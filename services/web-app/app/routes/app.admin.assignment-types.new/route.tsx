@@ -10,6 +10,7 @@ import {
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { AssignmentTypeEditorForm } from '~/components/admin/assignment-type-editor-form';
 import { requireAdmin } from '~/utils/auth.server';
+import type { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 import {
   DEFAULT_OUTPUT_SCHEMA_JSON,
@@ -54,9 +55,10 @@ function parseGradingConfig(formData: FormData) {
           formData,
           'promptConfigJson'
         ),
-        gradingOutputSchemaJson:
-          parseJsonFormField(formData, 'outputSchemaJson') ??
-          DEFAULT_OUTPUT_SCHEMA_JSON,
+        gradingOutputSchemaJson: (parseJsonFormField(
+          formData,
+          'outputSchemaJson'
+        ) ?? DEFAULT_OUTPUT_SCHEMA_JSON) as Prisma.InputJsonValue,
       }
     : {};
 }

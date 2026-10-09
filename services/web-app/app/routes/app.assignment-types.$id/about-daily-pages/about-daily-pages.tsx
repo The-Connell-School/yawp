@@ -7,10 +7,7 @@ import {
   AccordionTrigger,
 } from '~/components/ui/accordion';
 
-import {
-  SHORT_FORM_LIBRARY_HEADING,
-  ShortFormTeacherDirections,
-} from '../short-form-prompts-library/short-form-teacher-directions';
+import { TeacherDirections } from '../prompts-library/teacher-directions';
 
 import {
   ABOUT_HEADING,
@@ -18,8 +15,8 @@ import {
   GRADING_SUMMARY,
   HOW_ITS_GRADED_HEADING,
   HOW_ITS_GRADED_INTRO,
+  HOW_TO_USE,
   HOW_TO_USE_HEADING,
-  howToUse,
   PROMPT_RECIPE,
   PROMPT_RECIPE_SOURCE_NOTE,
   PROMPT_REWRITES,
@@ -91,12 +88,7 @@ function MinorHeading({ children }: { children: ReactNode }) {
  * whichever order they are in, and "how to browse the corpus" is the narrowest
  * question here, not the first one.
  */
-export function AboutDailyPages({
-  writingConditionsEnabled = false,
-}: {
-  /** The writing-conditions flag; off, the guide leaves out paragraph type and writing time. */
-  writingConditionsEnabled?: boolean;
-} = {}) {
+export function AboutDailyPages() {
   return (
     <section className="mb-6 rounded-lg border bg-muted/40 p-4">
       <h2 className="text-base font-semibold">{ABOUT_HEADING}</h2>
@@ -133,10 +125,10 @@ export function AboutDailyPages({
             <thead>
               <tr className="text-xs uppercase tracking-wide text-muted-foreground">
                 <th scope="col" className="w-[42%] font-medium sm:w-[30%]">
-                  Category
+                  Tier
                 </th>
                 <th scope="col" className="w-[16%] font-medium sm:w-[12%]">
-                  Weight
+                  Share
                 </th>
                 <th scope="col" className="hidden font-medium sm:table-cell">
                   What it reads
@@ -145,18 +137,18 @@ export function AboutDailyPages({
             </thead>
             <tbody className="align-top">
               {GRADING_SUMMARY.map((row) => (
-                <tr key={row.key}>
+                <tr key={row.tier}>
                   <th
                     scope="row"
                     className="pr-2 font-medium text-foreground/90"
                   >
-                    {row.label}
+                    {row.tier}
                   </th>
                   <td className="pr-2 tabular-nums text-muted-foreground">
-                    {row.weightPercent}%
+                    {row.share}
                   </td>
                   <td className="text-muted-foreground">
-                    <span className="sm:hidden">{row.label}: </span>
+                    <span className="sm:hidden">{row.tier}: </span>
                     {row.gloss}
                   </td>
                 </tr>
@@ -174,7 +166,7 @@ export function AboutDailyPages({
 
         <AboutSection value="how-to-use" heading={HOW_TO_USE_HEADING}>
           <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/80">
-            {howToUse(writingConditionsEnabled).map((item) => (
+            {HOW_TO_USE.map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ul>
@@ -228,8 +220,8 @@ export function AboutDailyPages({
           </ul>
         </AboutSection>
 
-        <AboutSection value="the-library" heading={SHORT_FORM_LIBRARY_HEADING}>
-          <ShortFormTeacherDirections />
+        <AboutSection value="the-library" heading="Prompt library">
+          <TeacherDirections variant="class-starter" />
         </AboutSection>
       </Accordion>
     </section>

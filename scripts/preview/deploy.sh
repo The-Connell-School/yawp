@@ -20,6 +20,11 @@ unset DATABASE_URL
 # this produced the database "yawp_pr_" and, because PR_NUMBER is exported as an empty
 # string rather than left unset, did it silently instead of failing under `set -u`.
 : "${DATABASE_NAME:?preview-env.mjs did not export DATABASE_NAME}"
+
+should_run_free_tier_ship_review_seed() {
+  node "$SCRIPT_DIR/free-tier-ship-review-seed-guard.mjs" "$DATABASE_NAME"
+}
+
 DEMO_RESET_DATA="${DEMO_RESET_DATA:-false}"
 DEMO_RESET_CONFIRMATION="${DEMO_RESET_CONFIRMATION:-}"
 DEMO_BACKUP_RETENTION="${DEMO_BACKUP_RETENTION:-14}"
@@ -157,6 +162,8 @@ load_or_create_access_config() {
     PREVIEW_ACCESS_SEATS="$(
       docker run --rm \
         -e PREVIEW_SEAT_COUNT="$PREVIEW_SEAT_COUNT" \
+        -e PREVIEW_SLUG="$SLUG" \
+        -e INCLUDE_PREVIEW_FREE_CLASSROOM_FIXTURE="${INCLUDE_PREVIEW_FREE_CLASSROOM_FIXTURE:-}" \
         -e PREVIEW_ACCESS_MASTER_ORGANIZATION_ID="$PREVIEW_ACCESS_MASTER_ORGANIZATION_ID" \
         -e PREVIEW_ACCESS_MASTER_LABEL="$PREVIEW_ACCESS_MASTER_LABEL" \
         -e PREVIEW_EXISTING_ACCESS_SEATS="$existing_seats" \
@@ -176,9 +183,13 @@ load_or_create_access_config() {
   )"
   # A retained seat map may be larger than a subsequently lowered count. Never
   # orphan one of those worlds on a reset; seed through the full retained map.
+  # Count from deploy tooling on the host (SCRIPT_DIR), not the PR checkout — older
+  # open PRs may lack older checkout-only seat-count helpers and must still preview-deploy.
+  # shellcheck source=scripts/preview/resolve-provisioned-seat-count.sh
+  source "$SCRIPT_DIR/resolve-provisioned-seat-count.sh"
   PREVIEW_SEAT_COUNT="$(
-    PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" node -e \
-      "process.stdout.write(String(JSON.parse(process.env.PREVIEW_ACCESS_SEATS).length))"
+    PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" \
+      resolve_provisioned_preview_seat_count
   )"
 
   if [[ -z "${PREVIEW_ACCESS_SECRET:-}" ]]; then
@@ -201,6 +212,13 @@ load_or_create_access_config() {
 
   export PREVIEW_ACCESS_CODES PREVIEW_ACCESS_SEATS PREVIEW_ACCESS_SECRET PREVIEW_MASTER_ACCESS_CODE PREVIEW_MASTER_ORG_GATE_ENABLED PREVIEW_SESSION_SECRET PREVIEW_SEAT_COUNT
 }
+
+if [[ "${YAWP_DEPLOY_STOP_AFTER:-}" == "access_config" ]]; then
+  load_or_create_access_config
+  printf 'YAWP_TEST_PREVIEW_SEAT_COUNT=%s\n' "$PREVIEW_SEAT_COUNT"
+  printf 'YAWP_TEST_PREVIEW_ACCESS_SEATS=%s\n' "$PREVIEW_ACCESS_SEATS"
+  exit 0
+fi
 
 load_or_create_access_config
 if [[ -n "${DIRECT_PORT:-}" || -f "$ROOT/ingress/current/ingress-server.mjs" ]]; then
@@ -614,12 +632,19 @@ compute_tooling_fingerprint() {
         packages/prisma/prisma.config.ts \
         packages/prisma/scripts/assignment-type-release-gate.ts \
         packages/prisma/scripts/backfill-class-art-key.ts \
+        packages/prisma/scripts/exit-ticket-assignment-type-data.ts \
+        packages/prisma/scripts/seed-exit-ticket-assignment-type.ts \
         packages/prisma/scripts/seed-local-dev.ts \
         packages/prisma/scripts/seed-class-starter-assignment-type.ts \
+        packages/prisma/scripts/apply-daily-pages-engagement-v2-seed.ts \
+        packages/prisma/scripts/seed-preview-teacher-notes-qa.ts \
+        packages/prisma/scripts/local-dev/preview-teacher-notes-qa.ts \
         packages/prisma/scripts/assets/class-starter.jpg \
         packages/prisma/scripts/sync-prod-fidelity-fixtures.ts \
         packages/prisma/scripts/preview-seats.ts \
         packages/prisma/scripts/seed-preview-seats.ts \
+        packages/prisma/scripts/seed-preview-planner-qa.ts \
+        packages/prisma/scripts/preview-planner-qa-ids.ts \
         packages/prisma/scripts/local-dev/class-insights.ts \
         packages/prisma/scripts/local-dev/dev-personas.ts \
         packages/prisma/scripts/local-dev/seed-synthetic-data.ts \
@@ -675,9 +700,26 @@ run_tooling_if_needed() {
     TOOLING_CHANGED=0
     # Even when skipping full tooling, always run idempotent seeds that must
     # keep preview data current with the codebase (e.g., AP History library).
+    local skip_path_seeds='bun prisma generate'
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-ap-history-library.ts" ]]; then
-      echo "Running AP History library seed on existing preview database (skip path)."
-      "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && bun run seed-ap-history-library'
+      skip_path_seeds+=' && bun run seed-ap-history-library'
+    fi
+    if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-planner-qa.ts" ]]; then
+      skip_path_seeds+=' && bun run seed-preview-planner-qa'
+    fi
+    if [[ "$skip_path_seeds" != 'bun prisma generate' ]]; then
+      echo "Running idempotent preview seeds on existing database (skip path)."
+      if ! "${compose[@]}" run --rm toolbox bash -lc "$skip_path_seeds"; then
+        echo "Warning: idempotent preview seeds failed; continuing deploy (non-fatal)." >&2
+      fi
+    fi
+    if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-free-tier-ship-review.ts" ]] && should_run_free_tier_ship_review_seed; then
+      echo "Running free-tier ship-review fixture seed on existing preview database (skip path)."
+      "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && bun run seed-free-tier-ship-review'
+    fi
+    if [[ -f "$SOURCE_DIR/packages/prisma/scripts/apply-daily-pages-engagement-v2-seed.ts" ]]; then
+      echo "Applying Daily Pages engagement v2 preview seed on existing database (skip path)."
+      "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && (bun run scripts/apply-daily-pages-engagement-v2-seed.ts || true)'
     fi
     return 0
   fi
@@ -706,10 +748,29 @@ run_tooling_if_needed() {
   fi
   # After whichever data path above created an organization, and before the gate
   # that validates assignment type data. `kind` is not settable through the admin
-  # UI, so without this a preview has no Class Starter to click on. The seed is
-  # idempotent, so it runs on every data mode and on every deploy.
+  # UI, so without these a preview has no Class Starter and no Exit Ticket to
+  # click on. Both seeds are idempotent, so they run on every data mode and on
+  # every deploy.
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-class-starter-assignment-type.ts" ]]; then
     tooling_command+=' && bun run seed-class-starter-assignment-type'
+  fi
+  # A preview database is a throwaway per-PR copy, so the exit ticket seed takes
+  # --all-orgs: there is nothing to roll out to slowly, and without it the type
+  # never appears in the assignment picker.
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-exit-ticket-assignment-type.ts" ]]; then
+    tooling_command+=' && bun run scripts/seed-exit-ticket-assignment-type.ts --all-orgs'
+  fi
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-free-tier-bundle-assignment-types.ts" ]]; then
+    tooling_command+=' && bun run seed-free-tier-bundle-assignment-types'
+  fi
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-planner-qa.ts" ]]; then
+    tooling_command+=' && (bun run seed-preview-planner-qa || { echo "Warning: preview planner QA seed failed; continuing deploy (non-fatal)." >&2; true; })'
+  fi
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/apply-daily-pages-engagement-v2-seed.ts" ]]; then
+    tooling_command+=' && (bun run scripts/apply-daily-pages-engagement-v2-seed.ts || true)'
+  fi
+  if [[ "$DATA_MODE" == "seed" && -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-teacher-notes-qa.ts" ]]; then
+    tooling_command+=' && bun run seed-preview-teacher-notes-qa'
   fi
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/assignment-type-release-gate.ts" ]]; then
     tooling_command+=' && bun run scripts/assignment-type-release-gate.ts --require-data'
@@ -718,6 +779,9 @@ run_tooling_if_needed() {
   # previews backed by an existing database pick up newly added prompts/sections.
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-ap-history-library.ts" ]]; then
     tooling_command+=' && bun run seed-ap-history-library'
+  fi
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-free-tier-ship-review.ts" ]] && should_run_free_tier_ship_review_seed; then
+    tooling_command+=' && bun run seed-free-tier-ship-review'
   fi
 
   "${compose[@]}" run --rm toolbox bash -lc "$tooling_command"

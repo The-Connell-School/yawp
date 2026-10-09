@@ -1023,6 +1023,95 @@ body:has(.yawp-public) > [data-state='closed'].fixed.bottom-4.right-4 {
   width: 100%;
 }
 
+.yawp-entry-auth-shell {
+  align-items: stretch;
+  max-width: 28rem;
+  padding: 28px 24px 32px;
+  text-align: left;
+}
+
+.yawp-entry-auth-shell-fit {
+  width: 100%;
+  max-width: min(28rem, calc(100vw - 48px));
+}
+
+.yawp-entry-auth-shell-fit-auto {
+  width: 100%;
+  max-width: min(28rem, calc(100vw - 48px));
+  align-self: center;
+  min-height: auto;
+}
+
+@media (max-width: 640px) {
+  .yawp-entry-auth-shell-fit-auto {
+    margin-block: auto;
+  }
+}
+
+.yawp-entry-auth {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+.yawp-entry-auth .yawp-entry-logo {
+  height: 56px;
+  margin: 0 auto 8px;
+  width: 56px;
+}
+
+.yawp-entry-auth .yawp-entry-copy {
+  margin-top: 0;
+  max-width: none;
+  text-align: left;
+  width: 100%;
+}
+
+.yawp-entry-auth .yawp-entry-copy h1 {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: normal;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.yawp-entry-auth .yawp-entry-copy h1 span {
+  display: block;
+  font-size: 0.875rem;
+  font-style: normal;
+  font-weight: 400;
+  margin-top: 4px;
+}
+
+.yawp-entry-auth-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1.25rem;
+  width: 100%;
+}
+
+.yawp-entry-join-bullets {
+  color: #3f3f46;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  list-style: disc;
+  margin: 0 0 1.25rem;
+  padding-left: 1.25rem;
+  text-align: left;
+}
+
+.yawp-entry-join-bullets li {
+  margin-bottom: 0.35rem;
+}
+
+.yawp-entry-status-card {
+  border-radius: 0.75rem;
+  border: 1px solid rgba(27, 27, 27, 0.1);
+  padding: 1.25rem 1rem;
+  text-align: center;
+}
+
 .yawp-entry-logo {
   display: block;
   height: 80px;
@@ -1422,5 +1511,39 @@ body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
   .yawp-entry-quote {
     margin-top: 32px;
     padding-top: 24px;
+  }
+}
+
+/*
+ * Printing an app page (today: the Lesson Planner packet).
+ *
+ * The app shell is a fixed-height flex frame with its own scroll containers,
+ * which is right on screen and wrong on paper — it clips the document to one
+ * viewport-sized page. These rules only apply to print: they drop the chrome
+ * and let the document flow across pages.
+ */
+@media print {
+  [data-app-nav],
+  [data-print-hidden] {
+    display: none !important;
+  }
+
+  /* Release the shell's h-screen / overflow-hidden so content paginates. */
+  main,
+  main > div,
+  main > div > div {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  @page {
+    margin: 1.6cm;
   }
 }

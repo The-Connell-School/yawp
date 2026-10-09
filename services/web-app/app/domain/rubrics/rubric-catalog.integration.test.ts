@@ -141,6 +141,82 @@ run('per-type rubric (production Daily Pages content) saves as a new revision, m
   cleanup.push(() => db.assignment.deleteMany({ where: { assignmentTypeId: type.id } }));
 });
 
+const hornbuckleShape = () => ({
+  scoringScale: { type: 'points_scale', minScore: 1, maxScore: 4, step: 1, compositeMin: 0, compositeMax: 100 },
+  rubric: {
+    categories: [
+      { key: 'introduction', label: 'Introduction', description: 'Intro moves.', weight: 0.25 },
+      { key: 'thesis', label: 'Thesis', description: 'Thesis moves.', weight: 0.25 },
+      { key: 'evidence_analysis', label: 'Evidence', description: 'Evidence moves.', weight: 0.25 },
+      { key: 'conclusion', label: 'Conclusion', description: 'Conclusion moves.', weight: 0.25 },
+    ],
+  },
+  outputSchema: { teacherNotesEnabled: true, scoringMode: 'holistic_tier' },
+});
+
+run('publishing new gradingInstructions through the catalog clears a per-type override for new work but keeps it on older pinned revisions', async () => {
+  const { db, catalog, perTypeKey, resolve } = await setup();
+  const shape = hornbuckleShape();
+  const promptConfig = {
+    gradingInstructions: 'Original GA from internal.',
+    gradingInstructionsOverride: 'Legacy paste override from platform admin.',
+  };
+  const type = await db.assignmentType.create({ data: {
+    title: `Hornbuckle-style ${suffix}`, position: 9003,
+    scoringScaleJson: shape.scoringScale as any, rubricJson: shape.rubric as any,
+    gradingPromptConfigJson: promptConfig as any, gradingOutputSchemaJson: shape.outputSchema as any,
+    gradingCalibrationNotes: null,
+  } });
+  const key = perTypeKey(type.id);
+  const before = await db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'Existing essay' } });
+  const detail = await catalog.get(key);
+  const doc = structuredClone(detail.live.editable) as any;
+  doc.promptConfig = { ...(doc.promptConfig ?? {}), gradingInstructions: 'Hornbuckle v4 GA from internal publish.' };
+  const saved = await catalog.save({ key, requestId: randomUUID(), actorEmail: actor, reason: 'Hornbuckle v4', expectedFingerprint: detail.live.fingerprint, document: doc });
+  const row = await db.assignmentType.findUniqueOrThrow({ where: { id: type.id } });
+  expect((row.gradingPromptConfigJson as any).gradingInstructions).toBe('Hornbuckle v4 GA from internal publish.');
+  expect((row.gradingPromptConfigJson as any).gradingInstructionsOverride).toBeNull();
+  expect((row.gradingPromptConfigJson as any).gradingInstructionsOverridePinnedFallback).toBe('Legacy paste override from platform admin.');
+  const pinnedRevision = await db.rubricRevision.findUniqueOrThrow({ where: { id: (await db.assignment.findUniqueOrThrow({ where: { id: before.id } })).rubricRevisionId! } });
+  expect((pinnedRevision.schemaJson as any).promptConfig.gradingInstructionsOverride).toBe('Legacy paste override from platform admin.');
+  const after = await db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'New essay' } });
+  expect(after.rubricRevisionId).toBe(saved.revision.id);
+  const oldConfig = await resolve({ assignmentTypeId: type.id, assignmentId: before.id });
+  const newConfig = await resolve({ assignmentTypeId: type.id, assignmentId: after.id });
+  expect(oldConfig.instructions).toMatchObject({ mode: 'unified', gradingInstructions: 'Legacy paste override from platform admin.' });
+  expect(newConfig.instructions).toMatchObject({ mode: 'unified', gradingInstructions: 'Hornbuckle v4 GA from internal publish.' });
+  cleanup.push(() => db.assignment.deleteMany({ where: { assignmentTypeId: type.id } }));
+});
+
+run('legacy per-type pin without override on the snapshot keeps the pasted GA after internal publish clears the live override', async () => {
+  const { db, catalog, perTypeKey, resolve } = await setup();
+  const shape = hornbuckleShape();
+  const type = await db.assignmentType.create({ data: {
+    title: `Hornbuckle legacy ${suffix}`, position: 9004,
+    scoringScaleJson: shape.scoringScale as any, rubricJson: shape.rubric as any,
+    gradingPromptConfigJson: { gradingInstructions: 'Original placeholder GA.' } as any,
+    gradingOutputSchemaJson: shape.outputSchema as any, gradingCalibrationNotes: null,
+  } });
+  const key = perTypeKey(type.id);
+  const legacy = await db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'Essay before paste' } });
+  await db.assignmentType.update({
+    where: { id: type.id },
+    data: {
+      gradingPromptConfigJson: {
+        gradingInstructions: 'Original placeholder GA.',
+        gradingInstructionsOverride: '10/5 pasted GA (live today).',
+      },
+    },
+  });
+  const detail = await catalog.get(key);
+  const doc = structuredClone(detail.live.editable) as any;
+  doc.promptConfig = { ...(doc.promptConfig ?? {}), gradingInstructions: 'Hornbuckle v4 GA from internal publish.' };
+  await catalog.save({ key, requestId: randomUUID(), actorEmail: actor, reason: 'Hornbuckle v4', expectedFingerprint: detail.live.fingerprint, document: doc });
+  const config = await resolve({ assignmentTypeId: type.id, assignmentId: legacy.id });
+  expect(config.instructions).toMatchObject({ mode: 'unified', gradingInstructions: '10/5 pasted GA (live today).' });
+  cleanup.push(() => db.assignment.deleteMany({ where: { assignmentTypeId: type.id } }));
+});
+
 run('code-seeded starters are editable and flagged; library-linked types are read-only; list counts every library rubric', async () => {
   const { db, catalog } = await setup();
   const listed = await catalog.list();
@@ -164,4 +240,93 @@ run('code-seeded starters are editable and flagged; library-linked types are rea
     expect(saved.revision.createdBy).toBe(actor);
   }
   await expect(catalog.get('does-not-exist')).rejects.toMatchObject({ statusCode: 404 });
+});
+const source = () => ({ contentId: randomUUID(), version: 3, fingerprint: 'e'.repeat(64) });
+
+run('staging a library rubric appends a source-tagged revision and changes nothing schools use', async () => {
+  const { db, catalog } = await setup();
+  const { rubric, type, name } = await libraryRubric(db, 'daily-pages-engagement');
+  // Give the rubric a current (school-facing) revision and a pinned assignment.
+  const first = await catalog.get(name);
+  const doc1 = structuredClone(first.live.editable) as any; doc1.calibrationNotes = 'School notes';
+  const v1 = await catalog.save({ key: name, requestId: randomUUID(), actorEmail: actor, reason: 'Baseline', expectedFingerprint: first.live.fingerprint, document: doc1 });
+  const pinned = await db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'School assignment' } });
+  const rubricBefore = await db.rubric.findUniqueOrThrow({ where: { id: rubric.id } });
+  const typeBefore = await db.assignmentType.findUniqueOrThrow({ where: { id: type.id } });
+
+  const detail = await catalog.get(name);
+  const document = structuredClone(detail.live.editable) as any;
+  document.calibrationNotes = 'Demo notes';
+  document.rubric.categories[0].description = `${document.rubric.categories[0].description} (demo)`;
+  const requestId = randomUUID();
+  const src = source();
+  const staged = await catalog.stage({ key: name, requestId, actorEmail: 'staff@yawp.test', reason: 'Stage for demo orgs', document, source: src });
+  expect(staged.replayed).toBe(false);
+  expect(staged.revision).toMatchObject({ rubricName: name, version: v1.revision.version + 1, createdBy: 'staff@yawp.test', reason: 'Stage for demo orgs' });
+
+  const row = await db.rubricRevision.findUniqueOrThrow({ where: { id: staged.revision.id } });
+  expect(row).toMatchObject({ requestId, sourceContentId: src.contentId, sourceVersion: src.version, sourceFingerprint: src.fingerprint });
+  const { contentFingerprint } = await import('./rubric-catalog.server');
+  expect(row.fingerprint).toBe(contentFingerprint(row.schemaJson));
+  expect((row.schemaJson as any).calibrationNotes).toBe('Demo notes');
+  expect((row.schemaJson as any).name).toBe(name);
+  expect((row.schemaJson as any).rubric.categories[0].description).toContain('(demo)');
+  // Nothing the platform reads by default moved.
+  expect(await db.rubric.findUniqueOrThrow({ where: { id: rubric.id } })).toEqual(rubricBefore);
+  expect(await db.assignmentType.findUniqueOrThrow({ where: { id: type.id } })).toEqual(typeBefore);
+  expect((await db.assignment.findUniqueOrThrow({ where: { id: pinned.id } })).rubricRevisionId).toBe(v1.revision.id);
+  const fresh = await db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'New school assignment' } });
+  expect(fresh.rubricRevisionId).toBe(v1.revision.id);
+  // An explicit pin to the staged revision is accepted by the pin trigger.
+  const demo = await db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'Demo assignment', rubricRevisionId: staged.revision.id } });
+  expect(demo.rubricRevisionId).toBe(staged.revision.id);
+
+  // Replays are idempotent; reusing the id for different inputs is refused.
+  const replay = await catalog.stage({ key: name, requestId, actorEmail: 'staff@yawp.test', reason: 'Stage for demo orgs', document, source: src });
+  expect(replay).toMatchObject({ replayed: true, revision: { id: staged.revision.id } });
+  await expect(catalog.stage({ key: name, requestId, actorEmail: 'staff@yawp.test', reason: 'Stage for demo orgs', document, source: { ...src, version: 4 } })).rejects.toMatchObject({ statusCode: 409 });
+  // A later save still versions after the staged revision.
+  const again = await catalog.get(name);
+  const doc3 = structuredClone(again.live.editable) as any; doc3.calibrationNotes = 'School notes 2';
+  const v3 = await catalog.save({ key: name, requestId: randomUUID(), actorEmail: actor, reason: 'School edit', expectedFingerprint: again.live.fingerprint, document: doc3 });
+  expect(v3.revision.version).toBe(staged.revision.version + 1);
+  cleanup.push(() => db.assignment.deleteMany({ where: { assignmentTypeId: type.id } }));
+});
+
+run('staging keeps non-editable prompt keys and validates like save', async () => {
+  const { db, catalog, perTypeKey } = await setup();
+  const daily = fixture.perTypeRubrics.find((type) => type.title === 'Daily Pages')!;
+  const promptConfig = { ...((daily.gradingPromptConfigJson as object) ?? {}), gradingInstructionsOverride: 'Teacher override stays' };
+  const type = await db.assignmentType.create({ data: {
+    title: `Daily Pages stage ${suffix}`, position: 9002, scoringScaleJson: daily.scoringScaleJson as any, rubricJson: daily.rubricJson as any,
+    gradingPromptConfigJson: promptConfig as any, gradingOutputSchemaJson: (daily.gradingOutputSchemaJson ?? undefined) as any, gradingCalibrationNotes: daily.gradingCalibrationNotes,
+  } });
+  const key = perTypeKey(type.id);
+  const typeBefore = await db.assignmentType.findUniqueOrThrow({ where: { id: type.id } });
+  const detail = await catalog.get(key);
+  const document = structuredClone(detail.live.editable) as any;
+  document.rubric.categories[0].label = `${document.rubric.categories[0].label} (demo)`;
+  const staged = await catalog.stage({ key, requestId: randomUUID(), actorEmail: actor, reason: 'Stage per-type', document, source: source() });
+  const row = await db.rubricRevision.findUniqueOrThrow({ where: { id: staged.revision.id } });
+  expect(row.rubricName).toBe(key);
+  expect((row.schemaJson as any).promptConfig.gradingInstructionsOverride).toBe('Teacher override stays');
+  expect((row.schemaJson as any).rubric.categories[0].label).toContain('(demo)');
+  expect(await db.assignmentType.findUniqueOrThrow({ where: { id: type.id } })).toEqual(typeBefore);
+  // Like a first save, staging captures the live content as the baseline first; the staged revision follows it.
+  const baseline = await db.assignmentTypeRubricBaseline.findUniqueOrThrow({ where: { assignmentTypeId: type.id } });
+  const baselineRow = await db.rubricRevision.findUniqueOrThrow({ where: { id: baseline.rubricRevisionId } });
+  expect(baselineRow).toMatchObject({ rubricName: key, createdBy: 'capture-before-edit', version: staged.revision.version - 1, sourceContentId: null });
+  expect(baselineRow.schemaJson).toEqual(detail.live.content as any);
+  expect((await db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'School entry' } })).rubricRevisionId).toBe(baselineRow.id);
+  cleanup.push(() => db.assignment.deleteMany({ where: { assignmentTypeId: type.id } }));
+
+  await expect(catalog.stage({ key, requestId: randomUUID(), actorEmail: actor, reason: 'Broken', document: { ...document, rubric: { categories: [] } }, source: source() })).rejects.toMatchObject({ statusCode: 422 });
+  await expect(catalog.stage({ key: 'does-not-exist', requestId: randomUUID(), actorEmail: actor, reason: 'Missing', document: { ...document, name: 'does-not-exist' }, source: source() })).rejects.toMatchObject({ statusCode: 404 });
+  const { name } = await libraryRubric(db, 'daily-pages-engagement');
+  const libDetail = await catalog.get(name);
+  await expect(catalog.stage({ key: name, requestId: randomUUID(), actorEmail: actor, reason: 'Rename', document: { ...(libDetail.live.editable as object), name: 'renamed' }, source: source() })).rejects.toMatchObject({ statusCode: 422 });
+  // Read-only rubrics (library-linked per-type key) are refused.
+  const linked = await libraryRubric(db, 'gba300-international-etiquette');
+  await db.assignmentType.update({ where: { id: linked.type.id }, data: { rubricJson: { categories: [{ key: 'old', label: 'Old', description: 'Unused', weight: 1 }] } } });
+  await expect(catalog.stage({ key: perTypeKey(linked.type.id), requestId: randomUUID(), actorEmail: actor, reason: 'Read only', document, source: source() })).rejects.toMatchObject({ statusCode: 403 });
 });

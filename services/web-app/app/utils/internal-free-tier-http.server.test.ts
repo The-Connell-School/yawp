@@ -1,5 +1,13 @@
-import { expect, test } from 'bun:test';
-import {
+import { beforeEach, expect, mock, test } from 'bun:test';
+
+const actualFeatureFlags = await import('~/domain/feature-flags/feature-flags.server');
+const isFreeTierEnabled = mock(actualFeatureFlags.isFreeTierEnabled);
+mock.module('~/domain/feature-flags/feature-flags.server', () => ({
+  ...actualFeatureFlags,
+  isFreeTierEnabled,
+}));
+
+const {
   applicationsSearch,
   tokensCreate,
   releaseBatchHttp,
@@ -12,9 +20,45 @@ import {
   markManualReviewHttp,
   reopenHttp,
   submitAdminInfoHttp,
-} from './internal-free-tier-http.server';
+} = await import('./internal-free-tier-http.server');
 
 const key = 'k'.repeat(43);
+
+beforeEach(() => {
+  isFreeTierEnabled.mockReset().mockResolvedValue(true);
+});
+
+test('release and token mint return 404 when the free tier flag is off', async () => {
+  const old = process.env.YAWP_MANAGEMENT_SERVICE_KEY;
+  process.env.YAWP_MANAGEMENT_SERVICE_KEY = key;
+  isFreeTierEnabled.mockResolvedValue(false);
+  try {
+    const headers = new Headers({ authorization: `Bearer ${key}` });
+    expect(
+      (
+        await applicationsSearch(
+          new Request('https://yawp.test/api/internal/v1/free-tier/applications?q=x', {
+            headers,
+          })
+        )
+      ).status
+    ).toBe(200);
+    expect(
+      (
+        await releaseBatchHttp(
+          new Request('https://yawp.test/api/internal/v1/free-tier/release', {
+            method: 'POST',
+            headers,
+          })
+        )
+      ).status
+    ).toBe(404);
+  } finally {
+    if (old === undefined) delete process.env.YAWP_MANAGEMENT_SERVICE_KEY;
+    else process.env.YAWP_MANAGEMENT_SERVICE_KEY = old;
+    isFreeTierEnabled.mockResolvedValue(true);
+  }
+});
 
 test('internal endpoints enforce management key and methods', async () => {
   const old = process.env.YAWP_MANAGEMENT_SERVICE_KEY;

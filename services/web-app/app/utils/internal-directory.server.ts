@@ -12,3 +12,8 @@ import { createOrganizationManagementHandler } from './internal-organizations.se
 export const internalOrganizationSearch = createOrganizationManagementHandler({
   findMany: args => prisma.organization.findMany({ ...args, select: { id: true, name: true } }),
 }, () => process.env.YAWP_MANAGEMENT_SERVICE_KEY);
+
+import { createOrganizationListHandler } from './internal-organizations.server';
+export const internalOrganizationList = createOrganizationListHandler({
+  findMany: args => prisma.organization.findMany({ ...args, select: { id: true, name: true } }),
+}, () => process.env.YAWP_MANAGEMENT_SERVICE_KEY);

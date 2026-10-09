@@ -17,6 +17,21 @@ function optionalEnv(name, fallback = '') {
   return process.env[name] || fallback;
 }
 
+// Same shape the Rubric Catalog HTTP layer accepts
+// (services/web-app/app/utils/internal-rubric-catalog-http.server.ts). A key it
+// would reject is a broken deploy, so refuse it here — and never echo the value.
+const MANAGEMENT_SERVICE_KEY_PATTERN = /^[A-Za-z0-9_-]{43,}$/;
+
+function optionalManagementServiceKey(value) {
+  if (!value) return '';
+  if (!MANAGEMENT_SERVICE_KEY_PATTERN.test(value)) {
+    throw new Error(
+      'PREVIEW_MANAGEMENT_SERVICE_KEY must be at least 43 characters of A-Z, a-z, 0-9, _ or -'
+    );
+  }
+  return value;
+}
+
 export function renderPreviewCompose({
   prNumber = process.env.PR_NUMBER,
   slug = process.env.PREVIEW_SLUG,
@@ -35,6 +50,7 @@ export function renderPreviewCompose({
   accessSecret = process.env.PREVIEW_ACCESS_SECRET,
   sessionSecret = process.env.PREVIEW_SESSION_SECRET,
   aiMode = process.env.PREVIEW_AI_MODE || 'live',
+  managementServiceKey = process.env.PREVIEW_MANAGEMENT_SERVICE_KEY,
   customIngressActive = process.env.PREVIEW_CUSTOM_INGRESS_ACTIVE !== 'false',
 } = {}) {
   const previewAccessSeats = requirePreviewAccessSeats(accessSeats);
@@ -43,6 +59,8 @@ export function renderPreviewCompose({
     : '';
   const previewAccessSecret = requirePreviewAccessSecret(accessSecret);
   const previewSessionSecret = requirePreviewSessionSecret(sessionSecret);
+  const previewManagementServiceKey =
+    optionalManagementServiceKey(managementServiceKey);
   if (!['disabled', 'live'].includes(aiMode)) {
     throw new Error('PREVIEW_AI_MODE must be disabled or live');
   }
@@ -149,6 +167,9 @@ ${tlsLabels}
       DATABASE_SSL_REJECT_UNAUTHORIZED: "false"
       NODE_ENV: ${env.runtime === 'fast' ? 'development' : 'production'}
       YAWP_ENVIRONMENT: "preview"
+      PRIMARY_APP_URL: ${q(env.url)}
+      PREVIEW_SLUG: ${q(env.slug)}
+      PREVIEW_DOMAIN: ${q(env.domain)}
       PREVIEW_DATA_MODE: ${q(env.dataMode)}
       PREVIEW_ACCESS_GATE: "on"
       PREVIEW_ACCESS_SEATS: ${q(previewAccessSeats)}
@@ -163,7 +184,7 @@ ${uaStudentBillingEnvironment}      INTERNAL_COMMAND_TOKEN: ${q(optionalEnv('PRE
       AWS_S3_BUCKET_FOR_VIDEOS: ${q(optionalEnv('PREVIEW_AWS_S3_BUCKET_FOR_VIDEOS', 'preview-videos'))}
       AWS_S3_REGION_FOR_VIDEOS: ${q(optionalEnv('PREVIEW_AWS_S3_REGION_FOR_VIDEOS', 'us-east-1'))}
       RESEND_FROM_EMAIL: ${q(optionalEnv('PREVIEW_RESEND_FROM_EMAIL', 'preview@yawp.local'))}
-      RESEND_API_KEY: ${q(optionalEnv('PREVIEW_RESEND_API_KEY', 'preview-resend-key'))}
+      RESEND_API_KEY: ${q(optionalEnv('PREVIEW_RESEND_API_KEY', ''))}
       OPENAI_ORGANIZATION_ID: ${q(optionalEnv('PREVIEW_OPENAI_ORGANIZATION_ID'))}
       OPENAI_API_KEY: ${q(optionalEnv('PREVIEW_OPENAI_API_KEY'))}
       YAWP_PREVIEW_AI_MODE: ${q(aiMode)}
@@ -171,6 +192,13 @@ ${uaStudentBillingEnvironment}      INTERNAL_COMMAND_TOKEN: ${q(optionalEnv('PRE
       ANTHROPIC_API_KEY: ${q(anthropicApiKey)}
       AI_MODEL: ${q(optionalEnv('PREVIEW_AI_MODEL', 'claude-sonnet-4-6'))}
       BLACKBOARD_LTI_MOCK_URL: "http://blackboard-lti-mock:9473"${marketingStudioEnvironment}`;
+  // Only the demo deploy supplies this key (Yawp Internal publishes rubrics to
+  // demo through the Rubric Catalog API). It goes to the web app alone; without
+  // it those routes 404, which is the right state for every PR preview.
+  const webEnvironment = previewManagementServiceKey
+    ? `${commonEnvironment}
+      YAWP_MANAGEMENT_SERVICE_KEY: ${q(previewManagementServiceKey)}`
+    : commonEnvironment;
   const fastVolumes = `    volumes:
       - ${q(`${env.sourceDir}:/app`)}
       - ${env.composeProject}-node-modules:/app/node_modules
@@ -209,7 +237,7 @@ ${commonEnvironment}
     command: bash -lc "cd services/web-app && bun run dev -- --host 0.0.0.0 --port 8080"
 ${fastVolumes}${mediaVolumeMount}
     environment:
-${commonEnvironment}
+${webEnvironment}
 `
       : `  web:
     image: ${q(`${routerBase}-web:current`)}
@@ -220,7 +248,7 @@ ${commonEnvironment}
       args:
         DATABASE_URL: ${q(env.databaseUrl)}
     environment:
-${commonEnvironment}
+${webEnvironment}
     restart: unless-stopped
 `;
 

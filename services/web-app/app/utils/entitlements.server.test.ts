@@ -2,9 +2,11 @@ import { describe, expect, test } from 'bun:test';
 import type { OrganizationPlan } from '@app/prisma';
 import {
   FREE_CLASSROOM_ACTIVE_CLASS_CAP,
+  FREE_CLASSROOM_ASSIGNMENT_QUOTAS,
   FREE_CLASSROOM_LESSON_PLAN_QUOTA,
   FREE_CLASSROOM_STUDENT_SEAT_CAP,
   FREE_CLASSROOM_TEACHER_SEAT_CAP,
+  canCreateAssignmentOfKindForPlan,
   getEntitlements,
   getEntitlementsForPlan,
 } from './entitlements.server';
@@ -26,6 +28,28 @@ describe('entitlements: shape and caps', () => {
     expect(e.canAddStudent({ currentStudents: 35 })).toBe(false);
     expect(e.canCreateClass({ currentActiveClasses: 0 })).toBe(true);
     expect(e.canCreateClass({ currentActiveClasses: 1 })).toBe(false);
+    expect(e.assignmentQuotaForKind('class_starter')).toBe(
+      FREE_CLASSROOM_ASSIGNMENT_QUOTAS.class_starter
+    );
+    expect(e.canCreateAssignmentOfKind({ kind: 'class_starter', createdCount: 11 })).toBe(
+      true
+    );
+    expect(e.canCreateAssignmentOfKind({ kind: 'class_starter', createdCount: 12 })).toBe(
+      false
+    );
+    expect(e.canCreateAssignmentOfKind({ kind: 'daily_pages', createdCount: 0 })).toBe(
+      false
+    );
+  });
+
+  test('SCHOOL short-circuits assignment quotas without extra work', () => {
+    expect(
+      canCreateAssignmentOfKindForPlan('SCHOOL', {
+        kind: 'class_starter',
+        createdCount: 999,
+      })
+    ).toBe(true);
+    expect(getEntitlementsForPlan('SCHOOL').assignmentQuotaForKind('class_starter')).toBeNull();
   });
 
   test('SCHOOL short-circuits to current behavior (no caps)', () => {

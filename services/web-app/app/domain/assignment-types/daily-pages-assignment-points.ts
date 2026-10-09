@@ -1,84 +1,200 @@
 import type { ResolvedAssignmentTypeGradingConfig } from './assignment-type-grading-config.server';
 import type { RubricScoreBand, RubricScoreLabel } from './assignment-type-rubric.shared';
+import {
+  buildDailyPagesEngagementRubricCategory,
+  dailyPagesEngagementBandDescriptionForTotal,
+  DAILY_PAGES_ENGAGEMENT_CATEGORY_KEY,
+  DAILY_PAGES_ENGAGEMENT_LIBRARY_REFERENCE_TOTAL,
+  DAILY_PAGES_ENGAGEMENT_SCALING_RULE,
+  usesDailyPagesEngagementPointScaling,
+} from './daily-pages-engagement-rubric';
+import {
+  dailyPagesEngagementHolisticPickerScores,
+  dailyPagesEngagementHolisticScoreLabels,
+  dailyPagesEngagementTierBands,
+} from './daily-pages-engagement-tier-bands';
 
-const SCALING_RULE = 'daily_pages_engagement_v1';
-const SOURCE_MAX = 30;
-const AUTHORED_BOUNDS = [[0, 0], [7, 13], [17, 23], [28, 30]];
-const AUTHORED_ANCHORS = [0, 10, 20, 30];
+function scalePoint(value: number, sourceMax: number, targetMax: number) {
+  if (sourceMax === targetMax) return value;
+  return Math.round((value * targetMax) / sourceMax);
+}
+
+function scaleBandsFromSource(
+  bands: RubricScoreBand[],
+  sourceMax: number,
+  targetMax: number
+): RubricScoreBand[] {
+  return bands.map((band) => ({
+    ...band,
+    min: scalePoint(band.min, sourceMax, targetMax),
+    max: scalePoint(band.max, sourceMax, targetMax),
+  }));
+}
+
+function scaleScoreLabelsFromSource(
+  labels: RubricScoreLabel[] | undefined,
+  sourceMax: number,
+  targetMax: number
+): RubricScoreLabel[] | undefined {
+  if (!labels?.length) return labels;
+  return labels.map((label) => ({
+    ...label,
+    value: scalePoint(label.value, sourceMax, targetMax),
+  }));
+}
+
+function dailyPagesEngagementBandDescriptionsAreCurrent(
+  bands: RubricScoreBand[] | undefined,
+  total: number
+): boolean {
+  if (!bands?.length) return false;
+  const footer = `Configured band for a ${total}-point assignment`;
+  return bands.every((band) => {
+    const description = band.description ?? '';
+    if (!description.includes(footer)) return false;
+    if (total === DAILY_PAGES_ENGAGEMENT_LIBRARY_REFERENCE_TOTAL) return true;
+    return !/100-point/.test(description);
+  });
+}
+
+function dailyPagesEngagementHolisticPickerIsCurrent(
+  category: ResolvedAssignmentTypeGradingConfig['rubricCategories'][number],
+  total: number,
+  scoringMode: ResolvedAssignmentTypeGradingConfig['scoringMode']
+): boolean {
+  if (scoringMode !== 'holistic_tier') return true;
+  const expectedScores = dailyPagesEngagementHolisticPickerScores(total);
+  const actualScores = category.allowedScores;
+  if (!actualScores?.length) return false;
+  if (
+    actualScores.length !== expectedScores.length ||
+    !expectedScores.every((score, index) => actualScores[index] === score)
+  ) {
+    return false;
+  }
+  const expectedLabels = dailyPagesEngagementHolisticScoreLabels(total);
+  const actualLabels = category.scoreLabels;
+  if (!actualLabels?.length) return false;
+  return expectedLabels.every((entry) =>
+    actualLabels.some(
+      (label) => label.value === entry.value && label.label === entry.label
+    )
+  );
+}
 
 /**
- * Only the explicitly revised library rubric opts in. Older pins, snapshots,
- * inline configurations and other rubrics keep the scale they were authored on.
+ * Resolves Daily Pages engagement rubrics to the teacher's
+ * configured point total using bands from the resolved (or pinned) schema.
  */
 export function scaleDailyPagesForAssignment(
   config: ResolvedAssignmentTypeGradingConfig,
-  pointValue: number | null | undefined,
+  pointValue: number | null | undefined
 ): ResolvedAssignmentTypeGradingConfig {
   const category = config.rubricCategories[0];
+  if (!usesDailyPagesEngagementPointScaling(config.outputSchemaSnapshot)) {
+    return config;
+  }
   if (
-    config.source !== 'assignment-type' ||
-    config.rubricName !== 'daily-pages-engagement' ||
-    config.outputSchemaSnapshot.assignmentPointScaling !== SCALING_RULE ||
     config.scoringType !== 'rubric_points' ||
-    config.minScore !== 0 || config.maxScore !== SOURCE_MAX || config.step !== 1 ||
-    config.rubricCategories.length !== 1 || category?.key !== 'engagement_with_prompt' ||
-    category.bands?.length !== AUTHORED_BOUNDS.length ||
-    !category.bands.every((band, index) => band.min === AUTHORED_BOUNDS[index][0] && band.max === AUTHORED_BOUNDS[index][1]) ||
-    category.scoreLabels?.length !== AUTHORED_ANCHORS.length ||
-    !category.scoreLabels.every((anchor, index) => anchor.value === AUTHORED_ANCHORS[index]) ||
-    !Number.isSafeInteger(pointValue) || pointValue! <= 0 || pointValue === SOURCE_MAX
-  ) return config;
+    config.rubricCategories.length !== 1 ||
+    category?.key !== DAILY_PAGES_ENGAGEMENT_CATEGORY_KEY ||
+    !Number.isSafeInteger(pointValue) ||
+    pointValue! < 5
+  ) {
+    return config;
+  }
 
   const total = pointValue!;
-  const bands: RubricScoreBand[] = [];
-  const scoreLabels: RubricScoreLabel[] = [];
-  let tiersMerged = false;
-  for (const [index, sourceBand] of category.bands.entries()) {
-    // Round inward: every ordinary score stays inside its proportional tier.
-    let min = Math.ceil(sourceBand.min * total / SOURCE_MAX);
-    let max = Math.floor(sourceBand.max * total / SOURCE_MAX);
-    const sourceAnchor = category.scoreLabels[index];
-    let anchor = Math.round(sourceAnchor.value * total / SOURCE_MAX);
-    if (min > max) {
-      // At 1 or 2 points some submitted tiers contain no integer. Give them
-      // their nearest positive anchor, then merge any identical score bands.
-      anchor = Math.max(1, Math.min(total, anchor));
-      min = max = anchor;
-    }
-    anchor = Math.max(min, Math.min(max, anchor));
-    const band = {
-      ...sourceBand, min, max,
-      description: `Configured anchor: ${anchor}/${total}. Original 30-point guidance (multiply by ${total}/30 and use only whole numbers inside this configured band): ${sourceBand.description}`,
-    };
-    const previous = bands.at(-1);
-    if (previous && band.min <= previous.max) {
-      tiersMerged = true;
-      previous.max = Math.max(previous.max, band.max);
-      previous.label += ` / ${band.label}`;
-      previous.description += `\n\nThese tiers share a score at this assignment total. ${band.description}`;
-    } else {
-      bands.push(band);
-    }
-    const previousLabel = scoreLabels.at(-1);
-    if (previousLabel?.value === anchor) {
-      previousLabel.label += ` / ${sourceAnchor.label}`;
-    } else {
-      scoreLabels.push({ value: anchor, label: sourceAnchor.label });
-    }
+  if (
+    config.maxScore === total &&
+    dailyPagesEngagementBandDescriptionsAreCurrent(category.bands, total) &&
+    dailyPagesEngagementHolisticPickerIsCurrent(
+      category,
+      total,
+      config.scoringMode
+    )
+  ) {
+    return config;
   }
-  const scaleContext = `This assignment is worth ${total} points. Use the configured bands and anchors below. The authored instructions retain their original 30-point examples; multiply by ${total}/30 and keep the result within the configured whole-number band.`;
-  const representability = tiersMerged
-    ? ` At this total, whole-number scores cannot distinguish all four tiers. Submitted tiers with the same score are combined below; zero remains NOT HANDED IN.`
-    : '';
-  const rubricCategories = [{
-    ...category,
-    description: `${category.description}\n\n${scaleContext}${representability}`,
-    bands,
-    scoreLabels,
-    ...(category.allowedScores
-      ? { allowedScores: [...new Set(scoreLabels.map((entry) => entry.value))] }
-      : {}),
-  }];
+  const snapshotScaling = config.rubricSnapshot?.assignmentPointScaling as
+    | { sourceMaxScore?: number }
+    | undefined;
+  const snapshotMaxScore = config.rubricSnapshot?.maxScore as number | undefined;
+  const sourceMax =
+    snapshotScaling?.sourceMaxScore ??
+    snapshotMaxScore ??
+    config.maxScore ??
+    DAILY_PAGES_ENGAGEMENT_LIBRARY_REFERENCE_TOTAL;
+
+  const sourceBands = category.bands;
+  const libraryBandCopyNeedsRewrite = sourceBands?.some((band) =>
+    /100-point/.test(band.description ?? '')
+  );
+  const useEngagementTierBands =
+    sourceMax === DAILY_PAGES_ENGAGEMENT_LIBRARY_REFERENCE_TOTAL ||
+    config.maxScore === total ||
+    libraryBandCopyNeedsRewrite;
+  const scaledCategory =
+    sourceBands && sourceBands.length > 0
+      ? useEngagementTierBands
+        ? {
+            ...category,
+            scoreLabels:
+              config.scoringMode === 'holistic_tier'
+                ? dailyPagesEngagementHolisticScoreLabels(total)
+                : scaleScoreLabelsFromSource(
+                    category.scoreLabels,
+                    sourceMax === total
+                      ? DAILY_PAGES_ENGAGEMENT_LIBRARY_REFERENCE_TOTAL
+                      : sourceMax,
+                    total
+                  ),
+            bands: dailyPagesEngagementTierBands(total).map((tierBand) => {
+              const sourceBand = sourceBands.find(
+                (band) => band.label === tierBand.label
+              );
+              return {
+                min: tierBand.min,
+                max: tierBand.max,
+                label: tierBand.label,
+                description: dailyPagesEngagementBandDescriptionForTotal(
+                  sourceBand?.description,
+                  total,
+                  tierBand
+                ),
+              };
+            }),
+          }
+        : {
+            ...category,
+            scoreLabels: scaleScoreLabelsFromSource(
+              category.scoreLabels,
+              sourceMax,
+              total
+            ),
+            bands: scaleBandsFromSource(sourceBands, sourceMax, total),
+          }
+      : buildDailyPagesEngagementRubricCategory(total);
+
+  const scaleContext = `This assignment is worth ${total} points. Score using the configured bands below. Choose the tier first, then a whole number inside its band. Excellent is always ${total} points only.`;
+  const categoryWithContext = {
+    ...scaledCategory,
+    description: `${category.description}\n\n${scaleContext}`,
+  };
+
+  const holisticPickerScores =
+    config.scoringMode === 'holistic_tier'
+      ? dailyPagesEngagementHolisticPickerScores(total)
+      : undefined;
+  const rubricCategories = [
+    {
+      ...categoryWithContext,
+      ...(holisticPickerScores
+        ? { allowedScores: holisticPickerScores }
+        : {}),
+    },
+  ];
+
   return {
     ...config,
     maxScore: total,
@@ -87,7 +203,11 @@ export function scaleDailyPagesForAssignment(
       ...config.rubricSnapshot,
       maxScore: total,
       categories: rubricCategories,
-      assignmentPointScaling: { rule: SCALING_RULE, sourceMaxScore: SOURCE_MAX, pointValue: total, tiersMerged },
+      assignmentPointScaling: {
+        rule: DAILY_PAGES_ENGAGEMENT_SCALING_RULE,
+        sourceMaxScore: sourceMax,
+        pointValue: total,
+      },
     },
   };
 }

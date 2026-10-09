@@ -25,9 +25,11 @@ export type { DraftComment } from './comments';
 
 export class DraftCommentError extends Error {}
 
+import { formatUserDisplayName } from '~/utils/user-display';
+
 const authorName = (membership: {
-  user: { name: string | null; email: string };
-}) => membership.user.name?.trim() || membership.user.email;
+  user: { name: string | null; email: string | null; username?: string | null };
+}) => formatUserDisplayName(membership.user);
 
 const requireContent = (value: string) => {
   const trimmed = value.trim();

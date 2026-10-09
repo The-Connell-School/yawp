@@ -1,17 +1,30 @@
 import { prisma } from '~/utils/db.server';
 import {
-  DAILY_PAGES_WRITING_CONDITIONS_FLAG,
+  LESSON_PLANNER_FLAG,
+  FREE_TIER_FLAG,
   FEATURE_FLAGS,
   FEATURE_FLAG_KEYS,
   type FeatureFlagKey,
+  type FeatureFlagMode,
+  type FeatureFlagValue,
+  type FeatureFlagValueInput,
+  evaluateFeatureFlag,
+  isFreeTierGloballyEnabled,
   featureFlagSettingName,
+  normalizeFeatureFlagValue,
   parseFeatureFlagValue,
+  sameFeatureFlagValue,
+  serializeFeatureFlagValue,
 } from './feature-flags';
 
 export type FeatureFlagState = {
   key: FeatureFlagKey;
   label: string;
   description: string;
+  mode: FeatureFlagMode;
+  /** Schools the flag is on for; empty unless mode is "targeted". */
+  orgIds: string[];
+  /** On for everyone. Kept for readers that predate per-school targeting. */
   enabled: boolean;
   /** When the flag was last set, or null if it never has been (default off). */
   updatedAt: string | null;
@@ -26,11 +39,14 @@ function stateFor(
   row: { value: string; description: string | null; updatedAt: Date } | null
 ): FeatureFlagState {
   const description = row?.description ?? '';
+  const { mode, orgIds } = parseFeatureFlagValue(row?.value);
   return {
     key,
     label: FEATURE_FLAGS[key].label,
     description: FEATURE_FLAGS[key].description,
-    enabled: parseFeatureFlagValue(row?.value),
+    mode,
+    orgIds,
+    enabled: mode === 'everyone',
     updatedAt: row ? row.updatedAt.toISOString() : null,
     lastChangedBy: description.startsWith(LAST_CHANGED_BY_PREFIX)
       ? description.slice(LAST_CHANGED_BY_PREFIX.length)
@@ -39,18 +55,22 @@ function stateFor(
 }
 
 /**
- * Whether a flag is on. One indexed read of its Setting row, no cache, so a
- * toggle takes effect on the next request in every instance. Fails closed: if
- * the row cannot be read the feature stays off, which is how it was before it
- * shipped.
+ * Whether a flag is on for a school (organization). One indexed read of its
+ * Setting row, no cache, so a change takes effect on the next request in
+ * every instance. A flag targeted at schools is off when no school is given.
+ * Fails closed: if the row cannot be read the feature stays off, which is
+ * how it was before it shipped.
  */
-export async function isFeatureFlagEnabled(key: FeatureFlagKey): Promise<boolean> {
+export async function isFeatureFlagEnabled(
+  key: FeatureFlagKey,
+  orgId?: string | null
+): Promise<boolean> {
   try {
     const row = await prisma.setting.findUnique({
       where: { name: featureFlagSettingName(key) },
       select: { value: true },
     });
-    return parseFeatureFlagValue(row?.value);
+    return evaluateFeatureFlag(parseFeatureFlagValue(row?.value), orgId);
   } catch (error) {
     console.error('feature_flag_read_failed', {
       key,
@@ -60,9 +80,31 @@ export async function isFeatureFlagEnabled(key: FeatureFlagKey): Promise<boolean
   }
 }
 
-/** Paragraph type and writing time on Daily Pages (and every assignment form). */
-export function isDailyPagesWritingConditionsEnabled(): Promise<boolean> {
-  return isFeatureFlagEnabled(DAILY_PAGES_WRITING_CONDITIONS_FLAG);
+/** YAWP! Lesson Planner for teachers at the given school. */
+export function isLessonPlannerEnabled(
+  orgId: string | null | undefined
+): Promise<boolean> {
+  return isFeatureFlagEnabled(LESSON_PLANNER_FLAG, orgId);
+}
+
+/**
+ * Whether Free Tier C is live. Only `everyone` counts as on; `targeted` is off
+ * for anonymous `/free` routes because there is no school context.
+ */
+export async function isFreeTierEnabled(): Promise<boolean> {
+  try {
+    const row = await prisma.setting.findUnique({
+      where: { name: featureFlagSettingName(FREE_TIER_FLAG) },
+      select: { value: true },
+    });
+    return isFreeTierGloballyEnabled(parseFeatureFlagValue(row?.value));
+  } catch (error) {
+    console.error('feature_flag_read_failed', {
+      key: FREE_TIER_FLAG,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
 }
 
 /** Every registered flag with its current state. */
@@ -77,32 +119,52 @@ export async function listFeatureFlags(): Promise<FeatureFlagState[]> {
   );
 }
 
+/** The given organization ids that do not exist, in one query. */
+export async function findUnknownOrganizationIds(
+  orgIds: readonly string[]
+): Promise<string[]> {
+  const unique = [...new Set(orgIds)];
+  if (unique.length === 0) return [];
+  const rows = await prisma.organization.findMany({
+    where: { id: { in: unique } },
+    select: { id: true },
+  });
+  const known = new Set(rows.map((row) => row.id));
+  return unique.filter((id) => !known.has(id));
+}
+
 /**
- * Turn a flag on or off. Upserts only the flag's own Setting row; nothing a
- * feature stored is touched either way.
+ * Set a flag to off, everyone, or a list of schools. Upserts only the flag's
+ * own Setting row; nothing a feature stored is touched either way. Callers
+ * validate that targeted schools exist.
  */
 export async function setFeatureFlag(
   key: FeatureFlagKey,
-  enabled: boolean,
+  next: FeatureFlagValueInput,
   operatorEmail: string
-): Promise<{ flag: FeatureFlagState; previousEnabled: boolean; changed: boolean }> {
+): Promise<{
+  flag: FeatureFlagState;
+  previous: FeatureFlagValue;
+  changed: boolean;
+}> {
   const name = featureFlagSettingName(key);
-  const previous = await prisma.setting.findUnique({
+  const existing = await prisma.setting.findUnique({
     where: { name },
     select: { value: true },
   });
-  const previousEnabled = parseFeatureFlagValue(previous?.value);
-  const value = enabled ? 'true' : 'false';
+  const previous = parseFeatureFlagValue(existing?.value);
+  const normalized = normalizeFeatureFlagValue(next.mode, next.orgIds);
+  const value = serializeFeatureFlagValue(normalized);
   const description = `${LAST_CHANGED_BY_PREFIX}${operatorEmail}`;
   const row = await prisma.setting.upsert({
     where: { name },
-    create: { name, value, valueType: 'boolean', description },
-    update: { value, description, updatedAt: new Date() },
+    create: { name, value, valueType: 'json', description },
+    update: { value, valueType: 'json', description, updatedAt: new Date() },
     select: { name: true, value: true, description: true, updatedAt: true },
   });
   return {
     flag: stateFor(key, row),
-    previousEnabled,
-    changed: previousEnabled !== enabled,
+    previous,
+    changed: !sameFeatureFlagValue(previous, normalized),
   };
 }

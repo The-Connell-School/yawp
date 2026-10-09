@@ -25,6 +25,9 @@ export const PROMPT_CONFIG_KEYS = [
   'systemInstructions', 'gradingInstructions', 'instructionsPreset', 'systemMessageTemplate',
   'userMessageTemplate', 'scoreInstructions', 'rubricInstructions',
 ] as const;
+/** Legacy pins without an override on their snapshot still grade with this after a catalog GA publish. */
+export const GRADING_INSTRUCTIONS_OVERRIDE_PINNED_FALLBACK_KEY =
+  'gradingInstructionsOverridePinnedFallback';
 const PER_TYPE_PREFIX = 'assignment-type:';
 const LIBRARY_NAME = /^[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*$/;
 const TYPE_ID = /^[A-Za-z0-9_-]{1,128}$/;
@@ -115,6 +118,77 @@ export function validateEditable(document: unknown, validationName: string) {
   return validateRubricPromotion({ ...document, name: validationName });
 }
 
+type LiveContent = {
+  content: JsonRecord;
+  type: (TypeColumns & { rubric?: { name: string } | null }) | null;
+};
+
+/**
+ * Builds the stored content for an edited document from the live content:
+ * prompt-config keys and top-level keys the editor does not own are carried
+ * over untouched. Shared by `save` (which writes the live row) and `stage`
+ * (which only appends a revision). For per-type rubrics it also returns the
+ * column update that `save` writes.
+ */
+function buildStoredContent(key: CatalogKey, live: LiveContent, document: JsonRecord) {
+  const livePrompt = isRecord(live.content.promptConfig) ? live.content.promptConfig : {};
+  const preservedPrompt = Object.fromEntries(Object.entries(livePrompt).filter(([k]) => !(PROMPT_CONFIG_KEYS as readonly string[]).includes(k)));
+  const editedPrompt = isRecord(document.promptConfig) ? document.promptConfig : {};
+  const promptConfig: JsonRecord = { ...preservedPrompt, ...editedPrompt };
+  // Internal publishes GA text as gradingInstructions. A stale per-type override
+  // would otherwise keep winning at grade time, so a new instruction set replaces it.
+  const liveGradingInstructions =
+    typeof livePrompt.gradingInstructions === 'string'
+      ? livePrompt.gradingInstructions.trim()
+      : '';
+  const incomingGradingInstructions =
+    typeof editedPrompt.gradingInstructions === 'string'
+      ? editedPrompt.gradingInstructions.trim()
+      : '';
+  if (
+    incomingGradingInstructions &&
+    incomingGradingInstructions !== liveGradingInstructions
+  ) {
+    const previousOverride =
+      typeof livePrompt.gradingInstructionsOverride === 'string' &&
+      livePrompt.gradingInstructionsOverride.trim()
+        ? livePrompt.gradingInstructionsOverride.trim()
+        : typeof livePrompt[GRADING_INSTRUCTIONS_OVERRIDE_PINNED_FALLBACK_KEY] ===
+              'string' &&
+            String(livePrompt[GRADING_INSTRUCTIONS_OVERRIDE_PINNED_FALLBACK_KEY]).trim()
+          ? String(livePrompt[GRADING_INSTRUCTIONS_OVERRIDE_PINNED_FALLBACK_KEY]).trim()
+          : '';
+    promptConfig.gradingInstructionsOverride = null;
+    if (previousOverride) {
+      promptConfig[GRADING_INSTRUCTIONS_OVERRIDE_PINNED_FALLBACK_KEY] =
+        previousOverride;
+    }
+  }
+
+  if (key.source === 'library') {
+    const preservedTop = Object.fromEntries(Object.entries(live.content).filter(([k]) => !['name', 'title', 'scoringScale', 'rubric', 'promptConfig', 'outputSchema', 'calibrationNotes'].includes(k)));
+    const next: JsonRecord = {
+      ...preservedTop, name: key.name, title: String(document.title).trim(),
+      ...(document.scoringScale !== undefined ? { scoringScale: document.scoringScale } : live.content.scoringScale !== undefined ? { scoringScale: live.content.scoringScale } : {}),
+      rubric: document.rubric,
+      ...(Object.keys(promptConfig).length || live.content.promptConfig !== undefined ? { promptConfig } : {}),
+      ...(document.outputSchema !== undefined ? { outputSchema: document.outputSchema } : live.content.outputSchema !== undefined ? { outputSchema: live.content.outputSchema } : {}),
+      calibrationNotes: typeof document.calibrationNotes === 'string' && document.calibrationNotes.trim() ? document.calibrationNotes : null,
+    };
+    return { next, typeUpdate: null };
+  }
+  const type = live.type!;
+  const typeUpdate: Prisma.AssignmentTypeUpdateInput = {
+    scoringScaleJson: (document.scoringScale ?? type.scoringScaleJson ?? undefined) as Prisma.InputJsonValue,
+    rubricJson: document.rubric as Prisma.InputJsonValue,
+    gradingPromptConfigJson: promptConfig as Prisma.InputJsonValue,
+    gradingOutputSchemaJson: (document.outputSchema ?? type.gradingOutputSchemaJson ?? undefined) as Prisma.InputJsonValue,
+    gradingCalibrationNotes: typeof document.calibrationNotes === 'string' && document.calibrationNotes.trim() ? document.calibrationNotes : null,
+  };
+  const next = perTypeContent({ ...type, ...(typeUpdate as unknown as TypeColumns), id: type.id, title: type.title });
+  return { next, typeUpdate };
+}
+
 export class CatalogError extends Error {
   constructor(message: string, readonly statusCode: number, readonly issues?: RubricValidationIssue[]) { super(message); }
 }
@@ -126,6 +200,22 @@ export type SaveInput = {
   key: string; requestId: string; actorEmail: string; reason: string;
   expectedFingerprint: string; document: unknown;
 };
+
+/** Identity of the Yawp Internal draft a staged revision was built from. */
+export type StageSource = { contentId: string; version: number; fingerprint: string };
+export type StageInput = {
+  key: string; requestId: string; actorEmail: string; reason: string;
+  document: unknown; source: StageSource;
+};
+export type ClearReleaseInput = { key: string; actorEmail: string; reason: string };
+
+/** The revision Yawp Internal released for a catalog key (see rubric-release.server.ts). */
+export type PublicRelease = { revisionId: string; version: number; fingerprint: string; releasedAt: string };
+const releaseSelect = { catalogKey: true, rubricRevisionId: true, releasedAt: true, rubricRevision: { select: { version: true, fingerprint: true } } } as const;
+type ReleaseRow = { catalogKey: string; rubricRevisionId: string; releasedAt: Date; rubricRevision: { version: number; fingerprint: string } };
+const publicRelease = (row: ReleaseRow): PublicRelease => ({
+  revisionId: row.rubricRevisionId, version: row.rubricRevision.version, fingerprint: row.rubricRevision.fingerprint, releasedAt: row.releasedAt.toISOString(),
+});
 
 const revisionSelect = { id: true, rubricName: true, version: true, schemaJson: true, fingerprint: true, createdBy: true, reason: true, createdAt: true, requestId: true, requestHash: true } as const;
 type RevisionRow = { id: string; rubricName: string; version: number; schemaJson: unknown; fingerprint: string; createdBy: string; reason: string; createdAt: Date; requestId: string; requestHash: string };
@@ -144,7 +234,7 @@ export class RubricCatalog {
   constructor(private db: Db) {}
 
   async list() {
-    const [rubrics, revisions, types, pinCounts, recent] = await Promise.all([
+    const [rubrics, revisions, types, pinCounts, recent, releases] = await Promise.all([
       this.db.rubric.findMany({ orderBy: { title: 'asc' }, select: { id: true, name: true, title: true, schemaJson: true, currentRevisionId: true, createdAt: true, updatedAt: true } }),
       this.db.rubricRevision.findMany({ select: revisionSelect, orderBy: [{ rubricName: 'asc' }, { version: 'asc' }] }),
       this.db.assignmentType.findMany({
@@ -159,7 +249,9 @@ export class RubricCatalog {
       }),
       this.db.assignment.groupBy({ by: ['assignmentTypeId', 'rubricRevisionId'], _count: { _all: true } }),
       this.db.assignment.groupBy({ by: ['assignmentTypeId'], where: { createdAt: { gte: new Date(Date.now() - 30 * 86400000) } }, _count: { _all: true } }),
+      this.db.rubricRelease.findMany({ select: releaseSelect }),
     ]);
+    const releaseByKey = new Map((releases as ReleaseRow[]).map((row) => [row.catalogKey, publicRelease(row)]));
     const revisionsByName = new Map<string, RevisionRow[]>();
     for (const revision of revisions as RevisionRow[]) {
       const list = revisionsByName.get(revision.rubricName) ?? [];
@@ -203,6 +295,8 @@ export class RubricCatalog {
         assignmentTypes: args.types.map((type) => ({ id: type.id, title: type.title, archived: type.archivedAt !== null })),
         organizations: [...organizations].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)),
         assignmentCount, assignmentsOnCurrentVersion: onCurrent, assignmentsOnOlderVersions: onOlder, assignmentsUnpinned: unpinned,
+        /** What schools with the `internal_rubrics` flag on get for new assignments; null when nothing is released. */
+        release: releaseByKey.get(args.key) ?? null,
       };
     };
 
@@ -266,7 +360,8 @@ export class RubricCatalog {
       revisions: revisions.map((revision) => ({
         id: revision.id, version: revision.version, createdAt: revision.createdAt.toISOString(), createdBy: revision.createdBy,
         reason: revision.reason, fingerprint: revision.fingerprint, content: revision.schemaJson,
-        isCurrent: summary.currentVersion === revision.version, assignmentCount: pins.get(revision.id) ?? 0,
+        isCurrent: summary.currentVersion === revision.version, isReleased: summary.release?.revisionId === revision.id,
+        assignmentCount: pins.get(revision.id) ?? 0,
       })),
     };
   }
@@ -281,15 +376,56 @@ export class RubricCatalog {
     return { content: perTypeContent(type), library: null, type };
   }
 
-  async save(input: SaveInput) {
-    const key = parseCatalogKey(input.key);
+  /** Parses the key and validates an operator document exactly as every write must. */
+  private prepareWrite(rawKey: string, rawDocument: unknown) {
+    const key = parseCatalogKey(rawKey);
     if (!key) throw new CatalogError('Unknown rubric', 404);
     const validationName = key.source === 'library' ? key.name : 'assignment-type-rubric';
-    const validation = validateEditable(input.document, validationName);
+    const validation = validateEditable(rawDocument, validationName);
     if (!validation.ok) throw new CatalogError('Rubric validation failed', 422, validation.issues);
-    const document = clone(input.document) as JsonRecord;
+    const document = clone(rawDocument) as JsonRecord;
     if (key.source === 'library' && document.name !== key.name) throw new CatalogError('The rubric name cannot change; it identifies the rubric across environments', 422, [{ path: '/name', message: 'The rubric name cannot change.' }]);
     const name = key.source === 'library' ? key.name : perTypeKey(key.assignmentTypeId);
+    return { key, document, name };
+  }
+
+  /**
+   * Step 1 of every write: make sure the live content exists as an immutable
+   * revision (capturing it as `capture-before-edit` when no revision holds it),
+   * point a library rubric's current revision at it, and pin any assignment of
+   * the rubric's types that is not pinned yet to it. The live content is
+   * unchanged, so what schools grade with does not move.
+   */
+  private async ensureLiveBaseline(tx: Tx, key: CatalogKey, name: string, live: NonNullable<Awaited<ReturnType<RubricCatalog['liveContent']>>>, actorEmail: string) {
+    const history = await tx.rubricRevision.findMany({ where: { rubricName: name }, select: revisionSelect, orderBy: { version: 'asc' } }) as RevisionRow[];
+    let baseline = [...history].reverse().find((revision) => sameContent(revision.schemaJson, live.content)) ?? null;
+    let captured: ReturnType<typeof publicRevision> | null = null;
+    if (!baseline) {
+      const version = (history[history.length - 1]?.version ?? 0) + 1;
+      baseline = await tx.rubricRevision.create({ select: revisionSelect, data: {
+        id: randomUUID(), rubricName: name, version, schemaJson: live.content as Prisma.InputJsonObject,
+        fingerprint: contentFingerprint(live.content), requestId: randomUUID(), requestHash: contentFingerprint(live.content),
+        createdBy: 'capture-before-edit', reason: `Live content captured before ${actorEmail} saved a new version`,
+      } }) as RevisionRow;
+      captured = publicRevision(baseline);
+    }
+    if (key.source === 'library') {
+      // The pin trigger only accepts a revision of the rubric's current
+      // pointer, so point at the revision that holds the live content first.
+      if (live.library!.currentRevisionId !== baseline.id) {
+        await tx.rubric.update({ where: { id: live.library!.id }, data: { currentRevisionId: baseline.id } });
+      }
+      const typeIds = (await tx.assignmentType.findMany({ where: { rubricId: live.library!.id }, select: { id: true } })).map((t) => t.id);
+      if (typeIds.length) await tx.assignment.updateMany({ where: { rubricRevisionId: null, assignmentTypeId: { in: typeIds } }, data: { rubricRevisionId: baseline.id } });
+    } else {
+      await tx.assignmentTypeRubricBaseline.upsert({ where: { assignmentTypeId: key.assignmentTypeId }, create: { assignmentTypeId: key.assignmentTypeId, rubricRevisionId: baseline.id }, update: { rubricRevisionId: baseline.id } });
+      await tx.assignment.updateMany({ where: { rubricRevisionId: null, assignmentTypeId: key.assignmentTypeId }, data: { rubricRevisionId: baseline.id } });
+    }
+    return { baseline, captured };
+  }
+
+  async save(input: SaveInput) {
+    const { key, document, name } = this.prepareWrite(input.key, input.document);
     const requestHash = contentFingerprint({ key: input.key, expectedFingerprint: input.expectedFingerprint, document, reason: input.reason, actorEmail: input.actorEmail });
 
     return this.db.$transaction(async (tx) => {
@@ -307,62 +443,12 @@ export class RubricCatalog {
       if (reason) throw new CatalogError(reason, 403);
       if (contentFingerprint(live.content) !== input.expectedFingerprint) throw new CatalogError('This rubric changed since you opened it. Reload to see the latest version, then reapply your edit.', 409);
 
-      const livePrompt = isRecord(live.content.promptConfig) ? live.content.promptConfig : {};
-      const preservedPrompt = Object.fromEntries(Object.entries(livePrompt).filter(([k]) => !(PROMPT_CONFIG_KEYS as readonly string[]).includes(k)));
-      const editedPrompt = isRecord(document.promptConfig) ? document.promptConfig : {};
-      const promptConfig = { ...preservedPrompt, ...editedPrompt };
-
-      let next: JsonRecord;
-      let typeUpdate: Prisma.AssignmentTypeUpdateInput | null = null;
-      if (key.source === 'library') {
-        const preservedTop = Object.fromEntries(Object.entries(live.content).filter(([k]) => !['name', 'title', 'scoringScale', 'rubric', 'promptConfig', 'outputSchema', 'calibrationNotes'].includes(k)));
-        next = {
-          ...preservedTop, name: key.name, title: String(document.title).trim(),
-          ...(document.scoringScale !== undefined ? { scoringScale: document.scoringScale } : live.content.scoringScale !== undefined ? { scoringScale: live.content.scoringScale } : {}),
-          rubric: document.rubric,
-          ...(Object.keys(promptConfig).length || live.content.promptConfig !== undefined ? { promptConfig } : {}),
-          ...(document.outputSchema !== undefined ? { outputSchema: document.outputSchema } : live.content.outputSchema !== undefined ? { outputSchema: live.content.outputSchema } : {}),
-          calibrationNotes: typeof document.calibrationNotes === 'string' && document.calibrationNotes.trim() ? document.calibrationNotes : null,
-        };
-      } else {
-        const type = live.type!;
-        typeUpdate = {
-          scoringScaleJson: (document.scoringScale ?? type.scoringScaleJson ?? undefined) as Prisma.InputJsonValue,
-          rubricJson: document.rubric as Prisma.InputJsonValue,
-          gradingPromptConfigJson: promptConfig as Prisma.InputJsonValue,
-          gradingOutputSchemaJson: (document.outputSchema ?? type.gradingOutputSchemaJson ?? undefined) as Prisma.InputJsonValue,
-          gradingCalibrationNotes: typeof document.calibrationNotes === 'string' && document.calibrationNotes.trim() ? document.calibrationNotes : null,
-        };
-        next = perTypeContent({ ...type, ...(typeUpdate as unknown as TypeColumns), id: type.id, title: type.title });
-      }
+      const { next, typeUpdate } = buildStoredContent(key, live, document);
       if (sameContent(next, live.content)) throw new CatalogError('No changes to save', 422, [{ path: '/', message: 'Nothing changed compared with the live rubric.' }]);
 
       // 1) Make sure the live content exists as an immutable revision, and pin
       //    any assignment that is not pinned yet to it, before anything moves.
-      const history = await tx.rubricRevision.findMany({ where: { rubricName: name }, select: revisionSelect, orderBy: { version: 'asc' } }) as RevisionRow[];
-      let baseline = [...history].reverse().find((revision) => sameContent(revision.schemaJson, live.content)) ?? null;
-      let captured: ReturnType<typeof publicRevision> | null = null;
-      if (!baseline) {
-        const version = (history[history.length - 1]?.version ?? 0) + 1;
-        baseline = await tx.rubricRevision.create({ select: revisionSelect, data: {
-          id: randomUUID(), rubricName: name, version, schemaJson: live.content as Prisma.InputJsonObject,
-          fingerprint: contentFingerprint(live.content), requestId: randomUUID(), requestHash: contentFingerprint(live.content),
-          createdBy: 'capture-before-edit', reason: `Live content captured before ${input.actorEmail} saved a new version`,
-        } }) as RevisionRow;
-        captured = publicRevision(baseline);
-      }
-      if (key.source === 'library') {
-        // The pin trigger only accepts a revision of the rubric's current
-        // pointer, so point at the revision that holds the live content first.
-        if (live.library!.currentRevisionId !== baseline.id) {
-          await tx.rubric.update({ where: { id: live.library!.id }, data: { currentRevisionId: baseline.id } });
-        }
-        const typeIds = (await tx.assignmentType.findMany({ where: { rubricId: live.library!.id }, select: { id: true } })).map((t) => t.id);
-        if (typeIds.length) await tx.assignment.updateMany({ where: { rubricRevisionId: null, assignmentTypeId: { in: typeIds } }, data: { rubricRevisionId: baseline.id } });
-      } else {
-        await tx.assignmentTypeRubricBaseline.upsert({ where: { assignmentTypeId: key.assignmentTypeId }, create: { assignmentTypeId: key.assignmentTypeId, rubricRevisionId: baseline.id }, update: { rubricRevisionId: baseline.id } });
-        await tx.assignment.updateMany({ where: { rubricRevisionId: null, assignmentTypeId: key.assignmentTypeId }, data: { rubricRevisionId: baseline.id } });
-      }
+      const { captured } = await this.ensureLiveBaseline(tx, key, name, live, input.actorEmail);
 
       // 2) Write the live row. The revision trigger records who and why.
       await tx.$executeRaw`SELECT set_config('yawp.rubric_revision_actor', ${input.actorEmail}, true), set_config('yawp.rubric_revision_reason', ${input.reason}, true), set_config('yawp.rubric_revision_request_id', ${input.requestId}, true), set_config('yawp.rubric_revision_request_hash', ${requestHash}, true)`;
@@ -376,6 +462,83 @@ export class RubricCatalog {
       return { revision: publicRevision(created as RevisionRow), replayed: false, captured };
     });
   }
+
+  /**
+   * Stages a Yawp Internal draft as an immutable revision without publishing
+   * it: the revision is appended (with its Internal source identity) but the
+   * live rubric row, its current pointer, per-type columns/baseline and every
+   * assignment are left exactly as they were. Schools keep grading with the
+   * current revision. The staged revision becomes the key's release
+   * (`RubricRelease`): only schools with the `internal_rubrics` feature flag
+   * on pin new assignments to it.
+   */
+  async stage(input: StageInput) {
+    const { key, document, name } = this.prepareWrite(input.key, input.document);
+    const source = { contentId: input.source.contentId, version: input.source.version, fingerprint: input.source.fingerprint };
+    const requestHash = contentFingerprint({ key: input.key, document, reason: input.reason, actorEmail: input.actorEmail, source });
+
+    return this.db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`rubric-request:${input.requestId}`}, 0))`;
+      const replay = await tx.rubricRevision.findUnique({ where: { requestId: input.requestId }, select: revisionSelect });
+      if (replay) {
+        if (replay.requestHash !== requestHash) throw new CatalogError('Request ID already used with different inputs', 409);
+        // A replay never re-releases: a later release for the key stays in place.
+        const current = await tx.rubricRelease.findUnique({ where: { catalogKey: name }, select: releaseSelect });
+        return { revision: publicRevision(replay as RevisionRow), replayed: true, release: current ? stageRelease(current as ReleaseRow) : null };
+      }
+      // Same row lock as save: serializes baseline capture and version numbering
+      // with saves (whose revision trigger runs under it) and other stages.
+      if (key.source === 'library') await tx.$queryRaw`SELECT id FROM "Rubric" WHERE name = ${key.name} FOR UPDATE`;
+      else await tx.$queryRaw`SELECT id FROM "AssignmentType" WHERE id = ${key.assignmentTypeId} FOR UPDATE`;
+      const live = await this.liveContent(tx, key);
+      if (!live) throw new CatalogError('Unknown rubric', 404);
+      const reason = readOnlyReason(key.source, key.source === 'library' ? key.name : '', live.content, live.type?.rubric?.name ?? null);
+      if (reason) throw new CatalogError(reason, 403);
+
+      const { next } = buildStoredContent(key, live, document);
+      // Exactly what a first save does: schools stay on the live content.
+      await this.ensureLiveBaseline(tx, key, name, live, input.actorEmail);
+      const latest = await tx.rubricRevision.aggregate({ where: { rubricName: name }, _max: { version: true } });
+      const created = await tx.rubricRevision.create({ select: revisionSelect, data: {
+        id: randomUUID(), rubricName: name, version: (latest._max.version ?? 0) + 1,
+        schemaJson: next as Prisma.InputJsonObject, fingerprint: contentFingerprint(next),
+        requestId: input.requestId, requestHash, createdBy: input.actorEmail, reason: input.reason,
+        sourceContentId: source.contentId, sourceVersion: source.version, sourceFingerprint: source.fingerprint,
+      } });
+      // Release it: schools with `internal_rubrics` on pin new assignments to it.
+      const releasedAt = new Date();
+      const release = await tx.rubricRelease.upsert({
+        where: { catalogKey: name }, select: releaseSelect,
+        create: { catalogKey: name, rubricRevisionId: created.id, releasedAt, releasedBy: input.actorEmail, requestId: input.requestId },
+        update: { rubricRevisionId: created.id, releasedAt, releasedBy: input.actorEmail, requestId: input.requestId },
+      });
+      return { revision: publicRevision(created as RevisionRow), replayed: false, release: stageRelease(release as ReleaseRow) };
+    });
+  }
+
+  /**
+   * Withdraws a key's release, so schools with `internal_rubrics` on go back
+   * to the rubric's current revision for new assignments. The revision and
+   * every assignment already pinned to it are kept. Idempotent.
+   */
+  async clearRelease(input: ClearReleaseInput) {
+    const key = parseCatalogKey(input.key);
+    if (!key) throw new CatalogError('Unknown rubric', 404);
+    const name = key.source === 'library' ? key.name : perTypeKey(key.assignmentTypeId);
+    return this.db.$transaction(async (tx) => {
+      const previous = await tx.rubricRelease.findUnique({ where: { catalogKey: name }, select: releaseSelect });
+      if (!previous) return { key: name, cleared: false, previous: null };
+      await tx.rubricRelease.delete({ where: { catalogKey: name } });
+      console.info('rubric_release_cleared', { key: name, revisionId: previous.rubricRevisionId, actorEmail: input.actorEmail, reason: input.reason });
+      return { key: name, cleared: true, previous: publicRelease(previous as ReleaseRow) };
+    });
+  }
+}
+
+/** The stage response's `release` (kept to the fields the endpoint has always documented). */
+function stageRelease(row: ReleaseRow) {
+  const { revisionId, version, releasedAt } = publicRelease(row);
+  return { revisionId, version, releasedAt };
 }
 
 function publicRevision(revision: RevisionRow) {

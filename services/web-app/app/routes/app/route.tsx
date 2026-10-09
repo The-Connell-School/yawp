@@ -71,6 +71,7 @@ import type { Route as RootRoute } from '../../+types/root';
 import { FLAT_SIDEBAR_SECTIONS, SidebarNavLinks } from './sidebar-nav';
 import { prisma } from '~/utils/db.server';
 import { shouldRedirectClasslessStudent } from '~/utils/classless-student-gate';
+import { formatUserContactLabel } from '~/utils/user-display';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -81,7 +82,49 @@ export const handle: BreadcrumbHandle = { breadcrumb: 'Home' };
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
+  const pathname = new URL(request.url).pathname;
+  const { isFreeTierEnabled } = await import(
+    '~/domain/feature-flags/feature-flags.server'
+  );
+  const freeTierFeatureOn = await isFreeTierEnabled();
+  const { loadFreeTierGateApplication, enforceFreeTierTeacherGate } = await import(
+    '~/domain/free-tier/free-tier-gate.server'
+  );
+  const freeTierApplication = freeTierFeatureOn
+    ? await loadFreeTierGateApplication(userId)
+    : null;
+
+  if (freeTierApplication) {
+    const { retryFreeClassroomProvisioningForUser } = await import(
+      '~/domain/free-tier/provision-free-classroom.server'
+    );
+    await retryFreeClassroomProvisioningForUser(userId);
+    await enforceFreeTierTeacherGate({
+      userId,
+      pathname,
+      organizationPlan: 'FREE_CLASSROOM',
+      application: freeTierApplication,
+    });
+    if (pathname.startsWith('/app/free-tier')) {
+      return data({
+        schoolYearScope: {
+          selected: ALL_SCHOOL_YEARS,
+          options: [],
+          isStudent: false,
+        },
+      });
+    }
+  }
+
   const profile = await requireMembership(request, userId);
+  if (freeTierFeatureOn && profile.role === 'TEACHER') {
+    await enforceFreeTierTeacherGate({
+      userId,
+      pathname,
+      organizationPlan: profile.organization.plan,
+      application: freeTierApplication,
+    });
+  }
 
   if (profile.role === 'STUDENT' && !profile.isOrgOwner) {
     const classCount =
@@ -213,6 +256,16 @@ export default function Route() {
     location.pathname
   );
 
+  const isFreeTierOnboardingShell = location.pathname.startsWith('/app/free-tier');
+
+  if (isFreeTierOnboardingShell) {
+    return (
+      <main className="min-h-screen bg-background">
+        <Outlet key={location.pathname} />
+      </main>
+    );
+  }
+
   return (
     <main
       className={cn(
@@ -299,7 +352,9 @@ export default function Route() {
               <div className="flex justify-between p-3 border-b">
                 <div className="flex flex-col">
                   <p className="text-sm font-bold">{user.name}</p>
-                  <p className="text-sm text-muted-foreground">{user.email}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {formatUserContactLabel(user)}
+                  </p>
                 </div>
                 <Button
                   size="icon-sm"

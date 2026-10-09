@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const requireAnonymous = mock();
 const verifyUserPassword = mock();
-const getSessionExpirationDate = mock();
+const getSessionExpirationDateForUser = mock();
 const getSession = mock();
 const commitSession = mock();
 const captureException = mock();
@@ -13,13 +13,16 @@ const prisma = {
   orgMembership: {
     findFirst: mock(),
   },
+  freeTierApplication: {
+    findFirst: mock(),
+  },
   session: {
     create: mock(),
   },
 };
 
 mock.module('~/utils/auth.server', () => ({
-  getSessionExpirationDate,
+  getSessionExpirationDateForUser,
   requireAnonymous,
   sessionKey: 'sessionId',
   verifyUserPassword,
@@ -43,6 +46,14 @@ mock.module('~/utils/preview-access.server', () => ({
     process.env.PREVIEW_DATA_MODE === 'seed',
 }));
 mock.module('~/cookies/membership-id.server', () => ({ setMembershipId }));
+mock.module('~/utils/rate-limit.server', () => ({
+  consumeLoginAttemptRateLimits: mock(async () => ({
+    allowed: true,
+    charged: [],
+  })),
+  refundLoginAttemptRateLimits: mock(async () => undefined),
+  rateLimitedFormResponse: mock(),
+}));
 
 const { action } = await import('./route');
 
@@ -50,16 +61,18 @@ describe('auth.login', () => {
   beforeEach(() => {
     requireAnonymous.mockReset();
     verifyUserPassword.mockReset();
-    getSessionExpirationDate.mockReset();
+    getSessionExpirationDateForUser.mockReset();
     getSession.mockReset();
     commitSession.mockReset();
     captureException.mockReset();
     getPreviewAccessSeat.mockReset();
     setMembershipId.mockReset();
     prisma.orgMembership.findFirst.mockReset();
+    prisma.freeTierApplication.findFirst.mockReset();
     prisma.session.create.mockReset();
+    prisma.freeTierApplication.findFirst.mockResolvedValue(null);
 
-    getSessionExpirationDate.mockReturnValue(new Date('2026-01-01T00:00:00.000Z'));
+    getSessionExpirationDateForUser.mockReturnValue(new Date('2026-01-01T00:00:00.000Z'));
     verifyUserPassword.mockResolvedValue({
       id: 'user-1',
       email: 'student@example.com',
@@ -124,6 +137,26 @@ describe('auth.login', () => {
       },
       select: { id: true },
     });
+    expect(prisma.session.create).not.toHaveBeenCalled();
+  });
+
+  test('rejects isolated preview login without seat membership even for free-tier teachers', async () => {
+    process.env.PREVIEW_ACCESS_GATE = 'on';
+    process.env.PREVIEW_DATA_MODE = 'seed';
+    prisma.orgMembership.findFirst.mockResolvedValue(null);
+    const form = new FormData();
+    form.append('email', 'teacher@shipreview-high.edu');
+    form.append('password', 'yawp-dev');
+    form.append('redirectTo', '/app/free-tier/onboarding');
+
+    const response = await action({
+      request: new Request('https://example.com/auth/login', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect(response).not.toBeInstanceOf(Response);
     expect(prisma.session.create).not.toHaveBeenCalled();
   });
 

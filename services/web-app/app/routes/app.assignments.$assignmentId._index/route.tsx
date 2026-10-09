@@ -1,6 +1,11 @@
-import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.server';
-import { parseWritingTimeMinutes } from '~/domain/grading/writing-time';
+import { ExitTicketClassReadPanel } from '~/components/assignments/exit-ticket-class-read-panel';
+import {
+  buildExitTicketClassRead,
+} from '~/domain/assignment-types/exit-ticket-class-read';
+import { loadExitTicketResponses } from '~/domain/assignment-types/exit-ticket-class-read.server';
+import { EXIT_TICKET_SEED_STEP } from '~/domain/lesson-planner/lesson-seed';
+import { Prisma } from '@app/prisma';
+import { isLessonPlannerEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { useState, type MouseEvent, type ReactNode } from 'react';
 import {
   type LoaderFunctionArgs,
@@ -35,6 +40,7 @@ import {
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
 import { formatClassLabel } from '~/utils/class-display';
+import { dailyPagesEngagementPointValueError } from '~/domain/assignment-types/daily-pages-engagement-point-validation';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
   AssignmentSummarySheetContent,
@@ -54,7 +60,19 @@ import {
   parseAssignmentRubricOverrides,
 } from '~/utils/assignment-grading-intent.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
-import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment.server';
+import {
+  exitTicketGradingModeFor,
+  resolveAssignmentPrompt,
+} from '~/utils/assignment-exit-ticket.server';
+import {
+  isExitTicketAssignmentType,
+  parseStoredExitTicketConfig,
+} from '~/domain/assignment-types/exit-ticket';
+import {
+  createAssignmentDeployedToClasses,
+  updateAssignmentInClassDeployment,
+} from '~/utils/assignment-deployment.server';
+import { FreeClassroomAssignmentQuotaError } from '~/utils/assignment-quota.server';
 import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-access.server';
 import {
   getGrammarGradingAssignmentTypeIds,
@@ -120,7 +138,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             select: {
               id: true,
               organizationId: true,
-              organization: { select: { classInsightsEnabled: true } },
+              organization: {
+                select: {
+                  classInsightsEnabled: true,
+                },
+              },
             },
           },
         },
@@ -136,12 +158,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           rubricTotalPoints: true,
           gradingMode: true,
           tutorEnabled: true,
-          writingTimeMinutes: true,
-          paragraphMode: true,
           collaborationEnabled: true,
           collaborationGroupMode: true,
           collaborationGroupSize: true,
           gradingAssistantStrictnessLevel: true,
+          exitTicketConfigJson: true,
           assignmentTypeId: true,
           assignmentType: {
             select: { id: true, title: true, systemKey: true, kind: true },
@@ -188,6 +209,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: string;
       title: string;
       systemKey: string | null;
+      kind: string | null;
       collaborationSupported: boolean;
     }>({
       scopes: [
@@ -201,6 +223,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         id: true,
         title: true,
         systemKey: true,
+        kind: true,
         collaborationSupported: true,
       },
       orderBy: { position: 'asc' },
@@ -212,25 +235,36 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
     assignmentTypes.map((assignmentType) => assignmentType.id)
   );
-  // Paragraph type and writing time are behind a global flag (off by
-  // default); off, the form offers neither.
-  const writingConditionsEnabled =
-    await isDailyPagesWritingConditionsEnabled();
-  const creationTypeDefaults = await getCreationTypeDefaultsById(
-    assignmentTypes.map((assignmentType) => assignmentType.id),
-    { writingConditionsEnabled }
-  );
+  const rubricMeta = await prisma.assignmentType.findMany({
+    where: { id: { in: assignmentTypes.map((type) => type.id) } },
+    select: {
+      id: true,
+      kind: true,
+      rubric: { select: { name: true } },
+    },
+  });
+  const rubricMetaById = new Map(rubricMeta.map((row) => [row.id, row]));
   const assignmentTypeOptions = assignmentTypes.map((assignmentType) => ({
     ...assignmentType,
     gradesGrammar: gradesGrammarIds.has(assignmentType.id),
-    defaultWritingTimeMinutes:
-      creationTypeDefaults.get(assignmentType.id)?.defaultWritingTimeMinutes ??
-      null,
-    offersParagraphModes:
-      creationTypeDefaults.get(assignmentType.id)?.offersParagraphModes ??
-      false,
+    kind: rubricMetaById.get(assignmentType.id)?.kind ?? null,
+    rubricName: rubricMetaById.get(assignmentType.id)?.rubric?.name ?? null,
   }));
 
+  // An exit ticket is read for what the class understood, graded or not, so
+  // its class read is built from every response rather than waiting on a
+  // generated summary.
+  const exitTicketConfig = parseStoredExitTicketConfig(
+    active.assignment.exitTicketConfigJson
+  );
+  const exitTicketClassRead = isExitTicketAssignmentType(
+    active.assignment.assignmentType
+  )
+      ? buildExitTicketClassRead({
+          responses: await loadExitTicketResponses(active.id),
+          config: exitTicketConfig,
+        })
+      : null;
   const insight =
     insightRow && insightRow.status === 'ready' && insightRow.summaryJson
       ? {
@@ -245,7 +279,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return {
     found: true as const,
-    writingConditionsEnabled,
     classInsightsEnabled,
     assignmentTypes: assignmentTypeOptions,
     activeClassId: active.classId,
@@ -277,18 +310,27 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       rubricTotalPoints: active.assignment.rubricTotalPoints,
       gradingMode: active.assignment.gradingMode,
       tutorEnabled: active.assignment.tutorEnabled,
-      writingTimeMinutes: active.assignment.writingTimeMinutes,
-      paragraphMode: active.assignment.paragraphMode,
       collaborationGroupMode: active.assignment.collaborationGroupMode,
       collaborationGroupSize: active.assignment.collaborationGroupSize,
       gradingAssistantStrictnessLevel: active.assignment
         .gradingAssistantStrictnessLevel as GradingAssistantStrictnessLevel,
       assignmentTypeId: active.assignment.assignmentTypeId,
       assignmentTypeLocked: active.assignment.collaborationEnabled,
+      // Null for everything that is not an exit ticket, and for an exit ticket
+      // created before this column existed. The sheet falls back to the
+      // default answers in both cases.
+      exitTicket: exitTicketConfig,
       assignmentType: active.assignment.assignmentType,
       documentCount: active._count.documents,
       gradedCount,
       insight,
+      exitTicketClassRead,
+      // Only where the planner is on; the step is not an index, so it can
+      // never be read as a Class Summary next step.
+      exitTicketPlanHref:
+        exitTicketClassRead && (await isLessonPlannerEnabled(profile.organization.id))
+          ? `/app/lesson-planner?from=${active.id}&step=${EXIT_TICKET_SEED_STEP}`
+          : null,
     },
   };
 }
@@ -368,6 +410,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const allowedAssignmentTypes = await getAvailableAssignmentTypesForScopes<{
       id: string;
       systemKey: string | null;
+      kind: string | null;
     }>({
       scopes: [
         {
@@ -376,7 +419,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           teacherProfileId: profile.id,
         },
       ],
-      select: { id: true, systemKey: true },
+      select: { id: true, systemKey: true, kind: true },
     });
     const selectedAssignmentType = allowedAssignmentTypes.find(
       (type) => type.id === assignmentTypeId
@@ -391,7 +434,25 @@ export async function action({ request, params }: ActionFunctionArgs) {
       );
     }
 
-    if (!prompt) {
+    // An exit ticket's prompt is composed from the form answers, here as well
+    // as on the create API, so editing one cannot replace a composed prompt
+    // with whatever the browser happened to post.
+    const resolvedPrompt = resolveAssignmentPrompt({
+      assignmentTypeKind: selectedAssignmentType?.kind,
+      postedPrompt: prompt,
+      formData,
+    });
+    if (!resolvedPrompt.success) {
+      return dataResponse(
+        { success: false, message: resolvedPrompt.message },
+        { status: 400 }
+      );
+    }
+    const assignmentPrompt = resolvedPrompt.prompt;
+    const exitTicketConfigJson =
+      resolvedPrompt.exitTicketConfigJson as Prisma.InputJsonValue | null;
+
+    if (!assignmentPrompt) {
       return dataResponse(
         { success: false, message: 'Prompt is required.' },
         { status: 400 }
@@ -421,22 +482,33 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
-    // Behind the writing-conditions flag: off, a sent writing time is ignored
-    // and the stored one is left exactly as it is.
-    const writingTimeResult = (await isDailyPagesWritingConditionsEnabled())
-      ? parseWritingTimeMinutes(formData)
-      : ({ success: true, sent: false, value: null } as const);
-    if (!writingTimeResult.success) {
-      return dataResponse(
-        { success: false, message: writingTimeResult.message },
-        { status: 400 }
-      );
+
+    if (gradingIntent.data.submitForGrade) {
+      const pointValue = gradingIntent.data.pointValue;
+      if (pointValue != null) {
+        const assignmentTypeForPoints = await prisma.assignmentType.findFirst({
+          where: { id: assignmentTypeId },
+          select: {
+            kind: true,
+            rubric: { select: { name: true } },
+          },
+        });
+        const engagementError = dailyPagesEngagementPointValueError({
+          kind: assignmentTypeForPoints?.kind ?? null,
+          rubricName: assignmentTypeForPoints?.rubric?.name ?? null,
+          pointValue,
+        });
+        if (engagementError) {
+          return dataResponse(
+            { success: false, message: engagementError },
+            { status: 400 }
+          );
+        }
+      }
     }
-    // Only written when the form sent it, so an older caller that omits the
-    // field leaves the stored value alone. Blank clears it.
-    const writingTimeData = writingTimeResult.sent
-      ? { writingTimeMinutes: writingTimeResult.value }
-      : {};
+
+    // Daily Pages writing time and paragraph type were removed: anything sent
+    // for either is ignored, never rejected, and a stored value is left alone.
 
     const promptAttachment = formData.get('promptAttachment');
     let promptAttachmentData:
@@ -510,11 +582,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
           data: {
             assignmentTypeId,
             title,
-            prompt,
+            prompt: assignmentPrompt,
+            ...(exitTicketConfigJson ? { exitTicketConfigJson } : {}),
             submitForGrade: gradingIntent.data.submitForGrade,
             pointValue: gradingIntent.data.pointValue,
             rubricTotalPoints: rubricOverrides.data.rubricTotalPoints,
-            gradingMode: rubricOverrides.data.gradingMode,
+            gradingMode: exitTicketGradingModeFor({
+              assignmentTypeKind: selectedAssignmentType?.kind,
+              formData,
+              gradingMode: rubricOverrides.data.gradingMode,
+            }),
             gradingAssistantStrictnessLevel: gradingAssistantStrictnessLevel!,
             tutorEnabled: tutorEnabledResult.value,
             ...promptAttachmentData,
@@ -530,6 +607,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
           await deleteAssignmentPromptAttachment(
             promptAttachmentData.promptAttachmentKey
           ).catch(() => {});
+        }
+        if (error instanceof FreeClassroomAssignmentQuotaError) {
+          return dataResponse(
+            { success: false, message: error.message },
+            { status: 403 }
+          );
         }
         throw error;
       }
@@ -597,19 +680,30 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     try {
-      await prisma.assignment.update({
-        where: { id: existingAssignment.id },
+      await updateAssignmentInClassDeployment({
+        assignmentId: existingAssignment.id,
+        classId,
         data: {
           assignmentTypeId,
           title,
-          prompt,
+          prompt: assignmentPrompt,
+          // Cleared rather than left alone: a type changed away from Exit
+          // Ticket must not keep a config describing a prompt it no longer
+          // has. Prisma.DbNull is how a nullable Json column is set to null.
+          exitTicketConfigJson: exitTicketConfigJson ?? Prisma.DbNull,
           submitForGrade: gradingIntent.data.submitForGrade,
           pointValue: gradingIntent.data.pointValue,
           ...(formData.has('rubricTotalPoints')
             ? { rubricTotalPoints: rubricOverrides.data.rubricTotalPoints }
             : {}),
           ...(formData.has('gradingMode')
-            ? { gradingMode: rubricOverrides.data.gradingMode }
+            ? {
+                gradingMode: exitTicketGradingModeFor({
+                  assignmentTypeKind: selectedAssignmentType?.kind,
+                  formData,
+                  gradingMode: rubricOverrides.data.gradingMode,
+                }),
+              }
             : {}),
           ...(gradingAssistantStrictnessLevel
             ? { gradingAssistantStrictnessLevel }
@@ -617,7 +711,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
           ...(formData.has('tutorEnabled')
             ? { tutorEnabled: tutorEnabledResult.value }
             : {}),
-          ...writingTimeData,
           ...promptAttachmentData,
         },
       });
@@ -639,6 +732,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
         await deleteAssignmentPromptAttachment(
           promptAttachmentData.promptAttachmentKey
         ).catch(() => {});
+      }
+      if (error instanceof FreeClassroomAssignmentQuotaError) {
+        return dataResponse(
+          { success: false, message: error.message },
+          { status: 403 }
+        );
       }
       throw error;
     }
@@ -856,6 +955,14 @@ export default function AssignmentDetailRoute() {
             </div>
           </div>
 
+          {data.assignment.exitTicketClassRead ? (
+            <div className="mb-4">
+              <ExitTicketClassReadPanel
+                read={data.assignment.exitTicketClassRead}
+                planHref={data.assignment.exitTicketPlanHref}
+              />
+            </div>
+          ) : null}
           <AssignmentSummarySheetContent
             assignment={assignmentForContent}
             classInsightsEnabled={data.classInsightsEnabled}
@@ -873,7 +980,6 @@ export default function AssignmentDetailRoute() {
           entryPoint="class"
           fixedClassId={activeClassId}
           assignmentTypes={data.assignmentTypes}
-          writingConditionsEnabled={data.writingConditionsEnabled}
           teacherClasses={[activeClassOption]}
           editingAssignment={{
             id: assignment.id,
@@ -888,10 +994,10 @@ export default function AssignmentDetailRoute() {
           initialSubmitForGrade={assignment.submitForGrade}
           initialPointValue={assignment.pointValue}
           initialRubricTotalPoints={assignment.rubricTotalPoints}
-          initialGradingMode={assignment.gradingMode === 'bands' ? 'bands' : 'step'}
+          initialGradingMode={
+            assignment.gradingMode === 'bands' ? 'bands' : 'step'
+          }
           initialTutorEnabled={assignment.tutorEnabled}
-          initialWritingTimeMinutes={assignment.writingTimeMinutes ?? null}
-          initialParagraphMode={assignment.paragraphMode ?? null}
           initialCollaborationEnabled={Boolean(data.collaboration)}
           initialCollaborationGroupMode={toCollaborationGroupMode(
             assignment.collaborationGroupMode
@@ -900,6 +1006,31 @@ export default function AssignmentDetailRoute() {
           initialGradingAssistantStrictnessLevel={
             assignment.gradingAssistantStrictnessLevel
           }
+          initialExitTicketMode={assignment.exitTicket?.mode}
+          initialExitTicketFocus={
+            assignment.exitTicket?.mode === 'specific'
+              ? assignment.exitTicket.focus
+              : undefined
+          }
+          initialExitTicketTopic={
+            assignment.exitTicket?.mode === 'specific'
+              ? assignment.exitTicket.topic
+              : undefined
+          }
+          initialExitTicketAnswerType={
+            assignment.exitTicket?.mode === 'specific'
+              ? assignment.exitTicket.answerType
+              : undefined
+          }
+          initialExitTicketLessonNotes={
+            assignment.exitTicket?.lessonNotes ?? null
+          }
+          initialExitTicketReflectionPrompt={
+            assignment.exitTicket?.mode === 'basic'
+              ? (assignment.exitTicket.reflectionPrompt ?? null)
+              : null
+          }
+          initialExitTicketGrading={assignment.exitTicket?.grading ?? null}
         />
 
         {/* Same sheet, same props as the class page's "Add assignment", so
@@ -911,14 +1042,39 @@ export default function AssignmentDetailRoute() {
           entryPoint="class"
           fixedClassId={activeClassId}
           assignmentTypes={data.assignmentTypes}
-          writingConditionsEnabled={data.writingConditionsEnabled}
           teacherClasses={[activeClassOption]}
           initialAssignmentTypeId={assignment.assignmentTypeId}
           initialTitle={`Copy of ${assignment.title?.trim() || 'Untitled Assignment'}`}
           initialPrompt={assignment.prompt}
           initialRubricTotalPoints={assignment.rubricTotalPoints}
-          initialGradingMode={assignment.gradingMode === 'bands' ? 'bands' : 'step'}
-          initialParagraphMode={assignment.paragraphMode ?? null}
+          initialGradingMode={
+            assignment.gradingMode === 'bands' ? 'bands' : 'step'
+          }
+          initialExitTicketMode={assignment.exitTicket?.mode}
+          initialExitTicketFocus={
+            assignment.exitTicket?.mode === 'specific'
+              ? assignment.exitTicket.focus
+              : undefined
+          }
+          initialExitTicketTopic={
+            assignment.exitTicket?.mode === 'specific'
+              ? assignment.exitTicket.topic
+              : undefined
+          }
+          initialExitTicketAnswerType={
+            assignment.exitTicket?.mode === 'specific'
+              ? assignment.exitTicket.answerType
+              : undefined
+          }
+          initialExitTicketLessonNotes={
+            assignment.exitTicket?.lessonNotes ?? null
+          }
+          initialExitTicketReflectionPrompt={
+            assignment.exitTicket?.mode === 'basic'
+              ? (assignment.exitTicket.reflectionPrompt ?? null)
+              : null
+          }
+          initialExitTicketGrading={assignment.exitTicket?.grading ?? null}
         />
       </div>
     </PageShell>

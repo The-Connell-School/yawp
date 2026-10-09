@@ -77,6 +77,12 @@ mock.module('~/domain/assignments/saved-assignments.server', () => ({
 }));
 
 const { action } = await import('./route');
+const {
+  BASIC_EXIT_TICKET_PROMPT,
+  EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
+  EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+  EXIT_TICKET_ELABORATION_NOTE,
+} = await import('~/domain/assignment-types/exit-ticket');
 
 afterAll(() => {
   mock.restore();
@@ -112,14 +118,15 @@ function responseStatus(response: any) {
 function mockAssignmentTypeAvailable({
   id = 'at-1',
   systemKey = 'generic_essay',
-  collaborationSupported = false,
   kind = null as string | null,
+  collaborationSupported = false,
 } = {}) {
   prisma.assignmentType.findFirst.mockResolvedValue({
     id,
     systemKey,
-    collaborationSupported,
     kind,
+    rubric: null,
+    collaborationSupported,
   });
 }
 
@@ -137,10 +144,7 @@ describe('api.assignments.create', () => {
     prisma.orgMembership.findMany.mockReset();
     prisma.apHistoryPromptLibraryEntry.findFirst.mockReset();
     createAssignmentDeployedToClasses.mockReset();
-    // Paragraph type and writing time are behind a flag. These tests describe
-    // the flag on (the behavior since they shipped); the flag-off block below
-    // describes the default.
-    prisma.setting.findUnique.mockReset().mockResolvedValue({ value: 'true' });
+    prisma.setting.findUnique.mockReset().mockResolvedValue(null);
     isAssignmentTypeAvailableForEveryScope.mockReset();
     uploadAssignmentPromptAttachment.mockReset();
     deleteAssignmentPromptAttachment.mockReset().mockResolvedValue(undefined);
@@ -209,7 +213,12 @@ describe('api.assignments.create', () => {
         id: 'at-1',
         archivedAt: null,
       },
-      select: { id: true, systemKey: true, kind: true },
+      select: {
+        id: true,
+        systemKey: true,
+        kind: true,
+        rubric: { select: { name: true, schemaJson: true } },
+      },
     });
     expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -375,50 +384,12 @@ describe('api.assignments.create', () => {
     });
   });
 
-  test('records how long students have to write', async () => {
-    const response = await action({
-      request: requestFor({
-        intent: 'create-assignment',
-        assignmentTypeId: 'at-1',
-        classIds: ['class-1', 'class-2'],
-        prompt: 'Write the essay.',
-        title: 'Essay',
-        writingTimeMinutes: '10',
-      }),
-      params: {},
-    } as any);
-
-    const body = await readBody(response);
-    expect(body.success).toBe(true);
-    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
-      data: expect.objectContaining({ writingTimeMinutes: 10 }),
-      classIds: ['class-1', 'class-2'],
-      deployment: { postAt: null, dueAt: null },
-    });
-  });
-
-  test('records no writing time when none is given (preserves current behavior)', async () => {
-    const response = await action({
-      request: requestFor({
-        intent: 'create-assignment',
-        assignmentTypeId: 'at-1',
-        classIds: ['class-1', 'class-2'],
-        prompt: 'Write the essay.',
-        title: 'Essay',
-      }),
-      params: {},
-    } as any);
-
-    const body = await readBody(response);
-    expect(body.success).toBe(true);
-    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
-      data: expect.objectContaining({ writingTimeMinutes: null }),
-      classIds: ['class-1', 'class-2'],
-      deployment: { postAt: null, dueAt: null },
-    });
-  });
-
-  describe('paragraph type', () => {
+  /**
+   * Daily Pages paragraph type and writing time were removed (never
+   * released). Anything sent for either is ignored, never rejected, so a form
+   * opened before the release still saves; nothing is written for either.
+   */
+  describe('without writing conditions', () => {
     function createWith(fields: Record<string, string>) {
       return action({
         request: requestFor({
@@ -433,79 +404,18 @@ describe('api.assignments.create', () => {
       } as any);
     }
 
-    test('records the chosen type on a Daily Pages assignment', async () => {
+    function createdData() {
+      return (createAssignmentDeployedToClasses.mock.calls[0]?.[0] as any)?.data;
+    }
+
+    test('writes neither a paragraph type nor a writing time', async () => {
       mockAssignmentTypeAvailable({ kind: 'daily_pages' });
 
-      const body = await readBody(await createWith({ paragraphMode: 'analyze' }));
+      const body = await readBody(await createWith({}));
 
       expect(body).toMatchObject({ success: true });
-      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ paragraphMode: 'analyze' }),
-        })
-      );
-    });
-
-    test('records none when no type is chosen (preserves current behavior)', async () => {
-      mockAssignmentTypeAvailable({ kind: 'daily_pages' });
-
-      await createWith({});
-
-      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ paragraphMode: null }),
-        })
-      );
-    });
-
-    test('ignores a type sent for an assignment type that is not Daily Pages', async () => {
-      mockAssignmentTypeAvailable({ kind: null });
-
-      await createWith({ paragraphMode: 'analyze' });
-
-      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ paragraphMode: null }),
-        })
-      );
-    });
-
-    test('rejects a type that is not switched on yet', async () => {
-      mockAssignmentTypeAvailable({ kind: 'daily_pages' });
-
-      const response = await createWith({ paragraphMode: 'argue' });
-
-      expect(responseStatus(response)).toBe(400);
-      expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('with the writing-conditions flag off', () => {
-    beforeEach(() => {
-      prisma.setting.findUnique.mockReset().mockResolvedValue(null);
-    });
-
-    function createWith(fields: Record<string, string>) {
-      return action({
-        request: requestFor({
-          intent: 'create-assignment',
-          assignmentTypeId: 'at-1',
-          classIds: ['class-1', 'class-2'],
-          prompt: 'Quote the line where the argument turns.',
-          title: 'Daily Pages',
-          ...fields,
-        }),
-        params: {},
-      } as any);
-    }
-
-    test('reads the flag from its Setting row', async () => {
-      mockAssignmentTypeAvailable({ kind: 'daily_pages' });
-      await createWith({});
-      expect(prisma.setting.findUnique).toHaveBeenCalledWith({
-        where: { name: 'feature_flag.daily_pages_paragraph_type_and_writing_time' },
-        select: { value: true },
-      });
+      expect(createdData()).not.toHaveProperty('paragraphMode');
+      expect(createdData()).not.toHaveProperty('writingTimeMinutes');
     });
 
     test('ignores a paragraph type and a writing time sent anyway', async () => {
@@ -516,17 +426,11 @@ describe('api.assignments.create', () => {
       );
 
       expect(body).toMatchObject({ success: true });
-      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            paragraphMode: null,
-            writingTimeMinutes: null,
-          }),
-        })
-      );
+      expect(createdData()).not.toHaveProperty('paragraphMode');
+      expect(createdData()).not.toHaveProperty('writingTimeMinutes');
     });
 
-    test('does not reject values it ignores (a form opened before the flag was switched off still saves)', async () => {
+    test('does not reject values it ignores, however malformed', async () => {
       mockAssignmentTypeAvailable({ kind: 'daily_pages' });
 
       const response = await createWith({
@@ -535,52 +439,19 @@ describe('api.assignments.create', () => {
       });
 
       expect(responseStatus(response)).not.toBe(400);
-      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            paragraphMode: null,
-            writingTimeMinutes: null,
-          }),
-        })
-      );
+      expect(createdData()).not.toHaveProperty('paragraphMode');
+      expect(createdData()).not.toHaveProperty('writingTimeMinutes');
     });
 
-    test('treats a failed flag read as off', async () => {
-      prisma.setting.findUnique.mockReset().mockRejectedValue(new Error('db down'));
+    test('never reads the removed flag', async () => {
       mockAssignmentTypeAvailable({ kind: 'daily_pages' });
-      const error = console.error;
-      console.error = () => {};
-      try {
-        await createWith({ paragraphMode: 'analyze', writingTimeMinutes: '10' });
-      } finally {
-        console.error = error;
-      }
-      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+      await createWith({});
+      expect(prisma.setting.findUnique).not.toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({
-            paragraphMode: null,
-            writingTimeMinutes: null,
-          }),
+          where: { name: 'feature_flag.daily_pages_paragraph_type_and_writing_time' },
         })
       );
     });
-  });
-
-  test('rejects a writing time that is not whole minutes', async () => {
-    const response = await action({
-      request: requestFor({
-        intent: 'create-assignment',
-        assignmentTypeId: 'at-1',
-        classIds: ['class-1'],
-        prompt: 'Write the essay.',
-        title: 'Essay',
-        writingTimeMinutes: 'ten',
-      }),
-      params: {},
-    } as any);
-
-    expect(responseStatus(response)).toBe(400);
-    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
 
   test('rejects an invalid tutor toggle value', async () => {
@@ -702,7 +573,12 @@ describe('api.assignments.create', () => {
         id: 'at-forbidden',
         archivedAt: null,
       },
-      select: { id: true, systemKey: true, kind: true },
+      select: {
+        id: true,
+        systemKey: true,
+        kind: true,
+        rubric: { select: { name: true, schemaJson: true } },
+      },
     });
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
@@ -1353,6 +1229,293 @@ describe('api.assignments.create', () => {
       expect(body.success).toBe(false);
       expect(body.message).toBe('Group size must be between 2 and 8 students.');
       expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('exit tickets', () => {
+    function mockExitTicketType() {
+      mockAssignmentTypeAvailable({
+        systemKey: null as any,
+        kind: EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
+      });
+    }
+
+    test('composes the standard prompt for a basic exit ticket', async () => {
+      mockExitTicketType();
+
+      const response = await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          exitTicketMode: 'basic',
+          title: 'Exit ticket: Tuesday',
+        }),
+        params: {},
+      } as any);
+
+      const body = await readBody(response);
+      expect(body.success).toBe(true);
+
+      const data = createAssignmentDeployedToClasses.mock.calls[0][0].data;
+      expect(data.prompt).toInclude(BASIC_EXIT_TICKET_PROMPT);
+      expect(data.prompt).toInclude(EXIT_TICKET_ELABORATION_NOTE);
+      expect(data.exitTicketConfigJson).toEqual({
+        schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+        mode: 'basic',
+      });
+    });
+
+    test('always grades a quick-builder exit ticket in bands', async () => {
+      mockExitTicketType();
+
+      await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          exitTicketKind: 'reflection',
+          exitTicketMode: 'basic',
+          exitTicketGradingBasis: 'completion',
+          submitForGrade: 'true',
+          pointValue: '10',
+          // A stale or hand-made post cannot turn steps back on.
+          gradingMode: 'step',
+        }),
+        params: {},
+      } as any);
+
+      const data = createAssignmentDeployedToClasses.mock.calls.at(-1)![0].data;
+      expect(data.gradingMode).toBe('bands');
+    });
+
+    // Steps grading is gone (#410) along with the original builder, so a post
+    // without the quick builder's fields that still asks for steps lands on
+    // bands too.
+    test('lands a post without the quick builder fields on bands', async () => {
+      mockExitTicketType();
+
+      await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          exitTicketMode: 'basic',
+          submitForGrade: 'true',
+          pointValue: '10',
+          gradingMode: 'step',
+        }),
+        params: {},
+      } as any);
+
+      const data = createAssignmentDeployedToClasses.mock.calls.at(-1)![0].data;
+      expect(data.gradingMode).toBe('bands');
+    });
+
+    test('composes the focused prompt for a specific exit ticket', async () => {
+      mockExitTicketType();
+
+      const response = await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          exitTicketMode: 'specific',
+          exitTicketFocus: 'ask-question',
+          exitTicketAnswerType: 'subjective',
+          exitTicketTopic: 'balancing chemical equations',
+        }),
+        params: {},
+      } as any);
+
+      const body = await readBody(response);
+      expect(body.success).toBe(true);
+
+      const data = createAssignmentDeployedToClasses.mock.calls[0][0].data;
+      expect(data.prompt).toInclude('balancing chemical equations');
+      expect(data.prompt).not.toInclude(BASIC_EXIT_TICKET_PROMPT);
+      expect(data.exitTicketConfigJson).toEqual({
+        schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+        mode: 'specific',
+        focus: 'ask-question',
+        answerType: 'subjective',
+        topic: 'balancing chemical equations',
+      });
+    });
+
+    test('an exit ticket needs no posted prompt', async () => {
+      // Every other type rejects a blank prompt. An exit ticket has no prompt
+      // field at all, so the same request must succeed here.
+      mockExitTicketType();
+
+      const response = await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          exitTicketMode: 'basic',
+        }),
+        params: {},
+      } as any);
+
+      expect((await readBody(response)).success).toBe(true);
+    });
+
+    test('never lets a posted prompt become what students read', async () => {
+      mockExitTicketType();
+
+      await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          exitTicketMode: 'basic',
+          prompt: 'Write about whatever you feel like.',
+        }),
+        params: {},
+      } as any);
+
+      const data = createAssignmentDeployedToClasses.mock.calls[0][0].data;
+      expect(data.prompt).not.toInclude('whatever you feel like');
+      expect(data.prompt).toInclude(BASIC_EXIT_TICKET_PROMPT);
+    });
+
+    test('refuses a specific exit ticket with nothing to be specific about', async () => {
+      mockExitTicketType();
+
+      const response = await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          exitTicketMode: 'specific',
+          exitTicketFocus: 'explain-concept',
+        }),
+        params: {},
+      } as any);
+
+      const body = await readBody(response);
+      expect(body.success).toBe(false);
+      expect(responseStatus(response)).toBe(400);
+      expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
+    });
+
+    test('leaves every other assignment type alone', async () => {
+      // The exit ticket fields are ignored for a type that is not one, and no
+      // config is written, so nothing existing gains a column value.
+      mockAssignmentTypeAvailable();
+
+      await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1', 'class-2'],
+          prompt: 'Write the essay.',
+          exitTicketMode: 'specific',
+          exitTicketFocus: 'explain-concept',
+          exitTicketTopic: 'mitosis',
+        }),
+        params: {},
+      } as any);
+
+      const data = createAssignmentDeployedToClasses.mock.calls[0][0].data;
+      expect(data.prompt).toBe('Write the essay.');
+      expect(data.exitTicketConfigJson).toBeUndefined();
+    });
+  });
+
+  describe('free classroom assignment quotas', () => {
+    beforeEach(() => {
+      requireMembership.mockResolvedValue({
+        id: 'teacher-1',
+        role: 'TEACHER',
+        organization: { id: 'org-free', name: 'Free Org', plan: 'FREE_CLASSROOM' },
+      });
+      prisma.organization.findMany.mockResolvedValue([
+        { id: 'org-free', apHistoryEnabled: false },
+      ]);
+      prisma.class.findMany.mockResolvedValue([
+        {
+          id: 'class-1',
+          school: { id: 'school-1', organizationId: 'org-free' },
+        },
+      ]);
+      mockAssignmentTypeAvailable({ kind: 'class_starter' });
+    });
+
+    test('creates through the shared deployment helper for a free classroom org', async () => {
+      await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1'],
+          prompt: 'Start class.',
+          title: 'Starter',
+        }),
+        params: {},
+      } as any);
+
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.objectContaining({
+          classIds: ['class-1'],
+          data: expect.objectContaining({ assignmentTypeId: 'at-1' }),
+        })
+      );
+    });
+
+    test('returns 403 when the bundle quota is exhausted', async () => {
+      const { FreeClassroomAssignmentQuotaError } = await import(
+        '~/utils/assignment-quota.server'
+      );
+      createAssignmentDeployedToClasses.mockRejectedValue(
+        new FreeClassroomAssignmentQuotaError(
+          "You've used all 12 free Class Starters.",
+          'quota_exhausted',
+          'class_starter'
+        )
+      );
+
+      const response = await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1'],
+          prompt: 'Start class.',
+          title: 'Starter',
+        }),
+        params: {},
+      } as any);
+      const body = await readBody(response);
+
+      expect(responseStatus(response)).toBe(403);
+      expect(body.success).toBe(false);
+      expect(body.message).toMatch(/used all 12 free Class Starters/i);
+    });
+
+    test('does not pass quota options for a school org', async () => {
+      requireMembership.mockResolvedValue({
+        id: 'teacher-1',
+        role: 'TEACHER',
+        organization: { id: 'org-1', name: 'School Org', plan: 'SCHOOL' },
+      });
+      mockAssignmentTypeAvailable({ kind: 'class_starter' });
+
+      await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1'],
+          prompt: 'Start class.',
+          title: 'Starter',
+        }),
+        params: {},
+      } as any);
+
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.not.objectContaining({
+          quotaOrganization: expect.anything(),
+        })
+      );
     });
   });
 });

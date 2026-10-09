@@ -5,7 +5,7 @@ const prisma = {
   class: { findMany: mock(), findFirst: mock() },
   documentGroup: { findFirst: mock() },
   // The loader reads the creation types' rubrics and kinds, to know which
-  // offer the grammar toggle and which suggest a writing time.
+  // offer the grammar toggle.
   assignmentType: { findMany: mock(async () => []) },
 };
 const requireUserId = mock();
@@ -38,6 +38,13 @@ mock.module('~/domain/assignments/saved-assignments.server', () => ({
   SAVED_ASSIGNMENTS_ENABLED: true,
   listSavedAssignments,
   archiveSavedAssignment,
+}));
+mock.module('~/utils/assignment-quota.server', () => ({
+  filterAssignmentTypesForOrganizationPlan: (
+    _org: { plan: string },
+    types: unknown[]
+  ) => types,
+  loadAssignmentCreationQuotasForTypes: mock(async () => new Map()),
 }));
 
 const { action, loader } = await import('./route');
@@ -97,7 +104,11 @@ describe('My Assignments loader', () => {
   });
 
   test('scopes assignments to classes the teacher teaches', async () => {
-    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+    requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', plan: 'SCHOOL' },
+    });
     prisma.classAssignment.findMany.mockResolvedValue([
       {
         id: 'ca-1',
@@ -149,7 +160,11 @@ describe('My Assignments loader', () => {
   // assignment once per class and printed the cross-class document total on
   // every one of those rows.
   test('collapses one assignment deployed to several classes into a single row', async () => {
-    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+    requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', plan: 'SCHOOL' },
+    });
     const assignment = {
       id: 'assignment-1',
       title: 'Essay One',
@@ -192,7 +207,11 @@ describe('My Assignments loader', () => {
   });
 
   test('counts documents per class deployment rather than across the assignment', async () => {
-    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+    requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', plan: 'SCHOOL' },
+    });
     prisma.classAssignment.findMany.mockResolvedValue([
       {
         id: 'ca-1',
@@ -214,7 +233,11 @@ describe('My Assignments loader', () => {
   });
 
   test('falls back to "Untitled Assignment" when the title is blank', async () => {
-    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+    requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', plan: 'SCHOOL' },
+    });
     prisma.classAssignment.findMany.mockResolvedValue([
       {
         id: 'ca-2',
@@ -242,7 +265,11 @@ describe('My Assignments loader', () => {
   test.skipIf(!SAVED_ASSIGNMENTS_ENABLED)(
     "hands the page this teacher's saved assignments and what it takes to reuse one",
     async () => {
-      requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+      requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', plan: 'SCHOOL' },
+    });
       prisma.classAssignment.findMany.mockResolvedValue([]);
       prisma.class.findMany.mockResolvedValue([
         {
@@ -302,7 +329,11 @@ describe('My Assignments loader', () => {
   test.skipIf(SAVED_ASSIGNMENTS_ENABLED)(
     'reads no saved assignments while the feature is switched off, but still arms the creation sheet',
     async () => {
-      requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+      requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', plan: 'SCHOOL' },
+    });
       prisma.classAssignment.findMany.mockResolvedValue([]);
       prisma.class.findMany.mockResolvedValue([
         {
@@ -314,7 +345,14 @@ describe('My Assignments loader', () => {
         },
       ]);
       getAvailableAssignmentTypesForScopes.mockResolvedValue([
-        { id: 'at-1', title: 'Essay', systemKey: null },
+        {
+          id: 'at-1',
+          title: 'Essay',
+          systemKey: null,
+          kind: null,
+          collaborationSupported: false,
+          rubric: null,
+        },
       ]);
 
       const result = (await loader({
@@ -332,12 +370,11 @@ describe('My Assignments loader', () => {
         {
           id: 'at-1',
           title: 'Essay',
-          collaborationSupported: undefined,
-          // No rubric and no kind on the mocked type: no grammar toggle and
-          // no suggested writing time.
+          kind: null,
+          rubricName: null,
+          collaborationSupported: false,
+          // No rubric and no kind on the mocked type: no grammar toggle.
           gradesGrammar: false,
-          defaultWritingTimeMinutes: null,
-          offersParagraphModes: false,
         },
       ]);
     }
@@ -356,7 +393,11 @@ describe('My Assignments loader', () => {
   });
 
   test('carries the tutor setting so cold writes can be marked in the list', async () => {
-    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+    requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', plan: 'SCHOOL' },
+    });
     prisma.classAssignment.findMany.mockResolvedValue([
       {
         id: 'ca-1',
@@ -424,7 +465,11 @@ describe('My Assignments action', () => {
     }
 
     test("removes every deployment of the assignment in this teacher's classes", async () => {
-      requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+      requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', plan: 'SCHOOL' },
+    });
       prisma.classAssignment.findMany.mockResolvedValue([
         { assignmentId: 'assignment-1', classId: 'class-1' },
         { assignmentId: 'assignment-1', classId: 'class-2' },
@@ -462,7 +507,11 @@ describe('My Assignments action', () => {
     });
 
     test("deletes nothing when one of the ids is outside the teacher's classes", async () => {
-      requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+      requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', plan: 'SCHOOL' },
+    });
       prisma.classAssignment.findMany.mockResolvedValue([
         { assignmentId: 'assignment-1', classId: 'class-1' },
       ]);
@@ -478,7 +527,11 @@ describe('My Assignments action', () => {
     });
 
     test('protects assignments that already own shared group work', async () => {
-      requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+      requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', plan: 'SCHOOL' },
+    });
       prisma.classAssignment.findMany.mockResolvedValue([
         { assignmentId: 'assignment-1', classId: 'class-1' },
       ]);
@@ -509,7 +562,11 @@ describe('My Assignments action', () => {
     });
 
     test('rejects an empty selection', async () => {
-      requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+      requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', plan: 'SCHOOL' },
+    });
 
       const response = (await action({
         request: deleteRequest([]),
@@ -523,7 +580,11 @@ describe('My Assignments action', () => {
   });
 
   test('removes a saved assignment for the teacher who owns it', async () => {
-    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+    requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', plan: 'SCHOOL' },
+    });
 
     const response = (await action({
       request: removeRequest({
@@ -558,7 +619,11 @@ describe('My Assignments action', () => {
   });
 
   test('rejects an unknown intent', async () => {
-    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+    requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', plan: 'SCHOOL' },
+    });
 
     const response = (await action({
       request: removeRequest({ intent: 'nope' }),

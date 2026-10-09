@@ -301,6 +301,7 @@ async function fetchScopedGradedRows(where: {
       submittedAt: true,
       numericPercentage: true,
       letterGrade: true,
+      score: true,
       rubricScores: true,
       overallComment: true,
       document: {
@@ -343,6 +344,7 @@ async function fetchScopedGradedRows(where: {
           submittedAt: submission.submittedAt,
           numericPercentage: submission.numericPercentage,
           letterGrade: submission.letterGrade,
+          score: submission.score,
           rubricScores: normalizeRubricScores(submission.rubricScores),
           overallComment: submission.overallComment,
           tutorEnabled:

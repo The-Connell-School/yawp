@@ -2,6 +2,7 @@ import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2'
 import { renderAsync } from '@react-email/components'
 import { type ReactElement } from 'react'
 import { z } from 'zod'
+import { shouldUsePreviewEmailCapture } from './preview-email-capture.server'
 
 const resendErrorSchema = z.union([
 	z.object({
@@ -74,6 +75,18 @@ function getEmailProvider(): EmailProvider {
 }
 
 async function sendEmailWithResend(email: EmailPayload) {
+	if (shouldUsePreviewEmailCapture()) {
+		// eslint-disable-next-line no-console
+		console.info(
+			'[preview-email-capture] accepted (not sent via Resend):',
+			JSON.stringify({ to: email.to, subject: email.subject }),
+		)
+		return {
+			status: 'success',
+			data: { id: 'preview-captured' },
+		} as const
+	}
+
 	// feel free to remove this condition once you've set up resend
 	if (
 		!(process.env.RESEND_API_KEY || process.env.RESEND_FROM_EMAIL) &&

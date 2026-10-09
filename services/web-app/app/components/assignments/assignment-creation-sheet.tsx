@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type * as React from 'react';
 import { useFetcher, useNavigate } from 'react-router';
 import { FileUp, Loader2 } from 'lucide-react';
@@ -14,10 +14,7 @@ import {
   collaborationModeNeedsGroupSize,
   type CollaborationGroupMode,
 } from '~/domain/assignments/collaboration';
-import {
-  enabledParagraphModes,
-  getParagraphMode,
-} from '~/domain/assignment-types/daily-pages-paragraph-modes';
+import { RadioGroup, RadioGroupItem } from '~/components/ui/radio-group';
 import {
   Select,
   SelectContent,
@@ -25,6 +22,35 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select';
+import {
+  DEFAULT_EXIT_TICKET_MODE,
+  DEFAULT_EXIT_TICKET_REFLECTION_PROMPT,
+  DEFAULT_EXIT_TICKET_GRADING_BASIS,
+  exitTicketCriteriaNoteKeys,
+  exitTicketKindForMode,
+  EXIT_TICKET_ANSWER_TYPE_OPTIONS,
+  EXIT_TICKET_ANSWER_TYPES,
+  EXIT_TICKET_FOCUS_OPTIONS,
+  EXIT_TICKET_DEFAULT_POINT_VALUE,
+  EXIT_TICKET_LESSON_NOTE_FIELDS,
+  EXIT_TICKET_LESSON_NOTE_MAX_LENGTH,
+  EXIT_TICKET_SUBMIT_FOR_GRADE_DEFAULT,
+  EXIT_TICKET_TOPIC_MAX_LENGTH,
+  EXIT_TICKET_TUTOR_ENABLED_DEFAULT,
+  composeExitTicketPrompt,
+  defaultExitTicketLessonNotesEnabled,
+  exitTicketFocusOption,
+  exitTicketTargetingHint,
+  isExitTicketAssignmentType,
+  parseExitTicketConfigInput,
+  type ExitTicketAnswerType,
+  type ExitTicketFocus,
+  type ExitTicketLessonNotes,
+  type ExitTicketMode,
+  type ExitTicketReflectionPrompt,
+  type ExitTicketGrading,
+  type ExitTicketReflectionPromptId,
+} from '~/domain/assignment-types/exit-ticket';
 import {
   Sheet,
   SheetContent,
@@ -47,16 +73,22 @@ import {
   type AssignmentGradingMode,
 } from '~/domain/assignments/rubric-overrides';
 import { Tooltip } from '~/components/ui/tooltip';
+import {
+  ExitTicketBuilder,
+  ExitTicketLessonNotesSection,
+  WhyDisclosure,
+  type ExitTicketGradingDraft,
+} from './exit-ticket-builder';
 import { cn } from '~/utils/misc';
 import { toDateInputValue } from '~/utils/date-only';
 import {
-  MAX_WRITING_TIME_MINUTES,
-  MIN_WRITING_TIME_MINUTES,
-} from '~/domain/grading/writing-time';
-
-function writingTimeFieldValue(minutes: number | null | undefined): string {
-  return typeof minutes === 'number' && minutes > 0 ? String(minutes) : '';
-}
+  assignmentTypeUsesDailyPagesEngagementRubric,
+  MIN_DAILY_PAGES_ENGAGEMENT_POINT_TOTAL,
+} from '~/domain/assignment-types/daily-pages-engagement-rubric';
+import {
+  dailyPagesEngagementTierBands,
+  formatDailyPagesEngagementBandRange,
+} from '~/domain/assignment-types/daily-pages-engagement-tier-bands';
 
 /**
  * A segmented control in the shape of the app's pill buttons: a recessed track
@@ -117,6 +149,38 @@ function GradingChoiceGroup<Value extends string>({
   );
 }
 
+/**
+ * A closed "More options" disclosure when enabled; its children unchanged
+ * otherwise. A native <details> keeps everything inside mounted, so every
+ * field still posts whether or not the teacher opened it.
+ */
+function MoreOptions({
+  enabled,
+  open,
+  onOpenChange,
+  children,
+}: {
+  enabled: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: ReactNode;
+}) {
+  if (!enabled) return <>{children}</>;
+  return (
+    <details
+      id="assignment-create-exit-ticket-more-options"
+      className="rounded-md border px-3 py-2"
+      open={open}
+      onToggle={(event) => onOpenChange(event.currentTarget.open)}
+    >
+      <summary className="cursor-pointer select-none py-1 text-sm font-medium">
+        More options
+      </summary>
+      {children}
+    </details>
+  );
+}
+
 export type AssignmentCreationEntryPoint =
   | 'dashboard'
   | 'assignment-type'
@@ -139,17 +203,19 @@ export type AssignmentCreationAssignmentType = {
    */
   gradesGrammar: boolean;
   /**
-   * The writing time the form suggests for a new assignment of this type, in
-   * minutes. Only a starting value for the field: absent or null leaves it
-   * blank, which is what every type without a suggestion should do.
+   * `AssignmentType.kind`, which decides whether this type gets a prompt box or
+   * a form. Required for the same reason as the flag above: a call site that
+   * forgot to load it would render an exit ticket as a blank prompt.
    */
-  defaultWritingTimeMinutes?: number | null;
-  /**
-   * Whether a new assignment of this type can name the kind of paragraph it
-   * practices (Daily Pages). Optional because absent is the safe answer: no
-   * selector, no paragraph type, grading and tutoring as before.
-   */
-  offersParagraphModes?: boolean;
+  kind: string | null;
+  /** Library rubric name when the type points at a shared rubric (e.g. SJP Daily Pages). */
+  rubricName?: string | null;
+  /** Free classroom bundle: assignments remaining for this kind. */
+  quotaRemaining?: number;
+  quotaTotal?: number;
+  quotaLabel?: string;
+  quotaExhausted?: boolean;
+  quotaExhaustedMessage?: string;
 };
 
 export type AssignmentCreationEditingAssignment = {
@@ -228,22 +294,31 @@ export type AssignmentCreationSheetProps = {
   initialGradingAssistantStrictnessLevel?: GradingAssistantStrictnessLevel;
   initialRubricTotalPoints?: number | null;
   initialGradingMode?: AssignmentGradingMode;
-  /**
-   * The assignment's saved writing time. Undefined means the caller has none
-   * to give — a new assignment — and the type's suggestion is used; null means
-   * the assignment has no writing time, and the field stays blank.
-   */
-  initialWritingTimeMinutes?: number | null;
-  /** The assignment's saved paragraph type, shown read-only when editing. */
-  initialParagraphMode?: string | null;
-  /**
-   * The Daily Pages writing-conditions flag (global, off by default). Off, the
-   * form neither shows nor submits Paragraph type or Time students have to
-   * write, on create or edit. Defaults to off so a call site that forgets it
-   * hides them rather than leaking an unreleased setting.
-   */
-  writingConditionsEnabled?: boolean;
   /** The rubric's authored total, shown before an assignment override is used. */
+  /**
+   * Exit ticket answers to start from. Only meaningful when the selected type
+   * is an exit ticket; editing one reopens the form on what was chosen rather
+   * than resetting it to the default.
+   */
+  initialExitTicketMode?: ExitTicketMode;
+  /**
+   * Whether a new exit ticket starts graded, and for how much. Set only by
+   * the Lesson Planner hand-off; without it a new ticket starts ungraded.
+   */
+  initialExitTicketGradebook?: {
+    submitForGrade: boolean;
+    pointValue: number | null;
+  } | null;
+  /** What a stored graded ticket was graded on; null for ungraded. */
+  initialExitTicketGrading?: ExitTicketGrading | null;
+  /** The reflection question a stored ticket asks; null for the default. */
+  initialExitTicketReflectionPrompt?: ExitTicketReflectionPrompt | null;
+  initialExitTicketFocus?: ExitTicketFocus;
+  initialExitTicketTopic?: string;
+  /** Absent leaves the question unanswered, which is what blocks submission. */
+  initialExitTicketAnswerType?: ExitTicketAnswerType | null;
+  /** Present reopens the notes section filled in; absent leaves the default. */
+  initialExitTicketLessonNotes?: ExitTicketLessonNotes | null;
 };
 
 type AssignmentCreationSheetContentProps = AssignmentCreationSheetProps & {
@@ -274,12 +349,14 @@ function initialAssignmentTypeSelection(
   fixedAssignmentTypeId?: string,
   initialAssignmentTypeId?: string
 ) {
-  return (
-    fixedAssignmentTypeId ??
-    initialAssignmentTypeId ??
-    assignmentTypes[0]?.id ??
-    ''
-  );
+  const preferredId =
+    fixedAssignmentTypeId ?? initialAssignmentTypeId ?? undefined;
+  if (preferredId) {
+    const preferred = assignmentTypes.find((type) => type.id === preferredId);
+    if (preferred && !preferred.quotaExhausted) return preferredId;
+  }
+  const firstAvailable = assignmentTypes.find((type) => !type.quotaExhausted);
+  return firstAvailable?.id ?? preferredId ?? assignmentTypes[0]?.id ?? '';
 }
 
 function initialClassIds(fixedClassId?: string) {
@@ -291,6 +368,99 @@ function pointValueFieldValue(pointValue: number | null | undefined) {
   return pointValue === null || pointValue === undefined
     ? ''
     : String(pointValue);
+}
+
+function gradingDraftFor(
+  grading: ExitTicketGrading | null | undefined
+): ExitTicketGradingDraft {
+  return {
+    basis: grading?.basis ?? DEFAULT_EXIT_TICKET_GRADING_BASIS,
+    minWords: grading?.minWords ? String(grading.minWords) : '',
+    minSentences: grading?.minSentences ? String(grading.minSentences) : '',
+    assessFor: grading?.assessFor ?? '',
+  };
+}
+
+/** Whether the lesson notes start open — only when there is already content. */
+function initialLessonNotesEnabled(
+  notes: ExitTicketLessonNotes | null | undefined
+) {
+  return Boolean(notes);
+}
+
+const EMPTY_LESSON_NOTES: ExitTicketLessonNotes = {
+  mainPoints: '',
+  mustMention: '',
+  watchFor: '',
+};
+
+function isExitTicketTypeId(
+  assignmentTypes: AssignmentCreationAssignmentType[],
+  assignmentTypeId: string
+) {
+  return isExitTicketAssignmentType(
+    assignmentTypes.find((type) => type.id === assignmentTypeId)
+  );
+}
+
+/**
+ * What the tutor toggle starts at. Editing keeps whatever the assignment has —
+ * the toggle is frozen after creation anyway. Otherwise an exit ticket starts
+ * off, where every other type starts on: a tutor in the document would be
+ * answering the question the ticket is asking.
+ */
+export function initialTutorEnabledFor({
+  isEditing,
+  isExitTicket,
+  initialTutorEnabled,
+}: {
+  isEditing: boolean;
+  isExitTicket: boolean;
+  initialTutorEnabled: boolean;
+}) {
+  if (isEditing) return initialTutorEnabled;
+  return isExitTicket ? EXIT_TICKET_TUTOR_ENABLED_DEFAULT : initialTutorEnabled;
+}
+
+/**
+ * How an exit ticket starts out in the gradebook. Editing keeps what the
+ * assignment already has; otherwise an exit ticket opens as a feedback-only
+ * check worth a few points if the teacher switches it to points.
+ */
+export function initialGradingFor({
+  isEditing,
+  isExitTicket,
+  initialSubmitForGrade,
+  initialPointValue,
+  plannedGradebook = null,
+}: {
+  isEditing: boolean;
+  isExitTicket: boolean;
+  initialSubmitForGrade: boolean;
+  initialPointValue: number | null | undefined;
+  /** A planned ticket's own choice, which beats the exit ticket default. */
+  plannedGradebook?: {
+    submitForGrade: boolean;
+    pointValue: number | null;
+  } | null;
+}) {
+  if (isEditing || !isExitTicket) {
+    return {
+      submitForGrade: initialSubmitForGrade,
+      pointValue: initialPointValue,
+    };
+  }
+  if (plannedGradebook) {
+    return {
+      submitForGrade: plannedGradebook.submitForGrade,
+      pointValue:
+        plannedGradebook.pointValue ?? EXIT_TICKET_DEFAULT_POINT_VALUE,
+    };
+  }
+  return {
+    submitForGrade: EXIT_TICKET_SUBMIT_FOR_GRADE_DEFAULT,
+    pointValue: EXIT_TICKET_DEFAULT_POINT_VALUE,
+  };
 }
 
 export function AssignmentCreationSheet({
@@ -333,9 +503,14 @@ export function AssignmentCreationSheetContent({
   initialGradingAssistantStrictnessLevel = DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   initialRubricTotalPoints = null,
   initialGradingMode = DEFAULT_ASSIGNMENT_GRADING_MODE,
-  initialWritingTimeMinutes,
-  initialParagraphMode = null,
-  writingConditionsEnabled = false,
+  initialExitTicketMode = DEFAULT_EXIT_TICKET_MODE,
+  initialExitTicketReflectionPrompt = null,
+  initialExitTicketGrading = null,
+  initialExitTicketGradebook = null,
+  initialExitTicketFocus = EXIT_TICKET_FOCUS_OPTIONS[0].value,
+  initialExitTicketAnswerType = null,
+  initialExitTicketTopic = '',
+  initialExitTicketLessonNotes = null,
   initialPostAt,
   initialDueAt,
   createFetcher,
@@ -358,32 +533,43 @@ export function AssignmentCreationSheetContent({
   );
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState(initialPrompt);
-  const [submitForGrade, setSubmitForGrade] = useState(initialSubmitForGrade);
+  const initialGrading = initialGradingFor({
+    isEditing: Boolean(editingAssignment),
+    isExitTicket: isExitTicketTypeId(
+      assignmentTypes,
+      initialAssignmentTypeSelection(
+        assignmentTypes,
+        fixedAssignmentTypeId,
+        initialAssignmentTypeId
+      )
+    ),
+    initialSubmitForGrade,
+    initialPointValue,
+    plannedGradebook: initialExitTicketGradebook,
+  });
+  const [submitForGrade, setSubmitForGrade] = useState(
+    initialGrading.submitForGrade
+  );
   const [pointValue, setPointValue] = useState(
-    pointValueFieldValue(initialPointValue)
+    pointValueFieldValue(initialGrading.pointValue)
   );
   const [postAt, setPostAt] = useState<string>('');
   const [dueAt, setDueAt] = useState<string>('');
-  const [tutorEnabled, setTutorEnabled] = useState(initialTutorEnabled);
   const [grammarGradingEnabled, setGrammarGradingEnabled] = useState(true);
-  const [paragraphMode, setParagraphMode] = useState(initialParagraphMode ?? '');
-  const initialWritingTimeValue = () =>
-    writingTimeFieldValue(
-      editingAssignment || initialWritingTimeMinutes !== undefined
-        ? initialWritingTimeMinutes
-        : assignmentTypes.find(
-            (type) =>
-              type.id ===
-              initialAssignmentTypeSelection(
-                assignmentTypes,
-                fixedAssignmentTypeId,
-                initialAssignmentTypeId
-              )
-          )?.defaultWritingTimeMinutes
-    );
-  const [writingTime, setWritingTime] = useState(initialWritingTimeValue);
-  // Once the teacher types a time, switching assignment type stops replacing it.
-  const writingTimeTouchedRef = useRef(false);
+  const [tutorEnabled, setTutorEnabled] = useState(() =>
+    initialTutorEnabledFor({
+      isEditing: Boolean(editingAssignment),
+      isExitTicket: isExitTicketTypeId(
+        assignmentTypes,
+        initialAssignmentTypeSelection(
+          assignmentTypes,
+          fixedAssignmentTypeId,
+          initialAssignmentTypeId
+        )
+      ),
+      initialTutorEnabled,
+    })
+  );
   const [collaborationEnabled, setCollaborationEnabled] = useState(
     initialCollaborationEnabled
   );
@@ -398,8 +584,45 @@ export function AssignmentCreationSheetContent({
       initialGradingAssistantStrictnessLevel
     );
   const [gradingPanelOpen, setGradingPanelOpen] = useState(false);
-  const [gradingMode, setGradingMode] = useState<AssignmentGradingMode>(
-    initialGradingMode
+  const [gradingMode, setGradingMode] =
+    useState<AssignmentGradingMode>(initialGradingMode);
+  const [exitTicketMode, setExitTicketMode] = useState<ExitTicketMode>(
+    initialExitTicketMode
+  );
+  const [exitTicketFocus, setExitTicketFocus] = useState<ExitTicketFocus>(
+    initialExitTicketFocus
+  );
+  const [exitTicketTopic, setExitTicketTopic] = useState(
+    initialExitTicketTopic
+  );
+  // Empty until the teacher answers. There is no sensible default: guessing
+  // either way decides for them whether a student can be told they are wrong.
+  const [exitTicketAnswerType, setExitTicketAnswerType] = useState<string>(
+    initialExitTicketAnswerType ?? ''
+  );
+  const [lessonNotesEnabled, setLessonNotesEnabled] = useState(
+    initialLessonNotesEnabled(initialExitTicketLessonNotes)
+  );
+  // Opens itself when there is something in it worth seeing: notes the
+  // planner already filled in, for one.
+  const [moreOptionsOpen, setMoreOptionsOpen] = useState(
+    Boolean(initialExitTicketLessonNotes)
+  );
+  const [gradingDraft, setGradingDraft] = useState<ExitTicketGradingDraft>(
+    gradingDraftFor(initialExitTicketGrading)
+  );
+  const [lessonNotes, setLessonNotes] = useState<ExitTicketLessonNotes>(
+    initialExitTicketLessonNotes ?? EMPTY_LESSON_NOTES
+  );
+  const [reflectionPromptId, setReflectionPromptId] =
+    useState<ExitTicketReflectionPromptId>(
+      initialExitTicketReflectionPrompt?.id ??
+        DEFAULT_EXIT_TICKET_REFLECTION_PROMPT
+    );
+  const [reflectionPromptText, setReflectionPromptText] = useState(
+    initialExitTicketReflectionPrompt?.id === 'custom'
+      ? initialExitTicketReflectionPrompt.text
+      : ''
   );
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [extractionTruncated, setExtractionTruncated] = useState(false);
@@ -415,18 +638,108 @@ export function AssignmentCreationSheetContent({
   const isExtracting = extractFetcher.state !== 'idle';
   const assignmentTypeId =
     fixedAssignmentTypeId ?? selectedAssignmentTypeId ?? '';
+  const selectedType = assignmentTypes.find(
+    (type) => type.id === assignmentTypeId
+  );
+  // Collaboration is offered for every assignment type now, so this only asks
+  // whether a type has been chosen at all.
   const selectedTypeSupportsCollaboration = Boolean(assignmentTypeId);
   // Offered only where there is something to turn off. Switching it on cannot
   // invent a grammar category for a rubric that has none.
   const selectedTypeGradesGrammar = Boolean(
     assignmentTypes.find((type) => type.id === assignmentTypeId)?.gradesGrammar
   );
-  const selectedTypeOffersParagraphModes = Boolean(
-    assignmentTypes.find((type) => type.id === assignmentTypeId)
-      ?.offersParagraphModes
+  // An exit ticket has no prompt box: the teacher answers the form and the
+  // prompt is composed from the answers. With the feature off it falls back to
+  // the ordinary prompt box, so an exit ticket type can exist before this does.
+  const isExitTicket = isExitTicketAssignmentType(selectedType);
+  const isQuickExitTicket = isExitTicket;
+  // Bands, never steps, for the quick builder: the exit ticket rubric is one
+  // category with four bands, and a short response is not stepped through.
+  const effectiveGradingMode: AssignmentGradingMode = isQuickExitTicket
+    ? 'bands'
+    : gradingMode;
+  const selectedExitTicketFocus = exitTicketFocusOption(exitTicketFocus);
+  // Composed through the same parser the server uses, so the preview a teacher
+  // approves and the prompt their students get cannot drift apart. Empty means
+  // the form is not answered yet, which is also what blocks submission.
+  // The quick builder's own answers. The original builder posts none of
+  // these, so it composes exactly what it always did.
+  // Lesson notes post when the grading section asks for them as criteria, or
+  // when the notes are switched on; the gate reads exactly what will post.
+  const criteriaNoteKeys = exitTicketCriteriaNoteKeys({
+    kind: exitTicketKindForMode(exitTicketMode),
+    graded: submitForGrade,
+    answerType: exitTicketAnswerType,
+    basis: gradingDraft.basis,
+  });
+  const postedNote = (key: keyof ExitTicketLessonNotes) =>
+    lessonNotesEnabled || criteriaNoteKeys.includes(key)
+      ? lessonNotes[key]
+      : undefined;
+  const quickBuilderInput = {
+    reflectionPrompt: reflectionPromptId,
+    reflectionPromptText,
+    graded: submitForGrade,
+    gradingBasis: gradingDraft.basis,
+    minWords: gradingDraft.minWords,
+    minSentences: gradingDraft.minSentences,
+    assessFor: gradingDraft.assessFor,
+    lessonMainPoints: postedNote('mainPoints'),
+    lessonMustMention: postedNote('mustMention'),
+    lessonWatchFor: postedNote('watchFor'),
+  };
+  const exitTicketConfig = parseExitTicketConfigInput({
+    mode: exitTicketMode,
+    focus: exitTicketFocus,
+    topic: exitTicketTopic,
+    answerType: exitTicketAnswerType,
+    ...quickBuilderInput,
+  });
+  // The desired-response answer never reaches the student, so the preview is
+  // composed without waiting on it — but the real config above is what gates
+  // submission, so the ticket still cannot be created unanswered.
+  const exitTicketPreviewConfig = parseExitTicketConfigInput({
+    mode: exitTicketMode,
+    focus: exitTicketFocus,
+    topic: exitTicketTopic,
+    answerType: exitTicketAnswerType || EXIT_TICKET_ANSWER_TYPES[0],
+    ...quickBuilderInput,
+  });
+  const exitTicketPreview = exitTicketPreviewConfig.success
+    ? composeExitTicketPrompt(exitTicketPreviewConfig.config)
+    : '';
+  const exitTicketPrompt = exitTicketConfig.success
+    ? composeExitTicketPrompt(exitTicketConfig.config)
+    : '';
+  const selectedAssignmentType = assignmentTypes.find(
+    (type) => type.id === assignmentTypeId
   );
-  const paragraphModeOptions = enabledParagraphModes();
-  const selectedParagraphMode = getParagraphMode(paragraphMode);
+  const usesDailyPagesEngagementRubric =
+    assignmentTypeUsesDailyPagesEngagementRubric({
+      kind: selectedAssignmentType?.kind,
+      rubricName: selectedAssignmentType?.rubricName,
+    });
+  const minimumPointValue = usesDailyPagesEngagementRubric
+    ? MIN_DAILY_PAGES_ENGAGEMENT_POINT_TOTAL
+    : 1;
+  const engagementBandPreview = useMemo(() => {
+    if (!usesDailyPagesEngagementRubric || !gradingPanelOpen) return null;
+    const parsed = Number.parseInt(pointValue, 10);
+    if (!Number.isSafeInteger(parsed) || parsed < minimumPointValue) {
+      return null;
+    }
+    try {
+      return dailyPagesEngagementTierBands(parsed);
+    } catch {
+      return null;
+    }
+  }, [
+    gradingPanelOpen,
+    minimumPointValue,
+    pointValue,
+    usesDailyPagesEngagementRubric,
+  ]);
   const hasFixedClass = Boolean(fixedClassId);
   // Every creation entry point uses the same server workflow. In particular,
   // the class page must not silently drop collaboration fields by posting to
@@ -486,14 +799,38 @@ export function AssignmentCreationSheetContent({
     setSelectedClassIds(initialClassIds(fixedClassId));
     setTitle(initialTitle);
     setPrompt(initialPrompt);
-    setSubmitForGrade(initialSubmitForGrade);
-    setPointValue(pointValueFieldValue(initialPointValue));
+    const grading = initialGradingFor({
+      isEditing: Boolean(editingAssignment),
+      isExitTicket: isExitTicketTypeId(
+        assignmentTypes,
+        initialAssignmentTypeSelection(
+          assignmentTypes,
+          fixedAssignmentTypeId,
+          initialAssignmentTypeId
+        )
+      ),
+      initialSubmitForGrade,
+      initialPointValue,
+      plannedGradebook: initialExitTicketGradebook,
+    });
+    setSubmitForGrade(grading.submitForGrade);
+    setPointValue(pointValueFieldValue(grading.pointValue));
     setPostAt(toDateInputValue(initialPostAt));
     setDueAt(toDateInputValue(initialDueAt));
-    setTutorEnabled(initialTutorEnabled);
-    setParagraphMode(initialParagraphMode ?? '');
-    setWritingTime(initialWritingTimeValue());
-    writingTimeTouchedRef.current = false;
+    setTutorEnabled(
+      initialTutorEnabledFor({
+        isEditing: Boolean(editingAssignment),
+        isExitTicket: isExitTicketTypeId(
+          assignmentTypes,
+          initialAssignmentTypeSelection(
+            assignmentTypes,
+            fixedAssignmentTypeId,
+            initialAssignmentTypeId
+          )
+        ),
+        initialTutorEnabled,
+      })
+    );
     setCollaborationEnabled(initialCollaborationEnabled);
     setCollaborationGroupMode(initialCollaborationGroupMode);
     setCollaborationGroupSize(
@@ -503,6 +840,25 @@ export function AssignmentCreationSheetContent({
     setGradingAssistantStrictnessLevel(initialGradingAssistantStrictnessLevel);
     setGradingPanelOpen(false);
     setGradingMode(initialGradingMode);
+    setExitTicketMode(initialExitTicketMode);
+    setExitTicketFocus(initialExitTicketFocus);
+    setExitTicketTopic(initialExitTicketTopic);
+    setExitTicketAnswerType(initialExitTicketAnswerType ?? '');
+    setLessonNotesEnabled(
+      initialLessonNotesEnabled(initialExitTicketLessonNotes)
+    );
+    setGradingDraft(gradingDraftFor(initialExitTicketGrading));
+    setMoreOptionsOpen(Boolean(initialExitTicketLessonNotes));
+    setLessonNotes(initialExitTicketLessonNotes ?? EMPTY_LESSON_NOTES);
+    setReflectionPromptId(
+      initialExitTicketReflectionPrompt?.id ??
+        DEFAULT_EXIT_TICKET_REFLECTION_PROMPT
+    );
+    setReflectionPromptText(
+      initialExitTicketReflectionPrompt?.id === 'custom'
+        ? initialExitTicketReflectionPrompt.text
+        : ''
+    );
     setAttachmentFile(null);
     setRemoveAttachment(false);
     setExtractionTruncated(false);
@@ -523,23 +879,20 @@ export function AssignmentCreationSheetContent({
     initialCollaborationGroupSize,
     initialGradingAssistantStrictnessLevel,
     initialGradingMode,
-    initialWritingTimeMinutes,
-    initialParagraphMode,
+    initialExitTicketMode,
+    initialExitTicketFocus,
+    initialExitTicketTopic,
+    initialExitTicketAnswerType,
+    initialExitTicketLessonNotes,
+    initialExitTicketReflectionPrompt,
+    initialExitTicketGrading,
+    initialExitTicketGradebook,
+    editingAssignment,
     initialPostAt,
     initialDueAt,
     open,
     teacherClasses,
   ]);
-
-  // A new assignment follows its type's suggestion until the teacher types one.
-  // An edit never does: its saved time, or its lack of one, is the teacher's.
-  const selectedTypeDefaultWritingTime = assignmentTypes.find(
-    (type) => type.id === assignmentTypeId
-  )?.defaultWritingTimeMinutes;
-  useEffect(() => {
-    if (isEditing || writingTimeTouchedRef.current) return;
-    setWritingTime(writingTimeFieldValue(selectedTypeDefaultWritingTime));
-  }, [isEditing, selectedTypeDefaultWritingTime]);
 
   useEffect(() => {
     if (createFetcher.state !== 'idle' || !createFetcher.data?.success) return;
@@ -590,7 +943,7 @@ export function AssignmentCreationSheetContent({
     isExtracting ||
     !assignmentTypeId ||
     (!isEditing && selectedClassCount === 0) ||
-    !prompt.trim() ||
+    (isExitTicket ? !exitTicketPrompt : !prompt.trim()) ||
     (titleRequired && !title.trim()) ||
     (submitForGrade && !pointValue.trim());
 
@@ -609,6 +962,93 @@ export function AssignmentCreationSheetContent({
       <h2>{headingText}</h2>
       <p>{headingDescription}</p>
     </div>
+  );
+
+  // Teacher-only context about the lesson. Rendered only while switched on,
+  // so a ticket without notes posts no note fields and stores none. Nothing
+  // here is ever composed into the prompt.
+  const exitTicketLessonNotesBlock = (
+    <div className="space-y-3 rounded-md border border-dashed p-3">
+      <div className="flex items-start gap-2.5">
+        <Checkbox
+          id="assignment-create-exit-ticket-lesson-notes"
+          checked={lessonNotesEnabled}
+          onCheckedChange={(checked) => setLessonNotesEnabled(checked === true)}
+          disabled={isSaving}
+          className="mt-0.5 size-4 shrink-0"
+        />
+        <Label
+          htmlFor="assignment-create-exit-ticket-lesson-notes"
+          className="cursor-pointer font-normal"
+        >
+          <span className="font-medium">Add notes about the lesson</span>
+          <span className="mt-0.5 block text-sm text-muted-foreground">
+            Students never see these. The more you tell us here, the more
+            targeted this exit ticket becomes — responses can be read against
+            what you actually taught, instead of just on their own terms.
+          </span>
+        </Label>
+      </div>
+
+      {lessonNotesEnabled ? (
+        <div className="space-y-3 pl-[calc(1rem+0.625rem)]">
+          {EXIT_TICKET_LESSON_NOTE_FIELDS.map((field) => {
+            const id = `assignment-create-exit-ticket-lesson-${field.key}`;
+            const name = `exitTicketLesson${field.key[0].toUpperCase()}${field.key.slice(1)}`;
+            return (
+              <div key={field.key} className="space-y-1.5">
+                <Label htmlFor={id}>
+                  {field.label}{' '}
+                  <span className="text-muted-foreground">(optional)</span>
+                </Label>
+                <Textarea
+                  id={id}
+                  name={name}
+                  value={lessonNotes[field.key]}
+                  onChange={(event) =>
+                    setLessonNotes((current) => ({
+                      ...current,
+                      [field.key]: event.target.value,
+                    }))
+                  }
+                  rows={2}
+                  maxLength={EXIT_TICKET_LESSON_NOTE_MAX_LENGTH}
+                  placeholder={field.placeholder}
+                  disabled={isSaving}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {field.helperText}
+                </p>
+              </div>
+            );
+          })}
+          <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+            {exitTicketTargetingHint(lessonNotes)}
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+
+  // The composed prompt goes along so any handler that still expects a
+  // prompt field keeps working. The server recomposes it from the answers
+  // rather than trusting this value.
+  const exitTicketHiddenFields = (
+    <>
+      <input type="hidden" name="exitTicketMode" value={exitTicketMode} />
+      {exitTicketMode === 'specific' ? (
+        <>
+          <input type="hidden" name="exitTicketFocus" value={exitTicketFocus} />
+          <input type="hidden" name="exitTicketTopic" value={exitTicketTopic} />
+          <input
+            type="hidden"
+            name="exitTicketAnswerType"
+            value={exitTicketAnswerType}
+          />
+        </>
+      ) : null}
+      <input type="hidden" name="prompt" value={exitTicketPrompt} />
+    </>
   );
 
   const form = (
@@ -650,7 +1090,30 @@ export function AssignmentCreationSheetContent({
           <Label>Assignment type</Label>
           <Select
             value={assignmentTypeId}
-            onValueChange={setSelectedAssignmentTypeId}
+            onValueChange={(nextTypeId) => {
+              setSelectedAssignmentTypeId(nextTypeId);
+              // Type-dependent defaults follow the type. Editing never reaches
+              // here for the tutor: the toggle is frozen after creation.
+              const nextIsExitTicket = isExitTicketTypeId(
+                assignmentTypes,
+                nextTypeId
+              );
+              setTutorEnabled(
+                initialTutorEnabledFor({
+                  isEditing,
+                  isExitTicket: nextIsExitTicket,
+                  initialTutorEnabled,
+                })
+              );
+              const grading = initialGradingFor({
+                isEditing,
+                isExitTicket: nextIsExitTicket,
+                initialSubmitForGrade,
+                initialPointValue,
+              });
+              setSubmitForGrade(grading.submitForGrade);
+              setPointValue(pointValueFieldValue(grading.pointValue));
+            }}
             disabled={
               isSaving ||
               Boolean(fixedAssignmentTypeId) ||
@@ -662,8 +1125,20 @@ export function AssignmentCreationSheetContent({
             </SelectTrigger>
             <SelectContent>
               {assignmentTypes.map((assignmentType) => (
-                <SelectItem key={assignmentType.id} value={assignmentType.id}>
-                  {assignmentType.title}
+                <SelectItem
+                  key={assignmentType.id}
+                  value={assignmentType.id}
+                  textValue={assignmentType.title}
+                  triggerLabel={assignmentType.title}
+                  disabled={assignmentType.quotaExhausted}
+                >
+                  {assignmentType.quotaLabel ? (
+                    <span className="text-xs text-muted-foreground">
+                      {assignmentType.quotaExhausted
+                        ? assignmentType.quotaExhaustedMessage
+                        : assignmentType.quotaLabel}
+                    </span>
+                  ) : null}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -815,89 +1290,190 @@ export function AssignmentCreationSheetContent({
           ) : null}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="assignment-create-prompt">Prompt</Label>
-          <div className="relative">
-            <Textarea
-              id="assignment-create-prompt"
-              name="prompt"
-              value={prompt}
-              onChange={(event) => {
-                setPrompt(event.target.value);
-                setExtractionTruncated(false);
-              }}
-              rows={10}
-              className="pb-12"
-              placeholder="Type the full assignment prompt for students, or extract it from a PDF..."
+        {isExitTicket ? (
+          <div className="space-y-4">
+            <ExitTicketBuilder
+              mode={exitTicketMode}
+              onModeChange={setExitTicketMode}
+              focus={exitTicketFocus}
+              onFocusChange={setExitTicketFocus}
+              topic={exitTicketTopic}
+              onTopicChange={setExitTicketTopic}
+              answerType={exitTicketAnswerType}
+              onAnswerTypeChange={setExitTicketAnswerType}
+              reflectionPromptId={reflectionPromptId}
+              onReflectionPromptIdChange={setReflectionPromptId}
+              reflectionPromptText={reflectionPromptText}
+              onReflectionPromptTextChange={setReflectionPromptText}
+              graded={submitForGrade}
+              onGradedChange={setSubmitForGrade}
+              pointValue={pointValue}
+              onPointValueChange={setPointValue}
+              grading={gradingDraft}
+              onGradingChange={(patch) =>
+                setGradingDraft((current) => ({ ...current, ...patch }))
+              }
+              lessonNotes={lessonNotes}
+              onLessonNoteChange={(key, value) =>
+                setLessonNotes((current) => ({ ...current, [key]: value }))
+              }
+              preview={exitTicketPreview}
               disabled={isSaving}
-              required
             />
-            <input
-              ref={extractFileInputRef}
-              type="file"
-              accept="application/pdf,.pdf"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0] ?? null;
-                event.target.value = '';
-                if (file) handleExtractPdf(file);
-              }}
-            />
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              aria-label="Extract assignment text from PDF"
-              className="absolute bottom-2 right-2 shadow-sm"
-              onClick={() => extractFileInputRef.current?.click()}
-              disabled={!pdfExtractionClassId || isExtracting || isSaving}
-            >
-              {isExtracting ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Extracting...
-                </span>
-              ) : (
-                <span className="flex items-center gap-2">
-                  <FileUp className="h-3.5 w-3.5" />
-                  Extract from PDF
-                </span>
-              )}
-            </Button>
+            {exitTicketHiddenFields}
           </div>
-          {extractError ? (
-            <p className="text-sm text-destructive">{extractError}</p>
-          ) : null}
-          {extractionTruncated ? (
-            <p className="text-sm text-destructive">
-              This PDF was too big — the extracted prompt got cut off. Please
-              review it and fill in the rest manually.
-            </p>
-          ) : null}
-        </div>
+        ) : (
+          <div className="space-y-2">
+            <Label htmlFor="assignment-create-prompt">Prompt</Label>
+            <div className="relative">
+              <Textarea
+                id="assignment-create-prompt"
+                name="prompt"
+                value={prompt}
+                onChange={(event) => {
+                  setPrompt(event.target.value);
+                  setExtractionTruncated(false);
+                }}
+                rows={10}
+                className="pb-12"
+                placeholder="Type the full assignment prompt for students, or extract it from a PDF..."
+                disabled={isSaving}
+                required
+              />
+              <input
+                ref={extractFileInputRef}
+                type="file"
+                accept="application/pdf,.pdf"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+                  event.target.value = '';
+                  if (file) handleExtractPdf(file);
+                }}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                aria-label="Extract assignment text from PDF"
+                className="absolute bottom-2 right-2 shadow-sm"
+                onClick={() => extractFileInputRef.current?.click()}
+                disabled={!pdfExtractionClassId || isExtracting || isSaving}
+              >
+                {isExtracting ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Extracting...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <FileUp className="h-3.5 w-3.5" />
+                    Extract from PDF
+                  </span>
+                )}
+              </Button>
+            </div>
+            {extractError ? (
+              <p className="text-sm text-destructive">{extractError}</p>
+            ) : null}
+            {extractionTruncated ? (
+              <p className="text-sm text-destructive">
+                This PDF was too big — the extracted prompt got cut off. Please
+                review it and fill in the rest manually.
+              </p>
+            ) : null}
+          </div>
+        )}
 
         <div className="pt-6">
           <input type="hidden" name="submitForGrade" value="false" />
-          <div className="flex items-center gap-2.5">
-            <Checkbox
-              id="assignment-create-submit-for-grade"
-              name="submitForGrade"
-              value="true"
-              checked={submitForGrade}
-              onCheckedChange={(checked) => setSubmitForGrade(checked === true)}
-              disabled={isSaving}
-              className="size-4 shrink-0"
-            />
-            <Label
-              htmlFor="assignment-create-submit-for-grade"
-              className="cursor-pointer font-normal leading-none"
-            >
-              Submit for grade
-            </Label>
-          </div>
-          <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
-            Students can submit this assignment for a recorded grade.
-          </p>
+          {isQuickExitTicket ? (
+            submitForGrade ? (
+              <input type="hidden" name="submitForGrade" value="true" />
+            ) : null
+          ) : isExitTicket ? (
+            /* Same field, same values — this only reframes the choice in the
+               terms an exit ticket is actually about. Feedback only still
+               reads and scores every response; it just keeps the score out of
+               the gradebook. */
+            <div className="space-y-2">
+              <Label>How this is graded</Label>
+              <RadioGroup
+                value={submitForGrade ? 'points' : 'feedback'}
+                onValueChange={(value) => setSubmitForGrade(value === 'points')}
+                disabled={isSaving}
+                className="gap-3 pt-1"
+              >
+                <div className="flex items-start gap-2.5">
+                  <RadioGroupItem
+                    id="assignment-create-exit-ticket-feedback-only"
+                    value="feedback"
+                    className="mt-1"
+                  />
+                  <Label
+                    htmlFor="assignment-create-exit-ticket-feedback-only"
+                    className="cursor-pointer font-normal"
+                  >
+                    <span className="font-medium">
+                      Feedback and understanding only
+                    </span>
+                    <span className="mt-0.5 block text-sm text-muted-foreground">
+                      Every response is still read and given feedback, and you
+                      still see who understood it. Nothing goes in the
+                      gradebook. Students answer honestly because there is
+                      nothing to lose by admitting what they missed.
+                    </span>
+                  </Label>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <RadioGroupItem
+                    id="assignment-create-exit-ticket-for-points"
+                    value="points"
+                    className="mt-1"
+                  />
+                  <Label
+                    htmlFor="assignment-create-exit-ticket-for-points"
+                    className="cursor-pointer font-normal"
+                  >
+                    <span className="font-medium">For points</span>
+                    <span className="mt-0.5 block text-sm text-muted-foreground">
+                      A recorded grade. Worth doing when you want the ticket to
+                      count toward completion — keep it small so one lesson
+                      check never outweighs real work.
+                    </span>
+                  </Label>
+                </div>
+              </RadioGroup>
+              {submitForGrade ? (
+                <input type="hidden" name="submitForGrade" value="true" />
+              ) : null}
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-2.5">
+                <Checkbox
+                  id="assignment-create-submit-for-grade"
+                  name="submitForGrade"
+                  value="true"
+                  checked={submitForGrade}
+                  onCheckedChange={(checked) =>
+                    setSubmitForGrade(checked === true)
+                  }
+                  disabled={isSaving}
+                  className="size-4 shrink-0"
+                />
+                <Label
+                  htmlFor="assignment-create-submit-for-grade"
+                  className="cursor-pointer font-normal leading-none"
+                >
+                  Submit for grade
+                </Label>
+              </div>
+              <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
+                Students can submit this assignment for a recorded grade.
+              </p>
+            </>
+          )}
 
           {submitForGrade ? (
             <div className="mt-3 overflow-hidden rounded-lg bg-muted shadow-sm ring-1 ring-black/5">
@@ -935,39 +1511,63 @@ export function AssignmentCreationSheetContent({
                   id="assignment-create-grading-panel"
                   className="space-y-5 border-t border-border px-4 py-4"
                 >
-                  <div className="space-y-2">
-                    <Label htmlFor="assignment-create-point-value">
-                      Point value
-                    </Label>
-                    <div className="flex items-center gap-2">
-                      {/* `Input` is `w-full`, so the width lives on a wrapper. */}
-                      <div className="w-24">
-                        <Input
-                          id="assignment-create-point-value"
-                          name="pointValue"
-                          type="number"
-                          min={1}
-                          max={1000}
-                          step={1}
-                          inputMode="numeric"
-                          value={pointValue}
-                          onChange={(event) =>
-                            setPointValue(event.target.value)
-                          }
-                          disabled={isSaving}
-                          required
-                          className="tabular-nums"
-                        />
+                  {isQuickExitTicket ? null : (
+                    <div className="space-y-2">
+                      <Label htmlFor="assignment-create-point-value">
+                        Point value
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        {/* `Input` is `w-full`, so the width lives on a wrapper. */}
+                        <div className="w-24">
+                          <Input
+                            id="assignment-create-point-value"
+                            name="pointValue"
+                            type="number"
+                            min={minimumPointValue}
+                            max={1000}
+                            step={1}
+                            inputMode="numeric"
+                            value={pointValue}
+                            onChange={(event) =>
+                              setPointValue(event.target.value)
+                            }
+                            disabled={isSaving}
+                            required
+                            className="tabular-nums"
+                          />
+                        </div>
+                        <span className="text-sm text-muted-foreground">
+                          points
+                        </span>
                       </div>
-                      <span className="text-sm text-muted-foreground">
-                        points
-                      </span>
+                      <p className="text-sm text-muted-foreground">
+                        What the assignment is worth in the gradebook.
+                        {minimumPointValue > 1
+                          ? ` Daily Pages engagement assignments need at least ${minimumPointValue} points when graded.`
+                          : ' The rubric keeps its own scale either way.'}
+                      </p>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      What the assignment is worth in the gradebook. The rubric
-                      keeps its own scale either way.
-                    </p>
-                  </div>
+                  )}
+
+                  {engagementBandPreview ? (
+                    <div
+                      className="space-y-2"
+                      data-testid="assignment-create-engagement-bands"
+                    >
+                      <p className="text-sm font-medium">Engagement tiers</p>
+                      <ul className="space-y-1 text-sm text-muted-foreground">
+                        {engagementBandPreview.map((band) => (
+                          <li key={band.tier}>
+                            <span className="font-medium text-foreground">
+                              {band.label}
+                            </span>
+                            {' — '}
+                            {formatDailyPagesEngagementBandRange(band)} points
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
 
                   {/* Scoring behavior is now fixed to bands; UI selector removed */}
 
@@ -993,7 +1593,7 @@ export function AssignmentCreationSheetContent({
                     </p>
                   </div>
                 </div>
-              ) : (
+              ) : isQuickExitTicket ? null : (
                 <input type="hidden" name="pointValue" value={pointValue} />
               )}
 
@@ -1017,286 +1617,250 @@ export function AssignmentCreationSheetContent({
           ) : null}
         </div>
 
-        {/* Frozen once the assignment exists: students may already have
+        {/* The quick builder keeps a default exit ticket to one screen:
+            everything a teacher rarely changes waits in here, still posting
+            its value, until they open it. */}
+        <MoreOptions
+          enabled={isQuickExitTicket}
+          open={moreOptionsOpen}
+          onOpenChange={setMoreOptionsOpen}
+        >
+          {isQuickExitTicket ? (
+            <div className="pt-4">
+              <ExitTicketLessonNotesSection
+                criteriaKeys={criteriaNoteKeys}
+                lessonNotes={lessonNotes}
+                onLessonNoteChange={(key, value) =>
+                  setLessonNotes((current) => ({ ...current, [key]: value }))
+                }
+                enabled={lessonNotesEnabled}
+                onEnabledChange={setLessonNotesEnabled}
+                disabled={isSaving}
+              />
+            </div>
+          ) : null}
+          {/* Frozen once the assignment exists: students may already have
             documents and tutor sessions built around this setting, so it is
             shown read-only rather than hidden. Nothing named tutorEnabled is
             submitted while editing, which is what tells the server to leave
             the stored value alone. */}
-        <div className="pt-6">
-          {isEditing ? null : (
-            <input type="hidden" name="tutorEnabled" value="false" />
-          )}
-          <div className="flex items-center gap-2.5">
-            <Checkbox
-              id="assignment-create-tutor-enabled"
-              name={isEditing ? undefined : 'tutorEnabled'}
-              value="true"
-              checked={tutorEnabled}
-              onCheckedChange={(checked) => setTutorEnabled(checked === true)}
-              disabled={isSaving || isEditing}
-              className="size-4 shrink-0"
-            />
-            <Label
-              htmlFor="assignment-create-tutor-enabled"
-              className={
-                isEditing
-                  ? 'font-normal leading-none text-muted-foreground'
-                  : 'cursor-pointer font-normal leading-none'
-              }
-            >
-              Tutor enabled
-            </Label>
-            {tutorEnabled ? null : (
-              <span className="rounded-full border px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                Cold write
-              </span>
+          <div className="pt-6">
+            {isEditing ? null : (
+              <input type="hidden" name="tutorEnabled" value="false" />
             )}
+            <div className="flex items-center gap-2.5">
+              <Checkbox
+                id="assignment-create-tutor-enabled"
+                name={isEditing ? undefined : 'tutorEnabled'}
+                value="true"
+                checked={tutorEnabled}
+                onCheckedChange={(checked) => setTutorEnabled(checked === true)}
+                disabled={isSaving || isEditing}
+                className="size-4 shrink-0"
+              />
+              <Label
+                htmlFor="assignment-create-tutor-enabled"
+                className={
+                  isEditing
+                    ? 'font-normal leading-none text-muted-foreground'
+                    : 'cursor-pointer font-normal leading-none'
+                }
+              >
+                Tutor enabled
+              </Label>
+              {tutorEnabled ? null : (
+                <span className="rounded-full border px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                  Cold write
+                </span>
+              )}
+            </div>
+            <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
+              {isEditing
+                ? 'The tutor cannot be switched on or off after an assignment is created — students may already be working with it. Duplicate the assignment to give a class a version with the other setting.'
+                : isQuickExitTicket
+                  ? 'Off by default for exit tickets.'
+                  : isExitTicket
+                    ? 'Off by default for an exit ticket: it checks what students understand on their own, and a tutor in the document would answer the question for them. Turn it on if you want them to have help.'
+                    : "The tutor is on by default. Turning it off removes it from students' documents — the digital equivalent of an in-class essay. Assigning one now and then shows what a student can do unaided, and gives the Reporter a baseline to measure independent growth against."}
+            </p>
+            {isQuickExitTicket && !isEditing ? (
+              <div className="mt-1 pl-[calc(1rem+0.625rem)]">
+                <WhyDisclosure>
+                  <p>
+                    An exit ticket checks what students understand on their own,
+                    and a tutor in the document would answer the question for
+                    them. Turn it on if you want them to have help.
+                  </p>
+                </WhyDisclosure>
+              </div>
+            ) : null}
           </div>
-          <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
-            {isEditing
-              ? 'The tutor cannot be switched on or off after an assignment is created — students may already be working with it. Duplicate the assignment to give a class a version with the other setting.'
-              : "The tutor is on by default. Turning it off removes it from students' documents — the digital equivalent of an in-class essay. Assigning one now and then shows what a student can do unaided, and gives the Reporter a baseline to measure independent growth against."}
-          </p>
-        </div>
 
-        {/* Graded for grammar and syntax. Shown only for assignment types whose
+          {/* Graded for grammar and syntax. Shown only for assignment types whose
             rubric grades grammar, because the toggle only ever turns it off.
             Frozen after creation like the two toggles around it: work already
             graded was scored against a rubric that included the category, and
             flipping it afterwards would silently restate those grades. */}
-        {selectedTypeGradesGrammar ? (
-          <div className="pt-6">
-            {isEditing ? null : (
-              <input
-                type="hidden"
-                name="grammarGradingEnabled"
-                value="false"
-              />
-            )}
-            <div className="flex items-center gap-2.5">
-              <Checkbox
-                id="assignment-create-grammar-grading-enabled"
-                name={isEditing ? undefined : 'grammarGradingEnabled'}
-                value="true"
-                checked={grammarGradingEnabled}
-                onCheckedChange={(checked) =>
-                  setGrammarGradingEnabled(checked === true)
-                }
-                disabled={isSaving || isEditing}
-                className="size-4 shrink-0"
-              />
-              <Label
-                htmlFor="assignment-create-grammar-grading-enabled"
-                className={
-                  isEditing
-                    ? 'font-normal leading-none text-muted-foreground'
-                    : 'cursor-pointer font-normal leading-none'
-                }
-              >
-                Grade this for grammar and syntax
-              </Label>
-            </div>
-            <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
-              {isEditing
-                ? 'Grammar grading cannot be switched on or off after an assignment is created — work may already be graded against it.'
-                : 'On by default for this assignment type. Turn it off for a quick write you want graded on the thinking alone: the grammar category is dropped, the writing is not marked up, and the remaining categories carry the whole grade.'}
-            </p>
-          </div>
-        ) : null}
-
-        {/* The kind of paragraph a Daily Pages entry practices. Only the types
-            switched on are offered, so teachers see Analyze first and the rest
-            as they are ready. Frozen after creation like the grammar toggle:
-            work may already be graded and tutored against it. */}
-        {writingConditionsEnabled &&
-        selectedTypeOffersParagraphModes &&
-        paragraphModeOptions.length > 0 ? (
-          <div className="pt-6">
-            <Label
-              htmlFor="assignment-create-paragraph-mode"
-              className="font-normal"
-            >
-              Paragraph type
-            </Label>
-            <select
-              id="assignment-create-paragraph-mode"
-              name={isEditing ? undefined : 'paragraphMode'}
-              value={paragraphMode}
-              onChange={(event) => setParagraphMode(event.target.value)}
-              disabled={isSaving || isEditing}
-              className="mt-2 block rounded border px-2 py-1 text-sm"
-            >
-              <option value="">Any kind of paragraph</option>
-              {paragraphModeOptions.map((mode) => (
-                <option key={mode.key} value={mode.key}>
-                  {mode.label}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {isEditing
-                ? 'The paragraph type cannot be changed after an assignment is created — work may already be graded against it.'
-                : selectedParagraphMode
-                  ? `${selectedParagraphMode.description} The tutor coaches toward it and the grading assistant reads for it.`
-                  : 'Choose the move students are practicing, and the tutor and grading assistant will focus on it. Leave it on any kind to grade the paragraph on its own terms.'}
-            </p>
-          </div>
-        ) : null}
-
-        {/* How long students have to write. Read by the grading assistant and
-            the grammar checker, so a ten-minute paragraph is not graded as a
-            revised essay. Unlike the toggles around it this stays editable:
-            it changes how future grading reads the work, not a grade given.
-            Behind the writing-conditions flag, like Paragraph type. */}
-        {writingConditionsEnabled ? (
-          <div className="pt-6">
-            <Label htmlFor="assignment-create-writing-time" className="font-normal">
-              Time students have to write
-            </Label>
-            <div className="mt-2 flex items-center gap-2">
-              {/* Input fills its container, so the container sets the width. */}
-              <div className="w-24 shrink-0">
-                <Input
-                  id="assignment-create-writing-time"
-                  name="writingTimeMinutes"
-                  type="number"
-                  inputMode="numeric"
-                  min={MIN_WRITING_TIME_MINUTES}
-                  max={MAX_WRITING_TIME_MINUTES}
-                  step={1}
-                  value={writingTime}
-                  onChange={(event) => {
-                    writingTimeTouchedRef.current = true;
-                    setWritingTime(event.target.value);
-                  }}
-                  disabled={isSaving}
+          {selectedTypeGradesGrammar ? (
+            <div className="pt-6">
+              {isEditing ? null : (
+                <input
+                  type="hidden"
+                  name="grammarGradingEnabled"
+                  value="false"
                 />
+              )}
+              <div className="flex items-center gap-2.5">
+                <Checkbox
+                  id="assignment-create-grammar-grading-enabled"
+                  name={isEditing ? undefined : 'grammarGradingEnabled'}
+                  value="true"
+                  checked={grammarGradingEnabled}
+                  onCheckedChange={(checked) =>
+                    setGrammarGradingEnabled(checked === true)
+                  }
+                  disabled={isSaving || isEditing}
+                  className="size-4 shrink-0"
+                />
+                <Label
+                  htmlFor="assignment-create-grammar-grading-enabled"
+                  className={
+                    isEditing
+                      ? 'font-normal leading-none text-muted-foreground'
+                      : 'cursor-pointer font-normal leading-none'
+                  }
+                >
+                  Grade this for grammar and syntax
+                </Label>
               </div>
-              <span className="text-sm text-muted-foreground">minutes</span>
+              <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
+                {isEditing
+                  ? 'Grammar grading cannot be switched on or off after an assignment is created — work may already be graded against it.'
+                  : 'On by default for this assignment type. Turn it off for a quick write you want graded on the thinking alone: the grammar category is dropped, the writing is not marked up, and the remaining categories carry the whole grade.'}
+              </p>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Optional. The grading assistant and grammar checker judge the writing
-              as work done in this time, so a ten-minute paragraph is not held to
-              the polish of a revised essay. Leave it blank for work students take
-              home or revise.
-            </p>
-          </div>
-        ) : null}
+          ) : null}
 
-        {/* Collaborative drafts. Available for every assignment type, and frozen
+          {/* Collaborative drafts. Available for every assignment type, and frozen
             after creation for the same reason the tutor toggle is: students may
             already have group drafts built around it.
             Group membership itself is arranged per class afterwards, because an
             assignment fans out to one ClassAssignment per class. */}
-        {selectedTypeSupportsCollaboration ? (
-          <div className="pt-6">
-            {isEditing ? null : (
-              <input type="hidden" name="collaborationEnabled" value="false" />
-            )}
-            <div className="flex items-center gap-2.5">
-              <Checkbox
-                id="assignment-create-collaboration-enabled"
-                name={isEditing ? undefined : 'collaborationEnabled'}
-                value="true"
-                checked={collaborationEnabled}
-                onCheckedChange={(checked) =>
-                  setCollaborationEnabled(checked === true)
-                }
-                disabled={isSaving || isEditing}
-                className="size-4 shrink-0"
-              />
-              <Label
-                htmlFor="assignment-create-collaboration-enabled"
-                className={
-                  isEditing
-                    ? 'font-normal leading-none text-muted-foreground'
-                    : 'cursor-pointer font-normal leading-none'
-                }
-              >
-                Is this a collaborative assignment?
-              </Label>
-            </div>
-            <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
-              {isEditing
-                ? 'Collaboration cannot be switched on or off after an assignment is created — groups may already be writing in shared drafts.'
-                : 'You must assign every student to a group before students can open this assignment. You can arrange groups yourself, shuffle automatically, or use the whole class. Students cannot create groups, move themselves, or create shared documents. When you finalize the groups, Yawp creates one shared document for each group.'}
-            </p>
-            {collaborationEnabled && !isEditing ? (
-              <div className="mt-3 space-y-3 pl-[calc(1rem+0.625rem)]">
+          {selectedTypeSupportsCollaboration ? (
+            <div className="pt-6">
+              {isEditing ? null : (
                 <input
                   type="hidden"
-                  name="collaborationGroupMode"
-                  value={collaborationGroupMode}
+                  name="collaborationEnabled"
+                  value="false"
                 />
-                <div className="space-y-2">
-                  <Label>How should groups be made?</Label>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {COLLABORATION_GROUP_MODE_OPTIONS.map((option) => {
-                      const selected = collaborationGroupMode === option.value;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={`h-full rounded-md border px-3 py-2 text-left text-sm transition ${
-                            selected
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-border bg-background hover:bg-muted'
-                          }`}
-                          aria-pressed={selected}
-                          onClick={() =>
-                            setCollaborationGroupMode(option.value)
-                          }
-                          disabled={isSaving}
-                        >
-                          <span className="block font-medium">
-                            {option.label}
-                          </span>
-                          <span
-                            className={`mt-1 block text-xs ${
-                              selected
-                                ? 'text-primary-foreground/80'
-                                : 'text-muted-foreground'
-                            }`}
-                          >
-                            {option.description}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Whole class has no size to choose: the group is the roster. */}
-                {collaborationModeNeedsGroupSize(collaborationGroupMode) ? (
-                  <div>
-                    <Label
-                      htmlFor="assignment-create-collaboration-group-size"
-                      className="font-normal leading-none"
-                    >
-                      Students per group
-                    </Label>
-                    <select
-                      id="assignment-create-collaboration-group-size"
-                      name="collaborationGroupSize"
-                      value={collaborationGroupSize}
-                      onChange={(event) =>
-                        setCollaborationGroupSize(Number(event.target.value))
-                      }
-                      disabled={isSaving}
-                      className="mt-1 block rounded border px-2 py-1 text-sm"
-                    >
-                      {COLLABORATION_GROUP_SIZE_OPTIONS.map((size) => (
-                        <option key={size} value={size}>
-                          {size}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null}
+              )}
+              <div className="flex items-center gap-2.5">
+                <Checkbox
+                  id="assignment-create-collaboration-enabled"
+                  name={isEditing ? undefined : 'collaborationEnabled'}
+                  value="true"
+                  checked={collaborationEnabled}
+                  onCheckedChange={(checked) =>
+                    setCollaborationEnabled(checked === true)
+                  }
+                  disabled={isSaving || isEditing}
+                  className="size-4 shrink-0"
+                />
+                <Label
+                  htmlFor="assignment-create-collaboration-enabled"
+                  className={
+                    isEditing
+                      ? 'font-normal leading-none text-muted-foreground'
+                      : 'cursor-pointer font-normal leading-none'
+                  }
+                >
+                  Is this a collaborative assignment?
+                </Label>
               </div>
-            ) : null}
-          </div>
-        ) : null}
+              <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
+                {isEditing
+                  ? 'Collaboration cannot be switched on or off after an assignment is created — groups may already be writing in shared drafts.'
+                  : 'You must assign every student to a group before students can open this assignment. You can arrange groups yourself, shuffle automatically, or use the whole class. Students cannot create groups, move themselves, or create shared documents. When you finalize the groups, Yawp creates one shared document for each group.'}
+              </p>
+              {collaborationEnabled && !isEditing ? (
+                <div className="mt-3 space-y-3 pl-[calc(1rem+0.625rem)]">
+                  <input
+                    type="hidden"
+                    name="collaborationGroupMode"
+                    value={collaborationGroupMode}
+                  />
+                  <div className="space-y-2">
+                    <Label>How should groups be made?</Label>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      {COLLABORATION_GROUP_MODE_OPTIONS.map((option) => {
+                        const selected =
+                          collaborationGroupMode === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className={`h-full rounded-md border px-3 py-2 text-left text-sm transition ${
+                              selected
+                                ? 'border-primary bg-primary text-primary-foreground'
+                                : 'border-border bg-background hover:bg-muted'
+                            }`}
+                            aria-pressed={selected}
+                            onClick={() =>
+                              setCollaborationGroupMode(option.value)
+                            }
+                            disabled={isSaving}
+                          >
+                            <span className="block font-medium">
+                              {option.label}
+                            </span>
+                            <span
+                              className={`mt-1 block text-xs ${
+                                selected
+                                  ? 'text-primary-foreground/80'
+                                  : 'text-muted-foreground'
+                              }`}
+                            >
+                              {option.description}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Whole class has no size to choose: the group is the roster. */}
+                  {collaborationModeNeedsGroupSize(collaborationGroupMode) ? (
+                    <div>
+                      <Label
+                        htmlFor="assignment-create-collaboration-group-size"
+                        className="font-normal leading-none"
+                      >
+                        Students per group
+                      </Label>
+                      <select
+                        id="assignment-create-collaboration-group-size"
+                        name="collaborationGroupSize"
+                        value={collaborationGroupSize}
+                        onChange={(event) =>
+                          setCollaborationGroupSize(Number(event.target.value))
+                        }
+                        disabled={isSaving}
+                        className="mt-1 block rounded border px-2 py-1 text-sm"
+                      >
+                        {COLLABORATION_GROUP_SIZE_OPTIONS.map((size) => (
+                          <option key={size} value={size}>
+                            {size}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </MoreOptions>
 
         {SAVED_ASSIGNMENTS_ENABLED && usesBulkCreateApi && !isEditing ? (
           <div className="pt-6">

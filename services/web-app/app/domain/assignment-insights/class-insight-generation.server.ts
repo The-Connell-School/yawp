@@ -1,5 +1,3 @@
-import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { readableWritingConditions } from '~/domain/feature-flags/feature-flags';
 import { Prisma } from '@app/prisma';
 import {
   aggregateRubricPerformance,
@@ -16,7 +14,6 @@ import {
 } from '~/domain/assignment-insights/differentiate-students';
 import type { ClassInsightSummary } from '~/domain/assignment-insights/class-insight-synthesis';
 import { readInsightRubric } from '~/domain/assignment-insights/insight-rubric.server';
-import { getParagraphMode } from '~/domain/assignment-types/daily-pages-paragraph-modes';
 import { prisma } from '~/utils/db.server';
 import {
   AiRateLimitError,
@@ -144,23 +141,13 @@ async function loadDifferentiationInputs(classAssignmentId: string) {
  * against. Each is null or false when the assignment set none, which leaves the
  * summary prompt as it was.
  */
-function writingConditions(
-  stored: {
-    tutorEnabled?: boolean | null;
-    writingTimeMinutes?: number | null;
-    paragraphMode?: string | null;
-    grammarGradingEnabled?: boolean | null;
-    assignmentType?: { title?: string | null } | null;
-  },
-  writingConditionsEnabled: boolean
-) {
-  // Paragraph type and writing time are behind a global flag; off, the
-  // summary reads them as unset, as it did before either existed.
-  const assignment = readableWritingConditions(stored, writingConditionsEnabled);
+function writingConditions(assignment: {
+  tutorEnabled?: boolean | null;
+  grammarGradingEnabled?: boolean | null;
+  assignmentType?: { title?: string | null } | null;
+}) {
   return {
     assignmentTypeTitle: assignment.assignmentType?.title ?? null,
-    paragraphModeLabel: getParagraphMode(assignment.paragraphMode)?.label ?? null,
-    writingTimeMinutes: assignment.writingTimeMinutes ?? null,
     coldWrite: assignment.tutorEnabled === false,
     grammarGraded: assignment.grammarGradingEnabled ?? null,
   };
@@ -188,8 +175,6 @@ export async function generateClassAssignmentInsight(input: {
         select: {
           title: true,
           tutorEnabled: true,
-          writingTimeMinutes: true,
-          paragraphMode: true,
           grammarGradingEnabled: true,
           assignmentType: { select: { title: true } },
         },
@@ -305,7 +290,6 @@ export async function generateClassAssignmentInsight(input: {
     }
   }
 
-  const writingConditionsEnabled = await isDailyPagesWritingConditionsEnabled();
   let generated: Awaited<ReturnType<typeof generateClassInsight>>;
   try {
     generated = await generateClassInsight({
@@ -313,10 +297,7 @@ export async function generateClassAssignmentInsight(input: {
       context: {
         assignmentTitle: classAssignment.assignment.title,
         className: classLabel(classAssignment.class),
-        ...writingConditions(
-          classAssignment.assignment,
-          writingConditionsEnabled
-        ),
+        ...writingConditions(classAssignment.assignment),
       },
       rubric,
       metadata: { classAssignmentId: classAssignment.id },

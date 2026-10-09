@@ -45,9 +45,8 @@ const isAssignmentTypeAvailableForAnyScope = mock();
 // bun's module mocks are global to the test run and mock.restore() does not
 // undo mock.module — restore from the pristine copy test-preload.ts captured
 // before any file could mock.module() this path (see comment there).
-const assignmentTypeAccessActual = globalThis.__realModules[
-  '~/utils/assignment-type-access.server'
-];
+const assignmentTypeAccessActual =
+  globalThis.__realModules['~/utils/assignment-type-access.server'];
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -68,7 +67,7 @@ mock.module('~/utils/assignment-type-access.server', () => ({
   isAssignmentTypeAvailableForAnyScope,
 }));
 
-const { action, loader } = await import('./route');
+const { action, loader, showModulesAccordion } = await import('./route');
 
 function makeAssignmentType(overrides: Record<string, unknown> = {}) {
   return {
@@ -325,6 +324,23 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
     prisma.savedDailyPagesPrompt.findMany.mockResolvedValue([]);
   });
 
+  test('hides the modules list on an exit ticket', () => {
+    // The exit ticket has one module whose whole description is "answer the
+    // exit ticket in your own words". The directions above it already say
+    // that, so the accordion is noise on this page only.
+    expect(showModulesAccordion({ kind: 'exit_ticket' }, 1)).toBe(false);
+    expect(showModulesAccordion({ kind: null }, 1)).toBe(true);
+  });
+
+  test('hides the modules list on an exit ticket for students too', () => {
+    // Not gated on role: the row is equally uninformative either way.
+    expect(showModulesAccordion({ kind: 'exit_ticket' }, 3)).toBe(false);
+  });
+
+  test('still hides the modules list when there are no modules at all', () => {
+    expect(showModulesAccordion({ kind: null }, 0)).toBe(false);
+  });
+
   test('provides prompt library data for teachers viewing Class Starter', async () => {
     const response = (await loader({
       request: new Request('https://example.test/app/assignment-types/at-1'),
@@ -373,13 +389,13 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
       params: { id: 'at-1' },
     } as never)) as any;
 
-    expect(prisma.savedDailyPagesPrompt.findMany.mock.calls[0][0].where).toEqual(
-      {
-        membershipId: 'teacher-1',
-        assignmentTypeId: 'at-1',
-        archivedAt: null,
-      }
-    );
+    expect(
+      prisma.savedDailyPagesPrompt.findMany.mock.calls[0][0].where
+    ).toEqual({
+      membershipId: 'teacher-1',
+      assignmentTypeId: 'at-1',
+      archivedAt: null,
+    });
     // The saved prompt is the only thing the "My prompts" filter keeps.
     expect(response.data.promptLibrary.prompts).toHaveLength(1);
     expect(response.data.promptLibrary.prompts[0]).toMatchObject({
@@ -487,9 +503,9 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
       'library',
       'mine',
     ]);
-    expect(response.data.thesisPromptLibrary.optionCounts.collections.mine).toBe(
-      1
-    );
+    expect(
+      response.data.thesisPromptLibrary.optionCounts.collections.mine
+    ).toBe(1);
   });
 
   test('omits thesis prompt library for students and other assignment types', async () => {
@@ -806,5 +822,63 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
 
     expect(response.data.apHistoryLibrary).toBeNull();
     expect(prisma.apHistoryPromptLibraryEntry.findMany).not.toHaveBeenCalled();
+  });
+
+  test('strips unreleased grade fields from document submission summaries', async () => {
+    requireMembership.mockResolvedValueOnce({
+      id: 'student-1',
+      role: 'STUDENT',
+      organization: { id: 'org-1', name: 'Org' },
+    });
+    prisma.document.findMany.mockImplementation(async (args: any) => {
+      if (args.where?.archivedAt?.not) {
+        return [];
+      }
+      return [
+        {
+          id: 'doc-1',
+          assignmentModuleSessions: [],
+          submissions: [
+            {
+              id: 'sub-1',
+              score: '80% (B)',
+              overallScore: 85,
+              numericPercentage: 80,
+              letterGrade: 'B',
+              releasedAt: null,
+              submittedAt: new Date('2026-08-01T00:00:00.000Z'),
+            },
+            {
+              id: 'sub-2',
+              score: '90% (A)',
+              overallScore: 20,
+              numericPercentage: 90,
+              letterGrade: 'A',
+              releasedAt: new Date('2026-08-02T00:00:00.000Z'),
+              submittedAt: new Date('2026-08-03T00:00:00.000Z'),
+            },
+          ],
+        },
+      ];
+    });
+
+    const response = (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    const submissions = response.data.documents[0].submissions;
+    expect(submissions[0]).toEqual({
+      id: 'sub-1',
+      releasedAt: null,
+      submittedAt: submissions[0].submittedAt,
+    });
+    expect(submissions[0]).not.toHaveProperty('overallScore');
+    expect(submissions[0]).not.toHaveProperty('numericPercentage');
+    expect(submissions[0]).not.toHaveProperty('score');
+    expect(submissions[1].numericPercentage).toBe(90);
+    expect(submissions[1].overallScore).toBe(20);
+    expect(JSON.stringify(response.data)).not.toContain('80% (B)');
+    expect(JSON.stringify(response.data)).not.toMatch(/overallScore["\\]*,85\b/);
   });
 });

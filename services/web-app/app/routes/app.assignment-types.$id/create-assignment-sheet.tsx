@@ -24,6 +24,7 @@ import {
   ApHistorySourceCarousel,
   type ApHistorySourceCardData,
 } from '~/components/ap-history/source-card';
+import type { ExitTicketPrefill } from '~/domain/lesson-planner/exit-ticket-block';
 
 type TeacherClass = {
   id: string;
@@ -35,21 +36,24 @@ type TeacherClass = {
 type Props = {
   assignmentTypeId: string;
   assignmentTypeTitle: string;
+  /** `AssignmentType.kind` — exit ticket UI, engagement point minimums, etc. */
+  assignmentTypeKind?: string | null;
+  assignmentTypeRubricName?: string | null;
   /** Whether this kind of writing is in the collaborative-drafts pilot. */
   assignmentTypeCollaborationSupported?: boolean;
   /** Whether this type's rubric grades grammar, so the toggle is worth showing. */
   assignmentTypeGradesGrammar?: boolean;
-  /** The writing time the form suggests for this type; null leaves it blank. */
-  assignmentTypeDefaultWritingTimeMinutes?: number | null;
-  /** Whether this type takes a paragraph type (Daily Pages). */
-  assignmentTypeOffersParagraphModes?: boolean;
-  /** The Daily Pages writing-conditions flag; off hides paragraph type and writing time. */
-  writingConditionsEnabled?: boolean;
   teacherClasses: TeacherClass[];
   initialClassId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialPrompt?: string;
+  /**
+   * The exit ticket a lesson plan ended on, when the teacher followed the
+   * planner's button here. The sheet opens on these answers and still shows
+   * them the composed prompt before anything is created.
+   */
+  plannedExitTicket?: ExitTicketPrefill | null;
   titleRequired?: boolean;
   apHistoryEntry?: {
     externalKey: string;
@@ -67,16 +71,16 @@ function classLabel(klass: TeacherClass) {
 export function CreateAssignmentSheet({
   assignmentTypeId,
   assignmentTypeTitle,
+  assignmentTypeKind = null,
+  assignmentTypeRubricName = null,
   assignmentTypeCollaborationSupported = false,
   assignmentTypeGradesGrammar = false,
-  assignmentTypeDefaultWritingTimeMinutes = null,
-  assignmentTypeOffersParagraphModes = false,
-  writingConditionsEnabled = false,
   teacherClasses,
   initialClassId,
   open,
   onOpenChange,
   initialPrompt = '',
+  plannedExitTicket = null,
   titleRequired = false,
   apHistoryEntry = null,
 }: Props) {
@@ -121,15 +125,31 @@ export function CreateAssignmentSheet({
           {
             id: assignmentTypeId,
             title: assignmentTypeTitle,
+            kind: assignmentTypeKind,
+            rubricName: assignmentTypeRubricName,
             collaborationSupported: assignmentTypeCollaborationSupported,
             gradesGrammar: assignmentTypeGradesGrammar,
-            defaultWritingTimeMinutes: assignmentTypeDefaultWritingTimeMinutes,
-            offersParagraphModes: assignmentTypeOffersParagraphModes,
           },
         ]}
-        writingConditionsEnabled={writingConditionsEnabled}
         teacherClasses={teacherClasses}
         initialPrompt={initialPrompt}
+        initialExitTicketMode={plannedExitTicket?.mode}
+        initialExitTicketFocus={plannedExitTicket?.focus ?? undefined}
+        initialExitTicketTopic={plannedExitTicket?.topic}
+        initialExitTicketAnswerType={plannedExitTicket?.answerType ?? null}
+        initialExitTicketLessonNotes={plannedExitTicket?.lessonNotes ?? null}
+        initialExitTicketReflectionPrompt={
+          plannedExitTicket?.reflectionPrompt ?? null
+        }
+        initialExitTicketGrading={plannedExitTicket?.grading ?? null}
+        initialExitTicketGradebook={
+          plannedExitTicket
+            ? {
+                submitForGrade: plannedExitTicket.graded,
+                pointValue: plannedExitTicket.pointValue,
+              }
+            : null
+        }
         titleRequired={titleRequired}
       />
     );

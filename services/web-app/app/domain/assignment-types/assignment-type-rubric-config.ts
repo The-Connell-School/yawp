@@ -11,16 +11,35 @@ import {
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import { DAILY_PAGES_ASSIGNMENT_TYPE_KIND } from './daily-pages-rubric';
 import {
-  DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG,
-  DAILY_PAGES_SHORT_FORM_RUBRIC,
-  DAILY_PAGES_SHORT_FORM_SCORING_SCALE,
-} from './daily-pages-short-form-rubric';
-import {
   CLASS_STARTER_ASSIGNMENT_TYPE_KIND,
   CLASS_STARTER_PROMPT_CONFIG,
   CLASS_STARTER_RUBRIC,
   CLASS_STARTER_SCORING_SCALE,
 } from './class-starter-rubric';
+import { EXIT_TICKET_ASSIGNMENT_TYPE_KIND } from './exit-ticket';
+import {
+  EXIT_TICKET_PROMPT_CONFIG,
+  EXIT_TICKET_RUBRIC,
+  EXIT_TICKET_SCORING_SCALE,
+} from './exit-ticket-rubric';
+import {
+  DAILY_PAGES_ENGAGEMENT_PROMPT_CONFIG,
+  DAILY_PAGES_ENGAGEMENT_RUBRIC,
+  DAILY_PAGES_ENGAGEMENT_SCALING_RULE,
+  DAILY_PAGES_ENGAGEMENT_SCORING_SCALE,
+} from './daily-pages-engagement-rubric';
+import {
+  PREWRITING_ASSIGNMENT_TYPE_KIND,
+  PREWRITING_PROMPT_CONFIG,
+  PREWRITING_RUBRIC,
+  PREWRITING_SCORING_SCALE,
+} from './prewriting-assignment-type';
+import {
+  THESIS_STATEMENT_ASSIGNMENT_TYPE_KIND,
+  THESIS_STATEMENT_PROMPT_CONFIG,
+  THESIS_STATEMENT_RUBRIC,
+  THESIS_STATEMENT_SCORING_SCALE,
+} from './thesis-statement-assignment-type';
 
 export const MODULE_RUBRIC_RELATIONSHIPS = [
   'primary',
@@ -36,7 +55,9 @@ export type AssignmentTypeRubricConfigSource =
   | 'assignment-type'
   | 'thesis-default'
   | 'daily-pages-short-form-default'
-  | 'class-starter-default';
+  | 'daily-pages-engagement-default'
+  | 'class-starter-default'
+  | 'exit-ticket-default';
 
 export type AssignmentTypeRubricConfigInput = {
   /**
@@ -110,10 +131,47 @@ const thesisDefaultConfig: AssignmentTypeRubricConfig = {
  * A kind listed here needs no data migration: an existing row picks its default
  * up on the next grading run, and a row that saved its own rubric still wins.
  */
-/**
- * The soft assistant, under the name it is keeping. Class Starter is what
- * Daily Pages was: one engagement judgment, overall feedback, no markup.
- */
+const prewritingConfig: AssignmentTypeRubricConfig = {
+  source: 'assignment-type',
+  scoringScale: PREWRITING_SCORING_SCALE,
+  rubric: PREWRITING_RUBRIC,
+  promptConfig: PREWRITING_PROMPT_CONFIG,
+  outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
+  calibrationNotes:
+    'Standalone pre-writing: exploratory effort and movement toward a specific focus.',
+  rubricIncomplete: false,
+};
+
+const thesisStatementConfig: AssignmentTypeRubricConfig = {
+  source: 'assignment-type',
+  scoringScale: THESIS_STATEMENT_SCORING_SCALE,
+  rubric: THESIS_STATEMENT_RUBRIC,
+  promptConfig: THESIS_STATEMENT_PROMPT_CONFIG,
+  outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
+  calibrationNotes:
+    'Standalone thesis statement: one arguable sentence with observation and analysis.',
+  rubricIncomplete: false,
+};
+
+/** Daily Pages: Brian 2026-10-02 engagement tiers with proportional point scaling. */
+const dailyPagesEngagementOutputSchema = {
+  ...DEFAULT_OUTPUT_SCHEMA_JSON,
+  assignmentPointScaling: DAILY_PAGES_ENGAGEMENT_SCALING_RULE,
+  scoringMode: 'holistic_tier' as const,
+};
+
+const dailyPagesEngagementConfig: AssignmentTypeRubricConfig = {
+  source: 'daily-pages-engagement-default',
+  scoringScale: DAILY_PAGES_ENGAGEMENT_SCORING_SCALE,
+  rubric: DAILY_PAGES_ENGAGEMENT_RUBRIC,
+  promptConfig: DAILY_PAGES_ENGAGEMENT_PROMPT_CONFIG,
+  outputSchema: dailyPagesEngagementOutputSchema,
+  calibrationNotes:
+    'Brian Connell merged Daily Pages engagement rubric (2026-10-02): proportional Excellent / Good / Needs More / Not Present tiers for any teacher-set total from 5 up.',
+  rubricIncomplete: false,
+  defaultLabel: 'Daily Pages engagement',
+};
+
 const classStarterConfig: AssignmentTypeRubricConfig = {
   source: 'class-starter-default',
   scoringScale: CLASS_STARTER_SCORING_SCALE,
@@ -126,31 +184,22 @@ const classStarterConfig: AssignmentTypeRubricConfig = {
   defaultLabel: 'Class Starter engagement',
 };
 
-/**
- * The formal assistant: a short piece graded the way an essay is, on the
- * essay's own 1-5 scale, with per-category feedback and grammar marked.
- *
- * This is what `daily_pages` grades with now — there is no flag and no legacy
- * fallback. A Daily Pages type that saved no rubric of its own moves from
- * judging engagement alone to this, which is a real change in how its work is
- * scored. A type that configured its own rubric keeps it, which is what leaves
- * production's 0-30 engagement row untouched.
- */
-const dailyPagesShortFormConfig: AssignmentTypeRubricConfig = {
-  source: 'daily-pages-short-form-default',
-  scoringScale: DAILY_PAGES_SHORT_FORM_SCORING_SCALE,
-  rubric: DAILY_PAGES_SHORT_FORM_RUBRIC,
-  promptConfig: DAILY_PAGES_SHORT_FORM_PROMPT_CONFIG,
-  outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
-  calibrationNotes:
-    'Daily Pages grades a short, formal piece on the same five dimensions as an essay — idea, support, structure, voice and grammar — with per-category feedback and grammar highlighting on. Effort alone earns the middle of the scale, and length is never rewarded or penalized on its own.',
-  rubricIncomplete: false,
-  defaultLabel: 'Daily Pages short-form writing',
-};
-
 const defaultRubricConfigsByKind: Record<string, AssignmentTypeRubricConfig> = {
-  [DAILY_PAGES_ASSIGNMENT_TYPE_KIND]: dailyPagesShortFormConfig,
+  [DAILY_PAGES_ASSIGNMENT_TYPE_KIND]: dailyPagesEngagementConfig,
   [CLASS_STARTER_ASSIGNMENT_TYPE_KIND]: classStarterConfig,
+  [EXIT_TICKET_ASSIGNMENT_TYPE_KIND]: {
+    source: 'exit-ticket-default',
+    scoringScale: EXIT_TICKET_SCORING_SCALE,
+    rubric: EXIT_TICKET_RUBRIC,
+    promptConfig: EXIT_TICKET_PROMPT_CONFIG,
+    outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
+    calibrationNotes:
+      'Exit Tickets judge understanding only, scored inside written bands so the grade honors the point value, with overall feedback and no grammar highlighting.',
+    rubricIncomplete: false,
+    defaultLabel: 'Exit Ticket understanding',
+  },
+  [PREWRITING_ASSIGNMENT_TYPE_KIND]: prewritingConfig,
+  [THESIS_STATEMENT_ASSIGNMENT_TYPE_KIND]: thesisStatementConfig,
 };
 
 function getDefaultRubricConfig(

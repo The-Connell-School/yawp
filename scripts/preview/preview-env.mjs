@@ -226,6 +226,7 @@ export function buildPreviewEnv({
   return {
     prNumber: safePrNumber,
     slug,
+    domain: safeDomain,
     composeProject,
     databaseName,
     databaseHost,

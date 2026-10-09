@@ -3,7 +3,10 @@ import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { createAcquisitionTokens, getFreeTierReleaseCap, releaseBatch, releaseBatchSchema, tokenCreateSchema } from '~/domain/free-tier/service.server';
 import { readBoundedText } from '~/utils/bounded-body.server';
-import { getApprovalHooks } from '~/domain/free-tier/approval-hooks.server';
+import {
+  ensureFreeTierProductionApprovalHooks,
+  getApprovalHooks,
+} from '~/domain/free-tier/approval-hooks.server';
 import type { FreeTierApplicationStatus } from '@app/prisma';
 
 const response = (value: unknown, status = 200, headers?: HeadersInit) =>
@@ -21,6 +24,23 @@ export function authenticate(request: Request) {
   const supplied = request.headers.get('authorization') ?? '';
   if (supplied.length > 512 || !timingSafeEqual(digest(supplied), digest(`Bearer ${key}`))) {
     return response({ error: 'Unauthorized' }, 401);
+  }
+  return null;
+}
+
+async function authorizeManagement(request: Request) {
+  const denied = authenticate(request);
+  if (denied) return denied;
+  return null;
+}
+
+/** #416 release/link/email endpoints only; search/export/queue stay on main behavior. */
+async function authorizeFreeTierReleaseManagement(request: Request) {
+  const denied = await authorizeManagement(request);
+  if (denied) return denied;
+  const { isFreeTierEnabled } = await import('~/domain/feature-flags/feature-flags.server');
+  if (!(await isFreeTierEnabled())) {
+    return response({ error: 'Not found' }, 404);
   }
   return null;
 }
@@ -48,7 +68,7 @@ const searchQuery = z
   .strict();
 
 export async function applicationsSearch(request: Request) {
-  const denied = authenticate(request);
+  const denied = await authorizeManagement(request);
   if (denied) return denied;
   if (request.method !== 'GET') return response({ error: 'Method not allowed' }, 405);
   let input: z.infer<typeof searchQuery>;
@@ -110,7 +130,7 @@ export async function applicationsSearch(request: Request) {
 }
 
 export async function tokensCreate(request: Request) {
-  const denied = authenticate(request);
+  const denied = await authorizeFreeTierReleaseManagement(request);
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
   if (new URL(request.url).search) return response({ error: 'Invalid request' }, 400);
@@ -126,7 +146,7 @@ export async function tokensCreate(request: Request) {
 }
 
 export async function releaseBatchHttp(request: Request) {
-  const denied = authenticate(request);
+  const denied = await authorizeFreeTierReleaseManagement(request);
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
   if (!request.headers.get('content-type')?.startsWith('application/json')) return response({ error: 'Invalid content type' }, 400);
@@ -134,13 +154,24 @@ export async function releaseBatchHttp(request: Request) {
   if (text === null) return response({ error: 'Payload too large' }, 413);
   let body: any; try { body = JSON.parse(text); } catch { return response({ error: 'Malformed JSON' }, 400); }
   try {
-    const result = await releaseBatch(releaseBatchSchema.parse(body));
+    const parsed = releaseBatchSchema.parse(body);
+    const result = await releaseBatch(parsed);
+    if (result.released > 0) {
+      const leads = await prisma.freeTierApplication.findMany({
+        where: { id: { in: parsed.applicationIds }, status: 'INVITED' },
+        select: { id: true },
+      });
+      const { sendReleaseEmailsForApplicationIds } = await import('~/domain/free-tier/approval-flow.server');
+      const emailResults = await sendReleaseEmailsForApplicationIds(leads.map((l) => l.id));
+      const emailFailures = emailResults.filter((r) => !r.ok);
+      return response({ ...result, emailFailures, emailFailureCount: emailFailures.length });
+    }
     return response(result);
   } catch { return response({ error: 'Invalid input' }, 400); }
 }
 
 export async function exportCsv(request: Request) {
-  const denied = authenticate(request);
+  const denied = await authorizeManagement(request);
   if (denied) return denied;
   if (request.method !== 'GET') return response({ error: 'Method not allowed' }, 405);
   // Reuse search filter parsing
@@ -229,7 +260,7 @@ const queueQuery = z
   .strict();
 
 export async function approvalQueue(request: Request) {
-  const denied = authenticate(request);
+  const denied = await authorizeManagement(request);
   if (denied) return denied;
   if (request.method !== 'GET') return response({ error: 'Method not allowed' }, 405);
   let input: z.infer<typeof queueQuery>;
@@ -296,7 +327,7 @@ export async function approvalQueue(request: Request) {
 }
 
 export async function approvalDetail(request: Request) {
-  const denied = authenticate(request);
+  const denied = await authorizeManagement(request);
   if (denied) return denied;
   if (request.method !== 'GET') return response({ error: 'Method not allowed' }, 405);
   const url = new URL(request.url);
@@ -356,7 +387,14 @@ async function enforceHeadroomForActivation(tx: any) {
   return remaining > 0;
 }
 
-type HookApp = { id: string; email: string; name: string; schoolName: string };
+type HookApp = {
+  id: string;
+  email: string;
+  name: string;
+  schoolName: string;
+  userId: string | null;
+  organizationId: string | null;
+};
 
 /**
  * Hooks run after the transaction commits, so a slow or failing hook can never
@@ -412,7 +450,15 @@ async function transition(args: {
   return prisma.$transaction(async (tx) => {
     const app = await tx.freeTierApplication.findUnique({
       where: { id: args.id },
-      select: { id: true, status: true, email: true, name: true, schoolName: true },
+      select: {
+        id: true,
+        status: true,
+        email: true,
+        name: true,
+        schoolName: true,
+        userId: true,
+        organizationId: true,
+      },
     });
     if (!app) return { status: 404 as const, payload: { error: 'Not found' }, changed: false };
     if (app.status === args.to) return { status: 200 as const, payload: { ok: true, idempotent: true, status: app.status }, changed: false };
@@ -427,7 +473,14 @@ async function transition(args: {
     return {
       status: 200 as const,
       payload: { ok: true, status: args.to, previousStatus: app.status },
-      app: { id: app.id, email: app.email, name: app.name, schoolName: app.schoolName },
+      app: {
+        id: app.id,
+        email: app.email,
+        name: app.name,
+        schoolName: app.schoolName,
+        userId: app.userId,
+        organizationId: app.organizationId,
+      },
       changed: true,
     };
   });
@@ -441,7 +494,8 @@ export const REJECTABLE_FROM: FreeTierApplicationStatus[] = ['ADMIN_SUBMITTED', 
 export const MANUAL_REVIEW_FROM: FreeTierApplicationStatus[] = ['ADMIN_SUBMITTED', 'SENT'];
 
 export async function approveHttp(request: Request) {
-  const denied = authenticate(request);
+  await ensureFreeTierProductionApprovalHooks();
+  const denied = await authorizeFreeTierReleaseManagement(request);
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
   const id = actionId(request);
@@ -459,7 +513,7 @@ export async function approveHttp(request: Request) {
 }
 
 export async function rejectHttp(request: Request) {
-  const denied = authenticate(request);
+  const denied = await authorizeFreeTierReleaseManagement(request);
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
   const id = actionId(request);
@@ -483,7 +537,7 @@ export async function rejectHttp(request: Request) {
 }
 
 export async function markManualReviewHttp(request: Request) {
-  const denied = authenticate(request);
+  const denied = await authorizeFreeTierReleaseManagement(request);
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
   const id = actionId(request);
@@ -497,7 +551,7 @@ export async function markManualReviewHttp(request: Request) {
 }
 
 export async function reopenHttp(request: Request) {
-  const denied = authenticate(request);
+  const denied = await authorizeFreeTierReleaseManagement(request);
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
   const id = actionId(request);
@@ -526,7 +580,7 @@ export async function reopenHttp(request: Request) {
 }
 
 export async function submitAdminInfoHttp(request: Request) {
-  const denied = authenticate(request);
+  const denied = await authorizeFreeTierReleaseManagement(request);
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
   const id = actionId(request);

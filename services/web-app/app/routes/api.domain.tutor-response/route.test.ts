@@ -54,8 +54,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     requireMembership.mockResolvedValue({ id: 'profile-1', role: 'STUDENT', organization: { id: 'org-1' } });
     prisma.user.findUnique.mockReset();
     prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
-    // Paragraph type is behind a flag; these tests describe it on.
-    prisma.setting.findUnique.mockReset().mockResolvedValue({ value: 'true' });
+    prisma.setting.findUnique.mockReset().mockResolvedValue(null);
     prisma.assignmentModuleSession.findFirst.mockReset();
     prisma.assignmentModuleSession.findUnique.mockReset();
     prisma.assignmentModuleSession.update.mockReset();
@@ -173,36 +172,9 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     return completionArgs.system[0].text as string;
   }
 
-  test('layers the chosen paragraph type onto the module tutor', async () => {
-    const systemText = await tutorSystemTextFor({
-      id: 'assignment-1',
-      title: 'Daily Pages',
-      prompt: 'Quote the line where her argument turns.',
-      tutorEnabled: true,
-      paragraphMode: 'analyze',
-    });
-
-    expect(systemText).toContain('Coach the student.');
-    expect(systemText).toContain('PARAGRAPH TYPE: Analyze');
-    expect(systemText.indexOf('Coach the student.')).toBeLessThan(
-      systemText.indexOf('PARAGRAPH TYPE: Analyze')
-    );
-  });
-
-  test('adds no paragraph-type layer when none was chosen', async () => {
-    const systemText = await tutorSystemTextFor({
-      id: 'assignment-1',
-      title: 'Daily Pages',
-      prompt: 'Quote the line where her argument turns.',
-      tutorEnabled: true,
-      paragraphMode: null,
-    });
-
-    expect(systemText).not.toContain('PARAGRAPH TYPE');
-  });
-
-  test('with the writing-conditions flag off, ignores a stored paragraph type', async () => {
-    prisma.setting.findUnique.mockReset().mockResolvedValue(null);
+  // Daily Pages paragraph type was removed: a value still stored on an old
+  // assignment never reaches the tutor.
+  test('ignores a stored paragraph type', async () => {
     const systemText = await tutorSystemTextFor({
       id: 'assignment-1',
       title: 'Daily Pages',
@@ -213,6 +185,8 @@ describe('api.domain.tutor-response read-only impersonation', () => {
 
     expect(systemText).toContain('Coach the student.');
     expect(systemText).not.toContain('PARAGRAPH TYPE');
+    expect(systemText).not.toContain('Claim-Evidence-Analysis');
+    expect(prisma.setting.findUnique).not.toHaveBeenCalled();
   });
 
   test('sends the current document as explicit auditable tutor context', async () => {

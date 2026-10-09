@@ -1,5 +1,5 @@
 // Real-SQL tests for the approval engine. Run in CI under the Prisma migrations job.
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { prisma } from '~/utils/db.server';
 import {
   approvalQueue,
@@ -20,6 +20,14 @@ const auth = new Headers({ authorization: `Bearer ${key}` });
 process.env.YAWP_MANAGEMENT_SERVICE_KEY = key;
 
 const op = { 'x-yawp-operator-email': 'approver@yawp.local' };
+
+beforeAll(async () => {
+  if (!enabled) return;
+  const { enableFreeTierFlagForIntegrationTests } = await import(
+    './free-tier-integration-flag.server'
+  );
+  await enableFreeTierFlagForIntegrationTests();
+});
 
 async function makeApp(emailSuffix: string, status: any = 'ADMIN_SUBMITTED') {
   const email = `ft-${run}-${emailSuffix}@school.example`;

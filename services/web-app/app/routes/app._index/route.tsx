@@ -1,5 +1,3 @@
-import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.server';
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
 import {
   Form,
@@ -19,6 +17,10 @@ import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { useUser } from '~/hooks/useUser.js';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
+import {
+  filterAssignmentTypesForOrganizationPlan,
+  loadAssignmentCreationQuotasForTypes,
+} from '~/utils/assignment-quota.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import type { TeacherClassCardData } from '~/components/teacher-class-card';
@@ -66,9 +68,11 @@ function formatAssignmentDueDate(iso: string): string {
 export type AssignmentTypeRow = {
   id: string;
   title: string;
+  kind?: string | null;
   systemKey?: string | null;
   collaborationSupported?: boolean;
   image?: { id: string } | null;
+  rubric?: { name: string } | null;
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -256,9 +260,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
           select: {
             id: true,
             title: true,
+            kind: true,
             collaborationSupported: true,
             systemKey: true,
             image: { select: { id: true } },
+            rubric: { select: { name: true } },
           },
           orderBy: { position: 'asc' },
         })
@@ -267,21 +273,25 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const enabledTeacherClasses =
     !useStudentExperience && assignmentsEnabled ? teacherClassesOrdered : [];
   const assignmentCreationClasses = enabledTeacherClasses;
-  const creationTypeRows = teacherAssignmentTypes.filter(
-    (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
+  const creationTypeRows = filterAssignmentTypesForOrganizationPlan<AssignmentTypeRow>(
+    profile.organization,
+    teacherAssignmentTypes.filter(
+      (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
+    )
   );
+  const teacherAssignmentTypesForGlance =
+    filterAssignmentTypesForOrganizationPlan<AssignmentTypeRow>(
+      profile.organization,
+      teacherAssignmentTypes
+    );
   // One query for the whole list, so the creation sheet knows which types can
   // offer the teacher's grammar-grading toggle.
   const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
     creationTypeRows.map((type) => type.id)
   );
-  // Paragraph type and writing time are behind a global flag (off by
-  // default); off, the form offers neither.
-  const writingConditionsEnabled =
-    await isDailyPagesWritingConditionsEnabled();
-  const creationTypeDefaults = await getCreationTypeDefaultsById(
-    creationTypeRows.map((type) => type.id),
-    { writingConditionsEnabled }
+  const quotaByTypeId = await loadAssignmentCreationQuotasForTypes(
+    profile.organization,
+    creationTypeRows.map((type) => ({ id: type.id, kind: type.kind ?? null }))
   );
   const assignmentCreationTypes = creationTypeRows.map((type) => ({
     id: type.id,
@@ -289,11 +299,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // AssignmentTypeRow is shared with student-side selects that do not ask
     // for this column, so it is optional there and defaulted here.
     collaborationSupported: type.collaborationSupported ?? false,
+    kind: type.kind ?? null,
+    rubricName: type.rubric?.name ?? null,
     gradesGrammar: gradesGrammarIds.has(type.id),
-    defaultWritingTimeMinutes:
-      creationTypeDefaults.get(type.id)?.defaultWritingTimeMinutes ?? null,
-    offersParagraphModes:
-      creationTypeDefaults.get(type.id)?.offersParagraphModes ?? false,
+    ...quotaByTypeId.get(type.id),
   }));
 
   // A student's assigned Writing Fundamentals practice, surfaced on their
@@ -337,7 +346,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : [];
 
   return dataResponse({
-    writingConditionsEnabled,
     requiresClassCode: isStudentOnlyWithNoClasses,
     enrolledClasses,
     writingPracticeAssignments,
@@ -346,7 +354,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     teacherClassCards,
     totalTeacherClassCount: teacherClasses.length,
     teacherWorkspaceClassStats,
-    teacherAssignmentTypes,
+    teacherAssignmentTypes: teacherAssignmentTypesForGlance,
     assignmentCreationClasses: assignmentCreationClasses.map((klass) => ({
       id: klass.id,
       name: formatClassLabel(klass),
@@ -430,7 +438,6 @@ export default function AppRoute() {
                 }}
                 entryPoint="dashboard"
                 assignmentTypes={data.assignmentCreationTypes}
-                writingConditionsEnabled={data.writingConditionsEnabled}
                 teacherClasses={data.assignmentCreationClasses}
                 initialAssignmentTypeId={createAssignmentTypeId}
               />

@@ -5,6 +5,30 @@ import { fileURLToPath } from 'node:url';
 import type { E2EContext } from './seed-e2e';
 import { TestHelpers } from './test-helpers';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const e2eDir = path.resolve(__dirname, '.');
+
+export function loadE2eEnvFromFile() {
+  const envPath = path.join(e2eDir, '.env.e2e');
+  if (!fs.existsSync(envPath)) return;
+  const envEntries = fs
+    .readFileSync(envPath, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const idx = line.indexOf('=');
+      if (idx === -1) return null;
+      return [line.slice(0, idx), line.slice(idx + 1)] as const;
+    })
+    .filter((entry): entry is readonly [string, string] => !!entry);
+  for (const [key, value] of envEntries) {
+    process.env[key] = value;
+  }
+}
+
+loadE2eEnvFromFile();
+
 type TestFixtures = {
   signIn: (email: string, password: string) => Promise<void>;
   e2eContext: E2EContext;
@@ -13,26 +37,8 @@ type TestFixtures = {
 
 export const test = base.extend<TestFixtures>({
   e2eContext: async ({}, use) => {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    const e2eDir = path.resolve(__dirname, '.');
+    loadE2eEnvFromFile();
     const ctxPath = path.join(e2eDir, '.e2e-context.json');
-    const envPath = path.join(e2eDir, '.env.e2e');
-    if (fs.existsSync(envPath)) {
-      const envEntries = fs
-        .readFileSync(envPath, 'utf8')
-        .split('\n')
-        .filter(Boolean)
-        .map((line) => {
-          const idx = line.indexOf('=');
-          if (idx === -1) return null;
-          return [line.slice(0, idx), line.slice(idx + 1)] as const;
-        })
-        .filter((entry): entry is readonly [string, string] => !!entry);
-      for (const [key, value] of envEntries) {
-        process.env[key] = value;
-      }
-    }
     const ctx = JSON.parse(fs.readFileSync(ctxPath, 'utf8')) as E2EContext;
     await use(ctx);
   },
@@ -40,7 +46,7 @@ export const test = base.extend<TestFixtures>({
     const signInFn = async (email: string, password: string) => {
       await page.goto('/auth/login');
       await page.waitForLoadState('networkidle');
-      const emailInput = page.locator('input[type="email"]');
+      const emailInput = page.getByLabel('Email or handle');
       const passwordInput = page.locator('input[type="password"]');
       const submitButton = page.getByRole('button', { name: /log in/i });
       await emailInput.fill(email);

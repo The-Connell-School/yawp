@@ -1,5 +1,3 @@
-import { isDailyPagesWritingConditionsEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { getCreationTypeDefaultsById } from '~/domain/grading/writing-time.server';
 import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
@@ -46,6 +44,10 @@ import {
   AssignmentHasCollaborativeWorkError,
   deleteClassAssignmentDeployment,
 } from '~/utils/assignment-deployment.server';
+import {
+  filterAssignmentTypesForOrganizationPlan,
+  loadAssignmentCreationQuotasForTypes,
+} from '~/utils/assignment-quota.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { prisma } from '~/utils/db.server';
 import {
@@ -172,8 +174,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       ? await getAvailableAssignmentTypesForScopes<{
           id: string;
           title: string;
+          kind: string | null;
           systemKey: string | null;
           collaborationSupported: boolean;
+          rubric: { name: string } | null;
         }>({
           scopes: teacherClasses.map((klass) => ({
             organizationId: klass.school.organizationId,
@@ -183,8 +187,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
           select: {
             id: true,
             title: true,
+            kind: true,
             systemKey: true,
             collaborationSupported: true,
+            rubric: { select: { name: true } },
           },
           orderBy: { position: 'asc' },
         })
@@ -196,40 +202,44 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // AP History assignments are built from their own library rather than a
   // free-text prompt, so they are not offered here.
-  const creationTypeRows = availableAssignmentTypes.filter(
-    (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
+  const creationTypeRows = filterAssignmentTypesForOrganizationPlan<
+    (typeof availableAssignmentTypes)[number]
+  >(
+    profile.organization,
+    availableAssignmentTypes.filter(
+      (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
+    )
   );
   const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
     creationTypeRows.map((type) => type.id)
-  );
-  // Paragraph type and writing time are behind a global flag (off by
-  // default); off, the form offers neither.
-  const writingConditionsEnabled =
-    await isDailyPagesWritingConditionsEnabled();
-  const creationTypeDefaults = await getCreationTypeDefaultsById(
-    creationTypeRows.map((type) => type.id),
-    { writingConditionsEnabled }
   );
 
   return {
     assignments,
     savedAssignments,
-    writingConditionsEnabled,
     assignmentCreationClasses: teacherClasses.map((klass) => ({
       id: klass.id,
       name: formatClassLabel(klass),
     })),
 
-    assignmentCreationTypes: creationTypeRows.map((type) => ({
-      id: type.id,
-      title: type.title,
-      collaborationSupported: type.collaborationSupported,
-      gradesGrammar: gradesGrammarIds.has(type.id),
-      defaultWritingTimeMinutes:
-        creationTypeDefaults.get(type.id)?.defaultWritingTimeMinutes ?? null,
-      offersParagraphModes:
-        creationTypeDefaults.get(type.id)?.offersParagraphModes ?? false,
-    })),
+    assignmentCreationTypes: await (async () => {
+      const quotaByTypeId = await loadAssignmentCreationQuotasForTypes(
+        profile.organization,
+        creationTypeRows.map((type) => ({
+          id: type.id,
+          kind: type.kind ?? null,
+        }))
+      );
+      return creationTypeRows.map((type) => ({
+        id: type.id,
+        title: type.title,
+        kind: type.kind,
+        rubricName: type.rubric?.name ?? null,
+        collaborationSupported: type.collaborationSupported,
+        gradesGrammar: gradesGrammarIds.has(type.id),
+        ...quotaByTypeId.get(type.id),
+      }));
+    })(),
   };
 }
 
@@ -458,7 +468,6 @@ export default function MyAssignmentsRoute() {
     savedAssignments,
     assignmentCreationClasses,
     assignmentCreationTypes,
-    writingConditionsEnabled,
   } = useLoaderData<typeof loader>();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -559,7 +568,6 @@ export default function MyAssignmentsRoute() {
           }}
           entryPoint="dashboard"
           assignmentTypes={assignmentCreationTypes}
-          writingConditionsEnabled={writingConditionsEnabled}
           teacherClasses={assignmentCreationClasses}
           initialAssignmentTypeId={reusedAssignment.assignmentTypeId}
           initialTitle={reusedAssignment.title}
@@ -765,7 +773,6 @@ export default function MyAssignmentsRoute() {
         onOpenChange={setIsCreateSheetOpen}
         entryPoint="dashboard"
         assignmentTypes={assignmentCreationTypes}
-        writingConditionsEnabled={writingConditionsEnabled}
         teacherClasses={assignmentCreationClasses}
       />
     </div>

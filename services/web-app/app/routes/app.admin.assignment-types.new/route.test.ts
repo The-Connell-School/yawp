@@ -8,23 +8,31 @@ const prisma = {
   rubric: {
     findUnique: mock(),
   },
+  user: {
+    findFirst: mock(),
+  },
 };
 
 const requireAdmin = mock();
+const requireUserId = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/auth.server', () => ({ requireAdmin }));
+mock.module('~/utils/auth.server', () => ({ requireAdmin, requireUserId }));
 
 const { action } = await import('./route');
 
 describe('admin assignment type new action', () => {
   beforeEach(() => {
     requireAdmin.mockReset();
+    requireUserId.mockReset();
+    prisma.user.findFirst.mockReset();
     prisma.assignmentType.count.mockReset();
     prisma.assignmentType.create.mockReset();
     prisma.rubric.findUnique.mockReset();
 
     requireAdmin.mockResolvedValue(undefined);
+    requireUserId.mockResolvedValue('admin-1');
+    prisma.user.findFirst.mockResolvedValue(null);
     prisma.assignmentType.count.mockResolvedValue(4);
     prisma.assignmentType.create.mockResolvedValue({ id: 'at-new' });
     prisma.rubric.findUnique.mockResolvedValue({ id: 'rubric-daily-pages' });
@@ -287,4 +295,40 @@ describe('admin assignment type new action', () => {
       expect(prisma.assignmentType.create).not.toHaveBeenCalled();
     }
   );
+
+  test('plain admin may persist legacy teacherNotesEnabled on create', async () => {
+    const form = new FormData();
+    form.set('title', 'Sneaky notes');
+    form.set(
+      'outputSchemaJson',
+      JSON.stringify({ schemaVersion: 1, teacherNotesEnabled: true })
+    );
+    form.set(
+      'rubricJson',
+      JSON.stringify({
+        categories: [
+          {
+            key: 'quality',
+            label: 'Quality',
+            description: 'Overall quality.',
+            weight: 1,
+          },
+        ],
+      })
+    );
+    form.set('scoringScale', JSON.stringify({ type: 'weighted_1_5', minScore: 1, maxScore: 5 }));
+    await action({
+      request: new Request('https://example.test/new', { method: 'POST', body: form }),
+      params: {},
+      context: {} as never,
+    } as never);
+    expect(prisma.assignmentType.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        gradingOutputSchemaJson: {
+          schemaVersion: 1,
+          teacherNotesEnabled: true,
+        },
+      }),
+    });
+  });
 });

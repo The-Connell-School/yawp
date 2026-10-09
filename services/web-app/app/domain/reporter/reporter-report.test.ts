@@ -10,6 +10,7 @@ import {
   humanizeRubricCategory,
   summarizeClassRubrics,
   summarizeStudentGrades,
+  numericPercentageForReporting,
   writeModeForTutorEnabled,
   type GradedSubmissionRow,
   type PlanBaseline,
@@ -27,6 +28,17 @@ function row(overrides: Partial<GradedSubmissionRow>): GradedSubmissionRow {
     ...overrides,
   };
 }
+
+describe('numericPercentageForReporting', () => {
+  test('derives a percent from points-only holistic scores', () => {
+    expect(
+      numericPercentageForReporting({
+        numericPercentage: null,
+        score: '18/20',
+      })
+    ).toBe(90);
+  });
+});
 
 describe('averagePercentage', () => {
   test('averages defined values and rounds', () => {

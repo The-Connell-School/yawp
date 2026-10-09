@@ -642,6 +642,12 @@ function AiLogItem({ item }: { item: AiLogEntry }) {
               value={item.assignmentTypeGradingVersion}
             />
           ) : null}
+          {item.inputTokens !== null ? (
+            <DetailRow label="Input tokens" value={item.inputTokens} />
+          ) : null}
+          {item.outputTokens !== null ? (
+            <DetailRow label="Output tokens" value={item.outputTokens} />
+          ) : null}
           {item.totalTokens !== null ? (
             <DetailRow label="Tokens" value={item.totalTokens} />
           ) : null}

@@ -53,6 +53,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const user = await prisma.user.findFirst({
     where: {
       email: { equals: normalizedEmail, mode: 'insensitive' },
+      NOT: { email: null },
     },
     select: { email: true },
   });
@@ -95,7 +96,7 @@ export async function action({ request }: ActionFunctionArgs) {
   await prisma.invitation.create({ data: verificationData });
 
   const response = await sendEmail({
-    to: user.email,
+    to: user.email!,
     subject: `Yawp!`,
     react: (
       <ForgotPasswordEmail onboardingUrl={verifyUrl.toString()} otp={otp} />

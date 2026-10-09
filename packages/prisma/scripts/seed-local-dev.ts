@@ -18,6 +18,7 @@ import {
   MissingOrganizationError,
   seedClassStarterAssignmentType,
 } from './seed-class-starter-assignment-type';
+import { applyDailyPagesEngagementV2Seed } from './apply-daily-pages-engagement-v2-seed';
 import {
   LOCAL_DEV_ORG_ID,
   LOCAL_DEV_ORG_NAME,
@@ -26,6 +27,7 @@ import {
   UA_PREVIEW_ORG_ID,
   UA_PREVIEW_ORG_NAME,
 } from './local-dev/dev-personas';
+import { seedFreeTierShipReview } from './local-dev/seed-free-tier-ship-review';
 
 assertLocalSeedTarget();
 
@@ -46,6 +48,8 @@ try {
       numOfStudentSeats: 200,
       numOfTeacherSeats: 40,
       reporterEnabled: true,
+      // Left off here on purpose: enableClassInsightsForOrganizations below is
+      // the single place that turns it on, for local dev and preview seats.
       // Writing practice defaults off so it stays dark in production. Local dev
       // and previews exist to look at it, so they seed it on.
       writingPracticeEnabled: true,
@@ -105,6 +109,16 @@ try {
   });
   console.timeEnd('collaboration');
 
+  const databaseName = process.env.DATABASE_URL?.split('/').pop()?.split('?')[0] ?? '';
+  const { shouldRunFreeTierShipReviewSeed } = await import(
+    '../../../scripts/preview/free-tier-ship-review-seed-guard.mjs'
+  );
+  if (shouldRunFreeTierShipReviewSeed(databaseName)) {
+    console.time('free-tier-ship-review');
+    await seedFreeTierShipReview(prisma);
+    console.timeEnd('free-tier-ship-review');
+  }
+
   console.log('🌱 Local dev seed complete.');
   console.log(
     JSON.stringify(
@@ -145,6 +159,8 @@ try {
   try {
     await seedClassStarterAssignmentType(prisma);
     console.log('Class Starter assignment type ready.');
+    const engagementV2 = await applyDailyPagesEngagementV2Seed(prisma);
+    console.log('Daily Pages engagement v2 seed:', engagementV2);
   } catch (error) {
     // Never fail a whole seed run over the one case that is legitimately absent.
     if (error instanceof MissingOrganizationError) {

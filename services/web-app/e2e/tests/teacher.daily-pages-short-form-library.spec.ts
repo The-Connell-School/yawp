@@ -17,16 +17,17 @@ test.describe.serial('Daily Pages short-form prompt library', () => {
     );
 
     await expect(
-      page.getByRole('heading', { name: 'How the Daily Pages library works' })
+      page.getByRole('heading', { name: 'About Daily Pages' })
     ).toBeVisible();
-    // The Class Starter directions must not appear here — that heading showing
-    // up would mean Daily Pages is still borrowing the freewrite corpus.
     await expect(
       page.getByRole('heading', { name: 'How Class Starter works' })
     ).toHaveCount(0);
 
-    await page.getByRole('button', { name: /Prompt Library/i }).click();
-    await expect(page.getByPlaceholder('Search prompts')).toBeVisible();
+    await page
+      .getByRole('button', { name: 'Prompt Library', exact: true })
+      .first()
+      .click();
+    await expect(page.getByText('Honest and kind at once')).toBeVisible();
 
     // A freewrite prompt has no business in the graded corpus.
     await expect(
@@ -46,9 +47,10 @@ test.describe.serial('Daily Pages short-form prompt library', () => {
       `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
     );
 
-    await page.getByRole('button', { name: /Prompt Library/i }).click();
-    await page.getByPlaceholder('Search prompts').fill('counterexample');
-    await page.keyboard.press('Enter');
+    await page
+      .getByRole('button', { name: 'Prompt Library', exact: true })
+      .first()
+      .click();
 
     const prompt = page.getByText('Honest and kind at once');
     await expect(prompt).toBeVisible();
@@ -72,7 +74,7 @@ test.describe.serial('Daily Pages short-form prompt library', () => {
     );
 
     await expect(
-      page.getByRole('heading', { name: 'How the Daily Pages library works' })
+      page.getByRole('heading', { name: 'About Daily Pages' })
     ).toHaveCount(0);
     await expect(
       page.getByRole('button', { name: /Prompt Library/i })

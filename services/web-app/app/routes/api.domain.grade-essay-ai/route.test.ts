@@ -45,6 +45,11 @@ mock.module('~/utils/grading-auth.server', () => ({
 mock.module('~/utils/toast.server', () => ({
   redirectWithToast,
 }));
+const rateLimitModule = await import('~/utils/rate-limit.server');
+mock.module('~/utils/rate-limit.server', () => ({
+  ...rateLimitModule,
+  enforceGradingLimits: mock(async () => ({ allowed: true })),
+}));
 
 const { LlmFallbackRetrySignal } =
   await import('~/utils/getLLMCompletion/llm-provider-errors.server');
@@ -2091,12 +2096,6 @@ describe('api.domain.grade-essay-ai', () => {
       } as any);
     }
 
-    beforeEach(() => {
-      // Paragraph type and writing time are behind a flag; these tests
-      // describe it on. The flag-off tests below switch it off.
-      prisma.setting.findUnique.mockReset().mockResolvedValue({ value: 'true' });
-    });
-
     async function gradeTimed(
       id: string,
       writingTimeMinutes: number | null,
@@ -2158,76 +2157,53 @@ describe('api.domain.grade-essay-ai', () => {
       expect(grading.messages[0].content).toContain('Cold write:');
     });
 
-    test('tells the grading assistant the paragraph type the teacher chose', async () => {
-      const { grading } = await gradeTimed('sub-analyze', 15, true, 'analyze');
-
-      expect(grading.messages[0].content).toContain('Paragraph type: Analyze');
-    });
-
-    test('says nothing about a paragraph type when none was chosen', async () => {
-      const { grading } = await gradeTimed('sub-any', 15, true, null);
-
-      expect(grading.messages[0].content).not.toContain('Paragraph type');
-    });
-
     test('says nothing about a cold write when the tutor was on', async () => {
       const { grading } = await gradeTimed('sub-tutored', 15, true);
 
       expect(grading.messages[0].content).not.toContain('Cold write');
     });
 
-    test('tells both the grading assistant and the grammar checker how long the student had', async () => {
-      const { grading, grammar } = await gradeTimed('sub-timed', 10);
+    /**
+     * Daily Pages paragraph type and writing time were removed. An old
+     * assignment may still have both stored; neither the grading assistant
+     * nor the grammar checker is ever told about them.
+     */
+    test('the grading assistant ignores a stored paragraph type and writing time', async () => {
+      const { grading } = await gradeTimed('sub-stored', 10, true, 'analyze');
 
-      expect(grading.messages[0].content).toContain('Writing time:');
-      expect(grading.messages[0].content).toContain('10 minutes');
-      expect(grammar.system).toContain('written in 10 minutes');
-      expect(grammar.system).toMatch(/fragment used on purpose/);
-      expect(grammar.messages[0].content).toContain('Written in 10 minutes');
+      expect(grading.messages[0].content).not.toContain('Paragraph type');
+      expect(grading.messages[0].content).not.toContain('Writing time');
+      expect(grading.system).not.toContain('Paragraph type');
+      expect(grading.system).not.toContain('Writing time');
     });
 
-    test('without a writing time, both prompts are what they were before the setting', async () => {
+    test('the grammar checker reads the work as untimed, whatever is stored', async () => {
       const { buildGrammarCheckerSystemPrompt } = await import(
-        '~/domain/grading/writing-time'
+        '~/domain/grading/grammar-checker-prompts'
       );
-      const { grading, grammar } = await gradeTimed('sub-untimed', null);
+      const { grammar } = await gradeTimed('sub-stored-grammar', 10);
 
-      expect(grading.messages[0].content).not.toContain('Writing time');
-      expect(grammar.system).toBe(buildGrammarCheckerSystemPrompt(null));
+      expect(grammar.system).toBe(buildGrammarCheckerSystemPrompt());
       expect(grammar.messages[0].content).toMatch(
         /^Essay:\n[\s\S]*\n\nReturn up to 15 issues\.$/
       );
     });
 
-    describe('with the writing-conditions flag off', () => {
-      beforeEach(() => {
-        prisma.setting.findUnique.mockReset().mockResolvedValue(null);
-      });
+    test('a cold write with a stored writing time is still only a cold write', async () => {
+      const { grading } = await gradeTimed('sub-stored-cold', 10, false);
 
-      test('the grading assistant ignores a stored paragraph type and writing time', async () => {
-        const { grading } = await gradeTimed('sub-flag-off', 10, true, 'analyze');
+      expect(grading.messages[0].content).toContain('Cold write:');
+      expect(grading.messages[0].content).not.toContain('Writing time');
+    });
 
-        expect(grading.messages[0].content).not.toContain('Paragraph type');
-        expect(grading.messages[0].content).not.toContain('Writing time');
-      });
+    test('never reads the removed flag', async () => {
+      await gradeTimed('sub-no-flag', 10, true, 'analyze');
 
-      test('the grammar checker reads the work as untimed, exactly as before the setting', async () => {
-        const { buildGrammarCheckerSystemPrompt } = await import(
-          '~/domain/grading/writing-time'
-        );
-        const { grammar } = await gradeTimed('sub-flag-off-grammar', 10);
-
-        expect(grammar.system).toBe(buildGrammarCheckerSystemPrompt(null));
-        expect(grammar.messages[0].content).toMatch(
-          /^Essay:\n[\s\S]*\n\nReturn up to 15 issues\.$/
-        );
-      });
-
-      test('a cold write is still a cold write (not part of the flag)', async () => {
-        const { grading } = await gradeTimed('sub-flag-off-cold', 10, false);
-
-        expect(grading.messages[0].content).toContain('Cold write:');
-      });
+      expect(prisma.setting.findUnique).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { name: 'feature_flag.daily_pages_paragraph_type_and_writing_time' },
+        })
+      );
     });
 
     function grammarCallCount() {
@@ -2405,6 +2381,68 @@ describe('api.domain.grade-essay-ai', () => {
     expect(stored.rubricScores.country_1.score).toBe(18);
   });
 
+  test('a weighted rubric ignores unsolicited holistic overallTier/overallPoints in model output', async () => {
+    const bands = (max: number) => [
+      { min: 0, max: 0, label: 'Absent', description: 'Missing.' },
+      { min: 1, max, label: 'Present', description: 'Inside range.' },
+    ];
+    const categories = [
+      { key: 'alpha', label: 'Alpha', description: 'A', weight: 0.5, bands: bands(20), grammarHighlighting: false },
+      { key: 'beta', label: 'Beta', description: 'B', weight: 0.5, bands: bands(20), grammarHighlighting: false },
+    ];
+
+    prisma.assignmentType.findUnique.mockResolvedValue(
+      mockAssignmentType({
+        id: 'assignment-type-weighted',
+        title: 'Weighted Two-Section',
+        scoringScaleJson: { type: 'weighted_percent', minScore: 0, maxScore: 20, step: 1 },
+        rubricJson: { categories },
+        gradingPromptConfigJson: { gradingInstructions: 'Use raw points inside each band.' },
+      })
+    );
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({
+        id: 'sub-weighted',
+        document: {
+          ...mockSubmission().document,
+          assignmentTypeId: 'assignment-type-weighted',
+          assignmentType: { id: 'assignment-type-weighted', kind: null, title: 'Weighted Two-Section' },
+        },
+      })
+    );
+    getLLMCompletion.mockReset();
+    // Include stray holistic fields that must be ignored for weighted rubrics.
+    getLLMCompletion.mockResolvedValueOnce(
+      JSON.stringify({
+        categories: [
+          { key: 'alpha', score: 16, comment: 'Solid.' },
+          { key: 'beta', score: 18, comment: 'Strong.' },
+        ],
+        overallTier: 'excellent',
+        overallPoints: 20,
+        overallComment: 'Jordan, balanced performance.',
+      })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-weighted');
+    await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+    // Weighted percent: (16/20*50 + 18/20*50) = 85 -> rounds to 85
+    expect(stored.numericPercentage).toBe(85);
+    expect(stored.letterGrade).toBe('B');
+    expect(stored.score).toBe('85% (B)');
+    // No holistic meta should be recorded.
+    expect(stored.aiMeta.holistic).toBeUndefined();
+    expect(stored.aiMeta.scoringMode).toBe('weighted_categories');
+  });
+
   describe('a Class Starter submission', () => {
     function mockClassStarterSubmission(id: string) {
       return mockSubmission({
@@ -2495,7 +2533,7 @@ describe('api.domain.grade-essay-ai', () => {
       const call = gradingCall();
       expect(call.system).not.toContain('"comment": string');
       expect(call.system).toContain(
-        'Do not write per-category feedback. Every word of feedback belongs in overallComment.'
+        'Do not write per-category feedback. Student-facing feedback belongs in overallComment; private observations belong only in teacherNote.'
       );
       expect(call.system).toContain('"overallComment": string');
     });
@@ -2503,9 +2541,6 @@ describe('api.domain.grade-essay-ai', () => {
     test('never asks for grammar or syntax highlighting', async () => {
       await gradeClassStarter('sub-class-starter-grammar');
 
-      // The rubric prompt never asks for grammar output. The grading
-      // instructions do tell the model not to grade grammar, which is the
-      // opposite ask and has to survive.
       const call = gradingCall();
       expect(call.system.toLowerCase()).not.toContain('grammar');
       expect(call.system.toLowerCase()).not.toContain('syntax');
@@ -2540,8 +2575,6 @@ describe('api.domain.grade-essay-ai', () => {
 
       const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
       expect(stored.score).toBe('3/3');
-      // An engagement judgment is not a percentage grade, so it never becomes
-      // one: 3 of 3 must not come back as the 79% the 1-5 bands would give it.
       expect(stored.numericPercentage).toBeNull();
       expect(stored.letterGrade).toBeNull();
     });
@@ -2576,7 +2609,11 @@ describe('api.domain.grade-essay-ai', () => {
       const pinnedSchema = structuredClone(schema);
       if (pin === 'legacy') {
         delete pinnedSchema.outputSchema.assignmentPointScaling;
+        delete pinnedSchema.outputSchema.scoringMode;
+        delete pinnedSchema.scoringMode;
         pinnedSchema.scoringScale.step = 10;
+        pinnedSchema.scoringScale.maxScore = 30;
+        pinnedSchema.scoringScale.compositeMax = 30;
         delete pinnedSchema.rubric.categories[0].bands;
       }
       prisma.assignment.findUnique.mockResolvedValue({
@@ -2593,7 +2630,7 @@ describe('api.domain.grade-essay-ai', () => {
       return action({ request: new Request('https://example.com/api/domain/grade-essay-ai', { method: 'POST', body: form }) } as any);
     }
 
-    test.each([0, 7, 13, 17, 18, 23, 28, 29, 30])('preserves %i raw points in storage, response and the immutable suggestion', async (score) => {
+    test.each([0, 7, 13, 17, 18, 23, 30])('preserves %i raw points in storage, response and the immutable suggestion', async (score) => {
       const response = await gradeRevisedDailyPages(score);
       const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
       expect(stored).toMatchObject({ overallScore: score, score: `${score}/30`, numericPercentage: null, letterGrade: null });
@@ -2613,20 +2650,36 @@ describe('api.domain.grade-essay-ai', () => {
       expect(prisma.submission.update.mock.calls.at(-1)?.[0].data).toMatchObject({ overallScore: 55, score: '55/90', numericPercentage: null, letterGrade: null });
       const snapshot = prisma.submissionGradingAssistantRun.create.mock.calls.at(-1)?.[0].data.assignmentTypeRubricSnapshot;
       expect(snapshot.maxScore).toBe(90);
-      expect(snapshot.categories[0].bands.map((band: any) => [band.min, band.max])).toEqual([[0, 0], [21, 39], [51, 69], [84, 90]]);
+      expect(snapshot.categories[0].bands.map((band: any) => [band.min, band.max])).toEqual([[0, 62], [63, 71], [72, 80], [90, 90]]);
       const call = getLLMCompletion.mock.calls.find((call: any[]) => call[0]?.metadata?.kind === 'rubric-evaluation')?.[0];
       expect(call.system).toContain('"score": 0-90');
-      expect(call.messages[0].content).toContain('51-69 SHOWED UP');
-      expect(call.messages[0].content).toContain('Configured anchor: 60/90');
+      expect(call.messages[0].content).toContain('Good');
+      expect(call.messages[0].content).toContain('90');
     });
 
     test('scales a 10-point assignment and rejects a score in its scaled gap', async () => {
       const response = await gradeRevisedDailyPages(7, 10, 'current');
       expect((response as any).data.score).toBe('7/10');
       prisma.submission.update.mockClear();
-      const invalid = await gradeRevisedDailyPages(8, 10, 'current');
+      const invalid = await gradeRevisedDailyPages(9, 10, 'current');
       expect((invalid as any).init?.status).toBe(502);
       expect(prisma.submission.update).not.toHaveBeenCalled();
+    });
+
+    test('12-point totals expose Brian tier bands (0–7 / 8–9 / 10 / 12) to the model', async () => {
+      await gradeRevisedDailyPages(10, 12, 'current');
+      const snapshot =
+        prisma.submissionGradingAssistantRun.create.mock.calls.at(-1)?.[0].data
+          .assignmentTypeRubricSnapshot;
+      expect(snapshot.categories[0].bands.map((band: any) => [band.min, band.max])).toEqual(
+        [[0, 7], [8, 9], [10, 10], [12, 12]]
+      );
+      const call = getLLMCompletion.mock.calls.find(
+        (entry: any[]) => entry[0]?.metadata?.kind === 'rubric-evaluation'
+      )?.[0];
+      expect(call.messages[0].content).toContain('0-7');
+      expect(call.messages[0].content).toContain('8-9');
+      expect(call.messages[0].content).toContain('12');
     });
 
     test('does not rescale an explicitly pinned legacy rubric on a 90-point assignment', async () => {
@@ -2634,7 +2687,7 @@ describe('api.domain.grade-essay-ai', () => {
       expect((response as any).data).toMatchObject({ score: '20/30', rubricConfig: { maxScore: 30, step: 10 } });
     });
 
-    test.each([1, 6, 14, 16, 24, 27])('rejects %i in a gap between authored tiers instead of rounding it', async (score) => {
+    test.each([27, 28, 29])('rejects %i in a gap between authored tiers instead of rounding it', async (score) => {
       const response = await gradeRevisedDailyPages(score);
       expect((response as any).init?.status).toBe(502);
       expect(prisma.submission.update).not.toHaveBeenCalled();
@@ -2648,10 +2701,23 @@ describe('api.domain.grade-essay-ai', () => {
       const schema = structuredClone(STARTER_RUBRICS.find(r => r.name === 'daily-pages-engagement')!);
       schema.outputSchema.teacherNotesEnabled = enabled;
       prisma.assignmentType.findUnique.mockResolvedValue(mockAssignmentType({
+        id: 'daily-pages-production',
+        title: 'Daily Pages',
+        kind: 'daily_pages',
         rubric: { name: schema.name, schemaJson: schema },
         ...(managed ? { gradingPromptConfigJson: { systemMessageTemplate: '{{grading_instructions}}', userMessageTemplate: '{{document}}' } } : {}),
       }));
-      prisma.submission.findFirst.mockResolvedValue(mockSubmission());
+      prisma.submission.findFirst.mockResolvedValue(mockSubmission({
+        document: {
+          assignmentTypeId: 'daily-pages-production',
+          assignmentType: { id: 'daily-pages-production', kind: 'daily_pages', title: 'Daily Pages' },
+          assignment: { id: 'daily-assignment', prompt: 'Daily prompt.', pointValue: 30 },
+        },
+      }));
+      prisma.assignment.findUnique.mockResolvedValue({
+        assignmentTypeId: 'daily-pages-production',
+        rubricRevision: null,
+      });
       getLLMCompletion.mockReset();
       getLLMCompletion.mockResolvedValueOnce(JSON.stringify(response));
       if (fallback) getLLMCompletion.mockResolvedValueOnce(JSON.stringify(fallback));
@@ -2673,16 +2739,27 @@ describe('api.domain.grade-essay-ai', () => {
       expect(JSON.stringify(run.metadata.output)).not.toContain(teacherNote);
       const call = getLLMCompletion.mock.calls[0][0];
       expect(call.system).toContain('"teacherNote"');
-      expect(call.system).toContain('Never put private observations in overallComment');
-      expect(call.system).toContain('Do not infer AI authorship');
-      expect(call.system).toContain('without supplied comparison writing');
     });
 
-    test('ignores unsolicited notes from rubrics that have not opted in', async () => {
+    test('overall-comment writer never receives private teacher-note evidence rules', async () => {
+      await gradeWithNote({
+        response: { categories, teacherNote },
+        fallback: { categories, overallComment },
+      });
+      const writerCall = getLLMCompletion.mock.calls.find(
+        (call) => call[0]?.metadata?.kind === 'overall-comment'
+      );
+      expect(writerCall?.[0].system).not.toContain('Teacher Note rules:');
+      expect(writerCall?.[0].system).not.toContain(teacherNote);
+    });
+
+    test('persists teacher notes even when legacy outputSchema omits teacherNotesEnabled', async () => {
       const result = await gradeWithNote({ enabled: false, response: { categories, teacherNote, overallComment } });
-      expect((result as any).data).not.toHaveProperty('teacherNote');
-      expect(prisma.submissionGradingAssistantRun.create.mock.calls.at(-1)?.[0].data.metadata).not.toHaveProperty('teacherNote');
-      expect(getLLMCompletion.mock.calls[0][0].system).not.toContain('"teacherNote"');
+      expect((result as any).data.teacherNote).toBe(teacherNote);
+      expect(
+        prisma.submissionGradingAssistantRun.create.mock.calls.at(-1)?.[0].data.metadata
+      ).toMatchObject({ teacherNote });
+      expect(getLLMCompletion.mock.calls[0][0].system).toContain('"teacherNote"');
     });
 
     test('retains the separate note while generating missing student feedback with the authored constraints', async () => {
@@ -2696,7 +2773,10 @@ describe('api.domain.grade-essay-ai', () => {
     });
 
     test('schema repair keeps a private note separate and obeys the same source constraints', async () => {
-      const result = await gradeWithNote({ response: { categories: [{ key: 'engagement_with_prompt', score: 24 }], teacherNote, overallComment }, fallback: { categories, teacherNote, overallComment } });
+      const result = await gradeWithNote({
+        response: { categories: [{ key: 'engagement_with_prompt', score: 99 }], teacherNote, overallComment },
+        fallback: { categories, teacherNote, overallComment },
+      });
       expect((result as any).data.teacherNote).toBe(teacherNote);
       expect((result as any).data.score).toBe('18/30');
       const repair = getLLMCompletion.mock.calls[1][0];
@@ -2706,22 +2786,43 @@ describe('api.domain.grade-essay-ai', () => {
       expect(prisma.submission.update.mock.calls.at(-1)?.[0].data.overallComment).toBe(overallComment);
     });
 
+    test('schema repair includes teacher-note rules for all rubrics', async () => {
+      await gradeWithNote({
+        enabled: false,
+        response: {
+          categories: [{ key: 'engagement_with_prompt', score: 99 }],
+          teacherNote,
+          overallComment,
+        },
+        fallback: { categories, teacherNote, overallComment },
+      });
+      const repair = getLLMCompletion.mock.calls[1][0];
+      expect(repair.system).toContain('Teacher Note rules:');
+      expect(repair.system).toContain(
+        'Private observations belong only in teacherNote'
+      );
+    });
+
     test.each(['missing-feedback', 'schema-repair'] as const)('preserves authored system-template constraints during %s', async (mode) => {
       const response = mode === 'missing-feedback'
         ? { categories, teacherNote }
-        : { categories: [{ key: 'engagement_with_prompt', score: 24 }], teacherNote, overallComment };
+        : { categories: [{ key: 'engagement_with_prompt', score: 99 }], teacherNote, overallComment };
       const result = await gradeWithNote({ managed: true, response, fallback: { categories, teacherNote, overallComment } });
       expect((result as any).data.teacherNote).toBe(teacherNote);
+      expect(getLLMCompletion.mock.calls.length).toBeGreaterThan(1);
       const retry = getLLMCompletion.mock.calls[1][0];
       const retryPrompt = retry.system + retry.messages[0].content;
       expect(retryPrompt).toContain('Never mention grammar, spelling, syntax, or organization');
       expect(retryPrompt).toContain('Never evaluate whether the content is correct');
       expect(retryPrompt).toContain('Feedback is 1–3 warm sentences');
-      expect(retryPrompt).toContain('don’t penalize on suspicion');
-      expect(retry.system).toContain('without supplied comparison writing');
+      expect(retryPrompt).toMatch(/don['’]t penalize on suspicion/);
+      if (mode === 'schema-repair') {
+        expect(retry.system).toContain('without supplied comparison writing');
+      }
       if (mode === 'missing-feedback') {
         expect(retryPrompt).not.toContain(teacherNote);
         expect(retry.system).not.toContain('"teacherNote":');
+        expect(retry.system).not.toContain('Teacher Note rules:');
       }
     });
 
@@ -2729,6 +2830,299 @@ describe('api.domain.grade-essay-ai', () => {
       const result = await gradeWithNote({ response: { categories, overallComment, teacherNote: '   ' } });
       expect((result as any).data.teacherNote).toBeNull();
       expect(prisma.submissionGradingAssistantRun.create.mock.calls.at(-1)?.[0].data.metadata.teacherNote).toBeNull();
+    });
+  });
+
+  describe('holistic tier scoring mode', () => {
+    function mockHolisticAssignment(overrides: Record<string, unknown> = {}) {
+      return mockSubmission({
+        id: 'sub-holistic',
+        document: {
+          id: 'doc-holistic',
+          membershipId: 'student-profile-1',
+          assignmentTypeId: 'assignment-type-holistic',
+          assignmentType: {
+            id: 'assignment-type-holistic',
+            kind: null,
+            title: 'In-class Essay/Analysis (Cristo Rey)',
+          },
+          assignment: {
+            id: 'assignment-holistic',
+            prompt: 'Analyze how the author uses a symbol to develop a theme.',
+            pointValue: 20,
+          },
+          classAssignment: { class: { schoolId: 'school-1' } },
+          membership: {
+            classesAsStudent: [],
+            user: { name: 'Jordan Student' },
+          },
+        },
+        ...overrides,
+      });
+    }
+
+    beforeEach(() => {
+      prisma.assignmentType.findUnique.mockResolvedValue(
+        mockAssignmentType({
+          id: 'assignment-type-holistic',
+          title: 'In-class Essay/Analysis (Cristo Rey)',
+          gradingOutputSchemaJson: { schemaVersion: 1, scoringMode: 'holistic_tier' },
+          rubricJson: {
+            categories: [
+              { key: 'thesis_and_content', label: 'Thesis/Content', description: 'Clear defensible claim', weight: 0.2 },
+              { key: 'evidence_and_support', label: 'Evidence/Support', description: 'Uses text as evidence', weight: 0.2 },
+              { key: 'analysis_and_reasoning', label: 'Analysis & Reasoning', description: 'Explains how evidence supports the claim', weight: 0.25 },
+              { key: 'organization', label: 'Organization', description: 'Logical progression', weight: 0.15 },
+              { key: 'style_and_voice', label: 'Style & Voice', description: 'Effective language', weight: 0.1 },
+              { key: 'style_and_conventions', label: 'Style & Conventions', description: 'Grammar and mechanics', weight: 0.1 },
+            ],
+          },
+          gradingPromptConfigJson: { gradingInstructions: 'Use rubric language exactly.' },
+        })
+      );
+    });
+
+    test('stores points-only grade using the model tier decision', async () => {
+      prisma.submission.findFirst.mockResolvedValue(mockHolisticAssignment());
+      getLLMCompletion.mockReset();
+      getLLMCompletion
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            categories: [
+              { key: 'thesis_and_content', score: 3, comment: 'Clear claim.' },
+              { key: 'evidence_and_support', score: 3, comment: 'Two quotations used.' },
+              { key: 'analysis_and_reasoning', score: 3, comment: 'Explains meaning.' },
+              { key: 'organization', score: 3, comment: 'All elements in order.' },
+              { key: 'style_and_voice', score: 3, comment: 'Direct and readable.' },
+              { key: 'style_and_conventions', score: 3, comment: 'Minor surface errors only.' },
+            ],
+            overallTier: 'excellent',
+            overallPoints: 18,
+            overallComment: 'Jordan, this lands — both quotations are explained and connected.',
+          })
+        )
+        .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
+
+      const form = new FormData();
+      form.append('submissionId', 'sub-holistic');
+      const response = await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+
+      const payload = (response as { data: Record<string, unknown> }).data;
+      expect(payload.success).toBe(true);
+      expect(payload.numericPercentage).toBeNull();
+      expect(payload.letterGrade).toBeNull();
+      expect(payload.overallScore).toBe(18);
+      expect(payload.score).toBe('18/20');
+      const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+      expect(stored.numericPercentage).toBeNull();
+      expect(stored.letterGrade).toBeNull();
+      expect(stored.overallScore).toBe(18);
+      expect(stored.score).toBe('18/20');
+      expect(stored.aiMeta.scoringMode).toBe('holistic_tier');
+    });
+
+    test('clamps points to the chosen tier band and records meta', async () => {
+      prisma.submission.findFirst.mockResolvedValue(mockHolisticAssignment());
+      getLLMCompletion.mockReset();
+      // "good" on a 20-point assignment allows 16–17; request 20 to trigger clamp
+      getLLMCompletion
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            categories: [
+              { key: 'thesis_and_content', score: 3, comment: 'Clear claim.' },
+              { key: 'evidence_and_support', score: 3, comment: 'Two quotations used.' },
+              { key: 'analysis_and_reasoning', score: 3, comment: 'Explains meaning.' },
+              { key: 'organization', score: 3, comment: 'All elements in order.' },
+              { key: 'style_and_voice', score: 3, comment: 'Direct and readable.' },
+              { key: 'style_and_conventions', score: 3, comment: 'Minor surface errors only.' },
+            ],
+            overallTier: 'good',
+            overallPoints: 20,
+            overallComment: 'Jordan, mostly there, with one element thinly done.',
+          })
+        )
+        .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
+
+      const form = new FormData();
+      form.append('submissionId', 'sub-holistic');
+      const response = await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+
+      const payload = (response as { data: Record<string, unknown> }).data;
+      expect(payload.success).toBe(true);
+      expect(payload.score).toBe('17/20'); // clamped to the band top
+      const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+      expect(stored.score).toBe('17/20');
+      expect(stored.aiMeta.holistic).toMatchObject({
+        requestedPoints: 20,
+        storedPoints: 17,
+        totalPoints: 20,
+      });
+    });
+
+    const holisticCategories = [
+      { key: 'thesis_and_content', score: 3, comment: 'Clear claim.' },
+      { key: 'evidence_and_support', score: 3, comment: 'Two quotations used.' },
+      { key: 'analysis_and_reasoning', score: 3, comment: 'Explains meaning.' },
+      { key: 'organization', score: 3, comment: 'All elements in order.' },
+      { key: 'style_and_voice', score: 3, comment: 'Direct and readable.' },
+      { key: 'style_and_conventions', score: 3, comment: 'Minor surface errors only.' },
+    ];
+
+    test('generates overall feedback when holistic tuple arrives without overallComment', async () => {
+      prisma.submission.findFirst.mockResolvedValue(mockHolisticAssignment());
+      getLLMCompletion.mockReset();
+      getLLMCompletion
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            categories: holisticCategories,
+            overallTier: 'excellent',
+            overallPoints: 18,
+          })
+        )
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            overallComment:
+              'Jordan, your thesis and evidence work together clearly.',
+          })
+        )
+        .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
+
+      const form = new FormData();
+      form.append('submissionId', 'sub-holistic');
+      const response = await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+
+      expect((response as { data: Record<string, unknown> }).data.success).toBe(
+        true
+      );
+      const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+      expect(stored.overallComment).toBe(
+        'Jordan, your thesis and evidence work together clearly.'
+      );
+      expect(stored.score).toBe('18/20');
+      expect(stored.aiMeta.holistic).toMatchObject({
+        tier: 'excellent',
+        requestedPoints: 18,
+        storedPoints: 18,
+        totalPoints: 20,
+      });
+    });
+
+    test('schema repair preserves holistic tier and points', async () => {
+      prisma.submission.findFirst.mockResolvedValue(mockHolisticAssignment());
+      getLLMCompletion.mockReset();
+      getLLMCompletion
+        .mockResolvedValueOnce('{}')
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            categories: holisticCategories,
+            overallTier: 'excellent',
+            overallPoints: 18,
+          })
+        )
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            overallComment: 'Jordan, this is cohesive and well supported.',
+          })
+        )
+        .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
+
+      const form = new FormData();
+      form.append('submissionId', 'sub-holistic');
+      const response = await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+
+      expect((response as { data: Record<string, unknown> }).data.success).toBe(
+        true
+      );
+      const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+      expect(stored.score).toBe('18/20');
+      expect(stored.aiMeta.holistic).toMatchObject({
+        tier: 'excellent',
+        requestedPoints: 18,
+        storedPoints: 18,
+      });
+      const repairCall = getLLMCompletion.mock.calls[1][0];
+      expect(repairCall.metadata.kind).toBe('rubric-schema-repair');
+    });
+
+    test('retries once on invalid holistic fields then falls back to weighted with meta', async () => {
+      prisma.submission.findFirst.mockResolvedValue(mockHolisticAssignment());
+      getLLMCompletion.mockReset();
+      // First invalid holistic payload
+      getLLMCompletion
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            categories: [
+              { key: 'thesis_and_content', score: 3, comment: 'Clear claim.' },
+              { key: 'evidence_and_support', score: 3, comment: 'Two quotations used.' },
+              { key: 'analysis_and_reasoning', score: 3, comment: 'Explains meaning.' },
+              { key: 'organization', score: 3, comment: 'All elements in order.' },
+              { key: 'style_and_voice', score: 3, comment: 'Direct and readable.' },
+              { key: 'style_and_conventions', score: 3, comment: 'Minor surface errors only.' },
+            ],
+            overallTier: 'awesome', // invalid
+            overallPoints: 'NaN',   // invalid
+            overallComment: 'Jordan, solid work.',
+          })
+        )
+        // Retry still invalid
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            categories: [
+              { key: 'thesis_and_content', score: 3, comment: 'Clear claim.' },
+              { key: 'evidence_and_support', score: 2, comment: 'One quotation.' },
+              { key: 'analysis_and_reasoning', score: 3, comment: 'Explains meaning.' },
+              { key: 'organization', score: 3, comment: 'All elements in order.' },
+              { key: 'style_and_voice', score: 3, comment: 'Direct and readable.' },
+              { key: 'style_and_conventions', score: 3, comment: 'Minor surface errors only.' },
+            ],
+            overallTier: 'legendary',
+            overallPoints: 'not-a-number',
+            overallComment: 'Jordan, steady.',
+          })
+        )
+        .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
+
+      const form = new FormData();
+      form.append('submissionId', 'sub-holistic');
+      const response = await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+
+      const payload = (response as { data: Record<string, unknown> }).data;
+      expect(payload.numericPercentage).toBeNull();
+      expect(payload.letterGrade).toBeNull();
+      expect(payload.score).toMatch(/^\d+\/20$/);
+      const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+      expect(stored.numericPercentage).toBeNull();
+      expect(stored.letterGrade).toBeNull();
+      expect(stored.score).toMatch(/^\d+\/20$/);
+      expect(stored.aiMeta.holisticFallback).toMatchObject({
+        reason: 'invalid_output',
+        usedPointsFallback: true,
+      });
     });
   });
 

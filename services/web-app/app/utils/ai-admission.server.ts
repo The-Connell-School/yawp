@@ -2,11 +2,16 @@ import { prisma } from '~/utils/db.server';
 
 export class AiRateLimitError extends Error {
   readonly retryAfterSeconds: number;
+  readonly scope: 'membership' | 'organization';
 
-  constructor(retryAfterSeconds: number) {
+  constructor(
+    retryAfterSeconds: number,
+    scope: 'membership' | 'organization' = 'membership'
+  ) {
     super('AI request budget exhausted');
     this.name = 'AiRateLimitError';
     this.retryAfterSeconds = retryAfterSeconds;
+    this.scope = scope;
   }
 }
 
@@ -25,6 +30,24 @@ export type AiAdmissionPolicy = {
  * intentionally retained when a provider call fails: failed and concurrent
  * attempts still consume capacity and cannot be used to bypass spend limits.
  */
+export class AiLockedForFreeTierError extends Error {
+  constructor() {
+    super('AI is locked until school administrator approval');
+    this.name = 'AiLockedForFreeTierError';
+  }
+}
+
+export function aiLockedForFreeTierMessage() {
+  return 'AI tools unlock after your school administrator approves YAWP for your classroom.';
+}
+
+export function aiAdmissionErrorResponse(error: unknown): Response | null {
+  if (error instanceof AiLockedForFreeTierError) {
+    return Response.json({ error: 'ai_locked', message: aiLockedForFreeTierMessage() }, { status: 403 });
+  }
+  return null;
+}
+
 export async function reserveAiRequest({
   membershipId,
   organizationId,
@@ -42,6 +65,21 @@ export async function reserveAiRequest({
 }): Promise<void> {
   if (!Number.isInteger(units) || units < 1) {
     throw new Error('AI reservation units must be a positive integer');
+  }
+  const { isFreeTierEnabled } = await import(
+    '~/domain/feature-flags/feature-flags.server'
+  );
+  if (await isFreeTierEnabled()) {
+    const org = await prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { id: true, plan: true },
+    });
+    if (org) {
+      const { isAiUnlocked } = await import('~/domain/free-tier/is-ai-unlocked.server');
+      if (!(await isAiUnlocked(org))) {
+        throw new AiLockedForFreeTierError();
+      }
+    }
   }
   const membershipSince = new Date(now.getTime() - policy.membershipWindowMs);
   const organizationSince = new Date(
@@ -96,14 +134,52 @@ export async function reserveAiRequest({
     ]);
 
     if (membershipCount + units > policy.membershipLimit) {
-      throw new AiRateLimitError(
-        Math.max(1, Math.ceil(policy.membershipWindowMs / 1000))
-      );
+      const oldestMembership = await transaction.aiRequestReservation.findFirst({
+        where: {
+          membershipId,
+          organizationId,
+          feature,
+          createdAt: { gte: membershipSince },
+        },
+        orderBy: { createdAt: 'asc' },
+        select: { createdAt: true },
+      });
+      const retryAfterSeconds = oldestMembership
+        ? Math.max(
+            1,
+            Math.ceil(
+              (oldestMembership.createdAt.getTime() +
+                policy.membershipWindowMs -
+                now.getTime()) /
+                1000
+            )
+          )
+        : Math.max(1, Math.ceil(policy.membershipWindowMs / 1000));
+      throw new AiRateLimitError(retryAfterSeconds, 'membership');
     }
     if (organizationCount + units > policy.organizationLimit) {
-      throw new AiRateLimitError(
-        Math.max(1, Math.ceil(policy.organizationWindowMs / 1000))
-      );
+      const oldestOrganization =
+        await transaction.aiRequestReservation.findFirst({
+          where: {
+            organizationId,
+            feature,
+            createdAt: { gte: organizationSince },
+          },
+          orderBy: { createdAt: 'asc' },
+          select: { createdAt: true },
+        });
+      const retryAfterSeconds = oldestOrganization
+        ? Math.max(
+            1,
+            Math.ceil(
+              (oldestOrganization.createdAt.getTime() +
+                policy.organizationWindowMs -
+                now.getTime()) /
+                1000
+            )
+          )
+        : Math.max(1, Math.ceil(policy.organizationWindowMs / 1000));
+      throw new AiRateLimitError(retryAfterSeconds, 'organization');
     }
 
     await transaction.aiRequestReservation.createMany({
