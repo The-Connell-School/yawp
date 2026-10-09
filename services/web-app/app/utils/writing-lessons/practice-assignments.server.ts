@@ -335,6 +335,43 @@ export type MixedAssignedPracticeItem =
     };
 
 /**
+ * How many of an assignment's problems are grammar (ACT multiple choice) vs
+ * composition. A single-kind assignment gives every problem to that kind;
+ * a mixed one splits proportionally to how many skills of each kind were
+ * selected, with at least one problem each. The results page uses the same
+ * split as the denominators for each kind's score.
+ */
+export function splitProblemCountByKind(
+  lessonSlugs: string[],
+  problemCount: number
+): { grammarCount: number; compositionCount: number } {
+  let grammarSlugs = 0;
+  let compositionSlugs = 0;
+  for (const slug of lessonSlugs) {
+    const lesson = getQuickWritingLessonBySlug(slug);
+    if (!lesson) continue;
+    if (lesson.section === 'Composition') compositionSlugs += 1;
+    else grammarSlugs += 1;
+  }
+  if (compositionSlugs === 0) {
+    return { grammarCount: problemCount, compositionCount: 0 };
+  }
+  if (grammarSlugs === 0) {
+    return { grammarCount: 0, compositionCount: problemCount };
+  }
+  const grammarCount = Math.min(
+    problemCount - 1,
+    Math.max(
+      1,
+      Math.round(
+        (problemCount * grammarSlugs) / (grammarSlugs + compositionSlugs)
+      )
+    )
+  );
+  return { grammarCount, compositionCount: problemCount - grammarCount };
+}
+
+/**
  * Expands an assignment into a practice sequence that can mix skill kinds:
  * grammar slugs become interleaved ACT items, composition slugs become
  * interleaved constructed-response items, and when both are present the two
@@ -384,15 +421,12 @@ export async function buildMixedGeneratedPracticeSequence(
     };
   }
 
-  // Both kinds: split the problem count proportionally to how many skills of
-  // each kind were selected (each side gets at least one problem), then
-  // alternate between the two streams.
-  const totalSlugs = grammarSlugs.length + compositionSlugs.length;
-  const grammarCount = Math.min(
-    problemCount - 1,
-    Math.max(1, Math.round((problemCount * grammarSlugs.length) / totalSlugs))
+  // Both kinds: split the problem count proportionally (see
+  // splitProblemCountByKind), then alternate between the two streams.
+  const { grammarCount, compositionCount } = splitProblemCountByKind(
+    lessonSlugs,
+    problemCount
   );
-  const compositionCount = problemCount - grammarCount;
 
   const [act, composed] = await Promise.all([
     buildGeneratedActPracticeSequence(grammarSlugs, grammarCount),
@@ -805,6 +839,10 @@ export type WritingPracticeStudentResult = {
    *  attempt). Composition problems are "done" only once mastered; ACT
    *  problems are done as soon as they're answered. */
   masteredCount: number;
+  /** Distinct grammar (ACT) problems answered correctly. */
+  correctCount: number;
+  /** Distinct composition problems mastered. */
+  compositionMasteredCount: number;
   completed: boolean;
   latestStatus: string | null;
 };
@@ -822,6 +860,10 @@ export type AssignedProgress = {
   masteredCount: number;
   /** Distinct prompts "done": mastered for composition, attempted for ACT. */
   doneCount: number;
+  /** Distinct grammar (ACT) prompts answered correctly. */
+  correctCount: number;
+  /** Distinct composition prompts with a `strong` attempt. */
+  compositionMasteredCount: number;
 };
 
 /**
@@ -846,14 +888,26 @@ export function computeAssignedProgress(
   let attemptedCount = 0;
   let masteredCount = 0;
   let doneCount = 0;
+  let correctCount = 0;
+  let compositionMasteredCount = 0;
   for (const { lessonSlug, mastered } of byPrompt.values()) {
     attemptedCount += 1;
     if (mastered) masteredCount += 1;
     const isComposition =
       getQuickWritingLessonBySlug(lessonSlug)?.section === 'Composition';
     if (isComposition ? mastered : true) doneCount += 1;
+    if (mastered) {
+      if (isComposition) compositionMasteredCount += 1;
+      else correctCount += 1;
+    }
   }
-  return { attemptedCount, masteredCount, doneCount };
+  return {
+    attemptedCount,
+    masteredCount,
+    doneCount,
+    correctCount,
+    compositionMasteredCount,
+  };
 }
 
 /**
@@ -929,6 +983,8 @@ export function summarizeWritingPracticeResults(params: {
         email: student.user.email,
         attemptCount: progress.attemptedCount,
         masteredCount: progress.masteredCount,
+        correctCount: progress.correctCount,
+        compositionMasteredCount: progress.compositionMasteredCount,
         completed: progress.doneCount >= params.problemCount,
         latestStatus: summary?.latestStatus ?? null,
       };
