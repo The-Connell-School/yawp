@@ -24,7 +24,10 @@ import {
   splitAroundUnderline,
 } from '~/utils/writing-lessons/act-practice.shared';
 import { writingPracticeAssignmentTitle } from '~/utils/writing-lessons/assignment-title';
-import { getWritingPracticeResultsForTeacher } from '~/utils/writing-lessons/practice-assignments.server';
+import {
+  getWritingPracticeResultsForTeacher,
+  splitProblemCountByKind,
+} from '~/utils/writing-lessons/practice-assignments.server';
 import {
   isCompositionAttemptRecord,
   practiceFeedbackStatusLabel,
@@ -59,8 +62,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const lessonTitles = classAssignment.assignment.lessonSlugs
     .map((slug) => getQuickWritingLessonBySlug(slug)?.title)
     .filter((title): title is string => Boolean(title));
-  const hasComposition = classAssignment.assignment.lessonSlugs.some(
-    (slug) => getQuickWritingLessonBySlug(slug)?.section === 'Composition'
+  // How many problems of each kind every student gets — the denominators for
+  // the per-kind scores (grammar "correct", composition "mastered").
+  const { grammarCount, compositionCount } = splitProblemCountByKind(
+    classAssignment.assignment.lessonSlugs,
+    classAssignment.assignment.problemCount
   );
 
   const completedCount = results.filter((row) => row.completed).length;
@@ -105,7 +111,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       `Grade ${classAssignment.class.grade} · Period ${classAssignment.class.period}`,
     title: writingPracticeAssignmentTitle(classAssignment.assignment),
     lessonTitles,
-    hasComposition,
+    grammarCount,
+    compositionCount,
     problemCount: classAssignment.assignment.problemCount,
     dueAt: classAssignment.assignment.dueAt
       ? classAssignment.assignment.dueAt.toISOString()
@@ -136,7 +143,8 @@ export default function WritingPracticeResultsRoute() {
     classLabel,
     title,
     lessonTitles,
-    hasComposition,
+    grammarCount,
+    compositionCount,
     problemCount,
     dueAt,
     results,
@@ -221,11 +229,6 @@ export default function WritingPracticeResultsRoute() {
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-3">
-                        {hasComposition && row.masteredCount > 0 ? (
-                          <span className="hidden items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-900 sm:inline-flex">
-                            {row.masteredCount} mastered
-                          </span>
-                        ) : null}
                         {row.latestStatus ? (
                           <span
                             className={`hidden items-center rounded-full px-2.5 py-0.5 text-xs font-medium sm:inline-flex ${
@@ -239,9 +242,37 @@ export default function WritingPracticeResultsRoute() {
                             )}
                           </span>
                         ) : null}
-                        <span className="text-base tabular-nums text-muted-foreground sm:text-sm">
-                          {row.attemptCount}/{problemCount}
-                        </span>
+                        {/* The headline is the score, not just problems
+                            answered: grammar (ACT) problems answered correctly
+                            and composition problems mastered, each out of
+                            that kind's share of the assignment. */}
+                        <div className="text-right" data-testid="student-score">
+                          {row.attemptCount === 0 ? (
+                            <span className="text-base text-muted-foreground sm:text-sm">
+                              Not started
+                            </span>
+                          ) : (
+                            <>
+                              <span className="text-base font-medium tabular-nums sm:text-sm">
+                                {[
+                                  grammarCount > 0
+                                    ? `${row.correctCount}/${grammarCount} correct`
+                                    : null,
+                                  compositionCount > 0
+                                    ? `${row.compositionMasteredCount}/${compositionCount} mastered`
+                                    : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </span>
+                              {row.attemptCount < problemCount ? (
+                                <span className="block text-xs font-normal tabular-nums text-muted-foreground">
+                                  {row.attemptCount} of {problemCount} answered
+                                </span>
+                              ) : null}
+                            </>
+                          )}
+                        </div>
                       </div>
                     </AccordionTrigger>
                     <AccordionContent className="bg-muted/30 px-4">
