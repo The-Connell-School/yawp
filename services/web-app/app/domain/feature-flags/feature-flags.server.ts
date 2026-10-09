@@ -1,6 +1,7 @@
 import { prisma } from '~/utils/db.server';
 import {
   LESSON_PLANNER_FLAG,
+  FREE_TIER_FLAG,
   FEATURE_FLAGS,
   FEATURE_FLAG_KEYS,
   type FeatureFlagKey,
@@ -8,6 +9,7 @@ import {
   type FeatureFlagValue,
   type FeatureFlagValueInput,
   evaluateFeatureFlag,
+  isFreeTierGloballyEnabled,
   featureFlagSettingName,
   normalizeFeatureFlagValue,
   parseFeatureFlagValue,
@@ -83,6 +85,26 @@ export function isLessonPlannerEnabled(
   orgId: string | null | undefined
 ): Promise<boolean> {
   return isFeatureFlagEnabled(LESSON_PLANNER_FLAG, orgId);
+}
+
+/**
+ * Whether Free Tier C is live. Only `everyone` counts as on; `targeted` is off
+ * for anonymous `/free` routes because there is no school context.
+ */
+export async function isFreeTierEnabled(): Promise<boolean> {
+  try {
+    const row = await prisma.setting.findUnique({
+      where: { name: featureFlagSettingName(FREE_TIER_FLAG) },
+      select: { value: true },
+    });
+    return isFreeTierGloballyEnabled(parseFeatureFlagValue(row?.value));
+  } catch (error) {
+    console.error('feature_flag_read_failed', {
+      key: FREE_TIER_FLAG,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
 }
 
 /** Every registered flag with its current state. */

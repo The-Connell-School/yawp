@@ -106,7 +106,7 @@ describe('internal feature-flag endpoints', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
     const body = await response.json();
-    expect(body.flags).toHaveLength(1);
+    expect(body.flags).toHaveLength(2);
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
   });
 
@@ -123,7 +123,10 @@ describe('internal feature-flag endpoints', () => {
       new Request(BASE, { headers: { authorization: `Bearer ${key}` } })
     );
     const body = await response.json();
-    expect(body.flags.map((flag: { key: string }) => flag.key)).toEqual([FLAG]);
+    expect(body.flags.map((flag: { key: string }) => flag.key)).toEqual([
+      FLAG,
+      'free_tier',
+    ]);
   });
 
   test('lists each flag with its mode, schools, and legacy enabled', async () => {

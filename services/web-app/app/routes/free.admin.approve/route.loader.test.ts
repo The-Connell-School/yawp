@@ -7,6 +7,10 @@ mock.module('~/utils/db.server', () => ({
   prisma: { freeTierApplication: { findUnique } },
 }));
 
+mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
+  requireFreeTierEnabled: async () => {},
+}));
+
 mock.module('~/domain/free-tier/signed-link.server', () => ({
   peekSignedLink: async () => ({
     ok: true,

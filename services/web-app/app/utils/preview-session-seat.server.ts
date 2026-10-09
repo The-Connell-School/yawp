@@ -52,11 +52,16 @@ function mismatchedSessionResponse(request: Request, cookies: string[]) {
 
 export async function previewSessionAllowedWithoutSeatMembership(userId: string) {
   const { prisma } = await import('./db.server.ts');
-  const freeTier = await prisma.freeTierApplication.findFirst({
-    where: { userId },
-    select: { id: true },
-  });
-  if (freeTier) return true;
+  const { isFreeTierEnabled } = await import(
+    '~/domain/feature-flags/feature-flags.server'
+  );
+  if (await isFreeTierEnabled()) {
+    const freeTier = await prisma.freeTierApplication.findFirst({
+      where: { userId },
+      select: { id: true },
+    });
+    if (freeTier) return true;
+  }
   const freeClassMembership = await prisma.orgMembership.findFirst({
     where: {
       userId,

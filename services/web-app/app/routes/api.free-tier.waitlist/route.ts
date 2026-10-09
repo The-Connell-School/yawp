@@ -12,6 +12,8 @@ const bad = (status: number, message: string) => Response.json({ error: message 
 const MAX_BODY_BYTES = 4096;
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  const { isFreeTierEnabled } = await import('~/domain/feature-flags/feature-flags.server');
+  if (!(await isFreeTierEnabled())) return bad(404, 'Not found');
   if (request.method !== 'POST') return bad(405, 'Method not allowed');
   if (!request.headers.get('content-type')?.startsWith('application/json')) return bad(400, 'Invalid content type');
   const text = await readBoundedText(request, MAX_BODY_BYTES);

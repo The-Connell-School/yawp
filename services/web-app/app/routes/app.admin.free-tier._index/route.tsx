@@ -18,8 +18,10 @@ import { APPROVABLE_FROM, REJECTABLE_FROM } from '~/utils/internal-free-tier-htt
 import { getApprovalHooks } from '~/domain/free-tier/approval-hooks.server';
 import { retryFreeClassroomProvisioningForUser } from '~/domain/free-tier/provision-free-classroom.server';
 import type { FreeTierApplicationStatus } from '@app/prisma';
+import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
+  await requireFreeTierEnabled();
   await requireSuperAdmin(request);
   const url = new URL(request.url);
   const view = url.searchParams.get('view') ?? 'waitlist';
@@ -46,6 +48,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
+  await requireFreeTierEnabled();
   const user = await requireSuperAdmin(request);
   const operator = await prisma.user.findUnique({ where: { id: user.id }, select: { email: true } });
   const formData = await request.formData();

@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import {
   LESSON_PLANNER_FLAG,
+  FREE_TIER_FLAG,
   FEATURE_FLAG_KEYS,
+  isFreeTierGloballyEnabled,
   featureFlagSettingName,
   MAX_FEATURE_FLAG_ORG_IDS,
   evaluateFeatureFlag,
@@ -27,6 +29,12 @@ describe('feature flag registry', () => {
     expect(featureFlagSettingName(LESSON_PLANNER_FLAG)).toBe(
       'feature_flag.lesson_planner'
     );
+  });
+
+  test('has the Free tier flag', () => {
+    expect(FEATURE_FLAG_KEYS).toContain(FREE_TIER_FLAG);
+    expect(isFeatureFlagKey(FREE_TIER_FLAG)).toBe(true);
+    expect(featureFlagSettingName(FREE_TIER_FLAG)).toBe('feature_flag.free_tier');
   });
 
   test('rejects anything that is not a registered flag', () => {
@@ -134,5 +142,15 @@ describe('evaluateFeatureFlag', () => {
     expect(evaluateFeatureFlag(targeted, '')).toBe(false);
     expect(evaluateFeatureFlag(targeted, null)).toBe(false);
     expect(evaluateFeatureFlag(targeted, undefined)).toBe(false);
+  });
+});
+
+describe('isFreeTierGloballyEnabled', () => {
+  test('is on only for everyone', () => {
+    expect(isFreeTierGloballyEnabled({ mode: 'everyone', orgIds: [] })).toBe(true);
+    expect(isFreeTierGloballyEnabled({ mode: 'off', orgIds: [] })).toBe(false);
+    expect(isFreeTierGloballyEnabled({ mode: 'targeted', orgIds: ['org-1'] })).toBe(
+      false
+    );
   });
 });

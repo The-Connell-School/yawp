@@ -19,11 +19,24 @@
  */
 export const LESSON_PLANNER_FLAG = 'lesson_planner' as const;
 
+/**
+ * Free Tier C (#416). Off: public `/free` routes, teacher onboarding, operator
+ * admin, and internal release APIs behave as if the product were not shipped.
+ * On for `everyone` only; `targeted` is treated as off for anonymous `/free`
+ * routes (there is no organization context).
+ */
+export const FREE_TIER_FLAG = 'free_tier' as const;
+
 export const FEATURE_FLAGS = {
   [LESSON_PLANNER_FLAG]: {
     label: 'Lesson Planner',
     description:
       'Shows the Lesson Planner in the teacher nav and allows planner pages, exports, and AI generation. Off: entry points are hidden and direct URLs are blocked; saved lessons are not deleted.',
+  },
+  [FREE_TIER_FLAG]: {
+    label: 'Free tier',
+    description:
+      'Enables public free-tier signup, teacher onboarding, school-admin approval links, and operator tools. Off: those routes and APIs return 404; production stays on the pre–Free Tier C experience until yawp-internal turns this on for everyone.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 
@@ -128,6 +141,13 @@ export function evaluateFeatureFlag(
   if (value.mode === 'everyone') return true;
   if (value.mode === 'targeted') return !!orgId && value.orgIds.includes(orgId);
   return false;
+}
+
+/** Free tier public flows are global; only `everyone` turns them on. */
+export function isFreeTierGloballyEnabled(
+  value: FeatureFlagValueInput
+): boolean {
+  return value.mode === 'everyone';
 }
 
 /** Same mode and the same set of schools, in any order. */

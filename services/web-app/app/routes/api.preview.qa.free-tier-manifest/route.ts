@@ -17,6 +17,8 @@ function notFound() {
 
 /** Preview-only: read emailed URLs for ship-review; may mint RELEASE links when none were logged. */
 export async function loader({ request }: LoaderFunctionArgs) {
+  const { isFreeTierEnabled } = await import('~/domain/feature-flags/feature-flags.server');
+  if (!(await isFreeTierEnabled())) return notFound();
   if (process.env.YAWP_ENVIRONMENT !== 'preview') return notFound();
   if (
     !isYawpPrPreviewDatabase(previewDatabaseNameFromUrl(process.env.DATABASE_URL))

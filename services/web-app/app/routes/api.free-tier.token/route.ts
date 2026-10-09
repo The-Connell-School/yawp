@@ -22,6 +22,8 @@ async function throttle(request: Request, route: string, targetKey: string, perT
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { isFreeTierEnabled } = await import('~/domain/feature-flags/feature-flags.server');
+  if (!(await isFreeTierEnabled())) return json({ error: 'Not found' }, 404);
   const url = new URL(request.url);
   const token = url.searchParams.get('token') || '';
   if (!token || token.length > 500) return json({ valid: false, reason: 'invalid' }, 400);
@@ -34,6 +36,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  const { isFreeTierEnabled } = await import('~/domain/feature-flags/feature-flags.server');
+  if (!(await isFreeTierEnabled())) return json({ error: 'Not found' }, 404);
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
   if (!request.headers.get('content-type')?.startsWith('application/json')) return json({ error: 'Invalid content type' }, 400);
   const text = await readBoundedText(request, 4096);

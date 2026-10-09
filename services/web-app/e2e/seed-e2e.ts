@@ -1301,6 +1301,17 @@ export async function seedE2E(): Promise<E2EContext> {
     update: { value: 'true', updatedAt: new Date() },
   });
 
+  await prisma.setting.upsert({
+    where: { name: 'feature_flag.free_tier' },
+    create: {
+      name: 'feature_flag.free_tier',
+      value: 'true',
+      valueType: 'boolean',
+      description: 'Enabled for E2E',
+    },
+    update: { value: 'true', updatedAt: new Date() },
+  });
+
   return {
     organizationId: org.id,
     schoolId: school.id,

@@ -22,6 +22,7 @@ import {
   seedPreviewPlannerQa,
 } from './seed-preview-planner-qa';
 import { ensureLessonPlannerEnabledForDemo } from './local-dev/seed-lesson-planner-feature-flag';
+import { ensureFreeTierEnabledForPreview } from './local-dev/seed-free-tier-feature-flag';
 import {
   seedPreviewTeacherNotesQa,
   shouldRunPreviewTeacherNotesQaSeed,
@@ -34,8 +35,11 @@ const requestedCount = Number(
 );
 const seats = buildPreviewSeatDefinitions(requestedCount);
 const prisma = createPrismaClient();
+const databaseName = process.env.DATABASE_URL?.split('/').pop()?.split('?')[0] ?? '';
 
 try {
+  const freeTierFlag = await ensureFreeTierEnabledForPreview(prisma, databaseName);
+  console.log(`Free tier feature flag seed: ${JSON.stringify(freeTierFlag)}`);
   const results = await ensurePreviewSeats(prisma, seats);
   const includeFreeClassroomFixture =
     process.env.PREVIEW_SLUG !== 'demo' &&
@@ -109,6 +113,10 @@ try {
   } else {
     console.log('preview planner QA seed skipped: demo environment');
     await ensureLessonPlannerEnabledForDemo(prisma);
+    const { ensureFreeTierEnabledForDemo } = await import(
+      './local-dev/seed-free-tier-feature-flag'
+    );
+    await ensureFreeTierEnabledForDemo(prisma);
   }
 } finally {
   await prisma.$disconnect();

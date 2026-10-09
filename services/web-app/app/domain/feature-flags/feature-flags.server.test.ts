@@ -20,7 +20,7 @@ const {
   setFeatureFlag,
   findUnknownOrganizationIds,
 } = await import('./feature-flags.server');
-const { LESSON_PLANNER_FLAG } = await import('./feature-flags');
+const { LESSON_PLANNER_FLAG, FREE_TIER_FLAG } = await import('./feature-flags');
 
 const NAME = 'feature_flag.lesson_planner';
 /** Removed with its feature; its Setting row may still exist in a database. */
@@ -107,7 +107,7 @@ describe('feature flags (server)', () => {
   test('lists every registered flag, off when it has no row', async () => {
     prisma.setting.findMany.mockResolvedValue([]);
     const flags = await listFeatureFlags();
-    expect(flags).toHaveLength(1);
+    expect(flags).toHaveLength(2);
     expect(flags[0]).toMatchObject({
       key: LESSON_PLANNER_FLAG,
       mode: 'off',
@@ -124,7 +124,10 @@ describe('feature flags (server)', () => {
       { name: REMOVED_NAME, value: 'true', description: null, updatedAt: new Date() },
     ]);
     const flags = await listFeatureFlags();
-    expect(flags.map((flag) => flag.key)).toEqual([LESSON_PLANNER_FLAG]);
+    expect(flags.map((flag) => flag.key)).toEqual([
+      LESSON_PLANNER_FLAG,
+      FREE_TIER_FLAG,
+    ]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });
     const where = prisma.setting.findMany.mock.calls[0]?.[0].where;
     expect(where.name.in).not.toContain(REMOVED_NAME);

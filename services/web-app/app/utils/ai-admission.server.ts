@@ -71,9 +71,14 @@ export async function reserveAiRequest({
     select: { id: true, plan: true },
   });
   if (org) {
-    const { isAiUnlocked } = await import('~/domain/free-tier/is-ai-unlocked.server');
-    if (!(await isAiUnlocked(org))) {
-      throw new AiLockedForFreeTierError();
+    const { isFreeTierEnabled } = await import(
+      '~/domain/feature-flags/feature-flags.server'
+    );
+    if (await isFreeTierEnabled()) {
+      const { isAiUnlocked } = await import('~/domain/free-tier/is-ai-unlocked.server');
+      if (!(await isAiUnlocked(org))) {
+        throw new AiLockedForFreeTierError();
+      }
     }
   }
   const membershipSince = new Date(now.getTime() - policy.membershipWindowMs);

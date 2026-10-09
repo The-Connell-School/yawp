@@ -83,10 +83,16 @@ export const handle: BreadcrumbHandle = { breadcrumb: 'Home' };
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const pathname = new URL(request.url).pathname;
+  const { isFreeTierEnabled } = await import(
+    '~/domain/feature-flags/feature-flags.server'
+  );
+  const freeTierFeatureOn = await isFreeTierEnabled();
   const { loadFreeTierGateApplication, enforceFreeTierTeacherGate } = await import(
     '~/domain/free-tier/free-tier-gate.server'
   );
-  const freeTierApplication = await loadFreeTierGateApplication(userId);
+  const freeTierApplication = freeTierFeatureOn
+    ? await loadFreeTierGateApplication(userId)
+    : null;
 
   if (freeTierApplication) {
     const { retryFreeClassroomProvisioningForUser } = await import(
@@ -111,7 +117,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   const profile = await requireMembership(request, userId);
-  if (profile.role === 'TEACHER') {
+  if (freeTierFeatureOn && profile.role === 'TEACHER') {
     await enforceFreeTierTeacherGate({
       userId,
       pathname,
