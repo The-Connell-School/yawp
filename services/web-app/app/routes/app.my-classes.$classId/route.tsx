@@ -2527,14 +2527,20 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
           </Sheet>
 
           {sortedStudents.length === 0 ? (
-            <div className="flex flex-col items-center justify-center border border-dashed bg-muted/50 p-12 rounded-lg">
+            <div
+              data-tour="class-roster"
+              className="flex flex-col items-center justify-center border border-dashed bg-muted/50 p-12 rounded-lg"
+            >
               <span className="text-lg font-bold">No students yet</span>
               <span className="text-sm text-muted-foreground">
                 Add students to this class to get started
               </span>
             </div>
           ) : filteredStudents.length === 0 ? (
-            <div className="flex flex-col items-center justify-center border border-dashed bg-muted/50 p-12 rounded-lg">
+            <div
+              data-tour="class-roster"
+              className="flex flex-col items-center justify-center border border-dashed bg-muted/50 p-12 rounded-lg"
+            >
               <span className="text-lg font-bold">No students found</span>
               <span className="text-sm text-muted-foreground">
                 Try a different search term
@@ -2542,6 +2548,7 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
             </div>
           ) : (
             <div
+              data-tour="class-roster"
               className={cn(
                 'rounded-lg bg-muted/50',
                 studentIsLoading ? 'opacity-50 transition-opacity' : ''
