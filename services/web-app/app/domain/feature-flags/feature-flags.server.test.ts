@@ -20,7 +20,7 @@ const {
   setFeatureFlag,
   findUnknownOrganizationIds,
 } = await import('./feature-flags.server');
-const { LESSON_PLANNER_FLAG } = await import('./feature-flags');
+const { INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG } = await import('./feature-flags');
 
 const NAME = 'feature_flag.lesson_planner';
 /** Removed with its feature; its Setting row may still exist in a database. */
@@ -34,6 +34,20 @@ describe('feature flags (server)', () => {
     prisma.setting.findMany.mockReset();
     prisma.setting.upsert.mockReset();
     prisma.organization.findMany.mockReset();
+  });
+
+  test('Rubrics from Yawp Internal is off with no row and follows per-school targeting', async () => {
+    prisma.setting.findUnique.mockResolvedValue(null);
+    expect(await isFeatureFlagEnabled(INTERNAL_RUBRICS_FLAG, 'org-1')).toBe(false);
+    expect(prisma.setting.findUnique.mock.calls[0]?.[0]).toMatchObject({
+      where: { name: 'feature_flag.internal_rubrics' },
+    });
+    prisma.setting.findUnique.mockResolvedValue({ value: '{"mode":"targeted","orgIds":["org-1"]}' });
+    expect(await isFeatureFlagEnabled(INTERNAL_RUBRICS_FLAG, 'org-1')).toBe(true);
+    expect(await isFeatureFlagEnabled(INTERNAL_RUBRICS_FLAG, 'org-2')).toBe(false);
+    expect(await isFeatureFlagEnabled(INTERNAL_RUBRICS_FLAG, null)).toBe(false);
+    prisma.setting.findUnique.mockResolvedValue({ value: '{"mode":"everyone","orgIds":[]}' });
+    expect(await isFeatureFlagEnabled(INTERNAL_RUBRICS_FLAG, 'org-2')).toBe(true);
   });
 
   test('defaults off when no row exists', async () => {
@@ -107,7 +121,8 @@ describe('feature flags (server)', () => {
   test('lists every registered flag, off when it has no row', async () => {
     prisma.setting.findMany.mockResolvedValue([]);
     const flags = await listFeatureFlags();
-    expect(flags).toHaveLength(1);
+    expect(flags.map((flag) => flag.key)).toEqual([LESSON_PLANNER_FLAG, INTERNAL_RUBRICS_FLAG]);
+    expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[0]).toMatchObject({
       key: LESSON_PLANNER_FLAG,
       mode: 'off',
@@ -124,7 +139,7 @@ describe('feature flags (server)', () => {
       { name: REMOVED_NAME, value: 'true', description: null, updatedAt: new Date() },
     ]);
     const flags = await listFeatureFlags();
-    expect(flags.map((flag) => flag.key)).toEqual([LESSON_PLANNER_FLAG]);
+    expect(flags.map((flag) => flag.key)).toEqual([LESSON_PLANNER_FLAG, INTERNAL_RUBRICS_FLAG]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });
     const where = prisma.setting.findMany.mock.calls[0]?.[0].where;
     expect(where.name.in).not.toContain(REMOVED_NAME);
