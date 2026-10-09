@@ -74,3 +74,76 @@ run "configured_secret_permissions" {
  }
 
 }
+
+run "content_unset_preserves_runtime" {
+ command = plan
+ assert {
+  condition = !contains(keys(aws_apprunner_service.web.source_configuration[0].image_repository[0].image_configuration[0].runtime_environment_variables), "INTERNAL_CONTENT_ENABLED")
+  error_message = "Unconfigured content integration must not enable the content API."
+ }
+ assert {
+  condition = !contains(keys(aws_apprunner_service.web.source_configuration[0].image_repository[0].image_configuration[0].runtime_environment_secrets), "YAWP_CONTENT_SERVICE_KEY") && contains(keys(aws_apprunner_service.web.source_configuration[0].image_repository[0].image_configuration[0].runtime_environment_secrets), "SESSION_SECRET")
+  error_message = "Unconfigured content integration must retain existing secrets without mapping a content key."
+ }
+}
+
+run "content_configured_runtime_and_permissions" {
+ command = plan
+ variables {
+  internal_content_integration = {
+   enabled = true
+   secret_arn = "arn:aws:secretsmanager:us-east-1:422348803522:secret:content-abcdef"
+  }
+ }
+ assert {
+  condition = aws_apprunner_service.web.source_configuration[0].image_repository[0].image_configuration[0].runtime_environment_variables["INTERNAL_CONTENT_ENABLED"] == "true" && aws_apprunner_service.web.source_configuration[0].image_repository[0].image_configuration[0].runtime_environment_secrets["YAWP_CONTENT_SERVICE_KEY"] == var.internal_content_integration.secret_arn
+  error_message = "Content integration must reach App Runner with the enable flag and exact secret ARN."
+ }
+}
+
+run "content_configured_secret_permissions" {
+ command = apply
+ plan_options {
+  target = [aws_iam_role_policy.apprunner_instance_policy]
+ }
+ variables {
+  internal_content_integration = {
+   enabled = true
+   secret_arn = "arn:aws:secretsmanager:us-east-1:422348803522:secret:content-abcdef"
+  }
+ }
+ assert {
+  condition = strcontains(aws_iam_role_policy.apprunner_instance_policy.policy, var.internal_content_integration.secret_arn)
+  error_message = "App Runner role must be allowed to read the exact content secret."
+ }
+}
+
+run "reject_content_wildcard_arn" {
+ command = plan
+ variables {
+  internal_content_integration = {
+   enabled = true
+   secret_arn = "arn:aws:secretsmanager:us-east-1:422348803522:secret:content-*"
+  }
+ }
+ expect_failures = [var.internal_content_integration]
+}
+
+run "reject_content_equal_to_management_key" {
+ command = plan
+ variables {
+  internal_platform_integration = {
+   internal_origin = "https://internal.yawp.school"
+   public_origin = "https://yawp.school"
+   management_secret_arn = "arn:aws:secretsmanager:us-east-1:422348803522:secret:management-abcdef"
+   production_secret_arn = "arn:aws:secretsmanager:us-east-1:422348803522:secret:production-abcdef"
+   issue_sessions = false
+   deliver_ends = true
+  }
+  internal_content_integration = {
+   enabled = true
+   secret_arn = "arn:aws:secretsmanager:us-east-1:422348803522:secret:management-abcdef"
+  }
+ }
+ expect_failures = [aws_apprunner_service.web]
+}
