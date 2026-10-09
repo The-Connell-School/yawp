@@ -2533,7 +2533,7 @@ describe('api.domain.grade-essay-ai', () => {
       const call = gradingCall();
       expect(call.system).not.toContain('"comment": string');
       expect(call.system).toContain(
-        'Do not write per-category feedback. Every word of feedback belongs in overallComment.'
+        'Do not write per-category feedback. Student-facing feedback belongs in overallComment; private observations belong only in teacherNote.'
       );
       expect(call.system).toContain('"overallComment": string');
     });
@@ -2753,11 +2753,13 @@ describe('api.domain.grade-essay-ai', () => {
       expect(writerCall?.[0].system).not.toContain(teacherNote);
     });
 
-    test('ignores unsolicited notes from rubrics that have not opted in', async () => {
+    test('persists teacher notes even when legacy outputSchema omits teacherNotesEnabled', async () => {
       const result = await gradeWithNote({ enabled: false, response: { categories, teacherNote, overallComment } });
-      expect((result as any).data).not.toHaveProperty('teacherNote');
-      expect(prisma.submissionGradingAssistantRun.create.mock.calls.at(-1)?.[0].data.metadata).not.toHaveProperty('teacherNote');
-      expect(getLLMCompletion.mock.calls[0][0].system).not.toContain('"teacherNote"');
+      expect((result as any).data.teacherNote).toBe(teacherNote);
+      expect(
+        prisma.submissionGradingAssistantRun.create.mock.calls.at(-1)?.[0].data.metadata
+      ).toMatchObject({ teacherNote });
+      expect(getLLMCompletion.mock.calls[0][0].system).toContain('"teacherNote"');
     });
 
     test('retains the separate note while generating missing student feedback with the authored constraints', async () => {
@@ -2784,7 +2786,7 @@ describe('api.domain.grade-essay-ai', () => {
       expect(prisma.submission.update.mock.calls.at(-1)?.[0].data.overallComment).toBe(overallComment);
     });
 
-    test('schema repair omits teacher-note rules when notes are disabled', async () => {
+    test('schema repair includes teacher-note rules for all rubrics', async () => {
       await gradeWithNote({
         enabled: false,
         response: {
@@ -2795,8 +2797,8 @@ describe('api.domain.grade-essay-ai', () => {
         fallback: { categories, teacherNote, overallComment },
       });
       const repair = getLLMCompletion.mock.calls[1][0];
-      expect(repair.system).not.toContain('Teacher Note rules:');
-      expect(repair.system).not.toContain(
+      expect(repair.system).toContain('Teacher Note rules:');
+      expect(repair.system).toContain(
         'Private observations belong only in teacherNote'
       );
     });

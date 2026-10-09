@@ -27,40 +27,6 @@ async function libraryRubric(db: any, prodName: string) {
   return { rubric, type, name };
 }
 
-run('teacher notes toggle writes outputSchema.teacherNotesEnabled as a new revision', async () => {
-  const { db, catalog } = await setup();
-  const { setRubricTeacherNotesEnabled } = await import('./rubric-output-options.server');
-  const { name, rubric, type } = await libraryRubric(db, 'thesis-driven-essay');
-  const before = await catalog.get(name);
-  expect(
-    (before.live.content as { outputSchema?: { teacherNotesEnabled?: boolean } })
-      .outputSchema?.teacherNotesEnabled
-  ).not.toBe(true);
-  const saved = await setRubricTeacherNotesEnabled({
-    db,
-    catalogKey: name,
-    enabled: true,
-    expectedFingerprint: before.live.fingerprint,
-    actorEmail: actor,
-  });
-  expect(saved.teacherNotesEnabled).toBe(true);
-  const row = await db.rubric.findUniqueOrThrow({ where: { id: rubric.id } });
-  expect(
-    (row.schemaJson as { outputSchema?: { teacherNotesEnabled?: boolean } })
-      .outputSchema?.teacherNotesEnabled
-  ).toBe(true);
-  const history = await catalog.get(name);
-  expect(history.revisions.some((revision) => revision.version === saved.revision.version)).toBe(
-    true
-  );
-  const { resolve } = await setup();
-  const grading = await resolve({ assignmentTypeId: type.id });
-  expect(
-    (grading.outputSchemaSnapshot as { teacherNotesEnabled?: boolean }).teacherNotesEnabled
-  ).toBe(true);
-  cleanup.push(() => db.assignment.deleteMany({ where: { assignmentType: { rubricId: rubric.id } } }));
-});
-
 run('first edit of a never-versioned library rubric captures the live content, pins existing work, and versions the edit with who and why', async () => {
   const { db, catalog, resolve } = await setup();
   const { rubric, type, name } = await libraryRubric(db, 'daily-pages-engagement');
