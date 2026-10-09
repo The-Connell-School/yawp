@@ -28,7 +28,7 @@ beforeEach(() => {
   isFreeTierEnabled.mockReset().mockResolvedValue(true);
 });
 
-test('internal endpoints return 404 when the free tier flag is off', async () => {
+test('release and token mint return 404 when the free tier flag is off', async () => {
   const old = process.env.YAWP_MANAGEMENT_SERVICE_KEY;
   process.env.YAWP_MANAGEMENT_SERVICE_KEY = key;
   isFreeTierEnabled.mockResolvedValue(false);
@@ -38,6 +38,16 @@ test('internal endpoints return 404 when the free tier flag is off', async () =>
       (
         await applicationsSearch(
           new Request('https://yawp.test/api/internal/v1/free-tier/applications?q=x', {
+            headers,
+          })
+        )
+      ).status
+    ).toBe(200);
+    expect(
+      (
+        await releaseBatchHttp(
+          new Request('https://yawp.test/api/internal/v1/free-tier/release', {
+            method: 'POST',
             headers,
           })
         )

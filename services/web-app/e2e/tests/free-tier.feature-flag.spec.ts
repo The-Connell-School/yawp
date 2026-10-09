@@ -1,5 +1,6 @@
 import { expect, test } from '../test-setup';
 import { setFreeTierFlag } from '../feature-flags';
+import { createE2EPrismaClient } from '../prisma-client';
 
 test.describe.serial('Free tier feature flag', () => {
   test.afterAll(async () => {
@@ -10,6 +11,34 @@ test.describe.serial('Free tier feature flag', () => {
     await setFreeTierFlag(false);
     const response = await page.goto('/free');
     expect(response?.status()).toBe(404);
+  });
+
+  test('form POST to /free returns 404 and does not create a waitlist row when off', async ({
+    page,
+    request,
+  }) => {
+    await setFreeTierFlag(false);
+    const email = `e2e-flag-post-off+${Date.now()}@yawp.local`;
+    const prisma = createE2EPrismaClient();
+    try {
+      const response = await request.post('/free?index', {
+        form: {
+          intent: 'waitlist',
+          name: 'Flag POST Off',
+          email,
+          schoolName: 'Flag High',
+          location: 'Local',
+          gradeLevel: '10',
+        },
+      });
+      expect(response.status()).toBe(404);
+      const count = await prisma.freeTierApplication.count({ where: { email } });
+      expect(count).toBe(0);
+    } finally {
+      await prisma.$disconnect();
+    }
+    await page.goto('/free');
+    expect((await page.goto('/free'))?.status()).toBe(404);
   });
 
   test('onboarding waitlist works when the flag is on', async ({ page }) => {

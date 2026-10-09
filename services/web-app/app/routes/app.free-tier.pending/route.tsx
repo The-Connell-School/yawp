@@ -14,10 +14,12 @@ import { resendFreeTierAdminApprovalReminder } from '~/domain/free-tier/approval
 import { renderAdminApprovalEmailBody } from '~/domain/free-tier/email-copy';
 import { FreeTierAuthCard, FreeTierEmailPreview, FreeTierSignOut } from '../free-tier/FreeTierAuthCard';
 import { freeTierConfigErrorMessage } from '~/domain/free-tier/free-tier-config.server';
+import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
 
 const LINK_PLACEHOLDER = '(link included in the email we sent)';
 
 export async function loader({ request }: LoaderFunctionArgs) {
+  await requireFreeTierEnabled();
   const userId = await requireUserId(request);
   const app = await prisma.freeTierApplication.findFirst({
     where: { userId },
@@ -51,6 +53,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
+  await requireFreeTierEnabled();
   const userId = await requireUserId(request);
   const intent = String((await request.formData()).get('intent'));
   const app = await prisma.freeTierApplication.findFirst({

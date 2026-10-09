@@ -13,12 +13,14 @@ import {
   FreeTierFieldLabel,
   FreeTierTextInput,
 } from '../free-tier/FreeTierAuthCard';
+import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
 
 type LoaderData =
   | { ok: false; reason?: string }
   | { ok: true; token: string; schoolName: string; teacherName: string };
 
 export async function loader({ request }: LoaderFunctionArgs) {
+  await requireFreeTierEnabled();
   const token = new URL(request.url).searchParams.get('t') ?? '';
   if (!token) return { ok: false as const };
   const peek = await peekSignedLink({ token, expectedPurpose: 'ADMIN_APPROVE' });
@@ -61,6 +63,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
+  await requireFreeTierEnabled();
   const formData = await request.formData();
   const token = String(formData.get('token') ?? '');
   const authorized = formData.get('authorized') === 'on';

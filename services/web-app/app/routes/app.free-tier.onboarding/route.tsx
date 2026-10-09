@@ -19,12 +19,14 @@ import {
   FreeTierTextInput,
 } from '../free-tier/FreeTierAuthCard';
 import { freeTierConfigErrorMessage } from '~/domain/free-tier/free-tier-config.server';
+import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
 
 const MAX_NOTE = 500;
 const MAX_NAME = 200;
 const LINK_PLACEHOLDER = '(link included in the email we send)';
 
 export async function loader({ request }: LoaderFunctionArgs) {
+  await requireFreeTierEnabled();
   const userId = await requireUserId(request);
   const app = await prisma.freeTierApplication.findFirst({
     where: { userId },
@@ -48,6 +50,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
+  await requireFreeTierEnabled();
   const userId = await requireUserId(request);
   const formData = await request.formData();
   const app = await prisma.freeTierApplication.findFirst({ where: { userId }, select: { id: true } });

@@ -20,10 +20,20 @@
 export const LESSON_PLANNER_FLAG = 'lesson_planner' as const;
 
 /**
- * Free Tier C (#416). Off: public `/free` routes, teacher onboarding, operator
- * admin, and internal release APIs behave as if the product were not shipped.
+ * Rubrics managed in Yawp Internal instead of the code-seeded/static content.
+ * On: a new assignment pins to the rubric version Yawp Internal released for
+ * its rubric (`RubricRelease`, written by the rubric catalog `stage`
+ * endpoint), when there is one. Off: it pins to the rubric's current version
+ * as before. Existing assignments always keep the version they were created
+ * with.
+ */
+export const INTERNAL_RUBRICS_FLAG = 'internal_rubrics' as const;
+
+/**
+ * Free Tier C (#416). Off: public `/free` UI routes, teacher onboarding, operator
+ * admin UI, and internal release/link-mint APIs behave as if the product were not shipped.
  * On for `everyone` only; `targeted` is treated as off for anonymous `/free`
- * routes (there is no organization context).
+ * routes (there is no organization context). Waitlist/token APIs on main stay available.
  */
 export const FREE_TIER_FLAG = 'free_tier' as const;
 
@@ -33,10 +43,15 @@ export const FEATURE_FLAGS = {
     description:
       'Shows the Lesson Planner in the teacher nav and allows planner pages, exports, and AI generation. Off: entry points are hidden and direct URLs are blocked; saved lessons are not deleted.',
   },
+  [INTERNAL_RUBRICS_FLAG]: {
+    label: 'Rubrics from Yawp Internal',
+    description:
+      "Schools with this on get the rubric version Yawp Internal released for each rubric when a new assignment is created. Off: new assignments use the platform's current rubric. Existing assignments keep the version they were created with.",
+  },
   [FREE_TIER_FLAG]: {
     label: 'Free tier',
     description:
-      'Enables public free-tier signup, teacher onboarding, school-admin approval links, and operator tools. Off: those routes and APIs return 404; production stays on the pre–Free Tier C experience until yawp-internal turns this on for everyone.',
+      'Enables Free Tier C teacher onboarding, school-admin approval links, operator release tools, and related UI. Off: those routes and release APIs return 404; waitlist/token APIs behave as on main until yawp-internal turns this on for everyone.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

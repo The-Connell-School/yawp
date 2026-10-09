@@ -10,8 +10,10 @@ import { enforceUnauthByIpAndTarget } from '~/utils/rate-limit.server';
 import { z } from 'zod';
 import { FreeTierEntryHeader } from '../free.join/FreeTierEntryHeader';
 import { FreeTierFieldLabel, FreeTierTextInput } from '../free-tier/FreeTierAuthCard';
+import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
+  await requireFreeTierEnabled();
   const url = new URL(request.url);
   const token = url.searchParams.get('t')?.trim();
   if (!token) return { mode: 'waitlist' as const, tokenValid: null };
@@ -22,6 +24,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 const formSchema = waitlistInputSchema;
 
 export async function action({ request }: ActionFunctionArgs) {
+  await requireFreeTierEnabled();
   const formData = await request.formData();
   const intent = String(formData.get('intent') ?? 'waitlist');
   const raw = {

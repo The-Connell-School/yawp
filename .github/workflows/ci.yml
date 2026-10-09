@@ -242,7 +242,8 @@ jobs:
           bun test
           ./services/web-app/app/domain/rubrics/rubric-catalog.test.ts
           ./services/web-app/app/domain/rubrics/rubric-catalog.integration.test.ts
-          ./services/web-app/app/domain/rubrics/internal-demo-rubrics.integration.test.ts
+          ./services/web-app/app/domain/rubrics/rubric-release.integration.test.ts
+          ./services/web-app/app/domain/rubrics/rubric-release.server.test.ts
           ./services/web-app/app/utils/internal-rubric-catalog-http.server.test.ts
           ./services/web-app/app/utils/ip.server.test.ts
           ./services/web-app/app/utils/rate-limit.server.test.ts
@@ -420,6 +421,7 @@ jobs:
             app/routes/app.free-tier.onboarding/route.test.tsx \
             app/routes/app.free-tier.pending/route.test.tsx \
             app/routes/free.admin.approve/route.loader.test.ts \
+            app/routes/free._index/route.action.test.ts \
             app/utils/free-tier/free-tier-feature-gate.server.test.ts \
             app/domain/feature-flags/is-free-tier-enabled.server.test.ts \
             app/routes/auth.login/route.test.tsx \

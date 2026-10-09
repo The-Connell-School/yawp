@@ -17,8 +17,10 @@ import {
   FreeTierFieldLabel,
   FreeTierTextInput,
 } from '../free-tier/FreeTierAuthCard';
+import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
+  await requireFreeTierEnabled();
   const token = new URL(request.url).searchParams.get('t') ?? '';
   if (!token) return { ok: false as const, reason: 'missing' as const };
   const peek = await peekSignedLink({ token, expectedPurpose: 'RELEASE' });
@@ -34,6 +36,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 const Schema = z.object({ name: NameSchema }).and(PasswordAndConfirmPasswordSchema);
 
 export async function action({ request }: ActionFunctionArgs) {
+  await requireFreeTierEnabled();
   const formData = await request.formData();
   const token = String(formData.get('token') ?? '');
   const parsed = Schema.safeParse({

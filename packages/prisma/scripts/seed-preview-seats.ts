@@ -21,7 +21,10 @@ import {
   isDemoPlannerQaEnvironment,
   seedPreviewPlannerQa,
 } from './seed-preview-planner-qa';
-import { ensureLessonPlannerEnabledForDemo } from './local-dev/seed-lesson-planner-feature-flag';
+import {
+  ensureInternalRubricsEnabledForDemo,
+  ensureLessonPlannerEnabledForDemo,
+} from './local-dev/seed-lesson-planner-feature-flag';
 import { ensureFreeTierEnabledForPreview } from './local-dev/seed-free-tier-feature-flag';
 import {
   seedPreviewTeacherNotesQa,
@@ -113,10 +116,7 @@ try {
   } else {
     console.log('preview planner QA seed skipped: demo environment');
     await ensureLessonPlannerEnabledForDemo(prisma);
-    const { ensureFreeTierEnabledForDemo } = await import(
-      './local-dev/seed-free-tier-feature-flag'
-    );
-    await ensureFreeTierEnabledForDemo(prisma);
+    await ensureInternalRubricsEnabledForDemo(prisma);
   }
 } finally {
   await prisma.$disconnect();

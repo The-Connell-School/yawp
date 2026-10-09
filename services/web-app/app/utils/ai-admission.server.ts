@@ -66,15 +66,15 @@ export async function reserveAiRequest({
   if (!Number.isInteger(units) || units < 1) {
     throw new Error('AI reservation units must be a positive integer');
   }
-  const org = await prisma.organization.findUnique({
-    where: { id: organizationId },
-    select: { id: true, plan: true },
-  });
-  if (org) {
-    const { isFreeTierEnabled } = await import(
-      '~/domain/feature-flags/feature-flags.server'
-    );
-    if (await isFreeTierEnabled()) {
+  const { isFreeTierEnabled } = await import(
+    '~/domain/feature-flags/feature-flags.server'
+  );
+  if (await isFreeTierEnabled()) {
+    const org = await prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { id: true, plan: true },
+    });
+    if (org) {
       const { isAiUnlocked } = await import('~/domain/free-tier/is-ai-unlocked.server');
       if (!(await isAiUnlocked(org))) {
         throw new AiLockedForFreeTierError();

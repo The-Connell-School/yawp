@@ -8,6 +8,10 @@ mock.module('~/domain/free-tier/approval-flow.server', () => ({
   submitAdminDetails: async () => ({ ok: true as const, status: 'SENT' as const }),
 }));
 
+mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
+  requireFreeTierEnabled: async () => {},
+}));
+
 test('onboarding action redirects without returning approval tokens', async () => {
   const { action } = await import('./route');
   mock.module('~/utils/auth.server', () => ({

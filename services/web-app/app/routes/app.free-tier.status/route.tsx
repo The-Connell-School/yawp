@@ -2,8 +2,10 @@ import { type LoaderFunctionArgs, useLoaderData } from 'react-router';
 import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { FreeTierAuthCard, FreeTierSignOut } from '../free-tier/FreeTierAuthCard';
+import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
+  await requireFreeTierEnabled();
   const userId = await requireUserId(request);
   const app = await prisma.freeTierApplication.findFirst({
     where: { userId },

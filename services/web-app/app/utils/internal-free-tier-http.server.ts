@@ -28,8 +28,15 @@ export function authenticate(request: Request) {
   return null;
 }
 
-async function authorizeFreeTierManagement(request: Request) {
+async function authorizeManagement(request: Request) {
   const denied = authenticate(request);
+  if (denied) return denied;
+  return null;
+}
+
+/** #416 release/link/email endpoints only; search/export/queue stay on main behavior. */
+async function authorizeFreeTierReleaseManagement(request: Request) {
+  const denied = await authorizeManagement(request);
   if (denied) return denied;
   const { isFreeTierEnabled } = await import('~/domain/feature-flags/feature-flags.server');
   if (!(await isFreeTierEnabled())) {
@@ -61,7 +68,7 @@ const searchQuery = z
   .strict();
 
 export async function applicationsSearch(request: Request) {
-  const denied = await authorizeFreeTierManagement(request);
+  const denied = await authorizeManagement(request);
   if (denied) return denied;
   if (request.method !== 'GET') return response({ error: 'Method not allowed' }, 405);
   let input: z.infer<typeof searchQuery>;
@@ -123,7 +130,7 @@ export async function applicationsSearch(request: Request) {
 }
 
 export async function tokensCreate(request: Request) {
-  const denied = await authorizeFreeTierManagement(request);
+  const denied = await authorizeFreeTierReleaseManagement(request);
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
   if (new URL(request.url).search) return response({ error: 'Invalid request' }, 400);
@@ -139,7 +146,7 @@ export async function tokensCreate(request: Request) {
 }
 
 export async function releaseBatchHttp(request: Request) {
-  const denied = await authorizeFreeTierManagement(request);
+  const denied = await authorizeFreeTierReleaseManagement(request);
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
   if (!request.headers.get('content-type')?.startsWith('application/json')) return response({ error: 'Invalid content type' }, 400);
@@ -164,7 +171,7 @@ export async function releaseBatchHttp(request: Request) {
 }
 
 export async function exportCsv(request: Request) {
-  const denied = await authorizeFreeTierManagement(request);
+  const denied = await authorizeManagement(request);
   if (denied) return denied;
   if (request.method !== 'GET') return response({ error: 'Method not allowed' }, 405);
   // Reuse search filter parsing
@@ -253,7 +260,7 @@ const queueQuery = z
   .strict();
 
 export async function approvalQueue(request: Request) {
-  const denied = await authorizeFreeTierManagement(request);
+  const denied = await authorizeManagement(request);
   if (denied) return denied;
   if (request.method !== 'GET') return response({ error: 'Method not allowed' }, 405);
   let input: z.infer<typeof queueQuery>;
@@ -320,7 +327,7 @@ export async function approvalQueue(request: Request) {
 }
 
 export async function approvalDetail(request: Request) {
-  const denied = await authorizeFreeTierManagement(request);
+  const denied = await authorizeManagement(request);
   if (denied) return denied;
   if (request.method !== 'GET') return response({ error: 'Method not allowed' }, 405);
   const url = new URL(request.url);
@@ -488,7 +495,7 @@ export const MANUAL_REVIEW_FROM: FreeTierApplicationStatus[] = ['ADMIN_SUBMITTED
 
 export async function approveHttp(request: Request) {
   await ensureFreeTierProductionApprovalHooks();
-  const denied = await authorizeFreeTierManagement(request);
+  const denied = await authorizeFreeTierReleaseManagement(request);
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
   const id = actionId(request);
@@ -506,7 +513,7 @@ export async function approveHttp(request: Request) {
 }
 
 export async function rejectHttp(request: Request) {
-  const denied = await authorizeFreeTierManagement(request);
+  const denied = await authorizeFreeTierReleaseManagement(request);
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
   const id = actionId(request);
@@ -530,7 +537,7 @@ export async function rejectHttp(request: Request) {
 }
 
 export async function markManualReviewHttp(request: Request) {
-  const denied = await authorizeFreeTierManagement(request);
+  const denied = await authorizeFreeTierReleaseManagement(request);
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
   const id = actionId(request);
@@ -544,7 +551,7 @@ export async function markManualReviewHttp(request: Request) {
 }
 
 export async function reopenHttp(request: Request) {
-  const denied = await authorizeFreeTierManagement(request);
+  const denied = await authorizeFreeTierReleaseManagement(request);
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
   const id = actionId(request);
@@ -573,7 +580,7 @@ export async function reopenHttp(request: Request) {
 }
 
 export async function submitAdminInfoHttp(request: Request) {
-  const denied = await authorizeFreeTierManagement(request);
+  const denied = await authorizeFreeTierReleaseManagement(request);
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
   const id = actionId(request);

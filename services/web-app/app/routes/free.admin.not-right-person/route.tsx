@@ -7,8 +7,10 @@ import {
   FreeTierFieldLabel,
   FreeTierTextInput,
 } from '../free-tier/FreeTierAuthCard';
+import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
+  await requireFreeTierEnabled();
   const token = new URL(request.url).searchParams.get('t') ?? '';
   if (!token) return { ok: false as const };
   const peek = await peekSignedLink({ token, expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON' });
@@ -17,6 +19,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
+  await requireFreeTierEnabled();
   const formData = await request.formData();
   const result = await redirectSchoolAdmin({
     token: String(formData.get('token') ?? ''),
