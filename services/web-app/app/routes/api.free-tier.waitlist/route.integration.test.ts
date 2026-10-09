@@ -1,6 +1,6 @@
 // Public route behaviour: uniform responses, honeypot, size limits, shared limiter.
 //   FREE_TIER_DB_TESTS=1 DATABASE_URL=... bun test app/routes/api.free-tier
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 import { CLOUDFRONT_IPV4_RANGES } from '~/utils/cloudfront-ranges.server';
 
 const enabled = process.env.FREE_TIER_DB_TESTS === '1';
@@ -24,6 +24,14 @@ const post = (b: unknown, opts: { ip?: string; type?: string; raw?: string } = {
     body: opts.raw ?? JSON.stringify(b),
   });
 const call = (r: Request) => wl!.action({ request: r, params: {}, context: {} } as never) as Promise<Response>;
+
+beforeAll(async () => {
+  if (!enabled) return;
+  const { enableFreeTierFlagForIntegrationTests } = await import(
+    '~/domain/free-tier/free-tier-integration-flag.server'
+  );
+  await enableFreeTierFlagForIntegrationTests();
+});
 
 suite('POST /api/free-tier/waitlist', () => {
   test('new, duplicate and honeypot submissions are indistinguishable', async () => {
