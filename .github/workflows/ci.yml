@@ -253,6 +253,7 @@ jobs:
         run: |
           set -e
           bun test ./services/web-app/app/domain/grading/teacher-notes.test.ts
+          bun test ./services/web-app/app/domain/grading/grading-assistant-invocation.test.ts
           bun test ./services/web-app/app/domain/grading/grading-prompt-shape.test.ts
           bun test ./packages/prisma/scripts/seed-preview-teacher-notes-qa.test.ts
           cd services/web-app
