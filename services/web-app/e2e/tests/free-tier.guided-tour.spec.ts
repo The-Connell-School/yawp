@@ -206,12 +206,35 @@ test.describe.serial('Free tier guided tour', () => {
         'data-tour-active',
         'true'
       );
+      // Closing partway through is not skipping: the welcome card comes back.
       await page.keyboard.press('Escape');
-      await expect
-        .poll(() => tourOutcome(`type-${type.toLowerCase().replace(' ', '-')}`))
-        .toBe('dismissed');
+      await expect(step).toBeHidden();
+      await page.reload();
+      await expect(card).toBeVisible();
+      expect(
+        await tourOutcome(`type-${type.toLowerCase().replace(' ', '-')}`)
+      ).toBeNull();
     });
   }
+
+  test('Restart all tours brings every welcome card back', async ({ page }) => {
+    await logInAsFreeTeacher(page);
+    await page.goto('/app');
+    await page.getByRole('button', { name: 'Skip' }).click();
+    await expect.poll(() => tourOutcome('dashboard')).toBe('dismissed');
+    await page.reload();
+    await expect(
+      page.getByRole('dialog', { name: /Welcome to YAWP/i })
+    ).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('button', { name: 'Restart all tours' }).click();
+
+    await expect(
+      page.getByRole('dialog', { name: /Welcome to YAWP/i })
+    ).toBeVisible();
+    await expect.poll(() => tourOutcome('dashboard')).toBeNull();
+  });
 
   test('no tour when the free_tier flag is off', async ({ page }) => {
     await logInAsFreeTeacher(page);

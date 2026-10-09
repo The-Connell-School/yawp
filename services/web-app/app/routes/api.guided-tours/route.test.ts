@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { redirect } from 'react-router';
 
 const prisma = {
-  userTour: { findUnique: mock(), upsert: mock() },
+  userTour: { findUnique: mock(), upsert: mock(), deleteMany: mock() },
 };
 const requireUserId = mock();
 const requireMembership = mock();
@@ -36,6 +36,7 @@ describe('api.guided-tours', () => {
     for (const fn of [
       prisma.userTour.findUnique,
       prisma.userTour.upsert,
+      prisma.userTour.deleteMany,
       requireUserId,
       requireMembership,
       isFreeTierEnabled,
@@ -133,6 +134,25 @@ describe('api.guided-tours', () => {
       post({ tourId: 'dashboard', status: 'completed' })
     ).rejects.toBeInstanceOf(Response);
     expect(prisma.userTour.upsert).not.toHaveBeenCalled();
+  });
+
+  test('restart clears every tour for this user only', async () => {
+    prisma.userTour.deleteMany.mockResolvedValue({ count: 3 });
+
+    const response = (await post({ intent: 'reset' })) as Response;
+
+    expect(response.status).toBe(200);
+    expect(prisma.userTour.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'user-1' },
+    });
+    expect(prisma.userTour.upsert).not.toHaveBeenCalled();
+  });
+
+  test('restart is not found for anyone the tours are not for', async () => {
+    isFreeTierEnabled.mockResolvedValue(false);
+    const response = (await post({ intent: 'reset' })) as Response;
+    expect(response.status).toBe(404);
+    expect(prisma.userTour.deleteMany).not.toHaveBeenCalled();
   });
 
   test('only accepts POST', async () => {
