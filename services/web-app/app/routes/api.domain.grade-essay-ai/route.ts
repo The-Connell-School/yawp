@@ -42,6 +42,7 @@ import {
   serializeDisplaySnapshot,
   shouldRunGrammarChecker,
 } from '~/domain/grading/rubric-display-options';
+import { readOutputSchemaDisplay } from '~/domain/rubrics/output-schema-display';
 import {
   buildGrammarCheckerRetryUserPrompt,
   buildGrammarCheckerSystemPrompt,
@@ -1218,6 +1219,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     });
   }
 
+  const explicitGrammarHighlight = readOutputSchemaDisplay(
+    resolvedGradingConfig.outputSchemaSnapshot
+  )?.grammarHighlight;
   const compiledInvocation = compileGradingAssistantInvocation({
     gradingConfig: resolvedGradingConfig,
     studentFirstName,
@@ -1227,8 +1231,12 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     gradingContext,
     coldWrite: submission.document.assignment?.tutorEnabled === false,
     assignmentPointTotal: submission.document.assignment?.pointValue ?? null,
-    assignmentGrammarGradingEnabled,
-    rubricCategories,
+    ...(explicitGrammarHighlight
+      ? {
+          assignmentGrammarGradingEnabled,
+          rubricCategories,
+        }
+      : {}),
   });
   const { system, maxTokens } = compiledInvocation;
   const rubricEvaluationMaxTokens = getRubricEvaluationMaxTokens(

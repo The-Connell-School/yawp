@@ -1,6 +1,11 @@
 /**
  * Regenerates grading-prompt golden digests from the current compiler. Run on
  * main before changing prompt compilation, then commit the fixture.
+ *
+ * Every digest in grading-prompt-golden-main.json must come from main. For
+ * assembly:* keys, run compileGradingAssistantInvocation on main without
+ * assignment grammar overrides (same as grade-essay-ai when display.grammarHighlight
+ * is unset).
  */
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -108,7 +113,6 @@ const thesisInvocation = compileGradingAssistantInvocation({
   studentFirstName: 'Jordan',
   strictnessLevel: 'intermediate',
   documentText: 'Essay body for golden digest.',
-  assignmentGrammarGradingEnabled: false,
 });
 entries['assembly:thesis-default-grammar-off'] = digest(
   `${thesisInvocation.system}\n---\n${thesisInvocation.userMessage}`
@@ -142,5 +146,10 @@ const outPath = join(
   import.meta.dir,
   '../app/domain/grading/__fixtures__/grading-prompt-golden-main.json'
 );
-writeFileSync(outPath, JSON.stringify(entries, null, 2) + '\n');
+const fixtureBody = {
+  _comment:
+    'Every digest must be generated from a checkout of main (see generate-grading-prompt-golden.ts). Assembly keys use main compileGradingAssistantInvocation without assignment grammar overrides.',
+  ...entries,
+};
+writeFileSync(outPath, JSON.stringify(fixtureBody, null, 2) + '\n');
 console.log(`Wrote ${Object.keys(entries).length} entries to ${outPath}`);

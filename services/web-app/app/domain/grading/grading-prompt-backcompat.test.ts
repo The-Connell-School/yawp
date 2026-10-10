@@ -118,9 +118,9 @@ describe('grading prompt backcompat (main)', () => {
       studentFirstName: 'Jordan',
       strictnessLevel: 'intermediate',
       documentText: 'Essay body for golden digest.',
-      assignmentGrammarGradingEnabled: false,
     });
     const thesisPayload = `${thesisInvocation.system}\n---\n${thesisInvocation.userMessage}`;
+    expect(thesisPayload).toContain('grammar_and_mechanics:');
     expect(digest(thesisPayload)).toBe(
       golden['assembly:thesis-default-grammar-off' as keyof typeof golden]
     );

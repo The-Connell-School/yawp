@@ -1,4 +1,5 @@
 {
+  "_comment": "Every digest must be generated from a checkout of main (see services/web-app/scripts/generate-grading-prompt-golden.ts). Assembly keys use main compileGradingAssistantInvocation without assignment grammar overrides.",
   "starter:thesis-driven-essay": "4917563349a89da9c70c24eb5df00c2586e655472d6cb2ca77b3404111b02903",
   "starter:daily-pages-engagement": "94294900890e9d836b7a889974fbe3515f811653da9c258766905dfbcd9f1afd",
   "starter:gba300-international-expansion": "affd9afddd0b0990c9e66eb53b3d3d97e1a5998ec31905ac9e4d33946646770b",
@@ -35,6 +36,6 @@
   "catalog:per-type:cfreethesisstatement00001": "c8872c470542fcaa4240366b903eb24bc11d8bd4f4786e2a34d375c3d88c6038",
   "catalog:per-type:prod-qa-writing-assignment-type": "e680c6dd036a1c9ab46fff7c507ef913191e5663feafc6a9ffd2f51f258e2ff6",
   "catalog:per-type:prod-qa-v3-writing-assignment-type": "e680c6dd036a1c9ab46fff7c507ef913191e5663feafc6a9ffd2f51f258e2ff6",
-  "assembly:thesis-default-grammar-off": "57c794b0296863e65eddc0ebe24d9be12d5369d1c1aa4507c29b8dabf454251c",
+  "assembly:thesis-default-grammar-off": "f0ea1aea7561c7240bddaaa632eb987bbb49153ff610f4408e53064243f8c16f",
   "assembly:managed-template": "5af692783af447082e28834847c3d14bc1a853cb9952396b60407e866d1442be"
 }
