@@ -7,10 +7,13 @@ import {
   type TourStatus,
 } from './tours';
 
-/** Tours the user has finished or skipped; their welcome cards stay closed. */
+/**
+ * Tours the user has finished; their welcome cards stay closed for good. A
+ * skipped tour is not here: it greets them again at their next login.
+ */
 export async function loadFinishedTourIds(userId: string): Promise<TourId[]> {
   const rows = await prisma.userTour.findMany({
-    where: { userId },
+    where: { userId, status: 'completed' },
     select: { tourId: true },
   });
   return rows.map((row) => row.tourId).filter(isTourId);
