@@ -43,7 +43,7 @@ export type GradingPromptShape = {
  * every one of its categories drops to overall feedback alone.
  */
 export function resolveCategoryFeedbackEnabled(
-  categories: { key: string; feedbackEnabled?: boolean }[]
+  categories: readonly { key: string; feedbackEnabled?: boolean }[]
 ) {
   return categories.some((category) => isCategoryFeedbackEnabled(category));
 }

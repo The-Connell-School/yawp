@@ -10,6 +10,7 @@ import {
   type GrammarHighlightMode,
   type ResolvedDisplayOptions,
 } from '~/domain/rubrics/output-schema-display';
+import type { Prisma } from '@app/prisma';
 
 export type DisplayResolutionAssignment = {
   grammarGradingEnabled?: boolean | null;
@@ -21,7 +22,13 @@ export function resolveDisplayOptions(
   assignment: DisplayResolutionAssignment = {}
 ): ResolvedDisplayOptions {
   const display = readOutputSchemaDisplay(outputSchema) ?? {};
-  const derivedPerCategoryComments = resolveCategoryFeedbackEnabled(categories);
+  const categoryList = [...categories];
+  const derivedPerCategoryComments = resolveCategoryFeedbackEnabled(
+    categoryList.filter(
+      (category): category is Partial<RubricCategoryOptions> & { key: string } =>
+        Boolean(category.key)
+    )
+  );
   let perCategoryComments =
     display.perCategoryComments ?? derivedPerCategoryComments;
   const showCategories = display.showCategories ?? true;
@@ -35,7 +42,7 @@ export function resolveDisplayOptions(
   } else if (display.grammarHighlight) {
     grammarHighlight = display.grammarHighlight;
   } else {
-    grammarHighlight = resolveGrammarHighlightingEnabled(categories)
+    grammarHighlight = resolveGrammarHighlightingEnabled(categoryList)
       ? 'deduct'
       : 'off';
   }
@@ -80,6 +87,6 @@ export function grammarCategoriesForHighlightMode<
 
 export function serializeDisplaySnapshot(
   display: ResolvedDisplayOptions
-): Record<string, unknown> {
-  return { ...display };
+): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(display)) as Prisma.InputJsonValue;
 }

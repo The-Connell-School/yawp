@@ -48,7 +48,10 @@ export function applyGrammarHighlightScoreClamp<
 
   const grammarKeys = new Set(
     rubricCategories
-      .filter((category) => isGrammarHighlightCategory(category))
+      .filter((category) => {
+        if (!category.key) return false;
+        return isGrammarHighlightCategory(category as RubricCategoryOptions);
+      })
       .map((category) => category.key)
   );
   if (grammarKeys.size === 0) return categories;
@@ -56,7 +59,7 @@ export function applyGrammarHighlightScoreClamp<
   return categories.map((category) => {
     if (!grammarKeys.has(category.key)) return category;
     if (category.score >= maxScore) return category;
-    if (meaningImpaired(category.comment, grammarImpairsMeaning)) {
+    if (meaningImpaired(category.comment, grammarImpairsMeaning ?? undefined)) {
       return category;
     }
     return { ...category, score: maxScore };
