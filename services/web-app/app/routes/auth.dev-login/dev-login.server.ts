@@ -31,6 +31,11 @@ export type DevLoginDependencies = {
   previewGateEnabled: () => boolean;
   previewSeatForRequest: (request: Request) => Promise<PreviewSeat | null>;
   redirectResponse: (headers: Headers) => Response;
+  /**
+   * Runs after a dev sign-in succeeds. Wired to clear the user's page tours,
+   * so a tester signing in from a preview link gets the first-login welcome.
+   */
+  onSignedIn?: (userId: string) => Promise<void>;
 };
 
 export type DevLoginOptionsDependencies = Pick<
@@ -55,6 +60,7 @@ export function createDevLoginAction({
   previewGateEnabled,
   previewSeatForRequest,
   redirectResponse,
+  onSignedIn,
 }: DevLoginDependencies) {
   return async ({ request }: ActionFunctionArgs) => {
     if (!localDevAuthEnabled()) return forbidden();
@@ -145,6 +151,7 @@ export function createDevLoginAction({
     authSession.set(sessionKey, session.id);
     authSession.unset('impersonationMode');
     authSession.unset('impersonatorUserId');
+    await onSignedIn?.(user.id);
 
     return redirectResponse(
       combineHeaders(

@@ -36,6 +36,7 @@ import {
   type TourStatus,
 } from '~/domain/guided-tours/tours';
 import { cn } from '~/utils/misc';
+import { readSkippedTours, writeSkippedTours } from './skipped-tours';
 
 const ICONS: Record<TourIcon, typeof House> = {
   home: House,
@@ -60,32 +61,6 @@ const SPOTLIGHT_PADDING = 8;
 const START_EVENT = 'yawp:page-tour-start';
 /** Sent by "Restart all tours" once the server has forgotten them. */
 const RESET_EVENT = 'yawp:page-tour-reset';
-/**
- * Tours skipped in this browser tab. Skipping hides a welcome card for the
- * session only; the next login greets the teacher again until they finish it.
- */
-const SKIPPED_KEY = 'yawp:skipped-tours';
-
-function readSkipped(): string[] {
-  try {
-    const value = JSON.parse(
-      window.sessionStorage.getItem(SKIPPED_KEY) ?? '[]'
-    );
-    return Array.isArray(value)
-      ? value.filter((id) => typeof id === 'string')
-      : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeSkipped(ids: Iterable<string>) {
-  try {
-    window.sessionStorage.setItem(SKIPPED_KEY, JSON.stringify([...ids]));
-  } catch {
-    // Private mode or storage off: the card just comes back on the next page load.
-  }
-}
 /** Let the page draw before the welcome card slides in. */
 const WELCOME_DELAY_MS = 400;
 
@@ -232,7 +207,7 @@ function PageTourController({
   // Finished or skipped during this session, so a card stays closed before
   // the server's list catches up, and skips last until the tab is closed.
   const [finishedHere, setFinishedHere] = useState<ReadonlySet<string>>(
-    () => new Set(readSkipped())
+    () => new Set(readSkippedTours())
   );
   // After "Restart all tours" the server has no rows left, so the list this
   // page loaded with is out of date until the next full load.
@@ -259,7 +234,8 @@ function PageTourController({
       if (!tour) return;
       setPhase({ kind: 'idle' });
       setFinishedHere((prev) => new Set(prev).add(tour.id));
-      if (status === 'dismissed') writeSkipped([...readSkipped(), tour.id]);
+      if (status === 'dismissed')
+        writeSkippedTours([...readSkippedTours(), tour.id]);
       recordOutcome(tour.id, status);
     },
     [tour]
@@ -279,7 +255,7 @@ function PageTourController({
     const restart = () => {
       setRestarted(true);
       setFinishedHere(new Set());
-      writeSkipped([]);
+      writeSkippedTours([]);
       if (tourId) setPhase({ kind: 'welcome' });
     };
     window.addEventListener(RESET_EVENT, restart);

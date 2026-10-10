@@ -16,6 +16,7 @@ import {
   PopoverTrigger,
 } from '~/components/ui/popover';
 import { Tooltip } from '~/components/ui/tooltip';
+import { clearSkippedTours } from '~/components/guided-tour/skipped-tours';
 import { cn } from '~/utils/misc';
 
 export type LocalDevLoginOption = {
@@ -97,7 +98,13 @@ function LoginOptionRow({
   const isActive = isSubmitting && submittingEmail === option.email;
 
   return (
-    <Form method="post" action="/auth/dev-login" className="block">
+    <Form
+      method="post"
+      action="/auth/dev-login"
+      className="block"
+      // A dev sign-in starts tours fresh, including ones skipped in this tab.
+      onSubmit={() => clearSkippedTours()}
+    >
       <input type="hidden" name="email" value={option.email} />
       <button
         type="submit"
@@ -376,6 +383,7 @@ function OneClickDevLogin() {
       '',
       `${window.location.pathname}${pending.search}${window.location.hash}`
     );
+    clearSkippedTours();
     void submit(
       { email: pending.email },
       { method: 'post', action: '/auth/dev-login' }
