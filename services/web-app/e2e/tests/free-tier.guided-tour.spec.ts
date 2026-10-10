@@ -105,8 +105,9 @@ test.describe.serial('Free tier guided tour', () => {
     ).toHaveCount(0);
   });
 
-  test('skip dismisses a page tour, and it can be replayed', async ({
+  test('skip hides a page tour for this session, and it can be replayed', async ({
     page,
+    browser,
   }) => {
     await logInAsFreeTeacher(page);
     await page.goto('/app/my-classes');
@@ -130,6 +131,24 @@ test.describe.serial('Free tier guided tour', () => {
     );
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('guided-tour-step')).toBeHidden();
+
+    // Skipping is not finishing: the next time they log in, it greets them again.
+    const nextLogin = await browser.newContext({
+      baseURL: new URL(page.url()).origin,
+    });
+    const nextPage = await nextLogin.newPage();
+    try {
+      await logInAsFreeTeacher(nextPage);
+      await expect(
+        nextPage.getByRole('dialog', { name: /Welcome to YAWP/i })
+      ).toBeVisible();
+      await nextPage.goto('/app/my-classes');
+      await expect(
+        nextPage.getByRole('dialog', { name: /Welcome to My Classes/i })
+      ).toBeVisible();
+    } finally {
+      await nextLogin.close();
+    }
   });
 
   test('class page tour points at the student join link', async ({ page }) => {
