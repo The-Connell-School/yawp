@@ -73,7 +73,7 @@ function grammarHighlightPromptRules(
       : 'grammar and mechanics';
   return [
     `Grammar/mechanics (${grammarList}): mark errors via highlighting but give full credit unless errors are so frequent or severe that the reader must reread to understand meaning. Never penalize dialect or multilingual patterns.`,
-    'Set grammarImpairsMeaning to true only when meaning is genuinely hard to follow because of mechanics; otherwise keep grammar category scores at full credit.',
+    'On each grammar/mechanics category object, set grammarImpairsMeaning to true only when meaning is genuinely hard to follow because of mechanics; otherwise keep that category score at full credit.',
   ];
 }
 
@@ -95,9 +95,13 @@ export function buildGradingResponseSchemaText({
   assignmentPointTotal?: number | null;
   grammarHighlightMode?: ResolvedDisplayOptions['grammarHighlight'];
 }) {
+  const grammarCategoryField =
+    grammarHighlightMode === 'highlight'
+      ? ', "grammarImpairsMeaning": boolean (grammar categories only)'
+      : '';
   const categoryFields = categoryFeedbackEnabled
-    ? `{"key": string, "score": ${minScore}-${maxScore}, "comment": string}`
-    : `{"key": string, "score": ${minScore}-${maxScore}}`;
+    ? `{"key": string, "score": ${minScore}-${maxScore}, "comment": string${grammarCategoryField}}`
+    : `{"key": string, "score": ${minScore}-${maxScore}${grammarCategoryField}}`;
   const holisticFields =
     scoringMode === 'holistic_tier'
       ? `,\n  "overallTier": "excellent" | "good" | "needs_more" | "not_present",\n  "overallPoints": integer${
@@ -106,13 +110,9 @@ export function buildGradingResponseSchemaText({
             : ''
         }`
       : '';
-  const grammarImpairsField =
-    grammarHighlightMode === 'highlight'
-      ? ',\n  "grammarImpairsMeaning": boolean'
-      : '';
   return `{\n  "categories": [${categoryFields}],\n  "overallComment": string${
     teacherNotesEnabled ? ',\n  "teacherNote": string | null' : ''
-  }${grammarImpairsField}${holisticFields}\n}`;
+  }${holisticFields}\n}`;
 }
 
 /**

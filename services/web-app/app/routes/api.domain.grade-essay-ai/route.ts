@@ -163,6 +163,9 @@ function buildAiSchemas({
     comment: categoryFeedbackEnabled
       ? z.string().min(1)
       : z.string().optional().default(''),
+    ...(grammarHighlightMode === 'highlight'
+      ? { grammarImpairsMeaning: z.boolean().optional() }
+      : {}),
   });
   const AiCategoriesSchema = z
     .array(AiCategorySchema)
@@ -213,9 +216,6 @@ function buildAiSchemas({
     categories: AiCategoriesSchema,
     overallComment: z.string().min(1),
     teacherNote: z.unknown().optional().transform(value => teacherNotesEnabled ? normalizeTeacherNote(value) : null),
-    ...(grammarHighlightMode === 'highlight'
-      ? { grammarImpairsMeaning: z.boolean().optional() }
-      : {}),
   });
 
   return { AiCategoriesSchema, AiResponseSchema };
@@ -1421,10 +1421,6 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       minScore,
       maxScore,
       display: displayOptions,
-      grammarImpairsMeaning:
-        'grammarImpairsMeaning' in parsed
-          ? (parsed as { grammarImpairsMeaning?: boolean }).grammarImpairsMeaning
-          : undefined,
     });
     parsed = { ...parsed, categories: clampedCategories };
   } catch (error) {
@@ -1681,7 +1677,11 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   // Grammar/syntax highlighting has always run for every non-AP-History
   // rubric, so a rubric whose categories say nothing about it keeps running it.
   // Only a rubric that explicitly opts every category out skips the pass.
-  const grammarHighlightingEnabled = shouldRunGrammarChecker(displayOptions);
+  const grammarHighlightingEnabled = shouldRunGrammarChecker(
+    displayOptions,
+    rubricCategories,
+    resolvedGradingConfig.outputSchemaSnapshot
+  );
   const grammarCategoryKeys = new Set(
     rubricCategories
       .filter((category) => isGrammarHighlightCategory(category))
