@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { parseRubricSchema, type RubricSchema } from './rubric-schema';
+import { validateOutputSchemaDisplay } from './output-schema-display';
 import { validateScoreScale } from '../assignment-types/score-scale-steps';
 
 type Json = null | string | number | boolean | Json[] | { [key: string]: Json };
@@ -76,6 +77,9 @@ export function validateRubricPromotion(raw: unknown): RubricPromotionValidation
     }
   });
   if (!Number.isFinite(totalWeight) || totalWeight <= 0) report('/rubric/categories', 'Total category weight must be positive and finite.');
+  for (const issue of validateOutputSchemaDisplay(value.outputSchema?.display)) {
+    report(issue.path, issue.message);
+  }
   if (issues.length) return { ok: false, issues };
   const normalized = parseRubricSchema(value);
   return normalized.ok ? normalized : { ok: false, issues: [{ path: '/', message: normalized.error }] };

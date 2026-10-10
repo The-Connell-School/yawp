@@ -1482,9 +1482,7 @@ export function AssignmentCreationSheetContent({
                   Graded out of{' '}
                   <span className="font-medium text-foreground">
                     {pointValue || '—'} points
-                  </span>{' '}
-                  in{' '}
-                  <span className="font-medium text-foreground">bands</span>
+                  </span>
                   , read at the{' '}
                   <span className="font-medium text-foreground">
                     {strictnessLabel.toLowerCase()}
