@@ -426,6 +426,9 @@ function runTestProfile(profile, { json }) {
   else if (chosen === "grading-queue-unit") {
     runWebApp("grading-queue", ["test", "app/domain/grading/grading-queue.test.ts"]);
     runWebApp("grading-queue-access", ["test", "app/domain/grading/grading-queue.server.test.ts"]);
+    runWebApp("grading-queue-rollout-auth", ["test", "app/utils/auth.server.test.ts"]);
+    runWebApp("grading-queue-loader", ["test", "app/routes/app_.submissions_.$submissionId/route.loader.test.ts"]);
+    runWebApp("grading-queue-lifecycle", ["test", "app/routes/app_.submissions_.$submissionId/teacher-grading/submission-lifecycle-panel.save-error.test.tsx"]);
   }
   else if (chosen === "grading-queue") {
     const local = requireConfig();
