@@ -36,13 +36,24 @@ export function resolveDisplayOptions(
     perCategoryComments = false;
   }
 
+  const categoriesAfterGrammarToggle = applyDisplayGrammarCategories(
+    categoryList,
+    outputSchema,
+    assignment
+  );
+  const explicitGrammarHighlight = display.grammarHighlight;
   let grammarHighlight: GrammarHighlightMode;
-  if (assignment.grammarGradingEnabled === false) {
+  if (
+    assignment.grammarGradingEnabled === false &&
+    explicitGrammarHighlight
+  ) {
     grammarHighlight = 'off';
-  } else if (display.grammarHighlight) {
-    grammarHighlight = display.grammarHighlight;
+  } else if (explicitGrammarHighlight) {
+    grammarHighlight = explicitGrammarHighlight;
   } else {
-    grammarHighlight = resolveGrammarHighlightingEnabled(categoryList)
+    grammarHighlight = resolveGrammarHighlightingEnabled(
+      categoriesAfterGrammarToggle
+    )
       ? 'deduct'
       : 'off';
   }
@@ -72,11 +83,19 @@ export function applyDisplayGrammarCategories<T extends RubricCategoryOptions>(
   return applyAssignmentGrammarGrading(categories, undefined);
 }
 
-export function shouldRunGrammarChecker(display: ResolvedDisplayOptions) {
-  return (
-    display.grammarHighlight === 'highlight' ||
-    display.grammarHighlight === 'deduct'
-  );
+export function shouldRunGrammarChecker(
+  display: ResolvedDisplayOptions,
+  rubricCategoriesAfterGrammarToggle: readonly Partial<RubricCategoryOptions>[],
+  outputSchema: unknown
+) {
+  const explicit = readOutputSchemaDisplay(outputSchema)?.grammarHighlight;
+  if (explicit === 'off') return false;
+  if (explicit === 'highlight' || explicit === 'deduct') {
+    return display.grammarHighlight !== 'off';
+  }
+  return resolveGrammarHighlightingEnabled([
+    ...rubricCategoriesAfterGrammarToggle,
+  ]);
 }
 
 export function grammarCategoriesForHighlightMode<

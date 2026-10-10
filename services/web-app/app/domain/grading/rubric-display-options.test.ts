@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
+import { getThesisDefaultRubricConfig } from '~/domain/assignment-types/assignment-type-rubric-config';
 import {
   applyDisplayGrammarCategories,
   resolveDisplayOptions,
+  shouldRunGrammarChecker,
 } from './rubric-display-options';
 
 const thesisCategories = [
@@ -43,7 +45,7 @@ describe('resolveDisplayOptions', () => {
     ).toBe(false);
   });
 
-  test('assignment grammar off wins', () => {
+  test('assignment grammar off wins when display explicitly sets grammarHighlight', () => {
     expect(
       resolveDisplayOptions(
         { display: { grammarHighlight: 'highlight' } },
@@ -51,6 +53,25 @@ describe('resolveDisplayOptions', () => {
         { grammarGradingEnabled: false }
       ).grammarHighlight
     ).toBe('off');
+  });
+
+  test('thesis-driven essay with grammar toggle off still runs the checker when display is unset', () => {
+    const thesis = getThesisDefaultRubricConfig();
+    const display = resolveDisplayOptions(
+      thesis.outputSchema,
+      thesis.rubric.categories,
+      { grammarGradingEnabled: false }
+    );
+    const filtered = applyDisplayGrammarCategories(
+      thesis.rubric.categories,
+      thesis.outputSchema,
+      { grammarGradingEnabled: false }
+    );
+
+    expect(display.grammarHighlight).toBe('deduct');
+    expect(
+      shouldRunGrammarChecker(display, filtered, thesis.outputSchema)
+    ).toBe(true);
   });
 });
 
