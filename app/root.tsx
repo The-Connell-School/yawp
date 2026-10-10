@@ -1,7 +1,7 @@
 import { cssBundleHref } from '@remix-run/css-bundle'
 import {
 	json,
-	type DataFunctionArgs,
+	type LoaderFunctionArgs,
 	type HeadersFunction,
 	type LinksFunction,
 	type MetaFunction,
@@ -70,7 +70,7 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
 	]
 }
 
-export async function loader({ request }: DataFunctionArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
 	const timings = makeTimings('root loader')
 	const userId = await time(() => getUserId(request), {
 		timings,
@@ -260,14 +260,6 @@ export default withSentry(AppWithProviders)
 export function ErrorBoundary() {
 	// the nonce doesn't rely on the loader so we can access that
 	const nonce = useNonce()
-
-	// NOTE: you cannot use useLoaderData in an ErrorBoundary because the loader
-	// likely failed to run so we have to do the best we can.
-	// We could probably do better than this (it's possible the loader did run).
-	// This would require a change in Remix.
-
-	// Just make sure your root route never errors out and you'll always be able
-	// to give the user a better UX.
 
 	return (
 		<Document nonce={nonce}>
