@@ -34,9 +34,15 @@ import {
   isGrammarHighlightCategory,
   isScoreInCategoryAllowedScores,
   isScoreInCategoryBands,
-  resolveGrammarHighlightingEnabled,
 } from '~/domain/assignment-types/rubric-category-options';
-import { applyAssignmentGrammarGrading } from '~/domain/assignment-types/assignment-grammar-grading';
+import { applyGrammarHighlightScoreClamp } from '~/domain/grading/grammar-highlight-scoring';
+import {
+  applyDisplayGrammarCategories,
+  resolveDisplayOptions,
+  serializeDisplaySnapshot,
+  shouldRunGrammarChecker,
+} from '~/domain/grading/rubric-display-options';
+import { readOutputSchemaDisplay } from '~/domain/rubrics/output-schema-display';
 import {
   buildGrammarCheckerRetryUserPrompt,
   buildGrammarCheckerSystemPrompt,
@@ -132,6 +138,7 @@ function buildAiSchemas({
   categoryFeedbackEnabled = true,
   teacherNotesEnabled = false,
   gradingMode,
+  grammarHighlightMode,
 }: {
   rubricCategories: GradingRubricCategory[];
   minScore: number;
@@ -144,6 +151,7 @@ function buildAiSchemas({
   categoryFeedbackEnabled?: boolean;
   teacherNotesEnabled?: boolean;
   gradingMode?: 'step' | 'bands';
+  grammarHighlightMode?: 'off' | 'highlight' | 'deduct';
 }) {
   const rubricKeys = rubricCategories.map((category) => category.key);
   const categoryByKey = new Map(
@@ -156,6 +164,9 @@ function buildAiSchemas({
     comment: categoryFeedbackEnabled
       ? z.string().min(1)
       : z.string().optional().default(''),
+    ...(grammarHighlightMode === 'highlight'
+      ? { grammarImpairsMeaning: z.boolean().optional() }
+      : {}),
   });
   const AiCategoriesSchema = z
     .array(AiCategorySchema)
@@ -855,12 +866,18 @@ export async function action({ request }: ActionFunctionArgs) {
     requestedStrictnessLevel ??
     assignmentStrictnessLevel ??
     DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL;
-  // The teacher's per-assignment answer to "is this graded for grammar". Off
-  // drops the grammar category here, once: scoring, the highlighting pass, and
-  // the grammar category keys are all derived from this list below.
-  const rubricCategories = applyAssignmentGrammarGrading(
+  const assignmentGrammarGradingEnabled =
+    submission.document.assignment?.grammarGradingEnabled;
+  const displayOptions = resolveDisplayOptions(
+    resolvedGradingConfig.outputSchemaSnapshot,
     resolvedGradingConfig.rubricCategories,
-    submission.document.assignment?.grammarGradingEnabled
+    { grammarGradingEnabled: assignmentGrammarGradingEnabled }
+  );
+  // Grammar-off (assignment or rubric display) drops grammar categories here once.
+  const rubricCategories = applyDisplayGrammarCategories(
+    resolvedGradingConfig.rubricCategories,
+    resolvedGradingConfig.outputSchemaSnapshot,
+    { grammarGradingEnabled: assignmentGrammarGradingEnabled }
   );
   const rubricKeys = rubricCategories.map((category) => category.key);
   const { minScore, maxScore, step, scoringType } = resolvedGradingConfig;
@@ -893,7 +910,10 @@ export async function action({ request }: ActionFunctionArgs) {
   // The prompt is derived from the rubric itself: how many judgments it asks
   // for, which words each score carries, and whether it wants per-category
   // feedback or overall feedback alone. No assignment type is named here.
-  const teacherNotesEnabled = hasTeacherNotes(resolvedGradingConfig.outputSchemaSnapshot);
+  const teacherNotesEnabled = hasTeacherNotes(
+    resolvedGradingConfig.outputSchemaSnapshot,
+    displayOptions
+  );
   const promptShape = buildGradingPromptShape({
     categories: rubricCategories,
     minScore,
@@ -901,6 +921,8 @@ export async function action({ request }: ActionFunctionArgs) {
     studentFirstName,
     teacherNotesEnabled,
     gradingMode: resolvedGradingConfig.gradingMode,
+    display: displayOptions,
+    outputSchema: resolvedGradingConfig.outputSchemaSnapshot,
   });
   const categoryFeedbackEnabled = promptShape.categoryFeedbackEnabled;
   const { AiCategoriesSchema, AiResponseSchema } = buildAiSchemas({
@@ -910,6 +932,7 @@ export async function action({ request }: ActionFunctionArgs) {
     categoryFeedbackEnabled,
     teacherNotesEnabled,
     gradingMode: resolvedGradingConfig.gradingMode,
+    grammarHighlightMode: displayOptions.grammarHighlight,
   });
 
   const assignmentPrompt = submission.document.assignment?.prompt?.trim();
@@ -1196,6 +1219,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     });
   }
 
+  const explicitGrammarHighlight = readOutputSchemaDisplay(
+    resolvedGradingConfig.outputSchemaSnapshot
+  )?.grammarHighlight;
   const compiledInvocation = compileGradingAssistantInvocation({
     gradingConfig: resolvedGradingConfig,
     studentFirstName,
@@ -1205,6 +1231,12 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     gradingContext,
     coldWrite: submission.document.assignment?.tutorEnabled === false,
     assignmentPointTotal: submission.document.assignment?.pointValue ?? null,
+    ...(explicitGrammarHighlight
+      ? {
+          assignmentGrammarGradingEnabled,
+          rubricCategories,
+        }
+      : {}),
   });
   const { system, maxTokens } = compiledInvocation;
   const rubricEvaluationMaxTokens = getRubricEvaluationMaxTokens(
@@ -1346,6 +1378,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           scoringMode: resolvedGradingConfig.scoringMode ?? 'weighted_categories',
           assignmentPointTotal:
             submission.document.assignment?.pointValue ?? null,
+          grammarHighlightMode: displayOptions.grammarHighlight,
         }
       )}\nCategory-specific score bands:\n${promptShape.rubricText}\nRules:\n- Preserve valid category scores${categoryFeedbackEnabled ? '/comments' : ''} from the original output when possible.\n- Every score must fall inside one declared band for its category.\n- Return exactly one category for each rubric key.\n- Use only these rubric keys: ${rubricKeys.join(', ')}.\n- overallComment must start with "${studentFirstName},".\n${repairPrivateObservationRules ? `${repairPrivateObservationRules}\n` : ''}- Do not include markdown or explanation.`,
       messages: [
@@ -1390,6 +1423,20 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   let parsed: z.infer<typeof AiResponseSchema>;
   try {
     parsed = await parseAiResponse(responseText);
+    const clampedCategories = applyGrammarHighlightScoreClamp({
+      categories: parsed.categories.map((category) => ({
+        ...category,
+        grammarImpairsMeaning:
+          typeof category.grammarImpairsMeaning === 'boolean'
+            ? category.grammarImpairsMeaning
+            : undefined,
+      })),
+      rubricCategories,
+      minScore,
+      maxScore,
+      display: displayOptions,
+    });
+    parsed = { ...parsed, categories: clampedCategories };
   } catch (error) {
     if (isGradingRequestDeadlineError(error)) {
       return gradingDeadlineResponse();
@@ -1644,8 +1691,11 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   // Grammar/syntax highlighting has always run for every non-AP-History
   // rubric, so a rubric whose categories say nothing about it keeps running it.
   // Only a rubric that explicitly opts every category out skips the pass.
-  const grammarHighlightingEnabled =
-    resolveGrammarHighlightingEnabled(rubricCategories);
+  const grammarHighlightingEnabled = shouldRunGrammarChecker(
+    displayOptions,
+    rubricCategories,
+    resolvedGradingConfig.outputSchemaSnapshot
+  );
   const grammarCategoryKeys = new Set(
     rubricCategories
       .filter((category) => isGrammarHighlightCategory(category))
@@ -1801,6 +1851,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       rubricCategoryKeys: rubricKeys,
       documentContext,
       scoringMode: resolvedGradingConfig.scoringMode ?? 'weighted_categories',
+      displaySnapshot: serializeDisplaySnapshot(displayOptions),
       ...(holisticSelected
         ? {
             holistic: {

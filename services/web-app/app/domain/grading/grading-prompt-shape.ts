@@ -1,9 +1,13 @@
+import { grammarHighlightHolisticCapInstructions } from './grammar-highlight-scoring';
 import { TEACHER_NOTES_EVIDENCE_RULE } from './teacher-notes';
 import type { RubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import {
   isBandScoredRubric,
   isCategoryFeedbackEnabled,
+  isGrammarHighlightCategory,
 } from '~/domain/assignment-types/rubric-category-options';
+import type { ResolvedDisplayOptions } from '~/domain/rubrics/output-schema-display';
+import { resolveDisplayOptions } from './rubric-display-options';
 
 /**
  * How much of a category the grading prompt needs. Kept structural so stored
@@ -39,9 +43,38 @@ export type GradingPromptShape = {
  * every one of its categories drops to overall feedback alone.
  */
 export function resolveCategoryFeedbackEnabled(
-  categories: { key: string; feedbackEnabled?: boolean }[]
+  categories: readonly { key: string; feedbackEnabled?: boolean }[]
 ) {
   return categories.some((category) => isCategoryFeedbackEnabled(category));
+}
+
+function resolvePromptCategoryFeedbackEnabled(
+  categories: { key: string; feedbackEnabled?: boolean }[],
+  display?: ResolvedDisplayOptions
+) {
+  const perCategoryComments = display
+    ? display.perCategoryComments
+    : resolveCategoryFeedbackEnabled(categories);
+  if (!perCategoryComments) return false;
+  return resolveCategoryFeedbackEnabled(categories);
+}
+
+function grammarHighlightPromptRules(
+  categories: GradingPromptCategory[],
+  display?: ResolvedDisplayOptions
+) {
+  if (!display || display.grammarHighlight !== 'highlight') return [];
+  const grammarLabels = categories
+    .filter((category) => isGrammarHighlightCategory(category))
+    .map((category) => category.label || category.key);
+  const grammarList =
+    grammarLabels.length > 0
+      ? grammarLabels.join(', ')
+      : 'grammar and mechanics';
+  return [
+    `Grammar/mechanics (${grammarList}): mark errors via highlighting but give full credit unless errors are so frequent or severe that the reader must reread to understand meaning. Never penalize dialect or multilingual patterns.`,
+    'On each grammar/mechanics category object, set grammarImpairsMeaning to true only when meaning is genuinely hard to follow because of mechanics; otherwise keep that category score at full credit.',
+  ];
 }
 
 /** The JSON shape the model is told to return. */
@@ -52,6 +85,7 @@ export function buildGradingResponseSchemaText({
   teacherNotesEnabled = false,
   scoringMode = 'weighted_categories',
   assignmentPointTotal = null,
+  grammarHighlightMode,
 }: {
   minScore: number;
   maxScore: number;
@@ -59,10 +93,15 @@ export function buildGradingResponseSchemaText({
   teacherNotesEnabled?: boolean;
   scoringMode?: 'weighted_categories' | 'holistic_tier';
   assignmentPointTotal?: number | null;
+  grammarHighlightMode?: ResolvedDisplayOptions['grammarHighlight'];
 }) {
+  const grammarCategoryField =
+    grammarHighlightMode === 'highlight'
+      ? ', "grammarImpairsMeaning": boolean (grammar categories only)'
+      : '';
   const categoryFields = categoryFeedbackEnabled
-    ? `{"key": string, "score": ${minScore}-${maxScore}, "comment": string}`
-    : `{"key": string, "score": ${minScore}-${maxScore}}`;
+    ? `{"key": string, "score": ${minScore}-${maxScore}, "comment": string${grammarCategoryField}}`
+    : `{"key": string, "score": ${minScore}-${maxScore}${grammarCategoryField}}`;
   const holisticFields =
     scoringMode === 'holistic_tier'
       ? `,\n  "overallTier": "excellent" | "good" | "needs_more" | "not_present",\n  "overallPoints": integer${
@@ -130,6 +169,8 @@ export function buildGradingPromptShape({
   gradingMode,
   scoringMode = 'weighted_categories',
   assignmentPointTotal = null,
+  display,
+  outputSchema,
 }: {
   categories: GradingPromptCategory[];
   minScore: number;
@@ -139,8 +180,15 @@ export function buildGradingPromptShape({
   gradingMode?: 'step' | 'bands';
   scoringMode?: 'weighted_categories' | 'holistic_tier';
   assignmentPointTotal?: number | null;
+  display?: ResolvedDisplayOptions;
+  outputSchema?: unknown;
 }): GradingPromptShape {
-  const categoryFeedbackEnabled = resolveCategoryFeedbackEnabled(categories);
+  const resolvedDisplay =
+    display ?? resolveDisplayOptions(outputSchema ?? {}, categories, {});
+  const categoryFeedbackEnabled = resolvePromptCategoryFeedbackEnabled(
+    categories,
+    resolvedDisplay
+  );
   const bandScored = isBandScoredRubric(categories);
   const schemaText = buildGradingResponseSchemaText({
     minScore,
@@ -149,6 +197,7 @@ export function buildGradingPromptShape({
     teacherNotesEnabled,
     scoringMode,
     assignmentPointTotal: scoringMode === 'holistic_tier' ? assignmentPointTotal : null,
+    grammarHighlightMode: resolvedDisplay.grammarHighlight,
   });
 
   const feedbackRule = categoryFeedbackEnabled
@@ -175,6 +224,13 @@ export function buildGradingPromptShape({
     scoringRule,
     judgmentRule,
     feedbackRule,
+    ...(resolvedDisplay.showCategories === false
+      ? [
+          'Categories are for your analysis only. The student and teacher will not see them. Write the overallComment so it stands alone and never references category names or scores.',
+        ]
+      : []),
+    ...grammarHighlightPromptRules(categories, resolvedDisplay),
+    ...grammarHighlightHolisticCapInstructions(resolvedDisplay),
     ...(scoringMode === 'holistic_tier'
       ? [
           // Holistic scoring instructions reflect the GA specification.

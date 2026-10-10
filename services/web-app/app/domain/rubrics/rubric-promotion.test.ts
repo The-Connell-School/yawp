@@ -55,4 +55,27 @@ describe('promotion rubric validation', () => {
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.schema.scoringMode).toBe('holistic_tier');
   });
+
+  test('accepts outputSchema.display and rejects unknown display keys', () => {
+    const ok = validateRubricPromotion({
+      ...valid(),
+      outputSchema: {
+        schemaVersion: 1,
+        display: {
+          grammarHighlight: 'highlight',
+          grammarMaxDeductionPct: 10,
+          teacherNotes: true,
+        },
+      },
+    });
+    expect(ok.ok).toBe(true);
+
+    const bad = validateRubricPromotion({
+      ...valid(),
+      outputSchema: {
+        display: { unexpected: true },
+      },
+    });
+    expect(bad.ok).toBe(false);
+  });
 });

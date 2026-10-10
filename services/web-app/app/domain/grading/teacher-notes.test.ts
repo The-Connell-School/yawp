@@ -36,9 +36,20 @@ describe('teacher-notes', () => {
     expect(gradingRepairPrivateObservationRules(true)).toContain('Teacher Note rules:');
   });
 
-  test('teacherNotesEnabled is always true regardless of legacy outputSchema flag', () => {
+  test('teacherNotesEnabled honors display.teacherNotes and ignores legacy flag', () => {
     expect(teacherNotesEnabled({ teacherNotesEnabled: false })).toBe(true);
     expect(teacherNotesEnabled({})).toBe(true);
+    expect(
+      teacherNotesEnabled(
+        { display: { teacherNotes: false } },
+        {
+          showCategories: true,
+          perCategoryComments: true,
+          grammarHighlight: 'deduct',
+          teacherNotes: false,
+        }
+      )
+    ).toBe(false);
   });
 
   test('normalizeTeacherNote trims and enforces max length', () => {

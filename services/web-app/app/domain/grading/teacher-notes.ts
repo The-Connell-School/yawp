@@ -1,3 +1,8 @@
+import {
+  readOutputSchemaDisplay,
+  type ResolvedDisplayOptions,
+} from '~/domain/rubrics/output-schema-display';
+
 /**
  * Teacher Notes are document observations, not an authorship detector. Keep
  * this contract in the shared prompt so every rubric gets the same conservative
@@ -31,9 +36,14 @@ export function gradingRepairPrivateObservationRules(
   ].join('\n');
 }
 
-/** Teacher notes are released for all orgs; ignore legacy outputSchema.teacherNotesEnabled. */
-export function teacherNotesEnabled(_outputSchema: unknown): boolean {
-  return true;
+/** Teacher notes default on; rubric display.teacherNotes can turn them off. */
+export function teacherNotesEnabled(
+  outputSchema: unknown,
+  display?: ResolvedDisplayOptions
+): boolean {
+  if (display) return display.teacherNotes;
+  const configured = readOutputSchemaDisplay(outputSchema)?.teacherNotes;
+  return configured ?? true;
 }
 
 export function normalizeTeacherNote(value: unknown): string | null {

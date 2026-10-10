@@ -8,7 +8,9 @@ describe('rubric catalog with production rubric content', () => {
     expect(fixture.libraryRubrics.length).toBe(10);
     for (const rubric of fixture.libraryRubrics) {
       const { editable, preservedTopLevelKeys } = toEditable(rubric.schemaJson as any, rubric.name);
-      expect(preservedTopLevelKeys).toEqual([]);
+      expect(preservedTopLevelKeys).toEqual(
+        rubric.name === 'daily-pages-engagement' ? ['scoringMode'] : []
+      );
       const result = validateEditable(editable, rubric.name);
       if (!result.ok) throw new Error(`${rubric.name}: ${JSON.stringify(result.issues)}`);
       // Nothing an operator did not touch is lost when the document round-trips.
