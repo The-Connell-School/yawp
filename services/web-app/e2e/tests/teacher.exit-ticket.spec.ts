@@ -179,7 +179,7 @@ test.describe.serial('Exit tickets', () => {
     await page.getByLabel('Grade this ticket').check();
     await page.getByLabel('How many points?').fill('5');
     // Always bands: there is no steps option to reach for.
-    await expect(page.getByText(/in\s+bands/)).toBeVisible();
+    await expect(page.getByText(/Graded out of 5 points/)).toBeVisible();
     await page.getByRole('button', { name: 'Change' }).click();
     await expect(page.getByRole('button', { name: 'Steps' })).toHaveCount(0);
 

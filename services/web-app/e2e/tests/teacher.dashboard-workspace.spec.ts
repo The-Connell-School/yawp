@@ -30,7 +30,7 @@ async function expectStandardizedAssignmentForm(page: Page) {
   ).toBeChecked();
   await expect(
     dialog.getByText(
-      'Graded out of 100 points in bands, read at the intermediate level.',
+      'Graded out of 100 points, read at the intermediate level.',
       { exact: true }
     )
   ).toBeVisible();
