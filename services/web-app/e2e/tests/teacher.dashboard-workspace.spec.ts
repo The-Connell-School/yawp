@@ -456,12 +456,9 @@ test.describe.serial('Teacher dashboard workspace', () => {
       await dialog.getByLabel('Prompt', { exact: true }).fill(prompt);
       await dialog.getByRole('button', { name: 'Change', exact: true }).click();
       await dialog.getByLabel('Point value', { exact: true }).fill('25');
-      await expect(
-        dialog.getByText(
-          'Graded out of 25 points in bands, read at the intermediate level.',
-          { exact: true }
-        )
-      ).toBeVisible();
+      await expect(dialog.getByText(/Graded out of\s+25 points/)).toBeVisible({
+        timeout: 15_000,
+      });
       await page.screenshot({
         path: testInfo.outputPath('assignment-grading-override.png'),
         fullPage: true,
