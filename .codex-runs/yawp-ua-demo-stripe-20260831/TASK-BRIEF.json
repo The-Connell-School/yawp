@@ -1,0 +1,53 @@
+{
+  "acceptance_hints": [
+    "Deploy latest main to persistent demo without resetting data; add UA student signup and real Stripe sandbox checkout on demo; configure billing credentials and webhook; execute live end-to-end QA"
+  ],
+  "adapter_contract": {
+    "input_adapters": [
+      "direct-ticket",
+      "markdown-file",
+      "json-brief",
+      "github",
+      "pm-platform"
+    ],
+    "optional_writeback_adapters": [
+      "central-station",
+      "github",
+      "netlify",
+      "local-file"
+    ],
+    "writeback_required_for_done": false
+  },
+  "context": {},
+  "core_contract": {
+    "bryant_owns_what": true,
+    "central_station_required": false,
+    "codex_owns_how": true,
+    "pm_platform_required": false,
+    "project_agnostic": true
+  },
+  "routing_seed": {
+    "domains": [
+      "billing",
+      "data",
+      "webhook",
+      "infra"
+    ],
+    "lane": "official-sdlc",
+    "risk_tier": "high"
+  },
+  "schema_version": "sdlc-task-brief/v1",
+  "scope_fences": [
+    "Do not expand beyond the accepted ticket/spec behavior without evidence.",
+    "Do not require a project-management platform adapter for local execution.",
+    "Do not mutate production/customer data without explicit approval."
+  ],
+  "source": {
+    "adapter": "none",
+    "path": null,
+    "project_specific": false,
+    "type": "direct-ticket"
+  },
+  "ticket": "Deploy latest main to persistent demo without resetting data; add UA student signup and real Stripe sandbox checkout on demo; configure billing credentials and webhook; execute live end-to-end QA",
+  "title": "Deploy latest main to persistent demo without resetting data; add UA student signup and real Stripe sandbox checkout on "
+}

@@ -1,0 +1,124 @@
+{
+  "assumptions": [
+    {
+      "confidence": 0.95,
+      "escalates": false,
+      "id": "scope-operator-001",
+      "source": "Bryant operating memory and SDLC master rules",
+      "statement": "Codex may choose repo, branch, worktree, tests, agents, and QA logistics without asking Bryant."
+    },
+    {
+      "confidence": 0.82,
+      "escalates": false,
+      "id": "scope-operator-002",
+      "source": "TASK-BRIEF.json",
+      "statement": "The normalized task brief is the source of accepted behavior unless repo docs provide stronger evidence."
+    },
+    {
+      "confidence": 0.9,
+      "escalates": false,
+      "id": "proof-operator-001",
+      "source": "adaptive risk router",
+      "statement": "Risk tier `high` requires proof: red_green_test_log, fresh_verification_commands, code_review_artifact, release_gate, evidence_pack, backend_or_cli_proof_script, data_integrity_assertions, idempotency_replay_test."
+    }
+  ],
+  "bryant_questions": [],
+  "decision": "continue",
+  "questions": [
+    {
+      "answer": "Deploy latest main to persistent demo without resetting data; add UA student signup and real Stripe sandbox checkout on demo; configure billing credentials and webhook; execute live end-to-end QA",
+      "answered_by": "codex-operator",
+      "question": "What user-visible or system behavior must change?",
+      "source": "ticket"
+    },
+    {
+      "answer": "Unrelated refactors, unrelated product behavior, production/customer data mutation, and merge/deploy actions.",
+      "answered_by": "codex-operator",
+      "question": "What is outside the scope unless evidence proves it is required?",
+      "source": "SDLC autonomy policy"
+    },
+    {
+      "answer": "red_green_test_log, fresh_verification_commands, code_review_artifact, release_gate, evidence_pack, backend_or_cli_proof_script, data_integrity_assertions, idempotency_replay_test",
+      "answered_by": "codex-operator",
+      "question": "Which proof will be required before reporting done?",
+      "source": "adaptive risk router"
+    },
+    {
+      "answer": "superpowers:brainstorming, superpowers:writing-plans, superpowers:test-driven-development, superpowers:verification-before-completion, superpowers:requesting-code-review, sdlc-run-ledger, sdlc-evidence-pack, sdlc-backend-proof",
+      "answered_by": "codex-operator",
+      "question": "Which skills must be used rather than reinvented?",
+      "source": "adaptive risk router"
+    }
+  ],
+  "required_skills": [
+    "superpowers:brainstorming",
+    "superpowers:writing-plans",
+    "superpowers:test-driven-development",
+    "superpowers:verification-before-completion",
+    "superpowers:requesting-code-review",
+    "sdlc-run-ledger",
+    "sdlc-evidence-pack",
+    "sdlc-backend-proof"
+  ],
+  "routing": {
+    "agent_budget": {
+      "implementers": 1,
+      "qa_passes": 3,
+      "red_team": 2,
+      "reviewers": 3
+    },
+    "approval_required": [
+      "production_release"
+    ],
+    "bryant_only_categories": [],
+    "domains": [
+      "billing",
+      "data",
+      "webhook",
+      "infra"
+    ],
+    "lane": "official-sdlc",
+    "operator_can_continue": true,
+    "reasons": [
+      "Auth/security/billing/data/webhook work can create customer-impacting regressions.",
+      "Production rollout intersects with sensitive behavior."
+    ],
+    "required_proof": [
+      "red_green_test_log",
+      "fresh_verification_commands",
+      "code_review_artifact",
+      "release_gate",
+      "evidence_pack",
+      "backend_or_cli_proof_script",
+      "data_integrity_assertions",
+      "idempotency_replay_test"
+    ],
+    "required_skills": [
+      "superpowers:brainstorming",
+      "superpowers:writing-plans",
+      "superpowers:test-driven-development",
+      "superpowers:verification-before-completion",
+      "superpowers:requesting-code-review",
+      "sdlc-run-ledger",
+      "sdlc-evidence-pack",
+      "sdlc-backend-proof"
+    ],
+    "reviewer_roles": [
+      "spec-compliance-reviewer",
+      "code-quality-reviewer",
+      "security-data-reviewer",
+      "architecture-risk-reviewer",
+      "no-context-red-team"
+    ],
+    "risk_tier": "high",
+    "stop_conditions": [
+      "done",
+      "agent_ready",
+      "ready_for_approval",
+      "true_blocker",
+      "waiting_external"
+    ],
+    "unsafe_actions": []
+  },
+  "ticket": "Deploy latest main to persistent demo without resetting data; add UA student signup and real Stripe sandbox checkout on demo; configure billing credentials and webhook; execute live end-to-end QA"
+}

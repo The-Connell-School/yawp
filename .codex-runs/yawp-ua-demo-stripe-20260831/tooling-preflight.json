@@ -1,0 +1,214 @@
+{
+  "backend_required": true,
+  "blocking_reasons": [],
+  "checks": [
+    {
+      "detail": "path exists",
+      "id": "codex_cli_path",
+      "path": "/Users/bryantbrock/.volta/bin/codex",
+      "required": false,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/Users/bryantbrock/.volta/bin/codex",
+        "--help"
+      ],
+      "detail": "command completed",
+      "exit_code": 0,
+      "id": "codex_cli_help",
+      "output_excerpt": "Codex CLI\n\nIf no subcommand is specified, options will be forwarded to the interactive CLI.\n\nUsage: codex [OPTIONS] [PROMPT]\n       codex [OPTIONS] <COMMAND> [ARGS]\n\nCommands:\n  agents            Browse all agent sessions on the shared local app-server daemon\n  exec              Run Codex non-interactively [aliases: e]\n  review            Run a code review non-interactively\n  login             Manage login\n  logout            Remove stored authentication credentials\n  mcp               Manage external MCP servers for Codex\n  plugin            Manage Codex plugins\n  mcp-server        Start Codex as an MCP server (stdio)\n  app-server        [experimental] Run the app server or related tooling\n  remote-control    [experimental] Manage the app-server daemon with remote control enabled\n  app               Launch the Desktop app (opens the app installer if missing)\n  completion        Generate shell completion scripts\n  update            Update Codex to the latest version\n  doctor           ",
+      "required": false,
+      "status": "pass"
+    },
+    {
+      "detail": "path exists",
+      "id": "git_cli_path",
+      "path": "/usr/bin/git",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/usr/bin/git",
+        "--version"
+      ],
+      "detail": "command completed",
+      "exit_code": 0,
+      "id": "git_cli_version",
+      "output_excerpt": "git version 2.50.1 (Apple Git-155)",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "detail": "path exists",
+      "id": "repo_path",
+      "path": "/Users/bryantbrock/Workspaces/TheConnellSchool/yawp/record-capsules/yawp-ua-demo-stripe-3462931f86",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "detail": "path exists",
+      "id": "qa_capture_script",
+      "path": "/Users/bryantbrock/.codex/skills/qa-video-capture/scripts/capture_browser_qa.mjs",
+      "required": false,
+      "status": "pass"
+    },
+    {
+      "detail": "path exists",
+      "id": "qa_narration_script",
+      "path": "/Users/bryantbrock/.codex/skills/qa-video-capture/scripts/narrate_qa_video.mjs",
+      "required": false,
+      "status": "pass"
+    },
+    {
+      "detail": "path exists",
+      "id": "qa_kokoro_tts_script",
+      "path": "/Users/bryantbrock/.codex/skills/qa-video-capture/scripts/kokoro_local_tts_qa_video.py",
+      "required": false,
+      "status": "pass"
+    },
+    {
+      "detail": "path exists",
+      "id": "qa_kokoro_python",
+      "path": "/Users/bryantbrock/.codex/qa-video-tts/kokoro/venv/bin/python",
+      "required": false,
+      "status": "pass"
+    },
+    {
+      "detail": "path exists",
+      "id": "qa_kokoro_model",
+      "path": "/Users/bryantbrock/.codex/qa-video-tts/kokoro/model/kokoro-v1.0.int8.onnx",
+      "required": false,
+      "status": "pass"
+    },
+    {
+      "detail": "path exists",
+      "id": "qa_kokoro_voices",
+      "path": "/Users/bryantbrock/.codex/qa-video-tts/kokoro/model/voices-v1.0.bin",
+      "required": false,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/Users/bryantbrock/.codex/qa-video-tts/kokoro/venv/bin/python",
+        "-c",
+        "import kokoro_onnx, soundfile; print('OK')"
+      ],
+      "detail": "command completed",
+      "exit_code": 0,
+      "id": "qa_kokoro_import",
+      "output_excerpt": "OK",
+      "required": false,
+      "status": "pass"
+    },
+    {
+      "detail": "path exists",
+      "id": "qa_publish_script",
+      "path": "/Users/bryantbrock/.codex/skills/qa-video-capture/scripts/publish_qa_video.mjs",
+      "required": false,
+      "status": "pass"
+    },
+    {
+      "detail": "path exists",
+      "id": "qa_capture_node",
+      "path": "/Users/bryantbrock/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node",
+      "required": false,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/Users/bryantbrock/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node",
+        "--version"
+      ],
+      "detail": "command completed",
+      "exit_code": 0,
+      "id": "qa_capture_node_version",
+      "output_excerpt": "v24.19.0",
+      "required": false,
+      "status": "pass"
+    },
+    {
+      "detail": "path exists",
+      "id": "qa_playwright_node_path",
+      "path": "/Users/bryantbrock/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright",
+      "required": false,
+      "status": "pass"
+    },
+    {
+      "detail": "path exists",
+      "id": "backend_proof_script",
+      "path": "/Users/bryantbrock/.codex/skills/sdlc-backend-proof/scripts/backend_proof.py",
+      "required": true,
+      "status": "pass"
+    }
+  ],
+  "generated_at": "2026-08-31T17:03:54.716749+00:00",
+  "repo": "/Users/bryantbrock/Workspaces/TheConnellSchool/yawp/record-capsules/yawp-ua-demo-stripe-3462931f86",
+  "require_live_codex": false,
+  "routing": {
+    "agent_budget": {
+      "implementers": 1,
+      "qa_passes": 3,
+      "red_team": 2,
+      "reviewers": 3
+    },
+    "approval_required": [
+      "production_release"
+    ],
+    "bryant_only_categories": [],
+    "domains": [
+      "billing",
+      "data",
+      "webhook",
+      "infra"
+    ],
+    "lane": "official-sdlc",
+    "operator_can_continue": true,
+    "reasons": [
+      "Auth/security/billing/data/webhook work can create customer-impacting regressions.",
+      "Production rollout intersects with sensitive behavior."
+    ],
+    "required_proof": [
+      "red_green_test_log",
+      "fresh_verification_commands",
+      "code_review_artifact",
+      "release_gate",
+      "evidence_pack",
+      "backend_or_cli_proof_script",
+      "data_integrity_assertions",
+      "idempotency_replay_test"
+    ],
+    "required_skills": [
+      "superpowers:brainstorming",
+      "superpowers:writing-plans",
+      "superpowers:test-driven-development",
+      "superpowers:verification-before-completion",
+      "superpowers:requesting-code-review",
+      "sdlc-run-ledger",
+      "sdlc-evidence-pack",
+      "sdlc-backend-proof"
+    ],
+    "reviewer_roles": [
+      "spec-compliance-reviewer",
+      "code-quality-reviewer",
+      "security-data-reviewer",
+      "architecture-risk-reviewer",
+      "no-context-red-team"
+    ],
+    "risk_tier": "high",
+    "stop_conditions": [
+      "done",
+      "agent_ready",
+      "ready_for_approval",
+      "true_blocker",
+      "waiting_external"
+    ],
+    "unsafe_actions": []
+  },
+  "schema_version": "sdlc-tooling-preflight/v1",
+  "status": "pass",
+  "ticket": "Deploy latest main to persistent demo without resetting data; add UA student signup and real Stripe sandbox checkout on demo; configure billing credentials and webhook; execute live end-to-end QA",
+  "visual_required": false,
+  "warnings": []
+}

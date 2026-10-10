@@ -1,0 +1,37 @@
+2026-08-31 fresh verification
+
+Local focused tests:
+- 41 focused billing and webhook tests passed.
+- Full typecheck passed with Node 22 after Prisma client generation.
+
+Demo deployment:
+- GitHub Actions run: https://github.com/The-Connell-School/yawp/actions/runs/33428002776
+- Result: success in 2m4s.
+- Requested ref: main.
+- Deployed SHA: 882a982 (origin/main 882a9826ff54a5ceb7568783b2a61adb454433a6).
+- reset_data: false.
+- Before counts: organizations 3, users 26, classes 4, assignments 9, documents 39, submissions 26, moduleSessions 228.
+- After counts: organizations 3, users 26, classes 4, assignments 9, documents 39, submissions 26, moduleSessions 228.
+
+Real Stripe sandbox webhook:
+- Replayed evt_1UAZdWHOYKJAxG9PGrykOGe0 to enabled endpoint we_1UAZfvHOYKJAxG9PzctDDSRH.
+- StripeWebhookEvent contains the event with type checkout.session.completed.
+- Existing paid QA license became ACTIVE, amountPaid 5000, currency usd, validUntil 2027-01-01T06:00:00Z (December 31 in America/Chicago).
+
+Fresh browser end-to-end test:
+- New student: ua-demo-qa-20260831190217@yawp.school.
+- Checkpoints: UA partner landing; hidden accepted organization code; email verification; unpaid billing gate; Stripe sandbox checkout; dashboard class-code dialog.
+- Final URL: https://ua-demo.yawp.school/app
+- Database: STUDENT membership, ACTIVE license, 5000 usd, valid through December 31.
+- User count increased additively from 26 to 27.
+- Video: browser-proof/page@5aa70c910a60161253007219b4268608.webm
+- Temporary published proof: https://tmpfiles.org/w1wHsduxLtf6/page-5aa70c910a60161253007219b4268608.webm
+
+Idempotency:
+- Replayed evt_1UAZdWHOYKJAxG9PGrykOGe0 again after success.
+- StripeWebhookEvent count for that id remained exactly 1.
+- License remained ACTIVE with amountPaid 5000 usd and the same checkout session.
+
+Webhook cleanup:
+- Old endpoint we_1UAYfaHOYKJAxG9PWxTQlJI7 is disabled.
+- Current endpoint we_1UAZfvHOYKJAxG9PzctDDSRH is enabled with checkout, refund, and dispute events.

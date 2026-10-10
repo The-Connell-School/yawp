@@ -1,0 +1,10 @@
+waitForURL: Timeout 45000ms exceeded.
+=========================== logs ===========================
+waiting for navigation until "load"
+  navigated to "https://ua-demo.yawp.school/billing/ua"
+  navigated to "https://ua-demo.yawp.school/billing/ua"
+  navigated to "https://ua-demo.yawp.school/billing/ua"
+============================================================
+    at /Users/bryantbrock/Workspaces/TheConnellSchool/yawp/record-capsules/yawp-ua-demo-stripe-3462931f86/.codex-runs/yawp-ua-demo-stripe-20260831/ua-demo-checkout.mjs:131:14
+    at processTicksAndRejections (native:7:39)
+URL: https://ua-demo.yawp.school/billing/ua

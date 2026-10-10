@@ -1,0 +1,21 @@
+{
+  "provider": "tmpfiles",
+  "temporary": true,
+  "pageUrl": "https://tmpfiles.org/w1wHsduxLtf6/page-5aa70c910a60161253007219b4268608.webm",
+  "videoUrl": "https://tmpfiles.org/dl/w1wHsduxLtf6/page-5aa70c910a60161253007219b4268608.webm",
+  "verification": {
+    "status": 200,
+    "contentType": "text/html; charset=utf-8",
+    "contentLength": null
+  },
+  "raw": {
+    "status": "success",
+    "data": {
+      "url": "https://tmpfiles.org/w1wHsduxLtf6/page-5aa70c910a60161253007219b4268608.webm"
+    }
+  },
+  "sourceVideo": "/Users/bryantbrock/Workspaces/TheConnellSchool/yawp/record-capsules/yawp-ua-demo-stripe-3462931f86/.codex-runs/yawp-ua-demo-stripe-20260831/browser-proof/page@5aa70c910a60161253007219b4268608.webm",
+  "errors": [
+    "netlify: No Netlify site id for brocksoftwareqa-video. Set QA_VIDEO_NETLIFY_SITE_ID or create/link the Brock Software QA video site."
+  ]
+}

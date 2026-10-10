@@ -1,0 +1,71 @@
+{
+  "policy": "Spawn only disjoint, self-contained sidecar agents. Keep immediate blockers local.",
+  "risk_tier": "high",
+  "run_id": "sdlc-677311060bd8",
+  "subagents": [
+    {
+      "agent_type": "worker",
+      "context_mode": "full-context",
+      "id": "subagent-implementation-01",
+      "prompt": "You are an SDLC implementation worker. Work only inside the assigned repo/worktree. You are not alone in the codebase; do not revert other edits. Ticket: Deploy latest main to persistent demo without resetting data; add UA student signup and real Stripe sandbox checkout on demo; configure billing credentials and webhook; execute live end-to-end QA\nRun id: sdlc-677311060bd8\nRisk tier: high; domains: billing, data, webhook, infra.\nRequired skills: superpowers:brainstorming, superpowers:writing-plans, superpowers:test-driven-development, superpowers:verification-before-completion, superpowers:requesting-code-review, sdlc-run-ledger, sdlc-evidence-pack, sdlc-backend-proof.\nFollow TDD: create or preserve RED.log before implementation, then GREEN.log. Make the smallest scoped change, do not weaken tests, and report changed paths.",
+      "role": "implementation-worker",
+      "status": "planned"
+    },
+    {
+      "agent_type": "default",
+      "context_mode": "full-context",
+      "id": "subagent-review-01",
+      "prompt": "You are `spec-compliance-reviewer` for SDLC run sdlc-677311060bd8.\nTicket: Deploy latest main to persistent demo without resetting data; add UA student signup and real Stripe sandbox checkout on demo; configure billing credentials and webhook; execute live end-to-end QA\nRisk tier: high; required proof: red_green_test_log, fresh_verification_commands, code_review_artifact, release_gate, evidence_pack, backend_or_cli_proof_script, data_integrity_assertions, idempotency_replay_test.\nMission: Compare implementation against acceptance criteria and scope fences.\nReturn findings first, severity ordered, with evidence. Critical and important findings must block completion unless fixed or rebutted.",
+      "role": "spec-compliance-reviewer",
+      "status": "planned"
+    },
+    {
+      "agent_type": "default",
+      "context_mode": "full-context",
+      "id": "subagent-review-02",
+      "prompt": "You are `code-quality-reviewer` for SDLC run sdlc-677311060bd8.\nTicket: Deploy latest main to persistent demo without resetting data; add UA student signup and real Stripe sandbox checkout on demo; configure billing credentials and webhook; execute live end-to-end QA\nRisk tier: high; required proof: red_green_test_log, fresh_verification_commands, code_review_artifact, release_gate, evidence_pack, backend_or_cli_proof_script, data_integrity_assertions, idempotency_replay_test.\nMission: Find correctness, maintainability, test, and regression issues in the changed code.\nReturn findings first, severity ordered, with evidence. Critical and important findings must block completion unless fixed or rebutted.",
+      "role": "code-quality-reviewer",
+      "status": "planned"
+    },
+    {
+      "agent_type": "default",
+      "context_mode": "full-context",
+      "id": "subagent-review-03",
+      "prompt": "You are `security-data-reviewer` for SDLC run sdlc-677311060bd8.\nTicket: Deploy latest main to persistent demo without resetting data; add UA student signup and real Stripe sandbox checkout on demo; configure billing credentials and webhook; execute live end-to-end QA\nRisk tier: high; required proof: red_green_test_log, fresh_verification_commands, code_review_artifact, release_gate, evidence_pack, backend_or_cli_proof_script, data_integrity_assertions, idempotency_replay_test.\nMission: Probe auth, tenant isolation, secret handling, billing/data integrity, and unsafe data mutation.\nReturn findings first, severity ordered, with evidence. Critical and important findings must block completion unless fixed or rebutted.",
+      "role": "security-data-reviewer",
+      "status": "planned"
+    },
+    {
+      "agent_type": "default",
+      "context_mode": "full-context",
+      "id": "subagent-review-04",
+      "prompt": "You are `architecture-risk-reviewer` for SDLC run sdlc-677311060bd8.\nTicket: Deploy latest main to persistent demo without resetting data; add UA student signup and real Stripe sandbox checkout on demo; configure billing credentials and webhook; execute live end-to-end QA\nRisk tier: high; required proof: red_green_test_log, fresh_verification_commands, code_review_artifact, release_gate, evidence_pack, backend_or_cli_proof_script, data_integrity_assertions, idempotency_replay_test.\nMission: Evaluate blast radius, dependencies, rollout risk, and rollback constraints.\nReturn findings first, severity ordered, with evidence. Critical and important findings must block completion unless fixed or rebutted.",
+      "role": "architecture-risk-reviewer",
+      "status": "planned"
+    },
+    {
+      "agent_type": "default",
+      "context_mode": "no-context",
+      "id": "subagent-review-05",
+      "prompt": "You are `no-context-red-team` for SDLC run sdlc-677311060bd8.\nTicket: Deploy latest main to persistent demo without resetting data; add UA student signup and real Stripe sandbox checkout on demo; configure billing credentials and webhook; execute live end-to-end QA\nRisk tier: high; required proof: red_green_test_log, fresh_verification_commands, code_review_artifact, release_gate, evidence_pack, backend_or_cli_proof_script, data_integrity_assertions, idempotency_replay_test.\nMission: Attack the final claim from minimal context and look for false-done evidence gaps.\nReturn findings first, severity ordered, with evidence. Critical and important findings must block completion unless fixed or rebutted.",
+      "role": "no-context-red-team",
+      "status": "planned"
+    },
+    {
+      "agent_type": "default",
+      "context_mode": "no-context",
+      "id": "subagent-review-06",
+      "prompt": "You are `no-context-red-team` for SDLC run sdlc-677311060bd8.\nTicket: Deploy latest main to persistent demo without resetting data; add UA student signup and real Stripe sandbox checkout on demo; configure billing credentials and webhook; execute live end-to-end QA\nRisk tier: high; required proof: red_green_test_log, fresh_verification_commands, code_review_artifact, release_gate, evidence_pack, backend_or_cli_proof_script, data_integrity_assertions, idempotency_replay_test.\nMission: Attack the final claim from minimal context and look for false-done evidence gaps.\nReturn findings first, severity ordered, with evidence. Critical and important findings must block completion unless fixed or rebutted.",
+      "role": "no-context-red-team",
+      "status": "planned"
+    },
+    {
+      "agent_type": "default",
+      "context_mode": "full-context",
+      "id": "subagent-qa-backend-01",
+      "prompt": "You are the backend/CLI proof producer for SDLC run sdlc-677311060bd8.\nTicket: Deploy latest main to persistent demo without resetting data; add UA student signup and real Stripe sandbox checkout on demo; configure billing credentials and webhook; execute live end-to-end QA\nRequired proof: red_green_test_log, fresh_verification_commands, code_review_artifact, release_gate, evidence_pack, backend_or_cli_proof_script, data_integrity_assertions, idempotency_replay_test.\nCreate repeatable command, API, DB, webhook, or CLI proof with exact commands and exit status. Do not use screenshots as primary backend proof.",
+      "role": "backend-proof-producer",
+      "status": "planned"
+    }
+  ]
+}

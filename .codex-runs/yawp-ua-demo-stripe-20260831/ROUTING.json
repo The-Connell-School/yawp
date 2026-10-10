@@ -1,0 +1,60 @@
+{
+  "agent_budget": {
+    "implementers": 1,
+    "qa_passes": 3,
+    "red_team": 2,
+    "reviewers": 3
+  },
+  "approval_required": [
+    "production_release"
+  ],
+  "bryant_only_categories": [],
+  "domains": [
+    "billing",
+    "data",
+    "webhook",
+    "infra"
+  ],
+  "lane": "official-sdlc",
+  "operator_can_continue": true,
+  "reasons": [
+    "Auth/security/billing/data/webhook work can create customer-impacting regressions.",
+    "Production rollout intersects with sensitive behavior."
+  ],
+  "required_proof": [
+    "red_green_test_log",
+    "fresh_verification_commands",
+    "code_review_artifact",
+    "release_gate",
+    "evidence_pack",
+    "backend_or_cli_proof_script",
+    "data_integrity_assertions",
+    "idempotency_replay_test"
+  ],
+  "required_skills": [
+    "superpowers:brainstorming",
+    "superpowers:writing-plans",
+    "superpowers:test-driven-development",
+    "superpowers:verification-before-completion",
+    "superpowers:requesting-code-review",
+    "sdlc-run-ledger",
+    "sdlc-evidence-pack",
+    "sdlc-backend-proof"
+  ],
+  "reviewer_roles": [
+    "spec-compliance-reviewer",
+    "code-quality-reviewer",
+    "security-data-reviewer",
+    "architecture-risk-reviewer",
+    "no-context-red-team"
+  ],
+  "risk_tier": "high",
+  "stop_conditions": [
+    "done",
+    "agent_ready",
+    "ready_for_approval",
+    "true_blocker",
+    "waiting_external"
+  ],
+  "unsafe_actions": []
+}

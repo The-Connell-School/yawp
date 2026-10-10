@@ -1,0 +1,38 @@
+{
+  "status": "passed",
+  "environment": "demo",
+  "deployed_sha": "882a9826ff54a5ceb7568783b2a61adb454433a6",
+  "deployment_run": "https://github.com/The-Connell-School/yawp/actions/runs/33428002776",
+  "reset_data": false,
+  "browser": {
+    "final_url": "https://ua-demo.yawp.school/app",
+    "student": "ua-demo-qa-20260831190217@yawp.school",
+    "checkpoints": [
+      "UA partner landing",
+      "Code-hidden signup",
+      "Verified email",
+      "Unpaid student billing gate",
+      "Stripe sandbox checkout",
+      "Paid license and dashboard class-code dialog"
+    ],
+    "video": "browser-proof/page@5aa70c910a60161253007219b4268608.webm",
+    "published_video": "https://tmpfiles.org/w1wHsduxLtf6/page-5aa70c910a60161253007219b4268608.webm"
+  },
+  "billing": {
+    "mode": "test",
+    "amount": 5000,
+    "currency": "usd",
+    "status": "ACTIVE",
+    "valid_until": "2027-01-01T06:00:00Z"
+  },
+  "data_counts": {
+    "before": {"organizations": 3, "users": 26, "classes": 4, "assignments": 9, "documents": 39, "submissions": 26, "moduleSessions": 228},
+    "after_deploy": {"organizations": 3, "users": 26, "classes": 4, "assignments": 9, "documents": 39, "submissions": 26, "moduleSessions": 228},
+    "after_qa_users": 27
+  },
+  "idempotency": {
+    "event_id": "evt_1UAZdWHOYKJAxG9PGrykOGe0",
+    "event_rows_after_replay": 1,
+    "license_unchanged": true
+  }
+}

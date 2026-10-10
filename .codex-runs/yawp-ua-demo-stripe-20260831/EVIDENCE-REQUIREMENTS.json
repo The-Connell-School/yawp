@@ -1,0 +1,31 @@
+{
+  "command_evidence_required": [
+    "red_green_test_log",
+    "fresh_verification_commands",
+    "backend_or_cli_proof_script",
+    "idempotency_replay_test"
+  ],
+  "final_report_must_include": [
+    "ticket",
+    "risk tier",
+    "skills used",
+    "tests and command outputs",
+    "review results",
+    "QA proof",
+    "preview or backend proof",
+    "release recommendation"
+  ],
+  "media_required": [],
+  "release_gate_required": true,
+  "required_proof": [
+    "red_green_test_log",
+    "fresh_verification_commands",
+    "code_review_artifact",
+    "release_gate",
+    "evidence_pack",
+    "backend_or_cli_proof_script",
+    "data_integrity_assertions",
+    "idempotency_replay_test"
+  ],
+  "risk_tier": "high"
+}

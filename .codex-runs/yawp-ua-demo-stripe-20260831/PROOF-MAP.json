@@ -1,0 +1,139 @@
+{
+  "proof": [
+    {
+      "acceptance_ids": [
+        "ACCEPTANCE.md"
+      ],
+      "evidence": [
+        {
+          "artifact": "RED.log",
+          "command_evidence": "red",
+          "kind": "red-test-log"
+        },
+        {
+          "artifact": "GREEN.log",
+          "command_evidence": "green",
+          "kind": "green-test-log"
+        }
+      ],
+      "proof": "red_green_test_log",
+      "status": "verified"
+    },
+    {
+      "acceptance_ids": [
+        "ACCEPTANCE.md"
+      ],
+      "evidence": [
+        {
+          "artifact": "TEST-PLAN.md",
+          "kind": "command-plan"
+        },
+        {
+          "artifact": "GREEN.log",
+          "command_evidence": "green",
+          "kind": "command-output"
+        }
+      ],
+      "proof": "fresh_verification_commands",
+      "status": "verified"
+    },
+    {
+      "acceptance_ids": [
+        "ACCEPTANCE.md"
+      ],
+      "evidence": [
+        {
+          "artifact": "REVIEW.md",
+          "kind": "review"
+        }
+      ],
+      "proof": "code_review_artifact",
+      "status": "verified"
+    },
+    {
+      "acceptance_ids": [
+        "ACCEPTANCE.md"
+      ],
+      "evidence": [
+        {
+          "artifact": "RELEASE-GATE.md",
+          "kind": "release-gate"
+        }
+      ],
+      "proof": "release_gate",
+      "status": "verified"
+    },
+    {
+      "acceptance_ids": [
+        "ACCEPTANCE.md"
+      ],
+      "evidence": [
+        {
+          "artifact": "EVIDENCE-PACK.md",
+          "kind": "evidence-pack"
+        }
+      ],
+      "proof": "evidence_pack",
+      "status": "verified"
+    },
+    {
+      "acceptance_ids": [
+        "ACCEPTANCE.md"
+      ],
+      "evidence": [
+        {
+          "artifact": "TEST-PLAN.md",
+          "kind": "backend-proof-plan"
+        },
+        {
+          "artifact": "GREEN.log",
+          "command_evidence": "green",
+          "kind": "backend-proof-output"
+        },
+        {
+          "artifact": "QA-PROOF.json",
+          "kind": "qa-proof-contract"
+        }
+      ],
+      "proof": "backend_or_cli_proof_script",
+      "status": "verified"
+    },
+    {
+      "acceptance_ids": [
+        "ACCEPTANCE.md"
+      ],
+      "evidence": [
+        {
+          "artifact": "TEST-PLAN.md",
+          "kind": "data-integrity-plan"
+        },
+        {
+          "artifact": "GREEN.log",
+          "command_evidence": "green",
+          "kind": "data-integrity-output"
+        }
+      ],
+      "proof": "data_integrity_assertions",
+      "status": "verified"
+    },
+    {
+      "acceptance_ids": [
+        "ACCEPTANCE.md"
+      ],
+      "evidence": [
+        {
+          "artifact": "TEST-PLAN.md",
+          "kind": "idempotency-plan"
+        },
+        {
+          "artifact": "GREEN.log",
+          "command_evidence": "green",
+          "kind": "idempotency-output"
+        }
+      ],
+      "proof": "idempotency_replay_test",
+      "status": "verified"
+    }
+  ],
+  "risk_tier": "high"
+}

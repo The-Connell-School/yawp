@@ -1,0 +1,14 @@
+{
+  "email": "ua-demo-qa-20260831190217@yawp.school",
+  "password": "Ua-demo-2026!Strong",
+  "finalUrl": "https://ua-demo.yawp.school/app",
+  "checkpoints": [
+    "UA partner landing",
+    "Code-hidden signup",
+    "Verified email",
+    "Unpaid student billing gate",
+    "Stripe sandbox checkout",
+    "Paid license and dashboard class-code dialog"
+  ],
+  "completedAt": "2026-08-31T19:02:45.084Z"
+}

@@ -1,0 +1,11 @@
+2026-08-31 Stripe sandbox webhook regression proof
+
+Event: evt_1UAZdWHOYKJAxG9PGrykOGe0
+Checkout: cs_test_a1f4jBq6DxtHv57FSNSoMn6Apoivw0ojTaStm2mVZdidiFvTk2aFoyk5G3
+Observed before fix:
+- Stripe checkout completed and payment_status was paid.
+- The demo webhook returned HTTP 400.
+- StudentLicense remained PENDING.
+- Live container diagnosis reproduced Stripe's Bun error: synchronous signature verification cannot use SubtleCryptoProvider and must call constructEventAsync.
+
+Regression fix: PR #344, merged as 882a9826ff54a5ceb7568783b2a61adb454433a6.

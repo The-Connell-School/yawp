@@ -1,0 +1,32 @@
+{
+  "app_surface": {
+    "browser": false,
+    "evidence": []
+  },
+  "detected_files": [
+    "package.json",
+    "bun.lockb"
+  ],
+  "languages": [
+    "javascript"
+  ],
+  "notes": [
+    "No deterministic test command discovered; operator must identify verification before implementation."
+  ],
+  "package_managers": [
+    "bun"
+  ],
+  "primary_test_command": null,
+  "repo": "/Users/bryantbrock/Workspaces/TheConnellSchool/yawp/record-capsules/yawp-ua-demo-stripe-3462931f86",
+  "repo_known": true,
+  "schema_version": "sdlc-repo-profile/v1",
+  "test_commands": [
+    {
+      "command": "bun run typecheck",
+      "id": "node_typecheck",
+      "kind": "static",
+      "source": "package.json scripts"
+    }
+  ],
+  "test_roots": []
+}

@@ -1,0 +1,53 @@
+{
+  "adversarial_round_budget": 2,
+  "lane": "official-sdlc",
+  "maximum_repair_rounds": 3,
+  "minimum_blocker_policy": "Critical and important findings must be fixed or explicitly rebutted with evidence.",
+  "qa_pass_budget": 3,
+  "review_budget": 3,
+  "reviewers": [
+    {
+      "context_mode": "full-context",
+      "id": "review-01",
+      "mission": "Compare implementation against acceptance criteria and scope fences.",
+      "required_output": "findings with severity, file/line evidence when applicable, and explicit pass/block recommendation",
+      "role": "spec-compliance-reviewer"
+    },
+    {
+      "context_mode": "full-context",
+      "id": "review-02",
+      "mission": "Find correctness, maintainability, test, and regression issues in the changed code.",
+      "required_output": "findings with severity, file/line evidence when applicable, and explicit pass/block recommendation",
+      "role": "code-quality-reviewer"
+    },
+    {
+      "context_mode": "full-context",
+      "id": "review-03",
+      "mission": "Probe auth, tenant isolation, secret handling, billing/data integrity, and unsafe data mutation.",
+      "required_output": "findings with severity, file/line evidence when applicable, and explicit pass/block recommendation",
+      "role": "security-data-reviewer"
+    },
+    {
+      "context_mode": "full-context",
+      "id": "review-04",
+      "mission": "Evaluate blast radius, dependencies, rollout risk, and rollback constraints.",
+      "required_output": "findings with severity, file/line evidence when applicable, and explicit pass/block recommendation",
+      "role": "architecture-risk-reviewer"
+    },
+    {
+      "context_mode": "no-context",
+      "id": "review-05",
+      "mission": "Attack the final claim from minimal context and look for false-done evidence gaps.",
+      "required_output": "findings with severity, file/line evidence when applicable, and explicit pass/block recommendation",
+      "role": "no-context-red-team"
+    },
+    {
+      "context_mode": "no-context",
+      "id": "review-06",
+      "mission": "Attack the final claim from minimal context and look for false-done evidence gaps.",
+      "required_output": "findings with severity, file/line evidence when applicable, and explicit pass/block recommendation",
+      "role": "no-context-red-team"
+    }
+  ],
+  "risk_tier": "high"
+}
