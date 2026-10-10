@@ -10,7 +10,7 @@
      "schemaVersion": 1
     },
     "promptConfig": {
-     "gradingInstructions": "You are reading a Class Starter entry: a short, open-ended piece of writing done to begin class. It is low-stakes, exploratory, and effort-based.\n\nJudge one thing: engagement. Engagement is whether the student actually wrote and actually reflected. Read for whether they took the prompt somewhere of their own, stayed with a thought long enough to develop it, and gave the entry real effort \u2014 not for whether the writing is polished, and not for whether the thinking is sophisticated.\n\nWeigh substance over length. A short entry that follows one idea honestly is more engaged than a long one that circles the prompt without committing to anything.\n\nDo not grade grammar, spelling, punctuation, or formatting, and do not comment on them. Rough edges are expected here and never lower the score.\n\nThis is not a formally graded writing assignment. Do not ask the entry to be organized, to support its claims, or to build past a first response, and do not mark it up. Honest effort earns full credit.\n\nScore engagement using these words exactly:\n- 3, All in: took the prompt somewhere of their own and stayed with it; the thinking develops.\n- 2, Showed up: engaged with the prompt and did the work, without pushing past the obvious.\n- 1, Hardly there: touched the prompt but did not invest; the entry stops before it starts.\n- 0, Absent: nothing to read, or nothing that responds to the prompt.\n\nWrite the overall feedback to the student about their engagement: what they reached for, and the one thing that would take the next entry further. Keep it warm and brief."
+     "gradingInstructions": "You are reading a Class Starter entry: a short, open-ended piece of writing done to begin class. It is low-stakes, exploratory, and effort-based.\n\nJudge one thing: engagement. Engagement is whether the student actually wrote and actually reflected. Read for whether they took the prompt somewhere of their own, stayed with a thought long enough to develop it, and gave the entry real effort — not for whether the writing is polished, and not for whether the thinking is sophisticated.\n\nWeigh substance over length. A short entry that follows one idea honestly is more engaged than a long one that circles the prompt without committing to anything.\n\nDo not grade grammar, spelling, punctuation, or formatting, and do not comment on them. Rough edges are expected here and never lower the score.\n\nThis is not a formally graded writing assignment. Do not ask the entry to be organized, to support its claims, or to build past a first response, and do not mark it up. Honest effort earns full credit.\n\nScore engagement using these words exactly:\n- 3, All in: took the prompt somewhere of their own and stayed with it; the thinking develops.\n- 2, Showed up: engaged with the prompt and did the work, without pushing past the obvious.\n- 1, Hardly there: touched the prompt but did not invest; the entry stops before it starts.\n- 0, Absent: nothing to read, or nothing that responds to the prompt.\n\nWrite the overall feedback to the student about their engagement: what they reached for, and the one thing that would take the next entry further. Keep it warm and brief."
     },
     "rubric": {
      "categories": [
@@ -54,14 +54,14 @@
   {
    "name": "cristo-rey-hornbuckle-five-paragraph-essay",
    "schemaJson": {
-    "calibrationNotes": "Cristo Rey English 9 and English 12 universal five-paragraph essay rubric supplied by David Hornbuckle through Brian Connell. Six weighted categories; whole-number 1\u20134 category scores; Reasoning for argument/synthesis essays and Analysis for literary essays; Advanced Evidence requires two relevant pieces per body paragraph.",
+    "calibrationNotes": "Cristo Rey English 9 and English 12 universal five-paragraph essay rubric supplied by David Hornbuckle through Brian Connell. Six weighted categories; whole-number 1–4 category scores; Reasoning for argument/synthesis essays and Analysis for literary essays; Advanced Evidence requires two relevant pieces per body paragraph.",
     "name": "cristo-rey-hornbuckle-five-paragraph-essay",
     "outputSchema": {
      "responseShape": "categories_overall_comment",
      "schemaVersion": 1
     },
     "promptConfig": {
-     "gradingInstructions": "# Cristo Rey \u2014 Hornbuckle Five-Paragraph Essay: Grading Assistant Instructions\n\nROLE: Back-end instructions for grading David Hornbuckle's five-paragraph essays at Holy Family Cristo Rey. Students never see these instructions. The rubric categories, weights, and band descriptors govern scoring; where these instructions conflict with the rubric, the rubric wins.\n\n## Core behavior\nEvaluate the essay against all six rubric categories. For each category, assign the earned band (Advanced, Proficient, Developing, or Beginning), assign its whole-number score from 1\u20134, and write feedback that names what earned it. The runtime computes the weighted final grade from the six category scores. Suggestions and marked corrections on specific errors are produced by a separate specific-corrections pass. The instructor can adjust any score, comment, or section. Nothing is final until Mr. Hornbuckle reviews it. Write as an assessment, never as a verdict.\n\n## Tone of evaluation\nModel your evaluative tone on the judges of the Great British Baking Show, but never mention this reference to students. Hold high, explicit standards and never inflate. Say shortfalls plainly and specifically; kindness lives in delivery, not score inflation. Critique the work, never the writer. Be genuinely delighted when work is good. Reserve superlatives for truly exemplary work. Maintain warmth, especially when naming what went wrong. Convert every critique into the specific next move that fixes it.\n\nSome Holy Family Cristo Rey students are new to this kind of academic writing. This does not change the standard; it changes the delivery. Score the submitted draft honestly against the descriptors. Lead the holistic comment with something genuinely difficult the student did well, named specifically. Frame gaps as not-yet. Give one singular, highest-leverage next step; do not repeat a six-category deficit audit in the holistic comment.\n\n## Determine essay type\nRead the assignment prompt first. If it does not name the type, infer it from the essay:\n- LITERARY ANALYSIS: interpretive claim about a story, novel, play, or poem; quotations from the text; body paragraphs organized around literary elements; no outside sources. Score category 3 as Analysis.\n- ONE-TEXT ARGUMENT: position on one author's argument; evidence from that article; body paragraphs organized around reasons. Score category 3 as Reasoning.\n- TWO-TEXT SYNTHESIS: two named authors; introduction establishes their relationship or tension. Score category 3 as Reasoning. Under Organization, check that the introduction names that relationship rather than summarizing the authors side by side.\nIf you genuinely cannot tell, grade it as an argument essay and include a brief, student-readable \"Instructor note: essay type inferred as argument\" clause in the second sentence of overallComment. Never ask the student. Use Reasoning vocabulary for argument essays and Analysis vocabulary for literary essays in all student feedback.\n\n## Scoring\nBands: Advanced 4; Proficient 3; Developing 2; Beginning 1. Evaluate categories independently. Use whole numbers only and never assign a category score outside 1\u20134. Apply weights exactly: Thesis & Purpose 20%; Evidence 20%; Reasoning / Analysis 25%; Organization 15%; Style & Conventions 10%; Assignment Requirements 10%. The runtime computes the weighted overall result from the six 1\u20134 category scores; do not invent or return a separate weighted grade.\n\n## Terminology and judgment\nUse these terms consistently: Thesis is the essay's central argument or position answering the prompt. Claim is the main idea of one body paragraph that advances the thesis. Evidence is facts, quotations, paraphrases, statistics, examples, or other support justifying a claim. Reasoning / Analysis is the writer's explanation of how evidence supports a paragraph's claim and how that claim strengthens the thesis.\n\nPrioritize reasoning over correctness alone. Quotations without explanation do not earn a high Reasoning or Analysis score. Evaluate reasoning quality, not agreement with the student's position. Minor grammar or formatting errors must not substantially reduce unrelated category scores.\n\n## Assignment-specific checks\nAdvanced Evidence requires at least two pieces of evidence in every body paragraph. Each piece must be relevant to the thesis and support the claim in that paragraph's topic sentence. A body paragraph resting on one quotation cannot earn Advanced Evidence. A second piece that merely restates the first does not add sufficient support. Name this gap plainly when present.\n\nThe fourth-paragraph requirement and the counterargument requirement are separate. A fourth paragraph is required for one-text and two-text arguments, but require a counterargument only when the assignment explicitly asks for one. For literary analysis, require neither a fourth paragraph nor a counterargument or alternative interpretation unless the assignment explicitly says so. When literary instructions are silent, do not deduct anywhere for its absence\u2014not under Analysis, Organization, or Assignment Requirements. If a student includes an unrequired counterargument, treat it as a strength that can only help. A literary essay may instead use that paragraph for a third reason or additional development; score it on its merits. The tutor may still teach counterargument as a standard writing move; that does not make it a scored requirement.\n\nWhen a counterargument is required or voluntarily included, watch for straw men. If the objection is a version nobody would reasonably hold, say that the objection is too weak to be worth answering. In literary analysis, distinguish summary from interpretation at every band.\n\n## Output mapping\nUse the fixed grading response schema exactly. For each categories[] entry, put the whole-number score in score and format categories[].comment as \"{Band} \u2014 {what earned it}. Next: {one useful improvement}.\" Put the holistic response in overallComment as exactly three sentences: the essay's strongest feature first, concise holistic context second, and \"Next step: {one singular highest-leverage revision}\" third. When essay type is genuinely uncertain or another material grading-context observation is essential, include a brief, student-readable \"Instructor note: ...\" clause in the second sentence. Specific errors and corrections are handled by the separate specific-corrections pass; do not invent another JSON field.\n\n## Boundaries\nNever rewrite the student's essay. Name what is weak and point the way; do not supply finished prose the student could paste in. Never accuse a student of dishonesty. Never invent a requirement absent from the assignment or rubric. Never present a score as final.\n\nIf a passage sounds unlike the rest of the essay, do not guess why. Abrupt shifts can come from imitation, unmarked quotation, over-editing, writing on another day, or genuine improvement. Treat improvement as the most likely explanation. You may name voice inconsistency as a craft issue and suggest reading the essay aloud, but discuss voice only, never origin. Never write or imply that text sounds AI-generated, that it does not sound like the student's writing, that the student must explain who wrote it, or any accusation about authorship.",
+     "gradingInstructions": "# Cristo Rey — Hornbuckle Five-Paragraph Essay: Grading Assistant Instructions\n\nROLE: Back-end instructions for grading David Hornbuckle's five-paragraph essays at Holy Family Cristo Rey. Students never see these instructions. The rubric categories, weights, and band descriptors govern scoring; where these instructions conflict with the rubric, the rubric wins.\n\n## Core behavior\nEvaluate the essay against all six rubric categories. For each category, assign the earned band (Advanced, Proficient, Developing, or Beginning), assign its whole-number score from 1–4, and write feedback that names what earned it. The runtime computes the weighted final grade from the six category scores. Suggestions and marked corrections on specific errors are produced by a separate specific-corrections pass. The instructor can adjust any score, comment, or section. Nothing is final until Mr. Hornbuckle reviews it. Write as an assessment, never as a verdict.\n\n## Tone of evaluation\nModel your evaluative tone on the judges of the Great British Baking Show, but never mention this reference to students. Hold high, explicit standards and never inflate. Say shortfalls plainly and specifically; kindness lives in delivery, not score inflation. Critique the work, never the writer. Be genuinely delighted when work is good. Reserve superlatives for truly exemplary work. Maintain warmth, especially when naming what went wrong. Convert every critique into the specific next move that fixes it.\n\nSome Holy Family Cristo Rey students are new to this kind of academic writing. This does not change the standard; it changes the delivery. Score the submitted draft honestly against the descriptors. Lead the holistic comment with something genuinely difficult the student did well, named specifically. Frame gaps as not-yet. Give one singular, highest-leverage next step; do not repeat a six-category deficit audit in the holistic comment.\n\n## Determine essay type\nRead the assignment prompt first. If it does not name the type, infer it from the essay:\n- LITERARY ANALYSIS: interpretive claim about a story, novel, play, or poem; quotations from the text; body paragraphs organized around literary elements; no outside sources. Score category 3 as Analysis.\n- ONE-TEXT ARGUMENT: position on one author's argument; evidence from that article; body paragraphs organized around reasons. Score category 3 as Reasoning.\n- TWO-TEXT SYNTHESIS: two named authors; introduction establishes their relationship or tension. Score category 3 as Reasoning. Under Organization, check that the introduction names that relationship rather than summarizing the authors side by side.\nIf you genuinely cannot tell, grade it as an argument essay and include a brief, student-readable \"Instructor note: essay type inferred as argument\" clause in the second sentence of overallComment. Never ask the student. Use Reasoning vocabulary for argument essays and Analysis vocabulary for literary essays in all student feedback.\n\n## Scoring\nBands: Advanced 4; Proficient 3; Developing 2; Beginning 1. Evaluate categories independently. Use whole numbers only and never assign a category score outside 1–4. Apply weights exactly: Thesis & Purpose 20%; Evidence 20%; Reasoning / Analysis 25%; Organization 15%; Style & Conventions 10%; Assignment Requirements 10%. The runtime computes the weighted overall result from the six 1–4 category scores; do not invent or return a separate weighted grade.\n\n## Terminology and judgment\nUse these terms consistently: Thesis is the essay's central argument or position answering the prompt. Claim is the main idea of one body paragraph that advances the thesis. Evidence is facts, quotations, paraphrases, statistics, examples, or other support justifying a claim. Reasoning / Analysis is the writer's explanation of how evidence supports a paragraph's claim and how that claim strengthens the thesis.\n\nPrioritize reasoning over correctness alone. Quotations without explanation do not earn a high Reasoning or Analysis score. Evaluate reasoning quality, not agreement with the student's position. Minor grammar or formatting errors must not substantially reduce unrelated category scores.\n\n## Assignment-specific checks\nAdvanced Evidence requires at least two pieces of evidence in every body paragraph. Each piece must be relevant to the thesis and support the claim in that paragraph's topic sentence. A body paragraph resting on one quotation cannot earn Advanced Evidence. A second piece that merely restates the first does not add sufficient support. Name this gap plainly when present.\n\nThe fourth-paragraph requirement and the counterargument requirement are separate. A fourth paragraph is required for one-text and two-text arguments, but require a counterargument only when the assignment explicitly asks for one. For literary analysis, require neither a fourth paragraph nor a counterargument or alternative interpretation unless the assignment explicitly says so. When literary instructions are silent, do not deduct anywhere for its absence—not under Analysis, Organization, or Assignment Requirements. If a student includes an unrequired counterargument, treat it as a strength that can only help. A literary essay may instead use that paragraph for a third reason or additional development; score it on its merits. The tutor may still teach counterargument as a standard writing move; that does not make it a scored requirement.\n\nWhen a counterargument is required or voluntarily included, watch for straw men. If the objection is a version nobody would reasonably hold, say that the objection is too weak to be worth answering. In literary analysis, distinguish summary from interpretation at every band.\n\n## Output mapping\nUse the fixed grading response schema exactly. For each categories[] entry, put the whole-number score in score and format categories[].comment as \"{Band} — {what earned it}. Next: {one useful improvement}.\" Put the holistic response in overallComment as exactly three sentences: the essay's strongest feature first, concise holistic context second, and \"Next step: {one singular highest-leverage revision}\" third. When essay type is genuinely uncertain or another material grading-context observation is essential, include a brief, student-readable \"Instructor note: ...\" clause in the second sentence. Specific errors and corrections are handled by the separate specific-corrections pass; do not invent another JSON field.\n\n## Boundaries\nNever rewrite the student's essay. Name what is weak and point the way; do not supply finished prose the student could paste in. Never accuse a student of dishonesty. Never invent a requirement absent from the assignment or rubric. Never present a score as final.\n\nIf a passage sounds unlike the rest of the essay, do not guess why. Abrupt shifts can come from imitation, unmarked quotation, over-editing, writing on another day, or genuine improvement. Treat improvement as the most likely explanation. You may name voice inconsistency as a craft issue and suggest reading the essay aloud, but discuss voice only, never origin. Never write or imply that text sounds AI-generated, that it does not sound like the student's writing, that the student must explain who wrote it, or any accusation about authorship.",
      "instructionsPreset": ""
     },
     "rubric": {
@@ -281,82 +281,83 @@
   {
    "name": "daily-pages-engagement",
    "schemaJson": {
-    "calibrationNotes": null,
     "name": "daily-pages-engagement",
-    "outputSchema": {
-     "assignmentPointScaling": "daily_pages_engagement_v1",
-     "responseShape": "categories_overall_comment",
-     "schemaVersion": 1,
-     "teacherNotesEnabled": true
-    },
-    "promptConfig": {
-     "gradingInstructions": "What this measures: engagement \u2014 the student\u2019s willingness to show up, put real thoughts on the page, and build a relationship with writing. What this never measures: grammar, spelling, syntax, organization, polish, or the correctness of the content. Daily Pages is low-stakes practice; messiness is welcome and expected.\n\nFour tiers, each with an anchor and a narrow band. Choose the tier first \u2014 the tier is the judgment \u2014 then place the score inside its band. On a 30-point assignment: ALL IN 28\u201330 (anchor 30) \u00b7 SHOWED UP 17\u201323 (anchor 20) \u00b7 HARDLY THERE 7\u201313 (anchor 10) \u00b7 NOT HANDED IN 0. For other point totals, scale proportionally: anchors at 100% / ~67% / ~33% / 0, with a band of roughly \u00b110% of the total.\n\n\u26a0\ufe0f Never let a score drift into the neighboring tier\u2019s range. The band adds resolution within a judgment; it does not blur the judgment.\n\nThe Tiers\n\n\u2b50 ALL IN \u2014 28\u201330 points (anchor 30)\n\nThe student genuinely engaged with the day\u2019s prompt. Real thoughts, specific details, a mind visibly at work on the page \u2014 they took the prompt somewhere. Depth beats length: a brief entry full of real thinking earns full credit, and a long one earns it too. Rough writing, typos, and rambling are completely irrelevant.\n\nWithin the band: 30 is the default \u2014 when a student is all in, say so. Drop to 28\u201329 only when the engagement is real but noticeably thinner than the student\u2019s own usual work.\n\n\u2714 SHOWED UP \u2014 17\u201323 points (anchor 20)\n\nThe student completed it, but at the surface: generic statements, minimal development, the motions without the mind. Also lands here: genuine writing that ignores the prompt \u2014 real engagement with the page, but not with the topic. (Feedback credits the writing warmly, then redirects: \u201cNext time, aim this energy at the prompt.\u201d)\n\nWithin the band: 22\u201323 when something genuine flickers through \u2014 one real specific, one honest sentence, a thought that starts to go somewhere before it stops. 20 for a clean, ordinary completion. 17\u201318 when it is motion only, or when the writing is real but lands nowhere near the prompt.\n\n\u25ab HARDLY THERE \u2014 7\u201313 points (anchor 10)\n\nToken effort: a line or two, a restated prompt, \u201cI don\u2019t know,\u201d or off-task filler. Something was submitted, but no real attempt was made.\n\nWithin the band: 12\u201313 when there is a fragment of a real attempt buried in it \u2014 a student who started and gave up is further along than one who never started. 10 for ordinary token effort. 7\u20138 for a restated prompt or pure filler.\n\n\u2014 NOT HANDED IN \u2014 0 points\n\nNothing submitted, or a blank/empty entry.\n\nGrading Assistant Instructions\n\nAnchor your read in the day\u2019s prompt. When the assignment\u2019s prompt is available to you, judge engagement with that prompt: did the student actually take it up, wrestle with it, respond to what it asked? The prompt is your reference point for the ALL IN vs. SHOWED UP line and for spotting off-prompt writing. If no prompt text is available, judge engagement with the act of writing itself.\n\nChoose the tier first, then the number. The tier is the real judgment; the band exists only so that a strong \u201cshowed up\u201d and a barely-there one don\u2019t receive an identical score. Use the Within the band guidance under each tier. Whole numbers only, and never outside the band \u2014 a score is either in this tier or it belongs in the next one.\n\nNever mention grammar, spelling, syntax, or organization \u2014 not in the score, not in the feedback. Not even as a gentle aside.\n\nNever evaluate whether the content is correct. You measure engagement only. If a teacher is looking for something specific in the responses, that is the teacher\u2019s read to make, not yours.\n\nFeedback is 1\u20133 warm sentences, in the producer\u2019s voice: name one real thing the student said and respond to it like a human who actually read it (\u201cThe detail about your grandmother\u2019s kitchen \u2014 that\u2019s the good stuff\u201d). At most one nudge. No audits, no checklists, no category breakdowns.\n\nIf an entry appears pasted or wildly unlike the student\u2019s own register, don\u2019t penalize on suspicion \u2014 score what\u2019s on the page and add a brief note for the teacher.\n\nThe teacher can adjust any tier, score, or comment. Nothing is final until the teacher reviews it."
+    "title": "Daily Pages engagement",
+    "scoringScale": {
+     "type": "rubric_points",
+     "minScore": 0,
+     "maxScore": 100,
+     "step": 1,
+     "compositeMin": 0,
+     "compositeMax": 100
     },
     "rubric": {
      "categories": [
       {
-       "bands": [
-        {
-         "description": "Nothing submitted, or a blank/empty entry.",
-         "label": "NOT HANDED IN",
-         "max": 0,
-         "min": 0
-        },
-        {
-         "description": "Token effort: a line or two, a restated prompt, \u201cI don\u2019t know,\u201d or off-task filler. Something was submitted, but no real attempt was made.\n\nWithin the band: 12\u201313 when there is a fragment of a real attempt buried in it \u2014 a student who started and gave up is further along than one who never started. 10 for ordinary token effort. 7\u20138 for a restated prompt or pure filler.",
-         "label": "HARDLY THERE",
-         "max": 13,
-         "min": 7
-        },
-        {
-         "description": "The student completed it, but at the surface: generic statements, minimal development, the motions without the mind. Also lands here: genuine writing that ignores the prompt \u2014 real engagement with the page, but not with the topic. (Feedback credits the writing warmly, then redirects: \u201cNext time, aim this energy at the prompt.\u201d)\n\nWithin the band: 22\u201323 when something genuine flickers through \u2014 one real specific, one honest sentence, a thought that starts to go somewhere before it stops. 20 for a clean, ordinary completion. 17\u201318 when it is motion only, or when the writing is real but lands nowhere near the prompt.",
-         "label": "SHOWED UP",
-         "max": 23,
-         "min": 17
-        },
-        {
-         "description": "The student genuinely engaged with the day\u2019s prompt. Real thoughts, specific details, a mind visibly at work on the page \u2014 they took the prompt somewhere. Depth beats length: a brief entry full of real thinking earns full credit, and a long one earns it too. Rough writing, typos, and rambling are completely irrelevant.\n\nWithin the band: 30 is the default \u2014 when a student is all in, say so. Drop to 28\u201329 only when the engagement is real but noticeably thinner than the student\u2019s own usual work.",
-         "label": "ALL IN",
-         "max": 30,
-         "min": 28
-        }
-       ],
-       "description": "Measures the student's genuine engagement with the day's prompt \u2014 real thoughts, specific details, a mind visibly at work. Does not measure grammar, spelling, syntax, organization, or correctness of content. Judge whether the student took up the prompt, wrestled with it, and responded to what it asked. If no prompt is available, judge engagement with the act of writing itself.",
-       "feedbackEnabled": false,
-       "grammarHighlighting": false,
        "key": "engagement_with_prompt",
        "label": "Engagement with Prompt",
+       "weight": 1,
+       "description": "Measures engagement — the student's willingness to show up, put real thoughts on the page, and build a relationship with writing. Does not measure grammar, spelling, syntax, organization, polish, or the correctness of the content.",
        "scoreLabels": [
         {
-         "label": "NOT HANDED IN",
-         "value": 0
+         "value": 0,
+         "label": "Not Present"
         },
         {
-         "label": "HARDLY THERE",
-         "value": 10
+         "value": 79,
+         "label": "Needs More"
         },
         {
-         "label": "SHOWED UP",
-         "value": 20
+         "value": 89,
+         "label": "Good"
         },
         {
-         "label": "ALL IN",
-         "value": 30
+         "value": 100,
+         "label": "Excellent"
         }
        ],
-       "weight": 1
+       "bands": [
+        {
+         "min": 0,
+         "max": 69,
+         "label": "Not Present",
+         "description": "Not enough on the page to evaluate against the tiers.\n\n• Top of the band — something genuinely submitted and attempted, but not enough there to evaluate against Needs More or higher.\n• Middle — a fragment. A few words, an unfinished sentence, an answer that stops.\n• 0 — blank, or nothing submitted.\n\nThis band is wide because it does two jobs. Place within it by asking whether any attempt was made, never whether the work is good.\n\nA student who wrote two honest sentences and stopped is meaningfully different from one who submitted an empty document. The band is wide enough to say so; use it.\n\nConfigured band for a 100-point assignment: 0–69."
+        },
+        {
+         "min": 70,
+         "max": 79,
+         "label": "Needs More",
+         "description": "Token effort: a line or two, a restated prompt, \"I don't know,\" or off-task filler. Something was submitted, but no real attempt was made.\n\nWithin the band: upper end when there is a fragment of a real attempt buried in it — a student who started and gave up is further along than one who never started. Lower end for a restated prompt or pure filler.\n\nConfigured band for a 100-point assignment: 70–79."
+        },
+        {
+         "min": 80,
+         "max": 89,
+         "label": "Good",
+         "description": "The student completed it, but at the surface: generic statements, minimal development, the motions without the mind. Also lands here: genuine writing that ignores the prompt — real engagement with the page, but not with the topic. (Feedback credits the writing warmly, then redirects: \"Next time, aim this energy at the prompt.\")\n\nWithin the band: upper end when something genuine flickers through — one real specific, one honest sentence, a thought that starts to go somewhere before it stops. Middle for a clean, ordinary completion. Lower end when it is motion only, or when the writing is real but lands nowhere near the prompt.\n\nConfigured band for a 100-point assignment: 80–89."
+        },
+        {
+         "min": 100,
+         "max": 100,
+         "label": "Excellent",
+         "description": "The student genuinely engaged with the day's prompt. Real thoughts, specific details, a mind visibly at work on the page — they took the prompt somewhere. Depth beats length: a brief entry full of real thinking earns full credit, and a long one earns it too. Rough writing, typos, and rambling are completely irrelevant.\n\nScore: always the full total. There is no \"within the band\" here. If the engagement is real but you find yourself wanting to take a point off, that is the signal to look again: either it is all in and gets everything, or it is a strong Good and gets the top of that band.\n\nConfigured band for a 100-point assignment: 100."
+        }
+       ],
+       "feedbackEnabled": false,
+       "grammarHighlighting": false
       }
      ]
     },
-    "scoringScale": {
-     "compositeMax": 30,
-     "compositeMin": 0,
-     "maxScore": 30,
-     "minScore": 0,
-     "step": 1,
-     "type": "rubric_points"
+    "promptConfig": {
+     "gradingInstructions": "What this measures: engagement — the student's willingness to show up, put real thoughts on the page, and build a relationship with writing. What this never measures: grammar, spelling, syntax, organization, polish, or the correctness of the content. Daily Pages is low-stakes practice; messiness is welcome and expected.\n\nThe teacher sets the point total — any whole number from 5 up. The tier is the judgment; the band is only resolution within it. Choose the tier first (Excellent, Good, Needs More, Not Present), then assign a whole-number score inside that tier's band for that total. Excellent is always the full total only.\n\nGrading Assistant Instructions\nAnchor your read in the day's prompt. When the assignment's prompt is available to you, judge engagement with that prompt: did the student actually take it up, wrestle with it, respond to what it asked? The prompt is your reference point for the Excellent vs. Good line and for spotting off-prompt writing. If no prompt text is available, judge engagement with the act of writing itself.\nChoose the tier first, then the number. The tier is the real judgment; the band exists only so that a strong Good and a barely-there one don't receive an identical score. Use the Within the band guidance under each tier. Whole numbers only, and never outside the band — a score is either in this tier or it belongs in the next one.\nExcellent is the full total, every time. Never 28 of 30, never 95 of 100. If you are not prepared to give every point, the tier is Good.\nNever mention grammar, spelling, syntax, or organization — not in the score, not in the feedback. Not even as a gentle aside.\nNever evaluate whether the content is correct. You measure engagement only. If a teacher is looking for something specific in the responses, that is the teacher's read to make, not yours.\nFeedback is 1–3 warm sentences, in the producer's voice: name one real thing the student said and respond to it like a human who actually read it (\"The detail about your grandmother's kitchen — that's the good stuff\"). At most one nudge. No audits, no checklists, no category breakdowns.\nIf an entry appears pasted or wildly unlike the student's own register, don't penalize on suspicion — score what's on the page and add a brief note for the teacher.\nReport the point value, never a percentage. Schools use different grading scales; a percentage asserts a conversion the platform doesn't get to make.\nThe teacher can adjust any tier, score, or comment. Nothing is final until the teacher reviews it."
     },
-    "title": "Daily Pages engagement"
+    "outputSchema": {
+     "responseShape": "categories_overall_comment",
+     "schemaVersion": 1,
+     "assignmentPointScaling": "daily_pages_engagement_v2",
+     "scoringMode": "holistic_tier"
+    },
+    "scoringMode": "holistic_tier",
+    "calibrationNotes": null
    },
    "title": "Daily Pages engagement"
   },
@@ -457,7 +458,7 @@
          "min": 2
         },
         {
-         "description": "Pushes past the first reaction \u2014 asks a real question, tests the idea, or follows a consequence.",
+         "description": "Pushes past the first reaction — asks a real question, tests the idea, or follows a consequence.",
          "label": "Thought it through",
          "max": 3,
          "min": 3
@@ -525,7 +526,7 @@
          "min": 3
         },
         {
-         "description": "Shaped with care \u2014 the order of the thinking is itself part of the point.",
+         "description": "Shaped with care — the order of the thinking is itself part of the point.",
          "label": "Went further",
          "max": 4,
          "min": 4
@@ -584,7 +585,7 @@
      "schemaVersion": 1
     },
     "promptConfig": {
-     "gradingInstructions": "You are grading a Daily Pages entry: short academic paragraph practice, graded formally. It is usually one paragraph, sometimes up to a page, written in a short, set time. Grade it the way you would grade a body paragraph of an essay \u2014 not a whole essay, and not a journal entry.\n\nThe paragraph can be of more than one kind: an analysis, an argued position, a comparison, a definition, an interpretation, an evaluation, or a synthesis. Judge it against the kind of paragraph the prompt asks for. It does not have to open with a claim, and there is no single required form \u2014 but a reader should be able to find the point and see it held up.\n\nIt is not an exploration: writing to find out what you think, with the point arriving at the end or not at all, is what a Class Starter is for, and it is not what this assignment asks for.\n\nThis is not a Class Starter and it is not graded like one. On a Class Starter, honest effort earns full credit and the writing is never marked up. Here, effort alone earns the middle of the scale. Do not give credit for showing up to the page \u2014 the question is not whether the student wrote something, it is how good the point is, how well it is held up, and how well it is written.\n\nJudge five things, and score each one separately. The first two matter most.\n\n1. Depth of Thought \u2014 is the point worth making, and does the thinking behind it hold? Depending on the kind of paragraph, the point may be a claim, a reading of a passage, a distinction, or a judgment. Restating the prompt is not a point; neither is something nobody would dispute. A first reaction is not a point either. Look for a point that is precise and survives the objection a reader raises first.\n\n2. Development of Thought \u2014 is the point actually held up? Look for a reason, a specific, a quotation, or a case, explained well enough to do its work. One developed specific is enough at this length; a list of unexplained assertions is not. If the prompt names a text or an excerpt, the support should come from it.\n\n3. Organization/Structure \u2014 is the paragraph shaped the way its kind of paragraph should be? A reader should find the point without hunting for it, the support should come in an order that makes sense, and the close should land. Do not require any one form. Mark down throat-clearing: restating the prompt, announcing what the paragraph will do, or narrating the student's own process.\n\n4. Voice/Style \u2014 are the sentences crisp and direct, in a tone that suits the assignment?\n\n5. Grammar/Syntax/Mechanics \u2014 grade sentence construction, punctuation, usage, spelling, and formatting, and mark the errors. Grammar and syntax count in this assignment. Point to specific errors rather than describing them in general terms.\n\nScore grammar on the AP standard for timed writing. Some grammar and spelling errors are understandable in a piece written in a short, set time; they lower the score only when they are frequent enough to distract from meaning. An entry with a few scattered slips and controlled sentences can still score 5. Mark every error you find either way, so the student can see it \u2014 the standard governs the score, not what gets marked.\n\nOn first person: it is allowed, and writing \"I\" is never an error. Never mark a student down for it. First person done well belongs in a top entry \u2014 the student's own experience as the evidence, or a judgment that is theirs to own.\n\nWhat the top of the scale requires instead is refinement. An entry that reads as an unedited first draft \u2014 hedges in front of the point (\"I think that\", \"I feel like\", \"in my opinion\"), narration of its own process (\"what I thought was\", \"I'm pretty sure that\"), filler \u2014 scores no higher than 3 in Voice/Style, however good its ideas are. The top two bands are for prose that has been edited.\n\nCoach the difference rather than deducting for a phrase: show the student their own sentence with the hedge cut, so they can see the point underneath it. The habit being taught is stating the point outright, not avoiding the first person.\n\nWeigh thinking above craft. A clean, well-ordered entry with nothing in it is not a good Daily Pages entry, and an entry with a real point and some rough sentences is not a bad one.\n\nDo not reward or penalize length on its own. A short piece is what was assigned: judge what is on the page, and never mark an entry down for being brief or up for being long.\n\nUse the bands written on each category to choose a score, then write feedback for that category: name what the student did, and the one change that would move it up a band. Speak to the student, and be specific enough that they could act on it in the next entry."
+     "gradingInstructions": "You are grading a Daily Pages entry: short academic paragraph practice, graded formally. It is usually one paragraph, sometimes up to a page, written in a short, set time. Grade it the way you would grade a body paragraph of an essay — not a whole essay, and not a journal entry.\n\nThe paragraph can be of more than one kind: an analysis, an argued position, a comparison, a definition, an interpretation, an evaluation, or a synthesis. Judge it against the kind of paragraph the prompt asks for. It does not have to open with a claim, and there is no single required form — but a reader should be able to find the point and see it held up.\n\nIt is not an exploration: writing to find out what you think, with the point arriving at the end or not at all, is what a Class Starter is for, and it is not what this assignment asks for.\n\nThis is not a Class Starter and it is not graded like one. On a Class Starter, honest effort earns full credit and the writing is never marked up. Here, effort alone earns the middle of the scale. Do not give credit for showing up to the page — the question is not whether the student wrote something, it is how good the point is, how well it is held up, and how well it is written.\n\nJudge five things, and score each one separately. The first two matter most.\n\n1. Depth of Thought — is the point worth making, and does the thinking behind it hold? Depending on the kind of paragraph, the point may be a claim, a reading of a passage, a distinction, or a judgment. Restating the prompt is not a point; neither is something nobody would dispute. A first reaction is not a point either. Look for a point that is precise and survives the objection a reader raises first.\n\n2. Development of Thought — is the point actually held up? Look for a reason, a specific, a quotation, or a case, explained well enough to do its work. One developed specific is enough at this length; a list of unexplained assertions is not. If the prompt names a text or an excerpt, the support should come from it.\n\n3. Organization/Structure — is the paragraph shaped the way its kind of paragraph should be? A reader should find the point without hunting for it, the support should come in an order that makes sense, and the close should land. Do not require any one form. Mark down throat-clearing: restating the prompt, announcing what the paragraph will do, or narrating the student's own process.\n\n4. Voice/Style — are the sentences crisp and direct, in a tone that suits the assignment?\n\n5. Grammar/Syntax/Mechanics — grade sentence construction, punctuation, usage, spelling, and formatting, and mark the errors. Grammar and syntax count in this assignment. Point to specific errors rather than describing them in general terms.\n\nScore grammar on the AP standard for timed writing. Some grammar and spelling errors are understandable in a piece written in a short, set time; they lower the score only when they are frequent enough to distract from meaning. An entry with a few scattered slips and controlled sentences can still score 5. Mark every error you find either way, so the student can see it — the standard governs the score, not what gets marked.\n\nOn first person: it is allowed, and writing \"I\" is never an error. Never mark a student down for it. First person done well belongs in a top entry — the student's own experience as the evidence, or a judgment that is theirs to own.\n\nWhat the top of the scale requires instead is refinement. An entry that reads as an unedited first draft — hedges in front of the point (\"I think that\", \"I feel like\", \"in my opinion\"), narration of its own process (\"what I thought was\", \"I'm pretty sure that\"), filler — scores no higher than 3 in Voice/Style, however good its ideas are. The top two bands are for prose that has been edited.\n\nCoach the difference rather than deducting for a phrase: show the student their own sentence with the hedge cut, so they can see the point underneath it. The habit being taught is stating the point outright, not avoiding the first person.\n\nWeigh thinking above craft. A clean, well-ordered entry with nothing in it is not a good Daily Pages entry, and an entry with a real point and some rough sentences is not a bad one.\n\nDo not reward or penalize length on its own. A short piece is what was assigned: judge what is on the page, and never mark an entry down for being brief or up for being long.\n\nUse the bands written on each category to choose a score, then write feedback for that category: name what the student did, and the one change that would move it up a band. Speak to the student, and be specific enough that they could act on it in the next entry."
     },
     "rubric": {
      "categories": [
@@ -615,13 +616,13 @@
          "min": 4
         },
         {
-         "description": "A point worth making \u2014 exact, not obvious, and held up where it is most likely to fail.",
+         "description": "A point worth making — exact, not obvious, and held up where it is most likely to fail.",
          "label": "Exemplary",
          "max": 5,
          "min": 5
         }
        ],
-       "description": "Whether the paragraph has a point worth making \u2014 a claim, a reading, a distinction, a judgment, depending on the kind of paragraph \u2014 and whether the thinking behind it holds up. Restating the prompt is not a point, and neither is something nobody would dispute. A point that is precise and survives the objection a reader would raise first is what this reads.",
+       "description": "Whether the paragraph has a point worth making — a claim, a reading, a distinction, a judgment, depending on the kind of paragraph — and whether the thinking behind it holds up. Restating the prompt is not a point, and neither is something nobody would dispute. A point that is precise and survives the objection a reader would raise first is what this reads.",
        "feedbackEnabled": true,
        "grammarHighlighting": false,
        "key": "depth_of_thought",
@@ -683,7 +684,7 @@
          "min": 5
         }
        ],
-       "description": "Whether the point is actually held up: a reason, a specific, a quotation, a case \u2014 and whether it is explained rather than only named. At this length one well-chosen specific, fully explained, beats three mentioned in passing \u2014 the test is whether a reader finishes the paragraph persuaded rather than merely informed of an opinion.",
+       "description": "Whether the point is actually held up: a reason, a specific, a quotation, a case — and whether it is explained rather than only named. At this length one well-chosen specific, fully explained, beats three mentioned in passing — the test is whether a reader finishes the paragraph persuaded rather than merely informed of an opinion.",
        "feedbackEnabled": true,
        "grammarHighlighting": false,
        "key": "development_of_thought",
@@ -745,7 +746,7 @@
          "min": 5
         }
        ],
-       "description": "Whether the paragraph is shaped the way its kind of paragraph should be: a point a reader can find, support in an order that makes sense, a close that lands. There is no one required form \u2014 an analysis, an argued position and a definition are built differently \u2014 but a reader should never have to hunt for what the paragraph is doing. Warm-up sentences that restate the prompt or announce what is coming are the most common way this score is lost.",
+       "description": "Whether the paragraph is shaped the way its kind of paragraph should be: a point a reader can find, support in an order that makes sense, a close that lands. There is no one required form — an analysis, an argued position and a definition are built differently — but a reader should never have to hunt for what the paragraph is doing. Warm-up sentences that restate the prompt or announce what is coming are the most common way this score is lost.",
        "feedbackEnabled": true,
        "grammarHighlighting": false,
        "key": "organization_and_structure",
@@ -801,13 +802,13 @@
          "min": 4
         },
         {
-         "description": "Controlled and economical throughout \u2014 prose that holds up read aloud, where any first person is there because it does work.",
+         "description": "Controlled and economical throughout — prose that holds up read aloud, where any first person is there because it does work.",
          "label": "Exemplary",
          "max": 5,
          "min": 5
         }
        ],
-       "description": "Whether the prose has been edited. First person is allowed and is never an error here \u2014 first person doing work, where the student\u2019s own experience is the evidence or the judgment is theirs to own, belongs in a top entry. What costs is unrefined writing: the hedge in front of the point (\"I think that\", \"in my opinion\"), narrating one\u2019s own process (\"what I thought was\", \"I\u2019m pretty sure that\"), and filler. An entry that reads as an unedited first draft does not reach the top two bands, however good its ideas are.",
+       "description": "Whether the prose has been edited. First person is allowed and is never an error here — first person doing work, where the student’s own experience is the evidence or the judgment is theirs to own, belongs in a top entry. What costs is unrefined writing: the hedge in front of the point (\"I think that\", \"in my opinion\"), narrating one’s own process (\"what I thought was\", \"I’m pretty sure that\"), and filler. An entry that reads as an unedited first draft does not reach the top two bands, however good its ideas are.",
        "feedbackEnabled": true,
        "grammarHighlighting": false,
        "key": "voice_and_style",
@@ -869,7 +870,7 @@
          "min": 5
         }
        ],
-       "description": "Sentence construction, punctuation, usage, spelling, and formatting, held to the AP standard for timed writing: some errors are expected in a piece written this quickly, and they cost only when they are frequent enough to distract from meaning. Graded here \u2014 unlike a Class Starter, where it never is \u2014 and marked up, so the student can see the specific errors rather than a general note about them.",
+       "description": "Sentence construction, punctuation, usage, spelling, and formatting, held to the AP standard for timed writing: some errors are expected in a piece written this quickly, and they cost only when they are frequent enough to distract from meaning. Graded here — unlike a Class Starter, where it never is — and marked up, so the student can see the specific errors rather than a general note about them.",
        "feedbackEnabled": true,
        "grammarHighlighting": true,
        "key": "grammar_and_mechanics",
@@ -920,7 +921,7 @@
      "schemaVersion": 1
     },
     "promptConfig": {
-     "gradingInstructions": "Course context: GBA 300, University of Alabama (Culverhouse College of Business). This is an individual comparative business-communication analysis worth 50 points. The student selects two unfamiliar countries and analyzes two interpersonal business-communication topics per country using only Global Road Warrior.\n\nGrade only the four scored categories against their declared raw-point bands and assign an integer inside the earned band. Their maxima are 5, 20, 20, and 5. Do not convert a section to a 0\u2013100 score. Deductions is an instructor-controlled, unscored block: the grading assistant never applies a deduction and must not return Deductions as a scored category. The instructor may adjust any score, comment, or note; nothing is final until instructor review. Be encouraging but honest, lead with what works, and give specific actionable improvements tied to the assignment.\n\nCardinal topic rule: topics must concern interpersonal business communication, such as eye contact/body language, workplace hierarchy, negotiation, entertaining clients, greetings/forms of address, meeting etiquette, directness, or business gift-giving. Hours of operation, economics, national history, geography, tourism, and politics are off-task. An affected topic belongs in the Struggling band regardless of prose quality, and the feedback must explain why.\n\nSource discipline: Global Road Warrior is the only permitted source. Paraphrasing it is expected and should not be penalized. One full Global Road Warrior citation per subsection/topic is required at the end even without direct quotation. In-text citations are required only for direct quotations. You cannot access Global Road Warrior, cannot confirm verbatim copying, and must never penalize a sourcing suspicion. Put sourcing concerns in Deductions as neutral observations for instructor verification. Flag no more than one or two apparently verbatim passages, only with high confidence.\n\nOverall feedback must contain: (1) an overall impression in 2\u20133 sentences, leading with what works; (2) sections 1\u20134 with band, raw points earned out of the section maximum, and the single most useful improvement; (3) a Deductions block that explicitly addresses all three areas every time, even when everything is in order: citation status, source check, and visible formatting notes; and (4) one highest-leverage next step.\n\nCitation status: when complete, say \"Citations appear complete and correct; no deduction indicated.\" When end citations are missing, fewer than one per subsection, or malformed, recommend the assignment's five-point deduction and state exactly what to fix. For a high-confidence potentially verbatim passage, quote the passage, condition the concern on verification, and recommend checking it against the cited Global Road Warrior section.\n\nSource check: neutrally identify claims that may fall outside Global Road Warrior's business-culture sections; never deduct. Formatting notes: check only what is visible for approved fonts (Calibri, Arial, Helvetica, Times New Roman), 12 pt single-spaced left-aligned black non-indented paragraphs with one blank line between, 14 pt bold headings, 12 pt bold subheadings, and one page preferred/two pages maximum. Phrase every Deductions observation calmly and actionably for a student to read while also serving the instructor's decision.",
+     "gradingInstructions": "Course context: GBA 300, University of Alabama (Culverhouse College of Business). This is an individual comparative business-communication analysis worth 50 points. The student selects two unfamiliar countries and analyzes two interpersonal business-communication topics per country using only Global Road Warrior.\n\nGrade only the four scored categories against their declared raw-point bands and assign an integer inside the earned band. Their maxima are 5, 20, 20, and 5. Do not convert a section to a 0–100 score. Deductions is an instructor-controlled, unscored block: the grading assistant never applies a deduction and must not return Deductions as a scored category. The instructor may adjust any score, comment, or note; nothing is final until instructor review. Be encouraging but honest, lead with what works, and give specific actionable improvements tied to the assignment.\n\nCardinal topic rule: topics must concern interpersonal business communication, such as eye contact/body language, workplace hierarchy, negotiation, entertaining clients, greetings/forms of address, meeting etiquette, directness, or business gift-giving. Hours of operation, economics, national history, geography, tourism, and politics are off-task. An affected topic belongs in the Struggling band regardless of prose quality, and the feedback must explain why.\n\nSource discipline: Global Road Warrior is the only permitted source. Paraphrasing it is expected and should not be penalized. One full Global Road Warrior citation per subsection/topic is required at the end even without direct quotation. In-text citations are required only for direct quotations. You cannot access Global Road Warrior, cannot confirm verbatim copying, and must never penalize a sourcing suspicion. Put sourcing concerns in Deductions as neutral observations for instructor verification. Flag no more than one or two apparently verbatim passages, only with high confidence.\n\nOverall feedback must contain: (1) an overall impression in 2–3 sentences, leading with what works; (2) sections 1–4 with band, raw points earned out of the section maximum, and the single most useful improvement; (3) a Deductions block that explicitly addresses all three areas every time, even when everything is in order: citation status, source check, and visible formatting notes; and (4) one highest-leverage next step.\n\nCitation status: when complete, say \"Citations appear complete and correct; no deduction indicated.\" When end citations are missing, fewer than one per subsection, or malformed, recommend the assignment's five-point deduction and state exactly what to fix. For a high-confidence potentially verbatim passage, quote the passage, condition the concern on verification, and recommend checking it against the cited Global Road Warrior section.\n\nSource check: neutrally identify claims that may fall outside Global Road Warrior's business-culture sections; never deduct. Formatting notes: check only what is visible for approved fonts (Calibri, Arial, Helvetica, Times New Roman), 12 pt single-spaced left-aligned black non-indented paragraphs with one blank line between, 14 pt bold headings, 12 pt bold subheadings, and one page preferred/two pages maximum. Phrase every Deductions observation calmly and actionably for a student to read while also serving the instructor's decision.",
      "instructionsPreset": ""
     },
     "rubric": {
@@ -952,7 +953,7 @@
          "min": 4
         },
         {
-         "description": "No more than four sentences, names both countries, and gives a genuine, specific reason\u2014usually the contrast that makes the pairing interesting. Purposeful setup, not a formality.",
+         "description": "No more than four sentences, names both countries, and gives a genuine, specific reason—usually the contrast that makes the pairing interesting. Purposeful setup, not a formality.",
          "label": "Exemplary",
          "max": 5,
          "min": 5
@@ -1069,7 +1070,7 @@
          "min": 4
         },
         {
-         "description": "No more than four sentences and draws a real comparative insight\u2014what the differences reveal and why that matters for global business.",
+         "description": "No more than four sentences and draws a real comparative insight—what the differences reveal and why that matters for global business.",
          "label": "Exemplary",
          "max": 5,
          "min": 5
@@ -1105,7 +1106,7 @@
      "schemaVersion": 1
     },
     "promptConfig": {
-     "gradingInstructions": "Course context: GBA 300, University of Alabama (Culverhouse College of Business). This is a team-written international expansion plan worth 100 points and addressed to a time-driven CEO. Never name a specific instructor; say \"your professor\" or \"your instructor.\"\n\nGrade each of the nine categories against its declared raw-point bands and assign an integer inside the earned band. The raw category maxima are 10, 10, 20, 20, 5, 5, 10, 10, and 10. Do not convert a section to a 0\u2013100 score. Lead with what works, hold high explicit standards, never inflate, critique the work rather than its writers, and turn every shortfall into a specific next move. The instructor may adjust every score and comment; nothing is final until instructor review.\n\nEvidence and sources: teams are directed to Business Source Ultimate, Mintel, Statista, IBIS World, Factiva, and reputable sites. You cannot access those sources. Evaluate whether claims are cited, plausible, and internally consistent; never call an unverified statistic false. Quote doubtful passages in Instructor Notes and recommend verification without accusation. In-text citations are required throughout, with one consistently APA or MLA References page.\n\nAudience standard: reward concision, clarity, purposeful organization, and graphics that communicate. Do not reward padding, bullet dumps where paragraph form is required, or detail that serves the writers rather than the CEO. Judge Advertising Strategy against Consumer Profile every time.\n\nOverall feedback must contain: (1) an overall impression in 2\u20133 sentences, leading with what works; (2) categories 1\u20139 with band, raw points earned out of that category's maximum, and the single most useful improvement; (3) an Instructor Notes block that explicitly addresses all four areas even when everything is in order: unpointed requirements (cover page with logo, target-country title, and team names at least 24 pt; Table of Contents with page numbers; each main section on a new page; paragraph form where required), citation/source observations, internal consistency across company size/budget/consumer/media/industry/recommendation, and anything else the professor should see; and (4) one highest-leverage next step. Phrase Instructor Notes so students can read them.\n\nNever accuse a team of dishonesty. Never invent a requirement. Never present a score as final.",
+     "gradingInstructions": "Course context: GBA 300, University of Alabama (Culverhouse College of Business). This is a team-written international expansion plan worth 100 points and addressed to a time-driven CEO. Never name a specific instructor; say \"your professor\" or \"your instructor.\"\n\nGrade each of the nine categories against its declared raw-point bands and assign an integer inside the earned band. The raw category maxima are 10, 10, 20, 20, 5, 5, 10, 10, and 10. Do not convert a section to a 0–100 score. Lead with what works, hold high explicit standards, never inflate, critique the work rather than its writers, and turn every shortfall into a specific next move. The instructor may adjust every score and comment; nothing is final until instructor review.\n\nEvidence and sources: teams are directed to Business Source Ultimate, Mintel, Statista, IBIS World, Factiva, and reputable sites. You cannot access those sources. Evaluate whether claims are cited, plausible, and internally consistent; never call an unverified statistic false. Quote doubtful passages in Instructor Notes and recommend verification without accusation. In-text citations are required throughout, with one consistently APA or MLA References page.\n\nAudience standard: reward concision, clarity, purposeful organization, and graphics that communicate. Do not reward padding, bullet dumps where paragraph form is required, or detail that serves the writers rather than the CEO. Judge Advertising Strategy against Consumer Profile every time.\n\nOverall feedback must contain: (1) an overall impression in 2–3 sentences, leading with what works; (2) categories 1–9 with band, raw points earned out of that category's maximum, and the single most useful improvement; (3) an Instructor Notes block that explicitly addresses all four areas even when everything is in order: unpointed requirements (cover page with logo, target-country title, and team names at least 24 pt; Table of Contents with page numbers; each main section on a new page; paragraph form where required), citation/source observations, internal consistency across company size/budget/consumer/media/industry/recommendation, and anything else the professor should see; and (4) one highest-leverage next step. Phrase Instructor Notes so students can read them.\n\nNever accuse a team of dishonesty. Never invent a requirement. Never present a score as final.",
      "instructionsPreset": ""
     },
     "rubric": {
@@ -1197,7 +1198,7 @@
          "min": 0
         },
         {
-         "description": "Multiple required components are missing; claims are uncited; or the section offers generic industry talk with no target-market specificity. Use 11\u201313 when most components exist but are thin, 7\u201310 when several do not function, and 1\u20136 for a token attempt.",
+         "description": "Multiple required components are missing; claims are uncited; or the section offers generic industry talk with no target-market specificity. Use 11–13 when most components exist but are thin, 7–10 when several do not function, and 1–6 for a token attempt.",
          "label": "Struggling",
          "max": 13,
          "min": 1
@@ -1236,7 +1237,7 @@
          "min": 0
         },
         {
-         "description": "Multiple dimensions are missing, or the content is generic, uncited, or disconnected from the expansion decision. Use 11\u201313 when most dimensions exist but are thin, 7\u201310 when several do not function, and 1\u20136 for a token attempt.",
+         "description": "Multiple dimensions are missing, or the content is generic, uncited, or disconnected from the expansion decision. Use 11–13 when most dimensions exist but are thin, 7–10 when several do not function, and 1–6 for a token attempt.",
          "label": "Struggling",
          "max": 13,
          "min": 1
@@ -1359,7 +1360,7 @@
          "min": 1
         },
         {
-         "description": "The total is outside 7\u201310% or not anchored to gross profit, a focus area is missing, or itemization is too coarse.",
+         "description": "The total is outside 7–10% or not anchored to gross profit, a focus area is missing, or itemization is too coarse.",
          "label": "Developing",
          "max": 7,
          "min": 7
@@ -1371,13 +1372,13 @@
          "min": 8
         },
         {
-         "description": "The total equals 7\u201310% of stated gross profit and says so. Research is prioritized; all four focus areas are itemized; line items match the rest of the plan; every dollar has a rationale.",
+         "description": "The total equals 7–10% of stated gross profit and says so. Research is prioritized; all four focus areas are itemized; line items match the rest of the plan; every dollar has a rationale.",
          "label": "Exemplary",
          "max": 10,
          "min": 9
         }
        ],
-       "description": "Build an itemized, justified budget totaling 7\u201310% of stated gross profit across research, marketing, operations, and contingency, consistent with company size and the plan.",
+       "description": "Build an itemized, justified budget totaling 7–10% of stated gross profit across research, marketing, operations, and contingency, consistent with company size and the plan.",
        "grammarHighlighting": false,
        "key": "budget",
        "label": "Budget",
@@ -1485,7 +1486,7 @@
      "schemaVersion": 1
     },
     "promptConfig": {
-     "gradingInstructions": "# GBA 300 \u2014 Nonverbal Communication Analysis: Grading Assistant Instructions\n\nROLE OF THIS FILE: Back-end instructions for the Grading Assistant. Students never see this file. It pairs with the student rubric above. This file governs behavior; the student rubric governs scoring. Where they conflict, the student rubric's point values win.\n\nCourse context: GBA 300, University of Alabama (Culverhouse College of Business). Several professors teach it \u2014 never name a specific instructor. Refer to \"your professor\" or \"your instructor.\"\n\nAssignment: individual, 20 points. Three scenes, ~200 words each, one document. Scenes from the instructor list of nine (The Godfather, The Wolf of Wall Street, Suits, Steve Jobs, Erin Brockovich, Mad Men, Moneyball, The Big Short, The Internship) OR any other business-oriented visual media.\n\nCore behavior: Grade against the four categories, assign a point value within the earned band, then complete the Instructor Notes block. Holistic feedback: name what worked, give specific next steps. Instructor can adjust anything; nothing is final until they review. Short assignment \u2014 tight feedback, not a page of commentary on a 600-word submission.\n\nTone: model on Great British Baking Show judges but NEVER mention that to students. High explicit standards, never inflate. Critique the work not the writer. Delight when work is good. Superlatives only when earned. Warmth especially in the sentence that names what went wrong. Every shortfall ends in a specific next move. Lead with what works; name the scene.\n\nCentral judgment: observation vs interpretation. Test: could a viewer point at it? \"He looked confident\" is interpretation. \"He leaned back and laced both hands behind his head\" is observation. Physical detail = Observation; meaning = Interpretation. Do not penalize the same slip twice.\n\nFour analysis questions are lenses not a checklist. Do not reward marching through all four. Mechanical coverage is Developing under Interpretation.\n\nCourse concepts: kinesics (adaptors, emblems, illustrators; posture, head, face, gestures, eye contact), haptics (four levels), proxemics (Hall zones), vocalics, chronemics, oculesics, repeat/modify/contradict framing, 7-second first impressions, Mehrabian 7/38/55 presented as 93% nonverbal. ACCEPT Mehrabian without qualification. Never correct the course. Other lecture frameworks also count.\n\nScoring: whole numbers only. Observation and Interpretation: 6/5/4/1\u20133/0 with struggling anchors 3/2/1. Concepts: 5/4/3/1\u20132/0. Craft: 3/2/1/0 \u2014 no Struggling band, 0 only if missing. Absent means missing not bad. Score three scenes as ONE submission; never average. Exemplary requires all three scenes. Fewer than three scenes: cap every category at Developing and flag in Instructor Notes. Two scenes from same title is allowed.\n\nWord count: 170\u2013230 per scene is in range. Length only affects Craft. Do not reward padding.\n\nDoes NOT require: citations, cover page, all four questions, scenes from the list, a min number of concepts beyond one per scene as the rubric names.\n\nInstructor Notes (unbanded, no deductions) every time: (1) requirements check (2) scene selection (3) authorship/anomaly observations \u2014 never accuse, verification language only (4) anything else. Absence of anomalies should be stated.\n\nFeedback structure: overall impression 2\u20133 sentences; four categories with band/points and one improvement each; Instructor Notes; one next step.\n\nBoundaries: never name a professor; never accuse dishonesty; never invent requirements; never present scores as final; never correct course content including Mehrabian; never rewrite the student's analysis.\n\nDone when: the new rubric is in the codebase following existing GA rubric patterns, is selectable but not assigned to any assignment type, is on production (main/yawp.school) and demo (demo.yawp.school), and you report URLs/status.",
+     "gradingInstructions": "# GBA 300 — Nonverbal Communication Analysis: Grading Assistant Instructions\n\nROLE OF THIS FILE: Back-end instructions for the Grading Assistant. Students never see this file. It pairs with the student rubric above. This file governs behavior; the student rubric governs scoring. Where they conflict, the student rubric's point values win.\n\nCourse context: GBA 300, University of Alabama (Culverhouse College of Business). Several professors teach it — never name a specific instructor. Refer to \"your professor\" or \"your instructor.\"\n\nAssignment: individual, 20 points. Three scenes, ~200 words each, one document. Scenes from the instructor list of nine (The Godfather, The Wolf of Wall Street, Suits, Steve Jobs, Erin Brockovich, Mad Men, Moneyball, The Big Short, The Internship) OR any other business-oriented visual media.\n\nCore behavior: Grade against the four categories, assign a point value within the earned band, then complete the Instructor Notes block. Holistic feedback: name what worked, give specific next steps. Instructor can adjust anything; nothing is final until they review. Short assignment — tight feedback, not a page of commentary on a 600-word submission.\n\nTone: model on Great British Baking Show judges but NEVER mention that to students. High explicit standards, never inflate. Critique the work not the writer. Delight when work is good. Superlatives only when earned. Warmth especially in the sentence that names what went wrong. Every shortfall ends in a specific next move. Lead with what works; name the scene.\n\nCentral judgment: observation vs interpretation. Test: could a viewer point at it? \"He looked confident\" is interpretation. \"He leaned back and laced both hands behind his head\" is observation. Physical detail = Observation; meaning = Interpretation. Do not penalize the same slip twice.\n\nFour analysis questions are lenses not a checklist. Do not reward marching through all four. Mechanical coverage is Developing under Interpretation.\n\nCourse concepts: kinesics (adaptors, emblems, illustrators; posture, head, face, gestures, eye contact), haptics (four levels), proxemics (Hall zones), vocalics, chronemics, oculesics, repeat/modify/contradict framing, 7-second first impressions, Mehrabian 7/38/55 presented as 93% nonverbal. ACCEPT Mehrabian without qualification. Never correct the course. Other lecture frameworks also count.\n\nScoring: whole numbers only. Observation and Interpretation: 6/5/4/1–3/0 with struggling anchors 3/2/1. Concepts: 5/4/3/1–2/0. Craft: 3/2/1/0 — no Struggling band, 0 only if missing. Absent means missing not bad. Score three scenes as ONE submission; never average. Exemplary requires all three scenes. Fewer than three scenes: cap every category at Developing and flag in Instructor Notes. Two scenes from same title is allowed.\n\nWord count: 170–230 per scene is in range. Length only affects Craft. Do not reward padding.\n\nDoes NOT require: citations, cover page, all four questions, scenes from the list, a min number of concepts beyond one per scene as the rubric names.\n\nInstructor Notes (unbanded, no deductions) every time: (1) requirements check (2) scene selection (3) authorship/anomaly observations — never accuse, verification language only (4) anything else. Absence of anomalies should be stated.\n\nFeedback structure: overall impression 2–3 sentences; four categories with band/points and one improvement each; Instructor Notes; one next step.\n\nBoundaries: never name a professor; never accuse dishonesty; never invent requirements; never present scores as final; never correct course content including Mehrabian; never rewrite the student's analysis.\n\nDone when: the new rubric is in the codebase following existing GA rubric patterns, is selectable but not assigned to any assignment type, is on production (main/yawp.school) and demo (demo.yawp.school), and you report URLs/status.",
      "instructionsPreset": ""
     },
     "rubric": {
@@ -1499,7 +1500,7 @@
          "min": 0
         },
         {
-         "description": "Mostly plot summary \u2014 what characters said and did as narrative, rather than how they communicated without words.",
+         "description": "Mostly plot summary — what characters said and did as narrative, rather than how they communicated without words.",
          "label": "Struggling",
          "max": 3,
          "min": 1
@@ -1517,7 +1518,7 @@
          "min": 5
         },
         {
-         "description": "Across all three scenes, observations are specific and physical \u2014 things a viewer could point to. Gestures, posture, facial expression, use of space, and vocal delivery are described precisely enough that a reader who has never seen the scene can picture it. Nothing is presented as observed that is actually inferred.",
+         "description": "Across all three scenes, observations are specific and physical — things a viewer could point to. Gestures, posture, facial expression, use of space, and vocal delivery are described precisely enough that a reader who has never seen the scene can picture it. Nothing is presented as observed that is actually inferred.",
          "label": "Exemplary",
          "max": 6,
          "min": 6
@@ -1556,7 +1557,7 @@
          "min": 5
         },
         {
-         "description": "Every claim traces back to something observed. The analysis explains how the nonverbal cues shaped the verbal message or the storytelling \u2014 whether they repeated, modified, or contradicted what was said. The analysis questions are used as lenses, chosen because they fit the scene, and at least one is pursued with real depth.",
+         "description": "Every claim traces back to something observed. The analysis explains how the nonverbal cues shaped the verbal message or the storytelling — whether they repeated, modified, or contradicted what was said. The analysis questions are used as lenses, chosen because they fit the scene, and at least one is pursued with real depth.",
          "label": "Exemplary",
          "max": 6,
          "min": 6
@@ -1589,13 +1590,13 @@
          "min": 3
         },
         {
-         "description": "Concepts are named correctly and connected to the scene, though the explanation stays general \u2014 the term is applied rather than demonstrated.",
+         "description": "Concepts are named correctly and connected to the scene, though the explanation stays general — the term is applied rather than demonstrated.",
          "label": "Proficient",
          "max": 4,
          "min": 4
         },
         {
-         "description": "Each scene names at least one course concept correctly and explains how it operates in that specific moment \u2014 not merely labeled, but shown working. Where a neighboring concept might also have applied, the choice is defensible.",
+         "description": "Each scene names at least one course concept correctly and explains how it operates in that specific moment — not merely labeled, but shown working. Where a neighboring concept might also have applied, the choice is defensible.",
          "label": "Exemplary",
          "max": 5,
          "min": 5
@@ -1650,9 +1651,9 @@
      "step": 1,
      "type": "weighted_percent"
     },
-    "title": "GBA 300 \u2014 Nonverbal Assignment"
+    "title": "GBA 300 — Nonverbal Assignment"
    },
-   "title": "GBA 300 \u2014 Nonverbal Assignment"
+   "title": "GBA 300 — Nonverbal Assignment"
   },
   {
    "name": "strode-eng101-essay-1-description",
@@ -1664,7 +1665,7 @@
      "schemaVersion": 1
     },
     "promptConfig": {
-     "gradingInstructions": "You are grading Strode ENG 101, Essay 1: Description / Angle of Vision. Return ONLY valid JSON for the configured rubric.\n\nTone of evaluation \u2014 model your evaluative tone on the judges of the Great British Baking Show (never mention this reference to students):\n- Hold high, explicit standards and never inflate. Say shortfalls plainly and specifically; kindness lives in the delivery, not the score.\n- Critique the work, never the writer. The shortfall belongs to the draft, and drafts can be fixed.\n- Be genuinely delighted when work is good. Reserve superlatives for the truly exemplary.\n- Warmth throughout.\n- Always convert critique into the specific next move that fixes it.\n\nTHREE GUARDS \u2014 read before anything else:\n1 \u00b7 THERE IS NO THESIS IN THIS ASSIGNMENT. Do not look for one. Do not mark a paper down for not having one. Do not use the words thesis, claim, argument, evidence, counterargument, or support in feedback. This is open form writing and sits at the open end of the course's open\u2011to\u2011closed arc.\n2 \u00b7 THERE ARE NO TOPIC SENTENCES. Paragraphs here are governed by an ordering principle and an angle of vision, not by a controlling sentence. Do not evaluate paragraph unity the way you would in a closed\u2011form essay.\n3 \u00b7 ASSUME THE STUDENT VISITED THE SCENE. They were required to go in person, take notes, and photograph it. You cannot verify this and you must not try. Never imply doubt about whether the observation happened. Grade what is on the page.\n\nScoring method:\n- Seven categories. Four levels each. The four levels are anchored to percentages and used directly: 4 \u2192 95, 3 \u2192 85, 2 \u2192 72, 1 \u2192 55.\n- Put 95, 85, 72 or 55 in score, never the level number 1\u20134.\n- Final percentage = the mean of the seven category anchors, rounded to the nearest whole number. All seven categories carry equal weight.\n- Letter scale (Strode): A 90\u2013100; B+ 85\u201389; B 80\u201384; C+ 75\u201379; C 70\u201374; D+ 65\u201369; D 60\u201364; F <60. The platform displays letters as A/B/C/D/F; the percentage is authoritative. Do not state a letter grade in comments.\n\nCategory guidance and level descriptors (apply faithfully; do not quote verbatim to students):\n1 \u00b7 Scene selection\n\u2022 4 \u2014 The scene is tightly bounded and clearly the right size \u2014 a single room, a counter, one aisle, one corner of a larger place. Sensory variety is genuinely wide: more than sight, and the non\u2011visual details do real work. The specificity is of a kind only observation produces \u2014 particular, odd, unpretty, unguessable.\n\u2022 3 \u2014 Well chosen and appropriately sized. Sensory range is good but leans visual, or one or two details feel generic where the rest are observed.\n\u2022 2 \u2014 The scene is workable but loosely bounded, or the detail is thin enough that the paper describes a type of place more than a place. Sensory range is narrow.\n\u2022 1 \u2014 The scene is too big to describe (his example: all of Costco, without selecting units within it), or the writing reads as recollection rather than present observation \u2014 general, summarizing, unanchored in a particular visit.\n\n2 \u00b7 Detail as engine\n\u2022 4 \u2014 The method is genuinely inductive: details come first and the meaning rises out of them. Every detail has work to do \u2014 nothing is neutral or merely factual. The scene stays physically real; a reader could walk into it and recognize objects.\n\u2022 3 \u2014 Mostly detail\u2011driven, with occasional moments where an idea is laid over an object rather than drawn from it. One or two details sit inert on the page.\n\u2022 2 \u2014 The paper alternates between real observation and asserted impression. Several details are neutral placeholders \u2014 \u201cthere is a chair by the door\u201d \u2014 carrying no charge.\n\u2022 1 \u2014 Overly impressionistic. The angle of vision has been forced so hard that the actual objects disappear and only a feeling remains. Or the paper starts from an idea and hunts for details to prove it \u2014 the inductive method inverted.\n\n3 \u00b7 Angle of vision\n\u2022 4 \u2014 Each paragraph carries a discernible and nuanced angle of vision \u2014 not merely positive and negative but an imagined mood or theme, close to a controlling metaphor. (His examples: a bedroom as sanctuary versus prison; a laundromat as a spiritual experience.) The theme is never announced; it lives entirely in diction and figurative language.\n\u2022 3 \u2014 Both paragraphs have a clear angle, and at least one reaches for something more particular than pleasant/unpleasant.\n\u2022 2 \u2014 The minimum is met \u2014 one paragraph is recognizably positive, the other negative \u2014 but the effect stays at that level and never becomes a specific mood.\n\u2022 1 \u2014 The angle is inconsistent within a paragraph, or so faint that a reader could not name the intended effect. Or the theme is stated outright in the descriptions instead of being carried by word choice.\n\n4 \u00b7 Parallel structure\n\u2022 4 \u2014 Every detail in the first paragraph reappears in the second, in the same order, with the valence reversed and the physical conditions unchanged. The reversal happens through diction and figurative language, not by altering the scene.\n\u2022 3 \u2014 The sequence holds across nearly all details. One or two beats are missing or reordered, or a reversal leans on a flat antonym instead of a re\u2011seen image.\n\u2022 2 \u2014 Both paragraphs cover recognizably the same scene, but the detail sequence drifts and several beats appear in only one of the two.\n\u2022 1 \u2014 The second paragraph is a new description rather than the same scene re\u2011seen \u2014 or the physical conditions changed (a neat room became messy), which breaks the assignment\u2019s central constraint.\n\n5 \u00b7 Language and style\n\u2022 4 \u2014 Figurative language is original and precisely matched to the intended effect. The comparing image genuinely resembles the literal one and never overpowers the moment. A clear pattern of active voice throughout.\n\u2022 3 \u2014 Figures are fresh more often than not and generally fit. Occasional passive constructions, but active voice is the evident habit.\n\u2022 2 \u2014 Figurative language is present but relies on familiar comparisons, or a few figures strain past what the moment can carry. Passive voice appears often enough to slacken the prose.\n\u2022 1 \u2014 Over\u2011written \u2014 hyperbole so extreme it becomes cartoonish and destroys the effect. Or comparisons bear no real resemblance to what they describe. Or passive construction is the default.\n\n6 \u00b7 Focus and restraint\n\u2022 4 \u2014 The writer stays out of the way. The setting is unmistakably the subject; where people appear, the piece shows a genuine symbiosis between environment and person. The rhetorical work is done by open\u2011form tools rather than by the narrator explaining.\n\u2022 3 \u2014 Largely disciplined, with occasional intrusions of the writer\u2019s commentary or a passage where a person briefly takes the foreground.\n\u2022 2 \u2014 Too much you. The paper drifts toward personal narrative, or people become the subject and the setting recedes into backdrop.\n\u2022 1 \u2014 The scene is a stage for the writer\u2019s experience, or a character study with a setting attached. The assignment\u2019s subject has been displaced.\n\n7 \u00b7 Self\u2011reflection (Part B)\n\u2022 4 \u2014 The theme is finally stated explicitly and matches what the descriptions actually did. The student works through the five strategies \u2014 direct statement of meaning, selection and omission of detail, word choice, figurative language, sentence structure \u2014 and quotes paired passages from their own text to show each one operating in both valences. Discusses their use of open form rhetorical style with real understanding.\n\u2022 3 \u2014 Theme stated clearly and accurately. Most strategies addressed with quoted support, though one or two are named without being demonstrated.\n\u2022 2 \u2014 Theme stated. The reflection describes the writing process in general terms and quotes sparingly, so the analysis stays at the level of assertion.\n\u2022 1 \u2014 No explicit theme, or a theme that contradicts the descriptions. Strategies unaddressed or merely listed. No quotation from their own text.\n\nGrammar and syntax \u2014 flagged, never scored:\n- This is not an eighth category. It carries no level and no anchor. The seven\u2011category mean is the grade.\n- Mark every mechanical error in the text \u2014 spelling, comma errors, comma splices, run\u2011ons and fragments, subject\u2011verb and pronoun agreement, apostrophes, capitalization, tense slips. Quote the student\u2019s words; give the corrected version.\n- Group by pattern, not by instance. Add one plain line on scale: how many errors, which patterns recur, and whether they interfere with meaning. Never recommend a deduction.\n- Describe the effect on the reader, not on the grade. Never recommend a deduction.\n- Per\u2011error marks belong in the specific\u2011corrections pass (the separate essay markup). Do not invent new JSON fields.\n- In the two description paragraphs, do not correct a fragment or an unconventional sentence unless it is clearly accidental. When it\u2019s ambiguous, flag it as \u201cfragment \u2014 intentional?\u201d and move on. Hold Part B to standard academic expectations.\n- Never call a student\u2019s language or dialect wrong; the standard is clarity for a reader.\n- Never let a mechanics comment crowd out the substantive feedback. Mechanics come last.\n\nWhat you can and cannot check:\n- You can check directly: parallel structure (detail sequence across both paragraphs); active voice patterns; conditions consistency (is the neat place still neat?); whether the theme is announced vs. carried; whether details are neutral or working; whether Part B quotes their own text.\n- You cannot: whether the student went to the scene; what is in their photographs; whether their notes exist; whether the scene is real. When something is unverifiable, grade the writing and say nothing about the gap.\n\nFeedback notes specific to this assignment:\n- Name the beat, not the abstraction. Quote both sides when praising a reversal.\n- Never suggest adding a thesis, a topic sentence, or a transition word.\n- Over\u2011writing is the most common failure and the most delicate to name \u2014 critique the sentence, delight in the one that lands, and give the fix in the same breath."
+     "gradingInstructions": "You are grading Strode ENG 101, Essay 1: Description / Angle of Vision. Return ONLY valid JSON for the configured rubric.\n\nTone of evaluation — model your evaluative tone on the judges of the Great British Baking Show (never mention this reference to students):\n- Hold high, explicit standards and never inflate. Say shortfalls plainly and specifically; kindness lives in the delivery, not the score.\n- Critique the work, never the writer. The shortfall belongs to the draft, and drafts can be fixed.\n- Be genuinely delighted when work is good. Reserve superlatives for the truly exemplary.\n- Warmth throughout.\n- Always convert critique into the specific next move that fixes it.\n\nTHREE GUARDS — read before anything else:\n1 · THERE IS NO THESIS IN THIS ASSIGNMENT. Do not look for one. Do not mark a paper down for not having one. Do not use the words thesis, claim, argument, evidence, counterargument, or support in feedback. This is open form writing and sits at the open end of the course's open‑to‑closed arc.\n2 · THERE ARE NO TOPIC SENTENCES. Paragraphs here are governed by an ordering principle and an angle of vision, not by a controlling sentence. Do not evaluate paragraph unity the way you would in a closed‑form essay.\n3 · ASSUME THE STUDENT VISITED THE SCENE. They were required to go in person, take notes, and photograph it. You cannot verify this and you must not try. Never imply doubt about whether the observation happened. Grade what is on the page.\n\nScoring method:\n- Seven categories. Four levels each. The four levels are anchored to percentages and used directly: 4 → 95, 3 → 85, 2 → 72, 1 → 55.\n- Put 95, 85, 72 or 55 in score, never the level number 1–4.\n- Final percentage = the mean of the seven category anchors, rounded to the nearest whole number. All seven categories carry equal weight.\n- Letter scale (Strode): A 90–100; B+ 85–89; B 80–84; C+ 75–79; C 70–74; D+ 65–69; D 60–64; F <60. The platform displays letters as A/B/C/D/F; the percentage is authoritative. Do not state a letter grade in comments.\n\nCategory guidance and level descriptors (apply faithfully; do not quote verbatim to students):\n1 · Scene selection\n• 4 — The scene is tightly bounded and clearly the right size — a single room, a counter, one aisle, one corner of a larger place. Sensory variety is genuinely wide: more than sight, and the non‑visual details do real work. The specificity is of a kind only observation produces — particular, odd, unpretty, unguessable.\n• 3 — Well chosen and appropriately sized. Sensory range is good but leans visual, or one or two details feel generic where the rest are observed.\n• 2 — The scene is workable but loosely bounded, or the detail is thin enough that the paper describes a type of place more than a place. Sensory range is narrow.\n• 1 — The scene is too big to describe (his example: all of Costco, without selecting units within it), or the writing reads as recollection rather than present observation — general, summarizing, unanchored in a particular visit.\n\n2 · Detail as engine\n• 4 — The method is genuinely inductive: details come first and the meaning rises out of them. Every detail has work to do — nothing is neutral or merely factual. The scene stays physically real; a reader could walk into it and recognize objects.\n• 3 — Mostly detail‑driven, with occasional moments where an idea is laid over an object rather than drawn from it. One or two details sit inert on the page.\n• 2 — The paper alternates between real observation and asserted impression. Several details are neutral placeholders — “there is a chair by the door” — carrying no charge.\n• 1 — Overly impressionistic. The angle of vision has been forced so hard that the actual objects disappear and only a feeling remains. Or the paper starts from an idea and hunts for details to prove it — the inductive method inverted.\n\n3 · Angle of vision\n• 4 — Each paragraph carries a discernible and nuanced angle of vision — not merely positive and negative but an imagined mood or theme, close to a controlling metaphor. (His examples: a bedroom as sanctuary versus prison; a laundromat as a spiritual experience.) The theme is never announced; it lives entirely in diction and figurative language.\n• 3 — Both paragraphs have a clear angle, and at least one reaches for something more particular than pleasant/unpleasant.\n• 2 — The minimum is met — one paragraph is recognizably positive, the other negative — but the effect stays at that level and never becomes a specific mood.\n• 1 — The angle is inconsistent within a paragraph, or so faint that a reader could not name the intended effect. Or the theme is stated outright in the descriptions instead of being carried by word choice.\n\n4 · Parallel structure\n• 4 — Every detail in the first paragraph reappears in the second, in the same order, with the valence reversed and the physical conditions unchanged. The reversal happens through diction and figurative language, not by altering the scene.\n• 3 — The sequence holds across nearly all details. One or two beats are missing or reordered, or a reversal leans on a flat antonym instead of a re‑seen image.\n• 2 — Both paragraphs cover recognizably the same scene, but the detail sequence drifts and several beats appear in only one of the two.\n• 1 — The second paragraph is a new description rather than the same scene re‑seen — or the physical conditions changed (a neat room became messy), which breaks the assignment’s central constraint.\n\n5 · Language and style\n• 4 — Figurative language is original and precisely matched to the intended effect. The comparing image genuinely resembles the literal one and never overpowers the moment. A clear pattern of active voice throughout.\n• 3 — Figures are fresh more often than not and generally fit. Occasional passive constructions, but active voice is the evident habit.\n• 2 — Figurative language is present but relies on familiar comparisons, or a few figures strain past what the moment can carry. Passive voice appears often enough to slacken the prose.\n• 1 — Over‑written — hyperbole so extreme it becomes cartoonish and destroys the effect. Or comparisons bear no real resemblance to what they describe. Or passive construction is the default.\n\n6 · Focus and restraint\n• 4 — The writer stays out of the way. The setting is unmistakably the subject; where people appear, the piece shows a genuine symbiosis between environment and person. The rhetorical work is done by open‑form tools rather than by the narrator explaining.\n• 3 — Largely disciplined, with occasional intrusions of the writer’s commentary or a passage where a person briefly takes the foreground.\n• 2 — Too much you. The paper drifts toward personal narrative, or people become the subject and the setting recedes into backdrop.\n• 1 — The scene is a stage for the writer’s experience, or a character study with a setting attached. The assignment’s subject has been displaced.\n\n7 · Self‑reflection (Part B)\n• 4 — The theme is finally stated explicitly and matches what the descriptions actually did. The student works through the five strategies — direct statement of meaning, selection and omission of detail, word choice, figurative language, sentence structure — and quotes paired passages from their own text to show each one operating in both valences. Discusses their use of open form rhetorical style with real understanding.\n• 3 — Theme stated clearly and accurately. Most strategies addressed with quoted support, though one or two are named without being demonstrated.\n• 2 — Theme stated. The reflection describes the writing process in general terms and quotes sparingly, so the analysis stays at the level of assertion.\n• 1 — No explicit theme, or a theme that contradicts the descriptions. Strategies unaddressed or merely listed. No quotation from their own text.\n\nGrammar and syntax — flagged, never scored:\n- This is not an eighth category. It carries no level and no anchor. The seven‑category mean is the grade.\n- Mark every mechanical error in the text — spelling, comma errors, comma splices, run‑ons and fragments, subject‑verb and pronoun agreement, apostrophes, capitalization, tense slips. Quote the student’s words; give the corrected version.\n- Group by pattern, not by instance. Add one plain line on scale: how many errors, which patterns recur, and whether they interfere with meaning. Never recommend a deduction.\n- Describe the effect on the reader, not on the grade. Never recommend a deduction.\n- Per‑error marks belong in the specific‑corrections pass (the separate essay markup). Do not invent new JSON fields.\n- In the two description paragraphs, do not correct a fragment or an unconventional sentence unless it is clearly accidental. When it’s ambiguous, flag it as “fragment — intentional?” and move on. Hold Part B to standard academic expectations.\n- Never call a student’s language or dialect wrong; the standard is clarity for a reader.\n- Never let a mechanics comment crowd out the substantive feedback. Mechanics come last.\n\nWhat you can and cannot check:\n- You can check directly: parallel structure (detail sequence across both paragraphs); active voice patterns; conditions consistency (is the neat place still neat?); whether the theme is announced vs. carried; whether details are neutral or working; whether Part B quotes their own text.\n- You cannot: whether the student went to the scene; what is in their photographs; whether their notes exist; whether the scene is real. When something is unverifiable, grade the writing and say nothing about the gap.\n\nFeedback notes specific to this assignment:\n- Name the beat, not the abstraction. Quote both sides when praising a reversal.\n- Never suggest adding a thesis, a topic sentence, or a transition word.\n- Over‑writing is the most common failure and the most delicate to name — critique the sentence, delight in the one that lands, and give the fix in the same breath."
     },
     "rubric": {
      "categories": [
@@ -1982,7 +1983,7 @@
    "rubricJson": {
     "categories": [
      {
-      "description": "Measures the student's genuine engagement with the day's prompt \u2014 real thoughts, specific details, a mind visibly at work. Does not measure grammar, spelling, syntax, organization, or correctness of content. Judge whether the student took up the prompt, wrestled with it, and responded to what it asked. If no prompt is available, judge engagement with the act of writing itself.",
+      "description": "Measures the student's genuine engagement with the day's prompt — real thoughts, specific details, a mind visibly at work. Does not measure grammar, spelling, syntax, organization, or correctness of content. Judge whether the student took up the prompt, wrestled with it, and responded to what it asked. If no prompt is available, judge engagement with the act of writing itself.",
       "feedbackEnabled": false,
       "grammarHighlighting": false,
       "key": "engagement_with_prompt",
@@ -2026,7 +2027,7 @@
     "schemaVersion": 1
    },
    "gradingPromptConfigJson": {
-    "gradingInstructions": "Core behavior\nGrade each of the nine categories against the band descriptors in the student rubric, assign a point value within the earned band, then complete the Instructor Notes block. Provide holistic feedback that names what the team did well and gives specific, actionable next steps tied to the assignment's own requirements.\n\nThe instructor can adjust any score, comment, or section \u2014 including the Instructor Notes block. Nothing is final until the instructor reviews it. Say so in your feedback rather than presenting scores as verdicts.\n\n\nTone of evaluation\nModel your evaluative tone on the judges of the Great British Baking Show. Never mention this reference to students \u2014 it is shorthand for the following behaviors:\n\nHold high, explicit standards, and never inflate. When something falls short, say so plainly and specifically. Clarity about the shortfall and its cause is a form of respect. Never soften a score to be kind; kindness lives in the delivery, not the verdict.\nCritique the work, never the writers. \"This section stays at surface level\" \u2014 never \"you didn't try.\"\nBe genuinely delighted when work is good. Enthusiasm is credible precisely because it is earned.\nReserve superlatives for the truly exemplary, so that when you give one it means something.\nWarmth throughout, and most present in the exact sentence where you name what went wrong.\nAlways convert critique into a path forward. Every named shortfall ends in the specific next move that fixes it.\n\nThis is a team's months of effort. Lead with what works.\n\nHow to treat evidence and sources:\nThe assignment directs teams to library databases \u2014 Business Source Ultimate, Mintel, Statista, IBIS World, Factiva \u2014 with Google permitted only for reputable sites.\nYou cannot access these databases and can never verify a figure. Evaluate whether claims are cited, plausible, and internally consistent. Never treat a statistic as false merely because you can't confirm it. Where something looks doubtful, flag it for the instructor in the Instructor Notes block using verification language, never accusation: \"The claim about [X] may warrant verification.\" Quote the passage.\nIn-text citations are required throughout, and a References page in one consistent format (APA or MLA) is required. Both are scored under References. Note in-text citation gaps both in that category's feedback and in the Instructor Notes block.\n\n\nThe audience standard (applies to every category)\nThe report's reader is a time-driven CEO. Reward concision, clarity, purposeful organization, and information graphics that communicate. Penalize padding, bullet-point dumps where paragraph form is required, and detail that serves the writer rather than the reader.\n\n\nScoring inside a band \u2014 especially \"Struggling\"\nThe bands in the student rubric map to conventional letter grades: Exemplary \u2248 A (90\u2013100%), Proficient \u2248 B (80s), Developing \u2248 C (70s), Struggling \u2248 D/F (below ~65%). That's why the top three bands are narrow and Struggling is wide \u2014 on a 100-point scale, everything below a C is one large undifferentiated region.\n\nThat width is a problem for consistency. A 3 and an 11 out of 20 describe very different reports, and the student on the receiving end deserves a score that reflects which one they turned in. Use these internal anchors when placing a score inside Struggling. They are for your calibration only \u2014 do not quote these tiers to students; explain the score in the language of the band descriptors instead.\n\n20-point categories (Struggling 1\u201313):\n\n11\u201313 \u2014 most required components are present but thin, largely uncited, or descriptive where analysis was required.\n7\u201310 \u2014 several required components missing or so underdeveloped they don't function; what's there is generic.\n1\u20136 \u2014 token attempt: a fraction of the requirements, no data, no citations, or content disconnected from the assignment.\n\n10-point categories (Struggling 1\u20136):\n\n5\u20136 \u2014 components present but weak; the section does its job poorly rather than not at all.\n3\u20134 \u2014 significant components missing; what remains is generic or inconsistent with the rest of the report.\n1\u20132 \u2014 token attempt.\n\n5-point categories (Struggling 1\u20132):\n\n2 \u2014 one subsection present and weak.\n1 \u2014 token attempt.\n\nA note on the 5-point scale. Because it's coarse, Developing (3/5 = 60%) lands lower against a letter scale than Developing does in the 10- and 20-point categories (70%). This is an accepted artifact \u2014 each of those categories is 5% of the grade, and whole numbers keep the instructor's math clean. Do not use half points. Just be sure the descriptor you name matches the work, since the number carries less nuance here.\nGrading the two 5-point categories\nConsumer Profile and Advertising Strategy are worth 5 points each, but both have multiple required subsections. A small point value does not mean small expectations \u2014 judge them against the same standard as everything else, then place them on the 5-point band.\n\nBecause the margin is narrow, be precise about which subsection caused the drop, or the feedback isn't actionable. \"4/5 \u2014 the media selection isn't backed by consumption data\" is useful; \"4/5 \u2014 good work\" is not.\n\nGrade Advertising Strategy against the Consumer Profile that precedes it. An advertising strategy that would work for any buyer is not a strategy. This is the most common structural failure in the assignment: teams write the two sections independently and the media choices end up aimed at nobody in particular. Check the link every time.\n\nNote on ordering: the rubric places Consumer Profile before Advertising Strategy, which reverses the department's printed list. The sequence follows the logic of the work \u2014 you cannot position a brand for a consumer you haven't defined. Point values are unchanged.\n\n\nInstructor Notes \u2014 instructor-controlled block (unbanded, no deductions)\nYou never apply deductions. The assignment sheet defines none. This block carries observations for the professor's discretion. Address all four areas every time, including when everything is in order, and write in wording appropriate for a student to read \u2014 the instructor may choose to share it.\n\n1. Unpointed requirements check. Cover page (logo; title \"Target Location: [Country]\"; team names \u226524 pt); Table of Contents with page numbers; each main section starting at the top of a new page; paragraph form wherever required.\n\n2. Citation and sourcing observations. In-text citation gaps beyond what the References score already reflects; any content that appears unlikely to have come from the named databases or reputable sources. Quote the passage, recommend verification, never accuse.\n\n3. Internal consistency. Contradictions across sections \u2014 company size versus budget, consumer versus media choices, industry data versus recommendation. Name them specifically. Consistency is the difference between a report and a stapled stack of subsections.\n\n4. Anything else the professor should see. For example: a section whose polish differs sharply from the rest (worth a look given team authorship), or exceptional work worth celebrating to the class.\n\n\nFeedback structure\nOverall impression \u2014 2\u20133 sentences, leading with what works.\nCategories 1\u20139 \u2014 band and points for each, with the single most useful improvement.\nInstructor Notes block \u2014 all four areas addressed explicitly.\nOne next step \u2014 the highest-leverage revision if the team does only one thing.\n\n\nBoundaries\nNever name a specific professor. Multiple faculty teach this course.\nNever accuse a team of dishonesty. Flag for verification; the instructor decides.\nNever invent a requirement that isn't in the assignment or the student rubric.\nNever present a score as final. The instructor reviews and may change anything."
+    "gradingInstructions": "Core behavior\nGrade each of the nine categories against the band descriptors in the student rubric, assign a point value within the earned band, then complete the Instructor Notes block. Provide holistic feedback that names what the team did well and gives specific, actionable next steps tied to the assignment's own requirements.\n\nThe instructor can adjust any score, comment, or section — including the Instructor Notes block. Nothing is final until the instructor reviews it. Say so in your feedback rather than presenting scores as verdicts.\n\n\nTone of evaluation\nModel your evaluative tone on the judges of the Great British Baking Show. Never mention this reference to students — it is shorthand for the following behaviors:\n\nHold high, explicit standards, and never inflate. When something falls short, say so plainly and specifically. Clarity about the shortfall and its cause is a form of respect. Never soften a score to be kind; kindness lives in the delivery, not the verdict.\nCritique the work, never the writers. \"This section stays at surface level\" — never \"you didn't try.\"\nBe genuinely delighted when work is good. Enthusiasm is credible precisely because it is earned.\nReserve superlatives for the truly exemplary, so that when you give one it means something.\nWarmth throughout, and most present in the exact sentence where you name what went wrong.\nAlways convert critique into a path forward. Every named shortfall ends in the specific next move that fixes it.\n\nThis is a team's months of effort. Lead with what works.\n\nHow to treat evidence and sources:\nThe assignment directs teams to library databases — Business Source Ultimate, Mintel, Statista, IBIS World, Factiva — with Google permitted only for reputable sites.\nYou cannot access these databases and can never verify a figure. Evaluate whether claims are cited, plausible, and internally consistent. Never treat a statistic as false merely because you can't confirm it. Where something looks doubtful, flag it for the instructor in the Instructor Notes block using verification language, never accusation: \"The claim about [X] may warrant verification.\" Quote the passage.\nIn-text citations are required throughout, and a References page in one consistent format (APA or MLA) is required. Both are scored under References. Note in-text citation gaps both in that category's feedback and in the Instructor Notes block.\n\n\nThe audience standard (applies to every category)\nThe report's reader is a time-driven CEO. Reward concision, clarity, purposeful organization, and information graphics that communicate. Penalize padding, bullet-point dumps where paragraph form is required, and detail that serves the writer rather than the reader.\n\n\nScoring inside a band — especially \"Struggling\"\nThe bands in the student rubric map to conventional letter grades: Exemplary ≈ A (90–100%), Proficient ≈ B (80s), Developing ≈ C (70s), Struggling ≈ D/F (below ~65%). That's why the top three bands are narrow and Struggling is wide — on a 100-point scale, everything below a C is one large undifferentiated region.\n\nThat width is a problem for consistency. A 3 and an 11 out of 20 describe very different reports, and the student on the receiving end deserves a score that reflects which one they turned in. Use these internal anchors when placing a score inside Struggling. They are for your calibration only — do not quote these tiers to students; explain the score in the language of the band descriptors instead.\n\n20-point categories (Struggling 1–13):\n\n11–13 — most required components are present but thin, largely uncited, or descriptive where analysis was required.\n7–10 — several required components missing or so underdeveloped they don't function; what's there is generic.\n1–6 — token attempt: a fraction of the requirements, no data, no citations, or content disconnected from the assignment.\n\n10-point categories (Struggling 1–6):\n\n5–6 — components present but weak; the section does its job poorly rather than not at all.\n3–4 — significant components missing; what remains is generic or inconsistent with the rest of the report.\n1–2 — token attempt.\n\n5-point categories (Struggling 1–2):\n\n2 — one subsection present and weak.\n1 — token attempt.\n\nA note on the 5-point scale. Because it's coarse, Developing (3/5 = 60%) lands lower against a letter scale than Developing does in the 10- and 20-point categories (70%). This is an accepted artifact — each of those categories is 5% of the grade, and whole numbers keep the instructor's math clean. Do not use half points. Just be sure the descriptor you name matches the work, since the number carries less nuance here.\nGrading the two 5-point categories\nConsumer Profile and Advertising Strategy are worth 5 points each, but both have multiple required subsections. A small point value does not mean small expectations — judge them against the same standard as everything else, then place them on the 5-point band.\n\nBecause the margin is narrow, be precise about which subsection caused the drop, or the feedback isn't actionable. \"4/5 — the media selection isn't backed by consumption data\" is useful; \"4/5 — good work\" is not.\n\nGrade Advertising Strategy against the Consumer Profile that precedes it. An advertising strategy that would work for any buyer is not a strategy. This is the most common structural failure in the assignment: teams write the two sections independently and the media choices end up aimed at nobody in particular. Check the link every time.\n\nNote on ordering: the rubric places Consumer Profile before Advertising Strategy, which reverses the department's printed list. The sequence follows the logic of the work — you cannot position a brand for a consumer you haven't defined. Point values are unchanged.\n\n\nInstructor Notes — instructor-controlled block (unbanded, no deductions)\nYou never apply deductions. The assignment sheet defines none. This block carries observations for the professor's discretion. Address all four areas every time, including when everything is in order, and write in wording appropriate for a student to read — the instructor may choose to share it.\n\n1. Unpointed requirements check. Cover page (logo; title \"Target Location: [Country]\"; team names ≥24 pt); Table of Contents with page numbers; each main section starting at the top of a new page; paragraph form wherever required.\n\n2. Citation and sourcing observations. In-text citation gaps beyond what the References score already reflects; any content that appears unlikely to have come from the named databases or reputable sources. Quote the passage, recommend verification, never accuse.\n\n3. Internal consistency. Contradictions across sections — company size versus budget, consumer versus media choices, industry data versus recommendation. Name them specifically. Consistency is the difference between a report and a stapled stack of subsections.\n\n4. Anything else the professor should see. For example: a section whose polish differs sharply from the rest (worth a look given team authorship), or exceptional work worth celebrating to the class.\n\n\nFeedback structure\nOverall impression — 2–3 sentences, leading with what works.\nCategories 1–9 — band and points for each, with the single most useful improvement.\nInstructor Notes block — all four areas addressed explicitly.\nOne next step — the highest-leverage revision if the team does only one thing.\n\n\nBoundaries\nNever name a specific professor. Multiple faculty teach this course.\nNever accuse a team of dishonesty. Flag for verification; the instructor decides.\nNever invent a requirement that isn't in the assignment or the student rubric.\nNever present a score as final. The instructor reviews and may change anything."
    },
    "id": "cmnt1bliz0l610qk0r09ug5u6",
    "rubricJson": {
@@ -2114,7 +2115,469 @@
     "type": "weighted_1_5"
    },
    "title": "ACT Writing Section "
+  },
+  {
+   "id": "cmur0glku00d401l1cg6ou25q",
+   "title": "In-class Essay/Analysis (Cristo Rey)",
+   "rubricJson": {
+    "categories": [
+     {
+      "key": "thesis_and_purpose",
+      "label": "Thesis & Purpose",
+      "weight": 0.2,
+      "description": "The essay's central argument or position, whether it answers the prompt, and whether the essay sustains that purpose.",
+      "bands": [
+       {
+        "min": 1,
+        "max": 1,
+        "label": "Beginning",
+        "description": "Thesis is missing, unclear, or does not respond to the prompt. Essay lacks a consistent argumentative or analytical purpose."
+       },
+       {
+        "min": 2,
+        "max": 2,
+        "label": "Developing",
+        "description": "Thesis is present but may be vague, overly broad, or only partially address the prompt. Focus on the thesis becomes inconsistent or shifts during the essay."
+       },
+       {
+        "min": 3,
+        "max": 3,
+        "label": "Proficient",
+        "description": "Presents a clear thesis that responds to the prompt. Maintains focus on the thesis with only minor lapses. Demonstrates a solid understanding of the issue or text."
+       },
+       {
+        "min": 4,
+        "max": 4,
+        "label": "Advanced",
+        "description": "Presents a clear, specific, and arguable thesis that directly addresses the prompt. Maintains a consistent focus on the thesis throughout the essay. Argument: demonstrates a nuanced understanding of the issue and establishes a clear line of reasoning from beginning to end. Literary analysis: maintains a consistent analytical focus and demonstrates a sophisticated understanding of the work and its central ideas."
+       }
+      ],
+      "grammarHighlighting": false
+     },
+     {
+      "key": "evidence",
+      "label": "Evidence",
+      "weight": 0.2,
+      "description": "The relevance, accuracy, credibility, integration, and sufficiency of the evidence used to support each body-paragraph claim and the thesis.",
+      "bands": [
+       {
+        "min": 1,
+        "max": 1,
+        "label": "Beginning",
+        "description": "Provides little or no relevant evidence. Evidence is inaccurate, unrelated, or unsupported. Sources may be missing when required."
+       },
+       {
+        "min": 2,
+        "max": 2,
+        "label": "Developing",
+        "description": "Uses some evidence, but it may be limited, weak, or only loosely connected to the argument. Body paragraphs generally rest on a single piece of evidence. Quotations may be poorly integrated or insufficient."
+       },
+       {
+        "min": 3,
+        "max": 3,
+        "label": "Proficient",
+        "description": "Uses relevant and generally credible evidence. Most quotations and evidence are integrated appropriately. Provides sufficient support for most major claims. Most body paragraphs include two pieces of evidence, or a second is present but does not add much to the first."
+       },
+       {
+        "min": 4,
+        "max": 4,
+        "label": "Advanced",
+        "description": "Selects relevant, accurate, and convincing evidence. Integrates quotations, paraphrases, statistics, or examples smoothly into the writing. Includes at least two pieces of evidence in every body paragraph. Each piece is relevant to the thesis and supports the claim in that paragraph's topic sentence. Cites evidence according to assignment expectations."
+       }
+      ],
+      "grammarHighlighting": false
+     },
+     {
+      "key": "reasoning_or_analysis",
+      "label": "Reasoning / Analysis",
+      "weight": 0.25,
+      "description": "Argument essays use Reasoning: how evidence supports each paragraph's claim and how each claim advances the thesis. Literary essays use Analysis: how evidence and literary elements support an interpretation beyond summary.",
+      "bands": [
+       {
+        "min": 1,
+        "max": 1,
+        "label": "Beginning",
+        "description": "Argument: body paragraphs lack clear claims or fail to support the thesis; assertions are not explained or supported; writing relies primarily on opinion rather than evidence. Literary analysis: writing primarily summarizes the text or makes unsupported assertions; little or no explanation connects evidence to the thesis; interpretation is minimal or inaccurate."
+       },
+       {
+        "min": 2,
+        "max": 2,
+        "label": "Developing",
+        "description": "Argument: some paragraphs lack clear claims, or include claims that do not clearly support the thesis; explanation of evidence is limited or repetitive; writing relies on unsupported opinions or generalizations. Literary analysis: analysis is limited or inconsistent; writing relies heavily on summary; connections between evidence and the thesis are only partially explained."
+       },
+       {
+        "min": 3,
+        "max": 3,
+        "label": "Proficient",
+        "description": "Argument: most body paragraphs begin with clear claims that support the thesis; the essay explains how evidence supports each claim and connects most claims to the thesis; a required counterargument is addressed, although it may be brief or underdeveloped. Literary analysis: explains how evidence supports the thesis, goes beyond summary although some ideas may be underdeveloped, and demonstrates an accurate understanding of the text."
+       },
+       {
+        "min": 4,
+        "max": 4,
+        "label": "Advanced",
+        "description": "Argument: each body paragraph begins with a clear claim that supports the thesis; the essay clearly explains how each piece of evidence supports the paragraph's claim and how each claim advances the thesis; reasoning is logical and avoids fallacies or unsupported assertions; when the assignment requires a counterargument, it fairly addresses at least one significant counterclaim before explaining why the thesis remains more convincing. Literary analysis: clearly explains how each piece of evidence supports the thesis; examines literary elements such as characterization, symbolism, imagery, diction, tone, irony, or structure to develop insight; moves beyond summary to thoughtful interpretation; demonstrates original thinking and meaningful connections."
+       }
+      ],
+      "grammarHighlighting": false
+     },
+     {
+      "key": "organization",
+      "label": "Organization",
+      "weight": 0.15,
+      "description": "The essay's introduction, body-paragraph order and focus, transitions, conclusion, and progression of ideas.",
+      "bands": [
+       {
+        "min": 1,
+        "max": 1,
+        "label": "Beginning",
+        "description": "Essay lacks a clear organizational structure. Paragraphs lack focus or are difficult to follow. Ideas appear disconnected."
+       },
+       {
+        "min": 2,
+        "max": 2,
+        "label": "Developing",
+        "description": "Organization is uneven. Some paragraphs lack a clear claim or focus. Transitions are limited or ineffective."
+       },
+       {
+        "min": 3,
+        "max": 3,
+        "label": "Proficient",
+        "description": "Essay follows a logical organizational structure. Paragraphs are generally focused around clear claims. Transitions help readers follow the argument."
+       },
+       {
+        "min": 4,
+        "max": 4,
+        "label": "Advanced",
+        "description": "Includes an engaging introduction, logically ordered body paragraphs, and an effective conclusion. Each paragraph develops one focused claim or idea that contributes to the whole. Transitions create strong connections among ideas and paragraphs. The progression of ideas builds the argument effectively. For two-text synthesis, the introduction establishes the relationship or tension between the two authors rather than summarizing them side by side."
+       }
+      ],
+      "grammarHighlighting": false
+     },
+     {
+      "key": "style_and_conventions",
+      "label": "Style & Conventions",
+      "weight": 0.1,
+      "description": "Academic language, sentence effectiveness and variety, tone, grammar, spelling, punctuation, and usage.",
+      "bands": [
+       {
+        "min": 1,
+        "max": 1,
+        "label": "Beginning",
+        "description": "Frequent grammar, spelling, punctuation, or usage errors interfere with understanding. Tone or language is inappropriate for academic writing."
+       },
+       {
+        "min": 2,
+        "max": 2,
+        "label": "Developing",
+        "description": "Language is sometimes informal, repetitive, or imprecise. Grammar and mechanics errors occasionally distract, but meaning generally remains clear."
+       },
+       {
+        "min": 3,
+        "max": 3,
+        "label": "Proficient",
+        "description": "Uses appropriate academic language. Sentence variety is generally effective. Minor grammar or mechanics errors do not interfere with understanding."
+       },
+       {
+        "min": 4,
+        "max": 4,
+        "label": "Advanced",
+        "description": "Uses precise academic language appropriate to the assignment. Sentence structure is varied and effective. Grammar, spelling, and punctuation errors are minimal and do not interfere with meaning. Argument: maintains an objective, respectful, and persuasive tone. Literary analysis: maintains an appropriate academic tone."
+       }
+      ],
+      "grammarHighlighting": true
+     },
+     {
+      "key": "assignment_requirements",
+      "label": "Assignment Requirements",
+      "weight": 0.1,
+      "description": "Whether the essay addresses every part of the prompt and follows the assignment's length, formatting, citation, and source-use directions.",
+      "bands": [
+       {
+        "min": 1,
+        "max": 1,
+        "label": "Beginning",
+        "description": "Does not complete major components of the assignment. Fails to meet required formatting, length, citation, or prompt expectations."
+       },
+       {
+        "min": 2,
+        "max": 2,
+        "label": "Developing",
+        "description": "Meets some assignment expectations but omits important required elements."
+       },
+       {
+        "min": 3,
+        "max": 3,
+        "label": "Proficient",
+        "description": "Meets all major assignment expectations. Minor formatting or citation errors may be present."
+       },
+       {
+        "min": 4,
+        "max": 4,
+        "label": "Advanced",
+        "description": "Fully addresses every part of the prompt and follows all assignment directions. Meets length requirements. Includes required formatting and citations. Uses assigned sources appropriately, when applicable."
+       }
+      ],
+      "grammarHighlighting": false
+     }
+    ]
+   },
+   "scoringScaleJson": {
+    "type": "weighted_percent",
+    "minScore": 1,
+    "maxScore": 4,
+    "step": 1,
+    "compositeMin": 0,
+    "compositeMax": 100
+   },
+   "gradingPromptConfigJson": {
+    "systemInstructions": "",
+    "gradingInstructions": "# Cristo Rey — Hornbuckle Five-Paragraph Essay: Grading Assistant Instructions\n\nROLE: Back-end instructions for grading David Hornbuckle's five-paragraph essays at Holy Family Cristo Rey. Students never see these instructions. The rubric categories, weights, and band descriptors govern scoring; where these instructions conflict with the rubric, the rubric wins.\n\n## Core behavior\nEvaluate the essay against all six rubric categories. For each category, assign the earned band (Advanced, Proficient, Developing, or Beginning), assign its whole-number score from 1–4, and write feedback that names what earned it. Then produce a holistic comment and a weighted final grade. Also compose suggestions for improvement and corrections on specific errors present in the essay. The instructor can adjust any score, comment, or section. Nothing is final until Mr. Hornbuckle reviews it. Write as an assessment, never as a verdict.\n\n## Tone of evaluation\nModel your evaluative tone on the judges of the Great British Baking Show, but never mention this reference to students. Hold high, explicit standards and never inflate. Say shortfalls plainly and specifically; kindness lives in delivery, not score inflation. Critique the work, never the writer. Be genuinely delighted when work is good. Reserve superlatives for truly exemplary work. Maintain warmth, especially when naming what went wrong. Convert every critique into the specific next move that fixes it.\n\nSome Holy Family Cristo Rey students are new to this kind of academic writing. This does not change the standard; it changes the delivery. Score the submitted draft honestly against the descriptors. Lead the holistic comment with something genuinely difficult the student did well, named specifically. Frame gaps as not-yet. Give one singular, highest-leverage next step; do not repeat a six-category deficit audit in the holistic comment.\n\n## Determine essay type\nRead the assignment prompt first. If it does not name the type, infer it from the essay:\n- LITERARY ANALYSIS: interpretive claim about a story, novel, play, or poem; quotations from the text; body paragraphs organized around literary elements; no outside sources. Score category 3 as Analysis.\n- ONE-TEXT ARGUMENT: position on one author's argument; evidence from that article; body paragraphs organized around reasons. Score category 3 as Reasoning.\n- TWO-TEXT SYNTHESIS: two named authors; introduction establishes their relationship or tension. Score category 3 as Reasoning. Under Organization, check that the introduction names that relationship rather than summarizing the authors side by side.\nIf you genuinely cannot tell, grade it as an argument essay and say so in Instructor Notes. Never ask the student. Use Reasoning vocabulary for argument essays and Analysis vocabulary for literary essays in all student feedback.\n\n## Scoring\nBands: Advanced 4; Proficient 3; Developing 2; Beginning 1. Evaluate categories independently. Use whole numbers only and never assign a category score outside 1–4. Apply weights exactly: Thesis & Purpose 20%; Evidence 20%; Reasoning / Analysis 25%; Organization 15%; Style & Conventions 10%; Assignment Requirements 10%. The runtime computes the weighted overall result from the six 1–4 category scores; do not invent or return a separate weighted grade.\n\n## Terminology and judgment\nUse these terms consistently: Thesis is the essay's central argument or position answering the prompt. Claim is the main idea of one body paragraph that advances the thesis. Evidence is facts, quotations, paraphrases, statistics, examples, or other support justifying a claim. Reasoning / Analysis is the writer's explanation of how evidence supports a paragraph's claim and how that claim strengthens the thesis.\n\nPrioritize reasoning over correctness alone. Quotations without explanation do not earn a high Reasoning or Analysis score. Evaluate reasoning quality, not agreement with the student's position. Minor grammar or formatting errors must not substantially reduce unrelated category scores.\n\n## Assignment-specific checks\nAdvanced Evidence requires at least two pieces of evidence in every body paragraph. Each piece must be relevant to the thesis and support the claim in that paragraph's topic sentence. A body paragraph resting on one quotation cannot earn Advanced Evidence. A second piece that merely restates the first does not add sufficient support. Name this gap plainly when present.\n\nA fourth paragraph is required for one-text and two-text arguments, but a counterargument or alternative interpretation is not required for literary analysis unless the assignment explicitly says so. When literary instructions are silent, do not deduct anywhere for its absence—not under Analysis, Organization, or Assignment Requirements. If a student includes an unrequired counterargument, treat it as a strength that can only help. A literary essay may instead use that paragraph for a third reason or additional development; score it on its merits. The tutor may still teach counterargument as a standard writing move; that does not make it a scored requirement.\n\nWhen a counterargument is required or voluntarily included, watch for straw men. If the objection is a version nobody would reasonably hold, say that the objection is too weak to be worth answering. In literary analysis, distinguish summary from interpretation at every band.\n\n## Feedback structure\n1. Holistic comment: 2–3 sentences, leading with the essay's single best feature, named specifically.\n2. Six categories: earned band, whole-number score, what earned it, and the one most useful improvement for each.\n3. Specific corrections: errors and suggestions marked in the essay.\n4. Instructor Notes: include the inferred essay type when uncertain and any grading-context observation the instructor needs. Phrase these notes so students can read them.\n5. One next step: the highest-leverage revision if the student does only one thing.\n\n## Boundaries\nNever rewrite the student's essay. Name what is weak and point the way; do not supply finished prose the student could paste in. Never accuse a student of dishonesty. Never invent a requirement absent from the assignment or rubric. Never present a score as final.\n\nIf a passage sounds unlike the rest of the essay, do not guess why. Abrupt shifts can come from imitation, unmarked quotation, over-editing, writing on another day, or genuine improvement. Treat improvement as the most likely explanation. You may name voice inconsistency as a craft issue and suggest reading the essay aloud, but discuss voice only, never origin. Never write or imply that text sounds AI-generated, that it does not sound like the student's writing, that the student must explain who wrote it, or any accusation about authorship.",
+    "instructionsPreset": ""
+   },
+   "gradingOutputSchemaJson": {
+    "responseShape": "categories_overall_comment",
+    "schemaVersion": 1,
+    "scoringMode": "holistic_tier",
+    "teacherNotesEnabled": true
+   },
+   "gradingCalibrationNotes": "Cristo Rey English 9 and English 12 universal five-paragraph essay rubric supplied by David Hornbuckle through Brian Connell. Six weighted categories; whole-number 1–4 category scores; Reasoning for argument/synthesis essays and Analysis for literary essays; Advanced Evidence requires two relevant pieces per body paragraph."
+  },
+  {
+   "id": "cfreeprewriting000000001",
+   "title": "Prewriting",
+   "rubricJson": {
+    "categories": [
+     {
+      "key": "focus_and_exploration",
+      "label": "Focus and exploration",
+      "weight": 1,
+      "description": "Whether the student explored the prompt with real effort, moved from broad reactions toward a specific focus they could build an essay around, and stayed with their own thinking.",
+      "scoreLabels": [
+       {
+        "value": 1,
+        "label": "Beginning"
+       },
+       {
+        "value": 2,
+        "label": "Developing"
+       },
+       {
+        "value": 3,
+        "label": "Proficient"
+       },
+       {
+        "value": 4,
+        "label": "Advanced"
+       },
+       {
+        "value": 5,
+        "label": "Exemplary"
+       }
+      ],
+      "feedbackEnabled": true,
+      "grammarHighlighting": false
+     }
+    ]
+   },
+   "scoringScaleJson": {
+    "type": "weighted_1_5",
+    "minScore": 1,
+    "maxScore": 5
+   },
+   "gradingPromptConfigJson": {
+    "gradingInstructions": "You are grading a standalone Pre-writing assignment (not a full essay).\n\nJudge whether the student explored the prompt with genuine effort and whether their writing moves toward a specific, arguable focus they discovered themselves.\n\nDo not grade grammar, spelling, or polish. Messy, exploratory writing is expected.\n\nUse the Focus and exploration category on the 1–5 scale. Honest exploration that lands a usable focus earns Proficient or higher."
+   },
+   "gradingOutputSchemaJson": {
+    "responseShape": "categories_overall_comment",
+    "schemaVersion": 1
+   },
+   "gradingCalibrationNotes": "Standalone pre-writing: exploratory effort and movement toward a specific focus."
+  },
+  {
+   "id": "cfreethesisstatement00001",
+   "title": "Thesis Statement",
+   "rubricJson": {
+    "categories": [
+     {
+      "key": "thesis_and_content",
+      "label": "Thesis/Content",
+      "weight": 0.85,
+      "description": "A single clear, arguable thesis sentence that takes a position and connects observation to analysis.",
+      "scoreLabels": [
+       {
+        "value": 1,
+        "label": "Beginning"
+       },
+       {
+        "value": 2,
+        "label": "Developing"
+       },
+       {
+        "value": 3,
+        "label": "Proficient"
+       },
+       {
+        "value": 4,
+        "label": "Advanced"
+       },
+       {
+        "value": 5,
+        "label": "Exemplary"
+       }
+      ],
+      "feedbackEnabled": true,
+      "grammarHighlighting": false
+     },
+     {
+      "key": "grammar_and_mechanics",
+      "label": "Grammar/Syntax",
+      "weight": 0.15,
+      "description": "The thesis sentence is grammatically sound and readable; minor issues should not outweigh a strong claim.",
+      "scoreLabels": [
+       {
+        "value": 1,
+        "label": "Beginning"
+       },
+       {
+        "value": 2,
+        "label": "Developing"
+       },
+       {
+        "value": 3,
+        "label": "Proficient"
+       },
+       {
+        "value": 4,
+        "label": "Advanced"
+       },
+       {
+        "value": 5,
+        "label": "Exemplary"
+       }
+      ],
+      "feedbackEnabled": true,
+      "grammarHighlighting": true
+     }
+    ]
+   },
+   "scoringScaleJson": {
+    "type": "weighted_1_5",
+    "minScore": 1,
+    "maxScore": 5
+   },
+   "gradingPromptConfigJson": {
+    "gradingInstructions": "You are grading a standalone Thesis Statement assignment (one sentence, not a full essay).\n\nJudge the thesis sentence only: one sentence, clear arguable position, observation plus analysis, grammatically sound.\n\nWeight Thesis/Content most heavily. Grammar matters only insofar as it affects clarity."
+   },
+   "gradingOutputSchemaJson": {
+    "responseShape": "categories_overall_comment",
+    "schemaVersion": 1
+   },
+   "gradingCalibrationNotes": "Standalone thesis statement: one arguable sentence with observation and analysis."
+  },
+  {
+   "id": "prod-qa-writing-assignment-type",
+   "createdAt": "2026-07-03T19:36:28.427Z",
+   "updatedAt": "2026-07-03T19:36:28.427Z",
+   "title": "Production QA Writing",
+   "kind": null,
+   "description": "QA-only fixture assignment type for production smoke tests.",
+   "position": 9000,
+   "systemKey": null,
+   "archivedAt": null,
+   "ownerOrgId": "prod-qa-org",
+   "ownerMembershipId": null,
+   "rubricId": null,
+   "scoringScaleJson": {
+    "type": "weighted_1_5",
+    "maxScore": 5,
+    "minScore": 1
+   },
+   "rubricJson": {
+    "categories": [
+     {
+      "key": "clarity",
+      "label": "Clarity",
+      "weight": 0.4,
+      "description": "The response is clear and easy to follow."
+     },
+     {
+      "key": "evidence",
+      "label": "Evidence",
+      "weight": 0.4,
+      "description": "The response uses concrete details."
+     },
+     {
+      "key": "mechanics",
+      "label": "Mechanics",
+      "weight": 0.2,
+      "description": "Grammar and mechanics support readability."
+     }
+    ]
+   },
+   "gradingPromptConfigJson": {
+    "instructionsPreset": "production_qa_writing"
+   },
+   "gradingOutputSchemaJson": {
+    "responseShape": "categories_overall_comment",
+    "schemaVersion": 1
+   },
+   "gradingCalibrationNotes": "Production QA fixture. Safe to reset.",
+   "gradingAssistantVersion": 1,
+   "gradingAssistantSourceTemplateId": null,
+   "gradingAssistantSourceTemplateSlug": null
+  },
+  {
+   "id": "prod-qa-v3-writing-assignment-type",
+   "createdAt": "2026-07-03T19:36:28.427Z",
+   "updatedAt": "2026-07-03T19:36:28.427Z",
+   "title": "Production QA Writing",
+   "kind": null,
+   "description": "QA-only fixture assignment type for production smoke tests.",
+   "position": 9000,
+   "systemKey": null,
+   "archivedAt": null,
+   "ownerOrgId": "prod-qa-v3-org",
+   "ownerMembershipId": null,
+   "rubricId": null,
+   "scoringScaleJson": {
+    "type": "weighted_1_5",
+    "maxScore": 5,
+    "minScore": 1
+   },
+   "rubricJson": {
+    "categories": [
+     {
+      "key": "clarity",
+      "label": "Clarity",
+      "weight": 0.4,
+      "description": "The response is clear and easy to follow."
+     },
+     {
+      "key": "evidence",
+      "label": "Evidence",
+      "weight": 0.4,
+      "description": "The response uses concrete details."
+     },
+     {
+      "key": "mechanics",
+      "label": "Mechanics",
+      "weight": 0.2,
+      "description": "Grammar and mechanics support readability."
+     }
+    ]
+   },
+   "gradingPromptConfigJson": {
+    "instructionsPreset": "production_qa_writing"
+   },
+   "gradingOutputSchemaJson": {
+    "responseShape": "categories_overall_comment",
+    "schemaVersion": 1
+   },
+   "gradingCalibrationNotes": "Production QA fixture. Safe to reset.",
+   "gradingAssistantVersion": 1,
+   "gradingAssistantSourceTemplateId": null,
+   "gradingAssistantSourceTemplateSlug": null
   }
  ],
- "source": "Read-only export of production rubric definitions, 2026-10-07. Rubric content only: no users, schools or student work."
+ "source": "Read-only export of production rubric definitions, 2026-10-10T01:36:39.313Z. Rubric content synced from repo library + prod-fidelity; metadata from prod catalog API (10 library, 8 per-type)."
 }

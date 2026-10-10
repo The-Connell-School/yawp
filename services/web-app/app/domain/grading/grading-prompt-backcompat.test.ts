@@ -3,6 +3,11 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import { compileRubricGradingPrompt } from './compile-rubric-grading-prompt';
+import { compileGradingAssistantInvocation } from './grading-assistant-invocation';
+import {
+  getThesisDefaultRubricConfig,
+  parseAssignmentTypeRubricConfig,
+} from '~/domain/assignment-types/assignment-type-rubric-config';
 import { parseRubricSchema } from '~/domain/rubrics/rubric-schema';
 import { STARTER_RUBRICS } from '~/domain/rubrics/starter-rubrics';
 import { dailyPagesEngagementV1LibrarySchema } from '~/domain/rubrics/library/daily-pages-engagement-v1.fixture';
@@ -64,15 +69,85 @@ describe('grading prompt backcompat (main)', () => {
     }
 
     for (const type of catalogFixture.perTypeRubrics) {
-      const content = perTypeContent(type as never);
-      const parsed = parseRubricSchema(content);
-      if (!parsed.ok) {
-        if (parsed.error.includes('at least one category')) continue;
-        throw new Error(`${type.id}: ${parsed.error}`);
-      }
       const key = `catalog:per-type:${type.id}`;
+      const content = perTypeContent(type as never);
+      let parsed = parseRubricSchema(content);
+      if (!parsed.ok && parsed.error.includes('at least one category')) {
+        const builtIn = parseAssignmentTypeRubricConfig({
+          rubricJson: (type as { rubricJson?: unknown }).rubricJson,
+          scoringScaleJson: (type as { scoringScaleJson?: unknown }).scoringScaleJson,
+          gradingPromptConfigJson: (type as { gradingPromptConfigJson?: unknown })
+            .gradingPromptConfigJson,
+          gradingOutputSchemaJson: (type as { gradingOutputSchemaJson?: unknown })
+            .gradingOutputSchemaJson,
+          gradingCalibrationNotes: (type as { gradingCalibrationNotes?: string | null })
+            .gradingCalibrationNotes,
+          assignmentTypeKind: null,
+        });
+        parsed = parseRubricSchema({
+          name: `assignment-type:${type.id}`,
+          title: (type as { title?: string | null }).title ?? type.id,
+          scoringScale: builtIn.scoringScale,
+          rubric: builtIn.rubric,
+          promptConfig: builtIn.promptConfig,
+          outputSchema: builtIn.outputSchema,
+          calibrationNotes: builtIn.calibrationNotes,
+        });
+      }
+      if (!parsed.ok) throw new Error(`${type.id}: ${parsed.error}`);
       const { combined } = compileRubricGradingPrompt(parsed.schema);
       expect(digest(combined)).toBe(golden[key as keyof typeof golden]);
     }
+  });
+
+  test('grade-essay-ai invocation assembly matches golden digests', () => {
+    const thesis = getThesisDefaultRubricConfig();
+    const thesisInvocation = compileGradingAssistantInvocation({
+      gradingConfig: {
+        label: thesis.defaultLabel ?? 'Thesis-driven essay grading assistant',
+        minScore: thesis.scoringScale.minScore,
+        maxScore: thesis.scoringScale.maxScore,
+        rubricCategories: thesis.rubric.categories,
+        instructions: {
+          mode: 'preset',
+          rubricInstructions: 'rubric',
+          scoreInstructions: 'score',
+        },
+        outputSchemaSnapshot: thesis.outputSchema,
+      },
+      studentFirstName: 'Jordan',
+      strictnessLevel: 'intermediate',
+      documentText: 'Essay body for golden digest.',
+      assignmentGrammarGradingEnabled: false,
+    });
+    const thesisPayload = `${thesisInvocation.system}\n---\n${thesisInvocation.userMessage}`;
+    expect(digest(thesisPayload)).toBe(
+      golden['assembly:thesis-default-grammar-off' as keyof typeof golden]
+    );
+
+    const managedInvocation = compileGradingAssistantInvocation({
+      gradingConfig: {
+        label: 'Managed template rubric',
+        minScore: 1,
+        maxScore: 5,
+        rubricCategories: thesis.rubric.categories,
+        instructions: {
+          mode: 'unified',
+          gradingInstructions: 'Grade with care.',
+        },
+        outputSchemaSnapshot: { teacherNotesEnabled: true },
+        promptTemplate: {
+          systemMessage: 'Managed grading system.',
+          userMessage: '{{rubric}}\n{{grading_instructions}}\n{{document}}',
+        },
+      },
+      studentFirstName: 'Jordan',
+      strictnessLevel: 'intermediate',
+      documentText: 'Essay body for golden digest.',
+    });
+    const managedPayload = `${managedInvocation.system}\n---\n${managedInvocation.userMessage}`;
+    expect(digest(managedPayload)).toBe(
+      golden['assembly:managed-template' as keyof typeof golden]
+    );
   });
 });

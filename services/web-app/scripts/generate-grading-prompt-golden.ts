@@ -9,6 +9,11 @@ import { parseRubricSchema } from '../app/domain/rubrics/rubric-schema';
 import { STARTER_RUBRICS } from '../app/domain/rubrics/starter-rubrics';
 import { dailyPagesEngagementV1LibrarySchema } from '../app/domain/rubrics/library/daily-pages-engagement-v1.fixture';
 import { compileRubricGradingPrompt } from '../app/domain/grading/compile-rubric-grading-prompt';
+import { compileGradingAssistantInvocation } from '../app/domain/grading/grading-assistant-invocation';
+import {
+  getThesisDefaultRubricConfig,
+  parseAssignmentTypeRubricConfig,
+} from '../app/domain/assignment-types/assignment-type-rubric-config';
 import catalog from '../app/domain/rubrics/__fixtures__/prod-rubric-catalog.json';
 
 function digest(text: string) {
@@ -55,15 +60,83 @@ for (const rubric of catalogFixture.libraryRubrics) {
 
 for (const type of catalogFixture.perTypeRubrics) {
   const content = perTypeContent(type as never);
-  const parsed = parseRubricSchema(content);
+  let parsed = parseRubricSchema(content);
+  if (!parsed.ok && parsed.error.includes('at least one category')) {
+    const builtIn = parseAssignmentTypeRubricConfig({
+      rubricJson: (type as { rubricJson?: unknown }).rubricJson,
+      scoringScaleJson: (type as { scoringScaleJson?: unknown }).scoringScaleJson,
+      gradingPromptConfigJson: (type as { gradingPromptConfigJson?: unknown })
+        .gradingPromptConfigJson,
+      gradingOutputSchemaJson: (type as { gradingOutputSchemaJson?: unknown })
+        .gradingOutputSchemaJson,
+      gradingCalibrationNotes: (type as { gradingCalibrationNotes?: string | null })
+        .gradingCalibrationNotes,
+      assignmentTypeKind: null,
+    });
+    parsed = parseRubricSchema({
+      name: `assignment-type:${type.id}`,
+      title: (type as { title?: string | null }).title ?? type.id,
+      scoringScale: builtIn.scoringScale,
+      rubric: builtIn.rubric,
+      promptConfig: builtIn.promptConfig,
+      outputSchema: builtIn.outputSchema,
+      calibrationNotes: builtIn.calibrationNotes,
+    });
+  }
   if (!parsed.ok) {
-    if (parsed.error.includes('at least one category')) continue;
     throw new Error(`Catalog per-type ${type.id}: ${parsed.error}`);
   }
   entries[`catalog:per-type:${type.id}`] = digest(
     compileRubricGradingPrompt(parsed.schema).combined
   );
 }
+
+const thesis = getThesisDefaultRubricConfig();
+const thesisInvocation = compileGradingAssistantInvocation({
+  gradingConfig: {
+    label: thesis.defaultLabel ?? 'Thesis-driven essay grading assistant',
+    minScore: thesis.scoringScale.minScore,
+    maxScore: thesis.scoringScale.maxScore,
+    rubricCategories: thesis.rubric.categories,
+    instructions: {
+      mode: 'preset',
+      rubricInstructions: 'rubric',
+      scoreInstructions: 'score',
+    },
+    outputSchemaSnapshot: thesis.outputSchema,
+  },
+  studentFirstName: 'Jordan',
+  strictnessLevel: 'intermediate',
+  documentText: 'Essay body for golden digest.',
+  assignmentGrammarGradingEnabled: false,
+});
+entries['assembly:thesis-default-grammar-off'] = digest(
+  `${thesisInvocation.system}\n---\n${thesisInvocation.userMessage}`
+);
+
+const managedInvocation = compileGradingAssistantInvocation({
+  gradingConfig: {
+    label: 'Managed template rubric',
+    minScore: 1,
+    maxScore: 5,
+    rubricCategories: thesis.rubric.categories,
+    instructions: {
+      mode: 'unified',
+      gradingInstructions: 'Grade with care.',
+    },
+    outputSchemaSnapshot: { teacherNotesEnabled: true },
+    promptTemplate: {
+      systemMessage: 'Managed grading system.',
+      userMessage: '{{rubric}}\n{{grading_instructions}}\n{{document}}',
+    },
+  },
+  studentFirstName: 'Jordan',
+  strictnessLevel: 'intermediate',
+  documentText: 'Essay body for golden digest.',
+});
+entries['assembly:managed-template'] = digest(
+  `${managedInvocation.system}\n---\n${managedInvocation.userMessage}`
+);
 
 const outPath = join(
   import.meta.dir,
