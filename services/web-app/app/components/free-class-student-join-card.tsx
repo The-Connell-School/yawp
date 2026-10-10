@@ -28,7 +28,10 @@ export function FreeClassStudentJoinCard({
   }, [joinUrl]);
 
   return (
-    <div className="rounded-lg border bg-muted/30 p-4">
+    <div
+      data-tour="class-join-link"
+      className="rounded-lg border bg-muted/30 p-4"
+    >
       <h3 className="text-sm font-semibold">Student join link</h3>
       <p className="mt-1 text-xs text-muted-foreground">
         Share this link or QR code so students can create handle accounts. Class

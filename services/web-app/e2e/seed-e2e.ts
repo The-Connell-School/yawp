@@ -1395,6 +1395,29 @@ async function seedFreeClassroomForE2E(client: E2EPrismaClient) {
   await ensurePreviewFreeClassroomFixture(client);
   process.env.E2E_FREE_CLASSROOM_TEACHER_EMAIL =
     'dev.teacher.free@yawp.local';
+  await markFreeTeacherToursFinished(client, 'dev.teacher.free@yawp.local');
+}
+
+// Page tours open a welcome card for a free classroom teacher on first visit.
+// Mark them finished so specs that are not about the tour never see one;
+// free-tier.guided-tour.spec.ts clears these rows for itself.
+async function markFreeTeacherToursFinished(
+  client: E2EPrismaClient,
+  email: string
+) {
+  const { TOUR_IDS } = await import('../app/domain/guided-tours/tours');
+  const user = await client.user.findUnique({
+    where: { email },
+    select: { id: true },
+  });
+  if (!user) return;
+  for (const tourId of TOUR_IDS) {
+    await client.userTour.upsert({
+      where: { userId_tourId: { userId: user.id, tourId } },
+      create: { userId: user.id, tourId, status: 'completed' },
+      update: { status: 'completed' },
+    });
+  }
 }
 
 // Note: this module is imported by the E2E prepare script, not run directly.

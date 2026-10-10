@@ -72,6 +72,13 @@ import { FLAT_SIDEBAR_SECTIONS, SidebarNavLinks } from './sidebar-nav';
 import { prisma } from '~/utils/db.server';
 import { shouldRedirectClasslessStudent } from '~/utils/classless-student-gate';
 import { formatUserContactLabel } from '~/utils/user-display';
+import {
+  GuidedTour,
+  RestartToursButton,
+  TourThisPageButton,
+} from '~/components/guided-tour/guided-tour';
+import { guidedToursAvailable } from '~/domain/guided-tours/tours';
+import { loadFinishedTourIds } from '~/domain/guided-tours/guided-tours.server';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -112,6 +119,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           options: [],
           isStudent: false,
         },
+        guidedTours: null,
       });
     }
   }
@@ -160,12 +168,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
       ? options
       : [selected, ...options].sort((a, b) => b.localeCompare(a));
 
+  // Free classroom teachers get page tours instead of a hands-on orientation.
+  const guidedTours = guidedToursAvailable({
+    freeTierEnabled: freeTierFeatureOn,
+    role: profile.role,
+    plan: profile.organization.plan,
+  })
+    ? { finishedTourIds: await loadFinishedTourIds(userId) }
+    : null;
+
   return data({
     schoolYearScope: {
       selected,
       options: selectableOptions,
       isStudent: profile.role === 'STUDENT',
     },
+    guidedTours,
   });
 }
 
@@ -193,7 +211,7 @@ function isAppNavLinkActive(linkTo: string, pathname: string) {
 export default function Route() {
   const location = useLocation();
   const user = useUser();
-  const { schoolYearScope } = useLoaderData<typeof loader>();
+  const { schoolYearScope, guidedTours } = useLoaderData<typeof loader>();
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
   const isReadOnlyImpersonation = rootData?.impersonation?.isReadOnly ?? false;
@@ -277,6 +295,7 @@ export default function Route() {
     >
       {/* Left navigation panel */}
       <nav
+        data-tour="app-nav"
         className={cn(
           'z-20 flex h-full w-[212px] min-w-[212px] -translate-x-full transform flex-col border-r bg-background transition-all duration-300 ease-in-out sm:translate-x-0',
           {
@@ -341,6 +360,12 @@ export default function Route() {
           />
         </div>
         <div className="flex flex-grow flex-col justify-end">
+          {guidedTours && !isReadOnlyImpersonation ? (
+            <TourThisPageButton
+              navExpanded={navExpanded}
+              onClick={() => setIsMobileNavOpen(false)}
+            />
+          ) : null}
           <Popover>
             <PopoverTrigger>
               <div className="flex items-center gap-2 border-t p-4 pb-6 transition hover:bg-foreground/5 sm:pb-3">
@@ -421,6 +446,11 @@ export default function Route() {
                       ? 'Shows the classes and work from this year. Switch back any time — nothing is ever removed.'
                       : 'Scopes your classes and grading queue. Students always keep their earlier work.'}
                   </p>
+                </div>
+              ) : null}
+              {guidedTours && !isReadOnlyImpersonation ? (
+                <div className="border-b p-1">
+                  <RestartToursButton className="w-full justify-start gap-2 rounded-lg" />
                 </div>
               ) : null}
               <Form action="/auth/logout" method="POST" className="p-1">
@@ -509,6 +539,9 @@ export default function Route() {
             <Outlet key={location.pathname} />
           </div>
         </NavExpandedContext.Provider>
+        {guidedTours && !isReadOnlyImpersonation ? (
+          <GuidedTour finishedTourIds={guidedTours.finishedTourIds} />
+        ) : null}
       </div>
       <UserSettingsDialog
         open={isSettingsOpen}

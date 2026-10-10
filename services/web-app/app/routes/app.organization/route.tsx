@@ -57,7 +57,10 @@ export default function Route() {
     <main className="flex flex-col h-screen">
       <div className="py-2 md:py-4 px-3 md:px-6 border-b">
         <h1 className="mb-3 text-2xl md:text-3xl">{organization.name}</h1>
-        <div className="flex gap-1 overflow-x-auto no-scrollbar">
+        <div
+          className="flex gap-1 overflow-x-auto no-scrollbar"
+          data-tour="organization-tabs"
+        >
           {tabs.map((tab) => (
             <Button
               key={tab.to}
@@ -73,7 +76,7 @@ export default function Route() {
           ))}
         </div>
       </div>
-      <div className="flex-grow overflow-auto">
+      <div className="flex-grow overflow-auto" data-tour="organization-content">
         <Outlet />
       </div>
     </main>

@@ -8,7 +8,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Form, useFetcher } from 'react-router';
+import { Form, useFetcher, useSubmit } from 'react-router';
 import { Badge } from '~/components/ui/badge';
 import {
   Popover,
@@ -16,6 +16,7 @@ import {
   PopoverTrigger,
 } from '~/components/ui/popover';
 import { Tooltip } from '~/components/ui/tooltip';
+import { clearSkippedTours } from '~/components/guided-tour/skipped-tours';
 import { cn } from '~/utils/misc';
 
 export type LocalDevLoginOption = {
@@ -97,7 +98,13 @@ function LoginOptionRow({
   const isActive = isSubmitting && submittingEmail === option.email;
 
   return (
-    <Form method="post" action="/auth/dev-login" className="block">
+    <Form
+      method="post"
+      action="/auth/dev-login"
+      className="block"
+      // A dev sign-in starts tours fresh, including ones skipped in this tab.
+      onSubmit={() => clearSkippedTours()}
+    >
       <input type="hidden" name="email" value={option.email} />
       <button
         type="submit"
@@ -342,6 +349,49 @@ export function PreviewSeatIdentity({ label }: { label: string }) {
   );
 }
 
+const DEV_LOGIN_PARAM = 'devLogin';
+
+/**
+ * A PR-comment link can sign a tester in as well as let them through the
+ * preview gate: `?code=<seat>&devLogin=<email>`. The gate strips `code` and
+ * keeps the rest, so this reads the email that is left and the search string
+ * without it. The sign-in itself is the same /auth/dev-login POST the menu
+ * below makes, so the server still requires the user to belong to the seat.
+ */
+export function readDevLoginParam(
+  search: string
+): { email: string; search: string } | null {
+  const params = new URLSearchParams(search);
+  const email = params.get(DEV_LOGIN_PARAM)?.trim().toLowerCase() ?? '';
+  if (!/^[^\s@]+@[^\s@]+$/.test(email)) return null;
+  params.delete(DEV_LOGIN_PARAM);
+  const rest = params.toString();
+  return { email, search: rest ? `?${rest}` : '' };
+}
+
+function OneClickDevLogin() {
+  const submit = useSubmit();
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current) return;
+    const pending = readDevLoginParam(window.location.search);
+    if (!pending) return;
+    started.current = true;
+    // Drop the email from the address bar before anything else happens.
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${window.location.pathname}${pending.search}${window.location.hash}`
+    );
+    clearSkippedTours();
+    void submit(
+      { email: pending.email },
+      { method: 'post', action: '/auth/dev-login' }
+    );
+  }, [submit]);
+  return null;
+}
+
 export function LocalDevEnvironmentBar({
   bannerWarning,
   localDevQuickLogin,
@@ -384,6 +434,7 @@ export function LocalDevEnvironmentBar({
 
   return (
     <div className="fixed bottom-4 right-4 z-30">
+      {showQuickLogin ? <OneClickDevLogin /> : null}
       <Popover open={isQuickLoginOpen} onOpenChange={setIsQuickLoginOpen}>
         <PopoverTrigger asChild>
           <button

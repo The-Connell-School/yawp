@@ -1748,6 +1748,21 @@ model User {
   memberships        OrgMembership[]
   isAdmin            Boolean         @default(false)
   isSuperAdmin       Boolean         @default(false)
+  tours              UserTour[]
+}
+
+/// How a user left each in-app page tour (free classroom teachers). One row per
+/// user and tour; no row means the tour has not been seen and its welcome card
+/// shows. Tour ids live in app code (app/domain/guided-tours/tours.ts).
+model UserTour {
+  userId    String
+  tourId    String
+  /// "completed" or "dismissed"
+  status    String
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, tourId])
 }
 
 model Invitation {

@@ -84,6 +84,7 @@ export const Comments = ({
 
   return (
     <div
+      data-tour="doc-comments"
       className={cn(
         'no-scrollbar h-full w-full overflow-y-scroll',
         className

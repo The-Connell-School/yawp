@@ -229,6 +229,7 @@ function ClassHeaderTabBar({
       ref={listRef}
       role="tablist"
       aria-label="Class sections"
+      data-tour="class-tabs"
       className="relative flex w-full max-w-lg items-stretch"
     >
       <div

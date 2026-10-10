@@ -131,6 +131,29 @@ describe('auth.dev-login action', () => {
     });
   });
 
+  test('a dev sign-in starts the user fresh, so page tours greet them like a first login', async () => {
+    const onSignedIn = mock(async () => {});
+    const freshAction = createDevLoginAction({
+      prismaClient: prisma as never,
+      getExpirationDate: getSessionExpirationDate as never,
+      sessionKey: 'sessionId',
+      sessionStorage: authSessionStorage as never,
+      membershipCookie: setMembershipId as never,
+      localDevAuthEnabled: isLocalDevAuthEnabled as never,
+      previewGateEnabled: isPreviewAccessGateEnabled as never,
+      previewSeatForRequest: getPreviewAccessSeat as never,
+      redirectResponse,
+      onSignedIn,
+    });
+
+    const response = await freshAction(
+      actionArgs(makeRequest('dev.student@yawp.local'))
+    );
+
+    expect(response.status).toBe(302);
+    expect(onSignedIn).toHaveBeenCalledWith('user-1');
+  });
+
   test('refuses a user without an active seat membership before creating a session', async () => {
     isPreviewAccessGateEnabled.mockReturnValue(true);
     getPreviewAccessSeat.mockResolvedValue({ organizationId: 'preview-seat-2', label: 'QA' });
