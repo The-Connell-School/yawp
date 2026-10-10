@@ -71,6 +71,7 @@ export const Bar = ({
 
   return (
     <div
+      data-tour="doc-toolbar"
       className="bg-muted-background flex w-full items-center gap-0.5 border-b p-1"
       ref={containerRef}
     >

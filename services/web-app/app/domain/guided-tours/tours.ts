@@ -25,6 +25,7 @@ export const TOUR_IDS = [
   'type-class-starter',
   'type-prewriting',
   'type-thesis-statement',
+  'document',
 ] as const;
 
 export type TourId = (typeof TOUR_IDS)[number];
@@ -44,7 +45,8 @@ export type TourIcon =
   | 'lounge'
   | 'planner'
   | 'organization'
-  | 'assignment-type';
+  | 'assignment-type'
+  | 'document';
 
 export type TourStep = {
   /** Value of the `data-tour` attribute on the element this step points at. */
@@ -57,6 +59,43 @@ export type PageTour = {
   id: TourId;
   welcome: { title: string; body: string; icon: TourIcon };
   steps: TourStep[];
+};
+
+/** The writing page, wherever a document opens. */
+const DOCUMENT_TOUR: PageTour = {
+  id: 'document',
+  welcome: {
+    title: 'Welcome to the writing page',
+    body: 'This is the page your students write on. Take a quick look around so you know what they will see.',
+    icon: 'document',
+  },
+  steps: [
+    {
+      target: 'doc-tutor',
+      title: 'The Tutor',
+      body: 'The assignment and its steps sit here. Students can open Chat to talk an idea through with the Tutor while they write.',
+    },
+    {
+      target: 'doc-toolbar',
+      title: 'Write here',
+      body: 'The page in the middle is the document. The toolbar formats it, and every change saves on its own.',
+    },
+    {
+      target: 'doc-comments',
+      title: 'Comments',
+      body: 'Highlight any text to leave a comment on it. Comments on the writing collect here.',
+    },
+    {
+      target: 'doc-submit',
+      title: 'Submit',
+      body: 'Students submit here when they are done. Submitted work shows up in Documents, ready for you to grade.',
+    },
+    {
+      target: 'doc-status',
+      title: 'Saved, history, print',
+      body: 'See that the work is saved, and use this menu to step back through every version in History or to print it.',
+    },
+  ],
 };
 
 const TOURS: Record<TourId, PageTour> = {
@@ -365,6 +404,7 @@ const TOURS: Record<TourId, PageTour> = {
       },
     ],
   },
+  document: DOCUMENT_TOUR,
 };
 
 /** Assignment type kinds with a tour of their page, and which tour. */
@@ -426,6 +466,7 @@ export function tourForPathname(pathname: string): PageTour | null {
   if (path === '/app/teacher-trainings') return TOURS['teachers-lounge'];
   if (path === '/app/lesson-planner') return TOURS['lesson-planner'];
   if (/^\/app\/organization(\/[^/]+)?$/.test(path)) return TOURS.organization;
+  if (/^\/app\/documents\/[^/]+$/.test(path)) return TOURS.document;
   return null;
 }
 

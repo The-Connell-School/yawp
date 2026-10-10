@@ -1,5 +1,6 @@
 import { prisma } from '~/utils/db.server';
 import {
+  guidedToursAvailable,
   isTourId,
   isTourStatus,
   nextTourStatus,
@@ -42,4 +43,29 @@ export async function recordTourOutcome(
 /** Forget every tour the user finished or skipped, so each page greets them again. */
 export async function resetTours(userId: string) {
   await prisma.userTour.deleteMany({ where: { userId } });
+}
+
+/**
+ * What a page needs to show tours: the finished tours for a free classroom
+ * teacher while the free tier is on, or null for everyone else.
+ */
+export async function loadGuidedTours(
+  userId: string,
+  membership: { role: string; organization?: { plan?: string | null } | null }
+): Promise<{ finishedTourIds: TourId[] } | null> {
+  const plan = membership.organization?.plan;
+  // Only free classroom teachers can see tours; skip the flag read otherwise.
+  if (
+    !guidedToursAvailable({
+      freeTierEnabled: true,
+      role: membership.role,
+      plan,
+    })
+  ) {
+    return null;
+  }
+  const { isFreeTierEnabled } =
+    await import('~/domain/feature-flags/feature-flags.server');
+  if (!(await isFreeTierEnabled())) return null;
+  return { finishedTourIds: await loadFinishedTourIds(userId) };
 }

@@ -294,6 +294,7 @@ export const Tutor = ({
 
   return (
     <div
+      data-tour="doc-tutor"
       className={cn(
         'flex w-full flex-col border-r bg-muted/30 pb-2 md:w-3/5',
         className

@@ -48,6 +48,7 @@ const ICONS: Record<TourIcon, typeof House> = {
   planner: Lightbulb,
   organization: CogIcon,
   'assignment-type': NotebookPen,
+  document: FileText,
 };
 
 /** About how big the step card is, to tell which side of an element it fits. */
@@ -367,6 +368,11 @@ function WelcomeCard({
       </div>
     </div>
   );
+}
+
+/** Opens the current page's tour, for pages with their own menu instead of the sidebar. */
+export function startPageTour() {
+  window.dispatchEvent(new Event(START_EVENT));
 }
 
 /**

@@ -9,9 +9,11 @@ import {
   useFetcher,
   useLoaderData,
   useNavigate,
+  useRouteLoaderData,
   useSearchParams,
   Link,
 } from 'react-router';
+import type { Route as RootRoute } from '../../+types/root';
 import {
   ArrowLeft,
   Loader2,
@@ -23,6 +25,7 @@ import {
   Clock,
   EllipsisVertical,
   Printer,
+  Compass,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
@@ -105,6 +108,11 @@ import {
 } from '~/domain/grading/grading-queue';
 import { loadDocumentNavigationNeighbors } from '~/domain/grading/grading-queue.server';
 import { redactGradedAtFromStudentDocumentSubmissions } from '~/domain/submissions/student-submission-grade-visibility.server';
+import { loadGuidedTours } from '~/domain/guided-tours/guided-tours.server';
+import {
+  GuidedTour,
+  startPageTour,
+} from '~/components/guided-tour/guided-tour';
 
 const SUBMIT_EMPTY_TOOLTIP =
   "You can't submit an empty document. Add text first.";
@@ -504,7 +512,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ? redactGradedAtFromStudentDocumentSubmissions(submissions)
     : submissions;
 
+  // Free classroom teachers get a tour of the writing page.
+  const guidedTours = await loadGuidedTours(userId, profile);
+
   return dataResponse({
+    guidedTours,
     doc: {
       ...doc,
       submissions: submissionsForResponse,
@@ -675,6 +687,10 @@ export function isTutorEnabledForAssignment(
 export default function Route() {
   const data = useLoaderData<typeof loader>();
   const user = useUser();
+  const isReadOnlyImpersonation =
+    useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root')
+      ?.impersonation?.isReadOnly ?? false;
+  const showGuidedTour = data.guidedTours != null && !isReadOnlyImpersonation;
   const fetcher = useFetcher();
   const submissionUnsubmitFetcher = useFetcher();
   const navigate = useNavigate();
@@ -942,6 +958,9 @@ export default function Route() {
   return (
     <>
       <main className="flex h-screen w-screen flex-col overflow-hidden bg-white">
+        {showGuidedTour ? (
+          <GuidedTour finishedTourIds={data.guidedTours!.finishedTourIds} />
+        ) : null}
         {apHistorySnapshot && !showDbqWorkspace ? (
           <ApHistoryAssignmentPanel snapshot={apHistorySnapshot} />
         ) : null}
@@ -1180,6 +1199,7 @@ export default function Route() {
                         variant="outline"
                         disabled
                         data-testid="document-submit-button"
+                        data-tour="doc-submit"
                       >
                         Submit
                       </Button>
@@ -1191,6 +1211,7 @@ export default function Route() {
                     variant="outline"
                     disabled={submitActionDisabled}
                     data-testid="document-submit-button"
+                    data-tour="doc-submit"
                     onClick={() => {
                       setSubmissionTitle(getLiveDocumentTitle());
                       setIsFinalizeDialogOpen(true);
@@ -1217,7 +1238,7 @@ export default function Route() {
                 {showOldComments ? 'Hide old comments' : 'Show old comments'}
               </Button>
             )}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5" data-tour="doc-status">
               <SaveStatusIndicator status={syncStatus} />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -1247,6 +1268,15 @@ export default function Route() {
                     <Printer className="h-4 w-4" />
                     Print
                   </DropdownMenuItem>
+                  {showGuidedTour ? (
+                    <DropdownMenuItem
+                      className="gap-2"
+                      onSelect={() => startPageTour()}
+                    >
+                      <Compass className="h-4 w-4" />
+                      Tour this page
+                    </DropdownMenuItem>
+                  ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

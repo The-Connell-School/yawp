@@ -13,9 +13,10 @@ gives them a short guided tour instead. The pattern follows The Nest's tour:
 4. **Restart all tours**, in the Settings menu, forgets every tour the teacher
    finished or skipped, so each page shows its welcome card again.
 
-Only **Skip** (or ✕) on the welcome card and **Finish** at the end are
-recorded. Closing a tour partway through records nothing, so the welcome card
-comes back on the next visit.
+Only **Finish** keeps a welcome card away for good. **Skip** (or ✕) hides
+it for the rest of that browser session; at the next login every unfinished
+page greets the teacher again, starting with the dashboard. Closing a tour
+partway through records nothing.
 
 ## Who sees it
 
@@ -41,6 +42,7 @@ The tours are defined in `services/web-app/app/domain/guided-tours/tours.ts`:
 | `type-class-starter` | `/app/assignment-types/:id` (Class Starter) | New menu, how it works, prompt library, modules, your drafts |
 | `type-prewriting` | `/app/assignment-types/:id` (Prewriting) | New menu, modules, your drafts |
 | `type-thesis-statement` | `/app/assignment-types/:id` (Thesis Statement) | New menu, modules, your drafts |
+| `document` | `/app/documents/:id` | Tutor, editor toolbar, comments, Submit, saved/history/print (Tour this page is in the ⋮ menu) |
 
 An assignment type page's URL doesn't say which type it is, so the page
 names its kind with `data-tour-variant`, and `tourForPage` picks that
