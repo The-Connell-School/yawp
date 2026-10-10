@@ -37,7 +37,7 @@ export function resolveDisplayOptions(
   }
 
   const categoriesAfterGrammarToggle = applyDisplayGrammarCategories(
-    categoryList,
+    categoryList as RubricCategoryOptions[],
     outputSchema,
     assignment
   );

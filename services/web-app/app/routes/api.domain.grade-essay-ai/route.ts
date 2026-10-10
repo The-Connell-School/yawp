@@ -1416,7 +1416,13 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   try {
     parsed = await parseAiResponse(responseText);
     const clampedCategories = applyGrammarHighlightScoreClamp({
-      categories: parsed.categories,
+      categories: parsed.categories.map((category) => ({
+        ...category,
+        grammarImpairsMeaning:
+          typeof category.grammarImpairsMeaning === 'boolean'
+            ? category.grammarImpairsMeaning
+            : undefined,
+      })),
       rubricCategories,
       minScore,
       maxScore,
