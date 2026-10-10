@@ -69,6 +69,7 @@ sudo mkdir -p \
   "$ROOT/ingress/challenges" \
   "$ROOT/previews" \
   "$ROOT/sources" \
+  "$ROOT/vite-deps" \
   "$ROOT/wake/access"
 # Preview deploy and teardown jobs create/remove descendants concurrently. Only repair
 # ownership on the stable directories bootstrap itself must write; recursively walking
@@ -81,6 +82,7 @@ sudo chown "$USER":"$USER" \
   "$ROOT/ingress/challenges" \
   "$ROOT/previews" \
   "$ROOT/sources" \
+  "$ROOT/vite-deps" \
   "$ROOT/wake" \
   "$ROOT/wake/access"
 docker network inspect preview >/dev/null 2>&1 || docker network create preview >/dev/null

@@ -16,16 +16,18 @@ put_alarm() {
   local comparison="${4:-GreaterThanOrEqualToThreshold}"
   local periods="${5:-3}"
   local eval_periods="${6:-5}"
+  local period="${7:-60}"
+  local description="${8:-Yawp host ${suffix} for ${INSTANCE_ID}}"
 
   "$AWS" cloudwatch put-metric-alarm \
     --region "$REGION" \
     --alarm-name "${ALARM_PREFIX}-${suffix}" \
-    --alarm-description "Yawp host ${suffix} for ${INSTANCE_ID}" \
+    --alarm-description "$description" \
     --namespace "$NAMESPACE" \
     --metric-name "$metric" \
     --dimensions "Name=InstanceId,Value=${INSTANCE_ID}" \
     --statistic Average \
-    --period 60 \
+    --period "$period" \
     --evaluation-periods "$eval_periods" \
     --datapoints-to-alarm "$periods" \
     --threshold "$threshold" \
@@ -35,8 +37,16 @@ put_alarm() {
     --ok-actions "$SNS_TOPIC"
 }
 
-put_alarm memory-warning MemoryUsedPercent 75
-put_alarm memory-critical MemoryUsedPercent 85  GreaterThanOrEqualToThreshold 2 3
+# Deploy spikes routinely cross 75% during Vite/esbuild cold starts, so there is no
+# warning-tier memory alarm. Critical catches acute pressure; sustained catches leaks.
+put_alarm memory-critical MemoryUsedPercent 95 GreaterThanOrEqualToThreshold 2 3
+
+# Sustained pressure: 5-minute averages must stay at or above 80% for 20 minutes
+# (4 of 4 periods). Deploy spikes rarely hold that long; creeping leaks or too many
+# warm previews do.
+put_alarm memory-sustained MemoryUsedPercent 80 GreaterThanOrEqualToThreshold 4 4 300 \
+  "Yawp host memory-sustained (20m avg >= 80%) for ${INSTANCE_ID}"
+
 put_alarm disk-warning DiskUsedPercent 80
 
-echo "Provisioned alarms ${ALARM_PREFIX}-{memory-warning,memory-critical,disk-warning} for ${INSTANCE_ID}"
+echo "Provisioned alarms ${ALARM_PREFIX}-{memory-critical,memory-sustained,disk-warning} for ${INSTANCE_ID}"

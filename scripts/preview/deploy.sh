@@ -68,7 +68,7 @@ DATA_SOURCE_CHANGED=1
 TOOLING_CHANGED=1
 DATABASE_CREATED=0
 
-mkdir -p "$PREVIEW_DIR" "$DB_COMPOSE_DIR"
+mkdir -p "$PREVIEW_DIR" "$DB_COMPOSE_DIR" "${ROOT}/vite-deps"
 DATABASE_ROLE_FILE="$PREVIEW_DIR/database-role"
 DATABASE_PASSWORD_FILE="$PREVIEW_DIR/database-password"
 load_or_create_database_credential() {
@@ -216,6 +216,9 @@ docker network inspect preview >/dev/null 2>&1 || docker network create preview 
 
 start_ms="$(date +%s%3N)"
 compose=(docker compose -p "$COMPOSE_PROJECT" -f "$PREVIEW_DIR/docker-compose.yml")
+# shellcheck source=vite-deps.sh
+source "$SCRIPT_DIR/vite-deps.sh"
+load_vite_deps_state
 db_compose=(docker compose -p "$POSTGRES_PROJECT" -f "$DB_COMPOSE_FILE")
 
 validate_database_name() {
@@ -699,6 +702,7 @@ run_tooling_if_needed() {
   fi
 
   "${compose[@]}" run --rm toolbox bash -lc "$tooling_command"
+  RAN_BUN_INSTALL=1
   printf '%s\n' "$fingerprint" > "$TOOLING_FINGERPRINT_FILE"
 }
 
@@ -788,6 +792,7 @@ reset_preview_database_for_data_source_change
 ensure_preview_database
 harden_preview_database
 run_tooling_if_needed
+seed_vite_deps || true
 ensure_preview_seats
 assert_no_master_code_collision
 install_demo_backup_tooling
@@ -853,6 +858,8 @@ for attempt in $(seq 1 90); do
     '
     echo "PREVIEW_ELAPSED_MS=$elapsed_ms"
     printf '%s\n' "$DATA_SOURCE_FINGERPRINT" > "$DATA_SOURCE_FINGERPRINT_FILE"
+    write_vite_deps_fingerprint
+    publish_vite_deps_template || true
     DEMO_RESET_RECOVERY_ARMED=false
     exit 0
   fi
