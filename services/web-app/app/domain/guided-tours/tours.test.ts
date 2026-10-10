@@ -32,6 +32,7 @@ describe('tourForPathname', () => {
     expect(tourForPathname('/app/organization/teachers')?.id).toBe(
       'organization'
     );
+    expect(tourForPathname('/app/documents/doc_123')?.id).toBe('document');
   });
 
   test('every page in the teacher sidebar has a tour', () => {
