@@ -285,7 +285,7 @@ describe('AssignmentCreationSheetContent', () => {
       expectText('Extract from PDF');
       expectText('Submit for grade');
       expectText(
-        'Graded out of 100 points in bands, read at the intermediate level.'
+        'Graded out of 100 points, read at the intermediate level.'
       );
       expectText('Tutor enabled');
       expectText(
@@ -377,7 +377,7 @@ describe('AssignmentCreationSheetContent', () => {
     root = renderSheet().root;
 
     expectText(
-      'Graded out of 100 points in bands, read at the intermediate level.'
+      'Graded out of 100 points, read at the intermediate level.'
     );
     // The old block stated the same facts four times over three nested boxes.
     expectNoText('Grade Configuration');
@@ -419,7 +419,7 @@ describe('AssignmentCreationSheetContent', () => {
     }).root;
 
     expectText(
-      'Graded out of 250 points in bands, read at the advanced level.'
+      'Graded out of 250 points, read at the advanced level.'
     );
     expect(inputByName('pointValue').value).toBe('250');
     expect(inputByName('gradingMode').value).toBe('bands');
@@ -1138,7 +1138,7 @@ describe('AssignmentCreationSheetContent', () => {
       expect(submitButton().disabled).toBe(false);
     });
 
-    it('is always graded in bands, with no steps option to pick', () => {
+    it('is always graded with band scoring under the hood, with no steps option to pick', () => {
       root = renderQuickExitTicketSheet({
         fixedClassId: 'class-1',
         initialGradingMode: 'step',
@@ -1146,7 +1146,7 @@ describe('AssignmentCreationSheetContent', () => {
       turnGradingOn();
 
       expect(inputByName('gradingMode').value).toBe('bands');
-      expectText('in bands');
+      expectText('Graded out of 10 points, read at the');
       act(() => {
         controlById('assignment-create-change-grading').click();
       });
