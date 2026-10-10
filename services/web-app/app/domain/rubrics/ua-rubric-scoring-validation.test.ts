@@ -15,10 +15,17 @@ import {
   GBA300_INTERNATIONAL_EXPANSION,
 } from './gba300-rubrics';
 import {
+  GBA300_ETIQUETTE_CONCLUSION_EXEMPLARY,
+  GBA300_ETIQUETTE_COUNTRY_1_EXEMPLARY,
+  GBA300_ETIQUETTE_COUNTRY_2_EXEMPLARY,
   GBA300_ETIQUETTE_EXEMPLARY_SCORES,
+  GBA300_ETIQUETTE_FULL_EXEMPLARY,
   GBA300_ETIQUETTE_INTRODUCTION_EXEMPLARY_SCORE,
   GBA300_ETIQUETTE_INTRODUCTION_EXEMPLARY,
   GBA300_ETIQUETTE_INVALID_GENERIC_SCORES,
+  GBA300_ETIQUETTE_SENTENCE_CAPS,
+  countSentences,
+  countTopicBlockSentences,
 } from './ua-rubric-scoring-fixtures';
 import { computeWeightedBandPercentage } from '~/domain/grading/gradeMath';
 
@@ -84,6 +91,65 @@ describe('UA rubric scoring validation (MVP)', () => {
     expect(shape.rubricText).toContain('18-20 Exemplary');
   });
 
+  test('approved category samples stay within rubric sentence caps', () => {
+    expect(countSentences(GBA300_ETIQUETTE_INTRODUCTION_EXEMPLARY)).toBeLessThanOrEqual(
+      GBA300_ETIQUETTE_SENTENCE_CAPS.introduction
+    );
+    expect(countSentences(GBA300_ETIQUETTE_CONCLUSION_EXEMPLARY)).toBeLessThanOrEqual(
+      GBA300_ETIQUETTE_SENTENCE_CAPS.conclusion
+    );
+
+    for (const topicSentenceCount of countTopicBlockSentences(
+      GBA300_ETIQUETTE_COUNTRY_1_EXEMPLARY
+    )) {
+      expect(topicSentenceCount).toBeLessThanOrEqual(
+        GBA300_ETIQUETTE_SENTENCE_CAPS.countryTopic
+      );
+    }
+
+    for (const topicSentenceCount of countTopicBlockSentences(
+      GBA300_ETIQUETTE_COUNTRY_2_EXEMPLARY
+    )) {
+      expect(topicSentenceCount).toBeLessThanOrEqual(
+        GBA300_ETIQUETTE_SENTENCE_CAPS.countryTopic
+      );
+    }
+  });
+
+  test('approved category samples include on-task business-communication topics and Global Road Warrior citations', () => {
+    expect(GBA300_ETIQUETTE_COUNTRY_1_EXEMPLARY).toContain('Hierarchy in First Meetings');
+    expect(GBA300_ETIQUETTE_COUNTRY_1_EXEMPLARY).toContain(
+      'Reading Indirect Negotiation Signals'
+    );
+    expect(GBA300_ETIQUETTE_COUNTRY_1_EXEMPLARY).toMatch(/Global Road Warrior, Japan/g);
+
+    expect(GBA300_ETIQUETTE_COUNTRY_2_EXEMPLARY).toContain(
+      'Building Rapport Before Business Talk'
+    );
+    expect(GBA300_ETIQUETTE_COUNTRY_2_EXEMPLARY).toContain(
+      'Flexible Timing and Direct Feedback'
+    );
+    expect(GBA300_ETIQUETTE_COUNTRY_2_EXEMPLARY).toMatch(/Global Road Warrior, Brazil/g);
+
+    expect(GBA300_ETIQUETTE_CONCLUSION_EXEMPLARY).toContain('Japan and Brazil');
+    expect(GBA300_ETIQUETTE_CONCLUSION_EXEMPLARY).toContain('global');
+  });
+
+  test('the full exemplary essay combines every approved category sample', () => {
+    expect(GBA300_ETIQUETTE_FULL_EXEMPLARY).toContain(
+      GBA300_ETIQUETTE_INTRODUCTION_EXEMPLARY
+    );
+    expect(GBA300_ETIQUETTE_FULL_EXEMPLARY).toContain(
+      GBA300_ETIQUETTE_COUNTRY_1_EXEMPLARY
+    );
+    expect(GBA300_ETIQUETTE_FULL_EXEMPLARY).toContain(
+      GBA300_ETIQUETTE_COUNTRY_2_EXEMPLARY
+    );
+    expect(GBA300_ETIQUETTE_FULL_EXEMPLARY).toContain(
+      GBA300_ETIQUETTE_CONCLUSION_EXEMPLARY
+    );
+  });
+
   test('the approved Introduction sample is wired into a grading request the assistant can score', () => {
     const instructions = getAssignmentTypeGradingInstructions(
       etiquette.promptConfig as Record<string, unknown>
@@ -107,6 +173,32 @@ describe('UA rubric scoring validation (MVP)', () => {
     expect(request.userPrompt).toContain(GBA300_ETIQUETTE_INTRODUCTION_EXEMPLARY);
     expect(request.userPrompt).toContain('Do not convert a section to a 0–100 score');
     expect(request.userPrompt).toContain('5-5 Exemplary');
+  });
+
+  test('the full exemplary essay is wired into a grading request the assistant can score', () => {
+    const instructions = getAssignmentTypeGradingInstructions(
+      etiquette.promptConfig as Record<string, unknown>
+    );
+    const shape = buildGradingPromptShape({
+      categories: etiquette.rubric.categories,
+      minScore: etiquette.scoringScale.minScore,
+      maxScore: etiquette.scoringScale.maxScore,
+      studentFirstName: 'Jordan',
+    });
+    const request = buildGradingRequest({
+      promptShape: shape,
+      instructions,
+      label: etiquette.title,
+      studentFirstName: 'Jordan',
+      assignmentPrompt:
+        'Compare two countries on interpersonal business communication using Global Road Warrior.',
+      essayText: GBA300_ETIQUETTE_FULL_EXEMPLARY,
+    });
+
+    expect(request.userPrompt).toContain('Hierarchy in First Meetings');
+    expect(request.userPrompt).toContain('Building Rapport Before Business Talk');
+    expect(request.userPrompt).toContain(GBA300_ETIQUETTE_CONCLUSION_EXEMPLARY);
+    expect(request.userPrompt).toContain('18-20 Exemplary');
   });
 
   test('exemplary raw scores for every category pass band validation and normalize to 100%', () => {

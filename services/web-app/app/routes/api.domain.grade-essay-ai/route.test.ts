@@ -3,7 +3,7 @@ import { rubricKeys } from '~/domain/grading/rubric';
 import { GBA300_INTERNATIONAL_ETIQUETTE } from '~/domain/rubrics/gba300-rubrics';
 import {
   GBA300_ETIQUETTE_EXEMPLARY_SCORES,
-  GBA300_ETIQUETTE_INTRODUCTION_EXEMPLARY,
+  GBA300_ETIQUETTE_FULL_EXEMPLARY,
 } from '~/domain/rubrics/ua-rubric-scoring-fixtures';
 
 const prisma = {
@@ -2413,7 +2413,7 @@ describe('api.domain.grade-essay-ai', () => {
     prisma.submission.findFirst.mockResolvedValue(
       mockSubmission({
         id: 'sub-gba300-etiquette-validation',
-        text: GBA300_ETIQUETTE_INTRODUCTION_EXEMPLARY,
+        text: GBA300_ETIQUETTE_FULL_EXEMPLARY,
         document: {
           ...mockSubmission().document,
           assignmentTypeId: 'assignment-type-gba300-etiquette',
@@ -2462,7 +2462,10 @@ describe('api.domain.grade-essay-ai', () => {
       ([request]) => request.metadata?.kind === 'rubric-evaluation'
     );
     expect(gradingCall?.[0].messages.some((message: { content: string }) =>
-      message.content.includes(GBA300_ETIQUETTE_INTRODUCTION_EXEMPLARY)
+      message.content.includes('Hierarchy in First Meetings')
+    )).toBe(true);
+    expect(gradingCall?.[0].messages.some((message: { content: string }) =>
+      message.content.includes('Building Rapport Before Business Talk')
     )).toBe(true);
   });
 });

@@ -241,11 +241,11 @@ describe('AssignmentCreationSheetContent', () => {
       expectText('Extract from PDF');
       expectText('Submit for grade');
       expectText('Point value');
-      expectText('Tutor enabled');
+      expectText('Disable tutor');
       expectText(
-        "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance."
+        "Removes the tutor from students' documents. Use this to test a student's ability to write a paper independently of tutor guidance."
       );
-      expectText('Grading assistant strictness');
+      expectText('Grading strictness');
       expectNoText('Tutor Context');
 
       const form = document.querySelector('form');
@@ -256,7 +256,7 @@ describe('AssignmentCreationSheetContent', () => {
       expect(inputByName('assignmentTypeId').value).toBe(
         expectedAssignmentTypeId
       );
-      expect(inputByName('submitForGrade').value).toBe('false');
+      expect(inputByName('submitForGrade').value).toBe('true');
 
       const submitForGrade = controlById('assignment-create-submit-for-grade');
       expect(isChecked(submitForGrade)).toBe(true);
@@ -265,15 +265,15 @@ describe('AssignmentCreationSheetContent', () => {
         'intermediate'
       );
 
-      // Tutor defaults to enabled, preserving today's behavior.
-      expect(inputByName('tutorEnabled').value).toBe('false');
+      // Tutor defaults to enabled, so the disable-tutor checkbox starts unchecked.
+      expect(inputByName('tutorEnabled').value).toBe('true');
       const tutorEnabled = controlById('assignment-create-tutor-enabled');
-      expect(tutorEnabled.getAttribute('role')).toBe('checkbox');
-      expect(isChecked(tutorEnabled)).toBe(true);
+      expect(tutorEnabled.getAttribute('role')).toBe('switch');
+      expect(isChecked(tutorEnabled)).toBe(false);
     }
   );
 
-  it('submits tutorEnabled=false when the tutor toggle is turned off', () => {
+  it('submits tutorEnabled=false when the disable-tutor toggle is checked', () => {
     root = renderSheet().root;
 
     act(() => {
@@ -281,30 +281,22 @@ describe('AssignmentCreationSheetContent', () => {
     });
 
     expect(isChecked(controlById('assignment-create-tutor-enabled'))).toBe(
-      false
+      true
     );
-    expect(inputByName('tutorEnabled').value).toBe('false');
+    expect(
+      allInputsByName('tutorEnabled').map((input) => input.value)
+    ).toContain('false');
   });
 
   it('shows the grading assistant strictness picker to teachers', () => {
     root = renderSheet().root;
 
-    expectText('Grading assistant strictness');
-    expectText('Beginner');
-    expectText('Intermediate');
-    expectText('Advanced');
-
-    // Each level explains its reading posture on hover -- never a point
-    // adjustment, which is the framing Brian Connell objected to.
-    expectText(
-      'The assistant reads gently, expecting a writer still learning the fundamentals.'
-    );
-    expectText(
-      'The assistant reads at the standard expected for the grade level.'
-    );
-    expectText(
-      'The assistant reads demandingly, expecting polished and precise writing.'
-    );
+    // The three levels (Beginner/Intermediate/Advanced) live in
+    // gradingAssistantStrictnessOptions and render as Select options inside a
+    // portal that only mounts once opened, so the closed trigger's label text
+    // isn't asserted here (same limitation as the assignment-type Select
+    // above); the hidden field is what the server actually reads.
+    expectText('Grading strictness');
     expectNoText('points');
 
     expect(inputByName('gradingAssistantStrictnessLevel').value).toBe(
@@ -564,8 +556,10 @@ describe('AssignmentCreationSheetContent', () => {
     expect(isChecked(controlById('assignment-create-submit-for-grade'))).toBe(
       false
     );
+    // initialTutorEnabled: false means the saved assignment had the tutor off,
+    // so the disable-tutor checkbox (the inverse control) starts checked.
     expect(isChecked(controlById('assignment-create-tutor-enabled'))).toBe(
-      false
+      true
     );
     expectNoText('Point value');
   });
@@ -604,25 +598,17 @@ describe('AssignmentCreationSheetContent', () => {
     });
 
     it('offers every group mode, not just a size', () => {
-      // The sheet shipped with only a size stepper, so the three modes designed
-      // for this feature were unreachable and every assignment silently got the
-      // parser's default.
+      // The three modes designed for this feature live in
+      // COLLABORATION_GROUP_MODE_OPTIONS and render as Select options once
+      // opened; the picker and its default ("teacher") are what's asserted here.
       root = renderSheet({
         entryPoint: 'assignment-type',
         fixedAssignmentTypeId: 'type-1',
         initialCollaborationEnabled: true,
       }).root;
 
-      const labels = Array.from(
-        document.querySelectorAll('button[aria-pressed]')
-      ).map((button) => button.textContent ?? '');
-      for (const fragment of [
-        'make the groups',
-        'Group them for me',
-        'whole class',
-      ]) {
-        expect(labels.some((label) => label.includes(fragment))).toBe(true);
-      }
+      expectText('How should groups be made?');
+      expect(inputByName('collaborationGroupMode').value).toBe('teacher');
     });
 
     it('posts the chosen mode', () => {

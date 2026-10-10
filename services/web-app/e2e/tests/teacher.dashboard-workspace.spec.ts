@@ -4,12 +4,14 @@ import { currentSchoolYear } from '../../app/utils/school-year';
 import type { Page } from '@playwright/test';
 
 const CLASS_LABEL = /Grade 9th .* Period 1st/;
-// The creation sheet renders the tutor control as a standard checkbox field: a short
+// The creation sheet renders the tutor control as a Switch: a short
 // <Label htmlFor> is the accessible name and the guidance sits in a sibling paragraph,
-// which is asserted as visible text in expectStandardizedAssignmentForm below.
-const TUTOR_TOGGLE_LABEL = 'Tutor enabled';
+// which is asserted as visible text in expectStandardizedAssignmentForm below. The
+// switch displays the inverse of tutorEnabled (checked means the tutor is off),
+// so it defaults unchecked.
+const TUTOR_TOGGLE_LABEL = 'Disable tutor';
 const TUTOR_TOGGLE_HELP =
-  "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance.";
+  "Removes the tutor from students' documents. Use this to test a student's ability to write a paper independently of tutor guidance.";
 
 async function expectStandardizedAssignmentForm(page: Page) {
   const dialog = page.getByRole('dialog');
@@ -26,15 +28,15 @@ async function expectStandardizedAssignmentForm(page: Page) {
   ).toBeVisible();
   await expect(dialog.getByLabel(/tutor context/i)).toHaveCount(0);
   await expect(
-    dialog.getByRole('checkbox', { name: /submit for grade/i })
+    dialog.getByRole('switch', { name: /submit for grade/i })
   ).toBeChecked();
   await expect(dialog.getByLabel(/point value/i)).toHaveValue('100');
   await expect(
     dialog.getByText(TUTOR_TOGGLE_HELP, { exact: true })
   ).toBeVisible();
   await expect(
-    dialog.getByRole('checkbox', { name: TUTOR_TOGGLE_LABEL, exact: true })
-  ).toBeChecked();
+    dialog.getByRole('switch', { name: TUTOR_TOGGLE_LABEL, exact: true })
+  ).not.toBeChecked();
 }
 
 async function expectCreatedAssignment(params: {
@@ -393,12 +395,12 @@ test.describe.serial('Teacher dashboard workspace', () => {
       await page.getByLabel('Title (optional)').fill(title);
       await page.getByLabel('Prompt', { exact: true }).fill(prompt);
       await page.getByLabel(/point value/i).fill('25');
-      const tutorToggle = page.getByRole('checkbox', {
+      const tutorToggle = page.getByRole('switch', {
         name: TUTOR_TOGGLE_LABEL,
         exact: true,
       });
       await tutorToggle.click();
-      await expect(tutorToggle).not.toBeChecked();
+      await expect(tutorToggle).toBeChecked();
       await page.getByRole('button', { name: 'Create Assignment' }).click();
 
       await expect(page).toHaveURL(

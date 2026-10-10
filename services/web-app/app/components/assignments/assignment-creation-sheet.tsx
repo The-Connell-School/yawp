@@ -6,6 +6,7 @@ import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
+import { Switch } from '~/components/ui/switch';
 import {
   COLLABORATION_GROUP_MODE_OPTIONS,
   COLLABORATION_GROUP_SIZE_OPTIONS,
@@ -644,7 +645,6 @@ export function AssignmentCreationSheetContent({
                 setPrompt(event.target.value);
                 setExtractionTruncated(false);
               }}
-              rows={10}
               className="pb-12"
               placeholder="Type the full assignment prompt for students, or extract it from a PDF..."
               disabled={isSaving}
@@ -694,282 +694,311 @@ export function AssignmentCreationSheetContent({
           ) : null}
         </div>
 
-        <div className="pt-6">
-          <input type="hidden" name="submitForGrade" value="false" />
-          <div className="flex items-center gap-2.5">
-            <Checkbox
-              id="assignment-create-submit-for-grade"
-              name="submitForGrade"
-              value="true"
-              checked={submitForGrade}
-              onCheckedChange={(checked) => setSubmitForGrade(checked === true)}
-              disabled={isSaving}
-              className="size-4 shrink-0"
-            />
-            <Label
-              htmlFor="assignment-create-submit-for-grade"
-              className="cursor-pointer font-normal leading-none"
-            >
-              Submit for grade
-            </Label>
-          </div>
-          <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
-            Students can submit this assignment for a recorded grade.
-          </p>
+        {/*
+          One consistent row pattern for every assignment-level setting:
+          label + one-line helper on the left, a Switch on the right, all
+          sharing a single divided list. Nested detail (point value,
+          strictness, group mode/size) hangs off a thin left rule beneath its
+          parent row instead of becoming a visually different block, so every
+          setting in this sheet reads the same way.
 
-          {submitForGrade ? (
-            <div className="mt-3 flex gap-2.5">
-              <div className="flex w-4 shrink-0 justify-center">
-                <div aria-hidden className="w-px bg-border" />
+          Booleans post their own hidden field bound to state (rather than a
+          name on the Switch plus a static hidden fallback), so there is only
+          ever one form value per field and no reliance on DOM-order tricks.
+        */}
+        <div className="rounded-md border divide-y divide-border">
+          {/* Submit for grade */}
+          <div className="p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <Label
+                  htmlFor="assignment-create-submit-for-grade"
+                  className="text-sm font-medium"
+                >
+                  Submit for grade
+                </Label>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  Students can submit this assignment for a recorded grade.
+                </p>
               </div>
-              <div className="min-w-0 flex-1 space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="assignment-create-point-value">
+              <input
+                type="hidden"
+                name="submitForGrade"
+                value={submitForGrade ? 'true' : 'false'}
+              />
+              <Switch
+                id="assignment-create-submit-for-grade"
+                checked={submitForGrade}
+                onCheckedChange={(checked) =>
+                  setSubmitForGrade(checked === true)
+                }
+                disabled={isSaving}
+                className="mt-0.5 shrink-0"
+              />
+            </div>
+
+            {submitForGrade ? (
+              <div className="mt-3 space-y-3">
+                <div className="flex items-center justify-between gap-4">
+                  <Label
+                    htmlFor="assignment-create-point-value"
+                    className="text-sm font-normal"
+                  >
                     Point value
                   </Label>
-                  <Input
-                    id="assignment-create-point-value"
-                    name="pointValue"
-                    type="number"
-                    min={1}
-                    max={1000}
-                    step={1}
-                    inputMode="numeric"
-                    value={pointValue}
-                    onChange={(event) => setPointValue(event.target.value)}
-                    disabled={isSaving}
-                    required
-                  />
+                  <div className="w-20 shrink-0">
+                    <Input
+                      id="assignment-create-point-value"
+                      name="pointValue"
+                      type="number"
+                      min={1}
+                      max={1000}
+                      step={1}
+                      inputMode="numeric"
+                      value={pointValue}
+                      onChange={(event) => setPointValue(event.target.value)}
+                      disabled={isSaving}
+                      required
+                      className="h-8 text-right"
+                    />
+                  </div>
                 </div>
 
+                <div className="flex items-center justify-between gap-4">
+                  <Label className="text-sm font-normal">
+                    Grading strictness
+                  </Label>
+                  <input
+                    type="hidden"
+                    name="gradingAssistantStrictnessLevel"
+                    value={gradingAssistantStrictnessLevel}
+                  />
+                  <Select
+                    value={gradingAssistantStrictnessLevel}
+                    onValueChange={(value) =>
+                      setGradingAssistantStrictnessLevel(
+                        value as GradingAssistantStrictnessLevel
+                      )
+                    }
+                    disabled={isSaving}
+                  >
+                    <SelectTrigger className="h-8 w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {gradingAssistantStrictnessOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          {/* Disable tutor. Frozen once the assignment exists: students may
+              already have documents and tutor sessions built around this
+              setting, so it is shown read-only rather than hidden. Nothing
+              named tutorEnabled is submitted while editing, which is what
+              tells the server to leave the stored value alone.
+
+              The switch displays and edits the inverse of tutorEnabled:
+              checked means the tutor is turned off. The submitted field
+              name/value stay tutorEnabled=true/false so the server and stored
+              data are unaffected by this display-only reversal. */}
+          <div className="p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <Label
+                  htmlFor="assignment-create-tutor-enabled"
+                  className={
+                    isEditing
+                      ? 'text-sm font-medium text-muted-foreground'
+                      : 'text-sm font-medium'
+                  }
+                >
+                  Disable tutor
+                </Label>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  {isEditing
+                    ? 'The tutor cannot be switched on or off after an assignment is created — students may already be working with it. Duplicate the assignment to give a class a version with the other setting.'
+                    : "Removes the tutor from students' documents. Use this to test a student's ability to write a paper independently of tutor guidance."}
+                </p>
+              </div>
+              {isEditing ? null : (
                 <input
                   type="hidden"
-                  name="gradingAssistantStrictnessLevel"
-                  value={gradingAssistantStrictnessLevel}
+                  name="tutorEnabled"
+                  value={tutorEnabled ? 'true' : 'false'}
                 />
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Label>Grading assistant strictness</Label>
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {gradingAssistantStrictnessOptions.map((option) => {
-                      const selected =
-                        gradingAssistantStrictnessLevel === option.value;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={`h-full rounded-md border px-3 py-2 text-left text-sm transition ${
-                            selected
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-border bg-background hover:bg-muted'
-                          }`}
-                          aria-pressed={selected}
-                          onClick={() =>
-                            setGradingAssistantStrictnessLevel(option.value)
-                          }
-                          disabled={isSaving}
-                        >
-                          <span className="block font-medium">
-                            {option.label}
-                          </span>
-                          <span
-                            className={`mt-1 block text-xs ${
-                              selected
-                                ? 'text-primary-foreground/80'
-                                : 'text-muted-foreground'
-                            }`}
-                          >
-                            {option.description}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+              )}
+              <Switch
+                id="assignment-create-tutor-enabled"
+                checked={!tutorEnabled}
+                onCheckedChange={(checked) =>
+                  setTutorEnabled(checked !== true)
+                }
+                disabled={isSaving || isEditing}
+                className="mt-0.5 shrink-0"
+              />
+            </div>
+          </div>
+
+          {/* Collaborative drafts. Available for every assignment type, and
+              frozen after creation for the same reason the tutor toggle is:
+              students may already have group drafts built around it. Group
+              membership itself is arranged per class afterwards, because an
+              assignment fans out to one ClassAssignment per class. */}
+          {selectedTypeSupportsCollaboration ? (
+            <div className="p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <Label
+                    htmlFor="assignment-create-collaboration-enabled"
+                    className={
+                      isEditing
+                        ? 'text-sm font-medium text-muted-foreground'
+                        : 'text-sm font-medium'
+                    }
+                  >
+                    Collaborative assignment
+                  </Label>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    {isEditing
+                      ? 'Collaboration cannot be switched on or off after an assignment is created — groups may already be writing in shared drafts.'
+                      : 'Students write in shared group documents. You must assign every student to a group before they can open this assignment.'}
+                  </p>
                 </div>
+                {isEditing ? null : (
+                  <input
+                    type="hidden"
+                    name="collaborationEnabled"
+                    value={collaborationEnabled ? 'true' : 'false'}
+                  />
+                )}
+                <Switch
+                  id="assignment-create-collaboration-enabled"
+                  checked={collaborationEnabled}
+                  onCheckedChange={(checked) =>
+                    setCollaborationEnabled(checked === true)
+                  }
+                  disabled={isSaving || isEditing}
+                  className="mt-0.5 shrink-0"
+                />
+              </div>
+
+              {collaborationEnabled && !isEditing ? (
+                <div className="mt-3 space-y-3">
+                  <input
+                    type="hidden"
+                    name="collaborationGroupMode"
+                    value={collaborationGroupMode}
+                  />
+                  <div className="flex items-center justify-between gap-4">
+                    <Label className="text-sm font-normal">
+                      How should groups be made?
+                    </Label>
+                    <Select
+                      value={collaborationGroupMode}
+                      onValueChange={(value) =>
+                        setCollaborationGroupMode(
+                          value as CollaborationGroupMode
+                        )
+                      }
+                      disabled={isSaving}
+                    >
+                      <SelectTrigger className="h-8 w-56">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COLLABORATION_GROUP_MODE_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Whole class has no size to choose: the group is the
+                      roster. */}
+                  {collaborationModeNeedsGroupSize(collaborationGroupMode) ? (
+                    <div className="flex items-center justify-between gap-4">
+                      <Label
+                        htmlFor="assignment-create-collaboration-group-size"
+                        className="text-sm font-normal"
+                      >
+                        Students per group
+                      </Label>
+                      <input
+                        type="hidden"
+                        name="collaborationGroupSize"
+                        value={collaborationGroupSize}
+                      />
+                      <Select
+                        value={String(collaborationGroupSize)}
+                        onValueChange={(value) =>
+                          setCollaborationGroupSize(Number(value))
+                        }
+                        disabled={isSaving}
+                      >
+                        <SelectTrigger
+                          id="assignment-create-collaboration-group-size"
+                          className="h-8 w-20"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {COLLABORATION_GROUP_SIZE_OPTIONS.map((size) => (
+                            <SelectItem key={size} value={String(size)}>
+                              {size}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* Save for reuse */}
+          {SAVED_ASSIGNMENTS_ENABLED && usesBulkCreateApi && !isEditing ? (
+            <div className="p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <Label
+                    htmlFor="assignment-create-save-for-reuse"
+                    className="text-sm font-medium"
+                  >
+                    Save to My Saved Assignments
+                  </Label>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    Keep this assignment so you can give it to another class
+                    later without setting it up again.
+                  </p>
+                </div>
+                <input
+                  type="hidden"
+                  name="saveForReuse"
+                  value={saveForReuse ? 'true' : 'false'}
+                />
+                <Switch
+                  id="assignment-create-save-for-reuse"
+                  checked={saveForReuse}
+                  onCheckedChange={(checked) =>
+                    setSaveForReuse(checked === true)
+                  }
+                  disabled={isSaving}
+                  className="mt-0.5 shrink-0"
+                />
               </div>
             </div>
           ) : null}
         </div>
-
-        {/* Frozen once the assignment exists: students may already have
-            documents and tutor sessions built around this setting, so it is
-            shown read-only rather than hidden. Nothing named tutorEnabled is
-            submitted while editing, which is what tells the server to leave
-            the stored value alone. */}
-        <div className="pt-6">
-          {isEditing ? null : (
-            <input type="hidden" name="tutorEnabled" value="false" />
-          )}
-          <div className="flex items-center gap-2.5">
-            <Checkbox
-              id="assignment-create-tutor-enabled"
-              name={isEditing ? undefined : 'tutorEnabled'}
-              value="true"
-              checked={tutorEnabled}
-              onCheckedChange={(checked) => setTutorEnabled(checked === true)}
-              disabled={isSaving || isEditing}
-              className="size-4 shrink-0"
-            />
-            <Label
-              htmlFor="assignment-create-tutor-enabled"
-              className={
-                isEditing
-                  ? 'font-normal leading-none text-muted-foreground'
-                  : 'cursor-pointer font-normal leading-none'
-              }
-            >
-              Tutor enabled
-            </Label>
-          </div>
-          <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
-            {isEditing
-              ? 'The tutor cannot be switched on or off after an assignment is created — students may already be working with it. Duplicate the assignment to give a class a version with the other setting.'
-              : "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance."}
-          </p>
-        </div>
-
-        {/* Collaborative drafts. Available for every assignment type, and frozen
-            after creation for the same reason the tutor toggle is: students may
-            already have group drafts built around it.
-            Group membership itself is arranged per class afterwards, because an
-            assignment fans out to one ClassAssignment per class. */}
-        {selectedTypeSupportsCollaboration ? (
-          <div className="pt-6">
-            {isEditing ? null : (
-              <input type="hidden" name="collaborationEnabled" value="false" />
-            )}
-            <div className="flex items-center gap-2.5">
-              <Checkbox
-                id="assignment-create-collaboration-enabled"
-                name={isEditing ? undefined : 'collaborationEnabled'}
-                value="true"
-                checked={collaborationEnabled}
-                onCheckedChange={(checked) =>
-                  setCollaborationEnabled(checked === true)
-                }
-                disabled={isSaving || isEditing}
-                className="size-4 shrink-0"
-              />
-              <Label
-                htmlFor="assignment-create-collaboration-enabled"
-                className={
-                  isEditing
-                    ? 'font-normal leading-none text-muted-foreground'
-                    : 'cursor-pointer font-normal leading-none'
-                }
-              >
-                Is this a collaborative assignment?
-              </Label>
-            </div>
-            <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
-              {isEditing
-                ? 'Collaboration cannot be switched on or off after an assignment is created — groups may already be writing in shared drafts.'
-                : 'You must assign every student to a group before students can open this assignment. You can arrange groups yourself, shuffle automatically, or use the whole class. Students cannot create groups, move themselves, or create shared documents. When you finalize the groups, Yawp creates one shared document for each group.'}
-            </p>
-            {collaborationEnabled && !isEditing ? (
-              <div className="mt-3 space-y-3 pl-[calc(1rem+0.625rem)]">
-                <input
-                  type="hidden"
-                  name="collaborationGroupMode"
-                  value={collaborationGroupMode}
-                />
-                <div className="space-y-2">
-                  <Label>How should groups be made?</Label>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {COLLABORATION_GROUP_MODE_OPTIONS.map((option) => {
-                      const selected = collaborationGroupMode === option.value;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={`h-full rounded-md border px-3 py-2 text-left text-sm transition ${
-                            selected
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-border bg-background hover:bg-muted'
-                          }`}
-                          aria-pressed={selected}
-                          onClick={() =>
-                            setCollaborationGroupMode(option.value)
-                          }
-                          disabled={isSaving}
-                        >
-                          <span className="block font-medium">
-                            {option.label}
-                          </span>
-                          <span
-                            className={`mt-1 block text-xs ${
-                              selected
-                                ? 'text-primary-foreground/80'
-                                : 'text-muted-foreground'
-                            }`}
-                          >
-                            {option.description}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Whole class has no size to choose: the group is the roster. */}
-                {collaborationModeNeedsGroupSize(collaborationGroupMode) ? (
-                  <div>
-                    <Label
-                      htmlFor="assignment-create-collaboration-group-size"
-                      className="font-normal leading-none"
-                    >
-                      Students per group
-                    </Label>
-                    <select
-                      id="assignment-create-collaboration-group-size"
-                      name="collaborationGroupSize"
-                      value={collaborationGroupSize}
-                      onChange={(event) =>
-                        setCollaborationGroupSize(Number(event.target.value))
-                      }
-                      disabled={isSaving}
-                      className="mt-1 block rounded border px-2 py-1 text-sm"
-                    >
-                      {COLLABORATION_GROUP_SIZE_OPTIONS.map((size) => (
-                        <option key={size} value={size}>
-                          {size}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        {SAVED_ASSIGNMENTS_ENABLED && usesBulkCreateApi && !isEditing ? (
-          <div className="pt-6">
-            <input type="hidden" name="saveForReuse" value="false" />
-            <div className="flex items-center gap-2.5">
-              <Checkbox
-                id="assignment-create-save-for-reuse"
-                name="saveForReuse"
-                value="true"
-                checked={saveForReuse}
-                onCheckedChange={(checked) => setSaveForReuse(checked === true)}
-                disabled={isSaving}
-                className="size-4 shrink-0"
-              />
-              <Label
-                htmlFor="assignment-create-save-for-reuse"
-                className="cursor-pointer font-normal leading-none"
-              >
-                Save to My Saved Assignments
-              </Label>
-            </div>
-            <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
-              Keep this assignment so you can give it to another class later
-              without setting it up again.
-            </p>
-          </div>
-        ) : null}
 
         {!submitForGrade ? (
           <input type="hidden" name="pointValue" value="" />
