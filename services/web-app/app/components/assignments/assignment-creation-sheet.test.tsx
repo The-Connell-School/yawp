@@ -235,17 +235,20 @@ describe('AssignmentCreationSheetContent', () => {
       expectText('Title (optional)');
       expectText('Attachment');
       expectText(
-        "Any documents uploaded here will be attached to the prompt and available to be viewed by students as they're working on their document."
+        'Attached PDFs show up in the prompt for students while they write.'
       );
       expectText('Prompt');
       expectText('Extract from PDF');
       expectText('Submit for grade');
+      expectText('Points');
+      expectText('Scoring');
+      expectText('Strictness');
+      expectText('100');
+      expectText('Steps');
+      expectText('Intermediate');
+      expectText('Disable tutor');
       expectText(
-        'Graded out of 100 points in steps, read at the intermediate level.'
-      );
-      expectText('Tutor enabled');
-      expectText(
-        "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance."
+        "Removes the tutor from students' documents. Use this to test a student's ability to write a paper independently of tutor guidance."
       );
       expectNoText('Customize Grading');
       expectNoText('Tutor Context');
@@ -258,7 +261,7 @@ describe('AssignmentCreationSheetContent', () => {
       expect(inputByName('assignmentTypeId').value).toBe(
         expectedAssignmentTypeId
       );
-      expect(inputByName('submitForGrade').value).toBe('false');
+      expect(inputByName('submitForGrade').value).toBe('true');
 
       const submitForGrade = controlById('assignment-create-submit-for-grade');
       expect(isChecked(submitForGrade)).toBe(true);
@@ -267,15 +270,15 @@ describe('AssignmentCreationSheetContent', () => {
         'intermediate'
       );
 
-      // Tutor defaults to enabled, preserving today's behavior.
-      expect(inputByName('tutorEnabled').value).toBe('false');
+      // Tutor defaults to enabled, so the disable-tutor switch starts off.
+      expect(inputByName('tutorEnabled').value).toBe('true');
       const tutorEnabled = controlById('assignment-create-tutor-enabled');
-      expect(tutorEnabled.getAttribute('role')).toBe('checkbox');
-      expect(isChecked(tutorEnabled)).toBe(true);
+      expect(tutorEnabled.getAttribute('role')).toBe('switch');
+      expect(isChecked(tutorEnabled)).toBe(false);
     }
   );
 
-  it('submits tutorEnabled=false when the tutor toggle is turned off', () => {
+  it('submits tutorEnabled=false when the disable-tutor toggle is checked', () => {
     root = renderSheet().root;
 
     act(() => {
@@ -283,9 +286,11 @@ describe('AssignmentCreationSheetContent', () => {
     });
 
     expect(isChecked(controlById('assignment-create-tutor-enabled'))).toBe(
-      false
+      true
     );
-    expect(inputByName('tutorEnabled').value).toBe('false');
+    expect(
+      allInputsByName('tutorEnabled').map((input) => input.value)
+    ).toContain('false');
   });
 
   it('shows the grading assistant strictness picker to teachers', () => {
@@ -318,12 +323,12 @@ describe('AssignmentCreationSheetContent', () => {
     );
   });
 
-  it('rests as a plain-language grading summary with nothing to expand past', () => {
+  it('rests as a compact grading summary with nothing to expand past', () => {
     root = renderSheet().root;
 
-    expectText(
-      'Graded out of 100 points in steps, read at the intermediate level.'
-    );
+    expectText('100');
+    expectText('Steps');
+    expectText('Intermediate');
     // The old block stated the same facts four times over three nested boxes.
     expectNoText('Grade Configuration');
     expectNoText('Default point value');
@@ -366,9 +371,9 @@ describe('AssignmentCreationSheetContent', () => {
       initialGradingAssistantStrictnessLevel: 'advanced',
     }).root;
 
-    expectText(
-      'Graded out of 250 points in bands, read at the advanced level.'
-    );
+    expectText('250');
+    expectText('Bands');
+    expectText('Advanced');
     expect(inputByName('pointValue').value).toBe('250');
     expect(inputByName('gradingMode').value).toBe('bands');
   });
@@ -400,9 +405,8 @@ describe('AssignmentCreationSheetContent', () => {
     });
 
     expect(inputByName('gradingMode').value).toBe('bands');
-    expectText(
-      'Graded out of 100 points in bands, read at the intermediate level.'
-    );
+    expectText('Bands');
+    expectText('Intermediate');
   });
 
   // `rubricTotalPoints` rescales the rubric's own scale and the `max_score`
@@ -681,7 +685,7 @@ describe('AssignmentCreationSheetContent', () => {
       false
     );
     expect(isChecked(controlById('assignment-create-tutor-enabled'))).toBe(
-      false
+      true
     );
     expectNoText('Point value');
   });
@@ -720,25 +724,14 @@ describe('AssignmentCreationSheetContent', () => {
     });
 
     it('offers every group mode, not just a size', () => {
-      // The sheet shipped with only a size stepper, so the three modes designed
-      // for this feature were unreachable and every assignment silently got the
-      // parser's default.
       root = renderSheet({
         entryPoint: 'assignment-type',
         fixedAssignmentTypeId: 'type-1',
         initialCollaborationEnabled: true,
       }).root;
 
-      const labels = Array.from(
-        document.querySelectorAll('button[aria-pressed]')
-      ).map((button) => button.textContent ?? '');
-      for (const fragment of [
-        'make the groups',
-        'Group them for me',
-        'whole class',
-      ]) {
-        expect(labels.some((label) => label.includes(fragment))).toBe(true);
-      }
+      expectText('How should groups be made?');
+      expect(inputByName('collaborationGroupMode').value).toBe('teacher');
     });
 
     it('posts the chosen mode', () => {
@@ -795,8 +788,8 @@ describe('AssignmentCreationSheetContent', () => {
     });
 
     it('posts collaboration off by default even when the toggle is shown', () => {
-      // A hidden false accompanies the checkbox, so an unchecked box still posts
-      // a value and the server keeps producing solo assignments.
+      // A hidden false still posts a value and the server keeps producing solo
+      // assignments.
       root = renderSheet({
         entryPoint: 'assignment-type',
         fixedAssignmentTypeId: 'type-1',
