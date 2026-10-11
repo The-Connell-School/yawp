@@ -124,14 +124,19 @@ test.describe.serial('Rubric display feedback views', () => {
     });
 
     const studentPage = await page.context().browser()!.newPage();
-    await studentPage.goto('/auth/dev-login');
-    await studentPage.evaluate(async () => {
-      const response = await fetch('/auth/dev-login', {
-        method: 'POST',
-        body: new URLSearchParams({ email: 'dev.student@yawp.local' }),
-      });
-      if (!response.ok) throw new Error('Student dev login failed');
-    });
+    await studentPage.goto('/auth/login');
+    await studentPage.getByLabel('Email or handle').fill(e2eContext.userEmail);
+    await studentPage.locator('input[type="password"]').fill('johndoe');
+    await studentPage.getByRole('button', { name: /log in/i }).click();
+    await studentPage.waitForURL(
+      (url) => url.pathname.startsWith('/app') || url.pathname === '/enter-code',
+      { timeout: 15000 }
+    );
+    if (new URL(studentPage.url()).pathname === '/enter-code') {
+      await studentPage.locator('input[name="code"]').fill(e2eContext.classCode);
+      await studentPage.getByRole('button', { name: /continue/i }).click();
+      await studentPage.waitForURL('**/app**', { timeout: 15000 });
+    }
     await studentPage.goto(`/app/submissions/${submissionId}`);
     await expect(studentPage.getByText('Your river image stays with the reader.')).toBeVisible();
     await expect(studentPage.getByText('Rubric')).toHaveCount(0);
