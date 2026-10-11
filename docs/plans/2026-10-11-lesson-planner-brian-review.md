@@ -9,6 +9,24 @@ change below. Nothing here is built yet.
 All code paths are under `services/web-app/app/` unless they start with
 `packages/` or `services/`.
 
+## Status (2026-10-11)
+
+Built on `claude/beautiful-gates-i8db40`, one commit per change, with the
+default recommendation taken for every open decision. The report-out is in
+[`2026-10-11-lesson-planner-brian-review-report.md`](./2026-10-11-lesson-planner-brian-review-report.md).
+Where the build differs from this plan:
+
+- **C5 (per-step tweak) is deferred**, as recommended.
+- **B1 is behind `lesson_planner_stack_v2`** rather than always on, to
+  follow the flag rule for anything a teacher sees.
+- **B3 (tooltip) is always on**: it only adds a hover hint.
+- **D2's client cue** is a single "I'm done for today" chip; "Open the
+  stack" was already on the page as the stack banner.
+- **E1 uses Georgia in PowerPoint and Cormorant Garamond in Present**:
+  PowerPoint cannot embed the web font.
+- **The model's `minutes: N` guess is ignored under intake v2**; only a
+  remembered class length prefills the slider.
+
 ## The thread through everything
 
 Brian's notes come back to one principle: **the teacher is in charge.** Four
