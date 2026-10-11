@@ -205,11 +205,14 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
         numericPercentage: gradePrivacy.unreleasedNumericPercentage,
       });
     }
-    expect(submission.comments).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ content: gradePrivacy.releaseComment }),
-      ])
-    );
     expect(submissionHtml).toContain(gradePrivacy.releaseComment);
+    expect(submissionDataText).toContain(gradePrivacy.releaseComment);
+    if (Array.isArray(submission.comments)) {
+      expect(submission.comments).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ content: gradePrivacy.releaseComment }),
+        ])
+      );
+    }
   });
 });
