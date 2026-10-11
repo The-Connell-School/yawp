@@ -122,6 +122,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       numericPercentage: true,
       letterGrade: true,
       grammarIssues: true,
+      aiMeta: true,
       releasedAt: true,
       gradedAt: true,
       unsubmittedAt: true,

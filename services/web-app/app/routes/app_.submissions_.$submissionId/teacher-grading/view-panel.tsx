@@ -18,6 +18,7 @@ import {
 import { derivedPerCategoryCommentsFromCategories } from '~/domain/grading/submission-display-options.server';
 import { grammarHighlightCaption } from '~/domain/grading/grammar-highlight-display';
 import type { RubricScoreBand } from '~/domain/assignment-types/assignment-type-rubric.shared';
+import type { ResolvedDisplayOptions } from '~/domain/rubrics/output-schema-display';
 
 export type ViewPanelSubmission = {
   /** When set, students only see assessment after the teacher releases it. */
@@ -43,11 +44,7 @@ export type ViewPanelSubmission = {
       bands?: RubricScoreBand[];
       feedbackEnabled?: boolean;
     }[];
-    display?: {
-      showCategories: boolean;
-      perCategoryComments: boolean;
-      grammarHighlight: 'off' | 'highlight' | 'deduct';
-    };
+    display?: ResolvedDisplayOptions;
   } | null;
   aiMeta?: unknown;
   grammarHighlightCaptionExplicit?: boolean;
@@ -75,7 +72,16 @@ export function ViewPanel({
   const perCategoryComments =
     display?.perCategoryComments ??
     derivedPerCategoryCommentsFromCategories(
-      submission.rubricConfig?.categories ?? []
+      (submission.rubricConfig?.categories ?? []).map((category) => ({
+        key: category.key,
+        label: category.label ?? category.key,
+        description: '',
+        weight: 1,
+        ...(category.feedbackEnabled === undefined
+          ? {}
+          : { feedbackEnabled: category.feedbackEnabled }),
+        ...(category.bands ? { bands: category.bands } : {}),
+      }))
     );
   const grammarCaption =
     submission.grammarHighlightCaptionExplicit &&

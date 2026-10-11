@@ -88,8 +88,8 @@ test.describe.serial('Rubric display feedback views', () => {
         id: document.id,
         documentId: document.id,
         title: document.title,
-        text: document.text,
-        html: document.html,
+        text: document.text ?? '',
+        html: document.html ?? '',
         submittedAt: new Date(),
         gradedAt: new Date(),
         releasedAt: new Date(),
@@ -110,7 +110,7 @@ test.describe.serial('Rubric display feedback views', () => {
       },
     });
 
-    await signIn('dev.teacher@yawp.local');
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(`/app/submissions/${submissionId}`);
     await expect(page.getByText('Your river image stays with the reader.')).toBeVisible();
     await expect(page.getByText('Rubric')).toHaveCount(0);
