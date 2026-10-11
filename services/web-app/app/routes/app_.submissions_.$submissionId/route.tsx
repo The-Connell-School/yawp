@@ -194,6 +194,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           id: true,
           title: true,
           assignmentTypeId: true,
+          assignmentType: {
+            select: { systemKey: true },
+          },
           assignment: {
             select: {
               id: true,
@@ -521,7 +524,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       isOwner,
       isTeacher,
       isAdmin,
-      run: gradingAssistantRuns[0] ?? null,
+      runs: gradingAssistantRuns,
+      assignmentTypeSystemKey:
+        submission.document.assignmentType?.systemKey ?? null,
+      teacherNotesEnabled: rubricConfig.display?.teacherNotes ?? true,
     }),
     isOwner,
     isTeacher: isTeacher || isAdmin,
@@ -562,6 +568,10 @@ function SubmissionDetail({
   const activities = 'activities' in loaderData ? loaderData.activities : [];
   const activityHasMore =
     'activityHasMore' in loaderData ? loaderData.activityHasMore : false;
+  const teacherNotesUi =
+    'teacherNotesUi' in loaderData
+      ? loaderData.teacherNotesUi
+      : { visible: false };
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -1447,11 +1457,7 @@ function SubmissionDetail({
               submissionForView={submissionForView}
               documentId={submission.documentId}
               submissionId={submission.id}
-              teacherNote={
-                'teacherNote' in loaderData
-                  ? (loaderData.teacherNote ?? null)
-                  : null
-              }
+              teacherNotesUi={teacherNotesUi}
               existingGrade={teacherExistingGrade}
               pointValue={submission.document.assignment?.pointValue}
               grammarIssues={grammarIssues}
@@ -1489,15 +1495,7 @@ function SubmissionDetail({
               </div>
             </>
           )}
-          {!isGradingOther ? (
-            <TeacherNotes
-              note={
-                'teacherNote' in loaderData
-                  ? (loaderData.teacherNote ?? null)
-                  : null
-              }
-            />
-          ) : null}
+          {!isGradingOther ? <TeacherNotes ui={teacherNotesUi} /> : null}
         </div>
 
         {/* Center: Essay */}
