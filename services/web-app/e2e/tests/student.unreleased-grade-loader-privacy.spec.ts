@@ -30,25 +30,15 @@ function submissionFromRouteData(
   submissionId: string
 ) {
   const route = getRouteLoaderData(loaderData, routeIdSuffix);
-  const direct = route.submission;
-  if (
-    direct &&
-    typeof direct === 'object' &&
-    !Array.isArray(direct) &&
-    (direct as { id?: unknown }).id === submissionId
-  ) {
-    return direct as Record<string, unknown>;
+  if (routeIdSuffix === 'app_.submissions_.$submissionId') {
+    const submission = route.submission;
+    expect(submission).toBeTruthy();
+    expect((submission as { id?: unknown }).id).toBe(submissionId);
+    return submission as Record<string, unknown>;
   }
   const matches = findObjectsWithId(route.submission ?? route, submissionId);
   expect(matches.length).toBeGreaterThan(0);
-  const submission =
-    matches.find(
-      (row) =>
-        typeof row.overallScore === 'number' ||
-        row.overallScore === null ||
-        row.overallScore === undefined
-    ) ?? matches[0]!;
-  return submission;
+  return matches[0]!;
 }
 
 test.describe.serial('Unreleased grade privacy in student loader responses', () => {
