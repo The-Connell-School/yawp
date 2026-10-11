@@ -153,6 +153,7 @@
     "@types/recharts": "^1.8.29",
     "@typescript-eslint/eslint-plugin": "^8.26.1",
     "@typescript-eslint/parser": "^8.26.1",
+    "turbo-stream": "2.4.1",
     "autoprefixer": "^10.4.21",
     "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-unused-imports": "^4.1.4",

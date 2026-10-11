@@ -50,7 +50,7 @@ function submissionFromRouteData(
     return direct as Record<string, unknown>;
   }
 
-  const matches = findObjectsWithId(route.submission ?? route, submissionId).filter(
+  const matches = findObjectsWithId(route, submissionId).filter(
     isSubmissionLoaderRow
   );
   expect(matches.length).toBeGreaterThan(0);
@@ -74,7 +74,7 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
         `/app/submissions/${gradePrivacy.submissionId}.data`
       )
     ).text();
-    const submissionLoader = decodeRouterDataResponse(submissionDataText);
+    const submissionLoader = await decodeRouterDataResponse(submissionDataText);
     const submission = submissionFromRouteData(
       submissionLoader,
       'app_.submissions_.$submissionId',
@@ -113,7 +113,7 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
       )
     );
 
-    const documentLoader = decodeRouterDataResponse(documentDataText);
+    const documentLoader = await decodeRouterDataResponse(documentDataText);
     const documentRoute = getRouteLoaderData(
       documentLoader,
       'app_.documents_.$id'
@@ -134,7 +134,7 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
         `/app/assignment-types/${gradePrivacy.assignmentTypeId}.data`
       )
     ).text();
-    const assignmentLoader = decodeRouterDataResponse(assignmentTypeDataText);
+    const assignmentLoader = await decodeRouterDataResponse(assignmentTypeDataText);
     const assignmentMatches = findObjectsWithId(
       assignmentLoader,
       gradePrivacy.submissionId
@@ -146,7 +146,7 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
       expect(row.gradedAt).toBeUndefined();
     }
 
-    const dailyPagesLoader = decodeRouterDataResponse(
+    const dailyPagesLoader = await decodeRouterDataResponse(
       await (
         await page.request.get(
           `/app/assignment-types/${gradePrivacy.dailyPagesAssignmentTypeId}.data`
@@ -187,7 +187,7 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
         `/app/submissions/${gradePrivacy.releaseSubmissionId}`
       )
     ).text();
-    const submissionLoader = decodeRouterDataResponse(
+    const submissionLoader = await decodeRouterDataResponse(
       await (
         await page.request.get(
           `/app/submissions/${gradePrivacy.releaseSubmissionId}.data`

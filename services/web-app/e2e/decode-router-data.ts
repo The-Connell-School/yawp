@@ -1,17 +1,30 @@
 /**
- * Decode a React Router single-fetch `.data` response (turbo-stream line array).
+ * Decode a React Router single-fetch `.data` response (turbo-stream v2).
  */
-export function decodeRouterDataResponse(body: string): unknown {
+import { decode } from 'turbo-stream';
+
+function bodyToTurboStream(body: string): ReadableStream<Uint8Array> {
+  const payload = body.endsWith('\n') ? body : `${body}\n`;
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(payload));
+      controller.close();
+    },
+  });
+}
+
+/** Legacy v1-style line decoder (unit fixtures only). */
+export function decodeRouterDataResponseLegacy(body: string): unknown {
   const line = JSON.parse(body) as unknown[];
   const visiting = new Set<number>();
-  const root = decodeTurboLine(line, 0, visiting);
+  const root = decodeTurboLineLegacy(line, 0, visiting);
   if (root && typeof root === 'object' && 'loaderData' in root) {
     return (root as { loaderData: unknown }).loaderData;
   }
   return root;
 }
 
-function followTurboRef(
+function followTurboRefLegacy(
   line: unknown[],
   index: number,
   visiting: Set<number>
@@ -21,12 +34,12 @@ function followTurboRef(
   }
   const target = line[index];
   if (target !== null && typeof target === 'object') {
-    return decodeTurboLine(line, index, visiting);
+    return decodeTurboLineLegacy(line, index, visiting);
   }
   return index;
 }
 
-function decodeTurboLine(
+function decodeTurboLineLegacy(
   line: unknown[],
   index: number,
   visiting: Set<number>
@@ -47,7 +60,7 @@ function decodeTurboLine(
       return new Date(value[1]);
     }
     const decoded = value.map((item) =>
-      typeof item === 'number' ? decodeTurboLine(line, item, visiting) : item
+      typeof item === 'number' ? decodeTurboLineLegacy(line, item, visiting) : item
     );
     visiting.delete(index);
     return decoded;
@@ -66,7 +79,7 @@ function decodeTurboLine(
         arrayIndices.every((index, position) => index === position);
       if (isDenseArray) {
         const decoded = arrayIndices.map((index) =>
-          decodeTurboLine(line, record[`_${index}`] as number, visiting)
+          decodeTurboLineLegacy(line, record[`_${index}`] as number, visiting)
         );
         visiting.delete(index);
         return decoded;
@@ -75,11 +88,8 @@ function decodeTurboLine(
       const out: Record<string, unknown> = {};
       for (const [propRef, valRef] of Object.entries(record)) {
         const keyIndex = Number(propRef.slice(1));
-        out[String(decodeTurboLine(line, keyIndex, visiting))] = decodeTurboLine(
-          line,
-          valRef as number,
-          visiting
-        );
+        out[String(decodeTurboLineLegacy(line, keyIndex, visiting))] =
+          decodeTurboLineLegacy(line, valRef as number, visiting);
       }
       visiting.delete(index);
       return out;
@@ -88,7 +98,33 @@ function decodeTurboLine(
 
   visiting.delete(index);
   if (typeof value === 'number') {
-    return followTurboRef(line, value, visiting);
+    return followTurboRefLegacy(line, value, visiting);
+  }
+  return value;
+}
+
+export async function decodeRouterDataResponse(body: string): Promise<unknown> {
+  const { value } = await decode(bodyToTurboStream(body), {
+    plugins: [
+      (type, ...rest) => {
+        if (type === 'ErrorResponse') {
+          const [data, status, statusText] = rest as [
+            unknown,
+            number,
+            string,
+          ];
+          return { value: { data, status, statusText } };
+        }
+        if (type === 'SingleFetchFallback') {
+          return { value: undefined };
+        }
+        return undefined;
+      },
+    ],
+  });
+
+  if (value && typeof value === 'object' && 'loaderData' in value) {
+    return (value as { loaderData: unknown }).loaderData;
   }
   return value;
 }
