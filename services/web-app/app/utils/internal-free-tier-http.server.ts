@@ -15,6 +15,7 @@ import type { FreeTierApplicationStatus } from '@app/prisma';
 
 const response = (value: unknown, status = 200, headers?: HeadersInit) =>
   Response.json(value, { status, headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', ...(headers || {}) } });
+const digest = (value: string) => createHash('sha256').update(value).digest();
 /**
  * The management-key check every internal endpoint shares (free tier, feature
  * flags). Returns a response to send back when the request is not allowed.
