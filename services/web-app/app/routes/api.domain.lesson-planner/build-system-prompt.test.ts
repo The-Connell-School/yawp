@@ -1356,3 +1356,110 @@ describe('writing fundamentals', () => {
     expect(entry!.prompt.toLowerCase()).toContain('practice');
   });
 });
+
+describe("buildLessonPlannerSystemPrompt — Brian's review: who the planner is", () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+  const lower = prompt.toLowerCase();
+
+  test('is a research-grounded pedagogy expert, not a fad follower', () => {
+    expect(lower).toContain('current research on how students actually learn');
+    expect(lower).toContain('not on outdated theories or fads');
+  });
+
+  test('knows real rooms and is on the teacher’s side', () => {
+    expect(lower).toContain('department chair');
+    expect(lower).toContain('phones');
+    expect(lower).toContain('never talk down to the teacher');
+    expect(lower).toContain('never talk down about students');
+  });
+
+  test('teaches new teachers and affirms veterans', () => {
+    expect(lower).toContain('new teacher learns why');
+    expect(lower).toContain('veteran');
+  });
+
+  test('never requires and never tries to convince', () => {
+    expect(lower).toContain('never require anything');
+    expect(lower).toContain('the teacher chooses');
+  });
+
+  test('takes pushback in stride and invites the teacher back in', () => {
+    expect(prompt).toContain(
+      'Tell me about your class or your school. That might help us here.'
+    );
+    expect(lower).toContain('never give the rudeness back');
+  });
+
+  test('knows texts and courses, and treats accuracy as non-negotiable', () => {
+    expect(prompt).toContain('AP Literature');
+    expect(lower).toContain('special education');
+    expect(lower).toContain('names, quotes, and details exactly right');
+  });
+
+  test('answers questions about itself briefly and moves on', () => {
+    expect(prompt).toContain(
+      "I'm really just an expert in pedagogy, methodology, and lesson planning, and that's where my identity ends."
+    );
+    expect(lower).toContain('do not hand the question back');
+  });
+
+  test('takes the high road on students and points personal struggles to a real person', () => {
+    expect(lower).toContain('take the high road');
+    expect(lower).toContain('a real person in their life');
+  });
+
+  test('is a joyful co-producer and celebrates when the work is done', () => {
+    expect(lower).toContain('co-producer');
+    expect(lower).toContain('celebrate');
+    expect(lower).toContain('never probe');
+  });
+});
+
+describe("buildLessonPlannerSystemPrompt — Brian's review: offer, don't prescribe", () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+    exitTicketsAvailable: true,
+  });
+  const lower = prompt.toLowerCase();
+
+  test('qualifies every teaching move as an option', () => {
+    expect(lower).toContain('if your students enjoy');
+    expect(lower).toContain('never present a practice as the one right way');
+    // Brian's own example of a qualified tip.
+    expect(lower).toContain('who is comfortable reading aloud');
+  });
+
+  test('keeps the direct "what to push for" voice about the text', () => {
+    expect(lower).toContain('what to push for');
+  });
+
+  test('leaves Daily Pages timing to the teacher', () => {
+    expect(lower).toContain('assign it as homework');
+  });
+
+  test('offers three exit tickets, one per focus', () => {
+    expect(lower).toContain('offer three exit tickets');
+    expect(prompt).toContain('understand-text');
+    expect(prompt).toContain('explain-concept');
+    expect(prompt).toContain('ask-question');
+  });
+
+  test('ends a plan on one closing question, not a menu of rounds', () => {
+    expect(prompt).toContain('Want to refine or edit any part of this?');
+  });
+
+  test('gives the session a beginning, a middle, and an end', () => {
+    expect(lower).toContain('a beginning, a middle, and an end');
+    expect(lower).toContain('do not keep moving the goalposts');
+  });
+
+  test('offers framings as separate pieces the teacher can stack', () => {
+    expect(lower).toContain('historical context');
+    expect(lower).toContain('literary context');
+    expect(prompt).toContain('frame-hist');
+  });
+});
