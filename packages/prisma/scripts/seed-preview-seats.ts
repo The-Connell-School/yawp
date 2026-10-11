@@ -24,6 +24,7 @@ import {
 import {
   ensureInternalRubricsEnabledForDemo,
   ensureLessonPlannerEnabledForDemo,
+  ensureLessonPlannerEnabledForPreview,
 } from './local-dev/seed-lesson-planner-feature-flag';
 import { ensureFreeTierEnabledForPreview } from './local-dev/seed-free-tier-feature-flag';
 import {
@@ -43,6 +44,13 @@ const databaseName = process.env.DATABASE_URL?.split('/').pop()?.split('?')[0] ?
 try {
   const freeTierFlag = await ensureFreeTierEnabledForPreview(prisma, databaseName);
   console.log(`Free tier feature flag seed: ${JSON.stringify(freeTierFlag)}`);
+  const lessonPlannerFlags = await ensureLessonPlannerEnabledForPreview(
+    prisma,
+    databaseName
+  );
+  console.log(
+    `Lesson Planner feature flags seed: ${JSON.stringify(lessonPlannerFlags)}`
+  );
   const results = await ensurePreviewSeats(prisma, seats);
   const includeFreeClassroomFixture =
     process.env.PREVIEW_SLUG !== 'demo' &&
