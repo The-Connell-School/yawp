@@ -391,3 +391,72 @@ describe('ViewPanel where the grade is withheld', () => {
     expect(text()).toContain('4/5');
   });
 });
+
+describe('ViewPanel rubric display options', () => {
+  const displaySubmission: ViewPanelSubmission = {
+    numericPercentage: 80,
+    letterGrade: 'B',
+    overallScore: 4,
+    score: '4/5',
+    overallComment: 'Strong overall work.',
+    rubricScores: {
+      thesis: { score: 4, comment: 'Clear thesis.' },
+      organization: { score: 3, comment: 'Transitions need work.' },
+    },
+    rubricConfig: {
+      minScore: 1,
+      maxScore: 5,
+      categories: [
+        { key: 'thesis', label: 'Thesis', feedbackEnabled: true },
+        { key: 'organization', label: 'Organization', feedbackEnabled: true },
+      ],
+    },
+    document: { assignment: { submitForGrade: true, pointValue: null } },
+  };
+
+  it('hides categories when showCategories is false', () => {
+    render(
+      <ViewPanel
+        submission={{
+          ...displaySubmission,
+          rubricConfig: {
+            ...displaySubmission.rubricConfig!,
+            display: {
+              showCategories: false,
+              perCategoryComments: false,
+              grammarHighlight: 'highlight',
+              teacherNotes: true,
+            },
+          },
+          grammarHighlightCaptionExplicit: true,
+        }}
+      />
+    );
+    expect(text()).not.toContain('Rubric');
+    expect(text()).toContain('Strong overall work.');
+    expect(document.querySelector('[data-testid="grammar-highlight-caption"]'))
+      .not.toBeNull();
+  });
+
+  it('omits per-category comments when perCategoryComments is false', () => {
+    render(
+      <ViewPanel
+        submission={{
+          ...displaySubmission,
+          rubricConfig: {
+            ...displaySubmission.rubricConfig!,
+            display: {
+              showCategories: true,
+              perCategoryComments: false,
+              grammarHighlight: 'deduct',
+              teacherNotes: true,
+            },
+          },
+        }}
+      />
+    );
+    expect(text()).toContain('Rubric');
+    expect(text()).not.toContain('Clear thesis.');
+    expect(text()).not.toContain('Transitions need work.');
+  });
+});
