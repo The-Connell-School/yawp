@@ -154,7 +154,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
               },
             },
             materials: {
-              select: { sourceMessageId: true, blockKey: true, kind: true },
+              select: {
+                id: true,
+                sourceMessageId: true,
+                blockKey: true,
+                kind: true,
+                slot: true,
+                editedAt: true,
+                content: true,
+              },
             },
           },
         })
@@ -269,6 +277,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
           addedMaterials: selected.materials.map(
             (material) => `${material.sourceMessageId}:${material.blockKey}`
           ),
+          // A deck the teacher edited by hand (Brian's review, E2), which the
+          // chat shows in place of the planner's.
+          editedDeck: (() => {
+            const deck = selected.materials.find(
+              (material) => material.slot === DECK_SLOT && material.editedAt
+            );
+            return deck
+              ? {
+                  materialId: deck.id,
+                  sourceMessageId: deck.sourceMessageId,
+                  content: deck.content,
+                }
+              : null;
+          })(),
           // What the lesson already holds, so the planner is not offered to
           // build something it has.
           lessonHas: {
@@ -846,6 +868,8 @@ export default function LessonPlannerRoute() {
                   onKeep={setKept}
                   stackV2={reviewFlags.stackV2}
                   intakeV2={reviewFlags.intakeV2}
+                  deckV2={reviewFlags.deckV2}
+                  editedDeck={selectedConversation?.editedDeck ?? null}
                   teacherClasses={teacherClasses}
                   stackHasPieces={keptCount > 0}
                   disabled={isSending}
@@ -1059,6 +1083,8 @@ function MessageBubble({
   stackHasPieces = false,
   intakeV2 = false,
   teacherClasses = [],
+  deckV2 = false,
+  editedDeck = null,
   disabled,
 }: {
   message: ChatMessage;
@@ -1101,6 +1127,13 @@ function MessageBubble({
    */
   intakeV2?: boolean;
   teacherClasses?: IntakeClass[];
+  /** Deck v2 (E2): Edit on the deck card, and an edited deck shown in place. */
+  deckV2?: boolean;
+  editedDeck?: {
+    materialId: string;
+    sourceMessageId: string;
+    content: string;
+  } | null;
   disabled: boolean;
 }) {
   if (message.role === 'user') {
@@ -1282,29 +1315,61 @@ function MessageBubble({
           ) : null}
           {deckOutcome.kind === 'deck' ? (
             <div className="mt-3">
-              <SlideDeckCard
-                deck={deckOutcome.deck}
-                added={
-                  !!message.id &&
-                  addedMaterials.has(`${message.id}:${DECK_SLOT}`)
-                }
-                onToggle={
-                  message.id
-                    ? (added) => onMaterial(message.id!, DECK_SLOT, added)
-                    : null
-                }
-                disabled={disabled}
-                presentHref={
-                  message.id && conversationId
-                    ? `/present/${conversationId}/${message.id}`
-                    : null
-                }
-                downloadHref={
-                  message.id && conversationId
-                    ? `/present/${conversationId}/${message.id}.pptx`
-                    : null
-                }
-              />
+              {(() => {
+                // Deck v2 (Brian's review, E2): a deck the teacher edited
+                // replaces the planner's in the chat, rather than sitting
+                // beside it. Present and PowerPoint follow the edit.
+                const edited =
+                  deckV2 && editedDeck && editedDeck.sourceMessageId === message.id
+                    ? editedDeck
+                    : null;
+                const editedParse = edited ? readSlideDeck(edited.content) : null;
+                const shown =
+                  editedParse?.kind === 'deck' ? editedParse.deck : deckOutcome.deck;
+                const deckId = edited ? edited.materialId : message.id;
+                return (
+                  <SlideDeckCard
+                    deck={shown}
+                    edited={Boolean(edited)}
+                    added={
+                      !!message.id &&
+                      addedMaterials.has(`${message.id}:${DECK_SLOT}`)
+                    }
+                    onToggle={
+                      message.id
+                        ? (added) => {
+                            if (
+                              !added &&
+                              edited &&
+                              !window.confirm(
+                                'Taking this deck out of the stack also discards your edits to it.'
+                              )
+                            ) {
+                              return;
+                            }
+                            onMaterial(message.id!, DECK_SLOT, added);
+                          }
+                        : null
+                    }
+                    disabled={disabled}
+                    presentHref={
+                      deckId && conversationId
+                        ? `/present/${conversationId}/${deckId}`
+                        : null
+                    }
+                    downloadHref={
+                      deckId && conversationId
+                        ? `/present/${conversationId}/${deckId}.pptx`
+                        : null
+                    }
+                    editHref={
+                      deckV2 && deckId && conversationId
+                        ? `/app/lesson-planner/${conversationId}/deck/${deckId}`
+                        : null
+                    }
+                  />
+                );
+              })()}
             </div>
           ) : null}
           {deckOutcome.kind === 'unreadable' ? (

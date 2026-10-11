@@ -5,7 +5,7 @@
  * thing on the card.
  */
 import { Link } from 'react-router';
-import { Check, Download, Play, Plus, Presentation } from 'lucide-react';
+import { Check, Download, PenLine, Play, Plus, Presentation } from 'lucide-react';
 import { cn } from '~/utils/misc';
 import {
   deckDurationMinutes,
@@ -19,6 +19,8 @@ export function SlideDeckCard({
   added,
   onToggle,
   disabled,
+  editHref = null,
+  edited = false,
 }: {
   deck: SlideDeck;
   /** Absent while the reply is still unsaved and has no id to present by. */
@@ -34,6 +36,13 @@ export function SlideDeckCard({
   /** Absent in the stack itself, where the deck is already filed. */
   onToggle?: ((added: boolean) => void) | null;
   disabled?: boolean;
+  /**
+   * Deck v2 (Brian's review, E2): where to edit this deck. Its presence also
+   * switches the card to "Save to PowerPoint", "Edit", "Present".
+   */
+  editHref?: string | null;
+  /** The teacher's edited version, shown in place of the planner's. */
+  edited?: boolean;
 }) {
   const minutes = deckDurationMinutes(deck);
   const preview = deck.slides.slice(0, 4);
@@ -48,7 +57,18 @@ export function SlideDeckCard({
           <Presentation size={16} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{deck.title}</p>
+          <p className="flex items-center gap-2 truncate text-sm font-semibold">
+            {deck.title}
+            {edited ? (
+              <span
+                data-testid="deck-edited-badge"
+                className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
+              >
+                <PenLine size={11} />
+                Edited
+              </span>
+            ) : null}
+          </p>
           <p className="truncate text-xs text-muted-foreground">
             {[
               `${deck.slides.length} ${deck.slides.length === 1 ? 'slide' : 'slides'}`,
@@ -86,8 +106,18 @@ export function SlideDeckCard({
             className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
           >
             <Download size={14} />
-            PowerPoint
+            {editHref ? 'Save to PowerPoint' : 'PowerPoint'}
           </a>
+        ) : null}
+        {editHref ? (
+          <Link
+            to={editHref}
+            data-testid="deck-edit"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-primary/40 px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary/5"
+          >
+            <PenLine size={14} />
+            Edit
+          </Link>
         ) : null}
         {presentHref ? (
           <Link

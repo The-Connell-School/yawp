@@ -462,6 +462,128 @@ test.describe("Lesson Planner — Brian's review", () => {
     });
   });
 
+  test.describe('decks: the YAWP! template and editing (E1, E2)', () => {
+    const DECK = {
+      title: 'The Things They Carried — Day 1',
+      subtitle: 'English 11 · Period 3',
+      slides: [
+        { layout: 'title', title: 'The Things They Carried', subtitle: 'Day 1', speakerNotes: 'Let it sit.', minutes: 1 },
+        { layout: 'prompt', title: 'Class starter', body: 'Write about something you carry every day.', speakerNotes: 'Eight minutes.', minutes: 8 },
+        { layout: 'statement', title: 'Hold this question', body: 'Why does a list feel like the right form?', speakerNotes: 'Leave it up.', minutes: 5 },
+        { layout: 'closing', title: 'Before you go', body: 'Exit ticket: open it in Yawp.', speakerNotes: 'Seven minutes.', minutes: 7 },
+      ],
+    };
+
+    async function seedDeck(e2eContext: Ctx) {
+      const prisma = createE2EPrismaClient();
+      try {
+        const conversation = await prisma.lessonPlanConversation.create({
+          data: {
+            membershipId: e2eContext.teacherMembershipId,
+            organizationId: e2eContext.organizationId,
+            title: 'Deck lesson',
+            messages: {
+              create: [
+                { role: 'user', content: 'Build the slide deck for this lesson', createdAt: new Date('2026-10-11T10:00:00Z') },
+                {
+                  role: 'assistant',
+                  content: `Here is your deck.\n\n\`\`\`yawp-slides\n${JSON.stringify(DECK)}\n\`\`\``,
+                  createdAt: new Date('2026-10-11T10:00:01Z'),
+                },
+              ],
+            },
+          },
+          select: { id: true, messages: { where: { role: 'assistant' }, select: { id: true } } },
+        });
+        return { conversationId: conversation.id, messageId: conversation.messages[0]!.id };
+      } finally {
+        await prisma.$disconnect();
+      }
+    }
+
+    test('flag off: the original card and presenter', async ({ page, signIn, e2eContext }) => {
+      const { conversationId, messageId } = await seedDeck(e2eContext);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+      const card = page.getByTestId('slide-deck-card');
+      await expect(card.getByTestId('deck-download-pptx')).toHaveText('PowerPoint');
+      await expect(card.getByTestId('deck-edit')).toHaveCount(0);
+      await page.goto(`/present/${conversationId}/${messageId}`);
+      await expect(page.getByTestId('slide-stage')).toBeVisible();
+      await expect(page.locator('[data-theme="tile"]')).toHaveCount(0);
+    });
+
+    test('flag on: Save to PowerPoint, Edit, Present; presented in the tile template', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_deck_v2', true);
+      const { conversationId, messageId } = await seedDeck(e2eContext);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+      const card = page.getByTestId('slide-deck-card');
+      await expect(card.getByTestId('deck-download-pptx')).toHaveText('Save to PowerPoint');
+      await expect(card.getByTestId('deck-edit')).toHaveText('Edit');
+      await expect(card.getByRole('link', { name: 'Present' })).toBeVisible();
+
+      const download = await page.request.get(`/present/${conversationId}/${messageId}.pptx`);
+      expect(download.ok()).toBe(true);
+      expect((await download.body()).subarray(0, 2).toString()).toBe('PK');
+
+      await page.goto(`/present/${conversationId}/${messageId}`);
+      const stage = page.getByTestId('slide-stage');
+      await expect(stage.locator('[data-theme="tile"]')).toBeVisible();
+      await expect(stage).toContainText('TODAY · 1 MIN');
+      await expect(stage).toContainText('The Things They Carried');
+    });
+
+    test('edit: delete a slide (with Undo), rename one, save — the chat shows the edit', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_deck_v2', true);
+      const { conversationId } = await seedDeck(e2eContext);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+      await page.getByTestId('deck-edit').click();
+
+      const slides = page.getByTestId('deck-editor-slide');
+      await expect(slides).toHaveCount(4);
+      await page.getByRole('button', { name: 'Delete slide 3' }).click();
+      await expect(slides).toHaveCount(3);
+      await page.getByTestId('deck-editor-undo').getByRole('button', { name: 'Undo' }).click();
+      await expect(slides).toHaveCount(4);
+      await page.getByRole('button', { name: 'Delete slide 3' }).click();
+      await expect(slides).toHaveCount(3);
+
+      await page.getByRole('button', { name: /^Slide 2:/ }).click();
+      await page.getByLabel('Title', { exact: true }).fill('Warm-up: what you carry');
+      await page.getByTestId('deck-editor-save').click();
+
+      await expect(page).toHaveURL(new RegExp(`/app/lesson-planner\\?c=${conversationId}`));
+      const card = page.getByTestId('slide-deck-card');
+      await expect(card).toContainText('3 slides');
+      await expect(card.getByTestId('deck-edited-badge')).toBeVisible();
+      await expect(card.getByTestId('deck-toggle')).toHaveText(/in the stack/i);
+
+      await card.getByRole('link', { name: 'Present' }).click();
+      await expect(page.getByTestId('slide-counter')).toHaveText('1 / 3');
+      await page.waitForLoadState('networkidle');
+      await page.keyboard.press('ArrowRight');
+      await expect(page.getByTestId('slide-counter')).toHaveText('2 / 3');
+      await expect(page.getByTestId('slide-stage')).toContainText('Warm-up: what you carry');
+    });
+
+    test('flag off: the editor is not there', async ({ page, signIn, e2eContext }) => {
+      const { conversationId, messageId } = await seedDeck(e2eContext);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const response = await page.goto(`/app/lesson-planner/${conversationId}/deck/${messageId}`);
+      expect(response?.status()).toBe(404);
+    });
+  });
+
   test('"In the stack" says what clicking it does (B3)', async ({
     page,
     signIn,
