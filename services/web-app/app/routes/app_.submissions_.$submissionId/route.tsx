@@ -1,4 +1,8 @@
-import { staffTeacherNoteLoaderField } from '~/domain/grading/teacher-notes';
+import {
+  staffTeacherNoteLoaderField,
+  teacherNotesEnabled,
+  type TeacherNotesUiState,
+} from '~/domain/grading/teacher-notes';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { TeacherNotes } from './teacher-grading/teacher-notes';
 import { invariant } from '@epic-web/invariant';
@@ -527,7 +531,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       runs: gradingAssistantRuns,
       assignmentTypeSystemKey:
         submission.document.assignmentType?.systemKey ?? null,
-      teacherNotesEnabled: rubricConfig.display?.teacherNotes ?? true,
+      teacherNotesEnabled: teacherNotesEnabled(
+        gradingConfig?.outputSchemaSnapshot
+      ),
     }),
     isOwner,
     isTeacher: isTeacher || isAdmin,
@@ -568,7 +574,7 @@ function SubmissionDetail({
   const activities = 'activities' in loaderData ? loaderData.activities : [];
   const activityHasMore =
     'activityHasMore' in loaderData ? loaderData.activityHasMore : false;
-  const teacherNotesUi =
+  const teacherNotesUi: TeacherNotesUiState =
     'teacherNotesUi' in loaderData
       ? loaderData.teacherNotesUi
       : { visible: false };
