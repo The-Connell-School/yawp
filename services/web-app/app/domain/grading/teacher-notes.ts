@@ -2,6 +2,13 @@ import {
   readOutputSchemaDisplay,
   type ResolvedDisplayOptions,
 } from '~/domain/rubrics/output-schema-display';
+import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+
+export type TeacherNotesUiState =
+  | { visible: false }
+  | { visible: true; phase: 'pending' }
+  | { visible: true; phase: 'empty' }
+  | { visible: true; phase: 'content'; note: string };
 
 /**
  * Teacher Notes are document observations, not an authorship detector. Keep
@@ -57,13 +64,60 @@ export function readTeacherNote(run: { status?: string | null; metadata?: unknow
   return normalizeTeacherNote((run.metadata as Record<string, unknown>).teacherNote);
 }
 
-/** Loader field for staff-only teacher notes (never exposed to students). */
+function latestSucceededGradingRun(
+  runs: ReadonlyArray<{ status?: string | null; metadata?: unknown }>
+) {
+  return runs.find(run => run.status === 'succeeded') ?? null;
+}
+
+export function resolveTeacherNotesUiState(options: {
+  assignmentTypeSystemKey: string | null | undefined;
+  teacherNotesEnabled: boolean;
+  runs: ReadonlyArray<{ status?: string | null; metadata?: unknown }>;
+}): TeacherNotesUiState {
+  if (
+    options.assignmentTypeSystemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY ||
+    !options.teacherNotesEnabled
+  ) {
+    return { visible: false };
+  }
+  if (!options.runs.length) {
+    return { visible: true, phase: 'pending' };
+  }
+  const succeeded = latestSucceededGradingRun(options.runs);
+  if (!succeeded) {
+    return { visible: true, phase: 'pending' };
+  }
+  const note = readTeacherNote(succeeded);
+  if (!note) {
+    return { visible: true, phase: 'empty' };
+  }
+  return { visible: true, phase: 'content', note };
+}
+
+/** Loader fields for staff-only teacher notes (never exposed to students). */
 export function staffTeacherNoteLoaderField(options: {
   isOwner: boolean;
   isTeacher: boolean;
   isAdmin: boolean;
-  run: { status?: string | null; metadata?: unknown } | null;
-}): { teacherNote: string | null } | Record<string, never> {
+  assignmentTypeSystemKey?: string | null;
+  teacherNotesEnabled?: boolean;
+  runs?: ReadonlyArray<{ status?: string | null; metadata?: unknown }>;
+  run?: { status?: string | null; metadata?: unknown } | null;
+}): { teacherNote: string | null; teacherNotesUi: TeacherNotesUiState } | Record<string, never> {
   if (options.isOwner || (!options.isTeacher && !options.isAdmin)) return {};
-  return { teacherNote: readTeacherNote(options.run) };
+  const runs =
+    options.runs ??
+    (options.run ? [options.run] : []);
+  const teacherNotesEnabled = options.teacherNotesEnabled ?? true;
+  const teacherNotesUi = resolveTeacherNotesUiState({
+    assignmentTypeSystemKey: options.assignmentTypeSystemKey,
+    teacherNotesEnabled,
+    runs,
+  });
+  const note =
+    teacherNotesUi.visible && teacherNotesUi.phase === 'content'
+      ? teacherNotesUi.note
+      : null;
+  return { teacherNote: note, teacherNotesUi };
 }

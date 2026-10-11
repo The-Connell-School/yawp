@@ -34,6 +34,7 @@ import {
   type TeacherGradingPanelHeaderState,
 } from './teacher-grading-panel';
 import { TeacherNotes } from './teacher-notes';
+import type { TeacherNotesUiState } from '~/domain/grading/teacher-notes';
 import { ViewPanel, type ViewPanelSubmission } from './view-panel';
 
 export function GradingAssistantSplitButton({
@@ -230,7 +231,7 @@ export function SubmissionLifecyclePanel({
   submissionActivityEnabled = false,
   submissionId,
   documentId,
-  teacherNote = null,
+  teacherNotesUi = { visible: false },
   onNavigationStateChange,
   ...teacherGradingPanelProps
 }: {
@@ -246,7 +247,7 @@ export function SubmissionLifecyclePanel({
   submissionActivityEnabled?: boolean;
   submissionId: string;
   documentId: string;
-  teacherNote?: string | null;
+  teacherNotesUi?: TeacherNotesUiState;
   onNavigationStateChange?: (state: {
     hasUnsavedChanges: boolean;
     isBusy: boolean;
@@ -460,12 +461,12 @@ export function SubmissionLifecyclePanel({
               hideHeader
               onHeaderStateChange={setHeaderState}
             />
-            <TeacherNotes note={teacherNote} variant="inline" />
+            <TeacherNotes ui={teacherNotesUi} variant="inline" />
           </>
         ) : isReadyToRelease || lifecycleState === 'released' ? (
           <>
             <ViewPanel submission={submissionForView} />
-            <TeacherNotes note={teacherNote} variant="inline" />
+            <TeacherNotes ui={teacherNotesUi} variant="inline" />
           </>
         ) : null}
       </div>
