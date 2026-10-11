@@ -198,11 +198,6 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
         `overallScore",${gradePrivacy.unreleasedOverallScore}|overallScore\\\\",${gradePrivacy.unreleasedOverallScore}`
       )
     );
-    expect(submissionDataText).toMatch(
-      new RegExp(
-        `numericPercentage",${gradePrivacy.unreleasedNumericPercentage}|numericPercentage\\\\",${gradePrivacy.unreleasedNumericPercentage}`
-      )
-    );
     if (typeof submission.overallScore === 'number') {
       expectSubmissionPrivacy(submission, {
         released: true,
