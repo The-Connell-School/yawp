@@ -24,40 +24,16 @@ function expectSubmissionPrivacy(
   }
 }
 
-function isSubmissionLoaderRow(row: Record<string, unknown>): boolean {
-  if (!('documentId' in row) && !('submittedAt' in row)) return false;
-  const overallScore = row.overallScore;
-  if (overallScore !== undefined && typeof overallScore === 'object') {
-    return false;
-  }
-  return true;
-}
-
 function submissionFromRouteData(
   loaderData: unknown,
   routeIdSuffix: string,
   submissionId: string
 ) {
   const route = getRouteLoaderData(loaderData, routeIdSuffix);
-  const direct = route.submission;
-  if (
-    direct &&
-    typeof direct === 'object' &&
-    !Array.isArray(direct) &&
-    (direct as { id?: unknown }).id === submissionId &&
-    isSubmissionLoaderRow(direct as Record<string, unknown>)
-  ) {
-    return direct as Record<string, unknown>;
-  }
-
-  const matches = findObjectsWithId(route, submissionId).filter(
-    isSubmissionLoaderRow
-  );
-  expect(matches.length).toBeGreaterThan(0);
-  const withNumericScore = matches.find(
-    (row) => typeof row.overallScore === 'number'
-  );
-  return withNumericScore ?? matches[0]!;
+  const submission = route.submission;
+  expect(submission).toBeTruthy();
+  expect((submission as { id?: unknown }).id).toBe(submissionId);
+  return submission as Record<string, unknown>;
 }
 
 test.describe.serial('Unreleased grade privacy in student loader responses', () => {

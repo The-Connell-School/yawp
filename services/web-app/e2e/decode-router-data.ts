@@ -103,6 +103,34 @@ function decodeTurboLineLegacy(
   return value;
 }
 
+function normalizeSingleFetchLoaderData(value: unknown): unknown {
+  if (value && typeof value === 'object' && 'routes' in value) {
+    const routes = (value as { routes: unknown }).routes;
+    if (routes && typeof routes === 'object' && !Array.isArray(routes)) {
+      const normalized: Record<string, unknown> = {};
+      for (const [routeId, routeResult] of Object.entries(
+        routes as Record<string, unknown>
+      )) {
+        if (
+          routeResult &&
+          typeof routeResult === 'object' &&
+          !Array.isArray(routeResult) &&
+          'data' in routeResult
+        ) {
+          normalized[routeId] = (routeResult as { data: unknown }).data;
+        } else {
+          normalized[routeId] = routeResult;
+        }
+      }
+      return normalized;
+    }
+  }
+  if (value && typeof value === 'object' && 'loaderData' in value) {
+    return (value as { loaderData: unknown }).loaderData;
+  }
+  return value;
+}
+
 export async function decodeRouterDataResponse(body: string): Promise<unknown> {
   const { value } = await decode(bodyToTurboStream(body), {
     plugins: [
@@ -115,18 +143,28 @@ export async function decodeRouterDataResponse(body: string): Promise<unknown> {
           ];
           return { value: { data, status, statusText } };
         }
+        if (type === 'SingleFetchRedirect') {
+          return { value: { __singleFetchRedirect: rest[0] } };
+        }
+        if (type === 'SingleFetchClassInstance') {
+          return { value: rest[0] };
+        }
         if (type === 'SingleFetchFallback') {
           return { value: undefined };
+        }
+        if (type === 'SanitizedError') {
+          const [name, message, stack] = rest as [string, string, string];
+          const error = new Error(message);
+          error.name = name;
+          error.stack = stack;
+          return { value: error };
         }
         return undefined;
       },
     ],
   });
 
-  if (value && typeof value === 'object' && 'loaderData' in value) {
-    return (value as { loaderData: unknown }).loaderData;
-  }
-  return value;
+  return normalizeSingleFetchLoaderData(value);
 }
 
 export function getRouteLoaderData(
