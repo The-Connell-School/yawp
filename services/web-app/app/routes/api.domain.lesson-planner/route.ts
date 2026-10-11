@@ -31,7 +31,10 @@ import {
   verifyLessonLinks,
 } from '~/domain/lesson-planner/lesson-links';
 import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
-import { shouldRenameLesson } from '~/domain/lesson-planner/lesson-name';
+import {
+  firstMessageTitle,
+  shouldRenameLesson,
+} from '~/domain/lesson-planner/lesson-name';
 import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
 import { buildLessonPlannerSystemPromptBlocks } from './build-system-prompt';
 import {
@@ -165,11 +168,7 @@ function progressStream(
   });
 }
 
-function deriveTitle(message: string): string {
-  const trimmed = message.trim().replace(/\s+/g, ' ');
-  if (trimmed.length <= 60) return trimmed || 'New lesson';
-  return `${trimmed.slice(0, 57)}…`;
-}
+const deriveTitle = firstMessageTitle;
 
 function boundedHistory(
   messages: Array<{ role: string; content: string }>

@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { deriveLessonName, shouldRenameLesson } from './lesson-name';
+import {
+  deriveLessonName,
+  firstMessageTitle,
+  nameIsProvisional,
+  shouldRenameLesson,
+} from './lesson-name';
 
 const PLAN = [
   '## Evidence That Earns Its Place',
@@ -99,5 +104,59 @@ describe('shouldRenameLesson', () => {
         teacherNamedIt: false,
       })
     ).toBeNull();
+  });
+});
+
+describe("a lesson still named after the teacher's first message (Brian's review, B5)", () => {
+  const first = "I'm teaching 'the things they carried' for the first time and I don't really know how to begin.";
+
+  test('firstMessageTitle is the old 57-character cut', () => {
+    expect(firstMessageTitle(first)).toBe(`${first.slice(0, 57)}…`);
+    expect(firstMessageTitle('  short  ')).toBe('short');
+    expect(firstMessageTitle('   ')).toBe('New lesson');
+  });
+
+  test('is provisional while the title is still that cut', () => {
+    expect(
+      nameIsProvisional({
+        title: firstMessageTitle(first),
+        packetTitle: null,
+        firstUserMessage: first,
+        unitDay: null,
+      })
+    ).toBe(true);
+  });
+
+  test('is not provisional once the plan renamed it', () => {
+    expect(
+      nameIsProvisional({
+        title: 'The Things They Carried — Day 1',
+        packetTitle: null,
+        firstUserMessage: first,
+        unitDay: null,
+      })
+    ).toBe(false);
+  });
+
+  test('a name the teacher typed always counts', () => {
+    expect(
+      nameIsProvisional({
+        title: firstMessageTitle(first),
+        packetTitle: 'TTTC day one',
+        firstUserMessage: first,
+        unitDay: null,
+      })
+    ).toBe(false);
+  });
+
+  test('a unit day is named by its unit, never provisional', () => {
+    expect(
+      nameIsProvisional({
+        title: firstMessageTitle(first),
+        packetTitle: null,
+        firstUserMessage: first,
+        unitDay: 2,
+      })
+    ).toBe(false);
   });
 });

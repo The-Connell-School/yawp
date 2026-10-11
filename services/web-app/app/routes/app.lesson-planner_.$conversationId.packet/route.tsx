@@ -3,6 +3,7 @@ import {
   Link,
   useFetcher,
   useLoaderData,
+  useRevalidator,
   type LoaderFunctionArgs,
 } from 'react-router';
 import {
@@ -14,6 +15,7 @@ import {
   Rows,
   BookMarked,
   PenLine,
+  Trash2,
 } from 'lucide-react';
 import {
   KIND_LABEL,
@@ -42,9 +44,88 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 
 export default function LessonPacketRoute() {
-  const { conversationId, packet, packetTitleValue, published } =
-    useLoaderData<typeof loader>();
+  const {
+    conversationId,
+    packet,
+    packetTitleValue,
+    published,
+    nameIsProvisional,
+    reviewFlags,
+  } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
+  const revalidator = useRevalidator();
+  const stackV2 = reviewFlags.stackV2;
+
+  /**
+   * Removing a piece from the stack, right here (Brian's review, B2).
+   *
+   * The piece disappears at once and an Undo sits on screen for a few
+   * seconds; only then is it actually removed. A confirm dialog asks the
+   * teacher to be sure every time, while Undo only costs the teacher who
+   * slipped. Leaving the page commits whatever is still waiting.
+   */
+  const [hiddenIds, setHiddenIds] = useState<string[]>([]);
+  const [undoable, setUndoable] = useState<{ id: string; title: string } | null>(
+    null
+  );
+  const pendingRemovals = useRef(
+    new Map<string, { timer: ReturnType<typeof setTimeout>; commit: () => void }>()
+  );
+
+  function commitRemoval(section: { id: string; origin: 'reply' | 'material' }) {
+    const body = new FormData();
+    body.set('conversationId', conversationId);
+    if (section.origin === 'material') {
+      body.set('intent', 'delete-material');
+      body.set('materialId', section.id);
+    } else {
+      body.set('intent', 'drop');
+      body.set('messageId', section.id);
+    }
+    return fetch('/api/domain/lesson-planner/packet', {
+      method: 'POST',
+      body,
+      keepalive: true,
+    });
+  }
+
+  function removeSection(section: {
+    id: string;
+    title: string;
+    origin: 'reply' | 'material';
+  }) {
+    setHiddenIds((ids) => [...ids, section.id]);
+    setUndoable({ id: section.id, title: section.title });
+    const commit = () => {
+      pendingRemovals.current.delete(section.id);
+      void commitRemoval(section).then(() => {
+        setUndoable((current) => (current?.id === section.id ? null : current));
+        revalidator.revalidate();
+      });
+    };
+    pendingRemovals.current.set(section.id, {
+      timer: setTimeout(commit, REMOVE_UNDO_MS),
+      commit,
+    });
+  }
+
+  function undoRemoval(id: string) {
+    const pending = pendingRemovals.current.get(id);
+    if (pending) clearTimeout(pending.timer);
+    pendingRemovals.current.delete(id);
+    setHiddenIds((ids) => ids.filter((other) => other !== id));
+    setUndoable(null);
+  }
+
+  useEffect(() => {
+    const pending = pendingRemovals.current;
+    return () => {
+      for (const { timer, commit } of pending.values()) {
+        clearTimeout(timer);
+        commit();
+      }
+    };
+  }, []);
   const [view, setView] = useState<'full' | 'outline' | 'handout'>('full');
   // Pieces the teacher does not want in students' hands this time. Nothing is
   // deleted — the handout is a reading of the packet, so it stays current.
@@ -132,10 +213,13 @@ export default function LessonPacketRoute() {
     );
   }
 
+  const shownSections = packet.sections.filter(
+    (section) => !hiddenIds.includes(section.id)
+  );
   const visibleSections =
     filter === 'all'
-      ? packet.sections
-      : packet.sections.filter((section) => section.kind === filter);
+      ? shownSections
+      : shownSections.filter((section) => section.kind === filter);
 
   // Every student-facing piece, and the subset actually going in the handout.
   const allHandoutParts = buildStudentHandout({ packet }).parts;
@@ -257,7 +341,12 @@ export default function LessonPacketRoute() {
             id="packet-title"
             name="packetTitle"
             defaultValue={packetTitleValue}
-            placeholder={packet.title}
+            placeholder={
+              stackV2 && nameIsProvisional ? 'Name this lesson' : packet.title
+            }
+            aria-describedby={
+              stackV2 && nameIsProvisional ? 'packet-title-help' : undefined
+            }
             maxLength={120}
             className="w-full rounded-lg border bg-background px-3 py-2 text-base font-medium"
             onBlur={(event) =>
@@ -271,6 +360,14 @@ export default function LessonPacketRoute() {
               )
             }
           />
+          {stackV2 && nameIsProvisional ? (
+            <p
+              id="packet-title-help"
+              className="mt-1 text-xs text-muted-foreground"
+            >
+              We'll name it from your plan, or type one.
+            </p>
+          ) : null}
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] print:block">
@@ -291,7 +388,9 @@ export default function LessonPacketRoute() {
               <div className="flex items-baseline gap-2">
                 <Lightbulb size={18} className="shrink-0 text-primary" />
                 <h1 className="text-xl font-semibold leading-tight">
-                  {packet.title}
+                  {stackV2 && nameIsProvisional
+                    ? 'Untitled lesson'
+                    : packet.title}
                 </h1>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -485,6 +584,19 @@ export default function LessonPacketRoute() {
                           Edit
                         </button>
                       ) : null}
+                      {stackV2 ? (
+                        <button
+                          type="button"
+                          onClick={() => removeSection(section)}
+                          data-testid="section-remove"
+                          aria-label={`Remove ${section.title} from the stack`}
+                          title="Remove from stack"
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive print:hidden"
+                        >
+                          <Trash2 size={13} />
+                          Remove
+                        </button>
+                      ) : null}
                       <a
                         href={pdfHref(section.id)}
                         download
@@ -515,9 +627,28 @@ export default function LessonPacketRoute() {
           </article>
         </div>
       </div>
+      {undoable ? (
+        <div
+          role="status"
+          data-testid="remove-undo"
+          className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-lg bg-foreground px-4 py-2.5 text-sm text-background shadow-lg print:hidden"
+        >
+          <span>Removed “{undoable.title}” from the stack</span>
+          <button
+            type="button"
+            onClick={() => undoRemoval(undoable.id)}
+            className="font-semibold underline underline-offset-2"
+          >
+            Undo
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }
+
+/** How long a removed piece can still be brought back. */
+const REMOVE_UNDO_MS = 6000;
 
 /**
  * A saved resource's body. A deck renders as a deck with a way to present it;

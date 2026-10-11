@@ -149,6 +149,95 @@ test.describe("Lesson Planner — Brian's review", () => {
     });
   });
 
+  test.describe('the stack is the lesson (B1, B2, B5)', () => {
+    const STARTERS =
+      '## Class starter (8 min)\n\nPick one:\n\n' +
+      '```yawp-daily-pages\nkind: class-starter\nWrite about something you carry every day.\n```\n\n' +
+      '```yawp-daily-pages\nkind: class-starter\nWhat is the heaviest thing you have ever carried?\n```\n\n' +
+      '## Reading (40 min)\n\nRead the first story together.';
+
+    test('flag off: a class starter has no stack button', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      const id = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Plan day one of The Things They Carried.' },
+        { role: 'assistant', content: STARTERS },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner?c=${id}`);
+      await expect(page.getByTestId('daily-pages-card')).toHaveCount(2);
+      await expect(page.getByTestId('daily-pages-stack-toggle')).toHaveCount(0);
+    });
+
+    test('flag on: stack one starter, then remove it from the stack screen with Undo', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      const id = await seedConversation(
+        e2eContext,
+        [
+          {
+            role: 'user',
+            content:
+              "I'm teaching 'the things they carried' for the first time and I don't really know how to begin.",
+          },
+          { role: 'assistant', content: STARTERS },
+        ],
+        "I'm teaching 'the things they carried' for the first time…"
+      );
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner?c=${id}`);
+
+      const toggles = page.getByTestId('daily-pages-stack-toggle');
+      await expect(toggles).toHaveCount(2);
+      const filed = page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/domain/lesson-planner/packet') &&
+          response.request().method() === 'POST'
+      );
+      await toggles.nth(1).click();
+      expect((await filed).ok()).toBe(true);
+      await expect(toggles.nth(1)).toHaveText(/in the stack/i);
+      await expect(toggles.nth(1)).toHaveAttribute('title', 'Click to remove from stack');
+      await expect(toggles.nth(0)).toHaveText(/add to stack/i);
+
+      await page.goto(`/app/lesson-planner/${id}/packet`);
+      // B5: the raw first message is not presented as the lesson's name.
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Untitled lesson');
+      await expect(page.getByLabel('Lesson name')).toHaveAttribute(
+        'placeholder',
+        'Name this lesson'
+      );
+      await expect(page.getByText("We'll name it from your plan, or type one.")).toBeVisible();
+
+      const sections = page.getByTestId('packet-section');
+      await expect(sections).toHaveCount(1);
+      await expect(sections.first()).toContainText('heaviest thing');
+
+      // Remove, then Undo.
+      await page.getByTestId('section-remove').click();
+      await expect(sections).toHaveCount(0);
+      await page.getByTestId('remove-undo').getByRole('button', { name: 'Undo' }).click();
+      await expect(sections).toHaveCount(1);
+
+      // Remove for real: it is gone after a reload.
+      await page.getByTestId('section-remove').click();
+      await expect(page.getByTestId('remove-undo')).toBeHidden({ timeout: 10_000 });
+      await page.reload();
+      await expect(page.getByTestId('packet-section')).toHaveCount(0);
+
+      // And the chat agrees.
+      await page.goto(`/app/lesson-planner?c=${id}`);
+      await expect(page.getByTestId('daily-pages-stack-toggle').nth(1)).toHaveText(
+        /add to stack/i
+      );
+    });
+  });
+
   test('"In the stack" says what clicking it does (B3)', async ({
     page,
     signIn,

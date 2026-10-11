@@ -627,3 +627,41 @@ describe('lesson packet action — filing a revision over a hand-edited material
     expect((response.data as any).replaced).toBe('msg-old:0');
   });
 });
+
+describe("lesson packet action — removing from the stack screen (Brian's review, B2)", () => {
+  test('deletes one filed piece by its own id, inside this lesson only', async () => {
+    const response = await action({
+      request: formRequest({
+        intent: 'delete-material',
+        conversationId: 'plan-1',
+        materialId: 'material-9',
+      }),
+    } as any);
+
+    expect(prisma.lessonPlanMaterial.deleteMany.mock.calls[0][0].where).toEqual({
+      id: 'material-9',
+      conversationId: 'plan-1',
+    });
+    expect((response.data as any).removed).toBe(true);
+  });
+
+  test('404s when the piece is not in this lesson', async () => {
+    prisma.lessonPlanMaterial.deleteMany.mockResolvedValue({ count: 0 });
+    const response = await action({
+      request: formRequest({
+        intent: 'delete-material',
+        conversationId: 'plan-1',
+        materialId: 'someone-elses',
+      }),
+    } as any);
+    expect(response.init?.status).toBe(404);
+  });
+
+  test('requires the material id', async () => {
+    const response = await action({
+      request: formRequest({ intent: 'delete-material', conversationId: 'plan-1' }),
+    } as any);
+    expect(prisma.lessonPlanMaterial.deleteMany).not.toHaveBeenCalled();
+    expect(response).toBeDefined();
+  });
+});

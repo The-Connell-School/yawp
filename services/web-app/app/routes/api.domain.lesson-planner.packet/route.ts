@@ -37,6 +37,9 @@ const POST = z
       'rename-section',
       'add-material',
       'remove-material',
+      // Brian's review (B2): remove a filed piece from the stack screen, by
+      // its own id, where there is no reply and block key to hand.
+      'delete-material',
       'rename-material',
       'edit-material',
       'publish',
@@ -81,6 +84,13 @@ const POST = z
         code: z.ZodIssueCode.custom,
         path: ['messageId'],
         message: 'A message is required.',
+      });
+    }
+    if (value.intent === 'delete-material' && !value.materialId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['materialId'],
+        message: 'A material is required.',
       });
     }
     if (value.intent === 'edit-material' && !value.materialId) {
@@ -220,6 +230,19 @@ export async function action({ request }: ActionFunctionArgs) {
 
   // A material is kept on its own: a teacher who wants the handout should not
   // have to take the whole lesson plan wrapped around it.
+  if (data.intent === 'delete-material') {
+    const { count } = await prisma.lessonPlanMaterial.deleteMany({
+      where: { id: data.materialId!, conversationId: conversation.id },
+    });
+    if (count === 0) {
+      return dataResponse(
+        { error: 'That piece is not part of this lesson.' },
+        { status: 404 }
+      );
+    }
+    return dataResponse({ removed: true, materialId: data.materialId });
+  }
+
   if (data.intent === 'add-material' || data.intent === 'remove-material') {
     if (data.intent === 'remove-material') {
       await prisma.lessonPlanMaterial.deleteMany({

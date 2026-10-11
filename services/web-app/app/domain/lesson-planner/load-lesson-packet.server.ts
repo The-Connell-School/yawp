@@ -12,6 +12,8 @@ import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-ac
 import { buildLessonPacket, type LessonPacket } from './lesson-packet';
 import { packetKindForMaterial } from './lesson-material';
 import { getQuickWritingLessons } from '~/utils/writing-lessons/static-lessons.server';
+import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
+import { nameIsProvisional } from './lesson-name';
 
 export type LoadedLessonPacket = {
   conversationId: string;
@@ -23,6 +25,13 @@ export type LoadedLessonPacket = {
   packetTitleValue: string;
   /** Whether the teacher has published this lesson to their library. */
   published: boolean;
+  /**
+   * Still named after the teacher's first message (Brian's review, B5), so
+   * the page asks for a name rather than presenting that message as one.
+   */
+  nameIsProvisional: boolean;
+  /** Brian's review flags for this school. */
+  reviewFlags: { intakeV2: boolean; stackV2: boolean; deckV2: boolean };
 };
 
 export async function loadLessonPacket({
@@ -46,6 +55,7 @@ export async function loadLessonPacket({
       title: true,
       packetTitle: true,
       publishedAt: true,
+      unitDay: true,
       originClassAssignment: {
         select: {
           class: { select: { title: true, grade: true, period: true } },
@@ -120,6 +130,12 @@ export async function loadLessonPacket({
     .sort((a, b) => a.at - b.at || a.order - b.order)
     .map((entry) => entry.section);
 
+  const firstUserMessage = await prisma.lessonPlanMessage.findFirst({
+    where: { conversationId: conversation.id, role: 'user' },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    select: { content: true },
+  });
+
   return {
     conversationId: conversation.id,
     packet: buildLessonPacket({
@@ -132,5 +148,14 @@ export async function loadLessonPacket({
     }),
     packetTitleValue: conversation.packetTitle ?? '',
     published: Boolean(conversation.publishedAt),
+    nameIsProvisional: nameIsProvisional({
+      title: conversation.title,
+      packetTitle: conversation.packetTitle,
+      firstUserMessage: firstUserMessage?.content ?? null,
+      unitDay: conversation.unitDay,
+    }),
+    reviewFlags: await getLessonPlannerReviewFlags(
+      access.membership.organization.id
+    ),
   };
 }
