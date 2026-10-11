@@ -37,6 +37,8 @@ const KIND_ICON: Record<ArtifactKind, typeof FileText> = {
   notes: NotebookPen,
   // A deck is drawn by the deck card, never here; present for completeness.
   slides: Presentation,
+  'class-starter': PenLine,
+  'daily-pages': PenLine,
 };
 
 export function MaterialCard({

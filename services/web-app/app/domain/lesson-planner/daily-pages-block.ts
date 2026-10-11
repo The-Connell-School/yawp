@@ -251,3 +251,20 @@ export function dailyPagesCreateHref(
   if (conversationId) params.set(FROM_LESSON_PARAM, conversationId);
   return `/app/assignment-types/${assignmentTypeId}?${params}`;
 }
+
+/**
+ * The stack key for the nth writing exercise in a reply: `dp`, `dp:1`, `dp:2`.
+ * The packet API caps a material key at 8 characters, as it does for `ticket`.
+ */
+export const DAILY_PAGES_BLOCK_KEY = 'dp';
+
+export function dailyPagesBlockKey(index: number): string {
+  return index === 0 ? DAILY_PAGES_BLOCK_KEY : `${DAILY_PAGES_BLOCK_KEY}:${index}`;
+}
+
+/** The position a stack key names, or null for a key that is not ours. */
+export function dailyPagesIndexForKey(key: string): number | null {
+  if (key === DAILY_PAGES_BLOCK_KEY) return 0;
+  const match = /^dp:(\d{1,5})$/.exec(key);
+  return match ? Number(match[1]) : null;
+}

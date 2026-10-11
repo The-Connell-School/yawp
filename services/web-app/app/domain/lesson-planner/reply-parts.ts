@@ -19,6 +19,7 @@ import {
 import {
   readDailyPagesExercises,
   type DailyPagesExercise,
+  dailyPagesBlockKey,
 } from './daily-pages-block';
 import {
   readPlannedExitTickets,
@@ -30,7 +31,7 @@ import { readPlannedPractice, type PlannedPractice } from './practice-block';
 export type ReplyPart =
   | { kind: 'markdown'; text: string }
   | { kind: 'material'; material: LessonMaterial }
-  | { kind: 'daily-pages'; exercise: DailyPagesExercise }
+  | { kind: 'daily-pages'; exercise: DailyPagesExercise; blockKey: string }
   | { kind: 'exit-ticket'; ticket: PlannedExitTicket; blockKey: string }
   | { kind: 'resource'; resource: LessonResource }
   | { kind: 'practice'; practice: PlannedPractice };
@@ -51,6 +52,7 @@ export function splitReplyParts(content: string): ReplyPart[] {
   let cursor = 0;
   let materialCount = 0;
   let exitTicketCount = 0;
+  let exerciseCount = 0;
 
   const pushText = (text: string) => {
     const trimmed = text.trim();
@@ -76,7 +78,14 @@ export function splitReplyParts(content: string): ReplyPart[] {
       }
     } else if (match[1] === 'yawp-daily-pages') {
       const [exercise] = readDailyPagesExercises(block).exercises;
-      if (exercise) parts.push({ kind: 'daily-pages', exercise });
+      if (exercise) {
+        parts.push({
+          kind: 'daily-pages',
+          exercise,
+          blockKey: dailyPagesBlockKey(exerciseCount),
+        });
+        exerciseCount += 1;
+      }
     } else if (match[1] === 'yawp-exit-ticket') {
       const [ticket] = readPlannedExitTickets(block).tickets;
       if (ticket) {

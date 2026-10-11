@@ -43,7 +43,20 @@ export const DECK_KIND = 'slides';
  * Everything the packet can hold. A deck is not a material a teacher hands
  * out, but it is filed, replaced, and printed exactly like one.
  */
-export type ArtifactKind = MaterialKind | typeof DECK_KIND;
+export type ArtifactKind =
+  | MaterialKind
+  | typeof DECK_KIND
+  | (typeof WRITING_EXERCISE_ARTIFACT_KINDS)[number];
+
+/**
+ * A class starter or Daily Pages prompt filed on its own (Brian's review, B1).
+ * Not a `yawp-material` kind: the planner hands these over in their own fence,
+ * so the material parser never sees them.
+ */
+export const WRITING_EXERCISE_ARTIFACT_KINDS = [
+  'class-starter',
+  'daily-pages',
+] as const;
 
 /** What each kind is called on its card and in the packet's contents. */
 export const MATERIAL_KIND_LABELS: Record<ArtifactKind, string> = {
@@ -54,6 +67,8 @@ export const MATERIAL_KIND_LABELS: Record<ArtifactKind, string> = {
   rubric: 'Rubric',
   notes: 'Notes',
   slides: 'Slides',
+  'class-starter': 'Class Starter',
+  'daily-pages': 'Daily Pages',
 };
 
 /**
@@ -164,7 +179,7 @@ function readTitle(
 
 const MAX_SLOT_CHARS = 80;
 
-function slugify(text: string): string {
+export function slugify(text: string): string {
   return (
     text
       .toLowerCase()
@@ -236,7 +251,11 @@ export function readLessonMaterials(content: string): {
  */
 export function packetKindForMaterial(kind: string): PacketSectionKind {
   if (kind === DECK_KIND) return 'slides';
-  return kind === 'handout' || kind === 'sample' || kind === 'exit-ticket'
+  return kind === 'handout' ||
+    kind === 'sample' ||
+    kind === 'exit-ticket' ||
+    kind === 'class-starter' ||
+    kind === 'daily-pages'
     ? 'handout'
     : 'plan';
 }

@@ -9,6 +9,47 @@ import {
   readPlannedExitTickets,
   type PlannedExitTicket,
 } from './exit-ticket-block';
+import {
+  DAILY_PAGES_BLOCK_KEY,
+  dailyPagesBlockKey,
+  dailyPagesIndexForKey,
+  readDailyPagesExercises,
+  WRITING_EXERCISE_LABELS,
+  type DailyPagesExercise,
+} from './daily-pages-block';
+import { slugify } from './lesson-material';
+
+export { DAILY_PAGES_BLOCK_KEY, dailyPagesBlockKey };
+
+const EXERCISE_TITLE_CHARS = 60;
+
+/**
+ * A class starter or Daily Pages prompt, filed on its own (Brian's review,
+ * B1). Each prompt gets its own slot, so three options are three pieces the
+ * teacher can take or leave. The library id rides along in the content so the
+ * stack can still send it to the right assignment sheet.
+ */
+export function exerciseAsMaterial(
+  exercise: DailyPagesExercise,
+  key: string
+): LessonMaterial {
+  const label = WRITING_EXERCISE_LABELS[exercise.kind];
+  const firstLine = exercise.prompt.split('\n')[0].trim();
+  const short =
+    firstLine.length > EXERCISE_TITLE_CHARS
+      ? `${firstLine.slice(0, EXERCISE_TITLE_CHARS - 1).trimEnd()}…`
+      : firstLine;
+  return {
+    key,
+    slot: `${exercise.kind}:${slugify(exercise.prompt).slice(0, 48)}`,
+    kind: exercise.kind,
+    title: `${label}: ${short}`,
+    audience: 'student',
+    content: exercise.promptId
+      ? `${exercise.prompt}\n\n_${label} prompt ${exercise.promptId}_`
+      : exercise.prompt,
+  };
+}
 
 export function exitTicketAsMaterial(
   ticket: PlannedExitTicket,
@@ -47,6 +88,11 @@ export function artifactFromAssistantReply(
     const { tickets } = readPlannedExitTickets(content);
     const ticket = tickets[index];
     return ticket ? exitTicketAsMaterial(ticket, materialKey) : null;
+  }
+  const exerciseIndex = dailyPagesIndexForKey(materialKey);
+  if (exerciseIndex !== null) {
+    const exercise = readDailyPagesExercises(content).exercises[exerciseIndex];
+    return exercise ? exerciseAsMaterial(exercise, materialKey) : null;
   }
   const { materials } = readLessonMaterials(content);
   return materials.find((item) => item.key === materialKey) ?? null;
