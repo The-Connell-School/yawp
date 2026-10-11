@@ -26,6 +26,7 @@ import { Textarea } from '~/components/ui/textarea';
 import { cn } from '~/utils/misc';
 import { prisma } from '~/utils/db.server';
 import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
+import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
 import { RECOMMENDED_LESSON_PLANNER_PROMPTS } from '~/routes/api.domain.lesson-planner/build-system-prompt';
 import { parseAssistantMessage } from '~/components/ai-chat/parse-assistant-message';
 import {
@@ -201,7 +202,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
     writingPracticeEnabled: true,
   });
 
+  // Brian's review: each change ships behind its own flag (see
+  // docs/plans/2026-10-11-lesson-planner-brian-review.md).
+  const reviewFlags = await getLessonPlannerReviewFlags(
+    access.membership.organization.id
+  );
+
   return {
+    reviewFlags,
     practice,
     dailyPagesTypeId,
     classStarterTypeId,
@@ -268,6 +276,7 @@ export default function LessonPlannerRoute() {
     practice,
     builtDays,
     unitMapConversation,
+    reviewFlags,
   } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const fetcher = useFetcher<LessonPlannerActionData>();
@@ -783,6 +792,7 @@ export default function LessonPlannerRoute() {
                   builtDays={builtDays}
                   onSuggestion={send}
                   onKeep={setKept}
+                  stackV2={reviewFlags.stackV2}
                   disabled={isSending}
                 />
               ))
@@ -990,6 +1000,7 @@ function MessageBubble({
   builtDays,
   onSuggestion,
   onKeep,
+  stackV2 = false,
   disabled,
 }: {
   message: ChatMessage;
@@ -1018,6 +1029,12 @@ function MessageBubble({
     unitDay?: { day: number; title: string }
   ) => void;
   onKeep: (messageId: string, audience: PacketAudience | null) => void;
+  /**
+   * Stack v2 (Brian's review, B4 + C6): the whole-reply button only appears
+   * under a delivered plan, there is no "Add all as a handout" in the chat,
+   * and a plan says plainly that the teacher can take just the pieces.
+   */
+  stackV2?: boolean;
   disabled: boolean;
 }) {
   if (message.role === 'user') {
@@ -1221,8 +1238,17 @@ function MessageBubble({
             </p>
           ) : null}
         </div>
+        {stackV2 && deliveredPlan && message.id ? (
+          <p
+            className="mt-2 text-sm text-muted-foreground"
+            data-testid="plan-stack-invite"
+          >
+            You don't have to use all of these. Add the pieces you want to the
+            stack, or add the whole lesson.
+          </p>
+        ) : null}
         <div className="mt-1.5 flex flex-wrap items-center gap-1">
-          {message.id ? (
+          {message.id && (!stackV2 || deliveredPlan || message.keptAudience) ? (
             message.keptAudience ? (
               <>
                 <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
@@ -1247,15 +1273,17 @@ function MessageBubble({
                   className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
                 >
                   <BookmarkPlus size={13} />
-                  Add all of this
+                  {stackV2 ? 'Add the whole lesson to the stack' : 'Add all of this'}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => onKeep(message.id!, 'student')}
-                  className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
-                >
-                  Add all as a handout
-                </button>
+                {stackV2 ? null : (
+                  <button
+                    type="button"
+                    onClick={() => onKeep(message.id!, 'student')}
+                    className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
+                  >
+                    Add all as a handout
+                  </button>
+                )}
               </>
             )
           ) : null}

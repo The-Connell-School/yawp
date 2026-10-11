@@ -64,6 +64,8 @@ export function SlideDeckCard({
             type="button"
             disabled={disabled}
             onClick={() => onToggle(!added)}
+            // Brian's review (B3): the toggle removes, and says so before the click.
+            title={added ? 'Click to remove from stack' : undefined}
             data-testid="deck-toggle"
             className={cn(
               'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50',
