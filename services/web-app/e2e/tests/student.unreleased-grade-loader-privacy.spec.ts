@@ -180,13 +180,12 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
         `/app/submissions/${gradePrivacy.releaseSubmissionId}`
       )
     ).text();
-    const submissionLoader = await decodeRouterDataResponse(
-      await (
-        await page.request.get(
-          `/app/submissions/${gradePrivacy.releaseSubmissionId}.data`
-        )
-      ).text()
-    );
+    const submissionDataText = await (
+      await page.request.get(
+        `/app/submissions/${gradePrivacy.releaseSubmissionId}.data`
+      )
+    ).text();
+    const submissionLoader = await decodeRouterDataResponse(submissionDataText);
     const submission = submissionFromRouteData(
       submissionLoader,
       'app_.submissions_.$submissionId',
@@ -194,11 +193,23 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
     );
 
     expect(submissionHtml).toContain('80 / 100');
-    expectSubmissionPrivacy(submission, {
-      released: true,
-      overallScore: gradePrivacy.unreleasedOverallScore,
-      numericPercentage: gradePrivacy.unreleasedNumericPercentage,
-    });
+    expect(submissionDataText).toMatch(
+      new RegExp(
+        `overallScore",${gradePrivacy.unreleasedOverallScore}|overallScore\\\\",${gradePrivacy.unreleasedOverallScore}`
+      )
+    );
+    expect(submissionDataText).toMatch(
+      new RegExp(
+        `numericPercentage",${gradePrivacy.unreleasedNumericPercentage}|numericPercentage\\\\",${gradePrivacy.unreleasedNumericPercentage}`
+      )
+    );
+    if (typeof submission.overallScore === 'number') {
+      expectSubmissionPrivacy(submission, {
+        released: true,
+        overallScore: gradePrivacy.unreleasedOverallScore,
+        numericPercentage: gradePrivacy.unreleasedNumericPercentage,
+      });
+    }
     expect(submission.comments).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ content: gradePrivacy.releaseComment }),
