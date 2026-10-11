@@ -26,7 +26,7 @@ import {
   letterFromPercent,
 } from '~/domain/grading/gradeMath';
 import { scoringModeFromAiMeta } from '~/domain/grading/scoring-mode';
-import { readDisplaySnapshotFromAiMeta } from '~/domain/grading/submission-display-options.server';
+import { readDisplaySnapshotFromAiMeta } from '~/domain/grading/submission-display-options';
 import { rubricCategories as rubric } from '~/domain/grading/rubric';
 import {
   cloneFormDataWithFallbackRetry,

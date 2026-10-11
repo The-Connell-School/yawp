@@ -142,14 +142,13 @@ test.describe.serial('Rubric display feedback views', () => {
     });
     await studentPage.close();
 
-    await prisma.submission.updateMany({
-      where: { id: submissionId },
-      data: { archivedAt: new Date() },
-    });
-    await prisma.document.updateMany({
-      where: { id: submissionId },
-      data: { deletedAt: new Date() },
-    });
+    if (submissionId) {
+      await prisma.submissionGradingAssistantRun.deleteMany({
+        where: { submissionId },
+      });
+      await prisma.submission.deleteMany({ where: { id: submissionId } });
+      await prisma.document.deleteMany({ where: { id: submissionId } });
+    }
     await prisma.assignmentType.delete({ where: { id: assignmentType.id } });
     await prisma.rubric.delete({ where: { id: rubric.id } });
   });

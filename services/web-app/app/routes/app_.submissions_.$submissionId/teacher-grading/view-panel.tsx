@@ -15,7 +15,7 @@ import {
   getCategoryScoreBand,
   isCategoryFeedbackEnabled,
 } from '~/domain/assignment-types/rubric-category-options';
-import { derivedPerCategoryCommentsFromCategories } from '~/domain/grading/submission-display-options.server';
+import { derivedPerCategoryCommentsFromCategories } from '~/domain/grading/submission-display-options';
 import { grammarHighlightCaption } from '~/domain/grading/grammar-highlight-display';
 import type { RubricScoreBand } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import type { ResolvedDisplayOptions } from '~/domain/rubrics/output-schema-display';

@@ -82,7 +82,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '~/components/ui/collapsible';
-import { derivedPerCategoryCommentsFromCategories } from '~/domain/grading/submission-display-options.server';
+import { derivedPerCategoryCommentsFromCategories } from '~/domain/grading/submission-display-options';
 import { cn } from '~/utils/misc';
 import { useUpdateSubmission } from './use-update-submission';
 import { hasGradingDraftToReplace } from './has-grading-draft-to-replace';

@@ -2,8 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import {
   grammarHighlightingEnabledForDisplay,
   readDisplaySnapshotFromAiMeta,
-  resolveDisplayForSubmissionView,
-} from './submission-display-options.server';
+} from './submission-display-options';
+import { resolveDisplayForSubmissionView } from './submission-display-options.server';
 import type { RubricDisplayConfig } from './rubric-display';
 
 const baseConfig: RubricDisplayConfig = {
