@@ -56,8 +56,10 @@ export function SlideDeckCard({
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <Presentation size={16} />
         </span>
-        <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2 truncate text-sm font-semibold">
+        {/* A floor on the title's width, so the buttons wrap to their own
+            line rather than squeezing the deck's name to a few letters. */}
+        <div className="min-w-[14rem] flex-1">
+          <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
             {deck.title}
             {edited ? (
               <span
