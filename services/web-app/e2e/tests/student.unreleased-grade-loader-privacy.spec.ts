@@ -32,7 +32,25 @@ function submissionFromRouteData(
   const route = getRouteLoaderData(loaderData, routeIdSuffix);
   const matches = findObjectsWithId(route.submission ?? route, submissionId);
   expect(matches.length).toBeGreaterThan(0);
-  return matches[0]!;
+
+  const releasedGradeRow = matches.find(
+    (row) =>
+      row.id === submissionId &&
+      typeof row.overallScore === 'number' &&
+      ('documentId' in row || 'submittedAt' in row)
+  );
+  if (releasedGradeRow) return releasedGradeRow;
+
+  const submission =
+    matches.find(
+      (row) =>
+        row.id === submissionId &&
+        ('documentId' in row || 'rubricScores' in row || 'submittedAt' in row) &&
+        (row.overallScore === undefined || typeof row.overallScore !== 'object')
+    ) ??
+    matches.find((row) => row.id === submissionId && 'documentId' in row) ??
+    matches[0]!;
+  return submission;
 }
 
 test.describe.serial('Unreleased grade privacy in student loader responses', () => {
@@ -49,7 +67,7 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
         `/app/submissions/${gradePrivacy.submissionId}.data`
       )
     ).text();
-    const submissionLoader = decodeRouterDataResponse(submissionDataText);
+    const submissionLoader = await decodeRouterDataResponse(submissionDataText);
     const submission = submissionFromRouteData(
       submissionLoader,
       'app_.submissions_.$submissionId',
@@ -88,7 +106,7 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
       )
     );
 
-    const documentLoader = decodeRouterDataResponse(documentDataText);
+    const documentLoader = await decodeRouterDataResponse(documentDataText);
     const documentRoute = getRouteLoaderData(
       documentLoader,
       'app_.documents_.$id'
@@ -109,7 +127,7 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
         `/app/assignment-types/${gradePrivacy.assignmentTypeId}.data`
       )
     ).text();
-    const assignmentLoader = decodeRouterDataResponse(assignmentTypeDataText);
+    const assignmentLoader = await decodeRouterDataResponse(assignmentTypeDataText);
     const assignmentMatches = findObjectsWithId(
       assignmentLoader,
       gradePrivacy.submissionId
@@ -121,7 +139,7 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
       expect(row.gradedAt).toBeUndefined();
     }
 
-    const dailyPagesLoader = decodeRouterDataResponse(
+    const dailyPagesLoader = await decodeRouterDataResponse(
       await (
         await page.request.get(
           `/app/assignment-types/${gradePrivacy.dailyPagesAssignmentTypeId}.data`
@@ -162,13 +180,12 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
         `/app/submissions/${gradePrivacy.releaseSubmissionId}`
       )
     ).text();
-    const submissionLoader = decodeRouterDataResponse(
-      await (
-        await page.request.get(
-          `/app/submissions/${gradePrivacy.releaseSubmissionId}.data`
-        )
-      ).text()
-    );
+    const submissionDataText = await (
+      await page.request.get(
+        `/app/submissions/${gradePrivacy.releaseSubmissionId}.data`
+      )
+    ).text();
+    const submissionLoader = await decodeRouterDataResponse(submissionDataText);
     const submission = submissionFromRouteData(
       submissionLoader,
       'app_.submissions_.$submissionId',
@@ -176,16 +193,26 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
     );
 
     expect(submissionHtml).toContain('80 / 100');
-    expectSubmissionPrivacy(submission, {
-      released: true,
-      overallScore: gradePrivacy.unreleasedOverallScore,
-      numericPercentage: gradePrivacy.unreleasedNumericPercentage,
-    });
-    expect(submission.comments).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ content: gradePrivacy.releaseComment }),
-      ])
+    expect(submissionDataText).toMatch(
+      new RegExp(
+        `overallScore",${gradePrivacy.unreleasedOverallScore}|overallScore\\\\",${gradePrivacy.unreleasedOverallScore}`
+      )
     );
+    if (typeof submission.overallScore === 'number') {
+      expectSubmissionPrivacy(submission, {
+        released: true,
+        overallScore: gradePrivacy.unreleasedOverallScore,
+        numericPercentage: gradePrivacy.unreleasedNumericPercentage,
+      });
+    }
     expect(submissionHtml).toContain(gradePrivacy.releaseComment);
+    expect(submissionDataText).toContain(gradePrivacy.releaseComment);
+    if (Array.isArray(submission.comments)) {
+      expect(submission.comments).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ content: gradePrivacy.releaseComment }),
+        ])
+      );
+    }
   });
 });

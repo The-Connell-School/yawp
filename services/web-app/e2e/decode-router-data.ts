@@ -1,17 +1,30 @@
 /**
- * Decode a React Router single-fetch `.data` response (turbo-stream line array).
+ * Decode a React Router single-fetch `.data` response (turbo-stream v2).
  */
-export function decodeRouterDataResponse(body: string): unknown {
+import { decode } from 'turbo-stream';
+
+function bodyToTurboStream(body: string): ReadableStream<Uint8Array> {
+  const payload = body.endsWith('\n') ? body : `${body}\n`;
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(payload));
+      controller.close();
+    },
+  });
+}
+
+/** Legacy v1-style line decoder (unit fixtures only). */
+export function decodeRouterDataResponseLegacy(body: string): unknown {
   const line = JSON.parse(body) as unknown[];
   const visiting = new Set<number>();
-  const root = decodeTurboLine(line, 0, visiting);
+  const root = decodeTurboLineLegacy(line, 0, visiting);
   if (root && typeof root === 'object' && 'loaderData' in root) {
     return (root as { loaderData: unknown }).loaderData;
   }
   return root;
 }
 
-function followTurboRef(
+function followTurboRefLegacy(
   line: unknown[],
   index: number,
   visiting: Set<number>
@@ -21,12 +34,12 @@ function followTurboRef(
   }
   const target = line[index];
   if (target !== null && typeof target === 'object') {
-    return decodeTurboLine(line, index, visiting);
+    return decodeTurboLineLegacy(line, index, visiting);
   }
   return index;
 }
 
-function decodeTurboLine(
+function decodeTurboLineLegacy(
   line: unknown[],
   index: number,
   visiting: Set<number>
@@ -47,7 +60,7 @@ function decodeTurboLine(
       return new Date(value[1]);
     }
     const decoded = value.map((item) =>
-      typeof item === 'number' ? decodeTurboLine(line, item, visiting) : item
+      typeof item === 'number' ? decodeTurboLineLegacy(line, item, visiting) : item
     );
     visiting.delete(index);
     return decoded;
@@ -66,7 +79,7 @@ function decodeTurboLine(
         arrayIndices.every((index, position) => index === position);
       if (isDenseArray) {
         const decoded = arrayIndices.map((index) =>
-          decodeTurboLine(line, record[`_${index}`] as number, visiting)
+          decodeTurboLineLegacy(line, record[`_${index}`] as number, visiting)
         );
         visiting.delete(index);
         return decoded;
@@ -75,11 +88,8 @@ function decodeTurboLine(
       const out: Record<string, unknown> = {};
       for (const [propRef, valRef] of Object.entries(record)) {
         const keyIndex = Number(propRef.slice(1));
-        out[String(decodeTurboLine(line, keyIndex, visiting))] = decodeTurboLine(
-          line,
-          valRef as number,
-          visiting
-        );
+        out[String(decodeTurboLineLegacy(line, keyIndex, visiting))] =
+          decodeTurboLineLegacy(line, valRef as number, visiting);
       }
       visiting.delete(index);
       return out;
@@ -88,9 +98,91 @@ function decodeTurboLine(
 
   visiting.delete(index);
   if (typeof value === 'number') {
-    return followTurboRef(line, value, visiting);
+    return followTurboRefLegacy(line, value, visiting);
   }
   return value;
+}
+
+function normalizeSingleFetchLoaderData(value: unknown): unknown {
+  if (value && typeof value === 'object' && 'routes' in value) {
+    const routes = (value as { routes: unknown }).routes;
+    if (routes && typeof routes === 'object' && !Array.isArray(routes)) {
+      const normalized: Record<string, unknown> = {};
+      for (const [routeId, routeResult] of Object.entries(
+        routes as Record<string, unknown>
+      )) {
+        if (
+          routeResult &&
+          typeof routeResult === 'object' &&
+          !Array.isArray(routeResult) &&
+          'data' in routeResult
+        ) {
+          normalized[routeId] = (routeResult as { data: unknown }).data;
+        } else {
+          normalized[routeId] = routeResult;
+        }
+      }
+      return normalized;
+    }
+  }
+  if (value && typeof value === 'object' && 'loaderData' in value) {
+    return (value as { loaderData: unknown }).loaderData;
+  }
+  return value;
+}
+
+function legacyLoaderDataLooksUsable(loaderData: unknown): boolean {
+  if (!loaderData || typeof loaderData !== 'object' || Array.isArray(loaderData)) {
+    return false;
+  }
+  return Object.keys(loaderData as Record<string, unknown>).some((key) =>
+    key.includes('routes/')
+  );
+}
+
+export async function decodeRouterDataResponse(body: string): Promise<unknown> {
+  try {
+    const legacy = decodeRouterDataResponseLegacy(body);
+    if (legacyLoaderDataLooksUsable(legacy)) {
+      return legacy;
+    }
+  } catch {
+    // Fall through to turbo-stream v2.
+  }
+
+  const { value } = await decode(bodyToTurboStream(body), {
+    plugins: [
+      (type, ...rest) => {
+        if (type === 'ErrorResponse') {
+          const [data, status, statusText] = rest as [
+            unknown,
+            number,
+            string,
+          ];
+          return { value: { data, status, statusText } };
+        }
+        if (type === 'SingleFetchRedirect') {
+          return { value: { __singleFetchRedirect: rest[0] } };
+        }
+        if (type === 'SingleFetchClassInstance') {
+          return { value: rest[0] };
+        }
+        if (type === 'SingleFetchFallback') {
+          return { value: undefined };
+        }
+        if (type === 'SanitizedError') {
+          const [name, message, stack] = rest as [string, string, string];
+          const error = new Error(message);
+          error.name = name;
+          error.stack = stack;
+          return { value: error };
+        }
+        return undefined;
+      },
+    ],
+  });
+
+  return normalizeSingleFetchLoaderData(value);
 }
 
 export function getRouteLoaderData(
@@ -106,7 +198,19 @@ export function getRouteLoaderData(
       `Route loader data not found for suffix "${routeIdSuffix}" (keys: ${Object.keys(root).join(', ')})`
     );
   }
-  return root[key] as Record<string, unknown>;
+  const route = root[key] as Record<string, unknown>;
+  if (
+    route &&
+    typeof route === 'object' &&
+    !('submission' in route) &&
+    'data' in route &&
+    route.data &&
+    typeof route.data === 'object' &&
+    !Array.isArray(route.data)
+  ) {
+    return route.data as Record<string, unknown>;
+  }
+  return route;
 }
 
 export function findObjectsWithId(

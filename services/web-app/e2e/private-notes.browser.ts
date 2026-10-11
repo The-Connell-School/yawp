@@ -57,7 +57,7 @@ try {
   await page.goto(`${origin}/auth/login`);
   await page.evaluate(async () => { const response = await fetch('/auth/dev-login', { method: 'POST', body: new URLSearchParams({ email: 'dev.teacher@yawp.local' }) }); if (!response.ok) throw new Error('Teacher dev login failed'); });
   await page.goto(`${origin}/app/submissions/${id}`);
-  const notes = page.getByRole('region', { name: 'Teacher Context' });
+  const notes = page.getByRole('region', { name: 'Notes to the teacher' });
   await expect(notes).toContainText(note, { timeout: 10000 });
   await page.reload();
   await expect(notes).toContainText(note);
@@ -81,7 +81,7 @@ try {
     assert(!(await response!.text()).includes(note), `${phase} HTML must omit private notes`);
     const data = await studentPage.evaluate(async (path) => (await fetch(path)).text(), `/app/submissions/${id}.data`);
     assert(!data.includes(note), `${phase} loader data must omit private notes`);
-    await expect(studentPage.getByRole('region', { name: 'Teacher Context' })).toHaveCount(0);
+    await expect(studentPage.getByRole('region', { name: 'Notes to the teacher' })).toHaveCount(0);
     await studentPage.screenshot({ path: join(dir, `student-${phase}.png`), fullPage: true });
   }
   const revision = await studentPage.goto(`${origin}/app/revise/${id}`);

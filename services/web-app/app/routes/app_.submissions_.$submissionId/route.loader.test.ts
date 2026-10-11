@@ -761,6 +761,43 @@ describe('submission loader — unsubmitted redirect', () => {
     expect(result.submission.comments).toHaveLength(1);
   });
 
+  test('group co-author student never receives teacherNote even when grade is released', async () => {
+    requireUserId.mockResolvedValue('coauthor-user');
+    requireMembership.mockResolvedValue(
+      membership('coauthor-membership', 'STUDENT')
+    );
+    const submission = buildSubmission() as any;
+    submission.releasedAt = new Date();
+    submission.document.membership = {
+      id: 'owner-membership',
+      userId: 'owner-user',
+      organizationId: 'org-1',
+    };
+    submission.document.group = {
+      id: 'group-1',
+      members: [
+        { membershipId: 'coauthor-membership' },
+        { membershipId: 'owner-membership' },
+      ],
+    };
+    submission.gradingAssistantRuns = [
+      {
+        status: 'succeeded',
+        metadata: { teacherNote: 'PRIVATE_COAUTHOR_NOTE' },
+      },
+    ];
+    prisma.submission.findFirst.mockResolvedValue(submission);
+
+    const result = await loader({
+      request: request(),
+      params: { submissionId: 'sub-1' },
+    });
+
+    expect((result as { isOwner: boolean }).isOwner).toBe(true);
+    expect(JSON.stringify(result)).not.toContain('PRIVATE_COAUTHOR_NOTE');
+    expect(result).not.toHaveProperty('teacherNote');
+  });
+
   test('group-owner and cross-organization viewers receive no private note', async () => {
     for (const groupOwner of [true, false]) {
       requireUserId.mockResolvedValue('other-user');

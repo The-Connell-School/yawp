@@ -1,8 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { decodeRouterDataResponse, findObjectsWithId } from './decode-router-data';
+import {
+  decodeRouterDataResponse,
+  decodeRouterDataResponseLegacy,
+  findObjectsWithId,
+} from './decode-router-data';
 
 describe('decodeRouterDataResponse', () => {
-  test('decodes turbo single-fetch arrays with nested submission rows', () => {
+  test('decodes turbo single-fetch arrays with nested submission rows', async () => {
     const body = JSON.stringify([
       { _1: 2 },
       'loaderData',
@@ -19,7 +23,10 @@ describe('decodeRouterDataResponse', () => {
       null,
     ]);
 
-    const loaderData = decodeRouterDataResponse(body) as Record<string, unknown>;
+    const loaderData = (await decodeRouterDataResponse(body)) as Record<
+      string,
+      unknown
+    >;
     const routeData = loaderData['routes/app_.submissions_.$submissionId'] as Record<
       string,
       unknown
@@ -49,7 +56,10 @@ describe('decodeRouterDataResponse', () => {
       null,
     ]);
 
-    const loaderData = decodeRouterDataResponse(body) as Record<string, unknown>;
+    const loaderData = decodeRouterDataResponseLegacy(body) as Record<
+      string,
+      unknown
+    >;
     const route = loaderData['routes/app_.documents_.$id'] as Record<
       string,
       unknown

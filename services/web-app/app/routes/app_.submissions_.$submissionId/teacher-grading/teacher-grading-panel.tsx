@@ -75,8 +75,14 @@ import {
   parseGradingAssistantStrictnessLevel,
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
-import { AlertTriangle, Loader2, TrendingUp } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Loader2, TrendingUp } from 'lucide-react';
 import { Tooltip } from '~/components/ui/tooltip';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '~/components/ui/collapsible';
+import { derivedPerCategoryCommentsFromCategories } from '~/domain/grading/submission-display-options';
 import { cn } from '~/utils/misc';
 import { useUpdateSubmission } from './use-update-submission';
 import { hasGradingDraftToReplace } from './has-grading-draft-to-replace';
@@ -287,6 +293,11 @@ export function TeacherGradingPanel({
   const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
   const isRawPoints = isPointsScaleScoringType(activeRubricConfig.scoringType) || activeRubricConfig.scoringType === 'act_writing_2_12';
   const isHolisticTier = isHolisticTierScoringMode(activeRubricConfig.scoringMode);
+  const showCategories = activeRubricConfig.display?.showCategories ?? true;
+  const perCategoryComments =
+    activeRubricConfig.display?.perCategoryComments ??
+    derivedPerCategoryCommentsFromCategories(activeRubricConfig.categories);
+  const [analysisOpen, setAnalysisOpen] = useState(false);
   const suppressPercentAndLetter = isRawPoints || isHolisticTier;
   const computedNumericPercentage = useMemo(() => {
     if (isRawPoints) return null;
@@ -1213,7 +1224,31 @@ export function TeacherGradingPanel({
         </div>
 
         <div className="space-y-2 border-t pt-4">
-          <div className="text-sm font-medium">Rubric</div>
+          {showCategories ? (
+            <div className="text-sm font-medium">Rubric</div>
+          ) : (
+            <Collapsible open={analysisOpen} onOpenChange={setAnalysisOpen}>
+              <CollapsibleTrigger
+                type="button"
+                className="flex w-full items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-left text-sm font-medium"
+                data-testid="grading-hidden-category-analysis"
+              >
+                <span>AI analysis (hidden from student)</span>
+                <ChevronDown
+                  className={cn(
+                    'size-4 shrink-0 transition',
+                    analysisOpen ? 'rotate-180' : ''
+                  )}
+                  aria-hidden="true"
+                />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-3">
+                <div className="text-sm font-medium text-muted-foreground">
+                  Category scores
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
           {activeRubricConfig.rubricIncomplete ? (
             <div
               data-testid="teacher-grading-rubric-incomplete-warning"
@@ -1231,7 +1266,13 @@ export function TeacherGradingPanel({
               </div>
             </div>
           ) : null}
-          <Accordion type="multiple" className="w-full rounded-lg bg-white">
+          <Accordion
+            type="multiple"
+            className={cn(
+              'w-full rounded-lg bg-white',
+              !showCategories && !analysisOpen ? 'hidden' : ''
+            )}
+          >
             {activeRubricConfig.categories.map((item) => {
               const current = rubricScores[item.key] || {
                 score: 0,
@@ -1292,7 +1333,8 @@ export function TeacherGradingPanel({
                   : `${current.score}/${categoryMaxScore}`
                 : 'Not scored';
               const isGrammarCategory = isGrammarHighlightCategory(item);
-              const showFeedback = isCategoryFeedbackEnabled(item);
+              const showFeedback =
+                perCategoryComments && isCategoryFeedbackEnabled(item);
               const scoreOptions = buildScoreOptions(
                 activeRubricConfig.minScore,
                 activeRubricConfig.maxScore,
