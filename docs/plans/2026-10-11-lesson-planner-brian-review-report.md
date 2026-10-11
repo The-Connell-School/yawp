@@ -216,7 +216,7 @@ original.
 
 - **TDD throughout.** Each change was written test-first: unit tests for
   logic and the prompt, e2e tests for every screen change.
-- **New e2e spec** `e2e/tests/teacher.lesson-planner-review.spec.ts`: 21
+- **New e2e spec** `e2e/tests/teacher.lesson-planner-review.spec.ts`: 15
   tests covering each flag on and off.
 - **Backward compatibility.** With all flags off, the full existing Lesson
   Planner and Exit Ticket e2e specs pass (86/86 across the three specs). The
