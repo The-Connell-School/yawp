@@ -11,6 +11,10 @@ import {
   ViewPanel,
   type ViewPanelSubmission,
 } from '~/routes/app_.submissions_.$submissionId/teacher-grading/view-panel';
+import {
+  grammarHighlightGrammarTabLabel,
+  grammarHighlightCaption,
+} from '~/domain/grading/grammar-highlight-display';
 
 import {
   ASSISTANT_NOTE_ATTRIBUTE,
@@ -32,6 +36,7 @@ type Props = {
   comments: FeedbackComment[];
   grammarIssues: GrammarIssue[];
   grammarHighlightingEnabled: boolean;
+  grammarHighlightCaptionExplicit?: boolean;
   activeCommentId: string | null;
   onSelectComment: (id: string) => void;
   /**
@@ -57,6 +62,7 @@ export function RevisionFeedbackPanel({
   comments,
   grammarIssues,
   grammarHighlightingEnabled,
+  grammarHighlightCaptionExplicit = false,
   activeCommentId,
   onSelectComment,
   focusRequest = null,
@@ -66,6 +72,18 @@ export function RevisionFeedbackPanel({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const focusedNoteId =
     focusRequest?.kind === 'assistant' ? focusRequest.id : null;
+  const grammarMode = submission.rubricConfig?.display?.grammarHighlight;
+  const grammarTabLabel =
+    grammarMode && grammarHighlightingEnabled
+      ? grammarHighlightGrammarTabLabel(
+          grammarMode,
+          grammarHighlightCaptionExplicit
+        )
+      : 'Grammar';
+  const grammarCaption =
+    grammarMode && grammarHighlightingEnabled
+      ? grammarHighlightCaption(grammarMode, grammarHighlightCaptionExplicit)
+      : null;
 
   // Keyed on the nonce, not the id: clicking the same mark twice has to reopen
   // a panel the student collapsed in between.
@@ -159,7 +177,7 @@ export function RevisionFeedbackPanel({
             testId="revision-feedback-tab-grammar"
             count={grammarIssues.length}
           >
-            Grammar
+            {grammarTabLabel}
           </TabButton>
         ) : null}
       </div>
@@ -169,7 +187,14 @@ export function RevisionFeedbackPanel({
         className="no-scrollbar min-h-0 grow overflow-y-auto"
         data-testid="revision-feedback-scroll"
       >
-        {tab === 'grade' ? <ViewPanel submission={submission} /> : null}
+        {tab === 'grade' ? (
+          <ViewPanel
+            submission={{
+              ...submission,
+              grammarHighlightCaptionExplicit,
+            }}
+          />
+        ) : null}
         {tab === 'teacher' ? (
           <GradingCommentsSidebar
             submissionComments={comments as never}
@@ -182,11 +207,21 @@ export function RevisionFeedbackPanel({
           />
         ) : null}
         {tab === 'assistant' ? (
-          <AssistantNotes
-            grammarIssues={grammarIssues}
-            sourceText={submission.text ?? ''}
-            focusedGrammarIssueId={focusedNoteId}
-          />
+          <>
+            {grammarCaption ? (
+              <p
+                className="border-b px-4 py-2 text-xs text-muted-foreground"
+                data-testid="grammar-highlight-caption"
+              >
+                {grammarCaption}
+              </p>
+            ) : null}
+            <AssistantNotes
+              grammarIssues={grammarIssues}
+              sourceText={submission.text ?? ''}
+              focusedGrammarIssueId={focusedNoteId}
+            />
+          </>
         ) : null}
       </div>
     </div>

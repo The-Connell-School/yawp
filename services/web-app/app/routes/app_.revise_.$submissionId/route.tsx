@@ -38,10 +38,13 @@ import { useDocumentSubmit } from '~/routes/app_.documents_.$id/hooks/use-docume
 import { EssayPanel } from '~/routes/app_.submissions_.$submissionId/essay-panel';
 import { GradeHighlightsOverlay } from '~/routes/app_.submissions_.$submissionId/teacher-grading/grade-highlights-overlay';
 import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
+import { resolveRubricConfigForSubmission } from '~/routes/app_.submissions_.$submissionId/submission-rubric-config.server';
+import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import {
-  resolveGrammarHighlightingForAssignmentType,
-  resolveRubricConfigForSubmission,
-} from '~/routes/app_.submissions_.$submissionId/submission-rubric-config.server';
+  grammarHighlightingEnabledForDisplay,
+  resolveDisplayForSubmissionView,
+  rubricDisplayConfigurationIsExplicit,
+} from '~/domain/grading/submission-display-options.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { isDocumentSubmittableContent } from '~/utils/document-submittable';
@@ -202,19 +205,35 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
-  const [rubricConfig, grammarHighlightingEnabled] = await Promise.all([
+  const assignmentTypeId = submission.document.assignmentTypeId;
+  const [rubricConfigBase, gradingConfig] = await Promise.all([
     resolveRubricConfigForSubmission({
-      assignmentTypeId: submission.document.assignmentTypeId,
+      assignmentTypeId,
       assignmentId: submission.document.assignment?.id,
       pointValue: submission.document.assignment?.pointValue,
       latestGradingRun: submission.gradingAssistantRuns[0] ?? null,
       rubricScores: submission.rubricScores,
     }),
-    resolveGrammarHighlightingForAssignmentType(
-      submission.document.assignmentTypeId,
-      submission.document.assignment?.grammarGradingEnabled
-    ),
+    assignmentTypeId
+      ? resolveAssignmentTypeGradingConfig({
+          assignmentTypeId,
+          assignmentId: submission.document.assignment?.id ?? null,
+        }).catch(() => null)
+      : Promise.resolve(null),
   ]);
+  const rubricConfig = resolveDisplayForSubmissionView({
+    rubricConfig: rubricConfigBase,
+    outputSchema: gradingConfig?.outputSchemaSnapshot ?? {},
+    grammarGradingEnabled: submission.document.assignment?.grammarGradingEnabled,
+    aiMeta: submission.aiMeta,
+  });
+  const grammarHighlightingEnabled = grammarHighlightingEnabledForDisplay(
+    rubricConfig.display!
+  );
+  const grammarHighlightCaptionExplicit = rubricDisplayConfigurationIsExplicit(
+    gradingConfig?.outputSchemaSnapshot ?? {},
+    submission.aiMeta
+  );
 
   const { document, gradingAssistantRuns: _privateRuns, ...gradedSubmission } = submission;
 
@@ -223,6 +242,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ...gradedSubmission,
       rubricConfig,
       grammarHighlightingEnabled,
+      grammarHighlightCaptionExplicit,
       document: {
         assignment: document.assignment
           ? {
@@ -349,6 +369,8 @@ export default function ReviseRoute() {
   }, []);
 
   const grammarHighlightingEnabled = useMemo(() => {
+    const display = submission.rubricConfig?.display;
+    if (display) return display.grammarHighlight !== 'off';
     if (typeof submission.grammarHighlightingEnabled === 'boolean') {
       return submission.grammarHighlightingEnabled;
     }
@@ -485,6 +507,9 @@ export default function ReviseRoute() {
               comments={submission.comments}
               grammarIssues={grammarIssues}
               grammarHighlightingEnabled={grammarHighlightingEnabled}
+              grammarHighlightCaptionExplicit={
+                submission.grammarHighlightCaptionExplicit === true
+              }
               activeCommentId={activeCommentId}
               onSelectComment={setActiveCommentId}
               focusRequest={focusRequest}

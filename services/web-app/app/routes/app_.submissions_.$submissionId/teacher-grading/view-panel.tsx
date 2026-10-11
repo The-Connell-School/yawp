@@ -11,7 +11,12 @@ import {
   scoringModeFromAiMeta,
 } from '~/domain/grading/scoring-mode';
 import { isScored } from '~/domain/grading/rubric-display';
-import { getCategoryScoreBand } from '~/domain/assignment-types/rubric-category-options';
+import {
+  getCategoryScoreBand,
+  isCategoryFeedbackEnabled,
+} from '~/domain/assignment-types/rubric-category-options';
+import { derivedPerCategoryCommentsFromCategories } from '~/domain/grading/submission-display-options.server';
+import { grammarHighlightCaption } from '~/domain/grading/grammar-highlight-display';
 import type { RubricScoreBand } from '~/domain/assignment-types/assignment-type-rubric.shared';
 
 export type ViewPanelSubmission = {
@@ -36,9 +41,16 @@ export type ViewPanelSubmission = {
       key: string;
       label?: string;
       bands?: RubricScoreBand[];
+      feedbackEnabled?: boolean;
     }[];
+    display?: {
+      showCategories: boolean;
+      perCategoryComments: boolean;
+      grammarHighlight: 'off' | 'highlight' | 'deduct';
+    };
   } | null;
   aiMeta?: unknown;
+  grammarHighlightCaptionExplicit?: boolean;
   document?: {
     assignment?: {
       submitForGrade: boolean;
@@ -58,6 +70,22 @@ export function ViewPanel({
 }) {
   const minScore = submission.rubricConfig?.minScore ?? 1;
   const maxScore = submission.rubricConfig?.maxScore ?? 5;
+  const display = submission.rubricConfig?.display;
+  const showCategories = display?.showCategories ?? true;
+  const perCategoryComments =
+    display?.perCategoryComments ??
+    derivedPerCategoryCommentsFromCategories(
+      submission.rubricConfig?.categories ?? []
+    );
+  const grammarCaption =
+    submission.grammarHighlightCaptionExplicit &&
+    display?.grammarHighlight &&
+    display.grammarHighlight !== 'off'
+      ? grammarHighlightCaption(
+          display.grammarHighlight,
+          submission.grammarHighlightCaptionExplicit
+        )
+      : null;
   const rawRubric = (submission.rubricScores ?? {}) as Record<
     string,
     number | { score: number | null; comment?: string }
@@ -206,7 +234,17 @@ export function ViewPanel({
               </p>
             </div>
           ) : null}
-          {visibleEntries.length > 0 && !rubricRestatesTheGrade ? (
+          {grammarCaption ? (
+            <p
+              className="text-xs text-muted-foreground"
+              data-testid="grammar-highlight-caption"
+            >
+              {grammarCaption}
+            </p>
+          ) : null}
+          {showCategories &&
+          visibleEntries.length > 0 &&
+          !rubricRestatesTheGrade ? (
             <div>
               <h3 className="text-sm font-medium text-muted-foreground">
                 Rubric
@@ -220,7 +258,16 @@ export function ViewPanel({
                     : []
                 }
               >
-                {visibleEntries.map(({ key, score, comment, band }) => (
+                {visibleEntries.map(({ key, score, comment, band }) => {
+                  const categoryConfig = submission.rubricConfig?.categories?.find(
+                    (category) => category.key === key
+                  );
+                  const showComment =
+                    perCategoryComments &&
+                    isCategoryFeedbackEnabled(
+                      categoryConfig ?? { key, feedbackEnabled: undefined }
+                    );
+                  return (
                   <AccordionItem
                     key={key}
                     value={key}
@@ -245,7 +292,7 @@ export function ViewPanel({
                       </div>
                     </AccordionTrigger>
                     <AccordionContent>
-                      {comment ? (
+                      {showComment && comment ? (
                         <p className="text-xs text-muted-foreground whitespace-pre-wrap">
                           {comment}
                         </p>
@@ -260,7 +307,8 @@ export function ViewPanel({
                       )}
                     </AccordionContent>
                   </AccordionItem>
-                ))}
+                );
+                })}
               </Accordion>
             </div>
           ) : null}

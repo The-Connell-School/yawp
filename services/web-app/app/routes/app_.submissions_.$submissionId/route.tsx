@@ -92,10 +92,12 @@ import { SubmissionActivitySheet } from './teacher-grading/submission-activity-s
 import { ViewPanel } from './teacher-grading/view-panel';
 import { resolveSubmissionGradeMode } from './submission-grade-mode';
 import { resolveSubmissionLifecycleState } from './submission-lifecycle-state';
+import { resolveRubricConfigForSubmission } from './submission-rubric-config.server';
 import {
-  resolveGrammarHighlightingForAssignmentType,
-  resolveRubricConfigForSubmission,
-} from './submission-rubric-config.server';
+  grammarHighlightingEnabledForDisplay,
+  resolveDisplayForSubmissionView,
+  rubricDisplayConfigurationIsExplicit,
+} from '~/domain/grading/submission-display-options.server';
 import {
   shouldHideUnreleasedGradeFromStudent,
   stripUnreleasedGradeFromStudentSubmissionPayload,
@@ -359,32 +361,40 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   const assignmentTypeId = submission.document.assignmentTypeId;
-  const [rubricConfig, grammarHighlightingEnabled, gradingConfig] =
-    await Promise.all([
-      resolveRubricConfigForSubmission({
-        assignmentTypeId,
-        pointValue: submission.document.assignment?.pointValue,
-        assignmentId: submission.document.assignment?.id,
-        latestGradingRun: submission.gradingAssistantRuns[0] ?? null,
-        rubricScores: submission.rubricScores,
-      }),
-      resolveGrammarHighlightingForAssignmentType(
-        assignmentTypeId,
-        submission.document.assignment?.grammarGradingEnabled
-      ),
-      assignmentTypeId
-        ? resolveAssignmentTypeGradingConfig({
-            assignmentTypeId,
-            assignmentId: submission.document.assignment?.id ?? null,
-          }).catch((error) => {
-            console.error(
-              'Failed to resolve assignment type grading config for submission view',
-              { assignmentTypeId, error }
-            );
-            return null;
-          })
-        : Promise.resolve(null),
-    ]);
+  const [rubricConfigBase, gradingConfig] = await Promise.all([
+    resolveRubricConfigForSubmission({
+      assignmentTypeId,
+      pointValue: submission.document.assignment?.pointValue,
+      assignmentId: submission.document.assignment?.id,
+      latestGradingRun: submission.gradingAssistantRuns[0] ?? null,
+      rubricScores: submission.rubricScores,
+    }),
+    assignmentTypeId
+      ? resolveAssignmentTypeGradingConfig({
+          assignmentTypeId,
+          assignmentId: submission.document.assignment?.id ?? null,
+        }).catch((error) => {
+          console.error(
+            'Failed to resolve assignment type grading config for submission view',
+            { assignmentTypeId, error }
+          );
+          return null;
+        })
+      : Promise.resolve(null),
+  ]);
+  const rubricConfig = resolveDisplayForSubmissionView({
+    rubricConfig: rubricConfigBase,
+    outputSchema: gradingConfig?.outputSchemaSnapshot ?? {},
+    grammarGradingEnabled: submission.document.assignment?.grammarGradingEnabled,
+    aiMeta: submission.aiMeta,
+  });
+  const grammarHighlightCaptionExplicit = rubricDisplayConfigurationIsExplicit(
+    gradingConfig?.outputSchemaSnapshot ?? {},
+    submission.aiMeta
+  );
+  const grammarHighlightingEnabled = grammarHighlightingEnabledForDisplay(
+    rubricConfig.display!
+  );
 
   const activityPage =
     !isOwner && (isTeacher || isAdmin)
@@ -497,6 +507,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     comments: sortedComments,
     rubricConfig,
     grammarHighlightingEnabled,
+    grammarHighlightCaptionExplicit,
     // What the Grading Assistant last suggested, so a teacher who has since
     // edited the grade can put the suggestions back.
     ...(hideUnreleasedGrade
@@ -825,8 +836,9 @@ function SubmissionDetail({
    * setting looked ignored.
    */
   const grammarHighlightingEnabled = useMemo(() => {
-    // The assignment type's own setting wins: switching highlighting off is
-    // expected to clear marks a previous grading run left behind.
+    const display = (teacherGradeUi?.rubricConfig ?? submission.rubricConfig)
+      ?.display;
+    if (display) return display.grammarHighlight !== 'off';
     if (typeof submission.grammarHighlightingEnabled === 'boolean') {
       return submission.grammarHighlightingEnabled;
     }
@@ -1066,6 +1078,8 @@ function SubmissionDetail({
       overallComment:
         teacherGradeUi?.overallComment ?? submission.overallComment,
       rubricScores: teacherGradeUi?.rubricScores ?? submission.rubricScores,
+      grammarHighlightCaptionExplicit:
+        submission.grammarHighlightCaptionExplicit === true,
     }),
     [submission, teacherGradeUi]
   );
@@ -1482,6 +1496,8 @@ function SubmissionDetail({
                     submission={{
                       ...submissionForView,
                       releasedAt: effectiveReleasedAt,
+                      grammarHighlightCaptionExplicit:
+                        submission.grammarHighlightCaptionExplicit === true,
                     }}
                     viewer={isOwner ? 'student' : 'teacher'}
                   />

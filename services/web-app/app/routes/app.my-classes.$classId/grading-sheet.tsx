@@ -26,6 +26,7 @@ import {
   letterFromPercent,
 } from '~/domain/grading/gradeMath';
 import { scoringModeFromAiMeta } from '~/domain/grading/scoring-mode';
+import { readDisplaySnapshotFromAiMeta } from '~/domain/grading/submission-display-options.server';
 import { rubricCategories as rubric } from '~/domain/grading/rubric';
 import {
   cloneFormDataWithFallbackRetry,
@@ -163,6 +164,10 @@ export function GradingSheet({
     ? documents[0]?.latestSubmission
     : null;
   const isEditing = !isMultiple && !!existingGrade;
+  const showRubricCategories =
+    isMultiple ||
+    (readDisplaySnapshotFromAiMeta(existingGrade?.aiMeta)?.showCategories ??
+      true);
 
   // Initialize form with existing grade data when editing
   useEffect(() => {
@@ -587,6 +592,7 @@ export function GradingSheet({
               </div>
             </div>
 
+            {showRubricCategories ? (
             <div className="pt-4 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -656,6 +662,7 @@ export function GradingSheet({
                 })}
               </div>
             </div>
+            ) : null}
 
             <div className="space-y-2">
               <Label htmlFor="overall-comment">Overall Feedback</Label>

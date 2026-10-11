@@ -1,6 +1,7 @@
-import { AlertTriangle } from 'lucide-react';
+import { Lock } from 'lucide-react';
 
 import { Badge } from '~/components/ui/badge';
+import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
 
 const TEACHER_NOTE_PREFIX_PATTERN =
@@ -41,7 +42,7 @@ export function TeacherNotes({
   const items = formatTeacherNoteItems(note);
   return (
     <section
-      aria-label="Teacher Context"
+      aria-label="Notes to the teacher"
       className={cn(
         'max-h-48 shrink-0 overflow-y-auto text-sm',
         variant === 'footer' ? 'border-t px-4 py-3' : 'mx-4 mb-4'
@@ -49,16 +50,20 @@ export function TeacherNotes({
       data-testid="teacher-private-notes"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-sm font-semibold text-foreground">
-          Teacher Context
-        </h2>
+        <Tooltip
+          text="Only teachers and admins can see this. Students never receive it, in the app or in any export."
+        >
+          <h2 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+            <Lock className="size-3.5 text-amber-700" aria-hidden="true" />
+            Note to you — never shown to students
+          </h2>
+        </Tooltip>
         <Badge
           variant="warning-soft"
           size="sm"
-          className="gap-1 border-amber-200 bg-amber-50 py-0.5 pr-2 pl-1 text-amber-800 hover:bg-amber-50 hover:text-amber-800"
+          className="border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-50 hover:text-amber-800"
         >
-          <AlertTriangle className="size-3" aria-hidden="true" />
-          Not visible to students
+          Private
         </Badge>
       </div>
       <ul className="mt-2 space-y-1.5 text-foreground">
