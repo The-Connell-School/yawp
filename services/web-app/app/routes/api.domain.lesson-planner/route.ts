@@ -31,6 +31,8 @@ import {
   verifyLessonLinks,
 } from '~/domain/lesson-planner/lesson-links';
 import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
+import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
+import { loadStackContents } from '~/domain/lesson-planner/stack-contents.server';
 import {
   firstMessageTitle,
   shouldRenameLesson,
@@ -350,10 +352,19 @@ export async function action({ request }: ActionFunctionArgs) {
     (await findWritingExerciseTypeIds(ctx)).exitTicket
   );
 
+  // Brian's review (B6): with stack v2 on, outputs are built from what the
+  // teacher kept, so the planner sees the stack itself, not just its titles.
+  const { stackV2 } = await getLessonPlannerReviewFlags(ctx.organizationId);
+  const stackContents =
+    stackV2 && activeConversation
+      ? await loadStackContents(activeConversation.id)
+      : [];
+
   const system = buildLessonPlannerSystemPromptBlocks({
     teacherName: null,
     organizationName: access.membership.organization.name,
     lessonInventory: conversation?.materials ?? [],
+    stackContents,
     unitContext,
     exitTicketsAvailable,
     writingPracticeAvailable: ctx.writingPracticeEnabled,

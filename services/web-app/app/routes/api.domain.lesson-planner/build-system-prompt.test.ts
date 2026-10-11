@@ -12,6 +12,7 @@ import {
 } from '~/domain/assignment-types/exit-ticket';
 import {
   buildLessonPlannerSystemPrompt,
+  buildLessonPlannerSystemPromptBlocks,
   RECOMMENDED_LESSON_PLANNER_PROMPTS,
 } from './build-system-prompt';
 
@@ -1461,5 +1462,70 @@ describe("buildLessonPlannerSystemPrompt — Brian's review: offer, don't prescr
     expect(lower).toContain('historical context');
     expect(lower).toContain('literary context');
     expect(prompt).toContain('frame-hist');
+  });
+});
+
+describe("buildLessonPlannerSystemPromptBlocks — building from the stack (Brian's review, B6)", () => {
+  const stackContents = [
+    { kind: 'class-starter', title: 'Class Starter: Write about something you carry', content: 'Write about something you carry every day.' },
+    { kind: 'notes', title: 'Historical context', content: 'Vietnam, 1969–70. O’Brien was drafted.' },
+    { kind: 'exit-ticket', title: 'Exit ticket', content: 'What is one thing a soldier carried that weighed nothing?' },
+  ];
+
+  test('hands the model the stack itself, with an order to build from exactly that', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'Connell School',
+      stackContents,
+    });
+    const variable = blocks[1].text;
+    expect(variable).toContain('Build from exactly these pieces');
+    expect(variable).toContain('O’Brien was drafted');
+    expect(variable).toContain('What is one thing a soldier carried');
+    // Kept in order.
+    expect(variable.indexOf('carry every day')).toBeLessThan(
+      variable.indexOf('O’Brien was drafted')
+    );
+  });
+
+  test('keeps the stack out of the cached instructions', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'Connell School',
+      stackContents,
+    });
+    expect(blocks[0].text).not.toContain('O’Brien was drafted');
+  });
+
+  test('says nothing when the stack is empty', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'Connell School',
+      stackContents: [],
+    });
+    expect(blocks[1].text).not.toContain('Build from exactly these pieces');
+  });
+
+  test('caps a huge stack rather than blowing the context', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'Connell School',
+      stackContents: Array.from({ length: 40 }, (_, index) => ({
+        kind: 'handout',
+        title: `Handout ${index}`,
+        content: 'x'.repeat(2000),
+      })),
+    });
+    expect(blocks[1].text.length).toBeLessThan(20_000);
+    expect(blocks[1].text).toContain('trimmed');
+  });
+
+  test('makes a deck built from the stack match the stack’s time', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'Connell School',
+      stackContents,
+    });
+    expect(blocks[1].text.toLowerCase()).toContain('minutes');
   });
 });

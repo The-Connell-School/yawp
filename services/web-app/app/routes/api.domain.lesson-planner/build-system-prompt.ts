@@ -29,6 +29,57 @@ export type LessonInventoryEntry = {
   title: string;
 };
 
+/** One piece in the teacher's stack, with what it actually says. */
+export type StackContentsEntry = {
+  kind: string;
+  title: string;
+  content: string;
+};
+
+/** Enough to build from, short enough not to crowd out the conversation. */
+const MAX_STACK_CONTENT_CHARS = 14_000;
+const MAX_STACK_PIECE_CHARS = 3_000;
+
+/**
+ * The teacher's stack, in full (Brian's review, B6).
+ *
+ * The stack is the lesson: a teacher who kept four of six steps wants a deck
+ * and a handout built from those four, not from the whole conversation. The
+ * inventory lines above only name what is filed, so the model used to build
+ * from the chat and quietly put the discarded steps back.
+ */
+function buildStackContentsSection(entries: StackContentsEntry[]): string[] {
+  if (!entries.length) return [];
+  let budget = MAX_STACK_CONTENT_CHARS;
+  let trimmed = false;
+  const pieces: string[] = [];
+  entries.forEach((entry, index) => {
+    if (budget <= 0) {
+      trimmed = true;
+      return;
+    }
+    let body = entry.content.trim();
+    const limit = Math.min(MAX_STACK_PIECE_CHARS, budget);
+    if (body.length > limit) {
+      body = `${body.slice(0, limit).trimEnd()}\n[… trimmed]`;
+      trimmed = true;
+    }
+    budget -= body.length;
+    pieces.push(`### ${index + 1}. ${entry.title} (${entry.kind})`, body, '');
+  });
+  return [
+    '',
+    "The teacher's stack — this IS the lesson they chose (in order):",
+    ...pieces,
+    ...(trimmed
+      ? ['(Some pieces were trimmed here for length; build from their titles and what is shown.)']
+      : []),
+    '- When the teacher asks for a slide deck, a student handout, or a printed lesson plan "from my stack" — or asks for one of those at all while the stack holds pieces — Build from exactly these pieces, in this order, and nothing else. Do not bring back steps from earlier in the conversation that they left out; leaving them out was the decision.',
+    "- A deck built from the stack covers each piece in the stack's order, and its slides' minutes add up to the minutes of the pieces it covers, not to a period you assumed.",
+    '- If the stack is missing something the output genuinely needs (a deck with nothing to project), say so in one line and ask, rather than inventing it.',
+  ];
+}
+
 /**
  * What the teacher has actually filed in this lesson.
  *
@@ -591,6 +642,7 @@ export function buildLessonPlannerSystemPromptBlocks({
   teacherName,
   organizationName,
   lessonInventory = [],
+  stackContents = [],
   unitContext = null,
   exitTicketsAvailable = false,
   writingPracticeAvailable = false,
@@ -598,6 +650,8 @@ export function buildLessonPlannerSystemPromptBlocks({
   teacherName: string | null;
   organizationName: string;
   lessonInventory?: LessonInventoryEntry[];
+  /** Stack v2: what is in the stack, in full, so outputs are built from it. */
+  stackContents?: StackContentsEntry[];
   unitContext?: UnitContext | null;
   exitTicketsAvailable?: boolean;
   writingPracticeAvailable?: boolean;
@@ -606,6 +660,7 @@ export function buildLessonPlannerSystemPromptBlocks({
   const intro = `You are the YAWP! Lesson Planner, an instructional design partner for ${who} at ${organizationName}.`;
   const tail = [
     ...buildInventorySection(lessonInventory),
+    ...buildStackContentsSection(stackContents),
     ...buildUnitContextSection(unitContext),
   ].join('\n');
   const variable = tail ? `${intro}\n${tail}` : intro;

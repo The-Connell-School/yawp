@@ -238,6 +238,58 @@ test.describe("Lesson Planner — Brian's review", () => {
     });
   });
 
+  test('builds a deck from the stack, from the stack screen (B6)', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+    const id = await seedConversation(e2eContext, [
+      { role: 'user', content: 'Plan day one of The Things They Carried.' },
+      {
+        role: 'assistant',
+        content:
+          PLAN +
+          '\n\n```yawp-daily-pages\nkind: class-starter\nWrite about something you carry every day.\n```',
+      },
+    ]);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${id}`);
+
+    // An empty stack keeps the original wording on the chip.
+    await expect(
+      page.getByRole('button', { name: 'Build the slide deck for this lesson' })
+    ).toBeVisible();
+
+    const filed = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.request().method() === 'POST'
+    );
+    await page.getByTestId('daily-pages-stack-toggle').click();
+    expect((await filed).ok()).toBe(true);
+    // Once something is filed, the chip says where the deck comes from.
+    await expect(
+      page.getByRole('button', { name: 'Build the slide deck from my stack' })
+    ).toBeVisible();
+
+    await page.goto(`/app/lesson-planner/${id}/packet`);
+    await expect(page.getByTestId('build-from-stack')).toBeVisible();
+
+    // The turn is held open: what matters is what was asked for.
+    const asked: string[] = [];
+    await page.route('**/api/domain/lesson-planner', (route) => {
+      asked.push(route.request().postData() ?? '');
+    });
+    await page.getByRole('link', { name: 'Slide deck from this stack' }).click();
+    await expect(page).toHaveURL(new RegExp(`c=${id}`));
+    await expect
+      .poll(() => asked.join('\n'))
+      .toContain(encodeURIComponent('Build the slide deck from my stack').replace(/%20/g, '+'));
+    // The one-shot parameter is gone, so a reload does not ask twice.
+    await expect(page).not.toHaveURL(/build=/);
+  });
+
   test('"In the stack" says what clicking it does (B3)', async ({
     page,
     signIn,

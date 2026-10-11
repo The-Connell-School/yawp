@@ -62,6 +62,7 @@ import { UnitPlanCard } from '~/components/ai-chat/unit-plan-card';
 import { readUnitPlan } from '~/domain/lesson-planner/unit-plan';
 import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
 import {
+  FROM_STACK_SUGGESTIONS,
   looksLikeLessonPlan,
   mentionsRoomPersonality,
   withStandardSuggestions,
@@ -535,6 +536,23 @@ export default function LessonPlannerRoute() {
   const keptCount =
     messages.filter((message) => message.keptAudience).length +
     addedMaterials.size;
+
+  // Brian's review (B6): "Slide deck from this stack" on the stack screen
+  // lands here with ?build=deck and asks once. The parameter is dropped as it
+  // is used, so a reload does not ask a second time.
+  const buildRequest = searchParams.get('build');
+  const buildAsked = useRef(false);
+  useEffect(() => {
+    if (buildAsked.current || !reviewFlags.stackV2 || !conversationId) return;
+    if (buildRequest !== 'deck' && buildRequest !== 'handout') return;
+    buildAsked.current = true;
+    const next = new URLSearchParams(searchParams);
+    next.delete('build');
+    setSearchParams(next, { replace: true });
+    send(FROM_STACK_SUGGESTIONS[buildRequest]);
+    // Runs once per arrival; send is stable enough for a one-shot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buildRequest, conversationId, reviewFlags.stackV2]);
 
   function send(
     message: string,

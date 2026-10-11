@@ -330,6 +330,33 @@ export default function LessonPacketRoute() {
           </div>
         </div>
 
+        {stackV2 && packet.sections.length > 0 ? (
+          <div
+            data-testid="build-from-stack"
+            className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-primary/25 bg-primary/[0.04] px-4 py-3 print:hidden"
+          >
+            {/* Brian's review (B6): the stack is the lesson, so every output
+                is built from it. Building goes back to the chat, where the
+                deck or handout lands as a card like any other. */}
+            <span className="mr-1 text-sm font-medium">Build from this stack:</span>
+            <Button size="sm" variant="outline" asChild>
+              <Link to={`/app/lesson-planner?c=${conversationId}&build=deck`}>
+                Slide deck from this stack
+              </Link>
+            </Button>
+            <Button size="sm" variant="outline" asChild>
+              <Link to={`/app/lesson-planner?c=${conversationId}&build=handout`}>
+                Student handout from this stack
+              </Link>
+            </Button>
+            <Button size="sm" variant="outline" asChild>
+              <a href={fullPacketPdfHref()} download>
+                Print the lesson plan
+              </a>
+            </Button>
+          </div>
+        ) : null}
+
         <div className="mb-4 print:hidden">
           <label
             htmlFor="packet-title"
