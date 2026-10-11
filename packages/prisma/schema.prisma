@@ -2172,3 +2172,29 @@ model InternalAssignmentRubricPinBackfill {
   pinnedAt           DateTime @default(now()) @db.Timestamptz(6)
   reason             String?
 }
+
+/// Replay protection for signed internal platform API requests (TTL enforced in app code).
+model InternalApiRequestNonce {
+  id        String   @id @default(cuid())
+  keyId     String
+  nonce     String
+  expiresAt DateTime @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([keyId, nonce])
+  @@index([expiresAt])
+}
+
+/// Append-only audit of mutating internal platform API calls authenticated via HMAC keys.
+model InternalPlatformApiAudit {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  actorEmail  String
+  keyId       String
+  endpoint    String
+  requestHash String
+  result      String
+
+  @@index([createdAt(sort: Desc)])
+  @@index([keyId, createdAt(sort: Desc)])
+}
