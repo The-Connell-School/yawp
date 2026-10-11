@@ -15,6 +15,7 @@ import {
   buildScoreScaleValues,
   normalizeScoreStep,
 } from '~/domain/assignment-types/score-scale-steps';
+import type { ResolvedDisplayOptions } from '~/domain/rubrics/output-schema-display';
 
 export type RubricDisplayCategory = {
   key: string;
@@ -60,6 +61,8 @@ export type RubricDisplayConfig = {
   rubricIncomplete?: boolean;
   /** When holistic_tier, overall grades are points-only (no % / letter). */
   scoringMode?: 'weighted_categories' | 'holistic_tier';
+  /** Resolved outputSchema.display for this submission's feedback UI. */
+  display?: ResolvedDisplayOptions;
 };
 
 const rubricDisplaySources = new Set<string>([
@@ -213,6 +216,7 @@ export function normalizeRubricDisplayConfig(
     source: parseRubricDisplaySource(raw.source),
     rubricIncomplete: raw.rubricIncomplete === true,
     ...(raw.scoringMode === 'holistic_tier' ? { scoringMode: 'holistic_tier' } : {}),
+    ...(isRecord(raw.display) ? { display: raw.display as ResolvedDisplayOptions } : {}),
   };
 }
 
