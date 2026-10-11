@@ -1529,3 +1529,51 @@ describe("buildLessonPlannerSystemPromptBlocks — building from the stack (Bria
     expect(blocks[1].text.toLowerCase()).toContain('minutes');
   });
 });
+
+describe("buildLessonPlannerSystemPrompt — intake v2 (Brian's review, A4)", () => {
+  const v1 = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+  const v2 = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+    intakeV2: true,
+  });
+
+  test('asks one decision at a time, class and length before content', () => {
+    const lower = v2.toLowerCase();
+    expect(lower).toContain('one decision per question');
+    expect(lower.indexOf('which class')).toBeLessThan(lower.indexOf('how to fill the time'));
+  });
+
+  test('teaches the classes and choose controls', () => {
+    expect(v2).toContain('  classes');
+    expect(v2).toContain('choose: ');
+  });
+
+  test('never guesses a grade, a class, or a length', () => {
+    const lower = v2.toLowerCase();
+    expect(lower).toContain('never guess the grade');
+    expect(lower).toContain('never write a class, a grade, or a period length into suggestions');
+    expect(lower).not.toContain('offer your best guess alongside them');
+  });
+
+  test('a choose option holds one decision, never a class or a length', () => {
+    expect(v2.toLowerCase()).toContain('each `choose:` option answers only how to fill the time');
+  });
+
+  test('leaves the original intake prompt alone when the flag is off', () => {
+    expect(v1).toContain('offer your best guess alongside them');
+    expect(v1).not.toContain('choose: ');
+  });
+
+  test('the cached core follows the flag too', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'Connell School',
+      intakeV2: true,
+    });
+    expect(blocks[0].text).toContain('choose: ');
+  });
+});

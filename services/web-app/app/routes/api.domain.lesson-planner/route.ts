@@ -354,7 +354,9 @@ export async function action({ request }: ActionFunctionArgs) {
 
   // Brian's review (B6): with stack v2 on, outputs are built from what the
   // teacher kept, so the planner sees the stack itself, not just its titles.
-  const { stackV2 } = await getLessonPlannerReviewFlags(ctx.organizationId);
+  const { stackV2, intakeV2 } = await getLessonPlannerReviewFlags(
+    ctx.organizationId
+  );
   const stackContents =
     stackV2 && activeConversation
       ? await loadStackContents(activeConversation.id)
@@ -365,6 +367,7 @@ export async function action({ request }: ActionFunctionArgs) {
     organizationName: access.membership.organization.name,
     lessonInventory: conversation?.materials ?? [],
     stackContents,
+    intakeV2,
     unitContext,
     exitTicketsAvailable,
     writingPracticeAvailable: ctx.writingPracticeEnabled,
