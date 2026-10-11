@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  DONE_FOR_TODAY_SUGGESTION,
   FOLLOW_ON_SUGGESTIONS,
+  FROM_STACK_SUGGESTIONS,
   looksLikeLessonPlan,
   mentionsRoomPersonality,
   STANDARD_OPENING_SUGGESTION,
@@ -317,5 +319,75 @@ describe('withStandardSuggestions — a plan on the very first reply', () => {
         deliveredPlan: false,
       })[0]
     ).toBe(STANDARD_OPENING_SUGGESTION);
+  });
+});
+
+describe("withStandardSuggestions — a clear end (Brian's review, D2)", () => {
+  test('offers "I\'m done for today" once the lesson has its deck or handout', () => {
+    const chips = withStandardSuggestions(['A version for period 5'], {
+      isOpeningReply: false,
+      deliveredPlan: true,
+      inPacket: { deck: true, handout: true },
+      offerDone: true,
+    });
+    expect(chips.at(-1)).toBe(DONE_FOR_TODAY_SUGGESTION);
+    expect(chips).toContain('A version for period 5');
+  });
+
+  test('also after the reply that built the deck', () => {
+    const chips = withStandardSuggestions([], {
+      isOpeningReply: false,
+      produced: { deck: true },
+      offerDone: true,
+    });
+    expect(chips).toEqual([DONE_FOR_TODAY_SUGGESTION]);
+  });
+
+  test('never before anything has been built', () => {
+    const chips = withStandardSuggestions([], {
+      isOpeningReply: false,
+      deliveredPlan: true,
+      offerDone: true,
+    });
+    expect(chips).not.toContain(DONE_FOR_TODAY_SUGGESTION);
+  });
+
+  test('not without the flag', () => {
+    const chips = withStandardSuggestions([], {
+      isOpeningReply: false,
+      produced: { deck: true },
+    });
+    expect(chips).not.toContain(DONE_FOR_TODAY_SUGGESTION);
+  });
+
+  test('keeps its place even when the model filled every slot', () => {
+    const chips = withStandardSuggestions(['a', 'b', 'c', 'd', 'e', 'f'], {
+      isOpeningReply: false,
+      produced: { deck: true, handout: true },
+      offerDone: true,
+    });
+    expect(chips.length).toBeLessThanOrEqual(5);
+    expect(chips.at(-1)).toBe(DONE_FOR_TODAY_SUGGESTION);
+  });
+});
+
+describe("withStandardSuggestions — building from the stack (Brian's review, B6)", () => {
+  test('says "from the stack" once the teacher has filed pieces', () => {
+    const chips = withStandardSuggestions([], {
+      isOpeningReply: false,
+      deliveredPlan: true,
+      stackHasPieces: true,
+    });
+    expect(chips).toContain(FROM_STACK_SUGGESTIONS.deck);
+    expect(chips).toContain(FROM_STACK_SUGGESTIONS.handout);
+    expect(chips).not.toContain(FOLLOW_ON_SUGGESTIONS.deck);
+  });
+
+  test('keeps the original wording with an empty stack', () => {
+    const chips = withStandardSuggestions([], {
+      isOpeningReply: false,
+      deliveredPlan: true,
+    });
+    expect(chips).toContain(FOLLOW_ON_SUGGESTIONS.deck);
   });
 });

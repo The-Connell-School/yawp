@@ -32,6 +32,22 @@ export const FOLLOW_ON_SUGGESTIONS = {
   handout: 'Build the student handout for this lesson',
 } as const;
 
+/**
+ * Stack v2 (Brian's review, B6): once the teacher has filed pieces, the deck
+ * and handout are built from the stack, and the chip says so.
+ */
+export const FROM_STACK_SUGGESTIONS = {
+  deck: 'Build the slide deck from my stack',
+  handout: 'Build the student handout from my stack',
+} as const;
+
+/**
+ * Stack v2 (Brian's review, D2): a planning session has an end. Once the
+ * lesson has its deck or handout, the teacher can say so in one tap and the
+ * planner wraps up.
+ */
+export const DONE_FOR_TODAY_SUGGESTION = "I'm done for today";
+
 const MAX_SUGGESTIONS = 5;
 
 function normalize(suggestion: string): string {
@@ -217,6 +233,10 @@ export function withStandardSuggestions(
     inPacket = {},
     /** This reply drew the minutes slider, so it owns the question of length. */
     asksForMinutes = false,
+    /** Stack v2: offer a one-tap way to end the session once something is built. */
+    offerDone = false,
+    /** Stack v2: the teacher has filed pieces, so outputs come from the stack. */
+    stackHasPieces = false,
   }: {
     isOpeningReply: boolean;
     teacherRaisedRoomPersonality?: boolean;
@@ -224,8 +244,51 @@ export function withStandardSuggestions(
     produced?: ArtifactFlags;
     inPacket?: ArtifactFlags;
     asksForMinutes?: boolean;
+    offerDone?: boolean;
+    stackHasPieces?: boolean;
   }
 ): string[] {
+  const chips = pickSuggestions(suggestions, {
+    isOpeningReply,
+    teacherRaisedRoomPersonality,
+    deliveredPlan,
+    produced,
+    inPacket,
+    asksForMinutes,
+    stackHasPieces,
+  });
+  const somethingBuilt =
+    produced.deck || produced.handout || inPacket.deck || inPacket.handout;
+  if (!offerDone || isOpeningReply || !somethingBuilt) return chips;
+  return [
+    ...chips
+      .filter((chip) => normalize(chip) !== normalize(DONE_FOR_TODAY_SUGGESTION))
+      .slice(0, MAX_SUGGESTIONS - 1),
+    DONE_FOR_TODAY_SUGGESTION,
+  ];
+}
+
+function pickSuggestions(
+  suggestions: string[],
+  {
+    isOpeningReply,
+    teacherRaisedRoomPersonality,
+    deliveredPlan,
+    produced,
+    inPacket,
+    asksForMinutes,
+    stackHasPieces,
+  }: {
+    isOpeningReply: boolean;
+    teacherRaisedRoomPersonality: boolean;
+    deliveredPlan: boolean;
+    produced: ArtifactFlags;
+    inPacket: ArtifactFlags;
+    asksForMinutes: boolean;
+    stackHasPieces: boolean;
+  }
+): string[] {
+  const followOn = stackHasPieces ? FROM_STACK_SUGGESTIONS : FOLLOW_ON_SUGGESTIONS;
   const withoutRoom = teacherRaisedRoomPersonality
     ? suggestions
     : suggestions.map(withoutRoomTalk);
@@ -260,9 +323,9 @@ export function withStandardSuggestions(
   if (!deliveredPlan) return deduped.slice(0, MAX_SUGGESTIONS);
 
   const pinned: string[] = [];
-  if (!produced.deck && !inPacket.deck) pinned.push(FOLLOW_ON_SUGGESTIONS.deck);
+  if (!produced.deck && !inPacket.deck) pinned.push(followOn.deck);
   if (!produced.handout && !inPacket.handout) {
-    pinned.push(FOLLOW_ON_SUGGESTIONS.handout);
+    pinned.push(followOn.handout);
   }
   if (!pinned.length) return deduped.slice(0, MAX_SUGGESTIONS);
 
@@ -272,11 +335,11 @@ export function withStandardSuggestions(
     ...deduped.filter(
       (suggestion) =>
         !(
-          pinned.includes(FOLLOW_ON_SUGGESTIONS.deck) &&
+          pinned.includes(followOn.deck) &&
           DECK_INTENT.test(suggestion)
         ) &&
         !(
-          pinned.includes(FOLLOW_ON_SUGGESTIONS.handout) &&
+          pinned.includes(followOn.handout) &&
           HANDOUT_INTENT.test(suggestion)
         )
     ),

@@ -793,6 +793,7 @@ export default function LessonPlannerRoute() {
                   onSuggestion={send}
                   onKeep={setKept}
                   stackV2={reviewFlags.stackV2}
+                  stackHasPieces={keptCount > 0}
                   disabled={isSending}
                 />
               ))
@@ -1001,6 +1002,7 @@ function MessageBubble({
   onSuggestion,
   onKeep,
   stackV2 = false,
+  stackHasPieces = false,
   disabled,
 }: {
   message: ChatMessage;
@@ -1035,6 +1037,8 @@ function MessageBubble({
    * and a plan says plainly that the teacher can take just the pieces.
    */
   stackV2?: boolean;
+  /** Something is filed in this lesson's stack. */
+  stackHasPieces?: boolean;
   disabled: boolean;
 }) {
   if (message.role === 'user') {
@@ -1094,6 +1098,8 @@ function MessageBubble({
     },
     inPacket: lessonHas,
     asksForMinutes: asks.some((ask) => ask.kind === 'minutes'),
+    offerDone: stackV2,
+    stackHasPieces: stackV2 && stackHasPieces,
   });
 
   return (
