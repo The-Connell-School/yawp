@@ -131,7 +131,25 @@ function normalizeSingleFetchLoaderData(value: unknown): unknown {
   return value;
 }
 
+function legacyLoaderDataLooksUsable(loaderData: unknown): boolean {
+  if (!loaderData || typeof loaderData !== 'object' || Array.isArray(loaderData)) {
+    return false;
+  }
+  return Object.keys(loaderData as Record<string, unknown>).some((key) =>
+    key.includes('routes/')
+  );
+}
+
 export async function decodeRouterDataResponse(body: string): Promise<unknown> {
+  try {
+    const legacy = decodeRouterDataResponseLegacy(body);
+    if (legacyLoaderDataLooksUsable(legacy)) {
+      return legacy;
+    }
+  } catch {
+    // Fall through to turbo-stream v2.
+  }
+
   const { value } = await decode(bodyToTurboStream(body), {
     plugins: [
       (type, ...rest) => {
@@ -180,7 +198,19 @@ export function getRouteLoaderData(
       `Route loader data not found for suffix "${routeIdSuffix}" (keys: ${Object.keys(root).join(', ')})`
     );
   }
-  return root[key] as Record<string, unknown>;
+  const route = root[key] as Record<string, unknown>;
+  if (
+    route &&
+    typeof route === 'object' &&
+    !('submission' in route) &&
+    'data' in route &&
+    route.data &&
+    typeof route.data === 'object' &&
+    !Array.isArray(route.data)
+  ) {
+    return route.data as Record<string, unknown>;
+  }
+  return route;
 }
 
 export function findObjectsWithId(
