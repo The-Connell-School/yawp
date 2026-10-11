@@ -49,6 +49,10 @@ Signed keys are rate limited (120 requests / minute / key id). Mutating signed c
 
 Legacy bearer auth continues to use `YAWP_MANAGEMENT_SERVICE_KEY` on management routes and `YAWP_CONTENT_SERVICE_KEY` only on `/api/internal/v1/rubric-catalog*` and `/api/internal/v1/rubrics*` while `LEGACY_INTERNAL_KEY_ALLOWED` is not `false`.
 
+### Grading stats (read only)
+
+`GET /api/internal/v1/stats/grading?since=YYYY-MM-DD&until=YYYY-MM-DD` requires `stats:read`. It returns daily counts of grading assistant runs grouped by organization, assignment type, success/failure, and whether a teacher note was present. The response contains only aggregate counts (no student writing or note text).
+
 ## Implemented: user directory
 
 `GET /api/internal/v1/users` and `GET /api/internal/v1/users/:id` accept a backend-only Bearer `YAWP_MANAGEMENT_SERVICE_KEY` or a signed request with `management:read`. Use the matching outbound key configured in Yawp Internal. The key must be a generated 32-byte base64url credential; it is not a member login token. No key leaves the handlers disabled (404). Invalid credentials return 401 before database access. Store the credential in managed secrets; omit Authorization headers from ingress and application logs. Deployment and real credentials have not been configured.
