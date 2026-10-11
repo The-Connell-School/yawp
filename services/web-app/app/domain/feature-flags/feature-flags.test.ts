@@ -5,6 +5,9 @@ import {
   LESSON_PLANNER_FLAG,
   FREE_TIER_FLAG,
   FEATURE_FLAG_KEYS,
+  LESSON_PLANNER_INTAKE_V2_FLAG,
+  LESSON_PLANNER_STACK_V2_FLAG,
+  LESSON_PLANNER_DECK_V2_FLAG,
   isFreeTierGloballyEnabled,
   featureFlagSettingName,
   MAX_FEATURE_FLAG_ORG_IDS,
@@ -58,7 +61,22 @@ describe('feature flag registry', () => {
       LESSON_PLANNER_FLAG,
       INTERNAL_RUBRICS_FLAG,
       FREE_TIER_FLAG,
+      LESSON_PLANNER_INTAKE_V2_FLAG,
+      LESSON_PLANNER_STACK_V2_FLAG,
+      LESSON_PLANNER_DECK_V2_FLAG,
     ]);
+  });
+
+  test('has the lesson planner review flags, each with a setting name', () => {
+    expect(featureFlagSettingName(LESSON_PLANNER_INTAKE_V2_FLAG)).toBe(
+      'feature_flag.lesson_planner_intake_v2'
+    );
+    expect(featureFlagSettingName(LESSON_PLANNER_STACK_V2_FLAG)).toBe(
+      'feature_flag.lesson_planner_stack_v2'
+    );
+    expect(featureFlagSettingName(LESSON_PLANNER_DECK_V2_FLAG)).toBe(
+      'feature_flag.lesson_planner_deck_v2'
+    );
   });
 
   test('rejects anything that is not a registered flag', () => {

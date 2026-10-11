@@ -42,3 +42,34 @@ export async function setLessonPlannerFlag(enabled: boolean) {
     await prisma.$disconnect();
   }
 }
+
+/**
+ * Lesson Planner review flags (intake v2, stack v2, deck v2). Mirrors
+ * featureFlagSettingName(...) for each in app/domain/feature-flags.
+ */
+export type LessonPlannerReviewFlag =
+  | 'lesson_planner_intake_v2'
+  | 'lesson_planner_stack_v2'
+  | 'lesson_planner_deck_v2';
+
+export async function setLessonPlannerReviewFlag(
+  flag: LessonPlannerReviewFlag,
+  enabled: boolean
+) {
+  const prisma = createE2EPrismaClient();
+  const name = `feature_flag.${flag}`;
+  try {
+    await prisma.setting.upsert({
+      where: { name },
+      create: {
+        name,
+        value: enabled ? 'true' : 'false',
+        valueType: 'boolean',
+        description: 'Set by e2e',
+      },
+      update: { value: enabled ? 'true' : 'false', updatedAt: new Date() },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}

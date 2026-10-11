@@ -37,6 +37,27 @@ export const INTERNAL_RUBRICS_FLAG = 'internal_rubrics' as const;
  */
 export const FREE_TIER_FLAG = 'free_tier' as const;
 
+/**
+ * Lesson Planner intake v2 (Brian's review, plan A): the ask card asks which
+ * classes from the teacher's real class list, a length per class with no
+ * pre-filled default, then how to fill the time. Off: the original
+ * minutes-slider intake.
+ */
+export const LESSON_PLANNER_INTAKE_V2_FLAG = 'lesson_planner_intake_v2' as const;
+
+/**
+ * Lesson Planner stack v2 (plan B): whole-reply "Add the whole lesson" only on
+ * plans, no "Add all as a handout" in the chat, remove from the stack screen,
+ * and build outputs from the stack. Off: the original stack controls.
+ */
+export const LESSON_PLANNER_STACK_V2_FLAG = 'lesson_planner_stack_v2' as const;
+
+/**
+ * Lesson Planner deck v2 (plan E): the YAWP! tile template for PowerPoint and
+ * Present, and the deck editor. Off: the original deck look, no editor.
+ */
+export const LESSON_PLANNER_DECK_V2_FLAG = 'lesson_planner_deck_v2' as const;
+
 export const FEATURE_FLAGS = {
   [LESSON_PLANNER_FLAG]: {
     label: 'Lesson Planner',
@@ -52,6 +73,21 @@ export const FEATURE_FLAGS = {
     label: 'Free tier',
     description:
       'Enables Free Tier C teacher onboarding, school-admin approval links, operator release tools, and related UI. Off: those routes and release APIs return 404; waitlist/token APIs behave as on main until yawp-internal turns this on for everyone.',
+  },
+  [LESSON_PLANNER_INTAKE_V2_FLAG]: {
+    label: 'Lesson Planner: new intake',
+    description:
+      'The planner asks which of the teacher’s real classes, a length per class (no 50-minute default), then how to fill the time, one decision per step. Off: the original length slider.',
+  },
+  [LESSON_PLANNER_STACK_V2_FLAG]: {
+    label: 'Lesson Planner: stack v2',
+    description:
+      'Remove pieces from the stack screen, build a deck or plan from the stack, and show "Add the whole lesson" only under full plans. Off: the original stack controls. Stacked data is unchanged either way.',
+  },
+  [LESSON_PLANNER_DECK_V2_FLAG]: {
+    label: 'Lesson Planner: deck template and editor',
+    description:
+      'Planner decks use the YAWP! tile template in PowerPoint and Present, and teachers can edit and delete slides. Off: the original deck look and no editor.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

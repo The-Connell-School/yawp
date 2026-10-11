@@ -1,6 +1,9 @@
 import { prisma } from '~/utils/db.server';
 import {
   LESSON_PLANNER_FLAG,
+  LESSON_PLANNER_INTAKE_V2_FLAG,
+  LESSON_PLANNER_STACK_V2_FLAG,
+  LESSON_PLANNER_DECK_V2_FLAG,
   FREE_TIER_FLAG,
   FEATURE_FLAGS,
   FEATURE_FLAG_KEYS,
@@ -78,6 +81,18 @@ export async function isFeatureFlagEnabled(
     });
     return false;
   }
+}
+
+/** Which of the Lesson Planner review flags are on for this school. */
+export async function getLessonPlannerReviewFlags(
+  orgId: string | null | undefined
+): Promise<{ intakeV2: boolean; stackV2: boolean; deckV2: boolean }> {
+  const [intakeV2, stackV2, deckV2] = await Promise.all([
+    isFeatureFlagEnabled(LESSON_PLANNER_INTAKE_V2_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_STACK_V2_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_DECK_V2_FLAG, orgId),
+  ]);
+  return { intakeV2, stackV2, deckV2 };
 }
 
 /** YAWP! Lesson Planner for teachers at the given school. */

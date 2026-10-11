@@ -127,6 +127,9 @@ describe('feature flags (server)', () => {
       LESSON_PLANNER_FLAG,
       INTERNAL_RUBRICS_FLAG,
       FREE_TIER_FLAG,
+      'lesson_planner_intake_v2',
+      'lesson_planner_stack_v2',
+      'lesson_planner_deck_v2',
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[2]).toMatchObject({ key: FREE_TIER_FLAG, mode: 'off', enabled: false });
@@ -150,6 +153,9 @@ describe('feature flags (server)', () => {
       LESSON_PLANNER_FLAG,
       INTERNAL_RUBRICS_FLAG,
       FREE_TIER_FLAG,
+      'lesson_planner_intake_v2',
+      'lesson_planner_stack_v2',
+      'lesson_planner_deck_v2',
     ]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });
     const where = prisma.setting.findMany.mock.calls[0]?.[0].where;
