@@ -1,4 +1,8 @@
-import { staffTeacherNoteLoaderField } from '~/domain/grading/teacher-notes';
+import {
+  staffTeacherNoteLoaderField,
+  teacherNotesEnabled,
+  type TeacherNotesUiState,
+} from '~/domain/grading/teacher-notes';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { TeacherNotes } from './teacher-grading/teacher-notes';
 import { invariant } from '@epic-web/invariant';
@@ -194,6 +198,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           id: true,
           title: true,
           assignmentTypeId: true,
+          assignmentType: {
+            select: { systemKey: true },
+          },
           assignment: {
             select: {
               id: true,
@@ -521,7 +528,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       isOwner,
       isTeacher,
       isAdmin,
-      run: gradingAssistantRuns[0] ?? null,
+      runs: gradingAssistantRuns,
+      assignmentTypeSystemKey:
+        submission.document.assignmentType?.systemKey ?? null,
+      teacherNotesEnabled: teacherNotesEnabled(
+        gradingConfig?.outputSchemaSnapshot
+      ),
     }),
     isOwner,
     isTeacher: isTeacher || isAdmin,
@@ -562,6 +574,10 @@ function SubmissionDetail({
   const activities = 'activities' in loaderData ? loaderData.activities : [];
   const activityHasMore =
     'activityHasMore' in loaderData ? loaderData.activityHasMore : false;
+  const teacherNotesUi: TeacherNotesUiState =
+    'teacherNotesUi' in loaderData
+      ? loaderData.teacherNotesUi
+      : { visible: false };
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -1447,11 +1463,7 @@ function SubmissionDetail({
               submissionForView={submissionForView}
               documentId={submission.documentId}
               submissionId={submission.id}
-              teacherNote={
-                'teacherNote' in loaderData
-                  ? (loaderData.teacherNote ?? null)
-                  : null
-              }
+              teacherNotesUi={teacherNotesUi}
               existingGrade={teacherExistingGrade}
               pointValue={submission.document.assignment?.pointValue}
               grammarIssues={grammarIssues}
@@ -1489,15 +1501,7 @@ function SubmissionDetail({
               </div>
             </>
           )}
-          {!isGradingOther ? (
-            <TeacherNotes
-              note={
-                'teacherNote' in loaderData
-                  ? (loaderData.teacherNote ?? null)
-                  : null
-              }
-            />
-          ) : null}
+          {!isGradingOther ? <TeacherNotes ui={teacherNotesUi} /> : null}
         </div>
 
         {/* Center: Essay */}
