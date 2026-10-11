@@ -32,6 +32,15 @@ function submissionFromRouteData(
   const route = getRouteLoaderData(loaderData, routeIdSuffix);
   const matches = findObjectsWithId(route.submission ?? route, submissionId);
   expect(matches.length).toBeGreaterThan(0);
+
+  const releasedGradeRow = matches.find(
+    (row) =>
+      row.id === submissionId &&
+      typeof row.overallScore === 'number' &&
+      ('documentId' in row || 'submittedAt' in row)
+  );
+  if (releasedGradeRow) return releasedGradeRow;
+
   const submission =
     matches.find(
       (row) =>
