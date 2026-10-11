@@ -449,3 +449,49 @@ describe('every tool the planner can call has something to say about it', () => 
     }
   });
 });
+
+describe("the teacher's own library (Brian's review, D3)", () => {
+  const searchMyLessons = mock();
+  const readMyLesson = mock();
+  const withLibrary = {
+    handleReporterTool: handleReporterToolCall,
+    listLounge: listLoungeMaterials,
+    listAssignmentTypes: listAssignableTypes,
+    readLounge: readLoungeMaterial,
+    searchMyLessons,
+    readMyLesson,
+  } as never;
+
+  beforeEach(() => {
+    searchMyLessons.mockReset().mockResolvedValue([
+      { id: 'plan-7', title: 'The Things They Carried — Day 1', updatedAt: '2026-10-01', published: true, pieces: 4 },
+    ]);
+    readMyLesson.mockReset().mockResolvedValue({ id: 'plan-7', title: 'The Things They Carried — Day 1', pieces: [] });
+  });
+
+  test('offers both tools, read-only', () => {
+    expect(LESSON_PLANNER_TOOL_NAMES).toContain('search_my_lessons');
+    expect(LESSON_PLANNER_TOOL_NAMES).toContain('read_my_lesson');
+  });
+
+  test('searches only this teacher’s lessons', async () => {
+    const out = JSON.parse(
+      await handleLessonPlannerToolCall('search_my_lessons', { query: 'things they carried' }, ctx, withLibrary)
+    );
+    expect(searchMyLessons).toHaveBeenCalledWith(ctx, 'things they carried');
+    expect(out.lessons[0].id).toBe('plan-7');
+  });
+
+  test('tells the model to say so when nothing matches', async () => {
+    searchMyLessons.mockResolvedValue([]);
+    const out = JSON.parse(
+      await handleLessonPlannerToolCall('search_my_lessons', { query: 'macbeth' }, ctx, withLibrary)
+    );
+    expect(out.note.toLowerCase()).toContain('ask');
+  });
+
+  test('opens one lesson under the teacher scope', async () => {
+    await handleLessonPlannerToolCall('read_my_lesson', { id: 'plan-7' }, ctx, withLibrary);
+    expect(readMyLesson).toHaveBeenCalledWith(ctx, 'plan-7');
+  });
+});

@@ -28,6 +28,7 @@ import {
   listLoungeMaterials,
   readLoungeMaterial,
 } from './yawp-catalog.server';
+import { readMyLesson, searchMyLessons } from './my-lessons.server';
 import {
   getQuickWritingLessonBySlug,
   getQuickWritingPracticePrompts,
@@ -51,6 +52,8 @@ export type LessonPlannerToolDependencies = {
   listLounge: typeof listLoungeMaterials;
   listAssignmentTypes: typeof listAssignableTypes;
   readLounge: typeof readLoungeMaterial;
+  searchMyLessons: typeof searchMyLessons;
+  readMyLesson: typeof readMyLesson;
 };
 
 const productionDependencies: LessonPlannerToolDependencies = {
@@ -58,6 +61,8 @@ const productionDependencies: LessonPlannerToolDependencies = {
   listLounge: listLoungeMaterials,
   listAssignmentTypes: listAssignableTypes,
   readLounge: readLoungeMaterial,
+  searchMyLessons,
+  readMyLesson,
 };
 
 /**
@@ -252,6 +257,30 @@ export const LESSON_PLANNER_CATALOG_TOOLS: ReporterTool[] = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'search_my_lessons',
+    description:
+      "Search THIS teacher's own saved lessons — their library and drafts — by name, by the pieces they filed, or by what they asked for. Use it whenever the teacher refers to earlier work (\"that lesson we made on The Things They Carried\", \"last week's exit ticket\"). You do not remember earlier conversations; this is how you find them. An empty query lists their most recent lessons.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Words from the lesson’s name, text, or topic.',
+        },
+      },
+    },
+  },
+  {
+    name: 'read_my_lesson',
+    description:
+      "Open one of this teacher's saved lessons by the id search_my_lessons returned: every piece in its stack, in order (or its last plan, if nothing was filed).",
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+    },
+  },
 ];
 
 export const LESSON_PLANNER_TOOL_NAMES = [
@@ -364,6 +393,20 @@ async function handleCatalogToolCall(
     }
     case 'list_assignment_types':
       return { assignmentTypes: await dependencies.listAssignmentTypes(ctx) };
+    case 'search_my_lessons': {
+      const query = typeof input.query === 'string' ? input.query : '';
+      const lessons = await dependencies.searchMyLessons(ctx, query);
+      return {
+        lessons,
+        note: lessons.length
+          ? 'Open the right one with read_my_lesson before you describe what is in it. If more than one could be it, ask the teacher which.'
+          : 'Nothing in this teacher’s library matches. Say so plainly and ask for the lesson’s name or a detail from it; do not reconstruct it from memory.',
+      };
+    }
+    case 'read_my_lesson': {
+      const id = typeof input.id === 'string' ? input.id : '';
+      return dependencies.readMyLesson(ctx, id);
+    }
     default:
       return undefined;
   }
