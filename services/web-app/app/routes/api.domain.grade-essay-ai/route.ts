@@ -60,6 +60,7 @@ import {
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
 import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
+import { preprocessGradingAssistantCategoriesInput } from '~/domain/grading/grading-assistant-category-filter';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
   extractJsonObjectCandidates,
@@ -168,51 +169,57 @@ function buildAiSchemas({
       ? { grammarImpairsMeaning: z.boolean().optional() }
       : {}),
   });
-  const AiCategoriesSchema = z
-    .array(AiCategorySchema)
-    .superRefine((categories, ctx) => {
-      if (categories.length !== rubricKeys.length) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Expected ${rubricKeys.length} rubric categories, received ${categories.length}.`,
-        });
-      }
+  const AiCategoriesSchema = z.preprocess(
+    (input) => preprocessGradingAssistantCategoriesInput(input, rubricKeys),
+    z
+      .array(AiCategorySchema)
+      .superRefine((categories, ctx) => {
+        if (categories.length !== rubricKeys.length) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Expected ${rubricKeys.length} rubric categories, received ${categories.length}.`,
+          });
+        }
 
-      const seen = new Set<string>();
-      for (const category of categories) {
-        if (seen.has(category.key)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: `Duplicate rubric category key: ${category.key}`,
-          });
-          continue;
+        const seen = new Set<string>();
+        for (const category of categories) {
+          if (seen.has(category.key)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: `Duplicate rubric category key: ${category.key}`,
+            });
+            continue;
+          }
+          seen.add(category.key);
+          const configuredCategory = categoryByKey.get(category.key);
+          if (
+            configuredCategory &&
+            (
+              !isScoreInCategoryBands(configuredCategory, category.score) ||
+              (gradingMode === 'step' &&
+                !isScoreInCategoryAllowedScores(
+                  configuredCategory,
+                  category.score
+                ))
+            )
+          ) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: `Score ${category.score} is outside the declared bands for ${category.key}.`,
+            });
+          }
         }
-        seen.add(category.key);
-        const configuredCategory = categoryByKey.get(category.key);
-        if (
-          configuredCategory &&
-          (
-            !isScoreInCategoryBands(configuredCategory, category.score) ||
-            (gradingMode === 'step' &&
-              !isScoreInCategoryAllowedScores(configuredCategory, category.score))
-          )
-        ) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: `Score ${category.score} is outside the declared bands for ${category.key}.`,
-          });
-        }
-      }
 
-      for (const key of rubricKeys) {
-        if (!seen.has(key)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: `Missing rubric category key: ${key}`,
-          });
+        for (const key of rubricKeys) {
+          if (!seen.has(key)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: `Missing rubric category key: ${key}`,
+            });
+          }
         }
-      }
-    });
+      })
+  );
   const AiResponseSchema = z.object({
     categories: AiCategoriesSchema,
     overallComment: z.string().min(1),

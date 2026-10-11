@@ -2276,6 +2276,93 @@ describe('api.domain.grade-essay-ai', () => {
     });
   });
 
+  test('accepts an extra grammar category when the assignment grammar toggle is off', async () => {
+    const rubricCategories = [
+      {
+        key: 'thesis_and_content',
+        label: 'Thesis/Content',
+        description: 'Clear thesis.',
+        weight: 0.6,
+        grammarHighlighting: false,
+      },
+      {
+        key: 'grammar_and_mechanics',
+        label: 'Grammar/Syntax',
+        description: 'Conventions.',
+        weight: 0.4,
+        grammarHighlighting: true,
+      },
+    ];
+
+    prisma.assignmentType.findUnique.mockResolvedValue(
+      mockAssignmentType({
+        gradingPromptConfigJson: {
+          gradingInstructions:
+            'Evaluate thesis and content and grammar_and_mechanics.',
+        },
+        rubricJson: { categories: rubricCategories },
+      })
+    );
+
+    const base = mockSubmission({ id: 'sub-assignment-grammar-off' });
+    prisma.submission.findFirst.mockResolvedValue({
+      ...base,
+      document: {
+        ...base.document,
+        assignment: {
+          id: 'assignment-grammar-off',
+          grammarGradingEnabled: false,
+          gradingAssistantStrictnessLevel: null,
+          tutorEnabled: true,
+          prompt: 'Write a thesis-driven essay.',
+          pointValue: null,
+          exitTicketConfigJson: null,
+        },
+      },
+    });
+    prisma.assignment.findUnique.mockResolvedValue({
+      assignmentTypeId: 'assignment-type-legacy',
+      rubricRevision: null,
+    });
+
+    getLLMCompletion.mockReset();
+    getLLMCompletion.mockImplementation(
+      async (args: { metadata?: { kind?: string } }) => {
+        if (args.metadata?.kind === 'grammar-issues') {
+          return JSON.stringify({ issues: [] });
+        }
+        return JSON.stringify({
+          categories: [
+            { key: 'thesis_and_content', score: 4, comment: 'Strong thesis.' },
+            {
+              key: 'grammar_and_mechanics',
+              score: 3,
+              comment: 'Some grammar issues.',
+            },
+          ],
+          overallComment: 'Jordan, strong work overall.',
+        });
+      }
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-assignment-grammar-off');
+
+    const response = await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+    const payload = (response as { data: Record<string, unknown> }).data;
+
+    expect(payload.success).toBe(true);
+    expect(Object.keys(payload.rubricScores ?? {})).toEqual([
+      'thesis_and_content',
+    ]);
+    expect(payload.rubricScores).not.toHaveProperty('grammar_and_mechanics');
+  });
+
   test('scores mixed 5- and 20-point sections as one weighted percentage', async () => {
     const bands = (max: number) => [
       { min: 0, max: 0, label: 'Absent', description: 'Missing.' },
