@@ -1577,3 +1577,10 @@ describe("buildLessonPlannerSystemPrompt — intake v2 (Brian's review, A4)", ()
     expect(blocks[0].text).toContain('choose: ');
   });
 });
+
+describe("buildLessonPlannerSystemPrompt — a deck's minutes match the lesson (Brian's review)", () => {
+  test('tells it to add the slide minutes up to the lesson length before handing over', () => {
+    const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'Connell School' });
+    expect(prompt.toLowerCase()).toContain('a 90-minute lesson gets a deck whose slide minutes total 90');
+  });
+});
