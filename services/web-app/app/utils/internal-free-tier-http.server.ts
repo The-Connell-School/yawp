@@ -1,6 +1,10 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
+import {
+  authenticateInternalManagementRequest,
+  recordInternalPlatformWriteAudit,
+} from '~/utils/internal-platform-auth.server';
 import { createAcquisitionTokens, getFreeTierReleaseCap, releaseBatch, releaseBatchSchema, tokenCreateSchema } from '~/domain/free-tier/service.server';
 import { readBoundedText } from '~/utils/bounded-body.server';
 import {
@@ -11,25 +15,48 @@ import type { FreeTierApplicationStatus } from '@app/prisma';
 
 const response = (value: unknown, status = 200, headers?: HeadersInit) =>
   Response.json(value, { status, headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', ...(headers || {}) } });
-const digest = (value: string) => createHash('sha256').update(value).digest();
-
 /**
  * The management-key check every internal endpoint shares (free tier, feature
  * flags). Returns a response to send back when the request is not allowed.
  */
-export function authenticate(request: Request) {
-  const key = process.env.YAWP_MANAGEMENT_SERVICE_KEY;
-  if (!key) return response({ error: 'Not found' }, 404);
-  if (!/^[A-Za-z0-9_-]{43,}$/.test(key)) return response({ error: 'Integration unavailable' }, 503);
-  const supplied = request.headers.get('authorization') ?? '';
-  if (supplied.length > 512 || !timingSafeEqual(digest(supplied), digest(`Bearer ${key}`))) {
-    return response({ error: 'Unauthorized' }, 401);
+export async function authenticate(
+  request: Request,
+  options: { body?: Uint8Array | string } = {}
+) {
+  const denied = await authenticateInternalManagementRequest(request, options);
+  if (denied) return denied;
+  return null;
+}
+
+export async function authenticateAndAuditWrite(
+  request: Request,
+  options: { body?: Uint8Array | string } = {}
+) {
+  const { authorizeInternalApiRequest } = await import(
+    '~/utils/internal-platform-auth.server'
+  );
+  const auth = await authorizeInternalApiRequest(request, options);
+  if (auth instanceof Response) return auth;
+  if (request.method !== 'GET' && request.method !== 'HEAD' && auth.mode === 'hmac') {
+    const url = new URL(request.url);
+    const body = options.body ?? '';
+    const hash =
+      typeof body === 'string'
+        ? createHash('sha256').update(body).digest('hex')
+        : createHash('sha256').update(Buffer.from(body)).digest('hex');
+    await recordInternalPlatformWriteAudit({
+      actorEmail: auth.actorEmail,
+      keyId: auth.keyId,
+      endpoint: `${request.method} ${url.pathname}`,
+      requestHash: hash,
+      result: 'authorized',
+    });
   }
   return null;
 }
 
 async function authorizeManagement(request: Request) {
-  const denied = authenticate(request);
+  const denied = await authenticate(request);
   if (denied) return denied;
   return null;
 }

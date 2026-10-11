@@ -1,9 +1,9 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { rubricPublicationInput, type InternalRubrics } from './internal-rubrics.server';
 import { validateRubricPromotion } from '~/domain/rubrics/rubric-promotion';
+import { authenticate } from '~/utils/internal-free-tier-http.server';
+import { internalApiKeysConfigured } from '~/utils/internal-platform-auth.server';
 const reply = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } });
-const digest = (value: string) => createHash('sha256').update(value).digest();
 const nameInput = z.string().regex(/^[A-Za-z0-9]+(?:(?:-|_)[A-Za-z0-9]+)*$/).max(120);
 const limit = 300 * 1024;
 async function readBody(request: Request) {
@@ -23,13 +23,11 @@ async function readBody(request: Request) {
   } finally { reader.releaseLock(); }
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
-export function createRubricHttp(service: Pick<InternalRubrics, 'inspect' | 'publish'>, credential: () => string | undefined, enabled: () => boolean) {
-  function auth(request: Request, method: string) {
-    const key = credential();
-    if (!enabled() || !key) return reply({ error: 'Not found' }, 404);
-    if (!/^[A-Za-z0-9_-]{43,}$/.test(key)) return reply({ error: 'Integration unavailable' }, 503);
-    const supplied = request.headers.get('authorization') || '';
-    if (supplied.length > 512 || !timingSafeEqual(digest(supplied), digest(`Bearer ${key}`))) return reply({ error: 'Unauthorized' }, 401);
+export function createRubricHttp(service: Pick<InternalRubrics, 'inspect' | 'publish'>, _credential: () => string | undefined, enabled: () => boolean) {
+  async function auth(request: Request, method: string, body?: string) {
+    if (!enabled() || !internalApiKeysConfigured()) return reply({ error: 'Not found' }, 404);
+    const denied = await authenticate(request, { body });
+    if (denied) return denied;
     if (request.method !== method) return reply({ error: 'Method not allowed' }, 405);
     return null;
   }
@@ -45,7 +43,7 @@ export function createRubricHttp(service: Pick<InternalRubrics, 'inspect' | 'pub
   }
   return {
     async inspect(request: Request) {
-      const denied = auth(request, 'GET'); if (denied) return denied;
+      const denied = await auth(request, 'GET'); if (denied) return denied;
       let name: string;
       try {
         const params = new URL(request.url).searchParams;
@@ -55,16 +53,28 @@ export function createRubricHttp(service: Pick<InternalRubrics, 'inspect' | 'pub
       return invoke(async () => ({ rubric: await service.inspect(name) }));
     },
     async validate(request: Request) {
-      const denied = auth(request, 'POST'); if (denied) return denied;
       let schema: unknown;
-      try { schema = z.object({ schema: z.unknown() }).strict().parse(await readBody(request)).schema; }
+      let bodyText = '';
+      try {
+        const parsed = await readBody(request);
+        bodyText = JSON.stringify(parsed);
+        const denied = await auth(request, 'POST', bodyText);
+        if (denied) return denied;
+        schema = z.object({ schema: z.unknown() }).strict().parse(parsed).schema;
+      }
       catch { return reply({ error: 'Invalid validation request' }, 400); }
       return reply(validateRubricPromotion(schema));
     },
     async publish(request: Request) {
-      const denied = auth(request, 'POST'); if (denied) return denied;
       let input: z.infer<typeof rubricPublicationInput>;
-      try { input = rubricPublicationInput.parse(await readBody(request)); }
+      let bodyText = '';
+      try {
+        const parsed = await readBody(request);
+        bodyText = JSON.stringify(parsed);
+        const denied = await auth(request, 'POST', bodyText);
+        if (denied) return denied;
+        input = rubricPublicationInput.parse(parsed);
+      }
       catch { return reply({ error: 'Invalid rubric publication' }, 400); }
       const validation = validateRubricPromotion(input.schema);
       if (!validation.ok) return reply(validation, 422);

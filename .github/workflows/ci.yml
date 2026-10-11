@@ -437,6 +437,7 @@ jobs:
             'app/routes/app.my-classes.$classId/class-student-enrollment.server.test.ts' \
             'app/utils/impersonation-read-only.server.test.ts' \
             'app/utils/internal-management.server.test.ts' \
+            'app/utils/internal-platform-auth.server.test.ts' \
             'app/domain/free-tier/student-join.server.test.ts' \
             'app/routes/app.assignment-types.$id/about-daily-pages/content.test.ts' \
             app/domain/assignment-types/assignment-type-grading-config.server.test.ts \

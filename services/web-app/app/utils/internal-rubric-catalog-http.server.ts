@@ -1,9 +1,14 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { CatalogError, type RubricCatalog } from '~/domain/rubrics/rubric-catalog.server';
+import {
+  authorizeInternalApiRequest,
+  internalApiKeysConfigured,
+  recordInternalPlatformWriteAudit,
+  type InternalApiAuthContext,
+} from '~/utils/internal-platform-auth.server';
 
 const reply = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } });
-const digest = (value: string) => createHash('sha256').update(value).digest();
 const LIMIT = 300 * 1024;
 
 export const saveInput = z.object({
@@ -55,15 +60,17 @@ async function readJson(request: Request) {
  * Rubric manager endpoints for the internal app, authenticated with the same
  * management service key as the other /api/internal/v1 management routes.
  */
-export function createRubricCatalogHttp(service: Pick<RubricCatalog, 'list' | 'get' | 'save' | 'stage' | 'clearRelease'>, credential: () => string | undefined) {
-  function auth(request: Request, method: 'GET' | 'POST') {
-    const key = credential();
-    if (!key) return reply({ error: 'Not found' }, 404);
-    if (!/^[A-Za-z0-9_-]{43,}$/.test(key)) return reply({ error: 'Integration unavailable' }, 503);
-    const supplied = request.headers.get('authorization') ?? '';
-    if (supplied.length > 512 || !timingSafeEqual(digest(supplied), digest(`Bearer ${key}`))) return reply({ error: 'Unauthorized' }, 401);
+export function createRubricCatalogHttp(service: Pick<RubricCatalog, 'list' | 'get' | 'save' | 'stage' | 'clearRelease'>, _credential: () => string | undefined) {
+  async function auth(
+    request: Request,
+    method: 'GET' | 'POST',
+    body?: Uint8Array | string
+  ): Promise<Response | InternalApiAuthContext> {
+    if (!internalApiKeysConfigured()) return reply({ error: 'Not found' }, 404);
+    const result = await authorizeInternalApiRequest(request, { body });
+    if (result instanceof Response) return result;
     if (request.method !== method) return reply({ error: 'Method not allowed' }, 405);
-    return null;
+    return result;
   }
   function failure(error: unknown) {
     if (error instanceof CatalogError) {
@@ -73,21 +80,43 @@ export function createRubricCatalogHttp(service: Pick<RubricCatalog, 'list' | 'g
     return reply({ error: 'Rubric catalog unavailable' }, 503);
   }
   async function write<T extends z.ZodTypeAny>(request: Request, schema: T, label: string, handler: (input: z.infer<T>) => Promise<unknown>) {
-    const denied = auth(request, 'POST'); if (denied) return denied;
+    if (request.method !== 'POST') return reply({ error: 'Method not allowed' }, 405);
     if (new URL(request.url).search) return reply({ error: 'Invalid query' }, 400);
+    let raw: unknown;
+    let bodyText = '';
+    try {
+      raw = await readJson(request);
+      bodyText = JSON.stringify(raw);
+    } catch {
+      return reply({ error: `Invalid ${label} request` }, 400);
+    }
+    const authResult = await auth(request, 'POST', bodyText);
+    if (authResult instanceof Response) return authResult;
     let input: z.infer<T>;
-    try { input = schema.parse(await readJson(request)); }
+    try { input = schema.parse(raw); }
     catch { return reply({ error: `Invalid ${label} request` }, 400); }
-    try { return reply(await handler(input)); } catch (error) { return failure(error); }
+    try {
+      const result = await handler(input);
+      if (authResult.mode === 'hmac') {
+        await recordInternalPlatformWriteAudit({
+          actorEmail: authResult.actorEmail,
+          keyId: authResult.keyId,
+          endpoint: `POST ${new URL(request.url).pathname}`,
+          requestHash: createHash('sha256').update(bodyText).digest('hex'),
+          result: 'success',
+        });
+      }
+      return reply(result);
+    } catch (error) { return failure(error); }
   }
   return {
     async list(request: Request) {
-      const denied = auth(request, 'GET'); if (denied) return denied;
+      const denied = await auth(request, 'GET'); if (denied instanceof Response) return denied;
       if (new URL(request.url).search) return reply({ error: 'Invalid query' }, 400);
       try { return reply(await service.list()); } catch (error) { return failure(error); }
     },
     async get(request: Request) {
-      const denied = auth(request, 'GET'); if (denied) return denied;
+      const denied = await auth(request, 'GET'); if (denied instanceof Response) return denied;
       const params = new URL(request.url).searchParams;
       const keys = [...params.keys()];
       if (keys.length !== 1 || keys[0] !== 'key' || params.getAll('key').length !== 1) return reply({ error: 'Provide one rubric key' }, 400);

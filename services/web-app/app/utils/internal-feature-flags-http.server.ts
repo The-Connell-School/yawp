@@ -49,7 +49,7 @@ function requestedValue(body: z.infer<typeof updateBody>): FeatureFlagValue {
 }
 
 export async function featureFlagsList(request: Request) {
-  const denied = authenticate(request);
+  const denied = await authenticate(request);
   if (denied) return denied;
   if (request.method !== 'GET') return response({ error: 'Method not allowed' }, 405);
   try {
@@ -63,14 +63,14 @@ export async function featureFlagsList(request: Request) {
 }
 
 export async function featureFlagUpdate(request: Request, key: string | undefined) {
-  const denied = authenticate(request);
+  const text = await readBoundedText(request, MAX_BODY_BYTES);
+  const denied = await authenticate(request, { body: text ?? '' });
   if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
   if (!isFeatureFlagKey(key)) return response({ error: 'Unknown feature flag' }, 404);
   if (!request.headers.get('content-type')?.startsWith('application/json')) {
     return response({ error: 'Invalid content type' }, 400);
   }
-  const text = await readBoundedText(request, MAX_BODY_BYTES);
   if (text === null) return response({ error: 'Payload too large' }, 413);
   let parsed: unknown;
   try {
