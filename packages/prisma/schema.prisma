@@ -197,6 +197,10 @@ model Class {
   classArtIndex                   Int?
   classArtKey                     String?
   isArchived                      Boolean                          @default(false)
+  /// How long this class usually meets, in minutes, as the teacher last set it
+  /// in the Lesson Planner intake (Brian's review, A2). Null until then; the
+  /// planner never guesses it.
+  periodMinutes                   Int?
   students                        OrgMembership[]                  @relation("ClassStudents")
   teachers                        OrgMembership[]                  @relation("ClassTeachers")
   schoolId                        String

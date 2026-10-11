@@ -27,8 +27,13 @@ import { cn } from '~/utils/misc';
 import { prisma } from '~/utils/db.server';
 import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
+import { formatClassCardTitle } from '~/utils/class-display';
 import { RECOMMENDED_LESSON_PLANNER_PROMPTS } from '~/routes/api.domain.lesson-planner/build-system-prompt';
 import { parseAssistantMessage } from '~/components/ai-chat/parse-assistant-message';
+import {
+  LessonIntakeCard,
+  type IntakeClass,
+} from '~/components/ai-chat/lesson-intake-card';
 import {
   MarkdownContent,
   printAssistantMessage,
@@ -209,8 +214,36 @@ export async function loader({ request }: LoaderFunctionArgs) {
     access.membership.organization.id
   );
 
+  // Intake v2 (A1): the classes come from the teacher's real class list, not
+  // from whatever the model guessed. Same scope as list_classes.
+  const teacherClasses = reviewFlags.intakeV2
+    ? (
+        await prisma.class.findMany({
+          where: {
+            isArchived: false,
+            teachers: { some: { id: access.membership.id } },
+            school: { organizationId: access.membership.organization.id },
+          },
+          select: {
+            id: true,
+            title: true,
+            grade: true,
+            period: true,
+            periodMinutes: true,
+          },
+          orderBy: [{ schoolYear: 'desc' }, { period: 'asc' }],
+          take: 100,
+        })
+      ).map((klass) => ({
+        id: klass.id,
+        title: formatClassCardTitle(klass),
+        periodMinutes: klass.periodMinutes,
+      }))
+    : [];
+
   return {
     reviewFlags,
+    teacherClasses,
     practice,
     dailyPagesTypeId,
     classStarterTypeId,
@@ -278,6 +311,7 @@ export default function LessonPlannerRoute() {
     builtDays,
     unitMapConversation,
     reviewFlags,
+    teacherClasses,
   } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const fetcher = useFetcher<LessonPlannerActionData>();
@@ -811,6 +845,8 @@ export default function LessonPlannerRoute() {
                   onSuggestion={send}
                   onKeep={setKept}
                   stackV2={reviewFlags.stackV2}
+                  intakeV2={reviewFlags.intakeV2}
+                  teacherClasses={teacherClasses}
                   stackHasPieces={keptCount > 0}
                   disabled={isSending}
                 />
@@ -1021,6 +1057,8 @@ function MessageBubble({
   onKeep,
   stackV2 = false,
   stackHasPieces = false,
+  intakeV2 = false,
+  teacherClasses = [],
   disabled,
 }: {
   message: ChatMessage;
@@ -1057,6 +1095,12 @@ function MessageBubble({
   stackV2?: boolean;
   /** Something is filed in this lesson's stack. */
   stackHasPieces?: boolean;
+  /**
+   * Intake v2 (Brian's review, A1–A3): one decision per step, classes from the
+   * teacher's real list, no pre-filled length.
+   */
+  intakeV2?: boolean;
+  teacherClasses?: IntakeClass[];
   disabled: boolean;
 }) {
   if (message.role === 'user') {
@@ -1335,7 +1379,16 @@ function MessageBubble({
             </button>
           ) : null}
         </div>
-        {asks.length > 0 && isLast ? (
+        {asks.length > 0 && isLast && intakeV2 ? (
+          // The card's own steps are the choices. The model's free-text chips
+          // paired a grade with a scope; they are not shown beside it.
+          <LessonIntakeCard
+            asks={asks}
+            teacherClasses={teacherClasses}
+            onSend={onSuggestion}
+            disabled={disabled}
+          />
+        ) : asks.length > 0 && isLast ? (
           <LessonAskCard
             asks={asks}
             suggestions={suggestions}
