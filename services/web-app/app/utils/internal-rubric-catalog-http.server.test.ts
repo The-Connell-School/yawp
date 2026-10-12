@@ -1,8 +1,20 @@
-import { expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { CatalogError } from '~/domain/rubrics/rubric-catalog.server';
 import { createRubricCatalogHttp } from './internal-rubric-catalog-http.server';
 
 const key = 'k'.repeat(43);
+const savedManagementKey = process.env.YAWP_MANAGEMENT_SERVICE_KEY;
+const savedInternalKeys = process.env.YAWP_INTERNAL_API_KEYS;
+beforeEach(() => {
+  process.env.YAWP_MANAGEMENT_SERVICE_KEY = key;
+  delete process.env.YAWP_INTERNAL_API_KEYS;
+});
+afterEach(() => {
+  if (savedManagementKey === undefined) delete process.env.YAWP_MANAGEMENT_SERVICE_KEY;
+  else process.env.YAWP_MANAGEMENT_SERVICE_KEY = savedManagementKey;
+  if (savedInternalKeys === undefined) delete process.env.YAWP_INTERNAL_API_KEYS;
+  else process.env.YAWP_INTERNAL_API_KEYS = savedInternalKeys;
+});
 const base = 'https://yawp.test/api/internal/v1/rubric-catalog';
 const get = (path = '', credential = key) => new Request(`${base}${path}`, { headers: { authorization: `Bearer ${credential}` } });
 const post = (body: unknown, credential = key, path = '/versions') => new Request(`${base}${path}`, { method: 'POST', headers: { authorization: `Bearer ${credential}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
@@ -22,8 +34,12 @@ test('every route requires the management key and the right method', async () =>
   expect((await http.save(post(valid, 'wrong'))).status).toBe(401);
   expect((await http.list(post({}, key, ''))).status).toBe(405);
   expect((await http.save(get('/versions'))).status).toBe(405);
+  delete process.env.YAWP_MANAGEMENT_SERVICE_KEY;
   expect((await createRubricCatalogHttp(service as any, () => undefined).list(get())).status).toBe(404);
+  process.env.YAWP_MANAGEMENT_SERVICE_KEY = key;
+  process.env.YAWP_MANAGEMENT_SERVICE_KEY = 'short';
   expect((await createRubricCatalogHttp(service as any, () => 'short').list(get())).status).toBe(503);
+  process.env.YAWP_MANAGEMENT_SERVICE_KEY = key;
   expect(calls).toHaveLength(0);
   const ok = await http.list(get());
   expect(ok.status).toBe(200); expect(ok.headers.get('cache-control')).toBe('no-store');
@@ -71,7 +87,9 @@ test('stage requires the management key, POST and exactly the documented body', 
   const http = createRubricCatalogHttp(service as any, () => key);
   expect((await http.stage(post(validStage, 'wrong', '/stage'))).status).toBe(401);
   expect((await http.stage(get('/stage'))).status).toBe(405);
+  delete process.env.YAWP_MANAGEMENT_SERVICE_KEY;
   expect((await createRubricCatalogHttp(service as any, () => undefined).stage(post(validStage, key, '/stage'))).status).toBe(404);
+  process.env.YAWP_MANAGEMENT_SERVICE_KEY = key;
   expect((await http.stage(post(validStage, key, '/stage?x=1'))).status).toBe(400);
   const { source: _source, ...noSource } = validStage;
   for (const body of [
@@ -125,7 +143,9 @@ test('unrelease requires the management key, POST and exactly the documented bod
   const http = createRubricCatalogHttp(service as any, () => key);
   expect((await http.clearRelease(post(validClear, 'wrong', '/unrelease'))).status).toBe(401);
   expect((await http.clearRelease(get('/unrelease'))).status).toBe(405);
+  delete process.env.YAWP_MANAGEMENT_SERVICE_KEY;
   expect((await createRubricCatalogHttp(service as any, () => undefined).clearRelease(post(validClear, key, '/unrelease'))).status).toBe(404);
+  process.env.YAWP_MANAGEMENT_SERVICE_KEY = key;
   expect((await http.clearRelease(post(validClear, key, '/unrelease?x=1'))).status).toBe(400);
   for (const body of [{ ...validClear, extra: true }, { ...validClear, actorEmail: 'nope' }, { ...validClear, reason: 'no' }, { ...validClear, key: '' }]) {
     expect((await http.clearRelease(post(body, key, '/unrelease'))).status).toBe(400);

@@ -1,8 +1,57 @@
 # Internal platform integration
 
+## Signed internal API authentication (HMAC)
+
+All `/api/internal/v1/*` routes accept either the legacy bearer credential or HMAC-SHA256 request signing. During rollout, legacy bearer auth remains enabled unless `LEGACY_INTERNAL_KEY_ALLOWED=false` (default `true`). Set that variable to `false` after Yawp Internal v3 has switched every caller to signed requests.
+
+### Headers
+
+- `X-Yawp-Key-Id`
+- `X-Yawp-Timestamp` (Unix seconds)
+- `X-Yawp-Nonce`
+- `X-Yawp-Actor` (staff email)
+- `X-Yawp-Signature`
+
+The signature is HMAC-SHA256 over a newline-delimited string:
+
+`METHOD\nPATH\nQUERY\nTIMESTAMP\nNONCE\nACTOR\nSHA256(body)`
+
+`QUERY` is the raw query string exactly as sent on the wire (no leading `?`, no sorting, no decoding). `ACTOR` is lowercased in the canonical string. `SHA256(body)` is lowercase hex; an empty body hashes the empty string.
+
+### Shared signature test vector
+
+Yawp Internal v3 and this service must produce the same signature for:
+
+| Field | Value |
+| --- | --- |
+| Method | `GET` |
+| Path | `/api/internal/v1/stats/grading` |
+| Query | `since=2024-01-15T12%3A00%3A00.000Z&until=2024-06-01T23%3A59%3A59.999Z` |
+| Timestamp | `1704067200` |
+| Nonce | `vector-nonce-01` |
+| Actor | `operator@yawp.school` |
+| Body | *(empty)* |
+| Secret | `test-secret-for-vector-0123456789ABCDEF` |
+| Expected `X-Yawp-Signature` | `7N9L9qsjofwsslfBt8_IqQ5QFbe2EswJUhJXmSMxj_c` |
+
+Canonical string (newlines shown as `\n`):
+
+`GET\n/api/internal/v1/stats/grading\nsince=2024-01-15T12%3A00%3A00.000Z&until=2024-06-01T23%3A59%3A59.999Z\n1704067200\nvector-nonce-01\noperator@yawp.school\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
+
+Requests older than five minutes are rejected. Each `(keyId, nonce)` pair is stored until expiry to block replay. Keys are loaded from `YAWP_INTERNAL_API_KEYS` (JSON array of `{ id, secret, scopes }`); two active entries support rotation. Scopes are enforced per route group:
+
+- `rubrics:read` / `rubrics:write` — `/api/internal/v1/rubric-catalog*` and `/api/internal/v1/rubrics*`
+- `flags:read` / `flags:write` — `/api/internal/v1/feature-flags*`
+- `stats:read` — `GET /api/internal/v1/stats/grading`
+- `management:read` / `management:write` — remaining management routes (users, organizations, free tier, QA, impersonation audit)
+
+Signed keys are rate limited (120 requests / minute / key id). Mutating signed calls append a row to `InternalPlatformApiAudit` with actor, key id, endpoint, request hash, and result.
+
+Legacy bearer auth continues to use `YAWP_MANAGEMENT_SERVICE_KEY` on management routes and `YAWP_CONTENT_SERVICE_KEY` only on `/api/internal/v1/rubric-catalog*` and `/api/internal/v1/rubrics*` while `LEGACY_INTERNAL_KEY_ALLOWED` is not `false`.
+
 ## Implemented: user directory
 
-`GET /api/internal/v1/users` and `GET /api/internal/v1/users/:id` accept a backend-only Bearer `YAWP_MANAGEMENT_SERVICE_KEY`. Use the matching outbound key configured in Yawp Internal. The key must be a generated 32-byte base64url credential; it is not a member login token. No key leaves the handlers disabled (404). Invalid credentials return 401 before database access. Store the credential in managed secrets; omit Authorization headers from ingress and application logs. Deployment and real credentials have not been configured.
+`GET /api/internal/v1/users` and `GET /api/internal/v1/users/:id` accept a backend-only Bearer `YAWP_MANAGEMENT_SERVICE_KEY` or a signed request with `management:read`. Use the matching outbound key configured in Yawp Internal. The key must be a generated 32-byte base64url credential; it is not a member login token. No key leaves the handlers disabled (404). Invalid credentials return 401 before database access. Store the credential in managed secrets; omit Authorization headers from ingress and application logs. Deployment and real credentials have not been configured.
 
 Search accepts `q`, optional `organizationId`, `limit` (1–50, default 50), and `cursor`. It searches active memberships by user name or email. Organization filtering happens before pagination. Each result contains `{ id, organizationId, displayName, email, privileged }`. A user with several memberships can appear once per organization. The cursor is bound to the query and organization. Responses are no-store.
 
