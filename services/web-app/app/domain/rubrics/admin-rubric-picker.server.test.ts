@@ -27,12 +27,12 @@ mock.module('./rubric-catalog.server', () => ({
   }),
 }));
 
-const rubricRelease = { findMany: mock(), findUnique: mock() };
+const rubricRevision = { findMany: mock() };
 const rubric = { findMany: mock(), findFirst: mock() };
 const assignmentType = { findMany: mock(), findUnique: mock() };
 
 mock.module('~/utils/db.server', () => ({
-  prisma: { rubricRelease, rubric, assignmentType },
+  prisma: { rubricRevision, rubric, assignmentType },
 }));
 
 const {
@@ -41,7 +41,7 @@ const {
   ADMIN_PER_TYPE_PICKER_PREFIX,
 } = await import('./admin-rubric-picker.server');
 
-const db = { rubricRelease, rubric, assignmentType };
+const db = { rubricRevision, rubric, assignmentType };
 
 const validLibrarySchema = {
   name: 'daily-pages-engagement',
@@ -65,10 +65,10 @@ const validLibrarySchema = {
 describe('listLiveRubricsForAdminPicker', () => {
   beforeEach(() => {
     catalogList.mockReset();
-    rubricRelease.findMany.mockReset();
+    rubricRevision.findMany.mockReset();
     rubric.findMany.mockReset();
     assignmentType.findMany.mockReset();
-    rubricRelease.findMany.mockResolvedValue([]);
+    rubricRevision.findMany.mockResolvedValue([]);
     rubric.findMany.mockImplementation(async (args: { where?: { archivedAt?: unknown; name?: { in: string[] } } }) => {
       if (args?.where?.archivedAt) return [];
       if (args?.where?.name?.in) {
@@ -78,6 +78,7 @@ describe('listLiveRubricsForAdminPicker', () => {
             name: 'daily-pages-engagement',
             title: 'Daily Pages engagement',
             schemaJson: validLibrarySchema,
+            currentRevision: null,
           },
         ];
       }
@@ -127,9 +128,11 @@ describe('listLiveRubricsForAdminPicker', () => {
     const options = await listLiveRubricsForAdminPicker(db as never);
     expect(options.map((row) => row.catalogKey).sort()).toEqual([
       'assignment-type:type-1',
+      'builtin:class-starter-default',
+      'builtin:daily-pages-short-form-default',
+      'builtin:thesis-default',
       'daily-pages-engagement',
     ]);
-    expect(rubricRelease.findMany).toHaveBeenCalled();
   });
 
   test('excludes archived and retired library rubrics', async () => {
@@ -175,11 +178,13 @@ describe('listLiveRubricsForAdminPicker', () => {
     });
 
     const options = await listLiveRubricsForAdminPicker(db as never);
-    expect(options).toHaveLength(1);
-    expect(options[0]?.name).toBe('daily-pages-engagement');
+    expect(options.filter((row) => row.source === 'library')).toHaveLength(1);
+    expect(options.find((row) => row.name === 'daily-pages-engagement')?.source).toBe(
+      'library'
+    );
   });
 
-  test('prefers RubricRelease revision content when present', async () => {
+  test('prefers currentRevision over draft schemaJson for library rows', async () => {
     catalogList.mockResolvedValue({
       rubrics: [
         {
@@ -191,37 +196,114 @@ describe('listLiveRubricsForAdminPicker', () => {
         },
       ],
     });
-    rubricRelease.findMany.mockResolvedValue([
-      {
-        catalogKey: 'daily-pages-engagement',
-        rubricRevision: {
-          schemaJson: {
-            ...validLibrarySchema,
-            calibrationNotes: 'Released copy',
+    rubric.findMany.mockImplementation(async (args: { where?: { archivedAt?: unknown; name?: { in: string[] } } }) => {
+      if (args?.where?.archivedAt) return [];
+      if (args?.where?.name?.in) {
+        return [
+          {
+            id: 'lib-1',
+            name: 'daily-pages-engagement',
+            title: 'Daily Pages engagement',
+            schemaJson: { ...validLibrarySchema, calibrationNotes: 'Draft copy' },
+            currentRevision: {
+              schemaJson: {
+                ...validLibrarySchema,
+                calibrationNotes: 'Published copy',
+              },
+            },
           },
+        ];
+      }
+      return [];
+    });
+
+    const options = await listLiveRubricsForAdminPicker(db as never);
+    expect(options.find((row) => row.name === 'daily-pages-engagement')?.json).toContain(
+      'Published copy'
+    );
+  });
+
+  test('lists per-type rows from published revision when live columns are empty', async () => {
+    const actTypeId = 'cmpphw7w303lh01l15z0pr6nd';
+    catalogList.mockResolvedValue({
+      rubrics: [
+        {
+          key: `assignment-type:${actTypeId}`,
+          source: 'assignment-type',
+          name: `assignment-type:${actTypeId}`,
+          title: 'ACT Writing Section',
+          editable: false,
+        },
+      ],
+    });
+    assignmentType.findMany.mockImplementation(async (args: { where?: { id?: { in: string[] } } }) => {
+      if (args?.where?.id?.in) {
+        return [
+          {
+            id: actTypeId,
+            title: 'ACT Writing Section',
+            scoringScaleJson: { minScore: 1, maxScore: 6 },
+            rubricJson: { categories: [] },
+            gradingPromptConfigJson: {},
+            gradingOutputSchemaJson: validLibrarySchema.outputSchema,
+            gradingCalibrationNotes: null,
+            rubricBaseline: null,
+          },
+        ];
+      }
+      return [{ id: actTypeId, title: 'ACT Writing Section' }];
+    });
+    rubricRevision.findMany.mockResolvedValue([
+      {
+        rubricName: `assignment-type:${actTypeId}`,
+        version: 2,
+        schemaJson: {
+          name: `assignment-type:${actTypeId}`,
+          title: 'ACT Writing Section',
+          scoringScale: { minScore: 1, maxScore: 6, type: 'weighted_1_5' },
+          rubric: validLibrarySchema.rubric,
+          promptConfig: {},
+          outputSchema: validLibrarySchema.outputSchema,
+          calibrationNotes: null,
         },
       },
     ]);
 
     const options = await listLiveRubricsForAdminPicker(db as never);
-    expect(options[0]?.json).toContain('Released copy');
+    expect(options.some((row) => row.catalogKey === `assignment-type:${actTypeId}`)).toBe(true);
   });
 });
 
 describe('resolveAdminRubricPickerSelection', () => {
   beforeEach(() => {
-    rubricRelease.findMany.mockReset();
-    rubricRelease.findUnique.mockReset();
+    rubricRevision.findMany.mockReset();
     rubric.findFirst.mockReset();
     assignmentType.findUnique.mockReset();
-    rubricRelease.findMany.mockResolvedValue([]);
+    rubricRevision.findMany.mockResolvedValue([]);
   });
 
-  test('accepts library rubrics without a RubricRelease row', async () => {
+  test('resolves built-in picker keys to the matching library rubric', async () => {
+    rubric.findFirst.mockResolvedValue({
+      id: 'lib-thesis',
+      name: 'thesis-driven-essay',
+      schemaJson: validLibrarySchema,
+      currentRevision: null,
+    });
+    await expect(
+      resolveAdminRubricPickerSelection('builtin:thesis-default', db as never)
+    ).resolves.toEqual({
+      kind: 'library',
+      rubricId: 'lib-thesis',
+      catalogKey: 'builtin:thesis-default',
+    });
+  });
+
+  test('accepts library rubrics using published revision content', async () => {
     rubric.findFirst.mockResolvedValue({
       id: 'lib-1',
       name: 'daily-pages-engagement',
-      schemaJson: validLibrarySchema,
+      schemaJson: { ...validLibrarySchema, rubric: { categories: [] } },
+      currentRevision: { schemaJson: validLibrarySchema },
     });
     await expect(resolveAdminRubricPickerSelection('lib-1', db as never)).resolves.toEqual({
       kind: 'library',

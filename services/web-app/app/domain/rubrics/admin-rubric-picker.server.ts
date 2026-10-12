@@ -1,6 +1,14 @@
 import type { Prisma, PrismaClient } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 import {
+  ADMIN_BUILTIN_PICKER_KEYS,
+  ADMIN_BUILTIN_PICKER_PREFIX,
+  fallbackBuiltinPublishedSchema,
+  isAdminBuiltinPickerKey,
+  libraryNameForAdminBuiltinPickerKey,
+  type AdminBuiltinPickerKey,
+} from './admin-rubric-picker-builtins';
+import {
   perTypeContent,
   perTypeKey,
   RubricCatalog,
@@ -20,7 +28,7 @@ export type AdminRubricPickerOption = {
   name: string;
   title: string;
   json: string;
-  source: 'library' | 'assignment-type';
+  source: 'library' | 'assignment-type' | 'builtin';
 };
 
 export type PerTypeLiveAssignmentTypeColumns = {
@@ -45,7 +53,7 @@ type CatalogListEntry = Awaited<ReturnType<RubricCatalog['list']>>['rubrics'][nu
 
 type PickerDb = Pick<
   PrismaClient,
-  'rubric' | 'rubricRelease' | 'assignmentType'
+  'rubric' | 'rubricRevision' | 'assignmentType'
 >;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -81,32 +89,80 @@ function columnsFromCatalogContent(
   };
 }
 
-async function releaseContentByKey(
+async function publishedLibraryContentByName(
   db: PickerDb,
-  keys: string[]
+  names: string[]
 ): Promise<Map<string, unknown>> {
-  if (!keys.length) return new Map();
-  const releases = await db.rubricRelease.findMany({
-    where: { catalogKey: { in: keys } },
+  if (!names.length) return new Map();
+  const rows = await db.rubric.findMany({
+    where: { name: { in: names } },
     select: {
-      catalogKey: true,
-      rubricRevision: { select: { schemaJson: true } },
+      name: true,
+      schemaJson: true,
+      currentRevision: { select: { schemaJson: true } },
     },
   });
   return new Map(
-    releases.map((row) => [row.catalogKey, row.rubricRevision.schemaJson])
+    rows.map((row) => [
+      row.name,
+      row.currentRevision?.schemaJson ?? row.schemaJson,
+    ])
   );
 }
 
-function pickerContent(
-  catalogKey: string,
-  liveContent: unknown,
-  releaseByKey: Map<string, unknown>
-) {
-  return releaseByKey.get(catalogKey) ?? liveContent;
+async function publishedPerTypeContentByTypeId(
+  db: PickerDb,
+  typeIds: string[]
+): Promise<Map<string, unknown>> {
+  if (!typeIds.length) return new Map();
+  const catalogKeys = typeIds.map((id) => perTypeKey(id));
+  const [types, revisions] = await Promise.all([
+    db.assignmentType.findMany({
+      where: { id: { in: typeIds } },
+      select: {
+        id: true,
+        scoringScaleJson: true,
+        rubricJson: true,
+        gradingPromptConfigJson: true,
+        gradingOutputSchemaJson: true,
+        gradingCalibrationNotes: true,
+        rubricBaseline: {
+          select: { rubricRevision: { select: { schemaJson: true } } },
+        },
+      },
+    }),
+    db.rubricRevision.findMany({
+      where: { rubricName: { in: catalogKeys } },
+      select: { rubricName: true, version: true, schemaJson: true },
+      orderBy: [{ rubricName: 'asc' }, { version: 'desc' }],
+    }),
+  ]);
+  const latestRevisionByKey = new Map<string, unknown>();
+  for (const revision of revisions) {
+    if (!latestRevisionByKey.has(revision.rubricName)) {
+      latestRevisionByKey.set(revision.rubricName, revision.schemaJson);
+    }
+  }
+  const byTypeId = new Map<string, unknown>();
+  for (const type of types) {
+    const key = perTypeKey(type.id);
+    const baseline = type.rubricBaseline?.rubricRevision?.schemaJson;
+    const live = perTypeContent(type);
+    const published =
+      baseline ??
+      (categoriesOf(live).length ? live : latestRevisionByKey.get(key)) ??
+      live;
+    byTypeId.set(type.id, published);
+  }
+  return byTypeId;
 }
 
-function isLiveCatalogEntry(entry: CatalogListEntry) {
+function isPickerCatalogEntry(
+  entry: CatalogListEntry,
+  publishedCategoryCount: number
+) {
+  if (entry.source === 'library') return true;
+  if (publishedCategoryCount > 0) return true;
   return entry.editable;
 }
 
@@ -119,11 +175,7 @@ export async function listLiveRubricsForAdminPicker(
   db: PickerDb = prisma
 ): Promise<AdminRubricPickerOption[]> {
   const catalog = await new RubricCatalog(db as PrismaClient).list();
-  const liveEntries = catalog.rubrics.filter(isLiveCatalogEntry);
-  const releaseByKey = await releaseContentByKey(
-    db,
-    liveEntries.map((entry) => entry.key)
-  );
+  const catalogEntries = catalog.rubrics;
 
   const archivedLibrary = await db.rubric.findMany({
     where: { archivedAt: { not: null } },
@@ -131,50 +183,43 @@ export async function listLiveRubricsForAdminPicker(
   });
   const archivedLibraryNames = new Set(archivedLibrary.map((row) => row.name));
 
+  const libraryNames = catalogEntries
+    .filter((entry) => entry.source === 'library')
+    .map((entry) => entry.name);
+  const perTypeIds = catalogEntries
+    .filter((entry) => entry.source === 'assignment-type')
+    .map((entry) => entry.key.slice(ADMIN_PER_TYPE_PICKER_PREFIX.length));
+
+  const [publishedLibrary, publishedPerType] = await Promise.all([
+    publishedLibraryContentByName(db, libraryNames),
+    publishedPerTypeContentByTypeId(db, perTypeIds),
+  ]);
+
   const libraryRows = await db.rubric.findMany({
-    where: {
-      name: {
-        in: liveEntries
-          .filter((entry) => entry.source === 'library')
-          .map((entry) => entry.name),
-      },
-    },
-    select: { id: true, name: true, title: true, schemaJson: true },
+    where: { name: { in: libraryNames } },
+    select: { id: true, name: true, title: true },
   });
   const libraryByName = new Map(libraryRows.map((row) => [row.name, row]));
 
-  const perTypeIds = liveEntries
-    .filter((entry) => entry.source === 'assignment-type')
-    .map((entry) => entry.key.slice(ADMIN_PER_TYPE_PICKER_PREFIX.length));
   const perTypeRows = perTypeIds.length
     ? await db.assignmentType.findMany({
         where: { id: { in: perTypeIds }, archivedAt: null, rubricId: null },
-        select: {
-          id: true,
-          title: true,
-          scoringScaleJson: true,
-          rubricJson: true,
-          gradingPromptConfigJson: true,
-          gradingOutputSchemaJson: true,
-          gradingCalibrationNotes: true,
-        },
+        select: { id: true, title: true },
       })
     : [];
   const perTypeById = new Map(perTypeRows.map((row) => [row.id, row]));
 
   const options: AdminRubricPickerOption[] = [];
 
-  for (const entry of liveEntries) {
+  for (const entry of catalogEntries) {
     if (entry.source === 'library') {
       if (archivedLibraryNames.has(entry.name)) continue;
       if (RETIRED_STARTER_RUBRIC_NAMES.has(entry.name)) continue;
       const rubric = libraryByName.get(entry.name);
       if (!rubric) continue;
-      const content = pickerContent(
-        entry.key,
-        rubric.schemaJson,
-        releaseByKey
-      );
+      const content = publishedLibrary.get(entry.name);
+      if (!content || !categoriesOf(content).length) continue;
+      if (!isPickerCatalogEntry(entry, categoriesOf(content).length)) continue;
       const json = formatCatalogContent(content);
       if (!json) continue;
       options.push({
@@ -191,8 +236,9 @@ export async function listLiveRubricsForAdminPicker(
     const typeId = entry.key.slice(ADMIN_PER_TYPE_PICKER_PREFIX.length);
     const type = perTypeById.get(typeId);
     if (!type) continue;
-    const live = perTypeContent(type);
-    const content = pickerContent(entry.key, live, releaseByKey);
+    const content = publishedPerType.get(typeId);
+    if (!content || !categoriesOf(content).length) continue;
+    if (!isPickerCatalogEntry(entry, categoriesOf(content).length)) continue;
     const json = formatCatalogContent(content);
     if (!json) continue;
     const parsed = parseRubricSchema(content);
@@ -210,8 +256,35 @@ export async function listLiveRubricsForAdminPicker(
     });
   }
 
+  for (const catalogKey of ADMIN_BUILTIN_PICKER_KEYS) {
+    const libraryName = libraryNameForAdminBuiltinPickerKey(catalogKey);
+    if (archivedLibraryNames.has(libraryName)) continue;
+    const content =
+      publishedLibrary.get(libraryName) ??
+      fallbackBuiltinPublishedSchema(catalogKey);
+    if (!categoriesOf(content).length) continue;
+    const json = formatCatalogContent(content);
+    if (!json) continue;
+    options.push({
+      id: catalogKey,
+      catalogKey,
+      name: catalogKey,
+      title: BUILTIN_PICKER_TITLE[catalogKey],
+      json,
+      source: 'builtin',
+    });
+  }
+
   return options.sort((a, b) => a.title.localeCompare(b.title));
 }
+
+const BUILTIN_PICKER_TITLE: Record<AdminBuiltinPickerKey, string> = {
+  'builtin:thesis-default': 'Thesis-driven essay grading assistant',
+  'builtin:class-starter-default': 'Class Starter engagement',
+  'builtin:daily-pages-short-form-default': 'Daily Pages short-form writing',
+};
+
+export { ADMIN_BUILTIN_PICKER_PREFIX } from './admin-rubric-picker-builtins';
 
 /** @deprecated Use listLiveRubricsForAdminPicker */
 export const listReleasedRubricsForAdminPicker = listLiveRubricsForAdminPicker;
@@ -222,6 +295,34 @@ export async function resolveAdminRubricPickerSelection(
 ): Promise<ResolvedAdminRubricPickerSelection> {
   const trimmed = rawValue?.trim();
   if (!trimmed || trimmed === '__none__') return { kind: 'none' };
+
+  if (isAdminBuiltinPickerKey(trimmed)) {
+    const libraryName = libraryNameForAdminBuiltinPickerKey(trimmed);
+    const rubric = await db.rubric.findFirst({
+      where: { name: libraryName, archivedAt: null },
+      select: {
+        id: true,
+        name: true,
+        schemaJson: true,
+        currentRevision: { select: { schemaJson: true } },
+      },
+    });
+    const content =
+      rubric?.currentRevision?.schemaJson ??
+      rubric?.schemaJson ??
+      fallbackBuiltinPublishedSchema(trimmed);
+    if (!categoriesOf(content).length) {
+      throw new Response('That rubric no longer exists. Choose another rubric.', {
+        status: 400,
+      });
+    }
+    if (!rubric) {
+      throw new Response('That rubric no longer exists. Choose another rubric.', {
+        status: 400,
+      });
+    }
+    return { kind: 'library', rubricId: rubric.id, catalogKey: trimmed };
+  }
 
   if (trimmed.startsWith(ADMIN_PER_TYPE_PICKER_PREFIX)) {
     const catalogKey = trimmed;
@@ -255,8 +356,8 @@ export async function resolveAdminRubricPickerSelection(
         status: 400,
       });
     }
-    const releaseByKey = await releaseContentByKey(db, [catalogKey]);
-    const content = pickerContent(catalogKey, perTypeContent(type), releaseByKey);
+    const published = await publishedPerTypeContentByTypeId(db, [typeId]);
+    const content = published.get(typeId) ?? perTypeContent(type);
     if (!categoriesOf(content).length) {
       throw new Response('That rubric no longer exists. Choose another rubric.', {
         status: 400,
@@ -275,15 +376,19 @@ export async function resolveAdminRubricPickerSelection(
       archivedAt: null,
       name: { notIn: [...RETIRED_STARTER_RUBRIC_NAMES] },
     },
-    select: { id: true, name: true, schemaJson: true },
+    select: {
+      id: true,
+      name: true,
+      schemaJson: true,
+      currentRevision: { select: { schemaJson: true } },
+    },
   });
   if (!rubric) {
     throw new Response('That rubric no longer exists. Choose another rubric.', {
       status: 400,
     });
   }
-  const releaseByKey = await releaseContentByKey(db, [rubric.name]);
-  const content = pickerContent(rubric.name, rubric.schemaJson, releaseByKey);
+  const content = rubric.currentRevision?.schemaJson ?? rubric.schemaJson;
   if (!categoriesOf(content).length) {
     throw new Response('That rubric no longer exists. Choose another rubric.', {
       status: 400,
