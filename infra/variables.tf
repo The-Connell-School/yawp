@@ -153,15 +153,44 @@ variable "yawp_app_origin" {
 
 variable "primary_app_url" {
   type        = string
-  description = "Canonical YAWP web origin for free-tier signed links and teacher emails (PRIMARY_APP_URL). Distinct from yawp_app_origin when UA uses a partner host."
-  default     = "https://yawp.school"
+  description = "Canonical YAWP web origin for free-tier signed links and teacher emails (PRIMARY_APP_URL). Omit or leave null in production to match live (unset on App Runner)."
+  default     = null
+  nullable    = true
+}
+
+variable "free_tier_link_hmac_enabled" {
+  type        = bool
+  description = "Provision FREE_TIER_LINK_HMAC_SECRET on App Runner and the Secrets Manager secret. Off by default to match production."
+  default     = false
 }
 
 variable "free_tier_link_hmac_secret" {
   type        = string
-  description = "HMAC secret for free-tier signed links (admin approve / join). Set via tfvars or create the secret version manually in AWS before merge."
+  description = "HMAC secret for free-tier signed links when free_tier_link_hmac_enabled is true."
   sensitive   = true
   default     = ""
+}
+
+variable "legacy_internal_key_allowed" {
+  type        = bool
+  description = "App Runner LEGACY_INTERNAL_KEY_ALLOWED (signed internal API legacy bearer keys)."
+  default     = false
+}
+
+variable "internal_platform_signing_keys_secret_arn" {
+  type        = string
+  description = "Full ARN of yawp-internal/production-signing-platform-keys for Terraform import when internal_platform_integration is set."
+  default     = null
+  nullable    = true
+
+  validation {
+    condition = (
+      var.internal_platform_integration == null ||
+      (var.internal_platform_signing_keys_secret_arn != null &&
+        can(regex("^arn:aws:secretsmanager:", var.internal_platform_signing_keys_secret_arn)))
+    )
+    error_message = "Set internal_platform_signing_keys_secret_arn to the existing secret ARN when internal_platform_integration is configured."
+  }
 }
 
 variable "stripe_secret_key" {

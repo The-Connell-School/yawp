@@ -12,5 +12,5 @@ resource "aws_secretsmanager_secret" "internal_platform_signing_keys" {
 import {
   for_each = var.internal_platform_integration != null ? { production = true } : {}
   to       = aws_secretsmanager_secret.internal_platform_signing_keys[each.key]
-  id       = "yawp-internal/production-signing-platform-keys"
+  id       = var.internal_platform_signing_keys_secret_arn
 }
