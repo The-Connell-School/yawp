@@ -13,9 +13,10 @@ import { readDailyPagesExercises, dailyPagesBlockKey } from './daily-pages-block
 import { readPlannedExitTickets } from './exit-ticket-block';
 import { EXIT_TICKET_BLOCK_KEY, DECK_SLOT, deckAsMaterial } from './lesson-material';
 import { readPlanSteps } from './plan-steps';
+import { practiceBlockKey, readPlannedPractice } from './practice-block';
 
 const FILEABLE_BLOCK =
-  /```+(yawp-material|yawp-daily-pages|yawp-exit-ticket|yawp-slides)[^\n]*\n[\s\S]*?```+/g;
+  /```+(yawp-material|yawp-daily-pages|yawp-exit-ticket|yawp-practice|yawp-slides)[^\n]*\n[\s\S]*?```+/g;
 
 export function pieceKeysInReply(content: string): string[] {
   const placed: Array<{ at: number; order: number; key: string }> = [];
@@ -28,6 +29,7 @@ export function pieceKeysInReply(content: string): string[] {
   let materials = 0;
   let exercises = 0;
   let tickets = 0;
+  let practices = 0;
   let deckFiled = false;
   for (const match of content.matchAll(FILEABLE_BLOCK)) {
     const at = match.index ?? 0;
@@ -44,6 +46,8 @@ export function pieceKeysInReply(content: string): string[] {
         push(tickets === 0 ? EXIT_TICKET_BLOCK_KEY : `${EXIT_TICKET_BLOCK_KEY}:${tickets}`, 1);
         tickets += 1;
       }
+    } else if (match[1] === 'yawp-practice') {
+      if (readPlannedPractice(block).practices.length) push(practiceBlockKey(practices++), 1);
     } else if (!deckFiled && deckAsMaterial(content)) {
       // A lesson has one deck: the reply's first.
       push(DECK_SLOT, 1);

@@ -116,3 +116,21 @@ describe("artifactFromAssistantReply — a lesson step (Brian's run 2, A3)", () 
     expect(artifactFromAssistantReply(plan, 'st:5')).toBeNull();
   });
 });
+
+describe("artifactFromAssistantReply — writing practice (Brian's run 2, A3)", () => {
+  const reply =
+    '## Practice (10 min)\n\nFix a few.\n\n```yawp-practice\nlessons: comma-splices\nproblems: 6\n---\nFix each sentence.\n```';
+
+  test('files the practice set as a piece of the lesson', () => {
+    const piece = artifactFromAssistantReply(reply, 'pr');
+    expect(piece).toMatchObject({
+      key: 'pr',
+      kind: 'practice',
+      audience: 'teacher',
+      slot: 'practice:comma-splices',
+    });
+    expect(piece!.title).toBe('Writing practice: Comma splices');
+    expect(piece!.content).toContain('6 problems from Comma splices');
+    expect(piece!.content).toContain('Fix each sentence.');
+  });
+});

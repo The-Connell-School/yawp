@@ -47,6 +47,7 @@ export type ArtifactKind =
   | MaterialKind
   | typeof DECK_KIND
   | typeof LESSON_STEP_KIND
+  | typeof PRACTICE_KIND
   | (typeof WRITING_EXERCISE_ARTIFACT_KINDS)[number];
 
 /**
@@ -55,6 +56,9 @@ export type ArtifactKind =
  * happens in the lesson, not only its handouts.
  */
 export const LESSON_STEP_KIND = 'step';
+
+/** Writing practice students work in YAWP!, filed as a piece of the lesson. */
+export const PRACTICE_KIND = 'practice';
 
 /**
  * A class starter or Daily Pages prompt filed on its own (Brian's review, B1).
@@ -78,6 +82,7 @@ export const MATERIAL_KIND_LABELS: Record<ArtifactKind, string> = {
   'class-starter': 'Class Starter',
   'daily-pages': 'Daily Pages',
   step: 'Lesson step',
+  practice: 'Writing practice',
 };
 
 /**

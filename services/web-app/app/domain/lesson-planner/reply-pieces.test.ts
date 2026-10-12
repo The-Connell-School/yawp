@@ -58,3 +58,11 @@ describe("pieceKeysInReply (Brian's run 2, A4)", () => {
     expect(pieceKeysInReply('Which class is this for?')).toEqual([]);
   });
 });
+
+describe('pieceKeysInReply — writing practice', () => {
+  test('a practice set is a piece too', () => {
+    expect(
+      pieceKeysInReply('```yawp-practice\nlessons: comma-splices\n```\n\n```yawp-practice\nlessons: passive-voice\n```')
+    ).toEqual(['pr', 'pr:1']);
+  });
+});

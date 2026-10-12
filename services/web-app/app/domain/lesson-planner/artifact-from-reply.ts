@@ -17,7 +17,14 @@ import {
   WRITING_EXERCISE_LABELS,
   type DailyPagesExercise,
 } from './daily-pages-block';
-import { slugify, LESSON_STEP_KIND } from './lesson-material';
+import { slugify, LESSON_STEP_KIND, PRACTICE_KIND } from './lesson-material';
+import {
+  describePlannedPractice,
+  practicedLessons,
+  practiceIndexForKey,
+  readPlannedPractice,
+  type PlannedPractice,
+} from './practice-block';
 import { planStepIndexForKey, readPlanSteps, type PlanStep } from './plan-steps';
 
 export { DAILY_PAGES_BLOCK_KEY, dailyPagesBlockKey };
@@ -81,6 +88,18 @@ export function stepAsMaterial(step: PlanStep): LessonMaterial {
   };
 }
 
+/** Writing practice, filed on its own (Brian's run 2, A3). */
+export function practiceAsMaterial(practice: PlannedPractice, key: string): LessonMaterial {
+  return {
+    key,
+    slot: `${PRACTICE_KIND}:${practice.lessonSlugs.join('-')}`,
+    kind: PRACTICE_KIND,
+    title: `Writing practice: ${practice.title ?? practicedLessons(practice)}`,
+    audience: 'teacher',
+    content: describePlannedPractice(practice),
+  };
+}
+
 /** Re-read one artifact from a saved assistant reply for packet filing. */
 export function artifactFromAssistantReply(
   content: string,
@@ -100,6 +119,11 @@ export function artifactFromAssistantReply(
     const { tickets } = readPlannedExitTickets(content);
     const ticket = tickets[index];
     return ticket ? exitTicketAsMaterial(ticket, materialKey) : null;
+  }
+  const practiceIndex = practiceIndexForKey(materialKey);
+  if (practiceIndex !== null) {
+    const practice = readPlannedPractice(content).practices[practiceIndex];
+    return practice ? practiceAsMaterial(practice, materialKey) : null;
   }
   const stepIndex = planStepIndexForKey(materialKey);
   if (stepIndex !== null) {

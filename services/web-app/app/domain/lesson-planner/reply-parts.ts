@@ -26,7 +26,11 @@ import {
   type PlannedExitTicket,
 } from './exit-ticket-block';
 import { readLessonResources, type LessonResource } from './lesson-resource';
-import { readPlannedPractice, type PlannedPractice } from './practice-block';
+import {
+  practiceBlockKey,
+  readPlannedPractice,
+  type PlannedPractice,
+} from './practice-block';
 
 export type ReplyPart =
   | { kind: 'markdown'; text: string }
@@ -34,7 +38,7 @@ export type ReplyPart =
   | { kind: 'daily-pages'; exercise: DailyPagesExercise; blockKey: string }
   | { kind: 'exit-ticket'; ticket: PlannedExitTicket; blockKey: string }
   | { kind: 'resource'; resource: LessonResource }
-  | { kind: 'practice'; practice: PlannedPractice };
+  | { kind: 'practice'; practice: PlannedPractice; blockKey: string };
 
 /** Every fence that becomes something to look at, in one pass. */
 const ANY_BLOCK =
@@ -53,6 +57,7 @@ export function splitReplyParts(content: string): ReplyPart[] {
   let materialCount = 0;
   let exitTicketCount = 0;
   let exerciseCount = 0;
+  let practiceCount = 0;
 
   const pushText = (text: string) => {
     const trimmed = text.trim();
@@ -99,7 +104,10 @@ export function splitReplyParts(content: string): ReplyPart[] {
       }
     } else if (match[1] === 'yawp-practice') {
       const [practice] = readPlannedPractice(block).practices;
-      if (practice) parts.push({ kind: 'practice', practice });
+      if (practice) {
+        parts.push({ kind: 'practice', practice, blockKey: practiceBlockKey(practiceCount) });
+        practiceCount += 1;
+      }
     } else {
       const [resource] = readLessonResources(block).resources;
       if (resource) parts.push({ kind: 'resource', resource });

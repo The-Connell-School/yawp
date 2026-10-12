@@ -1389,6 +1389,17 @@ function MessageBubble({
                   practice={part.practice}
                   lessons={practice.lessons}
                   classes={practice.classes}
+                  added={
+                    message.id
+                      ? addedMaterials.has(`${message.id}:${part.blockKey}`)
+                      : false
+                  }
+                  onToggle={
+                    stackV2 && message.id
+                      ? (next) => onMaterial(message.id!, part.blockKey, next)
+                      : null
+                  }
+                  disabled={disabled}
                 />
               );
             }

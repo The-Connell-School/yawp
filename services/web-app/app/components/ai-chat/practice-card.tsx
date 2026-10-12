@@ -12,7 +12,7 @@
  * not know is dropped, and a set left with none is not drawn at all.
  */
 import { useState } from 'react';
-import { Dumbbell, Sparkles } from 'lucide-react';
+import { Check, Dumbbell, Plus, Sparkles } from 'lucide-react';
 import type { PracticeSkillOption } from '~/components/writing-lessons/practice-skill-picker';
 import {
   WritingPracticeAssignmentSheet,
@@ -24,6 +24,9 @@ export function PracticeCard({
   practice,
   lessons,
   classes,
+  added = false,
+  onToggle,
+  disabled = false,
 }: {
   practice: PlannedPractice;
   /** Every lesson a practice set may name, for this school. */
@@ -34,6 +37,11 @@ export function PracticeCard({
    * something the teacher cannot use.
    */
   classes: WritingPracticeAssignmentClass[] | null;
+  /** Whether this practice set is in the lesson's stack. */
+  added?: boolean;
+  /** Stack v2 (Brian's run 2, A3): practice is part of the lesson's outline too. */
+  onToggle?: ((added: boolean) => void) | null;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const chosen = practice.lessonSlugs
@@ -79,17 +87,36 @@ export function PracticeCard({
         ) : null}
       </div>
 
-      {classes ? (
-        <div className="border-t border-primary/15 bg-primary/[0.04] px-4 py-2.5">
-          <button
-            type="button"
-            data-testid="practice-assign"
-            onClick={() => setOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-          >
-            <Sparkles size={13} />
-            Assign this practice to your class
-          </button>
+      {classes || onToggle ? (
+        <div className="flex flex-wrap items-center gap-2 border-t border-primary/15 bg-primary/[0.04] px-4 py-2.5">
+          {onToggle ? (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onToggle(!added)}
+              data-testid="practice-stack-toggle"
+              title={added ? 'Click to remove from stack' : undefined}
+              className={
+                added
+                  ? 'inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary/15 disabled:opacity-50'
+                  : 'inline-flex items-center gap-1.5 rounded-lg border border-primary/40 px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary/5 disabled:opacity-50'
+              }
+            >
+              {added ? <Check size={14} /> : <Plus size={14} />}
+              {added ? 'In the stack' : 'Add to stack'}
+            </button>
+          ) : null}
+          {classes ? (
+            <button
+              type="button"
+              data-testid="practice-assign"
+              onClick={() => setOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+            >
+              <Sparkles size={13} />
+              Assign this practice to your class
+            </button>
+          ) : null}
         </div>
       ) : null}
 

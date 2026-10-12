@@ -741,4 +741,30 @@ test.describe("Lesson Planner — Brian's second run", () => {
       ]);
     });
   });
+
+  test('A3: writing practice goes in the stack too', async ({ page, signIn, e2eContext }) => {
+    await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+    const { conversationId } = await seedConversation(e2eContext, [
+      { role: 'user', content: 'Plan a comma splice lesson.' },
+      {
+        role: 'assistant',
+        content:
+          '## Practice (10 min)\n\nFix a few.\n\n```yawp-practice\nlessons: fixing-comma-splices\nproblems: 6\ntitle: Comma splice repair\n---\nFix each sentence.\n```',
+      },
+    ]);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+    const toggle = page.getByTestId('practice-card').getByTestId('practice-stack-toggle');
+    const filed = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.request().method() === 'POST'
+    );
+    await toggle.click();
+    expect((await filed).ok()).toBe(true);
+    await expect(toggle).toHaveText(/in the stack/i);
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+    await expect(page.getByTestId('stack-list-row')).toHaveText([/Writing practice: Comma splice repair/]);
+    await expect(page.getByTestId('packet-section')).toContainText('6 problems');
+  });
 });
