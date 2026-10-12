@@ -336,14 +336,7 @@ jobs:
           docker build --platform linux/amd64 -t yawp-web-app:ci -f services/web-app/Dockerfile .
           docker run --rm yawp-web-app:ci bun -e "
             await import('./packages/prisma/scripts/local-dev/seed-free-tier-feature-flag.ts');
-            const { resolve, dirname } = await import('node:path');
-            const { pathToFileURL } = await import('node:url');
-            const seatsEntry = '/app/packages/prisma/scripts/seed-preview-seats.ts';
-            const guardPath = resolve(
-              dirname(seatsEntry),
-              '../../../../scripts/preview/free-tier-ship-review-seed-guard.mjs'
-            );
-            await import(pathToFileURL(guardPath).href);
+            await import('./scripts/preview/free-tier-ship-review-seed-guard.mjs');
           "
 
       - name: 🧪 Preview teacher-notes QA seed (integration)
