@@ -210,12 +210,38 @@ export async function action({ request }: ActionFunctionArgs) {
   // forks this material out of the model's control: a revision the planner
   // writes for the same slot after this can no longer replace it without
   // asking, because the content here is no longer something the model wrote.
+  //
+  // Never a slide deck: its content is the deck itself (slides as JSON), and
+  // the stack's text box only ever saw the prose around it. Saving that box
+  // once wrote a teacher's typing over every slide (Brian's run 2, items 23,
+  // 24, 27). A deck is edited in the deck editor, which validates it.
   if (data.intent === 'edit-material') {
     const { count } = await prisma.lessonPlanMaterial.updateMany({
-      where: { id: data.materialId!, conversationId: conversation.id },
+      where: {
+        id: data.materialId!,
+        conversationId: conversation.id,
+        NOT: { kind: 'slides' },
+      },
       data: { content: data.content!, editedAt: new Date() },
     });
     if (count === 0) {
+      const deck = await prisma.lessonPlanMaterial.findFirst({
+        where: {
+          id: data.materialId!,
+          conversationId: conversation.id,
+          kind: 'slides',
+        },
+        select: { id: true },
+      });
+      if (deck) {
+        return dataResponse(
+          {
+            error: 'deck-not-editable-as-text',
+            message: 'Edit a slide deck in the deck editor.',
+          },
+          { status: 400 }
+        );
+      }
       return dataResponse(
         { error: 'That material is not part of this lesson.' },
         { status: 404 }

@@ -11,6 +11,7 @@ const prisma = {
     deleteMany: mock(),
     updateMany: mock(),
     findUnique: mock(),
+    findFirst: mock(),
   },
 };
 
@@ -69,6 +70,7 @@ beforeEach(() => {
     count: 1,
   });
   prisma.lessonPlanMaterial.findUnique.mockReset().mockResolvedValue(null);
+  prisma.lessonPlanMaterial.findFirst.mockReset().mockResolvedValue(null);
 });
 
 describe('lesson packet action — one material at a time', () => {
@@ -520,6 +522,33 @@ describe('lesson packet action — editing a material by hand', () => {
     } as any);
 
     expect(response.init?.status).toBe(404);
+  });
+
+  // Brian's run 2 (items 23, 24, 27): typing into the stack's "Edit" box on a
+  // slide deck and saving wrote the text over the deck's slides, so the deck
+  // vanished and "hhhh" became the card. A deck is edited in the deck editor;
+  // a text edit must never reach it.
+  test('never writes text over a slide deck', async () => {
+    prisma.lessonPlanMaterial.updateMany.mockResolvedValue({ count: 0 });
+    prisma.lessonPlanMaterial.findFirst.mockResolvedValue({
+      id: 'deck-1',
+      kind: 'slides',
+    });
+
+    const response = await action({
+      request: formRequest({
+        intent: 'edit-material',
+        conversationId: 'plan-1',
+        materialId: 'deck-1',
+        content: 'hhhh',
+      }),
+    } as any);
+
+    const where = prisma.lessonPlanMaterial.updateMany.mock.calls[0][0].where;
+    expect(where).toMatchObject({ id: 'deck-1', conversationId: 'plan-1' });
+    expect(where.NOT).toEqual({ kind: 'slides' });
+    expect(response.init?.status).toBe(400);
+    expect((response.data as any).error).toBe('deck-not-editable-as-text');
   });
 
   test('requires content', async () => {

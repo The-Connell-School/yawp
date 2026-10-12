@@ -599,7 +599,12 @@ export default function LessonPacketRoute() {
                       {/* Only a filed material has its own content to edit — a
                           kept reply is a turn of the conversation, not one
                           artifact with a place to save an edit back to. */}
+                      {/* Never a deck: its slides are not prose, and the text
+                          box saving over them is what wiped one (Brian's run
+                          2). The deck card's own Edit opens the deck editor. */}
                       {section.origin === 'material' &&
+                      section.kind !== 'slides' &&
+                      !section.deck &&
                       editingId !== section.id ? (
                         <button
                           type="button"
@@ -645,6 +650,7 @@ export default function LessonPacketRoute() {
                       <SectionContent
                         section={section}
                         conversationId={conversationId}
+                        deckV2={reviewFlags.deckV2}
                       />
                     )}
                   </section>
@@ -684,9 +690,11 @@ const REMOVE_UNDO_MS = 6000;
 function SectionContent({
   section,
   conversationId,
+  deckV2 = false,
 }: {
   section: {
     id: string;
+    edited?: boolean;
     content: string;
     audience: 'teacher' | 'student';
     materials: LessonMaterial[];
@@ -694,6 +702,7 @@ function SectionContent({
     deckFailed: boolean;
   };
   conversationId: string;
+  deckV2?: boolean;
 }) {
   // The packet already took the deck out of the prose and parsed it, so there
   // is nothing left to pull apart here.
@@ -708,10 +717,18 @@ function SectionContent({
       {body ? <MarkdownContent content={body} /> : null}
       {section.deck ? (
         <div className={cn(body && 'mt-3')}>
+          {/* The same controls as the chat's deck card (Brian's run 2,
+              item 25): Edit opens the deck editor and comes back here. */}
           <SlideDeckCard
             deck={section.deck}
             presentHref={`/present/${conversationId}/${section.id}`}
             downloadHref={`/present/${conversationId}/${section.id}.pptx`}
+            editHref={
+              deckV2
+                ? `/app/lesson-planner/${conversationId}/deck/${section.id}?from=stack`
+                : null
+            }
+            edited={Boolean(section.edited)}
           />
         </div>
       ) : null}

@@ -50,6 +50,18 @@ import {
   TileSlideThumbnail,
 } from '~/routes/present.$conversationId.$messageId/tile-slide-canvas';
 
+/**
+ * Where saving or leaving the editor goes: back to the stack when the edit
+ * started there (Brian's run 2: check the stack and edit the deck right
+ * there), otherwise back to the chat.
+ */
+export function deckEditorReturnTo(conversationId: string, url: string) {
+  const from = new URL(url, 'http://localhost').searchParams.get('from');
+  return from === 'stack'
+    ? `/app/lesson-planner/${conversationId}/packet`
+    : `/app/lesson-planner?c=${conversationId}`;
+}
+
 async function requireDeckEditor(request: Request) {
   const access = await getLessonPlannerAccess(request);
   if (!access.allowed) throw redirect('/app');
@@ -67,7 +79,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     conversationId: params.conversationId,
     deckId: params.deckId,
   });
-  return { conversationId, deckId: params.deckId!, lessonTitle, deck };
+  return {
+    conversationId,
+    deckId: params.deckId!,
+    lessonTitle,
+    deck,
+    returnTo: deckEditorReturnTo(conversationId, request.url),
+  };
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -93,7 +111,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     deck: checked.deck,
   });
   if (!saved) throw new Response('Not Found', { status: 404 });
-  return redirect(`/app/lesson-planner?c=${conversation.id}`);
+  return redirect(deckEditorReturnTo(conversation.id, request.url));
 }
 
 const LAYOUT_LABELS: Record<Slide['layout'], string> = {
@@ -111,7 +129,7 @@ const LAYOUT_LABELS: Record<Slide['layout'], string> = {
 const UNDO_MS = 8000;
 
 export default function DeckEditorRoute() {
-  const { conversationId, lessonTitle, deck: loaded } =
+  const { lessonTitle, deck: loaded, returnTo } =
     useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
@@ -154,7 +172,7 @@ export default function DeckEditorRoute() {
         <input type="hidden" name="deck" value={JSON.stringify(deck)} />
         <div className="mb-5 flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" asChild>
-            <Link to={`/app/lesson-planner?c=${conversationId}`}>
+            <Link to={returnTo}>
               <ChevronLeft size={16} className="mr-1" />
               Back without saving
             </Link>
