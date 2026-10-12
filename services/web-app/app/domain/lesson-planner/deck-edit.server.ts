@@ -7,6 +7,7 @@
  * revision has to ask before it replaces their work (the packet API's
  * existing confirmReplace guard).
  */
+import { nextPositionFor } from './stack-order.server';
 import { prisma } from '~/utils/db.server';
 import { DECK_KIND, DECK_SLOT } from './lesson-material';
 import { fenceSlideDeck, type SlideDeck } from './slide-deck';
@@ -52,7 +53,12 @@ export async function saveEditedDeck({
   };
   const saved = await prisma.lessonPlanMaterial.upsert({
     where: { conversationId_slot: { conversationId, slot: DECK_SLOT } },
-    create: { conversationId, slot: DECK_SLOT, ...fields },
+    create: {
+      conversationId,
+      slot: DECK_SLOT,
+      ...fields,
+      position: await nextPositionFor(conversationId),
+    },
     update: fields,
     select: { id: true },
   });

@@ -14,6 +14,11 @@ import { requireMutableRequest } from '~/utils/auth.server';
 import { requireLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import { PACKET_AUDIENCES } from '~/domain/lesson-planner/lesson-packet';
 import { artifactFromAssistantReply } from '~/domain/lesson-planner/artifact-from-reply';
+import {
+  moveStackEntry,
+  nextPositionFor,
+  writeStackOrder,
+} from '~/domain/lesson-planner/stack-order.server';
 
 const MAX_PACKET_TITLE_CHARS = 120;
 const MAX_SECTION_TITLE_CHARS = 120;
@@ -45,6 +50,9 @@ const POST = z
       'publish',
       'unpublish',
       'delete',
+      // Brian's run 2 (A1): the teacher sequences the lesson.
+      'reorder',
+      'move',
     ]),
     conversationId: z.string().min(1),
     messageId: z.string().min(1).optional(),
@@ -63,6 +71,11 @@ const POST = z
      * rather than assumed.
      */
     confirmReplace: z.enum(['1']).optional(),
+    /** `reorder`: every piece's key ("m:<id>" / "r:<id>"), comma-separated. */
+    order: z.string().min(1).max(10_000).optional(),
+    /** `move`: the piece to move, and which way. */
+    entry: z.string().min(3).max(200).optional(),
+    direction: z.enum(['up', 'down']).optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -98,6 +111,20 @@ const POST = z
         code: z.ZodIssueCode.custom,
         path: ['materialId'],
         message: 'A material is required.',
+      });
+    }
+    if (value.intent === 'reorder' && !value.order) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['order'],
+        message: 'An order is required.',
+      });
+    }
+    if (value.intent === 'move' && (!value.entry || !value.direction)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['entry'],
+        message: 'A piece and a direction are required.',
       });
     }
     if (value.intent === 'edit-material' && value.content === undefined) {
@@ -151,6 +178,23 @@ export async function action({ request }: ActionFunctionArgs) {
       data: { deletedAt: new Date() },
     });
     return dataResponse({ deleted: true });
+  }
+
+  if (data.intent === 'reorder' || data.intent === 'move') {
+    const result =
+      data.intent === 'reorder'
+        ? await writeStackOrder(
+            conversation.id,
+            data.order!.split(',').map((key) => key.trim()).filter(Boolean)
+          )
+        : await moveStackEntry(conversation.id, data.entry!, data.direction!);
+    if (!result.ok) {
+      return dataResponse(
+        { error: 'That piece is not part of this lesson.' },
+        { status: 404 }
+      );
+    }
+    return dataResponse({ order: result.order });
   }
 
   if (data.intent === 'rename') {
@@ -366,6 +410,9 @@ export async function action({ request }: ActionFunctionArgs) {
         conversationId: conversation.id,
         slot: material.slot,
         ...saved,
+        // A revision keeps the place of what it replaces (the update below
+        // leaves position alone); a new piece in a reordered stack goes last.
+        position: await nextPositionFor(conversation.id),
       },
       // Confirmed or not previously edited: the content now on file came from
       // the model again, so any earlier fork is over.
@@ -394,8 +441,12 @@ export async function action({ request }: ActionFunctionArgs) {
       role: 'assistant',
     },
     data: keeping
-      ? { keptAt: new Date(), keptAudience: data.audience ?? 'teacher' }
-      : { keptAt: null, keptAudience: null },
+      ? {
+          keptAt: new Date(),
+          keptAudience: data.audience ?? 'teacher',
+          position: await nextPositionFor(conversation.id),
+        }
+      : { keptAt: null, keptAudience: null, position: null },
   });
 
   if (count === 0) {

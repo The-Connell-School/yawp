@@ -6,6 +6,7 @@
 import { prisma } from '~/utils/db.server';
 import type { StackContentsEntry } from '~/routes/api.domain.lesson-planner/build-system-prompt';
 import { deriveSectionTitle } from './lesson-packet';
+import { orderStackEntries } from './stack-order';
 
 export async function loadStackContents(
   conversationId: string
@@ -14,20 +15,29 @@ export async function loadStackContents(
     prisma.lessonPlanMessage.findMany({
       where: { conversationId, role: 'assistant', keptAt: { not: null } },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      select: { createdAt: true, content: true, keptTitle: true },
+      select: { createdAt: true, content: true, keptTitle: true, position: true },
     }),
     prisma.lessonPlanMaterial.findMany({
       where: { conversationId },
       orderBy: [{ sourceCreatedAt: 'asc' }, { blockKey: 'asc' }],
-      select: { sourceCreatedAt: true, kind: true, title: true, content: true },
+      select: {
+        sourceCreatedAt: true,
+        kind: true,
+        title: true,
+        content: true,
+        position: true,
+      },
     }),
   ]);
 
-  return [
+  // The teacher's order once they have set one (Brian's run 2, A1): a deck
+  // built from the stack follows the sequence they chose.
+  return orderStackEntries([
     ...kept.map((message, index) => ({
       at: message.createdAt.getTime(),
       order: 0,
-      entry: {
+      position: message.position,
+      item: {
         kind: 'lesson',
         title: message.keptTitle ?? deriveSectionTitle(message.content, index),
         content: message.content,
@@ -36,13 +46,12 @@ export async function loadStackContents(
     ...materials.map((material) => ({
       at: material.sourceCreatedAt.getTime(),
       order: 1,
-      entry: {
+      position: material.position,
+      item: {
         kind: material.kind,
         title: material.title,
         content: material.content,
       },
     })),
-  ]
-    .sort((a, b) => a.at - b.at || a.order - b.order)
-    .map(({ entry }) => entry);
+  ]);
 }

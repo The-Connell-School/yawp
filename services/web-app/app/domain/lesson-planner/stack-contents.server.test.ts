@@ -55,3 +55,34 @@ describe("loadStackContents (Brian's review, B6)", () => {
     });
   });
 });
+
+describe("loadStackContents — the teacher's order (Brian's run 2, A1)", () => {
+  test('a reordered stack is built from in the order the teacher set', async () => {
+    prisma.lessonPlanMessage.findMany.mockResolvedValue([
+      {
+        createdAt: new Date('2026-10-11T10:00:05Z'),
+        content: '## Reading (40 min)\n\nRead.',
+        keptTitle: null,
+        position: 2,
+      },
+    ]);
+    prisma.lessonPlanMaterial.findMany.mockResolvedValue([
+      {
+        sourceCreatedAt: new Date('2026-10-11T10:00:01Z'),
+        kind: 'class-starter',
+        title: 'Starter',
+        content: 'Write.',
+        position: 1,
+      },
+      {
+        sourceCreatedAt: new Date('2026-10-11T10:00:09Z'),
+        kind: 'exit-ticket',
+        title: 'Exit ticket',
+        content: 'What weighed nothing?',
+        position: 0,
+      },
+    ]);
+    const entries = await loadStackContents('plan-1');
+    expect(entries.map((entry) => entry.kind)).toEqual(['exit-ticket', 'class-starter', 'lesson']);
+  });
+});

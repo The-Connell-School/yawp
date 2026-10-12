@@ -5,6 +5,8 @@ const prisma = {
   lessonPlanMaterial: { findFirst: mock(), upsert: mock() },
 };
 mock.module('~/utils/db.server', () => ({ prisma }));
+const nextPositionFor = mock();
+mock.module('~/domain/lesson-planner/stack-order.server', () => ({ nextPositionFor }));
 
 const { saveEditedDeck } = await import('./deck-edit.server');
 
@@ -20,6 +22,7 @@ beforeEach(() => {
   });
   prisma.lessonPlanMaterial.findFirst.mockReset().mockResolvedValue(null);
   prisma.lessonPlanMaterial.upsert.mockReset().mockResolvedValue({ id: 'mat-9' });
+  nextPositionFor.mockReset().mockResolvedValue(null);
 });
 
 describe("saveEditedDeck (Brian's review, E2)", () => {
@@ -51,5 +54,15 @@ describe("saveEditedDeck (Brian's review, E2)", () => {
     const saved = await saveEditedDeck({ conversationId: 'plan-1', deckId: 'nope', deck });
     expect(saved).toBeNull();
     expect(prisma.lessonPlanMaterial.upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe("saveEditedDeck — the stack's order (Brian's run 2, A1)", () => {
+  test('a deck filed by its first edit goes to the end of a reordered stack', async () => {
+    nextPositionFor.mockResolvedValue(5);
+    await saveEditedDeck({ conversationId: 'plan-1', deckId: 'msg-1', deck });
+    const call = prisma.lessonPlanMaterial.upsert.mock.calls[0][0];
+    expect(call.create.position).toBe(5);
+    expect(call.update.position).toBeUndefined();
   });
 });

@@ -1512,6 +1512,9 @@ model LessonPlanMessage {
   keptAudience   String?
   /// Teacher-supplied name for this resource; falls back to a derived title.
   keptTitle      String?
+  /// Where this kept reply sits in the teacher's stack once they have
+  /// reordered it (Brian's run 2, A1). Null: ordered by when it was written.
+  position       Int?
   conversationId String
   conversation   LessonPlanConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
@@ -1551,6 +1554,9 @@ model LessonPlanMaterial {
   /// model's control, because a hand-edited handout is a decision, not a
   /// draft to be clobbered by the next thing the model happens to write.
   editedAt        DateTime?              @db.Timestamptz(6)
+  /// Where this piece sits in the teacher's stack once they have reordered it
+  /// (Brian's run 2, A1). Null: ordered by the reply it came from.
+  position        Int?
 
   @@unique([conversationId, slot])
   @@index([conversationId, sourceMessageId, blockKey])

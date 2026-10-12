@@ -24,6 +24,15 @@ mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/lesson-planner/lesson-planner-access.server', () => ({
   requireLessonPlannerAccess,
 }));
+const writeStackOrder = mock();
+const moveStackEntry = mock();
+const nextPositionFor = mock();
+mock.module('~/domain/lesson-planner/stack-order.server', () => ({
+  writeStackOrder,
+  moveStackEntry,
+  nextPositionFor,
+  loadStackOrder: mock(),
+}));
 
 const { action } = await import('./route');
 
@@ -71,6 +80,9 @@ beforeEach(() => {
   });
   prisma.lessonPlanMaterial.findUnique.mockReset().mockResolvedValue(null);
   prisma.lessonPlanMaterial.findFirst.mockReset().mockResolvedValue(null);
+  writeStackOrder.mockReset().mockResolvedValue({ ok: true, order: [] });
+  moveStackEntry.mockReset().mockResolvedValue({ ok: true, order: [] });
+  nextPositionFor.mockReset().mockResolvedValue(null);
 });
 
 describe('lesson packet action — one material at a time', () => {
@@ -308,7 +320,8 @@ describe('lesson packet action', () => {
 
     expect(response.data).toMatchObject({ kept: false });
     const update = prisma.lessonPlanMessage.updateMany.mock.calls[0][0];
-    expect(update.data).toEqual({ keptAt: null, keptAudience: null });
+    // Its place in the stack goes with it: kept again, it lands at the end.
+    expect(update.data).toEqual({ keptAt: null, keptAudience: null, position: null });
   });
 
   test('renames the packet', async () => {
@@ -692,5 +705,77 @@ describe("lesson packet action — removing from the stack screen (Brian's revie
     } as any);
     expect(prisma.lessonPlanMaterial.deleteMany).not.toHaveBeenCalled();
     expect(response).toBeDefined();
+  });
+});
+
+describe("lesson packet action — the teacher's order (Brian's run 2, A1)", () => {
+  test('reorder writes the order it was given, for this lesson', async () => {
+    writeStackOrder.mockResolvedValue({ ok: true, order: ['m:b', 'r:a'] });
+    const response = await action({
+      request: formRequest({
+        intent: 'reorder',
+        conversationId: 'plan-1',
+        order: 'm:b,r:a',
+      }),
+    } as any);
+    expect(writeStackOrder).toHaveBeenCalledWith('plan-1', ['m:b', 'r:a']);
+    expect((response.data as any).order).toEqual(['m:b', 'r:a']);
+  });
+
+  test('reorder refuses a piece from another lesson', async () => {
+    writeStackOrder.mockResolvedValue({ ok: false });
+    const response = await action({
+      request: formRequest({ intent: 'reorder', conversationId: 'plan-1', order: 'm:x' }),
+    } as any);
+    expect(response.init?.status).toBe(404);
+  });
+
+  test('reorder needs an order', async () => {
+    const response = await action({
+      request: formRequest({ intent: 'reorder', conversationId: 'plan-1' }),
+    } as any);
+    expect(response.init?.status).toBe(422);
+  });
+
+  test('move takes one piece one step', async () => {
+    moveStackEntry.mockResolvedValue({ ok: true, order: ['m:b', 'm:a'] });
+    const response = await action({
+      request: formRequest({
+        intent: 'move',
+        conversationId: 'plan-1',
+        entry: 'm:b',
+        direction: 'up',
+      }),
+    } as any);
+    expect(moveStackEntry).toHaveBeenCalledWith('plan-1', 'm:b', 'up');
+    expect((response.data as any).order).toEqual(['m:b', 'm:a']);
+  });
+
+  test('a piece filed into a reordered stack goes to the end', async () => {
+    nextPositionFor.mockResolvedValue(4);
+    await action({
+      request: formRequest({
+        intent: 'add-material',
+        conversationId: 'plan-1',
+        messageId: 'msg-1',
+        materialKey: '0',
+      }),
+    } as any);
+    const upsert = prisma.lessonPlanMaterial.upsert.mock.calls[0][0];
+    expect(upsert.create.position).toBe(4);
+    // A revision keeps the place of what it replaces.
+    expect(upsert.update.position).toBeUndefined();
+  });
+
+  test('a reply kept into a reordered stack goes to the end', async () => {
+    nextPositionFor.mockResolvedValue(2);
+    await action({
+      request: formRequest({
+        intent: 'keep',
+        conversationId: 'plan-1',
+        messageId: 'msg-1',
+      }),
+    } as any);
+    expect(prisma.lessonPlanMessage.updateMany.mock.calls[0][0].data.position).toBe(2);
   });
 });

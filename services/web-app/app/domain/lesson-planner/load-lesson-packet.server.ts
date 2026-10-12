@@ -14,6 +14,7 @@ import { packetKindForMaterial } from './lesson-material';
 import { getQuickWritingLessons } from '~/utils/writing-lessons/static-lessons.server';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
 import { nameIsProvisional } from './lesson-name';
+import { orderStackEntries } from './stack-order';
 
 export type LoadedLessonPacket = {
   conversationId: string;
@@ -71,6 +72,7 @@ export async function loadLessonPacket({
           content: true,
           keptAudience: true,
           keptTitle: true,
+          position: true,
         },
       },
       materials: {
@@ -84,6 +86,7 @@ export async function loadLessonPacket({
           audience: true,
           content: true,
           editedAt: true,
+          position: true,
         },
       },
     },
@@ -100,12 +103,14 @@ export async function loadLessonPacket({
 
   // Kept replies and individually saved materials are one document, ordered by
   // the reply each came from so the packet reads in lesson order rather than in
-  // the order the teacher happened to click.
-  const sections = [
+  // the order the teacher happened to click — until the teacher puts the stack
+  // in their own order (Brian's run 2, A1), which then wins.
+  const sections = orderStackEntries([
     ...conversation.messages.map((message) => ({
       at: message.createdAt.getTime(),
       order: 0,
-      section: {
+      position: message.position,
+      item: {
         id: message.id,
         content: message.content,
         keptAudience: message.keptAudience,
@@ -116,7 +121,8 @@ export async function loadLessonPacket({
       at: material.sourceCreatedAt.getTime(),
       // A material sits after the reply that produced it.
       order: 1,
-      section: {
+      position: material.position,
+      item: {
         id: material.id,
         content: material.content,
         keptAudience: material.audience,
@@ -126,9 +132,7 @@ export async function loadLessonPacket({
         editedAt: material.editedAt,
       },
     })),
-  ]
-    .sort((a, b) => a.at - b.at || a.order - b.order)
-    .map((entry) => entry.section);
+  ]);
 
   const firstUserMessage = await prisma.lessonPlanMessage.findFirst({
     where: { conversationId: conversation.id, role: 'user' },
