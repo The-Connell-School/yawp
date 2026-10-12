@@ -538,7 +538,16 @@ test.describe("Lesson Planner — Brian's second run", () => {
       await expect(card.getByTestId('deck-over-time')).toHaveText('60 min for a 50-minute period');
       await expect(card.getByRole('button', { name: 'Fit the deck to 50 minutes' })).toBeVisible();
 
-      await card.getByTestId('deck-edit').click();
+      // The stack's deck card says so too.
+      await card.getByTestId('deck-toggle').click();
+      await expect(card.getByTestId('deck-toggle')).toHaveText(/in the stack/i);
+      await page.waitForLoadState('networkidle');
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      await expect(page.getByTestId('slide-deck-card').getByTestId('deck-over-time')).toHaveText(
+        '60 min for a 50-minute period'
+      );
+
+      await page.getByTestId('slide-deck-card').getByTestId('deck-edit').click();
       const total = page.getByTestId('deck-editor-total');
       await expect(total).toHaveText('60 of 50 min');
       await page.getByRole('button', { name: /^Slide 2:/ }).click();

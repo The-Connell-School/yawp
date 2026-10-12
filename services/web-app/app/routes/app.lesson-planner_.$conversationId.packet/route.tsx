@@ -729,6 +729,7 @@ export default function LessonPacketRoute() {
                         section={section}
                         conversationId={conversationId}
                         deckV2={reviewFlags.deckV2}
+                        periodMinutes={periodMinutes}
                       />
                     )}
                   </section>
@@ -751,6 +752,7 @@ function SectionContent({
   section,
   conversationId,
   deckV2 = false,
+  periodMinutes = null,
 }: {
   section: {
     id: string;
@@ -763,6 +765,7 @@ function SectionContent({
   };
   conversationId: string;
   deckV2?: boolean;
+  periodMinutes?: number | null;
 }) {
   // The packet already took the deck out of the prose and parsed it, so there
   // is nothing left to pull apart here.
@@ -789,6 +792,7 @@ function SectionContent({
                 : null
             }
             edited={Boolean(section.edited)}
+            periodMinutes={deckV2 ? periodMinutes : null}
           />
         </div>
       ) : null}
