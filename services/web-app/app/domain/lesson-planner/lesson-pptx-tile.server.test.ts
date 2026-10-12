@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { inflateRawSync } from 'node:zlib';
 import type { SlideDeck } from './slide-deck';
 import { renderDeckPptxTile, TILE_THEME } from './lesson-pptx-tile.server';
+import { TILE_COLORS } from './tile-theme';
 
 /**
  * A .pptx is a zip of XML parts, so the way to check one is to open it.
@@ -137,15 +138,55 @@ describe("renderDeckPptxTile (Brian's review, E1)", () => {
     expect(all).toContain(TILE_THEME.serif);
   });
 
-  test('says how long each step takes, in an eyebrow above the title', async () => {
+  // Brian's run 2 (C2): the minutes are the teacher's, kept in the notes and
+  // the editor, never on the slide face.
+  test('keeps the minutes off the slide face, and in the speaker notes', async () => {
     const parts = pptxParts(await renderDeckPptxTile(DECK));
-    expect(slideText(parts, 2)).toContain('8 MIN');
-    expect(slideText(parts, 4)).toContain('40 MIN');
+    DECK.slides.forEach((_, index) => {
+      expect(slideText(parts, index + 1)).not.toMatch(/\bMIN\b/);
+    });
+    expect(notesText(parts, 2)).toContain('8 min');
   });
 
   test('gives each step its own numbered tile', async () => {
     const parts = pptxParts(await renderDeckPptxTile(DECK));
     const text = slideText(parts, 4);
     for (const n of ['1', '2', '3']) expect(text).toContain(n);
+  });
+});
+
+describe("renderDeckPptxTile — subtle, subtle, subtle (Brian's run 2, C3, C6)", () => {
+  test('the colours come from the one shared theme', () => {
+    expect(TILE_THEME.terracotta).toBe(TILE_COLORS.accent);
+    expect(TILE_THEME.cream).toBe(TILE_COLORS.cream);
+  });
+
+  test('the class starter slide is a raised white tile with a faint orange border, no orange band', async () => {
+    const parts = pptxParts(await renderDeckPptxTile(DECK));
+    const xml = parts.get('ppt/slides/slide2.xml')!;
+    // The band across the top was a shape filled with the accent; text in
+    // the accent (the eyebrow) is fine.
+    const shapeFills = [...xml.matchAll(/<p:spPr>([\s\S]*?)<\/p:spPr>/g)].map((match) => match[1]);
+    expect(shapeFills.some((fill) => fill.includes(`srgbClr val="${TILE_COLORS.accent}"`))).toBe(false);
+    expect(xml).toContain(TILE_COLORS.tileBorder);
+    expect(xml).toContain('outerShdw');
+  });
+
+  test('big colour blocks use the softer orange', async () => {
+    const parts = pptxParts(await renderDeckPptxTile(DECK));
+    const title = parts.get('ppt/slides/slide1.xml')!;
+    expect(title).toContain(TILE_COLORS.accentSoft);
+    const closing = parts.get(`ppt/slides/slide${DECK.slides.length}.xml`)!;
+    expect(closing).toContain(TILE_COLORS.accentSoft);
+    expect(closing).not.toContain(`<a:srgbClr val="${TILE_COLORS.accent}"/></a:solidFill></p:bg>`);
+  });
+
+  test('the footer mark can be faded or left off, for Brian and Kevin to choose', async () => {
+    const faded = pptxParts(await renderDeckPptxTile(DECK, { footerMark: 'faded' }));
+    const fadedLayout = [...faded.values()].find((xml) => xml.includes('YAWP!') && xml.includes('alpha'));
+    expect(fadedLayout).toBeDefined();
+    const none = pptxParts(await renderDeckPptxTile(DECK, { footerMark: 'none' }));
+    const layouts = [...none.entries()].filter(([name]) => /slideLayouts\/slideLayout\d+\.xml$/.test(name));
+    expect(layouts.some(([, xml]) => xml.includes('YAWP!'))).toBe(false);
   });
 });

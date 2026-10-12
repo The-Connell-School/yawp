@@ -13,17 +13,25 @@
  */
 import PptxGenJS from 'pptxgenjs';
 import type { Slide, SlideDeck } from './slide-deck';
-import { TILE_SLIDE_EYEBROWS } from './tile-theme';
+import {
+  DEFAULT_TILE_FOOTER_MARK,
+  notesWithMinutes,
+  TILE_COLORS,
+  tileEyebrow,
+  type TileFooterMark,
+} from './tile-theme';
 
-/** The app's own tokens (app.css :root), as hex. */
+/** The app's own tokens, from the one shared theme (run 2, C3). */
 export const TILE_THEME = {
-  cream: 'F7F5EE', // --background
-  paper: 'FFFEFA', // --popover
-  ink: '3C3828', // --foreground
-  muted: '7E7C78', // --muted-foreground
-  wash: 'E6E2D6', // --accent
-  rule: 'D6D4CC', // --border
-  terracotta: 'D27151', // --primary
+  cream: TILE_COLORS.cream,
+  paper: TILE_COLORS.paper,
+  ink: TILE_COLORS.ink,
+  muted: TILE_COLORS.muted,
+  wash: TILE_COLORS.wash,
+  rule: TILE_COLORS.rule,
+  terracotta: TILE_COLORS.accent,
+  soft: TILE_COLORS.accentSoft,
+  tileBorder: TILE_COLORS.tileBorder,
   /**
    * Cormorant Garamond is the app's display face, but PowerPoint cannot embed
    * a web font and a missing one falls back unpredictably. Georgia is on every
@@ -46,12 +54,15 @@ const BODY_HEIGHT = BODY_BOTTOM - BODY_TOP;
 
 type PptxSlide = ReturnType<PptxGenJS['addSlide']>;
 
+/** What the slide is for. The minutes are the teacher's (run 2, C2). */
 function eyebrow(spec: Slide): string {
-  const label = TILE_SLIDE_EYEBROWS[spec.layout].toUpperCase();
-  return spec.minutes ? `${label} · ${spec.minutes} MIN` : label;
+  return tileEyebrow(spec.layout);
 }
 
-/** A class-tile card: paper, a hairline ring, a soft shadow. */
+/**
+ * A raised white tile (run 2, C3): paper, a faint orange border and a soft
+ * shadow under it, in place of a hairline ring and an orange band.
+ */
 function addCard(
   slide: PptxSlide,
   box: { x: number; y: number; w: number; h: number },
@@ -61,13 +72,13 @@ function addCard(
     ...box,
     rectRadius: 0.12,
     fill: { color: fill },
-    line: { color: T.rule, width: 0.75 },
+    line: { color: T.tileBorder, width: 1 },
     shadow: {
       type: 'outer',
-      color: '000000',
-      opacity: 0.12,
-      blur: 6,
-      offset: 2,
+      color: '3C3828',
+      opacity: 0.14,
+      blur: 9,
+      offset: 3,
       angle: 90,
     },
   });
@@ -108,7 +119,7 @@ function addHeading(slide: PptxSlide, spec: Slide): void {
 
 function addTitleSlide(slide: PptxSlide, spec: Slide, deck: SlideDeck): void {
   // The art block of a class tile, full height, as flat colour.
-  addBand(slide, { x: 0, y: 0, w: 4.6, h: LAYOUT.height });
+  addBand(slide, { x: 0, y: 0, w: 4.6, h: LAYOUT.height }, T.soft);
   slide.addText(eyebrow(spec), {
     x: 5.3,
     y: 2.1,
@@ -149,7 +160,6 @@ function addPromptSlide(slide: PptxSlide, spec: Slide): void {
   if (!spec.body) return;
   const box = { x: MARGIN + 0.6, y: BODY_TOP, w: CONTENT_WIDTH - 1.2, h: BODY_HEIGHT };
   addCard(slide, box);
-  addBand(slide, { x: box.x, y: box.y, w: box.w, h: 0.18 });
   slide.addText(spec.body, {
     x: box.x + 0.5,
     y: box.y + 0.4,
@@ -253,7 +263,7 @@ function addCompareSlide(slide: PptxSlide, spec: Slide): void {
     addBand(
       slide,
       { x, y: BODY_TOP, w, h: 0.7 },
-      index === 0 ? T.terracotta : T.wash
+      index === 0 ? T.soft : T.wash
     );
     slide.addText(column.label, {
       x: x + 0.35,
@@ -263,7 +273,7 @@ function addCompareSlide(slide: PptxSlide, spec: Slide): void {
       fontFace: T.mono,
       fontSize: 13,
       charSpacing: 2,
-      color: index === 0 ? T.paper : T.ink,
+      color: T.ink,
       valign: 'middle',
     });
     slide.addText(column.text, {
@@ -320,7 +330,7 @@ function addQuoteSlide(slide: PptxSlide, spec: Slide): void {
 }
 
 function addClosingSlide(slide: PptxSlide, spec: Slide): void {
-  slide.background = { color: T.terracotta };
+  slide.background = { color: T.soft };
   slide.addText(eyebrow(spec), {
     x: MARGIN,
     y: 2.2,
@@ -329,7 +339,7 @@ function addClosingSlide(slide: PptxSlide, spec: Slide): void {
     fontFace: T.mono,
     fontSize: 12,
     charSpacing: 2,
-    color: T.paper,
+    color: T.ink,
     align: 'center',
   });
   slide.addText(spec.title, {
@@ -339,7 +349,7 @@ function addClosingSlide(slide: PptxSlide, spec: Slide): void {
     h: 1.3,
     fontFace: T.serif,
     fontSize: 46,
-    color: T.paper,
+    color: T.ink,
     align: 'center',
     valign: 'middle',
   });
@@ -352,7 +362,7 @@ function addClosingSlide(slide: PptxSlide, spec: Slide): void {
       h: 1.2,
       fontFace: T.sans,
       fontSize: 22,
-      color: T.paper,
+      color: T.ink,
       align: 'center',
       valign: 'top',
     });
@@ -387,10 +397,13 @@ function addSlide(pptx: PptxGenJS, spec: Slide, deck: SlideDeck): void {
       addQuoteSlide(slide, spec);
       break;
   }
-  slide.addNotes(spec.speakerNotes);
+  slide.addNotes(notesWithMinutes(spec.speakerNotes, spec.minutes));
 }
 
-export async function renderDeckPptxTile(deck: SlideDeck): Promise<Uint8Array> {
+export async function renderDeckPptxTile(
+  deck: SlideDeck,
+  { footerMark = DEFAULT_TILE_FOOTER_MARK }: { footerMark?: TileFooterMark } = {}
+): Promise<Uint8Array> {
   const pptx = new PptxGenJS();
   pptx.defineLayout(LAYOUT);
   pptx.layout = LAYOUT.name;
@@ -403,23 +416,28 @@ export async function renderDeckPptxTile(deck: SlideDeck): Promise<Uint8Array> {
   pptx.defineSlideMaster({
     title: MASTER,
     background: { color: T.cream },
-    objects: [
-      {
-        text: {
-          text: 'YAWP!',
-          options: {
-            x: MARGIN,
-            y: LAYOUT.height - 0.55,
-            w: 2,
-            h: 0.35,
-            fontFace: T.serif,
-            fontSize: 11,
-            bold: true,
-            color: T.terracotta,
-          },
-        },
-      },
-    ],
+    objects:
+      footerMark === 'none'
+        ? []
+        : [
+            {
+              text: {
+                text: 'YAWP!',
+                options: {
+                  x: MARGIN,
+                  y: LAYOUT.height - 0.55,
+                  w: 2,
+                  h: 0.35,
+                  fontFace: T.serif,
+                  fontSize: 11,
+                  bold: true,
+                  color: T.terracotta,
+                  // Brian's "phantom" mark: there, but barely (run 2, item 15).
+                  ...(footerMark === 'faded' ? { transparency: 82 } : {}),
+                },
+              },
+            },
+          ],
     slideNumber: {
       x: LAYOUT.width - MARGIN - 0.6,
       y: LAYOUT.height - 0.55,

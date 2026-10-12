@@ -283,7 +283,9 @@ export default function DeckEditorRoute() {
 
           <div className="flex min-w-0 flex-col gap-4">
             <div className="aspect-[16/9] w-full overflow-hidden rounded-xl shadow-sm ring-1 ring-black/5">
-              <TileSlideCanvas slide={slide} number={at + 1} />
+              {/* Brian's run 2 (C4): edit the words on the slide itself; the
+                  form below edits the same slide, so the two stay in sync. */}
+              <TileSlideCanvas slide={slide} number={at + 1} onEdit={edit} />
             </div>
 
             <div className="grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-2">

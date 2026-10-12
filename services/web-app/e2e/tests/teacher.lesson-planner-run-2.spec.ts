@@ -767,4 +767,68 @@ test.describe("Lesson Planner — Brian's second run", () => {
     await expect(page.getByTestId('stack-list-row')).toHaveText([/Writing practice: Comma splice repair/]);
     await expect(page.getByTestId('packet-section')).toContainText('6 problems');
   });
+
+  test.describe('C2, C3, C4: the deck, subtle and editable on the slide', () => {
+    test('no minutes on the slides; a raised tile and no orange band on the class starter', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_deck_v2', true);
+      const { conversationId, assistantIds } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Build the slide deck for this lesson' },
+        { role: 'assistant', content: DECK_REPLY },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/present/${conversationId}/${assistantIds[0]}`);
+      const stage = page.getByTestId('slide-stage');
+      await expect(stage).toContainText('TODAY');
+      await expect(stage).not.toContainText('MIN');
+      await page.waitForLoadState('networkidle');
+      await page.keyboard.press('ArrowRight');
+      await expect(stage).toContainText('YOUR TURN');
+      await expect(stage).not.toContainText('8 MIN');
+      const card = stage.getByTestId('tile-card');
+      await expect(card).toHaveCSS('border-top-width', '1px');
+      // The speaker notes still say how long.
+      await page.getByRole('button', { name: 'Notes' }).click();
+      await expect(page.locator('body')).toContainText('8 min');
+    });
+
+    test('edit the words on the slide; the form below follows, and the other way round', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_deck_v2', true);
+      const { conversationId, assistantIds } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Build the slide deck for this lesson' },
+        { role: 'assistant', content: DECK_REPLY },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner/${conversationId}/deck/${assistantIds[0]}`);
+      await page.getByRole('button', { name: /^Slide 2:/ }).click();
+
+      const onSlide = page.getByRole('textbox', { name: 'Slide title' });
+      await onSlide.click();
+      await page.keyboard.press('ControlOrMeta+a');
+      await page.keyboard.type('What you carry');
+      await expect(page.getByLabel('Title', { exact: true })).toHaveValue('What you carry');
+
+      await page
+        .getByRole('textbox', { name: 'Text', exact: true })
+        .fill('Write about one thing in your bag.');
+      await expect(page.getByRole('textbox', { name: 'Slide text' })).toHaveText(
+        'Write about one thing in your bag.'
+      );
+
+      await page.getByTestId('deck-editor-save').click();
+      await expect(page).toHaveURL(new RegExp(`/app/lesson-planner\\?c=${conversationId}`));
+      await page.getByTestId('slide-deck-card').getByRole('link', { name: 'Present' }).click();
+      await page.waitForLoadState('networkidle');
+      await page.keyboard.press('ArrowRight');
+      await expect(page.getByTestId('slide-stage')).toContainText('What you carry');
+      await expect(page.getByTestId('slide-stage')).toContainText('Write about one thing in your bag.');
+    });
+  });
 });

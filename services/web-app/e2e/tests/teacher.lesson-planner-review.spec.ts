@@ -537,7 +537,9 @@ test.describe("Lesson Planner — Brian's review", () => {
       await page.goto(`/present/${conversationId}/${messageId}`);
       const stage = page.getByTestId('slide-stage');
       await expect(stage.locator('[data-theme="tile"]')).toBeVisible();
-      await expect(stage).toContainText('TODAY · 1 MIN');
+      // Brian's run 2 (C2): the minutes stay off the slide face.
+      await expect(stage).toContainText('TODAY');
+      await expect(stage).not.toContainText('MIN');
       await expect(stage).toContainText('The Things They Carried');
     });
 
