@@ -140,11 +140,13 @@ export function ApHistoryGuide({
           )}
         >
           <GuideStep n={2}>Students write with the Tutor</GuideStep>
-          <GuideH3>Sources beside the draft, a coach beside the student</GuideH3>
+          <GuideH3>
+            Sources beside the draft, a coach beside the student
+          </GuideH3>
           <GuideCopy>
             The Tutor works through the essay in sections, from reading the
-            documents to revising, and asks about the next rubric point
-            instead of writing it.
+            documents to revising, and asks about the next rubric point instead
+            of writing it.
           </GuideCopy>
         </GuideRow>
 
@@ -160,8 +162,8 @@ export function ApHistoryGuide({
           <GuideH3>Feedback on every rubric point</GuideH3>
           <GuideCopy>
             After students submit, the Grading Assistant suggests each point
-            with a comment. Change anything you disagree with, then release
-            the grade.
+            with a comment. Change anything you disagree with, then release the
+            grade.
           </GuideCopy>
         </GuideRow>
 

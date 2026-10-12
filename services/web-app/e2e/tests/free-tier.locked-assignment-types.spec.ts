@@ -62,12 +62,12 @@ test.describe.serial('Free tier: locked assignment types', () => {
       .evaluateAll((tiles) =>
         tiles.map((tile) => tile.getAttribute('data-locked'))
       );
-    expect(order.indexOf('true')).toBeGreaterThan(
-      order.lastIndexOf('false')
-    );
+    expect(order.indexOf('true')).toBeGreaterThan(order.lastIndexOf('false'));
   });
 
-  test('a locked tile opens that type’s guide as a teaser', async ({ page }) => {
+  test('a locked tile opens that type’s guide as a teaser', async ({
+    page,
+  }) => {
     await logInAsFreeTeacher(page);
     await page.goto('/app');
 
@@ -107,7 +107,9 @@ test.describe.serial('Free tier: locked assignment types', () => {
     await logInAsFreeTeacher(page);
     await page.goto('/app');
     await page
-      .getByRole('link', { name: /AP History Essay, included with a paid plan/ })
+      .getByRole('link', {
+        name: /AP History Essay, included with a paid plan/,
+      })
       .click();
     await expect(page).toHaveURL(new RegExp(`${AP_HISTORY_TEASER}$`));
 
@@ -118,7 +120,9 @@ test.describe.serial('Free tier: locked assignment types', () => {
     await expect(page.getByTestId('guide-wont')).toContainText(
       /write the essay for a student/i
     );
-    await expect(page.locator('main img[src^="/img/ap-history-guide/"]').first()).toBeVisible();
+    await expect(
+      page.locator('main img[src^="/img/ap-history-guide/"]').first()
+    ).toBeVisible();
   });
 
   test('an unknown teaser is not found', async ({ page }) => {

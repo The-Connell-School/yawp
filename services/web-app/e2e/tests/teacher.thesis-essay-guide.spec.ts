@@ -105,9 +105,7 @@ test.describe('Thesis-Driven Essay: See how it works', () => {
       page.locator('img[src^="/img/ap-history-guide/"]').first()
     ).toBeVisible();
 
-    await page
-      .getByRole('link', { name: /back to AP History Essay/i })
-      .click();
+    await page.getByRole('link', { name: /back to AP History Essay/i }).click();
     await expect(page).toHaveURL(new RegExp(`${pagePath}$`));
   });
 
