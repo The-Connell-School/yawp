@@ -19,6 +19,7 @@ export type AssetImage =
   | 'yawp-editor-introduction.png'
   | 'yawp-editor-body.png'
   | 'yawp-editor-conclusion.png'
+  | 'yawp-editor-final.png'
   | 'yawp-my-documents.png';
 
 interface BaseSlide {

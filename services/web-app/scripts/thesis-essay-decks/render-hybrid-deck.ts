@@ -29,6 +29,7 @@ export const ASSET_SIZES: Record<AssetImage, { w: number; h: number }> = {
   'yawp-editor-introduction.png': { w: 2880, h: 1720 },
   'yawp-editor-body.png': { w: 2880, h: 1720 },
   'yawp-editor-conclusion.png': { w: 2880, h: 1720 },
+  'yawp-editor-final.png': { w: 2880, h: 1720 },
   'yawp-my-documents.png': { w: 1485, h: 403 },
 };
 
@@ -367,7 +368,7 @@ function addSectionSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 
     w: d,
     h: 1.25,
     fontFace: T.serif,
-    fontSize: spec.title.length > 18 ? 36 : spec.title.length > 14 ? 40 : 58,
+    fontSize: spec.title.length > 18 ? 36 : spec.title.length > 11 ? 40 : 58,
     color: T.ink,
     align: 'center',
     valign: 'middle',

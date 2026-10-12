@@ -13,6 +13,7 @@ const BRIAN_SLIDE_COUNTS: Record<string, number> = {
   'lesson-4-introduction': 23,
   'lesson-5-body-paragraphs': 24,
   'lesson-6-conclusion': 27,
+  'lesson-7-titles': 20,
 };
 
 /** Slides the hybrid adds on top of Brian's (new app screenshots). */
@@ -21,6 +22,7 @@ const ADDED_SLIDES: Record<string, number> = {
   'lesson-4-introduction': 1,
   'lesson-5-body-paragraphs': 1,
   'lesson-6-conclusion': 1,
+  'lesson-7-titles': 1,
 };
 
 function strings(slide: HybridSlide): string[] {
