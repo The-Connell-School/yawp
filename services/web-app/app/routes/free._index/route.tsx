@@ -4,7 +4,15 @@ import {
   useLoaderData,
   useFetcher,
 } from 'react-router';
-import { checkTokenValidity, redeemToken, submitWaitlist, waitlistInputSchema } from '~/domain/free-tier/service.server';
+import {
+  checkTokenValidity,
+  findAcquisitionTokenByCredential,
+  recordAcquisitionTokenScan,
+  redeemToken,
+  submitWaitlist,
+  waitlistInputSchema,
+} from '~/domain/free-tier/service.server';
+import { readOrMintScanDedupeCookie } from '~/domain/free-tier/acquisition-token-scan.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
 import { enforceUnauthByIpAndTarget } from '~/utils/rate-limit.server';
 import { z } from 'zod';
@@ -16,9 +24,30 @@ export async function loader({ request }: LoaderFunctionArgs) {
   await requireFreeTierEnabled();
   const url = new URL(request.url);
   const token = url.searchParams.get('t')?.trim();
-  if (!token) return { mode: 'waitlist' as const, tokenValid: null };
+  if (!token) return { mode: 'waitlist' as const, tokenValid: null, linkClosed: false as const };
+  const row = await findAcquisitionTokenByCredential(token);
+  if (row) {
+    const cookie = await readOrMintScanDedupeCookie(request);
+    await recordAcquisitionTokenScan({
+      tokenId: row.id,
+      dedupeCookie: cookie.value,
+      userAgent: request.headers.get('user-agent'),
+    });
+    if (cookie.setCookie) {
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location: url.pathname + url.search,
+          'set-cookie': cookie.setCookie,
+        },
+      });
+    }
+  }
   const validity = await checkTokenValidity(token);
-  return { mode: 'token' as const, token, tokenValid: validity };
+  const linkClosed =
+    validity.valid === false &&
+    (validity.reason === 'disabled' || validity.reason === 'expired' || validity.reason === 'exhausted');
+  return { mode: 'token' as const, token, tokenValid: validity, linkClosed };
 }
 
 const formSchema = waitlistInputSchema;
@@ -112,7 +141,18 @@ export default function FreeTierLandingRoute() {
           assignments and grading.
         </p>
 
-        {submitted ? (
+        {data.mode === 'token' && data.linkClosed ? (
+          <div className="yawp-entry-auth-body" role="status">
+            <p className="text-sm font-medium text-foreground">This event link is closed.</p>
+            <p className="text-sm text-muted-foreground">
+              The link may have expired, reached its limit, or been disabled. You can still join the
+              waitlist below.
+            </p>
+            <a href="/free" className="yawp-entry-button yawp-entry-button-primary w-full mt-4 inline-block text-center">
+              Join the waitlist
+            </a>
+          </div>
+        ) : submitted ? (
           <div className="yawp-entry-auth-body" role="status">
             <p className="text-sm font-medium text-foreground">You&apos;re on the list.</p>
             <p className="text-sm text-muted-foreground">We&apos;ll email you when a spot opens.</p>
