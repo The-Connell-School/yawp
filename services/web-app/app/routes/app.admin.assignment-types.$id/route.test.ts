@@ -28,14 +28,16 @@ const prisma = {
     findUnique: mock(),
   },
   rubricRevision: {
-    findMany: mock(),
+    findMany: mock(() => Promise.resolve([])),
+  },
+  assignment: {
+    groupBy: mock(() => Promise.resolve([])),
   },
 };
 
 const requireAdmin = mock();
 const requireUserId = mock();
 const requireMembership = mock();
-
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -75,6 +77,9 @@ describe('admin assignment type detail action', () => {
     requireAdmin.mockReset();
     requireUserId.mockReset();
     requireMembership.mockReset();
+    prisma.assignment.groupBy.mockReset();
+    prisma.assignment.groupBy.mockResolvedValue([]);
+    prisma.rubricRevision.findMany.mockResolvedValue([]);
 
     requireAdmin.mockResolvedValue(undefined);
     requireUserId.mockResolvedValue('admin-1');
@@ -423,9 +428,24 @@ describe('admin assignment type detail action', () => {
     prisma.rubric.findFirst.mockResolvedValue({
       id: 'rubric-1',
       name: 'cristo-rey-hornbuckle-five-paragraph-essay',
-    });
-    prisma.rubricRelease.findUnique.mockResolvedValue({
-      catalogKey: 'cristo-rey-hornbuckle-five-paragraph-essay',
+      schemaJson: {
+        name: 'cristo-rey-hornbuckle-five-paragraph-essay',
+        title: 'Cristo Rey',
+        scoringScale: { type: 'rubric_points', minScore: 0, maxScore: 100 },
+        rubric: {
+          categories: [
+            {
+              key: 'idea',
+              label: 'Idea',
+              description: 'Idea',
+              weight: 1,
+            },
+          ],
+        },
+        promptConfig: {},
+        outputSchema: { schemaVersion: 1, responseShape: 'categories_overall_comment' },
+        calibrationNotes: null,
+      },
     });
 
     const form = new FormData();
@@ -446,7 +466,6 @@ describe('admin assignment type detail action', () => {
     });
 
     expect(prisma.rubric.findFirst).toHaveBeenCalled();
-    expect(prisma.rubricRelease.findUnique).toHaveBeenCalled();
     expect(prisma.assignmentType.update).toHaveBeenCalledWith({
       where: { id: 'at-1' },
       data: {

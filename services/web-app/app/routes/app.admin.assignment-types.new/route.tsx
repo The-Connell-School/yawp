@@ -1,5 +1,5 @@
 import {
-  listReleasedRubricsForAdminPicker,
+  listLiveRubricsForAdminPicker,
   resolveAdminRubricPickerSelection,
 } from '~/domain/rubrics/admin-rubric-picker.server';
 import {
@@ -68,7 +68,7 @@ function parseGradingConfig(formData: FormData) {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
-  const rubrics = (await listReleasedRubricsForAdminPicker()).map(
+  const rubrics = (await listLiveRubricsForAdminPicker()).map(
     ({ id, name, title, json }) => ({ id, name, title, json })
   );
   return dataResponse({ rubrics });

@@ -47,9 +47,24 @@ describe('admin assignment type new action', () => {
     prisma.rubric.findFirst.mockResolvedValue({
       id: 'rubric-daily-pages',
       name: 'daily-pages-engagement',
-    });
-    prisma.rubricRelease.findUnique.mockResolvedValue({
-      catalogKey: 'daily-pages-engagement',
+      schemaJson: {
+        name: 'daily-pages-engagement',
+        title: 'Daily Pages engagement',
+        scoringScale: { type: 'rubric_points', minScore: 0, maxScore: 100 },
+        rubric: {
+          categories: [
+            {
+              key: 'engagement_with_prompt',
+              label: 'Engagement',
+              description: 'Engagement',
+              weight: 1,
+            },
+          ],
+        },
+        promptConfig: {},
+        outputSchema: { schemaVersion: 1, responseShape: 'categories_overall_comment' },
+        calibrationNotes: null,
+      },
     });
   });
 
@@ -57,6 +72,24 @@ describe('admin assignment type new action', () => {
     prisma.rubric.findFirst.mockResolvedValueOnce({
       id: 'daily-pages',
       name: 'daily-pages-engagement',
+      schemaJson: {
+        name: 'daily-pages-engagement',
+        title: 'Daily Pages engagement',
+        scoringScale: { type: 'rubric_points', minScore: 0, maxScore: 100 },
+        rubric: {
+          categories: [
+            {
+              key: 'engagement_with_prompt',
+              label: 'Engagement',
+              description: 'Engagement',
+              weight: 1,
+            },
+          ],
+        },
+        promptConfig: {},
+        outputSchema: { schemaVersion: 1, responseShape: 'categories_overall_comment' },
+        calibrationNotes: null,
+      },
     });
     const form = new FormData();
     form.set('title', 'Daily journal');
@@ -64,7 +97,6 @@ describe('admin assignment type new action', () => {
     form.set('gradingInstructionsOverride', '  Focus on reflection.  ');
     await action({ request: new Request('https://example.test/new', { method: 'POST', body: form }), params: {}, context: {} } as never);
     expect(prisma.rubric.findFirst).toHaveBeenCalled();
-    expect(prisma.rubricRelease.findUnique).toHaveBeenCalled();
     expect(prisma.assignmentType.create).toHaveBeenCalledWith({ data: {
       title: 'Daily journal', kind: null, description: null, tutorInstructions: null, position: 4,
       rubricId: 'daily-pages', gradingPromptConfigJson: { gradingInstructionsOverride: 'Focus on reflection.' },
@@ -199,7 +231,6 @@ describe('admin assignment type new action', () => {
     } as never);
 
     expect(prisma.rubric.findFirst).toHaveBeenCalled();
-    expect(prisma.rubricRelease.findUnique).toHaveBeenCalled();
     expect(prisma.assignmentType.create).toHaveBeenCalledWith({
       data: {
         title: 'Daily reflection',

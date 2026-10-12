@@ -1,7 +1,17 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
+const catalogList = mock(async () => ({ rubrics: [] as object[] }));
 const rubricCreate = mock();
 const rubricUpdate = mock();
+
+mock.module('~/domain/rubrics/rubric-catalog.server', () => ({
+  RubricCatalog: class {
+    constructor(_db: unknown) {}
+    list = catalogList;
+  },
+  perTypeKey: (id: string) => `assignment-type:${id}`,
+  perTypeContent: () => ({}),
+}));
 
 mock.module('~/utils/auth.server', () => ({
   requireAdmin: mock(async () => {}),
@@ -24,6 +34,8 @@ const { loader } = await import('./route');
 
 describe('app.admin.assignment-types.new loader', () => {
   beforeEach(() => {
+    catalogList.mockReset();
+    catalogList.mockResolvedValue({ rubrics: [] });
     rubricCreate.mockReset();
     rubricUpdate.mockReset();
   });
@@ -35,6 +47,7 @@ describe('app.admin.assignment-types.new loader', () => {
       context: {},
     } as never);
 
+    expect(catalogList).toHaveBeenCalled();
     expect(rubricCreate).not.toHaveBeenCalled();
     expect(rubricUpdate).not.toHaveBeenCalled();
   });

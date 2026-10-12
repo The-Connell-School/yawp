@@ -4,8 +4,6 @@ import {
   parseRubricSchema,
   type RubricSchema,
 } from './rubric-schema';
-import { RETIRED_STARTER_RUBRIC_NAMES, STARTER_RUBRICS } from './starter-rubrics';
-
 export type StoredRubric = {
   id: string;
   name: string;
@@ -32,7 +30,7 @@ function toStoredRubric(row: {
   };
 }
 
-/** @deprecated Assignment-type admin UI uses listReleasedRubricsForAdminPicker instead. */
+/** @deprecated Assignment-type admin UI uses listLiveRubricsForAdminPicker instead. */
 export async function listRubrics(): Promise<StoredRubric[]> {
   const rows = await prisma.rubric.findMany({
     where: { archivedAt: null },
@@ -68,59 +66,4 @@ export async function upsertRubric(schema: RubricSchema, title?: string) {
       schemaJson: { ...schema, title: resolvedTitle } as object,
     },
   });
-}
-
-/**
- * @deprecated Do not call at request time. Use data migrations and manual
- * `scripts/seed-rubric-library.ts` only when bootstrapping fixtures.
- */
-export async function seedStarterRubrics() {
-  const existing = await prisma.rubric.findMany({
-    select: {
-      id: true,
-      name: true,
-      title: true,
-      schemaJson: true,
-      archivedAt: true,
-    },
-  });
-  const byName = new Map(existing.map((row) => [row.name, row]));
-  const revisedNames = new Set(
-    (await prisma.rubricRevision.findMany({ select: { rubricName: true }, distinct: ['rubricName'] })).map(
-      (r) => r.rubricName
-    )
-  );
-
-  const created: string[] = [];
-  for (const schema of STARTER_RUBRICS) {
-    if (RETIRED_STARTER_RUBRIC_NAMES.has(schema.name)) {
-      continue;
-    }
-    const row = byName.get(schema.name);
-    if (row?.archivedAt) {
-      continue;
-    }
-    if (!row) {
-      await prisma.rubric.create({
-        data: {
-          name: schema.name,
-          title: schema.title,
-          schemaJson: schema as object,
-        },
-      });
-      created.push(schema.name);
-      continue;
-    }
-
-    // Do not overwrite once revisions exist or local content has diverged.
-    if (revisedNames.has(schema.name)) continue;
-    const parsed = parseRubricSchema(row.schemaJson);
-    const existingJson = parsed.ok ? formatRubricSchema(parsed.schema) : null;
-    const parsedCanonical = parseRubricSchema(schema);
-    const canonicalJson =
-      parsedCanonical.ok ? formatRubricSchema(parsedCanonical.schema) : formatRubricSchema(schema);
-    if (row.title !== schema.title || existingJson !== canonicalJson) continue;
-  }
-
-  return created;
 }

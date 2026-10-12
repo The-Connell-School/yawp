@@ -1,5 +1,5 @@
 import {
-  listReleasedRubricsForAdminPicker,
+  listLiveRubricsForAdminPicker,
   resolveAdminRubricPickerSelection,
 } from '~/domain/rubrics/admin-rubric-picker.server';
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router';
@@ -101,7 +101,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
-  const rubrics = (await listReleasedRubricsForAdminPicker()).map(
+  const rubrics = (await listLiveRubricsForAdminPicker()).map(
     ({ id, name, title, json }) => ({ id, name, title, json })
   );
   const currentPromptLabel = await resolveCurrentPromptLabel(course.id);
