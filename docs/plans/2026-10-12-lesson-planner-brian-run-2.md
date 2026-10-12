@@ -4,7 +4,7 @@ Source: `session-log-run-2.md`, Brian's Oct 12 run of the planner on the same
 *Things They Carried* lesson (English 11, Period 5, 50 minutes), on the PR 437
 preview build (`claude/beautiful-gates-i8db40`, HEAD e7b1853), plus Kevin's
 item 39 (a live stack panel beside the chat). Every item in the log maps to a
-numbered change below. Nothing here is built yet.
+numbered change below.
 
 All code paths are under `services/web-app/app/` unless they start with
 `packages/`, `services/` or `e2e/`. Line numbers are against e7b1853.
@@ -13,6 +13,13 @@ Companion documents: the wave-1 plan
 [`2026-10-11-lesson-planner-brian-review.md`](./2026-10-11-lesson-planner-brian-review.md)
 and its report-out
 [`2026-10-11-lesson-planner-brian-review-report.md`](./2026-10-11-lesson-planner-brian-review-report.md).
+
+## Status (2026-10-12)
+
+Built on PR 437's branch, one commit per change, with the default answer
+taken for every decision below. The report-out is in
+[`2026-10-12-lesson-planner-brian-run-2-report.md`](./2026-10-12-lesson-planner-brian-run-2-report.md),
+including where the build differs from this plan.
 
 ## What Brian said, in short
 
