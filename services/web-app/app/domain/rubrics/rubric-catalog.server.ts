@@ -46,6 +46,9 @@ export function canonicalJson(value: unknown): string {
   return JSON.stringify(value ?? null);
 }
 export const contentFingerprint = (value: unknown) => createHash('sha256').update(canonicalJson(value)).digest('hex');
+/** Optimistic-lock sentinel for creating a library rubric that does not exist yet (SHA-256 of the empty string). */
+export const NEW_LIBRARY_RUBRIC_EXPECTED_FINGERPRINT =
+  'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
 const sameContent = (a: unknown, b: unknown) => canonicalJson(a) === canonicalJson(b);
 
 export type CatalogKey = { source: 'library'; name: string } | { source: 'assignment-type'; assignmentTypeId: string };
@@ -424,6 +427,49 @@ export class RubricCatalog {
     return { baseline, captured };
   }
 
+  private async createNewLibraryRubric(
+    tx: Tx,
+    args: {
+      input: SaveInput;
+      key: Extract<CatalogKey, { source: 'library' }>;
+      document: JsonRecord;
+      name: string;
+      requestHash: string;
+    }
+  ) {
+    const syntheticLive: LiveContent = {
+      content: { name: args.key.name, title: args.key.name, rubric: { categories: [] } },
+      type: null,
+    };
+    const { next } = buildStoredContent(args.key, syntheticLive, args.document);
+    if (sameContent(next, syntheticLive.content)) {
+      throw new CatalogError('No changes to save', 422, [{ path: '/', message: 'Nothing changed compared with the live rubric.' }]);
+    }
+    const revision = await tx.rubricRevision.create({
+      select: revisionSelect,
+      data: {
+        id: randomUUID(),
+        rubricName: args.name,
+        version: 1,
+        schemaJson: next as Prisma.InputJsonObject,
+        fingerprint: contentFingerprint(next),
+        requestId: args.input.requestId,
+        requestHash: args.requestHash,
+        createdBy: args.input.actorEmail,
+        reason: args.input.reason,
+      },
+    }) as RevisionRow;
+    await tx.rubric.create({
+      data: {
+        name: args.key.name,
+        title: String(next.title),
+        schemaJson: next as Prisma.InputJsonObject,
+        currentRevisionId: revision.id,
+      },
+    });
+    return { revision: publicRevision(revision), replayed: false, captured: null };
+  }
+
   async save(input: SaveInput) {
     const { key, document, name } = this.prepareWrite(input.key, input.document);
     const requestHash = contentFingerprint({ key: input.key, expectedFingerprint: input.expectedFingerprint, document, reason: input.reason, actorEmail: input.actorEmail });
@@ -435,10 +481,22 @@ export class RubricCatalog {
         if (replay.requestHash !== requestHash) throw new CatalogError('Request ID already used with different inputs', 409);
         return { revision: publicRevision(replay as RevisionRow), replayed: true, captured: null };
       }
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`rubric-name:${name}`}, 0))`;
       if (key.source === 'library') await tx.$queryRaw`SELECT id FROM "Rubric" WHERE name = ${key.name} FOR UPDATE`;
       else await tx.$queryRaw`SELECT id FROM "AssignmentType" WHERE id = ${key.assignmentTypeId} FOR UPDATE`;
       const live = await this.liveContent(tx, key);
-      if (!live) throw new CatalogError('Unknown rubric', 404);
+      if (!live) {
+        if (key.source !== 'library' || input.expectedFingerprint !== NEW_LIBRARY_RUBRIC_EXPECTED_FINGERPRINT) {
+          throw new CatalogError('Unknown rubric', 404);
+        }
+        return this.createNewLibraryRubric(tx, {
+          input,
+          key,
+          document,
+          name,
+          requestHash,
+        });
+      }
       const reason = readOnlyReason(key.source, key.source === 'library' ? key.name : '', live.content, live.type?.rubric?.name ?? null);
       if (reason) throw new CatalogError(reason, 403);
       if (contentFingerprint(live.content) !== input.expectedFingerprint) throw new CatalogError('This rubric changed since you opened it. Reload to see the latest version, then reapply your edit.', 409);

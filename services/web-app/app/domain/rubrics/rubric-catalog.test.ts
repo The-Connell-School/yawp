@@ -1,6 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import fixture from './__fixtures__/prod-rubric-catalog.json';
-import { canonicalJson, contentFingerprint, parseCatalogKey, perTypeContent, toEditable, validateEditable } from './rubric-catalog.server';
+import {
+  NEW_LIBRARY_RUBRIC_EXPECTED_FINGERPRINT,
+  canonicalJson,
+  contentFingerprint,
+  parseCatalogKey,
+  perTypeContent,
+  toEditable,
+  validateEditable,
+} from './rubric-catalog.server';
 
 
 describe('rubric catalog with production rubric content', () => {
@@ -57,5 +65,8 @@ describe('rubric catalog with production rubric content', () => {
     expect(canonicalJson({ b: 1, a: [1, { d: null, c: 'x' }] })).toBe('{"a":[1,{"c":"x","d":null}],"b":1}');
     expect(contentFingerprint({ a: 1, b: 2 })).toBe(contentFingerprint({ b: 2, a: 1 }));
     expect(contentFingerprint({ a: 1 })).toMatch(/^[a-f0-9]{64}$/);
+    expect(NEW_LIBRARY_RUBRIC_EXPECTED_FINGERPRINT).toBe(
+      'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+    );
   });
 });
