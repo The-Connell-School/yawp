@@ -12,7 +12,7 @@ import type { AccentColor, IconName } from './hybrid-theme';
 /** An image in `assets/`, by file name. */
 export type AssetImage =
   | 'fallen-man.jpg'
-  | 'elephant.png'
+  | 'elephant.jpg'
   | 'critical-essay-form.png'
   | 'yawp-editor-prewriting.png'
   | 'yawp-editor-thesis.png'
@@ -20,6 +20,11 @@ export type AssetImage =
   | 'yawp-editor-body.png'
   | 'yawp-editor-conclusion.png'
   | 'yawp-editor-final.png'
+  | 'brian-twins.jpg'
+  | 'brian-1990s.jpg'
+  | 'yawp-join-link-card.png'
+  | 'yawp-join-page.png'
+  | 'yawp-student-dashboard.png'
   | 'yawp-my-documents.png';
 
 interface BaseSlide {

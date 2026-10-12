@@ -2,12 +2,14 @@
 import type { HybridDeck } from './deck-types';
 import { PREWRITING_DECK } from './prewriting-deck';
 import { BODY_DECK } from './body-deck';
+import { DAY_ONE_DECK } from './day-one-deck';
 import { CONCLUSION_DECK } from './conclusion-deck';
 import { INTRODUCTION_DECK } from './introduction-deck';
 import { THESIS_DECK } from './thesis-deck';
 import { TITLES_DECK } from './titles-deck';
 
 export const DECKS: { file: string; deck: HybridDeck }[] = [
+  { file: 'lesson-1-day-1', deck: DAY_ONE_DECK },
   { file: 'lesson-2-pre-writing', deck: PREWRITING_DECK },
   { file: 'lesson-3-thesis-statement', deck: THESIS_DECK },
   { file: 'lesson-4-introduction', deck: INTRODUCTION_DECK },

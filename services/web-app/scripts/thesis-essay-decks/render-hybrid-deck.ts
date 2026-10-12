@@ -22,7 +22,7 @@ const ASSETS = join(import.meta.dir, 'assets');
 /** Pixel sizes of the bundled images, for aspect ratios. */
 export const ASSET_SIZES: Record<AssetImage, { w: number; h: number }> = {
   'fallen-man.jpg': { w: 1200, h: 801 },
-  'elephant.png': { w: 2048, h: 1335 },
+  'elephant.jpg': { w: 2048, h: 1335 },
   'critical-essay-form.png': { w: 1545, h: 2000 },
   'yawp-editor-prewriting.png': { w: 2880, h: 1720 },
   'yawp-editor-thesis.png': { w: 2880, h: 1720 },
@@ -30,6 +30,11 @@ export const ASSET_SIZES: Record<AssetImage, { w: number; h: number }> = {
   'yawp-editor-body.png': { w: 2880, h: 1720 },
   'yawp-editor-conclusion.png': { w: 2880, h: 1720 },
   'yawp-editor-final.png': { w: 2880, h: 1720 },
+  'brian-twins.jpg': { w: 1025, h: 1506 },
+  'brian-1990s.jpg': { w: 717, h: 960 },
+  'yawp-join-link-card.png': { w: 2376, h: 576 },
+  'yawp-join-page.png': { w: 720, h: 1750 },
+  'yawp-student-dashboard.png': { w: 1460, h: 900 },
   'yawp-my-documents.png': { w: 1485, h: 403 },
 };
 
@@ -511,7 +516,7 @@ function addStepsSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 's
       w: w - 0.7,
       h: h - 1.6,
       fontFace: T.sans,
-      fontSize: count > 3 ? 22 : 26,
+      fontSize: count > 3 ? 22 : longest > 90 ? 21 : longest > 60 ? 23 : 26,
       color: T.ink,
       valign: 'top',
       margin: 0,

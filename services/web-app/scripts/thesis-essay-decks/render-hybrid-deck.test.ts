@@ -8,6 +8,7 @@ import { REVIEW_QUESTIONS, reviewQuiz } from './shared-slides';
 
 /** How many slides each of Brian's original decks had. The hybrids keep them all. */
 const BRIAN_SLIDE_COUNTS: Record<string, number> = {
+  'lesson-1-day-1': 13,
   'lesson-2-pre-writing': 23,
   'lesson-3-thesis-statement': 44,
   'lesson-4-introduction': 23,
@@ -18,6 +19,8 @@ const BRIAN_SLIDE_COUNTS: Record<string, number> = {
 
 /** Slides the hybrid adds on top of Brian's (new app screenshots). */
 const ADDED_SLIDES: Record<string, number> = {
+  // Brian's sign-up screenshot became three slides of today's join flow.
+  'lesson-1-day-1': 2,
   'lesson-3-thesis-statement': 1,
   'lesson-4-introduction': 1,
   'lesson-5-body-paragraphs': 1,

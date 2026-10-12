@@ -78,7 +78,7 @@ export const THESIS_DECK: HybridDeck = {
       layout: 'photo',
       eyebrow: 'Warm-up · Observe',
       title: 'What details do you see in this picture?',
-      image: 'elephant.png',
+      image: 'elephant.jpg',
       icon: 'eye',
       accent: 'teal',
       lines: ['What more can you ==find?==', 'Then: what’s going on in this picture?'],
@@ -92,7 +92,7 @@ export const THESIS_DECK: HybridDeck = {
       accent: 'sunshine',
       body: 'This elephant wandered out of a forest and into the streets of a city in North Bengal, India, attacking houses, shops and vehicles over a period of hours. The elephant was finally calmed with three tranquilizer darts. The clash appeared to have a happy ending: the authorities said they returned the creature to the forest.',
       attribution: 'Photo caption, The New York Times',
-      image: 'elephant.png',
+      image: 'elephant.jpg',
       notes:
         'Read the caption. Plenty of students guess India. Point out what they just did: observed details, then analyzed them into a theory. That is exactly what a thesis statement does.',
     },
