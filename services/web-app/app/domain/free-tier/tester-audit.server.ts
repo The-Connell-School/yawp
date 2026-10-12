@@ -8,7 +8,12 @@ export type TesterAuditActor = {
 };
 
 // Called within the mutation transaction: an audit failure rolls back the change.
-export async function recordTesterAudit(tx: Prisma.TransactionClient, actor: TesterAuditActor, targetId: string, metadata: Prisma.InputJsonObject = {}) {
+export async function recordTesterAudit(
+  tx: Prisma.TransactionClient,
+  actor: TesterAuditActor,
+  targetId: string,
+  metadata: Prisma.InputJsonObject = {}
+) {
   await tx.internalPlatformApiAudit.create({
     data: {
       ...actor,

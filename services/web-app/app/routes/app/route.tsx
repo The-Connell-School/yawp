@@ -1,3 +1,4 @@
+import { canUseMockAdmin, requireMockAdmin } from '~/utils/mock-admin.server';
 import {
   Form,
   Link,
@@ -81,8 +82,20 @@ export const NavExpandedContext = createContext({
 export const handle: BreadcrumbHandle = { breadcrumb: 'Home' };
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const userId = await requireUserId(request);
   const pathname = new URL(request.url).pathname;
+  if (pathname.startsWith('/app/tester/')) {
+    await requireMockAdmin(request);
+    return data({
+      mockAdminAvailable: true,
+      schoolYearScope: {
+        selected: ALL_SCHOOL_YEARS,
+        options: [] as string[],
+        isStudent: false,
+      },
+    });
+  }
+  const userId = await requireUserId(request);
+  const mockAdminAvailable = await canUseMockAdmin(userId);
   const { isFreeTierEnabled } = await import(
     '~/domain/feature-flags/feature-flags.server'
   );
@@ -107,6 +120,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
     if (pathname.startsWith('/app/free-tier')) {
       return data({
+        mockAdminAvailable,
         schoolYearScope: {
           selected: ALL_SCHOOL_YEARS,
           options: [],
@@ -161,6 +175,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : [selected, ...options].sort((a, b) => b.localeCompare(a));
 
   return data({
+    mockAdminAvailable,
     schoolYearScope: {
       selected,
       options: selectableOptions,
@@ -193,7 +208,7 @@ function isAppNavLinkActive(linkTo: string, pathname: string) {
 export default function Route() {
   const location = useLocation();
   const user = useUser();
-  const { schoolYearScope } = useLoaderData<typeof loader>();
+  const { schoolYearScope, mockAdminAvailable } = useLoaderData<typeof loader>();
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
   const isReadOnlyImpersonation = rootData?.impersonation?.isReadOnly ?? false;
@@ -331,6 +346,17 @@ export default function Route() {
           </Button>
         </div>
         <div className="p-3">
+          {mockAdminAvailable && (
+            <Link
+              to="/app/tester/waitlist"
+              aria-label="Tester queues"
+              title="Tester queues"
+              className="flex items-center gap-2 rounded p-2"
+            >
+              <Settings2 size={20} />
+              {navExpanded && 'Tester queues'}
+            </Link>
+          )}
           <SidebarNavLinks
             sections={FLAT_SIDEBAR_SECTIONS}
             user={user}
