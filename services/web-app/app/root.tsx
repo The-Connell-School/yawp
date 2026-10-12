@@ -1,3 +1,4 @@
+import { TesterFeedbackWidget } from './components/tester-feedback-widget';
 import { internalImpersonationMiddleware } from './utils/internal-impersonation-runtime.server';
 import { getImpersonationAttribution } from './utils/internal-impersonation-context.server';
 import {
@@ -105,6 +106,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (publicLandingPage && !internal) {
     return data(
       {
+        testerFeedbackAvailable: false,
         user: null,
         internalImpersonation: null,
         requestInfo: {
@@ -157,6 +159,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
               email: true,
               username: true,
               mustChangePassword: true,
+              isTester: process.env.TESTER_FEEDBACK_ENABLED === 'true',
               isAdmin: true,
               memberships: {
                 ...(internal ? { where: { id: internal.membershipId, organizationId: internal.organizationId, isActive: true } } : previewAccessSeat && isIsolatedPreviewSeatMode()
@@ -230,6 +233,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         isAdmin: Boolean(user?.isAdmin),
         selectedMembership: membership,
       },
+      testerFeedbackAvailable: process.env.TESTER_FEEDBACK_ENABLED === 'true' && Boolean(user?.isTester),
       lessonPlannerEnabled,
       requestInfo: {
         hints: getHints(request),
@@ -420,6 +424,7 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
           <Outlet />
         </div>
       </div>
+      {data.testerFeedbackAvailable ? <TesterFeedbackWidget /> : null}
       <Toaster toast={data.toast} />
     </Document>
   );
