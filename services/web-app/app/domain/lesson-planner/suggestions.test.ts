@@ -3,6 +3,7 @@ import {
   DONE_FOR_TODAY_SUGGESTION,
   FOLLOW_ON_SUGGESTIONS,
   FROM_STACK_SUGGESTIONS,
+  asksForDeck,
   asksToSwapStarter,
   isFileActionSuggestion,
   looksLikeLessonPlan,
@@ -471,5 +472,17 @@ describe("swapping the class starter (Brian's run 2, E1)", () => {
     expect(asksToSwapStarter(SWAP_STARTER_SUGGESTION)).toBe(true);
     expect(asksToSwapStarter('Can you give me a different warm-up?')).toBe(true);
     expect(asksToSwapStarter('Build the slide deck from my stack')).toBe(false);
+  });
+});
+
+describe('asksForDeck', () => {
+  test('a request to build or rebuild the deck', () => {
+    expect(asksForDeck('Build the slide deck from my stack')).toBe(true);
+    expect(asksForDeck('Rebuild the slide deck from my stack, replacing the one in it')).toBe(true);
+    expect(asksForDeck('make me slides for this')).toBe(true);
+  });
+  test('anything else', () => {
+    expect(asksForDeck('Build the student handout from my stack')).toBe(false);
+    expect(asksForDeck('What does slide 3 say?')).toBe(false);
   });
 });

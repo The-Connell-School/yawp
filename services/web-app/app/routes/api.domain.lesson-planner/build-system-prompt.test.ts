@@ -1669,3 +1669,22 @@ describe("buildLessonPlannerSystemPrompt — swapping a class starter (Brian's r
     expect(prompt).toContain('never as bullets or prose');
   });
 });
+
+describe("buildLessonPlannerSystemPrompt — the deck stays on today (Brian's run 2, C1, C5)", () => {
+  const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'Connell School' });
+
+  test("covers only this day's reading, never later chapters or other stories", () => {
+    expect(prompt).toContain(
+      "A deck covers only this lesson's reading and material: the pages, chapter or story assigned for this day"
+    );
+    expect(prompt).toContain('Do not bring in later chapters, other stories in the book');
+  });
+
+  test('no two slides in a row share a title', () => {
+    expect(prompt).toContain('No two slides in a row share a title');
+  });
+
+  test('no time instructions on the slide face', () => {
+    expect(prompt).toContain('Slide text never carries a time instruction');
+  });
+});

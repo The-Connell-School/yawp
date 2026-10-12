@@ -86,3 +86,14 @@ describe("loadStackContents — the teacher's order (Brian's run 2, A1)", () => 
     expect(entries.map((entry) => entry.kind)).toEqual(['exit-ticket', 'class-starter', 'lesson']);
   });
 });
+
+describe("loadStackContents — a rebuilt deck starts fresh (Brian's run 2, C1)", () => {
+  test('can leave the existing deck out, so it cannot seed the new one', async () => {
+    prisma.lessonPlanMaterial.findMany.mockResolvedValue([
+      { sourceCreatedAt: new Date('2026-10-11T10:00:01Z'), kind: 'notes', title: 'Framing', content: 'Vietnam.' },
+      { sourceCreatedAt: new Date('2026-10-11T10:00:02Z'), kind: 'slides', title: 'Old deck', content: '```yawp-slides\n{}\n```' },
+    ]);
+    const entries = await loadStackContents('plan-1', { leaveOutDeck: true });
+    expect(entries.map((entry) => entry.kind)).not.toContain('slides');
+  });
+});

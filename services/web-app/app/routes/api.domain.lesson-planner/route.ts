@@ -33,6 +33,7 @@ import {
 import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
 import { readLessonLength } from '~/domain/lesson-planner/lesson-length';
+import { asksForDeck } from '~/domain/lesson-planner/suggestions';
 import { loadStackContents } from '~/domain/lesson-planner/stack-contents.server';
 import {
   firstMessageTitle,
@@ -360,7 +361,10 @@ export async function action({ request }: ActionFunctionArgs) {
   );
   const stackContents =
     stackV2 && activeConversation
-      ? await loadStackContents(activeConversation.id)
+      ? await loadStackContents(activeConversation.id, {
+          // A deck is built from the pieces, not from the last deck (C1).
+          leaveOutDeck: asksForDeck(turn.message),
+        })
       : [];
 
   // How long this lesson is (Brian's run 2, B1): from this very message when

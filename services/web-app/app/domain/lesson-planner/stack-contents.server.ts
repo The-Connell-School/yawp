@@ -10,16 +10,31 @@ import { orderStackEntries } from './stack-order';
 import { hidePromptIds } from './prompt-ids';
 
 export async function loadStackContents(
-  conversationId: string
+  conversationId: string,
+  {
+    /**
+     * Building or rebuilding a deck (Brian's run 2, C1): the old deck is not
+     * a piece to build from, and feeding it back seeds the new deck with
+     * whatever drifted into the old one.
+     */
+    leaveOutDeck = false,
+  }: { leaveOutDeck?: boolean } = {}
 ): Promise<StackContentsEntry[]> {
   const [kept, materials] = await Promise.all([
     prisma.lessonPlanMessage.findMany({
       where: { conversationId, role: 'assistant', keptAt: { not: null } },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      select: { createdAt: true, content: true, keptTitle: true, position: true },
+      select: {
+        createdAt: true,
+        content: true,
+        keptTitle: true,
+        position: true,
+      },
     }),
     prisma.lessonPlanMaterial.findMany({
-      where: { conversationId },
+      where: leaveOutDeck
+        ? { conversationId, NOT: { kind: 'slides' } }
+        : { conversationId },
       orderBy: [{ sourceCreatedAt: 'asc' }, { blockKey: 'asc' }],
       select: {
         sourceCreatedAt: true,
@@ -44,17 +59,19 @@ export async function loadStackContents(
         content: hidePromptIds(message.content),
       },
     })),
-    ...materials.map((material) => ({
-      at: material.sourceCreatedAt.getTime(),
-      order: 1,
-      position: material.position,
-      item: {
-        kind: material.kind,
-        title: material.title,
-        // The model echoed "Class Starter prompt FW-021" back at teachers
-        // because it read it here (Brian's run 2, item 26).
-        content: hidePromptIds(material.content),
-      },
-    })),
+    ...materials
+      .filter((material) => !leaveOutDeck || material.kind !== 'slides')
+      .map((material) => ({
+        at: material.sourceCreatedAt.getTime(),
+        order: 1,
+        position: material.position,
+        item: {
+          kind: material.kind,
+          title: material.title,
+          // The model echoed "Class Starter prompt FW-021" back at teachers
+          // because it read it here (Brian's run 2, item 26).
+          content: hidePromptIds(material.content),
+        },
+      })),
   ]);
 }

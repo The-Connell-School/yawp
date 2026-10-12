@@ -78,6 +78,14 @@ export const DONE_FOR_TODAY_SUGGESTION = "I'm done for today";
  */
 export const SWAP_STARTER_SUGGESTION = 'Swap out the class starter prompt';
 
+/** Is this teacher message asking for a slide deck to be built? */
+export function asksForDeck(message: string): boolean {
+  return (
+    /\b(build|rebuild|make|create|redo|remake)\b/i.test(message) &&
+    /\b(slide deck|deck|slides)\b/i.test(message)
+  );
+}
+
 /** Is this teacher message asking to swap the class starter? */
 export function asksToSwapStarter(message: string | null | undefined): boolean {
   if (!message) return false;
