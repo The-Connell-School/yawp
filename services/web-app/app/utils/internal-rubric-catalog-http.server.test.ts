@@ -93,7 +93,7 @@ test('stage requires the management key, POST and exactly the documented body', 
   expect((await http.stage(post(validStage, key, '/stage?x=1'))).status).toBe(400);
   const { source: _source, ...noSource } = validStage;
   for (const body of [
-    noSource, { ...validStage, expectedFingerprint: 'a'.repeat(64) }, { ...validStage, requestId: 'nope' },
+    noSource, { ...validStage, expectedFingerprint: 'x' }, { ...validStage, requestId: 'nope' },
     { ...validStage, actorEmail: 'nope' }, { ...validStage, reason: 'no' }, { ...validStage, reason: 'x'.repeat(501) }, { ...validStage, document: [] },
     { ...validStage, source: { ...validStage.source, contentId: 'not-a-uuid' } },
     { ...validStage, source: { ...validStage.source, version: 0 } },

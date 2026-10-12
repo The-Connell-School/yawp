@@ -209,6 +209,8 @@ export type StageSource = { contentId: string; version: number; fingerprint: str
 export type StageInput = {
   key: string; requestId: string; actorEmail: string; reason: string;
   document: unknown; source: StageSource;
+  /** Required to create a library rubric that does not exist yet (empty-string SHA-256 sentinel). */
+  expectedFingerprint?: string;
 };
 export type ClearReleaseInput = { key: string; actorEmail: string; reason: string };
 
@@ -470,6 +472,68 @@ export class RubricCatalog {
     return { revision: publicRevision(revision), replayed: false, captured: null };
   }
 
+  private async createNewLibraryStaged(
+    tx: Tx,
+    args: {
+      input: StageInput;
+      key: Extract<CatalogKey, { source: 'library' }>;
+      document: JsonRecord;
+      name: string;
+      requestHash: string;
+      source: StageSource;
+    }
+  ) {
+    const syntheticLive: LiveContent = {
+      content: { name: args.key.name, title: args.key.name, rubric: { categories: [] } },
+      type: null,
+    };
+    const { next } = buildStoredContent(args.key, syntheticLive, args.document);
+    if (sameContent(next, syntheticLive.content)) {
+      throw new CatalogError('No changes to save', 422, [{ path: '/', message: 'Nothing changed compared with the live rubric.' }]);
+    }
+    const created = await tx.rubricRevision.create({
+      select: revisionSelect,
+      data: {
+        id: randomUUID(),
+        rubricName: args.name,
+        version: 1,
+        schemaJson: next as Prisma.InputJsonObject,
+        fingerprint: contentFingerprint(next),
+        requestId: args.input.requestId,
+        requestHash: args.requestHash,
+        createdBy: args.input.actorEmail,
+        reason: args.input.reason,
+        sourceContentId: args.source.contentId,
+        sourceVersion: args.source.version,
+        sourceFingerprint: args.source.fingerprint,
+      },
+    }) as RevisionRow;
+    await tx.rubric.create({
+      data: {
+        name: args.key.name,
+        title: String(next.title),
+        schemaJson: syntheticLive.content as Prisma.InputJsonObject,
+        currentRevisionId: null,
+      },
+    });
+    const releasedAt = new Date();
+    const release = await tx.rubricRelease.create({
+      select: releaseSelect,
+      data: {
+        catalogKey: args.name,
+        rubricRevisionId: created.id,
+        releasedAt,
+        releasedBy: args.input.actorEmail,
+        requestId: args.input.requestId,
+      },
+    });
+    return {
+      revision: publicRevision(created),
+      replayed: false,
+      release: stageRelease(release as ReleaseRow),
+    };
+  }
+
   async save(input: SaveInput) {
     const { key, document, name } = this.prepareWrite(input.key, input.document);
     const requestHash = contentFingerprint({ key: input.key, expectedFingerprint: input.expectedFingerprint, document, reason: input.reason, actorEmail: input.actorEmail });
@@ -533,7 +597,14 @@ export class RubricCatalog {
   async stage(input: StageInput) {
     const { key, document, name } = this.prepareWrite(input.key, input.document);
     const source = { contentId: input.source.contentId, version: input.source.version, fingerprint: input.source.fingerprint };
-    const requestHash = contentFingerprint({ key: input.key, document, reason: input.reason, actorEmail: input.actorEmail, source });
+    const requestHash = contentFingerprint({
+      key: input.key,
+      document,
+      reason: input.reason,
+      actorEmail: input.actorEmail,
+      source,
+      ...(input.expectedFingerprint !== undefined ? { expectedFingerprint: input.expectedFingerprint } : {}),
+    });
 
     return this.db.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`rubric-request:${input.requestId}`}, 0))`;
@@ -544,12 +615,31 @@ export class RubricCatalog {
         const current = await tx.rubricRelease.findUnique({ where: { catalogKey: name }, select: releaseSelect });
         return { revision: publicRevision(replay as RevisionRow), replayed: true, release: current ? stageRelease(current as ReleaseRow) : null };
       }
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`rubric-name:${name}`}, 0))`;
       // Same row lock as save: serializes baseline capture and version numbering
       // with saves (whose revision trigger runs under it) and other stages.
       if (key.source === 'library') await tx.$queryRaw`SELECT id FROM "Rubric" WHERE name = ${key.name} FOR UPDATE`;
       else await tx.$queryRaw`SELECT id FROM "AssignmentType" WHERE id = ${key.assignmentTypeId} FOR UPDATE`;
       const live = await this.liveContent(tx, key);
-      if (!live) throw new CatalogError('Unknown rubric', 404);
+      if (!live) {
+        if (key.source !== 'library' || input.expectedFingerprint !== NEW_LIBRARY_RUBRIC_EXPECTED_FINGERPRINT) {
+          throw new CatalogError('Unknown rubric', 404);
+        }
+        return this.createNewLibraryStaged(tx, {
+          input,
+          key,
+          document,
+          name,
+          requestHash,
+          source,
+        });
+      }
+      if (input.expectedFingerprint === NEW_LIBRARY_RUBRIC_EXPECTED_FINGERPRINT) {
+        throw new CatalogError(
+          'This rubric changed since you opened it. Reload to see the latest version, then reapply your edit.',
+          409
+        );
+      }
       const reason = readOnlyReason(key.source, key.source === 'library' ? key.name : '', live.content, live.type?.rubric?.name ?? null);
       if (reason) throw new CatalogError(reason, 403);
 
