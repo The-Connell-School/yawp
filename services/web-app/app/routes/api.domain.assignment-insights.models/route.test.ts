@@ -19,7 +19,9 @@ mock.module('~/utils/grading-auth.server', () => ({
 const { loader } = await import('./route');
 
 function getRequest(params: Record<string, string>) {
-  const url = new URL('https://example.com/api/domain/assignment-insights/models');
+  const url = new URL(
+    'https://example.com/api/domain/assignment-insights/models'
+  );
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
   }
@@ -97,7 +99,9 @@ describe('api.domain.assignment-insights.models', () => {
   test('rejects non-teachers', async () => {
     canManageGrades.mockReturnValue(false);
     const response = payloadOf(
-      await loader({ request: getRequest({ classAssignmentId: 'ca-1' }) } as never)
+      await loader({
+        request: getRequest({ classAssignmentId: 'ca-1' }),
+      } as never)
     );
     expect(response.init?.status).toBe(403);
     expect(response.data.models).toBeNull();
@@ -106,7 +110,9 @@ describe('api.domain.assignment-insights.models', () => {
   test('is not found while the feature flag is off for the school', async () => {
     prisma.setting.findUnique.mockResolvedValue(null);
     const response = payloadOf(
-      await loader({ request: getRequest({ classAssignmentId: 'ca-1' }) } as never)
+      await loader({
+        request: getRequest({ classAssignmentId: 'ca-1' }),
+      } as never)
     );
     expect(response.init?.status).toBe(404);
     expect(prisma.document.findMany).not.toHaveBeenCalled();
@@ -122,7 +128,9 @@ describe('api.domain.assignment-insights.models', () => {
   test('is not found for a class the teacher does not teach', async () => {
     prisma.classAssignment.findFirst.mockResolvedValue(null);
     const response = payloadOf(
-      await loader({ request: getRequest({ classAssignmentId: 'ca-1' }) } as never)
+      await loader({
+        request: getRequest({ classAssignmentId: 'ca-1' }),
+      } as never)
     );
     expect(response.init?.status).toBe(404);
     const where = prisma.classAssignment.findFirst.mock.calls[0]?.[0].where;
@@ -136,7 +144,9 @@ describe('api.domain.assignment-insights.models', () => {
       class: { school: { organization: { classInsightsEnabled: false } } },
     });
     const response = payloadOf(
-      await loader({ request: getRequest({ classAssignmentId: 'ca-1' }) } as never)
+      await loader({
+        request: getRequest({ classAssignmentId: 'ca-1' }),
+      } as never)
     );
     expect(response.init?.status).toBe(404);
   });
@@ -149,7 +159,9 @@ describe('api.domain.assignment-insights.models', () => {
     ]);
 
     const response = payloadOf(
-      await loader({ request: getRequest({ classAssignmentId: 'ca-1' }) } as never)
+      await loader({
+        request: getRequest({ classAssignmentId: 'ca-1' }),
+      } as never)
     );
 
     expect(response.init?.status ?? 200).toBe(200);
@@ -166,14 +178,21 @@ describe('api.domain.assignment-insights.models', () => {
 
     // Only graded work from this class assignment is read.
     const query = prisma.document.findMany.mock.calls[0]?.[0];
-    expect(query.where).toMatchObject({ classAssignmentId: 'ca-1', deletedAt: null });
+    expect(query.where).toMatchObject({
+      classAssignmentId: 'ca-1',
+      deletedAt: null,
+    });
     expect(query.select.submissions.where).toEqual({ gradedAt: { not: null } });
   });
 
   test('returns null models when there is too little graded work to compare', async () => {
-    prisma.document.findMany.mockResolvedValue([doc('a', 'Ava Ruiz', ALL_FIVE(5, 5))]);
+    prisma.document.findMany.mockResolvedValue([
+      doc('a', 'Ava Ruiz', ALL_FIVE(5, 5)),
+    ]);
     const response = payloadOf(
-      await loader({ request: getRequest({ classAssignmentId: 'ca-1' }) } as never)
+      await loader({
+        request: getRequest({ classAssignmentId: 'ca-1' }),
+      } as never)
     );
     expect(response.data.models).toBeNull();
   });

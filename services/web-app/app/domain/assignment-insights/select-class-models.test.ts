@@ -1,8 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import {
-  selectClassModels,
-  type ClassModelInput,
-} from './select-class-models';
+import { selectClassModels, type ClassModelInput } from './select-class-models';
 import { DEFAULT_INSIGHT_RUBRIC, type InsightRubric } from './insight-rubric';
 
 const TWO_CATEGORY_RUBRIC: InsightRubric = {
@@ -40,7 +37,10 @@ function student(
 describe('selectClassModels', () => {
   test('returns null when fewer than two students were scored', () => {
     expect(
-      selectClassModels([student('Ava', { thesis: 5, evidence: 1 })], TWO_CATEGORY_RUBRIC)
+      selectClassModels(
+        [student('Ava', { thesis: 5, evidence: 1 })],
+        TWO_CATEGORY_RUBRIC
+      )
     ).toBeNull();
   });
 
@@ -103,7 +103,13 @@ describe('selectClassModels', () => {
   test('reads high and low against each category’s own range', () => {
     const hundredPoint: InsightRubric = {
       categories: [
-        { key: 'budget', label: 'Budget', weight: 1, minScore: 0, maxScore: 100 },
+        {
+          key: 'budget',
+          label: 'Budget',
+          weight: 1,
+          minScore: 0,
+          maxScore: 100,
+        },
       ],
     };
     const result = selectClassModels(
@@ -124,7 +130,11 @@ describe('selectClassModels', () => {
     const longHtml = `<p>${'Evidence matters because '.repeat(30)}</p>`;
     const result = selectClassModels(
       [
-        { ...student('Ava', { thesis: 5, evidence: 5 }), text: null, html: longHtml },
+        {
+          ...student('Ava', { thesis: 5, evidence: 5 }),
+          text: null,
+          html: longHtml,
+        },
         student('Ben', { thesis: 4, evidence: 1 }),
       ],
       TWO_CATEGORY_RUBRIC

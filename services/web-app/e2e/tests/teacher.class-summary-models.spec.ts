@@ -139,7 +139,11 @@ test.describe('teacher class summary: models to teach from', () => {
     await expect(focus.getByText(/remove the student’s name/i)).toBeVisible();
   });
 
-  test('is absent while the flag is off', async ({ page, e2eContext, signIn }) => {
+  test('is absent while the flag is off', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
     await setClassSummaryModelsFlag(false);
     await seed(e2eContext);
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');

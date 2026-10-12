@@ -17,6 +17,7 @@ import { Button } from '~/components/ui/button';
 import { timeAgo } from '~/utils/timeAgo';
 import type { ClassInsightGenerateAvailability } from '~/domain/assignment-insights/class-insight-generate-availability';
 import { useClassInsightGenerateAvailability } from './use-class-insight-generate-availability';
+import { ClassModelsSection } from './class-models-section';
 
 type CategoryStatus = 'strength' | 'mixed' | 'gap';
 
@@ -406,10 +407,12 @@ function InsightBody({
   insight,
   classAssignmentId,
   lessonPlannerEnabled,
+  classSummaryModelsEnabled,
 }: {
   insight: ClassInsight;
   classAssignmentId: string;
   lessonPlannerEnabled: boolean;
+  classSummaryModelsEnabled: boolean;
 }) {
   const summary = insight.summary;
   if (!summary) return null;
@@ -522,6 +525,10 @@ function InsightBody({
         </div>
       )}
 
+      {classSummaryModelsEnabled ? (
+        <ClassModelsSection classAssignmentId={classAssignmentId} />
+      ) : null}
+
       {summary.differentiation && (
         <DifferentiationSection differentiation={summary.differentiation} />
       )}
@@ -538,9 +545,11 @@ export function ClassInsightsPanel({
   initialInsight: ClassInsight | null;
   gradedCount: number;
 }) {
-  const lessonPlannerEnabled =
-    useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root')
-      ?.lessonPlannerEnabled ?? false;
+  const rootData =
+    useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
+  const lessonPlannerEnabled = rootData?.lessonPlannerEnabled ?? false;
+  const classSummaryModelsEnabled =
+    rootData?.classSummaryModelsEnabled ?? false;
   const fetcher = useFetcher<InsightActionData>();
   const isWorking = fetcher.state !== 'idle';
 
@@ -647,6 +656,7 @@ export function ClassInsightsPanel({
             insight={insight!}
             classAssignmentId={classAssignmentId}
             lessonPlannerEnabled={lessonPlannerEnabled}
+            classSummaryModelsEnabled={classSummaryModelsEnabled}
           />
         )}
       </div>
