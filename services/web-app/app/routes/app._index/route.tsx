@@ -23,6 +23,8 @@ import {
 } from '~/utils/assignment-quota.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { lockedAssignmentTypeTeasersFor } from '~/domain/free-tier/locked-assignment-types';
 import type { TeacherClassCardData } from '~/components/teacher-class-card';
 import { StudentClassCard } from '~/components/student-class-card';
 import { getTeacherClassCardStats } from '~/utils/teacher-class-card-stats.server';
@@ -345,6 +347,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
           })
       : [];
 
+  // Free classroom teachers also see the paid types, grayed out, each opening
+  // its guide as a teaser. Only the free plan pays for the flag lookup.
+  const lockedAssignmentTypes =
+    !useStudentExperience &&
+    assignmentsEnabled &&
+    profile.organization.plan === 'FREE_CLASSROOM'
+      ? lockedAssignmentTypeTeasersFor({
+          freeTierEnabled: await isFreeTierEnabled(),
+          role: profile.role,
+          plan: profile.organization.plan,
+        })
+      : [];
+
   return dataResponse({
     requiresClassCode: isStudentOnlyWithNoClasses,
     enrolledClasses,
@@ -355,6 +370,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     totalTeacherClassCount: teacherClasses.length,
     teacherWorkspaceClassStats,
     teacherAssignmentTypes: teacherAssignmentTypesForGlance,
+    lockedAssignmentTypes,
     assignmentCreationClasses: assignmentCreationClasses.map((klass) => ({
       id: klass.id,
       name: formatClassLabel(klass),
@@ -410,6 +426,7 @@ export default function AppRoute() {
             <>
               <AssignmentsAtAGlance
                 assignmentTypes={data.teacherAssignmentTypes}
+                lockedAssignmentTypes={data.lockedAssignmentTypes}
                 onCreateAssignment={() => {
                   setCreateAssignmentTypeId(undefined);
                   setIsCreateSheetOpen(true);

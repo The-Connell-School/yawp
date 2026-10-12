@@ -37,7 +37,7 @@ function LockedTypeBanner() {
   return (
     <div
       data-testid="locked-type-banner"
-      className="flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4"
+      className="flex w-full items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4"
     >
       <Lock size={18} className="mt-0.5 shrink-0 text-primary" />
       <p className="text-sm leading-relaxed">

@@ -1,6 +1,7 @@
-import { Plus } from 'lucide-react';
+import { Lock, Plus } from 'lucide-react';
 import { Link } from 'react-router';
 import { Tooltip } from '~/components/ui/tooltip';
+import type { LockedAssignmentTypeTeaser } from '~/domain/free-tier/locked-assignment-types';
 import { cn } from '~/utils/misc';
 
 export type AssignmentTypeGlanceRow = {
@@ -36,19 +37,64 @@ function AssignmentTypeImage({
   );
 }
 
+/**
+ * A type the teacher's free classroom doesn't include: grayed out, with a
+ * lock where a free tile has its + button. It opens the type's guide as a
+ * teaser rather than the type itself.
+ */
+function LockedAssignmentTypeTile({
+  teaser,
+}: {
+  teaser: LockedAssignmentTypeTeaser;
+}) {
+  return (
+    <Tooltip text="Included with a paid plan">
+      <Link
+        to={`/app/assignment-type-previews/${teaser.slug}`}
+        data-locked="true"
+        aria-label={`${teaser.title}, included with a paid plan. See how it works.`}
+        className="group relative block w-36 shrink-0 overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md"
+      >
+        <img
+          src={teaser.image}
+          alt=""
+          className="h-20 w-full object-cover opacity-50 grayscale transition group-hover:opacity-75"
+        />
+        <div className="p-2.5 pr-10">
+          <h3 className="line-clamp-2 text-sm font-medium text-muted-foreground">
+            {teaser.title}
+          </h3>
+        </div>
+        <span
+          aria-hidden="true"
+          className="absolute right-2 top-2 inline-flex size-7 items-center justify-center rounded-full bg-background text-muted-foreground shadow-sm ring-1 ring-black/10"
+        >
+          <Lock className="h-3.5 w-3.5" />
+        </span>
+      </Link>
+    </Tooltip>
+  );
+}
+
 export function AssignmentsAtAGlance({
   assignmentTypes,
+  lockedAssignmentTypes = [],
   onCreateAssignment,
   onCreateAssignmentForType,
   writingPracticeTo,
 }: {
   assignmentTypes: AssignmentTypeGlanceRow[];
+  /** Paid types a free classroom teacher sees grayed out, after the rest. */
+  lockedAssignmentTypes?: LockedAssignmentTypeTeaser[];
   onCreateAssignment: () => void;
   onCreateAssignmentForType: (assignmentTypeId: string) => void;
   /** When set, shows a Writing Fundamentals Practice tile that links here. */
   writingPracticeTo?: string;
 }) {
-  const hasTiles = assignmentTypes.length > 0 || Boolean(writingPracticeTo);
+  const hasTiles =
+    assignmentTypes.length > 0 ||
+    lockedAssignmentTypes.length > 0 ||
+    Boolean(writingPracticeTo);
 
   return (
     <div data-testid="teacher-assignments-grid" data-tour="dashboard-assignments">
@@ -88,6 +134,7 @@ export function AssignmentsAtAGlance({
             {assignmentTypes.map((assignmentType) => (
               <div
                 key={assignmentType.id}
+                data-locked="false"
                 className="relative w-36 shrink-0 overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md"
               >
                 <Link
@@ -119,6 +166,9 @@ export function AssignmentsAtAGlance({
                   </button>
                 </Tooltip>
               </div>
+            ))}
+            {lockedAssignmentTypes.map((teaser) => (
+              <LockedAssignmentTypeTile key={teaser.slug} teaser={teaser} />
             ))}
           </div>
         </div>

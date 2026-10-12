@@ -58,15 +58,15 @@ export function GuidePage({
     // Own the scroll: the app shell is a fixed-height, overflow-hidden frame.
     <section className="h-full w-full overflow-y-auto">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-16 px-4 pb-20 pt-6 md:gap-20">
-        <div>
+        <div className="flex flex-col items-start gap-6">
           <Button variant="outline" size="sm" asChild>
             <Link to={backTo}>
               <ChevronLeft size={16} className="mr-1" />
               {backLabel}
             </Link>
           </Button>
+          {banner}
         </div>
-        {banner}
         {children}
       </div>
     </section>
