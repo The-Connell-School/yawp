@@ -537,3 +537,10 @@ describe('renderPreviewCompose (YAML uniqueness)', () => {
   });
 });
 
+
+test('mock admin is enabled only in demo compose configuration', () => {
+  const demo = Bun.YAML.parse(renderCompose({ prNumber: undefined, slug: 'demo' }));
+  const preview = Bun.YAML.parse(renderCompose());
+  expect(demo.services.web.environment.MOCK_ADMIN_ENABLED).toBe('true');
+  expect(preview.services.web.environment.MOCK_ADMIN_ENABLED).toBe('false');
+});
