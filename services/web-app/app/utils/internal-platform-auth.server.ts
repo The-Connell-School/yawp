@@ -18,6 +18,7 @@ export const INTERNAL_API_SCOPES = [
   'flags:read',
   'flags:write',
   'stats:read',
+  'audit:read',
   'management:read',
   'management:write',
 ] as const;
@@ -197,6 +198,9 @@ export function resolveInternalApiScope(
   const write = method !== 'GET' && method !== 'HEAD';
   if (pathname === '/api/internal/v1/stats/grading') {
     return 'stats:read';
+  }
+  if (pathname === '/api/internal/v1/audit') {
+    return 'audit:read';
   }
   if (pathname.startsWith('/api/internal/v1/feature-flags')) {
     return write ? 'flags:write' : 'flags:read';
