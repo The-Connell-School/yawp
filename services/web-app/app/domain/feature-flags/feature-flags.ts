@@ -58,6 +58,20 @@ export const LESSON_PLANNER_STACK_V2_FLAG = 'lesson_planner_stack_v2' as const;
  */
 export const LESSON_PLANNER_DECK_V2_FLAG = 'lesson_planner_deck_v2' as const;
 
+/**
+ * Lesson Planner stack panel (Brian's run 2, A7): the stack shows beside the
+ * chat as it takes shape, with remove and reorder right there. Needs stack
+ * v2. Off: the "Open the stack" bar only.
+ */
+export const LESSON_PLANNER_STACK_PANEL_FLAG = 'lesson_planner_stack_panel' as const;
+
+/**
+ * Lesson Planner plan export v2 (Brian's run 2, D1, D2): the lesson plan
+ * downloads as a concise plan (overview, goals, materials, numbered steps
+ * with what each is for) in Word and PDF. Off: the full packet PDF only.
+ */
+export const LESSON_PLANNER_PLAN_EXPORT_V2_FLAG = 'lesson_planner_plan_export_v2' as const;
+
 export const FEATURE_FLAGS = {
   [LESSON_PLANNER_FLAG]: {
     label: 'Lesson Planner',
@@ -88,6 +102,16 @@ export const FEATURE_FLAGS = {
     label: 'Lesson Planner: deck template and editor',
     description:
       'Planner decks use the YAWP! tile template in PowerPoint and Present, and teachers can edit and delete slides. Off: the original deck look and no editor.',
+  },
+  [LESSON_PLANNER_STACK_PANEL_FLAG]: {
+    label: 'Lesson Planner: stack beside the chat',
+    description:
+      'While planning, the stack shows in a panel beside the chat as pieces are added, with remove and reorder there. Needs stack v2. Off: the "Open the stack" bar only.',
+  },
+  [LESSON_PLANNER_PLAN_EXPORT_V2_FLAG]: {
+    label: 'Lesson Planner: concise lesson plan (Word and PDF)',
+    description:
+      'The stack downloads a concise lesson plan (overview, goals, materials, numbered steps with what each is for) as a Word file and a PDF. Off: the full packet PDF only.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

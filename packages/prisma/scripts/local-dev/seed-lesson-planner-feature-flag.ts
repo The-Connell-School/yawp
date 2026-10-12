@@ -57,6 +57,9 @@ const LESSON_PLANNER_REVIEW_FLAG_SETTINGS = [
   'feature_flag.lesson_planner_intake_v2',
   'feature_flag.lesson_planner_stack_v2',
   'feature_flag.lesson_planner_deck_v2',
+  // Brian's run 2 (docs/plans/2026-10-12-lesson-planner-brian-run-2.md).
+  'feature_flag.lesson_planner_stack_panel',
+  'feature_flag.lesson_planner_plan_export_v2',
 ] as const;
 
 /**

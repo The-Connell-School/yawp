@@ -4,6 +4,8 @@ import {
   LESSON_PLANNER_INTAKE_V2_FLAG,
   LESSON_PLANNER_STACK_V2_FLAG,
   LESSON_PLANNER_DECK_V2_FLAG,
+  LESSON_PLANNER_PLAN_EXPORT_V2_FLAG,
+  LESSON_PLANNER_STACK_PANEL_FLAG,
   FREE_TIER_FLAG,
   FEATURE_FLAGS,
   FEATURE_FLAG_KEYS,
@@ -86,14 +88,27 @@ export async function isFeatureFlagEnabled(
 /** Which of the Lesson Planner review flags are on for this school. */
 export async function getLessonPlannerReviewFlags(
   orgId: string | null | undefined
-): Promise<{ intakeV2: boolean; stackV2: boolean; deckV2: boolean }> {
-  const [intakeV2, stackV2, deckV2] = await Promise.all([
+): Promise<LessonPlannerReviewFlags> {
+  const [intakeV2, stackV2, deckV2, stackPanel, planExportV2] = await Promise.all([
     isFeatureFlagEnabled(LESSON_PLANNER_INTAKE_V2_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_STACK_V2_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_DECK_V2_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_STACK_PANEL_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_PLAN_EXPORT_V2_FLAG, orgId),
   ]);
-  return { intakeV2, stackV2, deckV2 };
+  // The panel shows the stack v2 list; without stack v2 it has nothing to show.
+  return { intakeV2, stackV2, deckV2, stackPanel: stackPanel && stackV2, planExportV2 };
 }
+
+export type LessonPlannerReviewFlags = {
+  intakeV2: boolean;
+  stackV2: boolean;
+  deckV2: boolean;
+  /** Brian's run 2 (A7). */
+  stackPanel: boolean;
+  /** Brian's run 2 (D1, D2). */
+  planExportV2: boolean;
+};
 
 /** YAWP! Lesson Planner for teachers at the given school. */
 export function isLessonPlannerEnabled(

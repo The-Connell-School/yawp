@@ -113,6 +113,8 @@ describe('internal feature-flag endpoints', () => {
       'lesson_planner_intake_v2',
       'lesson_planner_stack_v2',
       'lesson_planner_deck_v2',
+      'lesson_planner_stack_panel',
+      'lesson_planner_plan_export_v2',
     ]);
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[1]).toMatchObject({ key: 'internal_rubrics', label: 'Rubrics from Yawp Internal', mode: 'off', orgIds: [], enabled: false });
@@ -139,6 +141,8 @@ describe('internal feature-flag endpoints', () => {
       'lesson_planner_intake_v2',
       'lesson_planner_stack_v2',
       'lesson_planner_deck_v2',
+      'lesson_planner_stack_panel',
+      'lesson_planner_plan_export_v2',
     ]);
   });
 

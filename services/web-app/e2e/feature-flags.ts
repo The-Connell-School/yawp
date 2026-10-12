@@ -50,7 +50,9 @@ export async function setLessonPlannerFlag(enabled: boolean) {
 export type LessonPlannerReviewFlag =
   | 'lesson_planner_intake_v2'
   | 'lesson_planner_stack_v2'
-  | 'lesson_planner_deck_v2';
+  | 'lesson_planner_deck_v2'
+  | 'lesson_planner_stack_panel'
+  | 'lesson_planner_plan_export_v2';
 
 export async function setLessonPlannerReviewFlag(
   flag: LessonPlannerReviewFlag,

@@ -8,6 +8,8 @@ import {
   LESSON_PLANNER_INTAKE_V2_FLAG,
   LESSON_PLANNER_STACK_V2_FLAG,
   LESSON_PLANNER_DECK_V2_FLAG,
+  LESSON_PLANNER_PLAN_EXPORT_V2_FLAG,
+  LESSON_PLANNER_STACK_PANEL_FLAG,
   isFreeTierGloballyEnabled,
   featureFlagSettingName,
   MAX_FEATURE_FLAG_ORG_IDS,
@@ -64,6 +66,8 @@ describe('feature flag registry', () => {
       LESSON_PLANNER_INTAKE_V2_FLAG,
       LESSON_PLANNER_STACK_V2_FLAG,
       LESSON_PLANNER_DECK_V2_FLAG,
+      LESSON_PLANNER_STACK_PANEL_FLAG,
+      LESSON_PLANNER_PLAN_EXPORT_V2_FLAG,
     ]);
   });
 
@@ -76,6 +80,12 @@ describe('feature flag registry', () => {
     );
     expect(featureFlagSettingName(LESSON_PLANNER_DECK_V2_FLAG)).toBe(
       'feature_flag.lesson_planner_deck_v2'
+    );
+    expect(featureFlagSettingName(LESSON_PLANNER_STACK_PANEL_FLAG)).toBe(
+      'feature_flag.lesson_planner_stack_panel'
+    );
+    expect(featureFlagSettingName(LESSON_PLANNER_PLAN_EXPORT_V2_FLAG)).toBe(
+      'feature_flag.lesson_planner_plan_export_v2'
     );
   });
 
