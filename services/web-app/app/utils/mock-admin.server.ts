@@ -1,5 +1,6 @@
 import { requireUserId } from './auth.server';
 import { prisma } from './db.server';
+import { mockAdminEnvironment } from './mock-admin-environment';
 import { requireFreeTierEnabled } from './free-tier/free-tier-feature-gate.server';
 
 export function isMockAdminEnabled() {
@@ -28,9 +29,6 @@ export async function requireMockAdmin(request: Request) {
   return {
     actorUserId: user.id,
     actorEmail: user.email,
-    environment:
-      process.env.PREVIEW_SLUG === 'demo'
-        ? 'demo'
-        : process.env.YAWP_ENVIRONMENT || process.env.NODE_ENV || 'development',
+    environment: mockAdminEnvironment(process.env),
   };
 }
