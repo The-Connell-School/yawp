@@ -99,6 +99,9 @@ async function main() {
     // Check shared prerequisites before updating any accounts.
     const { FREE_CLASSROOM_ASSIGNMENT_KINDS } =
       await import('../../app/utils/entitlements.server');
+    type TransactionClient = Parameters<
+      Parameters<typeof prisma.$transaction>[0]
+    >[0];
     const count = await prisma.assignmentType.count({
       where: { kind: { in: [...FREE_CLASSROOM_ASSIGNMENT_KINDS] } },
     });
@@ -107,7 +110,9 @@ async function main() {
 
     for (const account of accounts) {
       const hash = await bcrypt.hash(account.password, 10);
-      const application = await prisma.$transaction(async (tx) => {
+      const application = await prisma.$transaction(async (
+        tx: TransactionClient
+      ) => {
         const user = await tx.user.upsert({
           where: { email: account.email },
           create: {

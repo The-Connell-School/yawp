@@ -9,15 +9,15 @@ export type DmmfField = {
 
 export type DmmfModel = {
   name: string;
-  fields: DmmfField[];
-  uniqueFields?: string[][];
-  uniqueIndexes?: { fields: string[] }[];
+  fields: readonly DmmfField[];
+  uniqueFields?: readonly (readonly string[])[];
+  uniqueIndexes?: readonly { fields: readonly string[] }[];
 };
 
 export type DmmfDocument = {
   datamodel: {
-    models: DmmfModel[];
-    enums?: { name: string; values: { name: string }[] }[];
+    models: readonly DmmfModel[];
+    enums?: readonly { name: string; values: readonly { name: string }[] }[];
   };
 };
 
