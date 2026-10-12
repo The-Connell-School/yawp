@@ -48,6 +48,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 const formSchema = waitlistInputSchema;
 
+export function freeTierSubmitSuccessCopy(loaderData: {
+  mode: 'waitlist' | 'token';
+  tokenValid: { valid: boolean } | null;
+}) {
+  if (loaderData.mode === 'token' && loaderData.tokenValid?.valid) {
+    return {
+      headline: 'Check your email for your join link.',
+      detail: null,
+    };
+  }
+  return {
+    headline: "You're on the list.",
+    detail: "We'll email you when a spot opens.",
+  };
+}
+
 export async function action({ request }: ActionFunctionArgs) {
   await requireFreeTierEnabled();
   const formData = await request.formData();
@@ -122,6 +138,7 @@ export default function FreeTierLandingRoute() {
   const data = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const submitted = fetcher.data?.ok === true;
+  const submitSuccess = submitted ? freeTierSubmitSuccessCopy(data) : null;
 
   const title =
     data.mode === 'token' ? 'Try YAWP with your students' : 'Try YAWP with your students';
@@ -148,10 +165,12 @@ export default function FreeTierLandingRoute() {
               Join the waitlist
             </a>
           </div>
-        ) : submitted ? (
+        ) : submitSuccess ? (
           <div className="yawp-entry-auth-body" role="status">
-            <p className="text-sm font-medium text-foreground">You&apos;re on the list.</p>
-            <p className="text-sm text-muted-foreground">We&apos;ll email you when a spot opens.</p>
+            <p className="text-sm font-medium text-foreground">{submitSuccess.headline}</p>
+            {submitSuccess.detail ? (
+              <p className="text-sm text-muted-foreground">{submitSuccess.detail}</p>
+            ) : null}
           </div>
         ) : (
           <fetcher.Form method="post" className="yawp-entry-auth-body">
