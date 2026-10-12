@@ -4,9 +4,11 @@ import {
   gradingRepairPrivateObservationRules,
   normalizeTeacherNote,
   overallCommentWriterRules,
+  resolveTeacherNotesUiState,
   staffTeacherNoteLoaderField,
   teacherNotesEnabled,
 } from './teacher-notes';
+import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 
 const dailyPagesOnlyPhrases = [
   'Never mention grammar, spelling, syntax, or organization as a grading judgment.',
@@ -60,6 +62,44 @@ describe('teacher-notes', () => {
     expect(normalizeTeacherNote('a'.repeat(2000))).toBe('a'.repeat(2000));
   });
 
+  test('resolveTeacherNotesUiState covers pending, empty, and content', () => {
+    expect(
+      resolveTeacherNotesUiState({
+        assignmentTypeSystemKey: null,
+        teacherNotesEnabled: true,
+        runs: [],
+      })
+    ).toEqual({ visible: true, phase: 'pending' });
+    expect(
+      resolveTeacherNotesUiState({
+        assignmentTypeSystemKey: null,
+        teacherNotesEnabled: true,
+        runs: [{ status: 'failed' }],
+      })
+    ).toEqual({ visible: true, phase: 'pending' });
+    expect(
+      resolveTeacherNotesUiState({
+        assignmentTypeSystemKey: null,
+        teacherNotesEnabled: true,
+        runs: [{ status: 'succeeded', metadata: { teacherNote: '  ' } }],
+      })
+    ).toEqual({ visible: true, phase: 'empty' });
+    expect(
+      resolveTeacherNotesUiState({
+        assignmentTypeSystemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY,
+        teacherNotesEnabled: true,
+        runs: [{ status: 'succeeded', metadata: { teacherNote: 'x' } }],
+      })
+    ).toEqual({ visible: false });
+    expect(
+      resolveTeacherNotesUiState({
+        assignmentTypeSystemKey: null,
+        teacherNotesEnabled: false,
+        runs: [{ status: 'succeeded', metadata: { teacherNote: 'x' } }],
+      })
+    ).toEqual({ visible: false });
+  });
+
   test('staffTeacherNoteLoaderField exposes notes to staff only', () => {
     const run = {
       status: 'succeeded',
@@ -72,15 +112,14 @@ describe('teacher-notes', () => {
         isAdmin: false,
         run,
       })
-    ).toEqual({ teacherNote: 'PRIVATE: vocabulary shift.' });
-    expect(
-      staffTeacherNoteLoaderField({
-        isOwner: false,
-        isTeacher: true,
-        isAdmin: false,
-        run,
-      })
-    ).toEqual({ teacherNote: 'PRIVATE: vocabulary shift.' });
+    ).toEqual({
+      teacherNote: 'PRIVATE: vocabulary shift.',
+      teacherNotesUi: {
+        visible: true,
+        phase: 'content',
+        note: 'PRIVATE: vocabulary shift.',
+      },
+    });
     expect(
       staffTeacherNoteLoaderField({
         isOwner: true,
