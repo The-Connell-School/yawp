@@ -13,6 +13,15 @@ test('hashToken uses sha256 hex', () => {
 test('canRedeemToken honors expiry and maxUses', () => {
   const now = Date.now();
   expect(
+    canRedeemToken({
+      uses: 0,
+      maxUses: 1,
+      expiresAt: new Date(now + 1000),
+      bypassWaitlist: false,
+      disabledAt: new Date(now - 1000),
+    }).ok,
+  ).toBe(false);
+  expect(
     canRedeemToken({ uses: 0, maxUses: 1, expiresAt: new Date(now + 1000), bypassWaitlist: false }).ok,
   ).toBe(true);
   expect(

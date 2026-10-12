@@ -42,7 +42,7 @@ test('release and token mint return 404 when the free tier flag is off', async (
           })
         )
       ).status
-    ).toBe(200);
+    ).toBe(404);
     expect(
       (
         await releaseBatchHttp(
