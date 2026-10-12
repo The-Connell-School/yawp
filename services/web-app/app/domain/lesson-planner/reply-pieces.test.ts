@@ -66,3 +66,10 @@ describe('pieceKeysInReply — writing practice', () => {
     ).toEqual(['pr', 'pr:1']);
   });
 });
+
+describe('blockMinutesInReply', () => {
+  test("a step that is only its block lends the block its minutes", async () => {
+    const { blockMinutesInReply } = await import('./reply-pieces');
+    expect(blockMinutesInReply(REPLY)).toEqual({ dp: 5, ticket: 5 });
+  });
+});

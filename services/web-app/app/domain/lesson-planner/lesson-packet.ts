@@ -292,7 +292,11 @@ export function buildLessonPacket({
 
   const outline = built.map((section) => ({
     title: section.title,
-    minutes: readMinutes(section.derivedTitle),
+    // A filed piece is named for what it is, minutes and all ("Read aloud
+    // (25 min)"); a kept reply's timing lives in its own heading.
+    minutes:
+      readMinutes(section.derivedTitle) ??
+      (section.origin === 'material' ? readMinutes(section.title) : null),
     steps: readSteps(section.content, section.derivedTitle),
     kind: section.kind,
     anchor: section.anchor,

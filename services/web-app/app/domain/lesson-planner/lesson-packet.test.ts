@@ -595,3 +595,18 @@ describe('buildLessonPacket — a kept reply that carries a deck', () => {
     expect(packet.sections[0]!.content).toContain('Sort the sentences.');
   });
 });
+
+describe("buildLessonPacket — a stack of pieces adds up (Brian's run 2, B2)", () => {
+  test("a filed piece's minutes come from its own title", () => {
+    const packet = buildLessonPacket({
+      title: 'Day 1',
+      className: null,
+      sections: [
+        { id: 'm1', content: 'Read the first pages.', keptTitle: 'Read aloud (25 min)', origin: 'material', kind: 'plan', keptAudience: 'teacher' },
+        { id: 'm2', content: 'Pairs compare.', keptTitle: 'Pair talk (12 min)', origin: 'material', kind: 'plan', keptAudience: 'teacher' },
+      ],
+    });
+    expect(packet.outline.map((entry) => entry.minutes)).toEqual([25, 12]);
+    expect(packet.totalMinutes).toBe(37);
+  });
+});

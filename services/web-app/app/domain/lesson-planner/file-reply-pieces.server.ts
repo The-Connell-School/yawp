@@ -8,7 +8,7 @@
  */
 import { prisma } from '~/utils/db.server';
 import { artifactFromAssistantReply } from './artifact-from-reply';
-import { pieceKeysInReply } from './reply-pieces';
+import { blockMinutesInReply, pieceKeysInReply } from './reply-pieces';
 import { loadStackOrder, writeStackOrder } from './stack-order.server';
 
 export async function fileReplyPieces({
@@ -31,9 +31,15 @@ export async function fileReplyPieces({
   const skipped: string[] = [];
   const newKeys: string[] = [];
 
+  const carriedMinutes = blockMinutesInReply(message.content);
   for (const key of pieceKeysInReply(message.content)) {
-    const material = artifactFromAssistantReply(message.content, key);
-    if (!material) continue;
+    const found = artifactFromAssistantReply(message.content, key);
+    if (!found) continue;
+    const minutes = carriedMinutes[key];
+    const material =
+      minutes && !/\(\s*\d+[^)]*min/i.test(found.title)
+        ? { ...found, title: `${found.title} (${minutes} min)` }
+        : found;
     const existing = await prisma.lessonPlanMaterial.findUnique({
       where: { conversationId_slot: { conversationId, slot: material.slot } },
       select: { sourceMessageId: true, blockKey: true, editedAt: true },

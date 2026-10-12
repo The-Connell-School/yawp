@@ -87,3 +87,19 @@ describe("fileReplyPieces (Brian's run 2, A4)", () => {
     ]);
   });
 });
+
+describe('fileReplyPieces — minutes carried to a block', () => {
+  test("an exit ticket under '## Exit ticket (10 min)' is filed with its 10 minutes", async () => {
+    await fileReplyPieces({
+      conversationId: 'plan-1',
+      message: {
+        id: 'msg-2',
+        createdAt: new Date(),
+        content:
+          '## Read aloud (20 min)\n\nRead.\n\n## Exit ticket (10 min)\n\n```yawp-exit-ticket\nmode: basic\n```',
+      },
+    });
+    const titles = prisma.lessonPlanMaterial.upsert.mock.calls.map((call) => call[0].create.title);
+    expect(titles).toEqual(['Read aloud (20 min)', 'Exit ticket (10 min)']);
+  });
+});

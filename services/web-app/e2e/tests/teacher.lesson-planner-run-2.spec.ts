@@ -827,8 +827,11 @@ test.describe("Lesson Planner — Brian's second run", () => {
       await page.getByTestId('deck-editor-save').click();
       await expect(page).toHaveURL(new RegExp(`/app/lesson-planner\\?c=${conversationId}`));
       await page.getByTestId('slide-deck-card').getByRole('link', { name: 'Present' }).click();
-      await page.waitForLoadState('networkidle');
-      await page.keyboard.press('ArrowRight');
+      await expect(page.getByTestId('slide-counter')).toHaveText('1 / 4');
+      // The button, not the arrow key: a key pressed before the presenter has
+      // hydrated is lost.
+      await page.getByRole('button', { name: 'Next slide' }).click();
+      await expect(page.getByTestId('slide-counter')).toHaveText('2 / 4');
       await expect(page.getByTestId('slide-stage')).toContainText('What you carry');
       await expect(page.getByTestId('slide-stage')).toContainText('Write about one thing in your bag.');
     });

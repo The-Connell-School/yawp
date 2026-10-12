@@ -19,11 +19,49 @@ const FILEABLE_BLOCK =
   /```+(yawp-material|yawp-daily-pages|yawp-exit-ticket|yawp-practice|yawp-slides)[^\n]*\n[\s\S]*?```+/g;
 
 export function pieceKeysInReply(content: string): string[] {
-  const placed: Array<{ at: number; order: number; key: string }> = [];
+  return placedPieces(content)
+    .filter((piece) => !piece.emptyStep)
+    .map((piece) => piece.key);
+}
+
+/**
+ * Minutes for the blocks that stand for their step: under "## Exit ticket
+ * (10 min)" with nothing but the ticket, the ticket is the step, and its 10
+ * minutes should not be lost when it is filed (Brian's run 2, B2).
+ */
+export function blockMinutesInReply(content: string): Record<string, number> {
+  const minutes: Record<string, number> = {};
+  const pieces = placedPieces(content);
+  pieces.forEach((piece, index) => {
+    if (!piece.emptyStep || piece.minutes == null) return;
+    const next = pieces[index + 1];
+    if (next && !next.step) minutes[next.key] = piece.minutes;
+  });
+  return minutes;
+}
+
+type Placed = {
+  at: number;
+  order: number;
+  key: string;
+  step?: boolean;
+  emptyStep?: boolean;
+  minutes?: number | null;
+};
+
+function placedPieces(content: string): Placed[] {
+  const placed: Placed[] = [];
   for (const step of readPlanSteps(content)) {
     // A step that is nothing but its block ("## Class starter" over the
     // prompt) is that block; filing an empty step beside it says nothing.
-    if (step.content.trim()) placed.push({ at: step.at, order: 0, key: step.key });
+    placed.push({
+      at: step.at,
+      order: 0,
+      key: step.key,
+      step: true,
+      emptyStep: !step.content.trim(),
+      minutes: step.minutes,
+    });
   }
 
   let materials = 0;
@@ -55,5 +93,5 @@ export function pieceKeysInReply(content: string): string[] {
     }
   }
 
-  return placed.sort((a, b) => a.at - b.at || a.order - b.order).map((piece) => piece.key);
+  return placed.sort((a, b) => a.at - b.at || a.order - b.order);
 }
