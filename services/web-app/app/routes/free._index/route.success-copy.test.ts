@@ -6,7 +6,7 @@ describe('freeTierSubmitSuccessCopy', () => {
     expect(
       freeTierSubmitSuccessCopy({
         mode: 'token',
-        tokenValid: { valid: true, label: 'NCTE' },
+        tokenValid: { valid: true },
       })
     ).toEqual({
       headline: 'Check your email for your join link.',
@@ -22,7 +22,7 @@ describe('freeTierSubmitSuccessCopy', () => {
     expect(
       freeTierSubmitSuccessCopy({
         mode: 'token',
-        tokenValid: { valid: false, reason: 'expired' },
+        tokenValid: { valid: false },
       })
     ).toEqual({
       headline: "You're on the list.",
