@@ -59,6 +59,7 @@ const acquisitionTokenCoreSelect = {
 } as const;
 
 type AcquisitionTokenClient = Pick<typeof prisma, 'acquisitionToken'>;
+type AcquisitionTokenCreateClient = Pick<typeof prisma, 'acquisitionToken' | '$executeRaw'>;
 
 async function findAcquisitionTokenByCredentialOn(
   client: AcquisitionTokenClient,
@@ -163,20 +164,12 @@ export const tokenCreateSchema = z
     label: z.string().trim().min(1).max(200),
     bypassWaitlist: z.boolean().optional().default(false),
     maxUses: z.number().int().min(1).max(10000).optional(),
-    expiresAt: z
-      .string()
-      .datetime()
-      .transform((v) => new Date(v))
-      .optional(),
+    expiresAt: z.union([z.string().datetime().transform((v) => new Date(v)), z.date()]).optional(),
     count: z.number().int().min(1).max(100).default(1),
     createdBy: z.string().trim().max(200).optional(),
     sourceName: z.string().trim().min(1).max(200).optional(),
     eventLocation: z.string().trim().min(1).max(200).optional(),
-    eventDate: z
-      .string()
-      .datetime()
-      .transform((v) => new Date(v))
-      .optional(),
+    eventDate: z.union([z.string().datetime().transform((v) => new Date(v)), z.date()]).optional(),
     notes: z.string().trim().max(2000).optional(),
   })
   .strict();
@@ -187,29 +180,19 @@ export const tokenPatchSchema = z
     label: z.string().trim().min(1).max(200).optional(),
     bypassWaitlist: z.boolean().optional(),
     maxUses: z.number().int().min(1).max(10000).nullable().optional(),
-    expiresAt: z
-      .string()
-      .datetime()
-      .transform((v) => new Date(v))
-      .nullable()
-      .optional(),
+    expiresAt: z.union([z.string().datetime().transform((v) => new Date(v)), z.date()]).nullable().optional(),
     sourceName: z.string().trim().min(1).max(200).nullable().optional(),
     eventLocation: z.string().trim().min(1).max(200).nullable().optional(),
-    eventDate: z
-      .string()
-      .datetime()
-      .transform((v) => new Date(v))
-      .nullable()
-      .optional(),
+    eventDate: z.union([z.string().datetime().transform((v) => new Date(v)), z.date()]).nullable().optional(),
     notes: z.string().trim().max(2000).nullable().optional(),
   })
   .strict();
 export type TokenPatchInput = z.infer<typeof tokenPatchSchema>;
 
-async function allocateUniqueAcquisitionCode() {
+async function allocateUniqueAcquisitionCode(client: AcquisitionTokenClient = prisma) {
   for (let attempt = 0; attempt < 8; attempt++) {
     const code = generateAcquisitionCode();
-    const existing = await prisma.acquisitionToken.findUnique({
+    const existing = await client.acquisitionToken.findUnique({
       where: { code },
       select: { id: true },
     });
@@ -218,31 +201,83 @@ async function allocateUniqueAcquisitionCode() {
   throw new Error('acquisition_code_collision');
 }
 
-export async function createAcquisitionTokens(input: TokenCreateInput) {
+function tokenCreateFingerprint(parsed: TokenCreateInput) {
+  return JSON.stringify({
+    label: parsed.label,
+    bypassWaitlist: parsed.bypassWaitlist ?? false,
+    maxUses: parsed.maxUses ?? null,
+    expiresAt: parsed.expiresAt?.toISOString() ?? null,
+    count: parsed.count,
+    createdBy: parsed.createdBy ?? null,
+    sourceName: parsed.sourceName ?? null,
+    eventLocation: parsed.eventLocation ?? null,
+    eventDate: parsed.eventDate?.toISOString() ?? null,
+    notes: parsed.notes ?? null,
+  });
+}
+
+async function findRecentMatchingAcquisitionToken(
+  client: AcquisitionTokenCreateClient,
+  parsed: TokenCreateInput,
+  since: Date
+) {
+  if (parsed.count !== 1) return null;
+  return client.acquisitionToken.findFirst({
+    where: {
+      label: parsed.label,
+      bypassWaitlist: parsed.bypassWaitlist ?? false,
+      maxUses: parsed.maxUses ?? null,
+      expiresAt: parsed.expiresAt ?? null,
+      createdBy: parsed.createdBy ?? null,
+      sourceName: parsed.sourceName ?? null,
+      eventLocation: parsed.eventLocation ?? null,
+      eventDate: parsed.eventDate ?? null,
+      notes: parsed.notes ?? null,
+      createdAt: { gte: since },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, code: true },
+  });
+}
+
+export async function createAcquisitionTokens(
+  input: z.input<typeof tokenCreateSchema>,
+  options: { idempotencyKey?: string | null; idempotencyWindowMs?: number } = {}
+) {
   const parsed = tokenCreateSchema.parse(input);
-  const tokens: { token: string; id: string; code: string; url: string }[] = [];
-  for (let i = 0; i < parsed.count; i++) {
-    const code = await allocateUniqueAcquisitionCode();
-    const tokenHash = hashToken(code);
-    const row = await prisma.acquisitionToken.create({
-      data: {
-        code,
-        tokenHash,
-        label: parsed.label,
-        sourceName: parsed.sourceName ?? null,
-        eventLocation: parsed.eventLocation ?? null,
-        eventDate: parsed.eventDate ?? null,
-        notes: parsed.notes ?? null,
-        bypassWaitlist: parsed.bypassWaitlist ?? false,
-        maxUses: parsed.maxUses ?? null,
-        expiresAt: parsed.expiresAt ?? null,
-        createdBy: parsed.createdBy,
-      },
-      select: { id: true },
-    });
-    tokens.push({ token: code, code, id: row.id, url: buildFreeTierEventLink(code) });
-  }
-  return tokens;
+  const fingerprint = tokenCreateFingerprint(parsed);
+  const lockKey = `free-tier-token-create:${options.idempotencyKey || createHash('sha256').update(fingerprint).digest('hex')}`;
+  const dedupeSince = new Date(Date.now() - (options.idempotencyWindowMs ?? 5 * 60_000));
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+    const existing = await findRecentMatchingAcquisitionToken(tx, parsed, dedupeSince);
+    if (existing?.code) {
+      return [{ token: existing.code, code: existing.code, id: existing.id, url: buildFreeTierEventLink(existing.code) }];
+    }
+    const tokens: { token: string; id: string; code: string; url: string }[] = [];
+    for (let i = 0; i < parsed.count; i++) {
+      const code = await allocateUniqueAcquisitionCode(tx);
+      const tokenHash = hashToken(code);
+      const row = await tx.acquisitionToken.create({
+        data: {
+          code,
+          tokenHash,
+          label: parsed.label,
+          sourceName: parsed.sourceName ?? null,
+          eventLocation: parsed.eventLocation ?? null,
+          eventDate: parsed.eventDate ?? null,
+          notes: parsed.notes ?? null,
+          bypassWaitlist: parsed.bypassWaitlist ?? false,
+          maxUses: parsed.maxUses ?? null,
+          expiresAt: parsed.expiresAt ?? null,
+          createdBy: parsed.createdBy,
+        },
+        select: { id: true },
+      });
+      tokens.push({ token: code, code, id: row.id, url: buildFreeTierEventLink(code) });
+    }
+    return tokens;
+  });
 }
 
 export async function listAcquisitionTokensWithStats() {

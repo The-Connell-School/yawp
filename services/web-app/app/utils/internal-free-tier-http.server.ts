@@ -28,6 +28,7 @@ import type { FreeTierApplicationStatus } from '@app/prisma';
 const response = (value: unknown, status = 200, headers?: HeadersInit) =>
   Response.json(value, { status, headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', ...(headers || {}) } });
 const digest = (value: string) => createHash('sha256').update(value).digest();
+const idempotencyKeySchema = z.string().trim().regex(/^[A-Za-z0-9._:-]{1,200}$/);
 /**
  * The management-key check every internal endpoint shares (free tier, feature
  * flags). Returns a response to send back when the request is not allowed.
@@ -275,7 +276,19 @@ export async function tokensCreate(request: Request) {
   try {
     parsed = tokenCreateSchema.parse(JSON.parse(text));
   } catch { return response({ error: 'Invalid input' }, 400); }
-  const created = await createAcquisitionTokens(parsed);
+  const actor = request.headers.get('x-yawp-operator-email') ?? request.headers.get('x-operator-email');
+  if (actor && !operatorEmail.safeParse(actor).success) return response({ error: 'Invalid operator email' }, 400);
+  const rawIdempotencyKey = request.headers.get('idempotency-key') ?? request.headers.get('x-yawp-idempotency-key');
+  let idempotencyKey: string | null = null;
+  if (rawIdempotencyKey) {
+    const parsedKey = idempotencyKeySchema.safeParse(rawIdempotencyKey);
+    if (!parsedKey.success) return response({ error: 'Invalid idempotency key' }, 400);
+    idempotencyKey = parsedKey.data;
+  }
+  const created = await createAcquisitionTokens(
+    { ...parsed, createdBy: parsed.createdBy ?? actor ?? undefined },
+    { idempotencyKey }
+  );
   return response({ tokens: created });
 }
 
