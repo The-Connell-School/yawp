@@ -19,6 +19,8 @@ const REVIEW_FLAGS: LessonPlannerReviewFlag[] = [
   'lesson_planner_intake_v2',
   'lesson_planner_stack_v2',
   'lesson_planner_deck_v2',
+  'lesson_planner_stack_panel',
+  'lesson_planner_plan_export_v2',
 ];
 
 type Ctx = { teacherMembershipId: string; organizationId: string };
@@ -829,6 +831,48 @@ test.describe("Lesson Planner — Brian's second run", () => {
       await page.keyboard.press('ArrowRight');
       await expect(page.getByTestId('slide-stage')).toContainText('What you carry');
       await expect(page.getByTestId('slide-stage')).toContainText('Write about one thing in your bag.');
+    });
+  });
+
+  test.describe('D1, D2: a concise lesson plan, for Word and Google Docs', () => {
+    test('downloads a Word file and a short PDF of the plan from the stack', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      await setLessonPlannerReviewFlag('lesson_planner_plan_export_v2', true);
+      const { conversationId } = await seedStack(e2eContext, [
+        { title: 'Class Starter: Carry', kind: 'class-starter', audience: 'student', content: 'Write about what you carry.' },
+        { title: 'Read aloud (20 min)', kind: 'step', content: 'If you like reading aloud yourself, take the first pages.' },
+        { title: 'Exit ticket', kind: 'exit-ticket', audience: 'student', content: 'What weighed nothing?' },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+
+      const word = page.getByRole('link', { name: 'Lesson plan for Word / Google Docs' }).first();
+      await expect(word).toBeVisible();
+      await expect(page.getByText('In Google Docs: File, then Open, then Upload.')).toBeVisible();
+      const [docx] = await Promise.all([page.waitForEvent('download'), word.click()]);
+      expect(docx.suggestedFilename()).toMatch(/Lesson plan\.docx$/);
+      const bytes = await (await import('node:fs/promises')).readFile((await docx.path())!);
+      expect(bytes.subarray(0, 2).toString()).toBe('PK');
+
+      const response = await page.request.get(`/app/lesson-planner/${conversationId}/plan.pdf`);
+      expect(response.ok()).toBe(true);
+      expect((await response.body()).subarray(0, 5).toString()).toBe('%PDF-');
+      // The full packet is still there for whoever wants everything.
+      await expect(page.getByRole('link', { name: 'Full packet (PDF)' })).toBeVisible();
+    });
+
+    test('flag off: no Word download, and the route is not there', async ({ page, signIn, e2eContext }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      const { conversationId } = await seedStack(e2eContext, [{ title: 'Read aloud' }]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      await expect(page.getByRole('link', { name: 'Lesson plan for Word / Google Docs' })).toHaveCount(0);
+      const response = await page.request.get(`/app/lesson-planner/${conversationId}/plan.docx`);
+      expect(response.status()).toBe(404);
     });
   });
 });

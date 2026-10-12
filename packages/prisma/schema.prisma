@@ -1490,6 +1490,10 @@ model LessonPlanConversation {
   /// deck inside the period on every turn. Null until the teacher says.
   periodMinutes    Int?
   lessonClassLabel String?
+  /// The concise lesson plan's summaries (Brian's run 2, D1), written once
+  /// per stack and reused until the stack changes (planSummaryKey).
+  planSummary      Json?
+  planSummaryKey   String?
   messages                LessonPlanMessage[]
   materials               LessonPlanMaterial[]
 

@@ -135,6 +135,11 @@ export default function LessonPacketRoute() {
     }`;
   }
 
+  /** The concise lesson plan (Brian's run 2, D1, D2). */
+  function lessonPlanHref(extension: 'docx' | 'pdf') {
+    return `/app/lesson-planner/${conversationId}/plan.${extension}`;
+  }
+
   /** The stacked lesson packet — every filed resource, not the tab on screen. */
   function fullPacketPdfHref() {
     return `/app/lesson-planner/${conversationId}/packet.pdf`;
@@ -303,7 +308,29 @@ export default function LessonPacketRoute() {
                 {stackV2 ? 'Create handouts' : 'Student handout'}
               </button>
             </div>
-            <Button type="button" size="sm" asChild>
+            {reviewFlags.planExportV2 && view !== 'handout' ? (
+              // Brian's run 2 (D1, D2): the concise plan, for Word and Google
+              // Docs first, so teachers can add their standards.
+              <>
+                <Button type="button" size="sm" asChild>
+                  <a href={lessonPlanHref('docx')} download data-testid="plan-docx">
+                    <FileDown size={15} className="mr-1.5" />
+                    Lesson plan for Word / Google Docs
+                  </a>
+                </Button>
+                <Button type="button" size="sm" variant="outline" asChild>
+                  <a href={lessonPlanHref('pdf')} download data-testid="plan-pdf">
+                    Lesson plan (PDF)
+                  </a>
+                </Button>
+              </>
+            ) : null}
+            <Button
+              type="button"
+              size="sm"
+              variant={reviewFlags.planExportV2 && view !== 'handout' ? 'ghost' : 'default'}
+              asChild
+            >
               <a
                 data-testid="packet-save-pdf"
                 href={view === 'handout' ? pdfHref() : fullPacketPdfHref()}
@@ -311,12 +338,19 @@ export default function LessonPacketRoute() {
                 aria-disabled={packet.sections.length === 0}
               >
                 <FileDown size={15} className="mr-1.5" />
-                Download PDF
+                {reviewFlags.planExportV2 && view !== 'handout'
+                  ? 'Full packet (PDF)'
+                  : 'Download PDF'}
               </a>
             </Button>
           </div>
         </div>
 
+        {reviewFlags.planExportV2 ? (
+          <p className="-mt-4 mb-4 text-right text-xs text-muted-foreground print:hidden">
+            In Google Docs: File, then Open, then Upload.
+          </p>
+        ) : null}
         <div className="mb-4 print:hidden">
           <label
             htmlFor="packet-title"
@@ -376,7 +410,16 @@ export default function LessonPacketRoute() {
                   />
                   <BuildFromStack
                     conversationId={conversationId}
-                    lessonPlanHref={fullPacketPdfHref()}
+                    lessonPlanHref={
+                      reviewFlags.planExportV2
+                        ? lessonPlanHref('docx')
+                        : fullPacketPdfHref()
+                    }
+                    lessonPlanLabel={
+                      reviewFlags.planExportV2
+                        ? 'Lesson plan for Word / Google Docs'
+                        : 'Download the lesson plan (PDF)'
+                    }
                     hasDeck={packet.sections.some(
                       (section) => section.deck || section.kind === 'slides'
                     )}
@@ -791,10 +834,12 @@ function SectionContent({
 function BuildFromStack({
   conversationId,
   lessonPlanHref,
+  lessonPlanLabel,
   hasDeck,
 }: {
   conversationId: string;
   lessonPlanHref: string;
+  lessonPlanLabel: string;
   hasDeck: boolean;
 }) {
   const build = (request: string) =>
@@ -813,7 +858,7 @@ function BuildFromStack({
         </Button>
         <Button size="sm" variant="outline" className="justify-start" asChild>
           <a href={lessonPlanHref} download>
-            Download the lesson plan (PDF)
+            {lessonPlanLabel}
           </a>
         </Button>
         <Button size="sm" className="justify-start" asChild>

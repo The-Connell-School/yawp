@@ -14,7 +14,10 @@ import { MATERIAL_KIND_LABELS, packetKindForMaterial, type ArtifactKind } from '
 import { findWritingExerciseTypeIds } from './yawp-catalog.server';
 import { stackCreateLink, type StackCreateLink } from './stack-create-link';
 import { getQuickWritingLessons } from '~/utils/writing-lessons/static-lessons.server';
-import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
+import {
+  getLessonPlannerReviewFlags,
+  type LessonPlannerReviewFlags,
+} from '~/domain/feature-flags/feature-flags.server';
 import { nameIsProvisional } from './lesson-name';
 import { orderStackEntries } from './stack-order';
 
@@ -34,7 +37,7 @@ export type LoadedLessonPacket = {
    */
   nameIsProvisional: boolean;
   /** Brian's review flags for this school. */
-  reviewFlags: { intakeV2: boolean; stackV2: boolean; deckV2: boolean };
+  reviewFlags: LessonPlannerReviewFlags;
   /**
    * Per filed piece, by section id (Brian's run 2, A5): what it is called
    * ("Class Starter", not "Handout") and, for a writing piece, the link that
@@ -43,6 +46,8 @@ export type LoadedLessonPacket = {
   stackDetails: Record<string, { label: string; create: StackCreateLink | null }>;
   /** The lesson's length, once the teacher said (Brian's run 2, B1). */
   periodMinutes: number | null;
+  /** Each filed piece's own kind, by id ("class-starter", "step", …). */
+  materialKinds: Record<string, string>;
 };
 
 const WRITING_KINDS = new Set(['class-starter', 'daily-pages', 'exit-ticket']);
@@ -226,5 +231,8 @@ export async function loadLessonPacket({
     reviewFlags,
     stackDetails,
     periodMinutes: conversation.periodMinutes,
+    materialKinds: Object.fromEntries(
+      conversation.materials.map((material) => [material.id, material.kind])
+    ),
   };
 }
