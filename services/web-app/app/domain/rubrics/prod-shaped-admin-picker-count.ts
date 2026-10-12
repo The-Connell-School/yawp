@@ -2,8 +2,8 @@ import fixture from './__fixtures__/prod-rubric-catalog.json';
 import { perTypeContent, perTypeKey } from './rubric-catalog.server';
 import { RETIRED_STARTER_RUBRIC_NAMES } from './starter-rubrics';
 
-/** Reviewed production-shaped admin picker total (8 library + 8 per-type Live). */
-export const PROD_SHAPED_ADMIN_PICKER_COUNT = 16;
+/** Reviewed production-shaped admin picker total (8 library + 6 per-type Live). */
+export const PROD_SHAPED_ADMIN_PICKER_COUNT = 14;
 
 const DAILY_PAGES_TYPE_ID = 'cmlgtyo8j01em0qjs6knw7cni';
 const GBA_ETIQUETTE_TYPE_ID = 'cms93piub000101lbiyhn43lh';

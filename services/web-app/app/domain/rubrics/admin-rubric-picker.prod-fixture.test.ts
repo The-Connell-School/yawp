@@ -54,12 +54,10 @@ describe('prod-shaped catalog acceptance', () => {
     ).toBe(true);
   });
 
-  test('production-shaped picker total is 16 (fixture JSON documents 14 keys)', () => {
-    expect(PROD_SHAPED_ADMIN_PICKER_COUNT).toBe(16);
+  test('production-shaped picker total is 14 (8 library + 6 per-type)', () => {
+    expect(PROD_SHAPED_ADMIN_PICKER_COUNT).toBe(14);
     expect(prodShapedPickerKeysFromFixture()).toHaveLength(14);
-    expect(PROD_SHAPED_ADMIN_PICKER_COUNT - prodShapedPickerKeysFromFixture().length).toBe(
-      2
-    );
+    expect(prodShapedPickerKeysFromFixture().filter((key) => key.startsWith('assignment-type:'))).toHaveLength(6);
   });
 
   test('archived QA validation probe library row stays excluded', () => {

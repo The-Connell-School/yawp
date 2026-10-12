@@ -51,6 +51,97 @@ type CatalogListEntry = Awaited<ReturnType<RubricCatalog['list']>>['rubrics'][nu
 
 type PickerDb = Pick<PrismaClient, 'rubric' | 'assignmentType'>;
 
+type PerTypePickerRow = {
+  id: string;
+  title: string | null;
+  ownerOrg: { name: string } | null;
+  schoolAssignments: { school: { name: string } }[];
+  organizationAssignments: { organization: { name: string } }[];
+};
+
+const perTypePickerSelect = {
+  id: true,
+  title: true,
+  ownerOrg: { select: { name: true } },
+  schoolAssignments: {
+    select: { school: { select: { name: true } } },
+    orderBy: { school: { name: 'asc' as const } },
+    take: 1,
+  },
+  organizationAssignments: {
+    select: { organization: { select: { name: true } } },
+    orderBy: { organization: { name: 'asc' as const } },
+    take: 1,
+  },
+} satisfies Prisma.AssignmentTypeSelect;
+
+function normalizePickerTitle(title: string) {
+  return title.trim().toLowerCase();
+}
+
+export function shortAssignmentTypeIdForPicker(typeId: string) {
+  if (typeId.length <= 16) return typeId;
+  return typeId.slice(-16);
+}
+
+export function pickerOwnershipLabel(type: PerTypePickerRow): string {
+  const school = type.schoolAssignments?.[0]?.school.name?.trim();
+  if (school) return school;
+  const org =
+    type.ownerOrg?.name?.trim() ??
+    type.organizationAssignments?.[0]?.organization.name?.trim();
+  if (org) return org;
+  return shortAssignmentTypeIdForPicker(type.id);
+}
+
+/** Keeps every option; duplicate display titles get a school/org suffix or type id. */
+export function disambiguateAdminRubricPickerTitles(
+  options: AdminRubricPickerOption[],
+  ownershipByCatalogKey: Map<string, string>
+): AdminRubricPickerOption[] {
+  const sorted = [...options].sort((a, b) => a.title.localeCompare(b.title));
+  const byNormalized = new Map<string, AdminRubricPickerOption[]>();
+  for (const option of sorted) {
+    const key = normalizePickerTitle(option.title);
+    const group = byNormalized.get(key) ?? [];
+    group.push(option);
+    byNormalized.set(key, group);
+  }
+
+  const duplicateGroups = [...byNormalized.values()].filter((group) => group.length > 1);
+  if (duplicateGroups.length) {
+    console.warn('admin_rubric_picker_duplicate_titles', {
+      titles: duplicateGroups.map((group) => group[0]?.title),
+      catalogKeys: duplicateGroups.flatMap((group) =>
+        group.map((option) => option.catalogKey)
+      ),
+    });
+  }
+
+  const used = new Set<string>();
+  return sorted.map((option) => {
+    const group = byNormalized.get(normalizePickerTitle(option.title)) ?? [option];
+    if (group.length === 1) {
+      used.add(normalizePickerTitle(option.title));
+      return option;
+    }
+
+    const typeId = option.catalogKey.startsWith(ADMIN_PER_TYPE_PICKER_PREFIX)
+      ? option.catalogKey.slice(ADMIN_PER_TYPE_PICKER_PREFIX.length)
+      : option.name;
+    const suffix =
+      ownershipByCatalogKey.get(option.catalogKey) ??
+      shortAssignmentTypeIdForPicker(typeId);
+
+    let candidate = `${option.title} (${suffix})`;
+    if (used.has(normalizePickerTitle(candidate))) {
+      candidate = `${option.title} (${shortAssignmentTypeIdForPicker(typeId)})`;
+    }
+    used.add(normalizePickerTitle(candidate));
+    return { ...option, title: candidate };
+  });
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
@@ -169,13 +260,16 @@ export async function listLiveRubricsForAdminPicker(
   });
   const libraryByName = new Map(libraryRows.map((row) => [row.name, row]));
 
-  const perTypeRows = perTypeIds.length
+  const perTypeRows: PerTypePickerRow[] = perTypeIds.length
     ? await db.assignmentType.findMany({
         where: { id: { in: perTypeIds }, archivedAt: null, rubricId: null },
-        select: { id: true, title: true },
+        select: perTypePickerSelect,
       })
     : [];
   const perTypeById = new Map(perTypeRows.map((row) => [row.id, row]));
+  const ownershipByCatalogKey = new Map(
+    perTypeRows.map((row) => [perTypeKey(row.id), pickerOwnershipLabel(row)])
+  );
 
   const options: AdminRubricPickerOption[] = [];
 
@@ -222,12 +316,7 @@ export async function listLiveRubricsForAdminPicker(
     });
   }
 
-  const sorted = options.sort((a, b) => a.title.localeCompare(b.title));
-  const titles = sorted.map((row) => row.title.trim().toLowerCase());
-  if (new Set(titles).size !== titles.length) {
-    throw new Error('Admin rubric picker produced duplicate titles');
-  }
-  return sorted;
+  return disambiguateAdminRubricPickerTitles(options, ownershipByCatalogKey);
 }
 
 export { ADMIN_BUILTIN_PICKER_PREFIX } from './admin-rubric-picker-builtins';

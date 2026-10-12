@@ -114,11 +114,15 @@ describe('listLiveRubricsForAdminPicker', () => {
       {
         id: 'type-1',
         title: 'Thesis lab',
+        ownerOrg: null,
+        schoolAssignments: [],
+        organizationAssignments: [],
         scoringScaleJson: { minScore: 0, maxScore: 5 },
         rubricJson: validLibrarySchema.rubric,
         gradingPromptConfigJson: {},
         gradingOutputSchemaJson: validLibrarySchema.outputSchema,
         gradingCalibrationNotes: null,
+        rubricBaseline: null,
       },
     ]);
 
@@ -129,45 +133,71 @@ describe('listLiveRubricsForAdminPicker', () => {
     ]);
   });
 
-  test('does not emit duplicate titles', async () => {
+  test('disambiguates production-shaped duplicate QA writing titles', async () => {
+    const qaTitle = 'Production QA Writing';
+    const qaV1 = 'prod-qa-writing-assignment-type';
+    const qaV3 = 'prod-qa-v3-writing-assignment-type';
+    const warn = console.warn;
+    const warnings: unknown[] = [];
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args);
+    };
+
     catalogList.mockResolvedValue({
       rubrics: [
         {
-          key: 'thesis-driven-essay',
-          source: 'library',
-          name: 'thesis-driven-essay',
-          title: 'Thesis-driven essay grading assistant',
+          key: `assignment-type:${qaV1}`,
+          source: 'assignment-type',
+          name: `assignment-type:${qaV1}`,
+          title: qaTitle,
           editable: true,
         },
         {
-          key: 'class-starter-engagement',
-          source: 'library',
-          name: 'class-starter-engagement',
-          title: 'Class Starter engagement',
+          key: `assignment-type:${qaV3}`,
+          source: 'assignment-type',
+          name: `assignment-type:${qaV3}`,
+          title: qaTitle,
           editable: true,
         },
       ],
     });
-    rubric.findMany.mockImplementation(async (args: { where?: { archivedAt?: unknown; name?: { in: string[] } } }) => {
+    rubric.findMany.mockImplementation(async (args: { where?: { archivedAt?: unknown } }) => {
       if (args?.where?.archivedAt) return [];
-      if (args?.where?.name?.in) {
-        return args.where.name.in.map((name, index) => ({
-          id: `lib-${index}`,
-          name,
-          title:
-            name === 'thesis-driven-essay'
-              ? 'Thesis-driven essay grading assistant'
-              : 'Class Starter engagement',
-          schemaJson: validLibrarySchema,
-          currentRevision: null,
+      return [];
+    });
+    assignmentType.findMany.mockImplementation(async (args: { where?: { id?: { in: string[] } } }) => {
+      if (args?.where?.id?.in) {
+        return args.where.id.in.map((id) => ({
+          id,
+          title: qaTitle,
+          ownerOrg: {
+            name:
+              id === qaV3 ? 'Production QA v3 Organization' : 'Production QA Organization',
+          },
+          schoolAssignments: [],
+          organizationAssignments: [],
+          scoringScaleJson: { minScore: 1, maxScore: 5 },
+          rubricJson: validLibrarySchema.rubric,
+          gradingPromptConfigJson: {},
+          gradingOutputSchemaJson: validLibrarySchema.outputSchema,
+          gradingCalibrationNotes: null,
+          rubricBaseline: null,
         }));
       }
       return [];
     });
 
     const options = await listLiveRubricsForAdminPicker(db as never);
+    console.warn = warn;
+
+    expect(options).toHaveLength(2);
     const titles = options.map((row) => row.title);
-    expect(new Set(titles).size).toBe(titles.length);
+    expect(new Set(titles).size).toBe(2);
+    expect(titles.some((title) => title.includes('Production QA Organization'))).toBe(true);
+    expect(titles.some((title) => title.includes('Production QA v3 Organization'))).toBe(true);
+    expect(warnings.some((entry) => JSON.stringify(entry).includes('admin_rubric_picker_duplicate_titles'))).toBe(
+      true
+    );
   });
 
   test('excludes archived and retired library rubrics', async () => {
@@ -277,6 +307,9 @@ describe('listLiveRubricsForAdminPicker', () => {
           {
             id: actTypeId,
             title: 'ACT Writing Section',
+            ownerOrg: null,
+            schoolAssignments: [],
+            organizationAssignments: [],
             scoringScaleJson: { minScore: 1, maxScore: 6 },
             rubricJson: { categories: [] },
             gradingPromptConfigJson: {},
@@ -286,7 +319,15 @@ describe('listLiveRubricsForAdminPicker', () => {
           },
         ];
       }
-      return [{ id: actTypeId, title: 'ACT Writing Section' }];
+      return [
+        {
+          id: actTypeId,
+          title: 'ACT Writing Section',
+          ownerOrg: null,
+          schoolAssignments: [],
+          organizationAssignments: [],
+        },
+      ];
     });
 
     const options = await listLiveRubricsForAdminPicker(db as never);
