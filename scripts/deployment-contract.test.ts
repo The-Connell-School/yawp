@@ -190,6 +190,7 @@ describe('production deployment contract', () => {
     expect(workflow).toContain('Verify production image resolves preview seed imports');
     expect(workflow).toContain('seed-free-tier-feature-flag.ts');
     expect(workflow).toContain('seed-preview-seats.ts');
+    expect(workflow).toContain('free-tier-ship-review-seed-guard.mjs');
   });
 
   test('container startup runs React Router serve with Bun instead of requiring Node', () => {
