@@ -10,7 +10,9 @@ import { redirect } from 'react-router';
 import { prisma } from '~/utils/db.server';
 import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import { buildLessonPacket, type LessonPacket } from './lesson-packet';
-import { packetKindForMaterial } from './lesson-material';
+import { MATERIAL_KIND_LABELS, packetKindForMaterial, type ArtifactKind } from './lesson-material';
+import { findWritingExerciseTypeIds } from './yawp-catalog.server';
+import { stackCreateLink, type StackCreateLink } from './stack-create-link';
 import { getQuickWritingLessons } from '~/utils/writing-lessons/static-lessons.server';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
 import { nameIsProvisional } from './lesson-name';
@@ -33,14 +35,25 @@ export type LoadedLessonPacket = {
   nameIsProvisional: boolean;
   /** Brian's review flags for this school. */
   reviewFlags: { intakeV2: boolean; stackV2: boolean; deckV2: boolean };
+  /**
+   * Per filed piece, by section id (Brian's run 2, A5): what it is called
+   * ("Class Starter", not "Handout") and, for a writing piece, the link that
+   * makes it a real assignment. Only under stack v2.
+   */
+  stackDetails: Record<string, { label: string; create: StackCreateLink | null }>;
 };
+
+const WRITING_KINDS = new Set(['class-starter', 'daily-pages', 'exit-ticket']);
 
 export async function loadLessonPacket({
   request,
   conversationId,
+  withStackDetails = true,
 }: {
   request: Request;
   conversationId: string | undefined;
+  /** The page's per-piece labels and create links; a download needs neither. */
+  withStackDetails?: boolean;
 }): Promise<LoadedLessonPacket> {
   const access = await getLessonPlannerAccess(request);
   if (!access.allowed) throw redirect('/app');
@@ -87,6 +100,7 @@ export async function loadLessonPacket({
           content: true,
           editedAt: true,
           position: true,
+          sourceMessageId: true,
         },
       },
     },
@@ -134,6 +148,52 @@ export async function loadLessonPacket({
     })),
   ]);
 
+  const reviewFlags = await getLessonPlannerReviewFlags(
+    access.membership.organization.id
+  );
+  const stackDetails: LoadedLessonPacket['stackDetails'] = {};
+  if (reviewFlags.stackV2 && withStackDetails) {
+    const writing = conversation.materials.filter((material) =>
+      WRITING_KINDS.has(material.kind)
+    );
+    const typeIds = writing.length
+      ? await findWritingExerciseTypeIds({
+          membershipId: access.membership.id,
+          organizationId: access.membership.organization.id,
+        })
+      : null;
+    const ticketSources = writing.some((material) => material.kind === 'exit-ticket')
+      ? await prisma.lessonPlanMessage.findMany({
+          where: {
+            conversationId: conversation.id,
+            id: {
+              in: writing
+                .filter((material) => material.kind === 'exit-ticket')
+                .map((material) => material.sourceMessageId),
+            },
+          },
+          select: { id: true, content: true },
+        })
+      : [];
+    const sourceById = new Map(ticketSources.map((message) => [message.id, message.content]));
+    for (const material of conversation.materials) {
+      stackDetails[material.id] = {
+        label:
+          MATERIAL_KIND_LABELS[material.kind as ArtifactKind] ?? material.kind,
+        create: typeIds
+          ? stackCreateLink({
+              kind: material.kind,
+              content: material.content,
+              blockKey: material.blockKey,
+              sourceContent: sourceById.get(material.sourceMessageId) ?? null,
+              typeIds,
+              conversationId: conversation.id,
+            })
+          : null,
+      };
+    }
+  }
+
   const firstUserMessage = await prisma.lessonPlanMessage.findFirst({
     where: { conversationId: conversation.id, role: 'user' },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -158,8 +218,7 @@ export async function loadLessonPacket({
       firstUserMessage: firstUserMessage?.content ?? null,
       unitDay: conversation.unitDay,
     }),
-    reviewFlags: await getLessonPlannerReviewFlags(
-      access.membership.organization.id
-    ),
+    reviewFlags,
+    stackDetails,
   };
 }

@@ -330,4 +330,54 @@ test.describe("Lesson Planner — Brian's second run", () => {
       await expect(page.getByTestId('stack-list-row')).toHaveText([/Keep me/]);
     });
   });
+
+  test.describe('A5, A6: writing pieces become assignments; codes stay hidden', () => {
+    test('a filed class starter says what it is, offers Create in YAWP!, and shows no code', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      const { conversationId } = await seedStack(e2eContext, [
+        {
+          title: 'Class Starter: Write about something you carry',
+          kind: 'class-starter',
+          audience: 'student',
+          // The footer every starter filed before run 2 carries.
+          content: 'Write about something you carry every day.\n\n_Class Starter prompt FW-021_',
+        },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+
+      const section = page.getByTestId('packet-section');
+      await expect(section).toContainText('Write about something you carry every day.');
+      await expect(page.locator('body')).not.toContainText('FW-021');
+      await expect(section).toContainText('Class Starter');
+      const create = section.getByTestId('stack-create-assignment');
+      await expect(create).toHaveText('Create this class starter in YAWP!');
+      await expect(create).toHaveAttribute('href', /\/app\/assignment-types\/.+newPrompt=Write/);
+    });
+
+    test('the chat never shows a library code, in prose or in a chip', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      const { conversationId } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Swap out the class starter prompt' },
+        {
+          role: 'assistant',
+          content:
+            'Two others that fit:\n\n- FW-093: "What is the heaviest thing you have ever carried?"\n- FW-024: "What do you carry that no one can see?"\n\n' +
+            '```suggestions\nUse prompt FW-093 instead\n```',
+        },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+      await expect(page.getByText('What is the heaviest thing you have ever carried?')).toBeVisible();
+      await expect(page.locator('main')).not.toContainText('FW-093');
+      await expect(page.locator('main')).not.toContainText('FW-024');
+    });
+  });
 });

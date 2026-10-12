@@ -7,6 +7,7 @@ import { prisma } from '~/utils/db.server';
 import type { StackContentsEntry } from '~/routes/api.domain.lesson-planner/build-system-prompt';
 import { deriveSectionTitle } from './lesson-packet';
 import { orderStackEntries } from './stack-order';
+import { hidePromptIds } from './prompt-ids';
 
 export async function loadStackContents(
   conversationId: string
@@ -40,7 +41,7 @@ export async function loadStackContents(
       item: {
         kind: 'lesson',
         title: message.keptTitle ?? deriveSectionTitle(message.content, index),
-        content: message.content,
+        content: hidePromptIds(message.content),
       },
     })),
     ...materials.map((material) => ({
@@ -50,7 +51,9 @@ export async function loadStackContents(
       item: {
         kind: material.kind,
         title: material.title,
-        content: material.content,
+        // The model echoed "Class Starter prompt FW-021" back at teachers
+        // because it read it here (Brian's run 2, item 26).
+        content: hidePromptIds(material.content),
       },
     })),
   ]);

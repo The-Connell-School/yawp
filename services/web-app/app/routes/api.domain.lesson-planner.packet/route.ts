@@ -365,6 +365,7 @@ export async function action({ request }: ActionFunctionArgs) {
       sourceCreatedAt: message.createdAt,
       sourceMessageId: message.id,
       blockKey: material.key,
+      promptId: material.promptId ?? null,
     };
     // Keyed by what the artifact IS, so filing a revision takes the original's
     // place. A teacher who asks for a shorter handout wants one handout.

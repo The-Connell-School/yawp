@@ -60,6 +60,7 @@ export default function LessonPacketRoute() {
     published,
     nameIsProvisional,
     reviewFlags,
+    stackDetails,
   } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const revalidator = useRevalidator();
@@ -204,6 +205,7 @@ export default function LessonPacketRoute() {
     origin: section.origin,
     title: section.title,
     kind: section.kind,
+    label: stackDetails[section.id]?.label,
     minutes: minutesByAnchor.get(section.anchor) ?? null,
   }));
 
@@ -577,7 +579,8 @@ export default function LessonPacketRoute() {
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <span className="inline-flex items-center gap-1 rounded-full bg-foreground/5 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground print:hidden">
                         <KindIcon kind={section.kind} size={11} />
-                        {KIND_LABEL[section.kind]}
+                        {/* "Class Starter", not "Handout" (Brian's run 2). */}
+                        {stackDetails[section.id]?.label ?? KIND_LABEL[section.kind]}
                       </span>
                       {section.edited ? (
                         <span
@@ -618,6 +621,16 @@ export default function LessonPacketRoute() {
                           <PenLine size={13} />
                           Edit
                         </button>
+                      ) : null}
+                      {stackDetails[section.id]?.create ? (
+                        <Link
+                          to={stackDetails[section.id]!.create!.href}
+                          data-testid="stack-create-assignment"
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary transition hover:bg-primary/15 print:hidden"
+                        >
+                          <PenLine size={13} />
+                          {stackDetails[section.id]!.create!.label}
+                        </Link>
                       ) : null}
                       {stackV2 ? (
                         <button

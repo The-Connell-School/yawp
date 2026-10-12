@@ -164,7 +164,9 @@ describe('buildLessonPacket', () => {
     // both would print "Warm-up (5 min)" twice on paper.
     expect(packet.sections[0]!.title).toBe('Warm-up (5 min)');
     expect(packet.sections[0]!.content).not.toContain('# Warm-up (5 min)');
-    expect(packet.sections[0]!.content).toContain('Daily Pages prompt FW-001');
+    // Brian's run 2 (item 17): the library code never reaches the teacher.
+    expect(packet.sections[0]!.content).not.toContain('FW-001');
+    expect(packet.sections[0]!.content).not.toMatch(/^\.$/m);
     // Inner headings survive — only the duplicated title is removed.
     expect(packet.sections[0]!.content).toContain('### Teacher moves');
   });

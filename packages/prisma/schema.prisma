@@ -1557,6 +1557,10 @@ model LessonPlanMaterial {
   /// Where this piece sits in the teacher's stack once they have reordered it
   /// (Brian's run 2, A1). Null: ordered by the reply it came from.
   position        Int?
+  /// The library prompt a class starter or Daily Pages piece came from
+  /// (FW-021, sf-ev-03), kept as data for its assignment sheet and never
+  /// shown to the teacher (Brian's run 2, A6).
+  promptId        String?
 
   @@unique([conversationId, slot])
   @@index([conversationId, sourceMessageId, blockKey])

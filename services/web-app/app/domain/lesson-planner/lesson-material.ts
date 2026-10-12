@@ -118,6 +118,12 @@ export type LessonMaterial = {
   audience: PacketAudience;
   /** Markdown, ready to render or print. */
   content: string;
+  /**
+   * The library prompt this came from (FW-021, sf-ev-03), kept as data so the
+   * stack can send it to the right assignment sheet. Never shown (Brian's
+   * run 2, item 17).
+   */
+  promptId?: string | null;
 };
 
 const MATERIAL_BLOCK = new RegExp(

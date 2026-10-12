@@ -26,8 +26,8 @@ const EXERCISE_TITLE_CHARS = 60;
 /**
  * A class starter or Daily Pages prompt, filed on its own (Brian's review,
  * B1). Each prompt gets its own slot, so three options are three pieces the
- * teacher can take or leave. The library id rides along in the content so the
- * stack can still send it to the right assignment sheet.
+ * teacher can take or leave. The library id rides along as data, never in the
+ * text a teacher reads (Brian's run 2, item 17).
  */
 export function exerciseAsMaterial(
   exercise: DailyPagesExercise,
@@ -45,9 +45,8 @@ export function exerciseAsMaterial(
     kind: exercise.kind,
     title: `${label}: ${short}`,
     audience: 'student',
-    content: exercise.promptId
-      ? `${exercise.prompt}\n\n_${label} prompt ${exercise.promptId}_`
-      : exercise.prompt,
+    content: exercise.prompt,
+    promptId: exercise.promptId ?? null,
   };
 }
 

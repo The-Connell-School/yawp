@@ -81,12 +81,14 @@ describe("class starters and Daily Pages go in the stack (Brian's review, B1)", 
     expect(new Set(slots).size).toBe(3);
   });
 
-  test('keeps the library id so the stack can still assign it', () => {
+  test('keeps the library id as data, never in the text (Brian\'s run 2)', () => {
     const material = exerciseAsMaterial(
       { kind: 'class-starter', prompt: 'Think of the last time…', promptId: 'FW-001' },
       'dp'
     );
-    expect(material.content).toContain('FW-001');
+    expect(material.promptId).toBe('FW-001');
+    expect(material.content).not.toContain('FW-001');
+    expect(material.title).not.toContain('FW-001');
   });
 
   test('returns null for an exercise that is not there', () => {

@@ -66,6 +66,7 @@ import {
 import { UnitPlanCard } from '~/components/ai-chat/unit-plan-card';
 import { readUnitPlan } from '~/domain/lesson-planner/unit-plan';
 import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
+import { hidePromptIds } from '~/domain/lesson-planner/prompt-ids';
 import {
   FROM_STACK_SUGGESTIONS,
   isFileActionSuggestion,
@@ -1184,7 +1185,8 @@ function MessageBubble({
     topicSettled: !isOpeningReply,
     planAlreadyWritten: deliveredPlan,
   });
-  const suggestions = withStandardSuggestions(modelSuggestions, {
+  // Library prompt ids never reach a teacher (Brian's run 2, item 21).
+  const suggestions = withStandardSuggestions(modelSuggestions.map(hidePromptIds), {
     isOpeningReply,
     teacherRaisedRoomPersonality,
     deliveredPlan,
@@ -1215,7 +1217,9 @@ function MessageBubble({
               return (
                 <div key={key} className={index > 0 ? 'mt-3' : undefined}>
                   <MarkdownContent
-                    content={linkMaterialTitles(part.text, materials)}
+                    content={hidePromptIds(
+                      linkMaterialTitles(part.text, materials)
+                    )}
                   />
                 </div>
               );
@@ -1279,7 +1283,10 @@ function MessageBubble({
             return (
               <div key={key} className="mt-3">
                 <MaterialCard
-                  material={part.material}
+                  material={{
+                    ...part.material,
+                    content: hidePromptIds(part.material.content),
+                  }}
                   added={
                     !!message.id &&
                     addedMaterials.has(`${message.id}:${part.material.key}`)

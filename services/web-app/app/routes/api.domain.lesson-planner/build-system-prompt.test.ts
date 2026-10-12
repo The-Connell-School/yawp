@@ -1036,9 +1036,10 @@ describe('buildLessonPlannerSystemPrompt — no bare prompt ids in a unit overvi
     );
   });
 
-  test('requires the cluster preview to bullet id and real text together', () => {
+  test('requires the cluster preview to bullet the real text, with the ids kept out of sight', () => {
     expect(lower).toContain('bullet the cluster instead, one line per day');
-    expect(lower).toContain("day 1 — fw-001: 'how do people gain power?'");
+    expect(lower).toContain("day 1 — 'how do people gain power?'");
+    expect(lower).toContain('the ids stay in the blocks, out of sight');
   });
 
   test('extends the general no-bare-citation rule to a multi-day overview', () => {
@@ -1601,5 +1602,21 @@ describe("buildLessonPlannerSystemPrompt — the app owns every file (Brian's ru
       stackContents: [{ kind: 'notes', title: 'Framing', content: 'Vietnam.' }],
     });
     expect(blocks[1].text).not.toContain('a printed lesson plan');
+  });
+});
+
+describe("buildLessonPlannerSystemPrompt — prompt ids stay out of sight (Brian's run 2, A6)", () => {
+  const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'Connell School' });
+
+  test('ids go only in the block header, never in prose, slides, handouts or suggestions', () => {
+    expect(prompt).toContain(
+      'Never show a prompt id (FW-021, sf-ev-03) to the teacher'
+    );
+  });
+
+  test('no longer models citing an id inline in a step', () => {
+    expect(prompt).not.toContain('Daily Pages prompt FW-001:');
+    expect(prompt).not.toContain('cite its prompt id');
+    expect(prompt).not.toContain('"Day 1 — FW-001:');
   });
 });

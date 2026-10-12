@@ -1,0 +1,73 @@
+import { describe, expect, test } from 'bun:test';
+import { stackCreateLink } from './stack-create-link';
+
+const typeIds = { dailyPages: 'dp-type', classStarter: 'cs-type', exitTicket: 'et-type' };
+
+describe("stackCreateLink (Brian's run 2, A5)", () => {
+  test('a class starter goes to the Class Starter sheet with its prompt', () => {
+    const link = stackCreateLink({
+      kind: 'class-starter',
+      content: 'Write about something you carry.',
+      blockKey: 'dp',
+      sourceContent: null,
+      typeIds,
+      conversationId: 'plan-1',
+    });
+    expect(link?.label).toBe('Create this class starter in YAWP!');
+    expect(link?.href).toContain('/app/assignment-types/cs-type?');
+    expect(link?.href).toContain('newPrompt=Write+about+something+you+carry.');
+    expect(link?.href).toContain('fromLesson=plan-1');
+  });
+
+  test('a Daily Pages prompt goes to Daily Pages, without any old id footer', () => {
+    const link = stackCreateLink({
+      kind: 'daily-pages',
+      content: 'Explain your claim.\n\n_Daily Pages prompt sf-ev-03_',
+      blockKey: 'dp:1',
+      sourceContent: null,
+      typeIds,
+      conversationId: 'plan-1',
+    });
+    expect(link?.label).toBe('Create this Daily Pages prompt in YAWP!');
+    expect(link?.href).toContain('/app/assignment-types/dp-type?');
+    expect(decodeURIComponent(link!.href)).not.toContain('sf-ev-03');
+  });
+
+  test('an exit ticket is rebuilt from the reply it came from', () => {
+    const link = stackCreateLink({
+      kind: 'exit-ticket',
+      content: 'What weighed nothing?',
+      blockKey: 'ticket:1',
+      sourceContent:
+        '```yawp-exit-ticket\nmode: basic\n```\n\n```yawp-exit-ticket\nmode: specific\nfocus: explain-concept\ntopic: weight\nanswer: objective\n```',
+      typeIds,
+      conversationId: 'plan-1',
+    });
+    expect(link?.label).toBe('Create this exit ticket in YAWP!');
+    expect(link?.href).toContain('/app/assignment-types/et-type');
+    expect(decodeURIComponent(link!.href)).toContain('weight');
+  });
+
+  test('nothing for a handout, or when the school has no such assignment', () => {
+    expect(
+      stackCreateLink({
+        kind: 'handout',
+        content: 'Read.',
+        blockKey: '0',
+        sourceContent: null,
+        typeIds,
+        conversationId: 'plan-1',
+      })
+    ).toBeNull();
+    expect(
+      stackCreateLink({
+        kind: 'class-starter',
+        content: 'Write.',
+        blockKey: 'dp',
+        sourceContent: null,
+        typeIds: { ...typeIds, classStarter: null },
+        conversationId: 'plan-1',
+      })
+    ).toBeNull();
+  });
+});
