@@ -43,6 +43,7 @@ Requests older than five minutes are rejected. Each `(keyId, nonce)` pair is sto
 - `rubrics:read` / `rubrics:write` — `/api/internal/v1/rubric-catalog*` and `/api/internal/v1/rubrics*`
 - `flags:read` / `flags:write` — `/api/internal/v1/feature-flags*`
 - `stats:read` — `GET /api/internal/v1/stats/grading`
+- `audit:read` — `GET /api/internal/v1/audit`
 - `management:read` / `management:write` — remaining management routes (users, organizations, free tier, QA, impersonation audit)
 
 Signed keys are rate limited (120 requests / minute / key id). Mutating signed calls append a row to `InternalPlatformApiAudit` with actor, key id, endpoint, request hash, and result.
@@ -52,6 +53,10 @@ Legacy bearer auth continues to use `YAWP_MANAGEMENT_SERVICE_KEY` on management 
 ### Grading stats (read only)
 
 `GET /api/internal/v1/stats/grading?since=YYYY-MM-DD&until=YYYY-MM-DD` requires `stats:read`. It returns daily counts of grading assistant runs grouped by organization, assignment type, success/failure, and whether a teacher note was present. The response contains only aggregate counts (no student writing or note text).
+
+### Platform API write audit (read only)
+
+`GET /api/internal/v1/audit?since=YYYY-MM-DD&until=YYYY-MM-DD` requires `audit:read`. It lists rows previously recorded for signed mutating internal API calls. Each event includes `keyId`, `actor`, `method`, `endpoint`, `result`, and `timestamp` (UTC). Request bodies and request hashes are never returned. Optional `limit` (1–100, default 50) and a `cursor` bound to the date range paginate results newest-first.
 
 ## Implemented: user directory
 
