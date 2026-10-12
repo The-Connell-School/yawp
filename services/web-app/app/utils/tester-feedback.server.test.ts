@@ -114,7 +114,7 @@ describe('tester feedback submission', () => {
       { severity: 'urgent' },
       { url: 'https://other.example/app' },
       { url: '/auth/login' },
-    ] as Record<string, string>[])  {
+    ] as Record<string, string>[]) {
       const { deps, saved } = setup();
       expect((await submitTesterFeedback(request(values), deps)).status).toBe(
         400

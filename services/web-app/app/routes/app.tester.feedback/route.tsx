@@ -1,5 +1,6 @@
 import {
   Form,
+  redirect,
   Link,
   useLoaderData,
   useLocation,
@@ -15,6 +16,9 @@ import { Button } from '~/components/ui/button';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
+  const url = new URL(request.url);
+  if (url.searchParams.get('format') === 'csv')
+    return redirect('/api/admin/tester-feedback' + url.search);
   const response = await readTesterFeedback(
     request,
     testerFeedbackDependencies,
@@ -42,7 +46,7 @@ export default function TesterFeedbackPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Tester feedback</h1>
         <Button asChild variant="outline">
-          <a href={`?${csv}`} download>
+          <a href={`/api/admin/tester-feedback?${csv}`} download>
             Download CSV
           </a>
         </Button>
