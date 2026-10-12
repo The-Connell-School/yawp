@@ -13,7 +13,7 @@ locals {
       security_group_id = "sg-0014c26538a83fdc8"
     },
     {
-      description     = "Postgres from Yawp Admin host"
+      description       = "Read-only PostgreSQL from Yawp Admin host"
       security_group_id = "sg-0b978b4f306a80e6a"
     },
   ] : []
@@ -831,7 +831,6 @@ resource "aws_s3_bucket_cors_configuration" "videos" {
       "http://localhost:5173",
       "https://${aws_apprunner_service.web.service_url}",
       "https://yawp.school",
-      "https://${var.ua_partner_hostname}",
     ]
     allowed_headers = ["*"]
     expose_headers  = ["ETag", "x-amz-request-id", "x-amz-id-2"]
