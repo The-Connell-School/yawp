@@ -71,4 +71,32 @@ test.describe.serial('Tester feedback', () => {
       await prisma.$disconnect();
     }
   });
+  test('admin can review and download matching CSV entries', async ({ page, signIn, e2eContext }) => {
+    const prisma = createE2EPrismaClient();
+    const user = await prisma.user.findUniqueOrThrow({ where: { email: e2eContext.teacherEmail } });
+    let feedbackId: string | undefined;
+    try {
+      await prisma.user.update({ where: { id: user.id }, data: { isAdmin: true } });
+      const entry = await prisma.testerFeedback.create({ data: {
+        userId: user.id, url: '/app/assignments', userAgent: 'E2E', whatIDid: 'E2E admin export', whatHappened: 'Loaded', whatIWish: 'Faster', severity: 'low', environment: 'test',
+      } });
+      feedbackId = entry.id;
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto(`/app/tester/feedback?userId=${user.id}&environment=test`);
+      await expect(page.getByRole('heading', { name: 'Tester feedback' })).toBeVisible();
+      await expect(page.getByText('E2E admin export', { exact: true })).toBeVisible();
+      const downloadPromise = page.waitForEvent('download');
+      await page.getByRole('link', { name: 'Download CSV' }).click();
+      const download = await downloadPromise;
+      expect(download.suggestedFilename()).toBe('tester-feedback.csv');
+      const response = await page.request.get(`/api/admin/tester-feedback?format=csv&userId=${user.id}&environment=test`);
+      expect(response.headers()['content-type']).toContain('text/csv');
+      expect(await response.text()).toContain('E2E admin export');
+    } finally {
+      if (feedbackId) await prisma.testerFeedback.delete({ where: { id: feedbackId } });
+      await prisma.user.update({ where: { id: user.id }, data: { isAdmin: user.isAdmin } });
+      await prisma.$disconnect();
+    }
+  });
+
 });
