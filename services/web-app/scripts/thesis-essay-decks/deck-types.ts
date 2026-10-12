@@ -16,6 +16,7 @@ export type AssetImage =
   | 'critical-essay-form.png'
   | 'yawp-editor-prewriting.png'
   | 'yawp-editor-thesis.png'
+  | 'yawp-editor-introduction.png'
   | 'yawp-my-documents.png';
 
 interface BaseSlide {
