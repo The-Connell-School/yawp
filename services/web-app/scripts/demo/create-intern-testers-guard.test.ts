@@ -17,6 +17,7 @@ describe('intern tester demo guard', () => {
   test('refuses production even with a demo marker', () => {
     for (const override of [
       { APP_ENV: 'production' },
+      { APP_ENV: 'prod' },
       { DEPLOY: 'production' },
       { DEPLOY_ENV: 'prod' },
       { ENVIRONMENT: 'production' },

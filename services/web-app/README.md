@@ -102,7 +102,11 @@ secure environment, then preview:
 bun scripts/demo/create-intern-testers.ts --dry-run
 ```
 
-To apply after reviewing the preview:
+Dry-run validates the demo guard, all four `INTERN_PASSWORD_*` variables, and
+the generated Prisma metadata, then prints the planned account emails and
+supported tester markers. It does not open a database connection.
+
+To run the real reconcile after reviewing the preview, use no arguments:
 
 ```bash
 bun scripts/demo/create-intern-testers.ts
@@ -118,8 +122,9 @@ host/path/query, or `DATABASE_SCHEMA`, and refuses `E2E_DATABASE_URL` overrides.
 Passwords are required even for dry-run; they are never logged. Dry-run validates
 configuration and reports planned accounts/flags without connecting to the database.
 
-The generated Prisma DMMF controls optional flags: `User.isTester=true` and
-`User.testerRole=MOCK_ADMIN` when supported. Missing or incompatible columns/enum
-values produce warnings and are skipped. This mock grant does not set real admin
-or super-admin privileges. Use a Prisma client generated from the demo schema.
-A failed run may have completed earlier accounts; rerunning safely reconciles them.
+The generated Prisma DMMF controls optional tester markers: `User.isTester=true`,
+`User.mockAdminGranted=true`, `User.testerRole=MOCK_ADMIN`, and a best-effort
+`TesterGrant` record when supported. Missing or incompatible columns, tables, or
+enum values produce warnings and are skipped. These markers do not set real admin
+or super-admin privileges. Use a Prisma client generated from the demo schema. A
+failed run may have completed earlier accounts; rerunning safely reconciles them.
