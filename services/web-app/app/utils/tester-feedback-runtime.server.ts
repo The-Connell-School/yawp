@@ -1,7 +1,11 @@
+import type { Prisma } from '@app/prisma';
 import { prisma } from './db.server';
 import { getUserId } from './auth.server';
 import { authenticateInternalManagementRequest } from './internal-platform-auth.server';
-import type { FeedbackDependencies } from './tester-feedback.server';
+import type {
+  FeedbackDependencies,
+  FeedbackInput,
+} from './tester-feedback.server';
 
 export const testerFeedbackEnabled = () =>
   process.env.TESTER_FEEDBACK_ENABLED === 'true';
@@ -26,20 +30,7 @@ export const testerFeedbackDependencies: FeedbackDependencies = {
   },
   authenticateInternal: (request) =>
     authenticateInternalManagementRequest(request),
-  save: (input) =>
-    prisma.$transaction(async (tx) => {
-      // Serialize per-user writes across app instances; five submissions per ten minutes.
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('tester_feedback:' || ${input.userId}))`;
-      const count = await tx.testerFeedback.count({
-        where: {
-          userId: input.userId,
-          createdAt: { gte: new Date(Date.now() - 600_000) },
-        },
-      });
-      if (count >= 5) return false;
-      await tx.testerFeedback.create({ data: input });
-      return true;
-    }),
+  save: saveTesterFeedback,
   list: (input) =>
     prisma.testerFeedback.findMany({
       where: {
@@ -60,3 +51,30 @@ export const testerFeedbackDependencies: FeedbackDependencies = {
       take: input.limit,
     }),
 };
+
+export type FeedbackWriteTransaction = Pick<
+  Prisma.TransactionClient,
+  '$executeRaw' | 'testerFeedback'
+>;
+type FeedbackWriteRunner = (
+  operation: (tx: FeedbackWriteTransaction) => Promise<boolean>
+) => Promise<boolean>;
+
+export function saveTesterFeedback(
+  input: FeedbackInput,
+  run: FeedbackWriteRunner = (operation) => prisma.$transaction(operation)
+) {
+  return run(async (tx) => {
+    // Serialize per-user writes across app instances; five submissions per ten minutes.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('tester_feedback:' || ${input.userId}))`;
+    const count = await tx.testerFeedback.count({
+      where: {
+        userId: input.userId,
+        createdAt: { gte: new Date(Date.now() - 600_000) },
+      },
+    });
+    if (count >= 5) return false;
+    await tx.testerFeedback.create({ data: input });
+    return true;
+  });
+}
