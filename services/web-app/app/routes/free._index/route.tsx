@@ -1,6 +1,7 @@
 import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
+  data,
   useLoaderData,
   useFetcher,
 } from 'react-router';
@@ -25,29 +26,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const token = url.searchParams.get('t')?.trim();
   if (!token) return { mode: 'waitlist' as const, tokenValid: null, linkClosed: false as const };
+  const cookie = await readOrMintScanDedupeCookie(request);
   const row = await findAcquisitionTokenByCredential(token);
   if (row) {
-    const cookie = await readOrMintScanDedupeCookie(request);
     await recordAcquisitionTokenScan({
       tokenId: row.id,
       dedupeCookie: cookie.value,
       userAgent: request.headers.get('user-agent'),
     });
-    if (cookie.setCookie) {
-      return new Response(null, {
-        status: 302,
-        headers: {
-          location: url.pathname + url.search,
-          'set-cookie': cookie.setCookie,
-        },
-      });
-    }
   }
   const validity = await checkTokenValidity(token);
   const linkClosed =
     validity.valid === false &&
     (validity.reason === 'disabled' || validity.reason === 'expired' || validity.reason === 'exhausted');
-  return { mode: 'token' as const, token, tokenValid: validity, linkClosed };
+  const payload = { mode: 'token' as const, token, tokenValid: validity, linkClosed };
+  if (cookie.setCookie) {
+    return data(payload, { headers: { 'Set-Cookie': cookie.setCookie } });
+  }
+  return payload;
 }
 
 const formSchema = waitlistInputSchema;
