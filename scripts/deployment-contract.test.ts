@@ -177,6 +177,21 @@ describe('production deployment contract', () => {
     );
   });
 
+  test('Docker image ships preview free-tier seed guard for prisma preview seeds', () => {
+    const dockerfile = readRepoFile('services/web-app/Dockerfile');
+    const workflow = readRepoFile('.github/workflows/ci.yml');
+
+    expect(dockerfile).toContain(
+      'COPY scripts/preview/free-tier-ship-review-seed-guard.mjs ./scripts/preview/free-tier-ship-review-seed-guard.mjs'
+    );
+    expect(dockerfile).toContain(
+      'COPY --from=build /app/scripts/preview ./scripts/preview'
+    );
+    expect(workflow).toContain('Verify production image resolves preview seed imports');
+    expect(workflow).toContain('seed-free-tier-feature-flag.ts');
+    expect(workflow).toContain('free-tier-ship-review-seed-guard.mjs');
+  });
+
   test('container startup runs React Router serve with Bun instead of requiring Node', () => {
     const startScript = readRepoFile('services/web-app/start.sh');
 

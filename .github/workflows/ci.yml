@@ -327,6 +327,18 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun run --cwd packages/prisma seed-local-dev
 
+      - name: 🐳 Verify production image resolves preview seed imports
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: |
+          set -euo pipefail
+          docker build --platform linux/amd64 -t yawp-web-app:ci -f services/web-app/Dockerfile .
+          docker run --rm yawp-web-app:ci bun -e "
+            await import('./packages/prisma/scripts/local-dev/seed-free-tier-feature-flag.ts');
+            await import('./scripts/preview/free-tier-ship-review-seed-guard.mjs');
+          "
+
       - name: 🧪 Preview teacher-notes QA seed (integration)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
