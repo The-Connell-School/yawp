@@ -37,6 +37,14 @@ export const INTERNAL_RUBRICS_FLAG = 'internal_rubrics' as const;
  */
 export const FREE_TIER_FLAG = 'free_tier' as const;
 
+/**
+ * Thesis-Driven Essay slide decks on the assignment type's page (#452). On:
+ * each step in the Modules list offers its lesson's deck to download, and
+ * Day 1's deck sits above them. Off: the Modules list is as before, pointing
+ * teachers to the Teachers' Lounge, and the download route returns 404.
+ */
+export const THESIS_ESSAY_DECKS_FLAG = 'thesis_essay_decks' as const;
+
 export const FEATURE_FLAGS = {
   [LESSON_PLANNER_FLAG]: {
     label: 'Lesson Planner',
@@ -52,6 +60,11 @@ export const FEATURE_FLAGS = {
     label: 'Free tier',
     description:
       'Enables Free Tier C teacher onboarding, school-admin approval links, operator release tools, and related UI. Off: those routes and release APIs return 404; waitlist/token APIs behave as on main until yawp-internal turns this on for everyone.',
+  },
+  [THESIS_ESSAY_DECKS_FLAG]: {
+    label: 'Thesis-Driven Essay slide decks',
+    description:
+      "Shows each lesson's slide deck inside the Thesis-Driven Essay's Modules, for teachers to download. Off: the Modules list points to the Teachers' Lounge as before and the deck downloads return 404.",
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

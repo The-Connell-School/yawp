@@ -4,6 +4,7 @@ import {
   INTERNAL_RUBRICS_FLAG,
   LESSON_PLANNER_FLAG,
   FREE_TIER_FLAG,
+  THESIS_ESSAY_DECKS_FLAG,
   FEATURE_FLAG_KEYS,
   isFreeTierGloballyEnabled,
   featureFlagSettingName,
@@ -58,7 +59,15 @@ describe('feature flag registry', () => {
       LESSON_PLANNER_FLAG,
       INTERNAL_RUBRICS_FLAG,
       FREE_TIER_FLAG,
+      THESIS_ESSAY_DECKS_FLAG,
     ]);
+  });
+
+  test('has the Thesis-Driven Essay decks flag', () => {
+    expect(FEATURE_FLAG_KEYS).toContain(THESIS_ESSAY_DECKS_FLAG);
+    expect(featureFlagSettingName(THESIS_ESSAY_DECKS_FLAG)).toBe(
+      'feature_flag.thesis_essay_decks'
+    );
   });
 
   test('rejects anything that is not a registered flag', () => {

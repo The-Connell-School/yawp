@@ -114,10 +114,12 @@ describe('internal feature-flag endpoints', () => {
       FLAG,
       'internal_rubrics',
       'free_tier',
+      'thesis_essay_decks',
     ]);
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[1]).toMatchObject({ key: 'internal_rubrics', label: 'Rubrics from Yawp Internal', mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[2]).toMatchObject({ key: 'free_tier', label: 'Free tier', mode: 'off', orgIds: [], enabled: false });
+    expect(body.flags[3]).toMatchObject({ key: 'thesis_essay_decks', label: 'Thesis-Driven Essay slide decks', mode: 'off', orgIds: [], enabled: false });
   });
 
   test('no longer lists the removed writing-conditions flag, even if its row is still stored', async () => {
@@ -137,6 +139,7 @@ describe('internal feature-flag endpoints', () => {
       FLAG,
       'internal_rubrics',
       'free_tier',
+      'thesis_essay_decks',
     ]);
   });
 

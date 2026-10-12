@@ -3,7 +3,8 @@
  *
  *   bun scripts/thesis-essay-decks/build.ts [outDir] [deck ...]
  *
- * Defaults to docs/decks/thesis-driven-essay at the repo root and all decks.
+ * Defaults to services/web-app/resources/thesis-essay-decks, where the app
+ * serves them from (the Thesis-Driven Essay page's Modules), and all decks.
  * Name decks to build only those, e.g. `build.ts "" lesson-3-thesis-statement`.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -12,7 +13,7 @@ import { DECKS } from './decks';
 import { renderHybridDeck } from './render-hybrid-deck';
 
 const [outArg, ...only] = process.argv.slice(2);
-const outDir = resolve(outArg || join(import.meta.dir, '../../../../docs/decks/thesis-driven-essay'));
+const outDir = resolve(outArg || join(import.meta.dir, '../../resources/thesis-essay-decks'));
 mkdirSync(outDir, { recursive: true });
 
 for (const { file, deck } of DECKS) {
