@@ -6,6 +6,15 @@ the three free ones, grayed out, so they can see what a paid plan adds. A
 locked tile is not a dead link. Opening it shows that type's "See how it
 works" guide, as a teaser, instead of the type's page.
 
+## Changes made while building it
+
+- Locked tiles and teasers also show during read-only impersonation. A
+  teaser writes nothing, and support staff should see what the teacher sees.
+- The AP History guide uses stills captured from a demo class, not clips.
+- The banner has no link yet; see open question 2.
+- Both paid guides share one route, which picks the guide by the type's
+  `systemKey` (AP History) or title (The Thesis-Driven Essay).
+
 ## Where things stand today
 
 - A free classroom gets exactly three assignment types: Class Starter,
