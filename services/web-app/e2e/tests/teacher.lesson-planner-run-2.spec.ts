@@ -612,4 +612,133 @@ test.describe("Lesson Planner — Brian's second run", () => {
       await expect(page.getByRole('button', { name: 'Swap out the class starter prompt' })).toBeVisible();
     });
   });
+
+  test.describe('A3, A4, E3: every step is a piece; add everything, then refine', () => {
+    const PLAN_WITH_FRAMINGS = [
+      '# The Things They Carried — Day 1',
+      '',
+      '## Framing (5 min)',
+      '',
+      'Pick a framing.',
+      '',
+      '```yawp-material',
+      'kind: notes',
+      'slot: frame-hist',
+      'title: Historical context',
+      '---',
+      'Vietnam, 1969.',
+      '```',
+      '',
+      '```yawp-material',
+      'kind: notes',
+      'slot: frame-lit',
+      'title: Literary context',
+      '---',
+      'Metafiction.',
+      '```',
+      '',
+      '## Read aloud (20 min)',
+      '',
+      'If you like reading aloud yourself, take the first pages.',
+      '',
+      '## Pair talk (8 min)',
+      '',
+      'Pairs compare one thing they carry.',
+    ].join('\n');
+
+    const saved = (page: import('@playwright/test').Page) =>
+      page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/domain/lesson-planner/packet') &&
+          response.request().method() === 'POST'
+      );
+
+    test('a reading step goes in the stack on its own', async ({ page, signIn, e2eContext }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      const { conversationId } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Plan Day 1.' },
+        { role: 'assistant', content: PLAN_WITH_FRAMINGS },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+      const steps = page.getByTestId('plan-step');
+      await expect(steps).toHaveText([/Framing/, /Read aloud/, /Pair talk/]);
+      const done = saved(page);
+      await steps.nth(1).getByTestId('plan-step-toggle').click();
+      expect((await done).ok()).toBe(true);
+      await expect(steps.nth(1).getByTestId('plan-step-toggle')).toHaveText(/in the stack/i);
+
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      await expect(page.getByTestId('stack-list-row')).toHaveText([/Read aloud/]);
+      await expect(page.getByTestId('packet-section')).toContainText('Lesson step');
+      await expect(page.getByTestId('packet-section')).toContainText('If you like reading aloud yourself');
+    });
+
+    test('Add everything files each step and framing as its own piece, in order', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      const { conversationId } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Plan Day 1.' },
+        { role: 'assistant', content: PLAN_WITH_FRAMINGS },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+      const done = saved(page);
+      await page.getByRole('button', { name: 'Add everything to the stack' }).click();
+      expect((await done).ok()).toBe(true);
+      await expect(page.getByText('Everything is in the stack')).toBeVisible();
+
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      await expect(page.getByTestId('stack-list-row')).toHaveText([
+        /Framing/,
+        /Historical context/,
+        /Literary context/,
+        /Read aloud/,
+        /Pair talk/,
+      ]);
+      // Each one can go on its own.
+      await page
+        .getByTestId('stack-list')
+        .getByRole('button', { name: 'Remove Literary context from the stack' })
+        .click();
+      await expect(page.getByTestId('stack-list-row')).toHaveCount(4);
+    });
+
+    test('a lesson kept whole the old way can be split into its pieces', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      const { conversationId, assistantIds } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Plan Day 1.' },
+        { role: 'assistant', content: PLAN_WITH_FRAMINGS },
+      ]);
+      const prisma = createE2EPrismaClient();
+      await prisma.lessonPlanMessage.update({
+        where: { id: assistantIds[0]! },
+        data: { keptAt: new Date(), keptAudience: 'teacher' },
+      });
+      await prisma.$disconnect();
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      await expect(page.getByTestId('stack-list-row')).toHaveCount(1);
+
+      const done = saved(page);
+      await page.getByTestId('section-split').click();
+      expect((await done).ok()).toBe(true);
+      await expect(page.getByTestId('stack-list-row')).toHaveText([
+        /Framing/,
+        /Historical context/,
+        /Literary context/,
+        /Read aloud/,
+        /Pair talk/,
+      ]);
+    });
+  });
 });

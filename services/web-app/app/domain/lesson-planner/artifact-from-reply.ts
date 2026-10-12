@@ -17,7 +17,8 @@ import {
   WRITING_EXERCISE_LABELS,
   type DailyPagesExercise,
 } from './daily-pages-block';
-import { slugify } from './lesson-material';
+import { slugify, LESSON_STEP_KIND } from './lesson-material';
+import { planStepIndexForKey, readPlanSteps, type PlanStep } from './plan-steps';
 
 export { DAILY_PAGES_BLOCK_KEY, dailyPagesBlockKey };
 
@@ -68,6 +69,18 @@ export function exitTicketAsMaterial(
   };
 }
 
+/** A step of a plan, filed on its own (Brian's run 2, A3). */
+export function stepAsMaterial(step: PlanStep): LessonMaterial {
+  return {
+    key: step.key,
+    slot: `${LESSON_STEP_KIND}:${slugify(step.title)}`,
+    kind: LESSON_STEP_KIND,
+    title: step.minutes !== null ? `${step.title} (${step.minutes} min)` : step.title,
+    audience: 'teacher',
+    content: step.content,
+  };
+}
+
 /** Re-read one artifact from a saved assistant reply for packet filing. */
 export function artifactFromAssistantReply(
   content: string,
@@ -87,6 +100,11 @@ export function artifactFromAssistantReply(
     const { tickets } = readPlannedExitTickets(content);
     const ticket = tickets[index];
     return ticket ? exitTicketAsMaterial(ticket, materialKey) : null;
+  }
+  const stepIndex = planStepIndexForKey(materialKey);
+  if (stepIndex !== null) {
+    const step = readPlanSteps(content)[stepIndex];
+    return step ? stepAsMaterial(step) : null;
   }
   const exerciseIndex = dailyPagesIndexForKey(materialKey);
   if (exerciseIndex !== null) {

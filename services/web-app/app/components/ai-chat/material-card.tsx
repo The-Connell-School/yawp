@@ -39,6 +39,7 @@ const KIND_ICON: Record<ArtifactKind, typeof FileText> = {
   slides: Presentation,
   'class-starter': PenLine,
   'daily-pages': PenLine,
+  step: NotebookPen,
 };
 
 export function MaterialCard({

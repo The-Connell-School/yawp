@@ -106,7 +106,7 @@ test.describe("Lesson Planner — Brian's review", () => {
       await expect(page.getByText(INTAKE_QUESTION)).toBeVisible();
       await expect(page.getByRole('button', { name: 'Add all of this' })).toHaveCount(0);
       await expect(
-        page.getByRole('button', { name: /add the whole lesson/i })
+        page.getByRole('button', { name: /add (the whole lesson|everything)/i })
       ).toHaveCount(0);
       await expect(
         page.getByRole('button', { name: 'Add all as a handout' })
@@ -129,8 +129,9 @@ test.describe("Lesson Planner — Brian's review", () => {
       await expect(page.getByTestId('plan-stack-invite')).toContainText(
         "You don't have to use all of these"
       );
+      // Brian's run 2 (A4): the whole lesson goes in as separate pieces.
       await expect(
-        page.getByRole('button', { name: 'Add the whole lesson to the stack' })
+        page.getByRole('button', { name: 'Add everything to the stack' })
       ).toBeVisible();
       await expect(
         page.getByRole('button', { name: 'Add all as a handout' })
@@ -140,12 +141,14 @@ test.describe("Lesson Planner — Brian's review", () => {
         page.getByRole('button', { name: /build the slide deck/i })
       ).toBeVisible();
 
-      await page.getByRole('button', { name: 'Add the whole lesson to the stack' }).click();
-      await expect(page.getByText('In the stack', { exact: true })).toBeVisible();
-      await page.getByRole('button', { name: 'Remove from stack' }).click();
-      await expect(
-        page.getByRole('button', { name: 'Add the whole lesson to the stack' })
-      ).toBeVisible();
+      const filed = page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/domain/lesson-planner/packet') &&
+          response.request().method() === 'POST'
+      );
+      await page.getByRole('button', { name: 'Add everything to the stack' }).click();
+      expect((await filed).ok()).toBe(true);
+      await expect(page.getByText('Everything is in the stack')).toBeVisible();
     });
   });
 

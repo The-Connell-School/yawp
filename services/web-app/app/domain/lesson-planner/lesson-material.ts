@@ -46,7 +46,15 @@ export const DECK_KIND = 'slides';
 export type ArtifactKind =
   | MaterialKind
   | typeof DECK_KIND
+  | typeof LESSON_STEP_KIND
   | (typeof WRITING_EXERCISE_ARTIFACT_KINDS)[number];
+
+/**
+ * One step of a plan — a reading, a pair talk, a quick write — filed on its
+ * own (Brian's run 2, A3), so the stack is an outline of everything that
+ * happens in the lesson, not only its handouts.
+ */
+export const LESSON_STEP_KIND = 'step';
 
 /**
  * A class starter or Daily Pages prompt filed on its own (Brian's review, B1).
@@ -69,6 +77,7 @@ export const MATERIAL_KIND_LABELS: Record<ArtifactKind, string> = {
   slides: 'Slides',
   'class-starter': 'Class Starter',
   'daily-pages': 'Daily Pages',
+  step: 'Lesson step',
 };
 
 /**

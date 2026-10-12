@@ -621,6 +621,24 @@ export default function LessonPacketRoute() {
                           Edit
                         </button>
                       ) : null}
+                      {stackV2 && section.origin === 'reply' ? (
+                        // Brian's run 2 (E3): a lesson kept whole the old
+                        // way becomes its steps and framings, each its own.
+                        <button
+                          type="button"
+                          data-testid="section-split"
+                          onClick={() =>
+                            fetcher.submit(
+                              { intent: 'split-kept', conversationId, messageId: section.id },
+                              { method: 'post', action: '/api/domain/lesson-planner/packet' }
+                            )
+                          }
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground print:hidden"
+                        >
+                          <Rows size={13} />
+                          Split into pieces
+                        </button>
+                      ) : null}
                       {stackDetails[section.id]?.create ? (
                         <Link
                           to={stackDetails[section.id]!.create!.href}

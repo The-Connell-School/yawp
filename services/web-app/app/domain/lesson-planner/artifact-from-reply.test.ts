@@ -95,3 +95,24 @@ describe("class starters and Daily Pages go in the stack (Brian's review, B1)", 
     expect(artifactFromAssistantReply(reply, 'dp:7')).toBeNull();
   });
 });
+
+describe("artifactFromAssistantReply — a lesson step (Brian's run 2, A3)", () => {
+  const plan =
+    '## Read aloud (20 min)\n\nIf you like reading aloud yourself, take the first pages.\n\n## Pair talk (8 min)\n\nPairs compare one item.';
+
+  test('files one step as a teacher-facing lesson step, titled with its minutes', () => {
+    const step = artifactFromAssistantReply(plan, 'st:1');
+    expect(step).toMatchObject({
+      key: 'st:1',
+      kind: 'step',
+      audience: 'teacher',
+      title: 'Pair talk (8 min)',
+      content: 'Pairs compare one item.',
+      slot: 'step:pair-talk',
+    });
+  });
+
+  test('null for a step that is not there', () => {
+    expect(artifactFromAssistantReply(plan, 'st:5')).toBeNull();
+  });
+});

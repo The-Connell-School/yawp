@@ -37,6 +37,11 @@ mock.module('~/domain/lesson-planner/stack-order.server', () => ({
   loadStackOrder,
 }));
 
+const fileReplyPieces = mock();
+mock.module('~/domain/lesson-planner/file-reply-pieces.server', () => ({
+  fileReplyPieces,
+}));
+
 const { action } = await import('./route');
 
 afterAll(() => {
@@ -87,6 +92,7 @@ beforeEach(() => {
   moveStackEntry.mockReset().mockResolvedValue({ ok: true, order: [] });
   nextPositionFor.mockReset().mockResolvedValue(null);
   loadStackOrder.mockReset().mockResolvedValue([]);
+  fileReplyPieces.mockReset().mockResolvedValue({ added: [], skipped: [] });
   prisma.lessonPlanMaterial.findMany.mockReset().mockResolvedValue([]);
   prisma.$transaction
     .mockReset()
@@ -884,5 +890,42 @@ describe("lesson packet action — use this class starter instead (Brian's run 2
       }),
     } as any);
     expect((response as any).init?.status).toBe(400);
+  });
+});
+
+describe("lesson packet action — everything, as pieces (Brian's run 2, A4, E3)", () => {
+  test('keep-all files every piece of the reply on its own', async () => {
+    fileReplyPieces.mockResolvedValue({ added: ['msg-1:st', 'msg-1:0'], skipped: [] });
+    const response = await action({
+      request: formRequest({ intent: 'keep-all', conversationId: 'plan-1', messageId: 'msg-1' }),
+    } as any);
+    expect(fileReplyPieces.mock.calls[0][0]).toMatchObject({
+      conversationId: 'plan-1',
+      message: { id: 'msg-1' },
+      replaceKeptReply: false,
+      confirmReplace: false,
+    });
+    expect((response as any).data).toEqual({
+      added: ['msg-1:st', 'msg-1:0'],
+      skipped: [],
+      messageId: 'msg-1',
+    });
+    // Nothing is kept whole.
+    expect(prisma.lessonPlanMessage.updateMany).not.toHaveBeenCalled();
+  });
+
+  test('split-kept turns a whole kept reply into its pieces, in its place', async () => {
+    await action({
+      request: formRequest({ intent: 'split-kept', conversationId: 'plan-1', messageId: 'msg-1' }),
+    } as any);
+    expect(fileReplyPieces.mock.calls[0][0].replaceKeptReply).toBe(true);
+  });
+
+  test('404s on a reply from another lesson', async () => {
+    prisma.lessonPlanMessage.findFirst.mockResolvedValue(null);
+    const response = await action({
+      request: formRequest({ intent: 'keep-all', conversationId: 'plan-1', messageId: 'nope' }),
+    } as any);
+    expect((response as any).init?.status).toBe(404);
   });
 });

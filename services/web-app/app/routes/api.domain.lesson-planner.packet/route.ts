@@ -14,6 +14,7 @@ import { requireMutableRequest } from '~/utils/auth.server';
 import { requireLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import { PACKET_AUDIENCES } from '~/domain/lesson-planner/lesson-packet';
 import { artifactFromAssistantReply } from '~/domain/lesson-planner/artifact-from-reply';
+import { fileReplyPieces } from '~/domain/lesson-planner/file-reply-pieces.server';
 import {
   loadStackOrder,
   moveStackEntry,
@@ -33,6 +34,8 @@ const MESSAGE_INTENTS = [
   'add-material',
   'remove-material',
   'replace-material',
+  'keep-all',
+  'split-kept',
 ] as const;
 
 /** What "use this one instead" can replace (Brian's run 2, E1). */
@@ -60,6 +63,9 @@ const POST = z
       'move',
       // Brian's run 2 (E1): "Use this one instead" for a class starter.
       'replace-material',
+      // Brian's run 2 (A4, E3): everything in a reply, as separate pieces.
+      'keep-all',
+      'split-kept',
     ]),
     conversationId: z.string().min(1),
     messageId: z.string().min(1).optional(),
@@ -320,6 +326,26 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
     return dataResponse({ removed: true, materialId: data.materialId });
+  }
+
+  if (data.intent === 'keep-all' || data.intent === 'split-kept') {
+    const message = await prisma.lessonPlanMessage.findFirst({
+      where: { id: data.messageId, conversationId: conversation.id, role: 'assistant' },
+      select: { id: true, createdAt: true, content: true },
+    });
+    if (!message) {
+      return dataResponse(
+        { error: 'That reply is not part of this lesson.' },
+        { status: 404 }
+      );
+    }
+    const result = await fileReplyPieces({
+      conversationId: conversation.id,
+      message,
+      replaceKeptReply: data.intent === 'split-kept',
+      confirmReplace: Boolean(data.confirmReplace),
+    });
+    return dataResponse({ ...result, messageId: message.id });
   }
 
   // "Use this one instead" (Brian's run 2, E1): the class starter the

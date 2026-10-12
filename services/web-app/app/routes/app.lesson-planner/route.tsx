@@ -21,6 +21,7 @@ import {
   Printer,
   Send,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '~/components/ui/button';
 import { Textarea } from '~/components/ui/textarea';
 import { cn } from '~/utils/misc';
@@ -68,6 +69,8 @@ import { readUnitPlan } from '~/domain/lesson-planner/unit-plan';
 import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
 import { hidePromptIds } from '~/domain/lesson-planner/prompt-ids';
 import { overTime, planMinutes } from '~/domain/lesson-planner/plan-timing';
+import { readPlanSteps } from '~/domain/lesson-planner/plan-steps';
+import { pieceKeysInReply } from '~/domain/lesson-planner/reply-pieces';
 import {
   asksToSwapStarter,
   BUILD_FROM_STACK_REQUESTS,
@@ -575,6 +578,45 @@ export default function LessonPlannerRoute() {
     });
   }, [packetFetcher.data, conversationId]);
 
+  // "Add everything to the stack" (Brian's run 2, A4): one piece per step and
+  // block, so each can be refined in the stack. Shown as in at once; the
+  // answer says which, if any, were left alone because they were hand-edited.
+  const keepAllFetcher = useFetcher<{ added?: string[]; skipped?: string[] }>();
+  const pendingKeepAll = useRef<string[]>([]);
+  function keepAll(messageId: string, keys: string[]) {
+    if (!conversationId) return;
+    const tokens = keys.map((key) => `${messageId}:${key}`);
+    pendingKeepAll.current = tokens;
+    setAddedMaterials((prev) => {
+      const next = new Set(prev);
+      for (const token of tokens) next.add(token);
+      return next;
+    });
+    keepAllFetcher.submit(
+      { intent: 'keep-all', conversationId, messageId },
+      { method: 'post', action: '/api/domain/lesson-planner/packet' }
+    );
+  }
+  useEffect(() => {
+    const data = keepAllFetcher.data;
+    if (!data?.added) return;
+    const filed = new Set(data.added);
+    const notFiled = pendingKeepAll.current.filter((token) => !filed.has(token));
+    pendingKeepAll.current = [];
+    if (notFiled.length) {
+      setAddedMaterials((prev) => {
+        const next = new Set(prev);
+        for (const token of notFiled) next.delete(token);
+        return next;
+      });
+    }
+    if (data.skipped?.length) {
+      toast(
+        `Left your edited ${data.skipped.length === 1 ? 'piece' : 'pieces'} alone: ${data.skipped.join(', ')}.`
+      );
+    }
+  }, [keepAllFetcher.data]);
+
   // "Replace existing class starter with this one" (Brian's run 2, E1).
   function replaceMaterial(messageId: string, materialKey: string) {
     if (!conversationId) return;
@@ -903,6 +945,7 @@ export default function LessonPlannerRoute() {
                       : null
                   }
                   onReplaceMaterial={replaceMaterial}
+                  onKeepAll={keepAll}
                   teacherClasses={teacherClasses}
                   stackHasPieces={keptCount > 0}
                   disabled={isSending}
@@ -1121,6 +1164,7 @@ function MessageBubble({
   periodMinutes = null,
   previousUserText = null,
   onReplaceMaterial = null,
+  onKeepAll = null,
   disabled,
 }: {
   message: ChatMessage;
@@ -1176,6 +1220,8 @@ function MessageBubble({
   previousUserText?: string | null;
   /** "Replace existing class starter with this one" (Brian's run 2, E1). */
   onReplaceMaterial?: ((messageId: string, materialKey: string) => void) | null;
+  /** "Add everything to the stack", as separate pieces (Brian's run 2, A4). */
+  onKeepAll?: ((messageId: string, keys: string[]) => void) | null;
   disabled: boolean;
 }) {
   if (message.role === 'user') {
@@ -1226,6 +1272,18 @@ function MessageBubble({
   );
   const planOverBy =
     stackV2 && deliveredPlan ? overTime(planMinutes(body), periodMinutes) : null;
+  // Brian's run 2 (A3, A4): the plan's steps, each a piece of its own, and
+  // everything the reply hands over, for "Add everything to the stack".
+  const planSteps =
+    stackV2 && deliveredPlan && message.id
+      ? readPlanSteps(message.content).filter((step) => step.content.trim())
+      : [];
+  const replyPieceKeys =
+    stackV2 && deliveredPlan ? pieceKeysInReply(message.content) : [];
+  const everythingIn =
+    Boolean(message.id) &&
+    replyPieceKeys.length > 0 &&
+    replyPieceKeys.every((key) => addedMaterials.has(`${message.id}:${key}`));
   // The slider belongs in the intake batch and nowhere else: not on the
   // opening reply, where the subject is still open, and not under a finished
   // plan, where every step has already been timed.
@@ -1462,6 +1520,53 @@ function MessageBubble({
             stack, or add the whole lesson.
           </p>
         ) : null}
+        {planSteps.length > 0 ? (
+          // Brian's run 2 (A3): every step — a reading, a pair talk, a quick
+          // write — can go in the stack, not only the writing assignments.
+          <div
+            data-testid="plan-steps"
+            className="mt-2 rounded-xl border border-border/60 bg-card px-3 py-2"
+          >
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Steps in this plan
+            </p>
+            <ul className="flex flex-col">
+              {planSteps.map((step) => {
+                const isIn = addedMaterials.has(`${message.id}:${step.key}`);
+                return (
+                  <li
+                    key={step.key}
+                    data-testid="plan-step"
+                    className="flex items-center gap-2 py-1 text-sm"
+                  >
+                    <span className="min-w-0 flex-1 truncate">{step.title}</span>
+                    {step.minutes !== null ? (
+                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                        {step.minutes} min
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      data-testid="plan-step-toggle"
+                      title={isIn ? 'Click to remove from stack' : undefined}
+                      onClick={() => onMaterial(message.id!, step.key, !isIn)}
+                      className={cn(
+                        'inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium transition disabled:opacity-50',
+                        isIn
+                          ? 'bg-primary/10 text-primary hover:bg-primary/15'
+                          : 'border border-primary/40 text-primary hover:bg-primary/5'
+                      )}
+                    >
+                      {isIn ? <BookmarkCheck size={12} /> : <BookmarkPlus size={12} />}
+                      {isIn ? 'In the stack' : 'Add to stack'}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : null}
         {planOverBy !== null && periodMinutes ? (
           // Brian's run 2 (B2): "too much stuff for a 50-minute class".
           <p
@@ -1506,14 +1611,26 @@ function MessageBubble({
               </>
             ) : (
               <>
-                <button
-                  type="button"
-                  onClick={() => onKeep(message.id!, 'teacher')}
-                  className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
-                >
-                  <BookmarkPlus size={13} />
-                  {stackV2 ? 'Add the whole lesson to the stack' : 'Add all of this'}
-                </button>
+                {stackV2 && everythingIn ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                    <BookmarkCheck size={13} />
+                    Everything is in the stack
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() =>
+                      stackV2 && onKeepAll
+                        ? onKeepAll(message.id!, replyPieceKeys)
+                        : onKeep(message.id!, 'teacher')
+                    }
+                    className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground disabled:opacity-50"
+                  >
+                    <BookmarkPlus size={13} />
+                    {stackV2 ? 'Add everything to the stack' : 'Add all of this'}
+                  </button>
+                )}
                 {stackV2 ? null : (
                   <button
                     type="button"

@@ -1688,3 +1688,10 @@ describe("buildLessonPlannerSystemPrompt — the deck stays on today (Brian's ru
     expect(prompt).toContain('Slide text never carries a time instruction');
   });
 });
+
+describe("buildLessonPlannerSystemPrompt — one heading per step (Brian's run 2, A3)", () => {
+  test('each step of a plan is its own timed heading', () => {
+    const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'Connell School' });
+    expect(prompt).toContain('Give every step of a plan its own `##` heading with its minutes');
+  });
+});
