@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
 import { CatalogError } from '~/domain/rubrics/rubric-catalog.server';
 import { createRubricCatalogHttp } from './internal-rubric-catalog-http.server';
 
@@ -162,4 +162,51 @@ test('unrelease requires the management key, POST and exactly the documented bod
 test('the unrelease route delegates to the catalog clearRelease handler', async () => {
   const route = await import('~/routes/api.internal.v1.rubric-catalog.unrelease/route');
   expect(typeof route.action).toBe('function');
+});
+
+test('signed save requests record platform audit rows', async () => {
+  const auditCreate = mock(async () => ({}));
+  mock.module('~/utils/db.server', () => ({
+    prisma: { internalPlatformApiAudit: { create: auditCreate } },
+  }));
+  const secret = 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEF';
+  process.env.YAWP_INTERNAL_API_KEYS = JSON.stringify([
+    { id: 'rubrics-writer', secret, scopes: ['rubrics:write'] },
+  ]);
+  process.env.LEGACY_INTERNAL_KEY_ALLOWED = 'false';
+  process.env.INTERNAL_API_NONCE_STORE = 'memory';
+  const { signInternalApiRequest, resetInternalApiMemoryNonceStore } = await import(
+    './internal-platform-auth.server'
+  );
+  resetInternalApiMemoryNonceStore();
+  const http = createRubricCatalogHttp(
+    fake({
+      save: async () => ({ revision: { version: 1 }, replayed: false, captured: null }),
+    }).service as any,
+    () => key
+  );
+  const body = JSON.stringify(valid);
+  const signed = signInternalApiRequest({
+    method: 'POST',
+    url: `${base}/versions`,
+    body,
+    keyId: 'rubrics-writer',
+    secret,
+    actor: 'ops@yawp.school',
+  });
+  const headers = new Headers(signed.headers);
+  headers.set('content-type', 'application/json');
+  const response = await http.save(new Request(`${base}/versions`, { method: 'POST', headers, body }));
+  expect(response.status).toBe(200);
+  expect(auditCreate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      data: expect.objectContaining({
+        endpoint: 'POST /api/internal/v1/rubric-catalog/versions',
+        result: 'success',
+      }),
+    })
+  );
+  delete process.env.YAWP_INTERNAL_API_KEYS;
+  delete process.env.INTERNAL_API_NONCE_STORE;
+  resetInternalApiMemoryNonceStore();
 });
