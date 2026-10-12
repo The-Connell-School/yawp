@@ -84,6 +84,33 @@ test.describe('Thesis-Driven Essay: See how it works', () => {
     );
   });
 
+  test('AP History Essay opens its own guide', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    const pagePath = `/app/assignment-types/${e2eContext.apHistoryAssignmentTypeId}`;
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(pagePath);
+
+    await page.getByRole('link', { name: 'See how it works' }).click();
+    await expect(page).toHaveURL(new RegExp(`${pagePath}/how-it-works$`));
+    await expect(
+      page.getByRole('heading', { level: 1, name: /AP History essay/i })
+    ).toBeVisible();
+    const wont = page.getByTestId('guide-wont');
+    await expect(wont).toContainText(/write the essay for a student/i);
+    await expect(wont).toContainText(/ready to submit/i);
+    await expect(
+      page.locator('img[src^="/img/ap-history-guide/"]').first()
+    ).toBeVisible();
+
+    await page
+      .getByRole('link', { name: /back to AP History Essay/i })
+      .click();
+    await expect(page).toHaveURL(new RegExp(`${pagePath}$`));
+  });
+
   test('keeps the guide teacher-only', async ({ page, signIn, e2eContext }) => {
     await signIn(e2eContext.userEmail, STUDENT_PASSWORD);
     await page.goto(
