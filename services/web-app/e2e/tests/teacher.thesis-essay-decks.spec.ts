@@ -67,6 +67,11 @@ test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
 
     await page.getByRole('button', { name: 'Modules' }).click();
     await expect(page.getByText(/each module has its slide deck/i)).toBeVisible();
+    // Day 1 has no step of its own, so its deck sits above the list.
+    await expect(page.getByText(/introduce YAWP! on Day 1/i)).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: /slide deck: lesson 1 · introduce students to yawp!/i })
+    ).toHaveAttribute('href', '/api/thesis-essay-deck/lesson-1-day-1');
 
     await page.getByRole('button', { name: 'Pre-writing' }).click();
     const preWriting = page.getByRole('link', { name: /slide deck: lesson 2 · pre-writing/i });
@@ -78,9 +83,10 @@ test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
       page.getByRole('link', { name: /slide deck: lesson 3 · thesis statement/i })
     ).toHaveAttribute('href', '/api/thesis-essay-deck/lesson-3-thesis-statement');
 
-    // The placeholder module matches no lesson, so it gets no deck.
+    // The placeholder module matches no lesson, so it gets no deck: Day 1
+    // plus the two steps.
     await page.getByRole('button', { name: 'The Thesis-Driven Essay' }).click();
-    await expect(page.getByRole('link', { name: /slide deck/i })).toHaveCount(2);
+    await expect(page.getByRole('link', { name: /slide deck/i })).toHaveCount(3);
 
     const response = await page.request.get('/api/thesis-essay-deck/lesson-2-pre-writing');
     expect(response.status()).toBe(200);
