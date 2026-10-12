@@ -68,6 +68,7 @@ import { readUnitPlan } from '~/domain/lesson-planner/unit-plan';
 import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
 import {
   FROM_STACK_SUGGESTIONS,
+  isFileActionSuggestion,
   looksLikeLessonPlan,
   mentionsRoomPersonality,
   withStandardSuggestions,
@@ -1460,6 +1461,19 @@ function MessageBubble({
             onSend={onSuggestion}
             disabled={disabled}
           />
+        ) : null}
+        {/* The planner offered a file ("Save Lesson Plan as PDF"). Its chip is
+            gone — sending those words does nothing — and the stack, where the
+            real downloads are, is offered instead (Brian's run 2, S2). */}
+        {isLast && conversationId && modelSuggestions.some(isFileActionSuggestion) ? (
+          <Link
+            to={`/app/lesson-planner/${conversationId}/packet`}
+            data-testid="open-stack-for-files"
+            className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-background px-3 py-1.5 text-sm font-medium text-primary transition hover:border-primary hover:bg-primary/10"
+          >
+            <FileText size={13} className="opacity-70" />
+            Open the stack to download the lesson plan
+          </Link>
         ) : null}
         {/* The chips move inside the card when there is one, so a turn never
             has two send buttons racing to consume it. */}

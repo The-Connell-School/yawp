@@ -3,6 +3,7 @@ import {
   DONE_FOR_TODAY_SUGGESTION,
   FOLLOW_ON_SUGGESTIONS,
   FROM_STACK_SUGGESTIONS,
+  isFileActionSuggestion,
   looksLikeLessonPlan,
   mentionsRoomPersonality,
   STANDARD_OPENING_SUGGESTION,
@@ -389,5 +390,44 @@ describe("withStandardSuggestions — building from the stack (Brian's review, B
       deliveredPlan: true,
     });
     expect(chips).toContain(FOLLOW_ON_SUGGESTIONS.deck);
+  });
+});
+
+describe("file actions are the app's, never a chip (Brian's run 2, S2)", () => {
+  test.each([
+    'Create Lesson Plan',
+    'Save Lesson Plan as PDF',
+    'Print Lesson Plan',
+    'Download the handout',
+    'Export this to Google Docs',
+    'Save it as a Word document',
+    'Print the slides',
+  ])('"%s" is a file action', (chip) => {
+    expect(isFileActionSuggestion(chip)).toBe(true);
+  });
+
+  test.each([
+    'Build the slide deck for this lesson',
+    'Build the student handout for this lesson',
+    'Make a shorter version for Period 3',
+    'Create a lesson plan on comma splices',
+    'Swap out the class starter prompt',
+    "I'm done for today",
+  ])('"%s" is not', (chip) => {
+    expect(isFileActionSuggestion(chip)).toBe(false);
+  });
+
+  test('a file-action chip is dropped, after a plan and on any other turn', () => {
+    const afterPlan = withStandardSuggestions(
+      ['Save Lesson Plan as PDF', 'Make a version for Period 3'],
+      { isOpeningReply: false, deliveredPlan: true }
+    );
+    expect(afterPlan).not.toContain('Save Lesson Plan as PDF');
+    expect(afterPlan).toContain('Make a version for Period 3');
+
+    const plain = withStandardSuggestions(['Print Lesson Plan', 'Keep going'], {
+      isOpeningReply: false,
+    });
+    expect(plain).toEqual(['Keep going']);
   });
 });

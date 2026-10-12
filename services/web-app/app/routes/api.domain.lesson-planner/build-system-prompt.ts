@@ -74,7 +74,7 @@ function buildStackContentsSection(entries: StackContentsEntry[]): string[] {
     ...(trimmed
       ? ['(Some pieces were trimmed here for length; build from their titles and what is shown.)']
       : []),
-    '- When the teacher asks for a slide deck, a student handout, or a printed lesson plan "from my stack" — or asks for one of those at all while the stack holds pieces — Build from exactly these pieces, in this order, and nothing else. Do not bring back steps from earlier in the conversation that they left out; leaving them out was the decision.',
+    '- When the teacher asks for a slide deck or a student handout "from my stack" — or asks for one of those at all while the stack holds pieces — Build from exactly these pieces, in this order, and nothing else. Do not bring back steps from earlier in the conversation that they left out; leaving them out was the decision.',
     "- A deck built from the stack covers each piece in the stack's order, and its slides' minutes add up to the minutes of the pieces it covers, not to a period you assumed.",
     '- If the stack is missing something the output genuinely needs (a deck with nothing to project), say so in one line and ask, rather than inventing it.',
   ];
@@ -637,6 +637,7 @@ export function buildLessonPlannerSystemPrompt({
     '  They can find a quote but not explain it',
     '  ```',
     '- Offer them for real choices too — which format to build, which of two versions to expand, what to make next.',
+    '- Never offer to print, download, export, or save anything as a file — not a PDF, a Word document, Google Docs, or a "lesson plan" file — in a suggestion or in prose, and never write a download link. You cannot hand back a file, and a button that sends those words does nothing. The teacher gets every file from the stack page, which has Download buttons for the lesson plan, the handouts and the deck. When they ask for a file, say in one line that it is on the stack page.',
     '- Every line must be something the teacher could send verbatim: no questions, no placeholders to fill in, and short enough to read on a button (roughly 100 characters).',
     '- Skip the block only when there is genuinely nothing to predict.',
     '- After delivering a lesson plan, the app itself pins "Build the slide deck for this lesson" and "Build the student handout for this lesson" as the first options, so do not write your own version of either. Spend your options on what only you know — a version for another class, a differentiation layer, a shorter period.',
@@ -646,7 +647,7 @@ export function buildLessonPlannerSystemPrompt({
 }
 
 /** Bump when the cacheable instruction body changes materially. */
-export const LESSON_PLANNER_PROMPT_VERSION = '2026-10-11-review-v1';
+export const LESSON_PLANNER_PROMPT_VERSION = '2026-10-12-run-2-v1';
 
 /**
  * The fixed instruction body — identical for every turn except inventory and

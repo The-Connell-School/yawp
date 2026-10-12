@@ -324,7 +324,7 @@ export default function LessonPacketRoute() {
                 aria-disabled={packet.sections.length === 0}
               >
                 <FileDown size={15} className="mr-1.5" />
-                Print / Save as PDF
+                Download PDF
               </a>
             </Button>
           </div>
@@ -351,7 +351,7 @@ export default function LessonPacketRoute() {
             </Button>
             <Button size="sm" variant="outline" asChild>
               <a href={fullPacketPdfHref()} download>
-                Print the lesson plan
+                Download the lesson plan (PDF)
               </a>
             </Button>
           </div>

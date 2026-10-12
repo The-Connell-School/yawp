@@ -50,6 +50,22 @@ export const DONE_FOR_TODAY_SUGGESTION = "I'm done for today";
 
 const MAX_SUGGESTIONS = 5;
 
+/**
+ * A chip asking for a file: print, download, export, PDF, Word, Google Docs.
+ *
+ * Tapping a chip only sends its words as the teacher's next message, and the
+ * planner cannot hand back a file. Brian clicked "Save Lesson Plan as PDF" and
+ * got a document with a download button that did nothing (run 2, item 33).
+ * Files come from the stack page's own buttons, so a chip like this is never
+ * shown; the chat offers a link to the stack in its place.
+ */
+const FILE_ACTION =
+  /\b(print|printable|download|export|pdf|docx|word (?:doc|document|file)|google docs?|google drive)\b|^\s*(?:create|make|save)\s+(?:a\s+|the\s+|my\s+|this\s+)?lesson\s+plan\s*(?:as\b.*|file|document)?\s*$|\bsave\b.*\bas\b/i;
+
+export function isFileActionSuggestion(suggestion: string): boolean {
+  return FILE_ACTION.test(suggestion);
+}
+
 function normalize(suggestion: string): string {
   return suggestion
     .toLowerCase()
@@ -300,7 +316,7 @@ function pickSuggestions(
   const seen = new Set<string>();
   for (const suggestion of offered) {
     const key = normalize(suggestion);
-    if (!key || seen.has(key)) continue;
+    if (!key || seen.has(key) || isFileActionSuggestion(suggestion)) continue;
     seen.add(key);
     deduped.push(suggestion);
   }

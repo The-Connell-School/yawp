@@ -175,4 +175,35 @@ test.describe("Lesson Planner — Brian's second run", () => {
       await expect(page.getByTestId('slide-deck-card')).toContainText('4 slides');
     });
   });
+
+  test.describe('S2: files come from the stack, never from a chat chip', () => {
+    test('a "Save Lesson Plan as PDF" chip is not shown; a link to the stack is', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      const { conversationId } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Plan Day 1 of The Things They Carried.' },
+        {
+          role: 'assistant',
+          content:
+            '# The Things They Carried — Day 1\n\n## Class starter (8 min)\n\nWrite about something you carry.\n\n' +
+            '## Reading (30 min)\n\nRead the first pages together.\n\n' +
+            '```suggestions\nSave Lesson Plan as PDF\nPrint Lesson Plan\nMake a version for Period 3\n```',
+        },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+      await expect(
+        page.getByRole('button', { name: 'Make a version for Period 3' })
+      ).toBeVisible();
+      await expect(page.getByRole('button', { name: /Save Lesson Plan as PDF/ })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: /Print Lesson Plan/ })).toHaveCount(0);
+
+      const toStack = page.getByTestId('open-stack-for-files');
+      await expect(toStack).toHaveText(/Open the stack to download/);
+      await toStack.click();
+      await expect(page).toHaveURL(new RegExp(`/app/lesson-planner/${conversationId}/packet`));
+    });
+  });
 });

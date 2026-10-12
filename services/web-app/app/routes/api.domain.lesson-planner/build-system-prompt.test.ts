@@ -1584,3 +1584,22 @@ describe("buildLessonPlannerSystemPrompt — a deck's minutes match the lesson (
     expect(prompt.toLowerCase()).toContain('a 90-minute lesson gets a deck whose slide minutes total 90');
   });
 });
+
+describe("buildLessonPlannerSystemPrompt — the app owns every file (Brian's run 2, S2)", () => {
+  test('never offers to print, download or export; points at the stack instead', () => {
+    const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'Connell School' });
+    expect(prompt).toContain(
+      'Never offer to print, download, export, or save anything as a file'
+    );
+    expect(prompt).toContain('the stack page');
+  });
+
+  test('the stack section no longer asks the model to print a lesson plan', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'Connell School',
+      stackContents: [{ kind: 'notes', title: 'Framing', content: 'Vietnam.' }],
+    });
+    expect(blocks[1].text).not.toContain('a printed lesson plan');
+  });
+});
