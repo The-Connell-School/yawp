@@ -88,7 +88,14 @@ describe('tester feedback submission', () => {
   });
   test('accepts non-ASCII feedback within the advertised character limits', async () => {
     const { deps, saved } = setup();
-    const response = await submitTesterFeedback(request({ whatIDid: '界'.repeat(4000), whatHappened: '界'.repeat(4000), whatIWish: '界'.repeat(4000) }), deps);
+    const response = await submitTesterFeedback(
+      request({
+        whatIDid: '界'.repeat(4000),
+        whatHappened: '界'.repeat(4000),
+        whatIWish: '界'.repeat(4000),
+      }),
+      deps
+    );
     expect(response.status).toBe(201);
     expect(saved).toHaveLength(1);
   });

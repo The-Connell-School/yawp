@@ -45,7 +45,9 @@ export function sanitizeFeedbackUrl(value: string) {
       url.searchParams.delete(key);
     }
   }
-  return url.pathname + url.search;
+  const sanitized = url.pathname + url.search;
+  if (sanitized.length > 2048) throw new Error('App URL is too long');
+  return sanitized;
 }
 
 export const feedbackQuerySchema = z
@@ -115,7 +117,7 @@ export async function submitTesterFeedback(
     'application/x-www-form-urlencoded'
   )
     return response({ error: 'Unsupported content type' }, 415);
-  const body = await readBoundedText(request, 48_000);
+  const body = await readBoundedText(request, 160_000);
   if (body === null) return response({ error: 'Feedback is too large' }, 413);
   const form = new URLSearchParams(body);
   const parsed = submissionSchema.safeParse({
