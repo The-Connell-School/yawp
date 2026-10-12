@@ -47,7 +47,7 @@ run "configured_runtime_and_permissions" {
   }
  }
  assert {
-  condition = aws_apprunner_service.web.source_configuration[0].image_repository[0].image_configuration[0].runtime_environment_variables["INTERNAL_IMPERSONATION_ENABLED"] == "true" && aws_apprunner_service.web.source_configuration[0].image_repository[0].image_configuration[0].runtime_environment_secrets["YAWP_PRODUCTION_SERVICE_KEY"] == var.internal_platform_integration.production_secret_arn && contains(keys(aws_apprunner_service.web.source_configuration[0].image_repository[0].image_configuration[0].runtime_environment_secrets), "SESSION_SECRET")
+  condition = aws_apprunner_service.web.source_configuration[0].image_repository[0].image_configuration[0].runtime_environment_variables["INTERNAL_IMPERSONATION_ENABLED"] == "true" && aws_apprunner_service.web.source_configuration[0].image_repository[0].image_configuration[0].runtime_environment_secrets["YAWP_PRODUCTION_SERVICE_KEY"] == var.internal_platform_integration.production_secret_arn && aws_apprunner_service.web.source_configuration[0].image_repository[0].image_configuration[0].runtime_environment_secrets["YAWP_INTERNAL_API_KEYS"] == aws_secretsmanager_secret.internal_platform_signing_keys["production"].arn && contains(keys(aws_apprunner_service.web.source_configuration[0].image_repository[0].image_configuration[0].runtime_environment_secrets), "SESSION_SECRET")
   error_message = "Integration settings must reach App Runner while retaining existing secrets."
  }
 
@@ -69,7 +69,7 @@ run "configured_secret_permissions" {
   }
  }
  assert {
-  condition = strcontains(aws_iam_role_policy.apprunner_instance_policy.policy, var.internal_platform_integration.management_secret_arn) && strcontains(aws_iam_role_policy.apprunner_instance_policy.policy, var.internal_platform_integration.production_secret_arn)
+  condition = strcontains(aws_iam_role_policy.apprunner_instance_policy.policy, var.internal_platform_integration.management_secret_arn) && strcontains(aws_iam_role_policy.apprunner_instance_policy.policy, var.internal_platform_integration.production_secret_arn) && strcontains(aws_iam_role_policy.apprunner_instance_policy.policy, aws_secretsmanager_secret.internal_platform_signing_keys["production"].arn)
   error_message = "App Runner role must be allowed to read both exact integration secrets."
  }
 

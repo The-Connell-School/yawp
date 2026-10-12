@@ -317,6 +317,9 @@ resource "aws_iam_role_policy" "apprunner_instance_policy" {
             aws_secretsmanager_secret.free_tier_link_hmac.arn
           ],
           module.internal_platform_integration.secret_arns,
+          var.internal_platform_integration != null ? [
+            aws_secretsmanager_secret.internal_platform_signing_keys["production"].arn
+          ] : [],
           local.ua_billing_runtime_enabled ? [
             aws_secretsmanager_secret.stripe_secret_key[0].arn,
             aws_secretsmanager_secret.stripe_webhook_secret[0].arn
@@ -530,6 +533,8 @@ resource "aws_apprunner_service" "web" {
         }, local.ua_billing_runtime_enabled ? {
           STRIPE_SECRET_KEY     = aws_secretsmanager_secret.stripe_secret_key[0].arn
           STRIPE_WEBHOOK_SECRET = aws_secretsmanager_secret.stripe_webhook_secret[0].arn
+        } : {}, var.internal_platform_integration != null ? {
+          YAWP_INTERNAL_API_KEYS = aws_secretsmanager_secret.internal_platform_signing_keys["production"].arn
         } : {}, module.internal_platform_integration.secrets)
       }
     }
