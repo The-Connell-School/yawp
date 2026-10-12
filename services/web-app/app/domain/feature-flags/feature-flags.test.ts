@@ -4,6 +4,7 @@ import {
   INTERNAL_RUBRICS_FLAG,
   LESSON_PLANNER_FLAG,
   FREE_TIER_FLAG,
+  CLASS_SUMMARY_MODELS_FLAG,
   FEATURE_FLAG_KEYS,
   isFreeTierGloballyEnabled,
   featureFlagSettingName,
@@ -53,11 +54,19 @@ describe('feature flag registry', () => {
     expect(featureFlagSettingName(FREE_TIER_FLAG)).toBe('feature_flag.free_tier');
   });
 
+  test('has the class summary models flag', () => {
+    expect(FEATURE_FLAG_KEYS).toContain(CLASS_SUMMARY_MODELS_FLAG);
+    expect(featureFlagSettingName(CLASS_SUMMARY_MODELS_FLAG)).toBe(
+      'feature_flag.class_summary_models'
+    );
+  });
+
   test('lists every registered flag key', () => {
     expect(FEATURE_FLAG_KEYS).toEqual([
       LESSON_PLANNER_FLAG,
       INTERNAL_RUBRICS_FLAG,
       FREE_TIER_FLAG,
+      CLASS_SUMMARY_MODELS_FLAG,
     ]);
   });
 

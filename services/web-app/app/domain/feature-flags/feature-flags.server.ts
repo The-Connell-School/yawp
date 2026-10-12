@@ -1,6 +1,7 @@
 import { prisma } from '~/utils/db.server';
 import {
   LESSON_PLANNER_FLAG,
+  CLASS_SUMMARY_MODELS_FLAG,
   FREE_TIER_FLAG,
   FEATURE_FLAGS,
   FEATURE_FLAG_KEYS,
@@ -85,6 +86,13 @@ export function isLessonPlannerEnabled(
   orgId: string | null | undefined
 ): Promise<boolean> {
   return isFeatureFlagEnabled(LESSON_PLANNER_FLAG, orgId);
+}
+
+/** "Models to teach from" in the class performance summary, per school. */
+export function isClassSummaryModelsEnabled(
+  orgId: string | null | undefined
+): Promise<boolean> {
+  return isFeatureFlagEnabled(CLASS_SUMMARY_MODELS_FLAG, orgId);
 }
 
 /**

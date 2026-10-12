@@ -37,6 +37,15 @@ export const INTERNAL_RUBRICS_FLAG = 'internal_rubrics' as const;
  */
 export const FREE_TIER_FLAG = 'free_tier' as const;
 
+/**
+ * "Models to teach from" in the class performance summary. On: teachers can
+ * ask the summary for a strong model and an instructive example from the
+ * latest graded work, with questions to think through before sharing either
+ * with the class. Off: the section is hidden and its endpoint returns 404.
+ * Nothing is stored, so turning it off leaves no data behind.
+ */
+export const CLASS_SUMMARY_MODELS_FLAG = 'class_summary_models' as const;
+
 export const FEATURE_FLAGS = {
   [LESSON_PLANNER_FLAG]: {
     label: 'Lesson Planner',
@@ -52,6 +61,11 @@ export const FEATURE_FLAGS = {
     label: 'Free tier',
     description:
       'Enables Free Tier C teacher onboarding, school-admin approval links, operator release tools, and related UI. Off: those routes and release APIs return 404; waitlist/token APIs behave as on main until yawp-internal turns this on for everyone.',
+  },
+  [CLASS_SUMMARY_MODELS_FLAG]: {
+    label: 'Class summary: models to teach from',
+    description:
+      'Adds a section to the class performance summary that picks a strong model and an instructive example from graded work for the teacher to use with the whole class. Off: the section is hidden and its endpoint returns 404.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 
