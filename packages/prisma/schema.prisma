@@ -1485,6 +1485,11 @@ model LessonPlanConversation {
   /// Which day of the unit this is. Null on a unit-linked session means the
   /// map; a number means that day's lesson.
   unitDay                 Int?
+  /// How long this lesson is and which class it is for, from the teacher's
+  /// own answer (Brian's run 2, B1), so the planner keeps every plan and
+  /// deck inside the period on every turn. Null until the teacher says.
+  periodMinutes    Int?
+  lessonClassLabel String?
   messages                LessonPlanMessage[]
   materials               LessonPlanMaterial[]
 

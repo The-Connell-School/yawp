@@ -32,6 +32,7 @@ import {
 } from '~/domain/lesson-planner/lesson-links';
 import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
+import { readLessonLength } from '~/domain/lesson-planner/lesson-length';
 import { loadStackContents } from '~/domain/lesson-planner/stack-contents.server';
 import {
   firstMessageTitle,
@@ -362,8 +363,21 @@ export async function action({ request }: ActionFunctionArgs) {
       ? await loadStackContents(activeConversation.id)
       : [];
 
+  // How long this lesson is (Brian's run 2, B1): from this very message when
+  // the teacher just said, otherwise what they said earlier in the lesson.
+  const heardLength = readLessonLength(turn.message);
+  const lessonLength =
+    heardLength ??
+    (activeConversation?.periodMinutes
+      ? {
+          minutes: activeConversation.periodMinutes,
+          classLabel: activeConversation.lessonClassLabel ?? null,
+        }
+      : null);
+
   const system = buildLessonPlannerSystemPromptBlocks({
     teacherName: null,
+    lessonLength,
     organizationName: access.membership.organization.name,
     lessonInventory: conversation?.materials ?? [],
     stackContents,
@@ -577,6 +591,12 @@ export async function action({ request }: ActionFunctionArgs) {
             // decided; renaming it after whatever the lesson turned out to be
             // would break the one-to-one with the board.
             ...(lessonName && dayTarget === null ? { title: lessonName } : {}),
+            ...(heardLength
+              ? {
+                  periodMinutes: heardLength.minutes,
+                  lessonClassLabel: heardLength.classLabel,
+                }
+              : {}),
           },
         });
 

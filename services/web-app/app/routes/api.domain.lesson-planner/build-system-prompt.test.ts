@@ -1620,3 +1620,42 @@ describe("buildLessonPlannerSystemPrompt — prompt ids stay out of sight (Brian
     expect(prompt).not.toContain('"Day 1 — FW-001:');
   });
 });
+
+describe("buildLessonPlannerSystemPromptBlocks — the lesson's length, every turn (Brian's run 2, B1)", () => {
+  test('names the length and the class, outside the cached instructions', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'Connell School',
+      lessonLength: { minutes: 50, classLabel: 'English 11 · Period 5' },
+    });
+    expect(blocks[1].text).toContain('This lesson is 50 minutes (English 11 · Period 5).');
+    expect(blocks[1].text).toContain('Every plan and every slide deck fits 50 minutes');
+    expect(blocks[0].text).not.toContain('This lesson is 50 minutes');
+  });
+
+  test('says nothing when the length is not known yet', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'Connell School',
+    });
+    expect(blocks[1].text).not.toContain('This lesson is');
+  });
+
+  test('a deck built from the stack fits the lesson, not the pieces’ own total', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'Connell School',
+      stackContents: [{ kind: 'notes', title: 'Framing', content: 'Vietnam.' }],
+    });
+    expect(blocks[1].text).not.toContain('not to a period you assumed');
+    expect(blocks[1].text).toContain("slides' minutes total the lesson's length");
+    expect(blocks[1].text).toContain('say which pieces to cut');
+  });
+
+  test('add it up before handing over a plan or a deck, and say what was cut', () => {
+    const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'Connell School' });
+    expect(prompt).toContain(
+      'Before you hand over a plan or a deck, add up its minutes and compare them to the lesson length'
+    );
+  });
+});

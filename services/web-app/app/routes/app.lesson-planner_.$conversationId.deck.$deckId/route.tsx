@@ -41,6 +41,7 @@ import {
 } from '~/domain/lesson-planner/deck-edit';
 import { saveEditedDeck } from '~/domain/lesson-planner/deck-edit.server';
 import {
+  deckDurationMinutes,
   SLIDE_LAYOUTS,
   type Slide,
   type SlideDeck,
@@ -79,11 +80,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     conversationId: params.conversationId,
     deckId: params.deckId,
   });
+  // The lesson's length, so the editor can keep a running total against it
+  // (Brian's run 2, B2). The deck loader already proved this lesson is theirs.
+  const lesson = await prisma.lessonPlanConversation.findFirst({
+    where: { id: conversationId },
+    select: { periodMinutes: true },
+  });
   return {
     conversationId,
     deckId: params.deckId!,
     lessonTitle,
     deck,
+    periodMinutes: lesson?.periodMinutes ?? null,
     returnTo: deckEditorReturnTo(conversationId, request.url),
   };
 }
@@ -129,7 +137,7 @@ const LAYOUT_LABELS: Record<Slide['layout'], string> = {
 const UNDO_MS = 8000;
 
 export default function DeckEditorRoute() {
-  const { lessonTitle, deck: loaded, returnTo } =
+  const { lessonTitle, deck: loaded, returnTo, periodMinutes } =
     useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
@@ -208,6 +216,24 @@ export default function DeckEditorRoute() {
         </label>
 
         <div className="grid gap-6 lg:grid-cols-[17rem_minmax(0,1fr)]">
+          <div className="flex flex-col gap-2">
+          {/* The minutes live here, for the teacher, not on the slides. */}
+          <p className="flex items-baseline justify-between text-xs text-muted-foreground">
+            <span>{deck.slides.length} slides</span>
+            <span
+              data-testid="deck-editor-total"
+              className={cn(
+                'font-medium tabular-nums',
+                periodMinutes && deckDurationMinutes(deck) > periodMinutes
+                  ? 'text-amber-700 dark:text-amber-300'
+                  : 'text-foreground'
+              )}
+            >
+              {periodMinutes
+                ? `${deckDurationMinutes(deck)} of ${periodMinutes} min`
+                : `${deckDurationMinutes(deck)} min`}
+            </span>
+          </p>
           <ol data-testid="deck-editor-slides" className="flex flex-col gap-2">
             {deck.slides.map((item, index) => (
               <li
@@ -253,6 +279,7 @@ export default function DeckEditorRoute() {
               </li>
             ))}
           </ol>
+          </div>
 
           <div className="flex min-w-0 flex-col gap-4">
             <div className="aspect-[16/9] w-full overflow-hidden rounded-xl shadow-sm ring-1 ring-black/5">

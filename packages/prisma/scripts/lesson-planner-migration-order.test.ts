@@ -20,6 +20,7 @@ const LESSON_PLANNER_MIGRATIONS = [
   '20261011120000_class_period_minutes',
   '20261012100000_lesson_stack_position',
   '20261012100100_lesson_material_prompt_id',
+  '20261012100200_lesson_plan_period_minutes',
 ];
 
 describe('lesson planner migration order', () => {

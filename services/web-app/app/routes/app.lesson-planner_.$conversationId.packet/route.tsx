@@ -61,6 +61,7 @@ export default function LessonPacketRoute() {
     nameIsProvisional,
     reviewFlags,
     stackDetails,
+    periodMinutes,
   } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const revalidator = useRevalidator();
@@ -412,6 +413,22 @@ export default function LessonPacketRoute() {
                   .filter(Boolean)
                   .join(' · ')}
               </p>
+              {stackV2 && periodMinutes ? (
+                // Brian's run 2 (B2): the stack says when the lesson runs long.
+                <p
+                  data-testid="stack-time"
+                  className={cn(
+                    'mt-1 text-sm print:hidden',
+                    packet.totalMinutes > periodMinutes
+                      ? 'font-medium text-amber-700 dark:text-amber-300'
+                      : 'text-muted-foreground'
+                  )}
+                >
+                  {packet.totalMinutes > periodMinutes
+                    ? `Planned ${packet.totalMinutes} min for a ${periodMinutes}-minute period: ${packet.totalMinutes - periodMinutes} over. Remove or shorten a piece to fit.`
+                    : `Period: ${periodMinutes} min`}
+                </p>
+              ) : null}
             </header>
 
             {packet.sections.length === 0 ? (

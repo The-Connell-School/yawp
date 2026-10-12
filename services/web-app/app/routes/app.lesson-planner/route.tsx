@@ -67,6 +67,7 @@ import { UnitPlanCard } from '~/components/ai-chat/unit-plan-card';
 import { readUnitPlan } from '~/domain/lesson-planner/unit-plan';
 import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
 import { hidePromptIds } from '~/domain/lesson-planner/prompt-ids';
+import { overTime, planMinutes } from '~/domain/lesson-planner/plan-timing';
 import {
   BUILD_FROM_STACK_REQUESTS,
   isBuildFromStackRequest,
@@ -147,6 +148,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             title: true,
             unitId: true,
             unitDay: true,
+            periodMinutes: true,
             messages: {
               orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
               select: {
@@ -274,6 +276,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
           title: selected.title,
           unitId: selected.unitId,
           unitDay: selected.unitDay,
+          // How long the lesson is, once the teacher said (Brian's run 2, B1).
+          periodMinutes: selected.periodMinutes,
           messages: selected.messages as ChatMessage[],
           // "<messageId>:<blockKey>" for every material already in the packet,
           // so each card knows whether it has been added.
@@ -874,6 +878,7 @@ export default function LessonPlannerRoute() {
                   intakeV2={reviewFlags.intakeV2}
                   deckV2={reviewFlags.deckV2}
                   editedDeck={selectedConversation?.editedDeck ?? null}
+                  periodMinutes={selectedConversation?.periodMinutes ?? null}
                   teacherClasses={teacherClasses}
                   stackHasPieces={keptCount > 0}
                   disabled={isSending}
@@ -1089,6 +1094,7 @@ function MessageBubble({
   teacherClasses = [],
   deckV2 = false,
   editedDeck = null,
+  periodMinutes = null,
   disabled,
 }: {
   message: ChatMessage;
@@ -1138,6 +1144,8 @@ function MessageBubble({
     sourceMessageId: string;
     content: string;
   } | null;
+  /** The lesson's length, for the over-time flags (Brian's run 2, B2). */
+  periodMinutes?: number | null;
   disabled: boolean;
 }) {
   if (message.role === 'user') {
@@ -1180,6 +1188,8 @@ function MessageBubble({
   // always offers the two artifacts that come next — in the app's own words,
   // rather than whatever the model happened to think of this run.
   const deliveredPlan = looksLikeLessonPlan(body, { boldSteps: stackV2 });
+  const planOverBy =
+    stackV2 && deliveredPlan ? overTime(planMinutes(body), periodMinutes) : null;
   // The slider belongs in the intake batch and nowhere else: not on the
   // opening reply, where the subject is still open, and not under a finished
   // plan, where every step has already been timed.
@@ -1377,6 +1387,15 @@ function MessageBubble({
                         ? `/app/lesson-planner/${conversationId}/deck/${deckId}`
                         : null
                     }
+                    periodMinutes={deckV2 ? periodMinutes : null}
+                    onFit={
+                      deckV2 && periodMinutes
+                        ? () =>
+                            onSuggestion(
+                              `Fit the slide deck to ${periodMinutes} minutes, and tell me what you cut.`
+                            )
+                        : null
+                    }
                   />
                 );
               })()}
@@ -1399,6 +1418,30 @@ function MessageBubble({
           >
             You don't have to use all of these. Add the pieces you want to the
             stack, or add the whole lesson.
+          </p>
+        ) : null}
+        {planOverBy !== null && periodMinutes ? (
+          // Brian's run 2 (B2): "too much stuff for a 50-minute class".
+          <p
+            data-testid="plan-over-time"
+            className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+          >
+            <span>
+              This plan runs {periodMinutes + planOverBy} minutes; the period is{' '}
+              {periodMinutes}.
+            </span>
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() =>
+                onSuggestion(
+                  `Trim this plan to fit ${periodMinutes} minutes, and tell me what you cut.`
+                )
+              }
+              className="rounded-md border border-amber-300 bg-background px-2 py-0.5 text-xs font-medium text-amber-900 transition hover:bg-amber-100 disabled:opacity-50 dark:text-amber-200"
+            >
+              Trim it to {periodMinutes} minutes
+            </button>
           </p>
         ) : null}
         <div className="mt-1.5 flex flex-wrap items-center gap-1">

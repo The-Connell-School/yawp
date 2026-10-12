@@ -41,6 +41,8 @@ export type LoadedLessonPacket = {
    * makes it a real assignment. Only under stack v2.
    */
   stackDetails: Record<string, { label: string; create: StackCreateLink | null }>;
+  /** The lesson's length, once the teacher said (Brian's run 2, B1). */
+  periodMinutes: number | null;
 };
 
 const WRITING_KINDS = new Set(['class-starter', 'daily-pages', 'exit-ticket']);
@@ -70,6 +72,8 @@ export async function loadLessonPacket({
       packetTitle: true,
       publishedAt: true,
       unitDay: true,
+      periodMinutes: true,
+      lessonClassLabel: true,
       originClassAssignment: {
         select: {
           class: { select: { title: true, grade: true, period: true } },
@@ -113,7 +117,8 @@ export async function loadLessonPacket({
       (klass.grade && klass.period
         ? `${klass.grade} · Period ${klass.period}`
         : (klass.grade ?? null)))
-    : null;
+    : // The class the teacher named when they gave the length (run 2, B1).
+      (conversation.lessonClassLabel ?? null);
 
   // Kept replies and individually saved materials are one document, ordered by
   // the reply each came from so the packet reads in lesson order rather than in
@@ -220,5 +225,6 @@ export async function loadLessonPacket({
     }),
     reviewFlags,
     stackDetails,
+    periodMinutes: conversation.periodMinutes,
   };
 }

@@ -75,8 +75,24 @@ function buildStackContentsSection(entries: StackContentsEntry[]): string[] {
       ? ['(Some pieces were trimmed here for length; build from their titles and what is shown.)']
       : []),
     '- When the teacher asks for a slide deck or a student handout "from my stack" — or asks for one of those at all while the stack holds pieces — Build from exactly these pieces, in this order, and nothing else. Do not bring back steps from earlier in the conversation that they left out; leaving them out was the decision.',
-    "- A deck built from the stack covers each piece in the stack's order, and its slides' minutes add up to the minutes of the pieces it covers, not to a period you assumed.",
+    "- A deck built from the stack covers each piece in the stack's order, and its slides' minutes total the lesson's length. If the pieces need more time than the lesson has, do not stretch the deck: say which pieces to cut, in one line, and build the deck for the time there is.",
     '- If the stack is missing something the output genuinely needs (a deck with nothing to project), say so in one line and ask, rather than inventing it.',
+  ];
+}
+
+/**
+ * How long this lesson is (Brian's run 2, B1). The teacher said it once, in a
+ * message that scrolls out of history on a long lesson; this line keeps it in
+ * front of the planner on every turn.
+ */
+function buildLessonLengthSection(
+  length: { minutes: number; classLabel: string | null } | null
+): string[] {
+  if (!length) return [];
+  const label = length.classLabel ? ` (${length.classLabel})` : '';
+  return [
+    '',
+    `This lesson is ${length.minutes} minutes${label}. Every plan and every slide deck fits ${length.minutes} minutes; do not ask for the length again.`,
   ];
 }
 
@@ -385,6 +401,7 @@ export function buildLessonPlannerSystemPrompt({
     '- Keep the opening to roughly a fifth of the period at most — 5 minutes of a 50-minute class, 10 of a block. Anything longer and the lesson is still warming up a quarter of the way in. This is exactly why a class starter and a Daily Pages reflection do not both belong at the top.',
     '- When the arithmetic fails, cut a step, do not compress every step. Four steps at seven minutes each is four things done badly; three done properly teaches more. Say what you cut and what it would take to get it back — "this needs the last ten minutes, so the gallery walk moves to tomorrow" — so the teacher can trade rather than discover the problem at 8:40.',
     '- Shorter periods get fewer moves, not faster ones. A 40-minute class is a mini-lesson and one activity, and a 90-minute block is not the same lesson read more slowly — it is room for a real workshop and independent writing time.',
+    '- Before you hand over a plan or a deck, add up its minutes and compare them to the lesson length. If it runs over, cut until it fits and say in one line what you cut. Never hand over a 57-minute plan or deck for a 50-minute period.',
     '- Do not write a timed plan before you know how long the period is. Ask with the `minutes` control first (see below). Guessing at the length and timing the steps against your guess produces a plan that is wrong in every step at once.',
     '',
     'Differentiating one topic for different classes (do this well when it is asked for):',
@@ -694,6 +711,7 @@ export function buildLessonPlannerSystemPromptBlocks({
   exitTicketsAvailable = false,
   writingPracticeAvailable = false,
   intakeV2 = false,
+  lessonLength = null,
 }: {
   teacherName: string | null;
   organizationName: string;
@@ -705,10 +723,13 @@ export function buildLessonPlannerSystemPromptBlocks({
   writingPracticeAvailable?: boolean;
   /** Intake v2 (A4). */
   intakeV2?: boolean;
+  /** How long this lesson is, once the teacher has said (Brian's run 2, B1). */
+  lessonLength?: { minutes: number; classLabel: string | null } | null;
 }): CacheableSystemBlock[] {
   const who = teacherName ? `${teacherName}, a teacher` : 'a teacher';
   const intro = `You are the YAWP! Lesson Planner, an instructional design partner for ${who} at ${organizationName}.`;
   const tail = [
+    ...buildLessonLengthSection(lessonLength),
     ...buildInventorySection(lessonInventory),
     ...buildStackContentsSection(stackContents),
     ...buildUnitContextSection(unitContext),

@@ -444,4 +444,92 @@ test.describe("Lesson Planner — Brian's second run", () => {
       await expect(page).not.toHaveURL(/build=/);
     });
   });
+
+  test.describe('B2: the plan and the deck fit the period, or say so', () => {
+    async function setPeriod(conversationId: string, minutes: number) {
+      const prisma = createE2EPrismaClient();
+      try {
+        await prisma.lessonPlanConversation.update({
+          where: { id: conversationId },
+          data: { periodMinutes: minutes, lessonClassLabel: 'English 11 · Period 5' },
+        });
+      } finally {
+        await prisma.$disconnect();
+      }
+    }
+
+    const LONG_PLAN =
+      '# The Things They Carried — Day 1\n\n## Class starter (8 min)\n\nWrite.\n\n' +
+      '## Read aloud (30 min)\n\nRead.\n\n## Pair talk (12 min)\n\nTalk.\n\n## Exit ticket (7 min)\n\nWrite.';
+
+    test('a 57-minute plan for a 50-minute period says so, with a way to trim it', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      const { conversationId } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'For English 11 · Period 5, 50 minutes.' },
+        { role: 'assistant', content: LONG_PLAN },
+      ]);
+      await setPeriod(conversationId, 50);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+      const flag = page.getByTestId('plan-over-time');
+      await expect(flag).toContainText('This plan runs 57 minutes; the period is 50.');
+      const asked: string[] = [];
+      await page.route('**/api/domain/lesson-planner', (route) => {
+        asked.push(route.request().postData() ?? '');
+      });
+      await flag.getByRole('button', { name: 'Trim it to 50 minutes' }).click();
+      await expect
+        .poll(() => decodeURIComponent(asked.join('\n').replace(/\+/g, ' ')))
+        .toContain('Trim this plan to fit 50 minutes');
+    });
+
+    test('a plan that fits says nothing', async ({ page, signIn, e2eContext }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      const { conversationId } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'For English 11 · Period 5, 60 minutes.' },
+        { role: 'assistant', content: LONG_PLAN },
+      ]);
+      await setPeriod(conversationId, 60);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+      await expect(page.getByRole('heading', { name: /Day 1/ })).toBeVisible();
+      await expect(page.getByTestId('plan-over-time')).toHaveCount(0);
+    });
+
+    test('a deck past the period is flagged on its card and in the editor', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_deck_v2', true);
+      const longDeck = {
+        ...DECK,
+        slides: DECK.slides.map((slide) => ({ ...slide, minutes: 15 })),
+      };
+      const { conversationId } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Build the slide deck for this lesson' },
+        {
+          role: 'assistant',
+          content: `Here is your deck.\n\n\`\`\`yawp-slides\n${JSON.stringify(longDeck)}\n\`\`\``,
+        },
+      ]);
+      await setPeriod(conversationId, 50);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+      const card = page.getByTestId('slide-deck-card');
+      await expect(card.getByTestId('deck-over-time')).toHaveText('60 min for a 50-minute period');
+      await expect(card.getByRole('button', { name: 'Fit the deck to 50 minutes' })).toBeVisible();
+
+      await card.getByTestId('deck-edit').click();
+      const total = page.getByTestId('deck-editor-total');
+      await expect(total).toHaveText('60 of 50 min');
+      await page.getByRole('button', { name: /^Slide 2:/ }).click();
+      await page.getByLabel('Minutes', { exact: true }).fill('5');
+      await expect(total).toHaveText('50 of 50 min');
+    });
+  });
 });

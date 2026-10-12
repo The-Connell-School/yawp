@@ -21,6 +21,8 @@ export function SlideDeckCard({
   disabled,
   editHref = null,
   edited = false,
+  periodMinutes = null,
+  onFit = null,
 }: {
   deck: SlideDeck;
   /** Absent while the reply is still unsaved and has no id to present by. */
@@ -43,6 +45,10 @@ export function SlideDeckCard({
   editHref?: string | null;
   /** The teacher's edited version, shown in place of the planner's. */
   edited?: boolean;
+  /** The lesson's length: a deck past it says so (Brian's run 2, B2). */
+  periodMinutes?: number | null;
+  /** Ask the planner to fit the deck to the period. */
+  onFit?: (() => void) | null;
 }) {
   const minutes = deckDurationMinutes(deck);
   const preview = deck.slides.slice(0, 4);
@@ -80,6 +86,26 @@ export function SlideDeckCard({
               .filter(Boolean)
               .join(' · ')}
           </p>
+          {periodMinutes && minutes > periodMinutes ? (
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+              <span
+                data-testid="deck-over-time"
+                className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-900 dark:bg-amber-950/50 dark:text-amber-200"
+              >
+                {minutes} min for a {periodMinutes}-minute period
+              </span>
+              {onFit ? (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={onFit}
+                  className="font-medium text-primary hover:underline disabled:opacity-50"
+                >
+                  Fit the deck to {periodMinutes} minutes
+                </button>
+              ) : null}
+            </p>
+          ) : null}
         </div>
         {onToggle ? (
           <button
