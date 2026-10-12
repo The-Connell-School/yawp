@@ -1,4 +1,7 @@
-import { listRubrics, seedStarterRubrics } from '~/domain/rubrics/rubric-library.server';
+import {
+  listReleasedRubricsForAdminPicker,
+  resolveAdminRubricPickerSelection,
+} from '~/domain/rubrics/admin-rubric-picker.server';
 import {
   data as dataResponse,
   redirect,
@@ -65,8 +68,9 @@ function parseGradingConfig(formData: FormData) {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
-  await seedStarterRubrics();
-  const rubrics = (await listRubrics()).map(({ id, name, title, json }) => ({ id, name, title, json }));
+  const rubrics = (await listReleasedRubricsForAdminPicker()).map(
+    ({ id, name, title, json }) => ({ id, name, title, json })
+  );
   return dataResponse({ rubrics });
 }
 
@@ -82,11 +86,19 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse({ error: 'Title is required' }, { status: 400 });
   }
 
-  const rawRubricId = formData.get('rubricId')?.toString().trim();
-  const rubricId = rawRubricId && rawRubricId !== '__none__' ? rawRubricId : null;
-  if (rubricId) {
-    const rubric = await prisma.rubric.findUnique({ where: { id: rubricId }, select: { id: true } });
-    if (!rubric) return dataResponse({ error: 'That rubric no longer exists. Choose another rubric.' }, { status: 400 });
+  const rawRubricId = formData.get('rubricId')?.toString().trim() ?? '';
+  let rubricSelection: Awaited<
+    ReturnType<typeof resolveAdminRubricPickerSelection>
+  > | null = null;
+  if (formData.has('rubricId')) {
+    try {
+      rubricSelection = await resolveAdminRubricPickerSelection(rawRubricId);
+    } catch (error) {
+      if (error instanceof Response) {
+        return dataResponse({ error: await error.text() }, { status: 400 });
+      }
+      throw error;
+    }
   }
 
   let gradingConfigData: ReturnType<typeof parseGradingConfig>;
@@ -113,7 +125,9 @@ export async function action({ request }: ActionFunctionArgs) {
       description,
       tutorInstructions,
       position: count,
-      ...(formData.has('rubricId') ? { rubricId } : {}),
+      ...(rubricSelection?.kind === 'library' ? { rubricId: rubricSelection.rubricId } : {}),
+      ...(rubricSelection?.kind === 'per-type' ? rubricSelection.assignmentTypeData : {}),
+      ...(rubricSelection?.kind === 'none' && formData.has('rubricId') ? { rubricId: null } : {}),
       ...gradingConfigData,
     },
   });

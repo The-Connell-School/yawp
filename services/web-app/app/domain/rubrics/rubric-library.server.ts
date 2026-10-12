@@ -32,6 +32,7 @@ function toStoredRubric(row: {
   };
 }
 
+/** @deprecated Assignment-type admin UI uses listReleasedRubricsForAdminPicker instead. */
 export async function listRubrics(): Promise<StoredRubric[]> {
   const rows = await prisma.rubric.findMany({
     where: { archivedAt: null },
@@ -70,8 +71,8 @@ export async function upsertRubric(schema: RubricSchema, title?: string) {
 }
 
 /**
- * Puts the protected production rubrics in the library and repairs any drift.
- * These definitions are compatibility fixtures, not editable templates.
+ * @deprecated Do not call at request time. Use data migrations and manual
+ * `scripts/seed-rubric-library.ts` only when bootstrapping fixtures.
  */
 export async function seedStarterRubrics() {
   const existing = await prisma.rubric.findMany({
