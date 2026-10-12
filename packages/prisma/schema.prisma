@@ -1775,6 +1775,7 @@ model User {
   memberships        OrgMembership[]
   isAdmin            Boolean         @default(false)
   isSuperAdmin       Boolean         @default(false)
+  mockAdminGranted   Boolean         @default(false)
 }
 
 model Invitation {
@@ -2214,6 +2215,11 @@ model InternalApiRequestNonce {
 
 /// Append-only audit of mutating internal platform API calls authenticated via HMAC keys.
 model InternalPlatformApiAudit {
+  actorUserId String?
+  action      String?
+  targetId    String?
+  environment String?
+  metadata    Json?
   id          String   @id @default(cuid())
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   actorEmail  String

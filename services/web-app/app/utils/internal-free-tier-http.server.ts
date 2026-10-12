@@ -1,3 +1,4 @@
+import { recordTesterAudit, type TesterAuditActor } from '~/domain/free-tier/tester-audit.server';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
@@ -598,6 +599,7 @@ async function transition(args: {
   decision: 'APPROVED' | 'REJECTED' | 'MANUAL_REVIEW';
   decidedByEmail: string;
   reason?: string;
+  audit?: TesterAuditActor;
 }): Promise<{ status: 200 | 404 | 409; payload: Record<string, unknown>; app?: HookApp; changed: boolean }> {
   return prisma.$transaction(async (tx) => {
     const app = await tx.freeTierApplication.findUnique({
@@ -622,6 +624,7 @@ async function transition(args: {
     await tx.freeTierApprovalDecision.create({
       data: { applicationId: args.id, decision: args.decision, reason: args.reason ?? null, decidedByEmail: args.decidedByEmail },
     });
+    if (args.audit) await recordTesterAudit(tx, args.audit, args.id, { previousStatus: app.status, status: args.to, reason: args.reason ?? null });
     return {
       status: 200 as const,
       payload: { ok: true, status: args.to, previousStatus: app.status },
@@ -658,11 +661,7 @@ export async function approveHttp(request: Request) {
   if (post) return post;
   const parsedEmail = parseOperatorEmail(request, read.body);
   if (typeof parsedEmail !== 'string') return parsedEmail.error;
-  const result = await transition({ id, from: APPROVABLE_FROM, to: 'APPROVED', decision: 'APPROVED', decidedByEmail: parsedEmail });
-  if (result.changed && result.app) {
-    const app = result.app;
-    await runHookSafely('onApplicationApproved', () => getApprovalHooks().onApplicationApproved(app));
-  }
+  const result = await decideApplication({ id, decision: 'APPROVED', decidedByEmail: parsedEmail });
   return response(result.payload, result.status);
 }
 
@@ -684,11 +683,7 @@ export async function rejectHttp(request: Request) {
   } catch {
     return response({ error: 'Reason required' }, 400);
   }
-  const result = await transition({ id, from: REJECTABLE_FROM, to: 'REJECTED', decision: 'REJECTED', decidedByEmail: parsedEmail, reason });
-  if (result.changed && result.app) {
-    const app = result.app;
-    await runHookSafely('onApplicationRejected', () => getApprovalHooks().onApplicationRejected(app, reason));
-  }
+  const result = await decideApplication({ id, decision: 'REJECTED', decidedByEmail: parsedEmail, reason });
   return response(result.payload, result.status);
 }
 
@@ -720,22 +715,7 @@ export async function reopenHttp(request: Request) {
   if (post) return post;
   const parsedEmail = parseOperatorEmail(request, read.body);
   if (typeof parsedEmail !== 'string') return parsedEmail.error;
-  const result = await prisma.$transaction(async (tx) => {
-    const app = await tx.freeTierApplication.findUnique({ where: { id }, select: { id: true, status: true, releasedAt: true } });
-    if (!app) return { status: 404 as const, payload: { error: 'Not found' } };
-    if (app.status === 'MANUAL_REVIEW') return { status: 200 as const, payload: { ok: true, idempotent: true, status: app.status } };
-    if (app.status !== 'REJECTED') return { status: 409 as const, payload: { error: 'Illegal state', status: app.status } };
-    // A released application already holds a slot under the F3 cap (released rows
-    // count whatever their status), so only unreleased ones need new headroom.
-    if (!app.releasedAt) {
-      const hasRoom = await enforceHeadroomForActivation(tx);
-      if (!hasRoom) return { status: 409 as const, payload: { error: 'Release cap reached' } };
-    }
-    const updated = await tx.freeTierApplication.updateMany({ where: { id, status: 'REJECTED' }, data: { status: 'MANUAL_REVIEW' } });
-    if (updated.count === 0) return { status: 409 as const, payload: { error: 'Conflict' } };
-    await tx.freeTierApprovalDecision.create({ data: { applicationId: id, decision: 'REOPENED', decidedByEmail: parsedEmail } });
-    return { status: 200 as const, payload: { ok: true, status: 'MANUAL_REVIEW', previousStatus: 'REJECTED' } };
-  });
+  const result = await reopenApplication({ id, decidedByEmail: parsedEmail });
   return response(result.payload, result.status);
 }
 
@@ -759,4 +739,47 @@ export async function submitAdminInfoHttp(request: Request) {
     return { status: 200 as const, payload: { ok: true } };
   });
   return response(result.payload, result.status);
+}
+
+/** Shared operator decisions for signed internal endpoints and scoped platform testers. */
+export async function decideApplication(args: {
+  id: string;
+  decision: 'APPROVED' | 'REJECTED';
+  decidedByEmail: string;
+  reason?: string;
+  audit?: TesterAuditActor;
+}) {
+  if (args.decision === 'APPROVED') await ensureFreeTierProductionApprovalHooks();
+  const result = await transition({ ...args, from: args.decision === 'APPROVED' ? APPROVABLE_FROM : REJECTABLE_FROM, to: args.decision });
+  if (result.changed && result.app) {
+    const app = result.app;
+    if (args.decision === 'APPROVED') {
+      await runHookSafely('onApplicationApproved', () => getApprovalHooks().onApplicationApproved(app));
+    } else {
+      await runHookSafely('onApplicationRejected', () => getApprovalHooks().onApplicationRejected(app, args.reason ?? 'Rejected'));
+    }
+  }
+  return result;
+}
+
+export async function reopenApplication(args: { id: string; decidedByEmail: string; audit?: TesterAuditActor }) {
+  const { id } = args;
+  const result = await prisma.$transaction(async (tx) => {
+    const app = await tx.freeTierApplication.findUnique({ where: { id }, select: { id: true, status: true, releasedAt: true } });
+    if (!app) return { status: 404 as const, payload: { error: 'Not found' } };
+    if (app.status === 'MANUAL_REVIEW') return { status: 200 as const, payload: { ok: true, idempotent: true, status: app.status } };
+    if (app.status !== 'REJECTED') return { status: 409 as const, payload: { error: 'Illegal state', status: app.status } };
+    // A released application already holds a slot under the F3 cap (released rows
+    // count whatever their status), so only unreleased ones need new headroom.
+    if (!app.releasedAt) {
+      const hasRoom = await enforceHeadroomForActivation(tx);
+      if (!hasRoom) return { status: 409 as const, payload: { error: 'Release cap reached' } };
+    }
+    const updated = await tx.freeTierApplication.updateMany({ where: { id, status: 'REJECTED' }, data: { status: 'MANUAL_REVIEW' } });
+    if (updated.count === 0) return { status: 409 as const, payload: { error: 'Conflict' } };
+    await tx.freeTierApprovalDecision.create({ data: { applicationId: id, decision: 'REOPENED', decidedByEmail: args.decidedByEmail } });
+    if (args.audit) await recordTesterAudit(tx, args.audit, id, { previousStatus: 'REJECTED', status: 'MANUAL_REVIEW' });
+    return { status: 200 as const, payload: { ok: true, status: 'MANUAL_REVIEW', previousStatus: 'REJECTED' } };
+  });
+  return result;
 }

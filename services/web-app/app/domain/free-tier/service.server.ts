@@ -1,3 +1,4 @@
+import { recordTesterAudit, type TesterAuditActor } from './tester-audit.server';
 import { createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
@@ -450,7 +451,7 @@ export const releaseBatchSchema = z
   .strict();
 export type ReleaseBatchInput = z.infer<typeof releaseBatchSchema>;
 
-export async function releaseBatch(input: ReleaseBatchInput) {
+export async function releaseBatch(input: ReleaseBatchInput, audit?: TesterAuditActor) {
   const parsed = releaseBatchSchema.parse(input);
   const cap = getFreeTierReleaseCap();
   const ids = [...new Set(parsed.applicationIds)];
@@ -481,11 +482,21 @@ export async function releaseBatch(input: ReleaseBatchInput) {
     const toRelease = eligible.slice(0, remaining);
     let released = 0;
     if (toRelease.length > 0) {
-      const updated = await tx.freeTierApplication.updateMany({
-        where: { id: { in: toRelease }, status: 'LEAD' },
-        data: { status: 'INVITED', releasedAt: new Date() },
-      });
-      released = updated.count;
+      if (audit) {
+        for (const id of toRelease) {
+          const updated = await tx.freeTierApplication.updateMany({
+            where: { id, status: 'LEAD' }, data: { status: 'INVITED', releasedAt: new Date() },
+          });
+          released += updated.count;
+          if (updated.count) await recordTesterAudit(tx, audit, id, { status: 'INVITED' });
+        }
+      } else {
+        const updated = await tx.freeTierApplication.updateMany({
+          where: { id: { in: toRelease }, status: 'LEAD' },
+          data: { status: 'INVITED', releasedAt: new Date() },
+        });
+        released = updated.count;
+      }
     }
     return {
       released,

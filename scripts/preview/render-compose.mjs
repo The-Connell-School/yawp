@@ -167,6 +167,7 @@ ${tlsLabels}
       DATABASE_SSL_REJECT_UNAUTHORIZED: "false"
       NODE_ENV: ${env.runtime === 'fast' ? 'development' : 'production'}
       YAWP_ENVIRONMENT: "preview"
+      MOCK_ADMIN_ENABLED: ${q(env.slug === 'demo' ? 'true' : 'false')}
       PRIMARY_APP_URL: ${q(env.url)}
       PREVIEW_SLUG: ${q(env.slug)}
       PREVIEW_DOMAIN: ${q(env.domain)}
