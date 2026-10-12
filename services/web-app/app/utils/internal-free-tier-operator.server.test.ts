@@ -2,8 +2,22 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 import { resetInternalApiMemoryNonceStore } from './internal-platform-auth.server';
 
-const auditCreate = mock(async () => ({}));
-const sendReleaseEmailsForApplicationIds = mock(async () => []);
+const auditCreate = mock(
+  async (_args: {
+    data: {
+      requestHash: string;
+      actorEmail?: string;
+      keyId?: string;
+      endpoint?: string;
+      result?: string;
+    };
+  }) => ({})
+);
+const sendReleaseEmailsForApplicationIds = mock(
+  async (
+    _applicationIds: string[]
+  ): Promise<{ applicationId: string; ok: boolean; error?: string }[]> => []
+);
 
 mock.module('~/utils/db.server', () => ({
   prisma: {

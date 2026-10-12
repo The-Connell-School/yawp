@@ -136,7 +136,9 @@ suite('token redemption', () => {
 
   test('disabled tokens are refused for redemption', async () => {
     const token = await makeToken();
-    const row = await prisma!.acquisitionToken.findFirst({ where: { label: `t-${run}` } });
+    const row = await prisma!.acquisitionToken.findUnique({
+      where: { tokenHash: svc!.hashToken(token) },
+    });
     await prisma!.acquisitionToken.update({ where: { id: row!.id }, data: { disabledAt: new Date() } });
     expect(await svc!.checkTokenValidity(token)).toEqual({ valid: false, reason: 'disabled' });
     expect(await svc!.redeemToken({ ...person('dis'), token })).toEqual({ ok: false, reason: 'disabled' });
@@ -144,7 +146,9 @@ suite('token redemption', () => {
 
   test('scan recording dedupes within ten minutes', async () => {
     const token = await makeToken();
-    const row = await prisma!.acquisitionToken.findFirst({ where: { label: `t-${run}` } });
+    const row = await prisma!.acquisitionToken.findUnique({
+      where: { tokenHash: svc!.hashToken(token) },
+    });
     const cookie = 'dedupe-cookie-value';
     await svc!.recordAcquisitionTokenScan({ tokenId: row!.id, dedupeCookie: cookie, userAgent: 'TestAgent/1.0' });
     await svc!.recordAcquisitionTokenScan({ tokenId: row!.id, dedupeCookie: cookie, userAgent: 'TestAgent/1.0' });
