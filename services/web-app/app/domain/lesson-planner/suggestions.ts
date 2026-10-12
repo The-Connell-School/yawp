@@ -42,6 +42,30 @@ export const FROM_STACK_SUGGESTIONS = {
 } as const;
 
 /**
+ * What the stack page's build links ask the planner for (Brian's review, B6;
+ * run 2, A8). Each arrives in the chat as `?build=<key>` and is sent once.
+ */
+export const BUILD_FROM_STACK_REQUESTS = {
+  deck: FROM_STACK_SUGGESTIONS.deck,
+  handout: FROM_STACK_SUGGESTIONS.handout,
+  // The stack already has a deck: say so, so the planner replaces it rather
+  // than answering that one already exists.
+  'rebuild-deck':
+    'Rebuild the slide deck from my stack, replacing the one in it',
+  // Brian's run 2 (item 37): the lesson for a student who was not there.
+  makeup:
+    'Make a make-up handout from my stack for a student who was absent today. Tell them to go to their Assignments in YAWP! and complete the class starter and Daily Pages assignments.',
+} as const;
+
+export type BuildFromStackRequest = keyof typeof BUILD_FROM_STACK_REQUESTS;
+
+export function isBuildFromStackRequest(
+  value: string | null
+): value is BuildFromStackRequest {
+  return value !== null && Object.hasOwn(BUILD_FROM_STACK_REQUESTS, value);
+}
+
+/**
  * Stack v2 (Brian's review, D2): a planning session has an end. Once the
  * lesson has its deck or handout, the teacher can say so in one tap and the
  * planner wraps up.
@@ -225,9 +249,29 @@ export function withoutPeriodLength(suggestion: string): string {
  * A reply built out of sections, rather than a question or a single answer —
  * which is when "now build the deck" becomes the useful next thing to offer.
  */
-export function looksLikeLessonPlan(body: string): boolean {
-  return [...body.matchAll(/^\s{0,3}#{1,3}\s+\S/gm)].length >= 2;
+export function looksLikeLessonPlan(
+  body: string,
+  {
+    /**
+     * Stack v2: a plan written as bold, timed steps ("**Read aloud (15 min)**")
+     * is still a plan; missing it hid "You don't have to use all of these"
+     * (Brian's run 2, E4).
+     */
+    boldSteps = false,
+  }: { boldSteps?: boolean } = {}
+): boolean {
+  const headings = [...body.matchAll(/^\s{0,3}#{1,3}\s+\S/gm)].length;
+  const timedSteps = boldSteps ? [...body.matchAll(TIMED_BOLD_STEP)].length : 0;
+  return headings + timedSteps >= 2;
 }
+
+const MINUTES = String.raw`\b\d{1,3}\s*(?:-\s*\d{1,3}\s*)?(?:min|minutes)\b`;
+// A line that opens with a bold label and names its minutes, inside the bold
+// ("**Class starter (5 min)**") or just after it ("**Read aloud** (15 min)").
+const TIMED_BOLD_STEP = new RegExp(
+  String.raw`^\s{0,3}(?:(?:[-*+]|\d+[.)])\s+)?\*\*(?:[^*\n]{0,80}?${MINUTES}[^*\n]*\*\*|[^*\n]{2,80}\*\*[^\n]{0,40}?${MINUTES})`,
+  'gim'
+);
 
 const DECK_INTENT = /\b(slide|deck|slides)\b/i;
 const HANDOUT_INTENT = /\b(handout|worksheet|packet for students)\b/i;

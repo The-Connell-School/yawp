@@ -299,15 +299,13 @@ export default function LessonPacketRoute() {
                 )}
               >
                 <FileText size={14} />
-                Student handout
+                {stackV2 ? 'Create handouts' : 'Student handout'}
               </button>
             </div>
             <Button type="button" size="sm" asChild>
               <a
                 data-testid="packet-save-pdf"
-                href={
-                  view === 'handout' ? pdfHref() : fullPacketPdfHref()
-                }
+                href={view === 'handout' ? pdfHref() : fullPacketPdfHref()}
                 download
                 aria-disabled={packet.sections.length === 0}
               >
@@ -317,33 +315,6 @@ export default function LessonPacketRoute() {
             </Button>
           </div>
         </div>
-
-        {stackV2 && packet.sections.length > 0 ? (
-          <div
-            data-testid="build-from-stack"
-            className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-primary/25 bg-primary/[0.04] px-4 py-3 print:hidden"
-          >
-            {/* Brian's review (B6): the stack is the lesson, so every output
-                is built from it. Building goes back to the chat, where the
-                deck or handout lands as a card like any other. */}
-            <span className="mr-1 text-sm font-medium">Build from this stack:</span>
-            <Button size="sm" variant="outline" asChild>
-              <Link to={`/app/lesson-planner?c=${conversationId}&build=deck`}>
-                Slide deck from this stack
-              </Link>
-            </Button>
-            <Button size="sm" variant="outline" asChild>
-              <Link to={`/app/lesson-planner?c=${conversationId}&build=handout`}>
-                Student handout from this stack
-              </Link>
-            </Button>
-            <Button size="sm" variant="outline" asChild>
-              <a href={fullPacketPdfHref()} download>
-                Download the lesson plan (PDF)
-              </a>
-            </Button>
-          </div>
-        ) : null}
 
         <div className="mb-4 print:hidden">
           <label
@@ -401,6 +372,13 @@ export default function LessonPacketRoute() {
                     onReorder={reorderStack}
                     onRemove={removeSection}
                     onJump={(item) => jumpTo(`resource-${item.id}`)}
+                  />
+                  <BuildFromStack
+                    conversationId={conversationId}
+                    lessonPlanHref={fullPacketPdfHref()}
+                    hasDeck={packet.sections.some(
+                      (section) => section.deck || section.kind === 'slides'
+                    )}
                   />
                 </nav>
               ) : (
@@ -483,6 +461,9 @@ export default function LessonPacketRoute() {
                     Check what belongs in the one combined handout below, or
                     download any piece on its own instead.
                   </p>
+                  {stackV2 ? (
+                    <MakeUpLink conversationId={conversationId} />
+                  ) : null}
                   <div className="flex flex-col gap-1.5">
                     {allHandoutParts.map((part) => {
                       const isIn = !excluded.includes(part.id);
@@ -580,7 +561,8 @@ export default function LessonPacketRoute() {
                       <span className="inline-flex items-center gap-1 rounded-full bg-foreground/5 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground print:hidden">
                         <KindIcon kind={section.kind} size={11} />
                         {/* "Class Starter", not "Handout" (Brian's run 2). */}
-                        {stackDetails[section.id]?.label ?? KIND_LABEL[section.kind]}
+                        {stackDetails[section.id]?.label ??
+                          KIND_LABEL[section.kind]}
                       </span>
                       {section.edited ? (
                         <span
@@ -763,5 +745,63 @@ function SectionContent({
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * The outputs built from the stack, once the sequence is set (Brian's run 2,
+ * A8, item 7). Building goes back to the chat, where the deck or handout
+ * lands as a card like any other; the slide deck comes last.
+ */
+function BuildFromStack({
+  conversationId,
+  lessonPlanHref,
+  hasDeck,
+}: {
+  conversationId: string;
+  lessonPlanHref: string;
+  hasDeck: boolean;
+}) {
+  const build = (request: string) =>
+    `/app/lesson-planner?c=${conversationId}&build=${request}`;
+  return (
+    <>
+      <div
+        data-testid="build-from-stack"
+        className="mt-4 flex flex-col gap-1.5 rounded-xl border border-primary/25 bg-primary/[0.04] p-3 print:hidden"
+      >
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          When the sequence is set
+        </p>
+        <Button size="sm" variant="outline" className="justify-start" asChild>
+          <Link to={build('handout')}>Create handouts from this stack</Link>
+        </Button>
+        <Button size="sm" variant="outline" className="justify-start" asChild>
+          <a href={lessonPlanHref} download>
+            Download the lesson plan (PDF)
+          </a>
+        </Button>
+        <Button size="sm" className="justify-start" asChild>
+          <Link to={build(hasDeck ? 'rebuild-deck' : 'deck')}>
+            {hasDeck
+              ? 'Rebuild the slide deck from this stack'
+              : 'Create a slide deck from this stack'}
+          </Link>
+        </Button>
+      </div>
+      <MakeUpLink conversationId={conversationId} />
+    </>
+  );
+}
+
+/** Brian's run 2 (items 37, 38): the lesson, for a student who missed it. */
+function MakeUpLink({ conversationId }: { conversationId: string }) {
+  return (
+    <Link
+      to={`/app/lesson-planner?c=${conversationId}&build=makeup`}
+      className="mt-2 block text-xs font-medium text-primary hover:underline print:hidden"
+    >
+      Send this lesson to a student who missed class
+    </Link>
   );
 }

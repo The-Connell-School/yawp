@@ -431,3 +431,27 @@ describe("file actions are the app's, never a chip (Brian's run 2, S2)", () => {
     expect(plain).toEqual(['Keep going']);
   });
 });
+
+describe("looksLikeLessonPlan — a plan written with bold steps (Brian's run 2, E4)", () => {
+  const bold =
+    '**Class starter (5 min)** — write about something you carry.\n\n**Read aloud (15 min)** — the first pages.';
+
+  test('two timed bold steps are a plan, under stack v2', () => {
+    expect(looksLikeLessonPlan(bold, { boldSteps: true })).toBe(true);
+    expect(
+      looksLikeLessonPlan('1. **Read aloud** (15 min): the first pages.\n2. **Pair talk** — 8 minutes.', {
+        boldSteps: true,
+      })
+    ).toBe(true);
+  });
+
+  test('flag off: unchanged, headings only', () => {
+    expect(looksLikeLessonPlan(bold)).toBe(false);
+  });
+
+  test('one bold phrase in an answer is not', () => {
+    expect(
+      looksLikeLessonPlan('That is **really** a fair question about the 50 min period.', { boldSteps: true })
+    ).toBe(false);
+  });
+});

@@ -380,4 +380,68 @@ test.describe("Lesson Planner — Brian's second run", () => {
       await expect(page.locator('main')).not.toContainText('FW-024');
     });
   });
+
+  test.describe('A8: labels, the last step, and the make-up handout', () => {
+    test('"Create handouts", and the deck is the last thing built from the stack', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      const { conversationId } = await seedStack(e2eContext, [
+        { title: 'Read aloud' },
+        { title: 'Class Starter: Carry', kind: 'class-starter', audience: 'student', content: 'Write about what you carry.' },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+
+      await expect(page.getByRole('button', { name: 'Create handouts', exact: true })).toBeVisible();
+      const strip = page.getByTestId('build-from-stack');
+      await expect(strip).toContainText('When the sequence is set');
+      const links = strip.getByRole('link');
+      await expect(links.last()).toHaveText('Create a slide deck from this stack');
+      await expect(strip.getByRole('link', { name: 'Create handouts from this stack' })).toBeVisible();
+    });
+
+    test('a stack that has a deck offers to rebuild it', async ({ page, signIn, e2eContext }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      const { conversationId } = await seedStack(e2eContext, [
+        { title: 'Read aloud' },
+        {
+          title: 'The Things They Carried — Day 1',
+          kind: 'slides',
+          content: '```yawp-slides\n' + JSON.stringify(DECK) + '\n```',
+        },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      const asked: string[] = [];
+      await page.route('**/api/domain/lesson-planner', (route) => {
+        asked.push(route.request().postData() ?? '');
+      });
+      await page.getByRole('link', { name: 'Rebuild the slide deck from this stack' }).click();
+      await expect
+        .poll(() => decodeURIComponent(asked.join('\n').replace(/\+/g, ' ')))
+        .toContain('Rebuild the slide deck from my stack');
+    });
+
+    test('send the lesson to a student who missed class', async ({ page, signIn, e2eContext }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      const { conversationId } = await seedStack(e2eContext, [
+        { title: 'Class Starter: Carry', kind: 'class-starter', audience: 'student', content: 'Write about what you carry.' },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      const asked: string[] = [];
+      await page.route('**/api/domain/lesson-planner', (route) => {
+        asked.push(route.request().postData() ?? '');
+      });
+      await page.getByRole('link', { name: 'Send this lesson to a student who missed class' }).click();
+      await expect(page).toHaveURL(new RegExp(`c=${conversationId}`));
+      await expect
+        .poll(() => decodeURIComponent(asked.join('\n').replace(/\+/g, ' ')))
+        .toContain('a student who was absent today');
+      await expect(page).not.toHaveURL(/build=/);
+    });
+  });
 });

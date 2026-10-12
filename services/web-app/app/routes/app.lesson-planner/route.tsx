@@ -68,7 +68,8 @@ import { readUnitPlan } from '~/domain/lesson-planner/unit-plan';
 import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
 import { hidePromptIds } from '~/domain/lesson-planner/prompt-ids';
 import {
-  FROM_STACK_SUGGESTIONS,
+  BUILD_FROM_STACK_REQUESTS,
+  isBuildFromStackRequest,
   isFileActionSuggestion,
   looksLikeLessonPlan,
   mentionsRoomPersonality,
@@ -535,7 +536,8 @@ export default function LessonPlannerRoute() {
         return next;
       });
       const replace = window.confirm(
-        'This has been edited by hand in the stack. Filing this version will replace those edits. Replace them?'
+        // Plainer words (Brian's run 2): the teacher's edits, and what happens.
+        'You edited this in the stack. Replace your edits with this version?'
       );
       if (!replace) return;
       setAddedMaterials((prev) => new Set(prev).add(token));
@@ -602,12 +604,12 @@ export default function LessonPlannerRoute() {
   const buildAsked = useRef(false);
   useEffect(() => {
     if (buildAsked.current || !reviewFlags.stackV2 || !conversationId) return;
-    if (buildRequest !== 'deck' && buildRequest !== 'handout') return;
+    if (!isBuildFromStackRequest(buildRequest)) return;
     buildAsked.current = true;
     const next = new URLSearchParams(searchParams);
     next.delete('build');
     setSearchParams(next, { replace: true });
-    send(FROM_STACK_SUGGESTIONS[buildRequest]);
+    send(BUILD_FROM_STACK_REQUESTS[buildRequest]);
     // Runs once per arrival; send is stable enough for a one-shot.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buildRequest, conversationId, reviewFlags.stackV2]);
@@ -1177,7 +1179,7 @@ function MessageBubble({
   // The opening turn always offers the data-driven route, and a delivered plan
   // always offers the two artifacts that come next — in the app's own words,
   // rather than whatever the model happened to think of this run.
-  const deliveredPlan = looksLikeLessonPlan(body);
+  const deliveredPlan = looksLikeLessonPlan(body, { boldSteps: stackV2 });
   // The slider belongs in the intake batch and nowhere else: not on the
   // opening reply, where the subject is still open, and not under a finished
   // plan, where every step has already been timed.

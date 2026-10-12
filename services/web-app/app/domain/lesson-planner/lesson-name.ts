@@ -67,7 +67,7 @@ export function shouldRenameLesson({
   teacherNamedIt: boolean;
 }): string | null {
   if (teacherNamedIt) return null;
-  if (priorReplies.some(looksLikeLessonPlan)) return null;
+  if (priorReplies.some((prior) => looksLikeLessonPlan(prior))) return null;
   return deriveLessonName(reply);
 }
 
