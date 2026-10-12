@@ -57,6 +57,7 @@ import {
 } from './utils/preview-access.server.ts';
 import { uaPartnerMiddleware } from './utils/ua-partner.server.ts';
 import { isLessonPlannerEnabled } from './domain/feature-flags/feature-flags.server.ts';
+import { getRootMembershipWhere } from './utils/root-membership-filter.server.ts';
 
 export const middleware = [internalImpersonationMiddleware, previewAccessMiddleware, uaPartnerMiddleware];
 
@@ -148,6 +149,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const previewAccessSeat = isPreviewAccessGateEnabled()
     ? await getPreviewAccessSeat(request)
     : null;
+  const membershipWhere = userId
+    ? await getRootMembershipWhere({
+        userId,
+        internal,
+        previewAccessSeat,
+        isolatedPreviewSeatMode: isIsolatedPreviewSeatMode(),
+      })
+    : undefined;
 
   const user = userId
     ? await time(
@@ -162,13 +171,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
               isTester: process.env.TESTER_FEEDBACK_ENABLED === 'true',
               isAdmin: true,
               memberships: {
-                ...(internal ? { where: { id: internal.membershipId, organizationId: internal.organizationId, isActive: true } } : previewAccessSeat && isIsolatedPreviewSeatMode()
-                  ? {
-                      where: {
-                        organizationId: previewAccessSeat.organizationId,
-                      },
-                    }
-                  : {}),
+                ...(membershipWhere ? { where: membershipWhere } : {}),
                 orderBy: { createdAt: 'asc' },
                 select: {
                   id: true,
