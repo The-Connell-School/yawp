@@ -10,7 +10,7 @@ afterAll(() => {
   else process.env.PREVIEW_SLUG = savedPreviewSlug;
   if (savedYawpEnvironment === undefined) delete process.env.YAWP_ENVIRONMENT;
   else process.env.YAWP_ENVIRONMENT = savedYawpEnvironment;
-  if (savedNodeEnv === undefined) delete process.env.NODE_ENV;
+  if (savedNodeEnv === undefined) Reflect.deleteProperty(process.env, 'NODE_ENV');
   else process.env.NODE_ENV = savedNodeEnv;
 });
 const requireUserId = mock(async () => 'intern');
