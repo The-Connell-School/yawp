@@ -27,12 +27,11 @@ mock.module('./rubric-catalog.server', () => ({
   }),
 }));
 
-const rubricRevision = { findMany: mock() };
 const rubric = { findMany: mock(), findFirst: mock() };
 const assignmentType = { findMany: mock(), findUnique: mock() };
 
 mock.module('~/utils/db.server', () => ({
-  prisma: { rubricRevision, rubric, assignmentType },
+  prisma: { rubric, assignmentType },
 }));
 
 const {
@@ -41,7 +40,7 @@ const {
   ADMIN_PER_TYPE_PICKER_PREFIX,
 } = await import('./admin-rubric-picker.server');
 
-const db = { rubricRevision, rubric, assignmentType };
+const db = { rubric, assignmentType };
 
 const validLibrarySchema = {
   name: 'daily-pages-engagement',
@@ -65,10 +64,8 @@ const validLibrarySchema = {
 describe('listLiveRubricsForAdminPicker', () => {
   beforeEach(() => {
     catalogList.mockReset();
-    rubricRevision.findMany.mockReset();
     rubric.findMany.mockReset();
     assignmentType.findMany.mockReset();
-    rubricRevision.findMany.mockResolvedValue([]);
     rubric.findMany.mockImplementation(async (args: { where?: { archivedAt?: unknown; name?: { in: string[] } } }) => {
       if (args?.where?.archivedAt) return [];
       if (args?.where?.name?.in) {
@@ -128,11 +125,49 @@ describe('listLiveRubricsForAdminPicker', () => {
     const options = await listLiveRubricsForAdminPicker(db as never);
     expect(options.map((row) => row.catalogKey).sort()).toEqual([
       'assignment-type:type-1',
-      'builtin:class-starter-default',
-      'builtin:daily-pages-short-form-default',
-      'builtin:thesis-default',
       'daily-pages-engagement',
     ]);
+  });
+
+  test('does not emit duplicate titles', async () => {
+    catalogList.mockResolvedValue({
+      rubrics: [
+        {
+          key: 'thesis-driven-essay',
+          source: 'library',
+          name: 'thesis-driven-essay',
+          title: 'Thesis-driven essay grading assistant',
+          editable: true,
+        },
+        {
+          key: 'class-starter-engagement',
+          source: 'library',
+          name: 'class-starter-engagement',
+          title: 'Class Starter engagement',
+          editable: true,
+        },
+      ],
+    });
+    rubric.findMany.mockImplementation(async (args: { where?: { archivedAt?: unknown; name?: { in: string[] } } }) => {
+      if (args?.where?.archivedAt) return [];
+      if (args?.where?.name?.in) {
+        return args.where.name.in.map((name, index) => ({
+          id: `lib-${index}`,
+          name,
+          title:
+            name === 'thesis-driven-essay'
+              ? 'Thesis-driven essay grading assistant'
+              : 'Class Starter engagement',
+          schemaJson: validLibrarySchema,
+          currentRevision: null,
+        }));
+      }
+      return [];
+    });
+
+    const options = await listLiveRubricsForAdminPicker(db as never);
+    const titles = options.map((row) => row.title);
+    expect(new Set(titles).size).toBe(titles.length);
   });
 
   test('excludes archived and retired library rubrics', async () => {
@@ -223,7 +258,7 @@ describe('listLiveRubricsForAdminPicker', () => {
     );
   });
 
-  test('lists per-type rows from published revision when live columns are empty', async () => {
+  test('omits per-type rows when live columns are empty and there is no baseline revision', async () => {
     const actTypeId = 'cmpphw7w303lh01l15z0pr6nd';
     catalogList.mockResolvedValue({
       rubrics: [
@@ -253,33 +288,18 @@ describe('listLiveRubricsForAdminPicker', () => {
       }
       return [{ id: actTypeId, title: 'ACT Writing Section' }];
     });
-    rubricRevision.findMany.mockResolvedValue([
-      {
-        rubricName: `assignment-type:${actTypeId}`,
-        version: 2,
-        schemaJson: {
-          name: `assignment-type:${actTypeId}`,
-          title: 'ACT Writing Section',
-          scoringScale: { minScore: 1, maxScore: 6, type: 'weighted_1_5' },
-          rubric: validLibrarySchema.rubric,
-          promptConfig: {},
-          outputSchema: validLibrarySchema.outputSchema,
-          calibrationNotes: null,
-        },
-      },
-    ]);
 
     const options = await listLiveRubricsForAdminPicker(db as never);
-    expect(options.some((row) => row.catalogKey === `assignment-type:${actTypeId}`)).toBe(true);
+    expect(options.some((row) => row.catalogKey === `assignment-type:${actTypeId}`)).toBe(
+      false
+    );
   });
 });
 
 describe('resolveAdminRubricPickerSelection', () => {
   beforeEach(() => {
-    rubricRevision.findMany.mockReset();
     rubric.findFirst.mockReset();
     assignmentType.findUnique.mockReset();
-    rubricRevision.findMany.mockResolvedValue([]);
   });
 
   test('resolves built-in picker keys to the matching library rubric', async () => {
