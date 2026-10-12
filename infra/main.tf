@@ -6,6 +6,17 @@ locals {
   production_domain_zone  = "${trim(var.production_domain_name, ".")}."
   production_edge_aliases = distinct([var.production_domain_name, var.ua_partner_hostname])
   apprunner_origin_domain = trimsuffix(replace(replace(aws_apprunner_service.web.service_url, "https://", ""), "http://", ""), "/")
+  primary_app_url_trimmed      = var.primary_app_url != null ? trimspace(var.primary_app_url) : ""
+  production_rds_extra_ingress = var.env == "production" ? [
+    {
+      description     = "Postgres from yawp-internal ECS tasks"
+      security_group_id = "sg-0014c26538a83fdc8"
+    },
+    {
+      description       = "Read-only PostgreSQL from Yawp Admin host"
+      security_group_id = "sg-0b978b4f306a80e6a"
+    },
+  ] : []
 }
 
 data "aws_route53_zone" "production_domain" {
@@ -90,6 +101,17 @@ module "vpc" {
     security_groups = [aws_security_group.bastion.id]
   }
 
+  dynamic "ingress" {
+    for_each = local.production_rds_extra_ingress
+    content {
+      description     = ingress.value.description
+      from_port       = 5432
+      to_port         = 5432
+      protocol        = "tcp"
+      security_groups = [ingress.value.security_group_id]
+    }
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -127,6 +149,10 @@ resource "aws_security_group" "bastion" {
 resource "aws_key_pair" "bastion" {
   key_name   = "${var.app_name}-${var.env}-bastion-key"
   public_key = var.bastion_public_key
+
+  lifecycle {
+    ignore_changes = [public_key]
+  }
 }
 
 resource "aws_instance" "bastion" {
@@ -314,9 +340,14 @@ resource "aws_iam_role_policy" "apprunner_instance_policy" {
             aws_secretsmanager_secret.internal_token.arn,
             aws_secretsmanager_secret.sentry_dsn.arn,
             aws_secretsmanager_secret.resend_api_key.arn,
-            aws_secretsmanager_secret.free_tier_link_hmac.arn
           ],
+          var.free_tier_link_hmac_enabled ? [
+            aws_secretsmanager_secret.free_tier_link_hmac[0].arn
+          ] : [],
           module.internal_platform_integration.secret_arns,
+          var.internal_platform_integration != null ? [
+            aws_secretsmanager_secret.internal_platform_signing_keys["production"].arn
+          ] : [],
           local.ua_billing_runtime_enabled ? [
             aws_secretsmanager_secret.stripe_secret_key[0].arn,
             aws_secretsmanager_secret.stripe_webhook_secret[0].arn
@@ -427,12 +458,13 @@ resource "aws_secretsmanager_secret_version" "internal_token" {
 }
 
 resource "aws_secretsmanager_secret" "free_tier_link_hmac" {
-  name = "${var.app_name}-${var.env}-free-tier-link-hmac-secret"
+  count = var.free_tier_link_hmac_enabled ? 1 : 0
+  name  = "${var.app_name}-${var.env}-free-tier-link-hmac-secret"
 }
 
 resource "aws_secretsmanager_secret_version" "free_tier_link_hmac" {
-  count         = var.free_tier_link_hmac_secret != "" ? 1 : 0
-  secret_id     = aws_secretsmanager_secret.free_tier_link_hmac.id
+  count         = var.free_tier_link_hmac_enabled && var.free_tier_link_hmac_secret != "" ? 1 : 0
+  secret_id     = aws_secretsmanager_secret.free_tier_link_hmac[0].id
   secret_string = var.free_tier_link_hmac_secret
 }
 
@@ -510,8 +542,10 @@ resource "aws_apprunner_service" "web" {
           UA_PARTNER_HOSTNAME                       = var.ua_partner_hostname
           STRIPE_UA_2026_PRICE_ID                   = var.stripe_ua_2026_price_id
           YAWP_APP_ORIGIN                           = var.yawp_app_origin
-          PRIMARY_APP_URL                           = var.primary_app_url
-        }, length(var.stripe_ua_existing_subscription_price_ids) > 0 ? {
+          LEGACY_INTERNAL_KEY_ALLOWED               = tostring(var.legacy_internal_key_allowed)
+        }, local.primary_app_url_trimmed != "" ? {
+          PRIMARY_APP_URL = local.primary_app_url_trimmed
+        } : {}, length(var.stripe_ua_existing_subscription_price_ids) > 0 ? {
           STRIPE_UA_EXISTING_SUBSCRIPTION_PRICE_IDS = join(",", var.stripe_ua_existing_subscription_price_ids)
         } : {}, module.internal_platform_integration.variables)
 
@@ -525,11 +559,14 @@ resource "aws_apprunner_service" "web" {
           INTERNAL_COMMAND_TOKEN = aws_secretsmanager_secret.internal_token.arn
           DATABASE_URL = aws_secretsmanager_secret.db_url.arn
           RESEND_API_KEY = aws_secretsmanager_secret.resend_api_key.arn
-          FREE_TIER_LINK_HMAC_SECRET = aws_secretsmanager_secret.free_tier_link_hmac.arn
           SENTRY_DSN = aws_secretsmanager_secret.sentry_dsn.arn
-        }, local.ua_billing_runtime_enabled ? {
+        }, var.free_tier_link_hmac_enabled ? {
+          FREE_TIER_LINK_HMAC_SECRET = aws_secretsmanager_secret.free_tier_link_hmac[0].arn
+        } : {}, local.ua_billing_runtime_enabled ? {
           STRIPE_SECRET_KEY     = aws_secretsmanager_secret.stripe_secret_key[0].arn
           STRIPE_WEBHOOK_SECRET = aws_secretsmanager_secret.stripe_webhook_secret[0].arn
+        } : {}, var.internal_platform_integration != null ? {
+          YAWP_INTERNAL_API_KEYS = aws_secretsmanager_secret.internal_platform_signing_keys["production"].arn
         } : {}, module.internal_platform_integration.secrets)
       }
     }
@@ -794,7 +831,6 @@ resource "aws_s3_bucket_cors_configuration" "videos" {
       "http://localhost:5173",
       "https://${aws_apprunner_service.web.service_url}",
       "https://yawp.school",
-      "https://${var.ua_partner_hostname}",
     ]
     allowed_headers = ["*"]
     expose_headers  = ["ETag", "x-amz-request-id", "x-amz-id-2"]
