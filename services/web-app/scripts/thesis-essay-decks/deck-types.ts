@@ -4,15 +4,18 @@
  * Text fields accept two light marks, so the content reads like prose:
  * - `==words==` wears Brian's yellow highlighter;
  * - `**words**` is bold in the slide's accent colour (the questions in a
- *   pre-write example, a key term).
+ *   pre-write example, a key term);
+ * - `__words__` is italic (a thesis inside a sample paragraph).
  */
 import type { AccentColor, IconName } from './hybrid-theme';
 
 /** An image in `assets/`, by file name. */
 export type AssetImage =
   | 'fallen-man.jpg'
+  | 'elephant.png'
   | 'critical-essay-form.png'
   | 'yawp-editor-prewriting.png'
+  | 'yawp-editor-thesis.png'
   | 'yawp-my-documents.png';
 
 interface BaseSlide {
@@ -74,7 +77,45 @@ export type HybridSlide =
       terms: [string, string];
       result: string;
       line: string;
-    });
+    })
+  | (BaseSlide & {
+      /** A review question. With `answer`, the right option is highlighted. */
+      layout: 'quiz';
+      title: string;
+      options: string[];
+      answer?: number;
+    })
+  | (BaseSlide & {
+      /** A list to put in order; `numbered` is the reveal. */
+      layout: 'ordering';
+      title: string;
+      items: string[];
+      numbered?: boolean;
+    })
+  | (BaseSlide & {
+      /** Observation and analysis side by side, and the thesis they make. */
+      layout: 'oa';
+      title: string;
+      observation: string;
+      analysis: string[];
+      thesis?: string;
+    })
+  | (BaseSlide & {
+      /** A thesis with each part in its own colour, and the parts listed. */
+      layout: 'thesis-parts';
+      title: string;
+      thesis: string;
+      /** `span` is the exact text inside `thesis`; `label` is what it becomes. */
+      parts: { span: string; label: string }[];
+    })
+  | (BaseSlide & {
+      /** A long passage from a sample essay, with a label on its tile. */
+      layout: 'passage';
+      title: string;
+      label?: string;
+      body: string;
+    })
+  | (BaseSlide & { layout: 'closer'; line?: string });
 
 export interface HybridDeck {
   title: string;

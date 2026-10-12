@@ -22,8 +22,10 @@ const ASSETS = join(import.meta.dir, 'assets');
 /** Pixel sizes of the bundled images, for aspect ratios. */
 export const ASSET_SIZES: Record<AssetImage, { w: number; h: number }> = {
   'fallen-man.jpg': { w: 1200, h: 801 },
+  'elephant.png': { w: 2048, h: 1335 },
   'critical-essay-form.png': { w: 1545, h: 2000 },
   'yawp-editor-prewriting.png': { w: 2880, h: 1720 },
+  'yawp-editor-thesis.png': { w: 2880, h: 1720 },
   'yawp-my-documents.png': { w: 1485, h: 403 },
 };
 
@@ -48,17 +50,19 @@ export interface Segment {
   text: string;
   highlight?: boolean;
   strong?: boolean;
+  italic?: boolean;
 }
 
 export function parseMarks(source: string): Segment[] {
   const segments: Segment[] = [];
-  const pattern = /==(.+?)==|\*\*(.+?)\*\*/g;
+  const pattern = /==(.+?)==|\*\*(.+?)\*\*|__(.+?)__/g;
   let last = 0;
   for (const match of source.matchAll(pattern)) {
     const index = match.index ?? 0;
     if (index > last) segments.push({ text: source.slice(last, index) });
     if (match[1] !== undefined) segments.push({ text: match[1], highlight: true });
-    else segments.push({ text: match[2], strong: true });
+    else if (match[2] !== undefined) segments.push({ text: match[2], strong: true });
+    else segments.push({ text: match[3], italic: true });
     last = index + match[0].length;
   }
   if (last < source.length) segments.push({ text: source.slice(last) });
@@ -79,6 +83,7 @@ function runs(source: string, accent: AccentColor, extra: PptxGenJS.TextPropsOpt
       ...extra,
       ...(segment.highlight ? { highlight: T.highlighter } : {}),
       ...(segment.strong ? { bold: true, color: T[accent] } : {}),
+      ...(segment.italic ? { italic: true } : {}),
     },
   }));
 }
@@ -304,7 +309,7 @@ function addTitleSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 't
     w,
     h: 1.5,
     fontFace: T.serif,
-    fontSize: 66,
+    fontSize: spec.title.length > 12 ? 46 : 66,
     color: T.ink,
     valign: 'middle',
     margin: 0,
@@ -359,7 +364,7 @@ function addSectionSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 
     w: d,
     h: 1.25,
     fontFace: T.serif,
-    fontSize: 58,
+    fontSize: spec.title.length > 18 ? 36 : spec.title.length > 14 ? 40 : 58,
     color: T.ink,
     align: 'center',
     valign: 'middle',
@@ -786,7 +791,7 @@ function addExampleSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 
     w: box.w - 1.0,
     h: box.h - 0.6,
     fontFace: T.serif,
-    fontSize: plain(spec.body).length > 1000 ? 16.5 : 18,
+    fontSize: plain(spec.body).length > 1000 ? 16.5 : plain(spec.body).length < 250 ? 32 : 18,
     color: T.ink,
     valign: 'middle',
     lineSpacingMultiple: 1.25,
@@ -978,6 +983,373 @@ function addEquationSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout:
   });
 }
 
+function addQuizSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 'quiz' }>, accent: AccentColor): void {
+  addHeading(slide, spec, accent);
+  addCornerCluster(slide, 'question', accent);
+  const box = { x: MARGIN, y: BODY_TOP - 0.05, w: CONTENT_WIDTH, h: BODY_HEIGHT + 0.1 };
+  addCard(slide, box, accent);
+  const count = spec.options.length;
+  const rowH = Math.min((box.h - 0.6) / count, 1.0);
+  const top = box.y + (box.h - rowH * count) / 2;
+  spec.options.forEach((option, index) => {
+    const y = top + index * rowH;
+    const isAnswer = spec.answer === index;
+    const letter = String.fromCharCode(97 + index);
+    const d = 0.5;
+    if (isAnswer) {
+      addDot(slide, box.x + 0.45, y + (rowH - d) / 2, d, T[accent]);
+    } else {
+      slide.addShape('ellipse', {
+        x: box.x + 0.45,
+        y: y + (rowH - d) / 2,
+        w: d,
+        h: d,
+        fill: { color: T.paper },
+        line: { color: spec.answer === undefined ? T[accent] : T.rule, width: 1.25 },
+      });
+    }
+    slide.addText(letter, {
+      x: box.x + 0.45,
+      y: y + (rowH - d) / 2,
+      w: d,
+      h: d,
+      fontFace: T.mono,
+      fontSize: 14,
+      bold: true,
+      color: isAnswer ? T.paper : spec.answer === undefined ? T[accent] : T.muted,
+      align: 'center',
+      valign: 'middle',
+      margin: 0,
+    });
+    slide.addText(
+      [
+        {
+          text: option,
+          options: {
+            ...(isAnswer ? { highlight: T.highlighter, bold: true } : {}),
+            color: spec.answer === undefined || isAnswer ? T.ink : T.muted,
+          },
+        },
+      ],
+      {
+        x: box.x + 1.2,
+        y,
+        w: box.w - 1.6,
+        h: rowH,
+        fontFace: T.sans,
+        fontSize: count > 4 ? 22 : 28,
+        valign: 'middle',
+        margin: 0,
+      }
+    );
+  });
+}
+
+function addOrderingSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 'ordering' }>, accent: AccentColor): void {
+  addHeading(slide, spec, accent);
+  addCornerCluster(slide, 'puzzle', accent);
+  const count = spec.items.length;
+  const gap = 0.14;
+  const rowH = Math.min((BODY_HEIGHT - gap * (count - 1)) / count, 0.72);
+  const w = Math.min(CONTENT_WIDTH, 9.5);
+  const x = MARGIN + (CONTENT_WIDTH - w) / 2;
+  const top = BODY_TOP + (BODY_HEIGHT - (rowH * count + gap * (count - 1))) / 2;
+  spec.items.forEach((item, index) => {
+    const y = top + index * (rowH + gap);
+    const color = spec.numbered ? accentAt(index) : accent;
+    addCard(slide, { x, y, w, h: rowH });
+    const d = 0.42;
+    if (spec.numbered) {
+      addDot(slide, x + 0.25, y + (rowH - d) / 2, d, T[color]);
+      slide.addText(String(index + 1), {
+        x: x + 0.25,
+        y: y + (rowH - d) / 2,
+        w: d,
+        h: d,
+        fontFace: T.serif,
+        fontSize: 16,
+        bold: true,
+        color: T.paper,
+        align: 'center',
+        valign: 'middle',
+        margin: 0,
+      });
+    } else {
+      slide.addShape('ellipse', {
+        x: x + 0.25,
+        y: y + (rowH - d) / 2,
+        w: d,
+        h: d,
+        fill: { color: T.paper },
+        line: { color: T.rule, width: 1.25 },
+      });
+    }
+    slide.addText(runs(item, color), {
+      x: x + 0.9,
+      y,
+      w: w - 1.2,
+      h: rowH,
+      fontFace: T.sans,
+      fontSize: plain(item).length > 70 ? 16 : 20,
+      color: T.ink,
+      valign: 'middle',
+      margin: 0,
+    });
+  });
+}
+
+function addOaSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 'oa' }>, accent: AccentColor): void {
+  addHeading(slide, spec, accent);
+  const gap = 0.4;
+  const w = (CONTENT_WIDTH - gap) / 2;
+  const topH = spec.thesis ? 2.35 : BODY_HEIGHT;
+  const columns: { label: string; color: AccentColor; lines: string[]; bullet: boolean }[] = [
+    { label: 'Observation', color: 'teal', lines: [spec.observation], bullet: false },
+    { label: 'Analysis', color: 'orange', lines: spec.analysis, bullet: true },
+  ];
+  columns.forEach((column, index) => {
+    const x = MARGIN + index * (w + gap);
+    addCard(slide, { x, y: BODY_TOP, w, h: topH }, column.color);
+    slide.addText(column.label.toUpperCase(), {
+      x: x + 0.35,
+      y: BODY_TOP + 0.22,
+      w: w - 0.7,
+      h: 0.35,
+      fontFace: T.mono,
+      fontSize: 12,
+      bold: true,
+      charSpacing: 2,
+      color: T[column.color],
+      margin: 0,
+    });
+    slide.addText(paragraphs(column.lines, column.color, { bullet: column.bullet, gapAfter: 6 }), {
+      x: x + 0.35,
+      y: BODY_TOP + 0.6,
+      w: w - 0.7,
+      h: topH - 0.8,
+      fontFace: column.bullet ? T.sans : T.serif,
+      fontSize: spec.thesis ? (column.bullet ? 18 : 24) : column.bullet ? 22 : 30,
+      color: T.ink,
+      valign: 'top',
+      lineSpacingMultiple: 1.1,
+      margin: 0,
+    });
+  });
+  if (!spec.thesis) return;
+  const y = BODY_TOP + topH + 0.45;
+  const h = BODY_BOTTOM - y;
+  // The equals sign between the two parts and what they make.
+  slide.addText('=', {
+    x: MARGIN,
+    y: BODY_TOP + topH + 0.02,
+    w: CONTENT_WIDTH,
+    h: 0.42,
+    fontFace: T.serif,
+    fontSize: 26,
+    bold: true,
+    color: T.muted,
+    align: 'center',
+    valign: 'middle',
+    margin: 0,
+  });
+  addCard(slide, { x: MARGIN, y, w: CONTENT_WIDTH, h }, 'coral');
+  slide.addText('THESIS', {
+    x: MARGIN + 0.35,
+    y: y + 0.18,
+    w: 2,
+    h: 0.3,
+    fontFace: T.mono,
+    fontSize: 12,
+    bold: true,
+    charSpacing: 2,
+    color: T.coral,
+    margin: 0,
+  });
+  slide.addText(runs(spec.thesis, 'coral'), {
+    x: MARGIN + 0.35,
+    y: y + 0.48,
+    w: CONTENT_WIDTH - 0.7,
+    h: h - 0.6,
+    fontFace: T.serif,
+    fontSize: plain(spec.thesis).length > 190 ? 18 : 21,
+    color: T.ink,
+    valign: 'top',
+    lineSpacingMultiple: 1.1,
+    margin: 0,
+  });
+}
+
+/** The thesis as runs, each part bold in its own colour. */
+function thesisRuns(thesis: string, parts: { span: string }[]): TextRun[] {
+  const out: TextRun[] = [];
+  let rest = thesis;
+  parts.forEach((part, index) => {
+    const at = rest.indexOf(part.span);
+    if (at < 0) return;
+    if (at > 0) out.push({ text: rest.slice(0, at) });
+    out.push({ text: part.span, options: { bold: true, color: T[accentAt(index)] } });
+    rest = rest.slice(at + part.span.length);
+  });
+  if (rest) out.push({ text: rest });
+  return out;
+}
+
+function addThesisPartsSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 'thesis-parts' }>, accent: AccentColor): void {
+  addHeading(slide, spec, accent);
+  const thesisH = 1.9;
+  addCard(slide, { x: MARGIN, y: BODY_TOP, w: CONTENT_WIDTH, h: thesisH }, accent);
+  slide.addText('THESIS', {
+    x: MARGIN + 0.35,
+    y: BODY_TOP + 0.18,
+    w: 2,
+    h: 0.3,
+    fontFace: T.mono,
+    fontSize: 12,
+    bold: true,
+    charSpacing: 2,
+    color: T[accent],
+    margin: 0,
+  });
+  slide.addText(thesisRuns(spec.thesis, spec.parts), {
+    x: MARGIN + 0.35,
+    y: BODY_TOP + 0.5,
+    w: CONTENT_WIDTH - 0.7,
+    h: thesisH - 0.65,
+    fontFace: T.serif,
+    fontSize: spec.thesis.length > 190 ? 19 : 22,
+    color: T.ink,
+    valign: 'top',
+    lineSpacingMultiple: 1.1,
+    margin: 0,
+  });
+  const top = BODY_TOP + thesisH + 0.35;
+  const rowH = Math.min((BODY_BOTTOM - top) / spec.parts.length, 0.85);
+  spec.parts.forEach((part, index) => {
+    const color = accentAt(index);
+    const y = top + index * rowH;
+    const d = 0.46;
+    addDot(slide, MARGIN + 0.2, y + (rowH - d) / 2, d, T[color]);
+    slide.addText(String(index + 1), {
+      x: MARGIN + 0.2,
+      y: y + (rowH - d) / 2,
+      w: d,
+      h: d,
+      fontFace: T.serif,
+      fontSize: 16,
+      bold: true,
+      color: T.paper,
+      align: 'center',
+      valign: 'middle',
+      margin: 0,
+    });
+    slide.addText(
+      [
+        { text: `${part.label}: `, options: { fontFace: T.mono, fontSize: 13, bold: true, color: T[color] } },
+        { text: part.span, options: { fontFace: T.sans, fontSize: 22, color: T.ink } },
+      ],
+      { x: MARGIN + 0.9, y, w: CONTENT_WIDTH - 1.1, h: rowH, valign: 'middle', margin: 0 }
+    );
+  });
+}
+
+function addPassageSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 'passage' }>, accent: AccentColor): void {
+  addHeading(slide, spec, accent);
+  const box = { x: MARGIN, y: BODY_TOP - 0.05, w: CONTENT_WIDTH, h: BODY_HEIGHT + 0.1 };
+  addCard(slide, box, accent);
+  let top = box.y + 0.3;
+  if (spec.label) {
+    slide.addText(spec.label.toUpperCase(), {
+      x: box.x + 0.5,
+      y: top,
+      w: box.w - 1,
+      h: 0.3,
+      fontFace: T.mono,
+      fontSize: 12,
+      bold: true,
+      charSpacing: 2,
+      color: T[accent],
+      margin: 0,
+    });
+    top += 0.4;
+  }
+  const length = plain(spec.body).length;
+  slide.addText(runs(spec.body, accent), {
+    x: box.x + 0.5,
+    y: top,
+    w: box.w - 1,
+    h: box.y + box.h - 0.3 - top,
+    fontFace: T.serif,
+    fontSize: length > 1500 ? 14 : length > 1100 ? 15.5 : length > 700 ? 17 : 19,
+    color: T.ink,
+    valign: 'top',
+    lineSpacingMultiple: 1.2,
+    margin: 0,
+  });
+}
+
+function addCloserSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 'closer' }>): void {
+  slide.background = { color: T.teal };
+  const d = 4.2;
+  const cx = (W - d) / 2;
+  const cy = (H - d) / 2 - (spec.line ? 0.3 : 0);
+  slide.addShape('ellipse', {
+    x: cx,
+    y: cy,
+    w: d,
+    h: d,
+    fill: { color: T.paper },
+    line: { color: T.paper, width: 0 },
+    shadow: { type: 'outer', color: T.ink, opacity: 0.18, blur: 14, offset: 4, angle: 90 },
+  });
+  slide.addText('YAWP!', {
+    x: cx,
+    y: cy + 1.25,
+    w: d,
+    h: 1.2,
+    fontFace: T.serif,
+    fontSize: 72,
+    bold: true,
+    color: T.ink,
+    align: 'center',
+    valign: 'middle',
+    margin: 0,
+  });
+  slide.addText('WRITING PROGRAM', {
+    x: cx,
+    y: cy + 2.5,
+    w: d,
+    h: 0.4,
+    fontFace: T.mono,
+    fontSize: 13,
+    bold: true,
+    charSpacing: 3,
+    color: T.terracotta,
+    align: 'center',
+    margin: 0,
+  });
+  addBubble(slide, 'lightbulb', cx + d - 1.2, cy - 0.5, 1.6, 'sunshine');
+  addBubble(slide, 'puzzle', cx - 0.6, cy + 0.3, 1.1, 'orange');
+  addBubble(slide, 'thumbs', cx + 0.1, cy + d - 1.1, 1.3, 'coral');
+  addDot(slide, cx - 0.35, cy + 1.9, 0.3, T.paper);
+  addDot(slide, cx + d + 0.1, cy + 1.5, 0.45, T.pink);
+  addDot(slide, cx + d - 0.5, cy + d + 0.05, 0.6, T.orange);
+  addDot(slide, cx + d - 1.4, cy + d + 0.3, 0.18, T.sunshine);
+  addDot(slide, cx + 1.4, cy + d + 0.2, 0.22, T.paper);
+  if (spec.line) {
+    slide.addText(spec.line, {
+      x: MARGIN,
+      y: cy + d + 0.55,
+      w: CONTENT_WIDTH,
+      h: 0.6,
+      fontFace: T.sans,
+      fontSize: 22,
+      color: T.paper,
+      align: 'center',
+      margin: 0,
+    });
+  }
+}
+
 function addSlide(pptx: PptxGenJS, spec: HybridSlide, index: number): void {
   const slide = pptx.addSlide({ masterName: MASTER });
   const accent = spec.accent ?? accentAt(index);
@@ -1020,6 +1392,24 @@ function addSlide(pptx: PptxGenJS, spec: HybridSlide, index: number): void {
       break;
     case 'equation':
       addEquationSlide(slide, spec, accent);
+      break;
+    case 'quiz':
+      addQuizSlide(slide, spec, accent);
+      break;
+    case 'ordering':
+      addOrderingSlide(slide, spec, accent);
+      break;
+    case 'oa':
+      addOaSlide(slide, spec, accent);
+      break;
+    case 'thesis-parts':
+      addThesisPartsSlide(slide, spec, accent);
+      break;
+    case 'passage':
+      addPassageSlide(slide, spec, accent);
+      break;
+    case 'closer':
+      addCloserSlide(slide, spec);
       break;
   }
   slide.addNotes(spec.notes);

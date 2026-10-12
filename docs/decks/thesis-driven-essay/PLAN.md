@@ -260,7 +260,18 @@ the biggest single piece of work. Lesson 3 is about the same size again.
 Lessons 4 to 7 together are roughly one more Pre-Writing. Lesson 1 is
 quick once its questions are answered.
 
-## Questions to settle before building
+## Decisions (Kevin, 2026-10-12)
+
+1. **Brian's personal slides** stay as they are. The speaker notes tell
+   teachers to make their own version using Brian's as the model, or to
+   delete the slide.
+2. **Sign-up** shows the current free-tier join flow.
+3. **House analogy** becomes a slide a teacher can actually use, not a
+   title they have to tell from memory.
+4. **Finishing touches** is written for the YAWP! editor, not Google Docs.
+5. **One PR** for all seven decks (#452).
+
+## Questions that were settled above
 
 1. **Brian's personal slides (Lesson 1, slides 2–4).** "I am Brian Connell"
    with his childhood and 1990s photos, and his own two-truths-and-a-lie
