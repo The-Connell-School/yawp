@@ -440,6 +440,8 @@ jobs:
             'app/utils/impersonation-read-only.server.test.ts' \
             'app/utils/internal-management.server.test.ts' \
             'app/utils/internal-platform-auth.server.test.ts' \
+            'app/utils/internal-grading-stats.server.test.ts' \
+            'app/routes/api.internal.v1.stats.grading/route.test.ts' \
             'app/domain/free-tier/student-join.server.test.ts' \
             'app/routes/app.assignment-types.$id/about-daily-pages/content.test.ts' \
             app/domain/assignment-types/assignment-type-grading-config.server.test.ts \
