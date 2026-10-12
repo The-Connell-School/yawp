@@ -48,10 +48,13 @@ const OPEN_PATHS = new Set([
  * deeper path: `/api/internal/v1/feature-flags/<key>` only.
  */
 const OPEN_SINGLE_SEGMENT_PREFIXES = ['/api/internal/v1/feature-flags/'];
+/** Yawp Internal operator API for free-tier event links (HMAC still required on the route). */
+const OPEN_PATH_PREFIXES = ['/api/internal/v1/free-tier/'];
 const OPEN_SEGMENT = /^[A-Za-z0-9_-]{1,128}$/;
 
 function isOpenPath(pathname: string) {
   if (OPEN_PATHS.has(pathname)) return true;
+  if (OPEN_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return true;
   return OPEN_SINGLE_SEGMENT_PREFIXES.some(
     (prefix) =>
       pathname.startsWith(prefix) &&

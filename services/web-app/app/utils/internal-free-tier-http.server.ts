@@ -6,7 +6,17 @@ import {
   INTERNAL_API_HEADER_SIGNATURE,
   recordInternalPlatformWriteAudit,
 } from '~/utils/internal-platform-auth.server';
-import { createAcquisitionTokens, getFreeTierReleaseCap, releaseBatch, releaseBatchSchema, tokenCreateSchema } from '~/domain/free-tier/service.server';
+import {
+  createAcquisitionTokens,
+  getFreeTierReleaseCap,
+  listAcquisitionTokensWithStats,
+  patchAcquisitionToken,
+  releaseBatch,
+  releaseBatchSchema,
+  setAcquisitionTokenDisabled,
+  tokenCreateSchema,
+  tokenPatchSchema,
+} from '~/domain/free-tier/service.server';
 import { readBoundedText } from '~/utils/bounded-body.server';
 import {
   ensureFreeTierProductionApprovalHooks,
@@ -63,6 +73,12 @@ async function authorizeManagement(request: Request) {
   return null;
 }
 
+async function authorizeFreeTierRead(request: Request) {
+  const { isFreeTierEnabled } = await import('~/domain/feature-flags/feature-flags.server');
+  if (!(await isFreeTierEnabled())) return response({ error: 'Not found' }, 404);
+  return authorizeManagement(request);
+}
+
 /** #416 release/link/email endpoints only; search/export/queue stay on main behavior. */
 async function authorizeFreeTierReleaseManagement(
   request: Request,
@@ -113,13 +129,14 @@ const searchQuery = z
       ])
       .optional(),
     released: z.enum(['true', 'false']).optional(),
+    acquisitionTokenId: z.string().min(1).max(200).optional(),
     cursor: z.string().max(500).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(50),
   })
   .strict();
 
 export async function applicationsSearch(request: Request) {
-  const denied = await authorizeManagement(request);
+  const denied = await authorizeFreeTierRead(request);
   if (denied) return denied;
   if (request.method !== 'GET') return response({ error: 'Method not allowed' }, 405);
   let input: z.infer<typeof searchQuery>;
@@ -130,7 +147,9 @@ export async function applicationsSearch(request: Request) {
     return response({ error: 'Invalid query' }, 400);
   }
   // Cursor binding
-  const binding = digest(JSON.stringify([input.q, input.status ?? null, input.released ?? null])).toString('base64url');
+  const binding = digest(
+    JSON.stringify([input.q, input.status ?? null, input.released ?? null, input.acquisitionTokenId ?? null])
+  ).toString('base64url');
   let after: string | undefined;
   if (input.cursor) {
     try {
@@ -145,6 +164,7 @@ export async function applicationsSearch(request: Request) {
   if (input.status) where.status = input.status;
   if (input.released === 'true') where.releasedAt = { not: null };
   if (input.released === 'false') where.releasedAt = null;
+  if (input.acquisitionTokenId) where.acquisitionTokenId = input.acquisitionTokenId;
   if (input.q) {
     where.OR = [
       { email: { contains: input.q, mode: 'insensitive' } },
@@ -178,6 +198,68 @@ export async function applicationsSearch(request: Request) {
       ? Buffer.from(JSON.stringify({ id: page[page.length - 1]!.id, binding })).toString('base64url')
       : null;
   return response({ applications: page, nextCursor });
+}
+
+export async function tokensList(request: Request) {
+  const denied = await authorizeFreeTierRead(request);
+  if (denied) return denied;
+  if (request.method !== 'GET') return response({ error: 'Method not allowed' }, 405);
+  const tokens = await listAcquisitionTokensWithStats();
+  return response({ tokens });
+}
+
+export async function tokensPatch(request: Request, tokenId: string) {
+  if (request.method !== 'PATCH') return response({ error: 'Method not allowed' }, 405);
+  const pre = await guardFreeTierPost(request);
+  if (pre) return pre;
+  if (!request.headers.get('content-type')?.startsWith('application/json')) {
+    return response({ error: 'Invalid content type' }, 400);
+  }
+  const text = await readBoundedText(request, 32768);
+  if (text === null) return response({ error: 'Payload too large' }, 413);
+  const post = await guardFreeTierPost(request, text ?? '');
+  if (post) return post;
+  let parsed: z.infer<typeof tokenPatchSchema>;
+  try {
+    parsed = tokenPatchSchema.parse(JSON.parse(text));
+  } catch {
+    return response({ error: 'Invalid input' }, 400);
+  }
+  try {
+    const updated = await patchAcquisitionToken(tokenId, parsed);
+    if (!updated) return response({ error: 'Invalid input' }, 400);
+    return response({ token: updated });
+  } catch {
+    return response({ error: 'Not found' }, 404);
+  }
+}
+
+export async function tokensDisable(request: Request, tokenId: string) {
+  if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
+  const pre = await guardFreeTierPost(request);
+  if (pre) return pre;
+  const post = await guardFreeTierPost(request, '');
+  if (post) return post;
+  try {
+    const updated = await setAcquisitionTokenDisabled(tokenId, true);
+    return response({ token: updated });
+  } catch {
+    return response({ error: 'Not found' }, 404);
+  }
+}
+
+export async function tokensEnable(request: Request, tokenId: string) {
+  if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
+  const pre = await guardFreeTierPost(request);
+  if (pre) return pre;
+  const post = await guardFreeTierPost(request, '');
+  if (post) return post;
+  try {
+    const updated = await setAcquisitionTokenDisabled(tokenId, false);
+    return response({ token: updated });
+  } catch {
+    return response({ error: 'Not found' }, 404);
+  }
 }
 
 export async function tokensCreate(request: Request) {
@@ -226,7 +308,7 @@ export async function releaseBatchHttp(request: Request) {
 }
 
 export async function exportCsv(request: Request) {
-  const denied = await authorizeManagement(request);
+  const denied = await authorizeFreeTierRead(request);
   if (denied) return denied;
   if (request.method !== 'GET') return response({ error: 'Method not allowed' }, 405);
   // Reuse search filter parsing
@@ -239,6 +321,7 @@ export async function exportCsv(request: Request) {
   if (input.status) where.status = input.status;
   if (input.released === 'true') where.releasedAt = { not: null };
   if (input.released === 'false') where.releasedAt = null;
+  if (input.acquisitionTokenId) where.acquisitionTokenId = input.acquisitionTokenId;
   if (input.q) {
     where.OR = [
       { email: { contains: input.q, mode: 'insensitive' } },
@@ -252,10 +335,23 @@ export async function exportCsv(request: Request) {
     where,
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     take: EXPORT_MAX_ROWS + 1,
+    include: { acquisitionToken: { select: { label: true } } },
   });
   const truncated = rows.length > EXPORT_MAX_ROWS;
   if (truncated) rows.length = EXPORT_MAX_ROWS;
-  const header = ['id', 'createdAt', 'status', 'name', 'email', 'schoolName', 'location', 'gradeLevel', 'releasedAt', 'acquisitionTokenId'];
+  const header = [
+    'id',
+    'createdAt',
+    'status',
+    'name',
+    'email',
+    'schoolName',
+    'location',
+    'gradeLevel',
+    'releasedAt',
+    'acquisitionTokenId',
+    'acquisitionTokenLabel',
+  ];
   const lines = [header.join(',')];
   for (const r of rows) {
     lines.push([
@@ -269,6 +365,7 @@ export async function exportCsv(request: Request) {
       csv(r.gradeLevel),
       r.releasedAt ? r.releasedAt.toISOString() : '',
       r.acquisitionTokenId || '',
+      csv(r.acquisitionToken?.label ?? ''),
     ].join(','));
   }
   return new Response(lines.join('\n'), {
@@ -315,7 +412,7 @@ const queueQuery = z
   .strict();
 
 export async function approvalQueue(request: Request) {
-  const denied = await authorizeManagement(request);
+  const denied = await authorizeFreeTierRead(request);
   if (denied) return denied;
   if (request.method !== 'GET') return response({ error: 'Method not allowed' }, 405);
   let input: z.infer<typeof queueQuery>;
@@ -382,7 +479,7 @@ export async function approvalQueue(request: Request) {
 }
 
 export async function approvalDetail(request: Request) {
-  const denied = await authorizeManagement(request);
+  const denied = await authorizeFreeTierRead(request);
   if (denied) return denied;
   if (request.method !== 'GET') return response({ error: 'Method not allowed' }, 405);
   const url = new URL(request.url);

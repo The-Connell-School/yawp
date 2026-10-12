@@ -214,7 +214,6 @@ describe('preview access gate', () => {
 
     for (const [method, path] of [
       ['GET', '/api/internal/v1/users'],
-      ['POST', '/api/internal/v1/free-tier/release'],
       ['GET', '/api/internal/v1/feature-flags/'],
       ['POST', '/api/internal/v1/feature-flags/a/b'],
       ['POST', '/api/internal/v1/feature-flags/lesson_planner/'],
@@ -230,6 +229,22 @@ describe('preview access gate', () => {
       expect((gated as Response).status).toBe(401);
     }
     expect(next).toHaveBeenCalledTimes(open.length);
+  });
+
+  test('lets Yawp Internal reach free-tier operator routes without a preview cookie', async () => {
+    const next = mock(async () => new Response('ok'));
+    for (const [method, path] of [
+      ['GET', '/api/internal/v1/free-tier/tokens'],
+      ['POST', '/api/internal/v1/free-tier/release'],
+      ['GET', '/api/internal/v1/free-tier/applications?q=x'],
+    ] as const) {
+      const response = await previewAccessMiddleware(
+        middlewareArgs(request(path, { method })),
+        next
+      );
+      expect(await response?.text()).toBe('ok');
+    }
+    expect(next).toHaveBeenCalledTimes(3);
   });
 
   test('fails closed when no access codes are configured', async () => {

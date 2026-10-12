@@ -25,3 +25,9 @@ export function freeTierPublicAppOrigin(): string {
 
   throw new Error('PRIMARY_APP_URL is required for free-tier links and email');
 }
+
+/** Public event-link URL for operators and QR codes. */
+export function buildFreeTierEventLink(code: string) {
+  const origin = freeTierPublicAppOrigin();
+  return `${origin}/free?t=${encodeURIComponent(code)}`;
+}

@@ -51,7 +51,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (!parsed.success) return json({ error: 'Invalid input' }, 400);
   const result = await redeemToken(parsed.data);
   if (!result.ok) {
-    const map = { invalid: 404, exhausted: 409, expired: 410 } as const;
+    const map = { invalid: 404, exhausted: 409, expired: 410, disabled: 410 } as const;
     return json({ ok: false, reason: result.reason }, map[result.reason] ?? 400);
   }
   // Nothing about the application (id, status, whether the email already

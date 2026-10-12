@@ -30,6 +30,7 @@ model FreeTierApplication {
   location         String
   gradeLevel       String
   acquisitionTokenId String?
+  acquisitionToken   AcquisitionToken? @relation(fields: [acquisitionTokenId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   userId           String?
   organizationId   String?
   releasedAt       DateTime?                 @db.Timestamptz(6)
@@ -111,15 +112,41 @@ model FreeTierEmailLog {
 }
 
 model AcquisitionToken {
-  id          String    @id @default(cuid())
-  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
-  tokenHash   String    @unique
-  label       String
-  bypassWaitlist Boolean @default(false)
-  maxUses     Int?
-  uses        Int       @default(0)
-  expiresAt   DateTime? @db.Timestamptz(6)
-  createdBy   String?
+  id             String    @id @default(cuid())
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+  tokenHash      String    @unique
+  /// Short URL-safe code for /free?t=…; legacy rows may be null (lookup by hash only).
+  code           String?   @unique
+  label          String
+  sourceName     String?
+  eventLocation  String?
+  eventDate      DateTime? @db.Timestamptz(6)
+  notes          String?
+  bypassWaitlist Boolean   @default(false)
+  maxUses        Int?
+  uses           Int       @default(0)
+  scanCount      Int       @default(0)
+  expiresAt      DateTime? @db.Timestamptz(6)
+  disabledAt     DateTime? @db.Timestamptz(6)
+  createdBy      String?
+  applications   FreeTierApplication[]
+  scans          AcquisitionTokenScan[]
+
+  @@index([expiresAt])
+}
+
+model AcquisitionTokenScan {
+  id              String           @id @default(cuid())
+  createdAt       DateTime         @default(now()) @db.Timestamptz(6)
+  tokenId         String
+  token           AcquisitionToken @relation(fields: [tokenId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  /// Hash of the browser dedupe cookie (no raw cookie stored).
+  dedupeCookieHash String
+  /// Coarse user agent prefix for debugging; not used for identity.
+  userAgentCoarse  String?
+
+  @@index([tokenId, createdAt(sort: Desc)])
+  @@index([tokenId, dedupeCookieHash, createdAt(sort: Desc)])
 }
 
 /// Audit log of operator decisions on free-tier applications.
