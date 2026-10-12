@@ -15,13 +15,13 @@ training video.
 
 | # | Lesson | Old deck | Slides | Review slides | New slides | Lesson plan | Video | Status |
 | --- | --- | --- | ---: | ---: | ---: | --- | ---: | --- |
-| 1 | Introduce Students to YAWP! | Day 1 Intro to YAWP! | 13 | 0 | 13 | Yes | 17 min | To do |
+| 1 | Introduce Students to YAWP! | Day 1 Intro to YAWP! | 13 | 0 | 13 | Yes | 17 min | **Done** |
 | 2 | Pre-Writing | Pre-Writing | 23 | 0 | 23 | Yes | 31 min | **Done** |
-| 3 | Developing a Thesis Statement | How to Write a Thesis Statement | 44 | 6 | 38 | Yes | 20 min | To do |
-| 4 | Introduction Paragraph | Introduction Paragraph | 23 | 8 | 15 | Yes | 17 min | To do |
-| 5 | Body Paragraphs | Body Paragraphs | 24 | 10 | 14 | Yes | 25 min | To do |
-| 6 | The Conclusion | Conclusion Paragraph | 27 | 12 | 15 | Yes | 13 min | To do |
-| 7 | Titling Your Essay | Titles and Formatting | 20 | 14 | 6 | **No** | 8 min | To do |
+| 3 | Developing a Thesis Statement | How to Write a Thesis Statement | 44 | 6 | 38 | Yes | 20 min | **Done** |
+| 4 | Introduction Paragraph | Introduction Paragraph | 23 | 8 | 15 | Yes | 17 min | **Done** |
+| 5 | Body Paragraphs | Body Paragraphs | 24 | 10 | 14 | Yes | 25 min | **Done** |
+| 6 | The Conclusion | Conclusion Paragraph | 27 | 12 | 15 | Yes | 13 min | **Done** |
+| 7 | Titling Your Essay | Titles and Formatting | 20 | 14 | 6 | **No** | 8 min | **Done** |
 | | **Remaining** | | **151** | **50** | **101** | | | |
 
 "Review slides" are the quiz that opens Lessons 3 to 7 (next section). "New
@@ -270,6 +270,9 @@ quick once its questions are answered.
    title they have to tell from memory.
 4. **Finishing touches** is written for the YAWP! editor, not Google Docs.
 5. **One PR** for all seven decks (#452).
+6. **Put the decks in the module** (Kevin, later the same day): each deck
+   now sits inside its step in the Thesis-Driven Essay's Modules, behind the
+   `thesis_essay_decks` flag. Formatting of that section is still open.
 
 ## Questions that were settled above
 
