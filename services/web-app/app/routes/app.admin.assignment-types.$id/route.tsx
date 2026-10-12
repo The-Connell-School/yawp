@@ -1,4 +1,7 @@
-import { listRubrics, seedStarterRubrics } from '~/domain/rubrics/rubric-library.server';
+import {
+  listLiveRubricsForAdminPicker,
+  resolveAdminRubricPickerSelection,
+} from '~/domain/rubrics/admin-rubric-picker.server';
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router';
 import { data as dataResponse, redirect, useLoaderData } from 'react-router';
 import type { Prisma } from '@app/prisma';
@@ -98,8 +101,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
-  await seedStarterRubrics();
-  const rubrics = (await listRubrics()).map(({ id, name, title, json }) => ({ id, name, title, json }));
+  const rubrics = (await listLiveRubricsForAdminPicker()).map(
+    ({ id, name, title, json }) => ({ id, name, title, json })
+  );
   const currentPromptLabel = await resolveCurrentPromptLabel(course.id);
   if (course.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
     return dataResponse({
@@ -209,8 +213,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
     );
     const hasRubricIdField = formData.has('rubricId');
     const rawRubricId = formData.get('rubricId')?.toString() ?? '';
-    const rubricId =
-      rawRubricId && rawRubricId !== '__none__' ? rawRubricId : null;
 
     if (!assignmentTypeId) {
       throw new Response('Not Found', { status: 404 });
@@ -234,13 +236,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
       throw new Response('Not Found', { status: 404 });
     }
 
-    if (hasRubricIdField && rubricId) {
-      const rubric = await prisma.rubric.findUnique({
-        where: { id: rubricId },
-        select: { id: true },
-      });
-      if (!rubric) {
-        return dataResponse({ error: 'That rubric no longer exists. Choose another rubric.' }, { status: 400 });
+    let rubricSelection: Awaited<
+      ReturnType<typeof resolveAdminRubricPickerSelection>
+    > | null = null;
+    if (hasRubricIdField) {
+      try {
+        rubricSelection = await resolveAdminRubricPickerSelection(rawRubricId);
+      } catch (error) {
+        if (error instanceof Response) {
+          return dataResponse({ error: await error.text() }, { status: 400 });
+        }
+        throw error;
       }
     }
 
@@ -328,7 +334,15 @@ export async function action({ request, params }: ActionFunctionArgs) {
         data: {
           title,
           description: description || null,
-          ...(hasRubricIdField ? { rubricId } : {}),
+          ...(hasRubricIdField && rubricSelection?.kind === 'library'
+            ? { rubricId: rubricSelection.rubricId }
+            : {}),
+          ...(hasRubricIdField && rubricSelection?.kind === 'per-type'
+            ? rubricSelection.assignmentTypeData
+            : {}),
+          ...(hasRubricIdField && rubricSelection?.kind === 'none'
+            ? { rubricId: null }
+            : {}),
           ...(hasTutorInstructions
             ? { tutorInstructions: tutorInstructions || null }
             : {}),

@@ -24,6 +24,9 @@ import {
 } from '~/domain/assignment-types/daily-pages-short-form-rubric';
 
 /**
+ * @deprecated Runtime code must not import this module. Tests, fixtures, and
+ * one-off seed/migration generators may still use it.
+ *
  * Protected rubrics the library starts with. Thesis preserves the production fallback; Daily Pages carries the approved
  * library revision; GBA 300 rubrics are department-supplied definitions.
  *
