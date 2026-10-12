@@ -12,7 +12,9 @@ const prisma = {
     updateMany: mock(),
     findUnique: mock(),
     findFirst: mock(),
+    findMany: mock(),
   },
+  $transaction: mock(),
 };
 
 mock.module('~/utils/auth.server', () => ({
@@ -27,11 +29,12 @@ mock.module('~/utils/lesson-planner/lesson-planner-access.server', () => ({
 const writeStackOrder = mock();
 const moveStackEntry = mock();
 const nextPositionFor = mock();
+const loadStackOrder = mock();
 mock.module('~/domain/lesson-planner/stack-order.server', () => ({
   writeStackOrder,
   moveStackEntry,
   nextPositionFor,
-  loadStackOrder: mock(),
+  loadStackOrder,
 }));
 
 const { action } = await import('./route');
@@ -83,6 +86,13 @@ beforeEach(() => {
   writeStackOrder.mockReset().mockResolvedValue({ ok: true, order: [] });
   moveStackEntry.mockReset().mockResolvedValue({ ok: true, order: [] });
   nextPositionFor.mockReset().mockResolvedValue(null);
+  loadStackOrder.mockReset().mockResolvedValue([]);
+  prisma.lessonPlanMaterial.findMany.mockReset().mockResolvedValue([]);
+  prisma.$transaction
+    .mockReset()
+    .mockImplementation(async (callback: (client: typeof prisma) => unknown) =>
+      callback(prisma)
+    );
 });
 
 describe('lesson packet action — one material at a time', () => {
@@ -777,5 +787,102 @@ describe("lesson packet action — the teacher's order (Brian's run 2, A1)", () 
       }),
     } as any);
     expect(prisma.lessonPlanMessage.updateMany.mock.calls[0][0].data.position).toBe(2);
+  });
+});
+
+describe("lesson packet action — use this class starter instead (Brian's run 2, E1)", () => {
+  const SWAP_REPLY =
+    'Two others:\n\n```yawp-daily-pages\nkind: class-starter\nid: FW-093\nWhat is the heaviest thing you have carried?\n```\n\n' +
+    '```yawp-daily-pages\nkind: class-starter\nid: FW-024\nWhat do you carry that no one sees?\n```';
+
+  beforeEach(() => {
+    prisma.lessonPlanMessage.findFirst.mockResolvedValue({
+      id: 'msg-swap',
+      createdAt: new Date('2026-10-12T10:05:00Z'),
+      content: SWAP_REPLY,
+    });
+    prisma.lessonPlanMaterial.findMany.mockResolvedValue([
+      { id: 'old-starter', sourceMessageId: 'msg-1', blockKey: 'dp', editedAt: null },
+    ]);
+    prisma.lessonPlanMaterial.upsert.mockResolvedValue({ id: 'new-starter' });
+    loadStackOrder.mockResolvedValue(['m:framing', 'm:old-starter', 'm:ticket']);
+  });
+
+  test('takes the old starter out and puts this one in its place', async () => {
+    const response = await action({
+      request: formRequest({
+        intent: 'replace-material',
+        conversationId: 'plan-1',
+        messageId: 'msg-swap',
+        materialKey: 'dp:1',
+      }),
+    } as any);
+
+    expect(prisma.lessonPlanMaterial.findMany.mock.calls[0][0].where).toEqual({
+      conversationId: 'plan-1',
+      kind: 'class-starter',
+    });
+    expect(prisma.lessonPlanMaterial.deleteMany.mock.calls[0][0].where).toEqual({
+      conversationId: 'plan-1',
+      id: { in: ['old-starter'] },
+    });
+    const upsert = prisma.lessonPlanMaterial.upsert.mock.calls[0][0];
+    expect(upsert.create.content).toBe('What do you carry that no one sees?');
+    expect(upsert.create.promptId).toBe('FW-024');
+    expect(writeStackOrder).toHaveBeenCalledWith('plan-1', ['m:framing', 'm:new-starter', 'm:ticket']);
+    expect((response as any).data).toMatchObject({
+      added: true,
+      messageId: 'msg-swap',
+      materialKey: 'dp:1',
+      replacedTokens: ['msg-1:dp'],
+    });
+  });
+
+  test('asks first when the old starter was edited by hand', async () => {
+    prisma.lessonPlanMaterial.findMany.mockResolvedValue([
+      { id: 'old-starter', sourceMessageId: 'msg-1', blockKey: 'dp', editedAt: new Date() },
+    ]);
+    const response = await action({
+      request: formRequest({
+        intent: 'replace-material',
+        conversationId: 'plan-1',
+        messageId: 'msg-swap',
+        materialKey: 'dp',
+      }),
+    } as any);
+    expect((response as any).init?.status).toBe(409);
+    expect(prisma.lessonPlanMaterial.deleteMany).not.toHaveBeenCalled();
+  });
+
+  test('with no starter in the stack, it is simply added', async () => {
+    prisma.lessonPlanMaterial.findMany.mockResolvedValue([]);
+    const response = await action({
+      request: formRequest({
+        intent: 'replace-material',
+        conversationId: 'plan-1',
+        messageId: 'msg-swap',
+        materialKey: 'dp',
+      }),
+    } as any);
+    expect(prisma.lessonPlanMaterial.upsert).toHaveBeenCalled();
+    expect(writeStackOrder).not.toHaveBeenCalled();
+    expect((response as any).data.replacedTokens).toEqual([]);
+  });
+
+  test('refuses something that is not a class starter or Daily Pages prompt', async () => {
+    prisma.lessonPlanMessage.findFirst.mockResolvedValue({
+      id: 'msg-1',
+      createdAt: new Date(),
+      content: '```yawp-material\nkind: handout\ntitle: H\n---\nRead.\n```',
+    });
+    const response = await action({
+      request: formRequest({
+        intent: 'replace-material',
+        conversationId: 'plan-1',
+        messageId: 'msg-1',
+        materialKey: '0',
+      }),
+    } as any);
+    expect((response as any).init?.status).toBe(400);
   });
 });

@@ -1659,3 +1659,13 @@ describe("buildLessonPlannerSystemPromptBlocks — the lesson's length, every tu
     );
   });
 });
+
+describe("buildLessonPlannerSystemPrompt — swapping a class starter (Brian's run 2, E1)", () => {
+  test('alternatives come back as blocks, never as bullets', () => {
+    const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'Connell School' });
+    expect(prompt).toContain(
+      'When the teacher asks to swap the class starter or see other prompts, give each alternative as its own `yawp-daily-pages` block'
+    );
+    expect(prompt).toContain('never as bullets or prose');
+  });
+});

@@ -77,8 +77,9 @@ export function splitReplyParts(content: string): ReplyPart[] {
         materialCount += 1;
       }
     } else if (match[1] === 'yawp-daily-pages') {
-      const [exercise] = readDailyPagesExercises(block).exercises;
-      if (exercise) {
+      // A bundled block is several prompts (Brian's run 2, E2): each gets its
+      // own card, numbered as readDailyPagesExercises numbers them.
+      for (const exercise of readDailyPagesExercises(block).exercises) {
         parts.push({
           kind: 'daily-pages',
           exercise,

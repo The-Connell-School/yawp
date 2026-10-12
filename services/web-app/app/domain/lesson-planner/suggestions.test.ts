@@ -3,8 +3,10 @@ import {
   DONE_FOR_TODAY_SUGGESTION,
   FOLLOW_ON_SUGGESTIONS,
   FROM_STACK_SUGGESTIONS,
+  asksToSwapStarter,
   isFileActionSuggestion,
   looksLikeLessonPlan,
+  SWAP_STARTER_SUGGESTION,
   mentionsRoomPersonality,
   STANDARD_OPENING_SUGGESTION,
   withStandardSuggestions,
@@ -453,5 +455,21 @@ describe("looksLikeLessonPlan — a plan written with bold steps (Brian's run 2,
     expect(
       looksLikeLessonPlan('That is **really** a fair question about the 50 min period.', { boldSteps: true })
     ).toBe(false);
+  });
+});
+
+describe("swapping the class starter (Brian's run 2, E1)", () => {
+  test('a reply with a class starter offers the swap, in the app\'s words', () => {
+    const chips = withStandardSuggestions(['Swap the starter for another one', 'Keep going'], {
+      isOpeningReply: false,
+      offerStarterSwap: true,
+    });
+    expect(chips).toEqual(['Keep going', SWAP_STARTER_SUGGESTION]);
+  });
+
+  test('knows a swap request when it sees one', () => {
+    expect(asksToSwapStarter(SWAP_STARTER_SUGGESTION)).toBe(true);
+    expect(asksToSwapStarter('Can you give me a different warm-up?')).toBe(true);
+    expect(asksToSwapStarter('Build the slide deck from my stack')).toBe(false);
   });
 });

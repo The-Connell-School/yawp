@@ -72,6 +72,19 @@ export function isBuildFromStackRequest(
  */
 export const DONE_FOR_TODAY_SUGGESTION = "I'm done for today";
 
+/**
+ * Stack v2 (Brian's run 2, E1): under a class starter, a one-tap way to see
+ * other prompts. The reply to it shows each one as a card with three choices.
+ */
+export const SWAP_STARTER_SUGGESTION = 'Swap out the class starter prompt';
+
+/** Is this teacher message asking to swap the class starter? */
+export function asksToSwapStarter(message: string | null | undefined): boolean {
+  if (!message) return false;
+  return /\b(swap|switch|replace|change|different|other)\b/i.test(message) &&
+    /\bclass[- ]starter\b|\bstarter\b|\bwarm[- ]up\b/i.test(message);
+}
+
 const MAX_SUGGESTIONS = 5;
 
 /**
@@ -297,6 +310,8 @@ export function withStandardSuggestions(
     offerDone = false,
     /** Stack v2: the teacher has filed pieces, so outputs come from the stack. */
     stackHasPieces = false,
+    /** Stack v2: this reply offered a class starter, so offer to swap it. */
+    offerStarterSwap = false,
   }: {
     isOpeningReply: boolean;
     teacherRaisedRoomPersonality?: boolean;
@@ -306,9 +321,10 @@ export function withStandardSuggestions(
     asksForMinutes?: boolean;
     offerDone?: boolean;
     stackHasPieces?: boolean;
+    offerStarterSwap?: boolean;
   }
 ): string[] {
-  const chips = pickSuggestions(suggestions, {
+  const picked = pickSuggestions(suggestions, {
     isOpeningReply,
     teacherRaisedRoomPersonality,
     deliveredPlan,
@@ -317,6 +333,15 @@ export function withStandardSuggestions(
     asksForMinutes,
     stackHasPieces,
   });
+  const chips =
+    offerStarterSwap
+      ? [
+          ...picked
+            .filter((chip) => !asksToSwapStarter(chip))
+            .slice(0, MAX_SUGGESTIONS - 1),
+          SWAP_STARTER_SUGGESTION,
+        ]
+      : picked;
   const somethingBuilt =
     produced.deck || produced.handout || inPacket.deck || inPacket.handout;
   if (!offerDone || isOpeningReply || !somethingBuilt) return chips;

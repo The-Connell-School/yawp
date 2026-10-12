@@ -15,7 +15,7 @@
  * says which one it is and sends it where it belongs.
  */
 import { Link } from 'react-router';
-import { Check, PenLine, Plus, Sparkles } from 'lucide-react';
+import { Check, PenLine, Plus, Repeat, Sparkles } from 'lucide-react';
 import { cn } from '~/utils/misc';
 import {
   dailyPagesCreateHref,
@@ -30,6 +30,7 @@ export function DailyPagesCard({
   conversationId,
   added = false,
   onToggle,
+  onReplace,
   disabled = false,
 }: {
   exercise: DailyPagesExercise;
@@ -51,6 +52,11 @@ export function DailyPagesCard({
    * Absent: no stack button, as before.
    */
   onToggle?: (added: boolean) => void;
+  /**
+   * Set on the options a swap offered (Brian's run 2, E1): put this one in
+   * the stack in place of the class starter already there.
+   */
+  onReplace?: (() => void) | null;
   disabled?: boolean;
 }) {
   const isStarter = exercise.kind === 'class-starter';
@@ -104,6 +110,19 @@ export function DailyPagesCard({
               {added ? 'In the stack' : 'Add to stack'}
             </button>
           ) : null}
+          {onReplace ? (
+            <button
+              type="button"
+              disabled={disabled || added}
+              onClick={onReplace}
+              data-testid="daily-pages-replace"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary/5 disabled:opacity-50"
+            >
+              <Repeat size={14} />
+              Replace existing {isStarter ? 'class starter' : 'Daily Pages prompt'} with
+              this one
+            </button>
+          ) : null}
           {targetTypeId ? (
           <Link
             to={dailyPagesCreateHref(
@@ -115,7 +134,9 @@ export function DailyPagesCard({
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90"
           >
             <Sparkles size={13} />
-            Create this {targetLabel} exercise for your class
+            {onReplace
+              ? `Create ${targetLabel === 'Class Starter' ? 'class starter' : 'Daily Pages'} assignment`
+              : `Create this ${targetLabel} exercise for your class`}
           </Link>
           ) : null}
         </div>

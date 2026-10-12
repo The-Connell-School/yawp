@@ -137,7 +137,13 @@ test.describe("Lesson Planner — Brian's second run", () => {
       ]);
       await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
       await page.goto(`/app/lesson-planner?c=${conversationId}`);
+      const filed = page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/domain/lesson-planner/packet') &&
+          response.request().method() === 'POST'
+      );
       await page.getByTestId('deck-toggle').click();
+      expect((await filed).ok()).toBe(true);
       await expect(page.getByTestId('deck-toggle')).toHaveText(/in the stack/i);
 
       await page.goto(`/app/lesson-planner/${conversationId}/packet`);
@@ -183,7 +189,13 @@ test.describe("Lesson Planner — Brian's second run", () => {
       ]);
       await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
       await page.goto(`/app/lesson-planner?c=${conversationId}`);
+      const filed = page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/domain/lesson-planner/packet') &&
+          response.request().method() === 'POST'
+      );
       await page.getByTestId('deck-toggle').click();
+      expect((await filed).ok()).toBe(true);
       await expect(page.getByTestId('deck-toggle')).toHaveText(/in the stack/i);
 
       const prisma = createE2EPrismaClient();
@@ -530,6 +542,74 @@ test.describe("Lesson Planner — Brian's second run", () => {
       await page.getByRole('button', { name: /^Slide 2:/ }).click();
       await page.getByLabel('Minutes', { exact: true }).fill('5');
       await expect(total).toHaveText('50 of 50 min');
+    });
+  });
+
+  test.describe('E1: swap the class starter', () => {
+    const STARTER_REPLY =
+      '## Class starter (5 min)\n\n```yawp-daily-pages\nkind: class-starter\nid: FW-021\nWrite about something you carry every day.\n```';
+    const SWAP_REPLY =
+      'Two others that fit:\n\n```yawp-daily-pages\nkind: class-starter\nid: FW-093\nWhat is the heaviest thing you have ever carried?\n```\n\n' +
+      '```yawp-daily-pages\nkind: class-starter\nid: FW-024\nWhat do you carry that no one can see?\n```';
+
+    test('a starter offers the swap; the swap shows three choices; "replace" swaps it in the stack', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      const { conversationId } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Plan Day 1 of The Things They Carried.' },
+        { role: 'assistant', content: STARTER_REPLY },
+        { role: 'user', content: 'Swap out the class starter prompt' },
+        { role: 'assistant', content: SWAP_REPLY },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+      const cards = page.getByTestId('daily-pages-card');
+      await expect(cards).toHaveCount(3);
+      // The original starter: the normal two choices.
+      await expect(cards.nth(0).getByTestId('daily-pages-replace')).toHaveCount(0);
+      const filed = () =>
+        page.waitForResponse(
+          (response) =>
+            response.url().includes('/api/domain/lesson-planner/packet') &&
+            response.request().method() === 'POST'
+        );
+      let done = filed();
+      await cards.nth(0).getByTestId('daily-pages-stack-toggle').click();
+      await done;
+
+      // Each swap option: Add to stack, Replace, Create.
+      const second = cards.nth(2);
+      await expect(second.getByTestId('daily-pages-stack-toggle')).toHaveText(/add to stack/i);
+      await expect(second.getByTestId('daily-pages-replace')).toHaveText(
+        'Replace existing class starter with this one'
+      );
+      await expect(second.getByTestId('daily-pages-create')).toHaveText(/Create class starter assignment/);
+      await expect(page.locator('main')).not.toContainText('FW-0');
+
+      done = filed();
+      await second.getByTestId('daily-pages-replace').click();
+      await done;
+      await expect(second.getByTestId('daily-pages-stack-toggle')).toHaveText(/in the stack/i);
+      await expect(cards.nth(0).getByTestId('daily-pages-stack-toggle')).toHaveText(/add to stack/i);
+
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      await expect(page.getByTestId('stack-list-row')).toHaveCount(1);
+      await expect(page.getByTestId('packet-section')).toContainText('What do you carry that no one can see?');
+    });
+
+    test('the swap chip sits under a class starter', async ({ page, signIn, e2eContext }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      const { conversationId } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Plan Day 1 of The Things They Carried.' },
+        { role: 'assistant', content: STARTER_REPLY },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+      await expect(page.getByRole('button', { name: 'Swap out the class starter prompt' })).toBeVisible();
     });
   });
 });

@@ -69,6 +69,7 @@ import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog
 import { hidePromptIds } from '~/domain/lesson-planner/prompt-ids';
 import { overTime, planMinutes } from '~/domain/lesson-planner/plan-timing';
 import {
+  asksToSwapStarter,
   BUILD_FROM_STACK_REQUESTS,
   isBuildFromStackRequest,
   isFileActionSuggestion,
@@ -494,6 +495,7 @@ export default function LessonPlannerRoute() {
   const pendingMaterialRef = useRef<{
     messageId: string;
     materialKey: string;
+    intent?: 'add-material' | 'replace-material';
   } | null>(null);
 
   function setKept(messageId: string, audience: PacketAudience | null) {
@@ -547,7 +549,7 @@ export default function LessonPlannerRoute() {
       setAddedMaterials((prev) => new Set(prev).add(token));
       packetFetcher.submit(
         {
-          intent: 'add-material',
+          intent: pending.intent ?? 'add-material',
           conversationId,
           messageId: pending.messageId,
           materialKey: pending.materialKey,
@@ -558,15 +560,31 @@ export default function LessonPlannerRoute() {
       return;
     }
 
-    const replaced = data.replaced;
-    if (!replaced) return;
+    // Whatever this filing took the place of stops claiming to be filed: one
+    // revision (`replaced`), or every class starter a swap replaced.
+    const gone = [
+      ...(data.replaced ? [data.replaced] : []),
+      ...((data as { replacedTokens?: string[] }).replacedTokens ?? []),
+    ];
+    if (!gone.length) return;
     setAddedMaterials((prev) => {
-      if (!prev.has(replaced)) return prev;
+      if (!gone.some((token) => prev.has(token))) return prev;
       const next = new Set(prev);
-      next.delete(replaced);
+      for (const token of gone) next.delete(token);
       return next;
     });
   }, [packetFetcher.data, conversationId]);
+
+  // "Replace existing class starter with this one" (Brian's run 2, E1).
+  function replaceMaterial(messageId: string, materialKey: string) {
+    if (!conversationId) return;
+    setAddedMaterials((prev) => new Set(prev).add(`${messageId}:${materialKey}`));
+    pendingMaterialRef.current = { messageId, materialKey, intent: 'replace-material' };
+    packetFetcher.submit(
+      { intent: 'replace-material', conversationId, messageId, materialKey },
+      { method: 'post', action: '/api/domain/lesson-planner/packet' }
+    );
+  }
 
   // A material goes into the packet on its own — the teacher wanted the
   // handout, not the whole lesson plan wrapped around it.
@@ -879,6 +897,12 @@ export default function LessonPlannerRoute() {
                   deckV2={reviewFlags.deckV2}
                   editedDeck={selectedConversation?.editedDeck ?? null}
                   periodMinutes={selectedConversation?.periodMinutes ?? null}
+                  previousUserText={
+                    messages[index - 1]?.role === 'user'
+                      ? messages[index - 1]!.content
+                      : null
+                  }
+                  onReplaceMaterial={replaceMaterial}
                   teacherClasses={teacherClasses}
                   stackHasPieces={keptCount > 0}
                   disabled={isSending}
@@ -1095,6 +1119,8 @@ function MessageBubble({
   deckV2 = false,
   editedDeck = null,
   periodMinutes = null,
+  previousUserText = null,
+  onReplaceMaterial = null,
   disabled,
 }: {
   message: ChatMessage;
@@ -1146,6 +1172,10 @@ function MessageBubble({
   } | null;
   /** The lesson's length, for the over-time flags (Brian's run 2, B2). */
   periodMinutes?: number | null;
+  /** What the teacher said just before this reply. */
+  previousUserText?: string | null;
+  /** "Replace existing class starter with this one" (Brian's run 2, E1). */
+  onReplaceMaterial?: ((messageId: string, materialKey: string) => void) | null;
   disabled: boolean;
 }) {
   if (message.role === 'user') {
@@ -1188,6 +1218,12 @@ function MessageBubble({
   // always offers the two artifacts that come next — in the app's own words,
   // rather than whatever the model happened to think of this run.
   const deliveredPlan = looksLikeLessonPlan(body, { boldSteps: stackV2 });
+  // Brian's run 2 (E1): the reply to "Swap out the class starter prompt"
+  // offers each prompt with three choices, one of them "Replace existing".
+  const isSwapReply = stackV2 && asksToSwapStarter(previousUserText);
+  const offersStarter = parts.some(
+    (part) => part.kind === 'daily-pages' && part.exercise.kind === 'class-starter'
+  );
   const planOverBy =
     stackV2 && deliveredPlan ? overTime(planMinutes(body), periodMinutes) : null;
   // The slider belongs in the intake batch and nowhere else: not on the
@@ -1210,6 +1246,7 @@ function MessageBubble({
     asksForMinutes: asks.some((ask) => ask.kind === 'minutes'),
     offerDone: stackV2,
     stackHasPieces: stackV2 && stackHasPieces,
+    offerStarterSwap: stackV2 && offersStarter && !isSwapReply,
   });
 
   return (
@@ -1253,6 +1290,11 @@ function MessageBubble({
                     stackV2 && message.id
                       ? (next) => onMaterial(message.id!, part.blockKey, next)
                       : undefined
+                  }
+                  onReplace={
+                    isSwapReply && message.id && onReplaceMaterial
+                      ? () => onReplaceMaterial(message.id!, part.blockKey)
+                      : null
                   }
                   disabled={disabled}
                 />

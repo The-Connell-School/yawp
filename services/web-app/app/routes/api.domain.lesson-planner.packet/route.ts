@@ -15,6 +15,7 @@ import { requireLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planne
 import { PACKET_AUDIENCES } from '~/domain/lesson-planner/lesson-packet';
 import { artifactFromAssistantReply } from '~/domain/lesson-planner/artifact-from-reply';
 import {
+  loadStackOrder,
   moveStackEntry,
   nextPositionFor,
   writeStackOrder,
@@ -31,7 +32,11 @@ const MESSAGE_INTENTS = [
   'rename-section',
   'add-material',
   'remove-material',
+  'replace-material',
 ] as const;
+
+/** What "use this one instead" can replace (Brian's run 2, E1). */
+const REPLACEABLE_KINDS = new Set(['class-starter', 'daily-pages']);
 
 const POST = z
   .object({
@@ -53,6 +58,8 @@ const POST = z
       // Brian's run 2 (A1): the teacher sequences the lesson.
       'reorder',
       'move',
+      // Brian's run 2 (E1): "Use this one instead" for a class starter.
+      'replace-material',
     ]),
     conversationId: z.string().min(1),
     messageId: z.string().min(1).optional(),
@@ -80,7 +87,9 @@ const POST = z
   .strict()
   .superRefine((value, context) => {
     if (
-      (value.intent === 'add-material' || value.intent === 'remove-material') &&
+      (value.intent === 'add-material' ||
+        value.intent === 'remove-material' ||
+        value.intent === 'replace-material') &&
       !value.materialKey
     ) {
       context.addIssue({
@@ -311,6 +320,92 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
     return dataResponse({ removed: true, materialId: data.materialId });
+  }
+
+  // "Use this one instead" (Brian's run 2, E1): the class starter the
+  // teacher swapped to takes the place of the one in the stack — the same
+  // place in the lesson — and the old one leaves.
+  if (data.intent === 'replace-material') {
+    const message = await prisma.lessonPlanMessage.findFirst({
+      where: { id: data.messageId, conversationId: conversation.id, role: 'assistant' },
+      select: { id: true, createdAt: true, content: true },
+    });
+    const material = message
+      ? artifactFromAssistantReply(message.content, data.materialKey!)
+      : null;
+    if (!message || !material) {
+      return dataResponse(
+        { error: 'That material is not part of this lesson.' },
+        { status: 404 }
+      );
+    }
+    if (!REPLACEABLE_KINDS.has(material.kind)) {
+      return dataResponse(
+        { error: 'Only a class starter or Daily Pages prompt can be swapped in.' },
+        { status: 400 }
+      );
+    }
+    const current = await prisma.lessonPlanMaterial.findMany({
+      where: { conversationId: conversation.id, kind: material.kind },
+      select: { id: true, sourceMessageId: true, blockKey: true, editedAt: true },
+    });
+    const others = current.filter(
+      (item) =>
+        !(item.sourceMessageId === message.id && item.blockKey === material.key)
+    );
+    if (others.some((item) => item.editedAt) && !data.confirmReplace) {
+      return dataResponse(
+        {
+          error: 'edited',
+          conflict: true,
+          message:
+            'This has been edited by hand. Filing the new version will replace those edits.',
+        },
+        { status: 409 }
+      );
+    }
+    const order = await loadStackOrder(conversation.id);
+    const oldKeys = new Set(others.map((item) => `m:${item.id}`));
+    const at = order.findIndex((key) => oldKeys.has(key));
+    const saved = await prisma.$transaction(async (tx) => {
+      if (others.length) {
+        await tx.lessonPlanMaterial.deleteMany({
+          where: { conversationId: conversation.id, id: { in: others.map((item) => item.id) } },
+        });
+      }
+      const fields = {
+        kind: material.kind,
+        title: material.title,
+        audience: data.audience ?? material.audience,
+        content: material.content,
+        sourceCreatedAt: message.createdAt,
+        sourceMessageId: message.id,
+        blockKey: material.key,
+        promptId: material.promptId ?? null,
+      };
+      return tx.lessonPlanMaterial.upsert({
+        where: {
+          conversationId_slot: { conversationId: conversation.id, slot: material.slot },
+        },
+        create: { conversationId: conversation.id, slot: material.slot, ...fields },
+        update: { ...fields, editedAt: null },
+        select: { id: true },
+      });
+    });
+    if (at >= 0) {
+      const newKey = `m:${saved.id}`;
+      const kept = order.filter((key) => !oldKeys.has(key) && key !== newKey);
+      const before = order.slice(0, at).filter((key) => !oldKeys.has(key) && key !== newKey).length;
+      kept.splice(before, 0, newKey);
+      await writeStackOrder(conversation.id, kept);
+    }
+    return dataResponse({
+      added: true,
+      messageId: message.id,
+      materialKey: material.key,
+      title: material.title,
+      replacedTokens: others.map((item) => `${item.sourceMessageId}:${item.blockKey}`),
+    });
   }
 
   if (data.intent === 'add-material' || data.intent === 'remove-material') {
