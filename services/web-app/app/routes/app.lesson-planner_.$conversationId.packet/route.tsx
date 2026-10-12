@@ -24,6 +24,15 @@ import {
   type ResourceFilter,
 } from './resource-index';
 import { MaterialRichEditor } from './material-rich-editor';
+import {
+  StackList,
+  type StackListItem,
+} from '~/components/lesson-planner/stack-list';
+import {
+  StackUndoToast,
+  useStackRemoval,
+} from '~/components/lesson-planner/use-stack-removal';
+import { stackEntryKey } from '~/domain/lesson-planner/stack-order';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/utils/misc';
 import { MarkdownContent } from '~/components/ai-chat/assistant-markdown';
@@ -56,76 +65,34 @@ export default function LessonPacketRoute() {
   const revalidator = useRevalidator();
   const stackV2 = reviewFlags.stackV2;
 
-  /**
-   * Removing a piece from the stack, right here (Brian's review, B2).
-   *
-   * The piece disappears at once and an Undo sits on screen for a few
-   * seconds; only then is it actually removed. A confirm dialog asks the
-   * teacher to be sure every time, while Undo only costs the teacher who
-   * slipped. Leaving the page commits whatever is still waiting.
-   */
-  const [hiddenIds, setHiddenIds] = useState<string[]>([]);
-  const [undoable, setUndoable] = useState<{ id: string; title: string } | null>(
-    null
-  );
-  const pendingRemovals = useRef(
-    new Map<string, { timer: ReturnType<typeof setTimeout>; commit: () => void }>()
-  );
-
-  function commitRemoval(section: { id: string; origin: 'reply' | 'material' }) {
-    const body = new FormData();
-    body.set('conversationId', conversationId);
-    if (section.origin === 'material') {
-      body.set('intent', 'delete-material');
-      body.set('materialId', section.id);
-    } else {
-      body.set('intent', 'drop');
-      body.set('messageId', section.id);
-    }
-    return fetch('/api/domain/lesson-planner/packet', {
-      method: 'POST',
-      body,
-      keepalive: true,
-    });
-  }
-
-  function removeSection(section: {
-    id: string;
-    title: string;
-    origin: 'reply' | 'material';
-  }) {
-    setHiddenIds((ids) => [...ids, section.id]);
-    setUndoable({ id: section.id, title: section.title });
-    const commit = () => {
-      pendingRemovals.current.delete(section.id);
-      void commitRemoval(section).then(() => {
-        setUndoable((current) => (current?.id === section.id ? null : current));
-        revalidator.revalidate();
-      });
-    };
-    pendingRemovals.current.set(section.id, {
-      timer: setTimeout(commit, REMOVE_UNDO_MS),
-      commit,
-    });
-  }
-
-  function undoRemoval(id: string) {
-    const pending = pendingRemovals.current.get(id);
-    if (pending) clearTimeout(pending.timer);
-    pendingRemovals.current.delete(id);
-    setHiddenIds((ids) => ids.filter((other) => other !== id));
-    setUndoable(null);
-  }
-
+  // Removing a piece from the stack, right here (Brian's review, B2), with an
+  // Undo rather than a dialog. Shared with the stack panel beside the chat.
+  const {
+    hiddenIds,
+    undoable,
+    remove: removeSection,
+    undo: undoRemoval,
+  } = useStackRemoval({
+    conversationId,
+    onCommitted: () => revalidator.revalidate(),
+  });
+  // The teacher's order while it is on its way to the server (Brian's run 2,
+  // A1). The loader's own order takes over again once it has caught up.
+  const reorderFetcher = useFetcher();
+  const [localOrder, setLocalOrder] = useState<string[] | null>(null);
+  const loadedOrder = packet.sections
+    .map((section) => stackEntryKey(section))
+    .join('|');
   useEffect(() => {
-    const pending = pendingRemovals.current;
-    return () => {
-      for (const { timer, commit } of pending.values()) {
-        clearTimeout(timer);
-        commit();
-      }
-    };
-  }, []);
+    setLocalOrder(null);
+  }, [loadedOrder]);
+  function reorderStack(keys: string[]) {
+    setLocalOrder(keys);
+    reorderFetcher.submit(
+      { intent: 'reorder', conversationId, order: keys.join(',') },
+      { method: 'post', action: '/api/domain/lesson-planner/packet' }
+    );
+  }
   const [view, setView] = useState<'full' | 'outline' | 'handout'>('full');
   // Pieces the teacher does not want in students' hands this time. Nothing is
   // deleted — the handout is a reading of the packet, so it stays current.
@@ -213,13 +180,32 @@ export default function LessonPacketRoute() {
     );
   }
 
-  const shownSections = packet.sections.filter(
+  const orderedSections = localOrder
+    ? [...packet.sections].sort(
+        (a, b) =>
+          localOrder.indexOf(stackEntryKey(a)) -
+          localOrder.indexOf(stackEntryKey(b))
+      )
+    : packet.sections;
+  const shownSections = orderedSections.filter(
     (section) => !hiddenIds.includes(section.id)
   );
+  // Brian's run 2 (A2): no filters under stack v2; the stack is one list.
   const visibleSections =
-    filter === 'all'
+    stackV2 || filter === 'all'
       ? shownSections
       : shownSections.filter((section) => section.kind === filter);
+  const minutesByAnchor = new Map(
+    packet.outline.map((entry) => [entry.anchor, entry.minutes])
+  );
+  const stackItems: StackListItem[] = shownSections.map((section) => ({
+    key: stackEntryKey(section),
+    id: section.id,
+    origin: section.origin,
+    title: section.title,
+    kind: section.kind,
+    minutes: minutesByAnchor.get(section.anchor) ?? null,
+  }));
 
   // Every student-facing piece, and the subset actually going in the handout.
   const allHandoutParts = buildStudentHandout({ packet }).parts;
@@ -400,12 +386,29 @@ export default function LessonPacketRoute() {
         <div className="grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] print:block">
           {packet.sections.length > 0 ? (
             <aside className="lg:sticky lg:top-6 lg:self-start print:hidden">
-              <ResourceIndex
-                entries={packet.outline}
-                filter={filter}
-                onFilter={setFilter}
-                onJump={jumpTo}
-              />
+              {stackV2 ? (
+                <nav aria-label="Lesson contents">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Your stack
+                  </p>
+                  <p className="mb-2 text-xs text-muted-foreground">
+                    Drag to put the lesson in order. Changes save themselves.
+                  </p>
+                  <StackList
+                    items={stackItems}
+                    onReorder={reorderStack}
+                    onRemove={removeSection}
+                    onJump={(item) => jumpTo(`resource-${item.id}`)}
+                  />
+                </nav>
+              ) : (
+                <ResourceIndex
+                  entries={packet.outline}
+                  filter={filter}
+                  onFilter={setFilter}
+                  onJump={jumpTo}
+                />
+              )}
             </aside>
           ) : null}
 
@@ -660,28 +663,10 @@ export default function LessonPacketRoute() {
           </article>
         </div>
       </div>
-      {undoable ? (
-        <div
-          role="status"
-          data-testid="remove-undo"
-          className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-lg bg-foreground px-4 py-2.5 text-sm text-background shadow-lg print:hidden"
-        >
-          <span>Removed “{undoable.title}” from the stack</span>
-          <button
-            type="button"
-            onClick={() => undoRemoval(undoable.id)}
-            className="font-semibold underline underline-offset-2"
-          >
-            Undo
-          </button>
-        </div>
-      ) : null}
+      <StackUndoToast undoable={undoable} onUndo={undoRemoval} />
     </section>
   );
 }
-
-/** How long a removed piece can still be brought back. */
-const REMOVE_UNDO_MS = 6000;
 
 /**
  * A saved resource's body. A deck renders as a deck with a way to present it;

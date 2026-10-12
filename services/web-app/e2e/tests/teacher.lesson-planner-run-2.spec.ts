@@ -83,6 +83,38 @@ const DECK = {
 
 const DECK_REPLY = `Here is your deck.\n\n\`\`\`yawp-slides\n${JSON.stringify(DECK)}\n\`\`\``;
 
+/** A lesson with pieces already filed in its stack, in written order. */
+async function seedStack(
+  e2eContext: Ctx,
+  pieces: Array<{ title: string; kind?: string; audience?: string; content?: string }>
+) {
+  const { conversationId, assistantIds } = await seedConversation(e2eContext, [
+    { role: 'user', content: 'Plan Day 1 of The Things They Carried.' },
+    { role: 'assistant', content: 'Here is the plan.' },
+  ]);
+  const prisma = createE2EPrismaClient();
+  try {
+    for (const [index, piece] of pieces.entries()) {
+      await prisma.lessonPlanMaterial.create({
+        data: {
+          conversationId,
+          sourceMessageId: assistantIds[0]!,
+          sourceCreatedAt: new Date(Date.UTC(2026, 9, 12, 10, 0, 1)),
+          blockKey: String(index),
+          slot: `seed-${index}`,
+          kind: piece.kind ?? 'notes',
+          title: piece.title,
+          audience: piece.audience ?? 'teacher',
+          content: piece.content ?? `${piece.title} body.`,
+        },
+      });
+    }
+  } finally {
+    await prisma.$disconnect();
+  }
+  return { conversationId, assistantIds };
+}
+
 test.describe("Lesson Planner — Brian's second run", () => {
   test.afterEach(async ({ e2eContext }) => {
     await clearLessonPlans(e2eContext.teacherMembershipId);
@@ -204,6 +236,98 @@ test.describe("Lesson Planner — Brian's second run", () => {
       await expect(toStack).toHaveText(/Open the stack to download/);
       await toStack.click();
       await expect(page).toHaveURL(new RegExp(`/app/lesson-planner/${conversationId}/packet`));
+    });
+  });
+
+  test.describe('A1, A2: the stack is a simple list you can sequence', () => {
+    test('move pieces up and down; the order saves itself and the document follows', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      const { conversationId } = await seedStack(e2eContext, [
+        { title: 'Historical context' },
+        { title: 'Read aloud' },
+        { title: 'Exit ticket', kind: 'exit-ticket', audience: 'student' },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+
+      const rows = page.getByTestId('stack-list-row');
+      await expect(rows).toHaveText([/Historical context/, /Read aloud/, /Exit ticket/]);
+      // A36: no filters; the stack is one simple list.
+      await expect(page.getByRole('button', { name: 'All', exact: true })).toHaveCount(0);
+
+      const saved = () =>
+        page.waitForResponse(
+          (response) =>
+            response.url().includes('/api/domain/lesson-planner/packet') &&
+            response.request().method() === 'POST'
+        );
+      let save = saved();
+      await page.getByRole('button', { name: 'Move Exit ticket up' }).click();
+      await save;
+      save = saved();
+      await page.getByRole('button', { name: 'Move Exit ticket up' }).click();
+      await save;
+      await expect(rows).toHaveText([/Exit ticket/, /Historical context/, /Read aloud/]);
+
+      await page.reload();
+      await expect(page.getByTestId('stack-list-row')).toHaveText([
+        /Exit ticket/,
+        /Historical context/,
+        /Read aloud/,
+      ]);
+      const sections = page.getByTestId('packet-section');
+      await expect(sections.nth(0)).toContainText('Exit ticket body.');
+      await expect(sections.nth(2)).toContainText('Read aloud body.');
+    });
+
+    test('drag a piece to a new place', async ({ page, signIn, e2eContext }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      const { conversationId } = await seedStack(e2eContext, [
+        { title: 'First' },
+        { title: 'Second' },
+        { title: 'Third' },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      const rows = page.getByTestId('stack-list-row');
+      await expect(rows).toHaveText([/First/, /Second/, /Third/]);
+
+      const save = page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/domain/lesson-planner/packet') &&
+          response.request().method() === 'POST'
+      );
+      await rows.nth(2).dragTo(rows.nth(0));
+      await save;
+      await expect(rows).toHaveText([/Third/, /First/, /Second/]);
+      await page.reload();
+      await expect(page.getByTestId('stack-list-row')).toHaveText([/Third/, /First/, /Second/]);
+    });
+
+    test('remove a piece from the list itself, with Undo', async ({ page, signIn, e2eContext }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      const { conversationId } = await seedStack(e2eContext, [
+        { title: 'Keep me' },
+        { title: 'Drop me' },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      const rows = page.getByTestId('stack-list-row');
+
+      await page.getByRole('button', { name: 'Remove Drop me from the stack' }).first().click();
+      await expect(rows).toHaveText([/Keep me/]);
+      await expect(page.getByTestId('packet-section')).toHaveCount(1);
+      await page.getByTestId('remove-undo').getByRole('button', { name: 'Undo' }).click();
+      await expect(rows).toHaveText([/Keep me/, /Drop me/]);
+
+      await page.getByRole('button', { name: 'Remove Drop me from the stack' }).first().click();
+      await expect(page.getByTestId('remove-undo')).toBeHidden({ timeout: 10_000 });
+      await page.reload();
+      await expect(page.getByTestId('stack-list-row')).toHaveText([/Keep me/]);
     });
   });
 });
