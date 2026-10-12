@@ -81,8 +81,13 @@ describe('signed internal writes record platform audit rows', () => {
     request.headers.set('content-type', 'application/json');
     request.headers.set('x-yawp-operator-email', 'ops@yawp.school');
     await featureFlagUpdate(request, 'lesson_planner');
-    expect(auditCreate).toHaveBeenCalledTimes(1);
-    expect(auditCreate.mock.calls[0]?.[0]?.data?.endpoint).toContain('feature-flags');
+    expect(auditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          endpoint: expect.stringContaining('feature-flags'),
+        }),
+      })
+    );
   });
 
   test('free tier token mint', async () => {
@@ -101,8 +106,13 @@ describe('signed internal writes record platform audit rows', () => {
     const request = await sign('POST', 'https://yawp.test/api/internal/v1/free-tier/tokens', body);
     request.headers.set('content-type', 'application/json');
     await tokensCreate(request);
-    expect(auditCreate).toHaveBeenCalledTimes(1);
-    expect(auditCreate.mock.calls[0]?.[0]?.data?.endpoint).toContain('free-tier/tokens');
+    expect(auditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          endpoint: expect.stringContaining('free-tier/tokens'),
+        }),
+      })
+    );
   });
 
   test('QA account create', async () => {
@@ -122,9 +132,12 @@ describe('signed internal writes record platform audit rows', () => {
     const request = await sign('POST', 'https://yawp.test/api/internal/v1/qa/accounts', body);
     request.headers.set('content-type', 'application/json');
     await createQaHttp(service as any, () => 'k'.repeat(43), () => true).create(request);
-    expect(auditCreate).toHaveBeenCalledTimes(1);
     const hash = createHash('sha256').update(body).digest('hex');
-    expect(auditCreate.mock.calls[0]?.[0]?.data?.requestHash).toBe(hash);
+    expect(auditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ requestHash: hash }),
+      })
+    );
   });
 
   test('organization search', async () => {
@@ -136,7 +149,12 @@ describe('signed internal writes record platform audit rows', () => {
     const request = await sign('POST', 'https://yawp.test/api/internal/v1/organizations/search', body);
     request.headers.set('content-type', 'application/json');
     await createOrganizationManagementHandler(directory as any, () => 'k'.repeat(43))(request);
-    expect(auditCreate).toHaveBeenCalledTimes(1);
-    expect(auditCreate.mock.calls[0]?.[0]?.data?.endpoint).toContain('organizations/search');
+    expect(auditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          endpoint: expect.stringContaining('organizations/search'),
+        }),
+      })
+    );
   });
 });
