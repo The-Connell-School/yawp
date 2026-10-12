@@ -25,6 +25,7 @@ export const stageInput = z.object({
   requestId: saveInput.shape.requestId,
   actorEmail: saveInput.shape.actorEmail,
   reason: saveInput.shape.reason,
+  expectedFingerprint: saveInput.shape.expectedFingerprint.optional(),
   document: saveInput.shape.document,
   source: z.object({
     contentId: z.string().uuid(),
