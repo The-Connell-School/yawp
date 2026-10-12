@@ -396,7 +396,7 @@ export async function renderDeckPptxTile(deck: SlideDeck): Promise<Uint8Array> {
   pptx.layout = LAYOUT.name;
   pptx.title = deck.title;
   if (deck.subtitle) pptx.subject = deck.subtitle;
-  pptx.company = 'Yawp!';
+  pptx.company = 'YAWP!';
 
   // A small typographic wordmark and the slide number, on the master, in
   // place of the little footer mark Brian asked to lose.

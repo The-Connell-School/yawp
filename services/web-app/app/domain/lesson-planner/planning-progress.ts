@@ -71,7 +71,7 @@ export const PLANNING_PROGRESS_LABELS: Record<string, string> = {
  * something true and general rather than the function's name — `list_classes`
  * is not a sentence, and a teacher should never be shown one.
  */
-const FALLBACK_LABEL = 'Looking things up in Yawp';
+const FALLBACK_LABEL = 'Looking things up in YAWP!';
 
 /**
  * The lookup stretch approaches its ceiling without arriving: the model can

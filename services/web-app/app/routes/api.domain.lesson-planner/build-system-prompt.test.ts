@@ -578,7 +578,7 @@ describe('buildLessonPlannerSystemPrompt — bringing material in', () => {
 
   test('warns that an invented address costs them the material', () => {
     expect(prompt.toLowerCase()).toContain(
-      'yawp deletes any block whose address did not come back from a tool'
+      'yawp! deletes any block whose address did not come back from a tool'
     );
   });
 });
@@ -640,7 +640,7 @@ describe('buildLessonPlannerSystemPrompt — when to ask the length', () => {
     );
     // The app strips it either way; the model should know rather than be
     // surprised that its control vanished.
-    expect(lower).toContain('yawp removes the control');
+    expect(lower).toContain('yawp! removes the control');
   });
 });
 
