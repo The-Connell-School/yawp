@@ -29,14 +29,29 @@ export function SeeHowItWorksLink({ to }: { to: string }) {
   );
 }
 
+/**
+ * How a route frames a guide: its way back, an optional note above the hero,
+ * and the button at the bottom. A guide can open from its feature's page or,
+ * for a free classroom teacher, as a teaser of a feature they don't have yet.
+ */
+export type GuideFrameProps = {
+  backTo: string;
+  backLabel: string;
+  banner?: React.ReactNode;
+  startTo: string;
+  startLabel: string;
+};
+
 /** The scrolling page every guide sits in, with the way back on top. */
 export function GuidePage({
   backTo,
   backLabel,
+  banner,
   children,
 }: {
   backTo: string;
   backLabel: string;
+  banner?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -51,6 +66,7 @@ export function GuidePage({
             </Link>
           </Button>
         </div>
+        {banner}
         {children}
       </div>
     </section>
