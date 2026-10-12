@@ -1,6 +1,15 @@
-import { expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { createQaHttp } from './internal-qa-http.server';
 const key = 'k'.repeat(43);
+let savedManagement: string | undefined;
+beforeEach(() => {
+  savedManagement = process.env.YAWP_MANAGEMENT_SERVICE_KEY;
+  process.env.YAWP_MANAGEMENT_SERVICE_KEY = key;
+});
+afterEach(() => {
+  if (savedManagement === undefined) delete process.env.YAWP_MANAGEMENT_SERVICE_KEY;
+  else process.env.YAWP_MANAGEMENT_SERVICE_KEY = savedManagement;
+});
 const id = 'abf51c57-a733-4fc2-9c66-0d613d9e2e37';
 const payload = { id, actorId: 'operator', organizationId: 'org', reason: 'QA', users: [{ name: 'Teacher', role: 'TEACHER' }] };
 const request = (body: unknown, credential = key) => new Request('https://yawp.test/api/internal/v1/qa/accounts', { method: 'POST', headers: { authorization: `Bearer ${credential}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });

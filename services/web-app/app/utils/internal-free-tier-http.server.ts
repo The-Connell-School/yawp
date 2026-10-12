@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import {
   authenticateInternalManagementRequest,
+  INTERNAL_API_HEADER_SIGNATURE,
   recordInternalPlatformWriteAudit,
 } from '~/utils/internal-platform-auth.server';
 import { createAcquisitionTokens, getFreeTierReleaseCap, releaseBatch, releaseBatchSchema, tokenCreateSchema } from '~/domain/free-tier/service.server';
@@ -63,13 +64,35 @@ async function authorizeManagement(request: Request) {
 }
 
 /** #416 release/link/email endpoints only; search/export/queue stay on main behavior. */
-async function authorizeFreeTierReleaseManagement(request: Request) {
-  const denied = await authorizeManagement(request);
-  if (denied) return denied;
+async function authorizeFreeTierReleaseManagement(
+  request: Request,
+  options: { body?: Uint8Array | string } = {}
+) {
   const { isFreeTierEnabled } = await import('~/domain/feature-flags/feature-flags.server');
   if (!(await isFreeTierEnabled())) {
     return response({ error: 'Not found' }, 404);
   }
+  const signed = Boolean(request.headers.get(INTERNAL_API_HEADER_SIGNATURE));
+  if (signed) {
+    const denied = await authenticateAndAuditWrite(request, options);
+    if (denied) return denied;
+    return null;
+  }
+  const denied = await authorizeManagement(request);
+  if (denied) return denied;
+  return null;
+}
+
+async function guardFreeTierPost(request: Request, body?: string) {
+  const signed = Boolean(request.headers.get(INTERNAL_API_HEADER_SIGNATURE));
+  if (!signed) {
+    const denied = await authorizeFreeTierReleaseManagement(request);
+    if (denied) return denied;
+    return null;
+  }
+  if (body === undefined) return null;
+  const denied = await authorizeFreeTierReleaseManagement(request, { body });
+  if (denied) return denied;
   return null;
 }
 
@@ -158,13 +181,15 @@ export async function applicationsSearch(request: Request) {
 }
 
 export async function tokensCreate(request: Request) {
-  const denied = await authorizeFreeTierReleaseManagement(request);
-  if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
+  const pre = await guardFreeTierPost(request);
+  if (pre) return pre;
   if (new URL(request.url).search) return response({ error: 'Invalid request' }, 400);
   if (!request.headers.get('content-type')?.startsWith('application/json')) return response({ error: 'Invalid content type' }, 400);
   const text = await readBoundedText(request, 32768);
   if (text === null) return response({ error: 'Payload too large' }, 413);
+  const post = await guardFreeTierPost(request, text ?? '');
+  if (post) return post;
   let parsed: z.infer<typeof tokenCreateSchema>;
   try {
     parsed = tokenCreateSchema.parse(JSON.parse(text));
@@ -174,12 +199,14 @@ export async function tokensCreate(request: Request) {
 }
 
 export async function releaseBatchHttp(request: Request) {
-  const denied = await authorizeFreeTierReleaseManagement(request);
-  if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
+  const pre = await guardFreeTierPost(request);
+  if (pre) return pre;
   if (!request.headers.get('content-type')?.startsWith('application/json')) return response({ error: 'Invalid content type' }, 400);
   const text = await readBoundedText(request, 32768);
   if (text === null) return response({ error: 'Payload too large' }, 413);
+  const post = await guardFreeTierPost(request, text ?? '');
+  if (post) return post;
   let body: any; try { body = JSON.parse(text); } catch { return response({ error: 'Malformed JSON' }, 400); }
   try {
     const parsed = releaseBatchSchema.parse(body);
@@ -437,18 +464,18 @@ async function runHookSafely(name: string, fn: () => Promise<void> | void) {
   }
 }
 
-async function readActionBody(request: Request, limit: number, requireJson: boolean): Promise<{ body: any } | { error: Response }> {
+async function readActionBody(request: Request, limit: number, requireJson: boolean): Promise<{ body: any; text: string } | { error: Response }> {
   if (requireJson && !request.headers.get('content-type')?.startsWith('application/json')) {
     return { error: response({ error: 'Invalid content type' }, 400) };
   }
   const text = await readBoundedText(request, limit);
   if (text === null) return { error: response({ error: 'Payload too large' }, 413) };
-  if (!text) return { body: {} };
-  if (!request.headers.get('content-type')?.startsWith('application/json')) return { body: {} };
+  if (!text) return { body: {}, text: '' };
+  if (!request.headers.get('content-type')?.startsWith('application/json')) return { body: {}, text };
   try {
     const parsed = JSON.parse(text);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { error: response({ error: 'Invalid input' }, 400) };
-    return { body: parsed };
+    return { body: parsed, text };
   } catch {
     return { error: response({ error: 'Malformed JSON' }, 400) };
   }
@@ -523,13 +550,15 @@ export const MANUAL_REVIEW_FROM: FreeTierApplicationStatus[] = ['ADMIN_SUBMITTED
 
 export async function approveHttp(request: Request) {
   await ensureFreeTierProductionApprovalHooks();
-  const denied = await authorizeFreeTierReleaseManagement(request);
-  if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
+  const pre = await guardFreeTierPost(request);
+  if (pre) return pre;
   const id = actionId(request);
   if (!id) return response({ error: 'Missing id' }, 400);
   const read = await readActionBody(request, 4096, false);
   if ('error' in read) return read.error;
+  const post = await guardFreeTierPost(request, read.text);
+  if (post) return post;
   const parsedEmail = parseOperatorEmail(request, read.body);
   if (typeof parsedEmail !== 'string') return parsedEmail.error;
   const result = await transition({ id, from: APPROVABLE_FROM, to: 'APPROVED', decision: 'APPROVED', decidedByEmail: parsedEmail });
@@ -541,13 +570,15 @@ export async function approveHttp(request: Request) {
 }
 
 export async function rejectHttp(request: Request) {
-  const denied = await authorizeFreeTierReleaseManagement(request);
-  if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
+  const pre = await guardFreeTierPost(request);
+  if (pre) return pre;
   const id = actionId(request);
   if (!id) return response({ error: 'Missing id' }, 400);
   const read = await readActionBody(request, 4096, true);
   if ('error' in read) return read.error;
+  const post = await guardFreeTierPost(request, read.text);
+  if (post) return post;
   const parsedEmail = parseOperatorEmail(request, read.body);
   if (typeof parsedEmail !== 'string') return parsedEmail.error;
   let reason: string;
@@ -565,13 +596,15 @@ export async function rejectHttp(request: Request) {
 }
 
 export async function markManualReviewHttp(request: Request) {
-  const denied = await authorizeFreeTierReleaseManagement(request);
-  if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
+  const pre = await guardFreeTierPost(request);
+  if (pre) return pre;
   const id = actionId(request);
   if (!id) return response({ error: 'Missing id' }, 400);
   const read = await readActionBody(request, 2048, false);
   if ('error' in read) return read.error;
+  const post = await guardFreeTierPost(request, read.text);
+  if (post) return post;
   const parsedEmail = parseOperatorEmail(request, read.body);
   if (typeof parsedEmail !== 'string') return parsedEmail.error;
   const result = await transition({ id, from: MANUAL_REVIEW_FROM, to: 'MANUAL_REVIEW', decision: 'MANUAL_REVIEW', decidedByEmail: parsedEmail });
@@ -579,13 +612,15 @@ export async function markManualReviewHttp(request: Request) {
 }
 
 export async function reopenHttp(request: Request) {
-  const denied = await authorizeFreeTierReleaseManagement(request);
-  if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
+  const pre = await guardFreeTierPost(request);
+  if (pre) return pre;
   const id = actionId(request);
   if (!id) return response({ error: 'Missing id' }, 400);
   const read = await readActionBody(request, 2048, false);
   if ('error' in read) return read.error;
+  const post = await guardFreeTierPost(request, read.text);
+  if (post) return post;
   const parsedEmail = parseOperatorEmail(request, read.body);
   if (typeof parsedEmail !== 'string') return parsedEmail.error;
   const result = await prisma.$transaction(async (tx) => {
@@ -608,9 +643,9 @@ export async function reopenHttp(request: Request) {
 }
 
 export async function submitAdminInfoHttp(request: Request) {
-  const denied = await authorizeFreeTierReleaseManagement(request);
-  if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
+  const denied = await guardFreeTierPost(request, '');
+  if (denied) return denied;
   const id = actionId(request);
   if (!id) return response({ error: 'Missing id' }, 400);
   // No operator email required; this is a flow-step helper.

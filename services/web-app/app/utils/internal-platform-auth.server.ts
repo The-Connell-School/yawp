@@ -86,14 +86,11 @@ export function internalApiKeysConfigured() {
   );
 }
 
-function canonicalQuery(searchParams: URLSearchParams) {
-  const pairs: string[] = [];
-  for (const key of [...searchParams.keys()].sort()) {
-    for (const value of searchParams.getAll(key).sort()) {
-      pairs.push(`${key}=${value}`);
-    }
-  }
-  return pairs.join('&');
+/** Raw query string exactly as sent (no leading `?`, no sorting or decoding). */
+export function internalApiRawQueryString(url: URL | string) {
+  const search =
+    typeof url === 'string' ? new URL(url).search : url.search;
+  return search.startsWith('?') ? search.slice(1) : search;
 }
 
 export function buildInternalApiSignatureBaseString(input: {
@@ -136,7 +133,7 @@ export function signInternalApiRequest(input: {
   const base = buildInternalApiSignatureBaseString({
     method: input.method,
     pathname: url.pathname,
-    search: canonicalQuery(url.searchParams),
+    search: internalApiRawQueryString(url),
     timestamp,
     nonce,
     actor: input.actor,
@@ -164,15 +161,33 @@ function timingSafeEqualString(a: string, b: string) {
   return timingSafeEqual(left, right);
 }
 
-function checkRateLimit(keyId: string) {
+const FAILED_AUTH_RATE_LIMIT_MAX = 60;
+
+function checkRateLimit(bucketKey: string, max = RATE_LIMIT_MAX) {
   const now = Date.now();
-  const bucket = rateBuckets.get(keyId);
+  const bucket = rateBuckets.get(bucketKey);
   if (!bucket || now - bucket.windowStart >= RATE_LIMIT_WINDOW_MS) {
-    rateBuckets.set(keyId, { count: 1, windowStart: now });
+    rateBuckets.set(bucketKey, { count: 1, windowStart: now });
     return true;
   }
   bucket.count += 1;
-  return bucket.count <= RATE_LIMIT_MAX;
+  return bucket.count <= max;
+}
+
+export function resetInternalApiRateLimitBuckets() {
+  rateBuckets.clear();
+}
+
+function clientIp(request: Request) {
+  const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  return forwarded || request.headers.get('cf-connecting-ip')?.trim() || 'unknown';
+}
+
+function legacyContentRoute(pathname: string) {
+  return (
+    pathname.startsWith('/api/internal/v1/rubric-catalog') ||
+    pathname.startsWith('/api/internal/v1/rubrics')
+  );
 }
 
 export function resolveInternalApiScope(
@@ -195,19 +210,25 @@ export function resolveInternalApiScope(
   return write ? 'management:write' : 'management:read';
 }
 
-function legacyKeys() {
+function legacyKeysForPath(pathname: string) {
   const keys: string[] = [];
   const management = process.env.YAWP_MANAGEMENT_SERVICE_KEY?.trim();
   const content = process.env.YAWP_CONTENT_SERVICE_KEY?.trim();
   if (management) keys.push(management);
-  if (content && content !== management) keys.push(content);
+  if (legacyContentRoute(pathname) && content && content !== management) {
+    keys.push(content);
+  }
   return keys;
 }
 
 function authorizeLegacyBearer(request: Request) {
   if (!legacyInternalKeyAllowed()) return response({ error: 'Unauthorized' }, 401);
-  const keys = legacyKeys();
-  if (!keys.length) return response({ error: 'Not found' }, 404);
+  const pathname = new URL(request.url).pathname;
+  const management = process.env.YAWP_MANAGEMENT_SERVICE_KEY?.trim();
+  const content = process.env.YAWP_CONTENT_SERVICE_KEY?.trim();
+  if (!management && !content) return response({ error: 'Not found' }, 404);
+  const keys = legacyKeysForPath(pathname);
+  if (!keys.length) return response({ error: 'Unauthorized' }, 401);
   for (const key of keys) {
     if (!/^[A-Za-z0-9_-]{43,}$/.test(key)) {
       return response({ error: 'Integration unavailable' }, 503);
@@ -324,14 +345,18 @@ export async function authorizeInternalApiRequest(
   }
 
   const key = keys.find(entry => entry.id === keyId);
-  if (!key) return response({ error: 'Unauthorized' }, 401);
-  if (!checkRateLimit(keyId)) return response({ error: 'Too many requests' }, 429);
+  if (!key) {
+    if (!checkRateLimit(`failed-auth:${clientIp(request)}`, FAILED_AUTH_RATE_LIMIT_MAX)) {
+      return response({ error: 'Too many requests' }, 429);
+    }
+    return response({ error: 'Unauthorized' }, 401);
+  }
 
   const body = options.body ?? '';
   const base = buildInternalApiSignatureBaseString({
     method: request.method,
     pathname: url.pathname,
-    search: canonicalQuery(url.searchParams),
+    search: internalApiRawQueryString(url),
     timestamp,
     nonce,
     actor,
@@ -339,8 +364,13 @@ export async function authorizeInternalApiRequest(
   });
   const expected = createHmac('sha256', key.secret).update(base).digest('base64url');
   if (!timingSafeEqualString(signature, expected)) {
+    if (!checkRateLimit(`failed-auth:${clientIp(request)}`, FAILED_AUTH_RATE_LIMIT_MAX)) {
+      return response({ error: 'Too many requests' }, 429);
+    }
     return response({ error: 'Unauthorized' }, 401);
   }
+
+  if (!checkRateLimit(keyId)) return response({ error: 'Too many requests' }, 429);
 
   if (requiredScope && !key.scopes.includes(requiredScope)) {
     return response({ error: 'Forbidden' }, 403);

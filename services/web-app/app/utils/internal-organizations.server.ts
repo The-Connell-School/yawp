@@ -1,8 +1,14 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { Prisma } from '@app/prisma';
-import { authenticate } from '~/utils/internal-free-tier-http.server';
-import { internalApiKeysConfigured } from '~/utils/internal-platform-auth.server';
+import {
+  authenticate,
+  authenticateAndAuditWrite,
+} from '~/utils/internal-free-tier-http.server';
+import {
+  INTERNAL_API_HEADER_SIGNATURE,
+  internalApiKeysConfigured,
+} from '~/utils/internal-platform-auth.server';
 const identifier = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/);
 const inputSchema = z.object({ q: z.string().trim().max(200).default(''), organizationIds: z.array(identifier).min(1).max(100).optional(), cursor: z.string().max(500).optional(), limit: z.number().int().min(1).max(50).default(50) }).strict();
 const digest = (value: string) => createHash('sha256').update(value).digest();
@@ -15,12 +21,19 @@ export function createOrganizationManagementHandler(directory: { findMany(args: 
     let bodyText = '';
     try {
       if (new URL(request.url).search || !request.headers.get('content-type')?.startsWith('application/json')) throw new Error();
+      const signed = Boolean(request.headers.get(INTERNAL_API_HEADER_SIGNATURE));
+      if (!signed) {
+        const denied = await authenticate(request);
+        if (denied) return denied;
+      }
       const reader = request.body?.getReader(); if (!reader) throw new Error();
       const chunks: Uint8Array[] = []; let size = 0;
       try { while (true) { const part = await reader.read(); if (part.done) break; size += part.value.byteLength; if (size > 32768) { await reader.cancel(); throw new Error(); } chunks.push(part.value); } } finally { reader.releaseLock(); }
       bodyText = Buffer.concat(chunks).toString('utf8');
-      const denied = await authenticate(request, { body: bodyText });
-      if (denied) return denied;
+      if (signed) {
+        const denied = await authenticateAndAuditWrite(request, { body: bodyText });
+        if (denied) return denied;
+      }
       input = inputSchema.parse(JSON.parse(bodyText));
       if (input.organizationIds) input.organizationIds = [...new Set(input.organizationIds)].sort();
       binding = digest(JSON.stringify([input.q, input.organizationIds ?? null])).toString('base64url');

@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { readBoundedText } from '~/utils/bounded-body.server';
-import { authenticate } from '~/utils/internal-free-tier-http.server';
+import {
+  authenticate,
+  authenticateAndAuditWrite,
+} from '~/utils/internal-free-tier-http.server';
+import { INTERNAL_API_HEADER_SIGNATURE } from '~/utils/internal-platform-auth.server';
 import {
   FEATURE_FLAG_MODES,
   MAX_FEATURE_FLAG_ORG_IDS,
@@ -63,10 +67,17 @@ export async function featureFlagsList(request: Request) {
 }
 
 export async function featureFlagUpdate(request: Request, key: string | undefined) {
-  const text = await readBoundedText(request, MAX_BODY_BYTES);
-  const denied = await authenticate(request, { body: text ?? '' });
-  if (denied) return denied;
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
+  const signed = Boolean(request.headers.get(INTERNAL_API_HEADER_SIGNATURE));
+  if (!signed) {
+    const denied = await authenticate(request);
+    if (denied) return denied;
+  }
+  const text = await readBoundedText(request, MAX_BODY_BYTES);
+  if (signed) {
+    const denied = await authenticateAndAuditWrite(request, { body: text ?? '' });
+    if (denied) return denied;
+  }
   if (!isFeatureFlagKey(key)) return response({ error: 'Unknown feature flag' }, 404);
   if (!request.headers.get('content-type')?.startsWith('application/json')) {
     return response({ error: 'Invalid content type' }, 400);
