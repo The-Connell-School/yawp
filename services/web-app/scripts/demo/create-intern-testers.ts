@@ -1,56 +1,90 @@
 /** Demo-only account reconciliation. Never run against production. */
 import { assertDemoEnvironment } from './create-intern-testers-guard';
+import {
+  buildInternAccounts,
+  buildTesterGrantPlan,
+  buildUserTesterFlags,
+  parseDemoInternArgs,
+  type DmmfDocument,
+  type TesterGrantPlan,
+} from './create-intern-testers-lib';
+
+async function reconcileTesterGrant(
+  tx: unknown,
+  plan: TesterGrantPlan | null,
+  userId: string
+) {
+  if (!plan) return;
+  const delegate = (tx as Record<string, unknown>)[plan.delegateName] as
+    | {
+        upsert?: (args: unknown) => Promise<unknown>;
+        findFirst?: (args: unknown) => Promise<{ id: string } | null>;
+        update?: (args: unknown) => Promise<unknown>;
+        create?: (args: unknown) => Promise<unknown>;
+      }
+    | undefined;
+  if (!delegate) return;
+
+  const create = replacePlanUserId(plan.create, userId);
+  const update = replacePlanUserId(plan.update, userId);
+  const where = plan.where ? replacePlanUserId(plan.where, userId) : undefined;
+
+  try {
+    if (where && delegate.upsert) {
+      await delegate.upsert({ where, create, update });
+      return;
+    }
+    const existing = delegate.findFirst
+      ? await delegate.findFirst({ where: create })
+      : null;
+    if (existing && delegate.update) {
+      await delegate.update({ where: { id: existing.id }, data: update });
+    } else if (delegate.create) {
+      await delegate.create({ data: create });
+    }
+  } catch {
+    console.warn('Skipping TesterGrant: compatible write failed.');
+  }
+}
+
+function replacePlanUserId(
+  value: Record<string, unknown>,
+  userId: string
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => {
+      if (key === 'userId' && entry === 'user-id') return [key, userId];
+      if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+        return [
+          key,
+          replacePlanUserId(entry as Record<string, unknown>, userId),
+        ];
+      }
+      return [key, entry];
+    })
+  );
+}
 
 async function main() {
   assertDemoEnvironment(process.env);
-  const args = process.argv.slice(2);
-  if (args.some((arg) => arg !== '--dry-run'))
-    throw new Error('Only --dry-run is supported.');
-  const dryRun = args.includes('--dry-run');
-  const accounts = [1, 2, 3, 4].map((number) => {
-    const password = process.env[`INTERN_PASSWORD_${number}`];
-    if (!password?.trim())
-      throw new Error(`INTERN_PASSWORD_${number} is required.`);
-    return {
-      email: `bryant+intern${number}@brock.software`,
-      name: `Intern Tester ${number}`,
-      password,
-    };
-  });
+  const { dryRun } = parseDemoInternArgs(process.argv.slice(2));
+  const accounts = buildInternAccounts(process.env);
 
   // Import only after validation. Dry-run never constructs a database client.
   const { Prisma } = await import('@app/prisma');
-  const fields =
-    Prisma.dmmf.datamodel.models.find((model) => model.name === 'User')
-      ?.fields ?? [];
-  const flags: Record<string, boolean | string> = {};
-  for (const name of ['isTester', 'testerRole']) {
-    const field = fields.find((candidate) => candidate.name === name);
-    if (name === 'isTester' && field?.type === 'Boolean') {
-      flags[name] = true;
-    } else if (name === 'testerRole' && field?.type === 'String') {
-      flags[name] = 'MOCK_ADMIN';
-    } else if (name === 'testerRole' && field?.kind === 'enum') {
-      const values =
-        Prisma.dmmf.datamodel.enums.find((item) => item.name === field.type)
-          ?.values ?? [];
-      const role = values.find((value) => value.name === 'MOCK_ADMIN');
-      if (role) flags[name] = role.name;
-      else console.warn('Skipping testerRole: MOCK_ADMIN is unavailable.');
-    } else {
-      console.warn(
-        `Skipping ${name}: compatible User column is absent from Prisma DMMF.`
-      );
-    }
-  }
+  const flags = buildUserTesterFlags(Prisma.dmmf as DmmfDocument);
+  for (const warning of flags.warnings) console.warn(warning);
+  const testerGrantPlan = buildTesterGrantPlan(Prisma.dmmf as DmmfDocument);
 
   if (dryRun) {
     for (const account of accounts)
       console.info(
         `Would reconcile demo teacher ${account.email} with an individual free-tier org/class.`
       );
+    if (testerGrantPlan)
+      console.info('Supported tester grant table: TesterGrant.');
     console.info(
-      `Supported tester flags: ${Object.keys(flags).join(', ') || 'none'}. No database connection or writes.`
+      `Supported tester flags: ${Object.keys(flags.data).join(', ') || 'none'}. No database connection or writes.`
     );
     return;
   }
@@ -65,6 +99,9 @@ async function main() {
     // Check shared prerequisites before updating any accounts.
     const { FREE_CLASSROOM_ASSIGNMENT_KINDS } =
       await import('../../app/utils/entitlements.server');
+    type TransactionClient = Parameters<
+      Parameters<typeof prisma.$transaction>[0]
+    >[0];
     const count = await prisma.assignmentType.count({
       where: { kind: { in: [...FREE_CLASSROOM_ASSIGNMENT_KINDS] } },
     });
@@ -73,25 +110,28 @@ async function main() {
 
     for (const account of accounts) {
       const hash = await bcrypt.hash(account.password, 10);
-      const application = await prisma.$transaction(async (tx) => {
+      const application = await prisma.$transaction(async (
+        tx: TransactionClient
+      ) => {
         const user = await tx.user.upsert({
           where: { email: account.email },
           create: {
             email: account.email,
             name: account.name,
             emailVerifiedAt: new Date(),
-            ...flags,
+            ...flags.data,
             password: { create: { hash } },
           },
           update: {
             name: account.name,
             emailVerifiedAt: new Date(),
             mustChangePassword: false,
-            ...flags,
+            ...flags.data,
             password: { upsert: { create: { hash }, update: { hash } } },
           },
           select: { id: true },
         });
+        await reconcileTesterGrant(tx, testerGrantPlan, user.id);
         const existing = await tx.freeTierApplication.findUnique({
           where: { email: account.email },
         });
@@ -139,10 +179,11 @@ async function main() {
   }
 }
 
-main().catch(() => {
-  // Do not print Prisma errors: they can contain connection details or input values.
-  console.error(
-    'Demo intern provisioning failed. Check demo guards, password variables, and free-tier prerequisites.'
-  );
-  process.exitCode = 1;
-});
+if (typeof Bun !== 'undefined' && Bun.main === import.meta.path)
+  main().catch(() => {
+    // Do not print Prisma errors: they can contain connection details or input values.
+    console.error(
+      'Demo intern provisioning failed. Check demo guards, password variables, and free-tier prerequisites.'
+    );
+    process.exitCode = 1;
+  });
