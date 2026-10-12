@@ -39,7 +39,7 @@ mock.module('~/domain/free-tier/approval-hooks.server', () => ({
 }));
 const { decideApplication, reopenApplication } =
   await import('~/utils/internal-free-tier-http.server');
-const { releaseBatch } = await import('./service.server');
+const { releaseBatch } = await import('~/domain/free-tier/service.server');
 const actor = {
   actorUserId: 'intern',
   actorEmail: 'intern@yawp.local',
