@@ -4,8 +4,15 @@ const prisma = {
   assignmentType: {
     count: mock(),
     create: mock(),
+    findMany: mock(() => Promise.resolve([])),
   },
   rubric: {
+    findUnique: mock(),
+    findFirst: mock(),
+    findMany: mock(() => Promise.resolve([])),
+  },
+  rubricRelease: {
+    findMany: mock(() => Promise.resolve([])),
     findUnique: mock(),
   },
   user: {
@@ -29,22 +36,35 @@ describe('admin assignment type new action', () => {
     prisma.assignmentType.count.mockReset();
     prisma.assignmentType.create.mockReset();
     prisma.rubric.findUnique.mockReset();
+    prisma.rubric.findFirst.mockReset();
+    prisma.rubricRelease.findUnique.mockReset();
 
     requireAdmin.mockResolvedValue(undefined);
     requireUserId.mockResolvedValue('admin-1');
     prisma.user.findFirst.mockResolvedValue(null);
     prisma.assignmentType.count.mockResolvedValue(4);
     prisma.assignmentType.create.mockResolvedValue({ id: 'at-new' });
-    prisma.rubric.findUnique.mockResolvedValue({ id: 'rubric-daily-pages' });
+    prisma.rubric.findFirst.mockResolvedValue({
+      id: 'rubric-daily-pages',
+      name: 'daily-pages-engagement',
+    });
+    prisma.rubricRelease.findUnique.mockResolvedValue({
+      catalogKey: 'daily-pages-engagement',
+    });
   });
 
   test('persists a selected library rubric and instructions without copying grading JSON', async () => {
+    prisma.rubric.findFirst.mockResolvedValueOnce({
+      id: 'daily-pages',
+      name: 'daily-pages-engagement',
+    });
     const form = new FormData();
     form.set('title', 'Daily journal');
     form.set('rubricId', 'daily-pages');
     form.set('gradingInstructionsOverride', '  Focus on reflection.  ');
     await action({ request: new Request('https://example.test/new', { method: 'POST', body: form }), params: {}, context: {} } as never);
-    expect(prisma.rubric.findUnique).toHaveBeenCalledWith({ where: { id: 'daily-pages' }, select: { id: true } });
+    expect(prisma.rubric.findFirst).toHaveBeenCalled();
+    expect(prisma.rubricRelease.findUnique).toHaveBeenCalled();
     expect(prisma.assignmentType.create).toHaveBeenCalledWith({ data: {
       title: 'Daily journal', kind: null, description: null, tutorInstructions: null, position: 4,
       rubricId: 'daily-pages', gradingPromptConfigJson: { gradingInstructionsOverride: 'Focus on reflection.' },
@@ -52,7 +72,7 @@ describe('admin assignment type new action', () => {
   });
 
   test('rejects a deleted library selection inline without creating an assignment type', async () => {
-    prisma.rubric.findUnique.mockResolvedValue(null);
+    prisma.rubric.findFirst.mockResolvedValue(null);
     const form = new FormData();
     form.set('title', 'Daily journal');
     form.set('rubricId', 'deleted-rubric');
@@ -178,10 +198,8 @@ describe('admin assignment type new action', () => {
       context: {} as never,
     } as never);
 
-    expect(prisma.rubric.findUnique).toHaveBeenCalledWith({
-      where: { id: 'rubric-daily-pages' },
-      select: { id: true },
-    });
+    expect(prisma.rubric.findFirst).toHaveBeenCalled();
+    expect(prisma.rubricRelease.findUnique).toHaveBeenCalled();
     expect(prisma.assignmentType.create).toHaveBeenCalledWith({
       data: {
         title: 'Daily reflection',
