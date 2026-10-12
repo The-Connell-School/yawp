@@ -5,11 +5,17 @@ const count = mock();
 
 mock.module('~/domain/free-tier/service.server', () => ({
   submitWaitlist,
-  checkTokenValidity: async () => ({ ok: false, reason: 'invalid' as const }),
+  findAcquisitionTokenByCredential: async () => null,
+  recordAcquisitionTokenScan: async () => {},
+  checkTokenValidity: async () => ({ valid: false, reason: 'invalid' as const }),
   redeemToken: async () => ({ ok: false, reason: 'invalid' as const }),
   waitlistInputSchema: {
     safeParse: (v: unknown) => ({ success: true, data: v }),
   },
+}));
+
+mock.module('~/domain/free-tier/acquisition-token-scan.server', () => ({
+  readOrMintScanDedupeCookie: async () => ({ value: 'test-cookie', setCookie: null }),
 }));
 
 mock.module('~/utils/db.server', () => ({

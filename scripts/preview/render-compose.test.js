@@ -39,6 +39,12 @@ function renderCompose(overrides = {}) {
 }
 
 describe('renderPreviewCompose', () => {
+  test('enables tester feedback only for demo', () => {
+    const demo = Bun.YAML.parse(renderCompose({ slug: 'demo' }));
+    const preview = Bun.YAML.parse(renderCompose());
+    expect(demo.services.web.environment.TESTER_FEEDBACK_ENABLED).toBe('true');
+    expect(preview.services.web.environment.TESTER_FEEDBACK_ENABLED).toBe('false');
+  });
   test('renders the fast full-stack preview runtime by default', () => {
     const compose = renderCompose();
     const parsed = Bun.YAML.parse(compose);
@@ -537,3 +543,10 @@ describe('renderPreviewCompose (YAML uniqueness)', () => {
   });
 });
 
+
+test('mock admin is enabled only in demo compose configuration', () => {
+  const demo = Bun.YAML.parse(renderCompose({ prNumber: undefined, slug: 'demo' }));
+  const preview = Bun.YAML.parse(renderCompose());
+  expect(demo.services.web.environment.MOCK_ADMIN_ENABLED).toBe('true');
+  expect(preview.services.web.environment.MOCK_ADMIN_ENABLED).toBe('false');
+});

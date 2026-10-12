@@ -177,6 +177,21 @@ describe('production deployment contract', () => {
     );
   });
 
+  test('Docker image ships preview free-tier seed guard for prisma preview seeds', () => {
+    const dockerfile = readRepoFile('services/web-app/Dockerfile');
+    const workflow = readRepoFile('.github/workflows/ci.yml');
+
+    expect(dockerfile).toContain(
+      'COPY scripts/preview/free-tier-ship-review-seed-guard.mjs ./scripts/preview/free-tier-ship-review-seed-guard.mjs'
+    );
+    expect(dockerfile).toContain(
+      'COPY --from=build /app/scripts/preview ./scripts/preview'
+    );
+    expect(workflow).toContain('Verify production image resolves preview seed imports');
+    expect(workflow).toContain('seed-free-tier-feature-flag.ts');
+    expect(workflow).toContain('free-tier-ship-review-seed-guard.mjs');
+  });
+
   test('container startup runs React Router serve with Bun instead of requiring Node', () => {
     const startScript = readRepoFile('services/web-app/start.sh');
 
@@ -1621,11 +1636,19 @@ describe('demo environment deployment contract', () => {
 
   test('demo deploy runs detached from the GitHub Actions SSH session', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');
+    const detached = readRepoFile(
+      'scripts/preview/run-host-deploy-detached.sh'
+    );
 
     expect(workflow).toContain('Prepare demo host capacity');
     expect(workflow).toContain('ensure-host-swap.sh');
     expect(workflow).toContain('install-host-metrics.sh');
     expect(workflow).toContain('run-host-deploy-detached.sh');
+    expect(detached).toContain('FAILURE_LOG_LINES="${FAILURE_LOG_LINES:-120}"');
+    expect(detached).toContain('emit_failure_log_tail');
+    expect(detached).toContain('mask_deploy_log');
+    expect(detached).toContain('PREVIEW_ACCESS_CODE=');
+    expect(detached).toContain('[REDACTED]');
     expect(workflow).not.toContain(
       'flock -w 1800 $(shell_quote "$lock_file") bash -lc $(shell_quote "$deploy_command")'
     );

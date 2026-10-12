@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
+const auditCreate = mock(async () => ({}));
 const prisma = {
   setting: {
     findUnique: mock(),
@@ -8,6 +9,9 @@ const prisma = {
   },
   organization: {
     findMany: mock(),
+  },
+  internalPlatformApiAudit: {
+    create: auditCreate,
   },
 };
 
@@ -346,5 +350,60 @@ describe('internal feature-flag endpoints', () => {
       expect((await featureFlagUpdate(missing, FLAG)).status).toBe(400);
     }
     expect(prisma.setting.upsert).not.toHaveBeenCalled();
+  });
+
+  test('signed writes record an internal platform audit row', async () => {
+    const secret = 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEF';
+    const saved = {
+      keys: process.env.YAWP_INTERNAL_API_KEYS,
+      legacy: process.env.LEGACY_INTERNAL_KEY_ALLOWED,
+      nonceStore: process.env.INTERNAL_API_NONCE_STORE,
+    };
+    process.env.YAWP_INTERNAL_API_KEYS = JSON.stringify([
+      { id: 'flags-writer', secret, scopes: ['flags:write'] },
+    ]);
+    process.env.LEGACY_INTERNAL_KEY_ALLOWED = 'false';
+    process.env.INTERNAL_API_NONCE_STORE = 'memory';
+    auditCreate.mockReset();
+
+    const { signInternalApiRequest, resetInternalApiMemoryNonceStore } = await import(
+      './internal-platform-auth.server'
+    );
+    resetInternalApiMemoryNonceStore();
+    const body = JSON.stringify({ enabled: true });
+    const signed = signInternalApiRequest({
+      method: 'POST',
+      url: `${BASE}/${FLAG}`,
+      body,
+      keyId: 'flags-writer',
+      secret,
+      actor: 'ops@yawp.school',
+    });
+    const headers = new Headers(signed.headers);
+    headers.set('content-type', 'application/json');
+    headers.set('x-yawp-operator-email', 'ops@yawp.school');
+    const request = new Request(`${BASE}/${FLAG}`, {
+      method: 'POST',
+      headers,
+      body,
+    });
+    const response = await featureFlagUpdate(request, FLAG);
+    expect(response.status).toBe(200);
+    expect(auditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          keyId: 'flags-writer',
+          actorEmail: 'ops@yawp.school',
+          endpoint: expect.stringContaining('feature-flags'),
+          result: 'authorized',
+        }),
+      })
+    );
+
+    process.env.YAWP_INTERNAL_API_KEYS = saved.keys;
+    process.env.LEGACY_INTERNAL_KEY_ALLOWED = saved.legacy;
+    if (saved.nonceStore === undefined) delete process.env.INTERNAL_API_NONCE_STORE;
+    else process.env.INTERNAL_API_NONCE_STORE = saved.nonceStore;
+    resetInternalApiMemoryNonceStore();
   });
 });

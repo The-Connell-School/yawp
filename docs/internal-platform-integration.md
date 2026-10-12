@@ -1,8 +1,66 @@
 # Internal platform integration
 
+## Signed internal API authentication (HMAC)
+
+All `/api/internal/v1/*` routes accept either the legacy bearer credential or HMAC-SHA256 request signing. During rollout, legacy bearer auth remains enabled unless `LEGACY_INTERNAL_KEY_ALLOWED=false` (default `true`). Set that variable to `false` after Yawp Internal v3 has switched every caller to signed requests.
+
+### Headers
+
+- `X-Yawp-Key-Id`
+- `X-Yawp-Timestamp` (Unix seconds)
+- `X-Yawp-Nonce`
+- `X-Yawp-Actor` (staff email)
+- `X-Yawp-Signature`
+
+The signature is HMAC-SHA256 over a newline-delimited string:
+
+`METHOD\nPATH\nQUERY\nTIMESTAMP\nNONCE\nACTOR\nSHA256(body)`
+
+`QUERY` is the raw query string exactly as sent on the wire (no leading `?`, no sorting, no decoding). `ACTOR` is lowercased in the canonical string. `SHA256(body)` is lowercase hex; an empty body hashes the empty string.
+
+### Shared signature test vector
+
+Yawp Internal v3 and this service must produce the same signature for:
+
+| Field | Value |
+| --- | --- |
+| Method | `GET` |
+| Path | `/api/internal/v1/stats/grading` |
+| Query | `since=2024-01-15T12%3A00%3A00.000Z&until=2024-06-01T23%3A59%3A59.999Z` |
+| Timestamp | `1704067200` |
+| Nonce | `vector-nonce-01` |
+| Actor | `operator@yawp.school` |
+| Body | *(empty)* |
+| Secret | `test-secret-for-vector-0123456789ABCDEF` |
+| Expected `X-Yawp-Signature` | `7N9L9qsjofwsslfBt8_IqQ5QFbe2EswJUhJXmSMxj_c` |
+
+Canonical string (newlines shown as `\n`):
+
+`GET\n/api/internal/v1/stats/grading\nsince=2024-01-15T12%3A00%3A00.000Z&until=2024-06-01T23%3A59%3A59.999Z\n1704067200\nvector-nonce-01\noperator@yawp.school\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
+
+Requests older than five minutes are rejected. Each `(keyId, nonce)` pair is stored until expiry to block replay. Keys are loaded from `YAWP_INTERNAL_API_KEYS` (JSON array of `{ id, secret, scopes }`); two active entries support rotation. Scopes are enforced per route group:
+
+- `rubrics:read` / `rubrics:write` — `/api/internal/v1/rubric-catalog*` and `/api/internal/v1/rubrics*`
+- `flags:read` / `flags:write` — `/api/internal/v1/feature-flags*`
+- `stats:read` — `GET /api/internal/v1/stats/grading`
+- `audit:read` — `GET /api/internal/v1/audit`
+- `management:read` / `management:write` — remaining management routes (users, organizations, free tier, QA, impersonation audit)
+
+Signed keys are rate limited (120 requests / minute / key id). Mutating signed calls append a row to `InternalPlatformApiAudit` with actor, key id, endpoint, request hash, and result.
+
+Legacy bearer auth continues to use `YAWP_MANAGEMENT_SERVICE_KEY` on management routes and `YAWP_CONTENT_SERVICE_KEY` only on `/api/internal/v1/rubric-catalog*` and `/api/internal/v1/rubrics*` while `LEGACY_INTERNAL_KEY_ALLOWED` is not `false`.
+
+### Grading stats (read only)
+
+`GET /api/internal/v1/stats/grading?since=YYYY-MM-DD&until=YYYY-MM-DD` requires `stats:read`. It returns daily counts of grading assistant runs grouped by organization, assignment type, success/failure, and whether a teacher note was present. The response contains only aggregate counts (no student writing or note text).
+
+### Platform API write audit (read only)
+
+`GET /api/internal/v1/audit?since=YYYY-MM-DD&until=YYYY-MM-DD` requires `audit:read`. It lists rows previously recorded for signed mutating internal API calls. Each event includes `keyId`, `actor`, `method`, `endpoint`, `result`, and `timestamp` (UTC). Request bodies and request hashes are never returned. Optional `limit` (1–100, default 50) and a `cursor` bound to the date range paginate results newest-first.
+
 ## Implemented: user directory
 
-`GET /api/internal/v1/users` and `GET /api/internal/v1/users/:id` accept a backend-only Bearer `YAWP_MANAGEMENT_SERVICE_KEY`. Use the matching outbound key configured in Yawp Internal. The key must be a generated 32-byte base64url credential; it is not a member login token. No key leaves the handlers disabled (404). Invalid credentials return 401 before database access. Store the credential in managed secrets; omit Authorization headers from ingress and application logs. Deployment and real credentials have not been configured.
+`GET /api/internal/v1/users` and `GET /api/internal/v1/users/:id` accept a backend-only Bearer `YAWP_MANAGEMENT_SERVICE_KEY` or a signed request with `management:read`. Use the matching outbound key configured in Yawp Internal. The key must be a generated 32-byte base64url credential; it is not a member login token. No key leaves the handlers disabled (404). Invalid credentials return 401 before database access. Store the credential in managed secrets; omit Authorization headers from ingress and application logs. Deployment and real credentials have not been configured.
 
 Search accepts `q`, optional `organizationId`, `limit` (1–50, default 50), and `cursor`. It searches active memberships by user name or email. Organization filtering happens before pagination. Each result contains `{ id, organizationId, displayName, email, privileged }`. A user with several memberships can appear once per organization. The cursor is bound to the query and organization. Responses are no-store.
 
@@ -127,8 +185,8 @@ The rubric manager in Yawp Internal v3 uses the catalog API under `/api/internal
 
 - `GET /api/internal/v1/rubric-catalog` lists library rubrics (`key` = `Rubric.name`) and per-type rubrics (`key` = `assignment-type:<typeId>`). Every rubric entry carries `release: { revisionId, version, fingerprint, releasedAt } | null`, the revision Yawp Internal released for that key.
 - `GET /api/internal/v1/rubric-catalog/item?key=...` returns the live content, editable document, fingerprint and revision history. `rubric.release` is the same release object (or null) and each entry in `revisions` has `isReleased`.
-- `POST /api/internal/v1/rubric-catalog/versions` (`save`) publishes to schools: it writes the live rubric row, appends a revision and moves the current pointer, so every new assignment pins to it.
-- `POST /api/internal/v1/rubric-catalog/stage` appends a revision **without publishing it** and **releases** it for its key. Body (strict): `{ key, requestId (uuid), actorEmail, reason (3..500), document, source: { contentId (uuid), version (positive int), fingerprint (64 lowercase hex) } }`. The document is validated exactly like `save` (422 with field issues; library names are immutable) and stored the same way (prompt-config and top-level keys the editor does not own are kept from the live content). The new `RubricRevision` gets the next version for that rubric, `fingerprint` of the stored content, `createdBy = actorEmail`, `reason`, and `sourceContentId/sourceVersion/sourceFingerprint` from `source`. Before inserting it, stage runs the same first step as `save`: if no revision holds the live content it is captured as a `capture-before-edit` revision, a library rubric's `currentRevisionId` is pointed at that baseline (a per-type rubric's `AssignmentTypeRubricBaseline` likewise), and unpinned assignments of the rubric's types are pinned to it; the staged revision takes the next version. The live content (`Rubric.schemaJson`, `AssignmentType` grading columns) is never changed, so schools keep grading with the same content. Retries with the same `requestId` and inputs return the original revision with `replayed: true`; different inputs return 409. In the same transaction the new revision becomes the key's release: the platform table `RubricRelease(catalogKey, rubricRevisionId, releasedAt, releasedBy, requestId)` is upserted for the key. A replay never re-releases (a newer release stays in place) and returns the key's current release. Unknown key 404, read-only rubric 403. Response: `{ revision: { id, rubricName, version, createdBy, reason, createdAt, fingerprint }, replayed, release: { revisionId, version, releasedAt } | null }` (`release` is only null on a replay whose release was cleared).
+- `POST /api/internal/v1/rubric-catalog/versions` (`save`) publishes to schools: it writes the live rubric row, appends a revision and moves the current pointer, so every new assignment pins to it. When the library `key` does not exist yet, pass `expectedFingerprint` = `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` (SHA-256 of the empty string) to create the `Rubric` row and its first revision without linking assignment types or changing existing grading. Any other fingerprint on a missing key still returns 404; once the rubric exists, the normal optimistic fingerprint check applies.
+- `POST /api/internal/v1/rubric-catalog/stage` appends a revision **without publishing it** and **releases** it for its key. Body (strict): `{ key, requestId (uuid), actorEmail, reason (3..500), document, source: { contentId (uuid), version (positive int), fingerprint (64 lowercase hex) }, expectedFingerprint? (64 lowercase hex) }`. The document is validated exactly like `save` (422 with field issues; library names are immutable) and stored the same way (prompt-config and top-level keys the editor does not own are kept from the live content). When the library `key` does not exist yet, pass `expectedFingerprint` = `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` to create the `Rubric` row (empty live content, no `currentRevisionId`, no assignment-type links), append version `1` with Internal `source` metadata, and release it in one transaction. Any other fingerprint on a missing key still returns 404; a second create with the sentinel after the rubric exists returns 409. For an existing rubric, the new `RubricRevision` gets the next version, `fingerprint` of the stored content, `createdBy = actorEmail`, `reason`, and `sourceContentId/sourceVersion/sourceFingerprint` from `source`. Before inserting it, stage runs the same first step as `save`: if no revision holds the live content it is captured as a `capture-before-edit` revision, a library rubric's `currentRevisionId` is pointed at that baseline (a per-type rubric's `AssignmentTypeRubricBaseline` likewise), and unpinned assignments of the rubric's types are pinned to it; the staged revision takes the next version. The live content (`Rubric.schemaJson`, `AssignmentType` grading columns) is never changed, so schools keep grading with the same content. Retries with the same `requestId` and inputs return the original revision with `replayed: true`; different inputs return 409. In the same transaction the new revision becomes the key's release: the platform table `RubricRelease(catalogKey, rubricRevisionId, releasedAt, releasedBy, requestId)` is upserted for the key. A replay never re-releases (a newer release stays in place) and returns the key's current release. Unknown key 404, read-only rubric 403. Response: `{ revision: { id, rubricName, version, createdBy, reason, createdAt, fingerprint }, replayed, release: { revisionId, version, releasedAt } | null }` (`release` is only null on a replay whose release was cleared).
 - `POST /api/internal/v1/rubric-catalog/unrelease` withdraws a key's release. Body (strict): `{ key, actorEmail, reason (3..500) }`. Response: `{ key, cleared, previous: release | null }`; clearing a key with no release returns `cleared: false`. The revision and every assignment pinned to it are kept. Unknown key format 404.
 
 Rollout (`internal_rubrics` feature flag, "Rubrics from Yawp Internal"): when `createAssignmentDeployedToClasses` creates an assignment without an explicit `rubricRevisionId`, it resolves the classes' school (`Class` → `School.organizationId`) before the transaction. If every class belongs to one organization and the flag is on for it (everyone, or targeted at that organization), the assignment pins to the `RubricRelease` revision for the assignment type's catalog key, using the same key the pin trigger accepts: the library rubric's `name` once it has a current revision, else `assignment-type:<typeId>` when the type has a per-type baseline. The release is used only when its revision belongs to that exact key; otherwise, and when the flag is off, there is no release, there are no classes, or the school/flag read fails (logged; it never blocks creation), the trigger's normal current-revision pin applies. Classes from several organizations cannot be deployed together (the quota guard refuses them), and the release lookup treats them as default. Existing assignments keep their pin; grading follows the pin. When an assignment is pinned to a revision with Internal source metadata, the grading resolver honors that content even for `thesis-driven-essay`, which otherwise always grades with the code default. Released revisions appear in catalog history and version counts. The flag defaults off; the demo seed (`seed-preview-seats`, seed data mode) creates it as everyone on demo without overwriting a later change. The former `INTERNAL_DEMO_RUBRICS_ENABLED` env var and the `internal.demo_orgs` / `internal.platform_demo_revisions` lookup were removed; the platform no longer reads Internal's schema.
@@ -137,7 +195,7 @@ Rollout (`internal_rubrics` feature flag, "Rubrics from Yawp Internal"): when `c
 
 Use `./bin/project internal-integration-config INPUT_JSON --json` to validate a proposed deployment and emit `variables`/`secrets` maps for review. This local command never calls AWS, fetches credentials or changes a service. The input requires exactly `internalOrigin`, `publicOrigin`, `managementSecretArn`, `productionSecretArn`, `issueSessions` and `deliverEnds`. Origins must be plain HTTPS; credential inputs must be distinct exact Secrets Manager ARNs. The command cannot prove that different secrets contain different values; credential provisioning must enforce that separately.
 
-Generated variables are `INTERNAL_PLATFORM_ORIGIN`, `YAWP_PUBLIC_ORIGIN`, `INTERNAL_IMPERSONATION_ENABLED` and `INTERNAL_END_DELIVERY_ENABLED`. Generated secret mappings are `YAWP_MANAGEMENT_SERVICE_KEY` (Internal calls Yawp) and `YAWP_PRODUCTION_SERVICE_KEY` (Yawp calls Internal). Existing `INTERNAL_COMMAND_TOKEN` is unrelated and must not be repurposed. `YAWP_APP_ORIGIN` does not substitute for the required `YAWP_PUBLIC_ORIGIN`.
+Generated variables are `INTERNAL_PLATFORM_ORIGIN`, `YAWP_PUBLIC_ORIGIN`, `INTERNAL_IMPERSONATION_ENABLED` and `INTERNAL_END_DELIVERY_ENABLED`. Generated secret mappings are `YAWP_MANAGEMENT_SERVICE_KEY` (Internal calls Yawp) and `YAWP_PRODUCTION_SERVICE_KEY` (Yawp calls Internal). When `internal_platform_integration` is configured, production Terraform also maps `YAWP_INTERNAL_API_KEYS` to the existing Secrets Manager secret `yawp-internal/production-signing-platform-keys` (imported into state by full secret ARN via `internal_platform_signing_keys_secret_arn`, not recreated) and grants the App Runner instance role `secretsmanager:GetSecretValue` on that ARN. Production Terraform variable values live in Secrets Manager as `yawp/terraform/production-tfvars` (`us-east-1`, JSON); see `infra/README.md`. Existing `INTERNAL_COMMAND_TOKEN` is unrelated and must not be repurposed. `YAWP_APP_ORIGIN` does not substitute for the required `YAWP_PUBLIC_ORIGIN`.
 
 The production Terraform App Runner resource now merges these mappings and adds their exact ARNs to its instance role policy when `internal_platform_integration` is configured. A reviewed production plan remains necessary. Merge the settings into existing maps; never replace existing application environment or secrets. Secret values do not belong in plan input JSON, Git or transcripts.
 

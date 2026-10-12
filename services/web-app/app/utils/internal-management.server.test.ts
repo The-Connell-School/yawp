@@ -1,7 +1,15 @@
-import { describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { createUserManagementHandlers } from './internal-management.server';
 
 const key = 'a'.repeat(43);
+const savedManagementKey = process.env.YAWP_MANAGEMENT_SERVICE_KEY;
+beforeEach(() => {
+  process.env.YAWP_MANAGEMENT_SERVICE_KEY = key;
+});
+afterEach(() => {
+  if (savedManagementKey === undefined) delete process.env.YAWP_MANAGEMENT_SERVICE_KEY;
+  else process.env.YAWP_MANAGEMENT_SERVICE_KEY = savedManagementKey;
+});
 const row = (id = 'membership-1', organizationId = 'org-1') => ({
   id, organizationId, user: { id: 'user-1', name: 'QA Teacher', email: 'qa@example.test', isAdmin: false, isSuperAdmin: false },
 });
@@ -17,6 +25,8 @@ function fixture(secret: string | null = key) {
 describe('internal user management boundary', () => {
   test('disabled or invalid machine authentication never queries users', async () => {
     for (const secret of [null, key]) {
+      if (secret) process.env.YAWP_MANAGEMENT_SERVICE_KEY = secret;
+      else delete process.env.YAWP_MANAGEMENT_SERVICE_KEY;
       const handler = fixture(secret);
       const response = await handler.search(request('', 'wrong'));
       expect(response.status).toBe(secret ? 401 : 404);

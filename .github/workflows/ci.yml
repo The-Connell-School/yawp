@@ -189,6 +189,9 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun test ./packages/prisma/scripts/exit-ticket-bootstrap-migration.test.ts
+      - name: 🧪 yawp_admin internal SELECT revoke migration contract
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        run: bun test ./packages/prisma/migrations/20261011121500_revoke_yawp_admin_internal_select/migration.test.ts
 
       - name: 🧪 Free tier bundle seed connection (tunnel TLS)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -252,6 +255,7 @@ jobs:
           ./services/web-app/app/utils/rate-limit.responses.test.ts
           ./services/web-app/app/utils/preview-access-rate-limit.server.test.ts
           ./services/web-app/app/utils/internal-free-tier-http.server.test.ts
+          ./services/web-app/app/utils/mock-admin-environment.test.ts
           $(find ./services/web-app/app/domain/free-tier -type f -name '*.test.ts' ! -name 'student-join.server.test.ts' ! -name '*.integration.test.ts')
           ./services/web-app/app/routes/app/sidebar-nav.reporter.test.ts
           ./packages/prisma/preview-access-code.free-classroom.test.ts
@@ -275,6 +279,7 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: |
           set -e
+          bun test ./services/web-app/app/utils/tester-decisions.server.test.ts
           bun test ./services/web-app/app/domain/grading/teacher-notes.test.ts
           bun test ./services/web-app/app/domain/grading/grading-assistant-invocation.test.ts
           bun test ./services/web-app/app/domain/grading/grading-prompt-shape.test.ts
@@ -323,6 +328,18 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun run --cwd packages/prisma seed-local-dev
+
+      - name: 🐳 Verify production image resolves preview seed imports
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: |
+          set -euo pipefail
+          docker build --platform linux/amd64 -t yawp-web-app:ci -f services/web-app/Dockerfile .
+          docker run --rm yawp-web-app:ci bun -e "
+            await import('./packages/prisma/scripts/local-dev/seed-free-tier-feature-flag.ts');
+            await import('./scripts/preview/free-tier-ship-review-seed-guard.mjs');
+          "
 
       - name: 🧪 Preview teacher-notes QA seed (integration)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -437,6 +454,11 @@ jobs:
             'app/routes/app.my-classes.$classId/class-student-enrollment.server.test.ts' \
             'app/utils/impersonation-read-only.server.test.ts' \
             'app/utils/internal-management.server.test.ts' \
+            'app/utils/internal-platform-auth.server.test.ts' \
+            'app/utils/internal-grading-stats.server.test.ts' \
+            'app/routes/api.internal.v1.stats.grading/route.test.ts' \
+            'app/routes/api.internal.v1.audit/route.test.ts' \
+            'app/utils/internal-platform-api-audit-list.server.test.ts' \
             'app/domain/free-tier/student-join.server.test.ts' \
             'app/routes/app.assignment-types.$id/about-daily-pages/content.test.ts' \
             app/domain/assignment-types/assignment-type-grading-config.server.test.ts \

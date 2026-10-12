@@ -10,10 +10,35 @@ set -euo pipefail
 
 DEPLOY_TIMEOUT_SECONDS="${DEPLOY_TIMEOUT_SECONDS:-3600}"
 POLL_SECONDS="${DEPLOY_POLL_SECONDS:-30}"
+FAILURE_LOG_LINES="${FAILURE_LOG_LINES:-120}"
 EXIT_FILE="${DEPLOY_LOG}.exit"
 LOG_DIR="$(dirname "$DEPLOY_LOG")"
+LOCAL_LOG_COPY="/tmp/demo-deploy.log"
 
 shell_quote() { printf '%q' "$1"; }
+
+mask_deploy_log() {
+  sed -E \
+    -e 's/(PREVIEW_ACCESS_CODE=)[^[:space:]]*/\1[REDACTED]/g' \
+    -e 's/(PREVIEW_LOGIN_PASSWORD=)[^[:space:]]*/\1[REDACTED]/g' \
+    -e 's/(PREVIEW_POSTGRES_ADMIN_PASSWORD=)[^[:space:]]*/\1[REDACTED]/g' \
+    -e 's/(PREVIEW_MANAGEMENT_SERVICE_KEY=)[^[:space:]]*/\1[REDACTED]/g' \
+    -e 's/(PREVIEW_RESEND_API_KEY=)[^[:space:]]*/\1[REDACTED]/g' \
+    -e 's/(PREVIEW_STRIPE_SECRET_KEY=)[^[:space:]]*/\1[REDACTED]/g' \
+    -e 's/(PREVIEW_STRIPE_WEBHOOK_SECRET=)[^[:space:]]*/\1[REDACTED]/g'
+}
+
+emit_failure_log_tail() {
+  local reason="$1"
+  echo "${reason}; last ${FAILURE_LOG_LINES} log lines (secrets redacted):" >&2
+  if [[ -f "$LOCAL_LOG_COPY" ]]; then
+    tail -n "$FAILURE_LOG_LINES" "$LOCAL_LOG_COPY" | mask_deploy_log >&2 || true
+  else
+    ssh -i "$SSH_IDENTITY" -o BatchMode=yes "$SSH_TARGET" \
+      "tail -n ${FAILURE_LOG_LINES} $(shell_quote "$DEPLOY_LOG") 2>/dev/null || true" \
+      | mask_deploy_log >&2 || true
+  fi
+}
 
 ssh -i "$SSH_IDENTITY" -o BatchMode=yes "$SSH_TARGET" bash -s <<REMOTE
 set -euo pipefail
@@ -37,16 +62,17 @@ done
 
 if ! ssh -i "$SSH_IDENTITY" -o BatchMode=yes "$SSH_TARGET" \
   "test -f $(shell_quote "$EXIT_FILE")"; then
-  echo "Deploy timed out after ${DEPLOY_TIMEOUT_SECONDS}s; log tail:" >&2
-  ssh -i "$SSH_IDENTITY" -o BatchMode=yes "$SSH_TARGET" \
-    "tail -50 $(shell_quote "$DEPLOY_LOG") 2>/dev/null || true" >&2
+  emit_failure_log_tail "Deploy timed out after ${DEPLOY_TIMEOUT_SECONDS}s"
   exit 1
 fi
 
-scp -i "$SSH_IDENTITY" -q "${SSH_TARGET}:${DEPLOY_LOG}" /tmp/demo-deploy.log
+scp -i "$SSH_IDENTITY" -q "${SSH_TARGET}:${DEPLOY_LOG}" "$LOCAL_LOG_COPY"
 exit_code="$(
   ssh -i "$SSH_IDENTITY" -o BatchMode=yes "$SSH_TARGET" \
     "tr -d '[:space:]' < $(shell_quote "$EXIT_FILE")"
 )"
 [[ "$exit_code" =~ ^[0-9]+$ ]] || exit_code=1
+if [[ "$exit_code" != "0" ]]; then
+  emit_failure_log_tail "Deploy failed with exit code ${exit_code}"
+fi
 exit "$exit_code"

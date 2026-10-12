@@ -1,6 +1,5 @@
 /* eslint-disable no-console */
 import type { PrismaClient } from '../../generated/prisma';
-import { isDemoPlannerQaEnvironment } from '../seed-preview-planner-qa';
 import { shouldRunFreeTierShipReviewSeed } from '../../../../scripts/preview/free-tier-ship-review-seed-guard.mjs';
 
 const FREE_TIER_FLAG_SETTING = 'feature_flag.free_tier';
@@ -33,6 +32,7 @@ export async function ensureFreeTierEnabledForPreview(
 
 /** Demo keeps Free Tier on while production stays off until yawp-internal toggles it. */
 export async function ensureFreeTierEnabledForDemo(prisma: PrismaClient) {
+  const { isDemoPlannerQaEnvironment } = await import('../seed-preview-planner-qa');
   if (!isDemoPlannerQaEnvironment()) return { skipped: true as const };
   await upsertFreeTierEveryone(prisma);
   console.log('Free tier feature flag: enabled for demo');

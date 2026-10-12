@@ -122,6 +122,41 @@ suite('token redemption', () => {
     expect(rows.every((r) => r.tokenHash !== token && r.tokenHash.length === 64)).toBe(true);
     expect(await svc!.checkTokenValidity(token)).toMatchObject({ valid: true });
   });
+
+  test('legacy long tokens without a code still redeem via hash lookup', async () => {
+    const legacy = svc!.generateToken();
+    await prisma!.acquisitionToken.create({
+      data: { tokenHash: svc!.hashToken(legacy), label: `legacy-${run}` },
+    });
+    expect(await svc!.checkTokenValidity(legacy)).toMatchObject({ valid: true });
+    await svc!.redeemToken({ ...person('legacy'), token: legacy });
+    expect(await prisma!.freeTierApplication.count({ where: { email: `ft-${run}-legacy@school.example` } })).toBe(1);
+    await prisma!.acquisitionToken.deleteMany({ where: { label: `legacy-${run}` } });
+  });
+
+  test('disabled tokens are refused for redemption', async () => {
+    const token = await makeToken();
+    const row = await prisma!.acquisitionToken.findUnique({
+      where: { tokenHash: svc!.hashToken(token) },
+    });
+    await prisma!.acquisitionToken.update({ where: { id: row!.id }, data: { disabledAt: new Date() } });
+    expect(await svc!.checkTokenValidity(token)).toEqual({ valid: false, reason: 'disabled' });
+    expect(await svc!.redeemToken({ ...person('dis'), token })).toEqual({ ok: false, reason: 'disabled' });
+  });
+
+  test('scan recording dedupes within ten minutes', async () => {
+    const token = await makeToken();
+    const row = await prisma!.acquisitionToken.findUnique({
+      where: { tokenHash: svc!.hashToken(token) },
+    });
+    const cookie = 'dedupe-cookie-value';
+    await svc!.recordAcquisitionTokenScan({ tokenId: row!.id, dedupeCookie: cookie, userAgent: 'TestAgent/1.0' });
+    await svc!.recordAcquisitionTokenScan({ tokenId: row!.id, dedupeCookie: cookie, userAgent: 'TestAgent/1.0' });
+    const updated = await prisma!.acquisitionToken.findUnique({ where: { id: row!.id } });
+    expect(updated?.scanCount).toBe(1);
+    const scans = await prisma!.acquisitionTokenScan.count({ where: { tokenId: row!.id } });
+    expect(scans).toBe(1);
+  });
 });
 
 suite('release cap', () => {

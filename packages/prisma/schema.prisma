@@ -30,6 +30,7 @@ model FreeTierApplication {
   location         String
   gradeLevel       String
   acquisitionTokenId String?
+  acquisitionToken   AcquisitionToken? @relation(fields: [acquisitionTokenId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   userId           String?
   organizationId   String?
   releasedAt       DateTime?                 @db.Timestamptz(6)
@@ -111,15 +112,41 @@ model FreeTierEmailLog {
 }
 
 model AcquisitionToken {
-  id          String    @id @default(cuid())
-  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
-  tokenHash   String    @unique
-  label       String
-  bypassWaitlist Boolean @default(false)
-  maxUses     Int?
-  uses        Int       @default(0)
-  expiresAt   DateTime? @db.Timestamptz(6)
-  createdBy   String?
+  id             String    @id @default(cuid())
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+  tokenHash      String    @unique
+  /// Short URL-safe code for /free?t=…; legacy rows may be null (lookup by hash only).
+  code           String?   @unique
+  label          String
+  sourceName     String?
+  eventLocation  String?
+  eventDate      DateTime? @db.Timestamptz(6)
+  notes          String?
+  bypassWaitlist Boolean   @default(false)
+  maxUses        Int?
+  uses           Int       @default(0)
+  scanCount      Int       @default(0)
+  expiresAt      DateTime? @db.Timestamptz(6)
+  disabledAt     DateTime? @db.Timestamptz(6)
+  createdBy      String?
+  applications   FreeTierApplication[]
+  scans          AcquisitionTokenScan[]
+
+  @@index([expiresAt])
+}
+
+model AcquisitionTokenScan {
+  id              String           @id @default(cuid())
+  createdAt       DateTime         @default(now()) @db.Timestamptz(6)
+  tokenId         String
+  token           AcquisitionToken @relation(fields: [tokenId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  /// Hash of the browser dedupe cookie (no raw cookie stored).
+  dedupeCookieHash String
+  /// Coarse user agent prefix for debugging; not used for identity.
+  userAgentCoarse  String?
+
+  @@index([tokenId, createdAt(sort: Desc)])
+  @@index([tokenId, dedupeCookieHash, createdAt(sort: Desc)])
 }
 
 /// Audit log of operator decisions on free-tier applications.
@@ -1769,8 +1796,11 @@ model User {
   password           Password?
   sessions           Session[]
   memberships        OrgMembership[]
+  isTester           Boolean         @default(false)
+  testerFeedback     TesterFeedback[]
   isAdmin            Boolean         @default(false)
   isSuperAdmin       Boolean         @default(false)
+  mockAdminGranted   Boolean         @default(false)
 }
 
 model Invitation {
@@ -2194,4 +2224,53 @@ model InternalAssignmentRubricPinBackfill {
   selectedRevisionId String?
   pinnedAt           DateTime @default(now()) @db.Timestamptz(6)
   reason             String?
+}
+
+/// Replay protection for signed internal platform API requests (TTL enforced in app code).
+model InternalApiRequestNonce {
+  id        String   @id @default(cuid())
+  keyId     String
+  nonce     String
+  expiresAt DateTime @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([keyId, nonce])
+  @@index([expiresAt])
+}
+
+/// Append-only audit of mutating internal platform API calls authenticated via HMAC keys.
+model InternalPlatformApiAudit {
+  actorUserId String?
+  action      String?
+  targetId    String?
+  environment String?
+  metadata    Json?
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  actorEmail  String
+  keyId       String
+  endpoint    String
+  requestHash String
+  result      String
+
+  @@index([createdAt(sort: Desc)])
+  @@index([keyId, createdAt(sort: Desc)])
+}
+
+model TesterFeedback {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  url          String   @db.VarChar(2048)
+  userAgent    String   @db.VarChar(1000)
+  whatIDid     String   @db.VarChar(4000)
+  whatHappened String   @db.VarChar(4000)
+  whatIWish    String   @db.VarChar(4000)
+  severity     String?  @db.VarChar(20)
+  environment  String   @db.VarChar(100)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([createdAt, id])
+  @@index([userId, createdAt])
+  @@index([environment, createdAt])
 }
