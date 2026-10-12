@@ -1,8 +1,17 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 const savedFlag = process.env.MOCK_ADMIN_ENABLED;
+const savedPreviewSlug = process.env.PREVIEW_SLUG;
+const savedYawpEnvironment = process.env.YAWP_ENVIRONMENT;
+const savedNodeEnv = process.env.NODE_ENV;
 afterAll(() => {
   if (savedFlag === undefined) delete process.env.MOCK_ADMIN_ENABLED;
   else process.env.MOCK_ADMIN_ENABLED = savedFlag;
+  if (savedPreviewSlug === undefined) delete process.env.PREVIEW_SLUG;
+  else process.env.PREVIEW_SLUG = savedPreviewSlug;
+  if (savedYawpEnvironment === undefined) delete process.env.YAWP_ENVIRONMENT;
+  else process.env.YAWP_ENVIRONMENT = savedYawpEnvironment;
+  if (savedNodeEnv === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = savedNodeEnv;
 });
 const requireUserId = mock(async () => 'intern');
 const findUnique = mock(async () => ({
@@ -54,6 +63,9 @@ function args(intent?: string) {
 }
 beforeEach(() => {
   process.env.MOCK_ADMIN_ENABLED = 'true';
+  delete process.env.PREVIEW_SLUG;
+  delete process.env.YAWP_ENVIRONMENT;
+  process.env.NODE_ENV = 'test';
   requireUserId.mockImplementation(async () => 'intern');
   findUnique.mockImplementation(async () => ({
     id: 'intern',
@@ -79,6 +91,27 @@ describe('tester routes', () => {
         }
       }
       expect(findUnique).not.toHaveBeenCalled();
+    });
+    test('production runtime denies even when the flag is accidentally enabled', async () => {
+      process.env.YAWP_ENVIRONMENT = 'production';
+      process.env.NODE_ENV = 'production';
+      findUnique.mockClear();
+      for (const handler of [route.loader, route.action]) {
+        try {
+          await handler(args('approve'));
+          throw new Error('Expected denial');
+        } catch (error) {
+          expect((error as Response).status).toBe(404);
+        }
+      }
+      expect(findUnique).not.toHaveBeenCalled();
+    });
+    test('demo runtime allows the explicit tester gate', async () => {
+      process.env.PREVIEW_SLUG = 'demo';
+      process.env.YAWP_ENVIRONMENT = 'preview';
+      process.env.NODE_ENV = 'production';
+      await route.loader(args());
+      expect(findMany).toHaveBeenCalled();
     });
     test('ungranted user cannot list or act', async () => {
       findUnique.mockImplementation(async () => ({

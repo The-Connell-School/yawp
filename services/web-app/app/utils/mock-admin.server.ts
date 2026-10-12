@@ -4,7 +4,23 @@ import { mockAdminEnvironment } from './mock-admin-environment';
 import { requireFreeTierEnabled } from './free-tier/free-tier-feature-gate.server';
 
 export function isMockAdminEnabled() {
-  return process.env.MOCK_ADMIN_ENABLED === 'true';
+  return (
+    process.env.MOCK_ADMIN_ENABLED === 'true' &&
+    isMockAdminRuntimeAllowed(process.env)
+  );
+}
+
+export function isMockAdminRuntimeAllowed(env: {
+  PREVIEW_SLUG?: string;
+  YAWP_ENVIRONMENT?: string;
+  NODE_ENV?: string;
+}) {
+  const previewSlug = env.PREVIEW_SLUG?.trim().toLowerCase();
+  const yawpEnvironment = env.YAWP_ENVIRONMENT?.trim().toLowerCase();
+  const nodeEnv = env.NODE_ENV?.trim().toLowerCase();
+  if (previewSlug === 'demo') return true;
+  if (yawpEnvironment === 'production') return false;
+  return nodeEnv !== 'production';
 }
 
 export async function canUseMockAdmin(userId: string) {
