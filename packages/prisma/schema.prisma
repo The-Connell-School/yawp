@@ -2231,7 +2231,7 @@ model InternalPlatformApiAudit {
 model TesterFeedback {
   id           String   @id @default(cuid())
   userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   url          String   @db.VarChar(2048)
   userAgent    String   @db.VarChar(1000)
   whatIDid     String   @db.VarChar(4000)

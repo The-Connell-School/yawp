@@ -13,7 +13,7 @@ CREATE TABLE "TesterFeedback" (
   "createdAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "TesterFeedback_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "TesterFeedback_severity_check" CHECK ("severity" IS NULL OR "severity" IN ('low', 'medium', 'high')),
-  CONSTRAINT "TesterFeedback_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE
+  CONSTRAINT "TesterFeedback_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE INDEX "TesterFeedback_createdAt_id_idx" ON "TesterFeedback"("createdAt", "id");
 CREATE INDEX "TesterFeedback_userId_createdAt_idx" ON "TesterFeedback"("userId", "createdAt");
