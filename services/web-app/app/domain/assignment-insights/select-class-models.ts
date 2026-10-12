@@ -40,6 +40,8 @@ export type ClassModelExample = {
 export type ClassModelFocus = {
   category: string;
   label: string;
+  /** The label as a teacher would say it mid-sentence: "evidence", not "Evidence/Support". */
+  skill: string;
   exemplar: ClassModelExample | null;
   instructive: ClassModelExample | null;
   exemplarPrompts: string[];
@@ -119,16 +121,31 @@ function toExample(
   };
 }
 
-function exemplarPrompts(label: string): string[] {
-  const skill = label.toLowerCase();
+/**
+ * A rubric label as it reads inside a sentence. Paired labels keep their
+ * first half ("Evidence/Support", "Grammar & Mechanics", "Voice and Style"),
+ * and words are lowercased unless they are acronyms ("MLA").
+ */
+export function skillName(
+  category: Pick<InsightRubricCategory, 'label'>
+): string {
+  const head =
+    category.label.split(/\s*(?:\/|&|\band\b)\s*/i)[0]?.trim() ||
+    category.label.trim();
+  return head
+    .split(/\s+/)
+    .map((word) => (/[A-Z].*[A-Z]/.test(word) ? word : word.toLowerCase()))
+    .join(' ');
+}
+
+function exemplarPrompts(skill: string): string[] {
   return [
     `What exactly makes the ${skill} work here? Name the move you want every student to try.`,
     'Which sentence would you pause on when you show this to the class?',
   ];
 }
 
-function instructivePrompts(label: string): string[] {
-  const skill = label.toLowerCase();
+function instructivePrompts(skill: string): string[] {
   return [
     `What is the one revision that would most improve the ${skill}?`,
     'Could the class revise this together, side by side with the strong model?',
@@ -207,13 +224,15 @@ export function selectClassModels(
     if (!exemplar && !instructive) continue;
     if (instructive) usedInstructive.add(instructive.input.submissionId);
 
+    const skill = skillName(category);
     focuses.push({
       category: category.key,
       label: category.label,
+      skill,
       exemplar: exemplar ? toExample(exemplar, category) : null,
       instructive: instructive ? toExample(instructive, category) : null,
-      exemplarPrompts: exemplarPrompts(category.label),
-      instructivePrompts: instructivePrompts(category.label),
+      exemplarPrompts: exemplarPrompts(skill),
+      instructivePrompts: instructivePrompts(skill),
     });
   }
 

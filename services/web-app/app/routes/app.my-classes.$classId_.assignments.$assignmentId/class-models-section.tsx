@@ -14,12 +14,12 @@ function ModelCard({
   kind,
   example,
   prompts,
-  label,
+  skill,
 }: {
   kind: 'exemplar' | 'instructive';
   example: ClassModelExample;
   prompts: string[];
-  label: string;
+  skill: string;
 }) {
   const isExemplar = kind === 'exemplar';
   const Icon = isExemplar ? Sparkles : Wrench;
@@ -55,7 +55,7 @@ function ModelCard({
           <ArrowUpRight className="h-3 w-3" aria-hidden />
         </Link>
         <span className="text-muted-foreground">
-          Scored {example.score}/{example.maxScore} on {label.toLowerCase()}
+          Scored {example.score}/{example.maxScore} on {skill}
         </span>
       </div>
       <ul className="mt-1 flex list-disc flex-col gap-1 pl-5 text-sm text-muted-foreground">
@@ -81,7 +81,7 @@ function FocusRow({ focus }: { focus: ClassModelFocus }) {
             kind="exemplar"
             example={focus.exemplar}
             prompts={focus.exemplarPrompts}
-            label={focus.label}
+            skill={focus.skill}
           />
         ) : null}
         {focus.instructive ? (
@@ -89,7 +89,7 @@ function FocusRow({ focus }: { focus: ClassModelFocus }) {
             kind="instructive"
             example={focus.instructive}
             prompts={focus.instructivePrompts}
-            label={focus.label}
+            skill={focus.skill}
           />
         ) : null}
       </div>

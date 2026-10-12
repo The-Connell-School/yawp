@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { selectClassModels, type ClassModelInput } from './select-class-models';
+import {
+  selectClassModels,
+  skillName,
+  type ClassModelInput,
+} from './select-class-models';
 import { DEFAULT_INSIGHT_RUBRIC, type InsightRubric } from './insight-rubric';
 
 const TWO_CATEGORY_RUBRIC: InsightRubric = {
@@ -173,6 +177,45 @@ describe('selectClassModels', () => {
     expect(focus.instructivePrompts.length).toBeGreaterThan(0);
     expect(focus.exemplarPrompts.join(' ')).toContain('evidence');
     expect(focus.instructivePrompts.join(' ')).toMatch(/name/i);
+  });
+
+  test('names the skill the way a teacher would say it in the prompts', () => {
+    const result = selectClassModels(
+      [
+        student('Ava', {
+          thesis_and_content: 5,
+          evidence_and_support: 5,
+        }),
+        student('Ben', {
+          thesis_and_content: 4,
+          evidence_and_support: 1,
+        }),
+      ],
+      DEFAULT_INSIGHT_RUBRIC
+    );
+
+    const focus = result!.focuses[0];
+    expect(focus.label).toBe('Evidence/Support');
+    expect(focus.skill).toBe('evidence');
+    expect(focus.exemplarPrompts[0]).toBe(
+      'What exactly makes the evidence work here? Name the move you want every student to try.'
+    );
+    expect(focus.instructivePrompts[0]).toBe(
+      'What is the one revision that would most improve the evidence?'
+    );
+    expect(focus.exemplarPrompts.join(' ')).not.toContain('/');
+  });
+
+  test('turns any rubric label into a short skill name', () => {
+    const named = (label: string) => skillName({ label });
+    expect(named('Thesis/Content')).toBe('thesis');
+    expect(named('Organization/Structure')).toBe('organization');
+    expect(named('Grammar & Mechanics')).toBe('grammar');
+    expect(named('Voice and Style')).toBe('voice');
+    expect(named('Budget')).toBe('budget');
+    expect(named('Use of Evidence')).toBe('use of evidence');
+    // Acronyms keep their capitals.
+    expect(named('MLA Citations')).toBe('MLA citations');
   });
 
   test('caps the focuses so the section stays a short list', () => {

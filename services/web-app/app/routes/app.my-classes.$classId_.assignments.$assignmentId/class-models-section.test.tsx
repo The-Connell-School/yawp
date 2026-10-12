@@ -33,6 +33,7 @@ const MODELS = {
     {
       category: 'evidence_and_support',
       label: 'Evidence/Support',
+      skill: 'evidence',
       exemplar: {
         submissionId: 'sub-ava',
         studentName: 'Ava Ruiz',
@@ -49,9 +50,9 @@ const MODELS = {
         score: 1,
         maxScore: 5,
       },
-      exemplarPrompts: ['What exactly makes the evidence/support work here?'],
+      exemplarPrompts: ['What exactly makes the evidence work here?'],
       instructivePrompts: [
-        'What is the one revision that would most improve the evidence/support?',
+        'What is the one revision that would most improve the evidence?',
         'Remove the student’s name before sharing, or ask them first.',
       ],
     },
@@ -116,7 +117,8 @@ describe('ClassModelsSection', () => {
     expect(exemplar.querySelector('a')?.getAttribute('href')).toBe(
       '/app/submissions/sub-ava'
     );
-    expect(exemplar.textContent).toContain('5/5');
+    expect(exemplar.textContent).toContain('Scored 5/5 on evidence');
+    expect(exemplar.textContent).not.toContain('evidence/support');
     expect(instructive.textContent).toContain('This proves my point');
     expect(instructive.textContent).toContain('Ben Ito');
     expect(instructive.textContent).toMatch(/remove the student’s name/i);
