@@ -86,6 +86,12 @@ describe('tester feedback submission', () => {
       },
     ]);
   });
+  test('accepts non-ASCII feedback within the advertised character limits', async () => {
+    const { deps, saved } = setup();
+    const response = await submitTesterFeedback(request({ whatIDid: '界'.repeat(4000), whatHappened: '界'.repeat(4000), whatIWish: '界'.repeat(4000) }), deps);
+    expect(response.status).toBe(201);
+    expect(saved).toHaveLength(1);
+  });
   test('requires enabled flag, authentication, and tester status', async () => {
     for (const [overrides, status] of [
       [{ enabled: () => false }, 404],
@@ -146,7 +152,7 @@ describe('tester feedback submission', () => {
     expect(
       (
         await submitTesterFeedback(
-          request({ whatIDid: 'x'.repeat(50000) }),
+          request({ whatIDid: 'x'.repeat(500000) }),
           deps
         )
       ).status
