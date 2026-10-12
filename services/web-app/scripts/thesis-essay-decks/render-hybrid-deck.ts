@@ -27,6 +27,7 @@ export const ASSET_SIZES: Record<AssetImage, { w: number; h: number }> = {
   'yawp-editor-prewriting.png': { w: 2880, h: 1720 },
   'yawp-editor-thesis.png': { w: 2880, h: 1720 },
   'yawp-editor-introduction.png': { w: 2880, h: 1720 },
+  'yawp-editor-body.png': { w: 2880, h: 1720 },
   'yawp-my-documents.png': { w: 1485, h: 403 },
 };
 
@@ -448,12 +449,46 @@ function addStepsSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 's
   }
   const count = spec.items.length;
   const gap = 0.35;
-  const w = (CONTENT_WIDTH - gap * (count - 1)) / count;
-  const h = Math.min(BODY_BOTTOM - top, 4.1);
+  // Four long steps read better as a 2 x 2 grid of wide tiles.
+  const longest = Math.max(...spec.items.map((item) => plain(item).length));
+  const perRow = count === 4 && longest > 60 ? 2 : count;
+  const rows = Math.ceil(count / perRow);
+  const w = (CONTENT_WIDTH - gap * (perRow - 1)) / perRow;
+  const h = rows > 1 ? (BODY_BOTTOM - top - gap * (rows - 1)) / rows : Math.min(BODY_BOTTOM - top, 4.1);
+  const grid = rows > 1;
   spec.items.forEach((item, index) => {
     const color = accentAt(ACCENT_OFFSET[accent] + index);
-    const x = MARGIN + index * (w + gap);
-    addCard(slide, { x, y: top, w, h }, color);
+    const x = MARGIN + (index % perRow) * (w + gap);
+    const y = top + Math.floor(index / perRow) * (h + gap);
+    addCard(slide, { x, y, w, h }, color);
+    if (grid) {
+      addDot(slide, x + 0.3, y + 0.35, 0.6, T[color]);
+      slide.addText(String(index + 1), {
+        x: x + 0.3,
+        y: y + 0.35,
+        w: 0.6,
+        h: 0.6,
+        fontFace: T.serif,
+        fontSize: 22,
+        bold: true,
+        color: T.paper,
+        align: 'center',
+        valign: 'middle',
+        margin: 0,
+      });
+      slide.addText(runs(item, color), {
+        x: x + 1.15,
+        y: y + 0.25,
+        w: w - 1.45,
+        h: h - 0.45,
+        fontFace: T.sans,
+        fontSize: longest > 110 ? 18 : 20,
+        color: T.ink,
+        valign: 'top',
+        margin: 0,
+      });
+      return;
+    }
     addDot(slide, x + 0.35, top + 0.4, 0.8, T[color]);
     slide.addText(String(index + 1), {
       x: x + 0.35,
@@ -1280,7 +1315,7 @@ function addPassageSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 
     w: box.w - 1,
     h: box.y + box.h - 0.3 - top,
     fontFace: T.serif,
-    fontSize: length > 1500 ? 14 : length > 1100 ? 16 : length > 700 ? 18.5 : 20,
+    fontSize: length > 1500 ? 12.5 : length > 1150 ? 13.5 : length > 850 ? 15 : length > 700 ? 17 : 20,
     color: T.ink,
     valign: 'top',
     lineSpacingMultiple: 1.2,
