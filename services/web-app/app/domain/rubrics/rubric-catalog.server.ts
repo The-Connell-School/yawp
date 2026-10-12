@@ -225,10 +225,9 @@ const publicRelease = (row: ReleaseRow): PublicRelease => ({
 const revisionSelect = { id: true, rubricName: true, version: true, schemaJson: true, fingerprint: true, createdBy: true, reason: true, createdAt: true, requestId: true, requestHash: true } as const;
 type RevisionRow = { id: string; rubricName: string; version: number; schemaJson: unknown; fingerprint: string; createdBy: string; reason: string; createdAt: Date; requestId: string; requestHash: string };
 
-// Code-seeded library rubrics are editable here: seedStarterRubrics only creates
-// missing rows and never overwrites an existing one, and every save is an
-// immutable revision. The catalog flags them so the operator knows the code
-// carries the original definition.
+// Library rubrics that still match code definitions are flagged so operators know
+// the repo carries the original shape. Runtime seeding is forbidden; rows come
+// from migrations and environment data only.
 function readOnlyReason(source: 'library' | 'assignment-type', _name: string, content: unknown, linkedLibrary?: string | null): string | null {
   if (source === 'assignment-type' && linkedLibrary) return `This assignment type grades with the library rubric "${linkedLibrary}"; edit that rubric instead.`;
   if (!categoriesOf(content).length) return 'No categories are stored, so this type grades with the built-in default rubric for its kind.';

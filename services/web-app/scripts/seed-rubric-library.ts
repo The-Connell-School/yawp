@@ -12,11 +12,11 @@
  *   bun scripts/seed-rubric-library.ts --force
  */
 import { prisma } from '../app/utils/db.server';
+import { upsertRubric } from '../app/domain/rubrics/rubric-library.server';
 import {
-  seedStarterRubrics,
-  upsertRubric,
-} from '../app/domain/rubrics/rubric-library.server';
-import { STARTER_RUBRICS } from '../app/domain/rubrics/starter-rubrics';
+  RETIRED_STARTER_RUBRIC_NAMES,
+  STARTER_RUBRICS,
+} from '../app/domain/rubrics/starter-rubrics';
 
 const force = process.argv.includes('--force');
 
@@ -26,7 +26,23 @@ if (force) {
     console.log(`republished ${rubric.name}`);
   }
 } else {
-  const created = await seedStarterRubrics();
+  const created: string[] = [];
+  for (const schema of STARTER_RUBRICS) {
+    if (RETIRED_STARTER_RUBRIC_NAMES.has(schema.name)) continue;
+    const existing = await prisma.rubric.findUnique({
+      where: { name: schema.name },
+      select: { id: true, archivedAt: true },
+    });
+    if (existing) continue;
+    await prisma.rubric.create({
+      data: {
+        name: schema.name,
+        title: schema.title,
+        schemaJson: schema as object,
+      },
+    });
+    created.push(schema.name);
+  }
   console.log(
     created.length ? `created ${created.join(', ')}` : 'nothing to create'
   );
