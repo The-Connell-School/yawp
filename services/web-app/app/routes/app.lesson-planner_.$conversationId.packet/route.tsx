@@ -633,7 +633,9 @@ export default function LessonPacketRoute() {
                           Edited
                         </span>
                       ) : null}
-                      <h2 className="min-w-0 flex-1 text-base font-semibold">
+                      {/* A floor on the name's width, so the controls wrap
+                          to their own line instead of squeezing it. */}
+                      <h2 className="min-w-[14rem] flex-1 text-base font-semibold">
                         <input
                           aria-label={`Name for ${section.title}`}
                           defaultValue={section.title}
@@ -853,15 +855,15 @@ function BuildFromStack({
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           When the sequence is set
         </p>
-        <Button size="sm" variant="outline" className="justify-start" asChild>
+        <Button size="sm" variant="outline" className="h-auto w-full justify-start whitespace-normal py-1.5 text-left" asChild>
           <Link to={build('handout')}>Create handouts from this stack</Link>
         </Button>
-        <Button size="sm" variant="outline" className="justify-start" asChild>
+        <Button size="sm" variant="outline" className="h-auto w-full justify-start whitespace-normal py-1.5 text-left" asChild>
           <a href={lessonPlanHref} download>
             {lessonPlanLabel}
           </a>
         </Button>
-        <Button size="sm" className="justify-start" asChild>
+        <Button size="sm" className="h-auto w-full justify-start whitespace-normal py-1.5 text-left" asChild>
           <Link to={build(hasDeck ? 'rebuild-deck' : 'deck')}>
             {hasDeck
               ? 'Rebuild the slide deck from this stack'

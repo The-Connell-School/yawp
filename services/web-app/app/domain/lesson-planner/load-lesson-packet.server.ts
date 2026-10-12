@@ -48,6 +48,8 @@ export type LoadedLessonPacket = {
   periodMinutes: number | null;
   /** Each filed piece's own kind, by id ("class-starter", "step", …). */
   materialKinds: Record<string, string>;
+  /** Each filed piece's chat card, by id: "<messageId>:<blockKey>". */
+  materialTokens: Record<string, string>;
 };
 
 const WRITING_KINDS = new Set(['class-starter', 'daily-pages', 'exit-ticket']);
@@ -233,6 +235,12 @@ export async function loadLessonPacket({
     periodMinutes: conversation.periodMinutes,
     materialKinds: Object.fromEntries(
       conversation.materials.map((material) => [material.id, material.kind])
+    ),
+    materialTokens: Object.fromEntries(
+      conversation.materials.map((material) => [
+        material.id,
+        `${material.sourceMessageId}:${material.blockKey}`,
+      ])
     ),
   };
 }

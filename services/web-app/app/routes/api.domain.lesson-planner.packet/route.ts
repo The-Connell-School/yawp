@@ -6,7 +6,13 @@
  * it must not consume the planner's AI admission budget or its request
  * deadline. Marking a section should feel instant.
  */
-import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
+import {
+  data as dataResponse,
+  type ActionFunctionArgs,
+  type LoaderFunctionArgs,
+} from 'react-router';
+import { loadLessonPacket } from '~/domain/lesson-planner/load-lesson-packet.server';
+import { stackItemsFor } from '~/domain/lesson-planner/stack-items';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
@@ -150,6 +156,24 @@ const POST = z
       });
     }
   });
+
+/**
+ * The stack, in order, for the panel beside the chat (Brian's run 2, A7). The
+ * same loader as the stack page, so the two never disagree.
+ */
+export async function loader({ request }: LoaderFunctionArgs) {
+  const conversationId = new URL(request.url).searchParams.get('conversationId') ?? undefined;
+  const loaded = await loadLessonPacket({ request, conversationId });
+  if (!loaded.reviewFlags.stackPanel) throw new Response('Not Found', { status: 404 });
+  return {
+    conversationId: loaded.conversationId,
+    items: stackItemsFor({
+      packet: loaded.packet,
+      stackDetails: loaded.stackDetails,
+      materialTokens: loaded.materialTokens,
+    }),
+  };
+}
 
 export async function action({ request }: ActionFunctionArgs) {
   await requireMutableRequest(request);

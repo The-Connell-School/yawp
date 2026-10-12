@@ -22,6 +22,12 @@ import {
   Send,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  readStackPanelClosed,
+  StackPanel,
+  writeStackPanelClosed,
+} from '~/components/lesson-planner/stack-panel';
+import type { StackItem } from '~/domain/lesson-planner/stack-items';
 import { Button } from '~/components/ui/button';
 import { Textarea } from '~/components/ui/textarea';
 import { cn } from '~/utils/misc';
@@ -578,6 +584,15 @@ export default function LessonPlannerRoute() {
     });
   }, [packetFetcher.data, conversationId]);
 
+  // Brian's run 2 (A7): the stack beside the chat reloads whenever something
+  // was filed or taken out from the chat.
+  const [stackVersion, setStackVersion] = useState(0);
+  useEffect(() => {
+    if (packetFetcher.state === 'idle' && packetFetcher.data) {
+      setStackVersion((version) => version + 1);
+    }
+  }, [packetFetcher.state, packetFetcher.data]);
+
   // "Add everything to the stack" (Brian's run 2, A4): one piece per step and
   // block, so each can be refined in the stack. Shown as in at once; the
   // answer says which, if any, were left alone because they were hand-edited.
@@ -615,6 +630,7 @@ export default function LessonPlannerRoute() {
         `Left your edited ${data.skipped.length === 1 ? 'piece' : 'pieces'} alone: ${data.skipped.join(', ')}.`
       );
     }
+    setStackVersion((version) => version + 1);
   }, [keepAllFetcher.data]);
 
   // "Replace existing class starter with this one" (Brian's run 2, E1).
@@ -653,6 +669,29 @@ export default function LessonPlannerRoute() {
       },
       { method: 'post', action: '/api/domain/lesson-planner/packet' }
     );
+  }
+
+  // The panel opens on its own once there is something in the stack, unless
+  // the teacher closed it (remembered on this device).
+  const [panelClosed, setPanelClosed] = useState(true);
+  useEffect(() => {
+    setPanelClosed(readStackPanelClosed());
+  }, []);
+  function removedFromPanel(piece: StackItem) {
+    if (piece.token) {
+      setAddedMaterials((prev) => {
+        if (!prev.has(piece.token!)) return prev;
+        const next = new Set(prev);
+        next.delete(piece.token!);
+        return next;
+      });
+    } else if (piece.origin === 'reply') {
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === piece.id ? { ...message, keptAudience: null } : message
+        )
+      );
+    }
   }
 
   // Everything in the packet, however it got there. Counting only kept replies
@@ -983,9 +1022,24 @@ export default function LessonPlannerRoute() {
                 </strong>{' '}
                 in this lesson's stack
               </p>
+              {reviewFlags.stackPanel && panelClosed ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    writeStackPanelClosed(false);
+                    setPanelClosed(false);
+                  }}
+                  className="ml-auto hidden text-sm font-medium text-primary hover:underline lg:inline"
+                >
+                  Show the stack here
+                </button>
+              ) : null}
               <Link
                 to={`/app/lesson-planner/${conversationId}/packet`}
-                className="ml-auto text-sm font-medium text-primary hover:underline"
+                className={cn(
+                  'text-sm font-medium text-primary hover:underline',
+                  !(reviewFlags.stackPanel && panelClosed) && 'ml-auto'
+                )}
               >
                 Open the stack
               </Link>
@@ -1008,6 +1062,18 @@ export default function LessonPlannerRoute() {
           </div>
         ) : null}
       </div>
+
+      {reviewFlags.stackPanel && conversationId && keptCount > 0 && !panelClosed ? (
+        <StackPanel
+          conversationId={conversationId}
+          version={stackVersion}
+          onRemoved={removedFromPanel}
+          onClose={() => {
+            writeStackPanelClosed(true);
+            setPanelClosed(true);
+          }}
+        />
+      ) : null}
     </section>
   );
 }

@@ -875,4 +875,93 @@ test.describe("Lesson Planner — Brian's second run", () => {
       expect(response.status()).toBe(404);
     });
   });
+
+  test.describe('A7: the stack takes shape beside the chat', () => {
+    const TWO_STARTERS =
+      '## Class starter (5 min)\n\n```yawp-daily-pages\nkind: class-starter\nWrite about something you carry every day.\n```\n\n' +
+      '```yawp-daily-pages\nkind: class-starter\nWhat is the heaviest thing you have carried?\n```';
+
+    test('flag off: no panel', async ({ page, signIn, e2eContext }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      const { conversationId } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Plan Day 1.' },
+        { role: 'assistant', content: TWO_STARTERS },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+      await page.getByTestId('daily-pages-stack-toggle').first().click();
+      await expect(page.getByTestId('lesson-packet-bar')).toBeVisible();
+      await expect(page.getByTestId('stack-panel')).toHaveCount(0);
+    });
+
+    test('pieces appear as they are added; remove and reorder right there', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      await setLessonPlannerReviewFlag('lesson_planner_stack_panel', true);
+      const { conversationId } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Plan Day 1.' },
+        { role: 'assistant', content: TWO_STARTERS },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+      await expect(page.getByTestId('stack-panel')).toHaveCount(0);
+
+      const toggles = page.getByTestId('daily-pages-stack-toggle');
+      await toggles.nth(0).click();
+      const panel = page.getByTestId('stack-panel');
+      await expect(panel).toBeVisible();
+      await expect(panel.getByTestId('stack-list-row')).toHaveText([/something you carry/]);
+      await toggles.nth(1).click();
+      await expect(panel.getByTestId('stack-list-row')).toHaveText([
+        /something you carry/,
+        /heaviest thing/,
+      ]);
+
+      // Reorder in the panel.
+      const reordered = page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/domain/lesson-planner/packet') &&
+          response.request().method() === 'POST'
+      );
+      await panel.getByRole('button', { name: /^Move Class Starter: What is the heaviest.* up$/ }).click();
+      await reordered;
+      await expect(panel.getByTestId('stack-list-row')).toHaveText([
+        /heaviest thing/,
+        /something you carry/,
+      ]);
+
+      // Remove in the panel: the chat card goes back to "Add to stack".
+      await panel.getByRole('button', { name: /^Remove Class Starter: Write about/ }).click();
+      await expect(panel.getByTestId('stack-list-row')).toHaveText([/heaviest thing/]);
+      await expect(page.getByTestId('remove-undo')).toBeHidden({ timeout: 10_000 });
+      await expect(toggles.nth(0)).toHaveText(/add to stack/i);
+
+      // The full stack is one click away, in the order set here.
+      await panel.getByRole('link', { name: 'Open the full stack' }).click();
+      await expect(page).toHaveURL(new RegExp(`/app/lesson-planner/${conversationId}/packet`));
+      await expect(page.getByTestId('stack-list-row')).toHaveText([/heaviest thing/]);
+    });
+
+    test('closed, it stays closed until opened again', async ({ page, signIn, e2eContext }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      await setLessonPlannerReviewFlag('lesson_planner_stack_panel', true);
+      const { conversationId } = await seedStack(e2eContext, [{ title: 'Read aloud' }]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+      const panel = page.getByTestId('stack-panel');
+      await expect(panel.getByTestId('stack-list-row')).toHaveText([/Read aloud/]);
+      await panel.getByRole('button', { name: 'Close the stack panel' }).click();
+      await expect(panel).toHaveCount(0);
+      await page.reload();
+      await expect(page.getByTestId('stack-panel')).toHaveCount(0);
+      await page.getByRole('button', { name: 'Show the stack here' }).click();
+      await expect(page.getByTestId('stack-panel')).toBeVisible();
+    });
+  });
 });

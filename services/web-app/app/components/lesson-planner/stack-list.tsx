@@ -20,18 +20,9 @@ import {
 } from 'lucide-react';
 import { cn } from '~/utils/misc';
 import type { PacketSectionKind } from '~/domain/lesson-planner/lesson-packet';
+import type { StackItem } from '~/domain/lesson-planner/stack-items';
 
-export type StackListItem = {
-  /** "m:<materialId>" or "r:<messageId>", as the reorder intent takes it. */
-  key: string;
-  id: string;
-  origin: 'reply' | 'material';
-  title: string;
-  kind: PacketSectionKind;
-  /** What the badge says, e.g. "Class starter"; falls back to the kind. */
-  label?: string;
-  minutes: number | null;
-};
+export type StackListItem = StackItem;
 
 const KIND_TEXT: Record<PacketSectionKind, string> = {
   plan: 'Plan',

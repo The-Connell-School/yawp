@@ -37,12 +37,14 @@ mock.module('~/domain/lesson-planner/stack-order.server', () => ({
   loadStackOrder,
 }));
 
+const loadLessonPacket = mock();
+mock.module('~/domain/lesson-planner/load-lesson-packet.server', () => ({ loadLessonPacket }));
 const fileReplyPieces = mock();
 mock.module('~/domain/lesson-planner/file-reply-pieces.server', () => ({
   fileReplyPieces,
 }));
 
-const { action } = await import('./route');
+const { action, loader } = await import('./route');
 
 afterAll(() => {
   mock.restore();
@@ -927,5 +929,40 @@ describe("lesson packet action — everything, as pieces (Brian's run 2, A4, E3)
       request: formRequest({ intent: 'keep-all', conversationId: 'plan-1', messageId: 'nope' }),
     } as any);
     expect((response as any).init?.status).toBe(404);
+  });
+});
+
+describe("lesson packet loader — the stack beside the chat (Brian's run 2, A7)", () => {
+  const loaded = (stackPanel: boolean) => ({
+    conversationId: 'plan-1',
+    packet: {
+      sections: [
+        { id: 'm1', origin: 'material', title: 'Read aloud (20 min)', kind: 'plan', anchor: 'resource-m1' },
+      ],
+      outline: [{ anchor: 'resource-m1', minutes: 20 }],
+    },
+    stackDetails: { m1: { label: 'Lesson step', create: null } },
+    materialTokens: { m1: 'msg-1:st' },
+    reviewFlags: { stackV2: true, stackPanel },
+  });
+
+  test('lists the stack in order, for the panel', async () => {
+    loadLessonPacket.mockResolvedValue(loaded(true));
+    const response = await loader({
+      request: new Request('http://localhost/api/domain/lesson-planner/packet?conversationId=plan-1'),
+    } as any);
+    expect(loadLessonPacket.mock.calls[0][0].conversationId).toBe('plan-1');
+    expect((response as any).items).toEqual([
+      expect.objectContaining({ key: 'm:m1', title: 'Read aloud (20 min)', label: 'Lesson step', token: 'msg-1:st', minutes: 20 }),
+    ]);
+  });
+
+  test('404 when the panel is off for this school', async () => {
+    loadLessonPacket.mockResolvedValue(loaded(false));
+    await expect(
+      loader({
+        request: new Request('http://localhost/api/domain/lesson-planner/packet?conversationId=plan-1'),
+      } as any)
+    ).rejects.toMatchObject({ status: 404 });
   });
 });
