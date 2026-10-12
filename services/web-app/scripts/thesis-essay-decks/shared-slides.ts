@@ -106,7 +106,8 @@ export function reviewQuiz(count: number): HybridSlide[] {
 
 /** The conclusion recipe (Lesson 6 slide 24, Lesson 7 slide 15). */
 export const CONCLUSION_STRUCTURE: HybridSlide = {
-  layout: 'steps',
+  layout: 'ordering',
+  numbered: true,
   eyebrow: 'Suggested conclusion structure',
   title: 'A conclusion that works',
   accent: 'teal',

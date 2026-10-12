@@ -28,6 +28,7 @@ export const ASSET_SIZES: Record<AssetImage, { w: number; h: number }> = {
   'yawp-editor-thesis.png': { w: 2880, h: 1720 },
   'yawp-editor-introduction.png': { w: 2880, h: 1720 },
   'yawp-editor-body.png': { w: 2880, h: 1720 },
+  'yawp-editor-conclusion.png': { w: 2880, h: 1720 },
   'yawp-my-documents.png': { w: 1485, h: 403 },
 };
 
@@ -1315,7 +1316,7 @@ function addPassageSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 
     w: box.w - 1,
     h: box.y + box.h - 0.3 - top,
     fontFace: T.serif,
-    fontSize: length > 1500 ? 12.5 : length > 1150 ? 13.5 : length > 850 ? 15 : length > 700 ? 17 : 20,
+    fontSize: length > 1500 ? 12.5 : length > 1150 ? 13.5 : length > 850 ? 15 : length > 700 ? 17 : length > 450 ? 20 : 24,
     color: T.ink,
     valign: 'top',
     lineSpacingMultiple: 1.2,
