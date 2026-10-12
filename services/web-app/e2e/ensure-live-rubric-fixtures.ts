@@ -31,7 +31,7 @@ async function ensureReleasedLibraryRubric(
   if (!rubric.currentRevisionId) {
     await prisma.rubric.update({
       where: { id: rubric.id },
-      data: { schemaJson: rubric.schemaJson },
+      data: { schemaJson: rubric.schemaJson as object },
     });
     rubric = await prisma.rubric.findUniqueOrThrow({ where: { id: rubric.id } });
   }

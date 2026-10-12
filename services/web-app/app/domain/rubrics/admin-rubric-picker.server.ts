@@ -1,4 +1,4 @@
-import type { Prisma as PrismaTypes } from '@app/prisma';
+import type { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 import { perTypeKey } from './rubric-catalog.server';
 import {
@@ -18,21 +18,22 @@ export type AdminRubricPickerOption = {
   source: 'library' | 'assignment-type';
 };
 
+export type PerTypeReleasedAssignmentTypeColumns = {
+  rubricId: null;
+  scoringScaleJson: Prisma.InputJsonValue;
+  rubricJson: Prisma.InputJsonValue;
+  gradingPromptConfigJson: Prisma.InputJsonValue;
+  gradingOutputSchemaJson: Prisma.InputJsonValue;
+  gradingCalibrationNotes: string | null;
+};
+
 export type ResolvedAdminRubricPickerSelection =
   | { kind: 'none' }
   | { kind: 'library'; rubricId: string; catalogKey: string }
   | {
       kind: 'per-type';
       catalogKey: string;
-      assignmentTypeData: Pick<
-        PrismaTypes.AssignmentTypeUpdateInput,
-        | 'rubricId'
-        | 'scoringScaleJson'
-        | 'rubricJson'
-        | 'gradingPromptConfigJson'
-        | 'gradingOutputSchemaJson'
-        | 'gradingCalibrationNotes'
-      >;
+      assignmentTypeData: PerTypeReleasedAssignmentTypeColumns;
     };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -45,7 +46,9 @@ function formatReleasedSchema(schemaJson: unknown): string | null {
   return formatRubricSchema(parsed.schema);
 }
 
-function columnsFromReleasedSchema(schemaJson: unknown): ResolvedAdminRubricPickerSelection['assignmentTypeData'] {
+function columnsFromReleasedSchema(
+  schemaJson: unknown
+): PerTypeReleasedAssignmentTypeColumns {
   const record = isRecord(schemaJson) ? schemaJson : {};
   const rubric = isRecord(record.rubric) ? record.rubric : {};
   const promptConfig = isRecord(record.promptConfig) ? record.promptConfig : {};

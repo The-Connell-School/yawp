@@ -4,6 +4,7 @@ const prisma = {
   $transaction: mock(),
   assignmentType: {
     findUnique: mock(),
+    findMany: mock(() => Promise.resolve([])),
     update: mock(),
   },
   assignmentTypePromptVersion: {
@@ -16,12 +17,15 @@ const prisma = {
   user: {
     findFirst: mock(),
   },
-  // The editor lists the shared rubric library and seeds the built-in
-  // rubrics on first sight.
   rubric: {
     findMany: mock(() => Promise.resolve([])),
     findUnique: mock(),
+    findFirst: mock(),
     create: mock(),
+  },
+  rubricRelease: {
+    findMany: mock(() => Promise.resolve([])),
+    findUnique: mock(),
   },
   rubricRevision: {
     findMany: mock(),
@@ -53,10 +57,18 @@ describe('admin assignment type detail action', () => {
   beforeEach(() => {
     prisma.$transaction.mockReset();
     prisma.assignmentType.findUnique.mockReset();
+    prisma.assignmentType.findMany.mockReset();
     prisma.assignmentType.update.mockReset();
+    prisma.assignmentType.findMany.mockResolvedValue([]);
     prisma.assignmentTypePromptVersion.findMany.mockReset();
     prisma.rubric.findUnique.mockReset();
+    prisma.rubric.findMany.mockReset();
+    prisma.rubric.findFirst.mockReset();
+    prisma.rubricRelease.findMany.mockReset();
+    prisma.rubricRelease.findUnique.mockReset();
     prisma.rubricRevision.findMany.mockReset();
+    prisma.rubric.findMany.mockResolvedValue([]);
+    prisma.rubricRelease.findMany.mockResolvedValue([]);
     prisma.orgMembership.findMany.mockReset();
     prisma.orgMembership.findUnique.mockReset();
     prisma.user.findFirst.mockReset();
@@ -408,7 +420,13 @@ describe('admin assignment type detail action', () => {
   });
 
   test('saves a selected shared rubric with the assignment type update', async () => {
-    prisma.rubric.findUnique.mockResolvedValue({ id: 'rubric-1' });
+    prisma.rubric.findFirst.mockResolvedValue({
+      id: 'rubric-1',
+      name: 'cristo-rey-hornbuckle-five-paragraph-essay',
+    });
+    prisma.rubricRelease.findUnique.mockResolvedValue({
+      catalogKey: 'cristo-rey-hornbuckle-five-paragraph-essay',
+    });
 
     const form = new FormData();
     form.set('intent', 'updateCourse');
@@ -427,10 +445,8 @@ describe('admin assignment type detail action', () => {
       context: {} as never,
     });
 
-    expect(prisma.rubric.findUnique).toHaveBeenCalledWith({
-      where: { id: 'rubric-1' },
-      select: { id: true },
-    });
+    expect(prisma.rubric.findFirst).toHaveBeenCalled();
+    expect(prisma.rubricRelease.findUnique).toHaveBeenCalled();
     expect(prisma.assignmentType.update).toHaveBeenCalledWith({
       where: { id: 'at-1' },
       data: {
