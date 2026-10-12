@@ -11,11 +11,21 @@ const options = {
 describe('root membership filter', () => {
   test('keeps the internal session filter even for an allowed user', async () => {
     const allowed = mock(async () => true);
-    expect(await getRootMembershipWhere({
-      ...options,
-      internal: { membershipId: 'internal-membership', organizationId: 'internal-org' },
-    }, allowed)).toEqual({
-      id: 'internal-membership', organizationId: 'internal-org', isActive: true,
+    expect(
+      await getRootMembershipWhere(
+        {
+          ...options,
+          internal: {
+            membershipId: 'internal-membership',
+            organizationId: 'internal-org',
+          },
+        },
+        allowed
+      )
+    ).toEqual({
+      id: 'internal-membership',
+      organizationId: 'internal-org',
+      isActive: true,
     });
     expect(allowed).not.toHaveBeenCalled();
   });
@@ -34,17 +44,29 @@ describe('root membership filter', () => {
 
   test('does not filter in non-isolated mode', async () => {
     const allowed = mock(async () => false);
-    expect(await getRootMembershipWhere({
-      ...options, isolatedPreviewSeatMode: false,
-    }, allowed)).toBeUndefined();
+    expect(
+      await getRootMembershipWhere(
+        {
+          ...options,
+          isolatedPreviewSeatMode: false,
+        },
+        allowed
+      )
+    ).toBeUndefined();
     expect(allowed).not.toHaveBeenCalled();
   });
 
   test('does not filter when there is no preview seat', async () => {
     const allowed = mock(async () => false);
-    expect(await getRootMembershipWhere({
-      ...options, previewAccessSeat: null,
-    }, allowed)).toBeUndefined();
+    expect(
+      await getRootMembershipWhere(
+        {
+          ...options,
+          previewAccessSeat: null,
+        },
+        allowed
+      )
+    ).toBeUndefined();
     expect(allowed).not.toHaveBeenCalled();
   });
 });
