@@ -114,6 +114,7 @@ async function publishedPerTypeContentByTypeId(
     where: { id: { in: typeIds } },
     select: {
       id: true,
+      title: true,
       scoringScaleJson: true,
       rubricJson: true,
       gradingPromptConfigJson: true,
