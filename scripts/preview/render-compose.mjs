@@ -170,6 +170,7 @@ ${tlsLabels}
       MOCK_ADMIN_ENABLED: ${q(env.slug === 'demo' ? 'true' : 'false')}
       PRIMARY_APP_URL: ${q(env.url)}
       PREVIEW_SLUG: ${q(env.slug)}
+      TESTER_FEEDBACK_ENABLED: ${q(env.slug === 'demo' ? 'true' : 'false')}
       PREVIEW_DOMAIN: ${q(env.domain)}
       PREVIEW_DATA_MODE: ${q(env.dataMode)}
       PREVIEW_ACCESS_GATE: "on"

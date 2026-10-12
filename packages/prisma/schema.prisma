@@ -1773,6 +1773,8 @@ model User {
   password           Password?
   sessions           Session[]
   memberships        OrgMembership[]
+  isTester           Boolean         @default(false)
+  testerFeedback     TesterFeedback[]
   isAdmin            Boolean         @default(false)
   isSuperAdmin       Boolean         @default(false)
   mockAdminGranted   Boolean         @default(false)
@@ -2230,4 +2232,22 @@ model InternalPlatformApiAudit {
 
   @@index([createdAt(sort: Desc)])
   @@index([keyId, createdAt(sort: Desc)])
+}
+
+model TesterFeedback {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  url          String   @db.VarChar(2048)
+  userAgent    String   @db.VarChar(1000)
+  whatIDid     String   @db.VarChar(4000)
+  whatHappened String   @db.VarChar(4000)
+  whatIWish    String   @db.VarChar(4000)
+  severity     String?  @db.VarChar(20)
+  environment  String   @db.VarChar(100)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([createdAt, id])
+  @@index([userId, createdAt])
+  @@index([environment, createdAt])
 }
