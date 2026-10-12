@@ -724,12 +724,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
 type ThesisDeckLink = { label: string; href: string };
 
-/** The deck links for the Thesis-Driven Essay's Modules, by module id. */
+/**
+ * The deck links for the Thesis-Driven Essay's Modules, by module id. Null
+ * when no deck file is there at all, so the page keeps its usual wording.
+ */
 function buildThesisDecks(modules: Array<{ id: string; title: string }>): {
   dayOne: ThesisDeckLink | null;
   byModuleId: Record<string, ThesisDeckLink>;
-} {
+} | null {
   const available = new Set(listAvailableThesisEssayDecks().map((deck) => deck.slug));
+  if (available.size === 0) return null;
   const link = (deck: typeof DAY_ONE_DECK): ThesisDeckLink => ({
     label: deckLabel(deck),
     href: deckHref(deck),
