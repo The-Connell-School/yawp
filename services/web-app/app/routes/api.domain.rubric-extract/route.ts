@@ -5,6 +5,7 @@ import { requireAdmin } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import crypto from 'node:crypto';
 import { computeIpHash, logAllowedUsage } from '~/utils/ai-usage-log.server';
+import { createDeidentifiedLlmLog } from '~/utils/llm-log-deidentify.server';
 import {
   buildRubricExtractSystemPrompt,
   ExtractedRubricSchema,
@@ -136,21 +137,19 @@ export async function action({ request }: ActionFunctionArgs) {
     const parsed = ExtractedRubricSchema.parse(parseFirstJsonValue(responseText));
     const normalized = normalizeExtractedRubric(parsed);
 
-    await prisma.llmLog.create({
-      data: {
-        model,
-        provider: 'anthropic',
-        systemPrompt: system,
-        messages: metadata,
-        response: responseText,
-        inputTokens: message.usage?.input_tokens,
-        outputTokens: message.usage?.output_tokens,
-        totalTokens:
-          (message.usage?.input_tokens ?? 0) +
-          (message.usage?.output_tokens ?? 0),
-        durationMs: Date.now() - startedAt,
-        metadata,
-      },
+    await createDeidentifiedLlmLog(prisma, {
+      model,
+      provider: 'anthropic',
+      systemPrompt: system,
+      messages: metadata,
+      response: responseText,
+      inputTokens: message.usage?.input_tokens,
+      outputTokens: message.usage?.output_tokens,
+      totalTokens:
+        (message.usage?.input_tokens ?? 0) +
+        (message.usage?.output_tokens ?? 0),
+      durationMs: Date.now() - startedAt,
+      metadata,
     });
     await logAllowedUsage({
       route: metadata.route,
@@ -174,18 +173,15 @@ export async function action({ request }: ActionFunctionArgs) {
         ? 'Could not parse rubric data. Try editing manually.'
         : 'Failed to extract rubric. Please try again.';
 
-    await prisma.llmLog
-      .create({
-        data: {
-          model,
-          provider: 'anthropic',
-          systemPrompt: system,
-          messages: metadata,
-          error: error instanceof Error ? error.message : String(error),
-          durationMs: Date.now() - startedAt,
-          metadata,
-        },
-      })
+    await createDeidentifiedLlmLog(prisma, {
+      model,
+      provider: 'anthropic',
+      systemPrompt: system,
+      messages: metadata,
+      error: error instanceof Error ? error.message : String(error),
+      durationMs: Date.now() - startedAt,
+      metadata,
+    })
       .catch(() => {});
 
     return dataResponse(

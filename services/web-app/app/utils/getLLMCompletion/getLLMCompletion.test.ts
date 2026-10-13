@@ -130,17 +130,15 @@ describe('getLLMCompletion', () => {
         metadata: {
           feature: 'tutor',
           kind: 'assignment-module-tutor',
-          organizationId: 'org-1',
-          membershipId: 'mem-1',
-          classId: 'class-1',
           route: 'routes/api.domain.tutor-response',
-          requestId: 'req-1',
           messageCount: 2,
           messageTextLengths: [12, 10],
           hasTools: false,
           toolRoundCount: 0,
           cacheCreationInputTokens: 0,
           cacheReadInputTokens: 0,
+          deidentified: true,
+          deidentificationVersion: 1,
         },
       }),
     });
@@ -353,13 +351,15 @@ describe('getLLMCompletion', () => {
     expect(log.metadata).toMatchObject({
       feature: 'reporter',
       payloadLogging: 'metadata-only',
-      organizationId: 'org-1',
-      membershipId: 'mem-1',
       route: 'routes/api.domain.reporter',
-      requestId: 'req-2',
       messageCount: 3,
       toolRoundCount: 1,
+      deidentified: true,
+      deidentificationVersion: 1,
     });
+    expect(JSON.stringify(log.metadata)).not.toContain('org-1');
+    expect(JSON.stringify(log.metadata)).not.toContain('mem-1');
+    expect(JSON.stringify(log.metadata)).not.toContain('req-2');
     expect(usageLogCreate).toHaveBeenCalledTimes(1);
   });
 
@@ -410,10 +410,9 @@ describe('getLLMCompletion', () => {
       messageCount: 2,
       hasTools: false,
       toolRoundCount: 0,
-      organizationId: 'org-1',
-      membershipId: 'mem-1',
       route: 'routes/api.domain.tutor-response',
-      requestId: 'req-3',
+      deidentified: true,
+      deidentificationVersion: 1,
     });
     expect(usageLogCreate).toHaveBeenCalledTimes(1);
   });
@@ -576,10 +575,9 @@ describe('getLLMCompletion', () => {
       fallbackTriggered: true,
       toolRoundCount: 1,
       hasTools: true,
-      organizationId: 'org-1',
-      membershipId: 'mem-1',
       route: 'routes/api.domain.tutor-response',
-      requestId: 'req-4',
+      deidentified: true,
+      deidentificationVersion: 1,
     });
   });
 

@@ -5,6 +5,7 @@ import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import crypto from 'node:crypto';
 import { computeIpHash, logAllowedUsage } from '~/utils/ai-usage-log.server';
+import { createDeidentifiedLlmLog } from '~/utils/llm-log-deidentify.server';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
 import { enforcePdfExtractorLimits, rateLimitedJson, withSingleFlight } from '~/utils/rate-limit.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
@@ -164,21 +165,19 @@ export async function action({ request }: ActionFunctionArgs) {
       parseFirstJsonValue(responseText)
     );
 
-    await prisma.llmLog.create({
-      data: {
-        model,
-        provider: 'anthropic',
-        systemPrompt: system,
-        messages: metadata,
-        response: responseText,
-        inputTokens: message.usage?.input_tokens,
-        outputTokens: message.usage?.output_tokens,
-        totalTokens:
-          (message.usage?.input_tokens ?? 0) +
-          (message.usage?.output_tokens ?? 0),
-        durationMs: Date.now() - startedAt,
-        metadata,
-      },
+    await createDeidentifiedLlmLog(prisma, {
+      model,
+      provider: 'anthropic',
+      systemPrompt: system,
+      messages: metadata,
+      response: responseText,
+      inputTokens: message.usage?.input_tokens,
+      outputTokens: message.usage?.output_tokens,
+      totalTokens:
+        (message.usage?.input_tokens ?? 0) +
+        (message.usage?.output_tokens ?? 0),
+      durationMs: Date.now() - startedAt,
+      metadata,
     });
     await logAllowedUsage({
       route: metadata.route,
@@ -215,18 +214,15 @@ export async function action({ request }: ActionFunctionArgs) {
         ? 'Could not read a DBQ or LEQ from that PDF. Please fill it in manually.'
         : 'Failed to extract from the PDF. Please try again.';
 
-    await prisma.llmLog
-      .create({
-        data: {
-          model,
-          provider: 'anthropic',
-          systemPrompt: system,
-          messages: metadata,
-          error: error instanceof Error ? error.message : String(error),
-          durationMs: Date.now() - startedAt,
-          metadata,
-        },
-      })
+    await createDeidentifiedLlmLog(prisma, {
+      model,
+      provider: 'anthropic',
+      systemPrompt: system,
+      messages: metadata,
+      error: error instanceof Error ? error.message : String(error),
+      durationMs: Date.now() - startedAt,
+      metadata,
+    })
       .catch(() => {});
 
     return dataResponse(
