@@ -332,17 +332,21 @@ describe('preview certificate manager', () => {
     })).toBe(true);
   });
 
-  test('falls back to ZeroSSL when Let\'s Encrypt hits the registered-domain limit', async () => {
+  test('falls back to ZeroSSL with email EAB when Let\'s Encrypt hits the registered-domain limit', async () => {
     const root = temporaryRoot('preview-cert-zerossl-fallback-');
     const certRoot = path.join(root, 'ingress', 'certs');
     const accountRoot = path.join(root, 'ingress', 'acme');
     const challengeRoot = path.join(root, 'ingress', 'challenges');
     const hostname = '*.preview.yawp.school';
     const issued = createCertificate(root, hostname);
+    const originalAccessKey = process.env.PREVIEW_ZEROSSL_ACCESS_KEY;
     const originalKid = process.env.PREVIEW_ZEROSSL_EAB_KID;
     const originalHmac = process.env.PREVIEW_ZEROSSL_EAB_HMAC_KEY;
-    process.env.PREVIEW_ZEROSSL_EAB_KID = 'zerossl-kid';
-    process.env.PREVIEW_ZEROSSL_EAB_HMAC_KEY = Buffer.from('zerossl-hmac-key').toString('base64url');
+    delete process.env.PREVIEW_ZEROSSL_ACCESS_KEY;
+    delete process.env.PREVIEW_ZEROSSL_EAB_KID;
+    delete process.env.PREVIEW_ZEROSSL_EAB_HMAC_KEY;
+    const hmacKey = Buffer.from('zerossl-hmac-key').toString('base64url');
+    let sawZeroSslEmailEabRequest = false;
     let sawZeroSslExternalAccountBinding = false;
     let zeroAuthPolls = 0;
     let zeroOrderPolls = 0;
@@ -374,6 +378,14 @@ describe('preview certificate manager', () => {
           type: 'urn:ietf:params:acme:error:rateLimited',
           detail: 'too many certificates (50) already issued for "yawp.school" in the last 168h0m0s',
         }, { status: 429 });
+      }
+      if (url === 'https://api.zerossl.com/acme/eab-credentials-email') {
+        sawZeroSslEmailEabRequest = options.body === 'email=admin%40example.com';
+        return response({
+          success: 1,
+          eab_kid: 'zerossl-kid',
+          eab_hmac_key: hmacKey,
+        });
       }
       if (url === 'https://zerossl.test/directory') {
         return response({
@@ -438,15 +450,18 @@ describe('preview certificate manager', () => {
       });
 
       expect(result).toEqual({ hostname, status: 'issued' });
+      expect(sawZeroSslEmailEabRequest).toBe(true);
       expect(sawZeroSslExternalAccountBinding).toBeTruthy();
       expect(JSON.parse(readFileSync(path.join(accountRoot, 'zerossl-eab.json'), 'utf8'))).toEqual({
         kid: 'zerossl-kid',
-        hmacKey: Buffer.from('zerossl-hmac-key').toString('base64url'),
+        hmacKey,
       });
       expect(readFileSync(path.join(certRoot, '_wildcard.preview.yawp.school', 'fullchain.pem'), 'utf8')).toBe(
         issued.cert
       );
     } finally {
+      if (originalAccessKey === undefined) delete process.env.PREVIEW_ZEROSSL_ACCESS_KEY;
+      else process.env.PREVIEW_ZEROSSL_ACCESS_KEY = originalAccessKey;
       if (originalKid === undefined) delete process.env.PREVIEW_ZEROSSL_EAB_KID;
       else process.env.PREVIEW_ZEROSSL_EAB_KID = originalKid;
       if (originalHmac === undefined) delete process.env.PREVIEW_ZEROSSL_EAB_HMAC_KEY;

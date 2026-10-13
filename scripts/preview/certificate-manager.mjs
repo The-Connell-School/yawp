@@ -31,6 +31,7 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_DIRECTORY_URL = 'https://acme-v02.api.letsencrypt.org/directory';
 const ZEROSSL_DIRECTORY_URL = 'https://acme.zerossl.com/v2/DV90';
 const ZEROSSL_EAB_URL = 'https://api.zerossl.com/acme/eab-credentials';
+const ZEROSSL_EAB_EMAIL_URL = 'https://api.zerossl.com/acme/eab-credentials-email';
 
 export function isDirectExecution(moduleUrl, argv1 = process.argv[1]) {
   if (!argv1) return false;
@@ -759,6 +760,7 @@ async function resolveZeroSslEabCredentials({
   accountRoot,
   fetchFn,
   requestTimeoutMs,
+  email = '',
   accessKey = process.env.PREVIEW_ZEROSSL_ACCESS_KEY || '',
   kid = process.env.PREVIEW_ZEROSSL_EAB_KID || '',
   hmacKey = process.env.PREVIEW_ZEROSSL_EAB_HMAC_KEY || '',
@@ -770,10 +772,26 @@ async function resolveZeroSslEabCredentials({
   }
   const stored = await readZeroSslEabCredentials(accountRoot);
   if (stored) return stored;
-  if (!accessKey) return null;
-  const url = new URL(ZEROSSL_EAB_URL);
-  url.searchParams.set('access_key', accessKey);
-  const response = await fetchWithTimeout(fetchFn, url, { method: 'POST' }, requestTimeoutMs);
+  const response = accessKey
+    ? await fetchWithTimeout(
+      fetchFn,
+      new URL(`${ZEROSSL_EAB_URL}?access_key=${encodeURIComponent(accessKey)}`),
+      { method: 'POST' },
+      requestTimeoutMs,
+    )
+    : email
+    ? await fetchWithTimeout(
+      fetchFn,
+      ZEROSSL_EAB_EMAIL_URL,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ email }).toString(),
+      },
+      requestTimeoutMs,
+    )
+    : null;
+  if (!response) return null;
   if (!response.ok) {
     throw new Error(`ZeroSSL EAB credential request failed (${response.status})`);
   }
@@ -786,12 +804,17 @@ async function resolveZeroSslEabCredentials({
   return credentials;
 }
 
-async function cacheConfiguredZeroSslEabCredentials({ accountRoot, fetchFn, requestTimeoutMs }) {
+async function cacheConfiguredZeroSslEabCredentials({
+  accountRoot,
+  fetchFn,
+  requestTimeoutMs,
+  email,
+}) {
   if (
     !process.env.PREVIEW_ZEROSSL_ACCESS_KEY
     && !(process.env.PREVIEW_ZEROSSL_EAB_KID && process.env.PREVIEW_ZEROSSL_EAB_HMAC_KEY)
   ) return;
-  await resolveZeroSslEabCredentials({ accountRoot, fetchFn, requestTimeoutMs });
+  await resolveZeroSslEabCredentials({ accountRoot, fetchFn, requestTimeoutMs, email });
 }
 
 function isLetsEncryptRegisteredDomainRateLimit(error) {
@@ -816,7 +839,7 @@ export async function ensureWildcardCertificate({
 }) {
   const hostname = wildcardCertificateHostname(domain);
   const { keyPath, certPath } = certificatePaths(certRoot, hostname);
-  await cacheConfiguredZeroSslEabCredentials({ accountRoot, fetchFn, requestTimeoutMs });
+  await cacheConfiguredZeroSslEabCredentials({ accountRoot, fetchFn, requestTimeoutMs, email });
   try {
     const certPem = await readFile(certPath, 'utf8');
     if (
@@ -851,10 +874,11 @@ export async function ensureWildcardCertificate({
       accountRoot,
       fetchFn,
       requestTimeoutMs,
+      email,
     });
     if (!externalAccountBinding) {
       throw new Error(
-        `${error.message}; ZeroSSL fallback is not configured (set PREVIEW_ZEROSSL_ACCESS_KEY or PREVIEW_ZEROSSL_EAB_KID/PREVIEW_ZEROSSL_EAB_HMAC_KEY)`,
+        `${error.message}; ZeroSSL fallback is not configured (set PREVIEW_ACME_EMAIL, PREVIEW_ZEROSSL_ACCESS_KEY, or PREVIEW_ZEROSSL_EAB_KID/PREVIEW_ZEROSSL_EAB_HMAC_KEY)`,
       );
     }
     return issueCertificate({
