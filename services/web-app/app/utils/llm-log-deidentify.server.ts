@@ -29,6 +29,8 @@ type LlmLogCreateData = {
 
 const NAME_KEY_RE =
   /(^|_|\b)(name|firstName|lastName|fullName|displayName|preferredName|studentName|teacherName|username|userName|email)(s)?$/i;
+const FILE_NAME_KEY_RE =
+  /(^|[_-])file[_-]?name$|^fileName$|^filename$|^originalFileName$|^originalFilename$|^uploadFileName$|^uploadedFileName$/i;
 const IDENTIFIER_KEY_RE =
   /(^id$|ids$|Id$|Ids$|_id$|_ids$|identifier$|email$|username$|userName$|name$|firstName$|lastName$|fullName$|displayName$|preferredName$|studentName$|teacherName$)/;
 
@@ -55,7 +57,7 @@ function collectKnownPhrases(value: unknown, phrases = new Set<string>()) {
   if (!isPlainObject(value)) return phrases;
 
   for (const [key, child] of Object.entries(value)) {
-    if (NAME_KEY_RE.test(key)) {
+    if (NAME_KEY_RE.test(key) || FILE_NAME_KEY_RE.test(key)) {
       if (Array.isArray(child)) {
         for (const item of child) addPhrase(phrases, item);
       } else {
@@ -107,7 +109,7 @@ function scrubJson(value: unknown, knownPhrases: Set<string>): Jsonish {
 
   const scrubbed: Record<string, Jsonish> = {};
   for (const [key, child] of Object.entries(value)) {
-    if (IDENTIFIER_KEY_RE.test(key)) continue;
+    if (IDENTIFIER_KEY_RE.test(key) || FILE_NAME_KEY_RE.test(key)) continue;
     scrubbed[key] = scrubJson(child, knownPhrases);
   }
   return scrubbed;

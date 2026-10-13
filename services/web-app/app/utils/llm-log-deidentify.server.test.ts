@@ -12,7 +12,9 @@ describe('LlmLog de-identification', () => {
         {
           role: 'user',
           name: 'mrivera',
-          content: 'I am Maria Rivera, @mrivera, email maria.rivera@example.edu.',
+          fileName: 'Maria Rivera essay.pdf',
+          content:
+            'I am Maria Rivera, @mrivera, email maria.rivera@example.edu. The uploaded file is Maria Rivera essay.pdf.',
         },
       ],
       response: 'Maria Rivera should revise the thesis.',
@@ -26,6 +28,10 @@ describe('LlmLog de-identification', () => {
         studentName: 'Maria Rivera',
         studentEmail: 'maria.rivera@example.edu',
         username: 'mrivera',
+        fileName: 'Maria Rivera essay.pdf',
+        upload: {
+          originalFilename: 'Maria Rivera notes.pdf',
+        },
       },
     });
 
@@ -36,7 +42,8 @@ describe('LlmLog de-identification', () => {
     expect(data.messages).toEqual([
       {
         role: 'user',
-        content: 'I am [name], @[username], email [email].',
+        content:
+          'I am [name], @[username], email [email]. The uploaded file is [name].',
       },
     ]);
     expect(data.metadata).toMatchObject({
@@ -47,6 +54,10 @@ describe('LlmLog de-identification', () => {
     });
     expect(serialized).not.toContain('Maria');
     expect(serialized).not.toContain('Rivera');
+    expect(serialized).not.toContain('Maria Rivera essay.pdf');
+    expect(serialized).not.toContain('Maria Rivera notes.pdf');
+    expect(serialized).not.toContain('fileName');
+    expect(serialized).not.toContain('originalFilename');
     expect(serialized).not.toContain('maria.rivera@example.edu');
     expect(serialized).not.toContain('org-1');
     expect(serialized).not.toContain('mem-1');

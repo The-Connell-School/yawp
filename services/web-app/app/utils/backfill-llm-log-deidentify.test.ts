@@ -48,6 +48,30 @@ describe('LlmLog de-identification backfill', () => {
               route: 'routes/test',
               studentName: 'Jane Student',
               membershipId: 'mem-1',
+              fileName: 'Jane Student essay.pdf',
+            },
+          },
+          {
+            id: 'log-2',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            systemPrompt: 'Extract text from the uploaded file.',
+            messages: [
+              {
+                role: 'user',
+                fileName: 'Alex Author draft.pdf',
+                content: 'Please extract Alex Author draft.pdf',
+              },
+            ],
+            response: 'Extracted text from Alex Author draft.pdf',
+            error: null,
+            inputTokens: 1,
+            outputTokens: 2,
+            totalTokens: 3,
+            durationMs: 4,
+            metadata: {
+              route: 'routes/test',
+              fileName: 'Alex Author draft.pdf',
             },
           },
         ]),
@@ -69,9 +93,9 @@ describe('LlmLog de-identification backfill', () => {
     });
 
     expect(summary).toEqual({
-      scanned: 1,
+      scanned: 2,
       skipped: 0,
-      changed: 1,
+      changed: 2,
       updated: 0,
       batches: 1,
       dryRun: true,
@@ -80,5 +104,7 @@ describe('LlmLog de-identification backfill', () => {
     expect(logs.join('\n')).not.toContain('Jane');
     expect(logs.join('\n')).not.toContain('jane@example.edu');
     expect(logs.join('\n')).not.toContain('mem-1');
+    expect(logs.join('\n')).not.toContain('Jane Student essay.pdf');
+    expect(logs.join('\n')).not.toContain('Alex Author draft.pdf');
   });
 });
