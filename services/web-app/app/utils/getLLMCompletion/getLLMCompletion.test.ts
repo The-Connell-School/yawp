@@ -363,6 +363,54 @@ describe('getLLMCompletion', () => {
     expect(usageLogCreate).toHaveBeenCalledTimes(1);
   });
 
+  test('de-identifies attribution identifiers and ipHash before writing LlmLog rows', async () => {
+    const ipHash =
+      'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
+    anthropicCreate.mockResolvedValueOnce(
+      anthropicTextResponse(`Reply for org-write-1 hash ${ipHash}`)
+    );
+
+    await getLLMCompletion({
+      model: 'claude-sonnet-4-6',
+      system: `System for org-write-1 membership mem-write-1 request req-write-1 hash ${ipHash}.`,
+      messages: [
+        {
+          role: 'user',
+          content:
+            'Please help membership mem-write-1 for organization org-write-1.',
+        },
+      ],
+      metadata: {
+        feature: 'tutor',
+        userId: 'user-write-1',
+      },
+      attribution: {
+        organizationId: 'org-write-1',
+        membershipId: 'mem-write-1',
+        classId: 'class-write-1',
+        route: 'routes/api.domain.tutor-response',
+        requestId: 'req-write-1',
+        ipHash,
+      },
+    });
+
+    const log = llmLogCreate.mock.calls[0]?.[0].data;
+    const serialized = JSON.stringify(log);
+    expect(log.metadata).toMatchObject({
+      feature: 'tutor',
+      route: 'routes/api.domain.tutor-response',
+      deidentified: true,
+      deidentificationVersion: 1,
+    });
+    expect(serialized).not.toContain('org-write-1');
+    expect(serialized).not.toContain('mem-write-1');
+    expect(serialized).not.toContain('class-write-1');
+    expect(serialized).not.toContain('req-write-1');
+    expect(serialized).not.toContain('user-write-1');
+    expect(serialized).not.toContain(ipHash);
+    expect(serialized).not.toContain('ipHash');
+  });
+
   test('falls back to gpt-4o-mini and opens the circuit after Anthropic 529', async () => {
     const controller = new AbortController();
     const anthropicError = Object.assign(new Error('Overloaded'), {

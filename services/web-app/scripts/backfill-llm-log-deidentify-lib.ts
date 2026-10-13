@@ -29,6 +29,7 @@ export type BackfillSummary = {
   scanned: number;
   skipped: number;
   changed: number;
+  textChanged: number;
   updated: number;
   batches: number;
   dryRun: boolean;
@@ -141,6 +142,18 @@ function changed(row: LlmLogRow, data: ReturnType<typeof deidentifyLlmLogData>) 
   );
 }
 
+function textChanged(
+  row: LlmLogRow,
+  data: ReturnType<typeof deidentifyLlmLogData>
+) {
+  return (
+    row.systemPrompt !== (data.systemPrompt ?? null) ||
+    JSON.stringify(row.messages) !== JSON.stringify(data.messages) ||
+    row.response !== (data.response ?? null) ||
+    row.error !== (data.error ?? null)
+  );
+}
+
 export async function backfillLlmLogDeidentification({
   prisma,
   options,
@@ -154,6 +167,7 @@ export async function backfillLlmLogDeidentification({
     scanned: 0,
     skipped: 0,
     changed: 0,
+    textChanged: 0,
     updated: 0,
     batches: 0,
     dryRun: options.dryRun,
@@ -184,6 +198,7 @@ export async function backfillLlmLogDeidentification({
       }
 
       summary.changed += 1;
+      if (textChanged(row, data)) summary.textChanged += 1;
       if (!options.dryRun) {
         await prisma.llmLog.update({
           where: { id: row.id },
@@ -201,7 +216,7 @@ export async function backfillLlmLogDeidentification({
 
     cursor = { id: rows[rows.length - 1].id };
     log(
-      `llmlog deidentify batch=${summary.batches} scanned=${summary.scanned} changed=${summary.changed} updated=${summary.updated} dryRun=${summary.dryRun}`
+      `llmlog deidentify batch=${summary.batches} scanned=${summary.scanned} changed=${summary.changed} textChanged=${summary.textChanged} updated=${summary.updated} dryRun=${summary.dryRun}`
     );
     if (rows.length < options.batchSize) break;
   }

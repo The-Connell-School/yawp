@@ -3,7 +3,7 @@ const EMAIL_RE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const USERNAME_RE = /(^|[\s([{"'])@([a-zA-Z0-9_][a-zA-Z0-9_.-]{1,31})\b/g;
 const UUID_RE =
   /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi;
-const CUID_RE = /\bcm[a-z0-9]{20,}\b/gi;
+const CUID_RE = /\bc[a-z0-9]{20,}\b/gi;
 
 type Jsonish =
   | null
@@ -32,7 +32,7 @@ const NAME_KEY_RE =
 const FILE_NAME_KEY_RE =
   /(^|[_-])file[_-]?name$|^fileName$|^filename$|^originalFileName$|^originalFilename$|^uploadFileName$|^uploadedFileName$/i;
 const IDENTIFIER_KEY_RE =
-  /(^id$|ids$|Id$|Ids$|_id$|_ids$|identifier$|email$|username$|userName$|name$|firstName$|lastName$|fullName$|displayName$|preferredName$|studentName$|teacherName$)/;
+  /(^id$|^ids$|Id$|Ids$|ID$|IDs$|_id$|_ids$|-id$|-ids$|identifier$|Identifier$|email$|Email$|username$|userName$|UserName$|name$|Name$|firstName$|FirstName$|lastName$|LastName$|fullName$|FullName$|displayName$|DisplayName$|preferredName$|PreferredName$|studentName$|StudentName$|teacherName$|TeacherName$|ipHash$|IpHash$|IPHash$|clientIpHash$|ClientIpHash$)/;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -48,6 +48,21 @@ function addPhrase(phrases: Set<string>, value: unknown) {
   }
 }
 
+function addStringLeaves(phrases: Set<string>, value: unknown) {
+  if (typeof value === 'string') {
+    addPhrase(phrases, value);
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) addStringLeaves(phrases, item);
+    return;
+  }
+
+  if (!isPlainObject(value)) return;
+  for (const child of Object.values(value)) addStringLeaves(phrases, child);
+}
+
 function collectKnownPhrases(value: unknown, phrases = new Set<string>()) {
   if (Array.isArray(value)) {
     for (const item of value) collectKnownPhrases(item, phrases);
@@ -57,12 +72,12 @@ function collectKnownPhrases(value: unknown, phrases = new Set<string>()) {
   if (!isPlainObject(value)) return phrases;
 
   for (const [key, child] of Object.entries(value)) {
-    if (NAME_KEY_RE.test(key) || FILE_NAME_KEY_RE.test(key)) {
-      if (Array.isArray(child)) {
-        for (const item of child) addPhrase(phrases, item);
-      } else {
-        addPhrase(phrases, child);
-      }
+    if (
+      NAME_KEY_RE.test(key) ||
+      FILE_NAME_KEY_RE.test(key) ||
+      IDENTIFIER_KEY_RE.test(key)
+    ) {
+      addStringLeaves(phrases, child);
     }
     collectKnownPhrases(child, phrases);
   }

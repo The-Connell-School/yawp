@@ -36,10 +36,11 @@ describe('LlmLog de-identification backfill', () => {
             id: 'log-1',
             model: 'claude-sonnet-4-6',
             provider: 'anthropic',
-            systemPrompt: 'Help Jane Student.',
+            systemPrompt:
+              'Help Jane Student for membership mem-1 and organization org-1.',
             messages: [{ role: 'user', content: 'Jane email jane@example.edu' }],
-            response: 'Jane should revise.',
-            error: null,
+            response: 'Jane should revise request req-1.',
+            error: 'Failed for user cyyyyyyyyyyyyyyyyyyyy',
             inputTokens: 1,
             outputTokens: 2,
             totalTokens: 3,
@@ -47,7 +48,10 @@ describe('LlmLog de-identification backfill', () => {
             metadata: {
               route: 'routes/test',
               studentName: 'Jane Student',
+              organizationId: 'org-1',
               membershipId: 'mem-1',
+              requestId: 'req-1',
+              userId: 'cyyyyyyyyyyyyyyyyyyyy',
               fileName: 'Jane Student essay.pdf',
             },
           },
@@ -96,6 +100,7 @@ describe('LlmLog de-identification backfill', () => {
       scanned: 2,
       skipped: 0,
       changed: 2,
+      textChanged: 2,
       updated: 0,
       batches: 1,
       dryRun: true,
@@ -103,8 +108,61 @@ describe('LlmLog de-identification backfill', () => {
     expect(updates).toEqual([]);
     expect(logs.join('\n')).not.toContain('Jane');
     expect(logs.join('\n')).not.toContain('jane@example.edu');
+    expect(logs.join('\n')).not.toContain('org-1');
     expect(logs.join('\n')).not.toContain('mem-1');
+    expect(logs.join('\n')).not.toContain('req-1');
+    expect(logs.join('\n')).not.toContain('cyyyyyyyyyyyyyyyyyyyy');
     expect(logs.join('\n')).not.toContain('Jane Student essay.pdf');
     expect(logs.join('\n')).not.toContain('Alex Author draft.pdf');
+  });
+
+  test('dry-run counts text changes when only ipHash appears in text and metadata', async () => {
+    const ipHash =
+      'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210';
+    const prisma: BackfillPrisma = {
+      llmLog: {
+        findMany: mock(async () => [
+          {
+            id: 'log-ip-hash',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            systemPrompt: `Use attribution ${ipHash}.`,
+            messages: [{ role: 'user', content: `Request hash ${ipHash}` }],
+            response: `Response hash ${ipHash}`,
+            error: null,
+            inputTokens: 1,
+            outputTokens: 2,
+            totalTokens: 3,
+            durationMs: 4,
+            metadata: {
+              route: 'routes/test',
+              ipHash,
+            },
+          },
+        ]),
+        update: mock(async () => {
+          throw new Error('dry-run must not update rows');
+        }),
+      },
+    };
+
+    const summary = await backfillLlmLogDeidentification({
+      prisma,
+      options: {
+        dryRun: true,
+        batchSize: 10,
+        environment: 'demo',
+        snapshotConfirmed: false,
+      },
+      log: () => undefined,
+    });
+
+    expect(summary).toMatchObject({
+      scanned: 1,
+      changed: 1,
+      textChanged: 1,
+      updated: 0,
+      dryRun: true,
+    });
   });
 });
