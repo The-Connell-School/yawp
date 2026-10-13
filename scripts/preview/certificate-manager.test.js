@@ -332,6 +332,124 @@ describe('preview certificate manager', () => {
     })).toBe(true);
   });
 
+  test('falls back to ZeroSSL when Let\'s Encrypt hits the registered-domain limit', async () => {
+    const root = temporaryRoot('preview-cert-zerossl-fallback-');
+    const certRoot = path.join(root, 'ingress', 'certs');
+    const accountRoot = path.join(root, 'ingress', 'acme');
+    const challengeRoot = path.join(root, 'ingress', 'challenges');
+    const hostname = '*.preview.yawp.school';
+    const issued = createCertificate(root, hostname);
+    const originalKid = process.env.PREVIEW_ZEROSSL_EAB_KID;
+    const originalHmac = process.env.PREVIEW_ZEROSSL_EAB_HMAC_KEY;
+    process.env.PREVIEW_ZEROSSL_EAB_KID = 'zerossl-kid';
+    process.env.PREVIEW_ZEROSSL_EAB_HMAC_KEY = Buffer.from('zerossl-hmac-key').toString('base64url');
+    let sawZeroSslExternalAccountBinding = false;
+    let zeroAuthPolls = 0;
+    let zeroOrderPolls = 0;
+    const response = (body, { status = 200, location, nonce = 'nonce-next' } = {}) => new Response(
+      typeof body === 'string' ? body : JSON.stringify(body),
+      {
+        status,
+        headers: {
+          'content-type': typeof body === 'string' ? 'application/pem-certificate-chain' : 'application/json',
+          'replay-nonce': nonce,
+          ...(location ? { location } : {}),
+        },
+      },
+    );
+    const fetchFn = async (url, options = {}) => {
+      if (url === 'https://acme-v02.api.letsencrypt.org/directory') {
+        return response({
+          newNonce: 'https://le.test/nonce',
+          newAccount: 'https://le.test/account',
+          newOrder: 'https://le.test/order/new',
+        });
+      }
+      if (url === 'https://le.test/nonce') return response('', { nonce: 'le-nonce-1' });
+      if (url === 'https://le.test/account') {
+        return response({}, { status: 201, location: 'https://le.test/account/1' });
+      }
+      if (url === 'https://le.test/order/new') {
+        return response({
+          type: 'urn:ietf:params:acme:error:rateLimited',
+          detail: 'too many certificates (50) already issued for "yawp.school" in the last 168h0m0s',
+        }, { status: 429 });
+      }
+      if (url === 'https://zerossl.test/directory') {
+        return response({
+          newNonce: 'https://zerossl.test/nonce',
+          newAccount: 'https://zerossl.test/account',
+          newOrder: 'https://zerossl.test/order/new',
+        });
+      }
+      if (url === 'https://zerossl.test/nonce') return response('', { nonce: 'zero-nonce-1' });
+      if (url === 'https://zerossl.test/account') {
+        const jws = JSON.parse(options.body);
+        const payload = JSON.parse(Buffer.from(jws.payload, 'base64url').toString('utf8'));
+        sawZeroSslExternalAccountBinding = payload.externalAccountBinding?.protected
+          && payload.externalAccountBinding?.payload
+          && payload.externalAccountBinding?.signature;
+        return response({}, { status: 201, location: 'https://zerossl.test/account/1' });
+      }
+      if (url === 'https://zerossl.test/order/new') {
+        return response({
+          authorizations: ['https://zerossl.test/auth/1'],
+          finalize: 'https://zerossl.test/order/1/finalize',
+        }, { status: 201, location: 'https://zerossl.test/order/1' });
+      }
+      if (url === 'https://zerossl.test/auth/1') {
+        zeroAuthPolls += 1;
+        return response(zeroAuthPolls === 1 ? {
+          status: 'pending',
+          identifier: { type: 'dns', value: hostname },
+          challenges: [{ type: 'dns-01', token: 'zero_dns_token-1', url: 'https://zerossl.test/challenge/1' }],
+        } : { status: 'valid' });
+      }
+      if (url === 'https://zerossl.test/challenge/1') return response({ status: 'pending' });
+      if (url === 'https://zerossl.test/order/1/finalize') return response({ status: 'processing' });
+      if (url === 'https://zerossl.test/order/1') {
+        zeroOrderPolls += 1;
+        return response(zeroOrderPolls === 1
+          ? { status: 'processing' }
+          : { status: 'valid', certificate: 'https://zerossl.test/certificate/1' });
+      }
+      if (url === 'https://zerossl.test/certificate/1') return response(issued.cert);
+      throw new Error(`Unexpected ACME URL ${url}`);
+    };
+
+    try {
+      const result = await ensureWildcardCertificate({
+        domain: 'preview.yawp.school',
+        certRoot,
+        accountRoot,
+        challengeRoot,
+        email: 'admin@example.com',
+        fetchFn,
+        pollIntervalMs: 0,
+        zeroSslDirectoryUrl: 'https://zerossl.test/directory',
+        dnsProvider: {
+          present: async () => ({ recordName: '_acme-challenge.preview.yawp.school.', recordValue: 'value', zoneId: 'Z1' }),
+          cleanup: async () => {},
+        },
+        createKeyAndCsr: async () => ({
+          privateKeyPem: issued.key,
+          csrDer: Buffer.from('test-csr'),
+        }),
+      });
+
+      expect(result).toEqual({ hostname, status: 'issued' });
+      expect(sawZeroSslExternalAccountBinding).toBeTruthy();
+      expect(readFileSync(path.join(certRoot, '_wildcard.preview.yawp.school', 'fullchain.pem'), 'utf8')).toBe(
+        issued.cert
+      );
+    } finally {
+      if (originalKid === undefined) delete process.env.PREVIEW_ZEROSSL_EAB_KID;
+      else process.env.PREVIEW_ZEROSSL_EAB_KID = originalKid;
+      if (originalHmac === undefined) delete process.env.PREVIEW_ZEROSSL_EAB_HMAC_KEY;
+      else process.env.PREVIEW_ZEROSSL_EAB_HMAC_KEY = originalHmac;
+    }
+  });
+
   test('Route53 DNS-01 provider writes only the wildcard challenge TXT record', async () => {
     const calls = [];
     const expectedDigest = Buffer.from(createHash('sha256').update('authorization').digest())
