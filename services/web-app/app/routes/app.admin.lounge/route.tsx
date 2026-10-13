@@ -118,7 +118,7 @@ export default function AdminLoungeRoute() {
   const errors = actionData && 'errors' in actionData ? actionData.errors : undefined;
 
   return (
-    <div className="flex flex-col gap-8 py-2">
+    <div className="mx-auto flex max-w-5xl flex-col gap-8 p-6">
       <div className="flex flex-wrap items-baseline gap-4">
         <h1 className="text-2xl font-bold">Lounge inbox</h1>
         <p className="text-sm text-muted-foreground">
