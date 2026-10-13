@@ -1,8 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 
+import {
+  hostedRepeatSignupSkipArtifact,
+  resolveHostedRepeatSignupGuard,
+} from '../e2e/hosted-demo-guards';
 import {
   classifySuiteSpecs,
   focusedHostedDemoSkipArtifacts,
@@ -89,6 +93,37 @@ describe('free-tier demo suite runner manifest', () => {
     expect(await readFile(join(root, suiteHostedDemoSkipArtifact), 'utf8')).toContain(
       'Hosted demo free-tier suite cases skipped.'
     );
+  });
+
+  test('keeps repeat-signup hosted guard skip-before-mutate with base URL and token only', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'free-tier-repeat-hosted-guard-'));
+    const attemptedHostedRequests: string[] = [];
+    const guard = resolveHostedRepeatSignupGuard({
+      DEMO_FREE_TIER_BASE_URL: 'https://demo.example.test',
+      DEMO_FREE_TIER_REPEAT_EVENT_TOKEN: 'repeat-token',
+    });
+
+    if (guard.status === 'ready') {
+      attemptedHostedRequests.push(`/free?t=${encodeURIComponent(guard.code)}`);
+    }
+
+    expect(attemptedHostedRequests).toEqual([]);
+    expect(guard.status).toBe('skip');
+    if (guard.status !== 'skip') {
+      throw new Error('Expected hosted repeat-signup guard to skip before navigation.');
+    }
+    expect(guard.missing).toEqual([
+      'DEMO_FREE_TIER_REPEAT_EMAIL',
+      'DEMO_FREE_TIER_REPEAT_ALLOW_SUBMIT=true',
+    ]);
+    expect(guard.artifactName).toBe(hostedRepeatSignupSkipArtifact);
+    expect(guard.artifactBody).toContain(
+      'no hosted /free?t= navigation or request was attempted'
+    );
+
+    await writeFile(join(root, guard.artifactName), guard.artifactBody);
+
+    expect(await readdir(root)).toEqual([hostedRepeatSignupSkipArtifact]);
   });
 
   test('uses explicit PW_EXECUTABLE_PATH before cached browser discovery', async () => {

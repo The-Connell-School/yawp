@@ -13,6 +13,7 @@ import type { Page } from '@playwright/test';
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient, type E2EPrismaClient } from '../prisma-client';
 import { setFreeTierFlag } from '../feature-flags';
+import { resolveHostedRepeatSignupGuard } from '../hosted-demo-guards';
 
 const OUT =
   process.env.QA_SCREENSHOT_DIR?.trim() ||
@@ -265,71 +266,27 @@ test.describe('Free-tier repeat sign-up QA', () => {
   });
 
   test('hosted demo repeat sign-up fixture', async ({ browser }) => {
-    const required = ['DEMO_FREE_TIER_BASE_URL', 'DEMO_FREE_TIER_REPEAT_EVENT_TOKEN'];
-    const missing = required.filter((key) => !process.env[key]?.trim());
-    if (missing.length) {
-      await note(
-        'hosted-demo-repeat-signup-skip.txt',
-        [
-          'Hosted demo qa-repeat-signup run skipped.',
-          `Missing env/access: ${missing.join(', ')}`,
-          '',
-          'Local faithful demo stand-in covers /free?t= first submission, same-browser repeat submission, cleared-cookie repeat submission, and same-email reuse from a fresh context.',
-        ].join('\n')
-      );
-      test.skip(true, `Hosted demo access missing: ${missing.join(', ')}`);
-    }
-
-    const baseUrl = process.env.DEMO_FREE_TIER_BASE_URL!.trim().replace(/\/+$/, '');
-    const code = process.env.DEMO_FREE_TIER_REPEAT_EVENT_TOKEN!.trim();
-    const fixtureEmail = process.env.DEMO_FREE_TIER_REPEAT_EMAIL?.trim();
-    const allowSubmit = process.env.DEMO_FREE_TIER_REPEAT_ALLOW_SUBMIT === 'true';
-    if (!fixtureEmail || !allowSubmit) {
-      await note(
-        'hosted-demo-repeat-signup-skip.txt',
-        [
-          'Hosted demo qa-repeat-signup mutation run skipped.',
-          'DEMO_FREE_TIER_BASE_URL and DEMO_FREE_TIER_REPEAT_EVENT_TOKEN were present, so the suite verified the hosted event page can render without a 500.',
-          'Repeat submissions require a disposable hosted fixture email plus DEMO_FREE_TIER_REPEAT_ALLOW_SUBMIT=true to avoid unintended outbound email sends.',
-          `Missing guarded fixture env: ${[
-            !fixtureEmail ? 'DEMO_FREE_TIER_REPEAT_EMAIL' : null,
-            !allowSubmit ? 'DEMO_FREE_TIER_REPEAT_ALLOW_SUBMIT=true' : null,
-          ]
-            .filter(Boolean)
-            .join(', ')}`,
-        ].join('\n')
-      );
-
-      const context = await browser.newContext({ baseURL: baseUrl });
-      try {
-        const page = await context.newPage();
-        const response = await page.goto(`/free?t=${encodeURIComponent(code)}`);
-        expect(response?.status()).toBeLessThan(500);
-        await expect(page.locator('body')).not.toContainText(
-          /stack trace|traceback|internal server error/i
-        );
-        await shot(page, 'hosted-demo-event-page.png');
-      } finally {
-        await context.close();
-      }
-      test.skip(true, 'Hosted demo repeat mutation fixture env is missing.');
+    const guard = resolveHostedRepeatSignupGuard();
+    if (guard.status === 'skip') {
+      await note(guard.artifactName, guard.artifactBody);
+      test.skip(true, guard.skipMessage);
       return;
     }
 
     const run = Date.now().toString(36);
     const input = {
-      code,
+      code: guard.code,
       name: `QA Repeat Signup Hosted ${run}`,
-      email: fixtureEmail,
+      email: guard.fixtureEmail,
       schoolName: `QA Hosted Demo ${run}`,
       location: 'Demo QA',
       gradeLevel: '9',
     };
 
-    const context = await browser.newContext({ baseURL: baseUrl });
+    const context = await browser.newContext({ baseURL: guard.baseUrl });
     try {
       const page = await context.newPage();
-      await page.goto(`/free?t=${encodeURIComponent(code)}`);
+      await page.goto(`/free?t=${encodeURIComponent(guard.code)}`);
       await expect(page.getByText('Use your event link to continue.')).toBeVisible();
       await shot(page, 'hosted-demo-01-before-submit.png');
       await submitEventSignup(page, input);
@@ -350,7 +307,7 @@ test.describe('Free-tier repeat sign-up QA', () => {
       await context.close();
     }
 
-    const clearedContext = await browser.newContext({ baseURL: baseUrl });
+    const clearedContext = await browser.newContext({ baseURL: guard.baseUrl });
     try {
       const clearedPage = await clearedContext.newPage();
       await submitEventSignup(clearedPage, {
