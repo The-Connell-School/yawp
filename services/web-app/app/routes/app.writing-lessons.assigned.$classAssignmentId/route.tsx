@@ -20,7 +20,9 @@ import { generatePracticeFeedback } from '~/utils/writing-lessons/practice-feedb
 import { detectPracticeGuardrail } from '~/utils/writing-lessons/practice-feedback.shared';
 import { getQuickWritingLessonContext, getQuickWritingLessonRecap } from '~/utils/writing-lessons/static-lessons.server';
 import {
+  AiFreeTierBudgetExceededError,
   AiRateLimitError,
+  aiFreeTierBudgetExceededMessage,
   reserveAiRequest,
 } from '~/utils/ai-admission.server';
 
@@ -167,6 +169,24 @@ export async function action({ request, params }: ActionFunctionArgs) {
         policy: COMPOSITION_ADMISSION_POLICY,
       });
     } catch (error) {
+      if (error instanceof AiFreeTierBudgetExceededError) {
+        return dataResponse<AssignedActionData>(
+          {
+            kind: 'composition',
+            position: safePosition,
+            feedback: {
+              status: 'needs_revision',
+              summary: aiFreeTierBudgetExceededMessage(),
+              degraded: false,
+              strengths: [],
+              focus: [],
+              encouragement: '',
+            } as any,
+            recorded: false,
+          },
+          { status: 402 }
+        );
+      }
       if (error instanceof AiRateLimitError) {
         return dataResponse<AssignedActionData>(
           {
