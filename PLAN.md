@@ -4,4 +4,5 @@
 - Confirm `/app/tester/feedback` and `/api/admin/tester-feedback` no longer expose list/export behavior, while `/api/internal/v1/tester-feedback` keeps bounded list/export and CSV escaping semantics.
 - Run focused platform route/API tests, Prisma migration/package checks needed by CI, and a touched-route TypeScript check.
 - Check PR #470 CI and record whether remaining failures are actionable or external preview/ACME issues.
-- Push any focused fixes, refresh PR notes if needed, and report exact blockers in `BUILD_RESULT.md` / `STATUS.md`.
+- Reviewer fix: recapture `/app/tester/feedback` from the real moved/gated platform route with an authenticated session, replacing the rejected visual harness artifact.
+- Push any focused fixes if needed, refresh PR notes if screenshots/tests change, and report exact evidence in `BUILD_RESULT.md` / `STATUS.md`.
