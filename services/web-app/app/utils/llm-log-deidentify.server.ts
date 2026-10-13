@@ -4,6 +4,9 @@ const USERNAME_RE = /(^|[\s([{"'])@([a-zA-Z0-9_][a-zA-Z0-9_.-]{1,31})\b/g;
 const UUID_RE =
   /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi;
 const CUID_RE = /\bc[a-z0-9]{20,}\b/gi;
+const SSN_RE = /\b\d{3}-\d{2}-\d{4}\b/g;
+const PHONE_RE =
+  /(?<!\w)(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}(?!\w)/g;
 
 type Jsonish =
   | null
@@ -94,6 +97,8 @@ function scrubString(value: string, knownPhrases: Set<string>) {
     .replace(EMAIL_RE, '[email]')
     .replace(UUID_RE, '[id]')
     .replace(CUID_RE, '[id]')
+    .replace(SSN_RE, '[id]')
+    .replace(PHONE_RE, '[phone]')
     .replace(USERNAME_RE, (_match, prefix) => `${prefix}@[username]`);
 
   const phrases = [...knownPhrases].sort((a, b) => b.length - a.length);

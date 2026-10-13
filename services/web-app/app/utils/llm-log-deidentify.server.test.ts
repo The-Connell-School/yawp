@@ -7,14 +7,14 @@ describe('LlmLog de-identification', () => {
       model: 'claude-sonnet-4-6',
       provider: 'anthropic',
       systemPrompt:
-        'Help Maria Rivera at maria.rivera@example.edu with class cmabc12345678901234567890 for membership mem-1, IP hash 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef, and user czzzzzzzzzzzzzzzzzzzz.',
+        'Help Maria Rivera at maria.rivera@example.edu with class cmabc12345678901234567890 for membership mem-1, IP hash 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef, phone 555-867-5309, SSN 123-45-6789, and user czzzzzzzzzzzzzzzzzzzz.',
       messages: [
         {
           role: 'user',
           name: 'mrivera',
           fileName: 'Maria Rivera essay.pdf',
           content:
-            'I am Maria Rivera, @mrivera, email maria.rivera@example.edu. The uploaded file is Maria Rivera essay.pdf for org-1.',
+            'I am Maria Rivera, @mrivera, email maria.rivera@example.edu, and phone (555) 867-5309. The uploaded file is Maria Rivera essay.pdf for org-1.',
         },
       ],
       response: 'Maria Rivera should revise the thesis for req-1.',
@@ -42,12 +42,13 @@ describe('LlmLog de-identification', () => {
     const serialized = JSON.stringify(data);
 
     expect(data.systemPrompt).toContain('Help [name]');
+    expect(data.systemPrompt).toContain('phone [phone], SSN [id]');
     expect(data.response).toContain('[name] should revise');
     expect(data.messages).toEqual([
       {
         role: 'user',
         content:
-          'I am [name], @[username], email [email]. The uploaded file is [name] for [name].',
+          'I am [name], @[username], email [email], and phone [phone]. The uploaded file is [name] for [name].',
       },
     ]);
     expect(data.metadata).toMatchObject({
@@ -72,5 +73,8 @@ describe('LlmLog de-identification', () => {
     expect(serialized).not.toContain('ipHash');
     expect(serialized).not.toContain('czzzzzzzzzzzzzzzzzzzz');
     expect(serialized).not.toContain('student-1');
+    expect(serialized).not.toContain('555-867-5309');
+    expect(serialized).not.toContain('(555) 867-5309');
+    expect(serialized).not.toContain('123-45-6789');
   });
 });
