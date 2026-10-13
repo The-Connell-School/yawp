@@ -158,4 +158,31 @@ describe('TeacherPasteReport', () => {
       document.querySelector('[data-testid="paste-report-empty"]')
     ).not.toBeNull();
   });
+
+  it('shows the fetch error instead of an empty state when events are unknown', async () => {
+    globalThis.fetch = mock(
+      async () => new Response('unavailable', { status: 503 })
+    ) as unknown as typeof fetch;
+    const contentRoot = document.createElement('div');
+    contentRoot.textContent = 'No linked marks are visible after the failure.';
+
+    root = renderWithContent(contentRoot);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => {
+      document
+        .querySelector<HTMLButtonElement>('[aria-label="Pasted text report"]')
+        ?.click();
+    });
+
+    expect(
+      document.querySelector('[data-testid="paste-report-empty"]')
+    ).toBeNull();
+    expect(document.body.textContent).not.toContain('No pasted text found');
+    expect(document.body.textContent).toContain(
+      'The event list could not be loaded'
+    );
+  });
 });

@@ -55,7 +55,8 @@ function AuthorizedTeacherPasteReport({
   const hasPastedText = (measurement?.pastedCharacters ?? 0) > 0;
   const hasRecordedEvents = (report?.events.length ?? 0) > 0;
   const hasPasteActivity = hasPastedText || hasRecordedEvents;
-  const eventQuerySettled = report != null || forbidden || error;
+  const eventQuerySucceeded = report != null || forbidden;
+  const showEventStatus = hasPasteActivity || loading || error;
   const query = submissionId
     ? `submissionId=${encodeURIComponent(submissionId)}`
     : `documentId=${encodeURIComponent(documentId ?? '')}`;
@@ -213,7 +214,7 @@ function AuthorizedTeacherPasteReport({
           {measurement &&
           measurement.pastedCharacters === 0 &&
           !hasRecordedEvents &&
-          eventQuerySettled ? (
+          eventQuerySucceeded ? (
             <div
               className="flex min-h-40 flex-col items-center justify-center rounded-md border border-dashed bg-muted/20 p-6 text-center"
               data-testid="paste-report-empty"
@@ -291,7 +292,7 @@ function AuthorizedTeacherPasteReport({
               Open the document text to measure this version.
             </p>
           )}
-          {hasPasteActivity ? (
+          {showEventStatus ? (
             <>
               <div className="mb-2 mt-4 flex items-center justify-between gap-2">
                 <h3 className="font-medium">Recorded events</h3>
