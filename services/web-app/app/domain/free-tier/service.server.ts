@@ -219,25 +219,40 @@ function tokenCreateFingerprint(parsed: TokenCreateInput) {
 async function findRecentMatchingAcquisitionToken(
   client: AcquisitionTokenCreateClient,
   parsed: TokenCreateInput,
-  since: Date
+  idempotencyKey: string
 ) {
   if (parsed.count !== 1) return null;
-  return client.acquisitionToken.findFirst({
-    where: {
-      label: parsed.label,
-      bypassWaitlist: parsed.bypassWaitlist ?? false,
-      maxUses: parsed.maxUses ?? null,
-      expiresAt: parsed.expiresAt ?? null,
-      createdBy: parsed.createdBy ?? null,
-      sourceName: parsed.sourceName ?? null,
-      eventLocation: parsed.eventLocation ?? null,
-      eventDate: parsed.eventDate ?? null,
-      notes: parsed.notes ?? null,
-      createdAt: { gte: since },
+  const existing = await client.acquisitionToken.findUnique({
+    where: { createIdempotencyKey: idempotencyKey },
+    select: {
+      id: true,
+      code: true,
+      label: true,
+      bypassWaitlist: true,
+      maxUses: true,
+      expiresAt: true,
+      createdBy: true,
+      sourceName: true,
+      eventLocation: true,
+      eventDate: true,
+      notes: true,
     },
-    orderBy: { createdAt: 'desc' },
-    select: { id: true, code: true },
   });
+  if (!existing) return null;
+  if (
+    existing.label !== parsed.label ||
+    existing.bypassWaitlist !== (parsed.bypassWaitlist ?? false) ||
+    existing.maxUses !== (parsed.maxUses ?? null) ||
+    existing.expiresAt?.getTime() !== parsed.expiresAt?.getTime() ||
+    existing.createdBy !== (parsed.createdBy ?? null) ||
+    existing.sourceName !== (parsed.sourceName ?? null) ||
+    existing.eventLocation !== (parsed.eventLocation ?? null) ||
+    existing.eventDate?.getTime() !== parsed.eventDate?.getTime() ||
+    existing.notes !== (parsed.notes ?? null)
+  ) {
+    throw new Error('idempotency_key_conflict');
+  }
+  return existing;
 }
 
 export async function createAcquisitionTokens(
@@ -246,13 +261,17 @@ export async function createAcquisitionTokens(
 ) {
   const parsed = tokenCreateSchema.parse(input);
   const fingerprint = tokenCreateFingerprint(parsed);
-  const lockKey = `free-tier-token-create:${options.idempotencyKey || createHash('sha256').update(fingerprint).digest('hex')}`;
-  const dedupeSince = new Date(Date.now() - (options.idempotencyWindowMs ?? 5 * 60_000));
+  const explicitIdempotencyKey = options.idempotencyKey?.trim() || null;
+  const lockKey = `free-tier-token-create:${
+    explicitIdempotencyKey ?? createHash('sha256').update(fingerprint).digest('hex')
+  }`;
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
-    const existing = await findRecentMatchingAcquisitionToken(tx, parsed, dedupeSince);
-    if (existing?.code) {
-      return [{ token: existing.code, code: existing.code, id: existing.id, url: buildFreeTierEventLink(existing.code) }];
+    if (explicitIdempotencyKey) {
+      const existing = await findRecentMatchingAcquisitionToken(tx, parsed, explicitIdempotencyKey);
+      if (existing?.code) {
+        return [{ token: existing.code, code: existing.code, id: existing.id, url: buildFreeTierEventLink(existing.code) }];
+      }
     }
     const tokens: { token: string; id: string; code: string; url: string }[] = [];
     for (let i = 0; i < parsed.count; i++) {
@@ -271,6 +290,7 @@ export async function createAcquisitionTokens(
           maxUses: parsed.maxUses ?? null,
           expiresAt: parsed.expiresAt ?? null,
           createdBy: parsed.createdBy,
+          createIdempotencyKey: parsed.count === 1 ? explicitIdempotencyKey : null,
         },
         select: { id: true },
       });

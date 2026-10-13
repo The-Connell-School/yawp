@@ -13,12 +13,17 @@ type StoredToken = {
   eventDate: Date | null;
   notes: string | null;
   createdAt: Date;
+  createIdempotencyKey: string | null;
 };
 
 const rows: StoredToken[] = [];
 const executeRaw = mock(async () => [{ locked: 1 }]);
-const findUnique = mock(async ({ where }: { where: { code?: string } }) =>
-  rows.find((row) => row.code === where.code) ?? null
+const findUnique = mock(async ({ where }: { where: { code?: string; tokenHash?: string; createIdempotencyKey?: string } }) =>
+  rows.find(
+    (row) =>
+      (where.code != null && row.code === where.code) ||
+      (where.createIdempotencyKey != null && row.createIdempotencyKey === where.createIdempotencyKey)
+  ) ?? null
 );
 const findFirst = mock(async ({ where }: { where: Record<string, any> }) =>
   rows.find((row) =>
@@ -48,6 +53,7 @@ const create = mock(async ({ data }: { data: Record<string, any> }) => {
     eventDate: data.eventDate ?? null,
     notes: data.notes ?? null,
     createdAt: new Date(),
+    createIdempotencyKey: data.createIdempotencyKey ?? null,
   };
   rows.push(row);
   return { id: row.id };
@@ -90,5 +96,43 @@ describe('createAcquisitionTokens idempotency', () => {
     expect(second).toEqual(first);
     expect(create).toHaveBeenCalledTimes(1);
     expect(rows).toHaveLength(1);
+  });
+
+  test('mints separate tokens for matching creates without an idempotency key', async () => {
+    const input = {
+      label: 'NCTE booth',
+      bypassWaitlist: false,
+      maxUses: 25,
+      count: 1,
+      createdBy: 'operator@yawp.school',
+      sourceName: 'NCTE',
+      eventLocation: 'Boston',
+      eventDate: '2026-11-20T00:00:00.000Z',
+      notes: 'Table 14',
+    };
+    const first = await createAcquisitionTokens(input);
+    const second = await createAcquisitionTokens(input);
+    expect(second).not.toEqual(first);
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(rows).toHaveLength(2);
+  });
+
+  test('mints separate tokens for matching creates with different idempotency keys', async () => {
+    const input = {
+      label: 'NCTE booth',
+      bypassWaitlist: false,
+      maxUses: 25,
+      count: 1,
+      createdBy: 'operator@yawp.school',
+      sourceName: 'NCTE',
+      eventLocation: 'Boston',
+      eventDate: '2026-11-20T00:00:00.000Z',
+      notes: 'Table 14',
+    };
+    const first = await createAcquisitionTokens(input, { idempotencyKey: 'create-link-1' });
+    const second = await createAcquisitionTokens(input, { idempotencyKey: 'create-link-2' });
+    expect(second).not.toEqual(first);
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(rows).toHaveLength(2);
   });
 });
