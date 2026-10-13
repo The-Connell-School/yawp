@@ -174,6 +174,55 @@ describe('tester feedback submission', () => {
     ).toBe(405);
     expect(saved).toHaveLength(0);
   });
+  test('accepts demo and preview origins reconstructed from proxy headers', async () => {
+    for (const environment of ['demo', 'preview']) {
+      const { deps, saved } = setup({ environment: () => environment });
+      const response = await submitTesterFeedback(
+        new Request('http://app-runner.internal/api/tester-feedback', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+            origin: `https://${environment}.yawp.test`,
+            'x-forwarded-proto': 'https',
+            'x-forwarded-host': `${environment}.yawp.test`,
+          },
+          body: new URLSearchParams({
+            url: '/app?tab=work',
+            whatIDid: 'Opened',
+            whatHappened: 'Froze',
+            whatIWish: 'Save',
+          }),
+        }),
+        deps
+      );
+      expect(response.status).toBe(201);
+      expect(saved).toHaveLength(1);
+      expect(saved[0]).toMatchObject({ environment });
+    }
+  });
+  test('does not trust proxy-reconstructed tester feedback origins in production', async () => {
+    const { deps, saved } = setup({ environment: () => 'production' });
+    const response = await submitTesterFeedback(
+      new Request('http://app-runner.internal/api/tester-feedback', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          origin: 'https://app.yawp.test',
+          'x-forwarded-proto': 'https',
+          'x-forwarded-host': 'app.yawp.test',
+        },
+        body: new URLSearchParams({
+          url: '/app?tab=work',
+          whatIDid: 'Opened',
+          whatHappened: 'Froze',
+          whatIWish: 'Save',
+        }),
+      }),
+      deps
+    );
+    expect(response.status).toBe(403);
+    expect(saved).toHaveLength(0);
+  });
   test('reports modest rate limiting without saving', async () => {
     const { deps } = setup({ save: async () => false });
     const response = await submitTesterFeedback(request(), deps);
