@@ -989,7 +989,17 @@ describe('PR preview deployment contract', () => {
     expect(ingressServer).toContain(
       "upstreamResponse.headers['x-yawp-preview-authorized']"
     );
-    expect(certificateManager).toContain("type === 'http-01'");
+    expect(bootstrap).toContain('node "$certificate_manager" --wildcard');
+    expect(bootstrap).toContain(
+      '$ROOT/ingress/current/certificate-manager.mjs --wildcard'
+    );
+    expect(certificateManager).toContain('ensureWildcardCertificate');
+    expect(certificateManager).toContain("challengeType: 'dns-01'");
+    expect(certificateManager).toContain('resolveZeroSslEabCredentials');
+    expect(certificateManager).toContain(
+      'isLetsEncryptRegisteredDomainRateLimit(error)'
+    );
+    expect(certificateManager).toContain("challengeType: 'http-01'");
     expect(wakeScript).toContain('docker compose');
     expect(wakeScript).toContain(' start');
     expect(wakeScript).not.toContain(' up ');
