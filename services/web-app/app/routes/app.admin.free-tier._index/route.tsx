@@ -17,6 +17,7 @@ import { sendReleaseEmailsForApplicationIds } from '~/domain/free-tier/approval-
 import { decideApplication } from '~/utils/internal-free-tier-http.server';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
 import { FreeTierBudgetExceededError } from '~/domain/free-tier/usage-budget.server';
+import { recordFreeTierCapDenialAudit } from '~/domain/free-tier/tester-audit.server';
 
 function budgetExceededPayload(error: FreeTierBudgetExceededError) {
   const usage = error.summary;
@@ -74,6 +75,17 @@ export async function action({ request }: ActionFunctionArgs) {
       result = await releaseBatch({ applicationIds: ids });
     } catch (error) {
       if (error instanceof FreeTierBudgetExceededError) {
+        await recordFreeTierCapDenialAudit(
+          prisma,
+          {
+            actorUserId: user.id,
+            actorEmail: operator?.email ?? 'admin@yawp.local',
+            environment: 'platform-admin',
+            action: 'waitlist.release.denied',
+          },
+          null,
+          { reason: 'budget_exceeded', budget: error.summary }
+        );
         return Response.json(budgetExceededPayload(error), { status: 402 });
       }
       throw error;

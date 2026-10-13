@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 const requireSuperAdmin = mock(async () => ({ id: 'operator' }));
 const userFindUnique = mock(async () => ({ email: 'operator@yawp.local' }));
 const freeTierFindMany = mock(async () => []);
+const auditCreate = mock(async () => ({}));
 const transaction = mock(async () => {
   throw new Error('admin route must use shared decision service');
 });
@@ -29,6 +30,7 @@ mock.module('~/utils/db.server', () => ({
     $transaction: transaction,
     user: { findUnique: userFindUnique },
     freeTierApplication: { findMany: freeTierFindMany },
+    internalPlatformApiAudit: { create: auditCreate },
   },
 }));
 mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
@@ -69,6 +71,7 @@ beforeEach(() => {
   userFindUnique.mockClear();
   freeTierFindMany.mockClear();
   transaction.mockClear();
+  auditCreate.mockClear();
   releaseBatch.mockClear();
   releaseBatch.mockImplementation(async () => ({
     released: 1,
@@ -145,5 +148,17 @@ describe('admin free-tier route', () => {
       operatorMessage: 'Free-tier preview budget reached: $15.00 of $10.00 used.',
     });
     expect(sendReleaseEmailsForApplicationIds).not.toHaveBeenCalled();
+    expect(auditCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        actorUserId: 'operator',
+        actorEmail: 'operator@yawp.local',
+        action: 'waitlist.release.denied',
+        result: 'denied',
+        metadata: expect.objectContaining({
+          reason: 'budget_exceeded',
+          budget: expect.objectContaining({ environment: 'preview' }),
+        }),
+      }),
+    });
   });
 });

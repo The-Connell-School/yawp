@@ -6,7 +6,7 @@ const rejected = mock(async () => {});
 const findUnique = mock(async () => ({
   id: 'application',
   status: 'SENT',
-  releasedAt: new Date(),
+  releasedAt: null as Date | null,
   email: 'teacher@yawp.local',
   name: 'Teacher',
   schoolName: 'Demo',
@@ -54,7 +54,7 @@ beforeEach(() => {
   findUnique.mockImplementation(async () => ({
     id: 'application',
     status: 'SENT',
-    releasedAt: new Date(),
+    releasedAt: null as Date | null,
     email: 'teacher@yawp.local',
     name: 'Teacher',
     schoolName: 'Demo',
@@ -62,7 +62,47 @@ beforeEach(() => {
     organizationId: null,
   }));
   updateMany.mockResolvedValue({ count: 1 });
+  updateMany.mockClear();
 });
+
+test('reopen cap denial records an audit row without changing state', async () => {
+  findUnique.mockImplementation(async () => ({
+    id: 'application',
+    status: 'REJECTED',
+    releasedAt: null,
+    email: 'teacher@yawp.local',
+    name: 'Teacher',
+    schoolName: 'Demo',
+    userId: null,
+    organizationId: null,
+  }));
+  process.env.FREE_TIER_RELEASE_CAP = '0';
+  try {
+    const result = await reopenApplication({
+      id: 'application',
+      decidedByEmail: actor.actorEmail,
+      audit: { ...actor, action: 'approval.reopen' },
+    });
+    expect(result.status).toBe(409);
+    expect(updateMany).not.toHaveBeenCalled();
+    expect(decisionCreate).not.toHaveBeenCalled();
+    expect(auditCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'approval.reopen',
+        targetId: 'application',
+        result: 'denied',
+        metadata: expect.objectContaining({
+          reason: 'Release cap reached',
+          previousStatus: 'REJECTED',
+          requestedStatus: 'MANUAL_REVIEW',
+        }),
+      }),
+    });
+  } finally {
+    delete process.env.FREE_TIER_RELEASE_CAP;
+  }
+});
+
 test('approval records audit in mutation transaction and runs existing approval hook', async () => {
   await decideApplication({
     id: 'application',
