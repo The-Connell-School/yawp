@@ -364,7 +364,7 @@ describe('preview certificate manager', () => {
     })).toBe(true);
   });
 
-  test('falls back to ZeroSSL with email EAB when Let\'s Encrypt hits the registered-domain limit', async () => {
+  test('falls back to ZeroSSL with email EAB when Let\'s Encrypt rate-limits nonce requests', async () => {
     const root = temporaryRoot('preview-cert-zerossl-fallback-');
     const certRoot = path.join(root, 'ingress', 'certs');
     const accountRoot = path.join(root, 'ingress', 'acme');
@@ -380,6 +380,7 @@ describe('preview certificate manager', () => {
     const hmacKey = Buffer.from('zerossl-hmac-key').toString('base64url');
     let sawZeroSslEmailEabRequest = false;
     let sawZeroSslExternalAccountBinding = false;
+    let leNonceRequests = 0;
     let zeroAuthPolls = 0;
     let zeroOrderPolls = 0;
     const response = (body, { status = 200, location, nonce = 'nonce-next' } = {}) => new Response(
@@ -401,16 +402,19 @@ describe('preview certificate manager', () => {
           newOrder: 'https://le.test/order/new',
         });
       }
-      if (url === 'https://le.test/nonce') return response('', { nonce: 'le-nonce-1' });
+      if (url === 'https://le.test/nonce') {
+        leNonceRequests += 1;
+        return leNonceRequests === 1
+          ? response('', { nonce: 'le-nonce-1' })
+          : response({
+            type: 'urn:ietf:params:acme:error:rateLimited',
+            detail: 'too many certificates (50) already issued for "yawp.school" in the last 168h0m0s',
+          }, { status: 429, nonce: 'le-rate-limited-nonce' });
+      }
       if (url === 'https://le.test/account') {
-        return response({}, { status: 201, location: 'https://le.test/account/1' });
+        return response({}, { status: 201, location: 'https://le.test/account/1', nonce: '' });
       }
-      if (url === 'https://le.test/order/new') {
-        return response({
-          type: 'urn:ietf:params:acme:error:rateLimited',
-          detail: 'too many certificates (50) already issued for "yawp.school" in the last 168h0m0s',
-        }, { status: 429 });
-      }
+      if (url === 'https://le.test/order/new') throw new Error('Let\'s Encrypt newOrder should not be reached');
       if (url === 'https://api.zerossl.com/acme/eab-credentials-email') {
         sawZeroSslEmailEabRequest = options.body === 'email=admin%40example.com';
         return response({
@@ -482,6 +486,7 @@ describe('preview certificate manager', () => {
       });
 
       expect(result).toEqual({ hostname, status: 'issued' });
+      expect(leNonceRequests).toBe(2);
       expect(sawZeroSslEmailEabRequest).toBe(true);
       expect(sawZeroSslExternalAccountBinding).toBeTruthy();
       expect(JSON.parse(readFileSync(path.join(accountRoot, 'zerossl-eab.json'), 'utf8'))).toEqual({
@@ -501,7 +506,7 @@ describe('preview certificate manager', () => {
     }
   });
 
-  test('does not fall back to ZeroSSL for exact-set duplicate certificate limits', async () => {
+  test('falls back to ZeroSSL for wildcard exact-set duplicate certificate limits', async () => {
     const root = temporaryRoot('preview-cert-exact-set-limit-');
     const certRoot = path.join(root, 'ingress', 'certs');
     const accountRoot = path.join(root, 'ingress', 'acme');
@@ -538,6 +543,11 @@ describe('preview certificate manager', () => {
       }
       if (url === 'https://api.zerossl.com/acme/eab-credentials-email') {
         sawZeroSslRequest = true;
+        return response({
+          success: true,
+          eab_kid: 'zerossl-kid',
+          eab_hmac_key: Buffer.from('zerossl-hmac-key').toString('base64url'),
+        });
       }
       throw new Error(`Unexpected URL ${url}`);
     };
@@ -554,8 +564,8 @@ describe('preview certificate manager', () => {
         present: async () => { throw new Error('DNS challenge should not start'); },
         cleanup: async () => {},
       },
-    })).rejects.toThrow('exact set of identifiers');
-    expect(sawZeroSslRequest).toBe(false);
+    })).rejects.toThrow('Unexpected URL https://acme.zerossl.com/v2/DV90');
+    expect(sawZeroSslRequest).toBe(true);
   });
 
   test('Route53 DNS-01 provider preserves unrelated wildcard challenge TXT values', async () => {
