@@ -29,6 +29,7 @@ const prisma = {
 const requireAdmin = mock();
 const requireMembership = mock();
 const requireUserId = mock();
+const sendEmail = mock();
 
 const dbServerMock = () => ({ prisma });
 const authServerMock = () => ({
@@ -45,7 +46,7 @@ mock.module('~/utils/db.server.js', dbServerMock);
 mock.module('~/utils/auth.server', authServerMock);
 mock.module('~/utils/auth.server.ts', authServerMock);
 mock.module('~/utils/auth.server.js', authServerMock);
-mock.module('~/utils/email.server', () => ({ sendEmail: mock() }));
+mock.module('~/utils/email.server', () => ({ sendEmail }));
 mock.module('~/utils/totp.server', () => ({
   generateTOTP: mock(),
 }));
@@ -107,6 +108,7 @@ describe('admin organization detail route', () => {
     requireAdmin.mockReset();
     requireMembership.mockReset();
     requireUserId.mockReset();
+    sendEmail.mockReset();
 
     requireAdmin.mockResolvedValue({ id: 'admin-1' });
     requireUserId.mockResolvedValue('admin-1');
@@ -125,19 +127,25 @@ describe('admin organization detail route', () => {
     prisma.$transaction.mockResolvedValue([]);
   });
 
-  test('keeps organization hard deletion compatible with database cascades', async () => {
+  test('blocks hidden organization delete submissions without deleting', async () => {
     const form = new URLSearchParams();
     form.set('intent', 'deleteOrganization');
 
-    await action({
+    const response = await action({
       request: updateRequest(form),
       params: { id: 'org-1' },
       context: {} as never,
     });
 
-    expect(prisma.organization.delete).toHaveBeenCalledWith({
-      where: { id: 'org-1' },
+    expect(response).toMatchObject({
+      init: { status: 410 },
+      data: {
+        status: 'error',
+        error:
+          'Organization deletion is disabled on the platform admin surface.',
+      },
     });
+    expect(prisma.organization.delete).not.toHaveBeenCalled();
   });
 
   test('does not load writing practice state for the organization edit sheet', async () => {
@@ -195,5 +203,26 @@ describe('admin organization detail route', () => {
     });
     expect(prisma.organization.update).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  test('blocks hidden owner invitation submissions without sending email', async () => {
+    const form = new URLSearchParams();
+    form.set('intent', 'invite-owners');
+    form.set('emails', 'owner@example.test');
+
+    const response = await action({
+      request: rawUpdateRequest(form),
+      params: { id: 'org-1' },
+      context: {} as never,
+    });
+
+    expect(response).toMatchObject({
+      init: { status: 410 },
+      data: {
+        status: 'error',
+        error: 'Owner invitations are disabled on the platform admin surface.',
+      },
+    });
+    expect(sendEmail).not.toHaveBeenCalled();
   });
 });
