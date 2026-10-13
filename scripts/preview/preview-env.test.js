@@ -271,6 +271,24 @@ describe('buildPreviewEnv', () => {
     expect(githubConfig).not.toContain(deprecatedTransportAuth);
   });
 
+  test('checks live PR metadata before deploying skipped previews', () => {
+    const workflow = readFileSync(
+      new URL(
+        '../../.github/workflows/preview-environments.yml',
+        import.meta.url
+      ),
+      'utf8'
+    );
+
+    expect(workflow).toContain('preview-policy:');
+    expect(workflow).toContain('gh pr view "$PR_NUMBER"');
+    expect(workflow).toContain('body="$(jq -r');
+    expect(workflow).toContain('reason=skip_preview');
+    expect(workflow).toContain(
+      "needs.preview-policy.outputs.should_deploy == 'true'"
+    );
+  });
+
   test('opts labeled PRs into versioned scrubbed production data', () => {
     const workflow = readFileSync(
       new URL(
