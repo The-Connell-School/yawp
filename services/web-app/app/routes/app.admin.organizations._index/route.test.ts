@@ -103,27 +103,48 @@ describe('admin organizations index route', () => {
     ]);
   });
 
-  test('creates organizations without default writing practice configuration', async () => {
+  test('marks platform organization creation as moved to Internal', async () => {
     const form = new URLSearchParams();
     form.set('intent', 'create');
     form.set('name', 'New Org');
     form.set('numOfStudentSeats', '30');
     form.set('numOfTeacherSeats', '10');
 
-    await action({
+    const response = await action({
       request: createRequest(form),
       params: {},
       context: {} as never,
     } as any);
 
-    expect(prisma.organization.create).toHaveBeenCalledWith({
+    expect(response).toMatchObject({
+      init: { status: 410 },
       data: {
-        name: 'New Org',
-        numOfStudentSeats: 30,
-        numOfTeacherSeats: 10,
-        accessExpiresAt: null,
+      error: 'Organization creation has moved to Yawp Internal.',
       },
     });
+    expect(prisma.organization.create).not.toHaveBeenCalled();
+  });
+
+  test('blocks hidden legacy organization creation submissions', async () => {
+    const form = new URLSearchParams();
+    form.set('intent', 'legacy-create');
+    form.set('name', 'New Org');
+    form.set('numOfStudentSeats', '30');
+    form.set('numOfTeacherSeats', '10');
+
+    const response = await action({
+      request: createRequest(form),
+      params: {},
+      context: {} as never,
+    } as any);
+
+    expect(response).toMatchObject({
+      init: { status: 410 },
+      data: {
+        error: 'Organization creation has moved to Yawp Internal.',
+      },
+    });
+    expect(prisma.organization.create).not.toHaveBeenCalled();
   });
 
   test('creates and returns a seeded preview seat only in isolated preview mode', async () => {

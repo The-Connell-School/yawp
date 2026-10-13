@@ -112,6 +112,9 @@ export default function OrganizationsRoute() {
 
   return (
     <div className="p-3 sm:p-5">
+      <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        Organization create/update writes have moved to Yawp Internal. This platform page is read-only for organization management.
+      </div>
       <div className="flex flex-col md:flex-row gap-4">
         <div className="grid gap-4 grid-cols-2">
           <Card className="bg-muted">
@@ -249,7 +252,7 @@ export default function OrganizationsRoute() {
           ) : null}
           <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
             <SheetTrigger asChild>
-              <Button>
+              <Button disabled title="Create organizations in Yawp Internal">
                 <Plus className="mr-2 h-4 w-4" />
                 Create Organization
               </Button>
