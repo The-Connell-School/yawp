@@ -16,6 +16,7 @@ import {
   ClipboardList,
   Settings,
   FlaskConical,
+  MessagesSquare,
 } from 'lucide-react';
 import { requireAdmin } from '~/utils/auth.server';
 import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
@@ -45,6 +46,11 @@ export const adminTabs = [
     label: 'AI Evaluations',
     to: '/app/admin/ai-evaluations',
     icon: <FlaskConical size={16} className="opacity-75 mr-1" />,
+  },
+  {
+    label: 'Lounge',
+    to: '/app/admin/lounge',
+    icon: <MessagesSquare size={16} className="opacity-75 mr-1" />,
   },
   {
     label: 'Audit',
