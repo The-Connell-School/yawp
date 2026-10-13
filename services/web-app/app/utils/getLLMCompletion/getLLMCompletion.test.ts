@@ -411,6 +411,56 @@ describe('getLLMCompletion', () => {
     expect(serialized).not.toContain('ipHash');
   });
 
+  test('de-identifies known free-form names before writing full LlmLog rows', async () => {
+    anthropicCreate.mockResolvedValueOnce(
+      anthropicTextResponse(
+        '{"overallComment":"Jordan, strengthen the topic sentence. Jane, add one more source."}'
+      )
+    );
+
+    await getLLMCompletion({
+      model: 'claude-sonnet-4-6',
+      system:
+        'Student first name: Jordan\nIn overallComment, start with "Jordan," and continue with feedback.',
+      messages: [
+        {
+          role: 'user',
+          content:
+            'My name is Jane Student. I am Jane Student and this essay by Jane Student needs help.',
+        },
+      ],
+      metadata: {
+        feature: 'grading',
+        kind: 'rubric-evaluation',
+      },
+      deidentificationPhrases: ['Jane Student', 'Jordan'],
+      attribution: {
+        organizationId: 'org-write-2',
+        membershipId: 'mem-write-2',
+        route: 'routes/api.domain.grade-essay-ai',
+        requestId: 'req-write-2',
+      },
+    });
+
+    const log = llmLogCreate.mock.calls[0]?.[0].data;
+    const serialized = JSON.stringify(log);
+    expect(log.systemPrompt).toContain('Student first name: [name]');
+    expect(log.systemPrompt).toContain('start with "[name],"');
+    expect(log.messages).toEqual([
+      {
+        role: 'user',
+        content:
+          'My name is [name]. I am [name] and this essay by [name] needs help.',
+      },
+    ]);
+    expect(log.response).toContain('"overallComment":"[name],');
+    expect(log.response).toContain('[name], add one more source.');
+    expect(serialized).not.toContain('Jane Student');
+    expect(serialized).not.toContain('Jane,');
+    expect(serialized).not.toContain('Jordan');
+    expect(serialized).not.toContain('deidentificationPhrases');
+  });
+
   test('falls back to gpt-4o-mini and opens the circuit after Anthropic 529', async () => {
     const controller = new AbortController();
     const anthropicError = Object.assign(new Error('Overloaded'), {

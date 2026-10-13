@@ -918,6 +918,13 @@ export async function action({ request }: ActionFunctionArgs) {
     studentName: submission.document.membership?.user?.name,
     groupLabel: submission.document.group?.label,
   });
+  const gradingDeidentificationPhrases = [
+    studentFirstName,
+    submission.document.membership?.user?.name,
+    submission.document.group?.label,
+  ].filter(
+    (value): value is string => typeof value === 'string' && value.length > 0
+  );
   // The prompt is derived from the rubric itself: how many judgments it asks
   // for, which words each score carries, and whether it wants per-category
   // feedback or overall feedback alone. No assignment type is named here.
@@ -992,6 +999,10 @@ export async function action({ request }: ActionFunctionArgs) {
         ...params,
         ...llmRetryOptions,
         signal,
+        deidentificationPhrases: [
+          gradingDeidentificationPhrases,
+          params.deidentificationPhrases,
+        ],
         attribution: {
           organizationId,
           membershipId: actor.membershipId,

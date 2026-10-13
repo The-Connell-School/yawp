@@ -79,6 +79,8 @@ interface Params {
   signal?: AbortSignal;
   /** Store only counts/timing metadata when prompts contain sensitive records. */
   logPayload?: 'full' | 'metadata-only';
+  /** Known names or direct identifiers that must be scrubbed from LlmLog text. */
+  deidentificationPhrases?: unknown;
 }
 
 async function logLlmCall(data: {
@@ -94,6 +96,7 @@ async function logLlmCall(data: {
   durationMs?: number;
   metadata?: Record<string, unknown>;
   logPayload?: 'full' | 'metadata-only';
+  deidentificationPhrases?: unknown;
 }) {
   const metadataOnly = data.logPayload === 'metadata-only';
   try {
@@ -116,6 +119,7 @@ async function logLlmCall(data: {
       outputTokens: data.outputTokens,
       totalTokens: data.totalTokens,
       durationMs: data.durationMs,
+      deidentificationPhrases: data.deidentificationPhrases,
       metadata: {
         ...data.metadata,
         ...(metadataOnly ? { payloadLogging: 'metadata-only' } : {}),
@@ -327,6 +331,7 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
           cacheReadInputTokens: totalCacheReadInputTokens,
         },
         logPayload: params.logPayload,
+        deidentificationPhrases: params.deidentificationPhrases,
       });
       // Best-effort usage decision/attribution log
       // Fire-and-forget: the usage log must never add latency to, or fail, a request.
@@ -370,6 +375,7 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
         cacheReadInputTokens: totalCacheReadInputTokens,
       },
       logPayload: params.logPayload,
+      deidentificationPhrases: params.deidentificationPhrases,
     });
     throw err;
   }
@@ -504,6 +510,7 @@ async function runOpenAiCompletion({
           toolRoundCount,
         }),
         logPayload: params.logPayload,
+        deidentificationPhrases: params.deidentificationPhrases,
       });
       // Fire-and-forget: the usage log must never add latency to, or fail, a request.
       void logAllowedUsage({
@@ -544,6 +551,7 @@ async function runOpenAiCompletion({
         toolRoundCount,
       }),
       logPayload: params.logPayload,
+      deidentificationPhrases: params.deidentificationPhrases,
     });
     throw err;
   }

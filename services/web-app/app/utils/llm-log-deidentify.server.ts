@@ -7,6 +7,23 @@ const CUID_RE = /\bc[a-z0-9]{20,}\b/gi;
 const SSN_RE = /\b\d{3}-\d{2}-\d{4}\b/g;
 const PHONE_RE =
   /(?<!\w)(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}(?!\w)/g;
+const SELF_IDENTIFIED_NAME_RE =
+  /\b(I am|I'm|my name is|name is|this is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\b/g;
+const STUDENT_FIRST_NAME_RE =
+  /\b(Student first name:\s*)([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\b/g;
+const FEEDBACK_START_NAME_RE =
+  /\b(start with\s+["'])([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})(,["'])/gi;
+const OVERALL_COMMENT_NAME_RE =
+  /(["']?overallComment["']?\s*:\s*["'])([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})(,)/g;
+const LEADING_FEEDBACK_NAME_RE = /(^|[\n\r])([A-Z][a-z]{2,})(,)(?=\s)/g;
+const COMMON_NAME_PARTS = new Set([
+  'admin',
+  'administrator',
+  'author',
+  'student',
+  'teacher',
+  'user',
+]);
 
 type Jsonish =
   | null
@@ -28,6 +45,7 @@ type LlmLogCreateData = {
   totalTokens?: number | null;
   durationMs?: number | null;
   metadata?: unknown;
+  deidentificationPhrases?: unknown;
 };
 
 const NAME_KEY_RE =
@@ -51,6 +69,21 @@ function addPhrase(phrases: Set<string>, value: unknown) {
   }
 }
 
+function addExplicitPhrase(phrases: Set<string>, value: unknown) {
+  if (typeof value !== 'string') return;
+  const trimmed = value.trim();
+  if (trimmed.length < 2 || trimmed.length > 120) return;
+  phrases.add(trimmed);
+  if (trimmed.includes('@') || trimmed.startsWith('@')) return;
+
+  for (const part of trimmed.split(/\s+/)) {
+    const normalized = part.toLowerCase().replace(/[^a-z]/g, '');
+    if (part.length >= 3 && !COMMON_NAME_PARTS.has(normalized)) {
+      phrases.add(part);
+    }
+  }
+}
+
 function addStringLeaves(phrases: Set<string>, value: unknown) {
   if (typeof value === 'string') {
     addPhrase(phrases, value);
@@ -64,6 +97,23 @@ function addStringLeaves(phrases: Set<string>, value: unknown) {
 
   if (!isPlainObject(value)) return;
   for (const child of Object.values(value)) addStringLeaves(phrases, child);
+}
+
+function addExactStringLeaves(phrases: Set<string>, value: unknown) {
+  if (typeof value === 'string') {
+    addExplicitPhrase(phrases, value);
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) addExactStringLeaves(phrases, item);
+    return;
+  }
+
+  if (!isPlainObject(value)) return;
+  for (const child of Object.values(value)) {
+    addExactStringLeaves(phrases, child);
+  }
 }
 
 function collectKnownPhrases(value: unknown, phrases = new Set<string>()) {
@@ -99,7 +149,21 @@ function scrubString(value: string, knownPhrases: Set<string>) {
     .replace(CUID_RE, '[id]')
     .replace(SSN_RE, '[id]')
     .replace(PHONE_RE, '[phone]')
-    .replace(USERNAME_RE, (_match, prefix) => `${prefix}@[username]`);
+    .replace(USERNAME_RE, (_match, prefix) => `${prefix}@[username]`)
+    .replace(SELF_IDENTIFIED_NAME_RE, (_match, prefix) => `${prefix} [name]`)
+    .replace(STUDENT_FIRST_NAME_RE, (_match, prefix) => `${prefix}[name]`)
+    .replace(
+      FEEDBACK_START_NAME_RE,
+      (_match, prefix, _name, suffix) => `${prefix}[name]${suffix}`
+    )
+    .replace(
+      OVERALL_COMMENT_NAME_RE,
+      (_match, prefix, _name, suffix) => `${prefix}[name]${suffix}`
+    )
+    .replace(
+      LEADING_FEEDBACK_NAME_RE,
+      (_match, prefix, _name, suffix) => `${prefix}[name]${suffix}`
+    );
 
   const phrases = [...knownPhrases].sort((a, b) => b.length - a.length);
   for (const phrase of phrases) {
@@ -124,7 +188,8 @@ function scrubJson(value: unknown, knownPhrases: Set<string>): Jsonish {
   if (value === null || value === undefined) return null;
   if (typeof value === 'string') return scrubString(value, knownPhrases);
   if (typeof value === 'number' || typeof value === 'boolean') return value;
-  if (Array.isArray(value)) return value.map((item) => scrubJson(item, knownPhrases));
+  if (Array.isArray(value))
+    return value.map((item) => scrubJson(item, knownPhrases));
   if (!isPlainObject(value)) return scrubString(String(value), knownPhrases);
 
   const scrubbed: Record<string, Jsonish> = {};
@@ -149,27 +214,32 @@ function mergeDeidentificationMetadata(
 }
 
 export function deidentifyLlmLogData(data: LlmLogCreateData): LlmLogCreateData {
+  const { deidentificationPhrases: _, ...persistedData } = data;
   const knownPhrases = collectKnownPhrases({
-    metadata: data.metadata,
-    messages: data.messages,
+    metadata: persistedData.metadata,
+    messages: persistedData.messages,
   });
+  addExactStringLeaves(knownPhrases, data.deidentificationPhrases);
 
   return {
-    ...data,
+    ...persistedData,
     systemPrompt:
-      typeof data.systemPrompt === 'string'
-        ? scrubString(data.systemPrompt, knownPhrases)
-        : data.systemPrompt,
-    messages: scrubJson(data.messages, knownPhrases),
+      typeof persistedData.systemPrompt === 'string'
+        ? scrubString(persistedData.systemPrompt, knownPhrases)
+        : persistedData.systemPrompt,
+    messages: scrubJson(persistedData.messages, knownPhrases),
     response:
-      typeof data.response === 'string'
-        ? scrubString(data.response, knownPhrases)
-        : data.response,
+      typeof persistedData.response === 'string'
+        ? scrubString(persistedData.response, knownPhrases)
+        : persistedData.response,
     error:
-      typeof data.error === 'string'
-        ? scrubString(data.error, knownPhrases)
-        : data.error,
-    metadata: mergeDeidentificationMetadata(data.metadata, knownPhrases),
+      typeof persistedData.error === 'string'
+        ? scrubString(persistedData.error, knownPhrases)
+        : persistedData.error,
+    metadata: mergeDeidentificationMetadata(
+      persistedData.metadata,
+      knownPhrases
+    ),
   };
 }
 

@@ -77,4 +77,56 @@ describe('LlmLog de-identification', () => {
     expect(serialized).not.toContain('(555) 867-5309');
     expect(serialized).not.toContain('123-45-6789');
   });
+
+  test('scrubs free-form student names from prompt and response text', () => {
+    const data = deidentifyLlmLogData({
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+      systemPrompt:
+        'Student first name: Jordan\nIn overallComment, start with "Jordan," and continue with feedback.',
+      messages: [
+        {
+          role: 'user',
+          content:
+            'My name is Jane Student. I am Jane Student and this draft is by Jane Student.',
+        },
+        {
+          role: 'user',
+          content:
+            'The author Jane Student argues that lunch should be longer.',
+        },
+      ],
+      response:
+        '{"overallComment":"Jordan, revise your claim."}\nJane Student, keep developing evidence.\nJane, add one more source.\nThe student should keep the conclusion focused.',
+      metadata: {
+        feature: 'grading',
+        kind: 'rubric-evaluation',
+      },
+      deidentificationPhrases: ['Jane Student', 'Jordan'],
+    });
+
+    const serialized = JSON.stringify(data);
+
+    expect(data.systemPrompt).toContain('Student first name: [name]');
+    expect(data.systemPrompt).toContain('start with "[name],"');
+    expect(data.messages).toEqual([
+      {
+        role: 'user',
+        content: 'My name is [name]. I am [name] and this draft is by [name].',
+      },
+      {
+        role: 'user',
+        content: 'The author [name] argues that lunch should be longer.',
+      },
+    ]);
+    expect(data.response).toContain('"overallComment":"[name],');
+    expect(data.response).toContain('[name], keep developing evidence.');
+    expect(data.response).toContain('[name], add one more source.');
+    expect(data.response).toContain(
+      'The student should keep the conclusion focused.'
+    );
+    expect(serialized).not.toContain('Jane Student');
+    expect(serialized).not.toContain('Jordan');
+    expect(serialized).not.toContain('deidentificationPhrases');
+  });
 });
