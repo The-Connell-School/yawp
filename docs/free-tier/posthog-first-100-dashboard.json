@@ -1,0 +1,169 @@
+{
+  "name": "Free tier first 100 teacher activation funnel",
+  "description": "Tracks free-tier movement from event-link or QR scan through signup/application, activation, student join, and first essay. Import into the existing YAWP PostHog project; do not create a second project.",
+  "filters": {
+    "environment": ["demo", "production", "preview"],
+    "acquisition_channel": ["event_link", "organic", "student_join_link", "free_classroom"],
+    "preview_slug": "optional"
+  },
+  "events": [
+    {
+      "event": "free_tier.scan",
+      "step": "QR/event-link scan",
+      "distinct_id": "free-tier-token:{acquisition_token_id}:{dedupe_cookie_hash}",
+      "required_properties": [
+        "environment",
+        "product_area",
+        "acquisition_channel",
+        "acquisition_token_id"
+      ],
+      "optional_properties": [
+        "preview_slug",
+        "token_label",
+        "source_name",
+        "event_location",
+        "event_date",
+        "bypass_waitlist"
+      ]
+    },
+    {
+      "event": "free_tier.signup",
+      "step": "Signup/application",
+      "distinct_id": "free-tier-application:{application_id}",
+      "required_properties": [
+        "environment",
+        "product_area",
+        "application_id",
+        "application_status",
+        "acquisition_channel",
+        "created"
+      ],
+      "optional_properties": [
+        "preview_slug",
+        "acquisition_token_id",
+        "token_label",
+        "source_name",
+        "event_location",
+        "event_date",
+        "bypass_waitlist"
+      ]
+    },
+    {
+      "event": "free_tier.activation",
+      "step": "Teacher activation",
+      "distinct_id": "free-tier-application:{application_id}",
+      "required_properties": [
+        "environment",
+        "product_area",
+        "application_id",
+        "application_status",
+        "organization_id",
+        "activation_step",
+        "acquisition_channel"
+      ],
+      "optional_properties": [
+        "preview_slug",
+        "teacher_user_id",
+        "acquisition_token_id",
+        "token_label",
+        "source_name",
+        "event_location",
+        "event_date",
+        "bypass_waitlist"
+      ]
+    },
+    {
+      "event": "free_tier.student_join",
+      "step": "Student join",
+      "distinct_id": "free-tier-student:{student_user_id}",
+      "required_properties": [
+        "environment",
+        "product_area",
+        "student_user_id",
+        "membership_id",
+        "organization_id",
+        "class_id",
+        "acquisition_channel"
+      ],
+      "optional_properties": [
+        "preview_slug"
+      ]
+    },
+    {
+      "event": "free_tier.first_essay",
+      "step": "First essay",
+      "distinct_id": "free-tier-organization:{organization_id}",
+      "required_properties": [
+        "environment",
+        "product_area",
+        "organization_id",
+        "submission_id",
+        "document_id",
+        "is_first_essay",
+        "submission_count",
+        "acquisition_channel"
+      ],
+      "optional_properties": [
+        "preview_slug",
+        "class_id"
+      ]
+    }
+  ],
+  "insights": [
+    {
+      "name": "First 100 teacher activation funnel",
+      "type": "funnel",
+      "steps": [
+        { "event": "free_tier.scan" },
+        { "event": "free_tier.signup" },
+        { "event": "free_tier.activation", "property_filter": { "activation_step": "provisioned" } },
+        { "event": "free_tier.first_essay", "property_filter": { "is_first_essay": true } }
+      ],
+      "breakdowns": [
+        "environment",
+        "acquisition_channel",
+        "source_name",
+        "token_label"
+      ]
+    },
+    {
+      "name": "Event-link / QR acquisition vs organic",
+      "type": "trends",
+      "events": [
+        "free_tier.signup",
+        "free_tier.activation",
+        "free_tier.first_essay"
+      ],
+      "breakdowns": [
+        "acquisition_channel",
+        "environment"
+      ]
+    },
+    {
+      "name": "First 100 activated teachers",
+      "type": "trends",
+      "event": "free_tier.activation",
+      "property_filter": {
+        "activation_step": "provisioned"
+      },
+      "aggregation": "unique",
+      "aggregation_property": "application_id",
+      "target": 100,
+      "breakdowns": [
+        "environment",
+        "source_name"
+      ]
+    },
+    {
+      "name": "Student joins before first essay",
+      "type": "trends",
+      "events": [
+        "free_tier.student_join",
+        "free_tier.first_essay"
+      ],
+      "breakdowns": [
+        "environment"
+      ]
+    }
+  ]
+}

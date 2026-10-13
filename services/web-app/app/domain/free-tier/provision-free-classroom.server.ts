@@ -11,6 +11,11 @@ import { currentSchoolYear } from '~/utils/school-year';
 import { generateClassCode } from '~/utils/class';
 import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
 import { pickClassArtKeyForOrganization } from '~/utils/class-art-assignment.server';
+import {
+  acquisitionChannel,
+  captureFreeTierAnalyticsEvent,
+  FREE_TIER_ANALYTICS_EVENTS,
+} from './posthog-analytics.server';
 
 export type ProvisionFreeClassroomResult =
   | { status: 'provisioned'; organizationId: string }
@@ -21,7 +26,10 @@ export type ProvisionFreeClassroomResult =
 function emailDomain(email: string) {
   const at = email.lastIndexOf('@');
   if (at < 0) return null;
-  return email.slice(at + 1).trim().toLowerCase();
+  return email
+    .slice(at + 1)
+    .trim()
+    .toLowerCase();
 }
 
 type SchoolDomainLookupClient = Pick<typeof prisma, '$queryRaw'>;
@@ -87,113 +95,179 @@ async function linkBundleAssignmentTypes(
 export async function provisionFreeClassroom(
   applicationId: string
 ): Promise<ProvisionFreeClassroomResult> {
-  return prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('free_tier_provision:' || ${applicationId}))`;
+  const result: ProvisionFreeClassroomResult = await prisma.$transaction(
+    async (tx): Promise<ProvisionFreeClassroomResult> => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('free_tier_provision:' || ${applicationId}))`;
 
-    const application = await tx.freeTierApplication.findUnique({
+      const application = await tx.freeTierApplication.findUnique({
+        where: { id: applicationId },
+        select: {
+          id: true,
+          email: true,
+          schoolName: true,
+          userId: true,
+          organizationId: true,
+          acquisitionTokenId: true,
+          acquisitionToken: {
+            select: {
+              label: true,
+              sourceName: true,
+              eventLocation: true,
+              eventDate: true,
+              bypassWaitlist: true,
+            },
+          },
+        },
+      });
+      if (!application) {
+        throw new Error('free_tier_application_not_found');
+      }
+
+      if (application.organizationId) {
+        return {
+          status: 'already_provisioned',
+          organizationId: application.organizationId,
+        };
+      }
+
+      if (!application.userId) {
+        return { status: 'pending_user' };
+      }
+
+      const domain = emailDomain(application.email);
+      if (
+        domain &&
+        !isConsumerEmailDomain(domain) &&
+        (await teacherEmailDomainMatchesSchoolOrg(domain))
+      ) {
+        return { status: 'routed_to_school_onboarding' };
+      }
+
+      const existingSchoolMembership = await tx.orgMembership.findFirst({
+        where: {
+          userId: application.userId,
+          organization: { plan: 'SCHOOL', id: { not: 'default-org' } },
+        },
+        select: { id: true },
+      });
+      if (existingSchoolMembership) {
+        return { status: 'routed_to_school_onboarding' };
+      }
+
+      const now = new Date();
+      const org = await tx.organization.create({
+        data: {
+          name: application.schoolName.trim() || 'Free Classroom',
+          plan: 'FREE_CLASSROOM' satisfies OrganizationPlan,
+          planActivatedAt: now,
+          numOfStudentSeats: FREE_CLASSROOM_STUDENT_SEAT_CAP,
+          numOfTeacherSeats: FREE_CLASSROOM_TEACHER_SEAT_CAP,
+          reporterEnabled: false,
+          classInsightsEnabled: true,
+          revisionFlowEnabled: true,
+        },
+        select: { id: true },
+      });
+
+      const schoolCode = schoolCodeFromName(
+        application.schoolName,
+        application.id
+      );
+      const school = await tx.school.create({
+        data: {
+          organizationId: org.id,
+          name: application.schoolName,
+          code: schoolCode,
+        },
+        select: { id: true },
+      });
+
+      const membership = await tx.orgMembership.create({
+        data: {
+          userId: application.userId,
+          organizationId: org.id,
+          role: 'TEACHER',
+          isOrgOwner: true,
+          schools: { connect: { id: school.id } },
+        },
+        select: { id: true },
+      });
+
+      const classCode = generateClassCode();
+      const classArtKey = await pickClassArtKeyForOrganization(org.id);
+      await tx.class.create({
+        data: {
+          schoolId: school.id,
+          schoolYear: currentSchoolYear(),
+          title: 'My Class',
+          code: classCode,
+          cardGradientKey: generateClassCardGradientKey(classCode),
+          classArtKey,
+          teachers: { connect: { id: membership.id } },
+        },
+      });
+
+      await linkBundleAssignmentTypes(tx, org.id);
+
+      await tx.freeTierApplication.update({
+        where: { id: application.id },
+        data: { organizationId: org.id },
+      });
+
+      return { status: 'provisioned', organizationId: org.id };
+    }
+  );
+
+  if (
+    result.status === 'provisioned' ||
+    result.status === 'already_provisioned'
+  ) {
+    const application = await prisma.freeTierApplication.findUnique({
       where: { id: applicationId },
       select: {
         id: true,
-        email: true,
-        schoolName: true,
+        status: true,
         userId: true,
         organizationId: true,
+        acquisitionTokenId: true,
+        acquisitionToken: {
+          select: {
+            label: true,
+            sourceName: true,
+            eventLocation: true,
+            eventDate: true,
+            bypassWaitlist: true,
+          },
+        },
       },
     });
-    if (!application) {
-      throw new Error('free_tier_application_not_found');
+    if (application?.organizationId) {
+      captureFreeTierAnalyticsEvent({
+        event: FREE_TIER_ANALYTICS_EVENTS.activation,
+        distinctId: `free-tier-application:${application.id}`,
+        properties: {
+          application_id: application.id,
+          application_status: application.status,
+          teacher_user_id: application.userId,
+          organization_id: application.organizationId,
+          activation_step: result.status,
+          acquisition_token_id: application.acquisitionTokenId,
+          acquisition_channel: acquisitionChannel({
+            acquisitionTokenId: application.acquisitionTokenId,
+            sourceName: application.acquisitionToken?.sourceName,
+          }),
+          token_label: application.acquisitionToken?.label ?? null,
+          source_name: application.acquisitionToken?.sourceName ?? null,
+          event_location: application.acquisitionToken?.eventLocation ?? null,
+          event_date:
+            application.acquisitionToken?.eventDate?.toISOString() ?? null,
+          bypass_waitlist: application.acquisitionToken?.bypassWaitlist ?? null,
+        },
+      });
     }
+  }
 
-    if (application.organizationId) {
-      return {
-        status: 'already_provisioned',
-        organizationId: application.organizationId,
-      };
-    }
-
-    if (!application.userId) {
-      return { status: 'pending_user' };
-    }
-
-    const domain = emailDomain(application.email);
-    if (
-      domain &&
-      !isConsumerEmailDomain(domain) &&
-      (await teacherEmailDomainMatchesSchoolOrg(domain))
-    ) {
-      return { status: 'routed_to_school_onboarding' };
-    }
-
-    const existingSchoolMembership = await tx.orgMembership.findFirst({
-      where: {
-        userId: application.userId,
-        organization: { plan: 'SCHOOL', id: { not: 'default-org' } },
-      },
-      select: { id: true },
-    });
-    if (existingSchoolMembership) {
-      return { status: 'routed_to_school_onboarding' };
-    }
-
-    const now = new Date();
-    const org = await tx.organization.create({
-      data: {
-        name: application.schoolName.trim() || 'Free Classroom',
-        plan: 'FREE_CLASSROOM' satisfies OrganizationPlan,
-        planActivatedAt: now,
-        numOfStudentSeats: FREE_CLASSROOM_STUDENT_SEAT_CAP,
-        numOfTeacherSeats: FREE_CLASSROOM_TEACHER_SEAT_CAP,
-        reporterEnabled: false,
-        classInsightsEnabled: true,
-        revisionFlowEnabled: true,
-      },
-      select: { id: true },
-    });
-
-    const schoolCode = schoolCodeFromName(application.schoolName, application.id);
-    const school = await tx.school.create({
-      data: {
-        organizationId: org.id,
-        name: application.schoolName,
-        code: schoolCode,
-      },
-      select: { id: true },
-    });
-
-    const membership = await tx.orgMembership.create({
-      data: {
-        userId: application.userId,
-        organizationId: org.id,
-        role: 'TEACHER',
-        isOrgOwner: true,
-        schools: { connect: { id: school.id } },
-      },
-      select: { id: true },
-    });
-
-    const classCode = generateClassCode();
-    const classArtKey = await pickClassArtKeyForOrganization(org.id);
-    await tx.class.create({
-      data: {
-        schoolId: school.id,
-        schoolYear: currentSchoolYear(),
-        title: 'My Class',
-        code: classCode,
-        cardGradientKey: generateClassCardGradientKey(classCode),
-        classArtKey,
-        teachers: { connect: { id: membership.id } },
-      },
-    });
-
-    await linkBundleAssignmentTypes(tx, org.id);
-
-    await tx.freeTierApplication.update({
-      where: { id: application.id },
-      data: { organizationId: org.id },
-    });
-
-    return { status: 'provisioned', organizationId: org.id };
-  });
+  return result;
 }
 
 /** Free Tier C calls this after the teacher account exists. */
@@ -207,7 +281,9 @@ export async function retryFreeClassroomProvisioningForUser(userId: string) {
   return provisionFreeClassroom(application.id);
 }
 
-export async function provisionFreeClassroomFromApproval(applicationId: string) {
+export async function provisionFreeClassroomFromApproval(
+  applicationId: string
+) {
   const result = await provisionFreeClassroom(applicationId);
   if (result.status === 'routed_to_school_onboarding') {
     console.info('free_tier_provision_routed_to_school', { applicationId });

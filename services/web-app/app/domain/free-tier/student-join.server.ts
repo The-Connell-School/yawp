@@ -21,6 +21,10 @@ import {
 } from './prisma-username-conflict';
 import { evaluateTeacherResetHandleStudentEligibility } from './teacher-reset-handle-student';
 import { generateStudentJoinToken } from '~/utils/student-join-token';
+import {
+  captureFreeTierAnalyticsEvent,
+  FREE_TIER_ANALYTICS_EVENTS,
+} from './posthog-analytics.server';
 
 export type FreeTierClassSummary = {
   id: string;
@@ -206,6 +210,18 @@ export async function registerFreeTierStudent({
       select: { id: true, expirationDate: true },
     });
 
+    captureFreeTierAnalyticsEvent({
+      event: FREE_TIER_ANALYTICS_EVENTS.studentJoin,
+      distinctId: `free-tier-student:${membership.userId}`,
+      properties: {
+        student_user_id: membership.userId,
+        membership_id: membership.id,
+        organization_id: klass.school.organizationId,
+        class_id: klass.id,
+        acquisition_channel: 'student_join_link',
+      },
+    });
+
     return {
       status: 'ok' as const,
       membershipId: membership.id,
@@ -227,7 +243,9 @@ export async function registerFreeTierStudent({
         typeof error === 'object' &&
         (error as { code?: string }).code === 'USERNAME_TAKEN')
     ) {
-      const suggestions = await suggestAvailableUsernames(usernameResult.username);
+      const suggestions = await suggestAvailableUsernames(
+        usernameResult.username
+      );
       return {
         status: 'error' as const,
         field: 'username' as const,
@@ -296,7 +314,10 @@ export async function teacherResetStudentPassword({
     },
   });
   if (!student) {
-    return { status: 'error' as const, error: 'Student not found in this class.' };
+    return {
+      status: 'error' as const,
+      error: 'Student not found in this class.',
+    };
   }
 
   const eligibility = evaluateTeacherResetHandleStudentEligibility(

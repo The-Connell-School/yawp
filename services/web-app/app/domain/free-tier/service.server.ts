@@ -1,4 +1,7 @@
-import { recordTesterAudit, type TesterAuditActor } from './tester-audit.server';
+import {
+  recordTesterAudit,
+  type TesterAuditActor,
+} from './tester-audit.server';
 import { createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
@@ -10,6 +13,11 @@ import {
   FREE_TIER_SCAN_DEDUPE_MS,
   hashScanDedupeCookie,
 } from './acquisition-token-scan.server';
+import {
+  acquisitionChannel,
+  captureFreeTierAnalyticsEvent,
+  FREE_TIER_ANALYTICS_EVENTS,
+} from './posthog-analytics.server';
 
 /** Read at call time so ops can change it with an env var and tests can override it. */
 export function getFreeTierReleaseCap(): number {
@@ -56,6 +64,9 @@ const acquisitionTokenCoreSelect = {
   expiresAt: true,
   bypassWaitlist: true,
   disabledAt: true,
+  sourceName: true,
+  eventLocation: true,
+  eventDate: true,
 } as const;
 
 type AcquisitionTokenClient = Pick<typeof prisma, 'acquisitionToken'>;
@@ -92,8 +103,10 @@ export function canRedeemToken(record: {
   | { ok: false; reason: 'expired' | 'exhausted' | 'disabled' } {
   if (record.disabledAt) return { ok: false, reason: 'disabled' };
   const now = Date.now();
-  if (record.expiresAt && record.expiresAt.getTime() <= now) return { ok: false, reason: 'expired' };
-  if (record.maxUses != null && record.uses >= record.maxUses) return { ok: false, reason: 'exhausted' };
+  if (record.expiresAt && record.expiresAt.getTime() <= now)
+    return { ok: false, reason: 'expired' };
+  if (record.maxUses != null && record.uses >= record.maxUses)
+    return { ok: false, reason: 'exhausted' };
   return { ok: true, reason: null };
 }
 
@@ -114,6 +127,17 @@ export async function recordAcquisitionTokenScan(input: {
       select: { id: true },
     });
     if (recent) return;
+    const token = await prisma.acquisitionToken.findUnique({
+      where: { id: input.tokenId },
+      select: {
+        id: true,
+        label: true,
+        sourceName: true,
+        eventLocation: true,
+        eventDate: true,
+        bypassWaitlist: true,
+      },
+    });
     await prisma.$transaction([
       prisma.acquisitionTokenScan.create({
         data: {
@@ -127,6 +151,19 @@ export async function recordAcquisitionTokenScan(input: {
         data: { scanCount: { increment: 1 } },
       }),
     ]);
+    captureFreeTierAnalyticsEvent({
+      event: FREE_TIER_ANALYTICS_EVENTS.scan,
+      distinctId: `free-tier-token:${input.tokenId}:${dedupeCookieHash}`,
+      properties: {
+        acquisition_token_id: input.tokenId,
+        acquisition_channel: 'event_link',
+        token_label: token?.label ?? null,
+        source_name: token?.sourceName ?? null,
+        event_location: token?.eventLocation ?? null,
+        event_date: token?.eventDate?.toISOString() ?? null,
+        bypass_waitlist: token?.bypassWaitlist ?? null,
+      },
+    });
   } catch (error) {
     console.error('free_tier_scan_record_failed', {
       error: error instanceof Error ? error.message : String(error),
@@ -142,7 +179,7 @@ export async function submitWaitlist(input: WaitlistInput) {
   // anyone who knows an address overwrite that applicant's name/school would be
   // a tampering path, and replying differently would reveal the address exists.
   // ON CONFLICT DO NOTHING keeps this a single statement with no error path.
-  await prisma.freeTierApplication.createMany({
+  const create = await prisma.freeTierApplication.createMany({
     data: [
       {
         name: parsed.name,
@@ -155,6 +192,26 @@ export async function submitWaitlist(input: WaitlistInput) {
     ],
     skipDuplicates: true,
   });
+  const application = await prisma.freeTierApplication.findUnique({
+    where: { email },
+    select: { id: true, status: true, acquisitionTokenId: true },
+  });
+  if (application) {
+    captureFreeTierAnalyticsEvent({
+      event: FREE_TIER_ANALYTICS_EVENTS.signup,
+      distinctId: `free-tier-application:${application.id}`,
+      properties: {
+        application_id: application.id,
+        application_status: application.status,
+        acquisition_token_id: application.acquisitionTokenId,
+        acquisition_channel: acquisitionChannel({
+          acquisitionTokenId: application.acquisitionTokenId,
+        }),
+        created: create.count > 0,
+        bypass_waitlist: false,
+      },
+    });
+  }
   return { ok: true as const };
 }
 
@@ -240,7 +297,12 @@ export async function createAcquisitionTokens(input: TokenCreateInput) {
       },
       select: { id: true },
     });
-    tokens.push({ token: code, code, id: row.id, url: buildFreeTierEventLink(code) });
+    tokens.push({
+      token: code,
+      code,
+      id: row.id,
+      url: buildFreeTierEventLink(code),
+    });
   }
   return tokens;
 }
@@ -292,7 +354,11 @@ export async function listAcquisitionTokensWithStats() {
     byToken.set(row.acquisitionTokenId, bucket);
   }
   return tokens.map((token) => {
-    const stats = byToken.get(token.id) ?? { signUps: 0, approved: 0, waitlisted: 0 };
+    const stats = byToken.get(token.id) ?? {
+      signUps: 0,
+      approved: 0,
+      waitlisted: 0,
+    };
     return {
       ...token,
       url: token.code ? buildFreeTierEventLink(token.code) : null,
@@ -308,25 +374,41 @@ export async function listAcquisitionTokensWithStats() {
   });
 }
 
-export async function patchAcquisitionToken(id: string, input: TokenPatchInput) {
+export async function patchAcquisitionToken(
+  id: string,
+  input: TokenPatchInput
+) {
   const parsed = tokenPatchSchema.parse(input);
   if (!Object.keys(parsed).length) return null;
   return prisma.acquisitionToken.update({
     where: { id },
     data: {
       ...(parsed.label !== undefined ? { label: parsed.label } : {}),
-      ...(parsed.bypassWaitlist !== undefined ? { bypassWaitlist: parsed.bypassWaitlist } : {}),
+      ...(parsed.bypassWaitlist !== undefined
+        ? { bypassWaitlist: parsed.bypassWaitlist }
+        : {}),
       ...(parsed.maxUses !== undefined ? { maxUses: parsed.maxUses } : {}),
-      ...(parsed.expiresAt !== undefined ? { expiresAt: parsed.expiresAt } : {}),
-      ...(parsed.sourceName !== undefined ? { sourceName: parsed.sourceName } : {}),
-      ...(parsed.eventLocation !== undefined ? { eventLocation: parsed.eventLocation } : {}),
-      ...(parsed.eventDate !== undefined ? { eventDate: parsed.eventDate } : {}),
+      ...(parsed.expiresAt !== undefined
+        ? { expiresAt: parsed.expiresAt }
+        : {}),
+      ...(parsed.sourceName !== undefined
+        ? { sourceName: parsed.sourceName }
+        : {}),
+      ...(parsed.eventLocation !== undefined
+        ? { eventLocation: parsed.eventLocation }
+        : {}),
+      ...(parsed.eventDate !== undefined
+        ? { eventDate: parsed.eventDate }
+        : {}),
       ...(parsed.notes !== undefined ? { notes: parsed.notes } : {}),
     },
   });
 }
 
-export async function setAcquisitionTokenDisabled(id: string, disabled: boolean) {
+export async function setAcquisitionTokenDisabled(
+  id: string,
+  disabled: boolean
+) {
   return prisma.acquisitionToken.update({
     where: { id },
     data: { disabledAt: disabled ? new Date() : null },
@@ -359,10 +441,11 @@ export async function redeemToken(input: RedeemInput) {
   const parsed = redeemInputSchema.parse(input);
   const email = normalizeEmail(parsed.email);
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const resolved = await findAcquisitionTokenByCredentialOn(tx, parsed.token);
     if (!resolved) return { ok: false as const, reason: 'invalid' as const };
-    if (resolved.disabledAt) return { ok: false as const, reason: 'disabled' as const };
+    if (resolved.disabledAt)
+      return { ok: false as const, reason: 'disabled' as const };
     const token = resolved;
 
     const existing = await tx.freeTierApplication.findUnique({
@@ -402,15 +485,19 @@ export async function redeemToken(input: RedeemInput) {
               disabledAt: fresh.disabledAt,
             })
           : ({ ok: false, reason: 'invalid' } as const);
-        return { ok: false as const, reason: gate.ok ? ('exhausted' as const) : gate.reason };
+        return {
+          ok: false as const,
+          reason: gate.ok ? ('exhausted' as const) : gate.reason,
+        };
       }
     }
 
     const now = new Date();
+    let created = false;
     if (!existing) {
       // ON CONFLICT DO NOTHING: a failed INSERT inside a transaction would abort
       // it, and losing a race for the same email just means the other writer won.
-      await tx.freeTierApplication.createMany({
+      const inserted = await tx.freeTierApplication.createMany({
         data: [
           {
             name: parsed.name,
@@ -425,11 +512,16 @@ export async function redeemToken(input: RedeemInput) {
         ],
         skipDuplicates: true,
       });
+      created = inserted.count > 0;
     } else {
       // Never overwrite an applicant's details or move them backwards. The only
       // change a bypass token may make is LEAD -> INVITED (a legal transition),
       // and the token is recorded as the source if there was none.
-      const data: { status?: FreeTierApplicationStatus; releasedAt?: Date; acquisitionTokenId?: string } = {};
+      const data: {
+        status?: FreeTierApplicationStatus;
+        releasedAt?: Date;
+        acquisitionTokenId?: string;
+      } = {};
       if (token.bypassWaitlist && existing.status === 'LEAD') {
         assertTransition('LEAD', 'INVITED');
         data.status = 'INVITED';
@@ -437,11 +529,52 @@ export async function redeemToken(input: RedeemInput) {
       }
       if (!existing.acquisitionTokenId) data.acquisitionTokenId = token.id;
       if (Object.keys(data).length > 0) {
-        await tx.freeTierApplication.update({ where: { id: existing.id }, data });
+        await tx.freeTierApplication.update({
+          where: { id: existing.id },
+          data,
+        });
       }
     }
-    return { ok: true as const, bypassWaitlist: token.bypassWaitlist };
+    const application = await tx.freeTierApplication.findUnique({
+      where: { email },
+      select: { id: true, status: true, acquisitionTokenId: true },
+    });
+    return {
+      ok: true as const,
+      bypassWaitlist: token.bypassWaitlist,
+      created,
+      applicationId: application?.id ?? existing?.id ?? null,
+      applicationStatus: application?.status ?? existing?.status ?? null,
+      acquisitionToken: {
+        id: token.id,
+        label: token.label,
+        sourceName: token.sourceName,
+        eventLocation: token.eventLocation,
+        eventDate: token.eventDate,
+      },
+    };
   });
+
+  if (result.ok && result.applicationId) {
+    captureFreeTierAnalyticsEvent({
+      event: FREE_TIER_ANALYTICS_EVENTS.signup,
+      distinctId: `free-tier-application:${result.applicationId}`,
+      properties: {
+        application_id: result.applicationId,
+        application_status: result.applicationStatus,
+        acquisition_token_id: result.acquisitionToken.id,
+        acquisition_channel: 'event_link',
+        token_label: result.acquisitionToken.label,
+        source_name: result.acquisitionToken.sourceName,
+        event_location: result.acquisitionToken.eventLocation,
+        event_date: result.acquisitionToken.eventDate?.toISOString() ?? null,
+        bypass_waitlist: result.bypassWaitlist,
+        created: result.created,
+      },
+    });
+  }
+
+  return result;
 }
 
 export const releaseBatchSchema = z
@@ -451,7 +584,10 @@ export const releaseBatchSchema = z
   .strict();
 export type ReleaseBatchInput = z.infer<typeof releaseBatchSchema>;
 
-export async function releaseBatch(input: ReleaseBatchInput, audit?: TesterAuditActor) {
+export async function releaseBatch(
+  input: ReleaseBatchInput,
+  audit?: TesterAuditActor
+) {
   const parsed = releaseBatchSchema.parse(input);
   const cap = getFreeTierReleaseCap();
   const ids = [...new Set(parsed.applicationIds)];
@@ -468,7 +604,9 @@ export async function releaseBatch(input: ReleaseBatchInput, audit?: TesterAudit
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('free_tier_release'))`;
     const current = await tx.freeTierApplication.count({
-      where: { OR: [{ releasedAt: { not: null } }, { status: { in: activeStatuses } }] },
+      where: {
+        OR: [{ releasedAt: { not: null } }, { status: { in: activeStatuses } }],
+      },
     });
     const remaining = Math.max(0, cap - current);
     // Only waitlisted leads can be released; already-released or unknown ids do
@@ -485,10 +623,12 @@ export async function releaseBatch(input: ReleaseBatchInput, audit?: TesterAudit
       if (audit) {
         for (const id of toRelease) {
           const updated = await tx.freeTierApplication.updateMany({
-            where: { id, status: 'LEAD' }, data: { status: 'INVITED', releasedAt: new Date() },
+            where: { id, status: 'LEAD' },
+            data: { status: 'INVITED', releasedAt: new Date() },
           });
           released += updated.count;
-          if (updated.count) await recordTesterAudit(tx, audit, id, { status: 'INVITED' });
+          if (updated.count)
+            await recordTesterAudit(tx, audit, id, { status: 'INVITED' });
         }
       } else {
         const updated = await tx.freeTierApplication.updateMany({

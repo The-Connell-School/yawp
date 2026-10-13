@@ -14,6 +14,10 @@ import {
   resolveSubmissionActivityActorMembershipId,
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
+import {
+  captureFreeTierAnalyticsEvent,
+  FREE_TIER_ANALYTICS_EVENTS,
+} from '~/domain/free-tier/posthog-analytics.server';
 
 const POST = z.object({ documentId: z.string(), title: z.string().optional() });
 
@@ -80,6 +84,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
       membership: {
         select: {
           organizationId: true,
+          organization: { select: { plan: true } },
           classesAsStudent: {
             select: {
               id: true,
@@ -206,6 +211,37 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
 
         return { submission, document: doc };
       });
+
+    if (
+      documentOrganizationId &&
+      document.membership.organization.plan === 'FREE_CLASSROOM'
+    ) {
+      const submissionCount = await prisma.submission.count({
+        where: {
+          document: {
+            membership: { organizationId: documentOrganizationId },
+          },
+        },
+      });
+      if (submissionCount === 1) {
+        captureFreeTierAnalyticsEvent({
+          event: FREE_TIER_ANALYTICS_EVENTS.firstEssay,
+          distinctId: `free-tier-organization:${documentOrganizationId}`,
+          properties: {
+            organization_id: documentOrganizationId,
+            submission_id: createdSubmission.id,
+            document_id: document.id,
+            class_id:
+              document.classAssignment?.class.id ??
+              document.membership.classesAsStudent[0]?.id ??
+              null,
+            is_first_essay: true,
+            submission_count: submissionCount,
+            acquisition_channel: 'free_classroom',
+          },
+        });
+      }
+    }
 
     return dataResponse({
       success: true,
