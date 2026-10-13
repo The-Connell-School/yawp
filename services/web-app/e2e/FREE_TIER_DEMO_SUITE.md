@@ -5,16 +5,16 @@ The durable runner for the free-tier demo coverage is:
 ```bash
 cd services/web-app
 PLAYWRIGHT_BROWSERS_PATH=/home/bryant/.cache/ms-playwright \
-FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-waitlist-copy-post-fix-verify \
+FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-waitlist-copy-fix-verify-rerun \
 bun run test:e2e:free-tier-demo
 ```
 
-For this `qa-waitlist-copy-post-fix-verify` rerun, use:
+For this `qa-waitlist-copy-fix-verify-rerun` rerun, use:
 
 ```bash
 cd services/web-app
 PLAYWRIGHT_BROWSERS_PATH=/home/bryant/.cache/ms-playwright \
-FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-waitlist-copy-post-fix-verify \
+FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-waitlist-copy-fix-verify-rerun \
 bun run test:e2e:free-tier-demo
 ```
 
@@ -72,10 +72,10 @@ If this suite finds a regression, append the lane failure note and attempt to fi
 ```bash
 cd services/web-app
 bun run scripts/file-free-tier-qa-failure.ts \
-  --id=ft-qa-waitlist-copy-post-fix-verify \
-  --slug=qa-waitlist-copy-post-fix-verify \
-  --title="Demo waitlist event-link still shows join-link copy after fixes" \
-  --evidence="/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-waitlist-copy-post-fix-verify" \
+  --id=ft-qa-waitlist-copy-fix-verify-rerun \
+  --slug=qa-waitlist-copy-fix-verify-rerun \
+  --title="Demo waitlist event-link still shows join-link copy on rerun" \
+  --evidence="/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-waitlist-copy-fix-verify-rerun" \
   --severity=major \
   --repro="Run \`bun run test:e2e:free-tier-demo\`." \
   --expected="The free-tier demo E2E suite passes without regressions." \
