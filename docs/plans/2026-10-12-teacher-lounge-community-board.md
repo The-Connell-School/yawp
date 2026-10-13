@@ -1,8 +1,57 @@
 # Teacher's Lounge → teacher community board
 
-Status: brainstorm + proposed plan (2026-10-12). Nothing here is built.
+Status: Phase 1 built behind `teacher_lounge_community` (2026-10-13). See
+"Phase 1 as built" below.
 Source: Kevin's request to rethink the Teacher's Lounge now that its training
 materials are moving into the modules and lessons themselves.
+
+## Phase 1 as built (2026-10-13)
+
+Decided: the hybrid feed (Question / Share / Win), keep the "Teacher's
+Lounge" name, simplified layout from the second round of mockups.
+
+| Piece | Where |
+| --- | --- |
+| Flag, off by default, per school | `domain/feature-flags/feature-flags.ts` (`LOUNGE_COMMUNITY_FLAG`) |
+| Tables (additive migration) | `20261013120000_teacher_lounge_community` |
+| Pure logic (bylines, mentions, privacy nudge, Top ranking, validation, access rule) | `app/domain/lounge/*.ts`, unit tested |
+| Reads and writes | `app/domain/lounge/lounge.server.ts`, real-DB test with `LOUNGE_DB_TESTS=1` |
+| Emails | `app/domain/lounge/notifications.server.ts` |
+| Feed, identity card, composer, thread | `routes/app.lounge._index`, `app.lounge.welcome`, `app.lounge.new`, `app.lounge.$postId` |
+| Staff inbox (asks, mentions, reports) | `routes/app.admin.lounge`, new "Lounge" admin tab |
+| Nav | Lounge item opens `/app/lounge` when the flag is on; course grid keeps `/app/teacher-trainings` with Community / Trainings tabs |
+| E2E | `e2e/tests/teacher.lounge-community.spec.ts` |
+
+Flag off, nothing changes: the nav item, the course grid page, and its
+markup are exactly as before, and every `/app/lounge` URL returns 404.
+
+Defaults chosen where the decisions below were still open:
+
+- **Cross-school identity.** On first post or reply a teacher picks Full
+  name and school, First name + last initial and school (default), or First
+  name only (school hidden). They can change it later.
+- **Who is "the Yawp team".** Every user with `isAdmin`. They always see the
+  community, appear by full name with "Yawp team", and are listed first in
+  the @mention picker.
+- **Asking Brian.** A checkbox, "Ask the Yawp team to answer this", or an
+  @mention of a team member, puts the thread in the inbox. A team reply
+  marks it answered. "Keep it private" makes a post visible only to its
+  author and the team.
+- **Video replies.** A Loom, YouTube, or Vimeo https link on a team reply,
+  shown as "Watch the video". Upload through the S3 pipeline is Phase 2.
+- **Emails.** Replies and mentions email the person (opt-out column exists,
+  no settings UI yet). Questions for the team email
+  `LOUNGE_STAFF_NOTIFY_EMAILS` (comma separated); unset means inbox only.
+- **Limits.** 10 posts and 60 replies per teacher per hour.
+- **Moderation.** Report on any post or reply; the team hides or dismisses
+  from the inbox. Authors can delete their own. No editing yet.
+
+To pilot: set `LOUNGE_STAFF_NOTIFY_EMAILS` for Brian, then target the flag
+at the pilot schools from Yawp Internal.
+
+Not built yet (Phase 2 and later): Discuss tabs on modules and lessons,
+attaching Yawp objects to posts, video upload, unread badge, editing,
+notification settings, weekly digest, search.
 
 ## Why now
 
