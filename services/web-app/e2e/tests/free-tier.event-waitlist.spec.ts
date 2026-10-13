@@ -2,7 +2,7 @@
  * QA repro for demo free-tier event links in waitlist mode.
  *
  * Local faithful demo stand-in:
- *   QA_SCREENSHOT_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-event-waitlist \
+ *   QA_SCREENSHOT_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-fixes/shots/qa-event-waitlist \
  *   PLAYWRIGHT_BROWSERS_PATH=/home/bryant/.cache/ms-playwright \
  *   bunx playwright test --config=playwright.free-tier-event-waitlist.config.ts
  */
@@ -17,7 +17,7 @@ import { waitForFreeTierEmailPayload } from '../helpers/free-tier-email';
 
 const OUT =
   process.env.QA_SCREENSHOT_DIR?.trim() ||
-  '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-event-waitlist';
+  '/home/bryant/work/yawp/codex-loop/lanes/free-tier-fixes/shots/qa-event-waitlist';
 const E2E_MANAGEMENT_SERVICE_KEY =
   'e2e-free-tier-release-management-key-000000000000';
 
@@ -114,6 +114,8 @@ test.describe('Free-tier event waitlist QA', () => {
       await expect(status).toBeVisible({ timeout: 15_000 });
       await shot(page, '02-event-waitlist-submitted.png');
       const statusText = (await status.textContent())?.trim() ?? '';
+      await expect(status).toContainText("You're on the list.");
+      await expect(status).not.toContainText('join link');
 
       const app = await prisma.freeTierApplication.findUniqueOrThrow({
         where: { email },
@@ -133,20 +135,18 @@ test.describe('Free-tier event waitlist QA', () => {
         name: teacherName,
       });
 
-      if (!statusText.includes("You're on the list.")) {
-        await note(
-          '02-event-waitlist-copy-mismatch.txt',
-          [
-            'Observed local demo waitlist-mode event copy mismatch.',
-            `label: ${label}`,
-            `email: ${email}`,
-            `applicationId: ${app.id}`,
-            'expected copy: You\'re on the list.',
-            `actual copy: ${statusText}`,
-            'database status: LEAD',
-          ].join('\n')
-        );
-      }
+      await note(
+        '02-event-waitlist-copy.txt',
+        [
+          'Observed local demo waitlist-mode event confirmation copy.',
+          `label: ${label}`,
+          `email: ${email}`,
+          `applicationId: ${app.id}`,
+          'expected copy: You\'re on the list.',
+          `actual copy: ${statusText}`,
+          'database status: LEAD',
+        ].join('\n')
+      );
 
       const afterRedeem = await prisma.acquisitionToken.findUniqueOrThrow({
         where: { id: token.id },

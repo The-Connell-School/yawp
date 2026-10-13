@@ -10,7 +10,7 @@ Local faithful demo stand-in:
 
 ```bash
 cd services/web-app
-QA_SCREENSHOT_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-event-waitlist \
+QA_SCREENSHOT_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-fixes/shots/qa-event-waitlist \
 PLAYWRIGHT_BROWSERS_PATH=/home/bryant/.cache/ms-playwright \
 bunx playwright test --config=playwright.free-tier-event-waitlist.config.ts
 ```

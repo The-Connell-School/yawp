@@ -48,11 +48,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 const formSchema = waitlistInputSchema;
 
-export function freeTierSubmitSuccessCopy(loaderData: {
-  mode: 'waitlist' | 'token';
-  tokenValid: { valid: boolean } | null;
-}) {
-  if (loaderData.mode === 'token' && loaderData.tokenValid?.valid) {
+type FreeTierSubmitSuccessInput = {
+  redeemed?: boolean;
+  bypassWaitlist?: boolean;
+};
+
+export function freeTierSubmitSuccessCopy(submission: FreeTierSubmitSuccessInput | undefined) {
+  if (submission?.redeemed && submission.bypassWaitlist) {
     return {
       headline: 'Check your email for your join link.',
       detail: null,
@@ -118,7 +120,11 @@ export async function action({ request }: ActionFunctionArgs) {
       );
       if (row) await sendReleaseEmailsForApplicationIds([row.id]);
     }
-    return { ok: true as const, redeemed: true as const };
+    return {
+      ok: true as const,
+      redeemed: true as const,
+      bypassWaitlist: result.bypassWaitlist,
+    };
   }
 
   const parsed = formSchema.safeParse({
@@ -138,7 +144,7 @@ export default function FreeTierLandingRoute() {
   const data = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const submitted = fetcher.data?.ok === true;
-  const submitSuccess = submitted ? freeTierSubmitSuccessCopy(data) : null;
+  const submitSuccess = submitted ? freeTierSubmitSuccessCopy(fetcher.data) : null;
 
   const title =
     data.mode === 'token' ? 'Try YAWP with your students' : 'Try YAWP with your students';
