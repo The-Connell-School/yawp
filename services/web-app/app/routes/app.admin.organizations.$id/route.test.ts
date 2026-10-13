@@ -76,6 +76,15 @@ function organizationFixture() {
 }
 
 function updateRequest(form: URLSearchParams) {
+  if (form.get('intent') === 'update') form.set('intent', 'legacy-update');
+  return new Request('https://example.test/app/admin/organizations/org-1', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: form,
+  });
+}
+
+function rawUpdateRequest(form: URLSearchParams) {
   return new Request('https://example.test/app/admin/organizations/org-1', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -143,6 +152,25 @@ describe('admin organization detail route', () => {
     expect(response.data).not.toHaveProperty(
       ['writingPractice', 'Enabled'].join('')
     );
+  });
+
+  test('marks platform organization updates as moved to Internal', async () => {
+    const form = new URLSearchParams({ intent: 'update', name: 'Moved Org' });
+
+    const response = await action({
+      request: rawUpdateRequest(form),
+      params: { id: 'org-1' },
+      context: {} as never,
+    });
+
+    expect(response).toMatchObject({
+      init: { status: 410 },
+      data: {
+        status: 'error',
+        error: 'Organization updates have moved to Yawp Internal.',
+      },
+    });
+    expect(prisma.organization.update).not.toHaveBeenCalled();
   });
 
   test('updates organization assignment types without writing practice state', async () => {

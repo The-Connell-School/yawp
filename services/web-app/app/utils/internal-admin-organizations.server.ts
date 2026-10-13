@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { createHash } from 'node:crypto';
 import { authorizeInternalApiRequest } from './internal-platform-auth.server';
 import { prisma } from './db.server';
 import {
@@ -43,8 +44,11 @@ type OrganizationDetailDb = OrganizationListDb & {
 
 type Dependencies = {
   organization: OrganizationListDb & OrganizationDetailDb;
+  organizationAssignmentType: Pick<typeof prisma.organizationAssignmentType, 'deleteMany' | 'createMany'>;
   assignmentType: Pick<typeof prisma.assignmentType, 'findMany'>;
   invitation: Pick<typeof prisma.invitation, 'findMany'>;
+  internalPlatformApiAudit: Pick<typeof prisma.internalPlatformApiAudit, 'create' | 'createMany' | 'findFirst'>;
+  $transaction: typeof prisma.$transaction;
   $queryRaw: typeof prisma.$queryRaw;
 };
 
@@ -86,6 +90,112 @@ function listOrderBy(sort: z.infer<typeof sortSchema>, direction: z.infer<typeof
 function previewAccessCode(id: string, code: string | null | undefined, previewSeatMode: boolean) {
   if (!previewSeatMode) return null;
   return code ?? getConfiguredPreviewOrganizationAccessCode(id);
+}
+
+const organizationWriteSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+  numOfStudentSeats: z.coerce.number().int().min(0).max(100_000),
+  numOfTeacherSeats: z.coerce.number().int().min(0).max(100_000),
+  accessExpiresAt: z.string().trim().max(80).nullable().optional(),
+  featureToggles: z.object({
+    reporterEnabled: z.boolean().optional(),
+    classInsightsEnabled: z.boolean().optional(),
+    writingPracticeEnabled: z.boolean().optional(),
+    submissionActivityEnabled: z.boolean().optional(),
+    revisionFlowEnabled: z.boolean().optional(),
+    apHistoryEnabled: z.boolean().optional(),
+    collaborativeDraftsEnabled: z.boolean().optional(),
+    studentDocumentSharingEnabled: z.boolean().optional(),
+  }).optional().default({}),
+  assignmentTypeIds: z.array(z.string().min(1)).max(500).optional().default([]),
+}).strict();
+
+function parseAccessExpiresAt(value: string | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) return undefined;
+  return date;
+}
+
+function requestHash(body: string) {
+  return createHash('sha256').update(body).digest('hex');
+}
+
+function snapshotOrganization(row: any) {
+  if (!row) return null;
+  const assignmentTypeIds = (row.assignmentTypeAssignments ?? [])
+    .map((link: any) => link.assignmentTypeId)
+    .sort();
+  return {
+    id: row.id,
+    name: row.name,
+    numOfStudentSeats: row.numOfStudentSeats,
+    numOfTeacherSeats: row.numOfTeacherSeats,
+    accessExpiresAt: row.accessExpiresAt,
+    featureToggles: featureToggles(row),
+    assignmentTypeIds,
+  };
+}
+
+async function writeAuditRows(tx: any, args: {
+  auth: { actorEmail: string; keyId: string };
+  endpoint: string;
+  hash: string;
+  action: string;
+  targetId: string;
+  before: unknown;
+  after: unknown;
+  idempotencyKey?: string | null;
+}) {
+  await tx.internalPlatformApiAudit.createMany({
+    data: [
+      {
+        actorEmail: args.auth.actorEmail,
+        keyId: args.auth.keyId,
+        endpoint: args.endpoint,
+        requestHash: args.hash,
+        result: 'before',
+        action: `${args.action}.before`,
+        targetId: args.targetId,
+        metadata: { before: args.before, idempotencyKey: args.idempotencyKey ?? null },
+      },
+      {
+        actorEmail: args.auth.actorEmail,
+        keyId: args.auth.keyId,
+        endpoint: args.endpoint,
+        requestHash: args.hash,
+        result: 'after',
+        action: `${args.action}.after`,
+        targetId: args.targetId,
+        metadata: { after: args.after, idempotencyKey: args.idempotencyKey ?? null },
+      },
+    ],
+  });
+}
+
+async function parseWriteRequest(request: Request) {
+  const body = await request.text();
+  const auth = await authorizeInternalApiRequest(request, { body, requiredScope: 'management:write' });
+  if (auth instanceof Response) return { auth };
+  let raw: unknown;
+  try {
+    raw = JSON.parse(body || '{}');
+  } catch {
+    return { response: response({ error: 'Invalid JSON' }, 400) };
+  }
+  const parsed = organizationWriteSchema.safeParse(raw);
+  if (!parsed.success) return { response: response({ error: 'Invalid organization request' }, 400) };
+  const accessExpiresAt = parseAccessExpiresAt(parsed.data.accessExpiresAt);
+  if (accessExpiresAt === undefined) return { response: response({ error: 'Invalid access expiration' }, 400) };
+  return {
+    auth,
+    body,
+    data: {
+      ...parsed.data,
+      accessExpiresAt,
+      assignmentTypeIds: Array.from(new Set(parsed.data.assignmentTypeIds)),
+    },
+  };
 }
 
 export async function internalAdminOrganizationsList(
@@ -263,4 +373,153 @@ export async function internalAdminOrganizationDetail(
     previewSeatMode,
     meta: { requestedBy: auth.actorEmail, keyId: auth.keyId },
   });
+}
+
+export async function internalAdminOrganizationCreate(
+  request: Request,
+  client: Dependencies = deps
+) {
+  if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
+  const parsed = await parseWriteRequest(request);
+  if ('response' in parsed) return parsed.response;
+  if (parsed.auth instanceof Response) return parsed.auth;
+  const accessExpiresAt = parsed.data.accessExpiresAt;
+  const idempotencyKey = request.headers.get('idempotency-key')?.trim() || null;
+  const hash = requestHash(parsed.body);
+  if (idempotencyKey) {
+    const previous = await client.internalPlatformApiAudit.findFirst({
+      where: {
+        endpoint: 'POST /api/internal/v1/admin/organizations',
+        requestHash: hash,
+        result: 'after',
+        action: 'organization.create.after',
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (previous?.targetId) {
+      const existing = await client.organization.findUnique({
+        where: { id: previous.targetId },
+        include: { assignmentTypeAssignments: true },
+      });
+      if (existing) return response({ organization: snapshotOrganization(existing) });
+    }
+  }
+
+  const validAssignmentTypes = parsed.data.assignmentTypeIds.length
+    ? await client.assignmentType.findMany({
+        where: { id: { in: parsed.data.assignmentTypeIds }, archivedAt: null },
+        select: { id: true },
+      })
+    : [];
+  if (validAssignmentTypes.length !== parsed.data.assignmentTypeIds.length) {
+    return response({ error: 'Assignment type not found' }, 404);
+  }
+
+  const created = await client.$transaction(async (tx: any) => {
+    const organization = await tx.organization.create({
+      data: {
+        name: parsed.data.name,
+        numOfStudentSeats: parsed.data.numOfStudentSeats,
+        numOfTeacherSeats: parsed.data.numOfTeacherSeats,
+        accessExpiresAt,
+        ...parsed.data.featureToggles,
+      },
+      include: { assignmentTypeAssignments: true },
+    });
+    if (parsed.data.assignmentTypeIds.length) {
+      await tx.organizationAssignmentType.createMany({
+        data: parsed.data.assignmentTypeIds.map((assignmentTypeId) => ({
+          organizationId: organization.id,
+          assignmentTypeId,
+        })),
+        skipDuplicates: true,
+      });
+    }
+    const after = await tx.organization.findUnique({
+      where: { id: organization.id },
+      include: { assignmentTypeAssignments: true },
+    });
+    await writeAuditRows(tx, {
+      auth: parsed.auth,
+      endpoint: 'POST /api/internal/v1/admin/organizations',
+      hash,
+      action: 'organization.create',
+      targetId: organization.id,
+      before: null,
+      after: snapshotOrganization(after),
+      idempotencyKey,
+    });
+    return after;
+  });
+
+  return response({ organization: snapshotOrganization(created) }, 201);
+}
+
+export async function internalAdminOrganizationUpdate(
+  request: Request,
+  id: string | undefined,
+  client: Dependencies = deps
+) {
+  if (request.method !== 'PATCH') return response({ error: 'Method not allowed' }, 405);
+  if (!id) return response({ error: 'Organization id is required' }, 400);
+  const parsed = await parseWriteRequest(request);
+  if ('response' in parsed) return parsed.response;
+  if (parsed.auth instanceof Response) return parsed.auth;
+  const accessExpiresAt = parsed.data.accessExpiresAt;
+
+  const [before, validAssignmentTypes] = await Promise.all([
+    client.organization.findUnique({
+      where: { id },
+      include: { assignmentTypeAssignments: true },
+    }),
+    parsed.data.assignmentTypeIds.length
+      ? client.assignmentType.findMany({
+          where: { id: { in: parsed.data.assignmentTypeIds }, archivedAt: null },
+          select: { id: true },
+        })
+      : Promise.resolve([]),
+  ]);
+  if (!before) return response({ error: 'Not found' }, 404);
+  if (validAssignmentTypes.length !== parsed.data.assignmentTypeIds.length) {
+    return response({ error: 'Assignment type not found' }, 404);
+  }
+
+  const after = await client.$transaction(async (tx: any) => {
+    await tx.organization.update({
+      where: { id },
+      data: {
+        name: parsed.data.name,
+        numOfStudentSeats: parsed.data.numOfStudentSeats,
+        numOfTeacherSeats: parsed.data.numOfTeacherSeats,
+        accessExpiresAt,
+        ...parsed.data.featureToggles,
+      },
+    });
+    await tx.organizationAssignmentType.deleteMany({ where: { organizationId: id } });
+    if (parsed.data.assignmentTypeIds.length) {
+      await tx.organizationAssignmentType.createMany({
+        data: parsed.data.assignmentTypeIds.map((assignmentTypeId) => ({
+          organizationId: id,
+          assignmentTypeId,
+        })),
+        skipDuplicates: true,
+      });
+    }
+    const updated = await tx.organization.findUnique({
+      where: { id },
+      include: { assignmentTypeAssignments: true },
+    });
+    await writeAuditRows(tx, {
+      auth: parsed.auth,
+      endpoint: `PATCH /api/internal/v1/admin/organizations/${id}`,
+      hash: requestHash(parsed.body),
+      action: 'organization.update',
+      targetId: id,
+      before: snapshotOrganization(before),
+      after: snapshotOrganization(updated),
+    });
+    return updated;
+  });
+
+  return response({ organization: snapshotOrganization(after) });
 }

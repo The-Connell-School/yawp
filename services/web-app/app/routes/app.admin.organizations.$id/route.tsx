@@ -138,6 +138,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   if (intent === 'update') {
+    return dataResponse(
+      { status: 'error', error: 'Organization updates have moved to Yawp Internal.' },
+      { status: 410 }
+    );
+  }
+
+  if (intent === 'legacy-update') {
     const name = formData.get('name')?.toString();
     const numOfStudentSeats = parseInt(
       formData.get('numOfStudentSeats')?.toString() || '10'
@@ -373,6 +380,9 @@ export default function OrganizationRoute() {
 
   return (
     <div className="grid gap-4 p-3 md:p-5">
+      <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        Organization create/update writes have moved to Yawp Internal. This platform detail page is read-only for organization settings.
+      </div>
       <div className="flex justify-between">
         <Button variant="ghost" asChild>
           <Link to="/app/admin/organizations">
@@ -387,7 +397,7 @@ export default function OrganizationRoute() {
           </Button>
           <Sheet open={isEditSheetOpen} onOpenChange={setIsEditSheetOpen}>
             <SheetTrigger asChild>
-              <Button variant="outline">
+              <Button variant="outline" disabled title="Edit organizations in Yawp Internal">
                 <Settings className="mr-2 h-4 w-4" />
                 Edit Organization
               </Button>

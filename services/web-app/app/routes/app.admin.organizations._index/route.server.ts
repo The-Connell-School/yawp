@@ -89,6 +89,13 @@ export async function organizationsAction({ request }: ActionFunctionArgs) {
   const intent = formData.get('intent');
 
   if (intent === 'create') {
+    return dataResponse(
+      { error: 'Organization creation has moved to Yawp Internal.' },
+      { status: 410 }
+    );
+  }
+
+  if (intent === 'legacy-create') {
     const { error, data } = await parseFormData(
       formData,
       CreateOrganizationSchema

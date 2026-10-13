@@ -2,10 +2,16 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   organization: {
+    create: mock(),
+    update: mock(),
     findMany: mock(),
     findUnique: mock(),
     count: mock(),
     groupBy: mock(),
+  },
+  organizationAssignmentType: {
+    deleteMany: mock(),
+    createMany: mock(),
   },
   assignmentType: {
     findMany: mock(),
@@ -13,6 +19,12 @@ const prisma = {
   invitation: {
     findMany: mock(),
   },
+  internalPlatformApiAudit: {
+    create: mock(),
+    createMany: mock(),
+    findFirst: mock(),
+  },
+  $transaction: mock(),
   $queryRaw: mock(),
   internalApiRequestNonce: {
     deleteMany: mock(),
@@ -49,7 +61,9 @@ mock.module('/home/bryant/work/yawp/codex-loop/worktrees/admin-migrate-2-platfor
 }));
 
 const {
+  internalAdminOrganizationCreate,
   internalAdminOrganizationDetail,
+  internalAdminOrganizationUpdate,
   internalAdminOrganizationsList,
 } = await import('./internal-admin-organizations.server');
 
@@ -67,12 +81,20 @@ describe('internal admin organization endpoints', () => {
       actorEmail: 'ops@yawp.test',
       scopes: ['management:read'],
     });
+    prisma.organization.create.mockReset();
+    prisma.organization.update.mockReset();
     prisma.organization.findMany.mockReset().mockResolvedValue([]);
     prisma.organization.findUnique.mockReset().mockResolvedValue(null);
     prisma.organization.count.mockReset().mockResolvedValue(0);
     prisma.organization.groupBy.mockReset().mockResolvedValue([]);
+    prisma.organizationAssignmentType.deleteMany.mockReset();
+    prisma.organizationAssignmentType.createMany.mockReset();
     prisma.assignmentType.findMany.mockReset().mockResolvedValue([]);
     prisma.invitation.findMany.mockReset().mockResolvedValue([]);
+    prisma.internalPlatformApiAudit.create.mockReset();
+    prisma.internalPlatformApiAudit.createMany.mockReset();
+    prisma.internalPlatformApiAudit.findFirst.mockReset().mockResolvedValue(null);
+    prisma.$transaction.mockReset().mockImplementation(async (fn: any) => fn(prisma));
     prisma.$queryRaw.mockReset().mockResolvedValue([{
       total_organizations: 0,
       active_organizations: 0,
@@ -183,5 +205,138 @@ describe('internal admin organization endpoints', () => {
       reasons: ['Only organization in this environment'],
     });
     expect(body.organization.previewSeatCode).toBeUndefined();
+  });
+
+  test('creates organizations with signed write auth and before/after audit', async () => {
+    authorizeInternalApiRequest.mockResolvedValueOnce({
+      mode: 'hmac',
+      keyId: 'writer',
+      actorEmail: 'ops@yawp.test',
+      scopes: ['management:write'],
+    });
+    prisma.assignmentType.findMany.mockResolvedValue([{ id: 'type-1' }]);
+    prisma.organization.create.mockResolvedValue({ id: 'org-1' });
+    prisma.organization.findUnique.mockResolvedValue({
+      id: 'org-1',
+      name: 'New Org',
+      numOfStudentSeats: 30,
+      numOfTeacherSeats: 10,
+      accessExpiresAt: null,
+      reporterEnabled: false,
+      assignmentTypeAssignments: [{ assignmentTypeId: 'type-1' }],
+    });
+    const body = JSON.stringify({
+      name: 'New Org',
+      numOfStudentSeats: 30,
+      numOfTeacherSeats: 10,
+      accessExpiresAt: null,
+      featureToggles: { reporterEnabled: false },
+      assignmentTypeIds: ['type-1'],
+    });
+
+    const res = await internalAdminOrganizationCreate(new Request(base, { method: 'POST', headers: { 'Idempotency-Key': 'create-1' }, body }));
+
+    expect(res.status).toBe(201);
+    expect(authorizeInternalApiRequest).toHaveBeenCalledWith(expect.any(Request), {
+      body,
+      requiredScope: 'management:write',
+    });
+    expect(prisma.organizationAssignmentType.createMany).toHaveBeenCalledWith({
+      data: [{ organizationId: 'org-1', assignmentTypeId: 'type-1' }],
+      skipDuplicates: true,
+    });
+    expect(prisma.internalPlatformApiAudit.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.arrayContaining([
+          expect.objectContaining({ action: 'organization.create.before', result: 'before' }),
+          expect.objectContaining({ action: 'organization.create.after', result: 'after' }),
+        ]),
+      })
+    );
+  });
+
+  test('replays idempotent organization create without creating a duplicate', async () => {
+    prisma.internalPlatformApiAudit.findFirst.mockResolvedValue({
+      targetId: 'org-existing',
+      createdAt: new Date(),
+    });
+    prisma.organization.findUnique.mockResolvedValue({
+      id: 'org-existing',
+      name: 'Existing Org',
+      numOfStudentSeats: 30,
+      numOfTeacherSeats: 10,
+      accessExpiresAt: null,
+      reporterEnabled: false,
+      assignmentTypeAssignments: [],
+    });
+    const body = JSON.stringify({
+      name: 'Existing Org',
+      numOfStudentSeats: 30,
+      numOfTeacherSeats: 10,
+    });
+
+    const res = await internalAdminOrganizationCreate(new Request(base, { method: 'POST', headers: { 'Idempotency-Key': 'create-1' }, body }));
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.organization.id).toBe('org-existing');
+    expect(prisma.organization.create).not.toHaveBeenCalled();
+  });
+
+  test('updates organization fields and replaces only its assignment-type rows', async () => {
+    authorizeInternalApiRequest.mockResolvedValueOnce({
+      mode: 'hmac',
+      keyId: 'writer',
+      actorEmail: 'ops@yawp.test',
+      scopes: ['management:write'],
+    });
+    prisma.assignmentType.findMany.mockResolvedValue([{ id: 'type-2' }]);
+    prisma.organization.findUnique
+      .mockResolvedValueOnce({
+        id: 'org-1',
+        name: 'Old Org',
+        numOfStudentSeats: 20,
+        numOfTeacherSeats: 5,
+        accessExpiresAt: null,
+        reporterEnabled: false,
+        assignmentTypeAssignments: [{ assignmentTypeId: 'type-1' }],
+      })
+      .mockResolvedValueOnce({
+        id: 'org-1',
+        name: 'Updated Org',
+        numOfStudentSeats: 40,
+        numOfTeacherSeats: 8,
+        accessExpiresAt: null,
+        reporterEnabled: true,
+        assignmentTypeAssignments: [{ assignmentTypeId: 'type-2' }],
+      });
+    const body = JSON.stringify({
+      name: 'Updated Org',
+      numOfStudentSeats: 40,
+      numOfTeacherSeats: 8,
+      accessExpiresAt: null,
+      featureToggles: { reporterEnabled: true },
+      assignmentTypeIds: ['type-2'],
+    });
+
+    const res = await internalAdminOrganizationUpdate(new Request(`${base}/org-1`, { method: 'PATCH', body }), 'org-1');
+
+    expect(res.status).toBe(200);
+    expect(prisma.organization.update).toHaveBeenCalledWith({
+      where: { id: 'org-1' },
+      data: expect.objectContaining({
+        name: 'Updated Org',
+        numOfStudentSeats: 40,
+        numOfTeacherSeats: 8,
+        reporterEnabled: true,
+      }),
+    });
+    expect(prisma.organizationAssignmentType.deleteMany).toHaveBeenCalledWith({
+      where: { organizationId: 'org-1' },
+    });
+    expect(prisma.organizationAssignmentType.createMany).toHaveBeenCalledWith({
+      data: [{ organizationId: 'org-1', assignmentTypeId: 'type-2' }],
+      skipDuplicates: true,
+    });
   });
 });
