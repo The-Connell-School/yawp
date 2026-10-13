@@ -18,9 +18,14 @@ If the installed Playwright package expects a browser revision that is not prese
 PW_EXECUTABLE_PATH=/home/bryant/.cache/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-linux64/chrome-headless-shell
 ```
 
-Hosted demo assertions are currently documented as a clean skip unless these disposable fixture variables exist:
+Hosted demo assertions load the event page when these variables exist:
 
 - `DEMO_FREE_TIER_BASE_URL`
 - `DEMO_FREE_TIER_REPEAT_EVENT_TOKEN`
+
+Hosted demo repeat submissions are guarded behind an explicit disposable fixture contract to avoid unintended outbound email sends:
+
+- `DEMO_FREE_TIER_REPEAT_EMAIL`
+- `DEMO_FREE_TIER_REPEAT_ALLOW_SUBMIT=true`
 
 The suite writes screenshots, hosted skip notes, and repeat-submission database evidence to `QA_SCREENSHOT_DIR`.
