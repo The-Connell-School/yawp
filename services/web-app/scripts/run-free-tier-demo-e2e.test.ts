@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -7,7 +7,9 @@ import {
   classifySuiteSpecs,
   resolveBrowserEnv,
   requiredMissingSpecs,
+  suiteHostedDemoSkipArtifact,
   suiteSpecs,
+  writeSuiteEvidence,
 } from './run-free-tier-demo-e2e';
 
 async function touch(root: string, relativePath: string) {
@@ -45,6 +47,22 @@ describe('free-tier demo suite runner manifest', () => {
     const { missing } = await classifySuiteSpecs(root);
 
     expect(requiredMissingSpecs(missing)).toEqual([]);
+  });
+
+  test('keeps suite hosted demo skip evidence distinct from focused spec evidence', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'free-tier-demo-suite-shots-'));
+    const focusedSkip = join(root, 'hosted-demo-skip.txt');
+    await writeFile(focusedSkip, 'focused spec skip evidence\n');
+
+    await writeSuiteEvidence([], [], root, {});
+
+    expect(await readFile(focusedSkip, 'utf8')).toBe('focused spec skip evidence\n');
+    expect(await readFile(join(root, suiteHostedDemoSkipArtifact), 'utf8')).toContain(
+      'Hosted demo free-tier suite cases skipped.'
+    );
+    expect(await readFile(join(root, 'suite-manifest.txt'), 'utf8')).toContain(
+      'Free-tier demo E2E suite manifest.'
+    );
   });
 
   test('uses explicit PW_EXECUTABLE_PATH before cached browser discovery', async () => {

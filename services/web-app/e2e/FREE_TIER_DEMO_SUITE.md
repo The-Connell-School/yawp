@@ -5,25 +5,25 @@ The durable runner for the free-tier demo coverage is:
 ```bash
 cd services/web-app
 PLAYWRIGHT_BROWSERS_PATH=/home/bryant/.cache/ms-playwright \
-FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-open-pr-merge-readiness-refresh \
+FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-idle-maintenance-audit \
 bun run test:e2e:free-tier-demo
 ```
 
-For this `qa-suite-open-pr-merge-readiness-refresh` run, use:
+For this `qa-suite-idle-maintenance-audit` run, use:
 
 ```bash
 cd services/web-app
 PLAYWRIGHT_BROWSERS_PATH=/home/bryant/.cache/ms-playwright \
-FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-open-pr-merge-readiness-refresh \
+FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-idle-maintenance-audit \
 bun run test:e2e:free-tier-demo
 ```
 
-For the current refresh task `qa-suite-open-pr-merge-readiness-refresh`, use:
+For the current maintenance task `qa-suite-idle-maintenance-audit`, use:
 
 ```bash
 cd services/web-app
 PLAYWRIGHT_BROWSERS_PATH=/home/bryant/.cache/ms-playwright \
-FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-open-pr-merge-readiness-refresh \
+FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-idle-maintenance-audit \
 bun run test:e2e:free-tier-demo
 ```
 
@@ -64,7 +64,7 @@ Those specs keep their local deterministic stand-ins and hosted demo skip checks
 
 ## Hosted Demo Skips
 
-Hosted demo checks require disposable demo access inputs. When any of these are absent, the runner writes `hosted-demo-skip.txt` under the screenshot directory and still runs the local deterministic specs:
+Hosted demo checks require disposable demo access inputs. When any of these are absent, the runner writes `suite-hosted-demo-skip.txt` under the screenshot directory and still runs the local deterministic specs. Focused specs may also write their own `hosted-demo-skip.txt` evidence, and the suite-level artifact intentionally does not overwrite it.
 
 ```bash
 DEMO_FREE_TIER_BASE_URL
@@ -80,10 +80,10 @@ If this suite finds a regression, append the lane failure note and attempt to fi
 ```bash
 cd services/web-app
 bun run scripts/file-free-tier-qa-failure.ts \
-  --id=ft-qa-suite-open-pr-merge-readiness-refresh \
-  --slug=qa-suite-open-pr-merge-readiness-refresh \
+  --id=ft-qa-suite-idle-maintenance-audit \
+  --slug=qa-suite-idle-maintenance-audit \
   --title="Free-tier demo E2E suite regression" \
-  --evidence="/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-open-pr-merge-readiness-refresh" \
+  --evidence="/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-idle-maintenance-audit" \
   --severity=major \
   --repro="Run \`bun run test:e2e:free-tier-demo\`." \
   --expected="The free-tier demo E2E suite passes without regressions." \

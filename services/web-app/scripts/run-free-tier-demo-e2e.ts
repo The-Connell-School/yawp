@@ -10,11 +10,12 @@ const __dirname = path.dirname(__filename);
 const webAppRoot = path.resolve(__dirname, '..');
 
 const defaultShotDir =
-  '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-open-pr-merge-readiness-refresh';
+  '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-idle-maintenance-audit';
 const shotDir =
   process.env.FREE_TIER_QA_SHOTS_DIR?.trim() ||
   process.env.QA_SCREENSHOT_DIR?.trim() ||
   defaultShotDir;
+export const suiteHostedDemoSkipArtifact = 'suite-hosted-demo-skip.txt';
 const defaultBrowsersPath = '/home/bryant/.cache/ms-playwright';
 
 type SuiteSpec = {
@@ -232,13 +233,18 @@ export function resolveBrowserEnv(
   };
 }
 
-async function writeSuiteEvidence(present: SuiteSpec[], missing: SuiteSpec[]) {
-  await mkdir(shotDir, { recursive: true });
+export async function writeSuiteEvidence(
+  present: SuiteSpec[],
+  missing: SuiteSpec[],
+  targetDir = shotDir,
+  env: Partial<NodeJS.ProcessEnv> = process.env
+) {
+  await mkdir(targetDir, { recursive: true });
 
-  const missingHosted = hostedDemoEnv.filter((key) => !process.env[key]?.trim());
+  const missingHosted = hostedDemoEnv.filter((key) => !env[key]?.trim());
   if (missingHosted.length > 0) {
     await writeFile(
-      path.join(shotDir, 'hosted-demo-skip.txt'),
+      path.join(targetDir, suiteHostedDemoSkipArtifact),
       [
         'Hosted demo free-tier suite cases skipped.',
         `Missing env/access: ${missingHosted.join(', ')}`,
@@ -249,7 +255,7 @@ async function writeSuiteEvidence(present: SuiteSpec[], missing: SuiteSpec[]) {
   }
 
   await writeFile(
-    path.join(shotDir, 'suite-manifest.txt'),
+    path.join(targetDir, 'suite-manifest.txt'),
     [
       'Free-tier demo E2E suite manifest.',
       '',
@@ -264,7 +270,7 @@ async function writeSuiteEvidence(present: SuiteSpec[], missing: SuiteSpec[]) {
         ? missing.map((spec) => `- ${spec.path}: ${spec.coverage}`)
         : ['- none']),
       '',
-      `Screenshot directory: ${shotDir}`,
+      `Screenshot directory: ${targetDir}`,
     ].join('\n')
   );
 }
