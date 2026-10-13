@@ -235,6 +235,8 @@ export async function readTesterFeedback(
     const auth = await deps.authenticateInternal(request);
     if (auth instanceof Response) return auth;
     internalAuth = auth;
+    if (internalAuth?.mode !== 'hmac')
+      return response({ error: 'Unauthorized' }, 401);
   } else {
     const user = await deps.getUser(request);
     if (!user) return response({ error: 'Sign in required' }, 401);
