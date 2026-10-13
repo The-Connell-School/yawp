@@ -10,6 +10,11 @@ import {
   FREE_TIER_SCAN_DEDUPE_MS,
   hashScanDedupeCookie,
 } from './acquisition-token-scan.server';
+import {
+  FreeTierBudgetExceededError,
+  freeTierBudgetRemainingActivations,
+  readFreeTierUsageSummary,
+} from './usage-budget.server';
 
 /** Read at call time so ops can change it with an env var and tests can override it. */
 export function getFreeTierReleaseCap(): number {
@@ -525,7 +530,14 @@ export async function releaseBatch(input: ReleaseBatchInput, audit?: TesterAudit
     const current = await tx.freeTierApplication.count({
       where: { OR: [{ releasedAt: { not: null } }, { status: { in: activeStatuses } }] },
     });
-    const remaining = Math.max(0, cap - current);
+    const budget = await readFreeTierUsageSummary(tx);
+    const remaining = Math.min(
+      Math.max(0, cap - current),
+      freeTierBudgetRemainingActivations(budget)
+    );
+    if (remaining <= 0) {
+      throw new FreeTierBudgetExceededError(budget);
+    }
     // Only waitlisted leads can be released; already-released or unknown ids do
     // not use up headroom and are reported separately.
     const leads = await tx.freeTierApplication.findMany({
