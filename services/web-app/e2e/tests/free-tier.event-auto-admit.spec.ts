@@ -178,7 +178,7 @@ test.describe('Free-tier event auto-admit QA', () => {
     }
   });
 
-  test('hosted demo run documents missing access cleanly', async () => {
+  test('hosted demo run documents unavailable hosted assertions cleanly', async () => {
     const required = [
       'DEMO_FREE_TIER_EVENT_TOKEN',
       'DEMO_FREE_TIER_BASE_URL',
@@ -197,5 +197,38 @@ test.describe('Free-tier event auto-admit QA', () => {
       );
       test.skip(true, `Hosted demo access missing: ${missing.join(', ')}`);
     }
+
+    const fixtureEmail = process.env.DEMO_FREE_TIER_AUTO_ADMIT_EMAIL?.trim();
+    const allowSubmit = process.env.DEMO_FREE_TIER_AUTO_ADMIT_ALLOW_SUBMIT === 'true';
+
+    if (!fixtureEmail || !allowSubmit) {
+      await note(
+        HOSTED_DEMO_SKIP_ARTIFACT,
+        [
+          'Hosted demo qa-event-auto mutation run skipped.',
+          'Auto-admit submission requires a disposable hosted fixture email plus DEMO_FREE_TIER_AUTO_ADMIT_ALLOW_SUBMIT=true to avoid unintended outbound email sends.',
+          `Missing guarded fixture env: ${[
+            !fixtureEmail ? 'DEMO_FREE_TIER_AUTO_ADMIT_EMAIL' : null,
+            !allowSubmit ? 'DEMO_FREE_TIER_AUTO_ADMIT_ALLOW_SUBMIT=true' : null,
+          ]
+            .filter(Boolean)
+            .join(', ')}`,
+        ].join('\n')
+      );
+      test.skip(true, 'Hosted demo auto-admit mutation fixture env is missing.');
+      return;
+    }
+
+    await note(
+      HOSTED_DEMO_SKIP_ARTIFACT,
+      [
+        'Hosted demo qa-event-auto run skipped.',
+        'Disposable fixture env was present, but hosted auto-admit mutations are intentionally not implemented until a fixture contract provides resettable event tokens, release links, and application cleanup.',
+      ].join('\n')
+    );
+    test.skip(
+      true,
+      'Hosted demo auto-admit fixture contract is documented but not implemented.'
+    );
   });
 });
