@@ -439,6 +439,10 @@ describe('preview certificate manager', () => {
 
       expect(result).toEqual({ hostname, status: 'issued' });
       expect(sawZeroSslExternalAccountBinding).toBeTruthy();
+      expect(JSON.parse(readFileSync(path.join(accountRoot, 'zerossl-eab.json'), 'utf8'))).toEqual({
+        kid: 'zerossl-kid',
+        hmacKey: Buffer.from('zerossl-hmac-key').toString('base64url'),
+      });
       expect(readFileSync(path.join(certRoot, '_wildcard.preview.yawp.school', 'fullchain.pem'), 'utf8')).toBe(
         issued.cert
       );
@@ -450,8 +454,10 @@ describe('preview certificate manager', () => {
     }
   });
 
-  test('Route53 DNS-01 provider writes only the wildcard challenge TXT record', async () => {
+  test('Route53 DNS-01 provider preserves unrelated wildcard challenge TXT values', async () => {
     const calls = [];
+    const changes = [];
+    let listCalls = 0;
     const expectedDigest = Buffer.from(createHash('sha256').update('authorization').digest())
       .toString('base64url');
     const provider = createRoute53Dns01Provider({
@@ -460,7 +466,21 @@ describe('preview certificate manager', () => {
       resolveTxtFn: async () => [[expectedDigest]],
       execFileFn: async (_command, args) => {
         calls.push(args);
+        if (args[1] === 'list-resource-record-sets') {
+          listCalls += 1;
+          const values = listCalls === 1 ? ['unrelated'] : ['unrelated', expectedDigest];
+          return {
+            stdout: JSON.stringify({
+              ResourceRecordSets: [{
+                Name: '_acme-challenge.preview.yawp.school.',
+                Type: 'TXT',
+                ResourceRecords: values.map((value) => ({ Value: JSON.stringify(value) })),
+              }],
+            }),
+          };
+        }
         if (args[1] === 'change-resource-record-sets') {
+          changes.push(JSON.parse(args[args.indexOf('--change-batch') + 1]));
           return { stdout: JSON.stringify({ ChangeInfo: { Id: 'change-1', Status: 'PENDING' } }) };
         }
         if (args[1] === 'get-change') {
@@ -476,9 +496,55 @@ describe('preview certificate manager', () => {
     });
 
     expect(result.recordName).toBe('_acme-challenge.preview.yawp.school.');
-    expect(calls[0]).toContain('change-resource-record-sets');
-    expect(calls[0]).toContain('--hosted-zone-id');
-    expect(calls[0]).toContain('ZONE123');
+    await provider.cleanup(result);
+    expect(calls.some((call) => call.includes('change-resource-record-sets'))).toBe(true);
+    expect(changes[0].Changes[0].Action).toBe('UPSERT');
+    expect(changes[0].Changes[0].ResourceRecordSet.ResourceRecords).toEqual([
+      { Value: '"unrelated"' },
+      { Value: JSON.stringify(expectedDigest) },
+    ]);
+    expect(changes[1].Changes[0].Action).toBe('UPSERT');
+    expect(changes[1].Changes[0].ResourceRecordSet.ResourceRecords).toEqual([
+      { Value: '"unrelated"' },
+    ]);
+  });
+
+  test('Route53 hosted-zone discovery is bounded to the preview domain zone', async () => {
+    const dnsNames = [];
+    const expectedDigest = Buffer.from(createHash('sha256').update('authorization').digest())
+      .toString('base64url');
+    const provider = createRoute53Dns01Provider({
+      zoneName: 'preview.yawp.school',
+      pollIntervalMs: 0,
+      resolveTxtFn: async () => [[expectedDigest]],
+      execFileFn: async (_command, args) => {
+        if (args[1] === 'list-hosted-zones-by-name') {
+          dnsNames.push(args[args.indexOf('--dns-name') + 1]);
+          return {
+            stdout: JSON.stringify({
+              HostedZones: [{ Name: 'preview.yawp.school.', Id: '/hostedzone/ZONE123' }],
+            }),
+          };
+        }
+        if (args[1] === 'list-resource-record-sets') {
+          return { stdout: JSON.stringify({ ResourceRecordSets: [] }) };
+        }
+        if (args[1] === 'change-resource-record-sets') {
+          return { stdout: JSON.stringify({ ChangeInfo: { Id: 'change-1', Status: 'PENDING' } }) };
+        }
+        if (args[1] === 'get-change') {
+          return { stdout: JSON.stringify({ ChangeInfo: { Status: 'INSYNC' } }) };
+        }
+        throw new Error(`Unexpected aws args: ${args.join(' ')}`);
+      },
+    });
+
+    await provider.present({
+      identifier: '*.preview.yawp.school',
+      keyAuthorization: 'authorization',
+    });
+
+    expect(dnsNames).toEqual(['preview.yawp.school.']);
   });
 
   test('attempts every resident renewal even when an earlier hostname fails', async () => {

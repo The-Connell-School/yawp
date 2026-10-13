@@ -404,16 +404,7 @@ function dnsChallengeName(identifier) {
   return `_acme-challenge.${challengeDomainForIdentifier(identifier)}`;
 }
 
-function hostedZoneCandidates(name) {
-  const labels = name.replace(/\.$/, '').split('.');
-  const candidates = [];
-  for (let index = 0; index < labels.length - 1; index += 1) {
-    candidates.push(`${labels.slice(index).join('.')}.`);
-  }
-  return candidates;
-}
-
-function route53ChangeBatch(recordName, recordValue, action) {
+function route53ChangeBatch(recordName, recordValues, action) {
   return JSON.stringify({
     Changes: [{
       Action: action,
@@ -421,7 +412,7 @@ function route53ChangeBatch(recordName, recordValue, action) {
         Name: recordName,
         Type: 'TXT',
         TTL: 30,
-        ResourceRecords: [{ Value: JSON.stringify(recordValue) }],
+        ResourceRecords: recordValues.map((value) => ({ Value: JSON.stringify(value) })),
       },
     }],
   });
@@ -440,20 +431,25 @@ async function execAwsJson(execFileFn, args, options = {}) {
   return stdout ? JSON.parse(stdout) : {};
 }
 
-async function discoverRoute53HostedZoneId({ recordName, execFileFn }) {
-  for (const candidate of hostedZoneCandidates(recordName)) {
-    const response = await execAwsJson(execFileFn, [
-      'list-hosted-zones-by-name',
-      '--dns-name', candidate,
-      '--max-items', '1',
-      '--output', 'json',
-    ]);
-    const zone = response.HostedZones?.[0];
-    if (zone?.Name === candidate && zone?.Config?.PrivateZone !== true) {
-      return String(zone.Id || '').replace(/^\/hostedzone\//, '');
-    }
+function normalizeZoneId(zoneId) {
+  return String(zoneId || '').replace(/^\/hostedzone\//, '');
+}
+
+async function discoverRoute53HostedZoneId({ zoneName, execFileFn }) {
+  const expectedName = `${zoneName.replace(/\.$/, '')}.`;
+  const response = await execAwsJson(execFileFn, [
+    'list-hosted-zones-by-name',
+    '--dns-name', expectedName,
+    '--max-items', '1',
+    '--output', 'json',
+  ]);
+  const zone = response.HostedZones?.[0];
+  if (zone?.Name === expectedName && zone?.Config?.PrivateZone !== true) {
+    return normalizeZoneId(zone.Id);
   }
-  throw new Error(`No public Route53 hosted zone found for ${recordName}`);
+  throw new Error(
+    `No public Route53 hosted zone found for ${expectedName}; set PREVIEW_ROUTE53_ZONE_ID to use a non-delegated parent zone`,
+  );
 }
 
 async function waitForRoute53Change({ changeId, execFileFn, pollIntervalMs }) {
@@ -482,8 +478,44 @@ async function waitForDnsTxt({ recordName, expectedValue, resolveTxtFn, pollInte
   throw new Error(`DNS TXT challenge did not propagate for ${recordName}`);
 }
 
+function parseRoute53TxtValue(value) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return String(value || '').replace(/^"|"$/g, '');
+  }
+}
+
+async function readRoute53TxtValues({ zoneId, recordName, execFileFn }) {
+  const response = await execAwsJson(execFileFn, [
+    'list-resource-record-sets',
+    '--hosted-zone-id', zoneId,
+    '--start-record-name', recordName,
+    '--start-record-type', 'TXT',
+    '--max-items', '1',
+    '--output', 'json',
+  ]);
+  const record = response.ResourceRecordSets?.[0];
+  if (record?.Name !== recordName || record?.Type !== 'TXT') return [];
+  return (record.ResourceRecords || [])
+    .map((entry) => parseRoute53TxtValue(entry.Value))
+    .filter((value) => typeof value === 'string' && value.length > 0);
+}
+
+async function changeRoute53TxtValues({ zoneId, recordName, recordValues, action, execFileFn }) {
+  if (recordValues.length === 0) return null;
+  const response = await execAwsJson(execFileFn, [
+    'change-resource-record-sets',
+    '--hosted-zone-id', zoneId,
+    '--change-batch', route53ChangeBatch(recordName, recordValues, action),
+    '--output', 'json',
+  ]);
+  return response.ChangeInfo?.Id || null;
+}
+
 export function createRoute53Dns01Provider({
   hostedZoneId = process.env.PREVIEW_ROUTE53_ZONE_ID || '',
+  zoneName = process.env.PREVIEW_ROUTE53_ZONE_NAME || process.env.PREVIEW_DOMAIN || '',
   execFileFn = execFileAsync,
   resolveTxtFn = resolveTxt,
   pollIntervalMs = 2000,
@@ -491,17 +523,26 @@ export function createRoute53Dns01Provider({
   return {
     async present({ identifier, keyAuthorization }) {
       const recordName = `${dnsChallengeName(identifier)}.`;
-      const zoneId = hostedZoneId || await discoverRoute53HostedZoneId({ recordName, execFileFn });
+      const challengeZoneName = challengeDomainForIdentifier(identifier);
+      const zoneId = hostedZoneId
+        ? normalizeZoneId(hostedZoneId)
+        : await discoverRoute53HostedZoneId({
+          zoneName: zoneName || challengeZoneName,
+          execFileFn,
+        });
       const recordValue = base64url(createHash('sha256').update(keyAuthorization).digest());
-      const response = await execAwsJson(execFileFn, [
-        'change-resource-record-sets',
-        '--hosted-zone-id', zoneId,
-        '--change-batch', route53ChangeBatch(recordName, recordValue, 'UPSERT'),
-        '--output', 'json',
-      ]);
-      if (response.ChangeInfo?.Id) {
+      const currentValues = await readRoute53TxtValues({ zoneId, recordName, execFileFn });
+      const nextValues = [...new Set([...currentValues, recordValue])];
+      const changeId = await changeRoute53TxtValues({
+        zoneId,
+        recordName,
+        recordValues: nextValues,
+        action: 'UPSERT',
+        execFileFn,
+      });
+      if (changeId) {
         await waitForRoute53Change({
-          changeId: response.ChangeInfo.Id,
+          changeId,
           execFileFn,
           pollIntervalMs,
         });
@@ -517,12 +558,23 @@ export function createRoute53Dns01Provider({
     async cleanup({ recordName, recordValue, zoneId }) {
       if (!recordName || !recordValue || !zoneId) return;
       try {
-        await execAwsJson(execFileFn, [
-          'change-resource-record-sets',
-          '--hosted-zone-id', zoneId,
-          '--change-batch', route53ChangeBatch(recordName, recordValue, 'DELETE'),
-          '--output', 'json',
-        ]);
+        const currentValues = await readRoute53TxtValues({ zoneId, recordName, execFileFn });
+        if (!currentValues.includes(recordValue)) return;
+        const remainingValues = currentValues.filter((value) => value !== recordValue);
+        const changeId = await changeRoute53TxtValues({
+          zoneId,
+          recordName,
+          recordValues: remainingValues.length > 0 ? remainingValues : currentValues,
+          action: remainingValues.length > 0 ? 'UPSERT' : 'DELETE',
+          execFileFn,
+        });
+        if (changeId) {
+          await waitForRoute53Change({
+            changeId,
+            execFileFn,
+            pollIntervalMs,
+          });
+        }
       } catch (error) {
         console.error(`Warning: failed to remove ACME DNS challenge ${recordName}: ${error.message}`);
       }
@@ -695,6 +747,14 @@ async function readZeroSslEabCredentials(accountRoot) {
   return null;
 }
 
+async function writeZeroSslEabCredentials(accountRoot, credentials) {
+  await atomicWrite(
+    path.join(accountRoot, 'zerossl-eab.json'),
+    `${JSON.stringify(credentials)}\n`,
+    0o600,
+  );
+}
+
 async function resolveZeroSslEabCredentials({
   accountRoot,
   fetchFn,
@@ -703,7 +763,11 @@ async function resolveZeroSslEabCredentials({
   kid = process.env.PREVIEW_ZEROSSL_EAB_KID || '',
   hmacKey = process.env.PREVIEW_ZEROSSL_EAB_HMAC_KEY || '',
 }) {
-  if (kid && hmacKey) return { kid, hmacKey };
+  if (kid && hmacKey) {
+    const credentials = { kid, hmacKey };
+    await writeZeroSslEabCredentials(accountRoot, credentials);
+    return credentials;
+  }
   const stored = await readZeroSslEabCredentials(accountRoot);
   if (stored) return stored;
   if (!accessKey) return null;
@@ -718,12 +782,16 @@ async function resolveZeroSslEabCredentials({
     throw new Error('ZeroSSL EAB credential response was incomplete');
   }
   const credentials = { kid: body.eab_kid, hmacKey: body.eab_hmac_key };
-  await atomicWrite(
-    path.join(accountRoot, 'zerossl-eab.json'),
-    `${JSON.stringify(credentials)}\n`,
-    0o600,
-  );
+  await writeZeroSslEabCredentials(accountRoot, credentials);
   return credentials;
+}
+
+async function cacheConfiguredZeroSslEabCredentials({ accountRoot, fetchFn, requestTimeoutMs }) {
+  if (
+    !process.env.PREVIEW_ZEROSSL_ACCESS_KEY
+    && !(process.env.PREVIEW_ZEROSSL_EAB_KID && process.env.PREVIEW_ZEROSSL_EAB_HMAC_KEY)
+  ) return;
+  await resolveZeroSslEabCredentials({ accountRoot, fetchFn, requestTimeoutMs });
 }
 
 function isLetsEncryptRegisteredDomainRateLimit(error) {
@@ -748,6 +816,7 @@ export async function ensureWildcardCertificate({
 }) {
   const hostname = wildcardCertificateHostname(domain);
   const { keyPath, certPath } = certificatePaths(certRoot, hostname);
+  await cacheConfiguredZeroSslEabCredentials({ accountRoot, fetchFn, requestTimeoutMs });
   try {
     const certPem = await readFile(certPath, 'utf8');
     if (
