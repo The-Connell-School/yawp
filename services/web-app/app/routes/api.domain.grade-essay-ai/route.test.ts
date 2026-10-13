@@ -56,10 +56,10 @@ const { LlmFallbackRetrySignal } =
 const { action, getRubricEvaluationMaxTokens } = await import('./route');
 
 test('expands the rubric response budget for category-heavy grading assistants', () => {
-  expect(getRubricEvaluationMaxTokens(4)).toBe(2000);
-  expect(getRubricEvaluationMaxTokens(5)).toBe(2000);
-  expect(getRubricEvaluationMaxTokens(9)).toBe(3600);
-  expect(getRubricEvaluationMaxTokens(20)).toBe(4096);
+  expect(getRubricEvaluationMaxTokens(4)).toBe(1800);
+  expect(getRubricEvaluationMaxTokens(5)).toBe(1800);
+  expect(getRubricEvaluationMaxTokens(9)).toBe(2400);
+  expect(getRubricEvaluationMaxTokens(20)).toBe(2400);
 });
 
 function buildRubricResponseJson(

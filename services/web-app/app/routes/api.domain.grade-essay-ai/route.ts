@@ -123,11 +123,13 @@ export function getRubricEvaluationMaxTokens(categoryCount: number) {
   const baseCategoryCount = 5;
   // Sized so a full per-category comment set fits. 900 truncated the JSON on
   // 7-category rubrics with long comments, which made every attempt fail.
-  const baseMaxTokens = 2000;
-  const tokensPerAdditionalCategory = 400;
+  const baseMaxTokens = 1800;
+  const tokensPerAdditionalCategory = 300;
 
+  // Capped at 2400 so one call (~40 tok/s observed) stays near 60s, inside
+  // the 100s grading deadline.
   return Math.min(
-    4096,
+    2400,
     baseMaxTokens +
       Math.max(0, categoryCount - baseCategoryCount) *
         tokensPerAdditionalCategory
