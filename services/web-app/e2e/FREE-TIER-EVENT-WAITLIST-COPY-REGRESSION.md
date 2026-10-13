@@ -19,3 +19,7 @@ bunx playwright test --config=playwright.free-tier-qa.config.ts --project=chromi
 
 The hosted path only submits when `FREE_TIER_QA_HOSTED_DEMO_SUBMIT=true` and
 `FREE_TIER_QA_HOSTED_DEMO_EMAIL` is present.
+
+When the disposable hosted fixture is absent, this focused repro writes
+`event-waitlist-copy-hosted-demo-skip.txt` so the durable suite's generic
+`hosted-demo-skip.txt` artifact cannot overwrite the focused evidence.

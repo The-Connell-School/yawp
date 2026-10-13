@@ -5,10 +5,10 @@ import { expect, test } from '../test-setup';
 import { setFreeTierFlag } from '../feature-flags';
 import { createE2EPrismaClient } from '../prisma-client';
 
-const slug = 'qa-waitlist-copy-post-fix-verify';
+const slug = 'qa-waitlist-copy-fix-verify-rerun';
 const shotsDir =
   process.env.FREE_TIER_QA_SHOTS_DIR ||
-  '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-waitlist-copy-post-fix-verify';
+  '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-waitlist-copy-fix-verify-rerun';
 
 function hashToken(token: string) {
   return createHash('sha256').update(token).digest('hex');
@@ -132,7 +132,7 @@ test.describe.serial('Free tier event waitlist copy regression', () => {
 
     if (!hostedUrl || !hostedToken) {
       await writeArtifact(
-        'hosted-demo-skip.txt',
+        'event-waitlist-copy-hosted-demo-skip.txt',
         [
           'Skipped hosted demo path.',
           'Missing FREE_TIER_QA_HOSTED_DEMO_URL or FREE_TIER_QA_HOSTED_DEMO_EVENT_TOKEN.',
@@ -161,7 +161,7 @@ test.describe.serial('Free tier event waitlist copy regression', () => {
     }
     if (!fixtureEmail) {
       await writeArtifact(
-        'hosted-demo-skip.txt',
+        'event-waitlist-copy-hosted-demo-skip.txt',
         'Missing FREE_TIER_QA_HOSTED_DEMO_EMAIL while FREE_TIER_QA_HOSTED_DEMO_SUBMIT=true; no hosted demo mutation was attempted.\n'
       );
       test.skip(true, 'Hosted demo submit opt-in requires FREE_TIER_QA_HOSTED_DEMO_EMAIL.');

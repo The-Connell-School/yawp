@@ -8,8 +8,9 @@
 ## Implementation
 1. Confirm the branch still contains the durable free-tier demo Playwright suite harness, required seeded repro specs, and focused waitlist event-link copy repro.
 2. Refresh focused repro screenshots, application-state JSON, hosted-demo skip artifact, suite manifest, and suite summary.
-3. Preserve runner manifest/list contract checks, including failure coverage for missing required seeded specs.
-4. Save evidence under `/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-waitlist-copy-fix-verify-rerun/`.
+3. Preserve the focused hosted-demo skip artifact under a waitlist-copy-specific filename so the durable suite cannot overwrite it.
+4. Preserve runner manifest/list contract checks, including failure coverage for missing required seeded specs.
+5. Save evidence under `/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-waitlist-copy-fix-verify-rerun/`.
 
 ## Verification
 - Run the suite manifest/list contract checks from `services/web-app`.
