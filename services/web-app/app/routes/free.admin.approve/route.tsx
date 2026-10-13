@@ -114,7 +114,9 @@ export default function FreeAdminApproveRoute() {
           ? 'A newer approval link was sent to your school administrator. Please use the most recent email from YAWP.'
           : actionData.reason === 'used'
             ? 'This approval link was already used.'
-            : 'We could not complete this approval. The link may be invalid or expired.';
+            : actionData.reason === 'budget_exceeded'
+              ? 'YAWP has reached the current free-tier budget for this environment. We did not use this approval link; our team will follow up.'
+              : 'We could not complete this approval. The link may be invalid or expired.';
     return (
       <FreeTierAuthCard
         title={declined ? 'Request not approved' : 'Unable to approve'}
