@@ -83,7 +83,10 @@ export const handle: BreadcrumbHandle = { breadcrumb: 'Home' };
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const pathname = new URL(request.url).pathname;
-  if (pathname.startsWith('/app/tester/')) {
+  if (
+    pathname.startsWith('/app/tester/') &&
+    pathname !== '/app/tester/feedback'
+  ) {
     await requireMockAdmin(request);
     return data({
       mockAdminAvailable: true,
