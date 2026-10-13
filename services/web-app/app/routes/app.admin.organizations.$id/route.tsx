@@ -145,77 +145,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   if (intent === 'legacy-update') {
-    const name = formData.get('name')?.toString();
-    const numOfStudentSeats = parseInt(
-      formData.get('numOfStudentSeats')?.toString() || '10'
+    return dataResponse(
+      { status: 'error', error: 'Organization updates have moved to Yawp Internal.' },
+      { status: 410 }
     );
-    const numOfTeacherSeats = parseInt(
-      formData.get('numOfTeacherSeats')?.toString() || '10'
-    );
-    const accessExpiresAt = formData.get('accessExpiresAt')?.toString();
-    const reporterEnabled = formData.get('reporterEnabled') === 'true';
-    const classInsightsEnabled =
-      formData.get('classInsightsEnabled') === 'true';
-    const writingPracticeEnabled =
-      formData.get('writingPracticeEnabled') === 'true';
-    const submissionActivityEnabled =
-      formData.get('submissionActivityEnabled') === 'true';
-    const revisionFlowEnabled =
-      formData.get('revisionFlowEnabled') === 'true';
-    const assignmentTypeIds = Array.from(
-      new Set(
-        formData
-          .getAll('assignmentTypeIds')
-          .map((value) => value.toString())
-          .filter(Boolean)
-      )
-    );
-    if (!name) {
-      throw new Response('Name is required', { status: 400 });
-    }
-
-    if (assignmentTypeIds.length > 0) {
-      const validAssignmentTypes = await prisma.assignmentType.findMany({
-        where: { id: { in: assignmentTypeIds }, archivedAt: null },
-        select: { id: true },
-      });
-      if (validAssignmentTypes.length !== assignmentTypeIds.length) {
-        throw new Response('Assignment type not found', { status: 404 });
-      }
-    }
-
-    await prisma.$transaction([
-      prisma.organization.update({
-        where: { id: params.id },
-        data: {
-          name,
-          numOfStudentSeats,
-          numOfTeacherSeats,
-          accessExpiresAt: accessExpiresAt ? new Date(accessExpiresAt) : null,
-          reporterEnabled,
-          classInsightsEnabled,
-          writingPracticeEnabled,
-          submissionActivityEnabled,
-          revisionFlowEnabled,
-        },
-      }),
-      prisma.organizationAssignmentType.deleteMany({
-        where: { organizationId: params.id },
-      }),
-      ...(assignmentTypeIds.length > 0
-        ? [
-            prisma.organizationAssignmentType.createMany({
-              data: assignmentTypeIds.map((assignmentTypeId) => ({
-                organizationId: params.id!,
-                assignmentTypeId,
-              })),
-              skipDuplicates: true,
-            }),
-          ]
-        : []),
-    ]);
-
-    return dataResponse({ status: 'success' });
   }
 
   if (intent === 'invite-owners') {

@@ -1,4 +1,3 @@
-import { parseFormData, validationError } from '@rvf/react-router';
 import {
   data as dataResponse,
   type ActionFunctionArgs,
@@ -18,7 +17,6 @@ import {
   getPreviewMasterAccessCode,
   isIsolatedPreviewSeatMode,
 } from './preview-seat.server';
-import { CreateOrganizationSchema } from './schema';
 
 type Stats = {
   total_organizations: number;
@@ -96,24 +94,10 @@ export async function organizationsAction({ request }: ActionFunctionArgs) {
   }
 
   if (intent === 'legacy-create') {
-    const { error, data } = await parseFormData(
-      formData,
-      CreateOrganizationSchema
+    return dataResponse(
+      { error: 'Organization creation has moved to Yawp Internal.' },
+      { status: 410 }
     );
-    if (error) return validationError(error);
-
-    await prisma.organization.create({
-      data: {
-        name: data.name,
-        numOfStudentSeats: Number(data.numOfStudentSeats),
-        numOfTeacherSeats: Number(data.numOfTeacherSeats),
-        accessExpiresAt: data.accessExpiresAt
-          ? new Date(data.accessExpiresAt)
-          : null,
-      },
-    });
-
-    return dataResponse({ success: true });
   }
 
   if (intent === 'createPreviewSeat') {

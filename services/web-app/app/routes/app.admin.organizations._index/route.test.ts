@@ -125,6 +125,28 @@ describe('admin organizations index route', () => {
     expect(prisma.organization.create).not.toHaveBeenCalled();
   });
 
+  test('blocks hidden legacy organization creation submissions', async () => {
+    const form = new URLSearchParams();
+    form.set('intent', 'legacy-create');
+    form.set('name', 'New Org');
+    form.set('numOfStudentSeats', '30');
+    form.set('numOfTeacherSeats', '10');
+
+    const response = await action({
+      request: createRequest(form),
+      params: {},
+      context: {} as never,
+    } as any);
+
+    expect(response).toMatchObject({
+      init: { status: 410 },
+      data: {
+        error: 'Organization creation has moved to Yawp Internal.',
+      },
+    });
+    expect(prisma.organization.create).not.toHaveBeenCalled();
+  });
+
   test('creates and returns a seeded preview seat only in isolated preview mode', async () => {
     isIsolatedPreviewSeatMode.mockReturnValue(true);
     const form = new URLSearchParams({ intent: 'createPreviewSeat' });

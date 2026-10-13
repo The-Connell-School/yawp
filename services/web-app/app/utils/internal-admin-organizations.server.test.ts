@@ -121,6 +121,26 @@ describe('internal admin organization endpoints', () => {
     expect(prisma.organization.findUnique).not.toHaveBeenCalled();
   });
 
+  test('rejects unauthorized create requests before mutating organizations', async () => {
+    authorizeInternalApiRequest.mockResolvedValueOnce(Response.json({ error: 'Unauthorized' }, { status: 401 }));
+    const body = JSON.stringify({ name: 'New Org', numOfStudentSeats: 30, numOfTeacherSeats: 10 });
+
+    const res = await internalAdminOrganizationCreate(new Request(base, { method: 'POST', body }));
+
+    expect(res.status).toBe(401);
+    expect(prisma.organization.create).not.toHaveBeenCalled();
+  });
+
+  test('rejects invalid-signature update requests before mutating organizations', async () => {
+    authorizeInternalApiRequest.mockResolvedValueOnce(Response.json({ error: 'Invalid signature' }, { status: 403 }));
+    const body = JSON.stringify({ name: 'Updated Org', numOfStudentSeats: 30, numOfTeacherSeats: 10 });
+
+    const res = await internalAdminOrganizationUpdate(new Request(`${base}/org-1`, { method: 'PATCH', body }), 'org-1');
+
+    expect(res.status).toBe(403);
+    expect(prisma.organization.update).not.toHaveBeenCalled();
+  });
+
   test('validates bounded pagination and sort inputs', async () => {
     expect((await internalAdminOrganizationsList(authed(`${base}?pageSize=101`))).status).toBe(400);
     expect((await internalAdminOrganizationsList(authed(`${base}?sort=bogus`))).status).toBe(400);
@@ -214,6 +234,7 @@ describe('internal admin organization endpoints', () => {
       actorEmail: 'ops@yawp.test',
       scopes: ['management:write'],
     });
+
     prisma.assignmentType.findMany.mockResolvedValue([{ id: 'type-1' }]);
     prisma.organization.create.mockResolvedValue({ id: 'org-1' });
     prisma.organization.findUnique.mockResolvedValue({
@@ -253,6 +274,48 @@ describe('internal admin organization endpoints', () => {
         ]),
       })
     );
+  });
+
+  test('rejects malformed create payloads before writing', async () => {
+    authorizeInternalApiRequest.mockResolvedValue({
+      mode: 'hmac',
+      keyId: 'writer',
+      actorEmail: 'ops@yawp.test',
+      scopes: ['management:write'],
+    });
+
+    expect((await internalAdminOrganizationCreate(new Request(base, { method: 'POST', body: '{' }))).status).toBe(400);
+    expect((await internalAdminOrganizationCreate(new Request(base, {
+      method: 'POST',
+      body: JSON.stringify({ name: '', numOfStudentSeats: 30, numOfTeacherSeats: 10 }),
+    }))).status).toBe(400);
+    expect((await internalAdminOrganizationCreate(new Request(base, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'New Org', numOfStudentSeats: 30, numOfTeacherSeats: 10, accessExpiresAt: 'not-a-date' }),
+    }))).status).toBe(400);
+
+    expect(prisma.organization.create).not.toHaveBeenCalled();
+  });
+
+  test('rejects create requests with unknown assignment types before writing', async () => {
+    authorizeInternalApiRequest.mockResolvedValueOnce({
+      mode: 'hmac',
+      keyId: 'writer',
+      actorEmail: 'ops@yawp.test',
+      scopes: ['management:write'],
+    });
+    prisma.assignmentType.findMany.mockResolvedValue([]);
+    const body = JSON.stringify({
+      name: 'New Org',
+      numOfStudentSeats: 30,
+      numOfTeacherSeats: 10,
+      assignmentTypeIds: ['missing-type'],
+    });
+
+    const res = await internalAdminOrganizationCreate(new Request(base, { method: 'POST', body }));
+
+    expect(res.status).toBe(404);
+    expect(prisma.organization.create).not.toHaveBeenCalled();
   });
 
   test('replays idempotent organization create without creating a duplicate', async () => {
@@ -338,5 +401,26 @@ describe('internal admin organization endpoints', () => {
       data: [{ organizationId: 'org-1', assignmentTypeId: 'type-2' }],
       skipDuplicates: true,
     });
+  });
+
+  test('rejects malformed update payloads before writing', async () => {
+    authorizeInternalApiRequest.mockResolvedValue({
+      mode: 'hmac',
+      keyId: 'writer',
+      actorEmail: 'ops@yawp.test',
+      scopes: ['management:write'],
+    });
+
+    expect((await internalAdminOrganizationUpdate(new Request(`${base}/org-1`, { method: 'PATCH', body: '{' }), 'org-1')).status).toBe(400);
+    expect((await internalAdminOrganizationUpdate(new Request(`${base}/org-1`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'Updated Org', numOfStudentSeats: -1, numOfTeacherSeats: 10 }),
+    }), 'org-1')).status).toBe(400);
+    expect((await internalAdminOrganizationUpdate(new Request(`${base}/org-1`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'Updated Org', numOfStudentSeats: 30, numOfTeacherSeats: 10, accessExpiresAt: 'not-a-date' }),
+    }), 'org-1')).status).toBe(400);
+
+    expect(prisma.organization.update).not.toHaveBeenCalled();
   });
 });

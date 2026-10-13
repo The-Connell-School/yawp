@@ -173,163 +173,27 @@ describe('admin organization detail route', () => {
     expect(prisma.organization.update).not.toHaveBeenCalled();
   });
 
-  test('updates organization assignment types without writing practice state', async () => {
+  test('blocks hidden legacy organization update submissions', async () => {
     const form = new URLSearchParams();
-    form.set('intent', 'update');
+    form.set('intent', 'legacy-update');
     form.set('name', 'Test Org');
     form.set('numOfStudentSeats', '30');
     form.set('numOfTeacherSeats', '10');
 
-    await action({
-      request: updateRequest(form),
+    const response = await action({
+      request: rawUpdateRequest(form),
       params: { id: 'org-1' },
       context: {} as never,
     });
 
-    const transactionOps = prisma.$transaction.mock.calls[0]?.[0] ?? [];
-    expect(transactionOps).toEqual([
-      { operation: 'update-org' },
-      { operation: 'delete-org-assignment-types' },
-    ]);
-  });
-
-  test('updates Reporter and Class Summary rollout gates independently', async () => {
-    const form = new URLSearchParams();
-    form.set('intent', 'update');
-    form.set('name', 'Test Org');
-    form.set('numOfStudentSeats', '30');
-    form.set('numOfTeacherSeats', '10');
-    form.set('reporterEnabled', 'true');
-    form.set('classInsightsEnabled', 'true');
-
-    await action({
-      request: updateRequest(form),
-      params: { id: 'org-1' },
-      context: {} as never,
+    expect(response).toMatchObject({
+      init: { status: 410 },
+      data: {
+        status: 'error',
+        error: 'Organization updates have moved to Yawp Internal.',
+      },
     });
-
-    expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
-      reporterEnabled: true,
-      classInsightsEnabled: true,
-    });
-  });
-
-  test('disables every rollout gate when its toggle is absent', async () => {
-    const form = new URLSearchParams();
-    form.set('intent', 'update');
-    form.set('name', 'Test Org');
-    form.set('numOfStudentSeats', '30');
-    form.set('numOfTeacherSeats', '10');
-
-    await action({
-      request: updateRequest(form),
-      params: { id: 'org-1' },
-      context: {} as never,
-    });
-
-    expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
-      reporterEnabled: false,
-      classInsightsEnabled: false,
-    });
-  });
-
-  test('updates the Writing Practice rollout gate for the organization', async () => {
-    const form = new URLSearchParams();
-    form.set('intent', 'update');
-    form.set('name', 'Test Org');
-    form.set('numOfStudentSeats', '30');
-    form.set('numOfTeacherSeats', '10');
-    form.set('writingPracticeEnabled', 'true');
-
-    await action({
-      request: updateRequest(form),
-      params: { id: 'org-1' },
-      context: {} as never,
-    });
-
-    expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
-      writingPracticeEnabled: true,
-    });
-  });
-
-  test('disables the Writing Practice rollout gate when its toggle is absent', async () => {
-    const form = new URLSearchParams();
-    form.set('intent', 'update');
-    form.set('name', 'Test Org');
-    form.set('numOfStudentSeats', '30');
-    form.set('numOfTeacherSeats', '10');
-
-    await action({
-      request: updateRequest(form),
-      params: { id: 'org-1' },
-      context: {} as never,
-    });
-
-    expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
-      writingPracticeEnabled: false,
-    });
-  });
-
-  test('updates the revision flow rollout gate independently', async () => {
-    const form = new URLSearchParams();
-    form.set('intent', 'update');
-    form.set('name', 'Test Org');
-    form.set('numOfStudentSeats', '30');
-    form.set('numOfTeacherSeats', '10');
-    form.set('revisionFlowEnabled', 'true');
-
-    await action({
-      request: updateRequest(form),
-      params: { id: 'org-1' },
-      context: {} as never,
-    });
-
-    expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
-      revisionFlowEnabled: true,
-      submissionActivityEnabled: false,
-      reporterEnabled: false,
-      classInsightsEnabled: false,
-      writingPracticeEnabled: false,
-    });
-  });
-
-  test('leaves the revision flow gate off when the checkbox is absent', async () => {
-    const form = new URLSearchParams();
-    form.set('intent', 'update');
-    form.set('name', 'Test Org');
-    form.set('numOfStudentSeats', '30');
-    form.set('numOfTeacherSeats', '10');
-
-    await action({
-      request: updateRequest(form),
-      params: { id: 'org-1' },
-      context: {} as never,
-    });
-
-    expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
-      revisionFlowEnabled: false,
-    });
-  });
-
-  test('updates the released grade activity rollout gate independently', async () => {
-    const form = new URLSearchParams();
-    form.set('intent', 'update');
-    form.set('name', 'Test Org');
-    form.set('numOfStudentSeats', '30');
-    form.set('numOfTeacherSeats', '10');
-    form.set('submissionActivityEnabled', 'true');
-
-    await action({
-      request: updateRequest(form),
-      params: { id: 'org-1' },
-      context: {} as never,
-    });
-
-    expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
-      submissionActivityEnabled: true,
-      reporterEnabled: false,
-      classInsightsEnabled: false,
-      writingPracticeEnabled: false,
-    });
+    expect(prisma.organization.update).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

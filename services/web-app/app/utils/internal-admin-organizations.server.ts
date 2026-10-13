@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { createHash } from 'node:crypto';
-import { authorizeInternalApiRequest } from './internal-platform-auth.server';
+import {
+  authorizeInternalApiRequest,
+  type InternalApiAuthContext,
+} from './internal-platform-auth.server';
 import { prisma } from './db.server';
 import {
   getConfiguredPreviewOrganizationAccessCode,
@@ -173,21 +176,26 @@ async function writeAuditRows(tx: any, args: {
   });
 }
 
-async function parseWriteRequest(request: Request) {
+type ParsedWriteRequest =
+  | { ok: true; auth: InternalApiAuthContext; body: string; data: Omit<z.infer<typeof organizationWriteSchema>, 'accessExpiresAt' | 'assignmentTypeIds'> & { accessExpiresAt: Date | null; assignmentTypeIds: string[] } }
+  | { ok: false; response: Response };
+
+async function parseWriteRequest(request: Request): Promise<ParsedWriteRequest> {
   const body = await request.text();
   const auth = await authorizeInternalApiRequest(request, { body, requiredScope: 'management:write' });
-  if (auth instanceof Response) return { auth };
+  if (auth instanceof Response) return { ok: false, response: auth };
   let raw: unknown;
   try {
     raw = JSON.parse(body || '{}');
   } catch {
-    return { response: response({ error: 'Invalid JSON' }, 400) };
+    return { ok: false, response: response({ error: 'Invalid JSON' }, 400) };
   }
   const parsed = organizationWriteSchema.safeParse(raw);
-  if (!parsed.success) return { response: response({ error: 'Invalid organization request' }, 400) };
+  if (!parsed.success) return { ok: false, response: response({ error: 'Invalid organization request' }, 400) };
   const accessExpiresAt = parseAccessExpiresAt(parsed.data.accessExpiresAt);
-  if (accessExpiresAt === undefined) return { response: response({ error: 'Invalid access expiration' }, 400) };
+  if (accessExpiresAt === undefined) return { ok: false, response: response({ error: 'Invalid access expiration' }, 400) };
   return {
+    ok: true,
     auth,
     body,
     data: {
@@ -381,8 +389,7 @@ export async function internalAdminOrganizationCreate(
 ) {
   if (request.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
   const parsed = await parseWriteRequest(request);
-  if ('response' in parsed) return parsed.response;
-  if (parsed.auth instanceof Response) return parsed.auth;
+	  if (!parsed.ok) return parsed.response;
   const accessExpiresAt = parsed.data.accessExpiresAt;
   const idempotencyKey = request.headers.get('idempotency-key')?.trim() || null;
   const hash = requestHash(parsed.body);
@@ -463,8 +470,7 @@ export async function internalAdminOrganizationUpdate(
   if (request.method !== 'PATCH') return response({ error: 'Method not allowed' }, 405);
   if (!id) return response({ error: 'Organization id is required' }, 400);
   const parsed = await parseWriteRequest(request);
-  if ('response' in parsed) return parsed.response;
-  if (parsed.auth instanceof Response) return parsed.auth;
+	  if (!parsed.ok) return parsed.response;
   const accessExpiresAt = parsed.data.accessExpiresAt;
 
   const [before, validAssignmentTypes] = await Promise.all([
