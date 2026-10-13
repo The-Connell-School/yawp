@@ -1,7 +1,10 @@
 import type { Prisma } from '@app/prisma';
 import { prisma } from './db.server';
 import { getUserId } from './auth.server';
-import { authenticateInternalManagementRequest } from './internal-platform-auth.server';
+import {
+  authorizeInternalApiRequest,
+  recordInternalPlatformWriteAudit,
+} from './internal-platform-auth.server';
 import type {
   FeedbackDependencies,
   FeedbackInput,
@@ -28,8 +31,8 @@ export const testerFeedbackDependencies: FeedbackDependencies = {
         })
       : null;
   },
-  authenticateInternal: (request) =>
-    authenticateInternalManagementRequest(request),
+  authenticateInternal: (request) => authorizeInternalApiRequest(request),
+  auditInternalRead: recordInternalPlatformWriteAudit,
   save: saveTesterFeedback,
   list: (input) =>
     prisma.testerFeedback.findMany({

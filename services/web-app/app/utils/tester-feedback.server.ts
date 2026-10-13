@@ -1,4 +1,9 @@
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import {
+  internalApiRawQueryString,
+  type InternalApiAuthContext,
+} from './internal-platform-auth.server';
 import { readBoundedText } from './bounded-body.server';
 
 export const FEEDBACK_TEXT_LIMIT = 4000;
@@ -88,7 +93,16 @@ export interface FeedbackDependencies {
   environment(): string;
   save(input: FeedbackInput): Promise<boolean>;
   list(input: FeedbackQuery): Promise<FeedbackEntry[]>;
-  authenticateInternal(request: Request): Promise<Response | null>;
+  authenticateInternal(
+    request: Request
+  ): Promise<Response | InternalApiAuthContext | null>;
+  auditInternalRead?(input: {
+    actorEmail: string;
+    keyId: string;
+    endpoint: string;
+    requestHash: string;
+    result: string;
+  }): Promise<void>;
 }
 const response = (value: unknown, status = 200, headers?: HeadersInit) =>
   Response.json(value, {
@@ -216,9 +230,11 @@ export async function readTesterFeedback(
   deps: FeedbackDependencies,
   mode: 'admin' | 'internal'
 ) {
+  let internalAuth: InternalApiAuthContext | null = null;
   if (mode === 'internal') {
-    const denied = await deps.authenticateInternal(request);
-    if (denied) return denied;
+    const auth = await deps.authenticateInternal(request);
+    if (auth instanceof Response) return auth;
+    internalAuth = auth;
   } else {
     const user = await deps.getUser(request);
     if (!user) return response({ error: 'Sign in required' }, 401);
@@ -248,6 +264,8 @@ export async function readTesterFeedback(
         },
         413
       );
+    if (internalAuth)
+      await auditInternalFeedbackRead(request, deps, internalAuth, 'export.success');
     return new Response(feedbackCsv(entries), {
       headers: {
         'content-type': 'text/csv; charset=utf-8',
@@ -259,8 +277,36 @@ export async function readTesterFeedback(
     });
   }
   const page = entries.slice(0, input.limit);
+  if (internalAuth)
+    await auditInternalFeedbackRead(request, deps, internalAuth, 'list.success');
   return response({
     entries: page,
     nextCursor: entries.length > input.limit ? page.at(-1)?.id : null,
+  });
+}
+
+async function auditInternalFeedbackRead(
+  request: Request,
+  deps: FeedbackDependencies,
+  auth: InternalApiAuthContext,
+  result: string
+) {
+  if (!deps.auditInternalRead) return;
+  const url = new URL(request.url);
+  const requestHash = createHash('sha256')
+    .update(
+      [
+        request.method.toUpperCase(),
+        url.pathname,
+        internalApiRawQueryString(url),
+      ].join('\n')
+    )
+    .digest('hex');
+  await deps.auditInternalRead({
+    actorEmail: auth.actorEmail,
+    keyId: auth.keyId,
+    endpoint: `${request.method.toUpperCase()} ${url.pathname}`,
+    requestHash,
+    result,
   });
 }
