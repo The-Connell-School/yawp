@@ -157,7 +157,7 @@ describe('free-tier approval flow', () => {
     expect(finalApp?.status).toBe('APPROVED');
   });
 
-  test('over-budget school admin approval hard-denies without approving or consuming the signed link', async () => {
+  test('school admin approval succeeds when an already-counted application fills the budget', async () => {
     process.env.FREE_TIER_BUDGET_ENVIRONMENT = 'preview';
     process.env.FREE_TIER_PREVIEW_BUDGET_USD = '0';
     process.env.FREE_TIER_PREVIEW_UNIT_COST_USD = '1';
@@ -217,25 +217,22 @@ describe('free-tier approval flow', () => {
       authorized: true,
       request: req,
     });
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error('expected budget denial');
-    expect(result.reason).toBe('budget_exceeded');
-    expect('operatorMessage' in result ? result.operatorMessage : '').toContain('Free-tier preview budget reached');
-    expect(hookCalls).toBe(0);
+    expect(result.ok, JSON.stringify(result)).toBe(true);
+    expect(hookCalls).toBe(1);
 
     const link = await prisma.freeTierSignedLink.findUnique({
       where: { id: linkId },
       select: { usedAt: true },
     });
-    expect(link?.usedAt).toBeNull();
+    expect(link?.usedAt).toBeInstanceOf(Date);
     const pending = await prisma.freeTierAdminApproval.findFirst({
       where: { applicationId: app.id, signedLinkId: linkId },
       select: { status: true, decidedAt: true },
     });
-    expect(pending?.status).toBe('PENDING');
-    expect(pending?.decidedAt).toBeNull();
+    expect(pending?.status).toBe('APPROVED');
+    expect(pending?.decidedAt).toBeInstanceOf(Date);
     const finalApp = await prisma.freeTierApplication.findUnique({ where: { id: app.id } });
-    expect(finalApp?.status).toBe('SENT');
+    expect(finalApp?.status).toBe('APPROVED');
   });
 
   test('concurrent approve clicks: only one consumes the signed link', async () => {

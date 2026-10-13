@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  assertFreeTierBudgetHeadroomForTransition,
   assertFreeTierBudgetHeadroom,
   calculateFreeTierUsage,
   FreeTierBudgetExceededError,
@@ -60,6 +61,28 @@ describe('free-tier usage budget', () => {
         FREE_TIER_PREVIEW_UNIT_COST_USD: '1',
       })
     ).rejects.toBeInstanceOf(FreeTierBudgetExceededError);
+  });
+
+  test('does not charge transitions that are already counted as active usage', async () => {
+    const client = {
+      freeTierApplication: {
+        count: async () => 1,
+      },
+    };
+    const summary = await assertFreeTierBudgetHeadroomForTransition(
+      client as any,
+      {
+        from: { status: 'SENT' },
+        to: { status: 'APPROVED' },
+      },
+      {
+        FREE_TIER_BUDGET_ENVIRONMENT: 'preview',
+        FREE_TIER_PREVIEW_BUDGET_USD: '0',
+        FREE_TIER_PREVIEW_UNIT_COST_USD: '1',
+      }
+    );
+    expect(summary.activeApplications).toBe(1);
+    expect(summary.overBudget).toBe(true);
   });
 });
 
