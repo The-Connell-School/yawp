@@ -7,6 +7,9 @@ const CUID_RE = /\bc[a-z0-9]{20,}\b/gi;
 const SSN_RE = /\b\d{3}-\d{2}-\d{4}\b/g;
 const PHONE_RE =
   /(?<!\w)(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}(?!\w)/g;
+const IPV4_RE =
+  /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g;
+const HEX_HASH_RE = /\b[a-f0-9]{32,128}\b/gi;
 const SELF_IDENTIFIED_NAME_RE =
   /\b(I am|I'm|my name is|name is|this is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\b/g;
 const STUDENT_FIRST_NAME_RE =
@@ -149,6 +152,8 @@ function scrubString(value: string, knownPhrases: Set<string>) {
     .replace(CUID_RE, '[id]')
     .replace(SSN_RE, '[id]')
     .replace(PHONE_RE, '[phone]')
+    .replace(IPV4_RE, '[ip]')
+    .replace(HEX_HASH_RE, '[hash]')
     .replace(USERNAME_RE, (_match, prefix) => `${prefix}@[username]`)
     .replace(SELF_IDENTIFIED_NAME_RE, (_match, prefix) => `${prefix} [name]`)
     .replace(STUDENT_FIRST_NAME_RE, (_match, prefix) => `${prefix}[name]`)

@@ -129,4 +129,38 @@ describe('LlmLog de-identification', () => {
     expect(serialized).not.toContain('Jordan');
     expect(serialized).not.toContain('deidentificationPhrases');
   });
+
+  test('scrubs raw IP addresses and standalone hash values from text', () => {
+    const hash =
+      'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210';
+    const data = deidentifyLlmLogData({
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+      systemPrompt: `Handle request from 203.0.113.42 with digest ${hash}.`,
+      messages: [
+        {
+          role: 'user',
+          content: `Client IP 198.51.100.20 and content hash ${hash}`,
+        },
+      ],
+      response: `No raw 203.0.113.42 or ${hash} should persist.`,
+      metadata: {
+        feature: 'tutor',
+      },
+    });
+
+    const serialized = JSON.stringify(data);
+
+    expect(data.systemPrompt).toContain('from [ip] with digest [hash]');
+    expect(data.messages).toEqual([
+      {
+        role: 'user',
+        content: 'Client IP [ip] and content hash [hash]',
+      },
+    ]);
+    expect(data.response).toContain('No raw [ip] or [hash]');
+    expect(serialized).not.toContain('203.0.113.42');
+    expect(serialized).not.toContain('198.51.100.20');
+    expect(serialized).not.toContain(hash);
+  });
 });

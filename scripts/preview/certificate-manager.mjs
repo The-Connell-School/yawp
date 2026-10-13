@@ -829,7 +829,7 @@ async function resolveZeroSslEabCredentials({
   return credentials;
 }
 
-function isLetsEncryptRateLimit(error) {
+function isLetsEncryptRegisteredDomainRateLimit(error) {
   const message = String(error?.message || '');
   return /^ACME (?:request|nonce request) failed \(429\):/.test(message);
 }
@@ -878,7 +878,7 @@ export async function ensureWildcardCertificate({
       dnsProvider,
     });
   } catch (error) {
-    if (!isLetsEncryptRateLimit(error) || directoryUrl !== DEFAULT_DIRECTORY_URL) {
+    if (!isLetsEncryptRegisteredDomainRateLimit(error) || directoryUrl !== DEFAULT_DIRECTORY_URL) {
       throw error;
     }
     const externalAccountBinding = await resolveZeroSslEabCredentials({
