@@ -289,8 +289,8 @@ test.describe('Free-tier repeat sign-up QA', () => {
         'hosted-demo-repeat-signup-skip.txt',
         [
           'Hosted demo qa-repeat-signup mutation run skipped.',
-          'DEMO_FREE_TIER_BASE_URL and DEMO_FREE_TIER_REPEAT_EVENT_TOKEN were present, so the suite verified the hosted event page can render without a 500.',
-          'Repeat submissions require a disposable hosted fixture email plus DEMO_FREE_TIER_REPEAT_ALLOW_SUBMIT=true to avoid unintended outbound email sends.',
+          'DEMO_FREE_TIER_BASE_URL and DEMO_FREE_TIER_REPEAT_EVENT_TOKEN were present, but the suite did not open the hosted event link because scanning it can mutate demo counters.',
+          'Repeat submissions require a disposable hosted fixture email plus DEMO_FREE_TIER_REPEAT_ALLOW_SUBMIT=true before any hosted demo navigation or submission.',
           `Missing guarded fixture env: ${[
             !fixtureEmail ? 'DEMO_FREE_TIER_REPEAT_EMAIL' : null,
             !allowSubmit ? 'DEMO_FREE_TIER_REPEAT_ALLOW_SUBMIT=true' : null,
@@ -299,19 +299,6 @@ test.describe('Free-tier repeat sign-up QA', () => {
             .join(', ')}`,
         ].join('\n')
       );
-
-      const context = await browser.newContext({ baseURL: baseUrl });
-      try {
-        const page = await context.newPage();
-        const response = await page.goto(`/free?t=${encodeURIComponent(code)}`);
-        expect(response?.status()).toBeLessThan(500);
-        await expect(page.locator('body')).not.toContainText(
-          /stack trace|traceback|internal server error/i
-        );
-        await shot(page, 'hosted-demo-event-page.png');
-      } finally {
-        await context.close();
-      }
       test.skip(true, 'Hosted demo repeat mutation fixture env is missing.');
       return;
     }

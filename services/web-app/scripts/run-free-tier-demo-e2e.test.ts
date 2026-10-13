@@ -52,11 +52,12 @@ describe('free-tier demo suite runner manifest', () => {
 
   test('keeps suite hosted-demo skip artifact distinct from focused spec skips', async () => {
     const root = await mkdtemp(join(tmpdir(), 'free-tier-demo-suite-shots-'));
-    const focusedArtifact = focusedHostedDemoSkipArtifacts[0];
-    await writeFile(
-      join(root, focusedArtifact),
-      'focused hosted skip evidence must remain durable'
-    );
+    for (const [index, focusedArtifact] of focusedHostedDemoSkipArtifacts.entries()) {
+      await writeFile(
+        join(root, focusedArtifact),
+        `focused hosted skip evidence ${index} must remain durable`
+      );
+    }
 
     await writeSuiteEvidence([], [], {
       shotDirectory: root,
@@ -65,9 +66,11 @@ describe('free-tier demo suite runner manifest', () => {
 
     expect(suiteHostedDemoSkipArtifact).toBe('suite-hosted-demo-skip.txt');
     expect(focusedHostedDemoSkipArtifacts).not.toContain(suiteHostedDemoSkipArtifact);
-    expect(await readFile(join(root, focusedArtifact), 'utf8')).toBe(
-      'focused hosted skip evidence must remain durable'
-    );
+    for (const [index, focusedArtifact] of focusedHostedDemoSkipArtifacts.entries()) {
+      expect(await readFile(join(root, focusedArtifact), 'utf8')).toBe(
+        `focused hosted skip evidence ${index} must remain durable`
+      );
+    }
     expect(await readFile(join(root, suiteHostedDemoSkipArtifact), 'utf8')).toContain(
       'Hosted demo free-tier suite cases skipped.'
     );

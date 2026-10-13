@@ -64,7 +64,7 @@ Those specs keep their local deterministic stand-ins and hosted demo skip checks
 
 ## Hosted Demo Skips
 
-Hosted demo checks require disposable demo access inputs. When any of these are absent, the runner writes `suite-hosted-demo-skip.txt` under the screenshot directory and still runs the local deterministic specs. Focused specs write their own named skip artifacts, such as `hosted-demo-repeat-signup-skip.txt`, so suite-level evidence does not overwrite focused evidence.
+Hosted demo checks require disposable demo access inputs. When any of these are absent, the runner writes `suite-hosted-demo-skip.txt` under the screenshot directory and still runs the local deterministic specs. Focused specs write their own named skip artifacts, such as `hosted-demo-repeat-signup-skip.txt`, so suite-level evidence does not overwrite focused evidence. Hosted paths that can mutate demo state, including event-link scans, must skip before navigation unless both disposable fixture env and the focused mutation opt-in flag are present.
 
 ```bash
 DEMO_FREE_TIER_BASE_URL
