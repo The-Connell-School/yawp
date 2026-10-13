@@ -164,6 +164,8 @@ async function main() {
 
   await writeSuiteEvidence(present, missing);
 
+  const missingDefault = missing.filter((spec) => spec.runByDefault);
+
   if (process.argv.includes('--list')) {
     console.log('Free-tier demo E2E specs:');
     for (const spec of present) {
@@ -175,7 +177,23 @@ async function main() {
       console.log(`missing  ${spec.path} (${spec.coverage})`);
     }
     console.log(`shotDir  ${shotDir}`);
+    if (missingDefault.length > 0) {
+      console.error(
+        `Missing required free-tier demo E2E specs: ${missingDefault
+          .map((spec) => spec.path)
+          .join(', ')}`
+      );
+      process.exitCode = 1;
+    }
     return;
+  }
+
+  if (missingDefault.length > 0) {
+    throw new Error(
+      `Missing required free-tier demo E2E specs: ${missingDefault
+        .map((spec) => spec.path)
+        .join(', ')}`
+    );
   }
 
   const runnable = present.filter((spec) => spec.runByDefault);
