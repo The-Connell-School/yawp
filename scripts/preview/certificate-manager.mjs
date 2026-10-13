@@ -437,19 +437,23 @@ function normalizeZoneId(zoneId) {
 }
 
 async function discoverRoute53HostedZoneId({ zoneName, execFileFn }) {
-  const expectedName = `${zoneName.replace(/\.$/, '')}.`;
-  const response = await execAwsJson(execFileFn, [
-    'list-hosted-zones-by-name',
-    '--dns-name', expectedName,
-    '--max-items', '1',
-    '--output', 'json',
-  ]);
-  const zone = response.HostedZones?.[0];
-  if (zone?.Name === expectedName && zone?.Config?.PrivateZone !== true) {
-    return normalizeZoneId(zone.Id);
+  const labels = zoneName.replace(/\.$/, '').split('.').filter(Boolean);
+  for (let index = 0; index < labels.length - 1; index += 1) {
+    const expectedName = `${labels.slice(index).join('.')}.`;
+    const response = await execAwsJson(execFileFn, [
+      'list-hosted-zones-by-name',
+      '--dns-name', expectedName,
+      '--max-items', '10',
+      '--output', 'json',
+    ]);
+    const zone = response.HostedZones?.find((candidate) => (
+      candidate?.Name === expectedName
+      && candidate?.Config?.PrivateZone !== true
+    ));
+    if (zone) return normalizeZoneId(zone.Id);
   }
   throw new Error(
-    `No public Route53 hosted zone found for ${expectedName}; set PREVIEW_ROUTE53_ZONE_ID to use a non-delegated parent zone`,
+    `No public Route53 hosted zone found for ${zoneName}; set PREVIEW_ROUTE53_ZONE_ID to use an explicit zone`,
   );
 }
 

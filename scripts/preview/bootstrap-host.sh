@@ -203,7 +203,8 @@ PREVIEW_TRAEFIK_ACME_PATH="$ROOT/traefik/letsencrypt/acme.json" \
 PREVIEW_ROOT="$ROOT" \
 PREVIEW_DOMAIN="$DOMAIN" \
 PREVIEW_ACME_EMAIL="${ACME_EMAIL:-admin@example.com}" \
-  node "$certificate_manager" --wildcard
+  node "$certificate_manager" --wildcard || \
+  echo "Warning: wildcard preview certificate issuance failed; continuing with resident exact certificates" >&2
 
 wildcard_hostname="_wildcard.$DOMAIN"
 default_hostname="$(

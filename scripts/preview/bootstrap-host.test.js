@@ -67,6 +67,7 @@ describe('bootstrap-host.sh', () => {
   test('migrates resident certificates and installs automatic renewal', () => {
     expect(script).toContain('node "$certificate_manager" --import-traefik');
     expect(script).toContain('node "$certificate_manager" --wildcard');
+    expect(script).toContain('Warning: wildcard preview certificate issuance failed; continuing with resident exact certificates');
     expect(script).toContain('wildcard_hostname="_wildcard.$DOMAIN"');
     expect(script).toContain('yawp-preview-certificate-renewal.timer');
     expect(script).toContain('$ROOT/ingress/current/certificate-manager.mjs --wildcard');
