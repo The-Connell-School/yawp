@@ -20,6 +20,7 @@ import { z } from 'zod';
 import { FreeTierEntryHeader } from '../free.join/FreeTierEntryHeader';
 import { FreeTierFieldLabel, FreeTierTextInput } from '../free-tier/FreeTierAuthCard';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
+import { FreeTierLegalLinks } from './LegalLinks';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireFreeTierEnabled();
@@ -205,6 +206,7 @@ export default function FreeTierLandingRoute() {
             </button>
           </fetcher.Form>
         )}
+        <FreeTierLegalLinks />
       </section>
     </main>
   );
