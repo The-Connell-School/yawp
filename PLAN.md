@@ -1,14 +1,17 @@
-# qa-suite-browser-cache-recovery
+# qa-regression-loop-post-fixes
 
 ## Scope
 
-- Platform-only QA infrastructure in `services/web-app`.
-- Reuse the existing free-tier demo runner and seeded repro manifest checks from the QA suite branch context.
-- Add a narrow browser executable resolution path so local Playwright runs can use an available cached Chrome/Chromium binary instead of failing only because the default headless-shell revision is absent.
+- Platform-only QA/e2e work in `services/web-app`.
+- Reuse the durable free-tier demo runner and seeded repro specs from the recent QA suite branch.
+- Re-run the local deterministic demo suite after seeded fixes, with hosted demo checks skipping cleanly when fixture/auth env is absent.
+- Do not change product behavior, deploy, rotate secrets, or send email.
 
 ## Steps
 
-1. Bring the free-tier demo runner/test context into this branch without product behavior changes.
-2. Add runner-level browser cache fallback and focused Bun coverage for explicit env, cached Chrome discovery, and missing-browser behavior.
-3. Update the runner doc with the lane screenshot path and cache behavior.
-4. Run focused script tests, typecheck where feasible, and launch/list the local deterministic suite enough to confirm it reaches runner/spec validation rather than the missing `chromium_headless_shell-1223` failure.
+1. Bring the durable free-tier demo suite context into this fresh `origin/main` branch without product behavior changes.
+2. Confirm the manifest fails if required seeded repro specs are missing.
+3. Run focused runner/filing helper tests.
+4. Run `test:e2e:free-tier-demo` with `FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-regression-loop-post-fixes`.
+5. Preserve hosted demo skip evidence when hosted demo env is absent.
+6. File any still-reproducing product regression to `FAILURES.md` and the fixes backlog P0b section.

@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 const webAppRoot = path.resolve(__dirname, '..');
 
 const defaultShotDir =
-  '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-browser-cache-recovery';
+  '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-regression-loop-post-fixes';
 const shotDir =
   process.env.FREE_TIER_QA_SHOTS_DIR?.trim() ||
   process.env.QA_SCREENSHOT_DIR?.trim() ||
