@@ -16,11 +16,12 @@ mock.module('~/utils/db.server', () => ({ prisma }));
 const {
   isFeatureFlagEnabled,
   isLessonPlannerEnabled,
+  isLoungeCommunityEnabled,
   listFeatureFlags,
   setFeatureFlag,
   findUnknownOrganizationIds,
 } = await import('./feature-flags.server');
-const { INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG } = await import(
+const { INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, LOUNGE_COMMUNITY_FLAG } = await import(
   './feature-flags'
 );
 
@@ -50,6 +51,18 @@ describe('feature flags (server)', () => {
     expect(await isFeatureFlagEnabled(INTERNAL_RUBRICS_FLAG, null)).toBe(false);
     prisma.setting.findUnique.mockResolvedValue({ value: '{"mode":"everyone","orgIds":[]}' });
     expect(await isFeatureFlagEnabled(INTERNAL_RUBRICS_FLAG, 'org-2')).toBe(true);
+  });
+
+  test("Teacher's Lounge community is off with no row and follows per-school targeting", async () => {
+    prisma.setting.findUnique.mockResolvedValue(null);
+    expect(await isLoungeCommunityEnabled('org-1')).toBe(false);
+    expect(prisma.setting.findUnique.mock.calls[0]?.[0]).toMatchObject({
+      where: { name: 'feature_flag.teacher_lounge_community' },
+    });
+    prisma.setting.findUnique.mockResolvedValue({ value: '{"mode":"targeted","orgIds":["org-1"]}' });
+    expect(await isLoungeCommunityEnabled('org-1')).toBe(true);
+    expect(await isLoungeCommunityEnabled('org-2')).toBe(false);
+    expect(await isLoungeCommunityEnabled(null)).toBe(false);
   });
 
   test('defaults off when no row exists', async () => {
@@ -127,6 +140,7 @@ describe('feature flags (server)', () => {
       LESSON_PLANNER_FLAG,
       INTERNAL_RUBRICS_FLAG,
       FREE_TIER_FLAG,
+      LOUNGE_COMMUNITY_FLAG,
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[2]).toMatchObject({ key: FREE_TIER_FLAG, mode: 'off', enabled: false });
@@ -150,6 +164,7 @@ describe('feature flags (server)', () => {
       LESSON_PLANNER_FLAG,
       INTERNAL_RUBRICS_FLAG,
       FREE_TIER_FLAG,
+      LOUNGE_COMMUNITY_FLAG,
     ]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });
     const where = prisma.setting.findMany.mock.calls[0]?.[0].where;

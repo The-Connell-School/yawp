@@ -4,6 +4,7 @@ import {
   INTERNAL_RUBRICS_FLAG,
   LESSON_PLANNER_FLAG,
   FREE_TIER_FLAG,
+  LOUNGE_COMMUNITY_FLAG,
   FEATURE_FLAG_KEYS,
   isFreeTierGloballyEnabled,
   featureFlagSettingName,
@@ -53,11 +54,23 @@ describe('feature flag registry', () => {
     expect(featureFlagSettingName(FREE_TIER_FLAG)).toBe('feature_flag.free_tier');
   });
 
+  test('has the Teacher\'s Lounge community flag, stored under its own row', () => {
+    expect(LOUNGE_COMMUNITY_FLAG).toBe('teacher_lounge_community');
+    expect(isFeatureFlagKey(LOUNGE_COMMUNITY_FLAG)).toBe(true);
+    expect(featureFlagSettingName(LOUNGE_COMMUNITY_FLAG)).toBe(
+      'feature_flag.teacher_lounge_community'
+    );
+    expect(FEATURE_FLAGS[LOUNGE_COMMUNITY_FLAG].label).toBe(
+      "Teacher's Lounge community"
+    );
+  });
+
   test('lists every registered flag key', () => {
     expect(FEATURE_FLAG_KEYS).toEqual([
       LESSON_PLANNER_FLAG,
       INTERNAL_RUBRICS_FLAG,
       FREE_TIER_FLAG,
+      LOUNGE_COMMUNITY_FLAG,
     ]);
   });
 

@@ -37,6 +37,15 @@ export const INTERNAL_RUBRICS_FLAG = 'internal_rubrics' as const;
  */
 export const FREE_TIER_FLAG = 'free_tier' as const;
 
+/**
+ * Teacher's Lounge community board. On for a school: the Teacher's Lounge nav
+ * item opens the community feed (/app/lounge), with the existing course grid
+ * one tab away at its old URL. Off: the nav item opens the course grid as
+ * before and every /app/lounge route returns 404. Posts are never deleted by
+ * turning it off.
+ */
+export const LOUNGE_COMMUNITY_FLAG = 'teacher_lounge_community' as const;
+
 export const FEATURE_FLAGS = {
   [LESSON_PLANNER_FLAG]: {
     label: 'Lesson Planner',
@@ -52,6 +61,11 @@ export const FEATURE_FLAGS = {
     label: 'Free tier',
     description:
       'Enables Free Tier C teacher onboarding, school-admin approval links, operator release tools, and related UI. Off: those routes and release APIs return 404; waitlist/token APIs behave as on main until yawp-internal turns this on for everyone.',
+  },
+  [LOUNGE_COMMUNITY_FLAG]: {
+    label: "Teacher's Lounge community",
+    description:
+      "Teachers at these schools get the community board in the Teacher's Lounge: posts, replies, helpful votes, and questions for Brian. Off: the Lounge shows only the course grid and community pages return 404; posts are kept.",
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 
