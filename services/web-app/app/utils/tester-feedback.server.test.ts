@@ -231,7 +231,7 @@ describe('tester feedback submission', () => {
   });
   test('does not trust proxy-reconstructed tester feedback origins in production', async () => {
     const { deps, saved } = setup({ environment: () => 'production' });
-    for (const headers of [
+    const productionOriginHeaders: HeadersInit[] = [
       {
         origin: 'https://app.yawp.test',
         'x-forwarded-proto': 'https',
@@ -241,7 +241,8 @@ describe('tester feedback submission', () => {
         origin: 'https://yawp.school',
         host: 'yawp.school',
       },
-    ]) {
+    ];
+    for (const headers of productionOriginHeaders) {
       const response = await submitTesterFeedback(
         new Request('http://app-runner.internal/api/tester-feedback', {
           method: 'POST',
