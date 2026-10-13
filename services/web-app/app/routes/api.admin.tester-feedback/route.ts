@@ -1,6 +1,9 @@
 import type { LoaderFunctionArgs } from 'react-router';
+import { requireAdmin } from '~/utils/auth.server';
 
-export const loader = ({ request }: LoaderFunctionArgs) => {
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  await requireAdmin(request);
+
   if (request.method !== 'GET') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
