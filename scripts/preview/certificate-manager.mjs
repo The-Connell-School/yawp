@@ -2,12 +2,14 @@ import { execFile } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import {
   createHash,
+  createHmac,
   createPrivateKey,
   createPublicKey,
   generateKeyPairSync,
   sign,
   X509Certificate,
 } from 'node:crypto';
+import { resolveTxt } from 'node:dns/promises';
 import {
   chmod,
   mkdir,
@@ -27,6 +29,8 @@ import { parsePreviewPr } from './wake-server.mjs';
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_DIRECTORY_URL = 'https://acme-v02.api.letsencrypt.org/directory';
+const ZEROSSL_DIRECTORY_URL = 'https://acme.zerossl.com/v2/DV90';
+const ZEROSSL_EAB_URL = 'https://api.zerossl.com/acme/eab-credentials';
 
 export function isDirectExecution(moduleUrl, argv1 = process.argv[1]) {
   if (!argv1) return false;
@@ -48,7 +52,8 @@ function publicKeyDer(key) {
 function validCertificatePair({ hostname, keyPem, certPem }) {
   try {
     const certificate = new X509Certificate(certPem);
-    if (!certificate.checkHost(hostname)) return false;
+    const validationHostname = hostname.startsWith('*.') ? `wildcard-probe.${hostname.slice(2)}` : hostname;
+    if (!certificate.checkHost(validationHostname)) return false;
     const privatePublic = publicKeyDer(createPrivateKey(keyPem));
     const certificatePublic = certificate.publicKey.export({ type: 'spki', format: 'der' });
     return Buffer.from(privatePublic).equals(Buffer.from(certificatePublic));
@@ -97,6 +102,25 @@ function certificateEntries(value, entries = []) {
     if (child && typeof child === 'object') certificateEntries(child, entries);
   }
   return entries;
+}
+
+export function wildcardCertificateHostname(domain) {
+  if (!/^([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$/.test(domain)) {
+    throw new Error('Preview domain must be a valid DNS domain');
+  }
+  return `*.${domain.toLowerCase()}`;
+}
+
+export function certificateStorageName(hostname) {
+  return hostname.startsWith('*.') ? `_wildcard.${hostname.slice(2)}` : hostname;
+}
+
+function certificatePaths(certRoot, hostname) {
+  const storageName = certificateStorageName(hostname);
+  return {
+    keyPath: path.join(certRoot, storageName, 'privkey.pem'),
+    certPath: path.join(certRoot, storageName, 'fullchain.pem'),
+  };
 }
 
 export async function importResidentTraefikCertificates({
@@ -259,10 +283,35 @@ function generateAccountKey() {
   }).privateKey;
 }
 
-async function createSession({ directoryUrl, fetchFn, accountRoot, email }) {
+function registrationFilename(directoryUrl) {
+  if (directoryUrl === DEFAULT_DIRECTORY_URL) return 'registration.json';
+  const digest = createHash('sha256').update(directoryUrl).digest('hex').slice(0, 16);
+  return `registration-${digest}.json`;
+}
+
+function externalAccountBindingJws({ jwk, kid, hmacKey, url }) {
+  const protectedValue = base64url(JSON.stringify({ alg: 'HS256', kid, url }));
+  const payloadValue = base64url(JSON.stringify(jwk));
+  const signature = createHmac('sha256', Buffer.from(hmacKey, 'base64url'))
+    .update(`${protectedValue}.${payloadValue}`)
+    .digest('base64url');
+  return {
+    protected: protectedValue,
+    payload: payloadValue,
+    signature,
+  };
+}
+
+async function createSession({
+  directoryUrl,
+  fetchFn,
+  accountRoot,
+  email,
+  externalAccountBinding,
+}) {
   await mkdir(accountRoot, { recursive: true, mode: 0o700 });
   const keyPath = path.join(accountRoot, 'account-key.pem');
-  const registrationPath = path.join(accountRoot, 'registration.json');
+  const registrationPath = path.join(accountRoot, registrationFilename(directoryUrl));
   let privateKeyPem;
   try {
     privateKeyPem = await readFile(keyPath, 'utf8');
@@ -300,9 +349,20 @@ async function createSession({ directoryUrl, fetchFn, accountRoot, email }) {
     kid: registration?.directoryUrl === directoryUrl ? registration.kid : null,
   });
   if (!session.kid) {
-    const { response } = await session.json(directory.newAccount, {
+    const accountPayload = {
       termsOfServiceAgreed: true,
       ...(email ? { contact: [`mailto:${email}`] } : {}),
+    };
+    if (externalAccountBinding) {
+      accountPayload.externalAccountBinding = externalAccountBindingJws({
+        jwk: session.jwk,
+        kid: externalAccountBinding.kid,
+        hmacKey: externalAccountBinding.hmacKey,
+        url: directory.newAccount,
+      });
+    }
+    const { response } = await session.json(directory.newAccount, {
+      ...accountPayload,
     }, { useJwk: true });
     session.kid = response.headers.get('location');
     if (!session.kid) throw new Error('ACME account response omitted its account URL');
@@ -311,7 +371,7 @@ async function createSession({ directoryUrl, fetchFn, accountRoot, email }) {
   return session;
 }
 
-async function defaultCreateKeyAndCsr(hostname) {
+async function defaultCreateKeyAndCsr(hostname, { subjectAltNames = [hostname] } = {}) {
   const temporary = await mkdtemp(path.join(tmpdir(), 'yawp-preview-csr-'));
   try {
     const privateKeyPem = generateKeyPairSync('rsa', {
@@ -326,7 +386,7 @@ async function defaultCreateKeyAndCsr(hostname) {
       'req', '-new', '-sha256',
       '-key', keyPath,
       '-subj', `/CN=${hostname}`,
-      '-addext', `subjectAltName=DNS:${hostname}`,
+      '-addext', `subjectAltName=${subjectAltNames.map((name) => `DNS:${name}`).join(',')}`,
       '-outform', 'DER',
       '-out', csrPath,
     ], { timeout: 30_000, maxBuffer: 1024 * 1024 });
@@ -334,6 +394,140 @@ async function defaultCreateKeyAndCsr(hostname) {
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
+}
+
+function challengeDomainForIdentifier(identifier) {
+  return identifier.startsWith('*.') ? identifier.slice(2) : identifier;
+}
+
+function dnsChallengeName(identifier) {
+  return `_acme-challenge.${challengeDomainForIdentifier(identifier)}`;
+}
+
+function hostedZoneCandidates(name) {
+  const labels = name.replace(/\.$/, '').split('.');
+  const candidates = [];
+  for (let index = 0; index < labels.length - 1; index += 1) {
+    candidates.push(`${labels.slice(index).join('.')}.`);
+  }
+  return candidates;
+}
+
+function route53ChangeBatch(recordName, recordValue, action) {
+  return JSON.stringify({
+    Changes: [{
+      Action: action,
+      ResourceRecordSet: {
+        Name: recordName,
+        Type: 'TXT',
+        TTL: 30,
+        ResourceRecords: [{ Value: JSON.stringify(recordValue) }],
+      },
+    }],
+  });
+}
+
+function route53Args(extra = []) {
+  return ['route53', ...extra];
+}
+
+async function execAwsJson(execFileFn, args, options = {}) {
+  const { stdout } = await execFileFn('aws', route53Args(args), {
+    timeout: 30_000,
+    maxBuffer: 1024 * 1024,
+    ...options,
+  });
+  return stdout ? JSON.parse(stdout) : {};
+}
+
+async function discoverRoute53HostedZoneId({ recordName, execFileFn }) {
+  for (const candidate of hostedZoneCandidates(recordName)) {
+    const response = await execAwsJson(execFileFn, [
+      'list-hosted-zones-by-name',
+      '--dns-name', candidate,
+      '--max-items', '1',
+      '--output', 'json',
+    ]);
+    const zone = response.HostedZones?.[0];
+    if (zone?.Name === candidate && zone?.Config?.PrivateZone !== true) {
+      return String(zone.Id || '').replace(/^\/hostedzone\//, '');
+    }
+  }
+  throw new Error(`No public Route53 hosted zone found for ${recordName}`);
+}
+
+async function waitForRoute53Change({ changeId, execFileFn, pollIntervalMs }) {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const response = await execAwsJson(execFileFn, [
+      'get-change',
+      '--id', changeId,
+      '--output', 'json',
+    ]);
+    if (response.ChangeInfo?.Status === 'INSYNC') return;
+    await delay(pollIntervalMs);
+  }
+  throw new Error(`Route53 change ${changeId} did not become INSYNC`);
+}
+
+async function waitForDnsTxt({ recordName, expectedValue, resolveTxtFn, pollIntervalMs }) {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    try {
+      const records = await resolveTxtFn(recordName);
+      if (records.some((parts) => parts.join('') === expectedValue)) return;
+    } catch {
+      // DNS propagation is expected to race the first few reads.
+    }
+    await delay(pollIntervalMs);
+  }
+  throw new Error(`DNS TXT challenge did not propagate for ${recordName}`);
+}
+
+export function createRoute53Dns01Provider({
+  hostedZoneId = process.env.PREVIEW_ROUTE53_ZONE_ID || '',
+  execFileFn = execFileAsync,
+  resolveTxtFn = resolveTxt,
+  pollIntervalMs = 2000,
+} = {}) {
+  return {
+    async present({ identifier, keyAuthorization }) {
+      const recordName = `${dnsChallengeName(identifier)}.`;
+      const zoneId = hostedZoneId || await discoverRoute53HostedZoneId({ recordName, execFileFn });
+      const recordValue = base64url(createHash('sha256').update(keyAuthorization).digest());
+      const response = await execAwsJson(execFileFn, [
+        'change-resource-record-sets',
+        '--hosted-zone-id', zoneId,
+        '--change-batch', route53ChangeBatch(recordName, recordValue, 'UPSERT'),
+        '--output', 'json',
+      ]);
+      if (response.ChangeInfo?.Id) {
+        await waitForRoute53Change({
+          changeId: response.ChangeInfo.Id,
+          execFileFn,
+          pollIntervalMs,
+        });
+      }
+      await waitForDnsTxt({
+        recordName,
+        expectedValue: recordValue,
+        resolveTxtFn,
+        pollIntervalMs,
+      });
+      return { recordName, recordValue, zoneId };
+    },
+    async cleanup({ recordName, recordValue, zoneId }) {
+      if (!recordName || !recordValue || !zoneId) return;
+      try {
+        await execAwsJson(execFileFn, [
+          'change-resource-record-sets',
+          '--hosted-zone-id', zoneId,
+          '--change-batch', route53ChangeBatch(recordName, recordValue, 'DELETE'),
+          '--output', 'json',
+        ]);
+      } catch (error) {
+        console.error(`Warning: failed to remove ACME DNS challenge ${recordName}: ${error.message}`);
+      }
+    },
+  };
 }
 
 async function waitForStatus({ session, url, valid, pollIntervalMs, attempts = 60 }) {
@@ -367,9 +561,7 @@ export async function ensureCertificate({
   if (parsePreviewPr(hostname, domain) === null || hostname !== hostname.toLowerCase()) {
     throw new Error('Certificate hostname must be an exact lowercase PR preview host');
   }
-  const target = path.join(certRoot, hostname);
-  const keyPath = path.join(target, 'privkey.pem');
-  const certPath = path.join(target, 'fullchain.pem');
+  const { keyPath, certPath } = certificatePaths(certRoot, hostname);
   try {
     const certPem = await readFile(certPath, 'utf8');
     if (
@@ -380,6 +572,39 @@ export async function ensureCertificate({
     if (error?.code !== 'ENOENT') throw error;
   }
 
+  return issueCertificate({
+    hostname,
+    identifiers: [hostname],
+    challengeType: 'http-01',
+    certRoot,
+    accountRoot,
+    challengeRoot,
+    email,
+    directoryUrl,
+    fetchFn,
+    pollIntervalMs,
+    createKeyAndCsr,
+    requestTimeoutMs,
+  });
+}
+
+async function issueCertificate({
+  hostname,
+  identifiers,
+  challengeType,
+  certRoot,
+  accountRoot,
+  challengeRoot,
+  email,
+  directoryUrl,
+  fetchFn,
+  pollIntervalMs,
+  createKeyAndCsr,
+  requestTimeoutMs,
+  dnsProvider,
+  externalAccountBinding,
+}) {
+  const { keyPath, certPath } = certificatePaths(certRoot, hostname);
   const boundedFetch = (url, options) => fetchWithTimeout(
     fetchFn,
     url,
@@ -391,29 +616,40 @@ export async function ensureCertificate({
     fetchFn: boundedFetch,
     accountRoot,
     email,
+    externalAccountBinding,
   });
   const { response: orderResponse, body: order } = await session.json(
     session.directory.newOrder,
-    { identifiers: [{ type: 'dns', value: hostname }] },
+    { identifiers: identifiers.map((value) => ({ type: 'dns', value })) },
   );
   const orderUrl = orderResponse.headers.get('location');
   if (!orderUrl || !Array.isArray(order.authorizations) || !order.finalize) {
     throw new Error('ACME order response is incomplete');
   }
-  const { privateKeyPem, csrDer } = await createKeyAndCsr(hostname);
+  const { privateKeyPem, csrDer } = await createKeyAndCsr(hostname, {
+    subjectAltNames: identifiers,
+  });
   await mkdir(challengeRoot, { recursive: true, mode: 0o755 });
   let challengePath = null;
+  const dnsChallenges = [];
   try {
     for (const authorizationUrl of order.authorizations) {
       const { body: authorization } = await session.json(authorizationUrl, null);
       if (authorization.status === 'valid') continue;
-      const challenge = authorization.challenges?.find((candidate) => candidate.type === 'http-01');
+      const challenge = authorization.challenges?.find((candidate) => candidate.type === challengeType);
       if (!challenge || !/^[A-Za-z0-9_-]{1,256}$/.test(challenge.token) || !challenge.url) {
-        throw new Error('ACME authorization has no usable HTTP-01 challenge');
+        throw new Error(`ACME authorization has no usable ${challengeType} challenge`);
       }
       const thumbprint = base64url(createHash('sha256').update(JSON.stringify(session.jwk)).digest());
-      challengePath = path.join(challengeRoot, challenge.token);
-      await atomicWrite(challengePath, `${challenge.token}.${thumbprint}\n`, 0o644);
+      const keyAuthorization = `${challenge.token}.${thumbprint}`;
+      if (challengeType === 'http-01') {
+        challengePath = path.join(challengeRoot, challenge.token);
+        await atomicWrite(challengePath, `${keyAuthorization}\n`, 0o644);
+      } else if (challengeType === 'dns-01') {
+        if (!dnsProvider) throw new Error('DNS-01 challenge requires a DNS provider');
+        const identifier = String(authorization.identifier?.value || identifiers[0] || hostname);
+        dnsChallenges.push(await dnsProvider.present({ identifier, keyAuthorization }));
+      }
       await session.json(challenge.url, {});
       await waitForStatus({
         session,
@@ -421,8 +657,10 @@ export async function ensureCertificate({
         valid: (body) => body.status === 'valid',
         pollIntervalMs,
       });
-      await rm(challengePath, { force: true });
-      challengePath = null;
+      if (challengePath) {
+        await rm(challengePath, { force: true });
+        challengePath = null;
+      }
     }
     await session.json(order.finalize, { csr: base64url(csrDer) });
     const completed = await waitForStatus({
@@ -441,6 +679,131 @@ export async function ensureCertificate({
     return { hostname, status: 'issued' };
   } finally {
     if (challengePath) await rm(challengePath, { force: true });
+    if (dnsProvider) {
+      await Promise.all(dnsChallenges.map((challenge) => dnsProvider.cleanup(challenge)));
+    }
+  }
+}
+
+async function readZeroSslEabCredentials(accountRoot) {
+  try {
+    const parsed = JSON.parse(await readFile(path.join(accountRoot, 'zerossl-eab.json'), 'utf8'));
+    if (parsed?.kid && parsed?.hmacKey) return parsed;
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+  return null;
+}
+
+async function resolveZeroSslEabCredentials({
+  accountRoot,
+  fetchFn,
+  requestTimeoutMs,
+  accessKey = process.env.PREVIEW_ZEROSSL_ACCESS_KEY || '',
+  kid = process.env.PREVIEW_ZEROSSL_EAB_KID || '',
+  hmacKey = process.env.PREVIEW_ZEROSSL_EAB_HMAC_KEY || '',
+}) {
+  if (kid && hmacKey) return { kid, hmacKey };
+  const stored = await readZeroSslEabCredentials(accountRoot);
+  if (stored) return stored;
+  if (!accessKey) return null;
+  const url = new URL(ZEROSSL_EAB_URL);
+  url.searchParams.set('access_key', accessKey);
+  const response = await fetchWithTimeout(fetchFn, url, { method: 'POST' }, requestTimeoutMs);
+  if (!response.ok) {
+    throw new Error(`ZeroSSL EAB credential request failed (${response.status})`);
+  }
+  const body = await response.json();
+  if (body?.success !== 1 || !body.eab_kid || !body.eab_hmac_key) {
+    throw new Error('ZeroSSL EAB credential response was incomplete');
+  }
+  const credentials = { kid: body.eab_kid, hmacKey: body.eab_hmac_key };
+  await atomicWrite(
+    path.join(accountRoot, 'zerossl-eab.json'),
+    `${JSON.stringify(credentials)}\n`,
+    0o600,
+  );
+  return credentials;
+}
+
+function isLetsEncryptRegisteredDomainRateLimit(error) {
+  return /^ACME request failed \(429\):/.test(String(error?.message || ''))
+    && /too many certificates .*already issued for .* in the last 168h/i.test(error.message);
+}
+
+export async function ensureWildcardCertificate({
+  domain,
+  certRoot,
+  accountRoot,
+  challengeRoot,
+  email,
+  directoryUrl = DEFAULT_DIRECTORY_URL,
+  fetchFn = globalThis.fetch,
+  pollIntervalMs = 2000,
+  renewalDays = 30,
+  createKeyAndCsr = defaultCreateKeyAndCsr,
+  requestTimeoutMs = 15_000,
+  dnsProvider = createRoute53Dns01Provider({ pollIntervalMs }),
+  zeroSslDirectoryUrl = ZEROSSL_DIRECTORY_URL,
+}) {
+  const hostname = wildcardCertificateHostname(domain);
+  const { keyPath, certPath } = certificatePaths(certRoot, hostname);
+  try {
+    const certPem = await readFile(certPath, 'utf8');
+    if (
+      !certificateNeedsRenewal(certPem, { renewalDays })
+      && await validateCertificatePair({ hostname, keyPath, certPath })
+    ) return { hostname, status: 'current' };
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+
+  try {
+    return await issueCertificate({
+      hostname,
+      identifiers: [hostname],
+      challengeType: 'dns-01',
+      certRoot,
+      accountRoot,
+      challengeRoot,
+      email,
+      directoryUrl,
+      fetchFn,
+      pollIntervalMs,
+      createKeyAndCsr,
+      requestTimeoutMs,
+      dnsProvider,
+    });
+  } catch (error) {
+    if (!isLetsEncryptRegisteredDomainRateLimit(error) || directoryUrl !== DEFAULT_DIRECTORY_URL) {
+      throw error;
+    }
+    const externalAccountBinding = await resolveZeroSslEabCredentials({
+      accountRoot,
+      fetchFn,
+      requestTimeoutMs,
+    });
+    if (!externalAccountBinding) {
+      throw new Error(
+        `${error.message}; ZeroSSL fallback is not configured (set PREVIEW_ZEROSSL_ACCESS_KEY or PREVIEW_ZEROSSL_EAB_KID/PREVIEW_ZEROSSL_EAB_HMAC_KEY)`,
+      );
+    }
+    return issueCertificate({
+      hostname,
+      identifiers: [hostname],
+      challengeType: 'dns-01',
+      certRoot,
+      accountRoot,
+      challengeRoot,
+      email,
+      directoryUrl: zeroSslDirectoryUrl,
+      fetchFn,
+      pollIntervalMs,
+      createKeyAndCsr,
+      requestTimeoutMs,
+      dnsProvider,
+      externalAccountBinding,
+    });
   }
 }
 
@@ -483,26 +846,39 @@ if (isDirectExecution(import.meta.url)) {
     const imported = await importResidentTraefikCertificates({ acmePath, root, certRoot, domain });
     console.log(`Imported ${imported.length} resident preview certificate(s)`);
   } else {
-    const hostnames = mode === '--resident'
+    const hostnames = mode === '--wildcard'
+      ? [wildcardCertificateHostname(domain)]
+      : mode === '--resident'
       ? await residentPreviewHostnames(root, domain)
       : [String(mode || '')];
     if (hostnames.length === 0) throw new Error('No resident preview certificates to maintain');
-    const report = await maintainCertificates({
-      hostnames,
-      options: {
+    if (mode === '--wildcard') {
+      const result = await ensureWildcardCertificate({
         domain,
         certRoot,
         accountRoot,
         challengeRoot,
         email,
-      },
-    });
-    for (const result of report.results) {
+      });
       console.log(`${result.hostname}: ${result.status}`);
+    } else {
+      const report = await maintainCertificates({
+        hostnames,
+        options: {
+          domain,
+          certRoot,
+          accountRoot,
+          challengeRoot,
+          email,
+        },
+      });
+      for (const result of report.results) {
+        console.log(`${result.hostname}: ${result.status}`);
+      }
+      for (const failure of report.failures) {
+        console.error(`${failure.hostname}: ${failure.error.message}`);
+      }
+      if (report.failures.length > 0) process.exitCode = 1;
     }
-    for (const failure of report.failures) {
-      console.error(`${failure.hostname}: ${failure.error.message}`);
-    }
-    if (report.failures.length > 0) process.exitCode = 1;
   }
 }

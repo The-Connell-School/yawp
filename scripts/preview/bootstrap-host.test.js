@@ -66,13 +66,17 @@ describe('bootstrap-host.sh', () => {
 
   test('migrates resident certificates and installs automatic renewal', () => {
     expect(script).toContain('node "$certificate_manager" --import-traefik');
+    expect(script).toContain('node "$certificate_manager" --wildcard');
+    expect(script).toContain('wildcard_hostname="_wildcard.$DOMAIN"');
     expect(script).toContain('yawp-preview-certificate-renewal.timer');
-    expect(script).toContain('$ROOT/ingress/current/certificate-manager.mjs --resident');
+    expect(script).toContain('$ROOT/ingress/current/certificate-manager.mjs --wildcard');
     expect(previewWorkflow).toContain('PREVIEW_ACME_EMAIL');
-    expect(deploy).toContain('node "$SCRIPT_DIR/certificate-manager.mjs" "$HOSTNAME"');
-    expect(deploy.indexOf('certificate-manager.mjs" "$HOSTNAME"')).toBeLessThan(
+    expect(deploy).toContain('node "$SCRIPT_DIR/certificate-manager.mjs" --wildcard');
+    expect(deploy.indexOf('certificate-manager.mjs" --wildcard')).toBeLessThan(
       deploy.indexOf('for attempt in $(seq 1 90)')
     );
+    expect(deploy).not.toContain('certificate-manager.mjs" "$HOSTNAME"');
+    expect(deploy).not.toContain('certificate-manager.mjs" "$UA_HOSTNAME"');
     expect(deploy).toContain('PREVIEW_DOMAIN="$PREVIEW_DOMAIN"');
     expect(deploy).not.toContain('PREVIEW_DOMAIN="$DOMAIN"');
   });

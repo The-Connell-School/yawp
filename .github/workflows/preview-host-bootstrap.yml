@@ -37,6 +37,9 @@ jobs:
       PREVIEW_INFLIGHT_TTL_SECONDS: ${{ vars.PREVIEW_INFLIGHT_TTL_SECONDS || '3600' }}
       PREVIEW_POSTGRES_ADMIN_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
       PREVIEW_ACME_EMAIL: ${{ vars.PREVIEW_ACME_EMAIL || 'bryant@brock.software' }}
+      PREVIEW_ZEROSSL_ACCESS_KEY: ${{ secrets.PREVIEW_ZEROSSL_ACCESS_KEY }}
+      PREVIEW_ZEROSSL_EAB_KID: ${{ secrets.PREVIEW_ZEROSSL_EAB_KID }}
+      PREVIEW_ZEROSSL_EAB_HMAC_KEY: ${{ secrets.PREVIEW_ZEROSSL_EAB_HMAC_KEY }}
     steps:
       - name: Check configuration
         env:
@@ -97,6 +100,9 @@ jobs:
             "PREVIEW_INFLIGHT_TTL_SECONDS=$(shell_quote "$PREVIEW_INFLIGHT_TTL_SECONDS")"
             "PREVIEW_POSTGRES_ADMIN_PASSWORD=$(shell_quote "$PREVIEW_POSTGRES_ADMIN_PASSWORD")"
             "PREVIEW_ACME_EMAIL=$(shell_quote "$PREVIEW_ACME_EMAIL")"
+            "PREVIEW_ZEROSSL_ACCESS_KEY=$(shell_quote "$PREVIEW_ZEROSSL_ACCESS_KEY")"
+            "PREVIEW_ZEROSSL_EAB_KID=$(shell_quote "$PREVIEW_ZEROSSL_EAB_KID")"
+            "PREVIEW_ZEROSSL_EAB_HMAC_KEY=$(shell_quote "$PREVIEW_ZEROSSL_EAB_HMAC_KEY")"
           )
           ssh -i ~/.ssh/preview_key "${PREVIEW_SSH_USER}@${PREVIEW_HOST}" \
             "cd ${PREVIEW_ROOT}/bootstrap && ${remote_env[*]} bash scripts/preview/bootstrap-host.sh"

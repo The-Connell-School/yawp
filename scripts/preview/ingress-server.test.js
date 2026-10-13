@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer, request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Duplex } from 'node:stream';
 import {
   createHttpRedirectHandler,
+  createCertificateStore,
   createPreviewIngress,
   createWebSocketUpgradeHandler,
   isDirectExecution,
@@ -54,6 +56,23 @@ function request(port, {
     if (body) outgoing.write(body);
     outgoing.end();
   });
+}
+
+function createCertificate(root, hostname) {
+  const keyPath = path.join(root, 'key.pem');
+  const certPath = path.join(root, 'cert.pem');
+  execFileSync('openssl', [
+    'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+    '-subj', `/CN=${hostname}`,
+    '-addext', `subjectAltName=DNS:${hostname}`,
+    '-days', '90',
+    '-keyout', keyPath,
+    '-out', certPath,
+  ], { stdio: 'ignore' });
+  return {
+    key: readFileSync(keyPath),
+    cert: readFileSync(certPath),
+  };
 }
 
 afterEach(async () => {
@@ -247,6 +266,33 @@ describe('preview ingress', () => {
     expect(blackboardRedirect.headers.location).toBe(
       'https://blackboard-pr-241.preview.yawp.school/'
     );
+  });
+
+  test('serves one wildcard certificate for any PR preview hostname', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'preview-ingress-certs-'));
+    roots.push(root);
+    const certRoot = path.join(root, 'certs');
+    const wildcardRoot = path.join(certRoot, '_wildcard.preview.yawp.school');
+    mkdirSync(wildcardRoot, { recursive: true });
+    const wildcard = createCertificate(root, '*.preview.yawp.school');
+    writeFileSync(path.join(wildcardRoot, 'privkey.pem'), wildcard.key);
+    writeFileSync(path.join(wildcardRoot, 'fullchain.pem'), wildcard.cert);
+
+    const store = createCertificateStore({
+      certRoot,
+      domain: 'preview.yawp.school',
+      defaultHostname: '_wildcard.preview.yawp.school',
+    });
+    let err;
+    let context;
+    store.sniCallback('ua-pr-241.preview.yawp.school', (nextErr, nextContext) => {
+      err = nextErr;
+      context = nextContext;
+    });
+
+    expect(err).toBeNull();
+    expect(context).toBeTruthy();
+    expect(store.defaultPair.cert.equals(wildcard.cert)).toBe(true);
   });
 
   test('proxies the Blackboard Learn host to the mock container', async () => {

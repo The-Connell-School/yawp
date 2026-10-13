@@ -912,18 +912,7 @@ start_or_refresh_web
   PREVIEW_ROOT="$ROOT" \
   PREVIEW_DOMAIN="$PREVIEW_DOMAIN" \
   PREVIEW_ACME_EMAIL="${PREVIEW_ACME_EMAIL:-admin@example.com}" \
-    node "$SCRIPT_DIR/certificate-manager.mjs" "$HOSTNAME"
-  PREVIEW_ROOT="$ROOT" \
-  PREVIEW_DOMAIN="$PREVIEW_DOMAIN" \
-  PREVIEW_ACME_EMAIL="${PREVIEW_ACME_EMAIL:-admin@example.com}" \
-    node "$SCRIPT_DIR/certificate-manager.mjs" "$UA_HOSTNAME"
-  if grep -qE '^[[:space:]]*blackboard-lti-mock:' "$PREVIEW_DIR/docker-compose.yml"; then
-    PREVIEW_ROOT="$ROOT" \
-    PREVIEW_DOMAIN="$PREVIEW_DOMAIN" \
-    PREVIEW_ACME_EMAIL="${PREVIEW_ACME_EMAIL:-admin@example.com}" \
-      node "$SCRIPT_DIR/certificate-manager.mjs" "$BLACKBOARD_HOSTNAME" \
-      || echo "Blackboard hostname certificate not issued yet; host ingress must route ${BLACKBOARD_HOSTNAME}"
-  fi
+    node "$SCRIPT_DIR/certificate-manager.mjs" --wildcard
 fi
 
 for attempt in $(seq 1 90); do

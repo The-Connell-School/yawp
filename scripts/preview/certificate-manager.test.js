@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
@@ -12,13 +13,17 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
+  certificateStorageName,
   certificateNeedsRenewal,
+  createRoute53Dns01Provider,
   ensureCertificate,
+  ensureWildcardCertificate,
   importResidentTraefikCertificates,
   isDirectExecution,
   maintainCertificates,
   residentPreviewHostnames,
   validateCertificatePair,
+  wildcardCertificateHostname,
 } from './certificate-manager.mjs';
 
 const roots = [];
@@ -29,13 +34,13 @@ function temporaryRoot(prefix) {
   return root;
 }
 
-function createCertificate(root, hostname, days = 90) {
+function createCertificate(root, hostname, days = 90, subjectAltNames = [hostname]) {
   const keyPath = path.join(root, 'key.pem');
   const certPath = path.join(root, 'cert.pem');
   execFileSync('openssl', [
     'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
     '-subj', `/CN=${hostname}`,
-    '-addext', `subjectAltName=DNS:${hostname}`,
+    '-addext', `subjectAltName=${subjectAltNames.map((name) => `DNS:${name}`).join(',')}`,
     '-days', String(days),
     '-keyout', keyPath,
     '-out', certPath,
@@ -51,6 +56,14 @@ afterEach(() => {
 });
 
 describe('preview certificate manager', () => {
+  test('stores wildcard certificates in a filesystem-safe resident slot', () => {
+    expect(wildcardCertificateHostname('Preview.Yawp.School')).toBe('*.preview.yawp.school');
+    expect(certificateStorageName('*.preview.yawp.school')).toBe('_wildcard.preview.yawp.school');
+    expect(certificateStorageName('pr-241.preview.yawp.school')).toBe(
+      'pr-241.preview.yawp.school'
+    );
+  });
+
   test('includes the UA alias for every resident PR preview', async () => {
     const root = temporaryRoot('preview-cert-resident-hosts-');
     mkdirSync(path.join(root, 'previews', 'pr-241'), { recursive: true });
@@ -214,6 +227,140 @@ describe('preview certificate manager', () => {
     expect(readFileSync(path.join(certRoot, hostname, 'privkey.pem'), 'utf8')).toBe(issued.key);
     expect(readFileSync(path.join(certRoot, hostname, 'fullchain.pem'), 'utf8')).toBe(issued.cert);
     expect(existsSync(path.join(challengeRoot, 'challenge_token-1'))).toBe(false);
+  });
+
+  test('completes DNS-01 wildcard issuance and publishes one reusable pair', async () => {
+    const root = temporaryRoot('preview-cert-wildcard-acme-');
+    const certRoot = path.join(root, 'ingress', 'certs');
+    const accountRoot = path.join(root, 'ingress', 'acme');
+    const challengeRoot = path.join(root, 'ingress', 'challenges');
+    const hostname = '*.preview.yawp.school';
+    const issued = createCertificate(root, hostname);
+    const dnsEvents = [];
+    let authPolls = 0;
+    let orderPolls = 0;
+    let csrSubjectAltNames;
+    const response = (body, { status = 200, location, nonce = 'nonce-next' } = {}) => new Response(
+      typeof body === 'string' ? body : JSON.stringify(body),
+      {
+        status,
+        headers: {
+          'content-type': typeof body === 'string' ? 'application/pem-certificate-chain' : 'application/json',
+          'replay-nonce': nonce,
+          ...(location ? { location } : {}),
+        },
+      },
+    );
+    const fetchFn = async (url) => {
+      if (url === 'https://acme.test/directory') {
+        return response({
+          newNonce: 'https://acme.test/nonce',
+          newAccount: 'https://acme.test/account',
+          newOrder: 'https://acme.test/order/new',
+        });
+      }
+      if (url === 'https://acme.test/nonce') return response('', { nonce: 'nonce-1' });
+      if (url === 'https://acme.test/account') {
+        return response({}, { status: 201, location: 'https://acme.test/account/1' });
+      }
+      if (url === 'https://acme.test/order/new') {
+        return response({
+          authorizations: ['https://acme.test/auth/1'],
+          finalize: 'https://acme.test/order/1/finalize',
+        }, { status: 201, location: 'https://acme.test/order/1' });
+      }
+      if (url === 'https://acme.test/auth/1') {
+        authPolls += 1;
+        return response(authPolls === 1 ? {
+          status: 'pending',
+          identifier: { type: 'dns', value: hostname },
+          challenges: [{ type: 'dns-01', token: 'dns_token-1', url: 'https://acme.test/challenge/1' }],
+        } : { status: 'valid' });
+      }
+      if (url === 'https://acme.test/challenge/1') return response({ status: 'pending' });
+      if (url === 'https://acme.test/order/1/finalize') return response({ status: 'processing' });
+      if (url === 'https://acme.test/order/1') {
+        orderPolls += 1;
+        return response(orderPolls === 1
+          ? { status: 'processing' }
+          : { status: 'valid', certificate: 'https://acme.test/certificate/1' });
+      }
+      if (url === 'https://acme.test/certificate/1') return response(issued.cert);
+      throw new Error(`Unexpected ACME URL ${url}`);
+    };
+
+    const result = await ensureWildcardCertificate({
+      domain: 'preview.yawp.school',
+      certRoot,
+      accountRoot,
+      challengeRoot,
+      email: 'admin@example.com',
+      directoryUrl: 'https://acme.test/directory',
+      fetchFn,
+      pollIntervalMs: 0,
+      dnsProvider: {
+        present: async (challenge) => {
+          dnsEvents.push(['present', challenge.identifier]);
+          return { recordName: '_acme-challenge.preview.yawp.school.', recordValue: 'value', zoneId: 'Z1' };
+        },
+        cleanup: async (challenge) => {
+          dnsEvents.push(['cleanup', challenge.recordName]);
+        },
+      },
+      createKeyAndCsr: async (_commonName, { subjectAltNames }) => {
+        csrSubjectAltNames = subjectAltNames;
+        return {
+          privateKeyPem: issued.key,
+          csrDer: Buffer.from('test-csr'),
+        };
+      },
+    });
+
+    expect(result).toEqual({ hostname, status: 'issued' });
+    expect(csrSubjectAltNames).toEqual([hostname]);
+    expect(dnsEvents).toEqual([
+      ['present', hostname],
+      ['cleanup', '_acme-challenge.preview.yawp.school.'],
+    ]);
+    expect(readFileSync(path.join(certRoot, '_wildcard.preview.yawp.school', 'privkey.pem'), 'utf8')).toBe(
+      issued.key
+    );
+    expect(await validateCertificatePair({
+      hostname,
+      keyPath: path.join(certRoot, '_wildcard.preview.yawp.school', 'privkey.pem'),
+      certPath: path.join(certRoot, '_wildcard.preview.yawp.school', 'fullchain.pem'),
+    })).toBe(true);
+  });
+
+  test('Route53 DNS-01 provider writes only the wildcard challenge TXT record', async () => {
+    const calls = [];
+    const expectedDigest = Buffer.from(createHash('sha256').update('authorization').digest())
+      .toString('base64url');
+    const provider = createRoute53Dns01Provider({
+      hostedZoneId: 'ZONE123',
+      pollIntervalMs: 0,
+      resolveTxtFn: async () => [[expectedDigest]],
+      execFileFn: async (_command, args) => {
+        calls.push(args);
+        if (args[1] === 'change-resource-record-sets') {
+          return { stdout: JSON.stringify({ ChangeInfo: { Id: 'change-1', Status: 'PENDING' } }) };
+        }
+        if (args[1] === 'get-change') {
+          return { stdout: JSON.stringify({ ChangeInfo: { Status: 'INSYNC' } }) };
+        }
+        throw new Error(`Unexpected aws args: ${args.join(' ')}`);
+      },
+    });
+
+    const result = await provider.present({
+      identifier: '*.preview.yawp.school',
+      keyAuthorization: 'authorization',
+    });
+
+    expect(result.recordName).toBe('_acme-challenge.preview.yawp.school.');
+    expect(calls[0]).toContain('change-resource-record-sets');
+    expect(calls[0]).toContain('--hosted-zone-id');
+    expect(calls[0]).toContain('ZONE123');
   });
 
   test('attempts every resident renewal even when an earlier hostname fails', async () => {

@@ -200,11 +200,21 @@ PREVIEW_DOMAIN="$DOMAIN" \
 PREVIEW_TRAEFIK_ACME_PATH="$ROOT/traefik/letsencrypt/acme.json" \
   node "$certificate_manager" --import-traefik
 
+PREVIEW_ROOT="$ROOT" \
+PREVIEW_DOMAIN="$DOMAIN" \
+PREVIEW_ACME_EMAIL="${ACME_EMAIL:-admin@example.com}" \
+  node "$certificate_manager" --wildcard
+
+wildcard_hostname="_wildcard.$DOMAIN"
 default_hostname="$(
   find "$ROOT/ingress/certs" -mindepth 1 -maxdepth 1 -type d -name "pr-*.$DOMAIN" -printf '%f\n' \
     | sort -V \
     | tail -1
 )"
+if [[ -f "$ROOT/ingress/certs/$wildcard_hostname/privkey.pem" \
+  && -f "$ROOT/ingress/certs/$wildcard_hostname/fullchain.pem" ]]; then
+  default_hostname="$wildcard_hostname"
+fi
 [[ -n "$default_hostname" ]] || {
   echo "No resident preview TLS certificate was available for ingress cutover" >&2
   exit 1
@@ -344,7 +354,7 @@ User=$WAKE_USER
 Environment=PREVIEW_ROOT=$ROOT
 Environment=PREVIEW_DOMAIN=$DOMAIN
 Environment=PREVIEW_ACME_EMAIL=${ACME_EMAIL:-admin@example.com}
-ExecStart=/usr/bin/flock -w 900 $ROOT/preview-host.lock $node_path $ROOT/ingress/current/certificate-manager.mjs --resident
+ExecStart=/usr/bin/flock -w 900 $ROOT/preview-host.lock $node_path $ROOT/ingress/current/certificate-manager.mjs --wildcard
 TimeoutStartSec=900
 UMask=0077
 NoNewPrivileges=true

@@ -467,6 +467,10 @@ function certificatePaths(certRoot, hostname) {
   };
 }
 
+function wildcardCertificateStorageName(domain) {
+  return `_wildcard.${domain}`;
+}
+
 function loadCertificatePair(certRoot, hostname) {
   const paths = certificatePaths(certRoot, hostname);
   return {
@@ -477,6 +481,14 @@ function loadCertificatePair(certRoot, hostname) {
 }
 
 async function findDefaultHostname(certRoot, domain) {
+  const wildcardName = wildcardCertificateStorageName(domain);
+  try {
+    await stat(path.join(certRoot, wildcardName, 'fullchain.pem'));
+    await stat(path.join(certRoot, wildcardName, 'privkey.pem'));
+    return wildcardName;
+  } catch {
+    // Fall back to a resident exact certificate during migration.
+  }
   const entries = await readdir(certRoot, { withFileTypes: true });
   return entries
     .filter((entry) => entry.isDirectory() && parsePreviewHost(entry.name, domain)?.service === 'web')
@@ -486,20 +498,27 @@ async function findDefaultHostname(certRoot, domain) {
 
 export function createCertificateStore({ certRoot, domain, defaultHostname }) {
   const cache = new Map();
-  function pair(hostname) {
-    if (parsePreviewPr(hostname, domain) === null) return null;
+  function pairByName(storageName) {
     try {
-      const loaded = loadCertificatePair(certRoot, hostname.toLowerCase());
-      const cached = cache.get(hostname);
+      const loaded = loadCertificatePair(certRoot, storageName.toLowerCase());
+      const cached = cache.get(storageName);
       if (cached?.version === loaded.version) return cached;
       const value = { ...loaded, context: createSecureContext(loaded) };
-      cache.set(hostname, value);
+      cache.set(storageName, value);
       return value;
     } catch {
       return null;
     }
   }
-  const defaultPair = pair(defaultHostname);
+  function pair(hostname) {
+    if (parsePreviewPr(hostname, domain) === null) return null;
+    for (const storageName of [hostname, wildcardCertificateStorageName(domain)]) {
+      const match = pairByName(storageName);
+      if (match) return match;
+    }
+    return null;
+  }
+  const defaultPair = pairByName(defaultHostname);
   if (!defaultPair) throw new Error(`No valid default certificate found for ${defaultHostname}`);
   return {
     defaultPair,
