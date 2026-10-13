@@ -76,13 +76,15 @@ describe('seedFreeTierBundleAssignmentTypes', () => {
         upsert: mock(() => ({ id: 'image-id' })),
         findUnique: mock(() => ({ id: 'image-id' })),
       },
+      $executeRawUnsafe: mock(() => ({})),
     } as unknown as PrismaClient;
 
     await seedFreeTierBundleAssignmentTypes(prisma);
 
     expect(prisma.assignmentType.upsert).not.toHaveBeenCalled();
     expect(prisma.assignmentType.create).toHaveBeenCalledTimes(3);
-    expect(prisma.assignmentModule.create).toHaveBeenCalledTimes(3);
+    expect(prisma.assignmentModule.create).not.toHaveBeenCalled();
+    expect(prisma.$executeRawUnsafe).toHaveBeenCalledTimes(7);
     expect(prisma.assignmentTypeImage.upsert).toHaveBeenCalledTimes(3);
   });
 });

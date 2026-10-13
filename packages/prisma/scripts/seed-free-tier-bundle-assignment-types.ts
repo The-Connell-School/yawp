@@ -7,6 +7,7 @@
  *   bun run --cwd packages/prisma seed-free-tier-bundle-assignment-types
  */
 import { readFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 
 import type { PrismaClient } from '../generated/prisma';
@@ -136,24 +137,36 @@ async function ensureAssignmentModules(
     where: { assignmentTypeId },
   });
   if (existing > 0) return;
-  await prisma.assignmentModule.create({
-    data: {
-      assignmentTypeId,
-      title: payload.title,
-      position: payload.position,
-      description: payload.description,
-      tutorInstructions: payload.tutorInstructions ?? null,
-      rubricAlignmentJson: payload.rubricAlignmentJson ?? undefined,
-      instructions: {
-        create: payload.steps.map((step) => ({
-          position: step.position,
-          title: step.title,
-          prompt: step.prompt,
-          showChatButton: step.showChatButton,
-        })),
-      },
-    },
-  });
+  const moduleId = `free-tier-${randomUUID()}`;
+  await prisma.$executeRawUnsafe(
+    `
+      INSERT INTO "AssignmentModule"
+        ("id", "assignmentTypeId", "title", "position", "description", "tutorInstructions", "rubricAlignmentJson")
+      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+    `,
+    moduleId,
+    assignmentTypeId,
+    payload.title,
+    payload.position,
+    payload.description,
+    payload.tutorInstructions ?? null,
+    payload.rubricAlignmentJson == null ? null : JSON.stringify(payload.rubricAlignmentJson)
+  );
+  for (const step of payload.steps) {
+    await prisma.$executeRawUnsafe(
+      `
+        INSERT INTO "AssignmentModuleInstruction"
+          ("id", "assignmentModuleId", "position", "title", "prompt", "showChatButton")
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `,
+      `free-tier-${randomUUID()}`,
+      moduleId,
+      step.position,
+      step.title,
+      step.prompt,
+      step.showChatButton
+    );
+  }
 }
 
 async function applyBundleRubricDefaults(
