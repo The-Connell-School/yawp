@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  decodeMentions,
+  encodeMentions,
   findMentionQuery,
   mentionToken,
   mentionedUserIds,
@@ -58,5 +60,31 @@ describe('findMentionQuery', () => {
 
   test('stops after a completed token', () => {
     expect(findMentionQuery('@[Brian Connell](user:u1) ')).toBeNull();
+  });
+});
+
+describe('encodeMentions / decodeMentions', () => {
+  const brian = { userId: 'u1', label: 'Brian Connell' };
+  const maria = { userId: 'u2', label: 'Maria S.' };
+
+  test('turns picked "@Name" text into tokens', () => {
+    expect(encodeMentions('Thanks @Brian Connell, and @Maria S. too', [brian, maria])).toBe(
+      'Thanks @[Brian Connell](user:u1), and @[Maria S.](user:u2) too'
+    );
+  });
+
+  test('leaves a mention alone once its text was edited away', () => {
+    expect(encodeMentions('Thanks @Brian C', [brian])).toBe('Thanks @Brian C');
+  });
+
+  test('does not match a longer word that starts with the name', () => {
+    expect(encodeMentions('@Brian Connelly', [brian])).toBe('@Brian Connelly');
+  });
+
+  test('round-trips through decode for editing', () => {
+    const encoded = 'Hi @[Brian Connell](user:u1)!';
+    const decoded = decodeMentions(encoded);
+    expect(decoded).toEqual({ text: 'Hi @Brian Connell!', mentions: [brian] });
+    expect(encodeMentions(decoded.text, decoded.mentions)).toBe(encoded);
   });
 });

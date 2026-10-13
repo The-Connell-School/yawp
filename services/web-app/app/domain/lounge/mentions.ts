@@ -57,3 +57,36 @@ export function findMentionQuery(
     start: match.index + match[1].length,
   };
 }
+
+export type PickedMention = { userId: string; label: string };
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * The composer shows "@Brian Connell"; the stored body needs the token. Each
+ * picked mention whose "@Label" text is still intact becomes a token. Longer
+ * labels go first so "@Ann Lee" is not cut short by "@Ann".
+ */
+export function encodeMentions(text: string, mentions: PickedMention[]): string {
+  const unique = [...new Map(mentions.map((m) => [m.label, m])).values()].sort(
+    (a, b) => b.label.length - a.label.length
+  );
+  let out = text;
+  for (const mention of unique) {
+    const pattern = new RegExp(`@${escapeRegExp(mention.label)}(?![\\w])`, 'g');
+    out = out.replace(pattern, () => mentionToken(mention.label, mention.userId));
+  }
+  return out;
+}
+
+export function decodeMentions(body: string): { text: string; mentions: PickedMention[] } {
+  const mentions: PickedMention[] = [];
+  for (const part of splitMentions(body)) {
+    if (part.type === 'mention' && !mentions.some((m) => m.userId === part.userId)) {
+      mentions.push({ userId: part.userId, label: part.label });
+    }
+  }
+  return { text: plainTextWithMentions(body), mentions };
+}
