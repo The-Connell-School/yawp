@@ -121,11 +121,13 @@ function isPrismaRecordNotFoundError(error: unknown) {
 
 export function getRubricEvaluationMaxTokens(categoryCount: number) {
   const baseCategoryCount = 5;
-  const baseMaxTokens = 900;
-  const tokensPerAdditionalCategory = 300;
+  // Sized so a full per-category comment set fits. 900 truncated the JSON on
+  // 7-category rubrics with long comments, which made every attempt fail.
+  const baseMaxTokens = 2000;
+  const tokensPerAdditionalCategory = 400;
 
   return Math.min(
-    2400,
+    4096,
     baseMaxTokens +
       Math.max(0, categoryCount - baseCategoryCount) *
         tokensPerAdditionalCategory
@@ -1268,7 +1270,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         model,
         system,
         messages: compiledInvocation.messages,
-        maxTokens,
+        maxTokens: Math.max(maxTokens, rubricEvaluationMaxTokens),
         metadata: {
           feature: 'grading',
           kind: 'rubric-evaluation',
