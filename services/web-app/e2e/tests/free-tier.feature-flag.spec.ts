@@ -2,12 +2,6 @@ import { expect, test } from '../test-setup';
 import { setFreeTierFlag } from '../feature-flags';
 import { createE2EPrismaClient } from '../prisma-client';
 
-const LOCAL_BASE_URL = `http://127.0.0.1:${process.env.FREE_TIER_E2E_PORT || 5197}`;
-
-function localUrl(path: string) {
-  return new URL(path, LOCAL_BASE_URL).toString();
-}
-
 test.describe.serial('Free tier feature flag', () => {
   test.afterAll(async () => {
     await setFreeTierFlag(true);
@@ -26,19 +20,17 @@ test.describe.serial('Free tier feature flag', () => {
     const email = `e2e-flag-post-off+${Date.now()}@yawp.local`;
     const prisma = createE2EPrismaClient();
     try {
-      const response = await fetch(localUrl('/free?index'), {
-        method: 'POST',
-        body: new URLSearchParams({
+      const response = await page.request.post('/free?index', {
+        form: {
           intent: 'waitlist',
           name: 'Flag POST Off',
           email,
           schoolName: 'Flag High',
           location: 'Local',
           gradeLevel: '10',
-        }),
-        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        },
       });
-      expect(response.status).toBe(404);
+      expect(response.status()).toBe(404);
       const count = await prisma.freeTierApplication.count({ where: { email } });
       expect(count).toBe(0);
     } finally {
