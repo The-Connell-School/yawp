@@ -273,10 +273,15 @@ describe('preview ingress', () => {
     roots.push(root);
     const certRoot = path.join(root, 'certs');
     const wildcardRoot = path.join(certRoot, '_wildcard.preview.yawp.school');
+    const legacyRoot = path.join(certRoot, 'ua-pr-241.preview.yawp.school');
     mkdirSync(wildcardRoot, { recursive: true });
+    mkdirSync(legacyRoot, { recursive: true });
     const wildcard = createCertificate(root, '*.preview.yawp.school');
+    const legacy = createCertificate(root, 'ua-pr-241.preview.yawp.school');
     writeFileSync(path.join(wildcardRoot, 'privkey.pem'), wildcard.key);
     writeFileSync(path.join(wildcardRoot, 'fullchain.pem'), wildcard.cert);
+    writeFileSync(path.join(legacyRoot, 'privkey.pem'), legacy.key);
+    writeFileSync(path.join(legacyRoot, 'fullchain.pem'), legacy.cert);
 
     const store = createCertificateStore({
       certRoot,
@@ -292,6 +297,7 @@ describe('preview ingress', () => {
 
     expect(err).toBeNull();
     expect(context).toBeTruthy();
+    expect(context).toBe(store.defaultPair.context);
     expect(store.defaultPair.cert.equals(wildcard.cert)).toBe(true);
   });
 

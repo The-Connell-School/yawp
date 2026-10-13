@@ -810,19 +810,6 @@ async function resolveZeroSslEabCredentials({
   return credentials;
 }
 
-async function cacheConfiguredZeroSslEabCredentials({
-  accountRoot,
-  fetchFn,
-  requestTimeoutMs,
-  email,
-}) {
-  if (
-    !process.env.PREVIEW_ZEROSSL_ACCESS_KEY
-    && !(process.env.PREVIEW_ZEROSSL_EAB_KID && process.env.PREVIEW_ZEROSSL_EAB_HMAC_KEY)
-  ) return;
-  await resolveZeroSslEabCredentials({ accountRoot, fetchFn, requestTimeoutMs, email });
-}
-
 function isLetsEncryptRegisteredDomainRateLimit(error) {
   return /^ACME request failed \(429\):/.test(String(error?.message || ''))
     && /too many certificates .*already issued for .* in the last 168h/i.test(error.message);
@@ -845,7 +832,6 @@ export async function ensureWildcardCertificate({
 }) {
   const hostname = wildcardCertificateHostname(domain);
   const { keyPath, certPath } = certificatePaths(certRoot, hostname);
-  await cacheConfiguredZeroSslEabCredentials({ accountRoot, fetchFn, requestTimeoutMs, email });
   try {
     const certPem = await readFile(certPath, 'utf8');
     if (

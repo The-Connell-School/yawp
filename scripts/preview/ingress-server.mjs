@@ -512,7 +512,7 @@ export function createCertificateStore({ certRoot, domain, defaultHostname }) {
   }
   function pair(hostname) {
     if (parsePreviewPr(hostname, domain) === null) return null;
-    for (const storageName of [hostname, wildcardCertificateStorageName(domain)]) {
+    for (const storageName of [wildcardCertificateStorageName(domain), hostname]) {
       const match = pairByName(storageName);
       if (match) return match;
     }

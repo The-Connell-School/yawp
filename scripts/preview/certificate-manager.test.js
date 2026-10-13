@@ -139,6 +139,38 @@ describe('preview certificate manager', () => {
     expect(certificateNeedsRenewal('not a certificate', { renewalDays: 30 })).toBe(true);
   });
 
+  test('keeps current wildcard certificates without contacting ZeroSSL', async () => {
+    const root = temporaryRoot('preview-cert-current-wildcard-');
+    const certRoot = path.join(root, 'ingress', 'certs');
+    const accountRoot = path.join(root, 'ingress', 'acme');
+    const challengeRoot = path.join(root, 'ingress', 'challenges');
+    const wildcardRoot = path.join(certRoot, '_wildcard.preview.yawp.school');
+    mkdirSync(wildcardRoot, { recursive: true });
+    const current = createCertificate(root, '*.preview.yawp.school', 90);
+    writeFileSync(path.join(wildcardRoot, 'privkey.pem'), current.key);
+    writeFileSync(path.join(wildcardRoot, 'fullchain.pem'), current.cert);
+    const originalAccessKey = process.env.PREVIEW_ZEROSSL_ACCESS_KEY;
+    process.env.PREVIEW_ZEROSSL_ACCESS_KEY = 'configured-but-unused';
+
+    try {
+      const result = await ensureWildcardCertificate({
+        domain: 'preview.yawp.school',
+        certRoot,
+        accountRoot,
+        challengeRoot,
+        email: 'admin@example.com',
+        fetchFn: async (url) => {
+          throw new Error(`Unexpected certificate network call: ${url}`);
+        },
+      });
+
+      expect(result).toEqual({ hostname: '*.preview.yawp.school', status: 'current' });
+    } finally {
+      if (originalAccessKey === undefined) delete process.env.PREVIEW_ZEROSSL_ACCESS_KEY;
+      else process.env.PREVIEW_ZEROSSL_ACCESS_KEY = originalAccessKey;
+    }
+  });
+
   test('completes HTTP-01 issuance and atomically publishes the new pair', async () => {
     const root = temporaryRoot('preview-cert-acme-');
     const certRoot = path.join(root, 'ingress', 'certs');
