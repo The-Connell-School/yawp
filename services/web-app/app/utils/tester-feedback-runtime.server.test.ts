@@ -1,6 +1,8 @@
 import { describe, expect, mock, test } from 'bun:test';
 import {
   saveTesterFeedback,
+  testerFeedbackEnabled,
+  testerFeedbackRuntimeAllowed,
   type FeedbackWriteTransaction,
 } from './tester-feedback-runtime.server';
 import type { FeedbackInput } from './tester-feedback.server';
@@ -54,5 +56,53 @@ describe('feedback database rate limit', () => {
       await saveTesterFeedback(input, async (operation) => operation(tx))
     ).toBe(false);
     expect(create).not.toHaveBeenCalled();
+  });
+});
+
+describe('feedback runtime gate', () => {
+  test('allows demo even under production runtime and denies production fallback', () => {
+    expect(
+      testerFeedbackRuntimeAllowed({
+        PREVIEW_SLUG: 'demo',
+        YAWP_ENVIRONMENT: 'production',
+        NODE_ENV: 'production',
+      })
+    ).toBe(true);
+    expect(
+      testerFeedbackRuntimeAllowed({
+        YAWP_ENVIRONMENT: 'production',
+        NODE_ENV: 'production',
+      })
+    ).toBe(false);
+    expect(testerFeedbackRuntimeAllowed({ NODE_ENV: 'production' })).toBe(
+      false
+    );
+    expect(testerFeedbackRuntimeAllowed({ NODE_ENV: 'test' })).toBe(true);
+  });
+  test('enabled requires both the flag and a non-production runtime', () => {
+    const savedFlag = process.env.TESTER_FEEDBACK_ENABLED;
+    const savedPreviewSlug = process.env.PREVIEW_SLUG;
+    const savedYawpEnvironment = process.env.YAWP_ENVIRONMENT;
+    const savedNodeEnv = process.env.NODE_ENV;
+    try {
+      process.env.TESTER_FEEDBACK_ENABLED = 'true';
+      delete process.env.PREVIEW_SLUG;
+      process.env.YAWP_ENVIRONMENT = 'production';
+      process.env.NODE_ENV = 'production';
+      expect(testerFeedbackEnabled()).toBe(false);
+      process.env.PREVIEW_SLUG = 'demo';
+      expect(testerFeedbackEnabled()).toBe(true);
+    } finally {
+      if (savedFlag === undefined) delete process.env.TESTER_FEEDBACK_ENABLED;
+      else process.env.TESTER_FEEDBACK_ENABLED = savedFlag;
+      if (savedPreviewSlug === undefined) delete process.env.PREVIEW_SLUG;
+      else process.env.PREVIEW_SLUG = savedPreviewSlug;
+      if (savedYawpEnvironment === undefined)
+        delete process.env.YAWP_ENVIRONMENT;
+      else process.env.YAWP_ENVIRONMENT = savedYawpEnvironment;
+      if (savedNodeEnv === undefined)
+        Reflect.deleteProperty(process.env, 'NODE_ENV');
+      else process.env.NODE_ENV = savedNodeEnv;
+    }
   });
 });

@@ -34,6 +34,7 @@
 | [Preview environments](./work/preview-environments.md) | 2026-03-30 |
 | [CI/deploy workflow split](./work/ci-deploy-split.md) | 2026-03-30 |
 | [AuditEvent removal](./work/audit-event-removal.md) | 2026-03-30 |
+| Intern guard audit | 2026-10-13 |
 
 ## Blocked
 

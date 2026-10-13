@@ -8,10 +8,25 @@ import type {
 } from './tester-feedback.server';
 
 export const testerFeedbackEnabled = () =>
-  process.env.TESTER_FEEDBACK_ENABLED === 'true';
+  process.env.TESTER_FEEDBACK_ENABLED === 'true' &&
+  testerFeedbackRuntimeAllowed(process.env);
+
+export function testerFeedbackRuntimeAllowed(env: {
+  PREVIEW_SLUG?: string;
+  YAWP_ENVIRONMENT?: string;
+  NODE_ENV?: string;
+}) {
+  const previewSlug = env.PREVIEW_SLUG?.trim().toLowerCase();
+  const yawpEnvironment = env.YAWP_ENVIRONMENT?.trim().toLowerCase();
+  const nodeEnv = env.NODE_ENV?.trim().toLowerCase();
+  if (previewSlug === 'demo') return true;
+  if (yawpEnvironment === 'production') return false;
+  return nodeEnv !== 'production';
+}
 
 export const testerFeedbackDependencies: FeedbackDependencies = {
   enabled: testerFeedbackEnabled,
+  runtimeAllowed: () => testerFeedbackRuntimeAllowed(process.env),
   environment: () =>
     (
       process.env.PREVIEW_SLUG ||

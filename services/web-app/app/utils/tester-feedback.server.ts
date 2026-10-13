@@ -82,6 +82,7 @@ export type FeedbackEntry = Omit<FeedbackInput, 'severity'> & {
 };
 export interface FeedbackDependencies {
   enabled(): boolean;
+  runtimeAllowed?(): boolean;
   getUser(
     request: Request
   ): Promise<{ id: string; isTester: boolean; isAdmin: boolean } | null>;
@@ -106,6 +107,8 @@ export async function submitTesterFeedback(
 ) {
   if (request.method !== 'POST')
     return response({ error: 'Method not allowed' }, 405, { Allow: 'POST' });
+  if (deps.runtimeAllowed?.() === false)
+    return response({ error: 'Not found' }, 404);
   if (!deps.enabled()) return response({ error: 'Not found' }, 404);
   const user = await deps.getUser(request);
   if (!user) return response({ error: 'Sign in to log feedback' }, 401);
@@ -191,6 +194,8 @@ export async function readTesterFeedback(
   deps: FeedbackDependencies,
   mode: 'admin' | 'internal'
 ) {
+  if (deps.runtimeAllowed?.() === false)
+    return response({ error: 'Not found' }, 404);
   if (mode === 'internal') {
     const denied = await deps.authenticateInternal(request);
     if (denied) return denied;

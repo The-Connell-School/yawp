@@ -26,6 +26,7 @@ function setup(overrides: Partial<FeedbackDependencies> = {}) {
   let reads = 0;
   const deps: FeedbackDependencies = {
     enabled: () => true,
+    runtimeAllowed: () => true,
     getUser: async () => ({ id: 'tester-1', isTester: true, isAdmin: false }),
     environment: () => 'demo',
     save: async (input) => {
@@ -118,6 +119,19 @@ describe('tester feedback submission', () => {
       expect((await submitTesterFeedback(request(), deps)).status).toBe(status);
       expect(saved).toHaveLength(0);
     }
+  });
+  test('production runtime denies before authentication and save', async () => {
+    let gotUser = false;
+    const { deps, saved } = setup({
+      runtimeAllowed: () => false,
+      getUser: async () => {
+        gotUser = true;
+        return { id: 'tester-1', isTester: true, isAdmin: false };
+      },
+    });
+    expect((await submitTesterFeedback(request(), deps)).status).toBe(404);
+    expect(gotUser).toBe(false);
+    expect(saved).toHaveLength(0);
   });
   test('rejects empty, oversized, invalid severity and non-app URL input', async () => {
     for (const values of [
@@ -284,6 +298,42 @@ describe('feedback reads and CSV', () => {
       ).status
     ).toBe(401);
     expect(internal.reads()).toBe(0);
+  });
+  test('production runtime denies feedback reads before auth or database access', async () => {
+    let gotUser = false;
+    let authenticated = false;
+    const { deps, reads } = setup({
+      runtimeAllowed: () => false,
+      getUser: async () => {
+        gotUser = true;
+        return { id: 'admin', isTester: false, isAdmin: true };
+      },
+      authenticateInternal: async () => {
+        authenticated = true;
+        return null;
+      },
+    });
+    expect(
+      (
+        await readTesterFeedback(
+          new Request('https://demo.example/app/tester/feedback'),
+          deps,
+          'admin'
+        )
+      ).status
+    ).toBe(404);
+    expect(
+      (
+        await readTesterFeedback(
+          new Request('https://demo.example/api/internal/v1/tester-feedback'),
+          deps,
+          'internal'
+        )
+      ).status
+    ).toBe(404);
+    expect(gotUser).toBe(false);
+    expect(authenticated).toBe(false);
+    expect(reads()).toBe(0);
   });
   test('admin CSV and signed internal list share the same filters and do not require the submission flag', async () => {
     const seen: unknown[] = [];
