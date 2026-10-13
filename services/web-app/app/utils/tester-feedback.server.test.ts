@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, mock, test } from 'bun:test';
 import {
   sanitizeFeedbackUrl,
   feedbackCsv,
@@ -285,6 +285,95 @@ describe('feedback reads and CSV', () => {
     ).toBe(401);
     expect(internal.reads()).toBe(0);
   });
+  test('signed internal list and export record audit rows after reading entries', async () => {
+    const audit = mock(async () => {});
+    const auth = {
+      mode: 'hmac' as const,
+      keyId: 'feedback-test',
+      actorEmail: 'operator@example.test',
+      scopes: ['management:read'] as const,
+    };
+    const { deps } = setup({
+      authenticateInternal: async () => auth,
+      auditInternalRead: audit,
+    });
+    const list = await readTesterFeedback(
+      new Request(
+        'https://demo.example/api/internal/v1/tester-feedback?severity=medium'
+      ),
+      deps,
+      'internal'
+    );
+    expect(list.status).toBe(200);
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorEmail: 'operator@example.test',
+        keyId: 'feedback-test',
+        endpoint: 'GET /api/internal/v1/tester-feedback',
+        result: 'list.success',
+        requestHash: expect.any(String),
+      })
+    );
+    audit.mockClear();
+    const csv = await readTesterFeedback(
+      new Request(
+        'https://demo.example/api/internal/v1/tester-feedback?format=csv'
+      ),
+      deps,
+      'internal'
+    );
+    expect(csv.status).toBe(200);
+    expect(await csv.text()).toContain('Opened a document');
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorEmail: 'operator@example.test',
+        keyId: 'feedback-test',
+        endpoint: 'GET /api/internal/v1/tester-feedback',
+        result: 'export.success',
+        requestHash: expect.any(String),
+      })
+    );
+  });
+  test('denied and invalid signed internal reads do not read rows or audit', async () => {
+    const audit = mock(async () => {});
+    const denied = setup({
+      authenticateInternal: async () => new Response(null, { status: 403 }),
+      auditInternalRead: audit,
+    });
+    expect(
+      (
+        await readTesterFeedback(
+          new Request('https://demo.example/api/internal/v1/tester-feedback'),
+          denied.deps,
+          'internal'
+        )
+      ).status
+    ).toBe(403);
+    expect(denied.reads()).toBe(0);
+    expect(audit).not.toHaveBeenCalled();
+    const invalid = setup({
+      authenticateInternal: async () => ({
+        mode: 'hmac' as const,
+        keyId: 'feedback-test',
+        actorEmail: 'operator@example.test',
+        scopes: ['management:read'] as const,
+      }),
+      auditInternalRead: audit,
+    });
+    expect(
+      (
+        await readTesterFeedback(
+          new Request(
+            'https://demo.example/api/internal/v1/tester-feedback?limit=200'
+          ),
+          invalid.deps,
+          'internal'
+        )
+      ).status
+    ).toBe(400);
+    expect(invalid.reads()).toBe(0);
+    expect(audit).not.toHaveBeenCalled();
+  });
   test('admin CSV and signed internal list share the same filters and do not require the submission flag', async () => {
     const seen: unknown[] = [];
     const { deps } = setup({
@@ -357,7 +446,7 @@ describe('feedback reads and CSV', () => {
 describe('signed feedback internal API', () => {
   test('requires management read scope, protects CSV filters, and rejects replay', async () => {
     const {
-      authenticateInternalManagementRequest,
+      authorizeInternalApiRequest,
       signInternalApiRequest,
       resetInternalApiMemoryNonceStore,
       resetInternalApiRateLimitBuckets,
@@ -379,7 +468,7 @@ describe('signed feedback internal API', () => {
       resetInternalApiMemoryNonceStore();
       resetInternalApiRateLimitBuckets();
       const { deps, reads } = setup({
-        authenticateInternal: authenticateInternalManagementRequest,
+        authenticateInternal: authorizeInternalApiRequest,
       });
       const url =
         'https://demo.example/api/internal/v1/tester-feedback?format=csv&environment=demo';
