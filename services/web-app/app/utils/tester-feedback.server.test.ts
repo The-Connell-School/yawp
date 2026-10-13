@@ -334,12 +334,12 @@ describe('feedback reads and CSV', () => {
     ).toBe(401);
     expect(internal.reads()).toBe(0);
   });
-  test('signed internal list and export record audit rows after reading entries', async () => {
+  test('signed internal list and export audit rows record the operator after reading entries', async () => {
     const audit = mock(async () => {});
     const auth = {
       mode: 'hmac' as const,
       keyId: 'feedback-test',
-      actorEmail: 'operator@example.test',
+      actorEmail: 'reviewer@yawp.school',
       scopes: ['management:read'] as const,
     };
     const { deps } = setup({
@@ -356,7 +356,7 @@ describe('feedback reads and CSV', () => {
     expect(list.status).toBe(200);
     expect(audit).toHaveBeenCalledWith(
       expect.objectContaining({
-        actorEmail: 'operator@example.test',
+        actorEmail: 'reviewer@yawp.school',
         keyId: 'feedback-test',
         endpoint: 'GET /api/internal/v1/tester-feedback',
         result: 'list.success',
@@ -375,7 +375,7 @@ describe('feedback reads and CSV', () => {
     expect(await csv.text()).toContain('Opened a document');
     expect(audit).toHaveBeenCalledWith(
       expect.objectContaining({
-        actorEmail: 'operator@example.test',
+        actorEmail: 'reviewer@yawp.school',
         keyId: 'feedback-test',
         endpoint: 'GET /api/internal/v1/tester-feedback',
         result: 'export.success',
