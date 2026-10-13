@@ -1,10 +1,19 @@
 import { describe, expect, it } from 'bun:test';
-import JSZip from 'jszip';
 import type { HybridSlide } from './deck-types';
 import { DECKS } from './decks';
 import { ICONS } from './hybrid-theme';
 import { ASSET_SIZES, parseMarks, plain, readAsset, renderHybridDeck } from './render-hybrid-deck';
 import { REVIEW_QUESTIONS, reviewQuiz } from './shared-slides';
+
+/**
+ * The part names inside a zip (a .pptx is one). Zip stores each name as plain
+ * text in its headers, so they can be read without unzipping, and without a
+ * zip library the web app doesn't otherwise depend on.
+ */
+function zipEntryNames(bytes: Uint8Array): Set<string> {
+  const text = Buffer.from(bytes).toString('latin1');
+  return new Set(text.match(/ppt\/[A-Za-z]+\/[A-Za-z]+\d+\.xml/g) ?? []);
+}
 
 /** How many slides each of Brian's original decks had. The hybrids keep them all. */
 const BRIAN_SLIDE_COUNTS: Record<string, number> = {
@@ -114,8 +123,7 @@ for (const { file, deck } of DECKS) {
     });
 
     it('writes a PowerPoint with one slide and one notes page per spec', async () => {
-      const zip = await JSZip.loadAsync(await renderHybridDeck(deck));
-      const names = Object.keys(zip.files);
+      const names = [...zipEntryNames(await renderHybridDeck(deck))];
       const slides = names.filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name));
       const notes = names.filter((name) => /^ppt\/notesSlides\/notesSlide\d+\.xml$/.test(name));
       expect(slides).toHaveLength(deck.slides.length);
