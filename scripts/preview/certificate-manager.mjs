@@ -176,6 +176,11 @@ function responseMessage(body) {
   }
 }
 
+function acmeFailureMessage(response, body, fallback) {
+  const message = responseMessage(body);
+  return message || fallback || response.statusText || 'ACME request failed';
+}
+
 async function delay(milliseconds) {
   if (milliseconds > 0) await new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
@@ -209,17 +214,27 @@ class AcmeSession {
       this.nonce = null;
       return nonce;
     }
+    let lastFailure = '';
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         const response = await this.fetchFn(this.directory.newNonce, { method: 'HEAD' });
         const nonce = response.headers.get('replay-nonce');
         if (response.ok && nonce) return nonce;
+        const body = await response.text();
+        lastFailure = `ACME nonce request failed (${response.status}): ${acmeFailureMessage(
+          response,
+          body,
+          nonce ? 'ACME server rejected a nonce request' : 'ACME server did not provide a nonce',
+        )}`;
+        if (response.status === 429 || response.status < 500) {
+          throw new Error(lastFailure);
+        }
       } catch (error) {
-        if (attempt === 2) throw error;
+        if (attempt === 2 || /^ACME nonce request failed/.test(error.message)) throw error;
       }
       await delay(250 * (attempt + 1));
     }
-    throw new Error('ACME server did not provide a nonce');
+    throw new Error(lastFailure || 'ACME server did not provide a nonce');
   }
 
   async post(url, payload, { useJwk = false } = {}) {
@@ -258,7 +273,7 @@ class AcmeSession {
         }
         const retryable = response.status >= 500 || problemType.endsWith(':badNonce');
         if (!retryable || attempt === 2) {
-          throw new Error(`ACME request failed (${response.status}): ${responseMessage(body)}`);
+          throw new Error(`ACME request failed (${response.status}): ${acmeFailureMessage(response, body)}`);
         }
       } catch (error) {
         if (attempt === 2 || /^ACME request failed/.test(error.message)) throw error;
@@ -814,11 +829,9 @@ async function resolveZeroSslEabCredentials({
   return credentials;
 }
 
-function isLetsEncryptRegisteredDomainRateLimit(error) {
+function isLetsEncryptRateLimit(error) {
   const message = String(error?.message || '');
-  return /^ACME request failed \(429\):/.test(message)
-    && /too many certificates\s*\(50\)\s+already issued for\s+["'][^"']+["']\s+in the last 168h/i.test(message)
-    && !/exact set of (domains|hostnames|identifiers)/i.test(message);
+  return /^ACME (?:request|nonce request) failed \(429\):/.test(message);
 }
 
 export async function ensureWildcardCertificate({
@@ -865,7 +878,7 @@ export async function ensureWildcardCertificate({
       dnsProvider,
     });
   } catch (error) {
-    if (!isLetsEncryptRegisteredDomainRateLimit(error) || directoryUrl !== DEFAULT_DIRECTORY_URL) {
+    if (!isLetsEncryptRateLimit(error) || directoryUrl !== DEFAULT_DIRECTORY_URL) {
       throw error;
     }
     const externalAccountBinding = await resolveZeroSslEabCredentials({
