@@ -634,7 +634,7 @@ describe('enforce-cap.sh', () => {
     expect(readFileSync(docker.log, 'utf8')).not.toContain(' down ');
   });
 
-  test('sleeps after 48 hours when sleep settings are not configured', () => {
+  test('sleeps after 2 hours when sleep settings are not configured', () => {
     const root = makeRoot();
     makeEnv(root, 104, { withCompose: true });
     const docker = makeDockerStub(root, [104]);
@@ -642,7 +642,7 @@ describe('enforce-cap.sh', () => {
 
     const result = run(root, {
       OPEN_PR_NUMBERS: '104',
-      PR_ACTIVITY: `104 ${now - 49 * 3600} 0 0`,
+      PR_ACTIVITY: `104 ${now - 3 * 3600} 0 0`,
       PREVIEW_MODE: 'reconcile',
       PREVIEW_DOCKER: docker.stub,
       PREVIEW_DOCKER_STATE: docker.state,

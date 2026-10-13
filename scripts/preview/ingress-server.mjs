@@ -750,7 +750,7 @@ if (isDirectExecution(import.meta.url)) {
   const httpPort = Number(process.env.PREVIEW_HTTP_PORT || '80');
   const httpsPort = Number(process.env.PREVIEW_HTTPS_PORT || '443');
   const bind = process.env.PREVIEW_INGRESS_BIND || '0.0.0.0';
-  const maxRunning = process.env.PREVIEW_MAX_RUNNING || '4';
+  const maxRunning = process.env.PREVIEW_MAX_RUNNING || '8';
   const maxConcurrentWakes = Number(process.env.PREVIEW_MAX_CONCURRENT_WAKES || '2');
   const wakeScript = process.env.PREVIEW_WAKE_SCRIPT
     || path.join(root, 'bootstrap', 'scripts', 'preview', 'wake-preview.sh');

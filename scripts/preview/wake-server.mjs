@@ -799,7 +799,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const domain = process.env.PREVIEW_DOMAIN || '';
   const secret = process.env.PREVIEW_WAKE_SECRET || '';
   const root = process.env.PREVIEW_ROOT || '/srv/yawp-preview';
-  const maxRunning = process.env.PREVIEW_MAX_RUNNING || '4';
+  const maxRunning = process.env.PREVIEW_MAX_RUNNING || '8';
   const wakeScript = process.env.PREVIEW_WAKE_SCRIPT
     || path.join(root, 'bootstrap', 'scripts', 'preview', 'wake-preview.sh');
   const accessLog = process.env.PREVIEW_ACCESS_LOG
