@@ -1,0 +1,181 @@
+import { describe, expect, test } from 'bun:test';
+import { mkdir, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
+
+import {
+  hostedRepeatSignupSkipArtifact,
+  resolveHostedRepeatSignupGuard,
+} from '../e2e/hosted-demo-guards';
+import {
+  classifySuiteSpecs,
+  focusedHostedDemoSkipArtifacts,
+  resolveBrowserEnv,
+  requiredMissingSpecs,
+  seededReproFamilies,
+  suiteSpecs,
+  suiteHostedDemoSkipArtifact,
+  writeSuiteEvidence,
+} from './run-free-tier-demo-e2e';
+
+async function touch(root: string, relativePath: string) {
+  const fullPath = join(root, relativePath);
+  await mkdir(dirname(fullPath), { recursive: true });
+  await writeFile(fullPath, '');
+}
+
+describe('free-tier demo suite runner manifest', () => {
+  test('fails required default coverage when seeded repro specs are absent', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'free-tier-demo-suite-'));
+    for (const spec of suiteSpecs.filter(
+      (candidate) => candidate.runByDefault && candidate.source === 'merged'
+    )) {
+      await touch(root, spec.path);
+    }
+
+    const { missing } = await classifySuiteSpecs(root);
+    const missingRequired = requiredMissingSpecs(missing).map((spec) => spec.path);
+
+    expect(missingRequired).toContain('e2e/tests/free-tier.event-auto-admit.spec.ts');
+    expect(missingRequired).toContain('e2e/tests/free-tier.event-waitlist.spec.ts');
+    expect(missingRequired).toContain('e2e/tests/free-tier.disabled-expired.spec.ts');
+    expect(missingRequired).toContain('e2e/tests/free-tier.repeat-signup.spec.ts');
+    expect(missingRequired).toContain('e2e/tests/free-tier.caps-limits.spec.ts');
+    expect(missingRequired).toContain('e2e/tests/auth.free-tier-student-signin.spec.ts');
+  });
+
+  test('passes required coverage when every default spec is present', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'free-tier-demo-suite-'));
+    for (const spec of suiteSpecs.filter((candidate) => candidate.runByDefault)) {
+      await touch(root, spec.path);
+    }
+
+    const { missing } = await classifySuiteSpecs(root);
+
+    expect(requiredMissingSpecs(missing)).toEqual([]);
+  });
+
+  test('tracks seeded repro families for platform and external internal coverage', () => {
+    expect(seededReproFamilies.map((family) => family.id)).toEqual([
+      'qa-approve-409',
+      'qa-dup-create-link',
+      'qa-flag-vs-route',
+      'qa-event-waitlist-copy-regression',
+    ]);
+    expect(
+      suiteSpecs.find((spec) => spec.path === 'e2e/tests/free-tier.feature-flag.spec.ts')
+        ?.coverage
+    ).toContain('flag-vs-route');
+    expect(
+      suiteSpecs.find((spec) => spec.path === 'e2e/tests/free-tier.event-waitlist.spec.ts')
+        ?.coverage
+    ).toContain('waitlist-copy');
+  });
+
+  test('keeps suite hosted-demo skip artifact distinct from focused spec skips', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'free-tier-demo-suite-shots-'));
+    const focusedArtifact = focusedHostedDemoSkipArtifacts[0];
+    await writeFile(
+      join(root, focusedArtifact),
+      'focused hosted skip evidence must remain durable'
+    );
+
+    await writeSuiteEvidence([], [], {
+      shotDirectory: root,
+      env: {},
+    });
+
+    expect(suiteHostedDemoSkipArtifact).toBe('suite-hosted-demo-skip.txt');
+    expect(focusedHostedDemoSkipArtifacts).not.toContain(suiteHostedDemoSkipArtifact);
+    expect(await readFile(join(root, focusedArtifact), 'utf8')).toBe(
+      'focused hosted skip evidence must remain durable'
+    );
+    expect(await readFile(join(root, suiteHostedDemoSkipArtifact), 'utf8')).toContain(
+      'Hosted demo free-tier suite cases skipped.'
+    );
+    expect(await readFile(join(root, suiteHostedDemoSkipArtifact), 'utf8')).toContain(
+      'no hosted /free?t= navigation'
+    );
+    expect(await readFile(join(root, suiteHostedDemoSkipArtifact), 'utf8')).toContain(
+      'DEMO_FREE_TIER_REPEAT_ALLOW_SUBMIT=true'
+    );
+  });
+
+  test('keeps repeat-signup hosted guard skip-before-mutate with base URL and token only', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'free-tier-repeat-hosted-guard-'));
+    const attemptedHostedRequests: string[] = [];
+    const guard = resolveHostedRepeatSignupGuard({
+      DEMO_FREE_TIER_BASE_URL: 'https://demo.example.test',
+      DEMO_FREE_TIER_REPEAT_EVENT_TOKEN: 'repeat-token',
+    });
+
+    if (guard.status === 'ready') {
+      attemptedHostedRequests.push(`/free?t=${encodeURIComponent(guard.code)}`);
+    }
+
+    expect(attemptedHostedRequests).toEqual([]);
+    expect(guard.status).toBe('skip');
+    if (guard.status !== 'skip') {
+      throw new Error('Expected hosted repeat-signup guard to skip before navigation.');
+    }
+    expect(guard.missing).toEqual([
+      'DEMO_FREE_TIER_REPEAT_EMAIL',
+      'DEMO_FREE_TIER_REPEAT_ALLOW_SUBMIT=true',
+    ]);
+    expect(guard.artifactName).toBe(hostedRepeatSignupSkipArtifact);
+    expect(guard.artifactBody).toContain(
+      'no hosted /free?t= navigation or request was attempted'
+    );
+
+    await writeFile(join(root, guard.artifactName), guard.artifactBody);
+
+    expect(await readdir(root)).toEqual([hostedRepeatSignupSkipArtifact]);
+  });
+
+  test('uses explicit PW_EXECUTABLE_PATH before cached browser discovery', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'free-tier-browser-cache-'));
+    const explicit = join(root, 'custom-chrome');
+    await writeFile(explicit, '');
+
+    const result = resolveBrowserEnv({
+      PLAYWRIGHT_BROWSERS_PATH: join(root, 'missing-cache'),
+      PW_EXECUTABLE_PATH: explicit,
+    });
+
+    expect(result.executablePath).toBe(explicit);
+    expect(result.env.PW_EXECUTABLE_PATH).toBe(explicit);
+    expect(result.message).toContain('PW_EXECUTABLE_PATH');
+  });
+
+  test('chooses newest cached chromium executable when headless shell may be mismatched', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'free-tier-browser-cache-'));
+    const oldChrome = join(root, 'chromium-1243', 'chrome-linux64', 'chrome');
+    const newChrome = join(root, 'chromium-1248', 'chrome-linux64', 'chrome');
+    const newShell = join(
+      root,
+      'chromium_headless_shell-1248',
+      'chrome-headless-shell-linux64',
+      'chrome-headless-shell'
+    );
+    await mkdir(dirname(oldChrome), { recursive: true });
+    await mkdir(dirname(newChrome), { recursive: true });
+    await mkdir(dirname(newShell), { recursive: true });
+    await writeFile(oldChrome, '');
+    await writeFile(newChrome, '');
+    await writeFile(newShell, '');
+
+    const result = resolveBrowserEnv({ PLAYWRIGHT_BROWSERS_PATH: root });
+
+    expect(result.executablePath).toBe(newChrome);
+    expect(result.env.PW_EXECUTABLE_PATH).toBe(newChrome);
+    expect(result.message).toContain('chromium r1248');
+  });
+
+  test('reports an actionable browser cache error when no executable exists', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'free-tier-browser-cache-'));
+
+    expect(() => resolveBrowserEnv({ PLAYWRIGHT_BROWSERS_PATH: root })).toThrow(
+      /set PW_EXECUTABLE_PATH/
+    );
+  });
+});
