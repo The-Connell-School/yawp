@@ -796,8 +796,14 @@ async function resolveZeroSslEabCredentials({
     throw new Error(`ZeroSSL EAB credential request failed (${response.status})`);
   }
   const body = await response.json();
-  if (body?.success !== 1 || !body.eab_kid || !body.eab_hmac_key) {
-    throw new Error('ZeroSSL EAB credential response was incomplete');
+  const success = body?.success;
+  if (
+    (success !== undefined && success !== true && success !== 1)
+    || !body?.eab_kid
+    || !body?.eab_hmac_key
+  ) {
+    const detail = body?.error?.message || body?.error || body?.message;
+    throw new Error(`ZeroSSL EAB credential response was incomplete${detail ? `: ${detail}` : ''}`);
   }
   const credentials = { kid: body.eab_kid, hmacKey: body.eab_hmac_key };
   await writeZeroSslEabCredentials(accountRoot, credentials);

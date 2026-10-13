@@ -382,7 +382,7 @@ describe('preview certificate manager', () => {
       if (url === 'https://api.zerossl.com/acme/eab-credentials-email') {
         sawZeroSslEmailEabRequest = options.body === 'email=admin%40example.com';
         return response({
-          success: 1,
+          success: true,
           eab_kid: 'zerossl-kid',
           eab_hmac_key: hmacKey,
         });
