@@ -80,6 +80,13 @@ export function calculateFreeTierUsage(
   };
 }
 
+export function freeTierApplicationConsumesBudget(input: {
+  status: FreeTierApplicationStatus;
+  releasedAt?: Date | string | null;
+}) {
+  return Boolean(input.releasedAt) || FREE_TIER_BUDGET_ACTIVE_STATUSES.includes(input.status);
+}
+
 export async function countFreeTierActiveApplications(
   client: Pick<Prisma.TransactionClient, 'freeTierApplication'> = prisma
 ) {
@@ -113,6 +120,20 @@ export async function assertFreeTierBudgetHeadroom(
   );
   if (after.overBudget) throw new FreeTierBudgetExceededError(after);
   return after;
+}
+
+export async function assertFreeTierBudgetHeadroomForTransition(
+  client: Pick<Prisma.TransactionClient, 'freeTierApplication'> = prisma,
+  transition: {
+    from: { status: FreeTierApplicationStatus; releasedAt?: Date | string | null };
+    to: { status: FreeTierApplicationStatus; releasedAt?: Date | string | null };
+  },
+  env: Env = process.env
+) {
+  const wasActive = freeTierApplicationConsumesBudget(transition.from);
+  const willBeActive = freeTierApplicationConsumesBudget(transition.to);
+  if (!wasActive && willBeActive) return assertFreeTierBudgetHeadroom(client, env);
+  return readFreeTierUsageSummary(client, env);
 }
 
 export function freeTierBudgetRemainingActivations(summary: FreeTierUsageSummary) {

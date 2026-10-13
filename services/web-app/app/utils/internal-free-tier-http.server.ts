@@ -20,8 +20,10 @@ import {
   tokenPatchSchema,
 } from '~/domain/free-tier/service.server';
 import {
-  assertFreeTierBudgetHeadroom,
+  assertFreeTierBudgetHeadroomForTransition,
+  FREE_TIER_BUDGET_ACTIVE_STATUSES,
   FreeTierBudgetExceededError,
+  freeTierApplicationConsumesBudget,
   readFreeTierUsageSummary,
 } from '~/domain/free-tier/usage-budget.server';
 import { readBoundedText } from '~/utils/bounded-body.server';
@@ -576,25 +578,31 @@ function parseOperatorEmail(request: Request, body?: unknown): string | { error:
   }
 }
 
-const ACTIVE_STATUSES: FreeTierApplicationStatus[] = [
-  'INVITED',
-  'ACCOUNT_CREATED',
-  'ADMIN_SUBMITTED',
-  'SENT',
-  'MANUAL_REVIEW',
-  'APPROVED',
-];
-
-async function enforceHeadroomForActivation(tx: any) {
+async function enforceHeadroomForActivation(
+  tx: any,
+  transition: {
+    from: { status: FreeTierApplicationStatus; releasedAt?: Date | string | null };
+    to: { status: FreeTierApplicationStatus; releasedAt?: Date | string | null };
+  }
+) {
   const cap = getFreeTierReleaseCap();
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('free_tier_release'))`;
-  const current = await tx.freeTierApplication.count({
-    where: { OR: [{ releasedAt: { not: null } }, { status: { in: ACTIVE_STATUSES } }] },
-  });
-  const remaining = Math.max(0, cap - current);
-  if (remaining <= 0) return { ok: false as const, reason: 'Release cap reached' };
+  const wasActive = freeTierApplicationConsumesBudget(transition.from);
+  const willBeActive = freeTierApplicationConsumesBudget(transition.to);
+  if (!wasActive && willBeActive) {
+    const current = await tx.freeTierApplication.count({
+      where: {
+        OR: [
+          { releasedAt: { not: null } },
+          { status: { in: FREE_TIER_BUDGET_ACTIVE_STATUSES } },
+        ],
+      },
+    });
+    const remaining = Math.max(0, cap - current);
+    if (remaining <= 0) return { ok: false as const, reason: 'Release cap reached' };
+  }
   try {
-    await assertFreeTierBudgetHeadroom(tx);
+    await assertFreeTierBudgetHeadroomForTransition(tx, transition);
   } catch (error) {
     if (error instanceof FreeTierBudgetExceededError) return { ok: false as const, reason: 'Free-tier budget reached', budget: error.summary };
     throw error;
@@ -674,6 +682,7 @@ async function transition(args: {
         schoolName: true,
         userId: true,
         organizationId: true,
+        releasedAt: true,
       },
     });
     if (!app) return { status: 404 as const, payload: { error: 'Not found' }, changed: false };
@@ -682,7 +691,10 @@ async function transition(args: {
       return { status: 409 as const, payload: { error: 'Illegal state', status: app.status }, changed: false };
     }
     if (args.to === 'APPROVED') {
-      const headroom = await enforceHeadroomForActivation(tx);
+      const headroom = await enforceHeadroomForActivation(tx, {
+        from: { status: app.status, releasedAt: app.releasedAt },
+        to: { status: args.to, releasedAt: app.releasedAt },
+      });
       if (!headroom.ok) {
         return {
           status: headroom.budget ? 402 as const : 409 as const,
@@ -850,7 +862,10 @@ export async function reopenApplication(args: { id: string; decidedByEmail: stri
     // A released application already holds a slot under the F3 cap (released rows
     // count whatever their status), so only unreleased ones need new headroom.
     if (!app.releasedAt) {
-      const headroom = await enforceHeadroomForActivation(tx);
+      const headroom = await enforceHeadroomForActivation(tx, {
+        from: { status: app.status, releasedAt: app.releasedAt },
+        to: { status: 'MANUAL_REVIEW', releasedAt: app.releasedAt },
+      });
       if (!headroom.ok) {
         return {
           status: headroom.budget ? 402 as const : 409 as const,

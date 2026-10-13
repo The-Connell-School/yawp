@@ -27,7 +27,7 @@ import {
 import { getApprovalHooks } from './approval-hooks.server';
 import { getClientIp } from '~/utils/ip.server';
 import {
-  assertFreeTierBudgetHeadroom,
+  assertFreeTierBudgetHeadroomForTransition,
   FreeTierBudgetExceededError,
   type FreeTierUsageSummary,
 } from './usage-budget.server';
@@ -274,6 +274,7 @@ export async function completeSchoolAdminApproval(args: {
           schoolName: true,
           userId: true,
           organizationId: true,
+          releasedAt: true,
         },
       });
       if (!app) abortClaimedLinkTransaction({ ok: false, reason: 'not_found' });
@@ -305,7 +306,10 @@ export async function completeSchoolAdminApproval(args: {
       }
 
       try {
-        await assertFreeTierBudgetHeadroom(tx);
+        await assertFreeTierBudgetHeadroomForTransition(tx, {
+          from: { status: app.status, releasedAt: app.releasedAt },
+          to: { status: 'APPROVED', releasedAt: app.releasedAt },
+        });
       } catch (error) {
         if (error instanceof FreeTierBudgetExceededError) {
           abortClaimedLinkTransaction(budgetExceededFailure(error));
