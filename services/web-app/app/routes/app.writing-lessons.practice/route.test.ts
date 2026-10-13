@@ -17,6 +17,7 @@ const reserveAiRequest = mock();
 class MockAiRateLimitError extends Error {
   retryAfterSeconds = 60;
 }
+class MockAiFreeTierBudgetExceededError extends Error {}
 
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
@@ -32,7 +33,10 @@ mock.module('~/utils/getLLMCompletion', () => ({
   getLLMCompletion,
 }));
 mock.module('~/utils/ai-admission.server', () => ({
+  AiFreeTierBudgetExceededError: MockAiFreeTierBudgetExceededError,
   AiRateLimitError: MockAiRateLimitError,
+  aiFreeTierBudgetExceededMessage: () =>
+    'AI tools are paused because this free-tier environment has reached its current budget.',
   reserveAiRequest,
 }));
 
@@ -274,6 +278,27 @@ describe('self-directed practice session loader', () => {
     expect(getLLMCompletion).not.toHaveBeenCalled();
   });
 
+  test('denies generated practice when the free-tier AI budget is exhausted', async () => {
+    reserveAiRequest.mockImplementation(() => {
+      throw new MockAiFreeTierBudgetExceededError();
+    });
+    const response = (await loader({
+      request: new Request(
+        'https://example.test/app/writing-lessons/practice?skills=topic-sentences&count=2&topic=skateboarding'
+      ),
+      params: {},
+      context: {} as never,
+    } as any)) as any;
+
+    expect(response.init?.status).toBe(402);
+    expect(response.data).toEqual({
+      error: 'free_tier_budget_exceeded',
+      message:
+        'AI tools are paused because this free-tier environment has reached its current budget.',
+    });
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+  });
+
   test('degrades to offline bank when mixed generation is rate-limited', async () => {
     reserveAiRequest.mockImplementation(() => {
       throw new MockAiRateLimitError();
@@ -437,6 +462,35 @@ describe('self-directed practice session action', () => {
     expect(new Headers(result.init?.headers).get('Retry-After')).toBeTruthy();
   });
 
+  test('denies rewrite checks when the free-tier AI budget is exhausted', async () => {
+    reserveAiRequest.mockImplementation(() => {
+      throw new MockAiFreeTierBudgetExceededError();
+    });
+    const result = (await action({
+      request: new Request('https://example.test/app/writing-lessons/practice', {
+        method: 'POST',
+        body: new URLSearchParams([
+          ['intent', 'check-rewrite'],
+          ['lessonSlug', 'fixing-comma-splices'],
+          ['questionId', 'act-1'],
+          ['exercise', 'X'],
+          ['instruction', 'Y'],
+          ['response', 'Z'],
+        ]),
+      }),
+      params: {},
+      context: {} as never,
+    } as any)) as any;
+
+    expect(result.init?.status).toBe(402);
+    expect(result.data).toEqual({
+      error: 'free_tier_budget_exceeded',
+      message:
+        'AI tools are paused because this free-tier environment has reached its current budget.',
+    });
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+  });
+
     test('is refused on a composition lesson', async () => {
       process.env.COMPOSITION_PRACTICE_ENABLED = 'true';
 
@@ -573,6 +627,36 @@ describe('self-directed practice session action', () => {
       } as any)) as any;
       expect(result.init?.status).toBe(429);
       expect(new Headers(result.init?.headers).get('Retry-After')).toBeTruthy();
+    });
+
+    test('denies composition feedback when the free-tier AI budget is exhausted', async () => {
+      reserveAiRequest.mockImplementation(() => {
+        throw new MockAiFreeTierBudgetExceededError();
+      });
+      const result = (await action({
+        request: buildRequest({
+          kind: 'composition',
+          lessonSlug: 'topic-sentences',
+          position: '1',
+          promptId: 'topic-sentences-1',
+          exercise: 'Rewrite this',
+          instruction: 'Write a topic sentence.',
+          response: 'A real attempt',
+        }),
+        params: {},
+        context: {} as never,
+      } as any)) as any;
+
+      expect(result.init?.status).toBe(402);
+      expect(result.data).toMatchObject({
+        kind: 'composition',
+        recorded: false,
+        feedback: {
+          summary:
+            'AI tools are paused because this free-tier environment has reached its current budget.',
+        },
+      });
+      expect(getLLMCompletion).not.toHaveBeenCalled();
     });
 
     test('is refused on a grammar lesson', async () => {

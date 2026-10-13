@@ -16,7 +16,9 @@ import type { ClassInsightSummary } from '~/domain/assignment-insights/class-ins
 import { readInsightRubric } from '~/domain/assignment-insights/insight-rubric.server';
 import { prisma } from '~/utils/db.server';
 import {
+  AiFreeTierBudgetExceededError,
   AiRateLimitError,
+  aiFreeTierBudgetExceededMessage,
   reserveAiRequest,
 } from '~/utils/ai-admission.server';
 
@@ -272,6 +274,13 @@ export async function generateClassAssignmentInsight(input: {
         policy: CLASS_INSIGHT_ADMISSION_POLICY,
       });
     } catch (error) {
+      if (error instanceof AiFreeTierBudgetExceededError) {
+        return {
+          success: false,
+          status: 402,
+          message: aiFreeTierBudgetExceededMessage(),
+        };
+      }
       if (error instanceof AiRateLimitError) {
         return {
           success: false,
