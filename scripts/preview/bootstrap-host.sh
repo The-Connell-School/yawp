@@ -200,10 +200,14 @@ PREVIEW_DOMAIN="$DOMAIN" \
 PREVIEW_TRAEFIK_ACME_PATH="$ROOT/traefik/letsencrypt/acme.json" \
   node "$certificate_manager" --import-traefik
 
-PREVIEW_ROOT="$ROOT" \
-PREVIEW_DOMAIN="$DOMAIN" \
-PREVIEW_ACME_EMAIL="${ACME_EMAIL:-admin@example.com}" \
-  node "$certificate_manager" --wildcard
+wildcard_available=true
+if ! PREVIEW_ROOT="$ROOT" \
+  PREVIEW_DOMAIN="$DOMAIN" \
+  PREVIEW_ACME_EMAIL="${ACME_EMAIL:-admin@example.com}" \
+    node "$certificate_manager" --wildcard; then
+  wildcard_available=false
+  echo "Warning: wildcard preview certificate issuance failed; continuing with resident exact certificates" >&2
+fi
 
 wildcard_hostname="_wildcard.$DOMAIN"
 default_hostname="$(
@@ -211,7 +215,8 @@ default_hostname="$(
     | sort -V \
     | tail -1
 )"
-if [[ -f "$ROOT/ingress/certs/$wildcard_hostname/privkey.pem" \
+if [[ "$wildcard_available" == "true" \
+  && -f "$ROOT/ingress/certs/$wildcard_hostname/privkey.pem" \
   && -f "$ROOT/ingress/certs/$wildcard_hostname/fullchain.pem" ]]; then
   default_hostname="$wildcard_hostname"
 fi

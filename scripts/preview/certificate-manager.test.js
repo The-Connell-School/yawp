@@ -613,7 +613,7 @@ describe('preview certificate manager', () => {
     ]);
   });
 
-  test('Route53 hosted-zone discovery is bounded to the preview domain zone', async () => {
+  test('Route53 hosted-zone discovery walks up to the first public parent zone', async () => {
     const dnsNames = [];
     const expectedDigest = Buffer.from(createHash('sha256').update('authorization').digest())
       .toString('base64url');
@@ -623,10 +623,18 @@ describe('preview certificate manager', () => {
       resolveTxtFn: async () => [[expectedDigest]],
       execFileFn: async (_command, args) => {
         if (args[1] === 'list-hosted-zones-by-name') {
-          dnsNames.push(args[args.indexOf('--dns-name') + 1]);
+          const dnsName = args[args.indexOf('--dns-name') + 1];
+          dnsNames.push(dnsName);
+          if (dnsName === 'preview.yawp.school.') {
+            return {
+              stdout: JSON.stringify({
+                HostedZones: [{ Name: 'yawp.school.', Id: '/hostedzone/PARENTZONE' }],
+              }),
+            };
+          }
           return {
             stdout: JSON.stringify({
-              HostedZones: [{ Name: 'preview.yawp.school.', Id: '/hostedzone/ZONE123' }],
+              HostedZones: [{ Name: 'yawp.school.', Id: '/hostedzone/PARENTZONE' }],
             }),
           };
         }
@@ -643,11 +651,55 @@ describe('preview certificate manager', () => {
       },
     });
 
-    await provider.present({
+    const result = await provider.present({
       identifier: '*.preview.yawp.school',
       keyAuthorization: 'authorization',
     });
 
+    expect(result.zoneId).toBe('PARENTZONE');
+    expect(dnsNames).toEqual(['preview.yawp.school.', 'yawp.school.']);
+  });
+
+  test('Route53 hosted-zone discovery chooses an exact public child zone before parents', async () => {
+    const dnsNames = [];
+    const expectedDigest = Buffer.from(createHash('sha256').update('authorization').digest())
+      .toString('base64url');
+    const provider = createRoute53Dns01Provider({
+      zoneName: 'preview.yawp.school',
+      pollIntervalMs: 0,
+      resolveTxtFn: async () => [[expectedDigest]],
+      execFileFn: async (_command, args) => {
+        if (args[1] === 'list-hosted-zones-by-name') {
+          const dnsName = args[args.indexOf('--dns-name') + 1];
+          dnsNames.push(dnsName);
+          return {
+            stdout: JSON.stringify({
+              HostedZones: [
+                { Name: dnsName, Id: '/hostedzone/PRIVATEZONE', Config: { PrivateZone: true } },
+                { Name: dnsName, Id: '/hostedzone/PUBLICZONE', Config: { PrivateZone: false } },
+              ],
+            }),
+          };
+        }
+        if (args[1] === 'list-resource-record-sets') {
+          return { stdout: JSON.stringify({ ResourceRecordSets: [] }) };
+        }
+        if (args[1] === 'change-resource-record-sets') {
+          return { stdout: JSON.stringify({ ChangeInfo: { Id: 'change-1', Status: 'PENDING' } }) };
+        }
+        if (args[1] === 'get-change') {
+          return { stdout: JSON.stringify({ ChangeInfo: { Status: 'INSYNC' } }) };
+        }
+        throw new Error(`Unexpected aws args: ${args.join(' ')}`);
+      },
+    });
+
+    const result = await provider.present({
+      identifier: '*.preview.yawp.school',
+      keyAuthorization: 'authorization',
+    });
+
+    expect(result.zoneId).toBe('PUBLICZONE');
     expect(dnsNames).toEqual(['preview.yawp.school.']);
   });
 

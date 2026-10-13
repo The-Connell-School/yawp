@@ -301,6 +301,39 @@ describe('preview ingress', () => {
     expect(store.defaultPair.cert.equals(wildcard.cert)).toBe(true);
   });
 
+  test('falls back to an exact certificate when the wildcard pair is unusable', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'preview-ingress-invalid-wildcard-'));
+    roots.push(root);
+    const certRoot = path.join(root, 'certs');
+    const wildcardRoot = path.join(certRoot, '_wildcard.preview.yawp.school');
+    const exactRoot = path.join(certRoot, 'ua-pr-241.preview.yawp.school');
+    mkdirSync(wildcardRoot, { recursive: true });
+    mkdirSync(exactRoot, { recursive: true });
+    const wrongWildcard = createCertificate(root, '*.other-preview.yawp.school');
+    const exact = createCertificate(root, 'ua-pr-241.preview.yawp.school');
+    writeFileSync(path.join(wildcardRoot, 'privkey.pem'), wrongWildcard.key);
+    writeFileSync(path.join(wildcardRoot, 'fullchain.pem'), wrongWildcard.cert);
+    writeFileSync(path.join(exactRoot, 'privkey.pem'), exact.key);
+    writeFileSync(path.join(exactRoot, 'fullchain.pem'), exact.cert);
+
+    const store = createCertificateStore({
+      certRoot,
+      domain: 'preview.yawp.school',
+      defaultHostname: 'ua-pr-241.preview.yawp.school',
+    });
+    let err;
+    let context;
+    store.sniCallback('ua-pr-241.preview.yawp.school', (nextErr, nextContext) => {
+      err = nextErr;
+      context = nextContext;
+    });
+
+    expect(err).toBeNull();
+    expect(context).toBeTruthy();
+    expect(context).toBe(store.defaultPair.context);
+    expect(store.defaultPair.cert.equals(exact.cert)).toBe(true);
+  });
+
   test('proxies the Blackboard Learn host to the mock container', async () => {
     let received;
     const resolved = [];
