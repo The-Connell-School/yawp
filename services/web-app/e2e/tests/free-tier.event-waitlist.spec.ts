@@ -20,6 +20,11 @@ const OUT =
   '/home/bryant/work/yawp/codex-loop/lanes/free-tier-fixes/shots/qa-event-waitlist';
 const E2E_MANAGEMENT_SERVICE_KEY =
   'e2e-free-tier-release-management-key-000000000000';
+const LOCAL_BASE_URL = `http://127.0.0.1:${process.env.FREE_TIER_E2E_PORT || 5197}`;
+
+function localUrl(path: string) {
+  return new URL(path, LOCAL_BASE_URL).toString();
+}
 
 async function shot(page: Page, name: string) {
   await mkdir(OUT, { recursive: true });
@@ -49,7 +54,6 @@ test.describe('Free-tier event waitlist QA', () => {
 
   test('local demo stand-in: scan, waitlist application, release, and join path', async ({
     page,
-    request,
   }) => {
     test.setTimeout(120_000);
 
@@ -82,11 +86,11 @@ test.describe('Free-tier event waitlist QA', () => {
       });
       tokenId = token.id;
 
-      const freeResponse = await request.get(`/free?t=${encodeURIComponent(code)}`, {
-        maxRedirects: 0,
+      const freeResponse = await fetch(localUrl(`/free?t=${encodeURIComponent(code)}`), {
+        redirect: 'manual',
       });
-      expect(freeResponse.status()).toBe(200);
-      expect(freeResponse.url()).toContain('/free?t=');
+      expect(freeResponse.status).toBe(200);
+      expect(freeResponse.url).toContain('/free?t=');
 
       await page.goto(`/free?t=${encodeURIComponent(code)}`);
       await expect(page).toHaveURL(new RegExp(`/free\\?t=${code}`));
@@ -166,14 +170,15 @@ test.describe('Free-tier event waitlist QA', () => {
         ].join('\n')
       );
 
-      const releaseResponse = await request.post('/api/internal/v1/free-tier/release', {
+      const releaseResponse = await fetch(localUrl('/api/internal/v1/free-tier/release'), {
+        method: 'POST',
         headers: {
           authorization: `Bearer ${E2E_MANAGEMENT_SERVICE_KEY}`,
           'content-type': 'application/json',
         },
-        data: { applicationIds: [app.id] },
+        body: JSON.stringify({ applicationIds: [app.id] }),
       });
-      expect(releaseResponse.status()).toBe(200);
+      expect(releaseResponse.status).toBe(200);
       await expect(async () => {
         const body = await releaseResponse.json();
         expect(body).toMatchObject({
@@ -218,7 +223,7 @@ test.describe('Free-tier event waitlist QA', () => {
       expect(account.status).toBe('ACCOUNT_CREATED');
       expect(userId).toBeTruthy();
 
-      await page.request.post('/auth/logout');
+      await page.context().clearCookies();
       await page.goto('/auth/login');
       await page.getByLabel('Email or handle').fill(email);
       await page.getByLabel('Password').fill(password);

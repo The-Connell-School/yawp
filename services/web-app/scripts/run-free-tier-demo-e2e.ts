@@ -320,7 +320,8 @@ async function main() {
   const browserResolution = resolveBrowserEnv(childEnv);
   console.log(browserResolution.message);
 
-  const prepare = spawnSync('bun', ['./e2e/ensure-e2e-env.ts'], {
+  const bunExecutable = process.execPath;
+  const prepare = spawnSync(bunExecutable, ['./e2e/ensure-e2e-env.ts'], {
     cwd: webAppRoot,
     stdio: 'inherit',
     env: browserResolution.env,
@@ -341,7 +342,7 @@ async function main() {
     '--project=chromium',
     ...runnable.map((spec) => spec.path),
   ];
-  const result = spawnSync('bun', args, {
+  const result = spawnSync(bunExecutable, args, {
     cwd: webAppRoot,
     stdio: 'inherit',
     env: browserResolution.env,

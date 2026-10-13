@@ -10,14 +10,17 @@ const WRONG_PASSWORD = 'yawp-wrong-pass-1';
 const SCREENSHOT_DIR =
   process.env.QA_SCREENSHOT_DIR?.trim() ||
   join(import.meta.dir, '../../../..', 'qa', 'student-signin');
+const LOCAL_BASE_URL = `http://127.0.0.1:${process.env.FREE_TIER_E2E_PORT || 5197}`;
 
 async function shot(page: import('@playwright/test').Page, name: string) {
   await mkdir(SCREENSHOT_DIR, { recursive: true });
   await page.screenshot({ path: join(SCREENSHOT_DIR, name), fullPage: true });
 }
 
-async function logout(page: import('@playwright/test').Page, baseUrl = '') {
-  await page.request.post(`${baseUrl}/auth/logout`);
+async function logout(
+  page: import('@playwright/test').Page,
+  _baseUrl = LOCAL_BASE_URL
+) {
   await page.context().clearCookies();
 }
 

@@ -17,6 +17,11 @@ import { setFreeTierFlag } from '../feature-flags';
 const OUT =
   process.env.QA_SCREENSHOT_DIR?.trim() ||
   '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-repeat-signup';
+const LOCAL_BASE_URL = `http://127.0.0.1:${process.env.FREE_TIER_E2E_PORT || 5197}`;
+
+function localUrl(path: string) {
+  return new URL(path, LOCAL_BASE_URL).toString();
+}
 
 async function shot(page: Page, name: string) {
   await mkdir(OUT, { recursive: true });
@@ -134,7 +139,6 @@ test.describe('Free-tier repeat sign-up QA', () => {
 
   test('local demo stand-in: repeated event sign-ups do not create duplicate enrollment', async ({
     page,
-    request,
     browser,
   }) => {
     test.setTimeout(120_000);
@@ -173,10 +177,10 @@ test.describe('Free-tier repeat sign-up QA', () => {
       });
       tokenId = token.id;
 
-      const freeResponse = await request.get(`/free?t=${encodeURIComponent(code)}`, {
-        maxRedirects: 0,
+      const freeResponse = await fetch(localUrl(`/free?t=${encodeURIComponent(code)}`), {
+        redirect: 'manual',
       });
-      expect(freeResponse.status()).toBe(200);
+      expect(freeResponse.status).toBe(200);
 
       await page.goto(`/free?t=${encodeURIComponent(code)}`);
       await expect(page.getByText('Use your event link to continue.')).toBeVisible();

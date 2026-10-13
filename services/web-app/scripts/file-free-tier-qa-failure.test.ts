@@ -6,6 +6,8 @@ import { tmpdir } from 'node:os';
 
 import { buildFailureSection } from './file-free-tier-qa-failure';
 
+const bunExecutable = process.execPath;
+
 describe('free-tier QA failure filing', () => {
   test('preserves the lane failure template fields', () => {
     const section = buildFailureSection({
@@ -48,7 +50,7 @@ describe('free-tier QA failure filing', () => {
     );
 
     const result = spawnSync(
-      'bun',
+      bunExecutable,
       [
         join(import.meta.dir, 'file-free-tier-qa-failure.ts'),
         '--id=ft-demo-regression',
@@ -85,7 +87,7 @@ describe('free-tier QA failure filing', () => {
     const missingBacklogPath = join(dir, 'missing', 'BACKLOG.md');
 
     const result = spawnSync(
-      'bun',
+      bunExecutable,
       [
         join(import.meta.dir, 'file-free-tier-qa-failure.ts'),
         '--id=ft-demo-regression',
@@ -121,7 +123,7 @@ describe('free-tier QA failure filing', () => {
     await writeFile(backlogPath, '# Fixes Backlog\n\n## P1\n- later\n');
 
     const result = spawnSync(
-      'bun',
+      bunExecutable,
       [
         join(import.meta.dir, 'file-free-tier-qa-failure.ts'),
         '--id=ft-demo-regression',
