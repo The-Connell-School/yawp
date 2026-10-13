@@ -54,6 +54,18 @@ function stateFor(
   };
 }
 
+function isDemoDeployment(env: Record<string, string | undefined>) {
+  return (
+    env.PREVIEW_SLUG?.trim().toLowerCase() === 'demo' ||
+    env.YAWP_ENVIRONMENT?.trim().toLowerCase() === 'demo'
+  );
+}
+
+function applyRuntimeOverrides(state: FeatureFlagState): FeatureFlagState {
+  if (state.key !== FREE_TIER_FLAG || !isDemoDeployment(process.env)) return state;
+  return { ...state, mode: 'everyone', orgIds: [], enabled: true };
+}
+
 /**
  * Whether a flag is on for a school (organization). One indexed read of its
  * Setting row, no cache, so a change takes effect on the next request in
@@ -115,7 +127,7 @@ export async function listFeatureFlags(): Promise<FeatureFlagState[]> {
   });
   const byName = new Map(rows.map((row) => [row.name, row]));
   return FEATURE_FLAG_KEYS.map((key) =>
-    stateFor(key, byName.get(featureFlagSettingName(key)) ?? null)
+    applyRuntimeOverrides(stateFor(key, byName.get(featureFlagSettingName(key)) ?? null))
   );
 }
 
