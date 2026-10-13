@@ -47,11 +47,14 @@ function post(
 
 describe('internal feature-flag endpoints', () => {
   let old: string | undefined;
+  let oldYawpEnvironment: string | undefined;
   beforeEach(() => {
     // Other suites mock db.server in the same process; take it back.
     mock.module('~/utils/db.server', () => ({ prisma }));
     old = process.env.YAWP_MANAGEMENT_SERVICE_KEY;
+    oldYawpEnvironment = process.env.YAWP_ENVIRONMENT;
     process.env.YAWP_MANAGEMENT_SERVICE_KEY = key;
+    delete process.env.YAWP_ENVIRONMENT;
     prisma.setting.findUnique.mockReset().mockResolvedValue(null);
     prisma.setting.findMany.mockReset().mockResolvedValue([]);
     prisma.setting.upsert.mockReset().mockImplementation(
@@ -73,6 +76,8 @@ describe('internal feature-flag endpoints', () => {
   afterEach(() => {
     if (old === undefined) delete process.env.YAWP_MANAGEMENT_SERVICE_KEY;
     else process.env.YAWP_MANAGEMENT_SERVICE_KEY = old;
+    if (oldYawpEnvironment === undefined) delete process.env.YAWP_ENVIRONMENT;
+    else process.env.YAWP_ENVIRONMENT = oldYawpEnvironment;
   });
 
   test('are hidden when no management key is configured', async () => {
@@ -118,6 +123,20 @@ describe('internal feature-flag endpoints', () => {
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[1]).toMatchObject({ key: 'internal_rubrics', label: 'Rubrics from Yawp Internal', mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[2]).toMatchObject({ key: 'free_tier', label: 'Free tier', mode: 'off', orgIds: [], enabled: false });
+  });
+
+  test('lists free tier as open on demo even when the stored flag is off', async () => {
+    process.env.YAWP_ENVIRONMENT = 'demo';
+    const response = await featureFlagsList(
+      new Request(BASE, { headers: { authorization: `Bearer ${key}` } })
+    );
+    const body = await response.json();
+    expect(body.flags.find((flag: { key: string }) => flag.key === 'free_tier')).toMatchObject({
+      key: 'free_tier',
+      mode: 'everyone',
+      orgIds: [],
+      enabled: true,
+    });
   });
 
   test('no longer lists the removed writing-conditions flag, even if its row is still stored', async () => {
