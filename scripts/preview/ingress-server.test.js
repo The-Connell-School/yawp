@@ -333,9 +333,17 @@ describe('preview ingress', () => {
       path: '/',
       headers: { host: 'blackboard-pr-241.preview.yawp.school' },
     });
+    const statusRedirect = await request(port, {
+      path: '/__status',
+      headers: { host: 'status.preview.yawp.school' },
+    });
     expect(blackboardRedirect.status).toBe(308);
     expect(blackboardRedirect.headers.location).toBe(
       'https://blackboard-pr-241.preview.yawp.school/'
+    );
+    expect(statusRedirect.status).toBe(308);
+    expect(statusRedirect.headers.location).toBe(
+      'https://status.preview.yawp.school/__status'
     );
   });
 
@@ -370,6 +378,33 @@ describe('preview ingress', () => {
     expect(context).toBeTruthy();
     expect(context).toBe(store.defaultPair.context);
     expect(store.defaultPair.cert.equals(wildcard.cert)).toBe(true);
+  });
+
+  test('serves the wildcard certificate for the status hostname', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'preview-ingress-status-certs-'));
+    roots.push(root);
+    const certRoot = path.join(root, 'certs');
+    const wildcardRoot = path.join(certRoot, '_wildcard.preview.yawp.school');
+    mkdirSync(wildcardRoot, { recursive: true });
+    const wildcard = createCertificate(root, '*.preview.yawp.school');
+    writeFileSync(path.join(wildcardRoot, 'privkey.pem'), wildcard.key);
+    writeFileSync(path.join(wildcardRoot, 'fullchain.pem'), wildcard.cert);
+
+    const store = createCertificateStore({
+      certRoot,
+      domain: 'preview.yawp.school',
+      defaultHostname: '_wildcard.preview.yawp.school',
+    });
+    let err;
+    let context;
+    store.sniCallback('status.preview.yawp.school', (nextErr, nextContext) => {
+      err = nextErr;
+      context = nextContext;
+    });
+
+    expect(err).toBeNull();
+    expect(context).toBeTruthy();
+    expect(context).toBe(store.defaultPair.context);
   });
 
   test('falls back to an exact certificate when the wildcard pair is unusable', () => {

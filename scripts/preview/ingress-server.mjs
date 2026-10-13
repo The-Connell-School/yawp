@@ -625,6 +625,11 @@ export function createHttpRedirectHandler({ domain, readChallenge }) {
     const rawHost = Array.isArray(request.headers.host)
       ? request.headers.host[0]
       : request.headers.host || '';
+    if (isStatusHost(rawHost, domain)) {
+      response.writeHead(308, { location: `https://status.${domain.toLowerCase()}${request.url || '/'}` });
+      response.end();
+      return;
+    }
     const parsed = parsePreviewHost(rawHost, domain);
     if (parsed === null) {
       send(response, 404, 'Not found.\n');
@@ -736,7 +741,10 @@ export function createCertificateStore({ certRoot, domain, defaultHostname }) {
   return {
     defaultPair,
     sniCallback(servername, callback) {
-      const match = pair(String(servername || '').toLowerCase());
+      const hostname = String(servername || '').toLowerCase();
+      const match = isStatusHost(hostname, domain)
+        ? pairByName(wildcardCertificateStorageName(domain), `*.${domain}`)
+        : pair(hostname);
       if (match) callback(null, match.context);
       else callback(new Error('No certificate provisioned for preview hostname'));
     },
