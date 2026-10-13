@@ -11,6 +11,14 @@ mock.module('~/utils/auth.server', () => ({
 const { adminTabs } = await import('./route');
 
 describe('admin tabs', () => {
+  test('marks tester feedback as moved to internal', () => {
+    const testerFeedbackTab = adminTabs.find(
+      (tab) => tab.to === '/app/tester/feedback'
+    );
+
+    expect(testerFeedbackTab?.label).toBe('Tester feedback (moved)');
+  });
+
   test('labels the assignment types surface', () => {
     const assignmentTypesTab = adminTabs.find(
       (tab) => tab.to === '/app/admin/assignments'

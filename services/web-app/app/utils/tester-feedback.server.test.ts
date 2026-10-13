@@ -309,7 +309,7 @@ describe('feedback reads and CSV', () => {
     expect(await csv.text()).toContain('Opened a document');
     const list = await readTesterFeedback(
       new Request(
-        'https://demo.example/api/internal/v1/tester-feedback?severity=medium'
+        'https://demo.example/api/internal/v1/tester-feedback?severity=medium&userId=tester-1&since=2026-10-01T00%3A00%3A00Z&until=2026-10-13T00%3A00%3A00Z'
       ),
       deps,
       'internal'
@@ -317,7 +317,14 @@ describe('feedback reads and CSV', () => {
     expect((await list.json()).entries).toHaveLength(1);
     expect(seen).toEqual([
       { format: 'csv', environment: 'demo', limit: 10001 },
-      { format: 'json', severity: 'medium', limit: 51 },
+      {
+        format: 'json',
+        severity: 'medium',
+        userId: 'tester-1',
+        since: '2026-10-01T00:00:00Z',
+        until: '2026-10-13T00:00:00Z',
+        limit: 51,
+      },
     ]);
     expect(
       (
