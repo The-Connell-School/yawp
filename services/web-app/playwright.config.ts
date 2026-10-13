@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const webPort = process.env.E2E_WEB_PORT || '5173';
+const webBaseURL = `http://127.0.0.1:${webPort}`;
+
 /**
  * @see https://playwright.dev/docs/test-configuration
  */
@@ -15,7 +18,7 @@ export default defineConfig({
     trace: process.env.CI ? 'retain-on-failure' : 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    baseURL: 'http://127.0.0.1:5173',
+    baseURL: webBaseURL,
     launchOptions: process.env.PW_EXECUTABLE_PATH
       ? { executablePath: process.env.PW_EXECUTABLE_PATH }
       : undefined,
@@ -44,9 +47,8 @@ export default defineConfig({
       timeout: 30 * 1000,
     },
     {
-      command:
-        "bash -c 'bun ./e2e/ensure-e2e-env.ts && set -a && source ./e2e/.env.e2e && set +a && E2E=true TESTER_FEEDBACK_ENABLED=true bun run dev -- --port 5173 --host 127.0.0.1 --strictPort'",
-      url: 'http://127.0.0.1:5173',
+      command: `bash -c 'bun ./e2e/ensure-e2e-env.ts && set -a && source ./e2e/.env.e2e && set +a && E2E=true TESTER_FEEDBACK_ENABLED=true bun run dev -- --port ${webPort} --host 127.0.0.1 --strictPort'`,
+      url: webBaseURL,
       reuseExistingServer: !process.env.CI,
       timeout: 240 * 1000,
     },
