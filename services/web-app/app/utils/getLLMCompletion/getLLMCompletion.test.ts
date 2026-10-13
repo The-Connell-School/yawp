@@ -501,6 +501,60 @@ describe('getLLMCompletion', () => {
     expect(serialized).not.toContain('req-write-generator');
   });
 
+  test('de-identifies student-chosen writing-practice topics before writing LlmLog rows', async () => {
+    anthropicCreate.mockResolvedValueOnce(
+      anthropicTextResponse(
+        '{"prompts":[{"exercise":"Brian Connell at Holy Family School wrote quickly, the timer ended.","instruction":"Fix the comma splice."}]}'
+      )
+    );
+
+    await getLLMCompletion({
+      model: 'claude-sonnet-4-6',
+      system: 'You author short writing-practice items.',
+      messages: [
+        {
+          role: 'user',
+          content:
+            "The student's chosen topic: Brian Connell at Holy Family School",
+        },
+      ],
+      metadata: {
+        feature: 'writing-practice-prompt-generation',
+        skill: 'comma splices',
+        count: 1,
+      },
+      deidentificationPhrases: ['Brian Connell at Holy Family School'],
+      attribution: {
+        organizationId: 'org-writing-practice',
+        membershipId: 'mem-writing-practice',
+        route: 'routes/app.writing-lessons.practice',
+        requestId: 'req-writing-practice',
+      },
+    });
+
+    const log = llmLogCreate.mock.calls[0]?.[0].data;
+    const serialized = JSON.stringify(log);
+    expect(JSON.stringify(log.messages)).toContain(
+      "The student's chosen topic: [name]"
+    );
+    expect(log.response).toContain('[name] wrote quickly');
+    expect(log.metadata).toMatchObject({
+      feature: 'writing-practice-prompt-generation',
+      skill: 'comma splices',
+      count: 1,
+      route: 'routes/app.writing-lessons.practice',
+      deidentified: true,
+      deidentificationVersion: 1,
+    });
+    expect(serialized).not.toContain('Brian');
+    expect(serialized).not.toContain('Connell');
+    expect(serialized).not.toContain('Holy Family');
+    expect(serialized).not.toContain('org-writing-practice');
+    expect(serialized).not.toContain('mem-writing-practice');
+    expect(serialized).not.toContain('req-writing-practice');
+    expect(serialized).not.toContain('deidentificationPhrases');
+  });
+
   test('falls back to gpt-4o-mini and opens the circuit after Anthropic 529', async () => {
     const controller = new AbortController();
     const anthropicError = Object.assign(new Error('Overloaded'), {

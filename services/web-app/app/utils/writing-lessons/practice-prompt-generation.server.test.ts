@@ -70,6 +70,21 @@ describe('generatePracticePrompts', () => {
     expect(userMessage).toContain('chosen topic');
   });
 
+  test('passes the student topic as an LlmLog de-identification phrase', async () => {
+    getLLMCompletion.mockResolvedValueOnce(
+      JSON.stringify({ prompts: [{ exercise: 'A, B.', instruction: 'Fix.' }] })
+    );
+
+    await generatePracticePrompts({
+      ...baseInput,
+      topic: 'Brian Connell at Holy Family School',
+    });
+
+    expect(getLLMCompletion.mock.calls[0][0].deidentificationPhrases).toEqual([
+      'Brian Connell at Holy Family School',
+    ]);
+  });
+
   test('makes no topic demands when none is given', async () => {
     getLLMCompletion.mockResolvedValueOnce(
       JSON.stringify({ prompts: [{ exercise: 'A, B.', instruction: 'Fix.' }] })

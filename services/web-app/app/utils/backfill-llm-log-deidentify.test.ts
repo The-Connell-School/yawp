@@ -224,4 +224,63 @@ describe('LlmLog de-identification backfill', () => {
     expect(logs.join('\n')).not.toContain('Connell');
     expect(logs.join('\n')).not.toContain('Holy Family');
   });
+
+  test('dry-run counts student-chosen writing-practice topic changes without exposing them', async () => {
+    const logs: string[] = [];
+    const prisma: BackfillPrisma = {
+      llmLog: {
+        findMany: mock(async () => [
+          {
+            id: 'log-writing-practice-topic',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            systemPrompt: 'You author short writing-practice items.',
+            messages: [
+              {
+                role: 'user',
+                content:
+                  "The student's chosen topic: Brian Connell at Holy Family School",
+              },
+            ],
+            response:
+              '{"prompts":[{"exercise":"Brian Connell at Holy Family School wrote quickly, the timer ended.","instruction":"Fix the comma splice."}]}',
+            error: null,
+            inputTokens: 1,
+            outputTokens: 2,
+            totalTokens: 3,
+            durationMs: 4,
+            metadata: {
+              route: 'routes/app.writing-lessons.practice',
+              feature: 'writing-practice-prompt-generation',
+            },
+          },
+        ]),
+        update: mock(async () => {
+          throw new Error('dry-run must not update rows');
+        }),
+      },
+    };
+
+    const summary = await backfillLlmLogDeidentification({
+      prisma,
+      options: {
+        dryRun: true,
+        batchSize: 10,
+        environment: 'demo',
+        snapshotConfirmed: false,
+      },
+      log: (message) => logs.push(message),
+    });
+
+    expect(summary).toMatchObject({
+      scanned: 1,
+      changed: 1,
+      textChanged: 1,
+      updated: 0,
+      dryRun: true,
+    });
+    expect(logs.join('\n')).not.toContain('Brian');
+    expect(logs.join('\n')).not.toContain('Connell');
+    expect(logs.join('\n')).not.toContain('Holy Family');
+  });
 });
