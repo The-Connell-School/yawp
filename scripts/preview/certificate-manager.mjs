@@ -336,6 +336,34 @@ async function defaultCreateKeyAndCsr(hostname) {
   }
 }
 
+function isAcmeRateLimitError(error) {
+  const message = String(error?.message || '');
+  return /^ACME request failed \(429\):/.test(message)
+    && /rate[- ]limits?|too many certificates/i.test(message);
+}
+
+async function writeTemporarySelfSignedCertificate({ hostname, certRoot, days = 7 }) {
+  const temporary = await mkdtemp(path.join(tmpdir(), 'yawp-preview-self-signed-'));
+  try {
+    const keyPath = path.join(temporary, 'privkey.pem');
+    const certPath = path.join(temporary, 'fullchain.pem');
+    await execFileAsync('openssl', [
+      'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-sha256',
+      '-days', String(days),
+      '-keyout', keyPath,
+      '-out', certPath,
+      '-subj', `/CN=${hostname}`,
+      '-addext', `subjectAltName=DNS:${hostname}`,
+    ], { timeout: 30_000, maxBuffer: 1024 * 1024 });
+    const target = path.join(certRoot, hostname);
+    await atomicWrite(path.join(target, 'privkey.pem'), await readFile(keyPath, 'utf8'), 0o600);
+    await atomicWrite(path.join(target, 'fullchain.pem'), await readFile(certPath, 'utf8'), 0o644);
+    return { hostname, status: 'self-signed-fallback' };
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+}
+
 async function waitForStatus({ session, url, valid, pollIntervalMs, attempts = 60 }) {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     if (attempt > 0 && pollIntervalMs > 0) {
@@ -380,67 +408,72 @@ export async function ensureCertificate({
     if (error?.code !== 'ENOENT') throw error;
   }
 
-  const boundedFetch = (url, options) => fetchWithTimeout(
-    fetchFn,
-    url,
-    options,
-    requestTimeoutMs,
-  );
-  const session = await createSession({
-    directoryUrl,
-    fetchFn: boundedFetch,
-    accountRoot,
-    email,
-  });
-  const { response: orderResponse, body: order } = await session.json(
-    session.directory.newOrder,
-    { identifiers: [{ type: 'dns', value: hostname }] },
-  );
-  const orderUrl = orderResponse.headers.get('location');
-  if (!orderUrl || !Array.isArray(order.authorizations) || !order.finalize) {
-    throw new Error('ACME order response is incomplete');
-  }
-  const { privateKeyPem, csrDer } = await createKeyAndCsr(hostname);
-  await mkdir(challengeRoot, { recursive: true, mode: 0o755 });
-  let challengePath = null;
   try {
-    for (const authorizationUrl of order.authorizations) {
-      const { body: authorization } = await session.json(authorizationUrl, null);
-      if (authorization.status === 'valid') continue;
-      const challenge = authorization.challenges?.find((candidate) => candidate.type === 'http-01');
-      if (!challenge || !/^[A-Za-z0-9_-]{1,256}$/.test(challenge.token) || !challenge.url) {
-        throw new Error('ACME authorization has no usable HTTP-01 challenge');
+    const boundedFetch = (url, options) => fetchWithTimeout(
+      fetchFn,
+      url,
+      options,
+      requestTimeoutMs,
+    );
+    const session = await createSession({
+      directoryUrl,
+      fetchFn: boundedFetch,
+      accountRoot,
+      email,
+    });
+    const { response: orderResponse, body: order } = await session.json(
+      session.directory.newOrder,
+      { identifiers: [{ type: 'dns', value: hostname }] },
+    );
+    const orderUrl = orderResponse.headers.get('location');
+    if (!orderUrl || !Array.isArray(order.authorizations) || !order.finalize) {
+      throw new Error('ACME order response is incomplete');
+    }
+    const { privateKeyPem, csrDer } = await createKeyAndCsr(hostname);
+    await mkdir(challengeRoot, { recursive: true, mode: 0o755 });
+    let challengePath = null;
+    try {
+      for (const authorizationUrl of order.authorizations) {
+        const { body: authorization } = await session.json(authorizationUrl, null);
+        if (authorization.status === 'valid') continue;
+        const challenge = authorization.challenges?.find((candidate) => candidate.type === 'http-01');
+        if (!challenge || !/^[A-Za-z0-9_-]{1,256}$/.test(challenge.token) || !challenge.url) {
+          throw new Error('ACME authorization has no usable HTTP-01 challenge');
+        }
+        const thumbprint = base64url(createHash('sha256').update(JSON.stringify(session.jwk)).digest());
+        challengePath = path.join(challengeRoot, challenge.token);
+        await atomicWrite(challengePath, `${challenge.token}.${thumbprint}\n`, 0o644);
+        await session.json(challenge.url, {});
+        await waitForStatus({
+          session,
+          url: authorizationUrl,
+          valid: (body) => body.status === 'valid',
+          pollIntervalMs,
+        });
+        await rm(challengePath, { force: true });
+        challengePath = null;
       }
-      const thumbprint = base64url(createHash('sha256').update(JSON.stringify(session.jwk)).digest());
-      challengePath = path.join(challengeRoot, challenge.token);
-      await atomicWrite(challengePath, `${challenge.token}.${thumbprint}\n`, 0o644);
-      await session.json(challenge.url, {});
-      await waitForStatus({
+      await session.json(order.finalize, { csr: base64url(csrDer) });
+      const completed = await waitForStatus({
         session,
-        url: authorizationUrl,
-        valid: (body) => body.status === 'valid',
+        url: orderUrl,
+        valid: (body) => body.status === 'valid' && typeof body.certificate === 'string',
         pollIntervalMs,
       });
-      await rm(challengePath, { force: true });
-      challengePath = null;
+      const certificateResponse = await session.post(completed.certificate, null);
+      const certPem = await certificateResponse.text();
+      if (!validCertificatePair({ hostname, keyPem: privateKeyPem, certPem })) {
+        throw new Error('ACME returned a certificate that does not match the hostname and private key');
+      }
+      await atomicWrite(keyPath, privateKeyPem, 0o600);
+      await atomicWrite(certPath, certPem, 0o644);
+      return { hostname, status: 'issued' };
+    } finally {
+      if (challengePath) await rm(challengePath, { force: true });
     }
-    await session.json(order.finalize, { csr: base64url(csrDer) });
-    const completed = await waitForStatus({
-      session,
-      url: orderUrl,
-      valid: (body) => body.status === 'valid' && typeof body.certificate === 'string',
-      pollIntervalMs,
-    });
-    const certificateResponse = await session.post(completed.certificate, null);
-    const certPem = await certificateResponse.text();
-    if (!validCertificatePair({ hostname, keyPem: privateKeyPem, certPem })) {
-      throw new Error('ACME returned a certificate that does not match the hostname and private key');
-    }
-    await atomicWrite(keyPath, privateKeyPem, 0o600);
-    await atomicWrite(certPath, certPem, 0o644);
-    return { hostname, status: 'issued' };
-  } finally {
-    if (challengePath) await rm(challengePath, { force: true });
+  } catch (error) {
+    if (!isAcmeRateLimitError(error)) throw error;
+    return writeTemporarySelfSignedCertificate({ hostname, certRoot });
   }
 }
 

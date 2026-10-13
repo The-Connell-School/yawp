@@ -888,6 +888,7 @@ smoke_access_code="$(
   PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" node -e \
     "process.stdout.write(JSON.parse(process.env.PREVIEW_ACCESS_SEATS)[0].code)"
 )"
+PREVIEW_TLS_INSECURE_SMOKE=false
 if [[ -n "${DIRECT_PORT:-}" ]]; then
   health_url="http://127.0.0.1:${DIRECT_PORT}/api/healthcheck"
   login_url="http://127.0.0.1:${DIRECT_PORT}"
@@ -905,29 +906,43 @@ start_or_refresh_web() {
 }
 start_or_refresh_web
 
+ensure_preview_certificate() {
+  local hostname="$1" output status
+  set +e
+  output="$(
+    PREVIEW_ROOT="$ROOT" \
+    PREVIEW_DOMAIN="$PREVIEW_DOMAIN" \
+    PREVIEW_ACME_EMAIL="${PREVIEW_ACME_EMAIL:-admin@example.com}" \
+      node "$SCRIPT_DIR/certificate-manager.mjs" "$hostname" 2>&1
+  )"
+  status="$?"
+  set -e
+  printf '%s\n' "$output"
+  if printf '%s\n' "$output" | grep -q ': self-signed-fallback'; then
+    PREVIEW_TLS_INSECURE_SMOKE=true
+  fi
+  return "$status"
+}
+
   if [[ "$SLUG" != "demo" \
     && -z "${DIRECT_PORT:-}" \
     && "${PREVIEW_TLS:-true}" == "true" \
     && "$PREVIEW_CUSTOM_INGRESS_ACTIVE" == "true" ]]; then
-  PREVIEW_ROOT="$ROOT" \
-  PREVIEW_DOMAIN="$PREVIEW_DOMAIN" \
-  PREVIEW_ACME_EMAIL="${PREVIEW_ACME_EMAIL:-admin@example.com}" \
-    node "$SCRIPT_DIR/certificate-manager.mjs" "$HOSTNAME"
-  PREVIEW_ROOT="$ROOT" \
-  PREVIEW_DOMAIN="$PREVIEW_DOMAIN" \
-  PREVIEW_ACME_EMAIL="${PREVIEW_ACME_EMAIL:-admin@example.com}" \
-    node "$SCRIPT_DIR/certificate-manager.mjs" "$UA_HOSTNAME"
+  ensure_preview_certificate "$HOSTNAME"
+  ensure_preview_certificate "$UA_HOSTNAME"
   if grep -qE '^[[:space:]]*blackboard-lti-mock:' "$PREVIEW_DIR/docker-compose.yml"; then
-    PREVIEW_ROOT="$ROOT" \
-    PREVIEW_DOMAIN="$PREVIEW_DOMAIN" \
-    PREVIEW_ACME_EMAIL="${PREVIEW_ACME_EMAIL:-admin@example.com}" \
-      node "$SCRIPT_DIR/certificate-manager.mjs" "$BLACKBOARD_HOSTNAME" \
+    ensure_preview_certificate "$BLACKBOARD_HOSTNAME" \
       || echo "Blackboard hostname certificate not issued yet; host ingress must route ${BLACKBOARD_HOSTNAME}"
   fi
 fi
 
+curl_health_flags=(-fsS --connect-timeout 1 --max-time 2)
+if [[ "$PREVIEW_TLS_INSECURE_SMOKE" == "true" ]]; then
+  curl_health_flags+=(-k)
+  export NODE_TLS_REJECT_UNAUTHORIZED=0
+fi
 for attempt in $(seq 1 90); do
-  if curl -fsS --connect-timeout 1 --max-time 2 "$health_url" >/dev/null; then
+  if curl "${curl_health_flags[@]}" "$health_url" >/dev/null; then
     PREVIEW_BASE_URL="$login_url" \
       PREVIEW_DATA_MODE="$DATA_MODE" \
       PREVIEW_ACCESS_CODE="$smoke_access_code" \

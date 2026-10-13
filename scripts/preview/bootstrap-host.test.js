@@ -69,8 +69,9 @@ describe('bootstrap-host.sh', () => {
     expect(script).toContain('yawp-preview-certificate-renewal.timer');
     expect(script).toContain('$ROOT/ingress/current/certificate-manager.mjs --resident');
     expect(previewWorkflow).toContain('PREVIEW_ACME_EMAIL');
-    expect(deploy).toContain('node "$SCRIPT_DIR/certificate-manager.mjs" "$HOSTNAME"');
-    expect(deploy.indexOf('certificate-manager.mjs" "$HOSTNAME"')).toBeLessThan(
+    expect(deploy).toContain('ensure_preview_certificate "$HOSTNAME"');
+    expect(deploy).toContain('NODE_TLS_REJECT_UNAUTHORIZED=0');
+    expect(deploy.indexOf('ensure_preview_certificate "$HOSTNAME"')).toBeLessThan(
       deploy.indexOf('for attempt in $(seq 1 90)')
     );
     expect(deploy).toContain('PREVIEW_DOMAIN="$PREVIEW_DOMAIN"');

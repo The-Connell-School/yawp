@@ -216,6 +216,62 @@ describe('preview certificate manager', () => {
     expect(existsSync(path.join(challengeRoot, 'challenge_token-1'))).toBe(false);
   });
 
+  test('publishes a short-lived fallback certificate when ACME hits the registered-domain limit', async () => {
+    const root = temporaryRoot('preview-cert-rate-limit-');
+    const certRoot = path.join(root, 'ingress', 'certs');
+    const accountRoot = path.join(root, 'ingress', 'acme');
+    const challengeRoot = path.join(root, 'ingress', 'challenges');
+    const hostname = 'pr-458.preview.yawp.school';
+    const response = (body, { status = 200, location, nonce = 'nonce-next' } = {}) => new Response(
+      typeof body === 'string' ? body : JSON.stringify(body),
+      {
+        status,
+        headers: {
+          'content-type': 'application/json',
+          'replay-nonce': nonce,
+          ...(location ? { location } : {}),
+        },
+      },
+    );
+    const fetchFn = async (url) => {
+      if (url === 'https://acme.test/directory') {
+        return response({
+          newNonce: 'https://acme.test/nonce',
+          newAccount: 'https://acme.test/account',
+          newOrder: 'https://acme.test/order/new',
+        });
+      }
+      if (url === 'https://acme.test/nonce') return response('', { nonce: 'nonce-1' });
+      if (url === 'https://acme.test/account') {
+        return response({}, { status: 201, location: 'https://acme.test/account/1' });
+      }
+      if (url === 'https://acme.test/order/new') {
+        return response({
+          detail: 'too many certificates already issued for "yawp.school"; see rate-limits',
+        }, { status: 429 });
+      }
+      throw new Error(`Unexpected ACME URL ${url}`);
+    };
+
+    const result = await ensureCertificate({
+      hostname,
+      domain: 'preview.yawp.school',
+      certRoot,
+      accountRoot,
+      challengeRoot,
+      email: 'admin@example.com',
+      directoryUrl: 'https://acme.test/directory',
+      fetchFn,
+      pollIntervalMs: 0,
+    });
+
+    const keyPath = path.join(certRoot, hostname, 'privkey.pem');
+    const certPath = path.join(certRoot, hostname, 'fullchain.pem');
+    expect(result).toEqual({ hostname, status: 'self-signed-fallback' });
+    expect(await validateCertificatePair({ hostname, keyPath, certPath })).toBe(true);
+    expect(certificateNeedsRenewal(readFileSync(certPath, 'utf8'))).toBe(true);
+  });
+
   test('attempts every resident renewal even when an earlier hostname fails', async () => {
     const calls = [];
     const report = await maintainCertificates({

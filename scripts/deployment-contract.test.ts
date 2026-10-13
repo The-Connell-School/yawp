@@ -1228,10 +1228,10 @@ describe('PR preview deployment contract', () => {
 
     // The subject here is poll SPEED. /api/healthcheck stays outside the in-app gate.
     expect(deployScript).toContain(
-      '--connect-timeout 1 --max-time 2 "$health_url"'
+      'curl_health_flags=(-fsS --connect-timeout 1 --max-time 2)'
     );
     expect(deployScript).toContain(
-      'curl -fsS --connect-timeout 1 --max-time 2 "$health_url"'
+      'curl "${curl_health_flags[@]}" "$health_url"'
     );
     expect(deployScript).not.toContain(deprecatedPreviewBasicAuth);
     expect(deployScript).toContain('sleep 1');
