@@ -54,5 +54,10 @@ bun test scripts/thesis-essay-decks
 - Layouts: `render-hybrid-deck.ts`; colours and fonts: `hybrid-theme.ts`
 - Images and icons: `assets/` (icons have SVG sources next to their PNGs)
 
+The decks are checked to open cleanly in PowerPoint as well as Google Slides.
+pptxgenjs writes paragraph properties before every run of a paragraph, which
+PowerPoint "repairs" by scrambling the formatting, so `render-hybrid-deck.ts`
+keeps only the first; a test fails if a deck has the problem again.
+
 The previews are rendered with LibreOffice, which swaps Georgia for a wider
 serif, so lines wrap a little earlier there than in PowerPoint.

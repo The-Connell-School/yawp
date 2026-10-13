@@ -13,6 +13,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import JSZip from 'jszip';
 import PptxGenJS from 'pptxgenjs';
 import type { AssetImage, HybridDeck, HybridSlide } from './deck-types';
 import { type AccentColor, accentAt, HYBRID as T, type IconName } from './hybrid-theme';
@@ -36,6 +37,25 @@ export const ASSET_SIZES: Record<AssetImage, { w: number; h: number }> = {
   'yawp-join-page.png': { w: 720, h: 1750 },
   'yawp-student-dashboard.png': { w: 1460, h: 900 },
   'yawp-my-documents.png': { w: 1485, h: 403 },
+};
+
+/** Alt text for the bundled images, read aloud by screen readers. */
+const ASSET_ALT: Record<AssetImage, string> = {
+  'fallen-man.jpg': 'A busy city street where a man has fallen on the pavement.',
+  'elephant.jpg': 'An elephant.',
+  'critical-essay-form.png': 'The critical essay form: introduction, body paragraphs and conclusion.',
+  'yawp-editor-prewriting.png': 'The YAWP! editor on the Pre-writing step.',
+  'yawp-editor-thesis.png': 'The YAWP! editor on the Thesis Statement step.',
+  'yawp-editor-introduction.png': 'The YAWP! editor on the Introduction step.',
+  'yawp-editor-body.png': 'The YAWP! editor on the Body Paragraphs step.',
+  'yawp-editor-conclusion.png': 'The YAWP! editor on the Conclusion step.',
+  'yawp-editor-final.png': 'The YAWP! editor with a finished, titled essay.',
+  'brian-twins.jpg': 'A childhood photo of Brian.',
+  'brian-1990s.jpg': 'A photo of Brian from the 1990s.',
+  'yawp-join-link-card.png': "The class's join link and QR code on the Students tab.",
+  'yawp-join-page.png': 'The YAWP! "Create your student account" page.',
+  'yawp-student-dashboard.png': 'The YAWP! student dashboard after joining.',
+  'yawp-my-documents.png': 'The My Documents list in YAWP!.',
 };
 
 const LAYOUT = { name: 'YAWP_HYBRID_16x9', width: 13.333, height: 7.5 };
@@ -161,6 +181,7 @@ function addBubble(
   const inset = d * 0.2;
   slide.addImage({
     path: join(ASSETS, 'icons', `${icon}.png`),
+    altText: `${icon} icon`,
     x: x + inset,
     y: y + inset,
     w: d - inset * 2,
@@ -235,6 +256,7 @@ function addFramedImage(slide: PptxSlide, image: AssetImage, box: Box): void {
   const pad = 0.14;
   slide.addImage({
     path: join(ASSETS, image),
+    altText: ASSET_ALT[image],
     x: box.x + pad,
     y: box.y + pad,
     w: box.w - pad * 2,
@@ -979,6 +1001,7 @@ function addEquationSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout:
     });
     slide.addImage({
       path: join(ASSETS, 'icons', `${part.icon}.png`),
+      altText: `${part.icon} icon`,
       x: x + d / 2 - 0.45,
       y: y + 0.4,
       w: 0.9,
@@ -1502,7 +1525,36 @@ export async function renderHybridDeck(deck: HybridDeck): Promise<Uint8Array> {
   deck.slides.forEach((slide, index) => addSlide(pptx, slide, index));
 
   const written = await pptx.write({ outputType: 'nodebuffer' });
-  return new Uint8Array(written as Buffer);
+  return keepOnePPrPerParagraph(new Uint8Array(written as Buffer));
+}
+
+/**
+ * pptxgenjs 4.0.1 writes an <a:pPr> before every run of a multi-run
+ * paragraph. A paragraph may hold only one, first. PowerPoint "repairs" the
+ * extras and scrambles the paragraph (highlights and bold on the wrong
+ * words); Google Slides and LibreOffice quietly use the first. So keep the
+ * first and drop the rest: what Google Slides already shows.
+ */
+async function keepOnePPrPerParagraph(bytes: Uint8Array): Promise<Uint8Array> {
+  const zip = await JSZip.loadAsync(bytes);
+  const parts = Object.keys(zip.files).filter((name) =>
+    /^ppt\/(slides|slideLayouts|slideMasters|notesSlides)\/[A-Za-z]+\d+\.xml$/.test(name)
+  );
+  for (const name of parts) {
+    const xml = await zip.file(name)!.async('string');
+    zip.file(name, xml.replace(/<a:p>[\s\S]*?<\/a:p>/g, dropExtraPPr));
+  }
+  return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+}
+
+/** One paragraph's XML, with only its first <a:pPr> (self-closing or not). */
+function dropExtraPPr(paragraph: string): string {
+  let seen = false;
+  return paragraph.replace(/<a:pPr\b[^>]*\/>|<a:pPr\b[^>]*>[\s\S]*?<\/a:pPr>/g, (pPr) => {
+    if (seen) return '';
+    seen = true;
+    return pPr;
+  });
 }
 
 /** For tests: confirm an asset is where the renderer will look. */

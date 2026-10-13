@@ -1,18 +1,21 @@
 import { describe, expect, it } from 'bun:test';
+import JSZip from 'jszip';
 import type { HybridSlide } from './deck-types';
 import { DECKS } from './decks';
 import { ICONS } from './hybrid-theme';
 import { ASSET_SIZES, parseMarks, plain, readAsset, renderHybridDeck } from './render-hybrid-deck';
 import { REVIEW_QUESTIONS, reviewQuiz } from './shared-slides';
 
-/**
- * The part names inside a zip (a .pptx is one). Zip stores each name as plain
- * text in its headers, so they can be read without unzipping, and without a
- * zip library the web app doesn't otherwise depend on.
- */
-function zipEntryNames(bytes: Uint8Array): Set<string> {
-  const text = Buffer.from(bytes).toString('latin1');
-  return new Set(text.match(/ppt\/[A-Za-z]+\/[A-Za-z]+\d+\.xml/g) ?? []);
+/** The slide and notes parts inside a written .pptx, by name. */
+async function pptxParts(bytes: Uint8Array): Promise<Map<string, string>> {
+  const zip = await JSZip.loadAsync(bytes);
+  const parts = new Map<string, string>();
+  for (const name of Object.keys(zip.files)) {
+    if (/^ppt\/(slides|notesSlides)\/[A-Za-z]+\d+\.xml$/.test(name)) {
+      parts.set(name, await zip.file(name)!.async('string'));
+    }
+  }
+  return parts;
 }
 
 /** How many slides each of Brian's original decks had. The hybrids keep them all. */
@@ -123,11 +126,32 @@ for (const { file, deck } of DECKS) {
     });
 
     it('writes a PowerPoint with one slide and one notes page per spec', async () => {
-      const names = [...zipEntryNames(await renderHybridDeck(deck))];
+      const parts = await pptxParts(await renderHybridDeck(deck));
+      const names = [...parts.keys()];
       const slides = names.filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name));
       const notes = names.filter((name) => /^ppt\/notesSlides\/notesSlide\d+\.xml$/.test(name));
       expect(slides).toHaveLength(deck.slides.length);
       expect(notes).toHaveLength(deck.slides.length);
+    });
+
+    // PowerPoint repairs a paragraph with more than one <a:pPr> (pptxgenjs
+    // writes one before every run), and the repair scrambles its formatting:
+    // highlights and bold land on the wrong words. Google Slides and
+    // LibreOffice let it pass, which is why only PowerPoint looked wrong.
+    it('gives each paragraph at most one pPr, ahead of its runs', async () => {
+      for (const [name, xml] of await pptxParts(await renderHybridDeck(deck))) {
+        for (const paragraph of xml.match(/<a:p>[\s\S]*?<\/a:p>/g) ?? []) {
+          const count = paragraph.match(/<a:pPr[\s>\/]/g)?.length ?? 0;
+          expect({ name, count }).toEqual({ name, count: Math.min(count, 1) });
+          if (count === 1) expect(paragraph.startsWith('<a:p><a:pPr')).toBe(true);
+        }
+      }
+    });
+
+    it('keeps local file paths out of image descriptions', async () => {
+      for (const xml of (await pptxParts(await renderHybridDeck(deck))).values()) {
+        expect(xml).not.toMatch(/descr="[^"]*\//);
+      }
     });
   });
 }
