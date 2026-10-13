@@ -5,25 +5,25 @@ The durable runner for the free-tier demo coverage is:
 ```bash
 cd services/web-app
 PLAYWRIGHT_BROWSERS_PATH=/home/bryant/.cache/ms-playwright \
-FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-hosted-skip-artifact-audit \
+FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-mainline-contract-refresh \
 bun run test:e2e:free-tier-demo
 ```
 
-For this `qa-hosted-skip-artifact-audit` run, use:
+For this `qa-suite-mainline-contract-refresh` run, use:
 
 ```bash
 cd services/web-app
 PLAYWRIGHT_BROWSERS_PATH=/home/bryant/.cache/ms-playwright \
-FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-hosted-skip-artifact-audit \
+FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-mainline-contract-refresh \
 bun run test:e2e:free-tier-demo
 ```
 
-For the current audit task `qa-hosted-skip-artifact-audit`, use:
+For the current audit task `qa-suite-mainline-contract-refresh`, use:
 
 ```bash
 cd services/web-app
 PLAYWRIGHT_BROWSERS_PATH=/home/bryant/.cache/ms-playwright \
-FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-hosted-skip-artifact-audit \
+FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-mainline-contract-refresh \
 bun run test:e2e:free-tier-demo
 ```
 
@@ -42,7 +42,7 @@ bun run scripts/run-free-tier-demo-e2e.ts --list
 The default runner executes merged free-tier demo coverage for:
 
 - `e2e/tests/free-tier.onboarding.spec.ts`: waitlist, release join, approval, local free-tier onboarding
-- `e2e/tests/free-tier.feature-flag.spec.ts`: free-tier route/flag availability
+- `e2e/tests/free-tier.feature-flag.spec.ts`: flag-vs-route free-tier route/flag availability
 - `e2e/tests/free-tier.bundle-quotas.spec.ts`: free classroom caps and visible quota counters
 
 The manifest also references related merged smoke/screenshot coverage without running it as part of the default demo suite:
@@ -54,13 +54,15 @@ The manifest also references related merged smoke/screenshot coverage without ru
 It also references the seeded free-tier QA repro specs as they land:
 
 - `e2e/tests/free-tier.event-auto-admit.spec.ts`
-- `e2e/tests/free-tier.event-waitlist.spec.ts`
+- `e2e/tests/free-tier.event-waitlist.spec.ts`: waitlist-copy event-link confirmation behavior
 - `e2e/tests/free-tier.disabled-expired.spec.ts`
 - `e2e/tests/free-tier.repeat-signup.spec.ts`
 - `e2e/tests/free-tier.caps-limits.spec.ts`
 - `e2e/tests/auth.free-tier-student-signin.spec.ts`
 
 Those specs keep their local deterministic stand-ins and hosted demo skip checks. The suite runner does not replace those checks; it only groups the runnable files and records missing hosted demo access once at the suite level.
+
+The manifest also records the seeded repro family inventory. `qa-approve-409` and `qa-dup-create-link` are internal admin repros and are recorded as external to the platform suite; `qa-flag-vs-route` and `qa-event-waitlist-copy-regression` are covered by platform specs.
 
 ## Hosted Demo Skips
 
@@ -80,14 +82,16 @@ If this suite finds a regression, append the lane failure note and attempt to fi
 ```bash
 cd services/web-app
 bun run scripts/file-free-tier-qa-failure.ts \
-  --id=ft-qa-hosted-skip-artifact-audit \
-  --slug=qa-hosted-skip-artifact-audit \
+  --id=ft-qa-suite-mainline-contract-refresh \
+  --slug=qa-suite-mainline-contract-refresh \
   --title="Free-tier demo E2E suite regression" \
-  --evidence="/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-hosted-skip-artifact-audit" \
+  --evidence="/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-mainline-contract-refresh" \
   --severity=major \
+  --dedupe-key="LEAD waitlist application" \
   --repro="Run \`bun run test:e2e:free-tier-demo\`." \
   --expected="The free-tier demo E2E suite passes without regressions." \
   --actual="The suite found a regression; see the Playwright output and screenshots."
 ```
 
 The helper appends a dated, template-compliant section to `FAILURES.md` with `severity`, `env`, `repro`, `expected`, `actual`, `screenshots`, and `filed_to_fixes`. If the fixes backlog is outside the writable sandbox, the helper prints the exact `P0b` item to add manually and records `filed_to_fixes: no` in the failure entry.
+For known failure families, pass a stable `--dedupe-key` from the existing evidence so reruns do not append duplicate `FAILURES.md` sections or duplicate fixes-lane `P0b` snippets.

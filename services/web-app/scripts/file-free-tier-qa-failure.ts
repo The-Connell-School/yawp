@@ -75,6 +75,26 @@ async function prependBacklogItem(backlogPath: string, item: string) {
   await writeFile(backlogPath, updated);
 }
 
+async function readExisting(pathname: string) {
+  try {
+    return await readFile(pathname, 'utf8');
+  } catch (error) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      error.code === 'ENOENT'
+    ) {
+      return '';
+    }
+    throw error;
+  }
+}
+
+function containsAny(body: string, needles: string[]) {
+  return needles.some((needle) => needle && body.includes(needle));
+}
+
 async function main() {
   const id = requiredArg('id');
   const slug = optionalArg('slug', id);
@@ -97,16 +117,38 @@ async function main() {
   const failuresPath = process.env.FREE_TIER_QA_FAILURES_PATH || defaultFailuresPath;
   const backlogPath = process.env.FREE_TIER_FIXES_BACKLOG_PATH || defaultBacklogPath;
   const backlogItem = `- [ ] todo | **${id}** ${title}`;
+  const dedupeKey = readArg('dedupe-key');
+  const failureDedupeKeys = [
+    `— ${slug}`,
+    `**${id}**`,
+    ...(dedupeKey ? [dedupeKey] : []),
+  ];
+  const backlogDedupeKeys = [`**${id}**`, ...(dedupeKey ? [dedupeKey] : [])];
+
+  const existingFailures = await readExisting(failuresPath);
+  const alreadyFiledFailure = containsAny(existingFailures, failureDedupeKeys);
+  const existingBacklog = await readExisting(backlogPath);
 
   let filedToFixes = 'yes';
-  try {
-    await prependBacklogItem(backlogPath, backlogItem);
-  } catch (error) {
-    filedToFixes = `no - add ${backlogItem} under P0b`;
-    console.error(
-      `Could not update fixes backlog automatically. Add this under P0b: ${backlogItem}`
+  if (containsAny(existingBacklog, backlogDedupeKeys)) {
+    filedToFixes = 'yes - already filed';
+  } else {
+    try {
+      await prependBacklogItem(backlogPath, backlogItem);
+    } catch (error) {
+      filedToFixes = `no - add ${backlogItem} under P0b`;
+      console.error(
+        `Could not update fixes backlog automatically. Add this under P0b: ${backlogItem}`
+      );
+      console.error(error);
+    }
+  }
+
+  if (alreadyFiledFailure) {
+    console.log(
+      `Skipping duplicate free-tier QA failure entry for ${slug}; existing evidence matched the slug/id/dedupe key.`
     );
-    console.error(error);
+    return;
   }
 
   await mkdir(path.dirname(failuresPath), { recursive: true });

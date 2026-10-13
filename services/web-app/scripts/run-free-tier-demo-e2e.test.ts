@@ -8,6 +8,7 @@ import {
   focusedHostedDemoSkipArtifacts,
   resolveBrowserEnv,
   requiredMissingSpecs,
+  seededReproFamilies,
   suiteSpecs,
   suiteHostedDemoSkipArtifact,
   writeSuiteEvidence,
@@ -48,6 +49,23 @@ describe('free-tier demo suite runner manifest', () => {
     const { missing } = await classifySuiteSpecs(root);
 
     expect(requiredMissingSpecs(missing)).toEqual([]);
+  });
+
+  test('tracks seeded repro families for platform and external internal coverage', () => {
+    expect(seededReproFamilies.map((family) => family.id)).toEqual([
+      'qa-approve-409',
+      'qa-dup-create-link',
+      'qa-flag-vs-route',
+      'qa-event-waitlist-copy-regression',
+    ]);
+    expect(
+      suiteSpecs.find((spec) => spec.path === 'e2e/tests/free-tier.feature-flag.spec.ts')
+        ?.coverage
+    ).toContain('flag-vs-route');
+    expect(
+      suiteSpecs.find((spec) => spec.path === 'e2e/tests/free-tier.event-waitlist.spec.ts')
+        ?.coverage
+    ).toContain('waitlist-copy');
   });
 
   test('keeps suite hosted-demo skip artifact distinct from focused spec skips', async () => {

@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 const webAppRoot = path.resolve(__dirname, '..');
 
 const defaultShotDir =
-  '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-hosted-skip-artifact-audit';
+  '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-mainline-contract-refresh';
 const shotDir =
   process.env.FREE_TIER_QA_SHOTS_DIR?.trim() ||
   process.env.QA_SCREENSHOT_DIR?.trim() ||
@@ -24,6 +24,25 @@ export const focusedHostedDemoSkipArtifacts = [
   'hosted-demo-repeat-signup-skip.txt',
   'hosted-demo-caps-limits-skip.txt',
   'hosted-demo-student-signin-skip.txt',
+] as const;
+
+export const seededReproFamilies = [
+  {
+    id: 'qa-approve-409',
+    scope: 'internal admin repro, external to platform suite',
+  },
+  {
+    id: 'qa-dup-create-link',
+    scope: 'internal admin repro, external to platform suite',
+  },
+  {
+    id: 'qa-flag-vs-route',
+    scope: 'platform free-tier feature flag route contract',
+  },
+  {
+    id: 'qa-event-waitlist-copy-regression',
+    scope: 'platform event waitlist-copy contract',
+  },
 ] as const;
 
 type SuiteSpec = {
@@ -42,7 +61,7 @@ export const suiteSpecs: SuiteSpec[] = [
   },
   {
     path: 'e2e/tests/free-tier.feature-flag.spec.ts',
-    coverage: 'free-tier route/flag availability',
+    coverage: 'flag-vs-route free-tier route/flag availability',
     source: 'merged',
     runByDefault: true,
   },
@@ -78,7 +97,7 @@ export const suiteSpecs: SuiteSpec[] = [
   },
   {
     path: 'e2e/tests/free-tier.event-waitlist.spec.ts',
-    coverage: 'demo event waitlist link local stand-in and hosted skip',
+    coverage: 'waitlist-copy demo event waitlist link local stand-in and hosted skip',
     source: 'qa-repro-pr',
     runByDefault: true,
   },
@@ -277,6 +296,9 @@ export async function writeSuiteEvidence(
           `- ${spec.runByDefault ? 'run' : 'referenced'} ${spec.path}: ${spec.coverage}`
       ),
       '',
+      'Seeded repro families:',
+      ...seededReproFamilies.map((family) => `- ${family.id}: ${family.scope}`),
+      '',
       'Referenced specs not present in this checkout yet:',
       ...(missing.length
         ? missing.map((spec) => `- ${spec.path}: ${spec.coverage}`)
@@ -303,6 +325,10 @@ async function main() {
     }
     for (const spec of missing) {
       console.log(`missing  ${spec.path} (${spec.coverage})`);
+    }
+    console.log('Seeded repro families:');
+    for (const family of seededReproFamilies) {
+      console.log(`seeded  ${family.id} (${family.scope})`);
     }
     console.log(`shotDir  ${shotDir}`);
     if (missingDefault.length > 0) {
