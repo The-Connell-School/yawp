@@ -997,7 +997,7 @@ describe('PR preview deployment contract', () => {
     expect(certificateManager).toContain("challengeType: 'dns-01'");
     expect(certificateManager).toContain('resolveZeroSslEabCredentials');
     expect(certificateManager).toContain(
-      'isLetsEncryptRegisteredDomainRateLimit(error)'
+      'isLetsEncryptRateLimit(error)'
     );
     expect(certificateManager).toContain("challengeType: 'http-01'");
     expect(wakeScript).toContain('docker compose');
