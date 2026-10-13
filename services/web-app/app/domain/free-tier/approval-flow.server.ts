@@ -26,11 +26,18 @@ import {
 } from './email.server';
 import { getApprovalHooks } from './approval-hooks.server';
 import { getClientIp } from '~/utils/ip.server';
+import {
+  assertFreeTierBudgetHeadroom,
+  FreeTierBudgetExceededError,
+  type FreeTierUsageSummary,
+} from './usage-budget.server';
 
 export type FreeTierTransactionalFailure = {
   ok: false;
   reason: string;
   status?: string;
+  budget?: FreeTierUsageSummary;
+  operatorMessage?: string;
 };
 
 export class FreeTierTransactionalAbortError extends Error {
@@ -45,6 +52,15 @@ export class FreeTierTransactionalAbortError extends Error {
 
 function abortClaimedLinkTransaction(result: FreeTierTransactionalFailure): never {
   throw new FreeTierTransactionalAbortError(result);
+}
+
+function budgetExceededFailure(error: FreeTierBudgetExceededError): FreeTierTransactionalFailure {
+  return {
+    ok: false,
+    reason: 'budget_exceeded',
+    budget: error.summary,
+    operatorMessage: `Free-tier ${error.summary.environment} budget reached: $${error.summary.spendUsd.toFixed(2)} of $${error.summary.budgetUsd.toFixed(2)} used.`,
+  };
 }
 
 function mapTransactionalAbort(error: unknown) {
@@ -286,6 +302,15 @@ export async function completeSchoolAdminApproval(args: {
         });
         if (stillPending) abortClaimedLinkTransaction({ ok: false, reason: 'superseded' });
         abortClaimedLinkTransaction({ ok: false, reason: 'not_found' });
+      }
+
+      try {
+        await assertFreeTierBudgetHeadroom(tx);
+      } catch (error) {
+        if (error instanceof FreeTierBudgetExceededError) {
+          abortClaimedLinkTransaction(budgetExceededFailure(error));
+        }
+        throw error;
       }
 
       await tx.freeTierAdminApproval.update({

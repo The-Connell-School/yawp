@@ -34,6 +34,9 @@ describe('free-tier approval flow', () => {
   }
 
   const secret = process.env.FREE_TIER_LINK_HMAC_SECRET;
+  const budgetEnv = process.env.FREE_TIER_BUDGET_ENVIRONMENT;
+  const previewBudget = process.env.FREE_TIER_PREVIEW_BUDGET_USD;
+  const previewUnitCost = process.env.FREE_TIER_PREVIEW_UNIT_COST_USD;
   beforeEach(() => {
     sendEmailMock.mockReset();
     sendEmailMock.mockResolvedValue({
@@ -43,10 +46,22 @@ describe('free-tier approval flow', () => {
     process.env.FREE_TIER_LINK_HMAC_SECRET =
       secret || 'integration-test-free-tier-link-secret-key';
     process.env.PRIMARY_APP_URL = 'https://yawp.test';
+    if (budgetEnv === undefined) delete process.env.FREE_TIER_BUDGET_ENVIRONMENT;
+    else process.env.FREE_TIER_BUDGET_ENVIRONMENT = budgetEnv;
+    if (previewBudget === undefined) delete process.env.FREE_TIER_PREVIEW_BUDGET_USD;
+    else process.env.FREE_TIER_PREVIEW_BUDGET_USD = previewBudget;
+    if (previewUnitCost === undefined) delete process.env.FREE_TIER_PREVIEW_UNIT_COST_USD;
+    else process.env.FREE_TIER_PREVIEW_UNIT_COST_USD = previewUnitCost;
   });
   afterEach(async () => {
     if (secret === undefined) delete process.env.FREE_TIER_LINK_HMAC_SECRET;
     else process.env.FREE_TIER_LINK_HMAC_SECRET = secret;
+    if (budgetEnv === undefined) delete process.env.FREE_TIER_BUDGET_ENVIRONMENT;
+    else process.env.FREE_TIER_BUDGET_ENVIRONMENT = budgetEnv;
+    if (previewBudget === undefined) delete process.env.FREE_TIER_PREVIEW_BUDGET_USD;
+    else process.env.FREE_TIER_PREVIEW_BUDGET_USD = previewBudget;
+    if (previewUnitCost === undefined) delete process.env.FREE_TIER_PREVIEW_UNIT_COST_USD;
+    else process.env.FREE_TIER_PREVIEW_UNIT_COST_USD = previewUnitCost;
     setApprovalHooks({});
     const apps = await prisma.freeTierApplication.findMany({
       where: { email: { endsWith: '@school.edu' } },
@@ -140,6 +155,87 @@ describe('free-tier approval flow', () => {
     expect(hookCalls).toBe(1);
     const finalApp = await prisma.freeTierApplication.findUnique({ where: { id: app.id } });
     expect(finalApp?.status).toBe('APPROVED');
+  });
+
+  test('over-budget school admin approval hard-denies without approving or consuming the signed link', async () => {
+    process.env.FREE_TIER_BUDGET_ENVIRONMENT = 'preview';
+    process.env.FREE_TIER_PREVIEW_BUDGET_USD = '0';
+    process.env.FREE_TIER_PREVIEW_UNIT_COST_USD = '1';
+    let hookCalls = 0;
+    setApprovalHooks({
+      onApplicationApproved: async () => {
+        hookCalls += 1;
+      },
+    });
+    const email = `ft-budget-deny-${Date.now()}@school.edu`;
+    const app = await prisma.freeTierApplication.create({
+      data: {
+        email,
+        name: 'Budget Teacher',
+        schoolName: 'Budget HS',
+        location: 'NY',
+        gradeLevel: '9',
+        status: 'ACCOUNT_CREATED',
+        userId: (
+          await prisma.user.create({
+            data: { email, name: 'Budget Teacher' },
+            select: { id: true },
+          })
+        ).id,
+      },
+    });
+    const submit = await submitAdminDetails({
+      applicationId: app.id,
+      userId: app.userId!,
+      adminName: 'Principal Pat',
+      adminEmail: 'principal@school.edu',
+      adminRole: 'Principal',
+    });
+    expect(submit.ok, JSON.stringify(submit)).toBe(true);
+    const emailLog = await prisma.freeTierEmailLog.findFirst({
+      where: { applicationId: app.id, kind: 'admin_approval', success: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    const approveUrl = (emailLog?.payload as { approveUrl?: string } | null)?.approveUrl;
+    const approveToken = approveUrl ? new URL(approveUrl).searchParams.get('t') : null;
+    if (!approveToken) throw new Error('missing emailed approve token');
+    const linkId = (
+      await prisma.freeTierSignedLink.findFirst({
+        where: { applicationId: app.id, purpose: 'ADMIN_APPROVE' },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      })
+    )?.id;
+    if (!linkId) throw new Error('missing approve link row');
+
+    const req = new Request('https://yawp.test/free/admin/approve', {
+      headers: { 'user-agent': 'test', 'x-forwarded-for': '203.0.113.8' },
+    });
+    const result = await completeSchoolAdminApproval({
+      token: approveToken,
+      adminRole: 'Principal',
+      authorized: true,
+      request: req,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected budget denial');
+    expect(result.reason).toBe('budget_exceeded');
+    expect('operatorMessage' in result ? result.operatorMessage : '').toContain('Free-tier preview budget reached');
+    expect(hookCalls).toBe(0);
+
+    const link = await prisma.freeTierSignedLink.findUnique({
+      where: { id: linkId },
+      select: { usedAt: true },
+    });
+    expect(link?.usedAt).toBeNull();
+    const pending = await prisma.freeTierAdminApproval.findFirst({
+      where: { applicationId: app.id, signedLinkId: linkId },
+      select: { status: true, decidedAt: true },
+    });
+    expect(pending?.status).toBe('PENDING');
+    expect(pending?.decidedAt).toBeNull();
+    const finalApp = await prisma.freeTierApplication.findUnique({ where: { id: app.id } });
+    expect(finalApp?.status).toBe('SENT');
   });
 
   test('concurrent approve clicks: only one consumes the signed link', async () => {
