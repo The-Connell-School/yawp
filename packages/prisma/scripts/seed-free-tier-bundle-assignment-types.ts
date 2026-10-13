@@ -263,34 +263,21 @@ async function upsertStandaloneType(
   }
 ) {
   const { mod, steps } = moduleFromProd(args.moduleId);
-  const assignmentType = await prisma.assignmentType.upsert({
+  const existing = await prisma.assignmentType.findUnique({
     where: { kind: args.kind },
-    update: {},
-    create: {
-      kind: args.kind,
-      title: args.title,
-      description: args.description,
-      position: args.position,
-      assignmentModules: {
-        create: {
-          title: mod.title,
-          position: mod.position,
-          description: mod.description,
-          tutorInstructions: mod.tutorInstructions,
-          rubricAlignmentJson: mod.rubricAlignmentJson ?? undefined,
-          instructions: {
-            create: steps.map((step) => ({
-              position: step.position,
-              title: step.title,
-              prompt: step.prompt,
-              showChatButton: step.showChatButton ?? false,
-            })),
-          },
-        },
-      },
-    },
     select: { id: true, kind: true },
   });
+  const assignmentType =
+    existing ??
+    (await prisma.assignmentType.create({
+      data: {
+        kind: args.kind,
+        title: args.title,
+        description: args.description,
+        position: args.position,
+      },
+      select: { id: true, kind: true },
+    }));
   await ensureAssignmentModules(prisma, assignmentType.id, {
     title: mod.title,
     position: mod.position,
@@ -310,33 +297,22 @@ async function upsertStandaloneType(
 }
 
 export async function seedFreeTierBundleAssignmentTypes(prisma: PrismaClient) {
-  const classStarter = await prisma.assignmentType.upsert({
+  const existingClassStarter = await prisma.assignmentType.findUnique({
     where: { kind: CLASS_STARTER_KIND },
-    update: {},
-    create: {
-      kind: CLASS_STARTER_KIND,
-      title: 'Class Starter',
-      description:
-        'Open-ended writing to begin class. Graded on engagement: did the student write, and did they reflect.',
-      position: 51,
-      assignmentModules: {
-        create: {
-          title: 'Class Starter',
-          position: 1,
-          description: 'Short writing to start the period.',
-          instructions: {
-            create: {
-              title: 'Write',
-              prompt: 'Write freely about the prompt for ten minutes.',
-              position: 1,
-              showChatButton: true,
-            },
-          },
-        },
-      },
-    },
     select: { id: true, kind: true },
   });
+  const classStarter =
+    existingClassStarter ??
+    (await prisma.assignmentType.create({
+      data: {
+        kind: CLASS_STARTER_KIND,
+        title: 'Class Starter',
+        description:
+          'Open-ended writing to begin class. Graded on engagement: did the student write, and did they reflect.',
+        position: 51,
+      },
+      select: { id: true, kind: true },
+    }));
   await ensureAssignmentModules(prisma, classStarter.id, {
     title: CLASS_STARTER_MODULE.title,
     position: CLASS_STARTER_MODULE.position,
