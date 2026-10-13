@@ -51,6 +51,10 @@ export default function TesterFeedbackPage() {
           </a>
         </Button>
       </div>
+      <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+        Tester feedback review has moved to Yawp Internal. This platform page is
+        kept temporarily for old links.
+      </div>
       <Form method="get" className="flex flex-wrap items-end gap-3">
         {(['environment', 'userId', 'since', 'until'] as const).map((name) => (
           <label key={name} className="grid gap-1 text-sm">

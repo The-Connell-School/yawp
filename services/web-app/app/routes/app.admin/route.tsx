@@ -22,7 +22,7 @@ import { requireAdmin } from '~/utils/auth.server';
 import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
 
 export const adminTabs = [
-  { label: 'Tester feedback', to: '/app/tester/feedback', icon: <MessageSquare size={16} className="opacity-75 mr-1" /> },
+  { label: 'Tester feedback (moved)', to: '/app/tester/feedback', icon: <MessageSquare size={16} className="opacity-75 mr-1" /> },
   {
     label: 'General',
     to: '/app/admin/general',
