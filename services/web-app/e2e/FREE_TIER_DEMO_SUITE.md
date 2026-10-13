@@ -18,6 +18,15 @@ FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shot
 bun run test:e2e:free-tier-demo
 ```
 
+For the clean rerun task `qa-suite-open-pr-clean-rerun`, use:
+
+```bash
+cd services/web-app
+PLAYWRIGHT_BROWSERS_PATH=/home/bryant/.cache/ms-playwright \
+FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-open-pr-clean-rerun \
+bun run test:e2e:free-tier-demo
+```
+
 The command resolves the free-tier specs present in the checkout, writes a `suite-manifest.txt` under the screenshot directory, prepares the deterministic E2E database, and then runs the specs through `playwright.free-tier-demo.config.ts` with `--project=chromium`. The dedicated config uses its own app port and does not reuse an existing local app server.
 
 The runner honors `PW_EXECUTABLE_PATH` when set. Otherwise it scans `PLAYWRIGHT_BROWSERS_PATH` for cached Chromium/Chrome executables, prefers the newest full Chrome cache entry such as `chromium-1248/chrome-linux64/chrome`, and passes that path to Playwright. This lets the lane run even when Playwright's default headless-shell revision is missing. If no executable is available, the runner exits before database prep with the path to check and the install/env override to use.
