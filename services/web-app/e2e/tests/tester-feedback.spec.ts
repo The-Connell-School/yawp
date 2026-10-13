@@ -82,10 +82,6 @@ test.describe.serial('Tester feedback', () => {
     });
     let feedbackId: string | undefined;
     try {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { isAdmin: true },
-      });
       const entry = await prisma.testerFeedback.create({
         data: {
           userId: user.id,
@@ -99,7 +95,7 @@ test.describe.serial('Tester feedback', () => {
         },
       });
       feedbackId = entry.id;
-      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await signIn(e2eContext.adminEmail, 'admin-e2e-password');
       await page.goto(
         `/app/tester/feedback?userId=${user.id}&environment=test`
       );
@@ -116,10 +112,6 @@ test.describe.serial('Tester feedback', () => {
     } finally {
       if (feedbackId)
         await prisma.testerFeedback.delete({ where: { id: feedbackId } });
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { isAdmin: user.isAdmin },
-      });
       await prisma.$disconnect();
     }
   });
