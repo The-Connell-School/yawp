@@ -73,6 +73,15 @@ DEMO_FREE_TIER_JOIN_TOKEN
 DEMO_FREE_TIER_STUDENT_JOIN_TOKEN
 ```
 
+The hosted student sign-in duplicate-handle check mutates demo by creating a student account from two disposable join tokens. It stays skipped unless these focused fixture inputs are present and the explicit mutation opt-in is set:
+
+```bash
+QA_DEMO_BASE_URL
+QA_DEMO_STUDENT_JOIN_TOKEN_ONE
+QA_DEMO_STUDENT_JOIN_TOKEN_TWO
+QA_DEMO_STUDENT_SIGNIN_ALLOW_MUTATION=true
+```
+
 ## Filing Failures
 
 If this suite finds a regression, append the lane failure note and attempt to file the fixes backlog item with:

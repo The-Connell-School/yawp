@@ -263,18 +263,28 @@ test.describe('Free-tier student handle sign-in', () => {
       'QA_DEMO_STUDENT_JOIN_TOKEN_ONE',
       'QA_DEMO_STUDENT_JOIN_TOKEN_TWO',
     ] as const;
+    const mutationOptIn = 'QA_DEMO_STUDENT_SIGNIN_ALLOW_MUTATION';
     const missing = required.filter((key) => !process.env[key]?.trim());
+    const allowMutation = process.env[mutationOptIn] === 'true';
     await mkdir(SCREENSHOT_DIR, { recursive: true });
-    if (missing.length) {
+    if (missing.length || !allowMutation) {
       await writeFile(
-        join(SCREENSHOT_DIR, 'hosted-demo-skip.txt'),
+        join(SCREENSHOT_DIR, 'student-signin-hosted-demo-skip.txt'),
         [
           'Hosted demo run skipped.',
-          `Missing disposable demo fixture env: ${missing.join(', ')}`,
-          'Required env: QA_DEMO_BASE_URL, QA_DEMO_STUDENT_JOIN_TOKEN_ONE, QA_DEMO_STUDENT_JOIN_TOKEN_TWO.',
+          missing.length
+            ? `Missing disposable demo fixture env: ${missing.join(', ')}`
+            : 'Disposable demo fixture env is present.',
+          !allowMutation
+            ? `Missing explicit mutation opt-in: ${mutationOptIn}=true`
+            : 'Mutation opt-in is present.',
+          `Required env: QA_DEMO_BASE_URL, QA_DEMO_STUDENT_JOIN_TOKEN_ONE, QA_DEMO_STUDENT_JOIN_TOKEN_TWO, ${mutationOptIn}=true.`,
         ].join('\n')
       );
-      test.skip(true, 'Hosted demo disposable fixture env is not configured.');
+      test.skip(
+        true,
+        'Hosted demo disposable fixture env and mutation opt-in are not configured.'
+      );
     }
 
     const baseUrl = process.env.QA_DEMO_BASE_URL!.replace(/\/+$/, '');
