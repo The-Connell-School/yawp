@@ -16,7 +16,7 @@ describe('legacy tester feedback admin API', () => {
     const response = await loader(
       loaderArgs(
         'https://demo.example/api/admin/tester-feedback?environment=demo'
-      )
+      ) as never
     );
 
     expect(response.status).toBe(410);
@@ -30,7 +30,7 @@ describe('legacy tester feedback admin API', () => {
 
   test('is deprecated and does not export CSV', async () => {
     const response = await loader(
-      loaderArgs('https://demo.example/api/admin/tester-feedback?format=csv')
+      loaderArgs('https://demo.example/api/admin/tester-feedback?format=csv') as never
     );
 
     expect(response.status).toBe(410);
