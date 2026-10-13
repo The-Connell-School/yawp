@@ -8,6 +8,15 @@ const createdOrgIds: string[] = [];
 
 afterAll(async () => {
   try {
+    await prisma.class.deleteMany({
+      where: { school: { organizationId: { in: createdOrgIds } } },
+    });
+    await prisma.school.deleteMany({
+      where: { organizationId: { in: createdOrgIds } },
+    });
+    await prisma.orgMembership.deleteMany({
+      where: { organizationId: { in: createdOrgIds } },
+    });
     await prisma.organization.deleteMany({ where: { id: { in: createdOrgIds } } });
     await prisma.$disconnect();
   } catch {

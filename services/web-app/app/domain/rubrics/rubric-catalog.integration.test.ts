@@ -97,7 +97,16 @@ run('editing an already-versioned rubric leaves pinned assignments and every old
   expect((await db.assignment.findUniqueOrThrow({ where: { id: existing.id } })).rubricRevisionId).toBe(v1.revision.id);
   const afterRows = await db.rubricRevision.findMany({ where: { rubricName: name }, orderBy: { version: 'asc' } });
   expect(afterRows.slice(0, snapshot.length)).toEqual(snapshot);
-  await expect((async () => db.rubricRevision.update({ where: { id: v1.revision.id }, data: { reason: 'tamper' } }))()).rejects.toBeTruthy();
+  await expect(
+    (async () =>
+      db.rubricRevision.update({
+        where: { id: v1.revision.id },
+        data: { reason: 'tamper' },
+      }))()
+  ).rejects.toBeTruthy();
+  await expect(
+    (async () => db.rubricRevision.delete({ where: { id: v1.revision.id } }))()
+  ).rejects.toBeTruthy();
   cleanup.push(() => db.assignment.deleteMany({ where: { assignmentTypeId: type.id } }));
 });
 
@@ -380,7 +389,10 @@ run('creates a new library rubric when expectedFingerprint is the empty-string s
   ).rejects.toMatchObject({ statusCode: 409 });
 
   cleanup.push(async () => {
-    await db.rubricRevision.deleteMany({ where: { rubricName: name } });
+    await db.rubric.updateMany({
+      where: { id: row.id },
+      data: { currentRevisionId: null },
+    });
     await db.rubric.delete({ where: { id: row.id } });
   });
 });
@@ -445,7 +457,6 @@ run('stages a new library rubric when expectedFingerprint is the empty-string se
 
   cleanup.push(async () => {
     await db.rubricRelease.deleteMany({ where: { catalogKey: name } });
-    await db.rubricRevision.deleteMany({ where: { rubricName: name } });
     await db.rubric.delete({ where: { id: row.id } });
   });
 });
