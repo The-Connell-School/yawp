@@ -21,6 +21,12 @@ const entry: FeedbackEntry = {
   environment: 'demo',
   createdAt: new Date('2026-10-12T00:00:00Z'),
 };
+const hmacAuth = {
+  mode: 'hmac' as const,
+  keyId: 'feedback-test',
+  actorEmail: 'reviewer@yawp.school',
+  scopes: ['management:read'] as const,
+};
 function setup(overrides: Partial<FeedbackDependencies> = {}) {
   const saved: unknown[] = [];
   let reads = 0;
@@ -287,14 +293,8 @@ describe('feedback reads and CSV', () => {
   });
   test('signed internal list and export audit rows record the operator after reading entries', async () => {
     const audit = mock(async () => {});
-    const auth = {
-      mode: 'hmac' as const,
-      keyId: 'feedback-test',
-      actorEmail: 'reviewer@yawp.school',
-      scopes: ['management:read'] as const,
-    };
     const { deps } = setup({
-      authenticateInternal: async () => auth,
+      authenticateInternal: async () => hmacAuth,
       auditInternalRead: audit,
     });
     const list = await readTesterFeedback(
@@ -308,7 +308,7 @@ describe('feedback reads and CSV', () => {
     expect(audit).toHaveBeenCalledWith(
       expect.objectContaining({
         actorEmail: 'reviewer@yawp.school',
-        keyId: 'feedback-test',
+        keyId: hmacAuth.keyId,
         endpoint: 'GET /api/internal/v1/tester-feedback',
         result: 'list.success',
         requestHash: expect.any(String),
@@ -327,12 +327,36 @@ describe('feedback reads and CSV', () => {
     expect(audit).toHaveBeenCalledWith(
       expect.objectContaining({
         actorEmail: 'reviewer@yawp.school',
-        keyId: 'feedback-test',
+        keyId: hmacAuth.keyId,
         endpoint: 'GET /api/internal/v1/tester-feedback',
         result: 'export.success',
         requestHash: expect.any(String),
       })
     );
+  });
+  test('legacy bearer internal reads cannot list or export feedback', async () => {
+    const audit = mock(async () => {});
+    const auth = {
+      mode: 'legacy' as const,
+      keyId: 'legacy',
+      actorEmail: 'legacy@yawp.internal',
+      scopes: ['management:read'] as const,
+    };
+    const { deps, reads } = setup({
+      authenticateInternal: async () => auth,
+      auditInternalRead: audit,
+    });
+
+    for (const url of [
+      'https://demo.example/api/internal/v1/tester-feedback',
+      'https://demo.example/api/internal/v1/tester-feedback?format=csv',
+    ]) {
+      expect(
+        (await readTesterFeedback(new Request(url), deps, 'internal')).status
+      ).toBe(401);
+    }
+    expect(reads()).toBe(0);
+    expect(audit).not.toHaveBeenCalled();
   });
   test('denied and invalid signed internal reads do not read rows or audit', async () => {
     const audit = mock(async () => {});
@@ -379,6 +403,7 @@ describe('feedback reads and CSV', () => {
     const { deps } = setup({
       enabled: () => false,
       getUser: async () => ({ id: 'admin', isTester: false, isAdmin: true }),
+      authenticateInternal: async () => hmacAuth,
       list: async (input) => {
         seen.push(input);
         return [entry];
@@ -428,7 +453,10 @@ describe('feedback reads and CSV', () => {
     ).toBe(400);
   });
   test('CSV refuses an oversized export instead of silently truncating', async () => {
-    const { deps } = setup({ list: async () => Array(10001).fill(entry) });
+    const { deps } = setup({
+      authenticateInternal: async () => hmacAuth,
+      list: async () => Array(10001).fill(entry),
+    });
     expect(
       (
         await readTesterFeedback(
