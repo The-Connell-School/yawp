@@ -14,6 +14,8 @@ import { pickClassArtKeyForOrganization } from '~/utils/class-art-assignment.ser
 import {
   acquisitionChannel,
   captureFreeTierAnalyticsEvent,
+  freeTierApplicationDistinctId,
+  freeTierOrganizationDistinctId,
   FREE_TIER_ANALYTICS_EVENTS,
 } from './posthog-analytics.server';
 
@@ -244,7 +246,8 @@ export async function provisionFreeClassroom(
     if (application?.organizationId) {
       captureFreeTierAnalyticsEvent({
         event: FREE_TIER_ANALYTICS_EVENTS.activation,
-        distinctId: `free-tier-application:${application.id}`,
+        distinctId: freeTierOrganizationDistinctId(application.organizationId),
+        aliases: [freeTierApplicationDistinctId(application.id)],
         properties: {
           application_id: application.id,
           application_status: application.status,

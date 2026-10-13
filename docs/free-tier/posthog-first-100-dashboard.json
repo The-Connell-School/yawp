@@ -3,7 +3,7 @@
   "description": "Tracks free-tier movement from event-link or QR scan through signup/application, activation, student join, and first essay. Import into the existing YAWP PostHog project; do not create a second project.",
   "filters": {
     "environment": ["demo", "production", "preview"],
-    "acquisition_channel": ["event_link", "organic", "student_join_link", "free_classroom"],
+    "acquisition_channel": ["event_link", "organic", "student_join_link"],
     "preview_slug": "optional"
   },
   "events": [
@@ -30,6 +30,9 @@
       "event": "free_tier.signup",
       "step": "Signup/application",
       "distinct_id": "free-tier-application:{application_id}",
+      "aliases": [
+        "free-tier-token:{acquisition_token_id}:{dedupe_cookie_hash} when a redemption request includes the scan cookie"
+      ],
       "required_properties": [
         "environment",
         "product_area",
@@ -51,7 +54,10 @@
     {
       "event": "free_tier.activation",
       "step": "Teacher activation",
-      "distinct_id": "free-tier-application:{application_id}",
+      "distinct_id": "free-tier-organization:{organization_id}",
+      "aliases": [
+        "free-tier-application:{application_id}"
+      ],
       "required_properties": [
         "environment",
         "product_area",
@@ -75,7 +81,7 @@
     {
       "event": "free_tier.student_join",
       "step": "Student join",
-      "distinct_id": "free-tier-student:{student_user_id}",
+      "distinct_id": "free-tier-organization:{organization_id}",
       "required_properties": [
         "environment",
         "product_area",
@@ -105,7 +111,14 @@
       ],
       "optional_properties": [
         "preview_slug",
-        "class_id"
+        "class_id",
+        "application_id",
+        "acquisition_token_id",
+        "token_label",
+        "source_name",
+        "event_location",
+        "event_date",
+        "bypass_waitlist"
       ]
     }
   ],

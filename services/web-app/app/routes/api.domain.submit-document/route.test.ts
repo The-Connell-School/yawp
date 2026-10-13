@@ -11,6 +11,10 @@ const prisma = {
   },
   submission: {
     create: mock(),
+    count: mock(),
+  },
+  freeTierApplication: {
+    findFirst: mock(),
   },
   documentWriteJournal: {
     create: mock(),
@@ -22,11 +26,27 @@ const prisma = {
 
 const requireUserId = mock();
 const requireMembership = mock();
+const captureFreeTierAnalyticsEvent = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
   requireMembership,
+}));
+mock.module('~/domain/free-tier/posthog-analytics.server', () => ({
+  acquisitionChannel: (input: {
+    acquisitionTokenId?: string | null;
+    sourceName?: string | null;
+  }) =>
+    input.acquisitionTokenId || input.sourceName?.trim()
+      ? 'event_link'
+      : 'organic',
+  captureFreeTierAnalyticsEvent,
+  freeTierOrganizationDistinctId: (organizationId: string) =>
+    `free-tier-organization:${organizationId}`,
+  FREE_TIER_ANALYTICS_EVENTS: {
+    firstEssay: 'free_tier.first_essay',
+  },
 }));
 mock.module('~/utils/toast.server', () => ({
   redirectWithToast: (to: string, payload: unknown) =>
@@ -45,12 +65,15 @@ describe('api.domain.submit-document', () => {
     prisma.document.updateMany.mockReset();
     prisma.document.findUniqueOrThrow.mockReset();
     prisma.submission.create.mockReset();
+    prisma.submission.count.mockReset();
+    prisma.freeTierApplication.findFirst.mockReset();
     prisma.documentWriteJournal.create.mockReset();
     prisma.documentWriteJournal.update.mockReset();
     prisma.submissionActivity.create.mockReset();
     prisma.$transaction.mockReset();
     requireUserId.mockReset();
     requireMembership.mockReset();
+    captureFreeTierAnalyticsEvent.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -74,6 +97,8 @@ describe('api.domain.submit-document', () => {
       updatedAt: new Date('2026-08-20T11:59:00.000Z'),
       classAssignment: null,
       membership: {
+        organizationId: 'org-1',
+        organization: { plan: 'SCHOOL' },
         classesAsStudent: [
           {
             id: 'class-1',
@@ -99,10 +124,13 @@ describe('api.domain.submit-document', () => {
       title: 'Essay',
       submittedAt: new Date('2026-08-20T12:00:00.000Z'),
     });
+    prisma.submission.count.mockResolvedValue(2);
+    prisma.freeTierApplication.findFirst.mockResolvedValue(null);
     prisma.$transaction.mockImplementation(async (callback: any) => {
       const tx = {
         user: prisma.user,
         submission: prisma.submission,
+        freeTierApplication: prisma.freeTierApplication,
         document: prisma.document,
         documentWriteJournal: prisma.documentWriteJournal,
         submissionActivity: prisma.submissionActivity,
@@ -340,6 +368,73 @@ describe('api.domain.submit-document', () => {
     expect(prisma.document.updateMany.mock.calls[0]?.[0].where).toMatchObject({
       revision: 4,
       updatedAt: new Date('2026-08-20T11:59:00.000Z'),
+    });
+  });
+
+  test('records first free classroom essay with application acquisition properties', async () => {
+    prisma.document.findFirst.mockResolvedValue({
+      id: 'doc-1',
+      html: '<p>Draft</p>',
+      text: 'Draft',
+      title: 'Essay',
+      submissions: [],
+      revision: 4,
+      updatedAt: new Date('2026-08-20T11:59:00.000Z'),
+      classAssignment: {
+        class: {
+          id: 'class-1',
+          schoolId: 'school-1',
+          school: { organizationId: 'org-free' },
+          teachers: [{ id: 'teacher-1' }],
+        },
+      },
+      membership: {
+        organizationId: 'org-free',
+        organization: { plan: 'FREE_CLASSROOM' },
+        classesAsStudent: [],
+      },
+    });
+    prisma.submission.count.mockResolvedValue(1);
+    prisma.freeTierApplication.findFirst.mockResolvedValue({
+      id: 'app-1',
+      acquisitionTokenId: 'tok-1',
+      acquisitionToken: {
+        label: 'NCTE QR',
+        sourceName: 'NCTE booth',
+        eventLocation: 'Denver',
+        eventDate: new Date('2026-10-01T00:00:00.000Z'),
+        bypassWaitlist: true,
+      },
+    });
+    const form = new FormData();
+    form.append('documentId', 'doc-1');
+
+    await action({
+      request: new Request('https://example.com/api/domain/submit-document', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect(captureFreeTierAnalyticsEvent).toHaveBeenCalledWith({
+      event: 'free_tier.first_essay',
+      distinctId: 'free-tier-organization:org-free',
+      properties: expect.objectContaining({
+        application_id: 'app-1',
+        organization_id: 'org-free',
+        submission_id: 'sub-1',
+        document_id: 'doc-1',
+        class_id: 'class-1',
+        is_first_essay: true,
+        submission_count: 1,
+        acquisition_token_id: 'tok-1',
+        acquisition_channel: 'event_link',
+        token_label: 'NCTE QR',
+        source_name: 'NCTE booth',
+        event_location: 'Denver',
+        event_date: '2026-10-01T00:00:00.000Z',
+        bypass_waitlist: true,
+      }),
     });
   });
 });

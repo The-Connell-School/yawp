@@ -24,6 +24,21 @@ type FreeTierAnalyticsProperties = Record<
   string | number | boolean | null | undefined
 >;
 
+export function freeTierScanDistinctId(input: {
+  acquisitionTokenId: string;
+  dedupeCookieHash: string;
+}) {
+  return `free-tier-token:${input.acquisitionTokenId}:${input.dedupeCookieHash}`;
+}
+
+export function freeTierApplicationDistinctId(applicationId: string) {
+  return `free-tier-application:${applicationId}`;
+}
+
+export function freeTierOrganizationDistinctId(organizationId: string) {
+  return `free-tier-organization:${organizationId}`;
+}
+
 export function freeTierAnalyticsEnvironment(): FreeTierEnvironment {
   const explicit = process.env.YAWP_ENVIRONMENT?.trim().toLowerCase();
   if (
@@ -69,11 +84,17 @@ export function acquisitionChannel(input: {
 export function captureFreeTierAnalyticsEvent(args: {
   event: FreeTierAnalyticsEventName;
   distinctId: string;
+  aliases?: string[];
   properties?: FreeTierAnalyticsProperties;
 }) {
   if (!posthog) return;
 
   try {
+    for (const alias of args.aliases ?? []) {
+      if (alias && alias !== args.distinctId) {
+        posthog.alias({ distinctId: args.distinctId, alias });
+      }
+    }
     posthog.capture({
       distinctId: args.distinctId,
       event: args.event,

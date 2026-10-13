@@ -18,8 +18,17 @@ All server-side events include `product_area=free_tier`, `environment`, and `pre
 
 - `event_link`: QR/event-link token traffic.
 - `organic`: free-tier waitlist traffic without an acquisition token.
-- `student_join_link`: student join-link activation.
-- `free_classroom`: first essay from a free classroom organization.
+
+## Funnel Identity
+
+PostHog person identity is chained as the teacher moves through the funnel:
+
+- Scan uses `free-tier-token:{acquisition_token_id}:{dedupe_cookie_hash}`.
+- Event-link signup uses `free-tier-application:{application_id}` and aliases the scan actor when the scan cookie is present.
+- Activation uses `free-tier-organization:{organization_id}` and aliases the application actor.
+- Student join and first essay also use `free-tier-organization:{organization_id}`.
+
+That gives the dashboard a connected actor path from scan -> signup/application -> activation/join -> first essay without adding secrets or changing storage. First-essay events also copy acquisition token, source, label, event, and bypass properties from the linked free-tier application so event-link / QR acquisition remains distinguishable from organic traffic.
 
 ## Suggested PostHog Setup
 

@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const capture = mock();
+const alias = mock();
 
 mock.module('~/services/posthog.server', () => ({
-  posthog: { capture },
+  posthog: { alias, capture },
 }));
 
 const originalEnv = {
@@ -18,12 +19,16 @@ const originalEnv = {
 const {
   acquisitionChannel,
   captureFreeTierAnalyticsEvent,
+  freeTierApplicationDistinctId,
   freeTierAnalyticsEnvironment,
+  freeTierOrganizationDistinctId,
+  freeTierScanDistinctId,
   FREE_TIER_ANALYTICS_EVENTS,
 } = await import('./posthog-analytics.server');
 
 describe('free-tier PostHog analytics', () => {
   beforeEach(() => {
+    alias.mockReset();
     capture.mockReset();
     delete process.env.APP_ENV;
     delete process.env.DEPLOY;
@@ -74,6 +79,41 @@ describe('free-tier PostHog analytics', () => {
         acquisition_channel: 'event_link',
       },
     });
+  });
+
+  test('aliases scan and application actors onto the organization funnel actor', () => {
+    const scanId = freeTierScanDistinctId({
+      acquisitionTokenId: 'tok-1',
+      dedupeCookieHash: 'cookie-hash',
+    });
+    const applicationId = freeTierApplicationDistinctId('app-1');
+    const organizationId = freeTierOrganizationDistinctId('org-1');
+
+    captureFreeTierAnalyticsEvent({
+      event: FREE_TIER_ANALYTICS_EVENTS.signup,
+      distinctId: applicationId,
+      aliases: [scanId],
+      properties: { application_id: 'app-1' },
+    });
+    captureFreeTierAnalyticsEvent({
+      event: FREE_TIER_ANALYTICS_EVENTS.activation,
+      distinctId: organizationId,
+      aliases: [applicationId],
+      properties: { application_id: 'app-1', organization_id: 'org-1' },
+    });
+
+    expect(alias).toHaveBeenNthCalledWith(1, {
+      distinctId: applicationId,
+      alias: scanId,
+    });
+    expect(alias).toHaveBeenNthCalledWith(2, {
+      distinctId: organizationId,
+      alias: applicationId,
+    });
+    expect(capture.mock.calls.map((call) => call[0].distinctId)).toEqual([
+      applicationId,
+      organizationId,
+    ]);
   });
 
   test('detects demo, production, and preview environments for dashboard filters', () => {

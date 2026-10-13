@@ -15,7 +15,9 @@ import {
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
 import {
+  acquisitionChannel,
   captureFreeTierAnalyticsEvent,
+  freeTierOrganizationDistinctId,
   FREE_TIER_ANALYTICS_EVENTS,
 } from '~/domain/free-tier/posthog-analytics.server';
 
@@ -224,10 +226,28 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
         },
       });
       if (submissionCount === 1) {
+        const application = await prisma.freeTierApplication.findFirst({
+          where: { organizationId: documentOrganizationId },
+          orderBy: { updatedAt: 'desc' },
+          select: {
+            id: true,
+            acquisitionTokenId: true,
+            acquisitionToken: {
+              select: {
+                label: true,
+                sourceName: true,
+                eventLocation: true,
+                eventDate: true,
+                bypassWaitlist: true,
+              },
+            },
+          },
+        });
         captureFreeTierAnalyticsEvent({
           event: FREE_TIER_ANALYTICS_EVENTS.firstEssay,
-          distinctId: `free-tier-organization:${documentOrganizationId}`,
+          distinctId: freeTierOrganizationDistinctId(documentOrganizationId),
           properties: {
+            application_id: application?.id ?? null,
             organization_id: documentOrganizationId,
             submission_id: createdSubmission.id,
             document_id: document.id,
@@ -237,7 +257,19 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
               null,
             is_first_essay: true,
             submission_count: submissionCount,
-            acquisition_channel: 'free_classroom',
+            acquisition_token_id: application?.acquisitionTokenId ?? null,
+            acquisition_channel: acquisitionChannel({
+              acquisitionTokenId: application?.acquisitionTokenId,
+              sourceName: application?.acquisitionToken?.sourceName,
+            }),
+            token_label: application?.acquisitionToken?.label ?? null,
+            source_name: application?.acquisitionToken?.sourceName ?? null,
+            event_location:
+              application?.acquisitionToken?.eventLocation ?? null,
+            event_date:
+              application?.acquisitionToken?.eventDate?.toISOString() ?? null,
+            bypass_waitlist:
+              application?.acquisitionToken?.bypassWaitlist ?? null,
           },
         });
       }

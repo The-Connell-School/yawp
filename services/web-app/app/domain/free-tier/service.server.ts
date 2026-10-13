@@ -16,6 +16,8 @@ import {
 import {
   acquisitionChannel,
   captureFreeTierAnalyticsEvent,
+  freeTierApplicationDistinctId,
+  freeTierScanDistinctId,
   FREE_TIER_ANALYTICS_EVENTS,
 } from './posthog-analytics.server';
 
@@ -153,7 +155,10 @@ export async function recordAcquisitionTokenScan(input: {
     ]);
     captureFreeTierAnalyticsEvent({
       event: FREE_TIER_ANALYTICS_EVENTS.scan,
-      distinctId: `free-tier-token:${input.tokenId}:${dedupeCookieHash}`,
+      distinctId: freeTierScanDistinctId({
+        acquisitionTokenId: input.tokenId,
+        dedupeCookieHash,
+      }),
       properties: {
         acquisition_token_id: input.tokenId,
         acquisition_channel: 'event_link',
@@ -199,7 +204,7 @@ export async function submitWaitlist(input: WaitlistInput) {
   if (application) {
     captureFreeTierAnalyticsEvent({
       event: FREE_TIER_ANALYTICS_EVENTS.signup,
-      distinctId: `free-tier-application:${application.id}`,
+      distinctId: freeTierApplicationDistinctId(application.id),
       properties: {
         application_id: application.id,
         application_status: application.status,
@@ -437,7 +442,10 @@ export const redeemInputSchema = waitlistInputSchema
   .strict();
 export type RedeemInput = z.infer<typeof redeemInputSchema>;
 
-export async function redeemToken(input: RedeemInput) {
+export async function redeemToken(
+  input: RedeemInput,
+  options?: { scanDedupeCookie?: string | null }
+) {
   const parsed = redeemInputSchema.parse(input);
   const email = normalizeEmail(parsed.email);
 
@@ -556,9 +564,16 @@ export async function redeemToken(input: RedeemInput) {
   });
 
   if (result.ok && result.applicationId) {
+    const scanAlias = options?.scanDedupeCookie
+      ? freeTierScanDistinctId({
+          acquisitionTokenId: result.acquisitionToken.id,
+          dedupeCookieHash: hashScanDedupeCookie(options.scanDedupeCookie),
+        })
+      : null;
     captureFreeTierAnalyticsEvent({
       event: FREE_TIER_ANALYTICS_EVENTS.signup,
-      distinctId: `free-tier-application:${result.applicationId}`,
+      distinctId: freeTierApplicationDistinctId(result.applicationId),
+      aliases: scanAlias ? [scanAlias] : undefined,
       properties: {
         application_id: result.applicationId,
         application_status: result.applicationStatus,

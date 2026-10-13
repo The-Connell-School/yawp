@@ -23,6 +23,7 @@ import { evaluateTeacherResetHandleStudentEligibility } from './teacher-reset-ha
 import { generateStudentJoinToken } from '~/utils/student-join-token';
 import {
   captureFreeTierAnalyticsEvent,
+  freeTierOrganizationDistinctId,
   FREE_TIER_ANALYTICS_EVENTS,
 } from './posthog-analytics.server';
 
@@ -212,7 +213,7 @@ export async function registerFreeTierStudent({
 
     captureFreeTierAnalyticsEvent({
       event: FREE_TIER_ANALYTICS_EVENTS.studentJoin,
-      distinctId: `free-tier-student:${membership.userId}`,
+      distinctId: freeTierOrganizationDistinctId(klass.school.organizationId),
       properties: {
         student_user_id: membership.userId,
         membership_id: membership.id,
