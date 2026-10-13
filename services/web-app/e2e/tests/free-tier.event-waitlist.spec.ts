@@ -13,11 +13,13 @@ import type { Page } from '@playwright/test';
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { setFreeTierFlag } from '../feature-flags';
-import { mintFreeTierLinkForE2E } from '../helpers/mint-free-tier-link';
+import { waitForFreeTierEmailPayload } from '../helpers/free-tier-email';
 
 const OUT =
   process.env.QA_SCREENSHOT_DIR?.trim() ||
   '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-event-waitlist';
+const E2E_MANAGEMENT_SERVICE_KEY =
+  'e2e-free-tier-release-management-key-000000000000';
 
 async function shot(page: Page, name: string) {
   await mkdir(OUT, { recursive: true });
@@ -31,6 +33,13 @@ async function note(name: string, body: string) {
 
 function hashToken(token: string) {
   return createHash('sha256').update(token).digest('hex');
+}
+
+function releaseTokenFromJoinUrl(joinUrl: string) {
+  const parsed = new URL(joinUrl);
+  const token = parsed.searchParams.get('t');
+  if (!token) throw new Error(`Release join URL is missing t=: ${joinUrl}`);
+  return token;
 }
 
 test.describe('Free-tier event waitlist QA', () => {
@@ -153,15 +162,27 @@ test.describe('Free-tier event waitlist QA', () => {
           `applicationId: ${app.id}`,
           `email: ${email}`,
           'status before release: LEAD',
-          'release path: no-email local LEAD -> INVITED transition plus signed join link mint',
+          'release path: platform internal release endpoint with captured local email log',
         ].join('\n')
       );
 
-      const released = await prisma.freeTierApplication.updateMany({
-        where: { id: app.id, status: 'LEAD' },
-        data: { status: 'INVITED', releasedAt: new Date() },
+      const releaseResponse = await request.post('/api/internal/v1/free-tier/release', {
+        headers: {
+          authorization: `Bearer ${E2E_MANAGEMENT_SERVICE_KEY}`,
+          'content-type': 'application/json',
+        },
+        data: { applicationIds: [app.id] },
       });
-      expect(released.count).toBe(1);
+      expect(releaseResponse.status()).toBe(200);
+      await expect(async () => {
+        const body = await releaseResponse.json();
+        expect(body).toMatchObject({
+          released: 1,
+          refused: 0,
+          skipped: 0,
+          emailFailureCount: 0,
+        });
+      }).toPass();
 
       const invited = await prisma.freeTierApplication.findUniqueOrThrow({
         where: { id: app.id },
@@ -170,12 +191,13 @@ test.describe('Free-tier event waitlist QA', () => {
       expect(invited.status).toBe('INVITED');
       expect(invited.releasedAt).toBeTruthy();
 
-      const release = await mintFreeTierLinkForE2E(prisma, {
+      const releasePayload = await waitForFreeTierEmailPayload(prisma, {
         applicationId: app.id,
-        purpose: 'RELEASE',
+        kind: 'release',
       });
+      const releaseToken = releaseTokenFromJoinUrl(releasePayload.joinUrl);
 
-      await page.goto(`/free/join?t=${encodeURIComponent(release.token)}`);
+      await page.goto(`/free/join?t=${encodeURIComponent(releaseToken)}`);
       await expect(page.getByRole('heading', { name: 'Before we begin' })).toBeVisible();
       await shot(page, '04-release-youre-in-join-form.png');
 
@@ -229,11 +251,11 @@ test.describe('Free-tier event waitlist QA', () => {
     }
   });
 
-  test('hosted demo run documents missing access cleanly', async () => {
+  test('hosted demo run documents unavailable hosted assertions cleanly', async () => {
     const required = [
       'DEMO_FREE_TIER_BASE_URL',
       'DEMO_FREE_TIER_WAITLIST_EVENT_TOKEN',
-      'DEMO_FREE_TIER_RELEASE_JOIN_TOKEN',
+      'DEMO_FREE_TIER_RELEASE_OPERATOR_ACCESS',
     ];
     const missing = required.filter((key) => !process.env[key]?.trim());
     if (missing.length) {
@@ -243,10 +265,22 @@ test.describe('Free-tier event waitlist QA', () => {
           'Hosted demo qa-event-waitlist run skipped.',
           `Missing env/access: ${missing.join(', ')}`,
           '',
-          'Local faithful demo stand-in covers event scan, waitlist submission, waitlist evidence, no-email release, release join, account creation, and sign-in.',
+          'Local faithful demo stand-in covers event scan, waitlist submission, waitlist evidence, release endpoint behavior, captured release email payload, release join, account creation, and sign-in.',
         ].join('\n')
       );
       test.skip(true, `Hosted demo access missing: ${missing.join(', ')}`);
     }
+    await note(
+      'hosted-demo-skip.txt',
+      [
+        'Hosted demo qa-event-waitlist run skipped.',
+        'Hosted demo scan/submission/release/join assertions are not implemented in this PR.',
+        'Required hosted operator access was present, but this QA suite avoids mutating hosted demo until the runner has a dedicated disposable event/application fixture contract.',
+      ].join('\n')
+    );
+    test.skip(
+      true,
+      'Hosted demo assertions are documented as unavailable until disposable hosted fixtures exist.'
+    );
   });
 });
