@@ -101,6 +101,48 @@ describe('free-tier demo suite runner manifest', () => {
     );
   });
 
+  test('writes suite hosted-demo skip evidence when access exists but mutation opt-ins are absent', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'free-tier-demo-suite-shots-'));
+
+    await writeSuiteEvidence([], [], {
+      shotDirectory: root,
+      env: {
+        DEMO_FREE_TIER_BASE_URL: 'https://demo.example.test',
+        DEMO_FREE_TIER_EVENT_TOKEN: 'event-token',
+        DEMO_FREE_TIER_JOIN_TOKEN: 'join-token',
+        QA_DEMO_BASE_URL: 'https://demo.example.test',
+        QA_DEMO_STUDENT_JOIN_TOKEN_ONE: 'student-one',
+        QA_DEMO_STUDENT_JOIN_TOKEN_TWO: 'student-two',
+      },
+    });
+
+    const artifact = await readFile(join(root, suiteHostedDemoSkipArtifact), 'utf8');
+    expect(artifact).toContain('Hosted demo free-tier suite cases skipped.');
+    expect(artifact).toContain('Missing env/access: none');
+    expect(artifact).toContain('DEMO_FREE_TIER_REPEAT_EMAIL');
+    expect(artifact).toContain('QA_DEMO_STUDENT_JOIN_ALLOW_SUBMIT=true');
+    expect(artifact).toContain('no hosted /free?t= navigation');
+  });
+
+  test('tracks student hosted fixture env names used by the focused guard', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'free-tier-demo-suite-shots-'));
+
+    await writeSuiteEvidence([], [], {
+      shotDirectory: root,
+      env: {
+        DEMO_FREE_TIER_BASE_URL: 'https://demo.example.test',
+        DEMO_FREE_TIER_EVENT_TOKEN: 'event-token',
+        DEMO_FREE_TIER_JOIN_TOKEN: 'join-token',
+      },
+    });
+
+    const artifact = await readFile(join(root, suiteHostedDemoSkipArtifact), 'utf8');
+    expect(artifact).toContain('QA_DEMO_BASE_URL');
+    expect(artifact).toContain('QA_DEMO_STUDENT_JOIN_TOKEN_ONE');
+    expect(artifact).toContain('QA_DEMO_STUDENT_JOIN_TOKEN_TWO');
+    expect(artifact).not.toContain('DEMO_FREE_TIER_STUDENT_JOIN_TOKEN');
+  });
+
   test('keeps repeat-signup hosted guard skip-before-mutate with base URL and token only', async () => {
     const root = await mkdtemp(join(tmpdir(), 'free-tier-repeat-hosted-guard-'));
     const attemptedHostedRequests: string[] = [];

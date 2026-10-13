@@ -66,13 +66,15 @@ The manifest also records the seeded repro family inventory. `qa-approve-409` an
 
 ## Hosted Demo Skips
 
-Hosted demo checks require disposable demo access inputs. When any of these are absent, the runner writes `suite-hosted-demo-skip.txt` under the screenshot directory and still runs the local deterministic specs. Focused specs write their own named skip artifacts, such as `hosted-demo-repeat-signup-skip.txt`, so suite-level evidence does not overwrite focused evidence.
+Hosted demo checks require disposable demo access inputs and explicit mutation opt-ins. When any hosted access input or mutation opt-in is absent, the runner writes `suite-hosted-demo-skip.txt` under the screenshot directory and still runs the local deterministic specs. Focused specs write their own named skip artifacts, such as `hosted-demo-repeat-signup-skip.txt`, so suite-level evidence does not overwrite focused evidence.
 
 ```bash
 DEMO_FREE_TIER_BASE_URL
 DEMO_FREE_TIER_EVENT_TOKEN
 DEMO_FREE_TIER_JOIN_TOKEN
-DEMO_FREE_TIER_STUDENT_JOIN_TOKEN
+QA_DEMO_BASE_URL
+QA_DEMO_STUDENT_JOIN_TOKEN_ONE
+QA_DEMO_STUDENT_JOIN_TOKEN_TWO
 DEMO_FREE_TIER_REPEAT_EMAIL
 DEMO_FREE_TIER_REPEAT_ALLOW_SUBMIT=true
 QA_DEMO_STUDENT_JOIN_ALLOW_SUBMIT=true

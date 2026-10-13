@@ -131,7 +131,9 @@ const hostedDemoEnv = [
   'DEMO_FREE_TIER_BASE_URL',
   'DEMO_FREE_TIER_EVENT_TOKEN',
   'DEMO_FREE_TIER_JOIN_TOKEN',
-  'DEMO_FREE_TIER_STUDENT_JOIN_TOKEN',
+  'QA_DEMO_BASE_URL',
+  'QA_DEMO_STUDENT_JOIN_TOKEN_ONE',
+  'QA_DEMO_STUDENT_JOIN_TOKEN_TWO',
 ];
 const hostedMutationOptIns = [
   'DEMO_FREE_TIER_REPEAT_EMAIL',
@@ -284,12 +286,12 @@ export async function writeSuiteEvidence(
     if (!expectedValue) return !env[name]?.trim();
     return env[name] !== expectedValue;
   });
-  if (missingHosted.length > 0) {
+  if (missingHosted.length > 0 || missingMutationOptIns.length > 0) {
     await writeFile(
       path.join(targetShotDir, suiteHostedDemoSkipArtifact),
       [
         'Hosted demo free-tier suite cases skipped.',
-        `Missing env/access: ${missingHosted.join(', ')}`,
+        `Missing env/access: ${missingHosted.join(', ') || 'none'}`,
         `Missing disposable/mutation opt-ins: ${missingMutationOptIns.join(', ') || 'none'}`,
         '',
         'Skip-before-mutate contract: no hosted /free?t= navigation, join submission, or demo mutation was attempted by the suite guard.',
