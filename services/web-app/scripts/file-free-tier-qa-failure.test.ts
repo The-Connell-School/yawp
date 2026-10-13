@@ -111,6 +111,66 @@ describe('free-tier QA failure filing', () => {
     );
   });
 
+  test('CLI prepends under the real P0b heading when earlier prose mentions P0b', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'free-tier-qa-failure-'));
+    const failuresPath = join(dir, 'FAILURES.md');
+    const backlogPath = join(dir, 'BACKLOG.md');
+    const earlierProse =
+      'Triage note: items labeled P0b below are handled by the fixes lane after QA filing.';
+    await writeFile(failuresPath, '# Failures\n');
+    await writeFile(
+      backlogPath,
+      [
+        '# Fixes Backlog',
+        '',
+        earlierProse,
+        '',
+        '## P0a',
+        '- existing P0a',
+        '',
+        '## P0b',
+        '- existing P0b',
+        '',
+      ].join('\n')
+    );
+
+    const result = spawnSync(
+      bunExecutable,
+      [
+        join(import.meta.dir, 'file-free-tier-qa-failure.ts'),
+        '--id=ft-demo-regression',
+        '--slug=qa-regression-loop-review',
+        '--title=Demo regression evidence',
+        '--evidence=/tmp/shots/qa-regression-loop-review',
+        '--date=2026-10-13',
+      ],
+      {
+        env: {
+          ...process.env,
+          FREE_TIER_QA_FAILURES_PATH: failuresPath,
+          FREE_TIER_FIXES_BACKLOG_PATH: backlogPath,
+        },
+        encoding: 'utf8',
+      }
+    );
+
+    expect(result.status).toBe(0);
+    const backlog = await readFile(backlogPath, 'utf8');
+    expect(backlog).toContain(earlierProse);
+    expect(backlog).toContain(
+      [
+        earlierProse,
+        '',
+        '## P0a',
+        '- existing P0a',
+        '',
+        '## P0b',
+        '- [ ] todo | **ft-demo-regression** Demo regression evidence',
+        '- existing P0b',
+      ].join('\n')
+    );
+  });
+
   test('CLI skips an exact duplicate instead of appending or prepending', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'free-tier-qa-failure-'));
     const failuresPath = join(dir, 'FAILURES.md');

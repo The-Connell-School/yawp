@@ -137,15 +137,17 @@ export function buildFailureSection({
 
 async function prependBacklogItem(backlogPath: string, item: string) {
   const body = await readFile(backlogPath, 'utf8');
-  const heading = 'P0b';
-  const idx = body.indexOf(heading);
-  if (idx === -1) {
-    throw new Error(`Could not find ${heading} in ${backlogPath}`);
+  const headingLabel = '## P0b';
+  const heading = /^##\s+P0b\s*$/m;
+  const match = heading.exec(body);
+  if (!match) {
+    throw new Error(`Could not find ${headingLabel} in ${backlogPath}`);
   }
-  const lineStart = body.lastIndexOf('\n', idx);
-  const insertAt = body.indexOf('\n', idx);
-  if (insertAt === -1 || lineStart === -1) {
-    throw new Error(`Could not locate ${heading} insertion point in ${backlogPath}`);
+  const headingEnd = match.index + match[0].length;
+  const insertAt = body.indexOf('\n', headingEnd);
+  if (insertAt === -1) {
+    await writeFile(backlogPath, `${body}\n${item}\n`);
+    return;
   }
   const updated = `${body.slice(0, insertAt + 1)}${item}\n${body.slice(insertAt + 1)}`;
   await writeFile(backlogPath, updated);
