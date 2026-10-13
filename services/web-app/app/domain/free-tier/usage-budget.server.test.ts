@@ -2,8 +2,10 @@ import { describe, expect, test } from 'bun:test';
 import {
   assertFreeTierBudgetHeadroomForTransition,
   assertFreeTierBudgetHeadroom,
+  assertFreeTierSpendAllowed,
   calculateFreeTierUsage,
   FreeTierBudgetExceededError,
+  FreeTierSpendGuardDeniedError,
   freeTierBudgetRemainingActivations,
   resolveFreeTierBudgetBasis,
 } from './usage-budget.server';
@@ -83,6 +85,21 @@ describe('free-tier usage budget', () => {
     );
     expect(summary.activeApplications).toBe(1);
     expect(summary.overBudget).toBe(true);
+  });
+
+  test('denies spend-producing actions when no budget headroom remains', async () => {
+    const client = {
+      freeTierApplication: {
+        count: async () => 2,
+      },
+    };
+    await expect(
+      assertFreeTierSpendAllowed(client as any, {
+        FREE_TIER_BUDGET_ENVIRONMENT: 'preview',
+        FREE_TIER_PREVIEW_BUDGET_USD: '2',
+        FREE_TIER_PREVIEW_UNIT_COST_USD: '1',
+      })
+    ).rejects.toBeInstanceOf(FreeTierSpendGuardDeniedError);
   });
 });
 
