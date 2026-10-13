@@ -102,4 +102,3 @@ describe('free-tier usage budget', () => {
     ).rejects.toBeInstanceOf(FreeTierSpendGuardDeniedError);
   });
 });
-
