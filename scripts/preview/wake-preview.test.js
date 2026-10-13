@@ -295,6 +295,22 @@ printf 'OK\\n'
     expect(log).not.toContain('compose -p yawp-pr-100');
   });
 
+  test('at the running cap sleeps a lane preview before an older human preview', () => {
+    const root = makeRoot();
+    makePreview(root, 100, { access: 10 });
+    makePreview(root, 101, { access: 20 });
+    makePreview(root, 102, { access: 30 });
+    writeFileSync(path.join(root, 'previews', 'pr-100', 'branch'), 'human/fix-login\n');
+    writeFileSync(path.join(root, 'previews', 'pr-101', 'branch'), 'codex/preview-lru\n');
+    const docker = makeDockerStub(root, [100, 101]);
+
+    const result = run(root, 102, docker);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('WAKE_SLEPT=101');
+    expect(readFileSync(docker.state, 'utf8').trim().split('\n').sort()).toEqual(['100', '102']);
+  });
+
   test('fails closed without mutation when configuration drift is already above the running cap', () => {
     const root = makeRoot();
     makePreview(root, 100, { access: 10 });

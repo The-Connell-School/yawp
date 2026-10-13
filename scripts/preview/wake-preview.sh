@@ -6,7 +6,7 @@ set -euo pipefail
 ROOT="${PREVIEW_ROOT:-/srv/yawp-preview}"
 DOCKER="${PREVIEW_DOCKER:-docker}"
 CURL="${PREVIEW_CURL:-curl}"
-RUNNING_CAP="${PREVIEW_MAX_RUNNING:-4}"
+RUNNING_CAP="${PREVIEW_MAX_RUNNING:-8}"
 SLEEP_ENABLED="${PREVIEW_SLEEP_ENABLED:-true}"
 ALLOW_DISPLACEMENT="${PREVIEW_WAKE_ALLOW_DISPLACEMENT:-true}"
 LOCK_WAIT_SECONDS="${PREVIEW_LOCK_WAIT_SECONDS:-900}"
@@ -254,43 +254,72 @@ target_is_quarantined() {
 
 access_epoch() {
   local pr="$1"
-  local access_file="$ACCESS_DIR/pr-${pr}"
-  local value=""
-  if [[ -f "$access_file" ]]; then
-    IFS= read -r value < "$access_file" || true
-    if is_nonnegative_integer "$value"; then
-      printf '%s\n' "$value"
-      return 0
+  local value="" max=0 file
+  for file in \
+    "$ACCESS_DIR/pr-${pr}" \
+    "$ROOT/previews/pr-${pr}/last-request" \
+    "$ROOT/previews/pr-${pr}/last-deploy"
+  do
+    if [[ -f "$file" ]]; then
+      IFS= read -r value < "$file" || true
+      if is_nonnegative_integer "$value" && (( value > max )); then
+        max="$value"
+      fi
     fi
+  done
+  if (( max > 0 )); then
+    printf '%s\n' "$max"
+  else
+    marker_mtime "$ROOT/previews/pr-${pr}"
   fi
-  marker_mtime "$ROOT/previews/pr-${pr}"
 }
 
 record_access() {
   local pr="$1"
-  local temporary recorded_epoch
+  local temporary recorded_epoch preview_dir
   recorded_epoch="$(current_epoch)"
   is_nonnegative_integer "$recorded_epoch" || return 1
+  preview_dir="$ROOT/previews/pr-${pr}"
+  mkdir -p "$preview_dir"
+  temporary="$preview_dir/last-request.$$.tmp"
+  printf '%s\n' "$recorded_epoch" > "$temporary"
+  mv -f -- "$temporary" "$preview_dir/last-request"
   mkdir -p "$ACCESS_DIR"
   temporary="$ACCESS_DIR/pr-${pr}.$$.tmp"
   printf '%s\n' "$recorded_epoch" > "$temporary"
   mv -f -- "$temporary" "$ACCESS_DIR/pr-${pr}"
 }
 
+candidate_priority_class() {
+  local pr="$1"
+  local branch=""
+  if [[ -f "$ROOT/previews/pr-${pr}/branch" ]]; then
+    IFS= read -r branch < "$ROOT/previews/pr-${pr}/branch" || true
+  fi
+  case "$branch" in
+    codex/*) echo 0 ;;
+    *) echo 1 ;;
+  esac
+}
+
 sleep_lru_candidate() {
-  local candidate oldest_pr="" oldest_epoch="" epoch
+  local candidate oldest_pr="" oldest_epoch="" epoch class oldest_class=""
   while IFS= read -r candidate; do
     [[ -n "$candidate" && "$candidate" != "$PR_NUMBER" ]] || continue
     [[ -f "$ROOT/previews/pr-${candidate}/docker-compose.yml" ]] || continue
     [[ -f "$ROOT/previews/pr-${candidate}/keep-awake" ]] && continue
     epoch="$(access_epoch "$candidate")"
+    class="$(candidate_priority_class "$candidate")"
     is_nonnegative_integer "$epoch" || epoch=0
     if (( epoch > NOW_EPOCH || NOW_EPOCH - epoch < WAKE_LEASE_SECONDS )); then
       continue
     fi
-    if [[ -z "$oldest_pr" ]] || (( epoch < oldest_epoch )); then
+    if [[ -z "$oldest_pr" ]] \
+      || (( class < oldest_class )) \
+      || (( class == oldest_class && epoch < oldest_epoch )); then
       oldest_pr="$candidate"
       oldest_epoch="$epoch"
+      oldest_class="$class"
     fi
   done < <(running_env_numbers)
 
@@ -301,8 +330,10 @@ sleep_lru_candidate() {
 
   slept="$oldest_pr"
   local candidate_dir="$ROOT/previews/pr-${slept}"
+  local services=()
+  mapfile -t services < <(project_runtime_services "$candidate_dir/docker-compose.yml")
   if ! "$DOCKER" compose -p "yawp-pr-${slept}" \
-    -f "$candidate_dir/docker-compose.yml" stop >&2; then
+    -f "$candidate_dir/docker-compose.yml" stop "${services[@]}" >&2; then
     echo "Preview running capacity stop failed" >&2
     return 1
   fi
@@ -340,18 +371,30 @@ wait_for_project_health() {
   return 1
 }
 
+project_runtime_services() {
+  local compose="$1"
+  printf '%s\n' web
+  if grep -qE '^[[:space:]]*blackboard-lti-mock:' "$compose"; then
+    printf '%s\n' blackboard-lti-mock
+  fi
+}
+
 restore_displaced() {
   [[ -n "$slept" ]] || return 0
   local displaced_dir="$ROOT/previews/pr-${slept}"
   local displaced_file="$displaced_dir/docker-compose.yml"
+  local services=()
   [[ -f "$displaced_file" ]] || return 1
-  "$DOCKER" compose -p "yawp-pr-${slept}" -f "$displaced_file" start >&2 || return 1
+  mapfile -t services < <(project_runtime_services "$displaced_file")
+  "$DOCKER" compose -p "yawp-pr-${slept}" -f "$displaced_file" start "${services[@]}" >&2 || return 1
   wait_for_project_health "$slept"
 }
 
 ensure_target_stopped() {
   is_running "$PR_NUMBER" || return 0
-  if ! "$DOCKER" compose -p "$project" -f "$compose_file" stop >/dev/null 2>&1; then
+  local services=()
+  mapfile -t services < <(project_runtime_services "$compose_file")
+  if ! "$DOCKER" compose -p "$project" -f "$compose_file" stop "${services[@]}" >/dev/null 2>&1; then
     is_running "$PR_NUMBER" && return 1
   fi
   ! is_running "$PR_NUMBER"
@@ -441,7 +484,8 @@ if (( running_count == RUNNING_CAP )); then
 fi
 
 wake_started=true
-if ! "$DOCKER" compose -p "$project" -f "$compose_file" start; then
+mapfile -t runtime_services < <(project_runtime_services "$compose_file")
+if ! "$DOCKER" compose -p "$project" -f "$compose_file" start "${runtime_services[@]}"; then
   fail_wake "Preview pr-${PR_NUMBER} could not start" 7
 fi
 if ! wait_for_project_health "$PR_NUMBER"; then

@@ -32,7 +32,7 @@ jobs:
       PREVIEW_DOMAIN: ${{ vars.PREVIEW_DOMAIN }}
       PREVIEW_ROOT: ${{ vars.PREVIEW_ROOT || '/srv/yawp-preview' }}
       PREVIEW_SSH_USER: ${{ vars.PREVIEW_SSH_USER || 'ec2-user' }}
-      PREVIEW_MAX_RUNNING: ${{ vars.PREVIEW_MAX_RUNNING || '4' }}
+      PREVIEW_MAX_RUNNING: ${{ vars.PREVIEW_MAX_RUNNING || '8' }}
       PREVIEW_SLEEP_ENABLED: ${{ vars.PREVIEW_SLEEP_ENABLED || 'true' }}
       PREVIEW_INFLIGHT_TTL_SECONDS: ${{ vars.PREVIEW_INFLIGHT_TTL_SECONDS || '3600' }}
       PREVIEW_POSTGRES_ADMIN_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}

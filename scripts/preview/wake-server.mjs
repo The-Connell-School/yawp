@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { mkdir, open, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, open, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -336,6 +336,159 @@ function send(response, status, body = '') {
   response.end(body);
 }
 
+async function fileEpoch(file) {
+  try {
+    const value = (await readFile(file, 'utf8')).trim();
+    if (/^[0-9]+$/.test(value)) return Number(value);
+  } catch {
+    // Fall back to absent/invalid timestamps below.
+  }
+  return 0;
+}
+
+async function readSmallFile(file) {
+  try {
+    const info = await stat(file);
+    if (!info.isFile() || info.size > 4096) return '';
+    return (await readFile(file, 'utf8')).trim();
+  } catch {
+    return '';
+  }
+}
+
+function parseMemoryValue(value) {
+  const match = String(value || '').trim().match(/^([0-9.]+)\s*([KMGT]?i?B)$/i);
+  if (!match) return 0;
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount)) return 0;
+  const unit = match[2].toLowerCase();
+  const scale = {
+    b: 1,
+    kb: 1000,
+    mb: 1000 ** 2,
+    gb: 1000 ** 3,
+    tb: 1000 ** 4,
+    kib: 1024,
+    mib: 1024 ** 2,
+    gib: 1024 ** 3,
+    tib: 1024 ** 4,
+  }[unit] || 1;
+  return Math.round(amount * scale);
+}
+
+function formatBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '';
+  if (bytes >= 1024 ** 3) return `${(bytes / (1024 ** 3)).toFixed(1)} GiB`;
+  if (bytes >= 1024 ** 2) return `${Math.round(bytes / (1024 ** 2))} MiB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KiB`;
+  return `${bytes} B`;
+}
+
+async function dockerLines(execFileFn, args) {
+  try {
+    const { stdout } = await execFileFn('docker', args, {
+      timeout: 10_000,
+      maxBuffer: 1024 * 1024,
+    });
+    return String(stdout).split('\n').map((line) => line.trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+async function hostMemory() {
+  try {
+    const meminfo = await readFile('/proc/meminfo', 'utf8');
+    const available = meminfo.match(/^MemAvailable:\s+([0-9]+)\s+kB$/m);
+    const total = meminfo.match(/^MemTotal:\s+([0-9]+)\s+kB$/m);
+    return {
+      availableBytes: available ? Number(available[1]) * 1024 : 0,
+      totalBytes: total ? Number(total[1]) * 1024 : 0,
+    };
+  } catch {
+    return { availableBytes: 0, totalBytes: 0 };
+  }
+}
+
+export async function collectPreviewStatus({
+  root,
+  domain,
+  maxRunning,
+  wakingPrs = [],
+  execFileFn = execFileAsync,
+} = {}) {
+  const previewRoot = path.join(root, 'previews');
+  const waking = new Set([...wakingPrs].map(Number));
+  const entries = await readdir(previewRoot, { withFileTypes: true }).catch(() => []);
+  const prs = entries
+    .filter((entry) => entry.isDirectory() && /^pr-[1-9][0-9]*$/.test(entry.name))
+    .map((entry) => Number(entry.name.slice(3)))
+    .sort((a, b) => a - b);
+
+  const runningProjects = new Set((await dockerLines(execFileFn, [
+    'ps',
+    '--filter', 'label=com.docker.compose.service=web',
+    '--filter', 'status=running',
+    '--format', '{{.Label "com.docker.compose.project"}}',
+  ])).map((project) => project.replace(/^yawp-pr-/, '')).filter((pr) => /^[1-9][0-9]*$/.test(pr)));
+
+  const stats = new Map();
+  for (const line of await dockerLines(execFileFn, ['stats', '--no-stream', '--format', '{{.Name}}\t{{.MemUsage}}'])) {
+    const [name, usage] = line.split('\t');
+    if (name) stats.set(name, parseMemoryValue(String(usage || '').split('/')[0]));
+  }
+  const memory = await hostMemory();
+
+  const previews = [];
+  for (const pr of prs) {
+    const dir = path.join(previewRoot, `pr-${pr}`);
+    const lastRequest = await fileEpoch(path.join(dir, 'last-request'));
+    const legacyAccess = await fileEpoch(path.join(root, 'wake', 'access', `pr-${pr}`));
+    const lastDeploy = await fileEpoch(path.join(dir, 'last-deploy'));
+    const branch = await readSmallFile(path.join(dir, 'branch'));
+    const author = await readSmallFile(path.join(dir, 'author'));
+    const pinned = await stat(path.join(dir, 'keep-awake')).then(() => true, () => false);
+    const deploying = await stat(path.join(root, 'inflight', `pr-${pr}`)).then(() => true, () => false);
+    const running = runningProjects.has(String(pr));
+    const state = waking.has(pr)
+      ? 'waking'
+      : deploying
+        ? 'deploying'
+        : running
+          ? 'running'
+          : 'sleeping';
+    const webName = `yawp-pr-${pr}-web-1`;
+    const ltiName = `yawp-pr-${pr}-blackboard-lti-mock-1`;
+    const rssBytes = (stats.get(webName) || 0) + (stats.get(ltiName) || 0);
+    previews.push({
+      pr,
+      branch,
+      author,
+      state,
+      pinned,
+      lastRequest: Math.max(lastRequest, legacyAccess),
+      lastDeploy,
+      lastActive: Math.max(lastRequest, legacyAccess, lastDeploy),
+      rssBytes,
+      rss: formatBytes(rssBytes),
+      url: domain ? `https://pr-${pr}.${domain}` : '',
+    });
+  }
+
+  return {
+    generatedAt: new Date().toISOString(),
+    maxRunning: Number(maxRunning || 0),
+    running: previews.filter((preview) => preview.state === 'running').length,
+    host: {
+      memAvailableBytes: memory.availableBytes,
+      memAvailable: formatBytes(memory.availableBytes),
+      memTotalBytes: memory.totalBytes,
+      memTotal: formatBytes(memory.totalBytes),
+    },
+    previews,
+  };
+}
+
 export function createWakeHandler({
   domain,
   secret,
@@ -542,6 +695,7 @@ export function createDefaultWakeOperations({
 }) {
   const recentAccess = new Map();
   const accessWrites = new Map();
+  const queuedWakeWrites = new Map();
   return {
     async ensureRunning(pr, { allowDisplacement = false, authorization } = {}) {
       const organizationId = String(authorization?.organizationId || '');
@@ -590,19 +744,53 @@ export function createDefaultWakeOperations({
     },
     async recordAccess(pr) {
       const now = Math.floor(Date.now() / 1000);
-      if (now - (recentAccess.get(pr) || 0) < 30) return;
+      if (now - (recentAccess.get(pr) || 0) < 60) return;
       if (accessWrites.has(pr)) return accessWrites.get(pr);
       const operation = (async () => {
         const accessDir = path.join(root, 'wake', 'access');
+        const previewDir = path.join(root, 'previews', `pr-${pr}`);
         await mkdir(accessDir, { recursive: true, mode: 0o700 });
-        const target = path.join(accessDir, `pr-${pr}`);
-        const temporary = `${target}.${process.pid}.${now}.tmp`;
-        await writeFile(temporary, `${now}\n`, { mode: 0o600 });
-        await rename(temporary, target);
+        await mkdir(previewDir, { recursive: true, mode: 0o755 });
+        for (const target of [
+          path.join(previewDir, 'last-request'),
+          path.join(accessDir, `pr-${pr}`),
+        ]) {
+          const temporary = `${target}.${process.pid}.${now}.tmp`;
+          await writeFile(temporary, `${now}\n`, { mode: 0o600 });
+          await rename(temporary, target);
+        }
         recentAccess.set(pr, now);
       })().finally(() => accessWrites.delete(pr));
       accessWrites.set(pr, operation);
       return operation;
+    },
+    async isResident(pr) {
+      try {
+        const info = await stat(path.join(root, 'previews', `pr-${pr}`, 'docker-compose.yml'));
+        return info.isFile();
+      } catch {
+        return false;
+      }
+    },
+    async recordQueuedWake(pr) {
+      if (queuedWakeWrites.has(pr)) return queuedWakeWrites.get(pr);
+      const now = Math.floor(Date.now() / 1000);
+      const operation = (async () => {
+        const wakeDir = path.join(root, 'wake');
+        await mkdir(wakeDir, { recursive: true, mode: 0o700 });
+        const target = path.join(wakeDir, `pr-${pr}`);
+        const temporary = `${target}.${process.pid}.${now}.tmp`;
+        await writeFile(temporary, `${now}\n`, { mode: 0o600 });
+        await rename(temporary, target);
+      })().finally(() => queuedWakeWrites.delete(pr));
+      queuedWakeWrites.set(pr, operation);
+      return operation;
+    },
+    async clearQueuedWake(pr) {
+      await rm(path.join(root, 'wake', `pr-${pr}`), { force: true });
+    },
+    async getStatus({ wakingPrs = [] } = {}) {
+      return collectPreviewStatus({ root, domain: process.env.PREVIEW_DOMAIN || '', maxRunning, wakingPrs });
     },
   };
 }

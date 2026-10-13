@@ -493,6 +493,52 @@ describe('enforce-cap.sh', () => {
     expect(existsSync(path.join(root, 'previews/pr-102'))).toBe(true);
   });
 
+  test('resident pressure never deletes a keep-awake marker preview', () => {
+    const root = makeRoot();
+    const pinned = makeEnv(root, 100);
+    const candidate = makeEnv(root, 101);
+    writeFileSync(path.join(pinned.previewDir, 'keep-awake'), 'true\n');
+
+    const result = run(root, {
+      OPEN_PR_NUMBERS: '100 101',
+      PREVIEW_MODE: 'reconcile',
+      PREVIEW_MAX_RESIDENT: '1',
+      PR_ACTIVITY: '100 1 0 1\n101 2 0 0',
+    });
+
+    expect(result.status).toBe(0);
+    expect(parse(result.stdout).CAP_EVICTED).toBe('101');
+    expect(existsSync(pinned.previewDir)).toBe(true);
+    expect(existsSync(candidate.previewDir)).toBe(false);
+  });
+
+  test('running pressure sleeps lane previews before human PRs', () => {
+    const root = makeRoot();
+    makeEnv(root, 100, { withCompose: true });
+    makeEnv(root, 101, { withCompose: true });
+    writeFileSync(path.join(root, 'previews/pr-100/branch'), 'human/fix-login\n');
+    writeFileSync(path.join(root, 'previews/pr-101/branch'), 'codex/preview-lru\n');
+    const docker = makeDockerStub(root, [100, 101]);
+
+    const result = run(root, {
+      OPEN_PR_NUMBERS: '100 101',
+      PREVIEW_MODE: 'reconcile',
+      PREVIEW_MAX_RESIDENT: '20',
+      PREVIEW_MAX_RUNNING: '1',
+      PREVIEW_NOW_EPOCH: '1000',
+      PREVIEW_DRAFT_IDLE_HOURS: '999',
+      PREVIEW_READY_IDLE_HOURS: '999',
+      PR_ACTIVITY: '100 990 0 0\n101 991 0 0',
+      PREVIEW_DOCKER: docker.stub,
+      PREVIEW_DOCKER_STATE: docker.state,
+      PREVIEW_DOCKER_LOG: docker.log,
+    });
+
+    expect(result.status).toBe(0);
+    expect(parse(result.stdout).CAP_SLEPT).toBe('101');
+    expect(readFileSync(docker.state, 'utf8').trim()).toBe('100');
+  });
+
   test.if(canReproduce)(
     'reclaims an environment whose source tree contains root-owned build output',
     () => {
@@ -613,7 +659,7 @@ describe('enforce-cap.sh', () => {
     });
   });
 
-  test('keeps a recently active ready PR running', () => {
+  test('keeps a recently active ready PR running when the idle window allows it', () => {
     const root = makeRoot();
     makeEnv(root, 102, { withCompose: true });
     const docker = makeDockerStub(root, [102]);
@@ -630,6 +676,7 @@ describe('enforce-cap.sh', () => {
       PREVIEW_NOW_EPOCH: String(now),
       PREVIEW_MAX_RESIDENT: '20',
       PREVIEW_MAX_RUNNING: '8',
+      PREVIEW_READY_IDLE_HOURS: '48',
     });
 
     expect(parse(result.stdout)).toMatchObject({

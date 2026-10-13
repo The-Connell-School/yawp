@@ -51,6 +51,118 @@ function send(response, status, body = '', headers = {}) {
   response.end(body);
 }
 
+function htmlEscape(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[char]));
+}
+
+function isStatusHost(host, domain) {
+  const hostname = String(host || '').toLowerCase().replace(/:\d+$/, '');
+  return hostname === `status.${String(domain || '').toLowerCase()}`;
+}
+
+function isStatusPath(url) {
+  return String(url || '/').split('?')[0] === '/__status';
+}
+
+function isWakePath(url) {
+  return String(url || '/').split('?')[0] === '/__wake';
+}
+
+function sendWakingPage(response, pr) {
+  const title = `Waking preview pr-${pr}`;
+  const body = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="5">
+  <title>${htmlEscape(title)}</title>
+  <style>
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; font: 16px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #172033; background: #f6f8fb; }
+    main { width: min(520px, calc(100vw - 32px)); }
+    h1 { margin: 0 0 8px; font-size: 1.5rem; }
+    p { margin: 0; color: #46556c; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Waking preview&hellip;</h1>
+    <p>pr-${htmlEscape(pr)} is starting. This page refreshes every 5 seconds.</p>
+  </main>
+</body>
+</html>`;
+  response.writeHead(503, {
+    'content-type': 'text/html; charset=utf-8',
+    'retry-after': '5',
+    'cache-control': 'no-store',
+  });
+  response.end(body);
+}
+
+function sendNoPreviewPage(response, pr) {
+  response.writeHead(404, {
+    'content-type': 'text/html; charset=utf-8',
+    'cache-control': 'no-store',
+  });
+  response.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>No preview</title></head><body><main><h1>No preview for pr-${htmlEscape(pr)}</h1><p>Push a commit or add the preview:keep-awake label to rebuild it.</p></main></body></html>`);
+}
+
+function json(response, status, value, headers = {}) {
+  response.writeHead(status, {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-store',
+    ...headers,
+  });
+  response.end(`${JSON.stringify(value, null, 2)}\n`);
+}
+
+function renderStatusPage(status) {
+  const rows = status.previews.map((preview) => `<tr>
+    <td><a href="${htmlEscape(preview.url)}">#${htmlEscape(preview.pr)}</a></td>
+    <td>${htmlEscape(preview.branch || '')}</td>
+    <td>${htmlEscape(preview.author || '')}</td>
+    <td>${htmlEscape(preview.state)}</td>
+    <td>${preview.pinned ? 'yes' : 'no'}</td>
+    <td>${preview.lastRequest ? new Date(preview.lastRequest * 1000).toISOString() : ''}</td>
+    <td>${preview.lastDeploy ? new Date(preview.lastDeploy * 1000).toISOString() : ''}</td>
+    <td>${htmlEscape(preview.rss || '')}</td>
+  </tr>`).join('');
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Yawp Preview Status</title>
+  <style>
+    body { margin: 0; font: 14px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #162033; background: #f7f8fb; }
+    main { padding: 24px; }
+    h1 { margin: 0 0 4px; font-size: 1.4rem; }
+    p { margin: 0 0 18px; color: #56657c; }
+    table { width: 100%; border-collapse: collapse; background: white; border: 1px solid #d7deea; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #e6ebf2; text-align: left; white-space: nowrap; }
+    th { background: #eef2f7; font-weight: 650; }
+    a { color: #1459a8; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Yawp Preview Status</h1>
+    <p>${htmlEscape(status.running)}/${htmlEscape(status.maxRunning)} running, host free memory ${htmlEscape(status.host.memAvailable || 'unknown')}.</p>
+    <table>
+      <thead><tr><th>PR</th><th>Branch</th><th>Author</th><th>State</th><th>Pinned</th><th>Last Request</th><th>Last Deploy</th><th>RSS</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </main>
+</body>
+</html>`;
+}
+
 function connectionHeaderNames(headers) {
   return new Set(String(headers.connection || '')
     .split(',')
@@ -115,30 +227,47 @@ function wakeErrorResponse(error) {
   return [503, 'Preview is temporarily unavailable; retry shortly.\n'];
 }
 
-function createWakeCoordinator({ ensureRunning, maxConcurrentWakes }) {
+function createWakeCoordinator({
+  ensureRunning,
+  maxConcurrentWakes,
+  recordQueuedWake = async () => {},
+  clearQueuedWake = async () => {},
+}) {
   if (!Number.isSafeInteger(maxConcurrentWakes) || maxConcurrentWakes < 1) {
     throw new Error('maxConcurrentWakes must be a positive integer');
   }
   const inFlight = new Map();
-  return async (pr, authorization) => {
-    if (!inFlight.has(pr)) {
-      if (inFlight.size >= maxConcurrentWakes) {
-        const error = new Error('Preview wake concurrency is full');
-        error.code = 'capacity-full';
-        throw error;
+  return {
+    isWaking(pr) {
+      return inFlight.has(pr);
+    },
+    wakingPrs() {
+      return [...inFlight.keys()];
+    },
+    enqueue(pr, authorization) {
+      if (!inFlight.has(pr)) {
+        if (inFlight.size >= maxConcurrentWakes) {
+          const error = new Error('Preview wake concurrency is full');
+          error.code = 'capacity-full';
+          throw error;
+        }
+        const options = {
+          allowDisplacement: true,
+          ...(typeof authorization === 'object' && authorization
+            ? { authorization }
+            : {}),
+        };
+        const operation = Promise.resolve()
+          .then(() => recordQueuedWake(pr))
+          .then(() => ensureRunning(pr, options))
+          .finally(async () => {
+            inFlight.delete(pr);
+            await clearQueuedWake(pr);
+          });
+        inFlight.set(pr, operation);
       }
-      const options = {
-        allowDisplacement: true,
-        ...(typeof authorization === 'object' && authorization
-          ? { authorization }
-          : {}),
-      };
-      const operation = Promise.resolve()
-        .then(() => ensureRunning(pr, options))
-        .finally(() => inFlight.delete(pr));
-      inFlight.set(pr, operation);
-    }
-    return inFlight.get(pr);
+      return inFlight.get(pr);
+    },
   };
 }
 
@@ -196,16 +325,68 @@ export function createPreviewIngress({
   resolveTarget,
   authorizeWake,
   ensureRunning,
+  isResident = async () => true,
   recordAccess,
+  recordQueuedWake,
+  clearQueuedWake,
+  getStatus,
   maxConcurrentWakes = 2,
 }) {
   if (!domain) throw new Error('preview ingress domain is required');
-  const wake = createWakeCoordinator({ ensureRunning, maxConcurrentWakes });
+  const wake = createWakeCoordinator({
+    ensureRunning,
+    maxConcurrentWakes,
+    recordQueuedWake,
+    clearQueuedWake,
+  });
+
+  async function queueAuthorizedWake({ parsed, request, response, jsonResponse = false }) {
+    const resident = await isResident(parsed.pr);
+    if (!resident) {
+      if (jsonResponse) json(response, 404, { status: 'not-resident', pr: parsed.pr });
+      else sendNoPreviewPage(response, parsed.pr);
+      return;
+    }
+    const authorization = await authorizeWake(parsed.pr, request.url, request);
+    if (!authorization) {
+      if (jsonResponse) json(response, 401, { status: 'unauthorized', pr: parsed.pr });
+      else send(response, 401, 'Open this sleeping preview with its one-click access URL.\n');
+      return;
+    }
+    try {
+      wake.enqueue(parsed.pr, authorization).catch((error) => {
+        console.error(`Preview pr-${parsed.pr} wake failed`, error);
+      });
+    } catch (error) {
+      const [status, body] = wakeErrorResponse(error);
+      if (jsonResponse) json(response, status, { status: 'error', pr: parsed.pr, message: body.trim() }, status === 503 ? { 'retry-after': '15' } : {});
+      else send(response, status, body, status === 503 ? { 'retry-after': '15' } : {});
+      return;
+    }
+    if (jsonResponse) {
+      json(response, 202, { status: 'waking', pr: parsed.pr }, { 'retry-after': '5' });
+    } else {
+      sendWakingPage(response, parsed.pr);
+    }
+  }
 
   return async (request, response) => {
     const rawHost = Array.isArray(request.headers.host)
       ? request.headers.host[0]
       : request.headers.host || '';
+    if ((isStatusHost(rawHost, domain) || isStatusPath(request.url)) && getStatus) {
+      const status = await getStatus({ wakingPrs: wake.wakingPrs() });
+      if (isStatusPath(request.url)) {
+        json(response, 200, status);
+      } else {
+        response.writeHead(200, {
+          'content-type': 'text/html; charset=utf-8',
+          'cache-control': 'no-store',
+        });
+        response.end(renderStatusPage(status));
+      }
+      return;
+    }
     const parsed = parsePreviewHost(rawHost, domain);
     if (parsed === null) {
       send(response, 404, 'Not found.\n');
@@ -214,23 +395,18 @@ export function createPreviewIngress({
     const hostname = previewServiceHostname(parsed.pr, domain, parsed.service);
     let target = await resolveTarget(parsed.pr, { service: parsed.service });
     if (!target) {
-      try {
-        const authorization = await authorizeWake(parsed.pr, request.url, request);
-        if (!authorization) {
-          send(response, 401, 'Open this sleeping preview with its one-click access URL.\n');
-          return;
-        }
-        await wake(parsed.pr, authorization);
-        target = await resolveTarget(parsed.pr, { fresh: true, service: parsed.service });
-        if (!target) {
-          send(response, 503, 'Preview is starting; retry shortly.\n', { 'retry-after': '5' });
-          return;
-        }
-      } catch (error) {
-        const [status, body] = wakeErrorResponse(error);
-        send(response, status, body, status === 503 ? { 'retry-after': '15' } : {});
-        return;
-      }
+      await queueAuthorizedWake({
+        parsed,
+        request,
+        response,
+        jsonResponse: isWakePath(request.url),
+      });
+      return;
+    }
+    if (isWakePath(request.url)) {
+      await recordAccess(parsed.pr);
+      json(response, 200, { status: 'running', pr: parsed.pr });
+      return;
     }
     await proxyHttp({
       request,
@@ -261,11 +437,19 @@ export function createWebSocketUpgradeHandler({
   resolveTarget,
   authorizeWake,
   ensureRunning,
+  isResident = async () => true,
   recordAccess = async () => {},
+  recordQueuedWake,
+  clearQueuedWake,
   maxConcurrentWakes = 2,
   connectTarget = netConnect,
 }) {
-  const wake = createWakeCoordinator({ ensureRunning, maxConcurrentWakes });
+  const wake = createWakeCoordinator({
+    ensureRunning,
+    maxConcurrentWakes,
+    recordQueuedWake,
+    clearQueuedWake,
+  });
   return async (request, socket, head) => {
     socket.on('error', () => {});
     socket.resume();
@@ -281,13 +465,18 @@ export function createWebSocketUpgradeHandler({
     let target = await resolveTarget(parsed.pr, { service: parsed.service });
     if (!target) {
       try {
+        if (!await isResident(parsed.pr)) {
+          writeSocketResponse(socket, '404 Not Found', 'Preview is no longer resident.\n');
+          return;
+        }
         const authorization = await authorizeWake(parsed.pr, request.url, request);
         if (!authorization) {
           writeSocketResponse(socket, '401 Unauthorized', 'Open this sleeping preview with its one-click access URL.\n');
           return;
         }
-        await wake(parsed.pr, authorization);
-        target = await resolveTarget(parsed.pr, { fresh: true, service: parsed.service });
+        wake.enqueue(parsed.pr, authorization).catch((error) => {
+          console.error(`Preview pr-${parsed.pr} wake failed`, error);
+        });
       } catch (error) {
         const [status, body] = wakeErrorResponse(error);
         writeSocketResponse(socket, `${status} Service Unavailable`, body);
@@ -295,7 +484,7 @@ export function createWebSocketUpgradeHandler({
       }
     }
     if (!target) {
-      writeSocketResponse(socket, '503 Service Unavailable', 'Preview is starting; retry shortly.\n');
+      writeSocketResponse(socket, '503 Service Unavailable', 'Preview is waking; retry shortly.\n');
       return;
     }
 
