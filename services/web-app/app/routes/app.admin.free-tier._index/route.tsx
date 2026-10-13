@@ -14,11 +14,25 @@ import {
   releaseBatch,
 } from '~/domain/free-tier/service.server';
 import { sendReleaseEmailsForApplicationIds } from '~/domain/free-tier/approval-flow.server';
-import { APPROVABLE_FROM, REJECTABLE_FROM } from '~/utils/internal-free-tier-http.server';
-import { getApprovalHooks } from '~/domain/free-tier/approval-hooks.server';
-import { retryFreeClassroomProvisioningForUser } from '~/domain/free-tier/provision-free-classroom.server';
-import type { FreeTierApplicationStatus } from '@app/prisma';
+import { decideApplication } from '~/utils/internal-free-tier-http.server';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
+import { FreeTierBudgetExceededError } from '~/domain/free-tier/usage-budget.server';
+
+function budgetExceededPayload(error: FreeTierBudgetExceededError) {
+  const usage = error.summary;
+  return {
+    ok: false,
+    error: 'Free-tier budget reached',
+    operatorMessage: `Free-tier ${usage.environment} budget reached: $${usage.spendUsd.toFixed(2)} of $${usage.budgetUsd.toFixed(2)} used.`,
+    usage,
+  };
+}
+
+function getOperatorMessage(value: unknown) {
+  return value && typeof value === 'object' && 'operatorMessage' in value
+    ? String((value as { operatorMessage: unknown }).operatorMessage)
+    : null;
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireFreeTierEnabled();
@@ -55,7 +69,15 @@ export async function action({ request }: ActionFunctionArgs) {
   const intent = String(formData.get('intent'));
   if (intent === 'release') {
     const ids = formData.getAll('applicationId').map(String);
-    const result = await releaseBatch({ applicationIds: ids });
+    let result: Awaited<ReturnType<typeof releaseBatch>>;
+    try {
+      result = await releaseBatch({ applicationIds: ids });
+    } catch (error) {
+      if (error instanceof FreeTierBudgetExceededError) {
+        return Response.json(budgetExceededPayload(error), { status: 402 });
+      }
+      throw error;
+    }
     const invited = await prisma.freeTierApplication.findMany({
       where: { id: { in: ids }, status: 'INVITED' },
       select: { id: true },
@@ -82,82 +104,32 @@ export async function action({ request }: ActionFunctionArgs) {
   const id = String(formData.get('applicationId') ?? '');
   const decidedByEmail = operator?.email ?? 'admin@yawp.local';
   if (intent === 'approve') {
-    const result = await operatorTransition({
+    const result = await decideApplication({
       id,
-      from: APPROVABLE_FROM,
-      to: 'APPROVED',
       decision: 'APPROVED',
       decidedByEmail,
     });
-    if (result.changed && result.app) {
-      try {
-        await getApprovalHooks().onApplicationApproved(result.app);
-      } catch (error) {
-        if (result.app.userId) {
-          await retryFreeClassroomProvisioningForUser(result.app.userId);
-        }
-        const message = error instanceof Error ? error.message : String(error);
-        return { ok: false, error: 'provisioning_failed', detail: message, applicationId: result.app.id };
-      }
-    }
-    return result.payload;
+    return Response.json(result.payload, { status: result.status });
   }
   if (intent === 'reject') {
     const reason = String(formData.get('reason') ?? 'Rejected');
-    const result = await operatorTransition({
+    const result = await decideApplication({
       id,
-      from: REJECTABLE_FROM,
-      to: 'REJECTED',
       decision: 'REJECTED',
       decidedByEmail,
       reason,
     });
-    if (result.changed && result.app) await getApprovalHooks().onApplicationRejected(result.app, reason);
-    return result.payload;
+    return Response.json(result.payload, { status: result.status });
   }
   return { ok: false };
-}
-
-async function operatorTransition(args: {
-  id: string;
-  from: FreeTierApplicationStatus[];
-  to: FreeTierApplicationStatus;
-  decision: 'APPROVED' | 'REJECTED' | 'MANUAL_REVIEW';
-  decidedByEmail: string;
-  reason?: string;
-}) {
-  return prisma.$transaction(async (tx) => {
-    const app = await tx.freeTierApplication.findUnique({
-      where: { id: args.id },
-      select: { id: true, status: true, email: true, name: true, schoolName: true, userId: true, organizationId: true },
-    });
-    if (!app) return { payload: { error: 'Not found' }, changed: false, app: null };
-    if (app.status === args.to) return { payload: { ok: true, idempotent: true }, changed: false, app: null };
-    if (!args.from.includes(app.status)) return { payload: { error: 'Illegal state', status: app.status }, changed: false, app: null };
-    const updated = await tx.freeTierApplication.updateMany({ where: { id: args.id, status: app.status }, data: { status: args.to } });
-    if (updated.count === 0) return { payload: { error: 'Conflict' }, changed: false, app: null };
-    await tx.freeTierApprovalDecision.create({
-      data: { applicationId: args.id, decision: args.decision, reason: args.reason ?? null, decidedByEmail: args.decidedByEmail },
-    });
-    return {
-      payload: { ok: true, status: args.to },
-      changed: true,
-      app: {
-        id: app.id,
-        email: app.email,
-        name: app.name,
-        schoolName: app.schoolName,
-        userId: app.userId,
-        organizationId: app.organizationId,
-      },
-    };
-  });
 }
 
 export default function AdminFreeTierRoute() {
   const data = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const releaseFetcher = useFetcher<typeof action>();
+  const releaseOperatorMessage = getOperatorMessage(releaseFetcher.data);
+  const actionOperatorMessage = getOperatorMessage(fetcher.data);
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <div className="flex flex-wrap gap-3 items-center">
@@ -181,6 +153,16 @@ export default function AdminFreeTierRoute() {
           {(releaseFetcher.data as { emailFailureCount: number }).emailFailureCount > 0
             ? ` ${(releaseFetcher.data as { emailFailureCount: number }).emailFailureCount} release email(s) failed — check email logs and retry from support tools.`
             : ' Release emails sent.'}
+        </p>
+      ) : null}
+      {releaseOperatorMessage ? (
+        <p className="text-sm rounded-md border border-destructive/40 bg-destructive/10 p-3" role="alert">
+          {releaseOperatorMessage}
+        </p>
+      ) : null}
+      {actionOperatorMessage ? (
+        <p className="text-sm rounded-md border border-destructive/40 bg-destructive/10 p-3" role="alert">
+          {actionOperatorMessage}
         </p>
       ) : null}
       {data.view === 'waitlist' && 'waitlist' in data ? (

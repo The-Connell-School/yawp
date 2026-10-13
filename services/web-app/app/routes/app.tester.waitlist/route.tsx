@@ -9,6 +9,23 @@ import { requireMockAdmin } from '~/utils/mock-admin.server';
 import { prisma } from '~/utils/db.server';
 import { releaseBatch } from '~/domain/free-tier/service.server';
 import { sendReleaseEmailsForApplicationIds } from '~/domain/free-tier/approval-flow.server';
+import { FreeTierBudgetExceededError } from '~/domain/free-tier/usage-budget.server';
+
+function budgetExceededPayload(error: FreeTierBudgetExceededError) {
+  const usage = error.summary;
+  return {
+    ok: false,
+    error: 'Free-tier budget reached',
+    operatorMessage: `Free-tier ${usage.environment} budget reached: $${usage.spendUsd.toFixed(2)} of $${usage.budgetUsd.toFixed(2)} used.`,
+    usage,
+  };
+}
+
+function getOperatorMessage(value: unknown) {
+  return value && typeof value === 'object' && 'operatorMessage' in value
+    ? String((value as { operatorMessage: unknown }).operatorMessage)
+    : null;
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireMockAdmin(request);
@@ -27,10 +44,18 @@ export async function action({ request }: ActionFunctionArgs) {
   const id = String(form.get('applicationId') ?? '').trim();
   if (form.get('intent') !== 'release' || !id || id.length > 200)
     return new Response('Invalid input', { status: 400 });
-  const result = await releaseBatch(
-    { applicationIds: [id] },
-    { ...actor, action: 'waitlist.release' }
-  );
+  let result: Awaited<ReturnType<typeof releaseBatch>>;
+  try {
+    result = await releaseBatch(
+      { applicationIds: [id] },
+      { ...actor, action: 'waitlist.release' }
+    );
+  } catch (error) {
+    if (error instanceof FreeTierBudgetExceededError) {
+      return Response.json(budgetExceededPayload(error), { status: 402 });
+    }
+    throw error;
+  }
   const invited =
     result.released > 0
       ? await prisma.freeTierApplication.findMany({
@@ -50,15 +75,16 @@ export async function action({ request }: ActionFunctionArgs) {
 export default function TesterWaitlist() {
   const { applications } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
+  const operatorMessage = getOperatorMessage(fetcher.data);
   return (
     <main className="p-6 space-y-4">
       <h1 className="text-xl font-semibold">Tester waitlist</h1>
       <Link to="/app/tester/approvals">Approval queue</Link>
       {fetcher.data && (
         <p role="status">
-          Released {fetcher.data.released}. Refused {fetcher.data.refused}.
-          Skipped {fetcher.data.skipped}. Email failures:{' '}
-          {fetcher.data.emailFailureCount}.
+          {operatorMessage
+            ? operatorMessage
+            : `Released ${fetcher.data.released}. Refused ${fetcher.data.refused}. Skipped ${fetcher.data.skipped}. Email failures: ${fetcher.data.emailFailureCount}.`}
         </p>
       )}
       {applications.length === 0 && <p>No pending applications.</p>}

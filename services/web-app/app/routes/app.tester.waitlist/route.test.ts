@@ -73,6 +73,8 @@ beforeEach(() => {
     mockAdminGranted: true,
   }));
   releaseBatch.mockClear();
+  releaseBatch.mockImplementation(async () => ({ released: 1 }));
+  sendReleaseEmailsForApplicationIds.mockClear();
   decideApplication.mockClear();
   reopenApplication.mockClear();
   findMany.mockClear();
@@ -162,6 +164,32 @@ describe('tester routes', () => {
       })
     );
     expect(sendReleaseEmailsForApplicationIds).toHaveBeenCalled();
+  });
+  test('waitlist release returns clear budget feedback when budget is exhausted', async () => {
+    const { FreeTierBudgetExceededError } = await import(
+      '~/domain/free-tier/usage-budget.server'
+    );
+    releaseBatch.mockImplementation(async () => {
+      throw new FreeTierBudgetExceededError({
+        environment: 'demo',
+        budgetUsd: 10,
+        unitCostUsd: 5,
+        activeApplications: 3,
+        spendUsd: 15,
+        remainingUsd: 0,
+        percentUsed: 100,
+        overBudget: true,
+      });
+    });
+
+    const response = (await waitlist.action(args('release'))) as Response;
+    expect(response.status).toBe(402);
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      error: 'Free-tier budget reached',
+      operatorMessage: 'Free-tier demo budget reached: $15.00 of $10.00 used.',
+    });
+    expect(sendReleaseEmailsForApplicationIds).not.toHaveBeenCalled();
   });
   test('approval and rejection use shared services with authenticated actor', async () => {
     for (const intent of ['approve', 'reject']) {
