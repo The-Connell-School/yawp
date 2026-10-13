@@ -17,6 +17,7 @@ import { setFreeTierFlag } from '../feature-flags';
 const OUT =
   process.env.QA_SCREENSHOT_DIR?.trim() ||
   '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-disabled-expired';
+const HOSTED_DEMO_SKIP_ARTIFACT = 'disabled-expired-hosted-demo-skip.txt';
 const LOCAL_BASE_URL = `http://127.0.0.1:${process.env.FREE_TIER_E2E_PORT || 5197}`;
 
 function localUrl(path: string) {
@@ -227,7 +228,7 @@ test.describe('Free-tier rejected event link QA', () => {
     const missing = required.filter((key) => !process.env[key]?.trim());
     if (missing.length) {
       await note(
-        'hosted-demo-skip.txt',
+        HOSTED_DEMO_SKIP_ARTIFACT,
         [
           'Hosted demo qa-disabled-expired run skipped.',
           `Missing env/access: ${missing.join(', ')}`,
@@ -238,7 +239,7 @@ test.describe('Free-tier rejected event link QA', () => {
       test.skip(true, `Hosted demo access missing: ${missing.join(', ')}`);
     }
     await note(
-      'hosted-demo-skip.txt',
+      HOSTED_DEMO_SKIP_ARTIFACT,
       [
         'Hosted demo qa-disabled-expired run skipped.',
         'Hosted demo rejected-link assertions are not implemented in this PR.',

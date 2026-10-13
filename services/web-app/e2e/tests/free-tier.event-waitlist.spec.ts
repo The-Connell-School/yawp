@@ -18,6 +18,7 @@ import { waitForFreeTierEmailPayload } from '../helpers/free-tier-email';
 const OUT =
   process.env.QA_SCREENSHOT_DIR?.trim() ||
   '/home/bryant/work/yawp/codex-loop/lanes/free-tier-fixes/shots/qa-event-waitlist';
+const HOSTED_DEMO_SKIP_ARTIFACT = 'event-waitlist-hosted-demo-skip.txt';
 const E2E_MANAGEMENT_SERVICE_KEY =
   'e2e-free-tier-release-management-key-000000000000';
 const LOCAL_BASE_URL = `http://127.0.0.1:${process.env.FREE_TIER_E2E_PORT || 5197}`;
@@ -265,7 +266,7 @@ test.describe('Free-tier event waitlist QA', () => {
     const missing = required.filter((key) => !process.env[key]?.trim());
     if (missing.length) {
       await note(
-        'hosted-demo-skip.txt',
+        HOSTED_DEMO_SKIP_ARTIFACT,
         [
           'Hosted demo qa-event-waitlist run skipped.',
           `Missing env/access: ${missing.join(', ')}`,
@@ -276,7 +277,7 @@ test.describe('Free-tier event waitlist QA', () => {
       test.skip(true, `Hosted demo access missing: ${missing.join(', ')}`);
     }
     await note(
-      'hosted-demo-skip.txt',
+      HOSTED_DEMO_SKIP_ARTIFACT,
       [
         'Hosted demo qa-event-waitlist run skipped.',
         'Hosted demo scan/submission/release/join assertions are not implemented in this PR.',

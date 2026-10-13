@@ -17,6 +17,7 @@ import { createE2EPrismaClient } from '../prisma-client';
 const OUT =
   process.env.QA_SCREENSHOT_DIR?.trim() ||
   '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-caps-limits';
+const HOSTED_DEMO_SKIP_ARTIFACT = 'caps-limits-hosted-demo-skip.txt';
 const SCAN_COOKIE = '__yawp_ft_scan';
 const LOCAL_BASE_URL = `http://127.0.0.1:${process.env.FREE_TIER_E2E_PORT || 5197}`;
 
@@ -390,7 +391,7 @@ test.describe.serial('Free-tier caps, limits, and cookie QA', () => {
     const missing = required.filter((key) => !process.env[key]?.trim());
     if (missing.length || process.env.DEMO_FREE_TIER_DISPOSABLE_OK !== '1') {
       await note(
-        'hosted-demo-skip.txt',
+        HOSTED_DEMO_SKIP_ARTIFACT,
         [
           'Hosted demo qa-caps-limits run skipped.',
           `Missing env/access: ${missing.join(', ') || 'none'}`,
@@ -406,7 +407,7 @@ test.describe.serial('Free-tier caps, limits, and cookie QA', () => {
     }
 
     await note(
-      'hosted-demo-skip.txt',
+      HOSTED_DEMO_SKIP_ARTIFACT,
       [
         'Hosted demo qa-caps-limits run skipped.',
         'Disposable fixture env was present, but hosted mutations are intentionally not implemented until a fixture contract provides resettable event tokens and application cleanup.',

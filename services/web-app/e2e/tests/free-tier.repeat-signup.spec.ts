@@ -17,6 +17,7 @@ import { setFreeTierFlag } from '../feature-flags';
 const OUT =
   process.env.QA_SCREENSHOT_DIR?.trim() ||
   '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-repeat-signup';
+const HOSTED_DEMO_SKIP_ARTIFACT = 'repeat-signup-hosted-demo-skip.txt';
 const LOCAL_BASE_URL = `http://127.0.0.1:${process.env.FREE_TIER_E2E_PORT || 5197}`;
 
 function localUrl(path: string) {
@@ -269,7 +270,7 @@ test.describe('Free-tier repeat sign-up QA', () => {
     const missing = required.filter((key) => !process.env[key]?.trim());
     if (missing.length) {
       await note(
-        'hosted-demo-skip.txt',
+        HOSTED_DEMO_SKIP_ARTIFACT,
         [
           'Hosted demo qa-repeat-signup run skipped.',
           `Missing env/access: ${missing.join(', ')}`,
@@ -286,7 +287,7 @@ test.describe('Free-tier repeat sign-up QA', () => {
     const allowSubmit = process.env.DEMO_FREE_TIER_REPEAT_ALLOW_SUBMIT === 'true';
     if (!fixtureEmail || !allowSubmit) {
       await note(
-        'hosted-demo-skip.txt',
+        HOSTED_DEMO_SKIP_ARTIFACT,
         [
           'Hosted demo qa-repeat-signup mutation run skipped.',
           'DEMO_FREE_TIER_BASE_URL and DEMO_FREE_TIER_REPEAT_EVENT_TOKEN were present, so the suite verified the hosted event page can render without a 500.',
