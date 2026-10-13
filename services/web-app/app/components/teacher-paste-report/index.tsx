@@ -53,6 +53,8 @@ function AuthorizedTeacherPasteReport({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [measurement, setMeasurement] = useState<PasteMeasurement | null>(null);
   const hasPastedText = (measurement?.pastedCharacters ?? 0) > 0;
+  const hasRecordedEvents = (report?.events.length ?? 0) > 0;
+  const hasPasteActivity = hasPastedText || hasRecordedEvents;
   const query = submissionId
     ? `submissionId=${encodeURIComponent(submissionId)}`
     : `documentId=${encodeURIComponent(documentId ?? '')}`;
@@ -181,7 +183,7 @@ function AuthorizedTeacherPasteReport({
             className={`flex flex-1 items-center justify-center gap-1.5 px-2 py-3 text-xs font-semibold ${open ? 'border-b-2 border-blue-600' : 'text-muted-foreground'}`}
             onClick={() => setOpen(true)}
           >
-            {hasPastedText ? (
+            {hasPasteActivity ? (
               <TriangleAlert
                 className="h-4 w-4 shrink-0 text-red-600"
                 data-testid="paste-report-warning-icon"
@@ -207,7 +209,9 @@ function AuthorizedTeacherPasteReport({
           data-testid="paste-report"
           aria-label="Pasted text report"
         >
-          {measurement && measurement.pastedCharacters === 0 ? (
+          {measurement &&
+          measurement.pastedCharacters === 0 &&
+          !hasRecordedEvents ? (
             <div
               className="flex min-h-40 flex-col items-center justify-center rounded-md border border-dashed bg-muted/20 p-6 text-center"
               data-testid="paste-report-empty"
@@ -285,7 +289,7 @@ function AuthorizedTeacherPasteReport({
               Open the document text to measure this version.
             </p>
           )}
-          {hasPastedText ? (
+          {hasPasteActivity ? (
             <>
               <div className="mb-2 mt-4 flex items-center justify-between gap-2">
                 <h3 className="font-medium">Recorded events</h3>
