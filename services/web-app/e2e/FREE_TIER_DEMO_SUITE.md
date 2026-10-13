@@ -61,8 +61,13 @@ If this suite finds a regression, append the lane failure note and attempt to fi
 cd services/web-app
 bun run scripts/file-free-tier-qa-failure.ts \
   --id=ft-qa-suite-ci \
+  --slug=qa-suite-ci \
   --title="Free-tier demo E2E suite regression" \
-  --evidence="/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-ci"
+  --evidence="/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-ci" \
+  --severity=major \
+  --repro="Run \`bun run test:e2e:free-tier-demo\`." \
+  --expected="The free-tier demo E2E suite passes without regressions." \
+  --actual="The suite found a regression; see the Playwright output and screenshots."
 ```
 
-If the fixes backlog is outside the writable sandbox, the helper prints the exact `P0b` item to add manually.
+The helper appends a dated, template-compliant section to `FAILURES.md` with `severity`, `env`, `repro`, `expected`, `actual`, `screenshots`, and `filed_to_fixes`. If the fixes backlog is outside the writable sandbox, the helper prints the exact `P0b` item to add manually and records `filed_to_fixes: no` in the failure entry.
