@@ -19,10 +19,26 @@ const FEEDBACK_START_NAME_RE =
 const OVERALL_COMMENT_NAME_RE =
   /(["']?overallComment["']?\s*:\s*["'])([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})(,)/g;
 const LEADING_FEEDBACK_NAME_RE = /(^|[\n\r])([A-Z][a-z]{2,})(,)(?=\s)/g;
+const JSON_DIRECT_IDENTIFIER_FIELD_RE =
+  /["'](?:attribution|author|byline|school|organization|teacher|student|studentName|teacherName|name)["']\s*:\s*["']([^"']{2,160})["']/gi;
+const CONTEXTUAL_DIRECT_IDENTIFIER_RE =
+  /\b(?:student|teacher|author|writer|principal|counselor|coach|by|from|for|about|named|called|at|school|organization|org)\s+([A-Z][A-Za-z'’-]+(?:\s+(?:[A-Z][A-Za-z'’-]+|of|the|and|&)){0,5})\b/g;
+const LEADING_PERSON_OR_ORG_DIRECT_IDENTIFIER_RE =
+  /\b([A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+){1,3})\s+(?:at|from|of)\s+([A-Z][A-Za-z'’-]+(?:\s+(?:[A-Z][A-Za-z'’-]+|of|the|and|&)){0,5})\b/g;
+const ORG_DIRECT_IDENTIFIER_RE =
+  /\b([A-Z][A-Za-z'’-]+(?:\s+(?:[A-Z][A-Za-z'’-]+|of|the|and|&)){0,5}\s+(?:School|Academy|College|University|Institute|District|High|Middle|Elementary|Parish|Church|Family|Prep|Preparatory|Foundation|Center|Centre))\b/g;
 const COMMON_NAME_PARTS = new Set([
+  'about',
   'admin',
   'administrator',
   'author',
+  'at',
+  'by',
+  'called',
+  'for',
+  'from',
+  'named',
+  'school',
   'student',
   'teacher',
   'user',
@@ -119,7 +135,34 @@ function addExactStringLeaves(phrases: Set<string>, value: unknown) {
   }
 }
 
+function addDelimitedDirectIdentifier(phrases: Set<string>, value: string) {
+  for (const part of value.split(/[,;|/()]+/)) {
+    addExplicitPhrase(phrases, part);
+  }
+}
+
+function addTextDirectIdentifierPhrases(phrases: Set<string>, value: string) {
+  for (const match of value.matchAll(JSON_DIRECT_IDENTIFIER_FIELD_RE)) {
+    addDelimitedDirectIdentifier(phrases, match[1] ?? '');
+  }
+  for (const match of value.matchAll(CONTEXTUAL_DIRECT_IDENTIFIER_RE)) {
+    addDelimitedDirectIdentifier(phrases, match[1] ?? '');
+  }
+  for (const match of value.matchAll(LEADING_PERSON_OR_ORG_DIRECT_IDENTIFIER_RE)) {
+    addDelimitedDirectIdentifier(phrases, match[1] ?? '');
+    addDelimitedDirectIdentifier(phrases, match[2] ?? '');
+  }
+  for (const match of value.matchAll(ORG_DIRECT_IDENTIFIER_RE)) {
+    addDelimitedDirectIdentifier(phrases, match[1] ?? '');
+  }
+}
+
 function collectKnownPhrases(value: unknown, phrases = new Set<string>()) {
+  if (typeof value === 'string') {
+    addTextDirectIdentifierPhrases(phrases, value);
+    return phrases;
+  }
+
   if (Array.isArray(value)) {
     for (const item of value) collectKnownPhrases(item, phrases);
     return phrases;
@@ -223,6 +266,9 @@ export function deidentifyLlmLogData(data: LlmLogCreateData): LlmLogCreateData {
   const knownPhrases = collectKnownPhrases({
     metadata: persistedData.metadata,
     messages: persistedData.messages,
+    systemPrompt: persistedData.systemPrompt,
+    response: persistedData.response,
+    error: persistedData.error,
   });
   addExactStringLeaves(knownPhrases, data.deidentificationPhrases);
 

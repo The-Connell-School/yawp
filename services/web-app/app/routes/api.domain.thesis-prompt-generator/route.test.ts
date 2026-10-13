@@ -46,7 +46,11 @@ describe('api.domain.thesis-prompt-generator', () => {
     getLLMCompletion.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
-    requireMembership.mockResolvedValue({ id: 'teacher-1', role: 'TEACHER' });
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', name: 'Holy Family School' },
+    });
   });
 
   test('returns the reply and drafted options from the model', async () => {
@@ -74,6 +78,7 @@ describe('api.domain.thesis-prompt-generator', () => {
     const call = getLLMCompletion.mock.calls[0][0];
     expect(call.system).toContain('thesis-driven critical essay');
     expect(call.model).toContain('claude');
+    expect(call.deidentificationPhrases).toEqual(['Holy Family School']);
     // Three full prompts must fit without truncating the JSON.
     expect(call.maxTokens).toBeGreaterThanOrEqual(4000);
   });

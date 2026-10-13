@@ -150,6 +150,7 @@ export async function action({ request }: ActionFunctionArgs) {
         (message.usage?.output_tokens ?? 0),
       durationMs: Date.now() - startedAt,
       metadata,
+      deidentificationPhrases: [file instanceof File ? file.name : null],
     });
     await logAllowedUsage({
       route: metadata.route,
@@ -181,6 +182,7 @@ export async function action({ request }: ActionFunctionArgs) {
       error: error instanceof Error ? error.message : String(error),
       durationMs: Date.now() - startedAt,
       metadata,
+      deidentificationPhrases: [file instanceof File ? file.name : null],
     })
       .catch(() => {});
 

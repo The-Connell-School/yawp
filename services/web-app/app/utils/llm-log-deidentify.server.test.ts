@@ -163,4 +163,35 @@ describe('LlmLog de-identification', () => {
     expect(serialized).not.toContain('198.51.100.20');
     expect(serialized).not.toContain(hash);
   });
+
+  test('scrubs contextual direct names and organization names from arbitrary prompt and response text', () => {
+    const data = deidentifyLlmLogData({
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+      systemPrompt:
+        'Create writing feedback for Brian Connell at Holy Family School.',
+      messages: [
+        {
+          role: 'user',
+          content:
+            'The teacher asked for Brian Connell from Holy Family to receive a prompt about identity.',
+        },
+      ],
+      response:
+        '{"title":"Identity","attribution":"Brian Connell, Holy Family","body":"For Brian Connell at Holy Family School, begin with a concrete moment."}',
+      metadata: {
+        feature: 'daily-pages-prompt-generator',
+      },
+    });
+
+    const serialized = JSON.stringify(data);
+
+    expect(data.systemPrompt).toContain('[name] at [name]');
+    expect(JSON.stringify(data.messages)).toContain('[name] from [name]');
+    expect(data.response).toContain('"attribution":"[name], [name]"');
+    expect(data.response).toContain('[name] at [name]');
+    expect(serialized).not.toContain('Brian');
+    expect(serialized).not.toContain('Connell');
+    expect(serialized).not.toContain('Holy Family');
+  });
 });

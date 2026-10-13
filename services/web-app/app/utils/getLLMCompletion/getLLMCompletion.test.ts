@@ -461,6 +461,46 @@ describe('getLLMCompletion', () => {
     expect(serialized).not.toContain('deidentificationPhrases');
   });
 
+  test('de-identifies arbitrary contextual names for full-payload generator routes', async () => {
+    anthropicCreate.mockResolvedValueOnce(
+      anthropicTextResponse(
+        '{"reply":"For Brian Connell at Holy Family School, try three identity prompts.","options":[{"prompt":"What does belonging ask of you?"}]}'
+      )
+    );
+
+    await getLLMCompletion({
+      model: 'claude-sonnet-4-6',
+      system: 'You generate Daily Pages prompts.',
+      messages: [
+        {
+          role: 'user',
+          content:
+            'Create a prompt for Brian Connell at Holy Family School about belonging.',
+        },
+      ],
+      metadata: {
+        feature: 'daily-pages-prompt-generator',
+      },
+      attribution: {
+        organizationId: 'org-write-generator',
+        membershipId: 'mem-write-generator',
+        route: 'routes/api.domain.daily-pages-prompt-generator',
+        requestId: 'req-write-generator',
+      },
+    });
+
+    const log = llmLogCreate.mock.calls[0]?.[0].data;
+    const serialized = JSON.stringify(log);
+    expect(JSON.stringify(log.messages)).toContain('[name] at [name]');
+    expect(log.response).toContain('[name] at [name]');
+    expect(serialized).not.toContain('Brian');
+    expect(serialized).not.toContain('Connell');
+    expect(serialized).not.toContain('Holy Family');
+    expect(serialized).not.toContain('org-write-generator');
+    expect(serialized).not.toContain('mem-write-generator');
+    expect(serialized).not.toContain('req-write-generator');
+  });
+
   test('falls back to gpt-4o-mini and opens the circuit after Anthropic 529', async () => {
     const controller = new AbortController();
     const anthropicError = Object.assign(new Error('Overloaded'), {

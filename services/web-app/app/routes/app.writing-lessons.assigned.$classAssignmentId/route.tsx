@@ -201,6 +201,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       response: responseText,
     }, {
       organizationId: profile.organization.id,
+      organizationName: profile.organization.name,
       membershipId: profile.id,
       classId: classAssignment.id,
       route: 'routes/app.writing-lessons.assigned.$classAssignmentId',
