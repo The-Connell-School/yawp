@@ -22,7 +22,7 @@ type SuiteSpec = {
   runByDefault: boolean;
 };
 
-const suiteSpecs: SuiteSpec[] = [
+export const suiteSpecs: SuiteSpec[] = [
   {
     path: 'e2e/tests/free-tier.onboarding.spec.ts',
     coverage: 'waitlist, release join, approval, local free-tier onboarding',
@@ -104,13 +104,32 @@ const hostedDemoEnv = [
   'DEMO_FREE_TIER_STUDENT_JOIN_TOKEN',
 ];
 
-async function exists(relativePath: string) {
+async function exists(root: string, relativePath: string) {
   try {
-    await access(path.join(webAppRoot, relativePath), constants.R_OK);
+    await access(path.join(root, relativePath), constants.R_OK);
     return true;
   } catch {
     return false;
   }
+}
+
+export async function classifySuiteSpecs(root = webAppRoot) {
+  const present: SuiteSpec[] = [];
+  const missing: SuiteSpec[] = [];
+
+  for (const spec of suiteSpecs) {
+    if (await exists(root, spec.path)) {
+      present.push(spec);
+    } else {
+      missing.push(spec);
+    }
+  }
+
+  return { present, missing };
+}
+
+export function requiredMissingSpecs(missing: SuiteSpec[]) {
+  return missing.filter((spec) => spec.runByDefault);
 }
 
 async function writeSuiteEvidence(present: SuiteSpec[], missing: SuiteSpec[]) {
@@ -151,20 +170,11 @@ async function writeSuiteEvidence(present: SuiteSpec[], missing: SuiteSpec[]) {
 }
 
 async function main() {
-  const present: SuiteSpec[] = [];
-  const missing: SuiteSpec[] = [];
-
-  for (const spec of suiteSpecs) {
-    if (await exists(spec.path)) {
-      present.push(spec);
-    } else {
-      missing.push(spec);
-    }
-  }
+  const { present, missing } = await classifySuiteSpecs();
 
   await writeSuiteEvidence(present, missing);
 
-  const missingDefault = missing.filter((spec) => spec.runByDefault);
+  const missingDefault = requiredMissingSpecs(missing);
 
   if (process.argv.includes('--list')) {
     console.log('Free-tier demo E2E specs:');
@@ -243,7 +253,9 @@ async function main() {
   process.exitCode = result.status ?? 1;
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

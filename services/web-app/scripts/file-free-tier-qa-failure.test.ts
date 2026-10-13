@@ -113,4 +113,39 @@ describe('free-tier QA failure filing', () => {
       '- filed_to_fixes: no - add - [ ] todo | **ft-demo-regression** Demo regression evidence under P0b'
     );
   });
+
+  test('CLI records filed_to_fixes no when the fixes backlog has no P0b section', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'free-tier-qa-failure-'));
+    const failuresPath = join(dir, 'FAILURES.md');
+    const backlogPath = join(dir, 'BACKLOG.md');
+    await writeFile(backlogPath, '# Fixes Backlog\n\n## P1\n- later\n');
+
+    const result = spawnSync(
+      'bun',
+      [
+        join(import.meta.dir, 'file-free-tier-qa-failure.ts'),
+        '--id=ft-demo-regression',
+        '--slug=qa-regression-loop-review',
+        '--title=Demo regression evidence',
+        '--evidence=/tmp/shots/qa-regression-loop-review',
+        '--date=2026-10-13',
+      ],
+      {
+        env: {
+          ...process.env,
+          FREE_TIER_QA_FAILURES_PATH: failuresPath,
+          FREE_TIER_FIXES_BACKLOG_PATH: backlogPath,
+        },
+        encoding: 'utf8',
+      }
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('Could not update fixes backlog automatically');
+
+    const failures = await readFile(failuresPath, 'utf8');
+    expect(failures).toContain(
+      '- filed_to_fixes: no - add - [ ] todo | **ft-demo-regression** Demo regression evidence under P0b'
+    );
+  });
 });
