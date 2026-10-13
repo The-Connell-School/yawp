@@ -91,6 +91,14 @@ describe('internal admin organization endpoints', () => {
     expect(prisma.organization.findMany).not.toHaveBeenCalled();
   });
 
+  test('rejects unauthorized detail requests before reading organizations', async () => {
+    authorizeInternalApiRequest.mockResolvedValueOnce(Response.json({ error: 'Unauthorized' }, { status: 401 }));
+    const res = await internalAdminOrganizationDetail(new Request(`${base}/org-1`), 'org-1');
+
+    expect(res.status).toBe(401);
+    expect(prisma.organization.findUnique).not.toHaveBeenCalled();
+  });
+
   test('validates bounded pagination and sort inputs', async () => {
     expect((await internalAdminOrganizationsList(authed(`${base}?pageSize=101`))).status).toBe(400);
     expect((await internalAdminOrganizationsList(authed(`${base}?sort=bogus`))).status).toBe(400);
