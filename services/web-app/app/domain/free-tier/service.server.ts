@@ -13,6 +13,8 @@ import {
 import {
   assertFreeTierBudgetHeadroomForTransition,
   FreeTierBudgetExceededError,
+  FreeTierSpendGuardDeniedError,
+  assertFreeTierSpendAllowed,
   freeTierBudgetRemainingActivations,
   readFreeTierUsageSummary,
 } from './usage-budget.server';
@@ -453,6 +455,24 @@ export async function redeemToken(input: RedeemInput) {
 
     // The same person scanning the same QR twice must not burn a second use.
     const alreadyCounted = existing?.acquisitionTokenId === token.id;
+    const wouldActivate =
+      token.bypassWaitlist &&
+      (!existing || existing.status === 'LEAD');
+    if (wouldActivate) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('free_tier_release'))`;
+      try {
+        await assertFreeTierSpendAllowed(tx);
+      } catch (error) {
+        if (error instanceof FreeTierSpendGuardDeniedError) {
+          return {
+            ok: false as const,
+            reason: 'budget_exceeded' as const,
+            budget: error.summary,
+          };
+        }
+        throw error;
+      }
+    }
     if (!alreadyCounted) {
       // Atomic claim: the cap and expiry are checked in the UPDATE itself, so
       // concurrent redemptions cannot overshoot maxUses.

@@ -11,11 +11,26 @@ const transaction = {
 };
 const prisma = {
   $transaction: mock(),
+  organization: { findUnique: mock() },
 };
 
 mock.module('~/utils/db.server', () => ({ prisma }));
+const isFreeTierEnabled = mock(async () => false);
+mock.module('~/domain/feature-flags/feature-flags.server', () => ({
+  isFreeTierEnabled,
+}));
+const isAiUnlocked = mock(async () => true);
+mock.module('~/domain/free-tier/is-ai-unlocked.server', () => ({
+  isAiUnlocked,
+}));
+const assertFreeTierSpendAllowed = mock(async () => ({}));
+class FreeTierSpendGuardDeniedError extends Error {}
+mock.module('~/domain/free-tier/usage-budget.server', () => ({
+  assertFreeTierSpendAllowed,
+  FreeTierSpendGuardDeniedError,
+}));
 
-const { AiRateLimitError, reserveAiRequest } =
+const { AiFreeTierBudgetExceededError, AiRateLimitError, reserveAiRequest } =
   await import('./ai-admission.server');
 
 const policy = {
@@ -43,6 +58,10 @@ beforeEach(() => {
       async (callback: (client: typeof transaction) => unknown) =>
         callback(transaction)
     );
+  prisma.organization.findUnique.mockReset().mockResolvedValue(null);
+  isFreeTierEnabled.mockReset().mockResolvedValue(false);
+  isAiUnlocked.mockReset().mockResolvedValue(true);
+  assertFreeTierSpendAllowed.mockReset().mockResolvedValue({});
 });
 
 describe('reserveAiRequest', () => {
@@ -102,5 +121,25 @@ describe('reserveAiRequest', () => {
       })
     ).rejects.toThrow('positive integer');
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  test('free classroom AI fails closed before reserving when free-tier budget is exhausted', async () => {
+    isFreeTierEnabled.mockResolvedValue(true);
+    prisma.organization.findUnique.mockResolvedValue({
+      id: 'org-free',
+      plan: 'FREE_CLASSROOM',
+    });
+    assertFreeTierSpendAllowed.mockRejectedValue(new FreeTierSpendGuardDeniedError());
+
+    await expect(
+      reserveAiRequest({
+        membershipId: 'member-1',
+        organizationId: 'org-free',
+        feature: 'lesson-planner',
+        policy,
+      })
+    ).rejects.toBeInstanceOf(AiFreeTierBudgetExceededError);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(transaction.aiRequestReservation.createMany).not.toHaveBeenCalled();
   });
 });

@@ -37,13 +37,30 @@ export class AiLockedForFreeTierError extends Error {
   }
 }
 
+export class AiFreeTierBudgetExceededError extends Error {
+  constructor() {
+    super('Free-tier AI spend is paused because the budget is exhausted');
+    this.name = 'AiFreeTierBudgetExceededError';
+  }
+}
+
 export function aiLockedForFreeTierMessage() {
   return 'AI tools unlock after your school administrator approves YAWP for your classroom.';
+}
+
+export function aiFreeTierBudgetExceededMessage() {
+  return 'AI tools are paused because this free-tier environment has reached its current budget.';
 }
 
 export function aiAdmissionErrorResponse(error: unknown): Response | null {
   if (error instanceof AiLockedForFreeTierError) {
     return Response.json({ error: 'ai_locked', message: aiLockedForFreeTierMessage() }, { status: 403 });
+  }
+  if (error instanceof AiFreeTierBudgetExceededError) {
+    return Response.json(
+      { error: 'free_tier_budget_exceeded', message: aiFreeTierBudgetExceededMessage() },
+      { status: 402 }
+    );
   }
   return null;
 }
@@ -78,6 +95,20 @@ export async function reserveAiRequest({
       const { isAiUnlocked } = await import('~/domain/free-tier/is-ai-unlocked.server');
       if (!(await isAiUnlocked(org))) {
         throw new AiLockedForFreeTierError();
+      }
+      if (org.plan === 'FREE_CLASSROOM') {
+        const {
+          assertFreeTierSpendAllowed,
+          FreeTierSpendGuardDeniedError,
+        } = await import('~/domain/free-tier/usage-budget.server');
+        try {
+          await assertFreeTierSpendAllowed();
+        } catch (error) {
+          if (error instanceof FreeTierSpendGuardDeniedError) {
+            throw new AiFreeTierBudgetExceededError();
+          }
+          throw error;
+        }
       }
     }
   }
