@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 const webAppRoot = path.resolve(__dirname, '..');
 
 const defaultShotDir =
-  '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-regression-loop-post-fixes';
+  '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-regression-suite-fresh-main';
 const shotDir =
   process.env.FREE_TIER_QA_SHOTS_DIR?.trim() ||
   process.env.QA_SCREENSHOT_DIR?.trim() ||
@@ -192,6 +192,19 @@ function browserCandidates(root: string): BrowserCandidate[] {
   });
 }
 
+function resolvePlaywrightBin() {
+  const candidates = [
+    path.resolve(webAppRoot, 'node_modules/.bin/playwright'),
+    path.resolve(webAppRoot, '../../node_modules/.bin/playwright'),
+  ];
+  const match = candidates.find((candidate) => existsSync(candidate));
+  if (match) return match;
+
+  throw new Error(
+    `Could not find Playwright binary. Checked: ${candidates.join(', ')}`
+  );
+}
+
 export function resolveBrowserEnv(
   env: Partial<NodeJS.ProcessEnv> = process.env
 ): BrowserResolution {
@@ -334,7 +347,7 @@ async function main() {
     return;
   }
 
-  const playwrightBin = path.resolve(webAppRoot, '../../node_modules/.bin/playwright');
+  const playwrightBin = resolvePlaywrightBin();
   const args = [
     playwrightBin,
     'test',

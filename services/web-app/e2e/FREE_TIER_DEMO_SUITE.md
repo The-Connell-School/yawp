@@ -5,16 +5,16 @@ The durable runner for the free-tier demo coverage is:
 ```bash
 cd services/web-app
 PLAYWRIGHT_BROWSERS_PATH=/home/bryant/.cache/ms-playwright \
-FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-regression-loop-post-fixes \
+FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-regression-suite-fresh-main \
 bun run test:e2e:free-tier-demo
 ```
 
-For this `qa-regression-loop-post-fixes` rerun, use:
+For this `qa-regression-suite-fresh-main` rerun, use:
 
 ```bash
 cd services/web-app
 PLAYWRIGHT_BROWSERS_PATH=/home/bryant/.cache/ms-playwright \
-FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-regression-loop-post-fixes \
+FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-regression-suite-fresh-main \
 bun run test:e2e:free-tier-demo
 ```
 
@@ -71,10 +71,10 @@ If this suite finds a regression, append the lane failure note and attempt to fi
 ```bash
 cd services/web-app
 bun run scripts/file-free-tier-qa-failure.ts \
-  --id=ft-qa-regression-loop-post-fixes \
-  --slug=qa-regression-loop-post-fixes \
+  --id=ft-qa-regression-suite-fresh-main \
+  --slug=qa-regression-suite-fresh-main \
   --title="Free-tier demo E2E suite regression" \
-  --evidence="/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-regression-loop-post-fixes" \
+  --evidence="/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-regression-suite-fresh-main" \
   --severity=major \
   --repro="Run \`bun run test:e2e:free-tier-demo\`." \
   --expected="The free-tier demo E2E suite passes without regressions." \
