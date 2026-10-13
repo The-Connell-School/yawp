@@ -10,6 +10,7 @@ import { prisma } from '~/utils/db.server';
 import { releaseBatch } from '~/domain/free-tier/service.server';
 import { sendReleaseEmailsForApplicationIds } from '~/domain/free-tier/approval-flow.server';
 import { FreeTierBudgetExceededError } from '~/domain/free-tier/usage-budget.server';
+import { recordFreeTierCapDenialAudit } from '~/domain/free-tier/tester-audit.server';
 
 function budgetExceededPayload(error: FreeTierBudgetExceededError) {
   const usage = error.summary;
@@ -52,6 +53,12 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   } catch (error) {
     if (error instanceof FreeTierBudgetExceededError) {
+      await recordFreeTierCapDenialAudit(
+        prisma,
+        { ...actor, action: 'waitlist.release.denied' },
+        id,
+        { reason: 'budget_exceeded', budget: error.summary }
+      );
       return Response.json(budgetExceededPayload(error), { status: 402 });
     }
     throw error;
