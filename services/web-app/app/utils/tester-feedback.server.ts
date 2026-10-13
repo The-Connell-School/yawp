@@ -100,6 +100,30 @@ const response = (value: unknown, status = 200, headers?: HeadersInit) =>
     },
   });
 
+function firstHeaderValue(value: string | null) {
+  return value?.split(',')[0]?.trim() || null;
+}
+
+function forwardedOrigin(request: Request) {
+  const proto = firstHeaderValue(request.headers.get('x-forwarded-proto'));
+  const host = firstHeaderValue(request.headers.get('x-forwarded-host'));
+  if (proto !== 'https' && proto !== 'http') return null;
+  if (!host || /[\s/@\\\u0000-\u001f]/.test(host)) return null;
+  try {
+    return new URL(`${proto}://${host}`).origin;
+  } catch {
+    return null;
+  }
+}
+
+function acceptsFeedbackOrigin(request: Request, environment: string) {
+  const origin = request.headers.get('origin');
+  if (!origin) return false;
+  if (origin === new URL(request.url).origin) return true;
+  if (environment.toLowerCase() === 'production') return false;
+  return origin === forwardedOrigin(request);
+}
+
 export async function submitTesterFeedback(
   request: Request,
   deps: FeedbackDependencies
@@ -110,7 +134,8 @@ export async function submitTesterFeedback(
   const user = await deps.getUser(request);
   if (!user) return response({ error: 'Sign in to log feedback' }, 401);
   if (!user.isTester) return response({ error: 'Tester access required' }, 403);
-  if (request.headers.get('origin') !== new URL(request.url).origin)
+  const environment = deps.environment();
+  if (!acceptsFeedbackOrigin(request, environment))
     return response({ error: 'Invalid origin' }, 403);
   if (
     request.headers.get('content-type')?.split(';')[0] !==
@@ -139,7 +164,7 @@ export async function submitTesterFeedback(
     ...parsed.data,
     userId: user.id,
     userAgent: (request.headers.get('user-agent') || '').slice(0, 1000),
-    environment: deps.environment(),
+    environment,
   });
   if (!saved)
     return response(
