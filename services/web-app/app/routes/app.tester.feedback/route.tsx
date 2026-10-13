@@ -7,6 +7,7 @@ import { Button } from '~/components/ui/button';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
+  return null;
 }
 
 export default function TesterFeedbackPage() {
