@@ -68,7 +68,9 @@ describe('bootstrap-host.sh', () => {
     expect(script).toContain('node "$certificate_manager" --import-traefik');
     expect(script).toContain('node "$certificate_manager" --wildcard');
     expect(script).toContain('Warning: wildcard preview certificate issuance failed; continuing with resident exact certificates');
+    expect(script).toContain('wildcard_available=false');
     expect(script).toContain('wildcard_hostname="_wildcard.$DOMAIN"');
+    expect(script).toContain('if [[ "$wildcard_available" == "true"');
     expect(script).toContain('yawp-preview-certificate-renewal.timer');
     expect(script).toContain('$ROOT/ingress/current/certificate-manager.mjs --wildcard');
     expect(previewWorkflow).toContain('PREVIEW_ACME_EMAIL');

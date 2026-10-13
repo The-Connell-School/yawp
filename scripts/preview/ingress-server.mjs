@@ -4,6 +4,7 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { connect as netConnect } from 'node:net';
 import { createSecureContext } from 'node:tls';
+import { createPrivateKey, createPublicKey, X509Certificate } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import {
@@ -480,6 +481,28 @@ function loadCertificatePair(certRoot, hostname) {
   };
 }
 
+function publicKeyDer(key) {
+  return createPublicKey(key).export({ type: 'spki', format: 'der' });
+}
+
+function validCertificatePair({ hostname, key, cert, now = Date.now() }) {
+  try {
+    const certificate = new X509Certificate(cert);
+    const validationHostname = hostname.startsWith('*.') ? `wildcard-probe.${hostname.slice(2)}` : hostname;
+    if (!certificate.checkHost(validationHostname)) return false;
+    const validFrom = Date.parse(certificate.validFrom);
+    const validTo = Date.parse(certificate.validTo);
+    if (!Number.isFinite(validFrom) || !Number.isFinite(validTo) || now < validFrom || now >= validTo) {
+      return false;
+    }
+    const privatePublic = publicKeyDer(createPrivateKey(key));
+    const certificatePublic = certificate.publicKey.export({ type: 'spki', format: 'der' });
+    return Buffer.from(privatePublic).equals(Buffer.from(certificatePublic));
+  } catch {
+    return false;
+  }
+}
+
 async function findDefaultHostname(certRoot, domain) {
   const wildcardName = wildcardCertificateStorageName(domain);
   try {
@@ -498,9 +521,10 @@ async function findDefaultHostname(certRoot, domain) {
 
 export function createCertificateStore({ certRoot, domain, defaultHostname }) {
   const cache = new Map();
-  function pairByName(storageName) {
+  function pairByName(storageName, hostname = storageName) {
     try {
       const loaded = loadCertificatePair(certRoot, storageName.toLowerCase());
+      if (!validCertificatePair({ hostname, ...loaded })) return null;
       const cached = cache.get(storageName);
       if (cached?.version === loaded.version) return cached;
       const value = { ...loaded, context: createSecureContext(loaded) };
@@ -512,13 +536,13 @@ export function createCertificateStore({ certRoot, domain, defaultHostname }) {
   }
   function pair(hostname) {
     if (parsePreviewPr(hostname, domain) === null) return null;
-    for (const storageName of [wildcardCertificateStorageName(domain), hostname]) {
-      const match = pairByName(storageName);
-      if (match) return match;
-    }
-    return null;
+    return pairByName(wildcardCertificateStorageName(domain), `*.${domain}`)
+      || pairByName(hostname, hostname);
   }
-  const defaultPair = pairByName(defaultHostname);
+  const defaultPair = pairByName(
+    defaultHostname,
+    defaultHostname === wildcardCertificateStorageName(domain) ? `*.${domain}` : defaultHostname,
+  );
   if (!defaultPair) throw new Error(`No valid default certificate found for ${defaultHostname}`);
   return {
     defaultPair,
