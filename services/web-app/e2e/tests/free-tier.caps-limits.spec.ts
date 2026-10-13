@@ -18,6 +18,11 @@ const OUT =
   process.env.QA_SCREENSHOT_DIR?.trim() ||
   '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-caps-limits';
 const SCAN_COOKIE = '__yawp_ft_scan';
+const LOCAL_BASE_URL = `http://127.0.0.1:${process.env.FREE_TIER_E2E_PORT || 5197}`;
+
+function localUrl(path: string) {
+  return new URL(path, LOCAL_BASE_URL).toString();
+}
 
 async function shot(page: Page, name: string) {
   await mkdir(OUT, { recursive: true });
@@ -111,7 +116,6 @@ test.describe.serial('Free-tier caps, limits, and cookie QA', () => {
 
   test('local demo stand-in: exhausted event link is friendly and has no side effects', async ({
     page,
-    request,
   }) => {
     const run = `qa-caps-${Date.now().toString(36)}`;
     const email = `${run}@example.com`;
@@ -126,11 +130,11 @@ test.describe.serial('Free-tier caps, limits, and cookie QA', () => {
       });
       tokenIds.push(token.id);
 
-      const response = await request.get(
-        `/free?t=${encodeURIComponent(token.code)}`
+      const response = await fetch(
+        localUrl(`/free?t=${encodeURIComponent(token.code)}`)
       );
       const text = await response.text();
-      expect(response.status()).toBe(200);
+      expect(response.status).toBe(200);
       expectNoServerErrorMarkers(text);
 
       await page.goto(`/free?t=${encodeURIComponent(token.code)}`);
@@ -148,14 +152,15 @@ test.describe.serial('Free-tier caps, limits, and cookie QA', () => {
         '01-exhausted-cap-response.txt',
         [
           'Exhausted event-link response.',
-          `status: ${response.status()}`,
+          `status: ${response.status}`,
           `tokenId: ${token.id}`,
           `bodyExcerpt: ${await bodyExcerpt(text)}`,
         ].join('\n')
       );
 
-      const submitted = await request.post('/free?index', {
-        form: {
+      const submitted = await fetch(localUrl('/free?index'), {
+        method: 'POST',
+        body: new URLSearchParams({
           intent: 'redeem',
           token: token.code,
           name: 'QA Exhausted Cap',
@@ -163,10 +168,11 @@ test.describe.serial('Free-tier caps, limits, and cookie QA', () => {
           schoolName: 'QA Demo',
           location: 'Demo QA',
           gradeLevel: '9',
-        },
+        }),
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
       });
       const submittedText = await submitted.text();
-      expect(submitted.status()).toBe(200);
+      expect(submitted.status).toBe(200);
       expectNoServerErrorMarkers(submittedText);
       expect(submittedText).toContain('exhausted');
 
@@ -214,7 +220,6 @@ test.describe.serial('Free-tier caps, limits, and cookie QA', () => {
 
   test('local demo stand-in: missing, cleared, and invalid scan cookies recover without 500s', async ({
     page,
-    request,
   }) => {
     const run = `qa-cookie-${Date.now().toString(36)}`;
     const tokenIds: string[] = [];
@@ -235,10 +240,10 @@ test.describe.serial('Free-tier caps, limits, and cookie QA', () => {
       const minted = cookies.find((cookie) => cookie.name === SCAN_COOKIE);
       expect(minted?.value).toBeTruthy();
 
-      const second = await request.get(url, {
+      const second = await fetch(localUrl(url), {
         headers: { cookie: `${SCAN_COOKIE}=${minted!.value}` },
       });
-      expect(second.status()).toBe(200);
+      expect(second.status).toBe(200);
 
       const prisma = createE2EPrismaClient();
       try {
@@ -278,7 +283,7 @@ test.describe.serial('Free-tier caps, limits, and cookie QA', () => {
       await shot(page, '04-invalid-cookie-recovery.png');
 
       const invalidText = await (
-        await request.get(url, { headers: { cookie: `${SCAN_COOKIE}=bad` } })
+        await fetch(localUrl(url), { headers: { cookie: `${SCAN_COOKIE}=bad` } })
       ).text();
       expectNoServerErrorMarkers(invalidText);
 
@@ -309,25 +314,26 @@ test.describe.serial('Free-tier caps, limits, and cookie QA', () => {
 
   test('local demo stand-in: duplicate submissions are safe and excessive attempts are friendly', async ({
     page,
-    request,
   }) => {
     const run = `qa-abuse-${Date.now().toString(36)}`;
     const email = `${run}@example.com`;
 
     try {
       for (let i = 0; i < 6; i++) {
-        const response = await request.post('/free?index', {
-          form: {
+        const response = await fetch(localUrl('/free?index'), {
+          method: 'POST',
+          body: new URLSearchParams({
             intent: 'waitlist',
             name: `QA Abuse ${i}`,
             email,
             schoolName: 'QA Demo',
             location: 'Demo QA',
             gradeLevel: '9',
-          },
+          }),
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
         });
         const text = await response.text();
-        expect(response.status()).toBe(200);
+        expect(response.status).toBe(200);
         expectNoServerErrorMarkers(text);
       }
 

@@ -17,6 +17,11 @@ import { setFreeTierFlag } from '../feature-flags';
 const OUT =
   process.env.QA_SCREENSHOT_DIR?.trim() ||
   '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-disabled-expired';
+const LOCAL_BASE_URL = `http://127.0.0.1:${process.env.FREE_TIER_E2E_PORT || 5197}`;
+
+function localUrl(path: string) {
+  return new URL(path, LOCAL_BASE_URL).toString();
+}
 
 type TokenCase = {
   key: 'disabled' | 'expired' | 'disabledAt';
@@ -68,7 +73,6 @@ test.describe('Free-tier rejected event link QA', () => {
 
   test('local demo stand-in: closed event links reject sign-ups and de-dupe scans', async ({
     page,
-    request,
   }) => {
     test.setTimeout(120_000);
 
@@ -138,8 +142,9 @@ test.describe('Free-tier rejected event link QA', () => {
         expect(afterFirstScan.scanCount).toBe(1);
         expect(scanRowsAfterFirst).toBe(1);
 
-        const rejectResponse = await request.post('/free?index', {
-          form: {
+        const rejectResponse = await fetch(localUrl('/free?index'), {
+          method: 'POST',
+          body: new URLSearchParams({
             intent: 'redeem',
             token: code,
             name: `QA ${item.key}`,
@@ -147,9 +152,10 @@ test.describe('Free-tier rejected event link QA', () => {
             schoolName: 'QA Demo',
             location: 'Demo QA',
             gradeLevel: '9',
-          },
+          }),
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
         });
-        expect(rejectResponse.status()).toBe(200);
+        expect(rejectResponse.status).toBe(200);
         const applicationCount = await prisma.freeTierApplication.count({
           where: { email },
         });

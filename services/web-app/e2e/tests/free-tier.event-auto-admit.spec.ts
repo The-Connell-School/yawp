@@ -17,6 +17,11 @@ import { mintFreeTierLinkForE2E } from '../helpers/mint-free-tier-link';
 const OUT =
   process.env.QA_SCREENSHOT_DIR?.trim() ||
   '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-event-auto';
+const LOCAL_BASE_URL = `http://127.0.0.1:${process.env.FREE_TIER_E2E_PORT || 5197}`;
+
+function localUrl(path: string) {
+  return new URL(path, LOCAL_BASE_URL).toString();
+}
 
 async function shot(page: Page, name: string) {
   await mkdir(OUT, { recursive: true });
@@ -35,7 +40,6 @@ function hashToken(token: string) {
 test.describe('Free-tier event auto-admit QA', () => {
   test('local demo stand-in: event link scan, auto-admit signup, cookie, and sign-in', async ({
     page,
-    request,
   }) => {
     test.setTimeout(120_000);
 
@@ -68,11 +72,11 @@ test.describe('Free-tier event auto-admit QA', () => {
       });
       tokenId = token.id;
 
-      const freeResponse = await request.get(`/free?t=${encodeURIComponent(code)}`, {
-        maxRedirects: 0,
+      const freeResponse = await fetch(localUrl(`/free?t=${encodeURIComponent(code)}`), {
+        redirect: 'manual',
       });
-      expect(freeResponse.status()).toBe(200);
-      expect(freeResponse.url()).toContain('/free?t=');
+      expect(freeResponse.status).toBe(200);
+      expect(freeResponse.url).toContain('/free?t=');
 
       await page.goto(`/free?t=${encodeURIComponent(code)}`);
       await expect(page).toHaveURL(new RegExp(`/free\\?t=${code}`));
@@ -141,7 +145,7 @@ test.describe('Free-tier event auto-admit QA', () => {
       expect(account.status).toBe('ACCOUNT_CREATED');
       expect(userId).toBeTruthy();
 
-      await page.request.post('/auth/logout');
+      await page.context().clearCookies();
       await page.goto('/auth/login');
       await page.getByLabel('Email or handle').fill(email);
       await page.getByLabel('Password').fill(password);
