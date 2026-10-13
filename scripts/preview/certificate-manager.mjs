@@ -811,8 +811,10 @@ async function resolveZeroSslEabCredentials({
 }
 
 function isLetsEncryptRegisteredDomainRateLimit(error) {
-  return /^ACME request failed \(429\):/.test(String(error?.message || ''))
-    && /too many certificates .*already issued for .* in the last 168h/i.test(error.message);
+  const message = String(error?.message || '');
+  return /^ACME request failed \(429\):/.test(message)
+    && /too many certificates\s*\(50\)\s+already issued for\s+["'][^"']+["']\s+in the last 168h/i.test(message)
+    && !/exact set of (domains|hostnames|identifiers)/i.test(message);
 }
 
 export async function ensureWildcardCertificate({

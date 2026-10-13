@@ -501,6 +501,63 @@ describe('preview certificate manager', () => {
     }
   });
 
+  test('does not fall back to ZeroSSL for exact-set duplicate certificate limits', async () => {
+    const root = temporaryRoot('preview-cert-exact-set-limit-');
+    const certRoot = path.join(root, 'ingress', 'certs');
+    const accountRoot = path.join(root, 'ingress', 'acme');
+    const challengeRoot = path.join(root, 'ingress', 'challenges');
+    let sawZeroSslRequest = false;
+    const response = (body, { status = 200, location, nonce = 'nonce-next' } = {}) => new Response(
+      typeof body === 'string' ? body : JSON.stringify(body),
+      {
+        status,
+        headers: {
+          'content-type': 'application/json',
+          'replay-nonce': nonce,
+          ...(location ? { location } : {}),
+        },
+      },
+    );
+    const fetchFn = async (url) => {
+      if (url === 'https://acme-v02.api.letsencrypt.org/directory') {
+        return response({
+          newNonce: 'https://le.test/nonce',
+          newAccount: 'https://le.test/account',
+          newOrder: 'https://le.test/order/new',
+        });
+      }
+      if (url === 'https://le.test/nonce') return response('', { nonce: 'le-nonce-1' });
+      if (url === 'https://le.test/account') {
+        return response({}, { status: 201, location: 'https://le.test/account/1' });
+      }
+      if (url === 'https://le.test/order/new') {
+        return response({
+          type: 'urn:ietf:params:acme:error:rateLimited',
+          detail: 'too many certificates (5) already issued for this exact set of identifiers in the last 168h0m0s',
+        }, { status: 429 });
+      }
+      if (url === 'https://api.zerossl.com/acme/eab-credentials-email') {
+        sawZeroSslRequest = true;
+      }
+      throw new Error(`Unexpected URL ${url}`);
+    };
+
+    await expect(ensureWildcardCertificate({
+      domain: 'preview.yawp.school',
+      certRoot,
+      accountRoot,
+      challengeRoot,
+      email: 'admin@example.com',
+      fetchFn,
+      pollIntervalMs: 0,
+      dnsProvider: {
+        present: async () => { throw new Error('DNS challenge should not start'); },
+        cleanup: async () => {},
+      },
+    })).rejects.toThrow('exact set of identifiers');
+    expect(sawZeroSslRequest).toBe(false);
+  });
+
   test('Route53 DNS-01 provider preserves unrelated wildcard challenge TXT values', async () => {
     const calls = [];
     const changes = [];
