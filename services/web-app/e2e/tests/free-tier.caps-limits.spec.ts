@@ -154,13 +154,56 @@ test.describe.serial('Free-tier caps, limits, and cookie QA', () => {
         ].join('\n')
       );
 
+      const submitted = await request.post('/free?index', {
+        form: {
+          intent: 'redeem',
+          token: token.code,
+          name: 'QA Exhausted Cap',
+          email,
+          schoolName: 'QA Demo',
+          location: 'Demo QA',
+          gradeLevel: '9',
+        },
+      });
+      const submittedText = await submitted.text();
+      expect(submitted.status()).toBe(200);
+      expectNoServerErrorMarkers(submittedText);
+      expect(submittedText).toContain('exhausted');
+
       const prisma = createE2EPrismaClient();
       try {
         const application = await prisma.freeTierApplication.findUnique({
           where: { email },
-          select: { id: true, status: true, userId: true },
+          select: {
+            id: true,
+            status: true,
+            userId: true,
+            acquisitionTokenId: true,
+          },
         });
         expect(application).toBeNull();
+
+        const tokenAfterSubmit = await prisma.acquisitionToken.findUniqueOrThrow({
+          where: { id: token.id },
+          select: { uses: true, maxUses: true },
+        });
+        expect(tokenAfterSubmit).toMatchObject({ uses: 1, maxUses: 1 });
+
+        await expect(
+          prisma.freeTierApplication.count({
+            where: { acquisitionTokenId: token.id, email },
+          })
+        ).resolves.toBe(0);
+        await expect(
+          prisma.user.count({
+            where: { email },
+          })
+        ).resolves.toBe(0);
+        await expect(
+          prisma.freeTierSignedLink.count({
+            where: { application: { email } },
+          })
+        ).resolves.toBe(0);
       } finally {
         await prisma.$disconnect();
       }
