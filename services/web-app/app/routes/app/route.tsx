@@ -73,6 +73,7 @@ import { FLAT_SIDEBAR_SECTIONS, SidebarNavLinks } from './sidebar-nav';
 import { prisma } from '~/utils/db.server';
 import { shouldRedirectClasslessStudent } from '~/utils/classless-student-gate';
 import { formatUserContactLabel } from '~/utils/user-display';
+import { isDemoFreeTierRouteOpen } from '~/utils/free-tier/free-tier-feature-gate.server';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -103,10 +104,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     '~/domain/feature-flags/feature-flags.server'
   );
   const freeTierFeatureOn = await isFreeTierEnabled();
+  const freeTierRouteOpen =
+    freeTierFeatureOn || isDemoFreeTierRouteOpen(process.env);
   const { loadFreeTierGateApplication, enforceFreeTierTeacherGate } = await import(
     '~/domain/free-tier/free-tier-gate.server'
   );
-  const freeTierApplication = freeTierFeatureOn
+  const freeTierApplication = freeTierRouteOpen
     ? await loadFreeTierGateApplication(userId)
     : null;
 
@@ -134,7 +137,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   const profile = await requireMembership(request, userId);
-  if (freeTierFeatureOn && profile.role === 'TEACHER') {
+  if (freeTierRouteOpen && profile.role === 'TEACHER') {
     await enforceFreeTierTeacherGate({
       userId,
       pathname,
