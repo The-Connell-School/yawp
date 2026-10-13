@@ -120,4 +120,42 @@ describe('TeacherPasteReport', () => {
       'No linked text remains in this version'
     );
   });
+
+  it('does not show the empty state before the event query resolves', async () => {
+    let resolveFetch!: (response: Response) => void;
+    globalThis.fetch = mock(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveFetch = resolve;
+        })
+    ) as unknown as typeof fetch;
+    const contentRoot = document.createElement('div');
+    contentRoot.textContent = 'No linked marks are visible yet.';
+
+    root = renderWithContent(contentRoot);
+
+    act(() => {
+      document
+        .querySelector<HTMLButtonElement>('[aria-label="Pasted text report"]')
+        ?.click();
+    });
+
+    expect(
+      document.querySelector('[data-testid="paste-report-empty"]')
+    ).toBeNull();
+    expect(document.body.textContent).not.toContain('No pasted text found');
+
+    await act(async () => {
+      resolveFetch(
+        new Response(JSON.stringify({ events: [], nextCursor: null }), {
+          status: 200,
+        })
+      );
+      await Promise.resolve();
+    });
+
+    expect(
+      document.querySelector('[data-testid="paste-report-empty"]')
+    ).not.toBeNull();
+  });
 });
