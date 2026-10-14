@@ -180,7 +180,7 @@ describe('preview ingress', () => {
     expect(accesses).toEqual([241]);
   });
 
-  test('queues a resident wake and serves an auto-refresh waking page', async () => {
+  test('authorizes, queues wake, and serves an auto-refresh waking page', async () => {
     const upstreamPort = await listen(createServer((incoming, response) => {
       response.end(`awake:${incoming.url}`);
     }));
@@ -191,7 +191,9 @@ describe('preview ingress', () => {
       resolveTarget: async () => running
         ? { host: '127.0.0.1', port: upstreamPort }
         : null,
-      authorizeWake: async () => null,
+      authorizeWake: async (pr, uri) => uri.includes('code=brisk-otter-4321')
+        ? { organizationId: 'local-dev-org', requirePreviewSeatCode: false }
+        : null,
       ensureRunning: async (pr, options) => {
         wakes.push({ pr, options });
         running = true;
@@ -200,47 +202,21 @@ describe('preview ingress', () => {
     });
     const ingressPort = await listen(createServer(ingress));
 
-    const woken = await request(ingressPort, { path: '/app' });
+    const unauthorized = await request(ingressPort, { path: '/app' });
+    const woken = await request(ingressPort, { path: '/app?code=brisk-otter-4321' });
     for (let attempt = 0; attempt < 20 && !running; attempt += 1) {
       await Bun.sleep(5);
     }
-    const refreshed = await request(ingressPort, { path: '/app' });
+    const refreshed = await request(ingressPort, { path: '/app?code=brisk-otter-4321' });
 
+    expect(unauthorized.status).toBe(401);
+    expect(unauthorized.body).toContain('one-click access URL');
     expect(woken.status).toBe(503);
     expect(woken.headers['retry-after']).toBe('5');
     expect(woken.body).toContain('Waking preview');
     expect(woken.body).toContain('http-equiv="refresh"');
     expect(refreshed.status).toBe(200);
-    expect(refreshed.body).toBe('awake:/app');
-    expect(wakes).toEqual([{
-      pr: 241,
-      options: {
-        allowDisplacement: true,
-      },
-    }]);
-  });
-
-  test('passes matching preview access credentials through to the wake command', async () => {
-    const wakes = [];
-    const ingress = createPreviewIngress({
-      domain: 'preview.yawp.school',
-      resolveTarget: async () => null,
-      authorizeWake: async (_pr, uri) => uri.includes('code=brisk-otter-4321')
-        ? { organizationId: 'local-dev-org', requirePreviewSeatCode: false }
-        : null,
-      ensureRunning: async (pr, options) => {
-        wakes.push({ pr, options });
-      },
-      recordAccess: async () => {},
-    });
-    const ingressPort = await listen(createServer(ingress));
-
-    const response = await request(ingressPort, { path: '/app?code=brisk-otter-4321' });
-    for (let attempt = 0; attempt < 20 && wakes.length === 0; attempt += 1) {
-      await Bun.sleep(5);
-    }
-
-    expect(response.status).toBe(503);
+    expect(refreshed.body).toBe('awake:/app?code=brisk-otter-4321');
     expect(wakes).toEqual([{
       pr: 241,
       options: {
@@ -255,7 +231,7 @@ describe('preview ingress', () => {
     const ingress = createPreviewIngress({
       domain: 'preview.yawp.school',
       resolveTarget: async () => null,
-      authorizeWake: async () => null,
+      authorizeWake: async () => true,
       ensureRunning: async (pr) => {
         wakes.push(pr);
       },
@@ -263,7 +239,7 @@ describe('preview ingress', () => {
     });
     const ingressPort = await listen(createServer(ingress));
 
-    const response = await request(ingressPort, { path: '/__wake' });
+    const response = await request(ingressPort, { path: '/__wake?code=brisk-otter-4321' });
     for (let attempt = 0; attempt < 20 && wakes.length === 0; attempt += 1) {
       await Bun.sleep(5);
     }
