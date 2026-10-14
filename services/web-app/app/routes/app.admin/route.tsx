@@ -29,7 +29,7 @@ export const adminTabs = [
     icon: <Settings size={16} className="opacity-75 mr-1" />,
   },
   {
-    label: 'Organizations',
+    label: 'Organizations (read-only moved)',
     to: '/app/admin/organizations',
     icon: <User size={16} className="opacity-75 mr-1" />,
   },

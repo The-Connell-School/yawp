@@ -1,4 +1,11 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { createElement } from 'react';
+import {
+  ORGANIZATIONS_READ_MOVED_MESSAGE,
+  OrganizationsLegacyNotice,
+} from './legacy-notice';
+
+
 
 const prisma = {
   organization: {
@@ -40,7 +47,7 @@ mock.module('./preview-seat.server', () => ({
   isIsolatedPreviewSeatMode,
 }));
 
-const { action, loader } = await import('./route');
+const { organizationsAction: action, organizationsLoader: loader } = await import('./route.server');
 
 afterAll(() => {
   mock.restore();
@@ -164,72 +171,91 @@ describe('admin organizations index route', () => {
     expect(createRuntimePreviewSeat).not.toHaveBeenCalled();
   });
 
-  test('loader exposes retrievable master and runtime codes only in preview mode', async () => {
-    isIsolatedPreviewSeatMode.mockReturnValue(true);
-    prisma.organization.findMany.mockResolvedValue([
-      {
-        id: 'local-dev-org',
-        name: 'Yawp Local Dev',
-        previewSeatCode: null,
-        createdAt: new Date('2026-08-04T00:00:00.000Z'),
-        memberships: [],
-      },
-      {
-        id: 'preview-seat-2',
-        name: 'Yawp Preview - Seat 2',
-        previewSeatCode: 'calm-panda-8127',
-        createdAt: new Date('2026-08-04T00:00:00.000Z'),
-        memberships: [],
-      },
-      {
-        id: 'ordinary-org',
-        name: 'Ordinary Org',
-        previewSeatCode: null,
-        createdAt: new Date('2026-08-04T00:00:00.000Z'),
-        memberships: [],
-      },
-    ]);
-
-    const response = await loader({
-      request: new Request('https://example.test/app/admin/organizations'),
-      params: {},
-      context: {} as never,
-    } as any);
-
-    expect(response.data.previewSeatMode).toBe(true);
-    expect(
-      response.data.organizations.map(
-        (organization) => organization.previewAccessCode
-      )
-    ).toEqual(['brave-otter-4193', 'calm-panda-8127', null]);
-    expect(response.data.organizations[1]).not.toHaveProperty(
-      'previewSeatCode'
-    );
+  test('denies loader access before any database read', async () => {
+    const denial = new Response('Forbidden', { status: 403 });
+    requireAdmin.mockRejectedValueOnce(denial);
+    await expect(loader({ request: new Request('https://example.test/app/admin/organizations') } as any)).rejects.toBe(denial);
+    expect(prisma.organization.findMany).not.toHaveBeenCalled();
+    expect(prisma.organization.count).not.toHaveBeenCalled();
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+    expect(isIsolatedPreviewSeatMode).not.toHaveBeenCalled();
   });
 
-  test('loader removes preview-seat mode and codes from production data', async () => {
-    prisma.organization.findMany.mockResolvedValue([
-      {
-        id: 'preview-seat-2',
-        name: 'Yawp Preview - Seat 2',
-        previewSeatCode: 'calm-panda-8127',
-        createdAt: new Date('2026-08-04T00:00:00.000Z'),
-        memberships: [],
-      },
-    ]);
+  test('denies every action before database writes or preview-seat creation', async () => {
+    for (const intent of ['create', 'createPreviewSeat', 'updateFilters']) {
+      const denial = new Response('Forbidden', { status: 403 });
+      requireAdmin.mockRejectedValueOnce(denial);
+      await expect(action({ request: createRequest(new URLSearchParams({ intent })) } as any)).rejects.toBe(denial);
+    }
+    expect(prisma.organization.create).not.toHaveBeenCalled();
+    expect(createRuntimePreviewSeat).not.toHaveBeenCalled();
+    expect(getOrganizationTableCookie).not.toHaveBeenCalled();
+    expect(isIsolatedPreviewSeatMode).not.toHaveBeenCalled();
+  });
 
-    const response = await loader({
-      request: new Request('https://example.test/app/admin/organizations'),
-      params: {},
-      context: {} as never,
-    } as any);
+  test('loader returns only preview-seat codes in preview-seat mode', async () => {
+    isIsolatedPreviewSeatMode.mockReturnValue(true);
+    const seats = [{ id: 'seat-2', name: 'Local Preview Seat 2', previewSeatCode: 'local-code-8127' }];
+    prisma.organization.findMany.mockResolvedValue(seats);
+    const request = new Request('https://example.test/app/admin/organizations');
+    const response = await loader({ request } as any);
+    expect(requireAdmin).toHaveBeenCalledWith(request);
+    expect(response.data).toEqual({ previewSeatMode: true, previewSeats: seats, readSurfaceMoved: true });
+    expect(prisma.organization.findMany).toHaveBeenCalledWith({
+      where: { previewSeatCode: { not: null } },
+      select: { id: true, name: true, previewSeatCode: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(prisma.organization.count).not.toHaveBeenCalled();
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+  });
 
-    expect(response.data.previewSeatMode).toBe(false);
-    expect(response.data.organizations[0].previewAccessCode).toBeNull();
-    expect(response.data.organizations[0]).not.toHaveProperty(
-      'previewSeatCode'
-    );
+  test('loader returns no preview codes and does not read organizations in production mode', async () => {
+    prisma.organization.findMany.mockResolvedValue([{ id: 'seat-2', previewSeatCode: 'local-code-8127' }]);
+    const request = new Request('https://example.test/app/admin/organizations');
+    const response = await loader({ request } as any);
+    expect(requireAdmin).toHaveBeenCalledWith(request);
+    expect(response.data).toEqual({ previewSeatMode: false, previewSeats: [], readSurfaceMoved: true });
+    expect(prisma.organization.findMany).not.toHaveBeenCalled();
     expect(getPreviewMasterAccessCode).not.toHaveBeenCalled();
     expect(getConfiguredPreviewOrganizationAccessCode).not.toHaveBeenCalled();
+  });
+});
+
+function textContent(node: unknown): string {
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (!node) return '';
+  if (Array.isArray(node)) return node.map(textContent).join('');
+  if (typeof node === 'object' && 'props' in node) {
+    return textContent((node as { props?: { children?: unknown } }).props?.children);
+  }
+  return '';
+}
+
+describe('legacy admin organizations route', () => {
+  test('displays moved read state while preserving platform-only write controls', () => {
+    const content = textContent(
+      OrganizationsLegacyNotice({
+        previewSeatMode: true,
+        createPreviewSeatControl: createElement(
+          'button',
+          null,
+          'Create Preview Seat'
+        ),
+        createOrganizationControl: createElement(
+          'button',
+          null,
+          'Create Organization'
+        ),
+      })
+    );
+
+    expect(content).toContain(ORGANIZATIONS_READ_MOVED_MESSAGE);
+    expect(content).toContain('Use Yawp Internal');
+    expect(content).toContain('Platform-only writes');
+    expect(content).toContain('Create Preview Seat');
+    expect(content).toContain('Create Organization');
+    expect(content).not.toContain('Total Organizations');
+    expect(content).not.toContain('Organization Growth');
   });
 });

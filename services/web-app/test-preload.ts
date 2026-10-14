@@ -44,6 +44,12 @@ function isWebAppTestFile(): boolean {
   if (!testFile) return true;
   const absoluteTestFile = resolve(process.cwd(), testFile);
   if (!absoluteTestFile.startsWith(`${import.meta.dir}/`)) return false;
+  if (
+    absoluteTestFile.endsWith('/app/utils/internal-admin-organizations.server.test.ts') ||
+    absoluteTestFile.endsWith('/app/routes/app.admin.organizations._index/route.test.ts')
+  ) {
+    return false;
+  }
   return !absoluteTestFile.startsWith(`${import.meta.dir}/scripts/`);
 }
 
