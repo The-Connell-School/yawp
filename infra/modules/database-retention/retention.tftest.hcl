@@ -5,6 +5,12 @@ mock_provider "aws" {
     }
   }
 
+  mock_data "aws_iam_policy_document" {
+    defaults = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"logging.s3.amazonaws.com\"},\"Action\":\"s3:PutObject\",\"Resource\":\"arn:aws:s3:::test-yawp-production-database-export-access-logs/database-exports/*\"}]}"
+    }
+  }
+
   mock_resource "aws_cloudwatch_log_group" {
     defaults = {
       arn = "arn:aws:logs:us-east-1:422348803522:log-group:/aws/lambda/test-yawp-production-rds-snapshot-cleanup"
@@ -48,6 +54,20 @@ run "database_exports_expire_after_90_days" {
       aws_s3_bucket_lifecycle_configuration.database_exports.rule[0].abort_incomplete_multipart_upload[0].days_after_initiation == 7
     )
     error_message = "Database export bucket must expire export objects after the 90-day retention window."
+  }
+}
+
+run "database_export_deletions_are_logged" {
+  command = plan
+
+  assert {
+    condition = (
+      aws_s3_bucket.database_exports_access_logs.bucket == "test-yawp-production-database-export-access-logs" &&
+      aws_s3_bucket_logging.database_exports.target_prefix == "database-exports/" &&
+      aws_s3_bucket_lifecycle_configuration.database_exports_access_logs.rule[0].expiration[0].days == 400 &&
+      strcontains(data.aws_iam_policy_document.database_exports_access_logs.json, "logging.s3.amazonaws.com")
+    )
+    error_message = "Database export bucket lifecycle deletions must emit S3 server access logs to a retained audit bucket."
   }
 }
 

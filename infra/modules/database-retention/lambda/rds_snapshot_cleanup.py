@@ -41,13 +41,13 @@ def _snapshot_created_at(snapshot):
 def _snapshot_tags(snapshot):
     arn = snapshot.get("DBSnapshotArn")
     if not arn:
-        return {}
+        return {}, False
     try:
         response = RDS.list_tags_for_resource(ResourceName=arn)
     except Exception:
         LOGGER.exception("Failed to read tags for snapshot %s", snapshot.get("DBSnapshotIdentifier"))
-        return {}
-    return {tag.get("Key", ""): tag.get("Value", "") for tag in response.get("TagList", [])}
+        return {}, True
+    return {tag.get("Key", ""): tag.get("Value", "") for tag in response.get("TagList", [])}, False
 
 
 def _is_pre_deploy_snapshot(snapshot, tags, markers):
@@ -84,10 +84,11 @@ def handler(event, context):
 
     inspected = []
     for snapshot in _manual_snapshots(db_instance_identifier):
-        tags = _snapshot_tags(snapshot)
+        tags, tag_read_failed = _snapshot_tags(snapshot)
         inspected.append({
             "snapshot": snapshot,
             "tags": tags,
+            "tag_read_failed": tag_read_failed,
             "created_at": _snapshot_created_at(snapshot),
             "is_pre_deploy": _is_pre_deploy_snapshot(snapshot, tags, markers),
         })
@@ -115,6 +116,9 @@ def handler(event, context):
 
         if item is newest_pre_deploy:
             skipped.append({"snapshot": snapshot_id, "reason": "newest-pre-deploy"})
+            continue
+        if item["tag_read_failed"]:
+            skipped.append({"snapshot": snapshot_id, "reason": "tag-read-failed"})
             continue
         if created_at is None:
             skipped.append({"snapshot": snapshot_id, "reason": "missing-create-time"})
