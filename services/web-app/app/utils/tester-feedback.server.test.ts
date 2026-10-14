@@ -229,6 +229,29 @@ describe('tester feedback submission', () => {
     expect(saved).toHaveLength(1);
     expect(saved[0]).toMatchObject({ environment: 'demo' });
   });
+  test('accepts demo hosted form posts when the browser omits origin but sends same-origin referer', async () => {
+    const { deps, saved } = setup({ environment: () => 'demo' });
+    const response = await submitTesterFeedback(
+      new Request('http://app-runner.internal/api/tester-feedback', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          referer: 'https://demo.yawp.school/app/assignments?tab=work',
+          host: 'demo.yawp.school',
+        },
+        body: new URLSearchParams({
+          url: '/app?tab=work',
+          whatIDid: 'Opened',
+          whatHappened: 'Froze',
+          whatIWish: 'Save',
+        }),
+      }),
+      deps
+    );
+    expect(response.status).toBe(201);
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject({ environment: 'demo' });
+  });
   test('does not trust proxy-reconstructed tester feedback origins in production', async () => {
     const { deps, saved } = setup({ environment: () => 'production' });
     const productionOriginHeaders: HeadersInit[] = [
@@ -239,6 +262,10 @@ describe('tester feedback submission', () => {
       },
       {
         origin: 'https://yawp.school',
+        host: 'yawp.school',
+      },
+      {
+        referer: 'https://yawp.school/app',
         host: 'yawp.school',
       },
     ];
