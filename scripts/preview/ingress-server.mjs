@@ -102,7 +102,7 @@ function sendWakingPage(response, pr) {
     const pause = (ms) => new Promise(resolve => setTimeout(resolve, ms));
     for (;;) {
       try {
-        const wake = await fetch('/__wake', { method: 'POST', headers: { 'x-preview-wake': '1' } });
+        const wake = await fetch('/__wake' + (location.search || ''), { method: 'POST', headers: { 'x-preview-wake': '1' } });
         if (wake.status === 404 || wake.status === 401 || wake.status === 403) {
           message.textContent = 'This preview is unavailable. Use its access URL if access is required.';
           return;
@@ -286,8 +286,7 @@ function createWakeCoordinator({
           .then(() => recordQueuedWake(pr))
           .then(() => ensureRunning(pr, options))
           .finally(async () => {
-            inFlight.delete(pr);
-            await clearQueuedWake(pr);
+            try { await clearQueuedWake(pr); } finally { inFlight.delete(pr); }
           });
         inFlight.set(pr, operation);
       }
@@ -365,11 +364,10 @@ export function createPreviewIngress({
 
   const limiter = createWakeLimiter({ ...wakeLimits, now });
 
-  async function queueAuthorizedWake({ parsed, request, response, jsonResponse = false }) {
+  async function queueWake({ parsed, request, response }) {
     const resident = await isResident(parsed.pr);
     if (!resident || !await isOpen(parsed.pr)) {
-      if (jsonResponse) json(response, 404, { status: 'not-resident', pr: parsed.pr });
-      else sendNoPreviewPage(response, parsed.pr);
+      json(response, 404, { status: 'not-resident', pr: parsed.pr });
       return;
     }
     if (isBotRequest(request)
@@ -381,8 +379,7 @@ export function createPreviewIngress({
     const anonymous = plainWakeEnabled && request.headers['x-preview-wake'] === '1';
     const authorization = anonymous ? null : await authorizeWake(parsed.pr, request.url, request);
     if (!anonymous && !authorization) {
-      if (jsonResponse) json(response, 401, { status: 'unauthorized', pr: parsed.pr });
-      else send(response, 401, 'Open this sleeping preview with its one-click access URL.\n');
+      json(response, 401, { status: 'unauthorized', pr: parsed.pr });
       return;
     }
     if (wake.isWaking(parsed.pr)) {
@@ -400,15 +397,10 @@ export function createPreviewIngress({
       });
     } catch (error) {
       const [status, body] = wakeErrorResponse(error);
-      if (jsonResponse) json(response, status, { status: 'error', pr: parsed.pr, message: body.trim() }, status === 503 ? { 'retry-after': '15' } : {});
-      else send(response, status, body, status === 503 ? { 'retry-after': '15' } : {});
+      json(response, status, { status: 'error', pr: parsed.pr, message: body.trim() }, status === 503 ? { 'retry-after': '15' } : {});
       return;
     }
-    if (jsonResponse) {
-      json(response, 202, { status: 'waking', pr: parsed.pr }, { 'retry-after': '5' });
-    } else {
-      sendWakingPage(response, parsed.pr);
-    }
+    json(response, 202, { status: 'waking', pr: parsed.pr }, { 'retry-after': '5' });
   }
 
   return async (request, response) => {
@@ -434,16 +426,16 @@ export function createPreviewIngress({
       return;
     }
     const hostname = previewServiceHostname(parsed.pr, domain, parsed.service);
-    let target = await resolveTarget(parsed.pr, { service: parsed.service });
+    const target = await resolveTarget(parsed.pr, { service: parsed.service });
     if (isWakePath(request.url)) {
       if (!['GET', 'POST'].includes(request.method)) {
         json(response, 405, { status: 'method-not-allowed' }, { allow: 'GET, POST' });
-      } else if (target) {
+      } else if (target && !wake.isWaking(parsed.pr)) {
         json(response, 200, { status: 'running', pr: parsed.pr });
       } else if (request.method === 'GET') {
         json(response, 200, { status: wake.isWaking(parsed.pr) ? 'waking' : 'sleeping', pr: parsed.pr });
       } else {
-        await queueAuthorizedWake({ parsed, request, response, jsonResponse: true });
+        await queueWake({ parsed, request, response });
       }
       return;
     }
@@ -505,7 +497,7 @@ export function createWebSocketUpgradeHandler({
       return;
     }
     const hostname = previewServiceHostname(parsed.pr, domain, parsed.service);
-    let target = await resolveTarget(parsed.pr, { service: parsed.service });
+    const target = await resolveTarget(parsed.pr, { service: parsed.service });
     if (!target) {
       writeSocketResponse(socket, '503 Service Unavailable', 'Open this preview in a browser to wake it.\n');
       return;
@@ -566,7 +558,9 @@ export function createWebSocketUpgradeHandler({
 
 export function targetFromDockerInspect(inspect, port = 8080) {
   const address = inspect?.NetworkSettings?.Networks?.preview?.IPAddress;
-  if (!inspect?.State?.Running || typeof address !== 'string' || !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(address)) {
+  if (!inspect?.State?.Running
+    || (inspect.State.Health && inspect.State.Health.Status !== 'healthy')
+    || typeof address !== 'string' || !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(address)) {
     return null;
   }
   return { host: address, port };

@@ -397,6 +397,16 @@ printf 'OK\\n'
     expect(readFileSync(docker.log, 'utf8')).not.toContain(' stop');
   });
 
+  test('closed PR state is rechecked under the host lock before any container mutation', () => {
+    const root = makeRoot(); makePreview(root, 241);
+    const docker = makeDockerStub(root);
+    const curl = path.join(root, 'curl');
+    writeFileSync(curl, `#!/bin/bash\nprintf '{"state":"closed"}\\n'\n`); chmodSync(curl, 0o755);
+    const result = run(root, 241, docker, { PREVIEW_WAKE_REQUIRE_OPEN_PR: 'true', PREVIEW_CURL: curl });
+    expect(result.status).not.toBe(0);
+    expect(readFileSync(docker.log, 'utf8')).not.toMatch(/ start| stop/);
+  });
+
   test('rejects malformed PR identifiers before calling Docker', () => {
     const root = makeRoot();
     const docker = makeDockerStub(root);

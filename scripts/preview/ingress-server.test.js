@@ -592,6 +592,31 @@ describe('preview ingress', () => {
     upstream.destroy();
   });
 
+  test('readiness remains waking until the health-gated wake operation completes', async () => {
+    let release;
+    let running = false;
+    const pending = new Promise(resolve => { release = resolve; });
+    const port = await listen(createServer(createPreviewIngress({
+      domain: 'preview.yawp.school', isOpen: async () => true,
+      resolveTarget: async () => running ? { host: '127.0.0.1', port: 1 } : null,
+      ensureRunning: async () => { running = true; await pending; }, recordAccess: async () => {},
+    })));
+    await request(port, { path: '/__wake', method: 'POST', headers: { 'x-preview-wake': '1' } });
+    await Bun.sleep(5);
+    const status = await request(port, { path: '/__wake' });
+    release();
+    expect(JSON.parse(status.body).status).toBe('waking');
+  });
+
+  test('starting or unhealthy Docker containers are not ready targets', () => {
+    for (const status of ['starting', 'unhealthy']) {
+      expect(targetFromDockerInspect({
+        State: { Running: true, Health: { Status: status } },
+        NetworkSettings: { Networks: { preview: { IPAddress: '172.21.0.14' } } },
+      })).toBeNull();
+    }
+  });
+
   test('extracts only a running preview-network target from Docker inspect', () => {
     expect(targetFromDockerInspect({
       State: { Running: true },
