@@ -38,6 +38,34 @@ variable "db_allocated_storage" {
   default     = 20
 }
 
+variable "database_export_retention_days" {
+  type        = number
+  description = "Number of days to retain database export objects in S3."
+  default     = 90
+
+  validation {
+    condition     = var.database_export_retention_days >= 90
+    error_message = "Database export retention must be at least 90 days."
+  }
+}
+
+variable "manual_snapshot_retention_days" {
+  type        = number
+  description = "Number of days to retain manual RDS snapshots before scheduled cleanup deletes eligible snapshots."
+  default     = 90
+
+  validation {
+    condition     = var.manual_snapshot_retention_days >= 90
+    error_message = "Manual RDS snapshot retention must be at least 90 days."
+  }
+}
+
+variable "rds_snapshot_cleanup_schedule_expression" {
+  type        = string
+  description = "EventBridge schedule expression for manual RDS snapshot cleanup."
+  default     = "cron(30 8 * * ? *)"
+}
+
 variable "session_secret" {
   type        = string
   description = "Secret used for session encryption"
@@ -187,7 +215,7 @@ variable "internal_platform_signing_keys_secret_arn" {
     condition = (
       var.internal_platform_integration == null ||
       (var.internal_platform_signing_keys_secret_arn != null &&
-        can(regex("^arn:aws:secretsmanager:", var.internal_platform_signing_keys_secret_arn)))
+      can(regex("^arn:aws:secretsmanager:", var.internal_platform_signing_keys_secret_arn)))
     )
     error_message = "Set internal_platform_signing_keys_secret_arn to the existing secret ARN when internal_platform_integration is configured."
   }
