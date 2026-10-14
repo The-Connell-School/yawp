@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { signInternalApiRequest } from './internal-platform-signing.server';
+import { renderPreviewCompose } from '../../../../scripts/preview/render-compose.mjs';
 
 type StoredToken = {
   id: string;
@@ -175,6 +176,46 @@ describe('Internal token-create wire contract through the real signed handler an
     headers.delete('x-yawp-signature');
     const response = await tokensCreate(new Request(signed, { headers }));
     expect(response.status).toBe(401);
+    expect(rows).toHaveLength(0);
+  });
+
+  test('the rendered demo key configuration authorizes a signed create with actor attribution', async () => {
+    const compose = Bun.YAML.parse(renderPreviewCompose({
+      prNumber: '', slug: 'demo', domain: 'yawp.school', runtime: 'production',
+      sourceDir: '/srv/yawp-demo/sources/demo',
+      accessSeats: JSON.stringify([{ code: 'brave-otter-4193', organizationId: 'local-dev-org', label: 'Master' }]),
+      sessionSecret: 'fixture-only-session-secret-0000000000',
+      accessSecret: 'fixture-only-access-secret-0000000000',
+      databasePassword: 'fixture-only-database-password-000000',
+      internalApiKeys: process.env.YAWP_INTERNAL_API_KEYS,
+    })) as { services: { web: { environment: Record<string, string> } } };
+    process.env.YAWP_INTERNAL_API_KEYS = compose.services.web.environment.YAWP_INTERNAL_API_KEYS;
+    expect((await tokensCreate(request(ordinaryInput))).status).toBe(200);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].createdBy).toBe(actor);
+  });
+
+  test('missing server HMAC configuration rejects a signed write with 404', async () => {
+    delete process.env.YAWP_INTERNAL_API_KEYS;
+    expect((await tokensCreate(request(ordinaryInput))).status).toBe(404);
+    expect(rows).toHaveLength(0);
+  });
+
+  test.each([
+    { id: 'other-environment', secret: signing.secret, scopes: ['management:write'], status: 401 },
+    { id: signing.keyId, secret: 'wrong-key-material-000000000000000000000000', scopes: ['management:write'], status: 401 },
+    { id: signing.keyId, secret: signing.secret, scopes: ['management:read'], status: 403 },
+  ])('rejects mismatched key or insufficient scope (case %#)', async ({ status, ...key }) => {
+    process.env.YAWP_INTERNAL_API_KEYS = JSON.stringify([key]);
+    expect((await tokensCreate(request(ordinaryInput))).status).toBe(status);
+    expect(rows).toHaveLength(0);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  test('rejects altered signed actor attribution', async () => {
+    const signed = request(ordinaryInput);
+    signed.headers.set('x-yawp-actor', 'someone-else@yawp.local');
+    expect((await tokensCreate(signed)).status).toBe(401);
     expect(rows).toHaveLength(0);
   });
 });

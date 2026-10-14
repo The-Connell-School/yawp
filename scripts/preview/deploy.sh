@@ -629,6 +629,7 @@ compute_tooling_fingerprint() {
         "$SCRIPT_DIR/deploy.sh" \
         "$SCRIPT_DIR/preview-env.mjs" \
         "$SCRIPT_DIR/render-compose.mjs" \
+        "$SCRIPT_DIR/demo-internal-api-config.mjs" \
         "$SCRIPT_DIR/find-traefik-dynamic-dir.sh" \
         "$SCRIPT_DIR/rollout-web.sh" \
         "$SCRIPT_DIR/tooling-artifacts.sh"

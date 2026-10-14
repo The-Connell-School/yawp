@@ -71,6 +71,8 @@ jobs:
       PREVIEW_RESEND_API_KEY: ${{ secrets.DEMO_RESEND_API_KEY }}
       # Optional. Lets Yawp Internal publish rubrics to demo via the Rubric Catalog API.
       PREVIEW_MANAGEMENT_SERVICE_KEY: ${{ secrets.DEMO_MANAGEMENT_SERVICE_KEY }}
+      # Existing demo-scoped HMAC keys; never fall back to production keys.
+      DEMO_INTERNAL_API_KEYS: ${{ secrets.DEMO_INTERNAL_API_KEYS }}
       PREVIEW_POSTGRES_ADMIN_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
       PREVIEW_LOGIN_EMAIL: ${{ secrets.DEMO_LOGIN_EMAIL || secrets.PREVIEW_LOGIN_EMAIL }}
       PREVIEW_LOGIN_PASSWORD: ${{ secrets.DEMO_LOGIN_PASSWORD || secrets.PREVIEW_LOGIN_PASSWORD }}
@@ -125,6 +127,9 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           path: demo-control
           persist-credentials: false
+
+      - name: Validate demo signed-write configuration
+        run: node demo-control/scripts/preview/demo-internal-api-config.mjs
 
       - name: Checkout the requested application ref
         uses: actions/checkout@v4
@@ -241,6 +246,7 @@ jobs:
             "PREVIEW_RESEND_FROM_EMAIL=$(shell_quote "$PREVIEW_RESEND_FROM_EMAIL")"
             "PREVIEW_RESEND_API_KEY=$(shell_quote "$PREVIEW_RESEND_API_KEY")"
             "PREVIEW_MANAGEMENT_SERVICE_KEY=$(shell_quote "$PREVIEW_MANAGEMENT_SERVICE_KEY")"
+            "DEMO_INTERNAL_API_KEYS=$(shell_quote "$DEMO_INTERNAL_API_KEYS")"
             "PREVIEW_POSTGRES_ADMIN_PASSWORD=$(shell_quote "$PREVIEW_POSTGRES_ADMIN_PASSWORD")"
             "PREVIEW_LOGIN_EMAIL=$(shell_quote "$PREVIEW_LOGIN_EMAIL")"
             "PREVIEW_LOGIN_PASSWORD=$(shell_quote "$PREVIEW_LOGIN_PASSWORD")"

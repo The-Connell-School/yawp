@@ -13,7 +13,7 @@ POLL_SECONDS="${DEPLOY_POLL_SECONDS:-30}"
 FAILURE_LOG_LINES="${FAILURE_LOG_LINES:-120}"
 EXIT_FILE="${DEPLOY_LOG}.exit"
 LOG_DIR="$(dirname "$DEPLOY_LOG")"
-LOCAL_LOG_COPY="/tmp/demo-deploy.log"
+LOCAL_LOG_COPY="${LOCAL_LOG_COPY:-/tmp/demo-deploy.log}"
 
 shell_quote() { printf '%q' "$1"; }
 
@@ -23,6 +23,7 @@ mask_deploy_log() {
     -e 's/(PREVIEW_LOGIN_PASSWORD=)[^[:space:]]*/\1[REDACTED]/g' \
     -e 's/(PREVIEW_POSTGRES_ADMIN_PASSWORD=)[^[:space:]]*/\1[REDACTED]/g' \
     -e 's/(PREVIEW_MANAGEMENT_SERVICE_KEY=)[^[:space:]]*/\1[REDACTED]/g' \
+    -e 's/((DEMO_INTERNAL_API_KEYS|YAWP_INTERNAL_API_KEYS)=).*/\1[REDACTED]/g' \
     -e 's/(PREVIEW_RESEND_API_KEY=)[^[:space:]]*/\1[REDACTED]/g' \
     -e 's/(PREVIEW_STRIPE_SECRET_KEY=)[^[:space:]]*/\1[REDACTED]/g' \
     -e 's/(PREVIEW_STRIPE_WEBHOOK_SECRET=)[^[:space:]]*/\1[REDACTED]/g'
@@ -40,6 +41,10 @@ emit_failure_log_tail() {
   fi
 }
 
+# Pass command and paths as positional data to a fixed script. Interpolating an
+# already shell-quoted command inside double quotes would consume its escaping
+# before bash -lc receives it (including JSON quotes, dollars and backslashes).
+detached_script='flock -w 1800 "$1" bash -lc "$2" > "$3" 2>&1; echo $? > "$4"'
 ssh -i "$SSH_IDENTITY" -o BatchMode=yes "$SSH_TARGET" bash -s <<REMOTE
 set -euo pipefail
 mkdir -p $(shell_quote "$LOG_DIR")
@@ -48,7 +53,7 @@ if ! flock -n $(shell_quote "$LOCK_FILE") -c true; then
   echo "Another operation holds $(shell_quote "$LOCK_FILE")" >&2
   exit 1
 fi
-setsid bash -c "flock -w 1800 $(shell_quote "$LOCK_FILE") bash -lc $(shell_quote "$REMOTE_COMMAND") > $(shell_quote "$DEPLOY_LOG") 2>&1; echo \\\$? > $(shell_quote "$EXIT_FILE")" </dev/null >/dev/null 2>&1 &
+setsid bash -c $(shell_quote "$detached_script") detached-deploy $(shell_quote "$LOCK_FILE") $(shell_quote "$REMOTE_COMMAND") $(shell_quote "$DEPLOY_LOG") $(shell_quote "$EXIT_FILE") </dev/null >/dev/null 2>&1 &
 REMOTE
 
 deadline=$((SECONDS + DEPLOY_TIMEOUT_SECONDS))
