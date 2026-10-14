@@ -21,9 +21,18 @@ import { CreateOrganizationSchema } from './schema';
 
 export async function organizationsLoader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
+  const previewSeatMode = isIsolatedPreviewSeatMode();
+  const previewSeats = previewSeatMode
+    ? await prisma.organization.findMany({
+        where: { previewSeatCode: { not: null } },
+        select: { id: true, name: true, previewSeatCode: true },
+        orderBy: { createdAt: 'desc' },
+      })
+    : [];
 
   return dataResponse({
-    previewSeatMode: isIsolatedPreviewSeatMode(),
+    previewSeatMode,
+    previewSeats,
     readSurfaceMoved: true,
   });
 }

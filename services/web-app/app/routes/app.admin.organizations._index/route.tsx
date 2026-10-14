@@ -31,7 +31,7 @@ export async function action(args: ActionFunctionArgs) {
 }
 
 export default function OrganizationsRoute() {
-  const { previewSeatMode } = useLoaderData<typeof loader>();
+  const { previewSeatMode, previewSeats } = useLoaderData<typeof loader>();
   const organizationFetcher = useFetcher();
   const seatFetcher = useFetcher<typeof action>();
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -144,6 +144,39 @@ export default function OrganizationsRoute() {
               ) : null}
             </SheetContent>
           </Sheet>
+        ) : null
+      }
+      previewSeatList={
+        previewSeatMode && previewSeats.length ? (
+          <section className="rounded-md border bg-background p-4">
+            <div className="space-y-1">
+              <h3 className="text-base font-semibold">Preview seats</h3>
+              <p className="text-sm text-muted-foreground">
+                Existing preview-seat access codes remain available here until
+                this platform-only action moves.
+              </p>
+            </div>
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[420px] text-sm">
+                <thead>
+                  <tr className="border-b text-left">
+                    <th className="py-2 pr-3 font-medium">Organization</th>
+                    <th className="py-2 pr-3 font-medium">Access Code</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewSeats.map((seat) => (
+                    <tr key={seat.id} className="border-b last:border-0">
+                      <td className="py-2 pr-3">{seat.name}</td>
+                      <td className="py-2 pr-3 font-mono">
+                        {seat.previewSeatCode}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
         ) : null
       }
       createOrganizationControl={
