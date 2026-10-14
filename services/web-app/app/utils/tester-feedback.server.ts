@@ -143,11 +143,32 @@ function hostedRequestOrigin(request: Request, origin: string) {
   }
 }
 
+function headerOrigin(value: string | null) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
 function acceptsFeedbackOrigin(request: Request, environment: string) {
-  const origin = request.headers.get('origin');
-  if (!origin) return false;
-  if (origin === new URL(request.url).origin) return true;
+  const originHeader = request.headers.get('origin');
+  const origin = headerOrigin(originHeader);
+  if (originHeader && !origin) return false;
+  if (origin && origin === new URL(request.url).origin) return true;
   if (environment.toLowerCase() === 'production') return false;
+  if (!origin) {
+    const referer = headerOrigin(request.headers.get('referer'));
+    return (
+      !!referer &&
+      (referer === new URL(request.url).origin ||
+        referer === forwardedOrigin(request) ||
+        referer === hostedRequestOrigin(request, referer))
+    );
+  }
   return (
     origin === forwardedOrigin(request) ||
     origin === hostedRequestOrigin(request, origin)
