@@ -147,6 +147,7 @@ describe('internal admin organization endpoints', () => {
       numOfStudentSeats: 30,
       numOfTeacherSeats: 5,
       previewSeatCode: 'secret-preview-code',
+      apiToken: 'future-secret',
       reporterEnabled: true,
       memberships: [{ role: 'STUDENT', isActive: true }],
     }]);
@@ -159,6 +160,8 @@ describe('internal admin organization endpoints', () => {
     body = await (await internalAdminOrganizationsList(authed(), deps())).json();
     expect(body.previewSeatMode).toBe(true);
     expect(body.organizations[0].previewAccessCode).toBe('secret-preview-code');
+    expect(body.organizations[0].previewSeatCode).toBeUndefined();
+    expect(body.organizations[0].apiToken).toBeUndefined();
   });
 
   test('returns organization detail with owners, assignment availability, and delete eligibility', async () => {
@@ -170,6 +173,7 @@ describe('internal admin organization endpoints', () => {
       numOfStudentSeats: 30,
       numOfTeacherSeats: 5,
       previewSeatCode: null,
+      apiToken: 'future-secret',
       reporterEnabled: true,
       classInsightsEnabled: false,
       writingPracticeEnabled: false,
@@ -208,6 +212,7 @@ describe('internal admin organization endpoints', () => {
       reasons: ['Only organization in this environment'],
     });
     expect(body.organization.previewSeatCode).toBeUndefined();
+    expect(body.organization.apiToken).toBeUndefined();
     expect(recordInternalPlatformWriteAudit).toHaveBeenLastCalledWith(expect.objectContaining({
       endpoint: 'GET /api/internal/v1/admin/organizations/org-1',
       result: 'organizations.detail.success',

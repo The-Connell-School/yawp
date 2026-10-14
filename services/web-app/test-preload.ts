@@ -43,7 +43,10 @@ function isWebAppTestFile(): boolean {
   const testFile = Bun.argv[1];
   if (!testFile) return true;
   const resolved = resolve(process.cwd(), testFile);
-  if (resolved.endsWith('/app/utils/internal-admin-organizations.server.test.ts')) {
+  if (
+    resolved.endsWith('/app/utils/internal-admin-organizations.server.test.ts') ||
+    resolved.endsWith('/app/routes/app.admin.organizations._index/route.test.ts')
+  ) {
     return false;
   }
   return resolved.startsWith(`${import.meta.dir}/`);

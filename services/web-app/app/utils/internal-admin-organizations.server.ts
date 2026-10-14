@@ -37,6 +37,20 @@ const featureToggleKeys = [
 
 type FeatureToggleKey = (typeof featureToggleKeys)[number];
 
+type BaseOrganizationFields = {
+  id: string;
+  createdAt: Date;
+  updatedAt: Date;
+  name: string;
+  plan?: string | null;
+  planActivatedAt?: Date | null;
+  planExpiresAt?: Date | null;
+  accessExpiresAt?: Date | null;
+  numOfStudentSeats: number;
+  numOfTeacherSeats: number;
+  previewSeatCode?: string | null;
+} & Record<FeatureToggleKey, boolean | null | undefined>;
+
 type OrganizationListDb = {
   findMany: typeof prisma.organization.findMany;
   count: typeof prisma.organization.count;
@@ -112,6 +126,62 @@ function previewAccessCode(
   return code ?? getConfiguredAccessCode(id);
 }
 
+function serializeBaseOrganization(
+  row: BaseOrganizationFields,
+  memberships: { role: string; isActive?: boolean | null }[],
+  previewSeatMode: boolean,
+  getConfiguredAccessCode: (id: string) => string | null
+) {
+  const seats = seatCounts(memberships);
+  return {
+    id: row.id,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    name: row.name,
+    plan: row.plan,
+    planActivatedAt: row.planActivatedAt ?? null,
+    planExpiresAt: row.planExpiresAt ?? null,
+    accessExpiresAt: row.accessExpiresAt ?? null,
+    numOfStudentSeats: row.numOfStudentSeats,
+    numOfTeacherSeats: row.numOfTeacherSeats,
+    seats: {
+      student: { used: seats.studentsUsed, total: row.numOfStudentSeats },
+      teacher: { used: seats.teachersUsed, total: row.numOfTeacherSeats },
+      members: seats.totalMembers,
+    },
+    featureToggles: featureToggles(row),
+    previewAccessCode: previewAccessCode(
+      row.id,
+      row.previewSeatCode,
+      previewSeatMode,
+      getConfiguredAccessCode
+    ),
+  };
+}
+
+const listOrganizationSelect = {
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  name: true,
+  plan: true,
+  planActivatedAt: true,
+  planExpiresAt: true,
+  accessExpiresAt: true,
+  numOfStudentSeats: true,
+  numOfTeacherSeats: true,
+  previewSeatCode: true,
+  reporterEnabled: true,
+  classInsightsEnabled: true,
+  writingPracticeEnabled: true,
+  submissionActivityEnabled: true,
+  revisionFlowEnabled: true,
+  apHistoryEnabled: true,
+  collaborativeDraftsEnabled: true,
+  studentDocumentSharingEnabled: true,
+  memberships: { select: { role: true, isActive: true } },
+} as const;
+
 export async function internalAdminOrganizationsList(
   request: Request,
   client: Dependencies = deps
@@ -136,7 +206,7 @@ export async function internalAdminOrganizationsList(
       where,
       skip,
       take: query.pageSize,
-      include: { memberships: { select: { role: true, isActive: true } } },
+      select: listOrganizationSelect,
       orderBy: listOrderBy(query.sort, query.direction),
     }),
     client.organization.count({ where }),
@@ -160,24 +230,16 @@ export async function internalAdminOrganizationsList(
   ]);
 
   const payload = {
-    organizations: (rows as any[]).map(({ previewSeatCode, memberships, ...row }) => {
-      const seats = seatCounts(memberships ?? []);
-      return {
-        ...row,
-        seats: {
-          student: { used: seats.studentsUsed, total: row.numOfStudentSeats },
-          teacher: { used: seats.teachersUsed, total: row.numOfTeacherSeats },
-          members: seats.totalMembers,
-        },
-        featureToggles: featureToggles(row),
-        previewAccessCode: previewAccessCode(
-          row.id,
-          previewSeatCode,
-          previewSeatMode,
-          client.preview.getConfiguredPreviewOrganizationAccessCode
-        ),
-      };
-    }),
+    organizations: (rows as (BaseOrganizationFields & {
+      memberships: { role: string; isActive?: boolean | null }[];
+    })[]).map((row) =>
+      serializeBaseOrganization(
+        row,
+        row.memberships ?? [],
+        previewSeatMode,
+        client.preview.getConfiguredPreviewOrganizationAccessCode
+      )
+    ),
     stats: stats[0] ?? {
       total_organizations: 0,
       active_organizations: 0,
@@ -215,7 +277,26 @@ export async function internalAdminOrganizationDetail(
   const [organization, invitations, totalOrganizations, assignmentTypes] = await Promise.all([
     client.organization.findUnique({
       where: { id },
-      include: {
+      select: {
+        id: true,
+        createdAt: true,
+        updatedAt: true,
+        name: true,
+        plan: true,
+        planActivatedAt: true,
+        planExpiresAt: true,
+        accessExpiresAt: true,
+        numOfStudentSeats: true,
+        numOfTeacherSeats: true,
+        previewSeatCode: true,
+        reporterEnabled: true,
+        classInsightsEnabled: true,
+        writingPracticeEnabled: true,
+        submissionActivityEnabled: true,
+        revisionFlowEnabled: true,
+        apHistoryEnabled: true,
+        collaborativeDraftsEnabled: true,
+        studentDocumentSharingEnabled: true,
         memberships: {
           select: {
             id: true,
@@ -257,23 +338,20 @@ export async function internalAdminOrganizationDetail(
 
   if (!organization) return response({ error: 'Not found' }, 404);
 
-  const seats = seatCounts(organization.memberships);
   const assigned = new Set(
     (organization.assignmentTypeAssignments as any[]).map((a) => a.assignmentTypeId)
   );
   const previewSeatMode = client.preview.isIsolatedPreviewSeatMode();
+  const serializedOrganization = serializeBaseOrganization(
+    organization,
+    organization.memberships,
+    previewSeatMode,
+    client.preview.getConfiguredPreviewOrganizationAccessCode
+  );
 
   const payload = {
     organization: {
-      ...organization,
-      memberships: undefined,
-      assignmentTypeAssignments: undefined,
-      previewSeatCode: undefined,
-      seats: {
-        student: { used: seats.studentsUsed, total: organization.numOfStudentSeats },
-        teacher: { used: seats.teachersUsed, total: organization.numOfTeacherSeats },
-        members: seats.totalMembers,
-      },
+      ...serializedOrganization,
       owners: organization.memberships
         .filter((m: any) => m.isOrgOwner && m.isActive !== false)
         .map((m: any) => ({ id: m.id, role: m.role, user: m.user })),
@@ -282,17 +360,10 @@ export async function internalAdminOrganizationDetail(
         ...assignmentType,
         available: assigned.has(assignmentType.id),
       })),
-      featureToggles: featureToggles(organization),
       deleteEligibility: {
         canDelete: totalOrganizations > 1,
         reasons: totalOrganizations <= 1 ? ['Only organization in this environment'] : [],
       },
-      previewAccessCode: previewAccessCode(
-        organization.id,
-        organization.previewSeatCode,
-        previewSeatMode,
-        client.preview.getConfiguredPreviewOrganizationAccessCode
-      ),
     },
     previewSeatMode,
     meta: { requestedBy: auth.actorEmail, keyId: auth.keyId },
