@@ -1,11 +1,11 @@
 # Free-Tier Demo E2E Suite
 
-For this `qa-suite-post-closure-mainline-health` run, use:
+For this `qa-durable-suite-post-closure-refresh` run, use:
 
 ```bash
 cd services/web-app
 PLAYWRIGHT_BROWSERS_PATH=/home/bryant/.cache/ms-playwright \
-FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-post-closure-mainline-health \
+FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-durable-suite-post-closure-refresh \
 bun run test:e2e:free-tier-demo
 ```
 
@@ -44,7 +44,7 @@ It also references the seeded free-tier QA repro specs as they land:
 
 Those specs keep their local deterministic stand-ins and hosted demo skip checks. The suite runner does not replace those checks; it only groups the runnable files and records missing hosted demo access once at the suite level.
 
-The manifest also records the seeded repro family inventory. `qa-approve-409` and `qa-dup-create-link` are internal admin repros and are recorded as external to the platform suite; `qa-flag-vs-route` and `qa-event-waitlist-copy-regression` are covered by platform specs.
+The manifest also records the seeded repro family inventory. `qa-approve-409` is the Pending Approve 409 internal admin repro and `qa-dup-create-link` is the duplicate Create link internal admin repro; both are recorded as external to the platform suite. `qa-flag-vs-route` and `qa-event-waitlist-copy-regression` are covered by platform specs.
 
 ## Hosted Demo Skips
 
@@ -72,10 +72,10 @@ If this suite finds a regression, append the lane failure note and attempt to fi
 ```bash
 cd services/web-app
 bun run scripts/file-free-tier-qa-failure.ts \
-  --id=ft-qa-suite-post-closure-mainline-health \
-  --slug=qa-suite-post-closure-mainline-health \
+  --id=ft-qa-durable-suite-post-closure-refresh \
+  --slug=qa-durable-suite-post-closure-refresh \
   --title="Free-tier demo E2E suite regression" \
-  --evidence="/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-post-closure-mainline-health" \
+  --evidence="/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-durable-suite-post-closure-refresh" \
   --severity=major \
   --dedupe-key="LEAD waitlist application" \
   --repro="Run \`bun run test:e2e:free-tier-demo\`." \
