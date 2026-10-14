@@ -473,6 +473,7 @@ export async function action({ request }: ActionFunctionArgs) {
           feature: 'grading-evaluation-case-generation',
           assignmentTypeId: assignmentType.id,
         },
+        deidentificationPhrases: [assignmentType.title],
         attribution: {
           organizationId: null,
           membershipId: null,
@@ -1030,6 +1031,10 @@ export async function action({ request }: ActionFunctionArgs) {
             evaluationRunId: run.id,
             gradingAssistantVersion: gradingConfig.version,
           },
+          deidentificationPhrases: [
+            assignmentType.title,
+            evaluationCase.title,
+          ],
           attribution: {
             organizationId: null,
             membershipId: null,

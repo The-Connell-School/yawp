@@ -3,6 +3,7 @@ import { anthropic } from '~/services/anthropic';
 import { openai } from '~/services/openai';
 import { prisma } from '~/utils/db.server';
 import { logAllowedUsage } from '~/utils/ai-usage-log.server';
+import { createDeidentifiedLlmLog } from '~/utils/llm-log-deidentify.server';
 import {
   getAnthropicOutageState,
   isAnthropicOutageCircuitOpen,
@@ -78,6 +79,8 @@ interface Params {
   signal?: AbortSignal;
   /** Store only counts/timing metadata when prompts contain sensitive records. */
   logPayload?: 'full' | 'metadata-only';
+  /** Known names or direct identifiers that must be scrubbed from LlmLog text. */
+  deidentificationPhrases?: unknown;
 }
 
 async function logLlmCall(data: {
@@ -93,34 +96,34 @@ async function logLlmCall(data: {
   durationMs?: number;
   metadata?: Record<string, unknown>;
   logPayload?: 'full' | 'metadata-only';
+  deidentificationPhrases?: unknown;
 }) {
   const metadataOnly = data.logPayload === 'metadata-only';
   try {
-    await prisma.llmLog.create({
-      data: {
-        model: data.model,
-        provider: data.provider,
-        systemPrompt: metadataOnly ? undefined : data.systemPrompt,
-        messages: metadataOnly
-          ? {
-              redacted: true,
-              messageCount:
-                data.metadata && typeof data.metadata.messageCount === 'number'
-                  ? data.metadata.messageCount
-                  : 0,
-            }
-          : (data.messages as object),
-        response: metadataOnly ? undefined : data.response,
-        error: metadataOnly && data.error ? 'LLM request failed' : data.error,
-        inputTokens: data.inputTokens,
-        outputTokens: data.outputTokens,
-        totalTokens: data.totalTokens,
-        durationMs: data.durationMs,
-        metadata: {
-          ...data.metadata,
-          ...(metadataOnly ? { payloadLogging: 'metadata-only' } : {}),
-        } as object,
-      },
+    await createDeidentifiedLlmLog(prisma, {
+      model: data.model,
+      provider: data.provider,
+      systemPrompt: metadataOnly ? undefined : data.systemPrompt,
+      messages: metadataOnly
+        ? {
+            redacted: true,
+            messageCount:
+              data.metadata && typeof data.metadata.messageCount === 'number'
+                ? data.metadata.messageCount
+                : 0,
+          }
+        : (data.messages as object),
+      response: metadataOnly ? undefined : data.response,
+      error: metadataOnly && data.error ? 'LLM request failed' : data.error,
+      inputTokens: data.inputTokens,
+      outputTokens: data.outputTokens,
+      totalTokens: data.totalTokens,
+      durationMs: data.durationMs,
+      deidentificationPhrases: data.deidentificationPhrases,
+      metadata: {
+        ...data.metadata,
+        ...(metadataOnly ? { payloadLogging: 'metadata-only' } : {}),
+      } as object,
     });
   } catch (err) {
     console.error('Failed to log LLM call:', err);
@@ -328,6 +331,7 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
           cacheReadInputTokens: totalCacheReadInputTokens,
         },
         logPayload: params.logPayload,
+        deidentificationPhrases: params.deidentificationPhrases,
       });
       // Best-effort usage decision/attribution log
       // Fire-and-forget: the usage log must never add latency to, or fail, a request.
@@ -371,6 +375,7 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
         cacheReadInputTokens: totalCacheReadInputTokens,
       },
       logPayload: params.logPayload,
+      deidentificationPhrases: params.deidentificationPhrases,
     });
     throw err;
   }
@@ -505,6 +510,7 @@ async function runOpenAiCompletion({
           toolRoundCount,
         }),
         logPayload: params.logPayload,
+        deidentificationPhrases: params.deidentificationPhrases,
       });
       // Fire-and-forget: the usage log must never add latency to, or fail, a request.
       void logAllowedUsage({
@@ -545,6 +551,7 @@ async function runOpenAiCompletion({
         toolRoundCount,
       }),
       logPayload: params.logPayload,
+      deidentificationPhrases: params.deidentificationPhrases,
     });
     throw err;
   }

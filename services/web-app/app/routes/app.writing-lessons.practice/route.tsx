@@ -384,6 +384,7 @@ export async function action({ request }: ActionFunctionArgs) {
       response: String(formData.get('response') ?? ''),
     }, {
       organizationId: profile.organization.id,
+      organizationName: profile.organization.name,
       membershipId: profile.id,
       route: 'routes/app.writing-lessons.practice',
       requestId: crypto.randomUUID(),
@@ -461,6 +462,7 @@ export async function action({ request }: ActionFunctionArgs) {
       response: responseText,
     }, {
       organizationId: profile.organization.id,
+      organizationName: profile.organization.name,
       membershipId: profile.id,
       route: 'routes/app.writing-lessons.practice',
       requestId: crypto.randomUUID(),
