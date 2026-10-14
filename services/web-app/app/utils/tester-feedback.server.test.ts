@@ -274,6 +274,67 @@ describe('tester feedback submission', () => {
     expect(saved).toHaveLength(1);
     expect(saved[0]).toMatchObject({ environment: 'production' });
   });
+  test('accepts deployed demo .data posts through an internal host when only the demo app referer is public', async () => {
+    const originalPrimary = process.env.PRIMARY_APP_URL;
+    const originalYawpOrigin = process.env.YAWP_APP_ORIGIN;
+    const originalPublicOrigin = process.env.YAWP_PUBLIC_ORIGIN;
+    delete process.env.PRIMARY_APP_URL;
+    delete process.env.YAWP_APP_ORIGIN;
+    delete process.env.YAWP_PUBLIC_ORIGIN;
+    try {
+      const { deps, saved } = setup({ environment: () => 'production' });
+      const response = await submitTesterFeedback(
+        new Request('http://app-runner.internal/api/tester-feedback.data', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+            referer: 'https://demo.yawp.school/app/assignments?tab=work',
+            host: 'app-runner.internal',
+          },
+          body: new URLSearchParams({
+            url: '/app/assignments?tab=work',
+            whatIDid: 'Opened',
+            whatHappened: 'Froze',
+            whatIWish: 'Save',
+          }),
+        }),
+        deps
+      );
+      expect(response.status).toBe(201);
+      expect(saved).toHaveLength(1);
+      expect(saved[0]).toMatchObject({ environment: 'production' });
+    } finally {
+      if (originalPrimary === undefined) delete process.env.PRIMARY_APP_URL;
+      else process.env.PRIMARY_APP_URL = originalPrimary;
+      if (originalYawpOrigin === undefined) delete process.env.YAWP_APP_ORIGIN;
+      else process.env.YAWP_APP_ORIGIN = originalYawpOrigin;
+      if (originalPublicOrigin === undefined)
+        delete process.env.YAWP_PUBLIC_ORIGIN;
+      else process.env.YAWP_PUBLIC_ORIGIN = originalPublicOrigin;
+    }
+  });
+  test('rejects deployed demo feedback fallback when the referer is not the app', async () => {
+    const { deps, saved } = setup({ environment: () => 'production' });
+    const response = await submitTesterFeedback(
+      new Request('http://app-runner.internal/api/tester-feedback.data', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          referer: 'https://demo.yawp.school/auth/login',
+          host: 'app-runner.internal',
+        },
+        body: new URLSearchParams({
+          url: '/app/assignments?tab=work',
+          whatIDid: 'Opened',
+          whatHappened: 'Froze',
+          whatIWish: 'Save',
+        }),
+      }),
+      deps
+    );
+    expect(response.status).toBe(403);
+    expect(saved).toHaveLength(0);
+  });
   test('accepts demo hosted form posts through an internal proxy host when PRIMARY_APP_URL matches the browser referer', async () => {
     const originalPrimary = process.env.PRIMARY_APP_URL;
     process.env.PRIMARY_APP_URL = 'https://demo.yawp.school';
