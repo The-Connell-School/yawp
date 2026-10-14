@@ -305,6 +305,7 @@ export async function completeSchoolAdminApproval(args: {
         abortClaimedLinkTransaction({ ok: false, reason: 'not_found' });
       }
 
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('free_tier_release'))`;
       try {
         await assertFreeTierBudgetHeadroomForTransition(tx, {
           from: { status: app.status, releasedAt: app.releasedAt },
