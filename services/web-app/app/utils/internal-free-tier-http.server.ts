@@ -369,11 +369,12 @@ export async function exportCsv(request: Request) {
   const denied = await authorizeFreeTierRead(request);
   if (denied) return denied;
   if (request.method !== 'GET') return response({ error: 'Method not allowed' }, 405);
-  // Reuse search filter parsing
+  // Validate client filters and pagination using the search contract.
+  // Export uses its own row bound below; never inject that bound into search validation.
   let input: z.infer<typeof searchQuery>;
   try {
     const params = Object.fromEntries(new URL(request.url).searchParams.entries());
-    input = searchQuery.parse({ ...params, limit: '1000' });
+    input = searchQuery.parse(params);
   } catch { return response({ error: 'Invalid query' }, 400); }
   const where: any = {};
   if (input.status) where.status = input.status;
