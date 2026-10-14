@@ -27,12 +27,14 @@ type EmailProvider = 'resend' | 'ses'
 type EmailPayload = {
 	from: string
 	to: string
+	bcc?: string[]
 	subject: string
 	html: string
 	text: string
 }
 type SendEmailOptions = {
 	to: string
+	bcc?: string[]
 	subject: string
 } & (
 	| { html: string; text: string; react?: never }
@@ -52,6 +54,7 @@ export async function sendEmail(options: SendEmailOptions) {
 	const email: EmailPayload = {
 		from,
 		to: options.to,
+		...(options.bcc?.length ? { bcc: options.bcc } : {}),
 		subject: options.subject,
 		html: content.html,
 		text: content.text,
@@ -154,7 +157,10 @@ async function sendEmailWithSes(email: EmailPayload) {
 		const response = await client.send(
 			new SendEmailCommand({
 				FromEmailAddress: email.from,
-				Destination: { ToAddresses: [email.to] },
+				Destination: {
+					ToAddresses: [email.to],
+					...(email.bcc?.length ? { BccAddresses: email.bcc } : {}),
+				},
 				Content: {
 					Simple: {
 						Subject: { Data: email.subject },
