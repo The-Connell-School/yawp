@@ -344,7 +344,7 @@ describe('preview ingress', () => {
     expect(response.body).toContain('Push a commit to rebuild it.');
   });
 
-  test('serves status JSON and HTML without secrets', async () => {
+  test('serves status JSON when unconfigured and redirects HTML to staff dashboard', async () => {
     const status = {
       running: 1,
       maxRunning: 8,
@@ -379,14 +379,58 @@ describe('preview ingress', () => {
 
     expect(jsonResponse.status).toBe(200);
     expect(JSON.parse(jsonResponse.body).previews[0].state).toBe('waking');
-    expect(htmlResponse.status).toBe(200);
-    expect(htmlResponse.body).toContain('Yawp Preview Status');
-    expect(htmlResponse.body).toContain('Last human activity');
-    expect(htmlResponse.body).toContain('Sleeps at');
-    expect(htmlResponse.body).not.toContain('<th>Pinned</th>');
-    expect(htmlResponse.body).toContain('codex/preview-lru');
-    expect(htmlResponse.body).not.toContain('brisk-otter');
+    expect(htmlResponse.status).toBe(302);
+    expect(htmlResponse.headers.location).toBe('https://internal.yawp.school/previews');
+    expect(htmlResponse.headers['cache-control']).toBe('no-store');
+    expect(htmlResponse.body).not.toContain('codex/preview-lru');
     expect(htmlResponse.body).not.toContain('SECRET');
+  });
+
+  test('requires bearer status token before reading status on every JSON path', async () => {
+    let calls = 0;
+    const token = 'unit-status-token-that-is-not-a-real-secret';
+    const ingress = createPreviewIngress({
+      domain: 'preview.yawp.school',
+      statusToken: token,
+      resolveTarget: async () => null,
+      authorizeWake: async () => false,
+      ensureRunning: async () => { throw new Error('must not wake'); },
+      recordAccess: async () => {},
+      getStatus: async () => { calls++; return { running: 1, previews: [] }; },
+    });
+    const port = await listen(createServer(ingress));
+    for (const host of ['status.preview.yawp.school', 'pr-241.preview.yawp.school']) {
+      for (const authorization of ['', 'Bearer wrong', `Basic ${token}`, `Bearer ${token}extra`, `Bearer ${token.slice(1)}`, `Bearer ${token}, Bearer ${token}`]) {
+        const denied = await request(port, { path: '/__status?fresh=1', headers: { host, authorization } });
+        expect(denied.status).toBe(401);
+        expect(denied.headers['cache-control']).toBe('no-store');
+        expect(denied.headers['www-authenticate']).toBe('Bearer');
+        expect(denied.body).not.toContain(token);
+        expect(calls).toBe(0);
+      }
+    }
+    const accepted = await request(port, { path: '/__status', headers: { authorization: `Bearer ${token}` } });
+    expect(accepted.status).toBe(200);
+    expect(JSON.parse(accepted.body).running).toBe(1);
+    expect(calls).toBe(1);
+    expect(accepted.body).not.toContain(token);
+  });
+
+  test('status HTML redirects without credentials or reading host data', async () => {
+    const ingress = createPreviewIngress({
+      domain: 'preview.yawp.school', statusToken: 'unit-status-token',
+      resolveTarget: async () => null,
+      authorizeWake: async () => false,
+      ensureRunning: async () => { throw new Error('must not wake'); },
+      getStatus: async () => { throw new Error('status unavailable'); },
+    });
+    const port = await listen(createServer(ingress));
+    const response = await request(port, { headers: { host: 'status.preview.yawp.school' } });
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe('https://internal.yawp.school/previews');
+    const wake = await request(port, { path: '/__wake' });
+    expect(wake.status).toBe(200);
+    expect(JSON.parse(wake.body).status).toBe('sleeping');
   });
 
   test('serves ACME challenges and redirects all other HTTP traffic to HTTPS', async () => {

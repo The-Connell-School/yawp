@@ -40,6 +40,15 @@ describe('bootstrap-host.sh', () => {
     );
   });
 
+  test('passes status secret from GitHub to a protected ingress environment file', () => {
+    expect(workflow).toContain('PREVIEW_STATUS_TOKEN: ${{ secrets.PREVIEW_STATUS_TOKEN }}');
+    expect(workflow).toContain('PREVIEW_STATUS_TOKEN=$(shell_quote "$PREVIEW_STATUS_TOKEN")');
+    expect(script).toContain('EnvironmentFile=-$ROOT/ingress/status.env');
+    expect(script).toContain('install -m 0600 -o root -g root');
+    expect(script).not.toContain('Environment=PREVIEW_STATUS_TOKEN=');
+    expect(ingress).toContain('statusToken: process.env.PREVIEW_STATUS_TOKEN');
+  });
+
   test('records human activity directly without a proxy access log', () => {
     expect(script).not.toContain('PREVIEW_ACCESS_LOG=');
     expect(script).not.toContain('--accesslog');

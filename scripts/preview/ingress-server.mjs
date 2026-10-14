@@ -4,7 +4,7 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { connect as netConnect } from 'node:net';
 import { createSecureContext } from 'node:tls';
-import { createPrivateKey, createPublicKey, X509Certificate } from 'node:crypto';
+import { createHash, timingSafeEqual, createPrivateKey, createPublicKey, X509Certificate } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import {
@@ -143,48 +143,6 @@ function json(response, status, value, headers = {}) {
     ...headers,
   });
   response.end(`${JSON.stringify(value, null, 2)}\n`);
-}
-
-function renderStatusPage(status) {
-  const rows = status.previews.map((preview) => `<tr>
-    <td><a href="${htmlEscape(preview.url)}">#${htmlEscape(preview.pr)}</a></td>
-    <td>${htmlEscape(preview.branch || '')}</td>
-    <td>${htmlEscape(preview.author || '')}</td>
-    <td>${htmlEscape(preview.state)}</td>
-    <td>${preview.lastRequest ? new Date(preview.lastRequest * 1000).toISOString() : ''}</td>
-    <td>${preview.lastHumanActivity ? new Date(preview.lastHumanActivity * 1000).toISOString() : ''}</td>
-    <td>${preview.sleepsAt ? new Date(preview.sleepsAt * 1000).toISOString() : ''}</td>
-    <td>${preview.lastDeploy ? new Date(preview.lastDeploy * 1000).toISOString() : ''}</td>
-    <td>${htmlEscape(preview.rss || '')}</td>
-  </tr>`).join('');
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Yawp Preview Status</title>
-  <style>
-    body { margin: 0; font: 14px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #162033; background: #f7f8fb; }
-    main { padding: 24px; }
-    h1 { margin: 0 0 4px; font-size: 1.4rem; }
-    p { margin: 0 0 18px; color: #56657c; }
-    table { width: 100%; border-collapse: collapse; background: white; border: 1px solid #d7deea; }
-    th, td { padding: 8px 10px; border-bottom: 1px solid #e6ebf2; text-align: left; white-space: nowrap; }
-    th { background: #eef2f7; font-weight: 650; }
-    a { color: #1459a8; }
-  </style>
-</head>
-<body>
-  <main>
-    <h1>Yawp Preview Status</h1>
-    <p>${htmlEscape(status.running)}/${htmlEscape(status.maxRunning)} running, host free memory ${htmlEscape(status.host.memAvailable || 'unknown')}.</p>
-    <table>
-      <thead><tr><th>PR</th><th>Branch</th><th>Author</th><th>State</th><th>Last Request</th><th>Last human activity</th><th>Sleeps at</th><th>Last Deploy</th><th>RSS</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  </main>
-</body>
-</html>`;
 }
 
 function connectionHeaderNames(headers) {
@@ -353,9 +311,20 @@ export function createPreviewIngress({
   recordQueuedWake,
   clearQueuedWake,
   getStatus,
+  statusToken,
   maxConcurrentWakes = 2,
 }) {
   if (!domain) throw new Error('preview ingress domain is required');
+  // Fixed-size digests keep the secret comparison constant-time, including unequal lengths.
+  const statusDigest = statusToken ? createHash('sha256').update(statusToken).digest() : null;
+  function statusAuthorized(request) {
+    if (!statusDigest) return true;
+    const header = request.headers.authorization;
+    const match = typeof header === 'string' ? /^Bearer ([^\s,]+)$/i.exec(header) : null;
+    const suppliedDigest = createHash('sha256').update(match?.[1] || '').digest();
+    const equal = timingSafeEqual(statusDigest, suppliedDigest);
+    return Boolean(match) && equal;
+  }
   const wake = createWakeCoordinator({
     ensureRunning,
     maxConcurrentWakes,
@@ -426,17 +395,20 @@ export function createPreviewIngress({
     const rawHost = Array.isArray(request.headers.host)
       ? request.headers.host[0]
       : request.headers.host || '';
-    if ((isStatusHost(rawHost, domain) || isStatusPath(request.url)) && getStatus) {
-      const status = await getStatus({ wakingPrs: wake.wakingPrs() });
-      if (isStatusPath(request.url)) {
-        json(response, 200, status);
-      } else {
-        response.writeHead(200, {
-          'content-type': 'text/html; charset=utf-8',
-          'cache-control': 'no-store',
-        });
-        response.end(renderStatusPage(status));
+    if (isStatusPath(request.url) && getStatus) {
+      if (!statusAuthorized(request)) {
+        json(response, 401, { status: 'unauthorized' }, { 'www-authenticate': 'Bearer' });
+        return;
       }
+      const status = await getStatus({ wakingPrs: wake.wakingPrs() });
+      json(response, 200, status);
+      return;
+    }
+    if (isStatusHost(rawHost, domain)) {
+      send(response, 302, '', {
+        location: 'https://internal.yawp.school/previews',
+        'cache-control': 'no-store',
+      });
       return;
     }
     const parsed = parsePreviewHost(rawHost, domain);
@@ -803,6 +775,7 @@ if (isDirectExecution(import.meta.url)) {
     domain,
     resolveTarget,
     maxConcurrentWakes,
+    statusToken: process.env.PREVIEW_STATUS_TOKEN,
     plainWakeEnabled: process.env.PREVIEW_PLAIN_WAKE_ENABLED === 'true',
     ...operations,
   });
