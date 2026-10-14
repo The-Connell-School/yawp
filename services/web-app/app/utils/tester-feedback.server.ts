@@ -174,6 +174,10 @@ function headerOrigin(value: string | null) {
   }
 }
 
+function isOpaqueOriginHeader(value: string | null) {
+  return value?.trim().toLowerCase() === 'null';
+}
+
 function headerUrl(value: string | null) {
   if (!value) return null;
   try {
@@ -231,7 +235,8 @@ function isDemoAppReferer(value: string | null) {
 function acceptsFeedbackOrigin(request: Request, environment: string) {
   const originHeader = request.headers.get('origin');
   const origin = headerOrigin(originHeader);
-  if (originHeader && !origin) return false;
+  const opaqueOrigin = isOpaqueOriginHeader(originHeader);
+  if (originHeader && !origin && !opaqueOrigin) return false;
   if (origin && origin === new URL(request.url).origin) return true;
   const publicOrigins = configuredPublicOrigins();
   const isProduction = environment.toLowerCase() === 'production';
@@ -244,6 +249,7 @@ function acceptsFeedbackOrigin(request: Request, environment: string) {
       return true;
     if (
       !refererHeader &&
+      !opaqueOrigin &&
       environment.toLowerCase() === 'demo' &&
       isTesterFeedbackEndpoint(request) &&
       hasDemoPublicOrigin(publicOrigins)
