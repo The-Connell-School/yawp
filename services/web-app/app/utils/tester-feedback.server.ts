@@ -189,15 +189,6 @@ function headerUrl(value: string | null) {
   }
 }
 
-function isDemoOrigin(origin: string | null) {
-  if (!origin) return false;
-  try {
-    return new URL(origin).hostname === 'demo.yawp.school';
-  } catch {
-    return false;
-  }
-}
-
 function isAcceptedSourceOrigin(
   request: Request,
   source: string | null,
@@ -210,10 +201,6 @@ function isAcceptedSourceOrigin(
       source === hostedRequestOrigin(request, source) ||
       publicOrigins.has(source))
   );
-}
-
-function hasDemoPublicOrigin(publicOrigins: Set<string>) {
-  return [...publicOrigins].some((origin) => isDemoOrigin(origin));
 }
 
 function isTesterFeedbackEndpoint(request: Request) {
@@ -233,36 +220,26 @@ function isDemoAppReferer(value: string | null) {
 }
 
 function acceptsFeedbackOrigin(request: Request, environment: string) {
+  const normalizedEnvironment = environment.trim().toLowerCase();
   const originHeader = request.headers.get('origin');
   const origin = headerOrigin(originHeader);
   const opaqueOrigin = isOpaqueOriginHeader(originHeader);
   if (originHeader && !origin && !opaqueOrigin) return false;
   if (origin && origin === new URL(request.url).origin) return true;
   const publicOrigins = configuredPublicOrigins();
-  const isProduction = environment.toLowerCase() === 'production';
+  const isDemo = normalizedEnvironment === 'demo';
+  const isProduction = normalizedEnvironment === 'production';
   if (!origin) {
     const refererHeader = request.headers.get('referer');
     if (
+      isDemo &&
       isTesterFeedbackEndpoint(request) &&
       isDemoAppReferer(refererHeader)
     )
       return true;
-    if (
-      !refererHeader &&
-      !opaqueOrigin &&
-      environment.toLowerCase() === 'demo' &&
-      isTesterFeedbackEndpoint(request) &&
-      hasDemoPublicOrigin(publicOrigins)
-    )
-      return true;
+    if (isProduction) return false;
     const referer = headerOrigin(refererHeader);
-    const acceptedReferer = isAcceptedSourceOrigin(
-      request,
-      referer,
-      publicOrigins
-    );
-    if (isProduction) return acceptedReferer && isDemoOrigin(referer);
-    return acceptedReferer;
+    return isAcceptedSourceOrigin(request, referer, publicOrigins);
   }
   if (isProduction) return false;
   return (
