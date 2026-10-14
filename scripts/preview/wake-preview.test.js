@@ -666,14 +666,14 @@ printf 'OK\\n'
     const root = makeRoot();
     makePreview(root, 100, { access: 999 });
     makePreview(root, 101, { access: 20 });
-    makePreview(root, 102);
+    makePreview(root, 102, { access: 998 });
     makePreview(root, 103);
     const docker = makeDockerStub(root, [100, 101]);
     const first = run(root, 102, docker, { PREVIEW_NOW_EPOCH: '1000' });
     const second = run(root, 103, docker, { PREVIEW_NOW_EPOCH: '1001' });
     expect(first.status).toBe(0);
     expect(second.status).toBe(0);
-    expect(second.stdout).toContain('WAKE_SLEPT=100');
-    expect(readFileSync(docker.state, 'utf8').trim().split('\n').sort()).toEqual(['102', '103']);
+    expect(second.stdout).toContain('WAKE_SLEPT=102');
+    expect(readFileSync(docker.state, 'utf8').trim().split('\n').sort()).toEqual(['100', '103']);
   });
 });

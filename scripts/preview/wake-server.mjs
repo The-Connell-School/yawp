@@ -479,7 +479,6 @@ export async function collectPreviewStatus({
     const lastIdleActivity = Math.max(lastHumanActivity, lastDeploy);
     const branch = await readSmallFile(path.join(dir, 'branch'));
     const author = await readSmallFile(path.join(dir, 'author'));
-    const pinned = await stat(path.join(dir, 'keep-awake')).then(() => true, () => false);
     const deploying = await stat(path.join(root, 'inflight', `pr-${pr}`)).then(() => true, () => false);
     const running = runningProjects.has(String(pr));
     const state = waking.has(pr)
@@ -500,7 +499,6 @@ export async function collectPreviewStatus({
       branch,
       author,
       state,
-      pinned,
       lastRequest: Math.max(lastRequest, legacyAccess),
       lastDeploy,
       lastHumanActivity,

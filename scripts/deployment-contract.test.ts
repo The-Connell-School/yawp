@@ -476,7 +476,7 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain('name: PR preview');
     expect(previewWorkflow).toContain('pull_request_target');
     expect(previewWorkflow).toContain(
-      'types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled, closed]'
+      'types: [opened, synchronize, reopened, ready_for_review, closed]'
     );
     expect(previewWorkflow).toContain(
       'github.event.pull_request.head.repo.full_name == github.repository'

@@ -21,7 +21,6 @@ AUTHORIZATION_MAX_QUEUE_SECONDS="${PREVIEW_WAKE_AUTHORIZATION_MAX_QUEUE_SECONDS:
 AUTHORIZED_ORGANIZATION_ID="${PREVIEW_WAKE_AUTHORIZED_ORGANIZATION_ID:-}"
 REQUIRE_PREVIEW_SEAT_CODE="${PREVIEW_WAKE_REQUIRE_PREVIEW_SEAT_CODE:-}"
 AUTHORIZED_CODE_SHA256="${PREVIEW_WAKE_AUTHORIZED_CODE_HMAC_SHA256:-}"
-WAKE_LEASE_SECONDS="${PREVIEW_WAKE_LEASE_SECONDS:-120}"
 LEGACY_HEALTH_PORT="${PREVIEW_LEGACY_HEALTH_PORT:-8080}"
 PR_NUMBER="${1:-}"
 
@@ -95,10 +94,6 @@ if [[ -n "$AUTHORIZED_CODE_SHA256" && ! "$AUTHORIZED_CODE_SHA256" =~ ^[a-f0-9]{6
   echo "PREVIEW_WAKE_AUTHORIZED_CODE_HMAC_SHA256 is invalid" >&2
   exit 2
 fi
-is_nonnegative_integer "$WAKE_LEASE_SECONDS" || {
-  echo "PREVIEW_WAKE_LEASE_SECONDS must be a nonnegative integer" >&2
-  exit 2
-}
 if ! is_positive_integer "$LEGACY_HEALTH_PORT" || (( LEGACY_HEALTH_PORT > 65535 )); then
   echo "PREVIEW_LEGACY_HEALTH_PORT must be a valid TCP port" >&2
   exit 2
@@ -252,28 +247,6 @@ target_is_quarantined() {
   [[ -f "$ROOT/quarantine/pr-${PR_NUMBER}" ]]
 }
 
-access_epoch() {
-  local pr="$1"
-  local value="" max=0 file
-  for file in \
-    "$ACCESS_DIR/pr-${pr}" \
-    "$ROOT/previews/pr-${pr}/last-request" \
-    "$ROOT/previews/pr-${pr}/last-deploy"
-  do
-    if [[ -f "$file" ]]; then
-      IFS= read -r value < "$file" || true
-      if is_nonnegative_integer "$value" && (( value > max )); then
-        max="$value"
-      fi
-    fi
-  done
-  if (( max > 0 )); then
-    printf '%s\n' "$max"
-  else
-    marker_mtime "$ROOT/previews/pr-${pr}"
-  fi
-}
-
 record_access() {
   local pr="$1"
   local temporary recorded_epoch preview_dir
@@ -290,48 +263,23 @@ record_access() {
   mv -f -- "$temporary" "$ACCESS_DIR/pr-${pr}"
 }
 
-candidate_priority_class() {
-  local pr="$1"
-  local branch=""
-  if [[ -f "$ROOT/previews/pr-${pr}/branch" ]]; then
-    IFS= read -r branch < "$ROOT/previews/pr-${pr}/branch" || true
-  fi
-  case "$branch" in
-    codex/*) echo 0 ;;
-    *) echo 1 ;;
-  esac
-}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/idle-policy.sh"
 
 sleep_lru_candidate() {
-  local candidate oldest_pr="" oldest_epoch="" epoch class oldest_class="" lease lease_deploy
+  local candidate oldest_pr="" oldest_epoch="" epoch
   while IFS= read -r candidate; do
     [[ -n "$candidate" && "$candidate" != "$PR_NUMBER" ]] || continue
     [[ -f "$ROOT/previews/pr-${candidate}/docker-compose.yml" ]] || continue
-    [[ -f "$ROOT/previews/pr-${candidate}/keep-awake" ]] && continue
-    epoch="$(access_epoch "$candidate")"
-    class="$(candidate_priority_class "$candidate")"
-    is_nonnegative_integer "$epoch" || epoch=0
-    lease=0
-    if [[ -f "$ACCESS_DIR/pr-$candidate" ]]; then IFS= read -r lease < "$ACCESS_DIR/pr-$candidate" || true; fi
-    is_nonnegative_integer "$lease" || lease=0
-    lease_deploy=0
-    if [[ -f "$ROOT/previews/pr-$candidate/last-deploy" ]]; then IFS= read -r lease_deploy < "$ROOT/previews/pr-$candidate/last-deploy" || true; fi
-    is_nonnegative_integer "$lease_deploy" || lease_deploy=0
-    (( lease_deploy > lease )) && lease="$lease_deploy"
-    if (( lease > NOW_EPOCH || NOW_EPOCH - lease < WAKE_LEASE_SECONDS )); then
-      continue
-    fi
-    if [[ -z "$oldest_pr" ]] \
-      || (( class < oldest_class )) \
-      || (( class == oldest_class && epoch < oldest_epoch )); then
+    epoch="$(preview_activity_epoch "$ROOT" "$candidate")"
+    if [[ -z "$oldest_pr" ]] || (( epoch < oldest_epoch )); then
       oldest_pr="$candidate"
       oldest_epoch="$epoch"
-      oldest_class="$class"
     fi
   done < <(running_env_numbers)
 
   [[ -n "$oldest_pr" ]] || {
-    echo "Preview running capacity is full and every candidate is pinned" >&2
+    echo "Preview running capacity is full and no resident candidate can be stopped" >&2
     return 1
   }
 

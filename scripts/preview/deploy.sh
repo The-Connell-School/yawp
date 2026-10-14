@@ -116,11 +116,6 @@ else
   PREVIEW_MASTER_ORG_GATE_ENABLED=false
 fi
 export PREVIEW_MASTER_ORG_GATE_ENABLED
-case "${PREVIEW_KEEP_AWAKE:-false}" in
-  true) printf 'true\n' > "$PREVIEW_DIR/keep-awake" ;;
-  false) rm -f -- "$PREVIEW_DIR/keep-awake" ;;
-  *) echo "PREVIEW_KEEP_AWAKE must be true or false" >&2; exit 1 ;;
-esac
 ACCESS_CODE_FILE="$PREVIEW_DIR/access-code"
 ACCESS_SEATS_FILE="$PREVIEW_DIR/access-seats.json"
 ACCESS_SECRET_FILE="$PREVIEW_DIR/access-secret"

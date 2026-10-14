@@ -27,3 +27,35 @@ preview_idle_protected() {
   (( lease > 0 && now - lease < 120 )) && return 0
   return 1
 }
+
+# Running capacity uses human activity exclusively. Deploys and wake leases never
+# move a recorded human visit forward. Legacy previews fall back to their web start.
+preview_activity_epoch() {
+  local root="$1" pr="$2" dir human container started epoch
+  dir="$root/previews/pr-$pr"
+  human="$(preview_file_epoch "$dir/last-human-activity")"
+  if (( human > 0 )); then
+    printf '%s\n' "$human"
+    return
+  fi
+  container="$("$DOCKER" ps --filter "label=com.docker.compose.project=yawp-pr-$pr" \
+    --filter label=com.docker.compose.service=web --filter status=running -q 2>/dev/null | head -1)"
+  started=""
+  if [[ -n "$container" ]]; then
+    started="$("$DOCKER" inspect --format '{{.State.StartedAt}}' "$container" 2>/dev/null || true)"
+  fi
+  epoch=0
+  [[ -z "$started" ]] || epoch="$(date -d "$started" +%s 2>/dev/null || echo 0)"
+  if [[ "$epoch" =~ ^[0-9]+$ ]] && (( epoch > 0 )); then
+    printf '%s\n' "$epoch"
+    return
+  fi
+  # last-deploy is the recorded Compose start for residents without Docker history.
+  epoch="$(preview_file_epoch "$dir/last-deploy")"
+  if (( epoch > 0 )); then
+    printf '%s\n' "$epoch"
+  else
+    stat -c %Y "$dir/docker-compose.yml" 2>/dev/null \
+      || stat -f %m "$dir/docker-compose.yml" 2>/dev/null || echo 0
+  fi
+}
