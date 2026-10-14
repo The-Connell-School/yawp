@@ -79,7 +79,7 @@ jobs:
       ((github.event.action != 'labeled' && github.event.action != 'unlabeled') || github.event.label.name == 'preview:keep-awake') &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       contains(github.event.pull_request.title, '[skip preview]') == false &&
-      contains(github.event.pull_request.body, '[skip preview]') == false &&
+      startsWith(github.event.pull_request.body || '', '[skip preview]') == false &&
       contains(github.event.pull_request.head.ref, '[skip preview]') == false
     runs-on: ubuntu-22.04
     environment: preview-host
@@ -127,7 +127,23 @@ jobs:
       PREVIEW_AUTHOR: ${{ github.event.pull_request.user.login }}
       PREVIEW_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
+      - name: Checkout preview guard
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Check current preview skip directive
+        id: preview_gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.body // ""' > /tmp/pr-body.md
+          bash scripts/preview/check-skip-preview.sh /tmp/pr-body.md
+
       - name: Check preview environment configuration
+        if: steps.preview_gate.outputs.skip_preview != 'true'
         env:
           PREVIEW_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_SSH_PRIVATE_KEY }}
         run: |
@@ -163,6 +179,7 @@ jobs:
           esac
 
       - name: Checkout reviewed preview control plane
+        if: steps.preview_gate.outputs.skip_preview != 'true'
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.repository.default_branch }}
@@ -170,6 +187,7 @@ jobs:
           persist-credentials: false
 
       - name: Download pull request source
+        if: steps.preview_gate.outputs.skip_preview != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -186,6 +204,7 @@ jobs:
           rm -f pr-source.tar.gz
 
       - name: Prepare SSH
+        if: steps.preview_gate.outputs.skip_preview != 'true'
         env:
           PREVIEW_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_SSH_PRIVATE_KEY }}
         run: |
@@ -197,6 +216,7 @@ jobs:
           ssh-keyscan -H "$PREVIEW_HOST" >> ~/.ssh/known_hosts
 
       - name: Sync source to preview host
+        if: steps.preview_gate.outputs.skip_preview != 'true'
         run: |
           set -euo pipefail
           shell_quote() {
@@ -235,6 +255,7 @@ jobs:
           )
 
       - name: Admit and deploy preview
+        if: steps.preview_gate.outputs.skip_preview != 'true'
         id: deploy
         env:
           GH_TOKEN: ${{ github.token }}
@@ -356,6 +377,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Verify preview access gate
+        if: steps.preview_gate.outputs.skip_preview != 'true'
         run: |
           set -euo pipefail
           url="${{ steps.deploy.outputs.url }}"
@@ -436,6 +458,7 @@ jobs:
           fi
 
       - name: Comment preview URL on PR
+        if: steps.preview_gate.outputs.skip_preview != 'true'
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: pr-preview-${{ github.event.pull_request.number }}
@@ -455,7 +478,7 @@ jobs:
             - **Smoke:** in-app access gate + dev login
 
       - name: Remove run-scoped control copy
-        if: always()
+        if: always() && steps.preview_gate.outputs.skip_preview != 'true'
         run: |
           set -euo pipefail
           [[ -f "$HOME/.ssh/preview_key" && "$GITHUB_RUN_ID" =~ ^[0-9]+$ && "$GITHUB_RUN_ATTEMPT" =~ ^[0-9]+$ ]] || exit 0

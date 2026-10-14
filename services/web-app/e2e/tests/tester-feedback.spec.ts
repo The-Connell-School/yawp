@@ -71,7 +71,7 @@ test.describe.serial('Tester feedback', () => {
       await prisma.$disconnect();
     }
   });
-  test('admin can review and download matching CSV entries', async ({
+  test('admin sees the deprecated platform review entry', async ({
     page,
     signIn,
     e2eContext,
@@ -82,10 +82,6 @@ test.describe.serial('Tester feedback', () => {
     });
     let feedbackId: string | undefined;
     try {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { isAdmin: true },
-      });
       const entry = await prisma.testerFeedback.create({
         data: {
           userId: user.id,
@@ -99,7 +95,7 @@ test.describe.serial('Tester feedback', () => {
         },
       });
       feedbackId = entry.id;
-      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await signIn(e2eContext.adminEmail, 'admin-e2e-password');
       await page.goto(
         `/app/tester/feedback?userId=${user.id}&environment=test`
       );
@@ -107,24 +103,15 @@ test.describe.serial('Tester feedback', () => {
         page.getByRole('heading', { name: 'Tester feedback' })
       ).toBeVisible();
       await expect(
-        page.getByText('E2E admin export', { exact: true })
+        page.getByText('Tester feedback review has moved to Yawp Internal')
       ).toBeVisible();
-      const downloadPromise = page.waitForEvent('download');
-      await page.getByRole('link', { name: 'Download CSV' }).click();
-      const download = await downloadPromise;
-      expect(download.suggestedFilename()).toBe('tester-feedback.csv');
-      const response = await page.request.get(
-        `/api/admin/tester-feedback?format=csv&userId=${user.id}&environment=test`
-      );
-      expect(response.headers()['content-type']).toContain('text/csv');
-      expect(await response.text()).toContain('E2E admin export');
+      await expect(page.getByText('E2E admin export')).toHaveCount(0);
+      await expect(
+        page.getByRole('link', { name: 'Download CSV' })
+      ).toHaveCount(0);
     } finally {
       if (feedbackId)
         await prisma.testerFeedback.delete({ where: { id: feedbackId } });
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { isAdmin: user.isAdmin },
-      });
       await prisma.$disconnect();
     }
   });
