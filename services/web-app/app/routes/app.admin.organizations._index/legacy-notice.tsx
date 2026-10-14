@@ -33,10 +33,10 @@ export function OrganizationsLegacyNotice({
       <section className="rounded-md border bg-muted/30 p-4">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="space-y-1">
-            <h3 className="text-base font-semibold">Platform-only writes</h3>
+            <h3 className="text-base font-semibold">Remaining platform-only writes</h3>
             <p className="max-w-2xl text-sm text-muted-foreground">
-              Create and preview-seat actions have not moved to Internal yet,
-              so these controls remain here temporarily.
+              Organization create and update writes now live in Yawp Internal.
+              Preview-seat creation remains unavailable from Internal.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
