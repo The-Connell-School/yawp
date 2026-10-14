@@ -208,6 +208,10 @@ function isAcceptedSourceOrigin(
   );
 }
 
+function hasDemoPublicOrigin(publicOrigins: Set<string>) {
+  return [...publicOrigins].some((origin) => isDemoOrigin(origin));
+}
+
 function isTesterFeedbackEndpoint(request: Request) {
   const pathname = new URL(request.url).pathname;
   return (
@@ -232,12 +236,20 @@ function acceptsFeedbackOrigin(request: Request, environment: string) {
   const publicOrigins = configuredPublicOrigins();
   const isProduction = environment.toLowerCase() === 'production';
   if (!origin) {
+    const refererHeader = request.headers.get('referer');
     if (
       isTesterFeedbackEndpoint(request) &&
-      isDemoAppReferer(request.headers.get('referer'))
+      isDemoAppReferer(refererHeader)
     )
       return true;
-    const referer = headerOrigin(request.headers.get('referer'));
+    if (
+      !refererHeader &&
+      environment.toLowerCase() === 'demo' &&
+      isTesterFeedbackEndpoint(request) &&
+      hasDemoPublicOrigin(publicOrigins)
+    )
+      return true;
+    const referer = headerOrigin(refererHeader);
     const acceptedReferer = isAcceptedSourceOrigin(
       request,
       referer,
