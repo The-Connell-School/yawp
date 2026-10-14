@@ -459,7 +459,10 @@ export async function collectPreviewStatus({
           : 'sleeping';
     const webName = `yawp-pr-${pr}-web-1`;
     const ltiName = `yawp-pr-${pr}-blackboard-lti-mock-1`;
-    const rssBytes = (stats.get(webName) || 0) + (stats.get(ltiName) || 0);
+    const rendererName = `yawp-pr-${pr}-renderer-1`;
+    const rssBytes = (stats.get(webName) || 0)
+      + (stats.get(ltiName) || 0)
+      + (stats.get(rendererName) || 0);
     previews.push({
       pr,
       branch,

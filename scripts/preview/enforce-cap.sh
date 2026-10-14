@@ -396,6 +396,9 @@ stop_env() {
   if grep -qE '^[[:space:]]*blackboard-lti-mock:' "$compose_file"; then
     services+=(blackboard-lti-mock)
   fi
+  if grep -qE '^[[:space:]]*renderer:' "$compose_file"; then
+    services+=(renderer)
+  fi
   if ! "$DOCKER" compose -p "$project" -f "$compose_file" stop "${services[@]}"; then
     # Tolerate an invalid or stale compose file: fall back to removing running containers.
     "$DOCKER" ps -aq --filter "label=com.docker.compose.project=${project}" 2>/dev/null \

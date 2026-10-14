@@ -659,6 +659,38 @@ describe('enforce-cap.sh', () => {
     });
   });
 
+  test('sleep stops every long-lived preview runtime service without deleting state', () => {
+    const root = makeRoot();
+    const env = makeEnv(root, 104, { withCompose: true });
+    writeFileSync(
+      path.join(env.previewDir, 'docker-compose.yml'),
+      'services:\n  web: {}\n  blackboard-lti-mock: {}\n  renderer: {}\n'
+    );
+    const docker = makeDockerStub(root, [104]);
+    const now = 400_000;
+
+    const result = run(root, {
+      OPEN_PR_NUMBERS: '104',
+      PR_ACTIVITY: `104 ${now - 3 * 3600} 0 0`,
+      PREVIEW_MODE: 'reconcile',
+      PREVIEW_DOCKER: docker.stub,
+      PREVIEW_DOCKER_STATE: docker.state,
+      PREVIEW_DOCKER_LOG: docker.log,
+      PREVIEW_NOW_EPOCH: String(now),
+      PREVIEW_MAX_RESIDENT: '20',
+      PREVIEW_MAX_RUNNING: '8',
+    });
+
+    expect(parse(result.stdout)).toMatchObject({
+      CAP_SLEPT: '104',
+      CAP_RESULT: 'ok',
+    });
+    expect(existsSync(env.previewDir)).toBe(true);
+    expect(readFileSync(docker.log, 'utf8')).toMatch(
+      /compose -p yawp-pr-104 .* stop web blackboard-lti-mock renderer/
+    );
+  });
+
   test('keeps a recently active ready PR running when the idle window allows it', () => {
     const root = makeRoot();
     makeEnv(root, 102, { withCompose: true });

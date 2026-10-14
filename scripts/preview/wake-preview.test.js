@@ -311,6 +311,24 @@ printf 'OK\\n'
     expect(readFileSync(docker.state, 'utf8').trim().split('\n').sort()).toEqual(['100', '102']);
   });
 
+  test('sleep stops renderer but wake starts only web and blackboard services', () => {
+    const root = makeRoot();
+    const victim = makePreview(root, 100, { access: 10 });
+    const target = makePreview(root, 101, { access: 20 });
+    const compose = 'services:\n  web: {}\n  blackboard-lti-mock: {}\n  renderer: {}\n';
+    writeFileSync(path.join(victim, 'docker-compose.yml'), compose);
+    writeFileSync(path.join(target, 'docker-compose.yml'), compose);
+    const docker = makeDockerStub(root, [100]);
+
+    const result = run(root, 101, docker, { PREVIEW_MAX_RUNNING: '1' });
+
+    expect(result.status).toBe(0);
+    const log = readFileSync(docker.log, 'utf8');
+    expect(log).toMatch(/compose -p yawp-pr-100 .* stop web blackboard-lti-mock renderer/);
+    expect(log).toMatch(/compose -p yawp-pr-101 .* start web blackboard-lti-mock$/m);
+    expect(log).not.toMatch(/compose -p yawp-pr-101 .* start .*renderer/);
+  });
+
   test('fails closed without mutation when configuration drift is already above the running cap', () => {
     const root = makeRoot();
     makePreview(root, 100, { access: 10 });

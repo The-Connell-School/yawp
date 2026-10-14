@@ -331,7 +331,7 @@ sleep_lru_candidate() {
   slept="$oldest_pr"
   local candidate_dir="$ROOT/previews/pr-${slept}"
   local services=()
-  mapfile -t services < <(project_runtime_services "$candidate_dir/docker-compose.yml")
+  mapfile -t services < <(project_sleep_services "$candidate_dir/docker-compose.yml")
   if ! "$DOCKER" compose -p "yawp-pr-${slept}" \
     -f "$candidate_dir/docker-compose.yml" stop "${services[@]}" >&2; then
     echo "Preview running capacity stop failed" >&2
@@ -371,11 +371,19 @@ wait_for_project_health() {
   return 1
 }
 
-project_runtime_services() {
+project_wake_services() {
   local compose="$1"
   printf '%s\n' web
   if grep -qE '^[[:space:]]*blackboard-lti-mock:' "$compose"; then
     printf '%s\n' blackboard-lti-mock
+  fi
+}
+
+project_sleep_services() {
+  local compose="$1"
+  project_wake_services "$compose"
+  if grep -qE '^[[:space:]]*renderer:' "$compose"; then
+    printf '%s\n' renderer
   fi
 }
 
@@ -385,7 +393,7 @@ restore_displaced() {
   local displaced_file="$displaced_dir/docker-compose.yml"
   local services=()
   [[ -f "$displaced_file" ]] || return 1
-  mapfile -t services < <(project_runtime_services "$displaced_file")
+  mapfile -t services < <(project_sleep_services "$displaced_file")
   "$DOCKER" compose -p "yawp-pr-${slept}" -f "$displaced_file" start "${services[@]}" >&2 || return 1
   wait_for_project_health "$slept"
 }
@@ -393,7 +401,7 @@ restore_displaced() {
 ensure_target_stopped() {
   is_running "$PR_NUMBER" || return 0
   local services=()
-  mapfile -t services < <(project_runtime_services "$compose_file")
+  mapfile -t services < <(project_sleep_services "$compose_file")
   if ! "$DOCKER" compose -p "$project" -f "$compose_file" stop "${services[@]}" >/dev/null 2>&1; then
     is_running "$PR_NUMBER" && return 1
   fi
@@ -484,7 +492,7 @@ if (( running_count == RUNNING_CAP )); then
 fi
 
 wake_started=true
-mapfile -t runtime_services < <(project_runtime_services "$compose_file")
+mapfile -t runtime_services < <(project_wake_services "$compose_file")
 if ! "$DOCKER" compose -p "$project" -f "$compose_file" start "${runtime_services[@]}"; then
   fail_wake "Preview pr-${PR_NUMBER} could not start" 7
 fi
