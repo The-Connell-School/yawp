@@ -37,3 +37,25 @@ test('does not recreate resident web containers when compose is already migrated
   expect(script).toContain('active_backup=\'\'');
   expect(script).toContain('if [[ -n "$active_backup" ]]; then\n    rm -f -- "$active_backup"');
 });
+
+
+test('preserve-running rollout skips legacy migration without credential writes or container recreation', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync, chmodSync, existsSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { spawnSync } = await import('node:child_process');
+  const root = mkdtempSync(path.join(tmpdir(), 'preserve-running-'));
+  try {
+    const dir = path.join(root, 'previews/pr-484'); mkdirSync(dir, { recursive: true });
+    const compose = 'services:\n  web: {}\n'; writeFileSync(path.join(dir, 'docker-compose.yml'), compose);
+    const docker = path.join(root, 'docker'); const log = path.join(root, 'docker.log');
+    writeFileSync(docker, `#!/bin/bash\nprintf '%s\\n' "$*" >> '${log}'\nif [[ "$1" == ps ]]; then echo running; elif [[ "$*" == *'SELECT datname'* ]]; then echo yawp_pr_484; elif [[ "$*" == *'SELECT 1'* ]]; then echo 1; fi\n`); chmodSync(docker, 0o755);
+    const result = spawnSync('bash', [path.join(import.meta.dir, 'migrate-resident-database-roles.sh')], {
+      encoding: 'utf8', env: { ...process.env, PREVIEW_ROOT: root, PREVIEW_DOCKER: docker,
+        PREVIEW_POSTGRES_ADMIN_PASSWORD: 'a'.repeat(40), PREVIEW_PRESERVE_RUNNING_RESIDENTS: 'true' },
+    });
+    expect(result.status).toBe(0);
+    expect(readFileSync(path.join(dir, 'docker-compose.yml'), 'utf8')).toBe(compose);
+    expect(existsSync(path.join(dir, 'database-password'))).toBe(false);
+    expect(readFileSync(log, 'utf8')).not.toMatch(/^compose\b|ALTER ROLE|createuser/m);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

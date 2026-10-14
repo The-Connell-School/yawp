@@ -13,6 +13,7 @@ import {
   parsePreviewPr,
   previewServiceHostname,
 } from './wake-server.mjs';
+import { isBotRequest, isHumanActivity, createWakeLimiter, createWakeAttemptLimiter } from './wake-policy.mjs';
 
 export function isDirectExecution(moduleUrl, argv1 = process.argv[1]) {
   if (!argv1) return false;
@@ -81,7 +82,7 @@ function sendWakingPage(response, pr) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="refresh" content="5">
+
   <title>${htmlEscape(title)}</title>
   <style>
     body { margin: 0; min-height: 100vh; display: grid; place-items: center; font: 16px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #172033; background: #f6f8fb; }
@@ -93,8 +94,30 @@ function sendWakingPage(response, pr) {
 <body>
   <main>
     <h1>Waking preview&hellip;</h1>
-    <p>pr-${htmlEscape(pr)} is starting. This page refreshes every 5 seconds.</p>
+    <p>pr-${htmlEscape(pr)} is starting. This usually takes a minute. Keep this page open.</p>
   </main>
+  <script>
+  (async () => {
+    const message = document.querySelector('p');
+    const pause = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+    for (;;) {
+      try {
+        const wake = await fetch('/__wake' + (location.search || ''), { method: 'POST', headers: { 'x-preview-wake': '1' } });
+        if (wake.status === 404 || wake.status === 401 || wake.status === 403) {
+          message.textContent = 'This preview is unavailable. Use its access URL if access is required.';
+          return;
+        }
+        for (let attempt = 0; attempt < 30; attempt++) {
+          const response = await fetch('/__wake', { cache: 'no-store' });
+          const status = await response.json();
+          if (status.status === 'running') { location.reload(); return; }
+          await pause(5000);
+        }
+      } catch { message.textContent = 'Waiting for the preview host. Retrying shortly…'; }
+      await pause(15000);
+    }
+  })()
+  </script>
 </body>
 </html>`;
   response.writeHead(503, {
@@ -130,6 +153,8 @@ function renderStatusPage(status) {
     <td>${htmlEscape(preview.state)}</td>
     <td>${preview.pinned ? 'yes' : 'no'}</td>
     <td>${preview.lastRequest ? new Date(preview.lastRequest * 1000).toISOString() : ''}</td>
+    <td>${preview.lastHumanActivity ? new Date(preview.lastHumanActivity * 1000).toISOString() : ''}</td>
+    <td>${preview.sleepsAt ? new Date(preview.sleepsAt * 1000).toISOString() : ''}</td>
     <td>${preview.lastDeploy ? new Date(preview.lastDeploy * 1000).toISOString() : ''}</td>
     <td>${htmlEscape(preview.rss || '')}</td>
   </tr>`).join('');
@@ -155,7 +180,7 @@ function renderStatusPage(status) {
     <h1>Yawp Preview Status</h1>
     <p>${htmlEscape(status.running)}/${htmlEscape(status.maxRunning)} running, host free memory ${htmlEscape(status.host.memAvailable || 'unknown')}.</p>
     <table>
-      <thead><tr><th>PR</th><th>Branch</th><th>Author</th><th>State</th><th>Pinned</th><th>Last Request</th><th>Last Deploy</th><th>RSS</th></tr></thead>
+      <thead><tr><th>PR</th><th>Branch</th><th>Author</th><th>State</th><th>Pinned</th><th>Last Request</th><th>Last human activity</th><th>Sleeps at</th><th>Last Deploy</th><th>RSS</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
   </main>
@@ -223,7 +248,7 @@ function wakeErrorResponse(error) {
   if (error?.code === 'not-resident') {
     return [404, 'Preview is no longer resident.\n'];
   }
-  console.error('Preview wake failed', error);
+  console.error('Preview wake failed', error?.code || 'unavailable');
   return [503, 'Preview is temporarily unavailable; retry shortly.\n'];
 }
 
@@ -261,8 +286,7 @@ function createWakeCoordinator({
           .then(() => recordQueuedWake(pr))
           .then(() => ensureRunning(pr, options))
           .finally(async () => {
-            inFlight.delete(pr);
-            await clearQueuedWake(pr);
+            try { await clearQueuedWake(pr); } finally { inFlight.delete(pr); }
           });
         inFlight.set(pr, operation);
       }
@@ -271,7 +295,7 @@ function createWakeCoordinator({
   };
 }
 
-function proxyHttp({ request, response, target, hostname, pr, recordAccess, recordWithoutMarker = false }) {
+function proxyHttp({ request, response, target, hostname, pr, recordAccess, recordHumanActivity }) {
   return new Promise((resolve) => {
     let settled = false;
     const upstream = httpRequest({
@@ -286,14 +310,9 @@ function proxyHttp({ request, response, target, hostname, pr, recordAccess, reco
       response.writeHead(status, downstreamHeaders(upstreamResponse.headers));
       upstreamResponse.pipe(response);
       upstreamResponse.once('end', () => {
-        if (
-          (authorized || recordWithoutMarker)
-          && status < 400
-          && request.method !== 'HEAD'
-          && request.method !== 'OPTIONS'
-        ) {
-          Promise.resolve(recordAccess(pr)).catch((error) => {
-            console.error('Preview activity recording failed', error);
+        if (isHumanActivity(request) && status < 400) {
+          Promise.resolve((authorized ? recordAccess : recordHumanActivity)(pr)).catch(() => {
+            console.error('Preview activity recording failed');
           });
         }
         if (!settled) {
@@ -326,7 +345,12 @@ export function createPreviewIngress({
   authorizeWake,
   ensureRunning,
   isResident = async () => true,
+  isOpen = async () => false,
+  plainWakeEnabled = true,
+  wakeLimits,
+  now,
   recordAccess,
+  recordHumanActivity = recordAccess,
   recordQueuedWake,
   clearQueuedWake,
   getStatus,
@@ -340,34 +364,63 @@ export function createPreviewIngress({
     clearQueuedWake,
   });
 
-  async function queueAuthorizedWake({ parsed, request, response, jsonResponse = false }) {
+  const limiter = createWakeLimiter({ ...wakeLimits, now });
+  const attemptLimit = createWakeAttemptLimiter({ now });
+  let credentialChecks = 0;
+
+  async function queueWake({ parsed, request, response }) {
     const resident = await isResident(parsed.pr);
     if (!resident) {
-      if (jsonResponse) json(response, 404, { status: 'not-resident', pr: parsed.pr });
-      else sendNoPreviewPage(response, parsed.pr);
+      json(response, 404, { status: 'not-resident', pr: parsed.pr });
       return;
     }
-    const authorization = await authorizeWake(parsed.pr, request.url, request);
-    if (!authorization) {
-      if (jsonResponse) json(response, 401, { status: 'unauthorized', pr: parsed.pr });
-      else send(response, 401, 'Open this sleeping preview with its one-click access URL.\n');
+    if (isBotRequest(request)
+      || request.headers['sec-fetch-site'] === 'cross-site'
+      || (request.headers.origin && request.headers.origin !== `https://${request.headers.host}`)) {
+      json(response, 403, { status: 'forbidden', pr: parsed.pr });
+      return;
+    }
+    const hasCredential = Boolean(request.headers.cookie) || new URL(request.url, 'https://preview.invalid').searchParams.has('code');
+    const anonymous = plainWakeEnabled && request.headers['x-preview-wake'] === '1';
+    const ip = request.socket?.remoteAddress || 'unknown';
+    const preflight = limiter.check(parsed.pr, ip, { credentialed: !anonymous || hasCredential });
+    if (preflight || attemptLimit(ip) || credentialChecks >= 2) {
+      json(response, 429, { status: 'rate-limited', pr: parsed.pr }, { 'retry-after': String(preflight || 60) });
+      return;
+    }
+    let authorization = null;
+    if (!anonymous || hasCredential) {
+      credentialChecks++;
+      try { authorization = await authorizeWake(parsed.pr, request.url, request); }
+      finally { credentialChecks--; }
+    }
+    if (!anonymous && !authorization) {
+      json(response, 401, { status: 'unauthorized', pr: parsed.pr });
+      return;
+    }
+    if (wake.isWaking(parsed.pr)) {
+      json(response, 202, { status: 'waking', pr: parsed.pr });
+      return;
+    }
+    const retryAfter = limiter.take(parsed.pr, ip, { credentialed: Boolean(authorization) });
+    if (retryAfter) {
+      json(response, 429, { status: 'rate-limited', pr: parsed.pr }, { 'retry-after': String(retryAfter) });
+      return;
+    }
+    if (!await isOpen(parsed.pr)) {
+      json(response, 404, { status: 'not-resident', pr: parsed.pr });
       return;
     }
     try {
       wake.enqueue(parsed.pr, authorization).catch((error) => {
-        console.error(`Preview pr-${parsed.pr} wake failed`, error);
+        console.error(`Preview pr-${parsed.pr} wake failed`, error?.code || 'unavailable');
       });
     } catch (error) {
       const [status, body] = wakeErrorResponse(error);
-      if (jsonResponse) json(response, status, { status: 'error', pr: parsed.pr, message: body.trim() }, status === 503 ? { 'retry-after': '15' } : {});
-      else send(response, status, body, status === 503 ? { 'retry-after': '15' } : {});
+      json(response, status, { status: 'error', pr: parsed.pr, message: body.trim() }, status === 503 ? { 'retry-after': '15' } : {});
       return;
     }
-    if (jsonResponse) {
-      json(response, 202, { status: 'waking', pr: parsed.pr }, { 'retry-after': '5' });
-    } else {
-      sendWakingPage(response, parsed.pr);
-    }
+    json(response, 202, { status: 'waking', pr: parsed.pr }, { 'retry-after': '5' });
   }
 
   return async (request, response) => {
@@ -393,19 +446,22 @@ export function createPreviewIngress({
       return;
     }
     const hostname = previewServiceHostname(parsed.pr, domain, parsed.service);
-    let target = await resolveTarget(parsed.pr, { service: parsed.service });
-    if (!target) {
-      await queueAuthorizedWake({
-        parsed,
-        request,
-        response,
-        jsonResponse: isWakePath(request.url),
-      });
+    const target = await resolveTarget(parsed.pr, { service: parsed.service });
+    if (isWakePath(request.url)) {
+      if (!['GET', 'POST'].includes(request.method)) {
+        json(response, 405, { status: 'method-not-allowed' }, { allow: 'GET, POST' });
+      } else if (target && !wake.isWaking(parsed.pr)) {
+        json(response, 200, { status: 'running', pr: parsed.pr });
+      } else if (request.method === 'GET') {
+        json(response, 200, { status: wake.isWaking(parsed.pr) ? 'waking' : 'sleeping', pr: parsed.pr });
+      } else {
+        await queueWake({ parsed, request, response });
+      }
       return;
     }
-    if (isWakePath(request.url)) {
-      await recordAccess(parsed.pr);
-      json(response, 200, { status: 'running', pr: parsed.pr });
+    if (!target) {
+      if (!await isResident(parsed.pr)) sendNoPreviewPage(response, parsed.pr);
+      else sendWakingPage(response, parsed.pr);
       return;
     }
     await proxyHttp({
@@ -415,7 +471,7 @@ export function createPreviewIngress({
       hostname,
       pr: parsed.pr,
       recordAccess,
-      recordWithoutMarker: parsed.service === 'blackboard',
+      recordHumanActivity,
     });
   };
 }
@@ -462,29 +518,9 @@ export function createWebSocketUpgradeHandler({
       return;
     }
     const hostname = previewServiceHostname(parsed.pr, domain, parsed.service);
-    let target = await resolveTarget(parsed.pr, { service: parsed.service });
+    const target = await resolveTarget(parsed.pr, { service: parsed.service });
     if (!target) {
-      try {
-        if (!await isResident(parsed.pr)) {
-          writeSocketResponse(socket, '404 Not Found', 'Preview is no longer resident.\n');
-          return;
-        }
-        const authorization = await authorizeWake(parsed.pr, request.url, request);
-        if (!authorization) {
-          writeSocketResponse(socket, '401 Unauthorized', 'Open this sleeping preview with its one-click access URL.\n');
-          return;
-        }
-        wake.enqueue(parsed.pr, authorization).catch((error) => {
-          console.error(`Preview pr-${parsed.pr} wake failed`, error);
-        });
-      } catch (error) {
-        const [status, body] = wakeErrorResponse(error);
-        writeSocketResponse(socket, `${status} Service Unavailable`, body);
-        return;
-      }
-    }
-    if (!target) {
-      writeSocketResponse(socket, '503 Service Unavailable', 'Preview is waking; retry shortly.\n');
+      writeSocketResponse(socket, '503 Service Unavailable', 'Open this preview in a browser to wake it.\n');
       return;
     }
 
@@ -508,17 +544,11 @@ export function createWebSocketUpgradeHandler({
         const headerBlock = responsePreamble.subarray(0, boundary).toString('latin1');
         const remainder = responsePreamble.subarray(boundary + 4);
         const lines = headerBlock.split('\r\n');
-        const authorized = lines.some((line) => /^x-yawp-preview-authorized:\s*1\s*$/i.test(line));
         const sanitized = lines.filter((line) => !/^x-yawp-preview-authorized:/i.test(line));
         socket.write(`${sanitized.join('\r\n')}\r\n\r\n`);
         if (remainder.length) socket.write(remainder);
         responsePreamble = Buffer.alloc(0);
         responseHeadersComplete = true;
-        if (authorized && /^HTTP\/1\.[01] 101\b/.test(lines[0] || '')) {
-          Promise.resolve(recordAccess(parsed.pr)).catch((error) => {
-            console.error('Preview activity recording failed', error);
-          });
-        }
       });
       socket.on('data', (chunk) => {
         if (!upstreamSocket.destroyed) upstreamSocket.write(chunk);
@@ -549,7 +579,9 @@ export function createWebSocketUpgradeHandler({
 
 export function targetFromDockerInspect(inspect, port = 8080) {
   const address = inspect?.NetworkSettings?.Networks?.preview?.IPAddress;
-  if (!inspect?.State?.Running || typeof address !== 'string' || !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(address)) {
+  if (!inspect?.State?.Running
+    || (inspect.State.Health && inspect.State.Health.Status !== 'healthy')
+    || typeof address !== 'string' || !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(address)) {
     return null;
   }
   return { host: address, port };
@@ -772,6 +804,7 @@ if (isDirectExecution(import.meta.url)) {
     domain,
     resolveTarget,
     maxConcurrentWakes,
+    plainWakeEnabled: process.env.PREVIEW_PLAIN_WAKE_ENABLED === 'true',
     ...operations,
   });
   const upgrades = createWebSocketUpgradeHandler({

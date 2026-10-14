@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
+import { createPrStateLookup } from './pr-state.mjs';
+
 const execFileAsync = promisify(execFile);
 const ACCESS_SEAT_VALUE_PREFIX = 'seat-v2:';
 const ACCESS_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
@@ -410,12 +412,40 @@ async function hostMemory() {
   }
 }
 
+export async function seedLegacyPreviewMetadata({ root, execFileFn = execFileAsync, prStateLookup = async () => null }) {
+  const entries = await readdir(path.join(root, 'previews'), { withFileTypes: true }).catch(() => []);
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !/^pr-[1-9][0-9]*$/.test(entry.name)) continue;
+    const pr = Number(entry.name.slice(3));
+    const dir = path.join(root, 'previews', entry.name);
+    const compose = await stat(path.join(dir, 'docker-compose.yml')).catch(() => null);
+    if (!compose) continue;
+    const legacy = Math.max(await fileEpoch(path.join(dir, 'last-request')), await fileEpoch(path.join(root, 'wake', 'access', entry.name)));
+    await writeFile(path.join(dir, 'last-human-activity'), `${legacy}\n`, { flag: 'wx', mode: 0o600 }).catch(error => { if (error.code !== 'EEXIST') throw error; });
+    if (!await stat(path.join(dir, 'last-deploy')).catch(() => null)) {
+      let epoch = Math.floor(compose.mtimeMs / 1000);
+      try {
+        const { stdout } = await execFileFn('docker', ['inspect', '--format', '{{.State.StartedAt}}', `yawp-pr-${pr}-web-1`], { timeout: 5000 });
+        const started = Math.floor(Date.parse(String(stdout).trim()) / 1000);
+        if (Number.isFinite(started) && started > epoch) epoch = started;
+      } catch { /* Compose mtime is the fallback for legacy stopped containers. */ }
+      await writeFile(path.join(dir, 'last-deploy'), `${epoch}\n`, { flag: 'wx', mode: 0o600 }).catch(error => { if (error.code !== 'EEXIST') throw error; });
+    }
+    const metadata = await prStateLookup(pr);
+    for (const field of ['branch', 'author']) {
+      const value = metadata?.[field];
+      if (value && !/[\x00-\x1f\x7f]/.test(value)) await writeFile(path.join(dir, field), `${value}\n`, { flag: 'wx' }).catch(error => { if (error.code !== 'EEXIST') throw error; });
+    }
+  }
+}
+
 export async function collectPreviewStatus({
   root,
   domain,
   maxRunning,
   wakingPrs = [],
   execFileFn = execFileAsync,
+  idleSleepHours = Number(process.env.PREVIEW_IDLE_SLEEP_HOURS || '48'),
 } = {}) {
   const previewRoot = path.join(root, 'previews');
   const waking = new Set([...wakingPrs].map(Number));
@@ -445,6 +475,8 @@ export async function collectPreviewStatus({
     const lastRequest = await fileEpoch(path.join(dir, 'last-request'));
     const legacyAccess = await fileEpoch(path.join(root, 'wake', 'access', `pr-${pr}`));
     const lastDeploy = await fileEpoch(path.join(dir, 'last-deploy'));
+    const lastHumanActivity = await fileEpoch(path.join(dir, 'last-human-activity'));
+    const lastIdleActivity = Math.max(lastHumanActivity, lastDeploy);
     const branch = await readSmallFile(path.join(dir, 'branch'));
     const author = await readSmallFile(path.join(dir, 'author'));
     const pinned = await stat(path.join(dir, 'keep-awake')).then(() => true, () => false);
@@ -471,6 +503,8 @@ export async function collectPreviewStatus({
       pinned,
       lastRequest: Math.max(lastRequest, legacyAccess),
       lastDeploy,
+      lastHumanActivity,
+      sleepsAt: lastIdleActivity ? lastIdleActivity + idleSleepHours * 3600 : null,
       lastActive: Math.max(lastRequest, legacyAccess, lastDeploy),
       rssBytes,
       rss: formatBytes(rssBytes),
@@ -695,10 +729,35 @@ export function createDefaultWakeOperations({
   commandTimeoutMs = wakeCommandTimeoutMs(),
   credentialIsCurrent = createPreviewSeatLookup(),
   credentialResolver = createPreviewSeatResolver(),
+  prStateLookup = createPrStateLookup(),
 }) {
   const recentAccess = new Map();
   const accessWrites = new Map();
   const queuedWakeWrites = new Map();
+  async function recordHuman(pr, { capacity = false } = {}) {
+    const now = Math.floor(Date.now() / 1000);
+    const key = `${pr}:${capacity}`;
+    if (now - (recentAccess.get(key) || 0) < 60) return;
+    if (accessWrites.has(key)) return accessWrites.get(key);
+    const operation = (async () => {
+      const accessDir = path.join(root, 'wake', 'access');
+      const previewDir = path.join(root, 'previews', `pr-${pr}`);
+      await mkdir(accessDir, { recursive: true, mode: 0o700 });
+      await mkdir(previewDir, { recursive: true, mode: 0o755 });
+      for (const target of [
+        path.join(previewDir, 'last-human-activity'),
+        path.join(previewDir, 'last-request'),
+        ...(capacity ? [path.join(accessDir, `pr-${pr}`)] : []),
+      ]) {
+        const temporary = `${target}.${process.pid}.${now}.${capacity ? 'capacity' : 'human'}.tmp`;
+        await writeFile(temporary, `${now}\n`, { mode: 0o600 });
+        await rename(temporary, target);
+      }
+      recentAccess.set(key, now);
+    })().finally(() => accessWrites.delete(key));
+    accessWrites.set(key, operation);
+    return operation;
+  }
   return {
     async ensureRunning(pr, { allowDisplacement = false, authorization } = {}) {
       const organizationId = String(authorization?.organizationId || '');
@@ -720,6 +779,7 @@ export function createDefaultWakeOperations({
             ...process.env,
             PREVIEW_ROOT: root,
             PREVIEW_MAX_RUNNING: String(maxRunning),
+            PREVIEW_WAKE_REQUIRE_OPEN_PR: 'true',
             PREVIEW_WAKE_ALLOW_DISPLACEMENT: allowDisplacement ? 'true' : 'false',
             PREVIEW_WAKE_AUTHORIZED_AT_EPOCH: String(Math.floor(Date.now() / 1000)),
             PREVIEW_WAKE_AUTHORIZED_ORGANIZATION_ID: organizationId,
@@ -745,27 +805,20 @@ export function createDefaultWakeOperations({
         resolveCredential: credentialResolver,
       });
     },
-    async recordAccess(pr) {
-      const now = Math.floor(Date.now() / 1000);
-      if (now - (recentAccess.get(pr) || 0) < 60) return;
-      if (accessWrites.has(pr)) return accessWrites.get(pr);
-      const operation = (async () => {
-        const accessDir = path.join(root, 'wake', 'access');
-        const previewDir = path.join(root, 'previews', `pr-${pr}`);
-        await mkdir(accessDir, { recursive: true, mode: 0o700 });
-        await mkdir(previewDir, { recursive: true, mode: 0o755 });
-        for (const target of [
-          path.join(previewDir, 'last-request'),
-          path.join(accessDir, `pr-${pr}`),
-        ]) {
-          const temporary = `${target}.${process.pid}.${now}.tmp`;
-          await writeFile(temporary, `${now}\n`, { mode: 0o600 });
-          await rename(temporary, target);
+    recordAccess: (pr) => recordHuman(pr, { capacity: true }),
+    recordHumanActivity: (pr) => recordHuman(pr),
+    async isOpen(pr) {
+      const metadata = await prStateLookup(pr);
+      if (metadata?.state !== 'open') return false;
+      const dir = path.join(root, 'previews', `pr-${pr}`);
+      // Only write public, bounded PR metadata; never access credentials.
+      for (const field of ['branch', 'author']) {
+        const value = metadata[field];
+        if (value && !/[\x00-\x1f\x7f]/.test(value)) {
+          await writeFile(path.join(dir, field), `${value}\n`).catch(() => {});
         }
-        recentAccess.set(pr, now);
-      })().finally(() => accessWrites.delete(pr));
-      accessWrites.set(pr, operation);
-      return operation;
+      }
+      return true;
     },
     async isResident(pr) {
       try {
@@ -798,7 +851,9 @@ export function createDefaultWakeOperations({
   };
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (process.argv[1] === fileURLToPath(import.meta.url) && process.argv[2] === '--seed-metadata') {
+  await seedLegacyPreviewMetadata({ root: process.env.PREVIEW_ROOT || '/srv/yawp-preview', prStateLookup: createPrStateLookup() });
+} else if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const domain = process.env.PREVIEW_DOMAIN || '';
   const secret = process.env.PREVIEW_WAKE_SECRET || '';
   const root = process.env.PREVIEW_ROOT || '/srv/yawp-preview';

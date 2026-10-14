@@ -987,7 +987,7 @@ describe('PR preview deployment contract', () => {
       'authorizeWake(parsed.pr, request.url, request)'
     );
     expect(ingressServer).toContain(
-      "upstreamResponse.headers['x-yawp-preview-authorized']"
+      "isHumanActivity(request)"
     );
     expect(bootstrap).toContain('node "$certificate_manager" --wildcard');
     expect(bootstrap).toContain(
@@ -1009,7 +1009,7 @@ describe('PR preview deployment contract', () => {
     expect(wakeProof).toContain('PROOF_CONTAINER_AFTER');
   });
 
-  test('preview idle defaults are two hours and comments promise authorized URL wake', () => {
+  test('preview idle defaults are 48 hours and comments promise browser plain URL wake', () => {
     const workflow = readRepoFile('.github/workflows/preview-environments.yml');
     const bootstrapWorkflow = readRepoFile(
       '.github/workflows/preview-host-bootstrap.yml'
@@ -1019,12 +1019,7 @@ describe('PR preview deployment contract', () => {
     const wakePreview = readRepoFile('scripts/preview/wake-preview.sh');
     const wakeServer = readRepoFile('scripts/preview/wake-server.mjs');
 
-    expect(workflow).toContain(
-      "PREVIEW_DRAFT_IDLE_HOURS: ${{ vars.PREVIEW_DRAFT_IDLE_HOURS || '2' }}"
-    );
-    expect(workflow).toContain(
-      "PREVIEW_READY_IDLE_HOURS: ${{ vars.PREVIEW_READY_IDLE_HOURS || '2' }}"
-    );
+    expect(workflow.match(/PREVIEW_IDLE_SLEEP_HOURS: \$\{\{ vars\.PREVIEW_IDLE_SLEEP_HOURS \|\| '48' \}\}/g)).toHaveLength(2);
     expect(
       workflow.match(
         /PREVIEW_SLEEP_ENABLED: \$\{\{ vars\.PREVIEW_SLEEP_ENABLED \|\| 'true' \}\}/g
@@ -1058,9 +1053,9 @@ describe('PR preview deployment contract', () => {
       "PREVIEW_INFLIGHT_TTL_SECONDS: ${{ vars.PREVIEW_INFLIGHT_TTL_SECONDS || '3600' }}"
     );
     expect(wakeServer).toContain("process.env.PREVIEW_MAX_RUNNING || '8'");
-    expect(workflow).toContain('Preview sleeping after 2 hours of inactivity');
+    expect(workflow).toContain('Preview slept after its human idle deadline or to free running capacity');
     expect(workflow).toContain(
-      'Open its one-click URL, or revisit from an already authorized browser, to wake it automatically'
+      'Open its plain URL in a browser to wake it; app access and login still apply.'
     );
   });
 

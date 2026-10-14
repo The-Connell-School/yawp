@@ -18,8 +18,7 @@ PR_ACTIVITY="${PR_ACTIVITY:-}"
 PR_STATE_AUTHORITATIVE="${PREVIEW_PR_STATE_AUTHORITATIVE:-false}"
 POSTGRES_CONTAINER="${PREVIEW_POSTGRES_CONTAINER:-preview-postgres}"
 SLEEP_ENABLED="${PREVIEW_SLEEP_ENABLED:-true}"
-DRAFT_IDLE_HOURS="${PREVIEW_DRAFT_IDLE_HOURS:-2}"
-READY_IDLE_HOURS="${PREVIEW_READY_IDLE_HOURS:-2}"
+IDLE_SLEEP_HOURS="${PREVIEW_IDLE_SLEEP_HOURS:-48}"
 NOW_EPOCH="${PREVIEW_NOW_EPOCH:-$(date +%s)}"
 DOCKER="${PREVIEW_DOCKER:-docker}"
 LOCK_WAIT_SECONDS="${PREVIEW_LOCK_WAIT_SECONDS:-900}"
@@ -39,6 +38,11 @@ if ! declare -F preview_remove_path >/dev/null 2>&1; then
   source "$SCRIPT_DIR/remove-preview-path.sh"
 fi
 
+if ! declare -F preview_idle_deadline >/dev/null 2>&1; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  source "$SCRIPT_DIR/idle-policy.sh"
+fi
+
 is_positive_integer() {
   [[ "$1" =~ ^[1-9][0-9]*$ ]]
 }
@@ -54,7 +58,7 @@ esac
 for value in "$RESIDENT_CAP" "$RUNNING_CAP"; do
   is_positive_integer "$value" || { echo "Preview caps must be positive integers" >&2; exit 1; }
 done
-for value in "$DRAFT_IDLE_HOURS" "$READY_IDLE_HOURS" "$NOW_EPOCH" "$LOCK_WAIT_SECONDS" "$INFLIGHT_TTL_SECONDS"; do
+for value in "$IDLE_SLEEP_HOURS" "$NOW_EPOCH" "$LOCK_WAIT_SECONDS" "$INFLIGHT_TTL_SECONDS"; do
   is_nonnegative_integer "$value" || { echo "Preview timing values must be nonnegative integers" >&2; exit 1; }
 done
 case "$SLEEP_ENABLED" in
@@ -495,26 +499,19 @@ while IFS= read -r pr; do
   fi
 done < <(resident_env_numbers)
 
-# Idle leases stop every PR-scoped service. State stays resident and any new deploy wakes it.
+# The human idle deadline applies to all previews, including keep-awake pins.
+# Pins remain protected from capacity displacement below.
 if [[ "$SLEEP_ENABLED" == "true" ]]; then
   while IFS= read -r pr; do
-    [[ -n "$pr" ]] || continue
+    [[ -n "$pr" && "$pr" != "$KEEP_PR" ]] || continue
     is_inflight "$pr" && continue
-    record="$(activity_record "$pr")"
-    [[ -n "$record" ]] || continue
-    read -r _ updated draft pinned _ _ <<<"$record"
-    is_nonnegative_integer "$updated" || continue
-    updated="$(effective_activity_epoch "$pr" "$updated")"
-    [[ "$pinned" == "1" ]] && continue
-    idle_hours="$READY_IDLE_HOURS"
-    [[ "$draft" == "1" ]] && idle_hours="$DRAFT_IDLE_HOURS"
-    if (( NOW_EPOCH - updated >= idle_hours * 3600 )); then
-      echo "sleep pr-${pr}: idle lease expired"
-      if stop_env "$pr"; then
-        slept="$(append_number "$slept" "$pr")"
-      fi
+    preview_idle_protected "$ROOT" "$pr" "$NOW_EPOCH" "$INFLIGHT_TTL_SECONDS" && continue
+    deadline="$(preview_idle_deadline "$previews_dir/pr-$pr" "$IDLE_SLEEP_HOURS")"
+    if (( deadline > 0 && NOW_EPOCH >= deadline )); then
+      echo "sleep pr-${pr}: human idle deadline expired"
+      if stop_env "$pr"; then slept="$(append_number "$slept" "$pr")"; fi
     fi
-  done < <(rank_candidates running "$KEEP_PR")
+  done < <(running_env_numbers)
 fi
 
 # Resident pressure deletes derived environments, drafts then oldest activity.

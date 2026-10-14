@@ -526,8 +526,7 @@ describe('enforce-cap.sh', () => {
       PREVIEW_MAX_RESIDENT: '20',
       PREVIEW_MAX_RUNNING: '1',
       PREVIEW_NOW_EPOCH: '1000',
-      PREVIEW_DRAFT_IDLE_HOURS: '999',
-      PREVIEW_READY_IDLE_HOURS: '999',
+      PREVIEW_IDLE_SLEEP_HOURS: '999',
       PR_ACTIVITY: '100 990 0 0\n101 991 0 0',
       PREVIEW_DOCKER: docker.stub,
       PREVIEW_DOCKER_STATE: docker.state,
@@ -602,6 +601,7 @@ describe('enforce-cap.sh', () => {
   test('sleeps an idle draft without deleting its state', () => {
     const root = makeRoot();
     const env = makeEnv(root, 101, { withCompose: true });
+    writeFileSync(path.join(env.previewDir, 'last-deploy'), '110000\n');
     const docker = makeDockerStub(root, [101]);
     const now = 200_000;
 
@@ -613,8 +613,7 @@ describe('enforce-cap.sh', () => {
       PREVIEW_DOCKER_STATE: docker.state,
       PREVIEW_DOCKER_LOG: docker.log,
       PREVIEW_SLEEP_ENABLED: 'true',
-      PREVIEW_DRAFT_IDLE_HOURS: '24',
-      PREVIEW_READY_IDLE_HOURS: '72',
+      PREVIEW_IDLE_SLEEP_HOURS: '24',
       PREVIEW_NOW_EPOCH: String(now),
       PREVIEW_MAX_RESIDENT: '20',
       PREVIEW_MAX_RUNNING: '8',
@@ -634,15 +633,16 @@ describe('enforce-cap.sh', () => {
     expect(readFileSync(docker.log, 'utf8')).not.toContain(' down ');
   });
 
-  test('sleeps after 2 hours when sleep settings are not configured', () => {
+  test('sleeps after 48 hours when sleep settings are not configured', () => {
     const root = makeRoot();
     makeEnv(root, 104, { withCompose: true });
+    writeFileSync(path.join(root, 'previews/pr-104/last-deploy'), '220000\n');
     const docker = makeDockerStub(root, [104]);
     const now = 400_000;
 
     const result = run(root, {
       OPEN_PR_NUMBERS: '104',
-      PR_ACTIVITY: `104 ${now - 3 * 3600} 0 0`,
+      PR_ACTIVITY: `104 ${now - 50 * 3600} 0 0`,
       PREVIEW_MODE: 'reconcile',
       PREVIEW_DOCKER: docker.stub,
       PREVIEW_DOCKER_STATE: docker.state,
@@ -666,12 +666,13 @@ describe('enforce-cap.sh', () => {
       path.join(env.previewDir, 'docker-compose.yml'),
       'services:\n  web: {}\n  blackboard-lti-mock: {}\n  renderer: {}\n'
     );
+    writeFileSync(path.join(root, 'previews/pr-104/last-deploy'), '220000\n');
     const docker = makeDockerStub(root, [104]);
     const now = 400_000;
 
     const result = run(root, {
       OPEN_PR_NUMBERS: '104',
-      PR_ACTIVITY: `104 ${now - 3 * 3600} 0 0`,
+      PR_ACTIVITY: `104 ${now - 50 * 3600} 0 0`,
       PREVIEW_MODE: 'reconcile',
       PREVIEW_DOCKER: docker.stub,
       PREVIEW_DOCKER_STATE: docker.state,
@@ -708,7 +709,6 @@ describe('enforce-cap.sh', () => {
       PREVIEW_NOW_EPOCH: String(now),
       PREVIEW_MAX_RESIDENT: '20',
       PREVIEW_MAX_RUNNING: '8',
-      PREVIEW_READY_IDLE_HOURS: '48',
     });
 
     expect(parse(result.stdout)).toMatchObject({
@@ -722,6 +722,8 @@ describe('enforce-cap.sh', () => {
     const root = makeRoot();
     makeEnv(root, 103, { withCompose: true });
     mkdirSync(path.join(root, 'wake', 'access'), { recursive: true });
+    writeFileSync(path.join(root, 'previews/pr-103/last-human-activity'), '396400\n');
+    writeFileSync(path.join(root, 'previews/pr-103/last-deploy'), '1\n');
     writeFileSync(path.join(root, 'wake', 'access', 'pr-103'), '396400\n');
     const docker = makeDockerStub(root, [103]);
 
@@ -733,8 +735,7 @@ describe('enforce-cap.sh', () => {
       PREVIEW_DOCKER_STATE: docker.state,
       PREVIEW_DOCKER_LOG: docker.log,
       PREVIEW_SLEEP_ENABLED: 'true',
-      PREVIEW_DRAFT_IDLE_HOURS: '48',
-      PREVIEW_READY_IDLE_HOURS: '48',
+      PREVIEW_IDLE_SLEEP_HOURS: '48',
       PREVIEW_NOW_EPOCH: '400000',
       PREVIEW_MAX_RESIDENT: '20',
       PREVIEW_MAX_RUNNING: '8',
@@ -764,8 +765,7 @@ describe('enforce-cap.sh', () => {
       PREVIEW_DOCKER_STATE: docker.state,
       PREVIEW_DOCKER_LOG: docker.log,
       PREVIEW_SLEEP_ENABLED: 'true',
-      PREVIEW_DRAFT_IDLE_HOURS: '999999',
-      PREVIEW_READY_IDLE_HOURS: '999999',
+      PREVIEW_IDLE_SLEEP_HOURS: '999999',
       PREVIEW_MAX_RESIDENT: '20',
       PREVIEW_MAX_RUNNING: '2',
     });
@@ -790,8 +790,7 @@ describe('enforce-cap.sh', () => {
       PREVIEW_DOCKER_STATE: docker.state,
       PREVIEW_DOCKER_LOG: docker.log,
       PREVIEW_SLEEP_ENABLED: 'true',
-      PREVIEW_DRAFT_IDLE_HOURS: '999999',
-      PREVIEW_READY_IDLE_HOURS: '999999',
+      PREVIEW_IDLE_SLEEP_HOURS: '999999',
       PREVIEW_MAX_RESIDENT: '20',
       PREVIEW_MAX_RUNNING: '2',
     });
@@ -978,6 +977,8 @@ describe('enforce-cap.sh', () => {
     const root = makeRoot();
     makeEnv(root, 1, { withCompose: true });
     makeEnv(root, 12, { withCompose: true });
+    writeFileSync(path.join(root, 'previews/pr-1/last-deploy'), '200000\n');
+    writeFileSync(path.join(root, 'previews/pr-12/last-deploy'), '399000\n');
     const docker = makeDockerStub(root, [1, 12]);
     const result = run(root, {
       OPEN_PR_NUMBERS: '1 12',

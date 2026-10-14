@@ -10,7 +10,7 @@ name: Preview host bootstrap
 # It rewrites the shared ingress/Postgres configuration, migrates existing residents
 # to isolated database roles, and installs the wake service. Resident application state
 # is preserved; previews that were sleeping remain stopped and healthy running previews
-# are recreated and health-checked.
+# keep their container IDs and are health-checked.
 
 on:
   workflow_dispatch:
@@ -34,6 +34,8 @@ jobs:
       PREVIEW_SSH_USER: ${{ vars.PREVIEW_SSH_USER || 'ec2-user' }}
       PREVIEW_MAX_RUNNING: ${{ vars.PREVIEW_MAX_RUNNING || '8' }}
       PREVIEW_SLEEP_ENABLED: ${{ vars.PREVIEW_SLEEP_ENABLED || 'true' }}
+      PREVIEW_PLAIN_WAKE_ENABLED: ${{ vars.PREVIEW_PLAIN_WAKE_ENABLED || 'true' }}
+      PREVIEW_IDLE_SLEEP_HOURS: ${{ vars.PREVIEW_IDLE_SLEEP_HOURS || '48' }}
       PREVIEW_INFLIGHT_TTL_SECONDS: ${{ vars.PREVIEW_INFLIGHT_TTL_SECONDS || '3600' }}
       PREVIEW_POSTGRES_ADMIN_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
       PREVIEW_ACME_EMAIL: ${{ vars.PREVIEW_ACME_EMAIL || 'bryant@brock.software' }}
@@ -78,6 +80,10 @@ jobs:
             scripts/preview/migrate-resident-database-roles.sh \
             scripts/preview/publish-host-metrics.sh \
             scripts/preview/install-host-metrics.sh \
+            scripts/preview/wake-policy.mjs \
+            scripts/preview/pr-state.mjs \
+            scripts/preview/idle-policy.sh \
+            scripts/preview/idle-sleep.sh \
             scripts/preview/wake-server.mjs \
             scripts/preview/wake-preview.sh \
             "${PREVIEW_SSH_USER}@${PREVIEW_HOST}:${PREVIEW_ROOT}/bootstrap/scripts/preview/"
@@ -97,6 +103,8 @@ jobs:
             "PREVIEW_DOMAIN=$(shell_quote "$PREVIEW_DOMAIN")"
             "PREVIEW_MAX_RUNNING=$(shell_quote "$PREVIEW_MAX_RUNNING")"
             "PREVIEW_SLEEP_ENABLED=$(shell_quote "$PREVIEW_SLEEP_ENABLED")"
+            "PREVIEW_PLAIN_WAKE_ENABLED=$(shell_quote "$PREVIEW_PLAIN_WAKE_ENABLED")"
+            "PREVIEW_IDLE_SLEEP_HOURS=$(shell_quote "$PREVIEW_IDLE_SLEEP_HOURS")"
             "PREVIEW_INFLIGHT_TTL_SECONDS=$(shell_quote "$PREVIEW_INFLIGHT_TTL_SECONDS")"
             "PREVIEW_POSTGRES_ADMIN_PASSWORD=$(shell_quote "$PREVIEW_POSTGRES_ADMIN_PASSWORD")"
             "PREVIEW_ACME_EMAIL=$(shell_quote "$PREVIEW_ACME_EMAIL")"

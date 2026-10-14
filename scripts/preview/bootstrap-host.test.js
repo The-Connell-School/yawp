@@ -40,11 +40,11 @@ describe('bootstrap-host.sh', () => {
     );
   });
 
-  test('records authorized activity directly without a proxy access log', () => {
+  test('records human activity directly without a proxy access log', () => {
     expect(script).not.toContain('PREVIEW_ACCESS_LOG=');
     expect(script).not.toContain('--accesslog');
-    expect(ingress).toContain("upstreamResponse.headers['x-yawp-preview-authorized']");
-    expect(ingress).toContain('recordAccess(pr)');
+    expect(ingress).toContain('isHumanActivity(request)');
+    expect(ingress).toContain('recordHumanActivity');
   });
 
   test('cuts over to the custom ingress with TLS canary and rollback', () => {

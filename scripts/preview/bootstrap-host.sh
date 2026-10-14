@@ -6,6 +6,8 @@ ACME_EMAIL="${PREVIEW_ACME_EMAIL:-}"
 DOMAIN="${PREVIEW_DOMAIN:-}"
 RUNNING_CAP="${PREVIEW_MAX_RUNNING:-8}"
 SLEEP_ENABLED="${PREVIEW_SLEEP_ENABLED:-true}"
+IDLE_SLEEP_HOURS="${PREVIEW_IDLE_SLEEP_HOURS:-48}"
+PLAIN_WAKE_ENABLED="${PREVIEW_PLAIN_WAKE_ENABLED:-false}"
 INFLIGHT_TTL_SECONDS="${PREVIEW_INFLIGHT_TTL_SECONDS:-3600}"
 WAKE_USER="${PREVIEW_WAKE_USER:-$USER}"
 HTTP_PORT="${PREVIEW_HTTP_PORT:-80}"
@@ -21,6 +23,11 @@ METRICS_USER="${PREVIEW_METRICS_USER:-$USER}"
   echo "PREVIEW_MAX_RUNNING must be a positive integer" >&2
   exit 1
 }
+[[ "$IDLE_SLEEP_HOURS" =~ ^[0-9]+$ ]] || { echo 'Invalid idle sleep hours' >&2; exit 1; }
+case "$PLAIN_WAKE_ENABLED" in
+  true|false) ;;
+  *) echo 'Invalid plain wake flag' >&2; exit 1 ;;
+esac
 case "$SLEEP_ENABLED" in
   true|false) ;;
   *) echo "PREVIEW_SLEEP_ENABLED must be true or false" >&2; exit 1 ;;
@@ -162,6 +169,7 @@ chmod +x "$database_role_migration"
 env \
   PREVIEW_ROOT="$ROOT" \
   PREVIEW_POSTGRES_ADMIN_PASSWORD="$PREVIEW_POSTGRES_ADMIN_PASSWORD" \
+  PREVIEW_PRESERVE_RUNNING_RESIDENTS=true \
   bash "$database_role_migration"
 flock -u 8
 
@@ -173,11 +181,16 @@ source_wake_script="$ROOT/bootstrap/scripts/preview/wake-preview.sh"
   echo "Preview ingress, certificate, wake server, and wake script must be synced before bootstrap" >&2
   exit 1
 }
+source_policy="$ROOT/bootstrap/scripts/preview/wake-policy.mjs"
+source_pr_state="$ROOT/bootstrap/scripts/preview/pr-state.mjs"
+source_idle_policy="$ROOT/bootstrap/scripts/preview/idle-policy.sh"
+source_idle_script="$ROOT/bootstrap/scripts/preview/idle-sleep.sh"
 release_id="$(sha256sum \
   "$source_wake_server" \
   "$source_ingress_server" \
   "$source_certificate_manager" \
   "$source_wake_script" \
+  "$source_policy" "$source_pr_state" "$source_idle_policy" "$source_idle_script" \
   | sha256sum \
   | awk '{print $1}')"
 release_dir="$ROOT/ingress/releases/$release_id"
@@ -186,6 +199,9 @@ install -m 0644 "$source_wake_server" "$release_dir/wake-server.mjs"
 install -m 0644 "$source_ingress_server" "$release_dir/ingress-server.mjs"
 install -m 0644 "$source_certificate_manager" "$release_dir/certificate-manager.mjs"
 install -m 0755 "$source_wake_script" "$release_dir/wake-preview.sh"
+install -m 0644 "$source_policy" "$source_pr_state" "$source_idle_policy" "$release_dir/"
+install -m 0755 "$source_idle_script" "$release_dir/idle-sleep.sh"
+PREVIEW_ROOT="$ROOT" node "$release_dir/wake-server.mjs" --seed-metadata
 ingress_server="$release_dir/ingress-server.mjs"
 certificate_manager="$release_dir/certificate-manager.mjs"
 wake_script="$release_dir/wake-preview.sh"
@@ -328,6 +344,8 @@ Environment=PREVIEW_ROOT=$ROOT
 Environment=PREVIEW_DOMAIN=$DOMAIN
 Environment=PREVIEW_MAX_RUNNING=$RUNNING_CAP
 Environment=PREVIEW_SLEEP_ENABLED=$SLEEP_ENABLED
+Environment=PREVIEW_PLAIN_WAKE_ENABLED=$PLAIN_WAKE_ENABLED
+Environment=PREVIEW_IDLE_SLEEP_HOURS=$IDLE_SLEEP_HOURS
 Environment=PREVIEW_INFLIGHT_TTL_SECONDS=$INFLIGHT_TTL_SECONDS
 Environment=PREVIEW_HTTP_PORT=$HTTP_PORT
 Environment=PREVIEW_HTTPS_PORT=$HTTPS_PORT
@@ -429,3 +447,33 @@ else
 fi
 
 echo "Preview environment host ready at $ROOT"
+
+# Separate oneshot bounds sleeper memory and serializes against deploy/wake.
+sudo tee /etc/systemd/system/yawp-preview-idle-sleep.service >/dev/null <<UNIT
+[Unit]
+Description=Stop previews after their human idle deadline
+After=docker.service yawp-preview-ingress.service
+
+[Service]
+Type=oneshot
+User=$WAKE_USER
+Environment=PREVIEW_ROOT=$ROOT
+Environment=PREVIEW_SLEEP_ENABLED=$SLEEP_ENABLED
+Environment=PREVIEW_IDLE_SLEEP_HOURS=$IDLE_SLEEP_HOURS
+Environment=PREVIEW_INFLIGHT_TTL_SECONDS=$INFLIGHT_TTL_SECONDS
+ExecStart=/usr/bin/env bash $ROOT/ingress/current/idle-sleep.sh
+UNIT
+sudo tee /etc/systemd/system/yawp-preview-idle-sleep.timer >/dev/null <<'UNIT'
+[Unit]
+Description=Check preview idle deadlines every minute
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=60
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+sudo systemctl daemon-reload
+sudo systemctl enable --now yawp-preview-idle-sleep.timer

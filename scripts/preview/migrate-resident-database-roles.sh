@@ -194,6 +194,7 @@ while IFS= read -r database; do
     "REVOKE CONNECT ON DATABASE \"${database}\" FROM PUBLIC;" >/dev/null
 done <<< "$database_list"
 
+preserved_running=false
 shopt -s nullglob
 for preview_dir in "$ROOT"/previews/*; do
   [[ -d "$preview_dir" ]] || continue
@@ -204,6 +205,12 @@ for preview_dir in "$ROOT"/previews/*; do
   }
   compose_file="$preview_dir/docker-compose.yml"
   [[ -f "$compose_file" ]] || continue
+  if [[ "${PREVIEW_PRESERVE_RUNNING_RESIDENTS:-false}" == true ]] \
+    && [[ -n "$($DOCKER ps --filter "label=com.docker.compose.project=yawp-$slug" --filter label=com.docker.compose.service=web --filter status=running -q)" ]]; then
+    preserved_running=true
+    echo "Preserving running resident $slug; role migration deferred until stopped"
+    continue
+  fi
   database="yawp_${slug//-/_}"
   role="${database}_app"
   role_file="$preview_dir/database-role"
@@ -275,7 +282,11 @@ done
 
 # Existing Postgres volumes ignore POSTGRES_PASSWORD changes. Rotate the actual admin
 # role only after every resident compose file no longer contains the previous credential.
-$DOCKER exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 -U postgres -d postgres -c \
-  "ALTER ROLE postgres WITH PASSWORD '${ADMIN_PASSWORD}';" >/dev/null
-echo "Resident preview database roles isolated and Postgres administrator rotated"
+if [[ "$preserved_running" == true ]]; then
+  echo "Postgres administrator rotation deferred while preserving running residents"
+else
+  $DOCKER exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 -U postgres -d postgres -c \
+    "ALTER ROLE postgres WITH PASSWORD '${ADMIN_PASSWORD}';" >/dev/null
+  echo "Resident preview database roles isolated and Postgres administrator rotated"
+fi
 trap - EXIT TERM INT

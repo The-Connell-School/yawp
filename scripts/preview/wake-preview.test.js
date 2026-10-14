@@ -397,6 +397,29 @@ printf 'OK\\n'
     expect(readFileSync(docker.log, 'utf8')).not.toContain(' stop');
   });
 
+  test('unauthorized human timestamps cannot renew the LRU capacity lease', () => {
+    const root = makeRoot();
+    makePreview(root, 100, { access: 10, pinned: true });
+    makePreview(root, 101, { access: 1000 });
+    makePreview(root, 102);
+    writeFileSync(path.join(root, 'previews/pr-101/last-request'), '4999\n');
+    const docker = makeDockerStub(root, [100, 101]);
+    const result = run(root, 102, docker, { PREVIEW_NOW_EPOCH: '5000' });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('WAKE_SLEPT=101');
+    expect(readFileSync(docker.state, 'utf8').trim().split('\n').sort()).toEqual(['100', '102']);
+  });
+
+  test('closed PR state is rechecked under the host lock before any container mutation', () => {
+    const root = makeRoot(); makePreview(root, 241);
+    const docker = makeDockerStub(root);
+    const curl = path.join(root, 'curl');
+    writeFileSync(curl, `#!/bin/bash\nprintf '{"state":"closed"}\\n'\n`); chmodSync(curl, 0o755);
+    const result = run(root, 241, docker, { PREVIEW_WAKE_REQUIRE_OPEN_PR: 'true', PREVIEW_CURL: curl });
+    expect(result.status).not.toBe(0);
+    expect(readFileSync(docker.log, 'utf8')).not.toMatch(/ start| stop/);
+  });
+
   test('rejects malformed PR identifiers before calling Docker', () => {
     const root = makeRoot();
     const docker = makeDockerStub(root);
