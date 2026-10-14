@@ -253,7 +253,7 @@ describe('tester feedback submission', () => {
     expect(saved[0]).toMatchObject({ environment: 'demo' });
   });
   test('accepts demo .data form posts without origin when the same-origin referer is present', async () => {
-    const { deps, saved } = setup({ environment: () => 'production' });
+    const { deps, saved } = setup({ environment: () => 'demo' });
     const response = await submitTesterFeedback(
       new Request('https://demo.yawp.school/api/tester-feedback.data', {
         method: 'POST',
@@ -272,10 +272,10 @@ describe('tester feedback submission', () => {
     );
     expect(response.status).toBe(201);
     expect(saved).toHaveLength(1);
-    expect(saved[0]).toMatchObject({ environment: 'production' });
+    expect(saved[0]).toMatchObject({ environment: 'demo' });
   });
   test('accepts demo .data form posts with opaque origin when the same-origin referer is present', async () => {
-    const { deps, saved } = setup({ environment: () => 'production' });
+    const { deps, saved } = setup({ environment: () => 'demo' });
     const response = await submitTesterFeedback(
       new Request('https://demo.yawp.school/api/tester-feedback.data', {
         method: 'POST',
@@ -295,7 +295,7 @@ describe('tester feedback submission', () => {
     );
     expect(response.status).toBe(201);
     expect(saved).toHaveLength(1);
-    expect(saved[0]).toMatchObject({ environment: 'production' });
+    expect(saved[0]).toMatchObject({ environment: 'demo' });
   });
   test('does not treat opaque origin as proxy-stripped source headers', async () => {
     const originalPrimary = process.env.PRIMARY_APP_URL;
@@ -334,7 +334,7 @@ describe('tester feedback submission', () => {
     delete process.env.YAWP_APP_ORIGIN;
     delete process.env.YAWP_PUBLIC_ORIGIN;
     try {
-      const { deps, saved } = setup({ environment: () => 'production' });
+      const { deps, saved } = setup({ environment: () => 'demo' });
       const response = await submitTesterFeedback(
         new Request('http://app-runner.internal/api/tester-feedback.data', {
           method: 'POST',
@@ -354,7 +354,7 @@ describe('tester feedback submission', () => {
       );
       expect(response.status).toBe(201);
       expect(saved).toHaveLength(1);
-      expect(saved[0]).toMatchObject({ environment: 'production' });
+      expect(saved[0]).toMatchObject({ environment: 'demo' });
     } finally {
       if (originalPrimary === undefined) delete process.env.PRIMARY_APP_URL;
       else process.env.PRIMARY_APP_URL = originalPrimary;
@@ -388,26 +388,31 @@ describe('tester feedback submission', () => {
     expect(saved).toHaveLength(1);
     expect(saved[0]).toMatchObject({ environment: 'demo' });
   });
-  test('rejects deployed demo feedback fallback when the referer is not the app', async () => {
-    const { deps, saved } = setup({ environment: () => 'production' });
-    const response = await submitTesterFeedback(
-      new Request('http://app-runner.internal/api/tester-feedback.data', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/x-www-form-urlencoded',
-          referer: 'https://demo.yawp.school/auth/login',
-          host: 'app-runner.internal',
-        },
-        body: new URLSearchParams({
-          url: '/app/assignments?tab=work',
-          whatIDid: 'Opened',
-          whatHappened: 'Froze',
-          whatIWish: 'Save',
+  test('rejects deployed demo feedback fallback when the referer is mismatched', async () => {
+    const { deps, saved } = setup({ environment: () => 'demo' });
+    for (const referer of [
+      'https://demo.yawp.school/auth/login',
+      'https://example.test/app/assignments?tab=work',
+    ]) {
+      const response = await submitTesterFeedback(
+        new Request('http://app-runner.internal/api/tester-feedback.data', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+            referer,
+            host: 'app-runner.internal',
+          },
+          body: new URLSearchParams({
+            url: '/app/assignments?tab=work',
+            whatIDid: 'Opened',
+            whatHappened: 'Froze',
+            whatIWish: 'Save',
+          }),
         }),
-      }),
-      deps
-    );
-    expect(response.status).toBe(403);
+        deps
+      );
+      expect(response.status).toBe(403);
+    }
     expect(saved).toHaveLength(0);
   });
   test('accepts demo hosted form posts through an internal proxy host when PRIMARY_APP_URL matches the browser referer', async () => {
@@ -504,7 +509,7 @@ describe('tester feedback submission', () => {
       else process.env.YAWP_APP_ORIGIN = originalYawpOrigin;
     }
   });
-  test('accepts demo .data posts when the proxy strips origin and referer but the public demo origin is configured', async () => {
+  test('rejects demo .data posts when the proxy strips both origin and referer', async () => {
     const originalPrimary = process.env.PRIMARY_APP_URL;
     process.env.PRIMARY_APP_URL = 'https://demo.yawp.school';
     try {
@@ -525,9 +530,8 @@ describe('tester feedback submission', () => {
         }),
         deps
       );
-      expect(response.status).toBe(201);
-      expect(saved).toHaveLength(1);
-      expect(saved[0]).toMatchObject({ environment: 'demo' });
+      expect(response.status).toBe(403);
+      expect(saved).toHaveLength(0);
     } finally {
       if (originalPrimary === undefined) delete process.env.PRIMARY_APP_URL;
       else process.env.PRIMARY_APP_URL = originalPrimary;
@@ -551,6 +555,13 @@ describe('tester feedback submission', () => {
       },
       {
         referer: 'https://yawp.school/app/assignments?tab=work',
+      },
+      {
+        referer: 'https://demo.yawp.school/app/assignments?tab=work',
+      },
+      {
+        origin: 'null',
+        referer: 'https://demo.yawp.school/app/assignments?tab=work',
       },
       {},
     ];
