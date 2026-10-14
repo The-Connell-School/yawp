@@ -227,6 +227,17 @@ jobs:
           ./services/web-app/app/domain/free-tier/service.integration.test.ts
           ./services/web-app/app/routes/api.free-tier.waitlist/route.integration.test.ts
 
+      - name: 🧪 Free-tier operator cap denial persistence (isolated)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          FREE_TIER_DB_TESTS: '1'
+          PRIMARY_APP_URL: https://yawp.test
+          RESEND_API_KEY: ''
+          RESEND_FROM_EMAIL: ''
+          EMAIL_PROVIDER: resend
+        run: bun test --max-concurrency=2 ./services/web-app/app/domain/free-tier/operator-caps.integration.test.ts
+
       - name: 🧪 Feature flag Postgres integration (isolated from prisma mocks)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
@@ -417,6 +428,26 @@ jobs:
         if: ${{ needs.paths.outputs.code == 'true' }}
         working-directory: services/web-app
         run: bun test app/utils/ai-usage-log.server.test.ts app/utils/getLLMCompletion/getLLMCompletion.test.ts
+
+      - name: 🧪 Free-tier spend admission and caller denials (isolated)
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        run: |
+          set -e
+          for file in \
+            app/domain/free-tier/usage-budget.server.test.ts \
+            app/utils/ai-admission.server.test.ts \
+            app/utils/tester-decisions.server.test.ts \
+            app/utils/internal-free-tier-operator.server.test.ts \
+            app/routes/api.free-tier.token/route.test.ts \
+            app/routes/api.domain.reporter/route.test.ts \
+            app/routes/api.domain.lesson-planner/route.test.ts \
+            app/routes/api.domain.assignment-insights/route.test.ts \
+            'app/routes/app.writing-lessons.assigned.$classAssignmentId/route.test.ts' \
+            app/routes/app.writing-lessons.practice/route.test.ts \
+            app/routes/app.tester.waitlist/route.test.ts; do
+            bun test --max-concurrency=2 "$file"
+          done
 
       # Free-tier / enrollment suites also mock Prisma; run isolated like Daily Pages.
       # Feature flags (and the suites around them). These suites
