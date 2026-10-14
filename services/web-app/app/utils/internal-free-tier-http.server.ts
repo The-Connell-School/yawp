@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import {
   authenticateInternalManagementRequest,
+  type InternalApiAuthContext,
   INTERNAL_API_HEADER_SIGNATURE,
   recordInternalPlatformWriteAudit,
 } from '~/utils/internal-platform-auth.server';
@@ -29,6 +30,9 @@ const response = (value: unknown, status = 200, headers?: HeadersInit) =>
   Response.json(value, { status, headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', ...(headers || {}) } });
 const digest = (value: string) => createHash('sha256').update(value).digest();
 const idempotencyKeySchema = z.string().trim().regex(/^[A-Za-z0-9._:-]{1,200}$/);
+const tokenCreateRequestSchema = tokenCreateSchema
+  .extend({ createIdempotencyKey: idempotencyKeySchema.nullish() })
+  .strict();
 /**
  * The management-key check every internal endpoint shares (free tier, feature
  * flags). Returns a response to send back when the request is not allowed.
@@ -46,6 +50,14 @@ export async function authenticateAndAuditWrite(
   request: Request,
   options: { body?: Uint8Array | string } = {}
 ) {
+  const auth = await authenticateAndAuditWriteContext(request, options);
+  return auth instanceof Response ? auth : null;
+}
+
+async function authenticateAndAuditWriteContext(
+  request: Request,
+  options: { body?: Uint8Array | string } = {}
+): Promise<Response | InternalApiAuthContext> {
   const { authorizeInternalApiRequest } = await import(
     '~/utils/internal-platform-auth.server'
   );
@@ -66,7 +78,7 @@ export async function authenticateAndAuditWrite(
       result: 'authorized',
     });
   }
-  return null;
+  return auth;
 }
 
 async function authorizeManagement(request: Request) {
@@ -86,18 +98,32 @@ async function authorizeFreeTierReleaseManagement(
   request: Request,
   options: { body?: Uint8Array | string } = {}
 ) {
+  const auth = await authorizeFreeTierReleaseManagementAuth(request, options);
+  return auth instanceof Response ? auth : null;
+}
+
+async function authorizeFreeTierReleaseManagementAuth(
+  request: Request,
+  options: { body?: Uint8Array | string } = {}
+): Promise<Response | InternalApiAuthContext> {
   const { isFreeTierEnabled } = await import('~/domain/feature-flags/feature-flags.server');
   if (!(await isFreeTierEnabled())) {
     return response({ error: 'Not found' }, 404);
   }
   const signed = Boolean(request.headers.get(INTERNAL_API_HEADER_SIGNATURE));
   if (!signed) return response({ error: 'Unauthorized' }, 401);
-  const denied = await authenticateAndAuditWrite(request, options);
-  if (denied) return denied;
-  return null;
+  return authenticateAndAuditWriteContext(request, options);
 }
 
 async function guardFreeTierPost(request: Request, body?: string) {
+  const auth = await guardFreeTierPostAuth(request, body);
+  return auth instanceof Response ? auth : null;
+}
+
+async function guardFreeTierPostAuth(
+  request: Request,
+  body?: string
+): Promise<Response | InternalApiAuthContext | null> {
   const signed = Boolean(request.headers.get(INTERNAL_API_HEADER_SIGNATURE));
   if (body === undefined) {
     const { isFreeTierEnabled } = await import('~/domain/feature-flags/feature-flags.server');
@@ -107,9 +133,7 @@ async function guardFreeTierPost(request: Request, body?: string) {
     if (!signed) return response({ error: 'Unauthorized' }, 401);
     return null;
   }
-  const denied = await authorizeFreeTierReleaseManagement(request, { body });
-  if (denied) return denied;
-  return null;
+  return authorizeFreeTierReleaseManagementAuth(request, { body });
 }
 
 const searchQuery = z
@@ -270,24 +294,17 @@ export async function tokensCreate(request: Request) {
   if (!request.headers.get('content-type')?.startsWith('application/json')) return response({ error: 'Invalid content type' }, 400);
   const text = await readBoundedText(request, 32768);
   if (text === null) return response({ error: 'Payload too large' }, 413);
-  const post = await guardFreeTierPost(request, text ?? '');
-  if (post) return post;
-  let parsed: z.infer<typeof tokenCreateSchema>;
+  const post = await guardFreeTierPostAuth(request, text ?? '');
+  if (post instanceof Response) return post;
+  if (!post) return response({ error: 'Unauthorized' }, 401);
+  let parsed: z.infer<typeof tokenCreateRequestSchema>;
   try {
-    parsed = tokenCreateSchema.parse(JSON.parse(text));
+    parsed = tokenCreateRequestSchema.parse(JSON.parse(text));
   } catch { return response({ error: 'Invalid input' }, 400); }
-  const actor = request.headers.get('x-yawp-operator-email') ?? request.headers.get('x-operator-email');
-  if (actor && !operatorEmail.safeParse(actor).success) return response({ error: 'Invalid operator email' }, 400);
-  const rawIdempotencyKey = request.headers.get('idempotency-key') ?? request.headers.get('x-yawp-idempotency-key');
-  let idempotencyKey: string | null = null;
-  if (rawIdempotencyKey) {
-    const parsedKey = idempotencyKeySchema.safeParse(rawIdempotencyKey);
-    if (!parsedKey.success) return response({ error: 'Invalid idempotency key' }, 400);
-    idempotencyKey = parsedKey.data;
-  }
+  const { createIdempotencyKey, createdBy: _ignoredCreatedBy, ...tokenInput } = parsed;
   const created = await createAcquisitionTokens(
-    { ...parsed, createdBy: parsed.createdBy ?? actor ?? undefined },
-    { idempotencyKey }
+    { ...tokenInput, createdBy: post.actorEmail },
+    { idempotencyKey: createIdempotencyKey ?? null }
   );
   return response({ tokens: created });
 }

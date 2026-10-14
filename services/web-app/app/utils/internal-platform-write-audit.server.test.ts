@@ -127,6 +127,34 @@ describe('signed internal writes record platform audit rows', () => {
     );
   });
 
+  test('free tier token mint ignores unsigned operator and idempotency headers', async () => {
+    mock.module('~/domain/feature-flags/feature-flags.server', () => ({
+      isFreeTierEnabled: async () => true,
+    }));
+    const { tokensCreate } = await import('./internal-free-tier-http.server');
+    const body = JSON.stringify({
+      count: 1,
+      label: 'audit-test',
+      createIdempotencyKey: 'signed-create-key',
+    });
+    const request = await sign('POST', 'https://yawp.test/api/internal/v1/free-tier/tokens', body);
+    request.headers.set('content-type', 'application/json');
+    request.headers.set('x-yawp-operator-email', 'tampered@yawp.school');
+    request.headers.set('idempotency-key', 'tampered-create-key');
+    const res = await tokensCreate(request);
+    expect(res.status).toBe(200);
+    expect(tokenFindUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { createIdempotencyKey: 'signed-create-key' },
+      })
+    );
+    const createArgs = (tokenCreate.mock.calls as any[])[0]?.[0];
+    expect(createArgs.data).toMatchObject({
+      createdBy: 'operator@yawp.school',
+      createIdempotencyKey: 'signed-create-key',
+    });
+  });
+
   test('QA account create', async () => {
     const { createQaHttp } = await import('./internal-qa-http.server');
     const service = {
