@@ -143,16 +143,24 @@ function hostedRequestOrigin(request: Request, origin: string) {
   }
 }
 
-function configuredPublicOrigin() {
-  const value = process.env.PRIMARY_APP_URL?.trim();
-  if (!value) return null;
-  try {
-    const url = new URL(value);
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
-    return url.origin;
-  } catch {
-    return null;
+function configuredPublicOrigins() {
+  const origins = new Set<string>();
+  for (const name of [
+    'PRIMARY_APP_URL',
+    'YAWP_APP_ORIGIN',
+    'YAWP_PUBLIC_ORIGIN',
+  ]) {
+    const value = process.env[name]?.trim();
+    if (!value) continue;
+    try {
+      const url = new URL(value);
+      if (url.protocol === 'https:' || url.protocol === 'http:')
+        origins.add(url.origin);
+    } catch {
+      // Invalid deployment configuration should not widen accepted origins.
+    }
   }
+  return origins;
 }
 
 function headerOrigin(value: string | null) {
@@ -172,7 +180,7 @@ function acceptsFeedbackOrigin(request: Request, environment: string) {
   if (originHeader && !origin) return false;
   if (origin && origin === new URL(request.url).origin) return true;
   if (environment.toLowerCase() === 'production') return false;
-  const publicOrigin = configuredPublicOrigin();
+  const publicOrigins = configuredPublicOrigins();
   if (!origin) {
     const referer = headerOrigin(request.headers.get('referer'));
     return (
@@ -180,13 +188,13 @@ function acceptsFeedbackOrigin(request: Request, environment: string) {
       (referer === new URL(request.url).origin ||
         referer === forwardedOrigin(request) ||
         referer === hostedRequestOrigin(request, referer) ||
-        referer === publicOrigin)
+        publicOrigins.has(referer))
     );
   }
   return (
     origin === forwardedOrigin(request) ||
     origin === hostedRequestOrigin(request, origin) ||
-    origin === publicOrigin
+    publicOrigins.has(origin)
   );
 }
 

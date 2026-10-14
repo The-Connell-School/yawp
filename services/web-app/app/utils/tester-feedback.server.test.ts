@@ -312,6 +312,40 @@ describe('tester feedback submission', () => {
       else process.env.PRIMARY_APP_URL = originalPrimary;
     }
   });
+  test('accepts demo hosted fetches when only YAWP_APP_ORIGIN is configured', async () => {
+    const originalPrimary = process.env.PRIMARY_APP_URL;
+    const originalYawpOrigin = process.env.YAWP_APP_ORIGIN;
+    delete process.env.PRIMARY_APP_URL;
+    process.env.YAWP_APP_ORIGIN = 'https://demo.yawp.school';
+    try {
+      const { deps, saved } = setup({ environment: () => 'demo' });
+      const response = await submitTesterFeedback(
+        new Request('http://app-runner.internal/api/tester-feedback', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+            origin: 'https://demo.yawp.school',
+            host: 'app-runner.internal',
+          },
+          body: new URLSearchParams({
+            url: '/app?tab=work',
+            whatIDid: 'Opened',
+            whatHappened: 'Froze',
+            whatIWish: 'Save',
+          }),
+        }),
+        deps
+      );
+      expect(response.status).toBe(201);
+      expect(saved).toHaveLength(1);
+      expect(saved[0]).toMatchObject({ environment: 'demo' });
+    } finally {
+      if (originalPrimary === undefined) delete process.env.PRIMARY_APP_URL;
+      else process.env.PRIMARY_APP_URL = originalPrimary;
+      if (originalYawpOrigin === undefined) delete process.env.YAWP_APP_ORIGIN;
+      else process.env.YAWP_APP_ORIGIN = originalYawpOrigin;
+    }
+  });
   test('does not trust proxy-reconstructed tester feedback origins in production', async () => {
     const { deps, saved } = setup({ environment: () => 'production' });
     const productionOriginHeaders: HeadersInit[] = [
