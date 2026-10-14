@@ -1,8 +1,4 @@
-import {
-  createHash,
-  createHmac,
-  timingSafeEqual,
-} from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import {
@@ -79,9 +75,9 @@ export function parseInternalApiKeysFromEnv(): InternalApiKey[] {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed
-      .map(entry => keySchema.safeParse(entry))
-      .filter(result => result.success)
-      .map(result => result.data);
+      .map((entry) => keySchema.safeParse(entry))
+      .filter((result) => result.success)
+      .map((result) => result.data);
   } catch {
     return [];
   }
@@ -121,8 +117,13 @@ export function resetInternalApiRateLimitBuckets() {
 }
 
 function clientIp(request: Request) {
-  const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
-  return forwarded || request.headers.get('cf-connecting-ip')?.trim() || 'unknown';
+  const forwarded = request.headers
+    .get('x-forwarded-for')
+    ?.split(',')[0]
+    ?.trim();
+  return (
+    forwarded || request.headers.get('cf-connecting-ip')?.trim() || 'unknown'
+  );
 }
 
 function legacyContentRoute(pathname: string) {
@@ -140,7 +141,10 @@ export function resolveInternalApiScope(
   if (pathname === '/api/internal/v1/stats/grading') {
     return 'stats:read';
   }
-  if (pathname === '/api/internal/v1/audit') {
+  if (
+    pathname === '/api/internal/v1/audit' ||
+    pathname.startsWith('/api/internal/v1/admin/audit/')
+  ) {
     return 'audit:read';
   }
   if (pathname.startsWith('/api/internal/v1/feature-flags')) {
@@ -167,7 +171,8 @@ function legacyKeysForPath(pathname: string) {
 }
 
 function authorizeLegacyBearer(request: Request) {
-  if (!legacyInternalKeyAllowed()) return response({ error: 'Unauthorized' }, 401);
+  if (!legacyInternalKeyAllowed())
+    return response({ error: 'Unauthorized' }, 401);
   const pathname = new URL(request.url).pathname;
   const management = process.env.YAWP_MANAGEMENT_SERVICE_KEY?.trim();
   const content = process.env.YAWP_CONTENT_SERVICE_KEY?.trim();
@@ -181,7 +186,7 @@ function authorizeLegacyBearer(request: Request) {
   }
   const supplied = request.headers.get('authorization') ?? '';
   if (supplied.length > 512) return response({ error: 'Unauthorized' }, 401);
-  const valid = keys.some(key =>
+  const valid = keys.some((key) =>
     timingSafeEqualString(supplied, `Bearer ${key}`)
   );
   if (!valid) return response({ error: 'Unauthorized' }, 401);
@@ -193,7 +198,8 @@ const memoryNonceStore = new Set<string>();
 async function reserveNonce(keyId: string, nonce: string, expiresAt: Date) {
   if (process.env.INTERNAL_API_NONCE_STORE === 'memory') {
     const compound = `${keyId}\0${nonce}`;
-    if (memoryNonceStore.has(compound)) return response({ error: 'Unauthorized' }, 401);
+    if (memoryNonceStore.has(compound))
+      return response({ error: 'Unauthorized' }, 401);
     memoryNonceStore.add(compound);
     return null;
   }
@@ -248,7 +254,8 @@ export async function authorizeInternalApiRequest(
 ): Promise<Response | InternalApiAuthContext> {
   const url = new URL(request.url);
   const requiredScope =
-    options.requiredScope ?? resolveInternalApiScope(url.pathname, request.method);
+    options.requiredScope ??
+    resolveInternalApiScope(url.pathname, request.method);
 
   const signature = request.headers.get(INTERNAL_API_HEADER_SIGNATURE);
   if (!signature) {
@@ -266,7 +273,8 @@ export async function authorizeInternalApiRequest(
   if (!keys.length) return response({ error: 'Not found' }, 404);
 
   const keyId = request.headers.get(INTERNAL_API_HEADER_KEY_ID)?.trim() ?? '';
-  const timestamp = request.headers.get(INTERNAL_API_HEADER_TIMESTAMP)?.trim() ?? '';
+  const timestamp =
+    request.headers.get(INTERNAL_API_HEADER_TIMESTAMP)?.trim() ?? '';
   const nonce = request.headers.get(INTERNAL_API_HEADER_NONCE)?.trim() ?? '';
   const actor = request.headers.get(INTERNAL_API_HEADER_ACTOR)?.trim() ?? '';
   if (!keyId || !timestamp || !nonce || !actor || !signature) {
@@ -284,14 +292,20 @@ export async function authorizeInternalApiRequest(
     return response({ error: 'Unauthorized' }, 401);
   }
   const epochMs = Number(timestamp) * 1000;
-  if (!Number.isFinite(epochMs)) return response({ error: 'Unauthorized' }, 401);
+  if (!Number.isFinite(epochMs))
+    return response({ error: 'Unauthorized' }, 401);
   if (Math.abs(Date.now() - epochMs) > CLOCK_SKEW_MS) {
     return response({ error: 'Unauthorized' }, 401);
   }
 
-  const key = keys.find(entry => entry.id === keyId);
+  const key = keys.find((entry) => entry.id === keyId);
   if (!key) {
-    if (!checkRateLimit(`failed-auth:${clientIp(request)}`, FAILED_AUTH_RATE_LIMIT_MAX)) {
+    if (
+      !checkRateLimit(
+        `failed-auth:${clientIp(request)}`,
+        FAILED_AUTH_RATE_LIMIT_MAX
+      )
+    ) {
       return response({ error: 'Too many requests' }, 429);
     }
     return response({ error: 'Unauthorized' }, 401);
@@ -307,21 +321,33 @@ export async function authorizeInternalApiRequest(
     actor,
     body,
   });
-  const expected = createHmac('sha256', key.secret).update(base).digest('base64url');
+  const expected = createHmac('sha256', key.secret)
+    .update(base)
+    .digest('base64url');
   if (!timingSafeEqualString(signature, expected)) {
-    if (!checkRateLimit(`failed-auth:${clientIp(request)}`, FAILED_AUTH_RATE_LIMIT_MAX)) {
+    if (
+      !checkRateLimit(
+        `failed-auth:${clientIp(request)}`,
+        FAILED_AUTH_RATE_LIMIT_MAX
+      )
+    ) {
       return response({ error: 'Too many requests' }, 429);
     }
     return response({ error: 'Unauthorized' }, 401);
   }
 
-  if (!checkRateLimit(keyId)) return response({ error: 'Too many requests' }, 429);
+  if (!checkRateLimit(keyId))
+    return response({ error: 'Too many requests' }, 429);
 
   if (requiredScope && !key.scopes.includes(requiredScope)) {
     return response({ error: 'Forbidden' }, 403);
   }
 
-  const replay = await reserveNonce(keyId, nonce, new Date(epochMs + CLOCK_SKEW_MS));
+  const replay = await reserveNonce(
+    keyId,
+    nonce,
+    new Date(epochMs + CLOCK_SKEW_MS)
+  );
   if (replay) return replay;
 
   return {
