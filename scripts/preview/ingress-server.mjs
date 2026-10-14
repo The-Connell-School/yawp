@@ -340,19 +340,14 @@ export function createPreviewIngress({
     clearQueuedWake,
   });
 
-  async function queueAuthorizedWake({ parsed, request, response, jsonResponse = false }) {
+  async function queueResidentWake({ parsed, request, response, jsonResponse = false }) {
     const resident = await isResident(parsed.pr);
     if (!resident) {
       if (jsonResponse) json(response, 404, { status: 'not-resident', pr: parsed.pr });
       else sendNoPreviewPage(response, parsed.pr);
       return;
     }
-    const authorization = await authorizeWake(parsed.pr, request.url, request);
-    if (!authorization) {
-      if (jsonResponse) json(response, 401, { status: 'unauthorized', pr: parsed.pr });
-      else send(response, 401, 'Open this sleeping preview with its one-click access URL.\n');
-      return;
-    }
+    const authorization = await authorizeWake(parsed.pr, request.url, request) || null;
     try {
       wake.enqueue(parsed.pr, authorization).catch((error) => {
         console.error(`Preview pr-${parsed.pr} wake failed`, error);
@@ -395,7 +390,7 @@ export function createPreviewIngress({
     const hostname = previewServiceHostname(parsed.pr, domain, parsed.service);
     let target = await resolveTarget(parsed.pr, { service: parsed.service });
     if (!target) {
-      await queueAuthorizedWake({
+      await queueResidentWake({
         parsed,
         request,
         response,
@@ -469,11 +464,7 @@ export function createWebSocketUpgradeHandler({
           writeSocketResponse(socket, '404 Not Found', 'Preview is no longer resident.\n');
           return;
         }
-        const authorization = await authorizeWake(parsed.pr, request.url, request);
-        if (!authorization) {
-          writeSocketResponse(socket, '401 Unauthorized', 'Open this sleeping preview with its one-click access URL.\n');
-          return;
-        }
+        const authorization = await authorizeWake(parsed.pr, request.url, request) || null;
         wake.enqueue(parsed.pr, authorization).catch((error) => {
           console.error(`Preview pr-${parsed.pr} wake failed`, error);
         });
