@@ -22,6 +22,9 @@ Lounge" name, simplified layout from the second round of mockups.
 | Nav | Lounge item opens `/app/lounge` when the flag is on; course grid keeps `/app/teacher-trainings` with Community / Trainings tabs |
 | E2E | `e2e/tests/teacher.lounge-community.spec.ts` |
 
+PR previews (`yawp_pr_<n>` databases) seed the flag on for everyone so the
+community is visible there; demo and production stay off.
+
 Flag off, nothing changes: the nav item, the course grid page, and its
 markup are exactly as before, and every `/app/lounge` URL returns 404.
 
