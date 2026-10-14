@@ -1,7 +1,6 @@
-# PLAN: admin-migrate-2 platform repair
+## Plan
 
-- Reuse `codex/admin-migrate-2-20261014` for the open platform PR; do not deploy or wake previews.
-- Address review rejection by committing the Organizations legacy route deprecation UI that the screenshot claimed.
-- Keep platform-only organization write actions available because create/preview-seat writes are intentionally outside Internal for this slice.
-- Replace row spreading in the signed admin Organizations API with explicit response serialization.
-- Run focused platform tests for the legacy Organizations route and signed Organizations API, then recapture the platform gated screenshot.
+- Add signed HMAC `/api/internal/v1/admin/organizations` read/create and `/:id` read/update endpoints using existing internal auth/audit helpers.
+- Validate create/update payloads, require HMAC for writes, support create idempotency, and record platform audit rows with created/before/after state.
+- Gate legacy platform organization create/update/invite/delete controls so staff are directed to Internal while preserving preview-seat availability.
+- Run focused platform route/API tests and the narrowest feasible typecheck before committing and opening a separate `[skip preview]` PR.

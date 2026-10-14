@@ -16,7 +16,7 @@ function textContent(node: unknown): string {
 }
 
 describe('legacy admin organizations route', () => {
-  test('displays moved read state while preserving platform-only write controls', () => {
+  test('displays moved read state and the gated legacy write controls', () => {
     const content = textContent(
       OrganizationsLegacyNotice({
         previewSeatMode: true,
@@ -35,7 +35,7 @@ describe('legacy admin organizations route', () => {
 
     expect(content).toContain(ORGANIZATIONS_READ_MOVED_MESSAGE);
     expect(content).toContain('Use Yawp Internal');
-    expect(content).toContain('Platform-only writes');
+    expect(content).toContain('Remaining platform-only writes');
     expect(content).toContain('Create Preview Seat');
     expect(content).toContain('Create Organization');
     expect(content).not.toContain('Total Organizations');

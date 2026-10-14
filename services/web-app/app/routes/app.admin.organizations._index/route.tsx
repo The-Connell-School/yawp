@@ -15,9 +15,6 @@ import {
   SheetTrigger,
 } from '~/components/ui/sheet';
 import { useEffect, useRef, useState } from 'react';
-import { useForm } from '@rvf/react-router';
-import { FormInput } from '~/components/forms/form-input-2';
-import { CreateOrganizationSchema } from './schema';
 import { OrganizationsLegacyNotice } from './legacy-notice';
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -31,10 +28,8 @@ export async function action(args: ActionFunctionArgs) {
 }
 
 export default function OrganizationsRoute() {
-  const { previewSeatMode, previewSeats } = useLoaderData<typeof loader>();
-  const organizationFetcher = useFetcher();
+  const { previewSeatMode } = useLoaderData<typeof loader>();
   const seatFetcher = useFetcher<typeof action>();
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isSeatSheetOpen, setIsSeatSheetOpen] = useState(false);
   const [copiedSeatCode, setCopiedSeatCode] = useState(false);
   const seatResultRef = useRef<HTMLDivElement>(null);
@@ -54,17 +49,6 @@ export default function OrganizationsRoute() {
     setCopiedSeatCode(false);
     seatResultRef.current?.focus();
   }, [createdSeat]);
-
-  const form = useForm({
-    schema: CreateOrganizationSchema,
-    method: 'POST',
-    defaultValues: {
-      name: '',
-      numOfStudentSeats: '10',
-      numOfTeacherSeats: '10',
-    },
-    onSubmitSuccess: () => setIsSheetOpen(false),
-  });
 
   return (
     <OrganizationsLegacyNotice
@@ -146,84 +130,11 @@ export default function OrganizationsRoute() {
           </Sheet>
         ) : null
       }
-      previewSeatList={
-        previewSeatMode && previewSeats.length ? (
-          <section className="rounded-md border bg-background p-4">
-            <div className="space-y-1">
-              <h3 className="text-base font-semibold">Preview seats</h3>
-              <p className="text-sm text-muted-foreground">
-                Existing preview-seat access codes remain available here until
-                this platform-only action moves.
-              </p>
-            </div>
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[420px] text-sm">
-                <thead>
-                  <tr className="border-b text-left">
-                    <th className="py-2 pr-3 font-medium">Organization</th>
-                    <th className="py-2 pr-3 font-medium">Access Code</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {previewSeats.map((seat) => (
-                    <tr key={seat.id} className="border-b last:border-0">
-                      <td className="py-2 pr-3">{seat.name}</td>
-                      <td className="py-2 pr-3 font-mono">
-                        {seat.previewSeatCode}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        ) : null
-      }
       createOrganizationControl={
-        <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-          <SheetTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Organization
-            </Button>
-          </SheetTrigger>
-          <SheetContent>
-            <SheetHeader>
-              <SheetTitle>Create Organization</SheetTitle>
-            </SheetHeader>
-            <organizationFetcher.Form
-              className="mt-4 space-y-4"
-              {...form.getFormProps()}
-            >
-              <input type="hidden" name="intent" value="create" />
-              <FormInput scope={form.scope('name')} label="Name" />
-              <FormInput
-                scope={form.scope('numOfStudentSeats')}
-                label="Number of Student Seats"
-                type="number"
-              />
-              <FormInput
-                scope={form.scope('numOfTeacherSeats')}
-                label="Number of Teacher Seats"
-                type="number"
-              />
-              <FormInput
-                scope={form.scope('accessExpiresAt')}
-                label="Access Expires At"
-                type="date"
-              />
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={organizationFetcher.state !== 'idle'}
-              >
-                {organizationFetcher.state === 'idle'
-                  ? 'Create Organization'
-                  : 'Creating...'}
-              </Button>
-            </organizationFetcher.Form>
-          </SheetContent>
-        </Sheet>
+        <Button disabled title="Create organizations in Yawp Internal">
+          <Plus className="mr-2 h-4 w-4" />
+          Create Organization
+        </Button>
       }
     />
   );

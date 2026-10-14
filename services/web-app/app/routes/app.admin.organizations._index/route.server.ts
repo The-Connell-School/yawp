@@ -1,4 +1,3 @@
-import { parseFormData, validationError } from '@rvf/react-router';
 import {
   data as dataResponse,
   type ActionFunctionArgs,
@@ -17,22 +16,12 @@ import {
   getPreviewMasterAccessCode,
   isIsolatedPreviewSeatMode,
 } from './preview-seat.server';
-import { CreateOrganizationSchema } from './schema';
 
 export async function organizationsLoader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
-  const previewSeatMode = isIsolatedPreviewSeatMode();
-  const previewSeats = previewSeatMode
-    ? await prisma.organization.findMany({
-        where: { previewSeatCode: { not: null } },
-        select: { id: true, name: true, previewSeatCode: true },
-        orderBy: { createdAt: 'desc' },
-      })
-    : [];
 
   return dataResponse({
-    previewSeatMode,
-    previewSeats,
+    previewSeatMode: isIsolatedPreviewSeatMode(),
     readSurfaceMoved: true,
   });
 }
@@ -43,24 +32,17 @@ export async function organizationsAction({ request }: ActionFunctionArgs) {
   const intent = formData.get('intent');
 
   if (intent === 'create') {
-    const { error, data } = await parseFormData(
-      formData,
-      CreateOrganizationSchema
+    return dataResponse(
+      { error: 'Organization creation has moved to Yawp Internal.' },
+      { status: 410 }
     );
-    if (error) return validationError(error);
+  }
 
-    await prisma.organization.create({
-      data: {
-        name: data.name,
-        numOfStudentSeats: Number(data.numOfStudentSeats),
-        numOfTeacherSeats: Number(data.numOfTeacherSeats),
-        accessExpiresAt: data.accessExpiresAt
-          ? new Date(data.accessExpiresAt)
-          : null,
-      },
-    });
-
-    return dataResponse({ success: true });
+  if (intent === 'legacy-create') {
+    return dataResponse(
+      { error: 'Organization creation has moved to Yawp Internal.' },
+      { status: 410 }
+    );
   }
 
   if (intent === 'createPreviewSeat') {
