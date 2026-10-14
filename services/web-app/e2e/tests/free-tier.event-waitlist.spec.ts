@@ -2,7 +2,7 @@
  * QA repro for demo free-tier event links in waitlist mode.
  *
  * Local faithful demo stand-in:
- *   QA_SCREENSHOT_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-fixes/shots/ft-event-waitlist-auto-admit \
+ *   FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-post-closure-mainline-health \
  *   PLAYWRIGHT_BROWSERS_PATH=/home/bryant/.cache/ms-playwright \
  *   bunx playwright test --config=playwright.free-tier-event-waitlist.config.ts
  */
@@ -17,12 +17,18 @@ import { waitForFreeTierEmailPayload } from '../helpers/free-tier-email';
 import { signInternalApiRequest } from '../../app/utils/internal-platform-signing.server';
 
 const OUT =
+  process.env.FREE_TIER_QA_SHOTS_DIR?.trim() ||
   process.env.QA_SCREENSHOT_DIR?.trim() ||
-  '/home/bryant/work/yawp/codex-loop/lanes/free-tier-fixes/shots/ft-event-waitlist-auto-admit';
+  '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-post-closure-mainline-health';
 const E2E_INTERNAL_API_KEY_ID = 'e2e-free-tier-release-management';
 const E2E_INTERNAL_API_SECRET =
   'e2e-free-tier-release-management-secret-00000000';
 const E2E_INTERNAL_API_ACTOR = 'free-tier-qa@yawp.school';
+const LOCAL_BASE_URL = `http://127.0.0.1:${process.env.FREE_TIER_E2E_PORT || 5197}`;
+
+function localUrl(path: string) {
+  return new URL(path, LOCAL_BASE_URL).toString();
+}
 
 async function shot(page: Page, name: string) {
   await mkdir(OUT, { recursive: true });
@@ -85,11 +91,14 @@ test.describe('Free-tier event waitlist QA', () => {
       });
       tokenId = token.id;
 
-      const freeResponse = await request.get(`/free?t=${encodeURIComponent(code)}`, {
-        maxRedirects: 0,
-      });
-      expect(freeResponse.status()).toBe(200);
-      expect(freeResponse.url()).toContain('/free?t=');
+      const freeResponse = await fetch(
+        localUrl(`/free?t=${encodeURIComponent(code)}`),
+        {
+          redirect: 'manual',
+        }
+      );
+      expect(freeResponse.status).toBe(200);
+      expect(freeResponse.url).toContain('/free?t=');
 
       await page.goto(`/free?t=${encodeURIComponent(code)}`);
       await expect(page).toHaveURL(new RegExp(`/free\\?t=${code}`));
@@ -204,13 +213,13 @@ test.describe('Free-tier event waitlist QA', () => {
       const releaseBody = JSON.stringify({ applicationIds: [app.id] });
       const signedRelease = signInternalApiRequest({
         method: 'POST',
-        url: new URL(releasePath, 'http://127.0.0.1:5186').toString(),
+        url: localUrl(releasePath),
         body: releaseBody,
         keyId: E2E_INTERNAL_API_KEY_ID,
         secret: E2E_INTERNAL_API_SECRET,
         actor: E2E_INTERNAL_API_ACTOR,
       });
-      const releaseResponse = await request.post(releasePath, {
+      const releaseResponse = await request.post(localUrl(releasePath), {
         headers: {
           ...signedRelease.headers,
           'content-type': 'application/json',
@@ -262,7 +271,7 @@ test.describe('Free-tier event waitlist QA', () => {
       expect(account.status).toBe('ACCOUNT_CREATED');
       expect(userId).toBeTruthy();
 
-      await page.request.post('/auth/logout');
+      await page.context().clearCookies();
       await page.goto('/auth/login');
       await page.getByLabel('Email or handle').fill(email);
       await page.getByLabel('Password').fill(password);
@@ -304,7 +313,7 @@ test.describe('Free-tier event waitlist QA', () => {
     const missing = required.filter((key) => !process.env[key]?.trim());
     if (missing.length) {
       await note(
-        'hosted-demo-skip.txt',
+        'hosted-demo-event-waitlist-skip.txt',
         [
           'Hosted demo qa-event-waitlist run skipped.',
           `Missing env/access: ${missing.join(', ')}`,
@@ -315,7 +324,7 @@ test.describe('Free-tier event waitlist QA', () => {
       test.skip(true, `Hosted demo access missing: ${missing.join(', ')}`);
     }
     await note(
-      'hosted-demo-skip.txt',
+      'hosted-demo-event-waitlist-skip.txt',
       [
         'Hosted demo qa-event-waitlist run skipped.',
         'Hosted demo scan/submission/release/join assertions are not implemented in this PR.',
