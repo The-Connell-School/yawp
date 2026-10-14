@@ -219,6 +219,10 @@ function isDemoAppReferer(value: string | null) {
   );
 }
 
+function isDemoAppOrigin(value: string | null) {
+  return headerOrigin(value) === 'https://demo.yawp.school';
+}
+
 function acceptsFeedbackOrigin(request: Request, environment: string) {
   const normalizedEnvironment = environment.trim().toLowerCase();
   const originHeader = request.headers.get('origin');
@@ -242,6 +246,8 @@ function acceptsFeedbackOrigin(request: Request, environment: string) {
     return isAcceptedSourceOrigin(request, referer, publicOrigins);
   }
   if (isProduction) return false;
+  if (isDemo && isTesterFeedbackEndpoint(request) && isDemoAppOrigin(origin))
+    return true;
   return (
     isAcceptedSourceOrigin(request, origin, publicOrigins)
   );

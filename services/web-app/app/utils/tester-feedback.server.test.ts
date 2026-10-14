@@ -475,6 +475,45 @@ describe('tester feedback submission', () => {
       else process.env.PRIMARY_APP_URL = originalPrimary;
     }
   });
+  test('accepts deployed demo fetches through an internal proxy host when the browser origin is demo', async () => {
+    const originalPrimary = process.env.PRIMARY_APP_URL;
+    const originalYawpOrigin = process.env.YAWP_APP_ORIGIN;
+    const originalPublicOrigin = process.env.YAWP_PUBLIC_ORIGIN;
+    delete process.env.PRIMARY_APP_URL;
+    delete process.env.YAWP_APP_ORIGIN;
+    delete process.env.YAWP_PUBLIC_ORIGIN;
+    try {
+      const { deps, saved } = setup({ environment: () => 'demo' });
+      const response = await submitTesterFeedback(
+        new Request('http://app-runner.internal/api/tester-feedback.data', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+            origin: 'https://demo.yawp.school',
+            host: 'app-runner.internal',
+          },
+          body: new URLSearchParams({
+            url: '/app/assignments?tab=work',
+            whatIDid: 'Opened',
+            whatHappened: 'Froze',
+            whatIWish: 'Save',
+          }),
+        }),
+        deps
+      );
+      expect(response.status).toBe(201);
+      expect(saved).toHaveLength(1);
+      expect(saved[0]).toMatchObject({ environment: 'demo' });
+    } finally {
+      if (originalPrimary === undefined) delete process.env.PRIMARY_APP_URL;
+      else process.env.PRIMARY_APP_URL = originalPrimary;
+      if (originalYawpOrigin === undefined) delete process.env.YAWP_APP_ORIGIN;
+      else process.env.YAWP_APP_ORIGIN = originalYawpOrigin;
+      if (originalPublicOrigin === undefined)
+        delete process.env.YAWP_PUBLIC_ORIGIN;
+      else process.env.YAWP_PUBLIC_ORIGIN = originalPublicOrigin;
+    }
+  });
   test('accepts demo hosted fetches when only YAWP_APP_ORIGIN is configured', async () => {
     const originalPrimary = process.env.PRIMARY_APP_URL;
     const originalYawpOrigin = process.env.YAWP_APP_ORIGIN;
