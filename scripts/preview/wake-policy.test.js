@@ -10,3 +10,12 @@ test('global anonymous wake budget and PR cooldown bound churn across different 
   now += 3600;
   expect(limiter.take(3, 'ip3')).toBe(0);
 });
+
+test('credentialed wakes retain a separate bounded hourly budget after anonymous budget is exhausted', () => {
+  const limiter = createWakeLimiter({ globalHour: 1, credentialedHour: 1, now: () => 1000 });
+  expect(limiter.take(1, 'anonymous')).toBe(0);
+  expect(limiter.take(2, 'other-anonymous')).toBe(3600);
+  expect(limiter.take(3, 'authorized', { credentialed: true })).toBe(0);
+  expect(limiter.take(4, 'another-authorized', { credentialed: true })).toBe(3600);
+  expect(limiter.take(1, 'authorized', { credentialed: true })).toBe(60);
+});

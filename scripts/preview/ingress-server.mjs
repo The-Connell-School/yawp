@@ -366,7 +366,7 @@ export function createPreviewIngress({
 
   async function queueWake({ parsed, request, response }) {
     const resident = await isResident(parsed.pr);
-    if (!resident || !await isOpen(parsed.pr)) {
+    if (!resident) {
       json(response, 404, { status: 'not-resident', pr: parsed.pr });
       return;
     }
@@ -376,8 +376,9 @@ export function createPreviewIngress({
       json(response, 403, { status: 'forbidden', pr: parsed.pr });
       return;
     }
+    const hasCredential = Boolean(request.headers.cookie) || new URL(request.url, 'https://preview.invalid').searchParams.has('code');
     const anonymous = plainWakeEnabled && request.headers['x-preview-wake'] === '1';
-    const authorization = anonymous ? null : await authorizeWake(parsed.pr, request.url, request);
+    const authorization = (!anonymous || hasCredential) ? await authorizeWake(parsed.pr, request.url, request) : null;
     if (!anonymous && !authorization) {
       json(response, 401, { status: 'unauthorized', pr: parsed.pr });
       return;
@@ -386,9 +387,13 @@ export function createPreviewIngress({
       json(response, 202, { status: 'waking', pr: parsed.pr });
       return;
     }
-    const retryAfter = limiter.take(parsed.pr, request.socket?.remoteAddress || 'unknown');
+    const retryAfter = limiter.take(parsed.pr, request.socket?.remoteAddress || 'unknown', { credentialed: Boolean(authorization) });
     if (retryAfter) {
       json(response, 429, { status: 'rate-limited', pr: parsed.pr }, { 'retry-after': String(retryAfter) });
+      return;
+    }
+    if (!await isOpen(parsed.pr)) {
+      json(response, 404, { status: 'not-resident', pr: parsed.pr });
       return;
     }
     try {
@@ -440,7 +445,7 @@ export function createPreviewIngress({
       return;
     }
     if (!target) {
-      if (!await isResident(parsed.pr) || !await isOpen(parsed.pr)) sendNoPreviewPage(response, parsed.pr);
+      if (!await isResident(parsed.pr)) sendNoPreviewPage(response, parsed.pr);
       else sendWakingPage(response, parsed.pr);
       return;
     }

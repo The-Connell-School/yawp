@@ -14,27 +14,29 @@ export function isHumanActivity(request) {
     || request.headers?.['sec-fetch-mode'] === 'navigate'
   );
 }
-export function createWakeLimiter({ perPrSeconds = 60, perIpHour = 10, globalHour = 30, now = () => Date.now() / 1000 } = {}) {
-  for (const value of [perPrSeconds, perIpHour, globalHour]) {
+export function createWakeLimiter({ perPrSeconds = 60, perIpHour = 10, globalHour = 20, credentialedHour = 10, now = () => Date.now() / 1000 } = {}) {
+  for (const value of [perPrSeconds, perIpHour, globalHour, credentialedHour]) {
     if (!Number.isSafeInteger(value) || value < 1) throw new Error('Wake limits must be positive integers');
   }
   const prs = new Map();
   const ips = new Map();
-  let global = [];
+  const globals = new Map();
   return {
-    take(pr, ip) {
+    take(pr, ip, { credentialed = false } = {}) {
+      const budget = credentialed ? 'credentialed' : 'anonymous';
+      const ipKey = `${budget}:${ip}`;
       const at = now();
       for (const [key, time] of prs) if (at - time >= perPrSeconds) prs.delete(key);
       for (const [key, times] of ips) {
         const live = times.filter(time => at - time < 3600);
         if (live.length) ips.set(key, live); else ips.delete(key);
       }
-      global = global.filter(time => at - time < 3600);
-      const times = ips.get(ip) || [];
+      const global = (globals.get(budget) || []).filter(time => at - time < 3600);
+      const times = ips.get(ipKey) || [];
       if (prs.has(pr)) return Math.ceil(perPrSeconds - (at - prs.get(pr)));
       if (times.length >= perIpHour) return Math.ceil(3600 - (at - times[0]));
-      if (global.length >= globalHour) return Math.ceil(3600 - (at - global[0]));
-      prs.set(pr, at); ips.set(ip, [...times, at]); global.push(at);
+      if (global.length >= (credentialed ? credentialedHour : globalHour)) return Math.ceil(3600 - (at - global[0]));
+      prs.set(pr, at); ips.set(ipKey, [...times, at]); globals.set(budget, [...global, at]);
       return 0;
     },
   };

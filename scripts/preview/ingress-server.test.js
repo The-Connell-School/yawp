@@ -240,6 +240,23 @@ describe('preview ingress', () => {
     expect(wakes).toEqual([]);
   });
 
+  test('GETs, rejected bots, and over-budget wakes do not spend GitHub lookups', async () => {
+    let checks = 0;
+    const port = await listen(createServer(createPreviewIngress({
+      domain: 'preview.yawp.school', resolveTarget: async () => null,
+      isOpen: async () => { checks++; return true; },
+      ensureRunning: async () => {}, recordAccess: async () => {},
+      wakeLimits: { globalHour: 1 },
+    })));
+    await request(port);
+    for (let i = 0; i < 4; i++) await request(port, { path: '/__wake', method: 'POST', headers: { 'user-agent': 'Googlebot', 'x-preview-wake': '1' } });
+    expect(checks).toBe(0);
+    await request(port, { path: '/__wake', method: 'POST', headers: { 'x-preview-wake': '1' } });
+    await Bun.sleep(10);
+    await request(port, { path: '/__wake', method: 'POST', headers: { host: 'pr-242.preview.yawp.school', 'x-preview-wake': '1' } });
+    expect(checks).toBe(1);
+  });
+
   test('/__wake POST still accepts authorized lane callers and rate-limits PR, IP, and global wakes', async () => {
     let now = 1000;
     const wakes = [];
