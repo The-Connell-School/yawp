@@ -57,3 +57,13 @@ output "videos_bucket_name" {
   description = "S3 bucket for videos/files"
   value       = aws_s3_bucket.videos.bucket
 }
+
+output "database_exports_bucket_name" {
+  description = "S3 bucket for database exports with 90-day lifecycle expiry"
+  value       = module.database_retention.database_exports_bucket_name
+}
+
+output "rds_snapshot_cleanup_lambda_name" {
+  description = "Lambda function that deletes eligible old manual RDS snapshots"
+  value       = module.database_retention.rds_snapshot_cleanup_lambda_name
+}

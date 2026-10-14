@@ -251,6 +251,18 @@ resource "aws_db_instance" "postgres" {
   }
 }
 
+module "database_retention" {
+  source = "./modules/database-retention"
+
+  app_name                             = var.app_name
+  env                                  = var.env
+  aws_region                           = var.aws_region
+  db_instance_identifier               = aws_db_instance.postgres.identifier
+  export_retention_days                = var.database_export_retention_days
+  snapshot_retention_days              = var.manual_snapshot_retention_days
+  snapshot_cleanup_schedule_expression = var.rds_snapshot_cleanup_schedule_expression
+}
+
 resource "aws_apprunner_vpc_connector" "vpc_connector" {
   vpc_connector_name = "${var.app_name}-${var.env}-vpc-connector"
   subnets            = module.vpc.private_subnets
