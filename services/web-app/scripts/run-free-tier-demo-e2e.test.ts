@@ -9,6 +9,7 @@ import {
 } from '../e2e/hosted-demo-guards';
 import {
   classifySuiteSpecs,
+  defaultShotDir,
   focusedHostedDemoSkipArtifacts,
   resolveBrowserEnv,
   requiredMissingSpecs,
@@ -25,6 +26,12 @@ async function touch(root: string, relativePath: string) {
 }
 
 describe('free-tier demo suite runner manifest', () => {
+  test('defaults evidence to the current mainline drift check slug', () => {
+    expect(defaultShotDir).toBe(
+      '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-durable-suite-mainline-drift-check'
+    );
+  });
+
   test('fails required default coverage when seeded repro specs are absent', async () => {
     const root = await mkdtemp(join(tmpdir(), 'free-tier-demo-suite-'));
     for (const spec of suiteSpecs.filter(

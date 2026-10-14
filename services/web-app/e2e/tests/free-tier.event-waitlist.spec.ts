@@ -2,7 +2,7 @@
  * QA repro for demo free-tier event links in waitlist mode.
  *
  * Local faithful demo stand-in:
- *   FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-post-closure-mainline-health \
+ *   FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-durable-suite-mainline-drift-check \
  *   PLAYWRIGHT_BROWSERS_PATH=/home/bryant/.cache/ms-playwright \
  *   bunx playwright test --config=playwright.free-tier-event-waitlist.config.ts
  */
@@ -19,7 +19,7 @@ import { signInternalApiRequest } from '../../app/utils/internal-platform-signin
 const OUT =
   process.env.FREE_TIER_QA_SHOTS_DIR?.trim() ||
   process.env.QA_SCREENSHOT_DIR?.trim() ||
-  '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-post-closure-mainline-health';
+  '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-durable-suite-mainline-drift-check';
 const E2E_INTERNAL_API_KEY_ID = 'e2e-free-tier-release-management';
 const E2E_INTERNAL_API_SECRET =
   'e2e-free-tier-release-management-secret-00000000';

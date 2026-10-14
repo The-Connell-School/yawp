@@ -2,7 +2,7 @@
  * QA guardrails for demo free-tier caps, cookies, and abuse paths.
  *
  * Local faithful demo stand-in:
- *   FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-post-closure-mainline-health \
+ *   FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-durable-suite-mainline-drift-check \
  *   PLAYWRIGHT_BROWSERS_PATH=/home/bryant/.cache/ms-playwright \
  *   bunx playwright test --config=playwright.free-tier-caps-limits.config.ts
  */
@@ -17,7 +17,7 @@ import { createE2EPrismaClient } from '../prisma-client';
 const OUT =
   process.env.FREE_TIER_QA_SHOTS_DIR?.trim() ||
   process.env.QA_SCREENSHOT_DIR?.trim() ||
-  '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-post-closure-mainline-health';
+  '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-durable-suite-mainline-drift-check';
 const SCAN_COOKIE = '__yawp_ft_scan';
 const LOCAL_BASE_URL = `http://127.0.0.1:${process.env.FREE_TIER_E2E_PORT || 5197}`;
 

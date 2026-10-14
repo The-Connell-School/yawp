@@ -1,4 +1,4 @@
-# PLAN: qa-durable-suite-post-closure-refresh
+# PLAN: qa-durable-suite-mainline-drift-check
 
 - Refresh the platform free-tier demo QA suite on current `origin/main` with test/repro-only changes.
 - Confirm the durable suite manifest/list evidence still represents duplicate Create link, Pending Approve 409, flag-vs-route, and waitlist-copy seeded repro families.

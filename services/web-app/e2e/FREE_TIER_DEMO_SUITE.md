@@ -1,11 +1,11 @@
 # Free-Tier Demo E2E Suite
 
-For this `qa-durable-suite-post-closure-refresh` run, use:
+For this `qa-durable-suite-mainline-drift-check` run, use:
 
 ```bash
 cd services/web-app
 PLAYWRIGHT_BROWSERS_PATH=/home/bryant/.cache/ms-playwright \
-FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-durable-suite-post-closure-refresh \
+FREE_TIER_QA_SHOTS_DIR=/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-durable-suite-mainline-drift-check \
 bun run test:e2e:free-tier-demo
 ```
 
@@ -72,10 +72,10 @@ If this suite finds a regression, append the lane failure note and attempt to fi
 ```bash
 cd services/web-app
 bun run scripts/file-free-tier-qa-failure.ts \
-  --id=ft-qa-durable-suite-post-closure-refresh \
-  --slug=qa-durable-suite-post-closure-refresh \
+  --id=ft-qa-durable-suite-mainline-drift-check \
+  --slug=qa-durable-suite-mainline-drift-check \
   --title="Free-tier demo E2E suite regression" \
-  --evidence="/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-durable-suite-post-closure-refresh" \
+  --evidence="/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-durable-suite-mainline-drift-check" \
   --severity=major \
   --dedupe-key="LEAD waitlist application" \
   --repro="Run \`bun run test:e2e:free-tier-demo\`." \
