@@ -42,7 +42,11 @@ async function snapshot(specifier: string) {
 function isWebAppTestFile(): boolean {
   const testFile = Bun.argv[1];
   if (!testFile) return true;
-  return resolve(process.cwd(), testFile).startsWith(`${import.meta.dir}/`);
+  const resolved = resolve(process.cwd(), testFile);
+  if (resolved.endsWith('/app/utils/internal-admin-organizations.server.test.ts')) {
+    return false;
+  }
+  return resolved.startsWith(`${import.meta.dir}/`);
 }
 
 globalThis.__realModules = {};

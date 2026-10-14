@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   organization: {
@@ -23,31 +23,22 @@ const prisma = {
 const isIsolatedPreviewSeatMode = mock();
 const getConfiguredPreviewOrganizationAccessCode = mock();
 const authorizeInternalApiRequest = mock();
+const recordInternalPlatformWriteAudit = mock();
+const internalApiRawQueryString = (url: URL | string) => {
+  const search = typeof url === 'string' ? new URL(url).search : url.search;
+  return search.startsWith('?') ? search.slice(1) : search;
+};
 
 mock.module('./db.server', () => ({ prisma }));
 mock.module('./db.server.ts', () => ({ prisma }));
 mock.module('./db.server.js', () => ({ prisma }));
-mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/db.server.ts', () => ({ prisma }));
-mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('/home/bryant/work/yawp/codex-loop/worktrees/admin-migrate-2-platform/services/web-app/app/utils/db.server.ts', () => ({ prisma }));
-mock.module('./internal-platform-auth.server', () => ({ authorizeInternalApiRequest }));
-mock.module('./internal-platform-auth.server.ts', () => ({ authorizeInternalApiRequest }));
-mock.module('./internal-platform-auth.server.js', () => ({ authorizeInternalApiRequest }));
-mock.module('/home/bryant/work/yawp/codex-loop/worktrees/admin-migrate-2-platform/services/web-app/app/utils/internal-platform-auth.server.ts', () => ({ authorizeInternalApiRequest }));
-mock.module('~/utils/preview-access.server', () => ({
-  isIsolatedPreviewSeatMode,
-  getConfiguredPreviewOrganizationAccessCode,
-}));
-mock.module('~/utils/preview-access.server.ts', () => ({
-  isIsolatedPreviewSeatMode,
-  getConfiguredPreviewOrganizationAccessCode,
-}));
-mock.module('/home/bryant/work/yawp/codex-loop/worktrees/admin-migrate-2-platform/services/web-app/app/utils/preview-access.server.ts', () => ({
-  isIsolatedPreviewSeatMode,
-  getConfiguredPreviewOrganizationAccessCode,
-}));
-
+mock.module('file:///home/bryant/work/yawp/codex-loop/worktrees/admin-migrate-2-platform/services/web-app/app/utils/db.server.ts', () => ({ prisma }));
+mock.module('./internal-platform-auth.server', () => ({ authorizeInternalApiRequest, recordInternalPlatformWriteAudit, internalApiRawQueryString }));
+mock.module('./internal-platform-auth.server.ts', () => ({ authorizeInternalApiRequest, recordInternalPlatformWriteAudit, internalApiRawQueryString }));
+mock.module('./internal-platform-auth.server.js', () => ({ authorizeInternalApiRequest, recordInternalPlatformWriteAudit, internalApiRawQueryString }));
+mock.module('/home/bryant/work/yawp/codex-loop/worktrees/admin-migrate-2-platform/services/web-app/app/utils/internal-platform-auth.server.ts', () => ({ authorizeInternalApiRequest, recordInternalPlatformWriteAudit, internalApiRawQueryString }));
+mock.module('file:///home/bryant/work/yawp/codex-loop/worktrees/admin-migrate-2-platform/services/web-app/app/utils/internal-platform-auth.server.ts', () => ({ authorizeInternalApiRequest, recordInternalPlatformWriteAudit, internalApiRawQueryString }));
 const {
   internalAdminOrganizationDetail,
   internalAdminOrganizationsList,
@@ -59,14 +50,28 @@ function authed(url = base) {
   return new Request(url);
 }
 
+function deps() {
+  return {
+    organization: prisma.organization,
+    assignmentType: prisma.assignmentType,
+    invitation: prisma.invitation,
+    $queryRaw: prisma.$queryRaw,
+    preview: {
+      isIsolatedPreviewSeatMode,
+      getConfiguredPreviewOrganizationAccessCode,
+    },
+  } as never;
+}
+
 describe('internal admin organization endpoints', () => {
   beforeEach(() => {
     authorizeInternalApiRequest.mockReset().mockResolvedValue({
-      mode: 'legacy',
-      keyId: 'legacy',
+      mode: 'hmac',
+      keyId: 'internal-dev',
       actorEmail: 'ops@yawp.test',
       scopes: ['management:read'],
     });
+    recordInternalPlatformWriteAudit.mockReset().mockResolvedValue(undefined);
     prisma.organization.findMany.mockReset().mockResolvedValue([]);
     prisma.organization.findUnique.mockReset().mockResolvedValue(null);
     prisma.organization.count.mockReset().mockResolvedValue(0);
@@ -85,7 +90,7 @@ describe('internal admin organization endpoints', () => {
 
   test('rejects unauthorized list requests before reading organizations', async () => {
     authorizeInternalApiRequest.mockResolvedValueOnce(Response.json({ error: 'Unauthorized' }, { status: 401 }));
-    const res = await internalAdminOrganizationsList(new Request(base));
+    const res = await internalAdminOrganizationsList(new Request(base), deps());
 
     expect(res.status).toBe(401);
     expect(prisma.organization.findMany).not.toHaveBeenCalled();
@@ -93,23 +98,43 @@ describe('internal admin organization endpoints', () => {
 
   test('rejects unauthorized detail requests before reading organizations', async () => {
     authorizeInternalApiRequest.mockResolvedValueOnce(Response.json({ error: 'Unauthorized' }, { status: 401 }));
-    const res = await internalAdminOrganizationDetail(new Request(`${base}/org-1`), 'org-1');
+    const res = await internalAdminOrganizationDetail(new Request(`${base}/org-1`), 'org-1', deps());
 
     expect(res.status).toBe(401);
     expect(prisma.organization.findUnique).not.toHaveBeenCalled();
   });
 
-  test('validates bounded pagination and sort inputs', async () => {
-    expect((await internalAdminOrganizationsList(authed(`${base}?pageSize=101`))).status).toBe(400);
-    expect((await internalAdminOrganizationsList(authed(`${base}?sort=bogus`))).status).toBe(400);
+  test('rejects legacy bearer access before reading organizations', async () => {
+    authorizeInternalApiRequest.mockResolvedValueOnce({
+      mode: 'legacy',
+      keyId: 'legacy',
+      actorEmail: 'legacy@yawp.internal',
+      scopes: ['management:read'],
+    });
 
-    const res = await internalAdminOrganizationsList(authed(`${base}?page=2&pageSize=10&sort=name&direction=asc&q=demo`));
+    const res = await internalAdminOrganizationsList(new Request(base), deps());
+
+    expect(res.status).toBe(401);
+    expect(prisma.organization.findMany).not.toHaveBeenCalled();
+  });
+
+  test('validates bounded pagination and sort inputs', async () => {
+    expect((await internalAdminOrganizationsList(authed(`${base}?pageSize=101`), deps())).status).toBe(400);
+    expect((await internalAdminOrganizationsList(authed(`${base}?sort=bogus`), deps())).status).toBe(400);
+
+    const res = await internalAdminOrganizationsList(authed(`${base}?page=2&pageSize=10&sort=name&direction=asc&q=demo`), deps());
     expect(res.status).toBe(200);
     expect(prisma.organization.findMany).toHaveBeenCalledWith(expect.objectContaining({
       skip: 10,
       take: 10,
       where: { name: { contains: 'demo', mode: 'insensitive' } },
       orderBy: { name: 'asc' },
+    }));
+    expect(recordInternalPlatformWriteAudit).toHaveBeenLastCalledWith(expect.objectContaining({
+      actorEmail: 'ops@yawp.test',
+      keyId: 'internal-dev',
+      endpoint: 'GET /api/internal/v1/admin/organizations',
+      result: 'organizations.list.success',
     }));
   });
 
@@ -126,12 +151,12 @@ describe('internal admin organization endpoints', () => {
       memberships: [{ role: 'STUDENT', isActive: true }],
     }]);
 
-    let body = await (await internalAdminOrganizationsList(authed())).json();
+    let body = await (await internalAdminOrganizationsList(authed(), deps())).json();
     expect(body.previewSeatMode).toBe(false);
     expect(body.organizations[0].previewAccessCode).toBeNull();
 
     isIsolatedPreviewSeatMode.mockReturnValue(true);
-    body = await (await internalAdminOrganizationsList(authed())).json();
+    body = await (await internalAdminOrganizationsList(authed(), deps())).json();
     expect(body.previewSeatMode).toBe(true);
     expect(body.organizations[0].previewAccessCode).toBe('secret-preview-code');
   });
@@ -171,7 +196,7 @@ describe('internal admin organization endpoints', () => {
       { id: 'inv-1', createdAt: new Date('2026-10-02T00:00:00Z'), target: 'pending@yawp.test', expiresAt: null },
     ]);
 
-    const res = await internalAdminOrganizationDetail(authed(`${base}/org-1`), 'org-1');
+    const res = await internalAdminOrganizationDetail(authed(`${base}/org-1`), 'org-1', deps());
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -183,5 +208,9 @@ describe('internal admin organization endpoints', () => {
       reasons: ['Only organization in this environment'],
     });
     expect(body.organization.previewSeatCode).toBeUndefined();
+    expect(recordInternalPlatformWriteAudit).toHaveBeenLastCalledWith(expect.objectContaining({
+      endpoint: 'GET /api/internal/v1/admin/organizations/org-1',
+      result: 'organizations.detail.success',
+    }));
   });
 });

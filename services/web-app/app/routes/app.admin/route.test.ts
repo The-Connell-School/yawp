@@ -19,6 +19,14 @@ describe('admin tabs', () => {
     expect(testerFeedbackTab?.label).toBe('Tester feedback (moved)');
   });
 
+  test('marks organizations read-only visibility as moved to internal', () => {
+    const organizationsTab = adminTabs.find(
+      (tab) => tab.to === '/app/admin/organizations'
+    );
+
+    expect(organizationsTab?.label).toBe('Organizations (read-only moved)');
+  });
+
   test('marks the assignment types surface as moved', () => {
     const assignmentTypesTab = adminTabs.find(
       (tab) => tab.to === '/app/admin/assignments'
