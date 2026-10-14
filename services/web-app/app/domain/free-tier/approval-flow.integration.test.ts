@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import bcrypt from 'bcryptjs';
 
-const sendEmailMock = mock(async () => ({
+const sendEmailMock = mock(async (_options: any) => ({
   status: 'success' as const,
   data: { id: 'integration-test-email' },
 }));
@@ -19,7 +19,8 @@ const {
   resendFreeTierAdminApprovalReminder,
   submitAdminDetails,
 } = await import('./approval-flow.server');
-const { mintSignedLink, peekSignedLink, RELEASE_LINK_TTL_MS } = await import('./signed-link.server');
+const { mintSignedLink, peekSignedLink, RELEASE_LINK_TTL_MS } =
+  await import('./signed-link.server');
 
 const enabled = process.env.FREE_TIER_DB_TESTS === '1';
 
@@ -50,21 +51,27 @@ describe('free-tier approval flow', () => {
     process.env.FREE_TIER_LINK_HMAC_SECRET =
       secret || 'integration-test-free-tier-link-secret-key';
     process.env.PRIMARY_APP_URL = 'https://yawp.test';
-    if (budgetEnv === undefined) delete process.env.FREE_TIER_BUDGET_ENVIRONMENT;
+    if (budgetEnv === undefined)
+      delete process.env.FREE_TIER_BUDGET_ENVIRONMENT;
     else process.env.FREE_TIER_BUDGET_ENVIRONMENT = budgetEnv;
-    if (previewBudget === undefined) delete process.env.FREE_TIER_PREVIEW_BUDGET_USD;
+    if (previewBudget === undefined)
+      delete process.env.FREE_TIER_PREVIEW_BUDGET_USD;
     else process.env.FREE_TIER_PREVIEW_BUDGET_USD = previewBudget;
-    if (previewUnitCost === undefined) delete process.env.FREE_TIER_PREVIEW_UNIT_COST_USD;
+    if (previewUnitCost === undefined)
+      delete process.env.FREE_TIER_PREVIEW_UNIT_COST_USD;
     else process.env.FREE_TIER_PREVIEW_UNIT_COST_USD = previewUnitCost;
   });
   afterEach(async () => {
     if (secret === undefined) delete process.env.FREE_TIER_LINK_HMAC_SECRET;
     else process.env.FREE_TIER_LINK_HMAC_SECRET = secret;
-    if (budgetEnv === undefined) delete process.env.FREE_TIER_BUDGET_ENVIRONMENT;
+    if (budgetEnv === undefined)
+      delete process.env.FREE_TIER_BUDGET_ENVIRONMENT;
     else process.env.FREE_TIER_BUDGET_ENVIRONMENT = budgetEnv;
-    if (previewBudget === undefined) delete process.env.FREE_TIER_PREVIEW_BUDGET_USD;
+    if (previewBudget === undefined)
+      delete process.env.FREE_TIER_PREVIEW_BUDGET_USD;
     else process.env.FREE_TIER_PREVIEW_BUDGET_USD = previewBudget;
-    if (previewUnitCost === undefined) delete process.env.FREE_TIER_PREVIEW_UNIT_COST_USD;
+    if (previewUnitCost === undefined)
+      delete process.env.FREE_TIER_PREVIEW_UNIT_COST_USD;
     else process.env.FREE_TIER_PREVIEW_UNIT_COST_USD = previewUnitCost;
     setApprovalHooks({});
     const apps = await prisma.freeTierApplication.findMany({
@@ -73,31 +80,170 @@ describe('free-tier approval flow', () => {
     });
     const appIds = apps.map((row) => row.id);
     const userIds = apps.map((row) => row.userId).filter(Boolean) as string[];
-    const orgIds = apps.map((row) => row.organizationId).filter(Boolean) as string[];
+    const orgIds = apps
+      .map((row) => row.organizationId)
+      .filter(Boolean) as string[];
     if (appIds.length > 0) {
-      await prisma.freeTierSignedLink.deleteMany({ where: { applicationId: { in: appIds } } });
-      await prisma.freeTierEmailLog.deleteMany({ where: { applicationId: { in: appIds } } });
-      await prisma.freeTierAdminApproval.deleteMany({ where: { applicationId: { in: appIds } } });
-      await prisma.freeTierApprovalDecision.deleteMany({ where: { applicationId: { in: appIds } } });
-      await prisma.freeTierApplication.deleteMany({ where: { id: { in: appIds } } });
+      await prisma.freeTierSignedLink.deleteMany({
+        where: { applicationId: { in: appIds } },
+      });
+      await prisma.freeTierEmailLog.deleteMany({
+        where: { applicationId: { in: appIds } },
+      });
+      await prisma.freeTierAdminApproval.deleteMany({
+        where: { applicationId: { in: appIds } },
+      });
+      await prisma.freeTierApprovalDecision.deleteMany({
+        where: { applicationId: { in: appIds } },
+      });
+      await prisma.freeTierApplication.deleteMany({
+        where: { id: { in: appIds } },
+      });
     }
     if (orgIds.length > 0) {
       await prisma.class.deleteMany({
         where: { school: { organizationId: { in: orgIds } } },
       });
-      await prisma.school.deleteMany({ where: { organizationId: { in: orgIds } } });
+      await prisma.school.deleteMany({
+        where: { organizationId: { in: orgIds } },
+      });
       await prisma.organizationAssignmentType.deleteMany({
         where: { organizationId: { in: orgIds } },
       });
-      await prisma.orgMembership.deleteMany({ where: { organizationId: { in: orgIds } } });
+      await prisma.orgMembership.deleteMany({
+        where: { organizationId: { in: orgIds } },
+      });
       await prisma.organization.deleteMany({ where: { id: { in: orgIds } } });
     }
     if (userIds.length > 0) {
-      await prisma.orgMembership.deleteMany({ where: { userId: { in: userIds } } });
+      await prisma.orgMembership.deleteMany({
+        where: { userId: { in: userIds } },
+      });
       await prisma.password.deleteMany({ where: { userId: { in: userIds } } });
       await prisma.user.deleteMany({ where: { id: { in: userIds } } });
     }
   });
+
+  for (const environment of ['demo', 'production', 'preview'] as const) {
+    test(`${environment}: fixed initial, reminder and replacement email through real approval flow`, async () => {
+      const oldEnvironment = process.env.YAWP_ENVIRONMENT;
+      const oldSlug = process.env.PREVIEW_SLUG;
+      const oldBudgetEnvironment = process.env.FREE_TIER_BUDGET_ENVIRONMENT;
+      process.env.YAWP_ENVIRONMENT = environment;
+      process.env.PREVIEW_SLUG =
+        environment === 'demo'
+          ? 'demo'
+          : environment === 'preview'
+            ? 'pr-999'
+            : '';
+      process.env.FREE_TIER_BUDGET_ENVIRONMENT = 'preview';
+      setApprovalHooks({ onApplicationApproved: async () => {} });
+      try {
+        const email = `ft-fixed-${Date.now()}@school.edu`;
+        const user = await prisma.user.create({
+          data: { email, name: 'Local Teacher' },
+        });
+        const app = await prisma.freeTierApplication.create({
+          data: {
+            email,
+            userId: user.id,
+            name: user.name!,
+            schoolName: 'Example High',
+            location: 'Local',
+            gradeLevel: '10',
+            status: 'ACCOUNT_CREATED',
+          },
+        });
+        const checkDelivery = (to: string) => {
+          const delivery = sendEmailMock.mock.calls.at(-1)![0];
+          expect(delivery.to).toBe(to);
+          if (environment === 'demo') expect(delivery.bcc).toEqual([email]);
+          else expect(delivery).not.toHaveProperty('bcc');
+          expect(delivery.text.includes('CRAFTED INTRO')).toBe(false);
+          expect(delivery.text.includes('HISTORICAL INTRO')).toBe(false);
+          expect(delivery.text).toContain('/free/admin/approve?t=');
+          expect(delivery.text).toContain('/free/admin/not-right-person?t=');
+          return delivery;
+        };
+        expect(
+          (
+            await submitAdminDetails({
+              applicationId: app.id,
+              userId: user.id,
+              adminName: 'Principal Pat',
+              adminEmail: 'principal@school.edu',
+              adminRole: 'Principal',
+              personalNote: 'CRAFTED INTRO',
+            })
+          ).ok
+        ).toBe(true);
+        checkDelivery('principal@school.edu');
+        await prisma.freeTierAdminApproval.updateMany({
+          where: { applicationId: app.id },
+          data: { personalNote: 'HISTORICAL INTRO' },
+        });
+        const request = new Request('https://yawp.test/free/admin/approve');
+        expect(
+          (
+            await resendFreeTierAdminApprovalReminder({
+              applicationId: app.id,
+              request,
+            })
+          ).ok
+        ).toBe(true);
+        const reminder = checkDelivery('principal@school.edu');
+        const declineUrl = reminder.text
+          .split('\n')
+          .find((line: string) =>
+            line.includes('/free/admin/not-right-person?t=')
+          )!;
+        expect(
+          (
+            await redirectSchoolAdmin({
+              token: new URL(declineUrl).searchParams.get('t')!,
+              newAdminName: 'Principal Lee',
+              newAdminEmail: 'replacement@school.edu',
+              request,
+            })
+          ).ok
+        ).toBe(true);
+        const replacement = checkDelivery('replacement@school.edu');
+        expect(replacement.text).toContain('Hi Principal Lee,');
+        const approveUrl = replacement.text
+          .split('\n')
+          .find((line: string) => line.includes('/free/admin/approve?t='))!;
+        expect(
+          (
+            await completeSchoolAdminApproval({
+              token: new URL(approveUrl).searchParams.get('t')!,
+              authorized: true,
+              adminRole: 'Principal',
+              request,
+            })
+          ).ok
+        ).toBe(true);
+        expect(
+          (
+            await prisma.freeTierApplication.findUnique({
+              where: { id: app.id },
+            })
+          )?.status
+        ).toBe('APPROVED');
+        const congratulations = sendEmailMock.mock.calls.at(-1)![0];
+        expect(congratulations.to).toBe(email);
+        expect(congratulations).not.toHaveProperty('bcc');
+      } finally {
+        for (const [key, value] of Object.entries({
+          YAWP_ENVIRONMENT: oldEnvironment,
+          PREVIEW_SLUG: oldSlug,
+          FREE_TIER_BUDGET_ENVIRONMENT: oldBudgetEnvironment,
+        })) {
+          if (value === undefined) delete process.env[key];
+          else process.env[key] = value;
+        }
+      }
+    });
+  }
 
   test('account → admin submit → approve calls hook once (idempotent second click)', async () => {
     let hookCalls = 0;
@@ -135,8 +281,11 @@ describe('free-tier approval flow', () => {
       where: { applicationId: app.id, kind: 'admin_approval', success: true },
       orderBy: { createdAt: 'desc' },
     });
-    const approveUrl = (emailLog?.payload as { approveUrl?: string } | null)?.approveUrl;
-    const approveToken = approveUrl ? new URL(approveUrl).searchParams.get('t') : null;
+    const approveUrl = (emailLog?.payload as { approveUrl?: string } | null)
+      ?.approveUrl;
+    const approveToken = approveUrl
+      ? new URL(approveUrl).searchParams.get('t')
+      : null;
     if (!approveToken) throw new Error('missing emailed approve token');
     const req = new Request('https://yawp.test/free/admin/approve', {
       headers: { 'user-agent': 'test', 'x-forwarded-for': '203.0.113.1' },
@@ -157,7 +306,9 @@ describe('free-tier approval flow', () => {
     expect(second.ok).toBe(true);
     expect('idempotent' in second && second.idempotent).toBe(true);
     expect(hookCalls).toBe(1);
-    const finalApp = await prisma.freeTierApplication.findUnique({ where: { id: app.id } });
+    const finalApp = await prisma.freeTierApplication.findUnique({
+      where: { id: app.id },
+    });
     expect(finalApp?.status).toBe('APPROVED');
   });
 
@@ -200,8 +351,11 @@ describe('free-tier approval flow', () => {
       where: { applicationId: app.id, kind: 'admin_approval', success: true },
       orderBy: { createdAt: 'desc' },
     });
-    const approveUrl = (emailLog?.payload as { approveUrl?: string } | null)?.approveUrl;
-    const approveToken = approveUrl ? new URL(approveUrl).searchParams.get('t') : null;
+    const approveUrl = (emailLog?.payload as { approveUrl?: string } | null)
+      ?.approveUrl;
+    const approveToken = approveUrl
+      ? new URL(approveUrl).searchParams.get('t')
+      : null;
     if (!approveToken) throw new Error('missing emailed approve token');
     const linkId = (
       await prisma.freeTierSignedLink.findFirst({
@@ -235,7 +389,9 @@ describe('free-tier approval flow', () => {
     });
     expect(pending?.status).toBe('APPROVED');
     expect(pending?.decidedAt).toBeInstanceOf(Date);
-    const finalApp = await prisma.freeTierApplication.findUnique({ where: { id: app.id } });
+    const finalApp = await prisma.freeTierApplication.findUnique({
+      where: { id: app.id },
+    });
     expect(finalApp?.status).toBe('APPROVED');
   });
 
@@ -275,8 +431,11 @@ describe('free-tier approval flow', () => {
         where: { applicationId: app.id, kind: 'admin_approval', success: true },
         orderBy: { createdAt: 'desc' },
       });
-      const approveUrl = (emailLog?.payload as { approveUrl?: string } | null)?.approveUrl;
-      const approveToken = approveUrl ? new URL(approveUrl).searchParams.get('t') : null;
+      const approveUrl = (emailLog?.payload as { approveUrl?: string } | null)
+        ?.approveUrl;
+      const approveToken = approveUrl
+        ? new URL(approveUrl).searchParams.get('t')
+        : null;
       if (!approveToken) throw new Error('missing emailed approve token');
       return { appId: app.id, approveToken };
     }
@@ -366,8 +525,11 @@ describe('free-tier approval flow', () => {
       where: { applicationId: app.id, kind: 'admin_approval', success: true },
       orderBy: { createdAt: 'desc' },
     });
-    const approveUrl = (emailLog?.payload as { approveUrl?: string } | null)?.approveUrl;
-    const approveToken = approveUrl ? new URL(approveUrl).searchParams.get('t') : null;
+    const approveUrl = (emailLog?.payload as { approveUrl?: string } | null)
+      ?.approveUrl;
+    const approveToken = approveUrl
+      ? new URL(approveUrl).searchParams.get('t')
+      : null;
     if (!approveToken) throw new Error('missing emailed approve token');
     const req = new Request('https://yawp.test/free/admin/approve', {
       headers: { 'user-agent': 'test', 'x-forwarded-for': '203.0.113.2' },
@@ -390,11 +552,15 @@ describe('free-tier approval flow', () => {
     const freshApprovals = outcomes.filter(
       (r) => r.ok && 'app' in r && r.app && !('idempotent' in r && r.idempotent)
     );
-    const idempotent = outcomes.filter((r) => r.ok && 'idempotent' in r && r.idempotent);
+    const idempotent = outcomes.filter(
+      (r) => r.ok && 'idempotent' in r && r.idempotent
+    );
     const linkLost = outcomes.filter((r) => !r.ok && r.reason === 'used');
     expect(freshApprovals.length).toBe(1);
     expect(idempotent.length + linkLost.length).toBe(1);
-    const finalApp = await prisma.freeTierApplication.findUnique({ where: { id: app.id } });
+    const finalApp = await prisma.freeTierApplication.findUnique({
+      where: { id: app.id },
+    });
     expect(finalApp?.status).toBe('APPROVED');
   });
 
@@ -428,8 +594,12 @@ describe('free-tier approval flow', () => {
       where: { applicationId: app.id, kind: 'admin_approval', success: true },
       orderBy: { createdAt: 'desc' },
     });
-    const declineUrl = (emailLog?.payload as { notRightPersonUrl?: string } | null)?.notRightPersonUrl;
-    const declineToken = declineUrl ? new URL(declineUrl).searchParams.get('t') : null;
+    const declineUrl = (
+      emailLog?.payload as { notRightPersonUrl?: string } | null
+    )?.notRightPersonUrl;
+    const declineToken = declineUrl
+      ? new URL(declineUrl).searchParams.get('t')
+      : null;
     if (!declineToken) throw new Error('missing decline token in email log');
 
     const req = new Request('https://yawp.test/free/admin/not-right-person', {
@@ -486,19 +656,33 @@ describe('free-tier approval flow', () => {
       where: { applicationId: app.id, kind: 'admin_approval', success: true },
       orderBy: { createdAt: 'desc' },
     });
-    const oldApproveUrl = (firstLog?.payload as { approveUrl?: string } | null)?.approveUrl;
-    const oldDeclineUrl = (firstLog?.payload as { notRightPersonUrl?: string } | null)?.notRightPersonUrl;
-    const oldApproveToken = oldApproveUrl ? new URL(oldApproveUrl).searchParams.get('t') : null;
-    const oldDeclineToken = oldDeclineUrl ? new URL(oldDeclineUrl).searchParams.get('t') : null;
-    if (!oldApproveToken || !oldDeclineToken) throw new Error('missing initial tokens');
+    const oldApproveUrl = (firstLog?.payload as { approveUrl?: string } | null)
+      ?.approveUrl;
+    const oldDeclineUrl = (
+      firstLog?.payload as { notRightPersonUrl?: string } | null
+    )?.notRightPersonUrl;
+    const oldApproveToken = oldApproveUrl
+      ? new URL(oldApproveUrl).searchParams.get('t')
+      : null;
+    const oldDeclineToken = oldDeclineUrl
+      ? new URL(oldDeclineUrl).searchParams.get('t')
+      : null;
+    if (!oldApproveToken || !oldDeclineToken)
+      throw new Error('missing initial tokens');
 
     const req = new Request('https://yawp.test/app/free-tier/pending', {
       headers: { 'user-agent': 'test', 'x-forwarded-for': '203.0.113.5' },
     });
-    const resent = await resendFreeTierAdminApprovalReminder({ applicationId: app.id, request: req });
+    const resent = await resendFreeTierAdminApprovalReminder({
+      applicationId: app.id,
+      request: req,
+    });
     expect(resent.ok).toBe(true);
 
-    const oldApprovePeek = await peekSignedLink({ token: oldApproveToken, expectedPurpose: 'ADMIN_APPROVE' });
+    const oldApprovePeek = await peekSignedLink({
+      token: oldApproveToken,
+      expectedPurpose: 'ADMIN_APPROVE',
+    });
     expect(oldApprovePeek.ok).toBe(false);
     if (oldApprovePeek.ok) throw new Error('old approve should be invalid');
     expect(['used', 'superseded']).toContain(oldApprovePeek.reason);
@@ -512,7 +696,11 @@ describe('free-tier approval flow', () => {
     expect(oldDeclinePeek.reason).toBe('used');
 
     const reminderLog = await prisma.freeTierEmailLog.findFirst({
-      where: { applicationId: app.id, kind: 'admin_approval_reminder', success: true },
+      where: {
+        applicationId: app.id,
+        kind: 'admin_approval_reminder',
+        success: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
     expect(reminderLog).not.toBeNull();
@@ -548,11 +736,19 @@ describe('free-tier approval flow', () => {
       where: { applicationId: app.id, kind: 'admin_approval', success: true },
       orderBy: { createdAt: 'desc' },
     });
-    const oldApproveUrl = (firstLog?.payload as { approveUrl?: string } | null)?.approveUrl;
-    const oldDeclineUrl = (firstLog?.payload as { notRightPersonUrl?: string } | null)?.notRightPersonUrl;
-    const oldApproveToken = oldApproveUrl ? new URL(oldApproveUrl).searchParams.get('t') : null;
-    const oldDeclineToken = oldDeclineUrl ? new URL(oldDeclineUrl).searchParams.get('t') : null;
-    if (!oldApproveToken || !oldDeclineToken) throw new Error('missing initial tokens');
+    const oldApproveUrl = (firstLog?.payload as { approveUrl?: string } | null)
+      ?.approveUrl;
+    const oldDeclineUrl = (
+      firstLog?.payload as { notRightPersonUrl?: string } | null
+    )?.notRightPersonUrl;
+    const oldApproveToken = oldApproveUrl
+      ? new URL(oldApproveUrl).searchParams.get('t')
+      : null;
+    const oldDeclineToken = oldDeclineUrl
+      ? new URL(oldDeclineUrl).searchParams.get('t')
+      : null;
+    if (!oldApproveToken || !oldDeclineToken)
+      throw new Error('missing initial tokens');
 
     const req = new Request('https://yawp.test/free/admin/not-right-person', {
       headers: { 'user-agent': 'test', 'x-forwarded-for': '203.0.113.6' },
@@ -565,7 +761,10 @@ describe('free-tier approval flow', () => {
     });
     expect(forwarded.ok).toBe(true);
 
-    const oldApprovePeek = await peekSignedLink({ token: oldApproveToken, expectedPurpose: 'ADMIN_APPROVE' });
+    const oldApprovePeek = await peekSignedLink({
+      token: oldApproveToken,
+      expectedPurpose: 'ADMIN_APPROVE',
+    });
     expect(oldApprovePeek.ok).toBe(false);
 
     const oldDeclinePeek = await peekSignedLink({
@@ -577,14 +776,25 @@ describe('free-tier approval flow', () => {
     expect(oldDeclinePeek.reason).toBe('used');
 
     const forwardLog = await prisma.freeTierEmailLog.findFirst({
-      where: { applicationId: app.id, toEmail: 'principal@school.edu', success: true },
+      where: {
+        applicationId: app.id,
+        toEmail: 'principal@school.edu',
+        success: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
     expect(forwardLog?.kind).toBe('admin_approval');
-    const newApproveUrl = (forwardLog?.payload as { approveUrl?: string } | null)?.approveUrl;
-    const newApproveToken = newApproveUrl ? new URL(newApproveUrl).searchParams.get('t') : null;
+    const newApproveUrl = (
+      forwardLog?.payload as { approveUrl?: string } | null
+    )?.approveUrl;
+    const newApproveToken = newApproveUrl
+      ? new URL(newApproveUrl).searchParams.get('t')
+      : null;
     if (!newApproveToken) throw new Error('missing new approve token');
-    const newPeek = await peekSignedLink({ token: newApproveToken, expectedPurpose: 'ADMIN_APPROVE' });
+    const newPeek = await peekSignedLink({
+      token: newApproveToken,
+      expectedPurpose: 'ADMIN_APPROVE',
+    });
     expect(newPeek.ok).toBe(true);
   });
 
@@ -601,7 +811,10 @@ describe('free-tier approval flow', () => {
       },
     });
     const declineMint = await import('./signed-link.server').then((m) =>
-      m.mintSignedLink({ applicationId: app.id, purpose: 'ADMIN_NOT_RIGHT_PERSON' })
+      m.mintSignedLink({
+        applicationId: app.id,
+        purpose: 'ADMIN_NOT_RIGHT_PERSON',
+      })
     );
     const req = new Request('https://yawp.test/free/admin/not-right-person', {
       headers: { 'user-agent': 'test', 'x-forwarded-for': '203.0.113.4' },
@@ -648,7 +861,10 @@ describe('free-tier approval flow', () => {
       passwordHash,
     });
     expect(created.ok).toBe(true);
-    const after = await peekSignedLink({ token: minted.token, expectedPurpose: 'RELEASE' });
+    const after = await peekSignedLink({
+      token: minted.token,
+      expectedPurpose: 'RELEASE',
+    });
     expect(after.ok).toBe(false);
     if (after.ok) throw new Error('expected used link');
     expect(after.reason).toBe('used');
@@ -685,7 +901,10 @@ describe('free-tier approval flow', () => {
       passwordHash: await testPasswordHash('new-pass'),
     });
     expect(created).toEqual({ ok: false, reason: 'sign_in_required' });
-    const after = await peekSignedLink({ token: minted.token, expectedPurpose: 'RELEASE' });
+    const after = await peekSignedLink({
+      token: minted.token,
+      expectedPurpose: 'RELEASE',
+    });
     expect(after.ok).toBe(true);
   });
 
@@ -755,8 +974,11 @@ describe('free-tier approval flow', () => {
       where: { applicationId: app.id, kind: 'admin_approval', success: true },
       orderBy: { createdAt: 'desc' },
     });
-    const approveUrl = (emailLog?.payload as { approveUrl?: string } | null)?.approveUrl;
-    const approveToken = approveUrl ? new URL(approveUrl).searchParams.get('t') : null;
+    const approveUrl = (emailLog?.payload as { approveUrl?: string } | null)
+      ?.approveUrl;
+    const approveToken = approveUrl
+      ? new URL(approveUrl).searchParams.get('t')
+      : null;
     if (!approveToken) throw new Error('missing emailed approve token');
     const linkId = (
       await prisma.freeTierSignedLink.findFirst({
@@ -781,13 +1003,19 @@ describe('free-tier approval flow', () => {
       authorized: true,
       request: req,
     });
-    expect(result).toEqual({ ok: false, reason: 'illegal_state', status: 'REJECTED' });
+    expect(result).toEqual({
+      ok: false,
+      reason: 'illegal_state',
+      status: 'REJECTED',
+    });
     const link = await prisma.freeTierSignedLink.findUnique({
       where: { id: linkId },
       select: { usedAt: true },
     });
     expect(link?.usedAt).toBeNull();
-    const finalApp = await prisma.freeTierApplication.findUnique({ where: { id: app.id } });
+    const finalApp = await prisma.freeTierApplication.findUnique({
+      where: { id: app.id },
+    });
     expect(finalApp?.status).toBe('REJECTED');
   });
 
@@ -814,13 +1042,20 @@ describe('free-tier approval flow', () => {
       name: 'Bad State',
       passwordHash: await testPasswordHash('yawp-ft-join-pass'),
     });
-    expect(created).toEqual({ ok: false, reason: 'illegal_state', status: 'ACCOUNT_CREATED' });
+    expect(created).toEqual({
+      ok: false,
+      reason: 'illegal_state',
+      status: 'ACCOUNT_CREATED',
+    });
     const link = await prisma.freeTierSignedLink.findUnique({
       where: { id: minted.linkId },
       select: { usedAt: true },
     });
     expect(link?.usedAt).toBeNull();
-    const peek = await peekSignedLink({ token: minted.token, expectedPurpose: 'RELEASE' });
+    const peek = await peekSignedLink({
+      token: minted.token,
+      expectedPurpose: 'RELEASE',
+    });
     expect(peek.ok).toBe(true);
   });
 });
