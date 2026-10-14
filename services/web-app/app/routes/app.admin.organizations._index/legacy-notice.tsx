@@ -7,10 +7,12 @@ export function OrganizationsLegacyNotice({
   previewSeatMode,
   createOrganizationControl,
   createPreviewSeatControl,
+  previewSeatList,
 }: {
   previewSeatMode: boolean;
   createOrganizationControl: ReactNode;
   createPreviewSeatControl?: ReactNode;
+  previewSeatList?: ReactNode;
 }) {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 md:p-8">
@@ -48,6 +50,7 @@ export function OrganizationsLegacyNotice({
           </p>
         ) : null}
       </section>
+      {previewSeatList}
     </div>
   );
 }
