@@ -7,3 +7,8 @@
 - Address reviewer rejection by requiring HMAC for every mutating Free Trial internal API request, even when legacy bearer compatibility remains enabled for reads.
 - Add focused tests proving valid legacy bearer / unsigned mutation requests are denied and signed writes still create audit rows with operator attribution and request hash.
 - Capture a local screenshot of the moved platform page after focused tests pass.
+
+## Review fixes
+
+- Update the real-db approval integration suite so approval/reject/manual-review/reopen/submit requests are signed with the internal API HMAC helper.
+- Keep legacy bearer-only denial coverage in the focused operator tests.

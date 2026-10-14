@@ -19,6 +19,15 @@ const sendReleaseEmailsForApplicationIds = mock(
   ): Promise<{ applicationId: string; ok: boolean; error?: string }[]> => []
 );
 const ensureFreeTierProductionApprovalHooks = mock(async () => {});
+type MockApprovalHooks = {
+  onApplicationApproved: (...args: unknown[]) => Promise<void> | void;
+  onApplicationRejected: (...args: unknown[]) => Promise<void> | void;
+};
+const defaultApprovalHooks: MockApprovalHooks = {
+  onApplicationApproved: async () => {},
+  onApplicationRejected: async () => {},
+};
+let approvalHooks: MockApprovalHooks = { ...defaultApprovalHooks };
 
 mock.module('~/utils/db.server', () => ({
   prisma: {
@@ -38,11 +47,11 @@ mock.module('~/domain/free-tier/approval-flow.server', () => ({
 }));
 
 mock.module('~/domain/free-tier/approval-hooks.server', () => ({
+  setApprovalHooks: (overrides: Partial<typeof approvalHooks>) => {
+    approvalHooks = { ...approvalHooks, ...overrides };
+  },
   ensureFreeTierProductionApprovalHooks,
-  getApprovalHooks: () => ({
-    onApplicationApproved: async () => {},
-    onApplicationRejected: async () => {},
-  }),
+  getApprovalHooks: () => approvalHooks,
 }));
 
 const secret = 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEF';
@@ -83,6 +92,7 @@ describe('free-tier operator HTTP', () => {
     auditCreate.mockReset();
     sendReleaseEmailsForApplicationIds.mockReset().mockResolvedValue([{ applicationId: 'app-1', ok: true }]);
     ensureFreeTierProductionApprovalHooks.mockReset();
+    approvalHooks = { ...defaultApprovalHooks };
   });
 
   afterEach(() => {
