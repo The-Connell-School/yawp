@@ -35,6 +35,7 @@ test('status idle deadlines ignore legacy wake leases and human activity dual-wr
   writeFileSync(path.join(dir, 'last-request'), '999999\n');
   const status = await collectPreviewStatus({ root, idleSleepHours: 48, execFileFn: async () => ({ stdout: '' }) });
   expect(status.previews[0]).toMatchObject({ lastHumanActivity: 100, lastDeploy: 200, sleepsAt: 173000 });
+  expect(Object.keys(status.previews[0])).toEqual(['pr', 'branch', 'author', 'state', 'lastRequest', 'lastDeploy', 'lastHumanActivity', 'sleepsAt', 'lastActive', 'rssBytes', 'rss', 'url']);
   const ops = createDefaultWakeOperations({ root, maxRunning: 8 });
   await ops.recordAccess(484);
   const human = readFileSync(path.join(dir, 'last-human-activity'), 'utf8');

@@ -5,7 +5,7 @@ on:
   # default branch. A long-lived PR's base SHA can lag behind default-branch repairs.
   # Pull-request code is synced separately and runs only inside the preview containers.
   pull_request_target:
-    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled, closed]
+    types: [opened, synchronize, reopened, ready_for_review, closed]
   workflow_dispatch:
   schedule:
     - cron: '27 5 * * *'
@@ -31,7 +31,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           EVENT_ACTION: ${{ github.event.action }}
-          EVENT_LABEL: ${{ github.event.label.name || '' }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           EVENT_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -56,8 +55,6 @@ jobs:
             reason=non_default_base
           elif [[ "$EVENT_HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]]; then
             reason=fork
-          elif [[ "$EVENT_ACTION" == "labeled" || "$EVENT_ACTION" == "unlabeled" ]] && [[ "$EVENT_LABEL" != "preview:keep-awake" ]]; then
-            reason=unrelated_label
           elif [[ "$title" == *"[skip preview]"* || "$body" == *"[skip preview]"* || "$head_ref" == *"[skip preview]"* ]]; then
             reason=skip_preview
           else
@@ -76,7 +73,6 @@ jobs:
       needs.preview-policy.outputs.should_deploy == 'true' &&
       github.event.action != 'closed' &&
       github.event.pull_request.base.ref == github.event.repository.default_branch &&
-      ((github.event.action != 'labeled' && github.event.action != 'unlabeled') || github.event.label.name == 'preview:keep-awake') &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       contains(github.event.pull_request.title, '[skip preview]') == false &&
       startsWith(github.event.pull_request.body || '', '[skip preview]') == false &&
@@ -100,7 +96,6 @@ jobs:
       PREVIEW_MAX_RUNNING: ${{ vars.PREVIEW_MAX_RUNNING || '8' }}
       PREVIEW_SLEEP_ENABLED: ${{ vars.PREVIEW_SLEEP_ENABLED || 'true' }}
       PREVIEW_IDLE_SLEEP_HOURS: ${{ vars.PREVIEW_IDLE_SLEEP_HOURS || '48' }}
-      PREVIEW_KEEP_AWAKE: ${{ contains(github.event.pull_request.labels.*.name, 'preview:keep-awake') }}
       PREVIEW_INFLIGHT_TTL_SECONDS: ${{ vars.PREVIEW_INFLIGHT_TTL_SECONDS || '3600' }}
       PREVIEW_DATA_MODE: ${{ contains(github.event.pull_request.labels.*.name, 'sanitized-production-data') && 'sanitized-production' || vars.PREVIEW_DATA_MODE || 'seed' }}
       PREVIEW_SEAT_COUNT: ${{ vars.PREVIEW_SEAT_COUNT || '1' }}
@@ -282,7 +277,6 @@ jobs:
             "PREVIEW_MAX_RUNNING=$(shell_quote "$PREVIEW_MAX_RUNNING")"
             "PREVIEW_SLEEP_ENABLED=$(shell_quote "$PREVIEW_SLEEP_ENABLED")"
             "PREVIEW_IDLE_SLEEP_HOURS=$(shell_quote "$PREVIEW_IDLE_SLEEP_HOURS")"
-            "PREVIEW_KEEP_AWAKE=$(shell_quote "$PREVIEW_KEEP_AWAKE")"
             "PREVIEW_INFLIGHT_TTL_SECONDS=$(shell_quote "$PREVIEW_INFLIGHT_TTL_SECONDS")"
             "PREVIEW_INFLIGHT_MARKER=$(shell_quote "$inflight_marker")"
             "PREVIEW_QUARANTINE_MARKER=$(shell_quote "$quarantine_marker")"
@@ -340,11 +334,11 @@ jobs:
             gh pr comment "$pr" --body "Preview slept after its human idle deadline or to free running capacity. State and access code remain intact. Open its plain URL in a browser to wake it; app access and login still apply. The first request can take a minute." || true
           done
           for pr in $evicted; do
-            gh pr comment "$pr" --body "Preview reclaimed at the ${PREVIEW_MAX_RESIDENT}-resident cap. Preview-local database and access state were deleted; push a commit or add \`preview:keep-awake\` to rebuild it." || true
+            gh pr comment "$pr" --body "Preview reclaimed at the ${PREVIEW_MAX_RESIDENT}-resident cap. Preview-local database and access state were deleted; push a commit to rebuild it." || true
           done
 
           if [[ "$result" == "full" ]]; then
-            echo "::error::Preview host is full at ${reason}; pinned and incoming PRs could not be displaced."
+            echo "::error::Preview host is full at ${reason}; no eligible PR could be displaced."
             exit 1
           fi
           if [[ "$result" != "ok" ]]; then
@@ -616,7 +610,7 @@ jobs:
             gh pr comment "$pr" --body "Preview slept after its human idle deadline or to free running capacity. State and access code remain intact. Open its plain URL in a browser to wake it; app access and login still apply. The first request can take a minute." || true
           done
           for pr in $evicted; do
-            gh pr comment "$pr" --body "Preview reclaimed at the ${PREVIEW_MAX_RESIDENT}-resident cap. Preview-local database and access state were deleted; push a commit or add \`preview:keep-awake\` to rebuild it." || true
+            gh pr comment "$pr" --body "Preview reclaimed at the ${PREVIEW_MAX_RESIDENT}-resident cap. Preview-local database and access state were deleted; push a commit to rebuild it." || true
           done
           if [ "$result" = "full" ]; then
             echo "::error::Preview reconciliation remains full at ${reason}."

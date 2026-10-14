@@ -121,7 +121,7 @@ refresh_pr_state() {
     }
     page_numbers="$("$JQ" -r '[.[].number] | join(" ")' <<<"$response")"
     page_activity="$(
-      "$JQ" -r '.[] | "\(.number) \(.updated_at | fromdateiso8601) \(if .draft then 1 else 0 end) \(if any(.labels[]?; .name == "preview:keep-awake") then 1 else 0 end) \(.head.ref // "") \(.user.login // "")"' \
+      "$JQ" -r '.[] | "\(.number) \(.updated_at | fromdateiso8601) \(if .draft then 1 else 0 end)"' \
         <<<"$response"
     )"
     if [[ -n "$page_numbers" ]]; then
@@ -202,16 +202,6 @@ is_open_pr() {
   [[ " ${OPEN_PR_NUMBERS} " == *" ${1} "* ]]
 }
 
-activity_record() {
-  local target="$1"
-  printf '%s\n' "$PR_ACTIVITY" | awk -v target="$target" '
-    $1 == target && NF >= 3 {
-      pinned = (NF >= 4 && $4 == "1") ? 1 : 0
-      print $1, $2, $3, pinned
-      exit
-    }'
-}
-
 file_epoch() {
   local file="$1"
   local value=""
@@ -241,66 +231,6 @@ effective_activity_epoch() {
   else
     printf '%s\n' "$github_epoch"
   fi
-}
-
-preview_branch() {
-  local pr="$1"
-  local fallback="${2:-}"
-  local file="$previews_dir/pr-${pr}/branch"
-  if [[ -f "$file" ]]; then
-    IFS= read -r fallback < "$file" || true
-  fi
-  printf '%s\n' "$fallback"
-}
-
-candidate_priority_class() {
-  local pr="$1"
-  local branch="${2:-}"
-  branch="$(preview_branch "$pr" "$branch")"
-  case "$branch" in
-    codex/*) echo 0 ;;
-    *) echo 1 ;;
-  esac
-}
-
-write_keep_awake_marker() {
-  local marker="$1"
-  local replacement="${marker}.tmp.$$"
-
-  # Container-backed deploys can leave the existing marker owned by root. The preview
-  # directory remains owned by the deploy user, so replace the file through that
-  # directory instead of truncating the inode in place.
-  if ! (umask 022; printf 'true\n' > "$replacement" && mv -f -- "$replacement" "$marker"); then
-    rm -f -- "$replacement" 2>/dev/null || true
-    echo "::error::could not update keep-awake marker ${marker}" >&2
-    return 1
-  fi
-}
-
-sync_keep_awake_markers() {
-  local pr record pinned marker
-  while IFS= read -r pr; do
-    [[ -d "$previews_dir/pr-${pr}" ]] || continue
-    record="$(activity_record "$pr")"
-    [[ -n "$record" ]] || continue
-    read -r _ _ _ pinned <<<"$record"
-    marker="$previews_dir/pr-${pr}/keep-awake"
-    if [[ "$pinned" == "1" ]]; then
-      write_keep_awake_marker "$marker"
-    else
-      rm -f -- "$marker"
-    fi
-  done < <(resident_env_numbers)
-}
-
-is_pinned() {
-  local pr="$1"
-  local record pinned
-  [[ -f "$previews_dir/pr-${pr}/keep-awake" ]] && return 0
-  record="$(activity_record "$pr")"
-  [[ -n "$record" ]] || return 1
-  read -r _ _ _ pinned _ _ <<<"$record"
-  [[ "$pinned" == "1" ]]
 }
 
 is_running() {
@@ -415,34 +345,29 @@ stop_env() {
 }
 
 rank_candidates() {
-  local scope="$1"
-  local keep="$2"
-  local candidates=""
-  local pr
+  local scope="$1" keep="$2" pr updated draft ignored effective
   if [[ "$scope" == "running" ]]; then
     while IFS= read -r pr; do
-      [[ -n "$pr" ]] || continue
-      is_inflight "$pr" || candidates="${candidates:+${candidates} }${pr}"
-    done < <(running_env_numbers)
-  else
-    while IFS= read -r pr; do
-      [[ -n "$pr" ]] || continue
-      is_inflight "$pr" || candidates="${candidates:+${candidates} }${pr}"
-    done < <(resident_env_numbers)
+      [[ -n "$pr" && "$pr" != "$keep" ]] || continue
+      printf '%s %s\n' "$(preview_activity_epoch "$ROOT" "$pr")" "$pr"
+    done < <(running_env_numbers) | sort -k1,1n -k2,2n | awk '{print $2}'
+    return
   fi
 
-  local updated draft pinned branch author effective class
-  while read -r pr updated draft pinned branch author; do
+  # Preserve resident reclamation's existing draft/activity eligibility and data
+  # removal paths. Running admission never feeds this destructive ranking.
+  local candidates=""
+  while IFS= read -r pr; do
     [[ -n "$pr" ]] || continue
-    pinned="${pinned:-0}"
-    [[ "$pr" != "$keep" && "$pinned" != "1" ]] || continue
-    [[ -f "$previews_dir/pr-${pr}/keep-awake" ]] && continue
+    is_inflight "$pr" || candidates="${candidates:+${candidates} }${pr}"
+  done < <(resident_env_numbers)
+  while read -r pr updated draft ignored; do
+    [[ -n "$pr" && "$pr" != "$keep" ]] || continue
     [[ " $candidates " == *" $pr "* ]] || continue
     is_nonnegative_integer "$updated" || continue
     effective="$(effective_activity_epoch "$pr" "$updated")"
-    class="$(candidate_priority_class "$pr" "$branch")"
-    printf '%d %d %d %s\n' "$class" "$([[ "$draft" == "1" ]] && echo 0 || echo 1)" "$effective" "$pr"
-  done <<<"$PR_ACTIVITY" | sort -k1,1n -k2,2n -k3,3n | awk '{print $4}'
+    printf '%d %d %s\n' "$([[ "$draft" == "1" ]] && echo 0 || echo 1)" "$effective" "$pr"
+  done <<<"$PR_ACTIVITY" | sort -k1,1n -k2,2n -k3,3n | awk '{print $3}'
 }
 
 append_number() {
@@ -470,7 +395,6 @@ incoming_running_slots() {
 acquire_host_lock
 prune_stale_inflight_markers
 refresh_pr_state
-sync_keep_awake_markers
 
 reclaimed=0
 evicted=""
@@ -485,10 +409,6 @@ while IFS= read -r pr; do
     continue
   fi
   if ! is_open_pr "$pr"; then
-    if is_pinned "$pr"; then
-      echo "keep pr-${pr}: keep-awake marker protects resident state"
-      continue
-    fi
     echo "reclaim pr-${pr}: pull request is closed or merged"
     if destroy_env "$pr"; then
       reclaimed=$((reclaimed + 1))
@@ -499,8 +419,7 @@ while IFS= read -r pr; do
   fi
 done < <(resident_env_numbers)
 
-# The human idle deadline applies to all previews, including keep-awake pins.
-# Pins remain protected from capacity displacement below.
+# The human idle deadline applies to all previews.
 if [[ "$SLEEP_ENABLED" == "true" ]]; then
   while IFS= read -r pr; do
     [[ -n "$pr" && "$pr" != "$KEEP_PR" ]] || continue
@@ -522,7 +441,6 @@ if (( resident_needed > RESIDENT_CAP )); then
     [[ -n "$pr" ]] || continue
     (( resident_needed > RESIDENT_CAP )) || break
     is_inflight "$pr" && continue
-    is_pinned "$pr" && continue
     echo "evict pr-${pr}: resident cap ${RESIDENT_CAP}, least active candidate"
     if destroy_env "$pr"; then
       evicted="$(append_number "$evicted" "$pr")"
@@ -538,7 +456,6 @@ if (( running_needed > RUNNING_CAP )) && [[ "$SLEEP_ENABLED" == "true" ]]; then
   while IFS= read -r pr; do
     [[ -n "$pr" ]] || continue
     (( running_needed > RUNNING_CAP )) || break
-    is_inflight "$pr" && continue
     echo "sleep pr-${pr}: running cap ${RUNNING_CAP}, least active candidate"
     if stop_env "$pr"; then
       slept="$(append_number "$slept" "$pr")"

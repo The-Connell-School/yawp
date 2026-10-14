@@ -133,7 +133,7 @@ function sendNoPreviewPage(response, pr) {
     'content-type': 'text/html; charset=utf-8',
     'cache-control': 'no-store',
   });
-  response.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>No preview</title></head><body><main><h1>No preview for pr-${htmlEscape(pr)}</h1><p>Push a commit or add the preview:keep-awake label to rebuild it.</p></main></body></html>`);
+  response.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>No preview</title></head><body><main><h1>No preview for pr-${htmlEscape(pr)}</h1><p>Push a commit to rebuild it.</p></main></body></html>`);
 }
 
 function json(response, status, value, headers = {}) {
@@ -151,7 +151,6 @@ function renderStatusPage(status) {
     <td>${htmlEscape(preview.branch || '')}</td>
     <td>${htmlEscape(preview.author || '')}</td>
     <td>${htmlEscape(preview.state)}</td>
-    <td>${preview.pinned ? 'yes' : 'no'}</td>
     <td>${preview.lastRequest ? new Date(preview.lastRequest * 1000).toISOString() : ''}</td>
     <td>${preview.lastHumanActivity ? new Date(preview.lastHumanActivity * 1000).toISOString() : ''}</td>
     <td>${preview.sleepsAt ? new Date(preview.sleepsAt * 1000).toISOString() : ''}</td>
@@ -180,7 +179,7 @@ function renderStatusPage(status) {
     <h1>Yawp Preview Status</h1>
     <p>${htmlEscape(status.running)}/${htmlEscape(status.maxRunning)} running, host free memory ${htmlEscape(status.host.memAvailable || 'unknown')}.</p>
     <table>
-      <thead><tr><th>PR</th><th>Branch</th><th>Author</th><th>State</th><th>Pinned</th><th>Last Request</th><th>Last human activity</th><th>Sleeps at</th><th>Last Deploy</th><th>RSS</th></tr></thead>
+      <thead><tr><th>PR</th><th>Branch</th><th>Author</th><th>State</th><th>Last Request</th><th>Last human activity</th><th>Sleeps at</th><th>Last Deploy</th><th>RSS</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
   </main>

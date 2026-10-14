@@ -341,6 +341,7 @@ describe('preview ingress', () => {
 
     expect(response.status).toBe(404);
     expect(response.body).toContain('No preview');
+    expect(response.body).toContain('Push a commit to rebuild it.');
   });
 
   test('serves status JSON and HTML without secrets', async () => {
@@ -353,7 +354,6 @@ describe('preview ingress', () => {
         branch: 'codex/preview-lru',
         author: 'codex',
         state: 'waking',
-        pinned: false,
         lastRequest: 1_800_000_000,
         lastDeploy: 1_800_000_100,
         lastHumanActivity: 1_800_000_200,
@@ -383,6 +383,7 @@ describe('preview ingress', () => {
     expect(htmlResponse.body).toContain('Yawp Preview Status');
     expect(htmlResponse.body).toContain('Last human activity');
     expect(htmlResponse.body).toContain('Sleeps at');
+    expect(htmlResponse.body).not.toContain('<th>Pinned</th>');
     expect(htmlResponse.body).toContain('codex/preview-lru');
     expect(htmlResponse.body).not.toContain('brisk-otter');
     expect(htmlResponse.body).not.toContain('SECRET');

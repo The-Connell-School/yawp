@@ -306,7 +306,7 @@ describe('buildPreviewEnv', () => {
     expect(workflow).toContain('PREVIEW_SANITIZED_DUMP_VERSION');
     expect(workflow).toContain('PREVIEW_DB_DUMP_VERSION');
     expect(workflow).toContain('PREVIEW_ACCESS_MASTER_ORGANIZATION_ID');
-    expect(workflow).toContain('labeled');
+    expect(workflow).toContain('types: [opened, synchronize, reopened, ready_for_review, closed]');
     expect(deploy).toContain('DATA_SOURCE_FINGERPRINT_FILE');
     expect(deploy).toContain('PREVIEW_DB_DUMP_VERSION');
     expect(deploy).toContain('reset_preview_database_for_data_source_change');
