@@ -5,11 +5,13 @@ import {
   useLoaderData,
 } from 'react-router';
 import { Form } from 'react-router';
+import { Checkbox } from '~/components/ui/checkbox';
 import { peekSignedLink } from '~/domain/free-tier/signed-link.server';
 import { completeSchoolAdminApproval } from '~/domain/free-tier/approval-flow.server';
 import { prisma } from '~/utils/db.server';
 import {
   FreeTierAuthCard,
+  FreeTierButton,
   FreeTierFieldLabel,
   FreeTierTextInput,
 } from '../free-tier/FreeTierAuthCard';
@@ -23,19 +25,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
   await requireFreeTierEnabled();
   const token = new URL(request.url).searchParams.get('t') ?? '';
   if (!token) return { ok: false as const };
-  const peek = await peekSignedLink({ token, expectedPurpose: 'ADMIN_APPROVE' });
+  const peek = await peekSignedLink({
+    token,
+    expectedPurpose: 'ADMIN_APPROVE',
+  });
   if (!peek.ok) {
     if (peek.reason === 'used' || peek.reason === 'superseded') {
-      const earlyId = await import('~/domain/free-tier/signed-link.server').then((m) =>
-        m.applicationIdFromSignedToken(token)
-      );
+      const earlyId =
+        await import('~/domain/free-tier/signed-link.server').then((m) =>
+          m.applicationIdFromSignedToken(token)
+        );
       if (earlyId) {
         const app = await prisma.freeTierApplication.findUnique({
           where: { id: earlyId },
           select: { status: true, schoolName: true },
         });
         if (app?.status === 'APPROVED') {
-          return { ok: false as const, reason: 'already_approved' as const, schoolName: app.schoolName };
+          return {
+            ok: false as const,
+            reason: 'already_approved' as const,
+            schoolName: app.schoolName,
+          };
         }
       }
       if (peek.reason === 'superseded') {
@@ -49,10 +59,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
     select: { schoolName: true, name: true, status: true },
   });
   if (app?.status === 'APPROVED') {
-    return { ok: false as const, reason: 'already_approved' as const, schoolName: app.schoolName };
+    return {
+      ok: false as const,
+      reason: 'already_approved' as const,
+      schoolName: app.schoolName,
+    };
   }
   if (app?.status === 'REJECTED' || app?.status === 'EXPIRED') {
-    return { ok: false as const, reason: 'declined' as const, schoolName: app.schoolName };
+    return {
+      ok: false as const,
+      reason: 'declined' as const,
+      schoolName: app.schoolName,
+    };
   }
   return {
     ok: true as const,
@@ -81,9 +99,14 @@ export default function FreeAdminApproveRoute() {
   const data = useLoaderData<LoaderData>();
   const actionData = useActionData<typeof action>();
 
-  if (actionData && actionData.ok && 'idempotent' in actionData && actionData.idempotent) {
+  if (
+    actionData &&
+    actionData.ok &&
+    'idempotent' in actionData &&
+    actionData.idempotent
+  ) {
     return (
-      <FreeTierAuthCard title="Already approved" className="yawp-entry-status-card">
+      <FreeTierAuthCard title="Already approved">
         <p className="text-sm text-muted-foreground">
           This school has already approved YAWP. No further action is needed.
         </p>
@@ -95,8 +118,8 @@ export default function FreeAdminApproveRoute() {
     return (
       <FreeTierAuthCard title="Thank you">
         <p className="text-sm text-muted-foreground">
-          YAWP is approved for {actionData.app.schoolName}. The teacher will receive an email to sign in and open
-          their class.
+          YAWP is approved for {actionData.app.schoolName}. The teacher will
+          receive an email to sign in and open their class.
         </p>
       </FreeTierAuthCard>
     );
@@ -120,7 +143,6 @@ export default function FreeAdminApproveRoute() {
     return (
       <FreeTierAuthCard
         title={declined ? 'Request not approved' : 'Unable to approve'}
-        className={declined ? 'yawp-entry-status-card' : undefined}
       >
         <p className="text-sm text-muted-foreground">{message}</p>
       </FreeTierAuthCard>
@@ -130,9 +152,10 @@ export default function FreeAdminApproveRoute() {
   if (!data.ok) {
     if (data.reason === 'already_approved') {
       return (
-        <FreeTierAuthCard title="Already approved" className="yawp-entry-status-card">
+        <FreeTierAuthCard title="Already approved">
           <p className="text-sm text-muted-foreground">
-            YAWP is already approved for {(data as { schoolName?: string }).schoolName ?? 'this school'}.
+            YAWP is already approved for{' '}
+            {(data as { schoolName?: string }).schoolName ?? 'this school'}.
           </p>
         </FreeTierAuthCard>
       );
@@ -141,24 +164,28 @@ export default function FreeAdminApproveRoute() {
       return (
         <FreeTierAuthCard title="Link replaced">
           <p className="text-sm text-muted-foreground">
-            A newer approval link was sent to your school administrator. Please use the most recent email from YAWP.
+            A newer approval link was sent to your school administrator. Please
+            use the most recent email from YAWP.
           </p>
         </FreeTierAuthCard>
       );
     }
     if (data.reason === 'declined') {
       return (
-        <FreeTierAuthCard title="Request not approved" className="yawp-entry-status-card">
+        <FreeTierAuthCard title="Request not approved">
           <p className="text-sm text-muted-foreground">
-            This YAWP access request for {(data as { schoolName?: string }).schoolName ?? 'this school'} was not
-            approved. No further action is needed on this link.
+            This YAWP access request for{' '}
+            {(data as { schoolName?: string }).schoolName ?? 'this school'} was
+            not approved. No further action is needed on this link.
           </p>
         </FreeTierAuthCard>
       );
     }
     return (
       <FreeTierAuthCard title="Link expired or already used">
-        <p className="text-sm text-muted-foreground">This link is no longer valid.</p>
+        <p className="text-sm text-muted-foreground">
+          This link is no longer valid.
+        </p>
       </FreeTierAuthCard>
     );
   }
@@ -169,20 +196,24 @@ export default function FreeAdminApproveRoute() {
       subtitle={`${data.teacherName} requested access for their classroom.`}
     >
       <p className="text-sm text-muted-foreground">
-        Confirm you are authorized to approve classroom software for your school or district.
+        Confirm you are authorized to approve classroom software for your school
+        or district.
       </p>
-      <Form method="post" className="mt-4 flex flex-col gap-4">
+      <Form method="post" className="flex flex-col gap-4">
         <input type="hidden" name="token" value={data.token} />
-        <FreeTierFieldLabel label="Your role (e.g. Principal, Technology Director)" htmlFor="adminRole">
+        <FreeTierFieldLabel
+          label="Your role (e.g. Principal, Technology Director)"
+          htmlFor="adminRole"
+        >
           <FreeTierTextInput id="adminRole" name="adminRole" required />
         </FreeTierFieldLabel>
         <label className="flex gap-2 text-sm items-start text-left">
-          <input type="checkbox" name="authorized" required className="mt-1" />
-          <span>I am authorized to approve this use for {data.schoolName}.</span>
+          <Checkbox name="authorized" required className="mt-1" />
+          <span>
+            I am authorized to approve this use for {data.schoolName}.
+          </span>
         </label>
-        <button type="submit" className="yawp-entry-button yawp-entry-button-primary w-full">
-          Approve YAWP
-        </button>
+        <FreeTierButton type="submit">Approve YAWP</FreeTierButton>
       </Form>
     </FreeTierAuthCard>
   );

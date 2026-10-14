@@ -1,9 +1,15 @@
-import { type ActionFunctionArgs, type LoaderFunctionArgs, useActionData, useLoaderData } from 'react-router';
+import {
+  type ActionFunctionArgs,
+  type LoaderFunctionArgs,
+  useActionData,
+  useLoaderData,
+} from 'react-router';
 import { Form } from 'react-router';
 import { peekSignedLink } from '~/domain/free-tier/signed-link.server';
 import { redirectSchoolAdmin } from '~/domain/free-tier/approval-flow.server';
 import {
   FreeTierAuthCard,
+  FreeTierButton,
   FreeTierFieldLabel,
   FreeTierTextInput,
 } from '../free-tier/FreeTierAuthCard';
@@ -13,7 +19,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   await requireFreeTierEnabled();
   const token = new URL(request.url).searchParams.get('t') ?? '';
   if (!token) return { ok: false as const };
-  const peek = await peekSignedLink({ token, expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON' });
+  const peek = await peekSignedLink({
+    token,
+    expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
+  });
   if (!peek.ok) return { ok: false as const };
   return { ok: true as const, token };
 }
@@ -38,7 +47,8 @@ export default function FreeAdminNotRightPersonRoute() {
     return (
       <FreeTierAuthCard title="Request forwarded">
         <p className="text-sm text-muted-foreground">
-          We emailed the administrator you named. The previous link is no longer active.
+          We emailed the administrator you named. The previous link is no longer
+          active.
         </p>
       </FreeTierAuthCard>
     );
@@ -61,7 +71,9 @@ export default function FreeAdminNotRightPersonRoute() {
   if (!data.ok) {
     return (
       <FreeTierAuthCard title="Link expired or already used">
-        <p className="text-sm text-muted-foreground">This link is no longer valid.</p>
+        <p className="text-sm text-muted-foreground">
+          This link is no longer valid.
+        </p>
       </FreeTierAuthCard>
     );
   }
@@ -76,11 +88,14 @@ export default function FreeAdminNotRightPersonRoute() {
           <FreeTierTextInput id="adminName" name="adminName" required />
         </FreeTierFieldLabel>
         <FreeTierFieldLabel label="Administrator email" htmlFor="adminEmail">
-          <FreeTierTextInput id="adminEmail" name="adminEmail" type="email" required />
+          <FreeTierTextInput
+            id="adminEmail"
+            name="adminEmail"
+            type="email"
+            required
+          />
         </FreeTierFieldLabel>
-        <button type="submit" className="yawp-entry-button yawp-entry-button-primary w-full">
-          Forward request
-        </button>
+        <FreeTierButton type="submit">Forward request</FreeTierButton>
       </Form>
     </FreeTierAuthCard>
   );
