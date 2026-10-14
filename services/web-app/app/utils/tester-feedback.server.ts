@@ -143,6 +143,18 @@ function hostedRequestOrigin(request: Request, origin: string) {
   }
 }
 
+function configuredPublicOrigin() {
+  const value = process.env.PRIMARY_APP_URL?.trim();
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
 function headerOrigin(value: string | null) {
   if (!value) return null;
   try {
@@ -160,18 +172,21 @@ function acceptsFeedbackOrigin(request: Request, environment: string) {
   if (originHeader && !origin) return false;
   if (origin && origin === new URL(request.url).origin) return true;
   if (environment.toLowerCase() === 'production') return false;
+  const publicOrigin = configuredPublicOrigin();
   if (!origin) {
     const referer = headerOrigin(request.headers.get('referer'));
     return (
       !!referer &&
       (referer === new URL(request.url).origin ||
         referer === forwardedOrigin(request) ||
-        referer === hostedRequestOrigin(request, referer))
+        referer === hostedRequestOrigin(request, referer) ||
+        referer === publicOrigin)
     );
   }
   return (
     origin === forwardedOrigin(request) ||
-    origin === hostedRequestOrigin(request, origin)
+    origin === hostedRequestOrigin(request, origin) ||
+    origin === publicOrigin
   );
 }
 
