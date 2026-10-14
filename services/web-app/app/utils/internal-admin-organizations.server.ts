@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import {
   authorizeInternalApiRequest,
+  internalApiRawQueryString,
+  recordInternalPlatformWriteAudit,
   type InternalApiAuthContext,
 } from './internal-platform-auth.server';
 import { prisma } from './db.server';
@@ -394,7 +396,7 @@ export async function internalAdminOrganizationsList(
     }),
   ]);
 
-  return response({
+  const payload = {
     organizations: (rows as (BaseOrganizationFields & {
       memberships: { role: string; isActive?: boolean | null }[];
     })[]).map((row) =>
@@ -418,7 +420,13 @@ export async function internalAdminOrganizationsList(
     },
     previewSeatMode,
     meta: { requestedBy: auth.actorEmail, keyId: auth.keyId },
-  });
+  };
+  await auditInternalAdminOrganizationRead(
+    request,
+    auth,
+    'organizations.list.success'
+  );
+  return response(payload);
 }
 
 export async function internalAdminOrganizationDetail(
@@ -495,7 +503,7 @@ export async function internalAdminOrganizationDetail(
     previewSeatMode
   );
 
-  return response({
+  const payload = {
     organization: {
       ...serializedOrganization,
       owners: organization.memberships
@@ -516,6 +524,36 @@ export async function internalAdminOrganizationDetail(
     },
     previewSeatMode,
     meta: { requestedBy: auth.actorEmail, keyId: auth.keyId },
+  };
+  await auditInternalAdminOrganizationRead(
+    request,
+    auth,
+    'organizations.detail.success'
+  );
+  return response(payload);
+}
+
+async function auditInternalAdminOrganizationRead(
+  request: Request,
+  auth: InternalApiAuthContext,
+  result: string
+) {
+  const url = new URL(request.url);
+  const hash = createHash('sha256')
+    .update(
+      [
+        request.method.toUpperCase(),
+        url.pathname,
+        internalApiRawQueryString(url),
+      ].join('\n')
+    )
+    .digest('hex');
+  await recordInternalPlatformWriteAudit({
+    actorEmail: auth.actorEmail,
+    keyId: auth.keyId,
+    endpoint: `${request.method.toUpperCase()} ${url.pathname}`,
+    requestHash: hash,
+    result,
   });
 }
 

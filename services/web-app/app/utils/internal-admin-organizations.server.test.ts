@@ -36,6 +36,11 @@ const prisma = {
 const isIsolatedPreviewSeatMode = mock();
 const getConfiguredPreviewOrganizationAccessCode = mock();
 const authorizeInternalApiRequest = mock();
+const recordInternalPlatformWriteAudit = mock();
+const internalApiRawQueryString = (url: URL | string) => {
+  const search = typeof url === 'string' ? new URL(url).search : url.search;
+  return search.startsWith('?') ? search.slice(1) : search;
+};
 
 mock.module('./db.server', () => ({ prisma }));
 mock.module('./db.server.ts', () => ({ prisma }));
@@ -49,16 +54,26 @@ mock.module(
 );
 mock.module('./internal-platform-auth.server', () => ({
   authorizeInternalApiRequest,
+  internalApiRawQueryString,
+  recordInternalPlatformWriteAudit,
 }));
 mock.module('./internal-platform-auth.server.ts', () => ({
   authorizeInternalApiRequest,
+  internalApiRawQueryString,
+  recordInternalPlatformWriteAudit,
 }));
 mock.module('./internal-platform-auth.server.js', () => ({
   authorizeInternalApiRequest,
+  internalApiRawQueryString,
+  recordInternalPlatformWriteAudit,
 }));
 mock.module(
   '/home/bryant/work/yawp/codex-loop/worktrees/admin-migrate-2-platform/services/web-app/app/utils/internal-platform-auth.server.ts',
-  () => ({ authorizeInternalApiRequest })
+  () => ({
+    authorizeInternalApiRequest,
+    internalApiRawQueryString,
+    recordInternalPlatformWriteAudit,
+  })
 );
 mock.module('~/utils/preview-access.server', () => ({
   isIsolatedPreviewSeatMode,
@@ -101,6 +116,7 @@ describe('internal admin organization endpoints', () => {
       actorEmail: 'ops@yawp.test',
       scopes: ['management:read'],
     });
+    recordInternalPlatformWriteAudit.mockReset().mockResolvedValue(undefined);
     prisma.organization.create.mockReset();
     prisma.organization.update.mockReset();
     prisma.organization.findMany.mockReset().mockResolvedValue([]);
@@ -260,6 +276,14 @@ describe('internal admin organization endpoints', () => {
         orderBy: { name: 'asc' },
       })
     );
+    expect(recordInternalPlatformWriteAudit).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        actorEmail: 'ops@yawp.test',
+        keyId: 'reader',
+        endpoint: 'GET /api/internal/v1/admin/organizations',
+        result: 'organizations.list.success',
+      })
+    );
   });
 
   test('returns preview codes only when preview seats are supported', async () => {
@@ -350,6 +374,14 @@ describe('internal admin organization endpoints', () => {
       reasons: ['Only organization in this environment'],
     });
     expect(body.organization.previewSeatCode).toBeUndefined();
+    expect(recordInternalPlatformWriteAudit).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        actorEmail: 'ops@yawp.test',
+        keyId: 'reader',
+        endpoint: 'GET /api/internal/v1/admin/organizations/org-1',
+        result: 'organizations.detail.success',
+      })
+    );
   });
 
   test('creates organizations with signed write auth and before/after audit', async () => {
