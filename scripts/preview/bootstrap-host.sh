@@ -36,6 +36,11 @@ esac
   echo "PREVIEW_INFLIGHT_TTL_SECONDS must be a nonnegative integer" >&2
   exit 1
 }
+# EnvironmentFile uses an unquoted base64url value. Reject invalid configuration without logging it.
+if [[ -n "${PREVIEW_STATUS_TOKEN:-}" && ! "$PREVIEW_STATUS_TOKEN" =~ ^[A-Za-z0-9_-]{32,}$ ]]; then
+  echo "PREVIEW_STATUS_TOKEN must be a base64url token of at least 32 characters" >&2
+  exit 1
+fi
 for port in "$HTTP_PORT" "$HTTPS_PORT"; do
   if ! [[ "$port" =~ ^[1-9][0-9]*$ ]] || (( port > 65535 )); then
     echo "Preview ingress ports must be valid TCP ports" >&2
@@ -331,6 +336,14 @@ rollback_ingress() {
   rm -f -- "$previous_ingress_unit"
 }
 trap rollback_ingress EXIT
+# Keep credentials out of world-readable systemd units. An omitted value preserves
+# an already-configured token, so rerunning bootstrap cannot silently disable auth.
+if [[ -n "${PREVIEW_STATUS_TOKEN:-}" ]]; then
+  status_env_tmp="$(mktemp "$ROOT/ingress/.status-env.XXXXXX")"
+  printf 'PREVIEW_STATUS_TOKEN=%s\n' "$PREVIEW_STATUS_TOKEN" > "$status_env_tmp"
+  sudo install -m 0600 -o root -g root "$status_env_tmp" "$ROOT/ingress/status.env"
+  rm -f -- "$status_env_tmp"
+fi
 sudo tee /etc/systemd/system/yawp-preview-ingress.service >/dev/null <<UNIT
 [Unit]
 Description=Yawp preview HTTPS ingress and automatic wake service
@@ -340,6 +353,7 @@ Requires=docker.service
 [Service]
 Type=simple
 User=$WAKE_USER
+EnvironmentFile=-$ROOT/ingress/status.env
 Environment=PREVIEW_ROOT=$ROOT
 Environment=PREVIEW_DOMAIN=$DOMAIN
 Environment=PREVIEW_MAX_RUNNING=$RUNNING_CAP

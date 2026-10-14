@@ -10,7 +10,9 @@ Capacity sleep uses `compose stop` and retains resident database, containers, vo
 
 `Preview host bootstrap` runs from main, replaces the ingress control plane, and preserves running resident containers. Record every running PR web container's ID and `StartedAt` before and after rollout. Remove obsolete host exemption markers without stopping previews. GitHub label changes no longer trigger deployments.
 
-The status HTML and `/__status` JSON expose activity, state, idle deadlines, and memory. They contain no exemption column or field.
+The staff dashboard lives at https://internal.yawp.school/previews. The status hostname redirects HTML requests there (302). `/__status` JSON exposes activity, state, idle deadlines, and memory; when `PREVIEW_STATUS_TOKEN` is configured it requires `Authorization: Bearer <token>`, checked with constant-time digest comparison before collecting status. Without a configured token, JSON retains its previous behavior. `/__wake` behavior is unchanged.
+
+Set the shared `PREVIEW_STATUS_TOKEN` GitHub secret for the host and the internal app runtime. The bootstrap workflow forwards it to the host, which installs a root-owned 0600 `ingress/status.env` for systemd; the token never appears in the service unit. Use a random base64url token of at least 32 characters. Omitting the secret on a later bootstrap preserves an existing token. Bootstrap replaces ingress without restarting running preview containers.
 
 Bounded local verification:
 
