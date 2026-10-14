@@ -27,6 +27,10 @@ async function testPasswordHash(password: string) {
   return bcrypt.hash(password, 10);
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 describe('free-tier approval flow', () => {
   if (!enabled) {
     test.skip('requires FREE_TIER_DB_TESTS', () => {});
@@ -233,6 +237,102 @@ describe('free-tier approval flow', () => {
     expect(pending?.decidedAt).toBeInstanceOf(Date);
     const finalApp = await prisma.freeTierApplication.findUnique({ where: { id: app.id } });
     expect(finalApp?.status).toBe('APPROVED');
+  });
+
+  test('concurrent administrator approvals wait for the release budget lock at the boundary', async () => {
+    process.env.FREE_TIER_BUDGET_ENVIRONMENT = 'preview';
+    process.env.FREE_TIER_PREVIEW_BUDGET_USD = '2';
+    process.env.FREE_TIER_PREVIEW_UNIT_COST_USD = '1';
+    setApprovalHooks({ onApplicationApproved: async () => {} });
+
+    async function createPendingApproval(suffix: string) {
+      const email = `ft-budget-race-${suffix}-${Date.now()}@school.edu`;
+      const app = await prisma.freeTierApplication.create({
+        data: {
+          email,
+          name: `Budget Race ${suffix}`,
+          schoolName: 'Budget Race HS',
+          location: 'NY',
+          gradeLevel: '9',
+          status: 'ACCOUNT_CREATED',
+          userId: (
+            await prisma.user.create({
+              data: { email, name: `Budget Race ${suffix}` },
+              select: { id: true },
+            })
+          ).id,
+        },
+      });
+      const submit = await submitAdminDetails({
+        applicationId: app.id,
+        userId: app.userId!,
+        adminName: 'Principal Pat',
+        adminEmail: `principal-${suffix}@school.edu`,
+        adminRole: 'Principal',
+      });
+      expect(submit.ok, JSON.stringify(submit)).toBe(true);
+      const emailLog = await prisma.freeTierEmailLog.findFirst({
+        where: { applicationId: app.id, kind: 'admin_approval', success: true },
+        orderBy: { createdAt: 'desc' },
+      });
+      const approveUrl = (emailLog?.payload as { approveUrl?: string } | null)?.approveUrl;
+      const approveToken = approveUrl ? new URL(approveUrl).searchParams.get('t') : null;
+      if (!approveToken) throw new Error('missing emailed approve token');
+      return { appId: app.id, approveToken };
+    }
+
+    const first = await createPendingApproval('one');
+    const second = await createPendingApproval('two');
+    let releaseLock!: () => void;
+    let locked!: () => void;
+    const lockHeld = new Promise<void>((resolve) => {
+      locked = resolve;
+    });
+    const release = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+    const lockTransaction = prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('free_tier_release'))`;
+      locked();
+      await release;
+    });
+    await lockHeld;
+
+    const req = new Request('https://yawp.test/free/admin/approve', {
+      headers: { 'user-agent': 'test', 'x-forwarded-for': '203.0.113.10' },
+    });
+    const approvals = Promise.all([
+      completeSchoolAdminApproval({
+        token: first.approveToken,
+        adminRole: 'Principal',
+        authorized: true,
+        request: req,
+      }),
+      completeSchoolAdminApproval({
+        token: second.approveToken,
+        adminRole: 'Principal',
+        authorized: true,
+        request: req,
+      }),
+    ]);
+
+    try {
+      const lockState = await Promise.race([
+        approvals.then(() => 'completed' as const),
+        sleep(100).then(() => 'waiting' as const),
+      ]);
+      expect(lockState).toBe('waiting');
+    } finally {
+      releaseLock();
+      await lockTransaction;
+    }
+    const results = await approvals;
+    expect(results.every((result) => result.ok)).toBe(true);
+
+    const approved = await prisma.freeTierApplication.count({
+      where: { id: { in: [first.appId, second.appId] }, status: 'APPROVED' },
+    });
+    expect(approved).toBe(2);
   });
 
   test('concurrent approve clicks: only one consumes the signed link', async () => {
