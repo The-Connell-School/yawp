@@ -55,6 +55,24 @@ function listTrackedRepoFiles(): string[] {
 }
 
 describe('production deployment contract', () => {
+  test('CI isolates free-tier Prisma module mocks from the combined real-DB suite', () => {
+    const workflow = readRepoFile('.github/workflows/ci.yml');
+    const selection = workflow.match(/\$\((find \.\/services\/web-app\/app\/domain\/free-tier[^)]+)\)/)?.[1];
+    expect(selection).toBeDefined();
+    const selected = execFileSync('bash', ['-c', selection!], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    }).trim().split('\n');
+    const mockFiles = listRepoFiles('services/web-app/app/domain/free-tier')
+      .filter(file => file.endsWith('.test.ts') && /mock\.module\(['"]~\/utils\/db\.server['"]/.test(readRepoFile(file)));
+    expect(mockFiles.length).toBeGreaterThan(0);
+    for (const file of mockFiles) {
+      expect(selected).not.toContain(`./${file}`);
+      // Excluded tests must still run, each in a separate Bun process.
+      expect(workflow).toContain(`run: bun test ./${file}\n`);
+    }
+  });
+
   test('E2E launcher never starts Vite after fixture preparation fails', () => {
     const command = readRepoFile('services/web-app/playwright.config.ts').match(/"bash -c '([^']+)'"/)?.[1];
     expect(command).toBeDefined();

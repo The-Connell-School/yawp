@@ -11,10 +11,14 @@ import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
 import { plainTextEmailToHtml } from './email-html.server';
 import { sanitizeFreeTierEmailLogPayload } from './email-log-payload.server';
 import { assertFreeTierRuntimeConfigured } from './free-tier-config.server';
+import { resolveFreeTierRuntimeEnvironment } from './usage-budget.server';
 
 export type EmailSendResult = { ok: true } | { ok: false; error: string };
 
-function emailSendErrorMessage(result: { status: string; error?: { message?: string } }) {
+function emailSendErrorMessage(result: {
+  status: string;
+  error?: { message?: string };
+}) {
   if (result.status === 'success') return null;
   const message = result.error?.message?.trim();
   return message || 'email_send_failed';
@@ -22,12 +26,14 @@ function emailSendErrorMessage(result: { status: string; error?: { message?: str
 
 async function deliverEmail(args: {
   to: string;
+  bcc?: string[];
   subject: string;
   text: string;
 }): Promise<EmailSendResult> {
   const html = plainTextEmailToHtml(args.text);
   const result = await sendEmail({
     to: args.to,
+    ...(args.bcc?.length ? { bcc: args.bcc } : {}),
     subject: args.subject,
     html,
     text: args.text,
@@ -69,7 +75,9 @@ export interface ReleaseEmailPayload {
   label?: string;
 }
 
-export async function sendFreeTierReleaseEmail(payload: ReleaseEmailPayload): Promise<EmailSendResult> {
+export async function sendFreeTierReleaseEmail(
+  payload: ReleaseEmailPayload
+): Promise<EmailSendResult> {
   try {
     assertFreeTierRuntimeConfigured();
     const base = freeTierPublicAppOrigin();
@@ -133,7 +141,6 @@ export async function sendFreeTierAdminApprovalEmail(args: {
     teacherName: args.teacherName,
     teacherEmail: args.teacherEmail,
     schoolName: args.schoolName,
-    personalNote: args.personalNote,
     approveUrl: args.approveUrl,
     notRightPersonUrl: args.notRightPersonUrl,
     adminRecipientName: args.adminRecipientName,
@@ -146,7 +153,14 @@ export async function sendFreeTierAdminApprovalEmail(args: {
     : `Approve YAWP for ${args.schoolName}`;
   try {
     assertFreeTierRuntimeConfigured();
-    const delivered = await deliverEmail({ to: args.to, subject, text });
+    const delivered = await deliverEmail({
+      to: args.to,
+      ...(resolveFreeTierRuntimeEnvironment() === 'demo'
+        ? { bcc: [args.teacherEmail] }
+        : {}),
+      subject,
+      text,
+    });
     if (!delivered.ok) {
       await logEmail({
         applicationId: args.applicationId,
@@ -154,7 +168,10 @@ export async function sendFreeTierAdminApprovalEmail(args: {
         toEmail: args.to,
         success: false,
         error: delivered.error,
-        payload: { approveUrl: args.approveUrl, notRightPersonUrl: args.notRightPersonUrl },
+        payload: {
+          approveUrl: args.approveUrl,
+          notRightPersonUrl: args.notRightPersonUrl,
+        },
       });
       return delivered;
     }
@@ -163,7 +180,10 @@ export async function sendFreeTierAdminApprovalEmail(args: {
       kind: args.isReminder ? 'admin_approval_reminder' : 'admin_approval',
       toEmail: args.to,
       success: true,
-      payload: { approveUrl: args.approveUrl, notRightPersonUrl: args.notRightPersonUrl },
+      payload: {
+        approveUrl: args.approveUrl,
+        notRightPersonUrl: args.notRightPersonUrl,
+      },
     });
     return { ok: true };
   } catch (error) {

@@ -141,7 +141,7 @@ jobs:
 
       - name: 🧪 Validate deployment contract
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        run: bun test ./scripts/deployment-contract.test.ts
+        run: bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js
 
       - name: 🧪 Validate Blackboard LTI mock
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -276,7 +276,7 @@ jobs:
           ./services/web-app/app/utils/preview-access-rate-limit.server.test.ts
           ./services/web-app/app/utils/internal-free-tier-http.server.test.ts
           ./services/web-app/app/utils/mock-admin-environment.test.ts
-          $(find ./services/web-app/app/domain/free-tier -type f -name '*.test.ts' ! -name 'student-join.server.test.ts' ! -name '*.integration.test.ts')
+          $(find ./services/web-app/app/domain/free-tier -type f -name '*.test.ts' ! -name 'student-join.server.test.ts' ! -name 'email.server.test.ts' ! -name 'service.create-token-idempotency.test.ts' ! -name '*.integration.test.ts')
           ./services/web-app/app/routes/app/sidebar-nav.reporter.test.ts
           ./packages/prisma/preview-access-code.free-classroom.test.ts
           ./packages/prisma/scripts/preview-seats.test.ts
@@ -289,6 +289,20 @@ jobs:
           './services/web-app/app/routes/app_.documents_.$id/route.test.ts'
           ./services/web-app/e2e/decode-router-data.test.ts
           # decode-router-data: turbo .data assertions in student.unreleased-grade-loader-privacy E2E
+
+      # Bun module mocks persist across files. The email recipient tests stub
+      # Prisma's email log, so keep them out of the combined real-DB run above.
+      - name: 🧪 Free-tier email recipient tests (isolated; mocks prisma)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./services/web-app/app/domain/free-tier/email.server.test.ts
+
+      - name: 🧪 Free-tier token idempotency tests (isolated; mocks prisma)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./services/web-app/app/domain/free-tier/service.create-token-idempotency.test.ts
 
       # These mock ~/utils/db.server; run each in its own process so DB integration
       # suites above keep a real Prisma client.
@@ -310,6 +324,12 @@ jobs:
           bun test 'app/routes/app_.submissions_.$submissionId/route.loader.test.ts'
           bun test 'app/routes/app.admin.assignment-types.$id/route.test.ts'
           bun test app/routes/app.admin.assignment-types.new/route.test.ts
+
+      - name: 🧪 Internal token-create contract (isolated; mocks prisma)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./services/web-app/app/utils/internal-free-tier-token-contract.server.test.ts
 
       - name: 🧪 Free-tier student-join unit tests (isolated; mocks prisma)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -485,6 +505,7 @@ jobs:
             app/routes/app.free-tier.pending/route.test.tsx \
             app/routes/free.admin.approve/route.loader.test.ts \
             app/routes/free._index/route.action.test.ts \
+            app/routes/free._index/route.denial.test.tsx \
             app/utils/free-tier/free-tier-feature-gate.server.test.ts \
             app/domain/feature-flags/is-free-tier-enabled.server.test.ts \
             app/routes/auth.login/route.test.tsx \
@@ -497,6 +518,11 @@ jobs:
             'app/utils/impersonation-read-only.server.test.ts' \
             'app/utils/internal-management.server.test.ts' \
             'app/utils/internal-platform-auth.server.test.ts' \
+            'app/utils/tester-feedback-gate.server.test.ts' \
+            'app/utils/tester-feedback-request.server.test.ts' \
+            'app/utils/tester-feedback.server.test.ts' \
+            'app/utils/tester-feedback-runtime.server.test.ts' \
+            'app/utils/preview-access.server.test.ts' \
             'app/utils/internal-grading-stats.server.test.ts' \
             'app/routes/api.internal.v1.stats.grading/route.test.ts' \
             'app/routes/api.internal.v1.audit/route.test.ts' \

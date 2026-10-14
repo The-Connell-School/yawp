@@ -38,6 +38,9 @@ const OPEN_PATHS = new Set([
   // environment. These routes require YAWP_MANAGEMENT_SERVICE_KEY themselves.
   '/api/internal/v1/feature-flags',
   '/api/internal/v1/organizations',
+  // Staff feedback review uses signed-only HMAC authorization at the route;
+  // the Internal service cannot present a human access-code cookie.
+  '/api/internal/v1/tester-feedback',
   '/lti/jwks',
   PREVIEW_ACCESS_PATH,
   `${PREVIEW_ACCESS_PATH}.data`,

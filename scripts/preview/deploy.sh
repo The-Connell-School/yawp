@@ -629,6 +629,7 @@ compute_tooling_fingerprint() {
         "$SCRIPT_DIR/deploy.sh" \
         "$SCRIPT_DIR/preview-env.mjs" \
         "$SCRIPT_DIR/render-compose.mjs" \
+        "$SCRIPT_DIR/demo-internal-api-config.mjs" \
         "$SCRIPT_DIR/find-traefik-dynamic-dir.sh" \
         "$SCRIPT_DIR/rollout-web.sh" \
         "$SCRIPT_DIR/tooling-artifacts.sh"
@@ -713,6 +714,11 @@ run_tooling_if_needed() {
     TOOLING_CHANGED=0
     # Even when skipping full tooling, always run idempotent seeds that must
     # keep preview data current with the codebase (e.g., AP History library).
+    # Bundle availability is required before serving code-only demo updates.
+    # Run this separately from optional fixture seeds so failure aborts rollout.
+    if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-free-tier-bundle-assignment-types.ts" ]]; then
+      "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && cd packages/prisma && bun run seed-free-tier-bundle-assignment-types'
+    fi
     local skip_path_seeds='bun prisma generate'
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-ap-history-library.ts" ]]; then
       skip_path_seeds+=' && bun run seed-ap-history-library'

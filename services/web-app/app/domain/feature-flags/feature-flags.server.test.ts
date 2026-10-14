@@ -296,3 +296,29 @@ describe('feature flags (server)', () => {
     expect(prisma.organization.findMany).toHaveBeenCalledTimes(1);
   });
 });
+
+for (const deployment of ['demo', 'production']) {
+  for (const mode of ['off', 'everyone', 'targeted']) {
+    test(`reports persisted and effective free tier separately: ${deployment} / ${mode}`, async () => {
+      const oldEnvironment = process.env.YAWP_ENVIRONMENT;
+      const oldSlug = process.env.PREVIEW_SLUG;
+      process.env.YAWP_ENVIRONMENT = deployment;
+      delete process.env.PREVIEW_SLUG;
+      try {
+        const orgIds = mode === 'targeted' ? ['org-1'] : [];
+        prisma.setting.findMany.mockResolvedValue([{ name: 'feature_flag.free_tier', value: JSON.stringify({ mode, orgIds }), description: null, updatedAt: new Date('2026-10-14T00:00:00Z') }]);
+        const flag = (await listFeatureFlags()).find((f) => f.key === FREE_TIER_FLAG)!;
+        expect(flag).toMatchObject({
+          mode: deployment === 'demo' ? 'everyone' : mode,
+          persisted: { mode, orgIds },
+          effective: deployment === 'demo' ? { mode: 'everyone', orgIds: [] } : { mode, orgIds },
+          runtimeOverride: deployment === 'demo' ? 'demo_free_tier' : null,
+        });
+        expect(prisma.setting.upsert).not.toHaveBeenCalled();
+      } finally {
+        if (oldEnvironment === undefined) delete process.env.YAWP_ENVIRONMENT; else process.env.YAWP_ENVIRONMENT = oldEnvironment;
+        if (oldSlug === undefined) delete process.env.PREVIEW_SLUG; else process.env.PREVIEW_SLUG = oldSlug;
+      }
+    });
+  }
+}

@@ -38,7 +38,10 @@ import {
   deleteClassAssignmentDeployment,
   updateAssignmentInClassDeployment,
 } from '~/utils/assignment-deployment.server';
-import { FreeClassroomAssignmentQuotaError } from '~/utils/assignment-quota.server';
+import {
+  FreeClassroomAssignmentQuotaError,
+  loadAssignmentCreationQuotasForTypes,
+} from '~/utils/assignment-quota.server';
 import {
   AssignmentPromptAttachmentError,
   assignmentPromptAttachmentRequestTooLarge,
@@ -1377,6 +1380,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     creationTypeRows.map((assignmentType) => assignmentType.id)
   );
 
+  const quotaByTypeId = await loadAssignmentCreationQuotasForTypes(
+    { id: klass.school.organizationId, plan: klass.school.organization.plan },
+    creationTypeRows.map(({ id, kind }) => ({ id, kind }))
+  );
+
   let studentJoinUrl: string | null = null;
   if (klass.school.organization.plan === 'FREE_CLASSROOM') {
     const joinToken = await ensureClassStudentJoinToken(klass.id);
@@ -1402,6 +1410,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         rubricName: rubric?.name ?? null,
         collaborationSupported,
         gradesGrammar: gradesGrammarIds.has(id),
+        ...quotaByTypeId.get(id),
       })
     ),
     apHistoryAssignmentTypeId:

@@ -38,7 +38,7 @@ test.describe('Free tier public flow', () => {
 
   test('join page shows YAWP branding when token is invalid', async ({ page }) => {
     await page.goto('/free/join?t=not-a-real-signed-token');
-    await expect(page.getByRole('link', { name: /YAWP/i })).toBeVisible();
+    await expect(page.getByRole('img', { name: 'Yawp', exact: true })).toBeVisible();
   });
 });
 
@@ -70,7 +70,7 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     });
 
     await page.goto(`/free/join?t=${encodeURIComponent(releaseMint.token)}`);
-    await expect(page.getByRole('link', { name: /YAWP/i })).toBeVisible();
+    await expect(page.getByRole('img', { name: 'Yawp', exact: true })).toBeVisible();
     await page.fill('input[name="name"]', teacherName);
     await page.fill('input[name="password"]', JOIN_PASSWORD);
     await page.fill('input[name="confirmPassword"]', JOIN_PASSWORD);
