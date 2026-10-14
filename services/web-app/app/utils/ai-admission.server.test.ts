@@ -142,4 +142,15 @@ describe('reserveAiRequest', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(transaction.aiRequestReservation.createMany).not.toHaveBeenCalled();
   });
+  for (const plan of ['SCHOOL', 'FREE_CLASSROOM']) {
+    test(`${plan} preserves AI admission when spend is allowed`, async () => {
+      isFreeTierEnabled.mockResolvedValue(true);
+      prisma.organization.findUnique.mockResolvedValue({ id: 'org-1', plan });
+      transaction.aiRequestReservation.count.mockResolvedValue(0);
+      await reserveAiRequest({ membershipId: 'member-1', organizationId: 'org-1', feature: 'reporter', policy });
+      expect(transaction.aiRequestReservation.createMany).toHaveBeenCalledTimes(1);
+      expect(assertFreeTierSpendAllowed.mock.calls.length).toBe(plan === 'FREE_CLASSROOM' ? 1 : 0);
+    });
+  }
+
 });

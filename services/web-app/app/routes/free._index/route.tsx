@@ -206,10 +206,17 @@ export default function FreeTierLandingRoute() {
             {fetcher.data?.ok === false && fetcher.data.error === 'rate_limited' ? (
               <p className="text-sm text-destructive">Too many attempts. Please wait and try again.</p>
             ) : null}
+            {fetcher.data?.ok === false && fetcher.data.error === 'cap_reached' ? (
+              <p className="text-sm text-destructive">This free classroom event is full.</p>
+            ) : null}
             {fetcher.data?.ok === false && fetcher.data.error === 'budget_exceeded' ? (
               <p className="text-sm text-destructive">
                 This event link is paused because the current free-tier budget has been reached.
               </p>
+            ) : null}
+            {fetcher.data?.ok === false &&
+            (fetcher.data.error === 'cap_reached' || fetcher.data.error === 'budget_exceeded') ? (
+              <a href="/free" className="text-sm underline">Join the waitlist</a>
             ) : null}
             <button type="submit" className="yawp-entry-button yawp-entry-button-primary w-full">
               {data.mode === 'token' ? 'Continue' : 'Join the waitlist'}

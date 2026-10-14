@@ -161,6 +161,72 @@ suite('token redemption', () => {
     });
   });
 
+  async function withAdmissionHeadroom(capSlots: number, budgetSlots: number, fn: () => Promise<void>) {
+    const { readFreeTierUsageSummary } = await import('./usage-budget.server');
+    const active = (await readFreeTierUsageSummary()).activeApplications;
+    const overrides = {
+      FREE_TIER_RELEASE_CAP: String(active + capSlots),
+      FREE_TIER_BUDGET_ENVIRONMENT: 'preview',
+      FREE_TIER_PREVIEW_BUDGET_USD: String(active + budgetSlots),
+      FREE_TIER_PREVIEW_UNIT_COST_USD: '1',
+    };
+    const previous = Object.fromEntries(Object.keys(overrides).map((key) => [key, process.env[key]]));
+    Object.assign(process.env, overrides);
+    try { await fn(); } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  }
+
+  for (const lead of [false, true]) {
+    test(`bypass cap-full denial preserves ${lead ? 'LEAD' : 'new applicant'} and token with budget headroom`, async () => {
+      const applicant = person(lead ? 'cap-lead' : 'cap-new');
+      if (lead) await svc!.submitWaitlist(applicant);
+      const before = await prisma!.freeTierApplication.findUnique({ where: { email: applicant.email } });
+      const token = await makeToken({ bypassWaitlist: true });
+      await withAdmissionHeadroom(0, 10, async () => {
+        expect(await svc!.redeemToken({ ...applicant, token })).toEqual({ ok: false, reason: 'cap_reached' });
+        expect(await prisma!.freeTierApplication.findUnique({ where: { email: applicant.email } })).toEqual(before);
+        const row = await prisma!.acquisitionToken.findUnique({ where: { tokenHash: svc!.hashToken(token) } });
+        expect(row?.uses).toBe(0);
+      });
+    });
+  }
+
+  for (const limit of ['cap', 'budget'] as const) {
+    test(`concurrent bypass new/LEAD admissions cannot exceed ${limit} headroom`, async () => {
+      const token = await makeToken({ bypassWaitlist: true });
+      const applicants = Array.from({ length: 6 }, (_, i) => person(`race-${limit}-${i}`));
+      for (const applicant of applicants.slice(0, 3)) await svc!.submitWaitlist(applicant);
+      await withAdmissionHeadroom(limit === 'cap' ? 2 : 10, limit === 'budget' ? 2 : 10, async () => {
+        const results = await Promise.all(applicants.map((applicant) => svc!.redeemToken({ ...applicant, token })));
+        expect(results.filter((result) => result.ok)).toHaveLength(2);
+        expect(results.filter((result) => !result.ok && result.reason === (limit === 'cap' ? 'cap_reached' : 'budget_exceeded'))).toHaveLength(4);
+        const row = await prisma!.acquisitionToken.findUnique({ where: { tokenHash: svc!.hashToken(token) } });
+        expect(row?.uses).toBe(2);
+        for (const [index, applicant] of applicants.entries()) {
+          const application = await prisma!.freeTierApplication.findUnique({ where: { email: applicant.email } });
+          if (results[index]!.ok) expect(application?.status).toBe('INVITED');
+          else if (index < 3) expect(application).toMatchObject({ status: 'LEAD', releasedAt: null, acquisitionTokenId: null });
+          else expect(application).toBeNull();
+        }
+      });
+    });
+  }
+
+  test('concurrent replay of one bypass applicant uses one admission and token use', async () => {
+    const token = await makeToken({ bypassWaitlist: true, maxUses: 1 });
+    await withAdmissionHeadroom(1, 1, async () => {
+      const results = await Promise.all(Array.from({ length: 3 }, () => svc!.redeemToken({ ...person('race-replay'), token })));
+      expect(results.every((result) => result.ok)).toBe(true);
+      const row = await prisma!.acquisitionToken.findUnique({ where: { tokenHash: svc!.hashToken(token) } });
+      expect(row?.uses).toBe(1);
+      expect(await svc!.redeemToken({ ...person('race-replay'), token })).toEqual({ ok: true, bypassWaitlist: true });
+    });
+  });
+
   test('a bypass token never moves an advanced application backwards or overwrites its details', async () => {
     const bypass = await makeToken({ bypassWaitlist: true });
     for (const status of ['ACCOUNT_CREATED', 'APPROVED', 'REJECTED'] as const) {

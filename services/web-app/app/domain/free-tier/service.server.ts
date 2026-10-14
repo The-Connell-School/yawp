@@ -1,4 +1,4 @@
-import { recordTesterAudit, type TesterAuditActor } from './tester-audit.server';
+import { recordFreeTierCapDenialAudit, recordTesterAudit, type TesterAuditActor } from './tester-audit.server';
 import { createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
@@ -13,8 +13,8 @@ import {
 import {
   assertFreeTierBudgetHeadroomForTransition,
   FreeTierBudgetExceededError,
-  FreeTierSpendGuardDeniedError,
-  assertFreeTierSpendAllowed,
+  freeTierApplicationConsumesBudget,
+  countFreeTierActiveApplications,
   freeTierBudgetRemainingActivations,
   readFreeTierUsageSummary,
 } from './usage-budget.server';
@@ -428,6 +428,11 @@ export async function redeemToken(input: RedeemInput) {
     if (resolved.disabledAt) return { ok: false as const, reason: 'disabled' as const };
     const token = resolved;
 
+    // Read the applicant after admission is serialized. Concurrent scans of the
+    // same email must see the committed invite and reuse its token admission.
+    if (token.bypassWaitlist) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('free_tier_release'))`;
+    }
     const existing = await tx.freeTierApplication.findUnique({
       where: { email },
       select: { id: true, status: true, releasedAt: true, acquisitionTokenId: true },
@@ -437,7 +442,10 @@ export async function redeemToken(input: RedeemInput) {
     const bypassActivatesApplication =
       token.bypassWaitlist && (!existing || existing.status === 'LEAD');
     if (bypassActivatesApplication) {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('free_tier_release'))`;
+      const alreadyActive = existing && freeTierApplicationConsumesBudget(existing);
+      if (!alreadyActive && await countFreeTierActiveApplications(tx) >= getFreeTierReleaseCap()) {
+        return { ok: false as const, reason: 'cap_reached' as const };
+      }
       try {
         await assertFreeTierBudgetHeadroomForTransition(tx, {
           from: existing
@@ -455,24 +463,6 @@ export async function redeemToken(input: RedeemInput) {
 
     // The same person scanning the same QR twice must not burn a second use.
     const alreadyCounted = existing?.acquisitionTokenId === token.id;
-    const wouldActivate =
-      token.bypassWaitlist &&
-      (!existing || existing.status === 'LEAD');
-    if (wouldActivate) {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('free_tier_release'))`;
-      try {
-        await assertFreeTierSpendAllowed(tx);
-      } catch (error) {
-        if (error instanceof FreeTierSpendGuardDeniedError) {
-          return {
-            ok: false as const,
-            reason: 'budget_exceeded' as const,
-            budget: error.summary,
-          };
-        }
-        throw error;
-      }
-    }
     if (!alreadyCounted) {
       // Atomic claim: the cap and expiry are checked in the UPDATE itself, so
       // concurrent redemptions cannot overshoot maxUses.
@@ -581,7 +571,7 @@ export async function releaseBatch(input: ReleaseBatchInput, audit?: TesterAudit
     });
     const leadIds = new Set(leads.map((l) => l.id));
     const eligible = ids.filter((id) => leadIds.has(id));
-    if (eligible.length > 0 && budgetRemaining <= 0) {
+    if (eligible.length > 0 && capRemaining > 0 && budgetRemaining <= 0) {
       throw new FreeTierBudgetExceededError(budget);
     }
     const remaining = Math.min(capRemaining, budgetRemaining);
@@ -604,9 +594,18 @@ export async function releaseBatch(input: ReleaseBatchInput, audit?: TesterAudit
         released = updated.count;
       }
     }
+    const refused = eligible.length - toRelease.length;
+    if (audit && refused > 0) {
+      await recordFreeTierCapDenialAudit(tx, audit, null, {
+        reason: capRemaining <= budgetRemaining ? 'cap_reached' : 'budget_exceeded',
+        refused,
+        cappedAt: cap,
+        ...(capRemaining > budgetRemaining ? { budget } : {}),
+      });
+    }
     return {
       released,
-      refused: eligible.length - toRelease.length,
+      refused,
       skipped: ids.length - eligible.length,
       cappedAt: cap,
     };

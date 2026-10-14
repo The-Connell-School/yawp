@@ -363,7 +363,7 @@ export async function releaseBatchHttp(request: Request) {
   let body: any; try { body = JSON.parse(text); } catch { return response({ error: 'Malformed JSON' }, 400); }
   try {
     const parsed = releaseBatchSchema.parse(body);
-    const result = await releaseBatch(parsed);
+    const result = await releaseBatch(parsed, auditActorFromInternalRequest(request, 'waitlist.release'));
     if (result.released > 0) {
       const leads = await prisma.freeTierApplication.findMany({
         where: { id: { in: parsed.applicationIds }, status: 'INVITED' },
