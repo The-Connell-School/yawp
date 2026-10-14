@@ -1,11 +1,11 @@
 // Deliberately conservative: link unfurlers, crawlers, monitors, and internal probes
 // neither wake containers nor extend human idle deadlines.
-const BOT_UA = /bot|crawler|spider|slurp|facebookexternalhit|facebot|whatsapp|telegram|discord|linkedin|pinterest|preview|headless|lighthouse|health.?check|kube-probe|kubelet|prometheus|uptime|monitor|curl|wget|python-requests|go-http-client/i;
+const BOT_UA = /bot|crawler|spider|slurp|facebookexternalhit|facebot|whatsapp|telegram|discord|linkedin|pinterest|preview|headless|lighthouse|health.?check|kube-probe|kubelet|prometheus|uptime|monitor/i;
 export function isBotRequest(request) {
   return BOT_UA.test(String(request.headers?.['user-agent'] || ''));
 }
 export function isHumanActivity(request) {
-  if (isBotRequest(request)) return false;
+  if (isBotRequest(request) || /curl|wget|python-requests|go-http-client/i.test(String(request.headers?.['user-agent'] || ''))) return false;
   const pathname = String(request.url || '/').split('?')[0];
   if (/^\/__(?:wake|status)(?:\/|$)|^\/(?:api\/)?health(?:check|z)?(?:\/|$)|^\/(?:assets|build|static)\//i.test(pathname)) return false;
   if (request.method === 'POST' && /^\/(?:api|auth)(?:\/|$)/.test(pathname)) return true;

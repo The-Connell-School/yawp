@@ -266,7 +266,7 @@ describe('preview ingress', () => {
       recordAccess: async () => {}, now: () => now,
       wakeLimits: { perPrSeconds: 60, perIpHour: 2, globalHour: 3 },
     })));
-    const post = (pr) => request(port, { path: '/__wake', method: 'POST', headers: { host: `pr-${pr}.preview.yawp.school`, 'x-forwarded-for': `fake-${pr}` } });
+    const post = (pr) => request(port, { path: '/__wake', method: 'POST', headers: { host: `pr-${pr}.preview.yawp.school`, 'user-agent': 'curl/8.1', 'x-forwarded-for': `fake-${pr}` } });
     expect((await post(241)).status).toBe(202);
     await Bun.sleep(10);
     expect((await post(241)).status).toBe(429);
