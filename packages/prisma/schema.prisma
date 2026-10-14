@@ -129,6 +129,7 @@ model AcquisitionToken {
   expiresAt      DateTime? @db.Timestamptz(6)
   disabledAt     DateTime? @db.Timestamptz(6)
   createdBy      String?
+  createIdempotencyKey String? @unique
   applications   FreeTierApplication[]
   scans          AcquisitionTokenScan[]
 
