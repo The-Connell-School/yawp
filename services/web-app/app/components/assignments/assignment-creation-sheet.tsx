@@ -210,6 +210,8 @@ export type AssignmentCreationAssignmentType = {
   kind: string | null;
   /** Library rubric name when the type points at a shared rubric (e.g. SJP Daily Pages). */
   rubricName?: string | null;
+  /** Displayed for a catalog type excluded by the organization plan. */
+  unavailableReason?: string;
   /** Free classroom bundle: assignments remaining for this kind. */
   quotaRemaining?: number;
   quotaTotal?: number;
@@ -353,10 +355,18 @@ function initialAssignmentTypeSelection(
     fixedAssignmentTypeId ?? initialAssignmentTypeId ?? undefined;
   if (preferredId) {
     const preferred = assignmentTypes.find((type) => type.id === preferredId);
-    if (preferred && !preferred.quotaExhausted) return preferredId;
+    if (
+      preferred &&
+      !preferred.quotaExhausted &&
+      !preferred.unavailableReason
+    ) {
+      return preferredId;
+    }
   }
-  const firstAvailable = assignmentTypes.find((type) => !type.quotaExhausted);
-  return firstAvailable?.id ?? preferredId ?? assignmentTypes[0]?.id ?? '';
+  const firstAvailable = assignmentTypes.find(
+    (type) => !type.quotaExhausted && !type.unavailableReason
+  );
+  return firstAvailable?.id ?? '';
 }
 
 function initialClassIds(fixedClassId?: string) {
@@ -941,7 +951,9 @@ export function AssignmentCreationSheetContent({
   const isSubmitDisabled =
     isSaving ||
     isExtracting ||
-    !assignmentTypeId ||
+    !selectedType ||
+    Boolean(selectedType.unavailableReason) ||
+    (!isEditing && Boolean(selectedType.quotaExhausted)) ||
     (!isEditing && selectedClassCount === 0) ||
     (isExitTicket ? !exitTicketPrompt : !prompt.trim()) ||
     (titleRequired && !title.trim()) ||
@@ -1060,6 +1072,9 @@ export function AssignmentCreationSheetContent({
         action={formAction}
         encType="multipart/form-data"
         className="mt-6 space-y-4"
+        onSubmit={(event) => {
+          if (isSubmitDisabled) event.preventDefault();
+        }}
       >
         <input
           type="hidden"
@@ -1130,9 +1145,16 @@ export function AssignmentCreationSheetContent({
                   value={assignmentType.id}
                   textValue={assignmentType.title}
                   triggerLabel={assignmentType.title}
-                  disabled={assignmentType.quotaExhausted}
+                  disabled={
+                    Boolean(assignmentType.unavailableReason) ||
+                    assignmentType.quotaExhausted
+                  }
                 >
-                  {assignmentType.quotaLabel ? (
+                  {assignmentType.unavailableReason ? (
+                    <span className="text-xs text-muted-foreground">
+                      {assignmentType.unavailableReason}
+                    </span>
+                  ) : assignmentType.quotaLabel ? (
                     <span className="text-xs text-muted-foreground">
                       {assignmentType.quotaExhausted
                         ? assignmentType.quotaExhaustedMessage
@@ -1143,6 +1165,16 @@ export function AssignmentCreationSheetContent({
               ))}
             </SelectContent>
           </Select>
+          {!isEditing &&
+          !assignmentTypes.some(
+            (type) => !type.unavailableReason && !type.quotaExhausted
+          ) ? (
+            <p role="status" className="text-sm text-muted-foreground">
+              No assignment types are available for this classroom. Included
+              types may be unavailable or their free allowance has been used.
+              Contact your administrator for help.
+            </p>
+          ) : null}
           {editingAssignment?.assignmentTypeLocked ? (
             <p className="text-xs text-muted-foreground">
               Assignment type is fixed because shared group drafts already
