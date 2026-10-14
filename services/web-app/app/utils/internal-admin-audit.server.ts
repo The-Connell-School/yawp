@@ -195,7 +195,7 @@ export function shapeAi(entry: Ai) {
       metadata,
       'assignmentTypeGradingVersion'
     ),
-    rubricCategoryKeys: metadata.rubricCategoryKeys ?? null,
+    rubricCategoryKeys: stripReplayUrl(metadata.rubricCategoryKeys) ?? null,
     inputTokens: entry.inputTokens,
     outputTokens: entry.outputTokens,
     totalTokens: entry.totalTokens,

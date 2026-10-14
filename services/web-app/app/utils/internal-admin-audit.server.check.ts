@@ -220,6 +220,7 @@ describe('signed admin Audit reads', () => {
           submissionId: 'sub',
           feature: 'grading',
           kind: 'context',
+          rubricCategoryKeys: [{ replayUrl: 'sensitive', safe: 'ideas' }],
           replayUrl: 'sensitive',
         },
         unrelated: 'hidden',
