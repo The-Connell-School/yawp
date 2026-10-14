@@ -28,3 +28,12 @@ test('revokes public connect again after changing each database owner', () => {
   expect(revoke).toBeGreaterThan(owner);
   expect(grant).toBeGreaterThan(revoke);
 });
+
+test('does not recreate resident web containers when compose is already migrated', () => {
+  expect(script).toContain('compose_database_url_changed=');
+  expect(script).toContain('rewrite_compose_database_url "$compose_file" "$database" "$role" "$password_file"');
+  expect(script).toContain('if [[ "$compose_database_url_changed" == "true" ]]; then');
+  expect(script).toContain('else\n    echo "Resident $slug already uses isolated database role $role"');
+  expect(script).toContain('active_backup=\'\'');
+  expect(script).toContain('if [[ -n "$active_backup" ]]; then\n    rm -f -- "$active_backup"');
+});
