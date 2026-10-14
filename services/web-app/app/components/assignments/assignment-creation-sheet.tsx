@@ -1073,7 +1073,7 @@ export function AssignmentCreationSheetContent({
         action={formAction}
         encType="multipart/form-data"
         className="mt-6 space-y-4"
-        onSubmit={(event) => {
+        onSubmit={(event: React.FormEvent<HTMLFormElement>) => {
           if (isSubmitDisabled) event.preventDefault();
         }}
       >
