@@ -10,16 +10,16 @@ set -euo pipefail
 ROOT="${PREVIEW_ROOT:-/srv/yawp-preview}"
 export PREVIEW_ROOT="$ROOT"
 MODE="${PREVIEW_MODE:-admit}"
-RESIDENT_CAP="${PREVIEW_MAX_RESIDENT:-${PREVIEW_MAX_ENVS:-30}}"
-RUNNING_CAP="${PREVIEW_MAX_RUNNING:-4}"
+RESIDENT_CAP="${PREVIEW_MAX_RESIDENT:-${PREVIEW_MAX_ENVS:-40}}"
+RUNNING_CAP="${PREVIEW_MAX_RUNNING:-8}"
 KEEP_PR="${KEEP_PR:-}"
 OPEN_PR_NUMBERS="${OPEN_PR_NUMBERS:-}"
 PR_ACTIVITY="${PR_ACTIVITY:-}"
 PR_STATE_AUTHORITATIVE="${PREVIEW_PR_STATE_AUTHORITATIVE:-false}"
 POSTGRES_CONTAINER="${PREVIEW_POSTGRES_CONTAINER:-preview-postgres}"
 SLEEP_ENABLED="${PREVIEW_SLEEP_ENABLED:-true}"
-DRAFT_IDLE_HOURS="${PREVIEW_DRAFT_IDLE_HOURS:-48}"
-READY_IDLE_HOURS="${PREVIEW_READY_IDLE_HOURS:-48}"
+DRAFT_IDLE_HOURS="${PREVIEW_DRAFT_IDLE_HOURS:-2}"
+READY_IDLE_HOURS="${PREVIEW_READY_IDLE_HOURS:-2}"
 NOW_EPOCH="${PREVIEW_NOW_EPOCH:-$(date +%s)}"
 DOCKER="${PREVIEW_DOCKER:-docker}"
 LOCK_WAIT_SECONDS="${PREVIEW_LOCK_WAIT_SECONDS:-900}"
@@ -117,7 +117,7 @@ refresh_pr_state() {
     }
     page_numbers="$("$JQ" -r '[.[].number] | join(" ")' <<<"$response")"
     page_activity="$(
-      "$JQ" -r '.[] | "\(.number) \(.updated_at | fromdateiso8601) \(if .draft then 1 else 0 end) \(if any(.labels[]?; .name == "preview:keep-awake") then 1 else 0 end)"' \
+      "$JQ" -r '.[] | "\(.number) \(.updated_at | fromdateiso8601) \(if .draft then 1 else 0 end) \(if any(.labels[]?; .name == "preview:keep-awake") then 1 else 0 end) \(.head.ref // "") \(.user.login // "")"' \
         <<<"$response"
     )"
     if [[ -n "$page_numbers" ]]; then
@@ -208,13 +208,23 @@ activity_record() {
     }'
 }
 
+file_epoch() {
+  local file="$1"
+  local value=""
+  [[ -f "$file" ]] || { echo 0; return 0; }
+  IFS= read -r value < "$file" || true
+  is_nonnegative_integer "$value" && printf '%s\n' "$value" || echo 0
+}
+
 access_epoch() {
   local pr="$1"
-  local value=""
-  local access_file="$ACCESS_DIR/pr-${pr}"
-  [[ -f "$access_file" ]] || { echo 0; return 0; }
-  IFS= read -r value < "$access_file" || true
-  is_nonnegative_integer "$value" && printf '%s\n' "$value" || echo 0
+  local preview_dir="$previews_dir/pr-${pr}"
+  local access last_request last_deploy
+  access="$(file_epoch "$ACCESS_DIR/pr-${pr}")"
+  last_request="$(file_epoch "$preview_dir/last-request")"
+  last_deploy="$(file_epoch "$preview_dir/last-deploy")"
+  printf '%s\n' "$access $last_request $last_deploy" \
+    | awk '{ max = 0; for (i = 1; i <= NF; i++) if ($i > max) max = $i; print max }'
 }
 
 effective_activity_epoch() {
@@ -227,6 +237,26 @@ effective_activity_epoch() {
   else
     printf '%s\n' "$github_epoch"
   fi
+}
+
+preview_branch() {
+  local pr="$1"
+  local fallback="${2:-}"
+  local file="$previews_dir/pr-${pr}/branch"
+  if [[ -f "$file" ]]; then
+    IFS= read -r fallback < "$file" || true
+  fi
+  printf '%s\n' "$fallback"
+}
+
+candidate_priority_class() {
+  local pr="$1"
+  local branch="${2:-}"
+  branch="$(preview_branch "$pr" "$branch")"
+  case "$branch" in
+    codex/*) echo 0 ;;
+    *) echo 1 ;;
+  esac
 }
 
 write_keep_awake_marker() {
@@ -257,6 +287,16 @@ sync_keep_awake_markers() {
       rm -f -- "$marker"
     fi
   done < <(resident_env_numbers)
+}
+
+is_pinned() {
+  local pr="$1"
+  local record pinned
+  [[ -f "$previews_dir/pr-${pr}/keep-awake" ]] && return 0
+  record="$(activity_record "$pr")"
+  [[ -n "$record" ]] || return 1
+  read -r _ _ _ pinned _ _ <<<"$record"
+  [[ "$pinned" == "1" ]]
 }
 
 is_running() {
@@ -347,12 +387,19 @@ stop_env() {
   local path="$previews_dir/pr-${pr}"
   local compose_file="$path/docker-compose.yml"
   local project="yawp-pr-${pr}"
+  local services=(web)
 
   [[ -f "$compose_file" ]] || {
     echo "::error::cannot sleep pr-${pr}; compose file missing"
     return 1
   }
-  if ! "$DOCKER" compose -p "$project" -f "$compose_file" stop; then
+  if grep -qE '^[[:space:]]*blackboard-lti-mock:' "$compose_file"; then
+    services+=(blackboard-lti-mock)
+  fi
+  if grep -qE '^[[:space:]]*renderer:' "$compose_file"; then
+    services+=(renderer)
+  fi
+  if ! "$DOCKER" compose -p "$project" -f "$compose_file" stop "${services[@]}"; then
     # Tolerate an invalid or stale compose file: fall back to removing running containers.
     "$DOCKER" ps -aq --filter "label=com.docker.compose.project=${project}" 2>/dev/null \
       | xargs -r "$DOCKER" rm -f >/dev/null 2>&1 || true
@@ -380,16 +427,18 @@ rank_candidates() {
     done < <(resident_env_numbers)
   fi
 
-  local updated draft pinned effective
-  while read -r pr updated draft pinned; do
+  local updated draft pinned branch author effective class
+  while read -r pr updated draft pinned branch author; do
     [[ -n "$pr" ]] || continue
     pinned="${pinned:-0}"
     [[ "$pr" != "$keep" && "$pinned" != "1" ]] || continue
+    [[ -f "$previews_dir/pr-${pr}/keep-awake" ]] && continue
     [[ " $candidates " == *" $pr "* ]] || continue
     is_nonnegative_integer "$updated" || continue
     effective="$(effective_activity_epoch "$pr" "$updated")"
-    printf '%d %d %s\n' "$([[ "$draft" == "1" ]] && echo 0 || echo 1)" "$effective" "$pr"
-  done <<<"$PR_ACTIVITY" | sort -k1,1n -k2,2n | awk '{print $3}'
+    class="$(candidate_priority_class "$pr" "$branch")"
+    printf '%d %d %d %s\n' "$class" "$([[ "$draft" == "1" ]] && echo 0 || echo 1)" "$effective" "$pr"
+  done <<<"$PR_ACTIVITY" | sort -k1,1n -k2,2n -k3,3n | awk '{print $4}'
 }
 
 append_number() {
@@ -432,6 +481,10 @@ while IFS= read -r pr; do
     continue
   fi
   if ! is_open_pr "$pr"; then
+    if is_pinned "$pr"; then
+      echo "keep pr-${pr}: keep-awake marker protects resident state"
+      continue
+    fi
     echo "reclaim pr-${pr}: pull request is closed or merged"
     if destroy_env "$pr"; then
       reclaimed=$((reclaimed + 1))
@@ -449,7 +502,7 @@ if [[ "$SLEEP_ENABLED" == "true" ]]; then
     is_inflight "$pr" && continue
     record="$(activity_record "$pr")"
     [[ -n "$record" ]] || continue
-    read -r _ updated draft pinned <<<"$record"
+    read -r _ updated draft pinned _ _ <<<"$record"
     is_nonnegative_integer "$updated" || continue
     updated="$(effective_activity_epoch "$pr" "$updated")"
     [[ "$pinned" == "1" ]] && continue
@@ -472,6 +525,7 @@ if (( resident_needed > RESIDENT_CAP )); then
     [[ -n "$pr" ]] || continue
     (( resident_needed > RESIDENT_CAP )) || break
     is_inflight "$pr" && continue
+    is_pinned "$pr" && continue
     echo "evict pr-${pr}: resident cap ${RESIDENT_CAP}, least active candidate"
     if destroy_env "$pr"; then
       evicted="$(append_number "$evicted" "$pr")"

@@ -1009,7 +1009,7 @@ describe('PR preview deployment contract', () => {
     expect(wakeProof).toContain('PROOF_CONTAINER_AFTER');
   });
 
-  test('preview idle defaults are one day and comments promise authorized URL wake', () => {
+  test('preview idle defaults are two hours and comments promise authorized URL wake', () => {
     const workflow = readRepoFile('.github/workflows/preview-environments.yml');
     const bootstrapWorkflow = readRepoFile(
       '.github/workflows/preview-host-bootstrap.yml'
@@ -1020,10 +1020,10 @@ describe('PR preview deployment contract', () => {
     const wakeServer = readRepoFile('scripts/preview/wake-server.mjs');
 
     expect(workflow).toContain(
-      "PREVIEW_DRAFT_IDLE_HOURS: ${{ vars.PREVIEW_DRAFT_IDLE_HOURS || '24' }}"
+      "PREVIEW_DRAFT_IDLE_HOURS: ${{ vars.PREVIEW_DRAFT_IDLE_HOURS || '2' }}"
     );
     expect(workflow).toContain(
-      "PREVIEW_READY_IDLE_HOURS: ${{ vars.PREVIEW_READY_IDLE_HOURS || '24' }}"
+      "PREVIEW_READY_IDLE_HOURS: ${{ vars.PREVIEW_READY_IDLE_HOURS || '2' }}"
     );
     expect(
       workflow.match(
@@ -1033,26 +1033,32 @@ describe('PR preview deployment contract', () => {
     expect(
       workflow.match(
         /PREVIEW_MAX_RUNNING: \$\{\{ vars\.PREVIEW_MAX_RUNNING \|\| '4' \}\}/g
+      ) ?? []
+    ).toHaveLength(0);
+    expect(
+      workflow.match(
+        /PREVIEW_MAX_RUNNING: \$\{\{ vars\.PREVIEW_MAX_RUNNING \|\| '8' \}\}/g
       )
     ).toHaveLength(2);
     expect(bootstrapWorkflow).toContain(
-      "PREVIEW_MAX_RUNNING: ${{ vars.PREVIEW_MAX_RUNNING || '4' }}"
+      "PREVIEW_MAX_RUNNING: ${{ vars.PREVIEW_MAX_RUNNING || '8' }}"
     );
     expect(bootstrapScript).toContain(
-      'RUNNING_CAP="${PREVIEW_MAX_RUNNING:-4}"'
+      'RUNNING_CAP="${PREVIEW_MAX_RUNNING:-8}"'
     );
-    expect(enforceCap).toContain('RUNNING_CAP="${PREVIEW_MAX_RUNNING:-4}"');
+    expect(enforceCap).toContain('RUNNING_CAP="${PREVIEW_MAX_RUNNING:-8}"');
     expect(enforceCap).toContain(
       'SLEEP_ENABLED="${PREVIEW_SLEEP_ENABLED:-true}"'
     );
-    expect(wakePreview).toContain('RUNNING_CAP="${PREVIEW_MAX_RUNNING:-4}"');
+    expect(wakePreview).toContain('RUNNING_CAP="${PREVIEW_MAX_RUNNING:-8}"');
     expect(wakePreview).toContain(
       'INFLIGHT_TTL_SECONDS="${PREVIEW_INFLIGHT_TTL_SECONDS:-3600}"'
     );
     expect(bootstrapWorkflow).toContain(
       "PREVIEW_INFLIGHT_TTL_SECONDS: ${{ vars.PREVIEW_INFLIGHT_TTL_SECONDS || '3600' }}"
     );
-    expect(wakeServer).toContain("process.env.PREVIEW_MAX_RUNNING || '4'");
+    expect(wakeServer).toContain("process.env.PREVIEW_MAX_RUNNING || '8'");
+    expect(workflow).toContain('Preview sleeping after 2 hours of inactivity');
     expect(workflow).toContain(
       'Open its one-click URL, or revisit from an already authorized browser, to wake it automatically'
     );

@@ -180,7 +180,7 @@ describe('preview ingress', () => {
     expect(accesses).toEqual([241]);
   });
 
-  test('authorizes, wakes, and serves the original first request without redirect', async () => {
+  test('authorizes, queues wake, and serves an auto-refresh waking page', async () => {
     const upstreamPort = await listen(createServer((incoming, response) => {
       response.end(`awake:${incoming.url}`);
     }));
@@ -204,11 +204,19 @@ describe('preview ingress', () => {
 
     const unauthorized = await request(ingressPort, { path: '/app' });
     const woken = await request(ingressPort, { path: '/app?code=brisk-otter-4321' });
+    for (let attempt = 0; attempt < 20 && !running; attempt += 1) {
+      await Bun.sleep(5);
+    }
+    const refreshed = await request(ingressPort, { path: '/app?code=brisk-otter-4321' });
 
     expect(unauthorized.status).toBe(401);
     expect(unauthorized.body).toContain('one-click access URL');
-    expect(woken.status).toBe(200);
-    expect(woken.body).toBe('awake:/app?code=brisk-otter-4321');
+    expect(woken.status).toBe(503);
+    expect(woken.headers['retry-after']).toBe('5');
+    expect(woken.body).toContain('Waking preview');
+    expect(woken.body).toContain('http-equiv="refresh"');
+    expect(refreshed.status).toBe(200);
+    expect(refreshed.body).toBe('awake:/app?code=brisk-otter-4321');
     expect(wakes).toEqual([{
       pr: 241,
       options: {
@@ -218,23 +226,86 @@ describe('preview ingress', () => {
     }]);
   });
 
-  test('returns controlled retryable responses instead of proxy 429/502 errors', async () => {
-    const failure = new Error('Preview pr-241 deployment is in progress');
-    failure.code = 'deploying';
+  test('/__wake queues the same start path and returns JSON for agents', async () => {
+    const wakes = [];
     const ingress = createPreviewIngress({
       domain: 'preview.yawp.school',
       resolveTarget: async () => null,
       authorizeWake: async () => true,
-      ensureRunning: async () => { throw failure; },
+      ensureRunning: async (pr) => {
+        wakes.push(pr);
+      },
+      recordAccess: async () => {},
+    });
+    const ingressPort = await listen(createServer(ingress));
+
+    const response = await request(ingressPort, { path: '/__wake?code=brisk-otter-4321' });
+    for (let attempt = 0; attempt < 20 && wakes.length === 0; attempt += 1) {
+      await Bun.sleep(5);
+    }
+
+    expect(response.status).toBe(202);
+    expect(response.headers['content-type']).toContain('application/json');
+    expect(JSON.parse(response.body)).toEqual({ status: 'waking', pr: 241 });
+    expect(wakes).toEqual([241]);
+  });
+
+  test('returns no-preview HTML for non-resident PRs without running a wake', async () => {
+    const ingress = createPreviewIngress({
+      domain: 'preview.yawp.school',
+      resolveTarget: async () => null,
+      isResident: async () => false,
+      authorizeWake: async () => true,
+      ensureRunning: async () => { throw new Error('must not wake'); },
       recordAccess: async () => {},
     });
     const ingressPort = await listen(createServer(ingress));
 
     const response = await request(ingressPort);
 
-    expect(response.status).toBe(503);
-    expect(response.headers['retry-after']).toBe('15');
-    expect(response.body).toContain('deployment is in progress');
+    expect(response.status).toBe(404);
+    expect(response.body).toContain('No preview');
+  });
+
+  test('serves status JSON and HTML without secrets', async () => {
+    const status = {
+      running: 1,
+      maxRunning: 8,
+      host: { memAvailable: '2.0 GiB' },
+      previews: [{
+        pr: 241,
+        branch: 'codex/preview-lru',
+        author: 'codex',
+        state: 'waking',
+        pinned: false,
+        lastRequest: 1_800_000_000,
+        lastDeploy: 1_800_000_100,
+        rss: '512 MiB',
+        url: 'https://pr-241.preview.yawp.school',
+      }],
+    };
+    const ingress = createPreviewIngress({
+      domain: 'preview.yawp.school',
+      resolveTarget: async () => null,
+      authorizeWake: async () => false,
+      ensureRunning: async () => {},
+      recordAccess: async () => {},
+      getStatus: async () => status,
+    });
+    const ingressPort = await listen(createServer(ingress));
+
+    const jsonResponse = await request(ingressPort, { path: '/__status' });
+    const htmlResponse = await request(ingressPort, {
+      headers: { host: 'status.preview.yawp.school' },
+    });
+
+    expect(jsonResponse.status).toBe(200);
+    expect(JSON.parse(jsonResponse.body).previews[0].state).toBe('waking');
+    expect(htmlResponse.status).toBe(200);
+    expect(htmlResponse.body).toContain('Yawp Preview Status');
+    expect(htmlResponse.body).toContain('codex/preview-lru');
+    expect(htmlResponse.body).not.toContain('brisk-otter');
+    expect(htmlResponse.body).not.toContain('SECRET');
   });
 
   test('serves ACME challenges and redirects all other HTTP traffic to HTTPS', async () => {
@@ -262,9 +333,17 @@ describe('preview ingress', () => {
       path: '/',
       headers: { host: 'blackboard-pr-241.preview.yawp.school' },
     });
+    const statusRedirect = await request(port, {
+      path: '/__status',
+      headers: { host: 'status.preview.yawp.school' },
+    });
     expect(blackboardRedirect.status).toBe(308);
     expect(blackboardRedirect.headers.location).toBe(
       'https://blackboard-pr-241.preview.yawp.school/'
+    );
+    expect(statusRedirect.status).toBe(308);
+    expect(statusRedirect.headers.location).toBe(
+      'https://status.preview.yawp.school/__status'
     );
   });
 
@@ -299,6 +378,33 @@ describe('preview ingress', () => {
     expect(context).toBeTruthy();
     expect(context).toBe(store.defaultPair.context);
     expect(store.defaultPair.cert.equals(wildcard.cert)).toBe(true);
+  });
+
+  test('serves the wildcard certificate for the status hostname', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'preview-ingress-status-certs-'));
+    roots.push(root);
+    const certRoot = path.join(root, 'certs');
+    const wildcardRoot = path.join(certRoot, '_wildcard.preview.yawp.school');
+    mkdirSync(wildcardRoot, { recursive: true });
+    const wildcard = createCertificate(root, '*.preview.yawp.school');
+    writeFileSync(path.join(wildcardRoot, 'privkey.pem'), wildcard.key);
+    writeFileSync(path.join(wildcardRoot, 'fullchain.pem'), wildcard.cert);
+
+    const store = createCertificateStore({
+      certRoot,
+      domain: 'preview.yawp.school',
+      defaultHostname: '_wildcard.preview.yawp.school',
+    });
+    let err;
+    let context;
+    store.sniCallback('status.preview.yawp.school', (nextErr, nextContext) => {
+      err = nextErr;
+      context = nextContext;
+    });
+
+    expect(err).toBeNull();
+    expect(context).toBeTruthy();
+    expect(context).toBe(store.defaultPair.context);
   });
 
   test('falls back to an exact certificate when the wildcard pair is unusable', () => {

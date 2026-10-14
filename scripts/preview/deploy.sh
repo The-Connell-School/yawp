@@ -563,6 +563,24 @@ install_demo_backup_tooling() {
   install -m 700 "$SCRIPT_DIR/restore-demo-backup.sh" "$ROOT/ops/restore-demo-backup.sh"
 }
 
+write_preview_metadata() {
+  local now temporary
+  now="$(date +%s)"
+  umask 022
+  temporary="$PREVIEW_DIR/last-deploy.$$.tmp"
+  printf '%s\n' "$now" > "$temporary"
+  mv -f -- "$temporary" "$PREVIEW_DIR/last-deploy"
+  if [[ -n "${PREVIEW_HEAD_SHA:-}" && "$PREVIEW_HEAD_SHA" =~ ^[A-Fa-f0-9]{7,40}$ ]]; then
+    printf '%s\n' "$PREVIEW_HEAD_SHA" > "$PREVIEW_DIR/deployed-sha"
+  fi
+  if [[ -n "${PREVIEW_BRANCH:-}" && ! "$PREVIEW_BRANCH" =~ [[:cntrl:]] ]]; then
+    printf '%s\n' "${PREVIEW_BRANCH:0:256}" > "$PREVIEW_DIR/branch"
+  fi
+  if [[ -n "${PREVIEW_AUTHOR:-}" && "$PREVIEW_AUTHOR" =~ ^[A-Za-z0-9_.-]{1,128}$ ]]; then
+    printf '%s\n' "$PREVIEW_AUTHOR" > "$PREVIEW_DIR/author"
+  fi
+}
+
 create_seed_preview_database() {
   validate_database_name "$DATABASE_NAME"
   echo "Creating preview database $DATABASE_NAME for seeded local-dev data..."
@@ -931,6 +949,7 @@ for attempt in $(seq 1 90); do
     echo "BLACKBOARD_HOSTNAME=$BLACKBOARD_HOSTNAME"
     echo "PREVIEW_ACCESS_CODE=$smoke_access_code"
     echo "PREVIEW_MASTER_ORG_GATE_ENABLED=$PREVIEW_MASTER_ORG_GATE_ENABLED"
+    write_preview_metadata
     PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" node -e '
       for (const [index, seat] of JSON.parse(process.env.PREVIEW_ACCESS_SEATS).entries()) {
         console.log(`PREVIEW_SEAT_CODE_${index + 1}=${seat.code}`)
