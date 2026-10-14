@@ -169,6 +169,7 @@ chmod +x "$database_role_migration"
 env \
   PREVIEW_ROOT="$ROOT" \
   PREVIEW_POSTGRES_ADMIN_PASSWORD="$PREVIEW_POSTGRES_ADMIN_PASSWORD" \
+  PREVIEW_PRESERVE_RUNNING_RESIDENTS=true \
   bash "$database_role_migration"
 flock -u 8
 
