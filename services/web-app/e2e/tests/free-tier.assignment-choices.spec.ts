@@ -260,3 +260,25 @@ for (const width of [1280, 390]) {
     await capture(page, 'paid-choices');
   });
 }
+
+for (const width of [1280, 390]) {
+  test(`direct paid type page cannot offer an invalid free-classroom create (${width})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await login(page);
+    await page.goto(`/app/assignment-types/${paidType.id}`);
+    await page.getByRole('button', { name: /^New$/ }).click();
+    await page
+      .getByRole('menuitem', { name: 'Assignment', exact: true })
+      .click();
+    const sheet = page.getByRole('dialog');
+    await capture(page, 'direct-paid-type');
+    await expect(
+      sheet.getByText(/No assignment types are available/)
+    ).toBeVisible();
+    await expect(
+      sheet.getByRole('button', { name: 'Create Assignment', exact: true })
+    ).toBeDisabled();
+  });
+}

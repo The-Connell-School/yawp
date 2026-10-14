@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useFetcher } from 'react-router';
-import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
+import {
+  AssignmentCreationSheet,
+  type AssignmentCreationAssignmentType,
+} from '~/components/assignments/assignment-creation-sheet';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
@@ -34,6 +37,11 @@ type TeacherClass = {
 };
 
 type Props = {
+  assignmentTypeAvailability?: Pick<
+    AssignmentCreationAssignmentType,
+    'unavailableReason' | 'quotaRemaining' | 'quotaTotal' | 'quotaLabel' |
+    'quotaExhausted' | 'quotaExhaustedMessage'
+  >;
   assignmentTypeId: string;
   assignmentTypeTitle: string;
   /** `AssignmentType.kind` — exit ticket UI, engagement point minimums, etc. */
@@ -69,6 +77,7 @@ function classLabel(klass: TeacherClass) {
 }
 
 export function CreateAssignmentSheet({
+  assignmentTypeAvailability = {},
   assignmentTypeId,
   assignmentTypeTitle,
   assignmentTypeKind = null,
@@ -114,7 +123,7 @@ export function CreateAssignmentSheet({
     }
   }, [fetcher.state, fetcher.data, onOpenChange]);
 
-  if (!apHistoryEntry) {
+  if (!apHistoryEntry || assignmentTypeAvailability.unavailableReason) {
     return (
       <AssignmentCreationSheet
         open={open}
@@ -129,6 +138,7 @@ export function CreateAssignmentSheet({
             rubricName: assignmentTypeRubricName,
             collaborationSupported: assignmentTypeCollaborationSupported,
             gradesGrammar: assignmentTypeGradesGrammar,
+            ...assignmentTypeAvailability,
           },
         ]}
         teacherClasses={teacherClasses}

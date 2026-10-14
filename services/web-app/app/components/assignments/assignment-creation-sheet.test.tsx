@@ -261,6 +261,15 @@ describe('AssignmentCreationSheetContent', () => {
     ).toBe('entitled');
   });
 
+  it('clears a fixed paid type instead of submitting its forbidden id', () => {
+    ({ root } = renderSheet({
+      assignmentTypes: [{ ...assignmentTypes[0], unavailableReason: 'Available with a paid plan.' }],
+      fixedAssignmentTypeId: 'type-1',
+      fixedClassId: 'class-1',
+    }));
+    expect((document.querySelector('[name="assignmentTypeId"]') as HTMLInputElement).value).toBe('');
+  });
+
   it('leaves no forbidden fallback when every type is unavailable', () => {
     ({ root } = renderSheet({
       assignmentTypes: [

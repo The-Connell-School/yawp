@@ -646,11 +646,12 @@ export function AssignmentCreationSheetContent({
   const CreateForm = createFetcher.Form;
   const isSaving = createFetcher.state !== 'idle';
   const isExtracting = extractFetcher.state !== 'idle';
+  const requestedTypeId = fixedAssignmentTypeId ?? selectedAssignmentTypeId ?? '';
+  const selectedType = assignmentTypes.find((type) => type.id === requestedTypeId);
   const assignmentTypeId =
-    fixedAssignmentTypeId ?? selectedAssignmentTypeId ?? '';
-  const selectedType = assignmentTypes.find(
-    (type) => type.id === assignmentTypeId
-  );
+    !isEditing && (selectedType?.unavailableReason || selectedType?.quotaExhausted)
+      ? ''
+      : requestedTypeId;
   // Collaboration is offered for every assignment type now, so this only asks
   // whether a type has been chosen at all.
   const selectedTypeSupportsCollaboration = Boolean(assignmentTypeId);
