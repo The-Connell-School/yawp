@@ -8,7 +8,11 @@ export function internalAuditDestination() {
   );
   url.searchParams.set(
     'env',
-    process.env.YAWP_ENVIRONMENT === 'production' ? 'production' : 'demo'
+    process.env.PREVIEW_SLUG === 'demo' || process.env.YAWP_ENVIRONMENT === 'demo'
+      ? 'demo'
+      : process.env.YAWP_ENVIRONMENT === 'production' || process.env.NODE_ENV === 'production'
+        ? 'production'
+        : 'demo'
   );
   return url.toString();
 }

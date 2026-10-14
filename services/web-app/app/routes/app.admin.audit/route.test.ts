@@ -28,6 +28,7 @@ const { loader } = await import('./route');
 
 describe('admin audit loader', () => {
   beforeEach(() => {
+    process.env.INTERNAL_ADMIN_AUDIT_MOVED = 'false';
     requireAdmin.mockReset();
     requireMutableRequest.mockReset();
     prisma.documentWriteJournal.findMany.mockReset();

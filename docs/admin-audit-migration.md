@@ -21,6 +21,7 @@ migration. It defaults off: existing readers remain available. Enable only
 after the companion Internal page has been reviewed and deployed. The enabled
 gate requires platform admin authentication before returning the moved notice
 and reads no Audit payloads. `YAWP_INTERNAL_URL` defaults to the Internal host;
-`YAWP_ENVIRONMENT=production` selects production, otherwise demo. Revert the
+`PREVIEW_SLUG=demo` or `YAWP_ENVIRONMENT=demo` selects demo; otherwise a
+production runtime selects production, and local development selects demo. Revert the
 switch to restore the legacy reader during rollout. There are no schema changes
 or document/AI-log mutations.
