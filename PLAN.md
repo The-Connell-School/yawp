@@ -4,4 +4,6 @@
 - Do not add email behavior; preserve existing platform-side hooks called by the signed endpoints.
 - Gate `/app/admin/free-tier` as moved so it is no longer the primary operator surface.
 - Add focused platform tests for the moved legacy route and any touched signed endpoint behavior.
+- Address reviewer rejection by requiring HMAC for every mutating Free Trial internal API request, even when legacy bearer compatibility remains enabled for reads.
+- Add focused tests proving valid legacy bearer / unsigned mutation requests are denied and signed writes still create audit rows with operator attribution and request hash.
 - Capture a local screenshot of the moved platform page after focused tests pass.
