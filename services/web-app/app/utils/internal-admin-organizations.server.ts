@@ -1,5 +1,11 @@
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { authorizeInternalApiRequest } from './internal-platform-auth.server';
+import {
+  authorizeInternalApiRequest,
+  internalApiRawQueryString,
+  recordInternalPlatformWriteAudit,
+  type InternalApiAuthContext,
+} from './internal-platform-auth.server';
 import { prisma } from './db.server';
 import {
   getConfiguredPreviewOrganizationAccessCode,
@@ -46,9 +52,22 @@ type Dependencies = {
   assignmentType: Pick<typeof prisma.assignmentType, 'findMany'>;
   invitation: Pick<typeof prisma.invitation, 'findMany'>;
   $queryRaw: typeof prisma.$queryRaw;
+  preview: {
+    isIsolatedPreviewSeatMode: typeof isIsolatedPreviewSeatMode;
+    getConfiguredPreviewOrganizationAccessCode: typeof getConfiguredPreviewOrganizationAccessCode;
+  };
 };
 
-const deps: Dependencies = prisma;
+const deps: Dependencies = {
+  organization: prisma.organization,
+  assignmentType: prisma.assignmentType,
+  invitation: prisma.invitation,
+  $queryRaw: prisma.$queryRaw,
+  preview: {
+    isIsolatedPreviewSeatMode,
+    getConfiguredPreviewOrganizationAccessCode,
+  },
+};
 
 function parseListQuery(url: URL) {
   const parsed = z
@@ -83,9 +102,14 @@ function listOrderBy(sort: z.infer<typeof sortSchema>, direction: z.infer<typeof
   return { [sort]: direction };
 }
 
-function previewAccessCode(id: string, code: string | null | undefined, previewSeatMode: boolean) {
+function previewAccessCode(
+  id: string,
+  code: string | null | undefined,
+  previewSeatMode: boolean,
+  getConfiguredAccessCode: (id: string) => string | null
+) {
   if (!previewSeatMode) return null;
-  return code ?? getConfiguredPreviewOrganizationAccessCode(id);
+  return code ?? getConfiguredAccessCode(id);
 }
 
 export async function internalAdminOrganizationsList(
@@ -95,6 +119,7 @@ export async function internalAdminOrganizationsList(
   if (request.method !== 'GET') return response({ error: 'Method not allowed' }, 405);
   const auth = await authorizeInternalApiRequest(request, { requiredScope: 'management:read' });
   if (auth instanceof Response) return auth;
+  if (auth.mode !== 'hmac') return response({ error: 'Unauthorized' }, 401);
 
   const url = new URL(request.url);
   const query = parseListQuery(url);
@@ -104,7 +129,7 @@ export async function internalAdminOrganizationsList(
     ? { name: { contains: query.q, mode: 'insensitive' as const } }
     : {};
   const skip = (query.page - 1) * query.pageSize;
-  const previewSeatMode = isIsolatedPreviewSeatMode();
+  const previewSeatMode = client.preview.isIsolatedPreviewSeatMode();
 
   const [rows, totalCount, stats, growthData] = await Promise.all([
     client.organization.findMany({
@@ -134,7 +159,7 @@ export async function internalAdminOrganizationsList(
     }),
   ]);
 
-  return response({
+  const payload = {
     organizations: (rows as any[]).map(({ previewSeatCode, memberships, ...row }) => {
       const seats = seatCounts(memberships ?? []);
       return {
@@ -145,7 +170,12 @@ export async function internalAdminOrganizationsList(
           members: seats.totalMembers,
         },
         featureToggles: featureToggles(row),
-        previewAccessCode: previewAccessCode(row.id, previewSeatCode, previewSeatMode),
+        previewAccessCode: previewAccessCode(
+          row.id,
+          previewSeatCode,
+          previewSeatMode,
+          client.preview.getConfiguredPreviewOrganizationAccessCode
+        ),
       };
     }),
     stats: stats[0] ?? {
@@ -166,7 +196,9 @@ export async function internalAdminOrganizationsList(
     },
     previewSeatMode,
     meta: { requestedBy: auth.actorEmail, keyId: auth.keyId },
-  });
+  };
+  await auditInternalAdminOrganizationRead(request, auth, 'organizations.list.success');
+  return response(payload);
 }
 
 export async function internalAdminOrganizationDetail(
@@ -177,6 +209,7 @@ export async function internalAdminOrganizationDetail(
   if (request.method !== 'GET') return response({ error: 'Method not allowed' }, 405);
   const auth = await authorizeInternalApiRequest(request, { requiredScope: 'management:read' });
   if (auth instanceof Response) return auth;
+  if (auth.mode !== 'hmac') return response({ error: 'Unauthorized' }, 401);
   if (!id) return response({ error: 'Organization id is required' }, 400);
 
   const [organization, invitations, totalOrganizations, assignmentTypes] = await Promise.all([
@@ -228,9 +261,9 @@ export async function internalAdminOrganizationDetail(
   const assigned = new Set(
     (organization.assignmentTypeAssignments as any[]).map((a) => a.assignmentTypeId)
   );
-  const previewSeatMode = isIsolatedPreviewSeatMode();
+  const previewSeatMode = client.preview.isIsolatedPreviewSeatMode();
 
-  return response({
+  const payload = {
     organization: {
       ...organization,
       memberships: undefined,
@@ -257,10 +290,37 @@ export async function internalAdminOrganizationDetail(
       previewAccessCode: previewAccessCode(
         organization.id,
         organization.previewSeatCode,
-        previewSeatMode
+        previewSeatMode,
+        client.preview.getConfiguredPreviewOrganizationAccessCode
       ),
     },
     previewSeatMode,
     meta: { requestedBy: auth.actorEmail, keyId: auth.keyId },
+  };
+  await auditInternalAdminOrganizationRead(request, auth, 'organizations.detail.success');
+  return response(payload);
+}
+
+async function auditInternalAdminOrganizationRead(
+  request: Request,
+  auth: InternalApiAuthContext,
+  result: string
+) {
+  const url = new URL(request.url);
+  const requestHash = createHash('sha256')
+    .update(
+      [
+        request.method.toUpperCase(),
+        url.pathname,
+        internalApiRawQueryString(url),
+      ].join('\n')
+    )
+    .digest('hex');
+  await recordInternalPlatformWriteAudit({
+    actorEmail: auth.actorEmail,
+    keyId: auth.keyId,
+    endpoint: `${request.method.toUpperCase()} ${url.pathname}`,
+    requestHash,
+    result,
   });
 }
