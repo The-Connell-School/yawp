@@ -32,6 +32,24 @@ const keyConfig = JSON.stringify([
 
 const now = new Date('2026-10-14T12:00:00.000Z');
 
+type PagedAssignmentTypeRow = {
+  id: string;
+  title: string;
+  kind: string;
+  systemKey: string;
+  description: null;
+  archivedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  scoringScaleJson: null;
+  rubricJson: null;
+  image: null;
+  rubric: null;
+  rubricBaseline: null;
+  assignmentModules: never[];
+  _count: { organizationAssignments: number };
+};
+
 function signed(url: string, keyId = 'assignment-types-key') {
   const signed = signInternalApiRequest({
     method: 'GET',
@@ -43,14 +61,18 @@ function signed(url: string, keyId = 'assignment-types-key') {
   return new Request(url, { headers: signed.headers });
 }
 
-function listRow(id: string, createdAt: Date) {
+function listRow(
+  id: string,
+  createdAt: Date,
+  options: Partial<Pick<PagedAssignmentTypeRow, 'title' | 'kind' | 'systemKey' | 'archivedAt'>> = {}
+): PagedAssignmentTypeRow {
   return {
     id,
-    title: `Assignment Type ${id}`,
-    kind: 'writing',
-    systemKey: id,
+    title: options.title ?? `Assignment Type ${id}`,
+    kind: options.kind ?? 'writing',
+    systemKey: options.systemKey ?? id,
     description: null,
-    archivedAt: null,
+    archivedAt: options.archivedAt ?? null,
     createdAt,
     updatedAt: createdAt,
     scoringScaleJson: null,
@@ -63,7 +85,7 @@ function listRow(id: string, createdAt: Date) {
   };
 }
 
-function makePagedDb(rows: ReturnType<typeof listRow>[]) {
+function makePagedDb(rows: PagedAssignmentTypeRow[]) {
   const reads: unknown[] = [];
   const sorted = [...rows].sort((a, b) => {
     const byCreated = b.createdAt.getTime() - a.createdAt.getTime();
@@ -73,17 +95,9 @@ function makePagedDb(rows: ReturnType<typeof listRow>[]) {
     reads,
     db: {
       assignmentType: {
-        findMany: async (args: { take?: number; where?: { OR?: unknown[] } }) => {
+        findMany: async (args: { take?: number; where?: AssignmentTypeWhere }) => {
           reads.push(args);
-          const cursor = args.where?.OR as
-            | [{ createdAt?: { lt?: Date } }, { createdAt?: Date; id?: { lt?: string } }]
-            | undefined;
-          const afterCreatedAt = cursor?.[0]?.createdAt?.lt;
-          const tieCreatedAt = cursor?.[1]?.createdAt;
-          const afterId = cursor?.[1]?.id?.lt;
-          const filtered = afterCreatedAt && tieCreatedAt && afterId
-            ? sorted.filter((row) => row.createdAt < afterCreatedAt || (row.createdAt.getTime() === tieCreatedAt.getTime() && row.id < afterId))
-            : sorted;
+          const filtered = sorted.filter((row) => matchesWhere(row, args.where));
           return filtered.slice(0, args.take ?? filtered.length);
         },
         findUnique: async () => null,
@@ -93,6 +107,38 @@ function makePagedDb(rows: ReturnType<typeof listRow>[]) {
       },
     },
   };
+}
+
+type AssignmentTypeWhere = {
+  AND?: AssignmentTypeWhere[];
+  OR?: AssignmentTypeWhere[];
+  archivedAt?: null | { not: null };
+  createdAt?: Date | { lt?: Date };
+  id?: { lt?: string };
+  title?: { contains?: string; mode?: string };
+  kind?: { contains?: string; mode?: string };
+  systemKey?: { contains?: string; mode?: string };
+};
+
+function contains(value: string, query: string | undefined) {
+  return query ? value.toLowerCase().includes(query.toLowerCase()) : true;
+}
+
+function matchesWhere(row: PagedAssignmentTypeRow, where: AssignmentTypeWhere | undefined): boolean {
+  if (!where) return true;
+  if (where.AND && !where.AND.every((clause) => matchesWhere(row, clause))) return false;
+  if (where.OR && !where.OR.some((clause) => matchesWhere(row, clause))) return false;
+  if ('archivedAt' in where) {
+    if (where.archivedAt === null && row.archivedAt !== null) return false;
+    if (where.archivedAt && 'not' in where.archivedAt && row.archivedAt === null) return false;
+  }
+  if (where.createdAt instanceof Date && row.createdAt.getTime() !== where.createdAt.getTime()) return false;
+  if (where.createdAt && !(where.createdAt instanceof Date) && where.createdAt.lt && !(row.createdAt < where.createdAt.lt)) return false;
+  if (where.id?.lt && !(row.id < where.id.lt)) return false;
+  if (where.title?.contains && !contains(row.title, where.title.contains)) return false;
+  if (where.kind?.contains && !contains(row.kind, where.kind.contains)) return false;
+  if (where.systemKey?.contains && !contains(row.systemKey, where.systemKey.contains)) return false;
+  return true;
 }
 
 function makeDb() {
@@ -266,6 +312,36 @@ describe('internal assignment type read APIs', () => {
     const secondPage = await secondResponse.json();
     expect(secondPage.assignmentTypes.map((row: { id: string }) => row.id)).toEqual(['type-z', 'type-y']);
     expect(secondPage.nextCursor).toBeNull();
+  });
+
+  test('combines search filtering with cursor pagination without repeating the first page', async () => {
+    const newestAt = new Date('2026-10-14T12:00:00.000Z');
+    const middleAt = new Date('2026-10-13T12:00:00.000Z');
+    const olderAt = new Date('2026-10-12T12:00:00.000Z');
+    const oldestAt = new Date('2026-10-11T12:00:00.000Z');
+    const { db, reads } = makePagedDb([
+      listRow('type-top-miss', newestAt, { title: 'Draft only' }),
+      listRow('type-c', newestAt, { title: 'Filtered catalog row' }),
+      listRow('type-b', middleAt, { title: 'Filtered catalog row' }),
+      listRow('type-gap-miss', olderAt, { title: 'Draft only' }),
+      listRow('type-a', oldestAt, { title: 'Filtered catalog row' }),
+    ]);
+    const handler = createInternalAssignmentTypeHandlers({ db: db as never });
+
+    const firstResponse = await handler.list(signed('https://yawp.test/api/internal/v1/admin/assignment-types?limit=2&q=filtered'));
+    expect(firstResponse.status).toBe(200);
+    const firstPage = await firstResponse.json();
+    expect(firstPage.assignmentTypes.map((row: { id: string }) => row.id)).toEqual(['type-c', 'type-b']);
+    expect(typeof firstPage.nextCursor).toBe('string');
+
+    const secondResponse = await handler.list(
+      signed(`https://yawp.test/api/internal/v1/admin/assignment-types?limit=2&q=filtered&cursor=${firstPage.nextCursor}`)
+    );
+    expect(secondResponse.status).toBe(200);
+    const secondPage = await secondResponse.json();
+    expect(secondPage.assignmentTypes.map((row: { id: string }) => row.id)).toEqual(['type-a']);
+    expect(secondPage.nextCursor).toBeNull();
+    expect((reads[1] as { where?: AssignmentTypeWhere }).where?.AND).toHaveLength(3);
   });
 
   test('returns detail rows with modules and organization assignments', async () => {

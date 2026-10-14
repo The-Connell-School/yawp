@@ -338,30 +338,32 @@ export function createInternalAssignmentTypeHandlers(input: {
       } catch {
         return response({ error: 'Invalid query' }, 400);
       }
+      const whereClauses: Prisma.AssignmentTypeWhereInput[] = [];
+      if (after) {
+        whereClauses.push({
+          OR: [
+            { createdAt: { lt: after.createdAt } },
+            { createdAt: after.createdAt, id: { lt: after.id } },
+          ],
+        });
+      }
+      if (archived === 'active') whereClauses.push({ archivedAt: null });
+      if (archived === 'archived') whereClauses.push({ archivedAt: { not: null } });
+      if (q) {
+        whereClauses.push({
+          OR: [
+            { title: { contains: q, mode: 'insensitive' } },
+            { kind: { contains: q, mode: 'insensitive' } },
+            { systemKey: { contains: q, mode: 'insensitive' } },
+          ],
+        });
+      }
+
       const rows = await input.db.assignmentType.findMany({
         select: listSelect,
         take: limit + 1,
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        where: {
-          ...(after
-            ? {
-                OR: [
-                  { createdAt: { lt: after.createdAt } },
-                  { createdAt: after.createdAt, id: { lt: after.id } },
-                ],
-              }
-            : {}),
-          ...(archived === 'active' ? { archivedAt: null } : archived === 'archived' ? { archivedAt: { not: null } } : {}),
-          ...(q
-            ? {
-                OR: [
-                  { title: { contains: q, mode: 'insensitive' } },
-                  { kind: { contains: q, mode: 'insensitive' } },
-                  { systemKey: { contains: q, mode: 'insensitive' } },
-                ],
-              }
-            : {}),
-        },
+        where: whereClauses.length > 0 ? { AND: whereClauses } : {},
       }) as AssignmentTypeListRow[];
       const page = rows.slice(0, limit);
       const releases = await releasesFor(input.db, page.map(releaseKey));
