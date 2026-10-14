@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 const webAppRoot = path.resolve(__dirname, '..');
 
 const defaultShotDir =
-  '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-suite-post-closure-mainline-health';
+  '/home/bryant/work/yawp/codex-loop/lanes/free-tier-qa/shots/qa-durable-suite-post-closure-refresh';
 const shotDir =
   process.env.FREE_TIER_QA_SHOTS_DIR?.trim() ||
   process.env.QA_SCREENSHOT_DIR?.trim() ||
@@ -29,11 +29,11 @@ export const focusedHostedDemoSkipArtifacts = [
 export const seededReproFamilies = [
   {
     id: 'qa-approve-409',
-    scope: 'internal admin repro, external to platform suite',
+    scope: 'Pending Approve 409 internal admin repro, external to platform suite',
   },
   {
     id: 'qa-dup-create-link',
-    scope: 'internal admin repro, external to platform suite',
+    scope: 'duplicate Create link internal admin repro, external to platform suite',
   },
   {
     id: 'qa-flag-vs-route',
