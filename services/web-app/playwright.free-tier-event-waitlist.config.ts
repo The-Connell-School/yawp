@@ -1,5 +1,14 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const internalApiKeys = JSON.stringify([
+  {
+    id: 'e2e-free-tier-release-management',
+    secret: 'e2e-free-tier-release-management-secret-00000000',
+    scopes: ['management:write'],
+  },
+]);
+const internalApiKeysEnv = JSON.stringify(internalApiKeys);
+
 export default defineConfig({
   testDir: './e2e',
   testMatch: /tests\/free-tier\.event-waitlist\.spec\.ts/,
@@ -41,7 +50,7 @@ export default defineConfig({
     },
     {
       command:
-        "bash -c 'bun ./e2e/ensure-e2e-env.ts && set -a && source ./e2e/.env.e2e && set +a && E2E=true TESTER_FEEDBACK_ENABLED=true PRIMARY_APP_URL=http://127.0.0.1:5186 YAWP_MANAGEMENT_SERVICE_KEY=e2e-free-tier-release-management-key-000000000000 bun run dev -- --port 5186 --host 127.0.0.1 --strictPort'",
+        `bash -c 'bun ./e2e/ensure-e2e-env.ts && set -a && source ./e2e/.env.e2e && set +a && E2E=true TESTER_FEEDBACK_ENABLED=true PRIMARY_APP_URL=http://127.0.0.1:5186 LEGACY_INTERNAL_KEY_ALLOWED=false INTERNAL_API_NONCE_STORE=memory YAWP_INTERNAL_API_KEYS=${internalApiKeysEnv} bun run dev -- --port 5186 --host 127.0.0.1 --strictPort'`,
       url: 'http://127.0.0.1:5186',
       reuseExistingServer: false,
       timeout: 240 * 1000,

@@ -14,12 +14,15 @@ import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { setFreeTierFlag } from '../feature-flags';
 import { waitForFreeTierEmailPayload } from '../helpers/free-tier-email';
+import { signInternalApiRequest } from '../../app/utils/internal-platform-signing.server';
 
 const OUT =
   process.env.QA_SCREENSHOT_DIR?.trim() ||
   '/home/bryant/work/yawp/codex-loop/lanes/free-tier-fixes/shots/ft-event-waitlist-auto-admit';
-const E2E_MANAGEMENT_SERVICE_KEY =
-  'e2e-free-tier-release-management-key-000000000000';
+const E2E_INTERNAL_API_KEY_ID = 'e2e-free-tier-release-management';
+const E2E_INTERNAL_API_SECRET =
+  'e2e-free-tier-release-management-secret-00000000';
+const E2E_INTERNAL_API_ACTOR = 'free-tier-qa@yawp.school';
 
 async function shot(page: Page, name: string) {
   await mkdir(OUT, { recursive: true });
@@ -197,12 +200,22 @@ test.describe('Free-tier event waitlist QA', () => {
         ].join('\n')
       );
 
-      const releaseResponse = await request.post('/api/internal/v1/free-tier/release', {
+      const releasePath = '/api/internal/v1/free-tier/release';
+      const releaseBody = JSON.stringify({ applicationIds: [app.id] });
+      const signedRelease = signInternalApiRequest({
+        method: 'POST',
+        url: new URL(releasePath, 'http://127.0.0.1:5186').toString(),
+        body: releaseBody,
+        keyId: E2E_INTERNAL_API_KEY_ID,
+        secret: E2E_INTERNAL_API_SECRET,
+        actor: E2E_INTERNAL_API_ACTOR,
+      });
+      const releaseResponse = await request.post(releasePath, {
         headers: {
-          authorization: `Bearer ${E2E_MANAGEMENT_SERVICE_KEY}`,
+          ...signedRelease.headers,
           'content-type': 'application/json',
         },
-        data: { applicationIds: [app.id] },
+        data: releaseBody,
       });
       expect(releaseResponse.status()).toBe(200);
       await expect(async () => {
