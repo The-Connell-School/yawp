@@ -41,7 +41,7 @@ export default function AssignmentTypesRoute() {
         <Button className="mt-3" variant="outline" asChild>
           <Link to="/app/admin/assignment-types/new">
             <Plus className="mr-2 size-4 shrink-0" />
-            Legacy create tool
+            Create assignment type
           </Link>
         </Button>
       </div>
