@@ -206,16 +206,15 @@ describe('tester feedback submission', () => {
       expect(saved[0]).toMatchObject({ environment });
     }
   });
-  test('does not trust proxy-reconstructed tester feedback origins in production', async () => {
-    const { deps, saved } = setup({ environment: () => 'production' });
+  test('accepts demo hosted requests when the public host carries the browser origin', async () => {
+    const { deps, saved } = setup({ environment: () => 'demo' });
     const response = await submitTesterFeedback(
       new Request('http://app-runner.internal/api/tester-feedback', {
         method: 'POST',
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
-          origin: 'https://app.yawp.test',
-          'x-forwarded-proto': 'https',
-          'x-forwarded-host': 'app.yawp.test',
+          origin: 'https://demo.yawp.school',
+          host: 'demo.yawp.school',
         },
         body: new URLSearchParams({
           url: '/app?tab=work',
@@ -226,7 +225,42 @@ describe('tester feedback submission', () => {
       }),
       deps
     );
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(201);
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject({ environment: 'demo' });
+  });
+  test('does not trust proxy-reconstructed tester feedback origins in production', async () => {
+    const { deps, saved } = setup({ environment: () => 'production' });
+    const productionOriginHeaders: HeadersInit[] = [
+      {
+        origin: 'https://app.yawp.test',
+        'x-forwarded-proto': 'https',
+        'x-forwarded-host': 'app.yawp.test',
+      },
+      {
+        origin: 'https://yawp.school',
+        host: 'yawp.school',
+      },
+    ];
+    for (const headers of productionOriginHeaders) {
+      const response = await submitTesterFeedback(
+        new Request('http://app-runner.internal/api/tester-feedback', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+            ...headers,
+          },
+          body: new URLSearchParams({
+            url: '/app?tab=work',
+            whatIDid: 'Opened',
+            whatHappened: 'Froze',
+            whatIWish: 'Save',
+          }),
+        }),
+        deps
+      );
+      expect(response.status).toBe(403);
+    }
     expect(saved).toHaveLength(0);
   });
   test('reports modest rate limiting without saving', async () => {

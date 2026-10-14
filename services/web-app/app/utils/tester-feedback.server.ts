@@ -130,12 +130,28 @@ function forwardedOrigin(request: Request) {
   }
 }
 
+function hostedRequestOrigin(request: Request, origin: string) {
+  const host = firstHeaderValue(request.headers.get('host'));
+  if (!host || /[\s/@\\\u0000-\u001f]/.test(host)) return null;
+  try {
+    const parsedOrigin = new URL(origin);
+    if (parsedOrigin.protocol !== 'https:' && parsedOrigin.protocol !== 'http:')
+      return null;
+    return new URL(`${parsedOrigin.protocol}//${host}`).origin;
+  } catch {
+    return null;
+  }
+}
+
 function acceptsFeedbackOrigin(request: Request, environment: string) {
   const origin = request.headers.get('origin');
   if (!origin) return false;
   if (origin === new URL(request.url).origin) return true;
   if (environment.toLowerCase() === 'production') return false;
-  return origin === forwardedOrigin(request);
+  return (
+    origin === forwardedOrigin(request) ||
+    origin === hostedRequestOrigin(request, origin)
+  );
 }
 
 export async function submitTesterFeedback(
