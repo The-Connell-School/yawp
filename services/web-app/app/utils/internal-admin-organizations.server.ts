@@ -585,55 +585,60 @@ export async function internalAdminOrganizationCreate(
   const accessExpiresAt = parsed.data.accessExpiresAt;
   const idempotencyKey = request.headers.get('idempotency-key')?.trim() || null;
   const hash = requestHash(parsed.body);
-  if (idempotencyKey) {
-    const previous = await client.internalPlatformApiAudit.findFirst({
-      where: {
-        endpoint: 'POST /api/internal/v1/admin/organizations',
-        result: 'after',
-        action: 'organization.create.after',
-        actorEmail: parsed.auth.actorEmail,
-        keyId: parsed.auth.keyId,
-        metadata: { path: ['idempotencyKey'], equals: idempotencyKey },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-    if (previous) {
-      if (previous.requestHash !== hash) {
-        return response(
-          { error: 'Idempotency-Key was already used with a different request' },
-          409
-        );
-      }
-      if (!previous.targetId) {
+  return client.$transaction(async (tx: any) => {
+    if (idempotencyKey) {
+      // Length-delimited tuple serialization avoids actor/key boundary ambiguity.
+      // The transaction lock spans the replay check, mutation and audit insert.
+      const replayScope = JSON.stringify([
+        'organization.create', parsed.auth.actorEmail, parsed.auth.keyId, idempotencyKey,
+      ]);
+      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${replayScope}, 0))`;
+      const previous = await tx.internalPlatformApiAudit.findFirst({
+        where: {
+          endpoint: 'POST /api/internal/v1/admin/organizations',
+          result: 'after',
+          action: 'organization.create.after',
+          actorEmail: parsed.auth.actorEmail,
+          keyId: parsed.auth.keyId,
+          metadata: { path: ['idempotencyKey'], equals: idempotencyKey },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (previous) {
+        if (previous.requestHash !== hash) {
+          return response(
+            { error: 'Idempotency-Key was already used with a different request' },
+            409
+          );
+        }
+        if (!previous.targetId) {
+          return response(
+            { error: 'Idempotency-Key could not be replayed safely' },
+            409
+          );
+        }
+        const existing = await tx.organization.findUnique({
+          where: { id: previous.targetId },
+          include: { assignmentTypeAssignments: true },
+        });
+        if (existing)
+          return response({ organization: snapshotOrganization(existing) });
         return response(
           { error: 'Idempotency-Key could not be replayed safely' },
           409
         );
       }
-      const existing = await client.organization.findUnique({
-        where: { id: previous.targetId },
-        include: { assignmentTypeAssignments: true },
-      });
-      if (existing)
-        return response({ organization: snapshotOrganization(existing) });
-      return response(
-        { error: 'Idempotency-Key could not be replayed safely' },
-        409
-      );
     }
-  }
 
-  const validAssignmentTypes = parsed.data.assignmentTypeIds.length
-    ? await client.assignmentType.findMany({
-        where: { id: { in: parsed.data.assignmentTypeIds }, archivedAt: null },
-        select: { id: true },
-      })
-    : [];
-  if (validAssignmentTypes.length !== parsed.data.assignmentTypeIds.length) {
-    return response({ error: 'Assignment type not found' }, 404);
-  }
-
-  const created = await client.$transaction(async (tx: any) => {
+    const validAssignmentTypes = parsed.data.assignmentTypeIds.length
+      ? await tx.assignmentType.findMany({
+          where: { id: { in: parsed.data.assignmentTypeIds }, archivedAt: null },
+          select: { id: true },
+        })
+      : [];
+    if (validAssignmentTypes.length !== parsed.data.assignmentTypeIds.length) {
+      return response({ error: 'Assignment type not found' }, 404);
+    }
     const organization = await tx.organization.create({
       data: {
         name: parsed.data.name,
@@ -667,10 +672,8 @@ export async function internalAdminOrganizationCreate(
       after: snapshotOrganization(after),
       idempotencyKey,
     });
-    return after;
-  });
-
-  return response({ organization: snapshotOrganization(created) }, 201);
+    return response({ organization: snapshotOrganization(after) }, 201);
+  }, { isolationLevel: 'ReadCommitted' });
 }
 
 export async function internalAdminOrganizationUpdate(
@@ -685,27 +688,28 @@ export async function internalAdminOrganizationUpdate(
   if (!parsed.ok) return parsed.response;
   const accessExpiresAt = parsed.data.accessExpiresAt;
 
-  const [before, validAssignmentTypes] = await Promise.all([
-    client.organization.findUnique({
+  return client.$transaction(async (tx: any) => {
+    // Lock before reading fields AND assignment rows. A waiting writer then
+    // reads the preceding commit under ReadCommitted and audits what it replaces.
+    await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${id} FOR UPDATE`;
+    const before = await tx.organization.findUnique({
       where: { id },
       include: { assignmentTypeAssignments: true },
-    }),
-    parsed.data.assignmentTypeIds.length
-      ? client.assignmentType.findMany({
+    });
+    if (!before) return response({ error: 'Not found' }, 404);
+    const validAssignmentTypes = parsed.data.assignmentTypeIds.length
+      ? await tx.assignmentType.findMany({
           where: {
             id: { in: parsed.data.assignmentTypeIds },
             archivedAt: null,
           },
           select: { id: true },
         })
-      : Promise.resolve([]),
-  ]);
-  if (!before) return response({ error: 'Not found' }, 404);
-  if (validAssignmentTypes.length !== parsed.data.assignmentTypeIds.length) {
-    return response({ error: 'Assignment type not found' }, 404);
-  }
+      : [];
+    if (validAssignmentTypes.length !== parsed.data.assignmentTypeIds.length) {
+      return response({ error: 'Assignment type not found' }, 404);
+    }
 
-  const after = await client.$transaction(async (tx: any) => {
     await tx.organization.update({
       where: { id },
       data: {
@@ -741,8 +745,6 @@ export async function internalAdminOrganizationUpdate(
       before: snapshotOrganization(before),
       after: snapshotOrganization(updated),
     });
-    return updated;
-  });
-
-  return response({ organization: snapshotOrganization(after) });
+    return response({ organization: snapshotOrganization(updated) });
+  }, { isolationLevel: 'ReadCommitted' });
 }

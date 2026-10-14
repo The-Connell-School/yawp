@@ -112,6 +112,83 @@ function requestHash(body: string) {
   return createHash('sha256').update(body).digest('hex');
 }
 
+// Transactions overlap until the handler takes a database lock. Reads outside
+// the transaction can therefore reproduce both reviewed races deterministically.
+function concurrentDatabase(options: { failAudit?: boolean; initial?: any } = {}) {
+  const rows = new Map<string, any>();
+  if (options.initial) rows.set(options.initial.id, structuredClone(options.initial));
+  const audits: any[] = [];
+  const locks = new Map<string, Promise<void>>();
+  const organization = {
+    create: async ({ data }: any) => {
+      const row = { ...data, id: `org-${rows.size + 1}`, assignmentTypeAssignments: [] };
+      rows.set(row.id, row);
+      return structuredClone(row);
+    },
+    findUnique: async ({ where }: any) => structuredClone(rows.get(where.id) ?? null),
+    update: async ({ where, data }: any) => {
+      const row = { ...rows.get(where.id), ...data };
+      rows.set(where.id, row);
+      return structuredClone(row);
+    },
+  };
+  const assignmentType = { findMany: async ({ where }: any) => where.id.in.map((id: string) => ({ id })) };
+  const organizationAssignmentType = {
+    deleteMany: async ({ where }: any) => { rows.get(where.organizationId).assignmentTypeAssignments = []; },
+    createMany: async ({ data }: any) => {
+      for (const link of data) rows.get(link.organizationId).assignmentTypeAssignments.push({ assignmentTypeId: link.assignmentTypeId });
+    },
+  };
+  const internalPlatformApiAudit = {
+    findFirst: async ({ where }: any) => structuredClone(audits.find((a) =>
+      a.action === where.action && a.actorEmail === where.actorEmail && a.keyId === where.keyId &&
+      a.metadata.idempotencyKey === where.metadata.equals
+    ) ?? null),
+    createMany: async ({ data }: any) => {
+      if (options.failAudit) throw new Error('Transactional audit failed');
+      audits.push(...structuredClone(data));
+    },
+  };
+  const delegates = { organization, assignmentType, organizationAssignmentType, internalPlatformApiAudit };
+  prisma.organization.findUnique.mockImplementation(organization.findUnique);
+  prisma.internalPlatformApiAudit.findFirst.mockImplementation(internalPlatformApiAudit.findFirst);
+  prisma.assignmentType.findMany.mockImplementation(assignmentType.findMany);
+  prisma.$transaction.mockImplementation(async (fn: any) => {
+    const initialRows = structuredClone(rows);
+    const initialAudits = structuredClone(audits);
+    const releases: (() => void)[] = [];
+    try {
+      return await fn({
+        ...delegates,
+        $queryRaw: async (sql: TemplateStringsArray, ...values: unknown[]) => {
+          const key = `${sql.join('?').includes('FOR UPDATE') ? 'row' : 'replay'}:${values[0]}`;
+          const previous = locks.get(key) ?? Promise.resolve();
+          const held = new Promise<void>((resolve) => releases.push(resolve));
+          locks.set(key, previous.then(() => held));
+          await previous;
+          return [{ locked: 1 }];
+        },
+      });
+    } catch (error) {
+      rows.clear();
+      for (const [id, row] of initialRows) rows.set(id, row);
+      audits.splice(0, audits.length, ...initialAudits);
+      throw error;
+    } finally {
+      for (const release of releases) release();
+    }
+  });
+  return { rows, audits };
+}
+
+function writeRequest(name: string, method = 'POST', key = 'concurrent-create', fields: Record<string, unknown> = {}) {
+  return new Request(method === 'POST' ? base : `${base}/org-1`, {
+    method,
+    headers: { 'Idempotency-Key': key },
+    body: JSON.stringify({ name, numOfStudentSeats: 30, numOfTeacherSeats: 4, assignmentTypeIds: [], ...fields }),
+  });
+}
+
 describe('internal admin organization endpoints', () => {
   beforeEach(() => {
     authorizeInternalApiRequest.mockReset().mockResolvedValue({
@@ -768,4 +845,68 @@ describe('internal admin organization endpoints', () => {
 
     expect(prisma.organization.update).not.toHaveBeenCalled();
   });
+  test('overlapping same-key creates return one organization and one audit pair', async () => {
+    const { rows, audits } = concurrentDatabase();
+    const replies = await Promise.all([
+      internalAdminOrganizationCreate(writeRequest('Same Org')),
+      internalAdminOrganizationCreate(writeRequest('Same Org')),
+    ]);
+    const bodies = await Promise.all(replies.map((reply) => reply.json()));
+    expect(replies.map((reply) => reply.status).sort()).toEqual([200, 201]);
+    expect(rows.size).toBe(1);
+    expect(bodies[0].organization.id).toBe(bodies[1].organization.id);
+    expect(audits.map((audit) => audit.action)).toEqual(['organization.create.before', 'organization.create.after']);
+  });
+
+  test('overlapping conflicting bodies for one replay key reject the second mutation', async () => {
+    const { rows, audits } = concurrentDatabase();
+    const replies = await Promise.all([
+      internalAdminOrganizationCreate(writeRequest('First Org')),
+      internalAdminOrganizationCreate(writeRequest('Conflicting Org')),
+    ]);
+    expect(replies.map((reply) => reply.status).sort()).toEqual([201, 409]);
+    expect(rows.size).toBe(1);
+    expect(audits).toHaveLength(2);
+  });
+
+  test('replay keys are scoped to the actor and signing key', async () => {
+    const { rows } = concurrentDatabase();
+    for (const [actorEmail, keyId] of [['first@yawp.test', 'key-1'], ['second@yawp.test', 'key-1'], ['first@yawp.test', 'key-2']]) {
+      authorizeInternalApiRequest.mockResolvedValueOnce({ mode: 'hmac', actorEmail, keyId, scopes: ['management:write'] });
+      expect((await internalAdminOrganizationCreate(writeRequest('Same Org'))).status).toBe(201);
+    }
+    expect(rows.size).toBe(3);
+  });
+
+  test('overlapping updates audit the exact overwritten fields and assignments', async () => {
+    const initial = { id: 'org-1', name: 'Original', numOfStudentSeats: 10, numOfTeacherSeats: 2, accessExpiresAt: null, reporterEnabled: false, assignmentTypeAssignments: [{ assignmentTypeId: 'original-type' }] };
+    const { rows, audits } = concurrentDatabase({ initial });
+    const replies = await Promise.all([
+      internalAdminOrganizationUpdate(writeRequest('First', 'PATCH', '', { numOfStudentSeats: 40, accessExpiresAt: '2027-01-01T00:00:00.000Z', featureToggles: { reporterEnabled: true }, assignmentTypeIds: ['type-1'] }), 'org-1'),
+      internalAdminOrganizationUpdate(writeRequest('Second', 'PATCH', '', { numOfStudentSeats: 60, numOfTeacherSeats: 8, accessExpiresAt: '2028-01-01T00:00:00.000Z', featureToggles: { reporterEnabled: false }, assignmentTypeIds: ['type-2'] }), 'org-1'),
+    ]);
+    expect(replies.map((reply) => reply.status)).toEqual([200, 200]);
+    const before = audits.filter((audit) => audit.result === 'before').map((audit) => audit.metadata.before);
+    const after = audits.filter((audit) => audit.result === 'after').map((audit) => audit.metadata.after);
+    expect(before[0].name).toBe('Original');
+    expect(before[0].assignmentTypeIds).toEqual(['original-type']);
+    expect(before[1]).toEqual(after[0]);
+    expect(after[1]).toEqual(expect.objectContaining({ name: rows.get('org-1').name, assignmentTypeIds: ['type-2'] }));
+  });
+
+  test('create rolls back organization and assignments if its audit fails', async () => {
+    const { rows, audits } = concurrentDatabase({ failAudit: true });
+    await expect(internalAdminOrganizationCreate(writeRequest('Rollback', 'POST', 'rollback', { assignmentTypeIds: ['type-1'] }))).rejects.toThrow('Transactional audit failed');
+    expect(rows.size).toBe(0);
+    expect(audits).toHaveLength(0);
+  });
+
+  test('update rolls back fields and assignments if its audit fails', async () => {
+    const initial = { id: 'org-1', name: 'Original', numOfStudentSeats: 10, numOfTeacherSeats: 2, accessExpiresAt: null, assignmentTypeAssignments: [{ assignmentTypeId: 'original-type' }] };
+    const { rows, audits } = concurrentDatabase({ failAudit: true, initial });
+    await expect(internalAdminOrganizationUpdate(writeRequest('Rollback', 'PATCH', '', { assignmentTypeIds: ['type-2'] }), 'org-1')).rejects.toThrow('Transactional audit failed');
+    expect(rows.get('org-1')).toEqual(initial);
+    expect(audits).toHaveLength(0);
+  });
+
 });
