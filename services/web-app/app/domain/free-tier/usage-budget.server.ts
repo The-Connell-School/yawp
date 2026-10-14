@@ -48,6 +48,11 @@ export function resolveFreeTierBudgetEnvironment(env: Env = process.env): FreeTi
     return budgetOverride;
   }
 
+  return resolveFreeTierRuntimeEnvironment(env);
+}
+
+/** Runtime classification, independent of accounting overrides. */
+export function resolveFreeTierRuntimeEnvironment(env: Env = process.env): FreeTierBudgetEnvironment {
   const previewSlug = (env.PREVIEW_SLUG ?? '').trim().toLowerCase();
   if (previewSlug === 'demo') return 'demo';
 

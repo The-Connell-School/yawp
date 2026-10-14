@@ -119,7 +119,7 @@ export async function submitAdminDetails(args: {
   const adminEmail = normalizeEmail(args.adminEmail);
   const app = await prisma.freeTierApplication.findFirst({
     where: { id: args.applicationId, userId: args.userId },
-    select: { id: true, status: true, email: true, name: true, schoolName: true, teacherPersonalNote: true },
+    select: { id: true, status: true, email: true, name: true, schoolName: true },
   });
   if (!app) return { ok: false as const, reason: 'not_found' as const };
   if (app.status !== 'ACCOUNT_CREATED' && app.status !== 'ADMIN_SUBMITTED') {
@@ -129,7 +129,8 @@ export async function submitAdminDetails(args: {
   const rules = evaluateAdminEmail({ teacherEmail: app.email, adminEmail, schoolName: app.schoolName });
 
   const copyHash = adminApprovalEmailCopyVersionHash();
-  const note = args.personalNote?.trim() || null;
+  // Kept in the API for older callers; introductions are no longer accepted.
+  const note = null;
 
   const result = await prisma.$transaction(async (tx) => {
     const current = await tx.freeTierApplication.findUnique({
@@ -213,7 +214,6 @@ export async function submitAdminDetails(args: {
       teacherEmail: app.email,
       teacherName: app.name,
       schoolName: app.schoolName,
-      personalNote: note,
       approveUrl,
       notRightPersonUrl: declineUrl,
     });
@@ -395,7 +395,7 @@ export async function resendFreeTierAdminApprovalReminder(args: {
   const pendingRow = await prisma.freeTierAdminApproval.findFirst({
     where: { applicationId: app.id, status: 'PENDING' },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, adminEmail: true, personalNote: true },
+    select: { id: true, adminEmail: true },
   });
   if (!pendingRow) return { ok: false as const, reason: 'not_found' as const };
 
@@ -412,7 +412,7 @@ export async function resendFreeTierAdminApprovalReminder(args: {
       ttlMs: FREE_TIER_LINK_TTL_MS,
       tx,
     });
-    return { approveMint, declineMint, personalNote: pendingRow.personalNote };
+    return { approveMint, declineMint };
   });
 
   const base = freeTierPublicAppOrigin();
@@ -425,7 +425,6 @@ export async function resendFreeTierAdminApprovalReminder(args: {
     teacherEmail: app.email,
     teacherName: app.name,
     schoolName: app.schoolName,
-    personalNote: minted.personalNote,
     approveUrl,
     notRightPersonUrl,
   });
@@ -517,13 +516,6 @@ export async function redirectSchoolAdmin(args: {
       teacherEmail: preApp.email,
       teacherName: preApp.name,
       schoolName: preApp.schoolName,
-      personalNote: (
-        await prisma.freeTierAdminApproval.findFirst({
-          where: { applicationId: preApp.id, status: 'PENDING' },
-          orderBy: { createdAt: 'desc' },
-          select: { personalNote: true },
-        })
-      )?.personalNote,
       approveUrl,
       notRightPersonUrl,
       adminRecipientName: newAdminNameTrim,

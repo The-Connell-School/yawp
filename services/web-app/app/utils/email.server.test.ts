@@ -141,6 +141,21 @@ describe('sendEmail', () => {
 		expect(sesSend).not.toHaveBeenCalled();
 	});
 
+
+  test('passes optional BCC to SES without changing To', async () => {
+    process.env.EMAIL_PROVIDER = 'ses';
+    sesSend.mockResolvedValue({ MessageId: 'mock' });
+    await sendEmail({ to: 'principal@example.edu', bcc: ['teacher@example.edu'], subject: 'Approval', html: '<p>fixed</p>', text: 'fixed' } as Parameters<typeof sendEmail>[0]);
+    expect((sesSend.mock.calls[0][0] as MockSendEmailCommand).input).toMatchObject({ Destination: { ToAddresses: ['principal@example.edu'], BccAddresses: ['teacher@example.edu'] } });
+  });
+
+  test('passes optional BCC to Resend without changing To', async () => {
+    process.env.EMAIL_PROVIDER = 'resend';
+    process.env.RESEND_API_KEY = 'mock-key';
+    await sendEmail({ to: 'principal@example.edu', bcc: ['teacher@example.edu'], subject: 'Approval', html: '<p>fixed</p>', text: 'fixed' } as Parameters<typeof sendEmail>[0]);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ to: 'principal@example.edu', bcc: ['teacher@example.edu'] });
+  });
+
 	test('captures email on yawp_pr preview without calling Resend', async () => {
 		process.env.YAWP_ENVIRONMENT = 'preview';
 		process.env.DATABASE_URL = 'postgresql://app@db/yawp_pr_416';
