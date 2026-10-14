@@ -10,6 +10,12 @@ import {
   FREE_TIER_SCAN_DEDUPE_MS,
   hashScanDedupeCookie,
 } from './acquisition-token-scan.server';
+import {
+  assertFreeTierBudgetHeadroomForTransition,
+  FreeTierBudgetExceededError,
+  freeTierBudgetRemainingActivations,
+  readFreeTierUsageSummary,
+} from './usage-budget.server';
 
 /** Read at call time so ops can change it with an env var and tests can override it. */
 export function getFreeTierReleaseCap(): number {
@@ -422,8 +428,28 @@ export async function redeemToken(input: RedeemInput) {
 
     const existing = await tx.freeTierApplication.findUnique({
       where: { email },
-      select: { id: true, status: true, acquisitionTokenId: true },
+      select: { id: true, status: true, releasedAt: true, acquisitionTokenId: true },
     });
+
+    const now = new Date();
+    const bypassActivatesApplication =
+      token.bypassWaitlist && (!existing || existing.status === 'LEAD');
+    if (bypassActivatesApplication) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('free_tier_release'))`;
+      try {
+        await assertFreeTierBudgetHeadroomForTransition(tx, {
+          from: existing
+            ? { status: existing.status, releasedAt: existing.releasedAt }
+            : { status: 'LEAD', releasedAt: null },
+          to: { status: 'INVITED', releasedAt: now },
+        });
+      } catch (error) {
+        if (error instanceof FreeTierBudgetExceededError) {
+          return { ok: false as const, reason: 'budget_exceeded' as const };
+        }
+        throw error;
+      }
+    }
 
     // The same person scanning the same QR twice must not burn a second use.
     const alreadyCounted = existing?.acquisitionTokenId === token.id;
@@ -461,7 +487,6 @@ export async function redeemToken(input: RedeemInput) {
       }
     }
 
-    const now = new Date();
     if (!existing) {
       // ON CONFLICT DO NOTHING: a failed INSERT inside a transaction would abort
       // it, and losing a race for the same email just means the other writer won.
@@ -525,7 +550,12 @@ export async function releaseBatch(input: ReleaseBatchInput, audit?: TesterAudit
     const current = await tx.freeTierApplication.count({
       where: { OR: [{ releasedAt: { not: null } }, { status: { in: activeStatuses } }] },
     });
-    const remaining = Math.max(0, cap - current);
+    const budget = await readFreeTierUsageSummary(tx);
+    const budgetRemaining = freeTierBudgetRemainingActivations(budget);
+    if (budgetRemaining <= 0) {
+      throw new FreeTierBudgetExceededError(budget);
+    }
+    const remaining = Math.min(Math.max(0, cap - current), budgetRemaining);
     // Only waitlisted leads can be released; already-released or unknown ids do
     // not use up headroom and are reported separately.
     const leads = await tx.freeTierApplication.findMany({

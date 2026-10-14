@@ -178,6 +178,31 @@ suite('approval queue and actions', () => {
     }
   });
 
+  test('approve does not spend another budget slot for an already-counted application', async () => {
+    const previousEnv = process.env.FREE_TIER_BUDGET_ENVIRONMENT;
+    const previousBudget = process.env.FREE_TIER_PREVIEW_BUDGET_USD;
+    const previousUnitCost = process.env.FREE_TIER_PREVIEW_UNIT_COST_USD;
+    process.env.FREE_TIER_BUDGET_ENVIRONMENT = 'preview';
+    process.env.FREE_TIER_PREVIEW_BUDGET_USD = '0';
+    process.env.FREE_TIER_PREVIEW_UNIT_COST_USD = '1';
+    try {
+      const a = await makeApp('approve-budget-full', 'SENT');
+      const res = await post(approveHttp, a.id, 'approve');
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.previousStatus).toBe('SENT');
+      const row = await prisma.freeTierApplication.findUnique({ where: { id: a.id } });
+      expect(row?.status).toBe('APPROVED');
+    } finally {
+      if (previousEnv === undefined) delete process.env.FREE_TIER_BUDGET_ENVIRONMENT;
+      else process.env.FREE_TIER_BUDGET_ENVIRONMENT = previousEnv;
+      if (previousBudget === undefined) delete process.env.FREE_TIER_PREVIEW_BUDGET_USD;
+      else process.env.FREE_TIER_PREVIEW_BUDGET_USD = previousBudget;
+      if (previousUnitCost === undefined) delete process.env.FREE_TIER_PREVIEW_UNIT_COST_USD;
+      else process.env.FREE_TIER_PREVIEW_UNIT_COST_USD = previousUnitCost;
+    }
+  });
+
   test('approve is refused before the teacher submits admin info and after rejection', async () => {
     for (const from of ['LEAD', 'INVITED', 'ACCOUNT_CREATED', 'REJECTED', 'EXPIRED'] as const) {
       const a = await makeApp(`noapprove-${from}`, from);

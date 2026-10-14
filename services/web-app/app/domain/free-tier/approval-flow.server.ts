@@ -26,11 +26,18 @@ import {
 } from './email.server';
 import { getApprovalHooks } from './approval-hooks.server';
 import { getClientIp } from '~/utils/ip.server';
+import {
+  assertFreeTierBudgetHeadroomForTransition,
+  FreeTierBudgetExceededError,
+  type FreeTierUsageSummary,
+} from './usage-budget.server';
 
 export type FreeTierTransactionalFailure = {
   ok: false;
   reason: string;
   status?: string;
+  budget?: FreeTierUsageSummary;
+  operatorMessage?: string;
 };
 
 export class FreeTierTransactionalAbortError extends Error {
@@ -45,6 +52,15 @@ export class FreeTierTransactionalAbortError extends Error {
 
 function abortClaimedLinkTransaction(result: FreeTierTransactionalFailure): never {
   throw new FreeTierTransactionalAbortError(result);
+}
+
+function budgetExceededFailure(error: FreeTierBudgetExceededError): FreeTierTransactionalFailure {
+  return {
+    ok: false,
+    reason: 'budget_exceeded',
+    budget: error.summary,
+    operatorMessage: `Free-tier ${error.summary.environment} budget reached: $${error.summary.spendUsd.toFixed(2)} of $${error.summary.budgetUsd.toFixed(2)} used.`,
+  };
 }
 
 function mapTransactionalAbort(error: unknown) {
@@ -258,6 +274,7 @@ export async function completeSchoolAdminApproval(args: {
           schoolName: true,
           userId: true,
           organizationId: true,
+          releasedAt: true,
         },
       });
       if (!app) abortClaimedLinkTransaction({ ok: false, reason: 'not_found' });
@@ -286,6 +303,18 @@ export async function completeSchoolAdminApproval(args: {
         });
         if (stillPending) abortClaimedLinkTransaction({ ok: false, reason: 'superseded' });
         abortClaimedLinkTransaction({ ok: false, reason: 'not_found' });
+      }
+
+      try {
+        await assertFreeTierBudgetHeadroomForTransition(tx, {
+          from: { status: app.status, releasedAt: app.releasedAt },
+          to: { status: 'APPROVED', releasedAt: app.releasedAt },
+        });
+      } catch (error) {
+        if (error instanceof FreeTierBudgetExceededError) {
+          abortClaimedLinkTransaction(budgetExceededFailure(error));
+        }
+        throw error;
       }
 
       await tx.freeTierAdminApproval.update({
