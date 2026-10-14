@@ -1,7 +1,7 @@
-# PLAN: admin-migrate-n
+# PLAN: qa-suite-post-closure-mainline-health
 
-- Keep the Assignment Types migration read-only: signed list/detail platform APIs, Internal list/detail inspection, and a de-emphasized legacy platform admin surface.
-- Address reviewer rejection by making Assignment Types list pagination use a stable cursor matching the `createdAt desc, id desc` sort tuple.
-- Add a multi-page platform API test proving no skipped or duplicated rows across cursor pages.
-- Add deny/authz coverage for the signed detail API and the Internal detail loader before any platform client work.
-- Re-run focused Internal and platform tests/typechecks, verify platform PR checks are green, then update PR descriptions and `BUILD_RESULT.md` with `[skip preview]` preserved.
+- Refresh the platform free-tier demo QA suite on current `origin/main` with test/repro-only changes.
+- Restore the durable suite runner, manifest docs, hosted-demo skip evidence, and missing seeded repro specs while preserving current waitlist-copy behavior checks.
+- Keep hosted demo mutation guarded: write skip artifacts unless disposable fixture env and explicit opt-ins are present.
+- Run manifest/list output, runner/helper contract tests, typecheck, and the deterministic local free-tier demo Playwright suite with capped workers.
+- If a distinct product failure appears, append lane `FAILURES.md` and prepend a matching fixes-lane `P0b` backlog item.
