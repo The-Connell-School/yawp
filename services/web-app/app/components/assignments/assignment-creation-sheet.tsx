@@ -210,6 +210,8 @@ export type AssignmentCreationAssignmentType = {
   kind: string | null;
   /** Library rubric name when the type points at a shared rubric (e.g. SJP Daily Pages). */
   rubricName?: string | null;
+  /** Displayed for a catalog type excluded by the organization plan. */
+  unavailableReason?: string;
   /** Free classroom bundle: assignments remaining for this kind. */
   quotaRemaining?: number;
   quotaTotal?: number;
@@ -347,16 +349,29 @@ export function assignmentCreationClassLabel(
 function initialAssignmentTypeSelection(
   assignmentTypes: AssignmentCreationAssignmentType[],
   fixedAssignmentTypeId?: string,
-  initialAssignmentTypeId?: string
+  initialAssignmentTypeId?: string,
+  isEditing = false
 ) {
   const preferredId =
     fixedAssignmentTypeId ?? initialAssignmentTypeId ?? undefined;
+  // Creation availability can change after an assignment is posted. Preserve
+  // its current type for ordinary edits; selecting a replacement still requires
+  // an available catalog type.
+  if (isEditing && preferredId) return preferredId;
   if (preferredId) {
     const preferred = assignmentTypes.find((type) => type.id === preferredId);
-    if (preferred && !preferred.quotaExhausted) return preferredId;
+    if (
+      preferred &&
+      !preferred.quotaExhausted &&
+      !preferred.unavailableReason
+    ) {
+      return preferredId;
+    }
   }
-  const firstAvailable = assignmentTypes.find((type) => !type.quotaExhausted);
-  return firstAvailable?.id ?? preferredId ?? assignmentTypes[0]?.id ?? '';
+  const firstAvailable = assignmentTypes.find(
+    (type) => !type.quotaExhausted && !type.unavailableReason
+  );
+  return firstAvailable?.id ?? '';
 }
 
 function initialClassIds(fixedClassId?: string) {
@@ -522,7 +537,8 @@ export function AssignmentCreationSheetContent({
     initialAssignmentTypeSelection(
       assignmentTypes,
       fixedAssignmentTypeId,
-      initialAssignmentTypeId
+      initialAssignmentTypeId,
+      Boolean(editingAssignment)
     )
   );
   const [selectedClassId, setSelectedClassId] = useState(
@@ -540,7 +556,8 @@ export function AssignmentCreationSheetContent({
       initialAssignmentTypeSelection(
         assignmentTypes,
         fixedAssignmentTypeId,
-        initialAssignmentTypeId
+        initialAssignmentTypeId,
+        Boolean(editingAssignment)
       )
     ),
     initialSubmitForGrade,
@@ -564,7 +581,8 @@ export function AssignmentCreationSheetContent({
         initialAssignmentTypeSelection(
           assignmentTypes,
           fixedAssignmentTypeId,
-          initialAssignmentTypeId
+          initialAssignmentTypeId,
+          Boolean(editingAssignment)
         )
       ),
       initialTutorEnabled,
@@ -636,11 +654,16 @@ export function AssignmentCreationSheetContent({
   const CreateForm = createFetcher.Form;
   const isSaving = createFetcher.state !== 'idle';
   const isExtracting = extractFetcher.state !== 'idle';
+  const requestedTypeId = fixedAssignmentTypeId ?? selectedAssignmentTypeId ?? '';
+  const selectedType = assignmentTypes.find((type) => type.id === requestedTypeId);
+  const unchangedTypeEdit =
+    isEditing &&
+    requestedTypeId === (fixedAssignmentTypeId ?? initialAssignmentTypeId);
   const assignmentTypeId =
-    fixedAssignmentTypeId ?? selectedAssignmentTypeId ?? '';
-  const selectedType = assignmentTypes.find(
-    (type) => type.id === assignmentTypeId
-  );
+    !unchangedTypeEdit &&
+    (!selectedType || selectedType.unavailableReason || selectedType.quotaExhausted)
+      ? ''
+      : requestedTypeId;
   // Collaboration is offered for every assignment type now, so this only asks
   // whether a type has been chosen at all.
   const selectedTypeSupportsCollaboration = Boolean(assignmentTypeId);
@@ -792,7 +815,8 @@ export function AssignmentCreationSheetContent({
       initialAssignmentTypeSelection(
         assignmentTypes,
         fixedAssignmentTypeId,
-        initialAssignmentTypeId
+        initialAssignmentTypeId,
+        Boolean(editingAssignment)
       )
     );
     setSelectedClassId(fixedClassId ?? teacherClasses[0]?.id ?? '');
@@ -806,7 +830,8 @@ export function AssignmentCreationSheetContent({
         initialAssignmentTypeSelection(
           assignmentTypes,
           fixedAssignmentTypeId,
-          initialAssignmentTypeId
+          initialAssignmentTypeId,
+          Boolean(editingAssignment)
         )
       ),
       initialSubmitForGrade,
@@ -825,7 +850,8 @@ export function AssignmentCreationSheetContent({
           initialAssignmentTypeSelection(
             assignmentTypes,
             fixedAssignmentTypeId,
-            initialAssignmentTypeId
+            initialAssignmentTypeId,
+            Boolean(editingAssignment)
           )
         ),
         initialTutorEnabled,
@@ -942,6 +968,10 @@ export function AssignmentCreationSheetContent({
     isSaving ||
     isExtracting ||
     !assignmentTypeId ||
+    (!unchangedTypeEdit &&
+      (!selectedType ||
+        Boolean(selectedType.unavailableReason) ||
+        Boolean(selectedType.quotaExhausted))) ||
     (!isEditing && selectedClassCount === 0) ||
     (isExitTicket ? !exitTicketPrompt : !prompt.trim()) ||
     (titleRequired && !title.trim()) ||
@@ -1060,6 +1090,9 @@ export function AssignmentCreationSheetContent({
         action={formAction}
         encType="multipart/form-data"
         className="mt-6 space-y-4"
+        onSubmit={(event: React.FormEvent<HTMLFormElement>) => {
+          if (isSubmitDisabled) event.preventDefault();
+        }}
       >
         <input
           type="hidden"
@@ -1130,9 +1163,16 @@ export function AssignmentCreationSheetContent({
                   value={assignmentType.id}
                   textValue={assignmentType.title}
                   triggerLabel={assignmentType.title}
-                  disabled={assignmentType.quotaExhausted}
+                  disabled={
+                    Boolean(assignmentType.unavailableReason) ||
+                    assignmentType.quotaExhausted
+                  }
                 >
-                  {assignmentType.quotaLabel ? (
+                  {assignmentType.unavailableReason ? (
+                    <span className="text-xs text-muted-foreground">
+                      {assignmentType.unavailableReason}
+                    </span>
+                  ) : assignmentType.quotaLabel ? (
                     <span className="text-xs text-muted-foreground">
                       {assignmentType.quotaExhausted
                         ? assignmentType.quotaExhaustedMessage
@@ -1143,6 +1183,16 @@ export function AssignmentCreationSheetContent({
               ))}
             </SelectContent>
           </Select>
+          {!isEditing &&
+          !assignmentTypes.some(
+            (type) => !type.unavailableReason && !type.quotaExhausted
+          ) ? (
+            <p role="status" className="text-sm text-muted-foreground">
+              No assignment types are available for this classroom. Included
+              types may be unavailable or their free allowance has been used.
+              Contact your administrator for help.
+            </p>
+          ) : null}
           {editingAssignment?.assignmentTypeLocked ? (
             <p className="text-xs text-muted-foreground">
               Assignment type is fixed because shared group drafts already

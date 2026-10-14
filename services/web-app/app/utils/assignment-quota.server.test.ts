@@ -9,6 +9,18 @@ import {
 } from './assignment-quota.server';
 
 describe('assignment-quota helpers', () => {
+  test('marks out-of-bundle free choices unavailable while preserving paid behavior', () => {
+    expect(
+      buildAssignmentCreationQuotaFields('FREE_CLASSROOM', null, 0)
+    ).toEqual({ unavailableReason: 'Available with a paid plan.' });
+    expect(
+      buildAssignmentCreationQuotaFields('FREE_CLASSROOM', 'essay', 0)
+    ).toEqual({ unavailableReason: 'Available with a paid plan.' });
+    expect(buildAssignmentCreationQuotaFields('SCHOOL', 'essay', 0)).toEqual(
+      {}
+    );
+  });
+
   test('labels remaining class starters', () => {
     expect(freeClassroomQuotaMessage('class_starter', 8)).toBe(
       '8 of 12 Class Starters left'
