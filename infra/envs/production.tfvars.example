@@ -12,3 +12,11 @@
 # database_export_retention_days = 90
 # manual_snapshot_retention_days = 90
 # rds_snapshot_cleanup_schedule_expression = "cron(30 8 * * ? *)"
+
+# CloudTrail is enabled automatically for env = "production"; override only if
+# importing pre-existing names differs from Terraform defaults.
+# cloudtrail_enabled = true
+# cloudtrail_name = "yawp-production-management-events"
+# cloudtrail_log_bucket_name = "yawp-production-cloudtrail-ACCOUNT"
+# cloudtrail_s3_key_prefix = "cloudtrail"
+# cloudtrail_log_retention_days = 365

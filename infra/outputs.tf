@@ -72,3 +72,18 @@ output "rds_snapshot_cleanup_lambda_name" {
   description = "Lambda function that deletes eligible old manual RDS snapshots"
   value       = module.database_retention.rds_snapshot_cleanup_lambda_name
 }
+
+output "cloudtrail_trail_arn" {
+  description = "ARN of the production multi-region CloudTrail trail, when enabled."
+  value       = try(aws_cloudtrail.management_events[0].arn, null)
+}
+
+output "cloudtrail_log_bucket_name" {
+  description = "S3 bucket that stores production CloudTrail logs, when enabled."
+  value       = try(aws_s3_bucket.cloudtrail_logs[0].bucket, null)
+}
+
+output "cloudtrail_kms_key_arn" {
+  description = "KMS key used for production CloudTrail log encryption, when enabled."
+  value       = try(aws_kms_key.cloudtrail[0].arn, null)
+}
