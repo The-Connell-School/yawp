@@ -531,13 +531,11 @@ export async function releaseBatch(input: ReleaseBatchInput, audit?: TesterAudit
       where: { OR: [{ releasedAt: { not: null } }, { status: { in: activeStatuses } }] },
     });
     const budget = await readFreeTierUsageSummary(tx);
-    const remaining = Math.min(
-      Math.max(0, cap - current),
-      freeTierBudgetRemainingActivations(budget)
-    );
-    if (remaining <= 0) {
+    const budgetRemaining = freeTierBudgetRemainingActivations(budget);
+    if (budgetRemaining <= 0) {
       throw new FreeTierBudgetExceededError(budget);
     }
+    const remaining = Math.min(Math.max(0, cap - current), budgetRemaining);
     // Only waitlisted leads can be released; already-released or unknown ids do
     // not use up headroom and are reported separately.
     const leads = await tx.freeTierApplication.findMany({
