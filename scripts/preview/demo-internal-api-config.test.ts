@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { renderPreviewCompose } from './render-compose.mjs';
 import { spawnSync } from 'node:child_process';
 
@@ -97,4 +99,111 @@ describe('demo signed management configuration', () => {
     expect(result.stdout === 'DEMO_INTERNAL_API_KEYS=[REDACTED]\nYAWP_INTERNAL_API_KEYS=[REDACTED]\n').toBe(true);
     expect(result.stdout.includes(testSecret)).toBe(false);
   });
+});
+
+// Run the actual detached runner and real bash/flock/setsid locally. Only SSH/SCP
+// are replaced: SSH executes exactly the command OpenSSH would pass to the host.
+// Fixtures never reach a network, and boolean assertions keep their bytes out of
+// test failure output. Each run owns its paths, including the local log copy.
+function runDetachedTransport(value: string, targetExit = 0) {
+  const root = mkdtempSync(join(tmpdir(), 'demo-detached-transport-'));
+  const bin = join(root, 'bin');
+  const source = join(root, 'remote source');
+  mkdirSync(bin);
+  mkdirSync(source);
+  writeFileSync(join(bin, 'ssh'), `#!/usr/bin/env bash
+set -euo pipefail
+while [[ "$1" == -* ]]; do
+  case "$1" in
+    -i|-o) shift 2 ;;
+    *) exit 90 ;;
+  esac
+done
+shift # SSH target
+exec bash -c "$*"
+`, { mode: 0o700 });
+  writeFileSync(join(bin, 'scp'), `#!/usr/bin/env bash
+set -euo pipefail
+while [[ "$1" == -* ]]; do
+  case "$1" in
+    -i) shift 2 ;;
+    -q) shift ;;
+    *) exit 90 ;;
+  esac
+done
+cp -- "\${1#*:}" "$2"
+`, { mode: 0o700 });
+  writeFileSync(join(source, 'target.sh'), `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s' "$DEMO_INTERNAL_API_KEYS" > received-keys
+printf '%s' "$PREVIEW_MANAGEMENT_SERVICE_KEY" > received-scalar
+printf 'executed' > executed
+exit ${targetExit}
+`);
+  const runner = new URL('./run-host-deploy-detached.sh', import.meta.url).pathname;
+  try {
+    // Same shell_quote, cd and assignment construction as Demo environment.
+    const result = spawnSync('bash', ['-c', `
+set -euo pipefail
+shell_quote() { printf '%q' "$1"; }
+REMOTE_COMMAND="cd $(shell_quote "$TRANSPORT_SOURCE") && DEMO_INTERNAL_API_KEYS=$(shell_quote "$DEMO_INTERNAL_API_KEYS") PREVIEW_MANAGEMENT_SERVICE_KEY=$(shell_quote "$PREVIEW_MANAGEMENT_SERVICE_KEY") bash target.sh"
+export REMOTE_COMMAND
+exec bash "$TRANSPORT_RUNNER"
+`], {
+      env: {
+        PATH: `${bin}:${process.env.PATH}`,
+        SSH_IDENTITY: join(root, 'unused-identity'), SSH_TARGET: 'local-fixture',
+        LOCK_FILE: join(root, 'host lock'), DEPLOY_LOG: join(root, 'deploy log'),
+        LOCAL_LOG_COPY: join(root, 'local log'),
+        DEPLOY_TIMEOUT_SECONDS: '2', DEPLOY_POLL_SECONDS: '0.05',
+        TRANSPORT_SOURCE: source, TRANSPORT_RUNNER: runner,
+        DEMO_INTERNAL_API_KEYS: value,
+        PREVIEW_MANAGEMENT_SERVICE_KEY: 'fixture-only-existing-scalar',
+      },
+      encoding: 'utf8', timeout: 5000,
+    });
+    return {
+      status: result.status,
+      executed: existsSync(join(source, 'executed')),
+      exactKeys: existsSync(join(source, 'received-keys')) && readFileSync(join(source, 'received-keys'), 'utf8') === value,
+      exactScalar: existsSync(join(source, 'received-scalar')) && readFileSync(join(source, 'received-scalar'), 'utf8') === 'fixture-only-existing-scalar',
+      copiedLog: existsSync(join(root, 'local log')),
+      leaked: result.stdout.includes(testSecret) || result.stderr.includes(testSecret),
+    };
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+describe('demo HMAC bytes through the actual detached SSH runner', () => {
+  const specialKeys = [{ id: 'demo-internal', secret: `${testSecret}$VALUE'"\\$(printf unintended);\u0060printf unintended\u0060`, scopes: ['management:write'] }];
+  const cases = [
+    ['existing scalar control', 'fixture-only-scalar'],
+    ['compact JSON', keys],
+    ['spaced JSON', keys.replaceAll(',', ', ')],
+    ['pretty-printed JSON', JSON.stringify(JSON.parse(keys), null, 2)],
+    ['compact JSON with dollar, quotes, backslash and shell metacharacters', JSON.stringify(specialKeys)],
+    ['pretty-printed JSON with dollar, quotes, backslash and shell metacharacters', JSON.stringify(specialKeys, null, 2)],
+  ];
+  for (const [name, value] of cases) {
+    test(`executes the target and preserves exact bytes for ${name}`, () => {
+      const result = runDetachedTransport(value);
+      expect(result.status).toBe(0);
+      expect(result.executed).toBe(true);
+      expect(result.exactKeys).toBe(true);
+      expect(result.exactScalar).toBe(true);
+      expect(result.copiedLog).toBe(true);
+      expect(result.leaked).toBe(false);
+    }, 8000);
+  }
+
+  test('propagates the target failure after delivering exact JSON bytes', () => {
+    const result = runDetachedTransport(JSON.stringify(specialKeys, null, 2), 17);
+    expect(result.status).toBe(17);
+    expect(result.executed).toBe(true);
+    expect(result.exactKeys).toBe(true);
+    expect(result.exactScalar).toBe(true);
+    expect(result.copiedLog).toBe(true);
+    expect(result.leaked).toBe(false);
+  }, 8000);
 });

@@ -9,10 +9,17 @@ This remains **in_progress** until manager deployment and independent hosted QA.
   [38609335025](https://github.com/The-Connell-School/yawp/actions/runs/38609335025),
   revision `35dbf87fb4b9707d12ecb8f83f6c2aca825ffab5`, finished
   2026-10-14T17:52:53Z. The earlier handoff records `reset_data=false`.
-- Latest successful Internal Deploy (prod) run checked read-only:
+- Internal Deploy run corresponding to the failed attempt:
   [38610518244](https://github.com/The-Connell-School/yawp-internal-v3/actions/runs/38610518244),
   revision `52dc904448adb61a9752a76c59218c4aaa957e4b`, finished
   2026-10-14T17:56:00Z. This is the Internal service serving `?env=demo`.
+- On review repair, the latest successful Internal Deploy checked read-only is
+  [38620637805](https://github.com/The-Connell-School/yawp-internal-v3/actions/runs/38620637805),
+  revision `3b587188748824ddb5ed4553b8ac9ab9e269dc50`, finished
+  2026-10-14T19:06:27Z. Demo's latest successful run remains `38609335025`.
+  Internal's environment resolver, demo signing selection and free-tier client
+  are unchanged between these two Internal revisions. Workflow revision/run
+  metadata does not establish effective runtime secret availability.
 - Authenticated demo attempt at 2026-10-14T18:18:48Z: one create POST,
   HTTP 401, action `ok=false`, zero matching rows on independent reload.
   Evidence: lane `shots/ft-create-link-action-400/hosted/`.
@@ -48,12 +55,23 @@ read/rubric/flag scopes; do not broaden privileges or replace unrelated keys.
 
 The reviewed control-plane validator checks it before SSH or host changes. An
 absent/malformed configuration fails with a variable-name-only error. The SSH
-environment forwards it using `shell_quote`; the renderer puts it into
+environment forwards it using `shell_quote`. The detached runner passes that
+command as a positional argument to a fixed Bash script, preserving its escaping
+until the intended `bash -lc` execution. It does not embed the quoted command
+inside another double-quoted shell program. The renderer puts it into
 `YAWP_INTERNAL_API_KEYS` on the **demo web container only**, preserves literal
 dollar characters through Compose, and refuses any PR-number or non-demo target.
 Toolbox, renderer, and LTI mock receive no HMAC credentials. PR preview workflows
 have no secret reference. Authentication, actor checks, nonce protection and JSON
 idempotency are unchanged. No migration is included.
+
+Execution regressions run the actual detached runner with local SSH/SCP stand-ins
+and real Bash, `flock`, `setsid`, polling and exit-status handling. Compact,
+spaced and pretty-printed JSON, including dollar, quote, backslash and shell
+metacharacters, must execute the target and arrive byte-for-byte unchanged. The
+existing scalar credential and nonzero target exit are checked too. Tests own
+their log-copy path via `LOCAL_LOG_COPY`; the workflow's default path is unchanged.
+This proves local transport, not hosted authentication or persistence.
 
 ## Manager steps
 
