@@ -21,7 +21,13 @@ export type FeatureFlagState = {
   key: FeatureFlagKey;
   label: string;
   description: string;
+  /** Existing response mode, retained for backward compatibility. */
   mode: FeatureFlagMode;
+  /** Parsed Setting value, before any deployment override. */
+  persisted: FeatureFlagValue;
+  /** Rollout used by the route gate; targeted still blocks anonymous entry. */
+  effective: FeatureFlagValue;
+  runtimeOverride: 'demo_free_tier' | null;
   /** Schools the flag is on for; empty unless mode is "targeted". */
   orgIds: string[];
   /** On for everyone. Kept for readers that predate per-school targeting. */
@@ -46,6 +52,11 @@ function stateFor(
     description: FEATURE_FLAGS[key].description,
     mode,
     orgIds,
+    persisted: { mode, orgIds },
+    effective: key === FREE_TIER_FLAG && isDemoDeployment(process.env)
+      ? { mode: 'everyone', orgIds: [] } : { mode, orgIds },
+    runtimeOverride: key === FREE_TIER_FLAG && isDemoDeployment(process.env)
+      ? 'demo_free_tier' : null,
     enabled: mode === 'everyone',
     updatedAt: row ? row.updatedAt.toISOString() : null,
     lastChangedBy: description.startsWith(LAST_CHANGED_BY_PREFIX)

@@ -135,8 +135,23 @@ describe('internal feature-flag endpoints', () => {
       key: 'free_tier',
       mode: 'everyone',
       orgIds: [],
+      persisted: { mode: 'off', orgIds: [] },
+      effective: { mode: 'everyone', orgIds: [] },
+      runtimeOverride: 'demo_free_tier',
       enabled: true,
     });
+  });
+
+  test('demo writes report the saved value without losing the runtime override', async () => {
+    process.env.YAWP_ENVIRONMENT = 'demo';
+    const response = await featureFlagUpdate(post({ mode: 'off' }, {}, 'free_tier'), 'free_tier');
+    expect(response.status).toBe(200);
+    expect((await response.json()).flag).toMatchObject({
+      mode: 'off', enabled: false,
+      persisted: { mode: 'off', orgIds: [] },
+      effective: { mode: 'everyone', orgIds: [] }, runtimeOverride: 'demo_free_tier',
+    });
+    expect(prisma.setting.upsert.mock.calls[0][0].where).toEqual({ name: 'feature_flag.free_tier' });
   });
 
   test('no longer lists the removed writing-conditions flag, even if its row is still stored', async () => {
@@ -178,6 +193,9 @@ describe('internal feature-flag endpoints', () => {
       description: expect.any(String),
       mode: 'targeted',
       orgIds: ['org-1'],
+      persisted: { mode: 'targeted', orgIds: ['org-1'] },
+      effective: { mode: 'targeted', orgIds: ['org-1'] },
+      runtimeOverride: null,
       enabled: false,
       updatedAt: '2026-10-07T16:00:00.000Z',
       lastChangedBy: 'ops@yawp.school',
@@ -359,6 +377,32 @@ describe('internal feature-flag endpoints', () => {
       expect((await featureFlagUpdate(missing, FLAG)).status).toBe(400);
     }
     expect(prisma.setting.upsert).not.toHaveBeenCalled();
+  });
+
+  test('signed demo reads expose persisted state independently of effective Everyone', async () => {
+    const signingFixture = 'flags-read-fixture-key'.repeat(3);
+    const names = ['YAWP_INTERNAL_API_KEYS', 'LEGACY_INTERNAL_KEY_ALLOWED', 'INTERNAL_API_NONCE_STORE'] as const;
+    const saved = names.map((name) => process.env[name]);
+    const { signInternalApiRequest, resetInternalApiMemoryNonceStore } = await import('./internal-platform-auth.server');
+    process.env.YAWP_INTERNAL_API_KEYS = JSON.stringify([{ id: 'flags-reader', secret: signingFixture, scopes: ['flags:read'] }]);
+    process.env.LEGACY_INTERNAL_KEY_ALLOWED = 'false';
+    process.env.INTERNAL_API_NONCE_STORE = 'memory';
+    process.env.YAWP_ENVIRONMENT = 'demo';
+    resetInternalApiMemoryNonceStore();
+    prisma.setting.findMany.mockResolvedValue([{ name: 'feature_flag.free_tier', value: '{"mode":"off","orgIds":[]}', description: null, updatedAt: new Date('2026-10-14T00:00:00Z') }]);
+    try {
+      const signed = signInternalApiRequest({ method: 'GET', url: BASE, body: '', keyId: 'flags-reader', secret: signingFixture, actor: 'reader@example.test' });
+      const response = await featureFlagsList(new Request(BASE, { headers: signed.headers }));
+      expect(response.status).toBe(200);
+      expect((await response.json()).flags.find((f: { key: string }) => f.key === 'free_tier')).toMatchObject({
+        mode: 'everyone', persisted: { mode: 'off', orgIds: [] },
+        effective: { mode: 'everyone', orgIds: [] }, runtimeOverride: 'demo_free_tier',
+      });
+      expect(prisma.setting.upsert).not.toHaveBeenCalled();
+    } finally {
+      names.forEach((name, index) => { if (saved[index] === undefined) delete process.env[name]; else process.env[name] = saved[index]; });
+      resetInternalApiMemoryNonceStore();
+    }
   });
 
   test('signed writes record an internal platform audit row', async () => {
