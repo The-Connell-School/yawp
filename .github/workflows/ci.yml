@@ -227,6 +227,15 @@ jobs:
           ./services/web-app/app/domain/free-tier/service.integration.test.ts
           ./services/web-app/app/routes/api.free-tier.waitlist/route.integration.test.ts
 
+      - name: 🧪 Feature flag Postgres integration (isolated from prisma mocks)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          FEATURE_FLAG_DB_TESTS: '1'
+        run: >-
+          bun test --max-concurrency=2
+          ./services/web-app/app/domain/feature-flags/feature-flags.integration.test.ts
+
       - name: 🧪 Web app unit + DB tests (rate limits, client IP, free tier)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
@@ -260,7 +269,6 @@ jobs:
           ./services/web-app/app/routes/app/sidebar-nav.reporter.test.ts
           ./packages/prisma/preview-access-code.free-classroom.test.ts
           ./packages/prisma/scripts/preview-seats.test.ts
-          ./services/web-app/app/domain/feature-flags/feature-flags.integration.test.ts
           ./services/web-app/app/domain/submissions/student-submission-grade-visibility.server.test.ts
           './services/web-app/app/routes/app_.submissions_.$submissionId/route.loader.test.ts'
           './services/web-app/app/routes/app_.submissions_.$submissionId/submission-rubric-config.server.test.ts'
