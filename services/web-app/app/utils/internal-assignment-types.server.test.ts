@@ -43,6 +43,58 @@ function signed(url: string, keyId = 'assignment-types-key') {
   return new Request(url, { headers: signed.headers });
 }
 
+function listRow(id: string, createdAt: Date) {
+  return {
+    id,
+    title: `Assignment Type ${id}`,
+    kind: 'writing',
+    systemKey: id,
+    description: null,
+    archivedAt: null,
+    createdAt,
+    updatedAt: createdAt,
+    scoringScaleJson: null,
+    rubricJson: null,
+    image: null,
+    rubric: null,
+    rubricBaseline: null,
+    assignmentModules: [],
+    _count: { organizationAssignments: 0 },
+  };
+}
+
+function makePagedDb(rows: ReturnType<typeof listRow>[]) {
+  const reads: unknown[] = [];
+  const sorted = [...rows].sort((a, b) => {
+    const byCreated = b.createdAt.getTime() - a.createdAt.getTime();
+    return byCreated || b.id.localeCompare(a.id);
+  });
+  return {
+    reads,
+    db: {
+      assignmentType: {
+        findMany: async (args: { take?: number; where?: { OR?: unknown[] } }) => {
+          reads.push(args);
+          const cursor = args.where?.OR as
+            | [{ createdAt?: { lt?: Date } }, { createdAt?: Date; id?: { lt?: string } }]
+            | undefined;
+          const afterCreatedAt = cursor?.[0]?.createdAt?.lt;
+          const tieCreatedAt = cursor?.[1]?.createdAt;
+          const afterId = cursor?.[1]?.id?.lt;
+          const filtered = afterCreatedAt && tieCreatedAt && afterId
+            ? sorted.filter((row) => row.createdAt < afterCreatedAt || (row.createdAt.getTime() === tieCreatedAt.getTime() && row.id < afterId))
+            : sorted;
+          return filtered.slice(0, args.take ?? filtered.length);
+        },
+        findUnique: async () => null,
+      },
+      rubricRelease: {
+        findMany: async () => [],
+      },
+    },
+  };
+}
+
 function makeDb() {
   let listReads = 0;
   let detailReads = 0;
@@ -145,9 +197,15 @@ describe('internal assignment type read APIs', () => {
 
     expect((await handler.list(new Request('https://yawp.test/api/internal/v1/admin/assignment-types'))).status).toBe(401);
     expect(reads()).toEqual({ listReads: 0, detailReads: 0 });
+    expect((await handler.detail(new Request('https://yawp.test/api/internal/v1/admin/assignment-types/at-1'), 'at-1')).status).toBe(401);
+    expect(reads()).toEqual({ listReads: 0, detailReads: 0 });
 
     const wrongScope = signed('https://yawp.test/api/internal/v1/admin/assignment-types', 'flags-only-key');
     expect((await handler.list(wrongScope)).status).toBe(403);
+    expect(reads()).toEqual({ listReads: 0, detailReads: 0 });
+
+    const wrongScopeDetail = signed('https://yawp.test/api/internal/v1/admin/assignment-types/at-1', 'flags-only-key');
+    expect((await handler.detail(wrongScopeDetail, 'at-1')).status).toBe(403);
     expect(reads()).toEqual({ listReads: 0, detailReads: 0 });
   });
 
@@ -181,6 +239,33 @@ describe('internal assignment type read APIs', () => {
       endpoint: 'GET /api/internal/v1/admin/assignment-types',
       result: 'assignment-types.list.success',
     });
+  });
+
+  test('paginates by the full createdAt and id sort tuple without skipped or duplicated rows', async () => {
+    const createdAt = new Date('2026-10-14T12:00:00.000Z');
+    const olderAt = new Date('2026-10-13T12:00:00.000Z');
+    const oldestAt = new Date('2026-10-12T12:00:00.000Z');
+    const { db } = makePagedDb([
+      listRow('type-z', olderAt),
+      listRow('type-b', createdAt),
+      listRow('type-y', oldestAt),
+      listRow('type-a', createdAt),
+    ]);
+    const handler = createInternalAssignmentTypeHandlers({ db: db as never });
+
+    const firstResponse = await handler.list(signed('https://yawp.test/api/internal/v1/admin/assignment-types?limit=2'));
+    expect(firstResponse.status).toBe(200);
+    const firstPage = await firstResponse.json();
+    expect(firstPage.assignmentTypes.map((row: { id: string }) => row.id)).toEqual(['type-b', 'type-a']);
+    expect(typeof firstPage.nextCursor).toBe('string');
+
+    const secondResponse = await handler.list(
+      signed(`https://yawp.test/api/internal/v1/admin/assignment-types?limit=2&cursor=${firstPage.nextCursor}`)
+    );
+    expect(secondResponse.status).toBe(200);
+    const secondPage = await secondResponse.json();
+    expect(secondPage.assignmentTypes.map((row: { id: string }) => row.id)).toEqual(['type-z', 'type-y']);
+    expect(secondPage.nextCursor).toBeNull();
   });
 
   test('returns detail rows with modules and organization assignments', async () => {

@@ -142,20 +142,29 @@ function parseArchived(value: string | null): 'active' | 'archived' | 'all' {
   throw new Error('Invalid archived filter');
 }
 
-function decodeCursor(value: string | null, binding: string) {
+type AssignmentTypeCursor = { id: string; createdAt: Date };
+
+function decodeCursor(value: string | null, binding: string): AssignmentTypeCursor | undefined {
   if (!value) return undefined;
   if (value.length > 500 || !/^[A-Za-z0-9_-]+$/.test(value)) throw new Error('Invalid cursor');
-  const decoded = JSON.parse(Buffer.from(value, 'base64url').toString()) as { id?: unknown; binding?: unknown };
-  if (decoded.binding !== binding || typeof decoded.id !== 'string' || !identifier.test(decoded.id)) {
+  const decoded = JSON.parse(Buffer.from(value, 'base64url').toString()) as { id?: unknown; createdAt?: unknown; binding?: unknown };
+  if (
+    decoded.binding !== binding ||
+    typeof decoded.id !== 'string' ||
+    !identifier.test(decoded.id) ||
+    typeof decoded.createdAt !== 'string'
+  ) {
     throw new Error('Invalid cursor');
   }
-  return decoded.id;
+  const createdAtMs = Date.parse(decoded.createdAt);
+  if (!Number.isFinite(createdAtMs)) throw new Error('Invalid cursor');
+  return { id: decoded.id, createdAt: new Date(createdAtMs) };
 }
 
-function nextCursor(page: { id: string }[], hasMore: boolean, binding: string) {
+function nextCursor(page: { id: string; createdAt: Date | string }[], hasMore: boolean, binding: string) {
   if (!hasMore) return null;
   const last = page.at(-1);
-  return last ? Buffer.from(JSON.stringify({ id: last.id, binding })).toString('base64url') : null;
+  return last ? Buffer.from(JSON.stringify({ id: last.id, createdAt: iso(last.createdAt), binding })).toString('base64url') : null;
 }
 
 function releaseKey(row: { id: string; rubric: { name: string } | null; rubricBaseline: unknown | null }) {
@@ -311,7 +320,7 @@ export function createInternalAssignmentTypeHandlers(input: {
       let limit: number;
       let q: string;
       let archived: 'active' | 'archived' | 'all';
-      let after: string | undefined;
+      let after: AssignmentTypeCursor | undefined;
       let binding: string;
       try {
         const params = new URL(request.url).searchParams;
@@ -334,7 +343,14 @@ export function createInternalAssignmentTypeHandlers(input: {
         take: limit + 1,
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         where: {
-          ...(after ? { id: { lt: after } } : {}),
+          ...(after
+            ? {
+                OR: [
+                  { createdAt: { lt: after.createdAt } },
+                  { createdAt: after.createdAt, id: { lt: after.id } },
+                ],
+              }
+            : {}),
           ...(archived === 'active' ? { archivedAt: null } : archived === 'archived' ? { archivedAt: { not: null } } : {}),
           ...(q
             ? {
