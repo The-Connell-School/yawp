@@ -90,24 +90,22 @@ async function authorizeFreeTierReleaseManagement(
     return response({ error: 'Not found' }, 404);
   }
   const signed = Boolean(request.headers.get(INTERNAL_API_HEADER_SIGNATURE));
-  if (signed) {
-    const denied = await authenticateAndAuditWrite(request, options);
-    if (denied) return denied;
-    return null;
-  }
-  const denied = await authorizeManagement(request);
+  if (!signed) return response({ error: 'Unauthorized' }, 401);
+  const denied = await authenticateAndAuditWrite(request, options);
   if (denied) return denied;
   return null;
 }
 
 async function guardFreeTierPost(request: Request, body?: string) {
   const signed = Boolean(request.headers.get(INTERNAL_API_HEADER_SIGNATURE));
-  if (!signed) {
-    const denied = await authorizeFreeTierReleaseManagement(request);
-    if (denied) return denied;
+  if (body === undefined) {
+    const { isFreeTierEnabled } = await import('~/domain/feature-flags/feature-flags.server');
+    if (!(await isFreeTierEnabled())) {
+      return response({ error: 'Not found' }, 404);
+    }
+    if (!signed) return response({ error: 'Unauthorized' }, 401);
     return null;
   }
-  if (body === undefined) return null;
   const denied = await authorizeFreeTierReleaseManagement(request, { body });
   if (denied) return denied;
   return null;
