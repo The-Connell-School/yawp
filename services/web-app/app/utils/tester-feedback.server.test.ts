@@ -313,6 +313,29 @@ describe('tester feedback submission', () => {
       else process.env.YAWP_PUBLIC_ORIGIN = originalPublicOrigin;
     }
   });
+  test('accepts demo runtime .data posts through an internal host when only the demo app referer is public', async () => {
+    const { deps, saved } = setup({ environment: () => 'demo' });
+    const response = await submitTesterFeedback(
+      new Request('http://app-runner.internal/api/tester-feedback.data', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          referer: 'https://demo.yawp.school/app/assignments?tab=work',
+          host: 'app-runner.internal',
+        },
+        body: new URLSearchParams({
+          url: '/app/assignments?tab=work',
+          whatIDid: 'Opened',
+          whatHappened: 'Froze',
+          whatIWish: 'Save',
+        }),
+      }),
+      deps
+    );
+    expect(response.status).toBe(201);
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject({ environment: 'demo' });
+  });
   test('rejects deployed demo feedback fallback when the referer is not the app', async () => {
     const { deps, saved } = setup({ environment: () => 'production' });
     const response = await submitTesterFeedback(

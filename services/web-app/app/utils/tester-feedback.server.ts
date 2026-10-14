@@ -232,18 +232,18 @@ function acceptsFeedbackOrigin(request: Request, environment: string) {
   const publicOrigins = configuredPublicOrigins();
   const isProduction = environment.toLowerCase() === 'production';
   if (!origin) {
+    if (
+      isTesterFeedbackEndpoint(request) &&
+      isDemoAppReferer(request.headers.get('referer'))
+    )
+      return true;
     const referer = headerOrigin(request.headers.get('referer'));
     const acceptedReferer = isAcceptedSourceOrigin(
       request,
       referer,
       publicOrigins
     );
-    if (isProduction)
-      return (
-        (acceptedReferer && isDemoOrigin(referer)) ||
-        (isTesterFeedbackEndpoint(request) &&
-          isDemoAppReferer(request.headers.get('referer')))
-      );
+    if (isProduction) return acceptedReferer && isDemoOrigin(referer);
     return acceptedReferer;
   }
   if (isProduction) return false;
