@@ -206,6 +206,9 @@ export default function FreeTierLandingRoute() {
             {fetcher.data?.ok === false && fetcher.data.error === 'rate_limited' ? (
               <p className="text-sm text-destructive">Too many attempts. Please wait and try again.</p>
             ) : null}
+            {fetcher.data?.ok === false && fetcher.data.error === 'budget_exceeded' ? (
+              <p className="text-sm text-destructive">This free classroom event is full. Join the waitlist and we will follow up.</p>
+            ) : null}
             <button type="submit" className="yawp-entry-button yawp-entry-button-primary w-full">
               {data.mode === 'token' ? 'Continue' : 'Join the waitlist'}
             </button>

@@ -56,6 +56,33 @@ suite('waitlist', () => {
 });
 
 suite('token redemption', () => {
+  async function withFullActivationBudget(fn: () => Promise<void>) {
+    const previousEnv = process.env.FREE_TIER_BUDGET_ENVIRONMENT;
+    const previousBudget = process.env.FREE_TIER_PREVIEW_BUDGET_USD;
+    const previousUnitCost = process.env.FREE_TIER_PREVIEW_UNIT_COST_USD;
+    const active = await prisma!.freeTierApplication.count({
+      where: {
+        OR: [
+          { releasedAt: { not: null } },
+          { status: { in: ['INVITED', 'ACCOUNT_CREATED', 'ADMIN_SUBMITTED', 'SENT', 'MANUAL_REVIEW', 'APPROVED'] } },
+        ],
+      },
+    });
+    process.env.FREE_TIER_BUDGET_ENVIRONMENT = 'preview';
+    process.env.FREE_TIER_PREVIEW_BUDGET_USD = String(active);
+    process.env.FREE_TIER_PREVIEW_UNIT_COST_USD = '1';
+    try {
+      await fn();
+    } finally {
+      if (previousEnv === undefined) delete process.env.FREE_TIER_BUDGET_ENVIRONMENT;
+      else process.env.FREE_TIER_BUDGET_ENVIRONMENT = previousEnv;
+      if (previousBudget === undefined) delete process.env.FREE_TIER_PREVIEW_BUDGET_USD;
+      else process.env.FREE_TIER_PREVIEW_BUDGET_USD = previousBudget;
+      if (previousUnitCost === undefined) delete process.env.FREE_TIER_PREVIEW_UNIT_COST_USD;
+      else process.env.FREE_TIER_PREVIEW_UNIT_COST_USD = previousUnitCost;
+    }
+  }
+
   test('maxUses is exact under concurrency (10 people, 3 uses)', async () => {
     const token = await makeToken({ maxUses: 3 });
     const results = await Promise.all(Array.from({ length: 10 }, (_, i) => svc!.redeemToken({ ...person(`m${i}`), token })));
@@ -100,6 +127,38 @@ suite('token redemption', () => {
     expect((await get('i'))?.status).toBe('INVITED');
     expect((await get('j'))?.status).toBe('LEAD');
     expect((await get('j'))?.releasedAt).toBeNull();
+  });
+
+  test('bypass token refuses a new active invite when the activation budget is full without consuming a use', async () => {
+    await withFullActivationBudget(async () => {
+      const bypass = await makeToken({ bypassWaitlist: true });
+      expect(await svc!.redeemToken({ ...person('budget-new'), token: bypass })).toEqual({
+        ok: false,
+        reason: 'budget_exceeded',
+      });
+      const tokenRow = await prisma!.acquisitionToken.findUnique({ where: { tokenHash: svc!.hashToken(bypass) } });
+      expect(tokenRow?.uses).toBe(0);
+      expect(await prisma!.freeTierApplication.count({ where: { email: `ft-${run}-budget-new@school.example` } })).toBe(0);
+    });
+  });
+
+  test('bypass token refuses waitlisted LEAD promotion when the activation budget is full without consuming a use', async () => {
+    await withFullActivationBudget(async () => {
+      const bypass = await makeToken({ bypassWaitlist: true });
+      await svc!.submitWaitlist(person('budget-lead'));
+      expect(await svc!.redeemToken({ ...person('budget-lead'), token: bypass })).toEqual({
+        ok: false,
+        reason: 'budget_exceeded',
+      });
+      const tokenRow = await prisma!.acquisitionToken.findUnique({ where: { tokenHash: svc!.hashToken(bypass) } });
+      expect(tokenRow?.uses).toBe(0);
+      const application = await prisma!.freeTierApplication.findUnique({
+        where: { email: `ft-${run}-budget-lead@school.example` },
+      });
+      expect(application?.status).toBe('LEAD');
+      expect(application?.releasedAt).toBeNull();
+      expect(application?.acquisitionTokenId).toBeNull();
+    });
   });
 
   test('a bypass token never moves an advanced application backwards or overwrites its details', async () => {
