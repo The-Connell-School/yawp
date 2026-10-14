@@ -30,6 +30,8 @@ mock.module('~/utils/writing-lessons/practice-feedback.server', () => ({
 mock.module('~/utils/ai-admission.server', () => ({
   AiFreeTierBudgetExceededError: MockAiFreeTierBudgetExceededError,
   AiRateLimitError: MockAiRateLimitError,
+  AiLockedForFreeTierError: class extends Error {},
+  aiLockedForFreeTierMessage: () => "AI tools are locked pending administrator approval.",
   aiFreeTierBudgetExceededMessage: () =>
     'AI tools are paused because this free-tier environment has reached its current budget.',
   reserveAiRequest,

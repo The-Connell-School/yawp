@@ -65,24 +65,12 @@ export function aiAdmissionErrorResponse(error: unknown): Response | null {
   return null;
 }
 
-export async function reserveAiRequest({
-  membershipId,
-  organizationId,
-  feature,
-  policy,
-  units = 1,
-  now = new Date(),
-}: {
-  membershipId: string;
-  organizationId: string;
-  feature: string;
-  policy: AiAdmissionPolicy;
-  units?: number;
-  now?: Date;
-}): Promise<void> {
-  if (!Number.isInteger(units) || units < 1) {
-    throw new Error('AI reservation units must be a positive integer');
-  }
+/** Check free-tier approval/budget before generation that does not reserve a quota.
+ * Paid plans and environments with the flag off keep their existing behavior.
+ */
+export async function assertAiFreeTierSpendAllowed(
+  organizationId: string
+): Promise<void> {
   const { isFreeTierEnabled } = await import(
     '~/domain/feature-flags/feature-flags.server'
   );
@@ -112,6 +100,27 @@ export async function reserveAiRequest({
       }
     }
   }
+}
+
+export async function reserveAiRequest({
+  membershipId,
+  organizationId,
+  feature,
+  policy,
+  units = 1,
+  now = new Date(),
+}: {
+  membershipId: string;
+  organizationId: string;
+  feature: string;
+  policy: AiAdmissionPolicy;
+  units?: number;
+  now?: Date;
+}): Promise<void> {
+  if (!Number.isInteger(units) || units < 1) {
+    throw new Error('AI reservation units must be a positive integer');
+  }
+  await assertAiFreeTierSpendAllowed(organizationId);
   const membershipSince = new Date(now.getTime() - policy.membershipWindowMs);
   const organizationSince = new Date(
     now.getTime() - policy.organizationWindowMs

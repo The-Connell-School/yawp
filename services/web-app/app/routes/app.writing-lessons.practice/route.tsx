@@ -383,6 +383,8 @@ export async function action({ request }: ActionFunctionArgs) {
       if (error instanceof AiFreeTierBudgetExceededError) {
         return dataResponse(
           {
+            intent: 'check-rewrite' as const,
+            questionId: String(formData.get('questionId') ?? ''),
             error: 'free_tier_budget_exceeded',
             message: aiFreeTierBudgetExceededMessage(),
           },

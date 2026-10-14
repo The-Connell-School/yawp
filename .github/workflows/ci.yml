@@ -444,6 +444,9 @@ jobs:
             app/routes/api.domain.lesson-planner/route.test.ts \
             app/routes/api.domain.assignment-insights/route.test.ts \
             'app/routes/app.writing-lessons.assigned.$classAssignmentId/route.test.ts' \
+            'app/routes/app.writing-lessons.assigned.$classAssignmentId/route.generation-budget.test.ts' \
+            app/components/writing-lessons/practice-runner.rewrite-budget.test.tsx \
+            app/utils/writing-lessons/practice-assignments.server.test.ts \
             app/routes/app.writing-lessons.practice/route.test.ts \
             app/routes/app.tester.waitlist/route.test.ts; do
             bun test --max-concurrency=2 "$file"

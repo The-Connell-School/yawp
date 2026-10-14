@@ -484,6 +484,8 @@ describe('self-directed practice session action', () => {
 
     expect(result.init?.status).toBe(402);
     expect(result.data).toEqual({
+      intent: 'check-rewrite',
+      questionId: 'act-1',
       error: 'free_tier_budget_exceeded',
       message:
         'AI tools are paused because this free-tier environment has reached its current budget.',

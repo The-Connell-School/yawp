@@ -473,6 +473,7 @@ export async function buildMixedGeneratedPracticeSequence(
 export async function getOrCreateStudentPracticeSet(params: {
   classAssignmentId: string;
   membershipId: string;
+  organizationId: string;
   lessonSlugs: string[];
   problemCount: number;
 }): Promise<MixedAssignedPracticeItem[]> {
@@ -488,17 +489,26 @@ export async function getOrCreateStudentPracticeSet(params: {
     return existing.promptsJson as unknown as MixedAssignedPracticeItem[];
   }
 
+  // Admission belongs to generation, so stored sets stay readable and both
+  // the single-flight winner and timeout fallback check before any model/output.
+  const generate = async () => {
+    const { assertAiFreeTierSpendAllowed } = await import(
+      '~/utils/ai-admission.server'
+    );
+    await assertAiFreeTierSpendAllowed(params.organizationId);
+    return buildMixedGeneratedPracticeSequence(
+      params.lessonSlugs,
+      params.problemCount
+    );
+  };
+
   // Single-flight the model call per student+assignment so a double-open or a
   // revalidation does not pay for the same generation twice. A caller that loses
   // the race waits briefly for the winner's saved set instead of erroring, and
   // falls back to generating itself if the winner never delivers.
   const flight = await withSingleFlight(
     `practice-set:${params.classAssignmentId}:${params.membershipId}`,
-    () =>
-      buildMixedGeneratedPracticeSequence(
-        params.lessonSlugs,
-        params.problemCount
-      ),
+    generate,
     { ttlMs: 120_000 }
   );
   if (!flight.ran) {
@@ -510,10 +520,7 @@ export async function getOrCreateStudentPracticeSet(params: {
   }
   const { items, source } = flight.ran
     ? flight.value
-    : await buildMixedGeneratedPracticeSequence(
-        params.lessonSlugs,
-        params.problemCount
-      );
+    : await generate();
 
   try {
     const created = await prisma.writingPracticePromptSet.create({
