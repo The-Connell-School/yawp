@@ -174,6 +174,17 @@ function headerOrigin(value: string | null) {
   }
 }
 
+function headerUrl(value: string | null) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    return url;
+  } catch {
+    return null;
+  }
+}
+
 function isDemoOrigin(origin: string | null) {
   if (!origin) return false;
   try {
@@ -197,6 +208,22 @@ function isAcceptedSourceOrigin(
   );
 }
 
+function isTesterFeedbackEndpoint(request: Request) {
+  const pathname = new URL(request.url).pathname;
+  return (
+    pathname === '/api/tester-feedback' ||
+    pathname === '/api/tester-feedback.data'
+  );
+}
+
+function isDemoAppReferer(value: string | null) {
+  const referer = headerUrl(value);
+  return (
+    referer?.hostname === 'demo.yawp.school' &&
+    (referer.pathname === '/app' || referer.pathname.startsWith('/app/'))
+  );
+}
+
 function acceptsFeedbackOrigin(request: Request, environment: string) {
   const originHeader = request.headers.get('origin');
   const origin = headerOrigin(originHeader);
@@ -211,7 +238,12 @@ function acceptsFeedbackOrigin(request: Request, environment: string) {
       referer,
       publicOrigins
     );
-    if (isProduction) return acceptedReferer && isDemoOrigin(referer);
+    if (isProduction)
+      return (
+        (acceptedReferer && isDemoOrigin(referer)) ||
+        (isTesterFeedbackEndpoint(request) &&
+          isDemoAppReferer(request.headers.get('referer')))
+      );
     return acceptedReferer;
   }
   if (isProduction) return false;
