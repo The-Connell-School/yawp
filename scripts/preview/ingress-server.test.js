@@ -5,6 +5,7 @@ import { createServer, request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Duplex } from 'node:stream';
+import { runInNewContext } from 'node:vm';
 import {
   createHttpRedirectHandler,
   createCertificateStore,
@@ -180,74 +181,119 @@ describe('preview ingress', () => {
     expect(accesses).toEqual([241]);
   });
 
-  test('authorizes, queues wake, and serves an auto-refresh waking page', async () => {
-    const upstreamPort = await listen(createServer((incoming, response) => {
-      response.end(`awake:${incoming.url}`);
-    }));
+  test('plain URL flow executes page JS, POSTs wake, polls readiness, and reloads the original URL', async () => {
     let running = false;
     const wakes = [];
-    const ingress = createPreviewIngress({
+    const upstreamPort = await listen(createServer((_incoming, response) => response.end('app access gate')));
+    const ingressPort = await listen(createServer(createPreviewIngress({
       domain: 'preview.yawp.school',
-      resolveTarget: async () => running
-        ? { host: '127.0.0.1', port: upstreamPort }
-        : null,
-      authorizeWake: async (pr, uri) => uri.includes('code=brisk-otter-4321')
-        ? { organizationId: 'local-dev-org', requirePreviewSeatCode: false }
-        : null,
-      ensureRunning: async (pr, options) => {
-        wakes.push({ pr, options });
-        running = true;
-      },
+      resolveTarget: async () => running ? { host: '127.0.0.1', port: upstreamPort } : null,
+      isOpen: async () => true,
+      authorizeWake: async () => false,
+      ensureRunning: async (pr) => { wakes.push(pr); running = true; },
       recordAccess: async () => {},
-    });
-    const ingressPort = await listen(createServer(ingress));
-
-    const unauthorized = await request(ingressPort, { path: '/app' });
-    const woken = await request(ingressPort, { path: '/app?code=brisk-otter-4321' });
-    for (let attempt = 0; attempt < 20 && !running; attempt += 1) {
-      await Bun.sleep(5);
-    }
-    const refreshed = await request(ingressPort, { path: '/app?code=brisk-otter-4321' });
-
-    expect(unauthorized.status).toBe(401);
-    expect(unauthorized.body).toContain('one-click access URL');
-    expect(woken.status).toBe(503);
-    expect(woken.headers['retry-after']).toBe('5');
-    expect(woken.body).toContain('Waking preview');
-    expect(woken.body).toContain('http-equiv="refresh"');
-    expect(refreshed.status).toBe(200);
-    expect(refreshed.body).toBe('awake:/app?code=brisk-otter-4321');
-    expect(wakes).toEqual([{
-      pr: 241,
-      options: {
-        allowDisplacement: true,
-        authorization: { organizationId: 'local-dev-org', requirePreviewSeatCode: false },
+    })));
+    const page = await request(ingressPort, { path: '/app?tab=lessons' });
+    expect(page.status).toBe(503);
+    expect(page.body).toContain('Waking preview');
+    expect(wakes).toEqual([]);
+    let reloaded = false;
+    const scripts = [...page.body.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+    expect(scripts.length).toBe(1);
+    await runInNewContext(scripts[0][1], {
+      fetch: async (url, options = {}) => {
+        const result = await request(ingressPort, {
+          path: url, method: options.method || 'GET',
+          headers: { 'user-agent': 'Mozilla/5.0', ...options.headers },
+        });
+        return { status: result.status, ok: result.status < 400, json: async () => JSON.parse(result.body) };
       },
-    }]);
+      location: { reload: () => { reloaded = true; } },
+      document: { querySelector: () => ({ textContent: '' }) },
+      setTimeout: (fn) => { fn(); },
+    });
+    expect(reloaded).toBe(true);
+    expect(wakes).toEqual([241]);
+    const app = await request(ingressPort, { path: '/app?tab=lessons' });
+    expect(app.body).toBe('app access gate');
   });
 
-  test('/__wake queues the same start path and returns JSON for agents', async () => {
+  test('GET, bots, cross-site POSTs, and closed/non-resident PRs cannot wake', async () => {
     const wakes = [];
-    const ingress = createPreviewIngress({
-      domain: 'preview.yawp.school',
-      resolveTarget: async () => null,
-      authorizeWake: async () => true,
-      ensureRunning: async (pr) => {
-        wakes.push(pr);
-      },
+    const port = await listen(createServer(createPreviewIngress({
+      domain: 'preview.yawp.school', resolveTarget: async () => null,
+      isResident: async (pr) => pr !== 999, isOpen: async (pr) => pr !== 998,
+      authorizeWake: async () => true, ensureRunning: async (pr) => wakes.push(pr),
       recordAccess: async () => {},
-    });
-    const ingressPort = await listen(createServer(ingress));
-
-    const response = await request(ingressPort, { path: '/__wake?code=brisk-otter-4321' });
-    for (let attempt = 0; attempt < 20 && wakes.length === 0; attempt += 1) {
-      await Bun.sleep(5);
+    })));
+    for (const ua of ['Mozilla/5.0', 'Googlebot', 'Slackbot-LinkExpanding 1.0', 'facebookexternalhit']) {
+      await request(port, { path: '/?code=test', headers: { 'user-agent': ua } });
+      await request(port, { path: '/__wake', headers: { 'user-agent': ua } });
     }
+    for (const ua of ['Googlebot', 'Slackbot', 'kube-probe/1.0']) {
+      expect((await request(port, { path: '/__wake', method: 'POST', headers: { 'user-agent': ua, 'x-preview-wake': '1' } })).status).toBe(403);
+    }
+    expect((await request(port, { path: '/__wake', method: 'POST', headers: { origin: 'https://evil.example', 'x-preview-wake': '1' } })).status).toBe(403);
+    for (const pr of [998, 999]) {
+      expect((await request(port, { path: '/__wake', method: 'POST', headers: { host: `pr-${pr}.preview.yawp.school`, 'x-preview-wake': '1' } })).status).toBe(404);
+    }
+    expect(wakes).toEqual([]);
+  });
 
-    expect(response.status).toBe(202);
-    expect(response.headers['content-type']).toContain('application/json');
-    expect(JSON.parse(response.body)).toEqual({ status: 'waking', pr: 241 });
-    expect(wakes).toEqual([241]);
+  test('/__wake POST still accepts authorized lane callers and rate-limits PR, IP, and global wakes', async () => {
+    let now = 1000;
+    const wakes = [];
+    const port = await listen(createServer(createPreviewIngress({
+      domain: 'preview.yawp.school', resolveTarget: async () => null, isOpen: async () => true,
+      authorizeWake: async () => true, ensureRunning: async (pr) => wakes.push(pr),
+      recordAccess: async () => {}, now: () => now,
+      wakeLimits: { perPrSeconds: 60, perIpHour: 2, globalHour: 3 },
+    })));
+    const post = (pr) => request(port, { path: '/__wake', method: 'POST', headers: { host: `pr-${pr}.preview.yawp.school`, 'x-forwarded-for': `fake-${pr}` } });
+    expect((await post(241)).status).toBe(202);
+    await Bun.sleep(10);
+    expect((await post(241)).status).toBe(429);
+    expect((await post(242)).status).toBe(202);
+    await Bun.sleep(10);
+    expect((await post(243)).status).toBe(429);
+    now += 3601;
+    expect((await post(243)).status).toBe(202);
+    expect(wakes).toEqual([241, 242, 243]);
+  });
+
+  test('anonymous wake requires the fetch header and respects its rollout flag', async () => {
+    for (const enabled of [true, false]) {
+      const wakes = [];
+      const port = await listen(createServer(createPreviewIngress({
+        domain: 'preview.yawp.school', resolveTarget: async () => null,
+        isOpen: async () => true, authorizeWake: async () => false,
+        ensureRunning: async (pr) => wakes.push(pr), recordAccess: async () => {}, plainWakeEnabled: enabled,
+      })));
+      expect((await request(port, { path: '/__wake', method: 'POST' })).status).toBe(401);
+      expect((await request(port, { path: '/__wake', method: 'POST', headers: { 'x-preview-wake': '1' } })).status).toBe(enabled ? 202 : 401);
+      await Bun.sleep(10);
+      expect(wakes).toEqual(enabled ? [241] : []);
+    }
+  });
+
+  test('records only human document navigations and API/login POSTs, including app access gate', async () => {
+    const accesses = [];
+    const upstreamPort = await listen(createServer((_req, res) => { res.statusCode = 401; res.end('access gate'); }));
+    const port = await listen(createServer(createPreviewIngress({
+      domain: 'preview.yawp.school', resolveTarget: async () => ({ host: '127.0.0.1', port: upstreamPort }),
+      ensureRunning: async () => {}, recordAccess: async (pr) => accesses.push(pr),
+    })));
+    await request(port, { headers: { accept: 'text/html', 'user-agent': 'Mozilla/5.0' } });
+    await request(port, { method: 'POST', path: '/auth/login', headers: { 'user-agent': 'Mozilla/5.0' } });
+    await request(port, { method: 'POST', path: '/api/lessons', headers: { 'user-agent': 'Mozilla/5.0' } });
+    await request(port, { headers: { 'sec-fetch-mode': 'navigate', 'user-agent': 'Mozilla/5.0' } });
+    for (const options of [
+      { path: '/assets/app.js' }, { path: '/__wake' }, { path: '/api/healthcheck', headers: { accept: 'text/html' } },
+      { headers: { accept: 'text/html', 'user-agent': 'Googlebot' } },
+      { headers: { accept: 'text/html', 'user-agent': 'ELB-HealthChecker/2.0' } },
+      { method: 'HEAD', headers: { accept: 'text/html' } },
+    ]) await request(port, options);
+    expect(accesses).toEqual([241, 241, 241, 241]);
   });
 
   test('returns no-preview HTML for non-resident PRs without running a wake', async () => {
@@ -280,6 +326,8 @@ describe('preview ingress', () => {
         pinned: false,
         lastRequest: 1_800_000_000,
         lastDeploy: 1_800_000_100,
+        lastHumanActivity: 1_800_000_200,
+        sleepsAt: 1_800_173_000,
         rss: '512 MiB',
         url: 'https://pr-241.preview.yawp.school',
       }],
@@ -303,6 +351,8 @@ describe('preview ingress', () => {
     expect(JSON.parse(jsonResponse.body).previews[0].state).toBe('waking');
     expect(htmlResponse.status).toBe(200);
     expect(htmlResponse.body).toContain('Yawp Preview Status');
+    expect(htmlResponse.body).toContain('Last human activity');
+    expect(htmlResponse.body).toContain('Sleeps at');
     expect(htmlResponse.body).toContain('codex/preview-lru');
     expect(htmlResponse.body).not.toContain('brisk-otter');
     expect(htmlResponse.body).not.toContain('SECRET');
@@ -331,7 +381,7 @@ describe('preview ingress', () => {
 
     const blackboardRedirect = await request(port, {
       path: '/',
-      headers: { host: 'blackboard-pr-241.preview.yawp.school' },
+      headers: { host: 'blackboard-pr-241.preview.yawp.school', accept: 'text/html' },
     });
     const statusRedirect = await request(port, {
       path: '/__status',
@@ -465,7 +515,7 @@ describe('preview ingress', () => {
     const ingressPort = await listen(createServer(ingress));
 
     const response = await request(ingressPort, {
-      headers: { host: 'blackboard-pr-241.preview.yawp.school' },
+      headers: { host: 'blackboard-pr-241.preview.yawp.school', accept: 'text/html' },
     });
 
     expect(response.status).toBe(200);
@@ -535,7 +585,7 @@ describe('preview ingress', () => {
 
     expect(clientResponse).toContain('101 Switching Protocols');
     expect(clientResponse).not.toContain('X-Yawp-Preview-Authorized');
-    expect(accesses).toEqual([241]);
+    expect(accesses).toEqual([]);
     expect(upstreamRequest).toContain('GET /socket HTTP/1.1');
     expect(upstreamRequest).toContain('host: pr-241.preview.yawp.school');
     client.destroy();

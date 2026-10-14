@@ -456,6 +456,18 @@ if target_deployment_is_inflight; then
   exit 11
 fi
 
+# Recheck live PR state after acquiring the mutation lock. This also protects
+# credentialed lane callers when a resident remains after a PR closes.
+if [[ "${PREVIEW_WAKE_REQUIRE_OPEN_PR:-false}" == "true" ]]; then
+  pr_state="$("$CURL" -fsS --max-time 5 -A yawp-preview-wake \
+    "https://api.github.com/repos/The-Connell-School/yawp/pulls/$PR_NUMBER" \
+    | jq -r '.state // "unknown"')" || pr_state=unknown
+  if [[ "$pr_state" != open ]]; then
+    echo "Preview pr-${PR_NUMBER} is not resident as an open pull request" >&2
+    exit 3
+  fi
+fi
+
 if is_running "$PR_NUMBER"; then
   wait_for_project_health "$PR_NUMBER" || {
     echo "Preview pr-${PR_NUMBER} is running but did not become healthy" >&2
