@@ -1,7 +1,7 @@
-# PLAN: admin-migrate-n
+# PLAN: admin-migrate-2 platform repair
 
-- Keep the Assignment Types migration read-only: signed list/detail platform APIs, Internal list/detail inspection, and a de-emphasized legacy platform admin surface.
-- Address reviewer rejection by making Assignment Types list pagination use a stable cursor matching the `createdAt desc, id desc` sort tuple.
-- Add a multi-page platform API test proving no skipped or duplicated rows across cursor pages.
-- Add deny/authz coverage for the signed detail API and the Internal detail loader before any platform client work.
-- Re-run focused Internal and platform tests/typechecks, verify platform PR checks are green, then update PR descriptions and `BUILD_RESULT.md` with `[skip preview]` preserved.
+- Reuse `codex/admin-migrate-2-20261014` for the open platform PR; do not deploy or wake previews.
+- Address review rejection by committing the Organizations legacy route deprecation UI that the screenshot claimed.
+- Keep platform-only organization write actions available because create/preview-seat writes are intentionally outside Internal for this slice.
+- Replace row spreading in the signed admin Organizations API with explicit response serialization.
+- Run focused platform tests for the legacy Organizations route and signed Organizations API, then recapture the platform gated screenshot.
