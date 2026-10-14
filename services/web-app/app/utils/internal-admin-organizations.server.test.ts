@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { createHash } from 'node:crypto';
 
 const prisma = {
   organization: {
@@ -86,6 +87,10 @@ const base = 'https://yawp.test/api/internal/v1/admin/organizations';
 
 function authed(url = base) {
   return new Request(url);
+}
+
+function requestHash(body: string) {
+  return createHash('sha256').update(body).digest('hex');
 }
 
 describe('internal admin organization endpoints', () => {
@@ -489,12 +494,99 @@ describe('internal admin organization endpoints', () => {
       actorEmail: 'ops@yawp.test',
       scopes: ['management:write'],
     });
+    const body = JSON.stringify({
+      name: 'Existing Org',
+      numOfStudentSeats: 30,
+      numOfTeacherSeats: 10,
+    });
     prisma.internalPlatformApiAudit.findFirst.mockResolvedValue({
       targetId: 'org-existing',
+      requestHash: requestHash(body),
       createdAt: new Date(),
     });
     prisma.organization.findUnique.mockResolvedValue({
       id: 'org-existing',
+      name: 'Existing Org',
+      numOfStudentSeats: 30,
+      numOfTeacherSeats: 10,
+      accessExpiresAt: null,
+      reporterEnabled: false,
+      assignmentTypeAssignments: [],
+    });
+
+    const res = await internalAdminOrganizationCreate(
+      new Request(base, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': 'create-1' },
+        body,
+      })
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.organization.id).toBe('org-existing');
+    expect(prisma.internalPlatformApiAudit.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          actorEmail: 'ops@yawp.test',
+          keyId: 'writer',
+          metadata: {
+            path: ['idempotencyKey'],
+            equals: 'create-1',
+          },
+        }),
+      })
+    );
+    expect(prisma.organization.create).not.toHaveBeenCalled();
+  });
+
+  test('rejects reused create idempotency keys with different payloads', async () => {
+    authorizeInternalApiRequest.mockResolvedValueOnce({
+      mode: 'hmac',
+      keyId: 'writer',
+      actorEmail: 'ops@yawp.test',
+      scopes: ['management:write'],
+    });
+    const originalBody = JSON.stringify({
+      name: 'Existing Org',
+      numOfStudentSeats: 30,
+      numOfTeacherSeats: 10,
+    });
+    prisma.internalPlatformApiAudit.findFirst.mockResolvedValue({
+      targetId: 'org-existing',
+      requestHash: requestHash(originalBody),
+      createdAt: new Date(),
+    });
+    const changedBody = JSON.stringify({
+      name: 'Existing Org',
+      numOfStudentSeats: 31,
+      numOfTeacherSeats: 10,
+    });
+
+    const res = await internalAdminOrganizationCreate(
+      new Request(base, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': 'create-1' },
+        body: changedBody,
+      })
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(json.error).toContain('different request');
+    expect(prisma.organization.create).not.toHaveBeenCalled();
+  });
+
+  test('allows the same create payload with a different idempotency key', async () => {
+    authorizeInternalApiRequest.mockResolvedValueOnce({
+      mode: 'hmac',
+      keyId: 'writer',
+      actorEmail: 'ops@yawp.test',
+      scopes: ['management:write'],
+    });
+    prisma.organization.create.mockResolvedValue({ id: 'org-2' });
+    prisma.organization.findUnique.mockResolvedValue({
+      id: 'org-2',
       name: 'Existing Org',
       numOfStudentSeats: 30,
       numOfTeacherSeats: 10,
@@ -511,15 +603,23 @@ describe('internal admin organization endpoints', () => {
     const res = await internalAdminOrganizationCreate(
       new Request(base, {
         method: 'POST',
-        headers: { 'Idempotency-Key': 'create-1' },
+        headers: { 'Idempotency-Key': 'create-2' },
         body,
       })
     );
-    const json = await res.json();
 
-    expect(res.status).toBe(200);
-    expect(json.organization.id).toBe('org-existing');
-    expect(prisma.organization.create).not.toHaveBeenCalled();
+    expect(res.status).toBe(201);
+    expect(prisma.internalPlatformApiAudit.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          metadata: {
+            path: ['idempotencyKey'],
+            equals: 'create-2',
+          },
+        }),
+      })
+    );
+    expect(prisma.organization.create).toHaveBeenCalled();
   });
 
   test('updates organization fields and replaces only its assignment-type rows', async () => {

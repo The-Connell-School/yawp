@@ -534,19 +534,37 @@ export async function internalAdminOrganizationCreate(
     const previous = await client.internalPlatformApiAudit.findFirst({
       where: {
         endpoint: 'POST /api/internal/v1/admin/organizations',
-        requestHash: hash,
         result: 'after',
         action: 'organization.create.after',
+        actorEmail: parsed.auth.actorEmail,
+        keyId: parsed.auth.keyId,
+        metadata: { path: ['idempotencyKey'], equals: idempotencyKey },
       },
       orderBy: { createdAt: 'desc' },
     });
-    if (previous?.targetId) {
+    if (previous) {
+      if (previous.requestHash !== hash) {
+        return response(
+          { error: 'Idempotency-Key was already used with a different request' },
+          409
+        );
+      }
+      if (!previous.targetId) {
+        return response(
+          { error: 'Idempotency-Key could not be replayed safely' },
+          409
+        );
+      }
       const existing = await client.organization.findUnique({
         where: { id: previous.targetId },
         include: { assignmentTypeAssignments: true },
       });
       if (existing)
         return response({ organization: snapshotOrganization(existing) });
+      return response(
+        { error: 'Idempotency-Key could not be replayed safely' },
+        409
+      );
     }
   }
 
