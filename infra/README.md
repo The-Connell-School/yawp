@@ -13,6 +13,15 @@ Download and decrypt that secret for `terraform plan` / `apply` against producti
 
 See `envs/production.tfvars.example` for the shape of non-secret keys only (placeholders, no live values).
 
+## Production CloudTrail
+
+Production plans create a multi-region management-event CloudTrail named
+`<app_name>-production-management-events`. Logs are written under the
+`cloudtrail/` prefix in a private S3 bucket with KMS default encryption, S3
+versioning, public access blocks, TLS-only bucket policy, and lifecycle
+expiration. The default current-object retention is 365 days and can be adjusted
+with `cloudtrail_log_retention_days` before plan review.
+
 ## Tests
 
 ```bash

@@ -246,3 +246,64 @@ variable "stripe_ua_existing_subscription_price_ids" {
   description = "Legacy recurring Stripe Price IDs whose subscribers should receive the UA license without paying again."
   default     = []
 }
+
+variable "cloudtrail_enabled" {
+  type        = bool
+  description = "Create the production multi-region CloudTrail and encrypted log bucket. Only takes effect when env is production."
+  default     = true
+}
+
+variable "cloudtrail_name" {
+  type        = string
+  description = "Name for the production multi-region CloudTrail. Leave empty to derive one from app_name and env."
+  default     = ""
+
+  validation {
+    condition     = var.cloudtrail_name == "" || can(regex("^[A-Za-z0-9._-]{3,128}$", var.cloudtrail_name))
+    error_message = "cloudtrail_name must be empty or a 3-128 character CloudTrail name using letters, numbers, dots, underscores, and hyphens."
+  }
+}
+
+variable "cloudtrail_log_bucket_name" {
+  type        = string
+  description = "S3 bucket name for CloudTrail logs. Leave empty to derive yawp-production-cloudtrail-ACCOUNT."
+  default     = ""
+
+  validation {
+    condition     = var.cloudtrail_log_bucket_name == "" || can(regex("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.cloudtrail_log_bucket_name))
+    error_message = "cloudtrail_log_bucket_name must be empty or a valid lowercase S3 bucket name."
+  }
+}
+
+variable "cloudtrail_s3_key_prefix" {
+  type        = string
+  description = "S3 key prefix for CloudTrail log objects inside the log bucket."
+  default     = "cloudtrail"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9!_.*'()/-]+$", var.cloudtrail_s3_key_prefix)) && !startswith(var.cloudtrail_s3_key_prefix, "/") && !endswith(var.cloudtrail_s3_key_prefix, "/")
+    error_message = "cloudtrail_s3_key_prefix must be a non-empty S3 key prefix without leading or trailing slashes."
+  }
+}
+
+variable "cloudtrail_log_retention_days" {
+  type        = number
+  description = "Number of days to retain current CloudTrail log objects before S3 lifecycle expiration."
+  default     = 365
+
+  validation {
+    condition     = var.cloudtrail_log_retention_days >= 90
+    error_message = "cloudtrail_log_retention_days must be at least 90 days."
+  }
+}
+
+variable "cloudtrail_kms_deletion_window_days" {
+  type        = number
+  description = "Waiting period before the CloudTrail KMS key can be deleted."
+  default     = 30
+
+  validation {
+    condition     = var.cloudtrail_kms_deletion_window_days >= 7 && var.cloudtrail_kms_deletion_window_days <= 30
+    error_message = "cloudtrail_kms_deletion_window_days must be between 7 and 30 days."
+  }
+}
