@@ -34,7 +34,7 @@ export const adminTabs = [
     icon: <User size={16} className="opacity-75 mr-1" />,
   },
   {
-    label: 'Assignment Types',
+    label: 'Assignment Types (moved)',
     to: '/app/admin/assignments',
     icon: <ClipboardList size={16} className="opacity-75 mr-1" />,
   },

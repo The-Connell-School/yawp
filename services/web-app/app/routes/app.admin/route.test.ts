@@ -19,12 +19,12 @@ describe('admin tabs', () => {
     expect(testerFeedbackTab?.label).toBe('Tester feedback (moved)');
   });
 
-  test('labels the assignment types surface', () => {
+  test('marks the assignment types surface as moved', () => {
     const assignmentTypesTab = adminTabs.find(
       (tab) => tab.to === '/app/admin/assignments'
     );
 
-    expect(assignmentTypesTab?.label).toBe('Assignment Types');
+    expect(assignmentTypesTab?.label).toBe('Assignment Types (moved)');
     expect(adminTabs.map((tab) => tab.label)).not.toContain(
       'Assignments & Grading'
     );
