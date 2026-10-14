@@ -110,27 +110,15 @@ describe('admin organizations index route', () => {
     ]);
   });
 
-  test('creates organizations without default writing practice configuration', async () => {
-    const form = new URLSearchParams();
-    form.set('intent', 'create');
-    form.set('name', 'New Org');
-    form.set('numOfStudentSeats', '30');
-    form.set('numOfTeacherSeats', '10');
-
-    await action({
-      request: createRequest(form),
-      params: {},
-      context: {} as never,
-    } as any);
-
-    expect(prisma.organization.create).toHaveBeenCalledWith({
-      data: {
-        name: 'New Org',
-        numOfStudentSeats: 30,
-        numOfTeacherSeats: 10,
-        accessExpiresAt: null,
-      },
-    });
+  test('denies legacy unsigned organization creation without writing', async () => {
+    for (const intent of ['create', 'legacy-create']) {
+      const result = await action({
+        request: createRequest(new URLSearchParams({ intent, name: 'New Org', numOfStudentSeats: '30', numOfTeacherSeats: '10' })),
+      } as any);
+      expect((result as any).init.status).toBe(410);
+      expect((result as any).data.error).toContain('moved to Yawp Internal');
+    }
+    expect(prisma.organization.create).not.toHaveBeenCalled();
   });
 
   test('creates and returns a seeded preview seat only in isolated preview mode', async () => {
@@ -182,7 +170,7 @@ describe('admin organizations index route', () => {
   });
 
   test('denies every action before database writes or preview-seat creation', async () => {
-    for (const intent of ['create', 'createPreviewSeat', 'updateFilters']) {
+    for (const intent of ['create', 'legacy-create', 'createPreviewSeat', 'updateFilters']) {
       const denial = new Response('Forbidden', { status: 403 });
       requireAdmin.mockRejectedValueOnce(denial);
       await expect(action({ request: createRequest(new URLSearchParams({ intent })) } as any)).rejects.toBe(denial);
@@ -252,7 +240,7 @@ describe('legacy admin organizations route', () => {
 
     expect(content).toContain(ORGANIZATIONS_READ_MOVED_MESSAGE);
     expect(content).toContain('Use Yawp Internal');
-    expect(content).toContain('Platform-only writes');
+    expect(content).toContain('Remaining platform-only writes');
     expect(content).toContain('Create Preview Seat');
     expect(content).toContain('Create Organization');
     expect(content).not.toContain('Total Organizations');
