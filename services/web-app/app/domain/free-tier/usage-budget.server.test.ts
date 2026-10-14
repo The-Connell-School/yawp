@@ -48,6 +48,46 @@ describe('free-tier usage budget', () => {
     });
   });
 
+  test('resolves demo deploys separately from ordinary previews', () => {
+    const env = {
+      FREE_TIER_DEMO_BUDGET_USD: '50',
+      FREE_TIER_PRODUCTION_BUDGET_USD: '500',
+      FREE_TIER_PREVIEW_BUDGET_USD: '5',
+      FREE_TIER_DEMO_UNIT_COST_USD: '1',
+      FREE_TIER_PRODUCTION_UNIT_COST_USD: '10',
+      FREE_TIER_PREVIEW_UNIT_COST_USD: '0.5',
+      NODE_ENV: 'production',
+    };
+
+    expect(
+      resolveFreeTierBudgetBasis({
+        ...env,
+        PREVIEW_SLUG: 'demo',
+        YAWP_ENVIRONMENT: 'preview',
+      })
+    ).toEqual({
+      environment: 'demo',
+      budgetUsd: 50,
+      unitCostUsd: 1,
+    });
+    expect(
+      resolveFreeTierBudgetBasis({
+        ...env,
+        PREVIEW_SLUG: 'pr-526',
+        YAWP_ENVIRONMENT: 'preview',
+      })
+    ).toEqual({
+      environment: 'preview',
+      budgetUsd: 5,
+      unitCostUsd: 0.5,
+    });
+    expect(resolveFreeTierBudgetBasis({ ...env, YAWP_ENVIRONMENT: 'production' })).toEqual({
+      environment: 'production',
+      budgetUsd: 500,
+      unitCostUsd: 10,
+    });
+  });
+
   test('hard-denies the next activation when it would exceed budget', async () => {
     const client = {
       freeTierApplication: {

@@ -43,9 +43,17 @@ function readMoney(env: Env, key: string, fallback: number) {
 }
 
 export function resolveFreeTierBudgetEnvironment(env: Env = process.env): FreeTierBudgetEnvironment {
-  const explicit = (env.FREE_TIER_BUDGET_ENVIRONMENT ?? env.YAWP_ENVIRONMENT ?? env.APP_ENV ?? '').trim().toLowerCase();
+  const budgetOverride = (env.FREE_TIER_BUDGET_ENVIRONMENT ?? '').trim().toLowerCase();
+  if (budgetOverride === 'demo' || budgetOverride === 'production' || budgetOverride === 'preview') {
+    return budgetOverride;
+  }
+
+  const previewSlug = (env.PREVIEW_SLUG ?? '').trim().toLowerCase();
+  if (previewSlug === 'demo') return 'demo';
+
+  const explicit = (env.YAWP_ENVIRONMENT ?? env.APP_ENV ?? '').trim().toLowerCase();
   if (explicit === 'demo' || explicit === 'production' || explicit === 'preview') return explicit;
-  if (env.PREVIEW_DEPLOYMENT_ID || env.RENDER_EXTERNAL_HOSTNAME?.includes('preview')) return 'preview';
+  if (previewSlug || env.PREVIEW_DEPLOYMENT_ID || env.RENDER_EXTERNAL_HOSTNAME?.includes('preview')) return 'preview';
   if ((env.PLATFORM_HOST ?? env.HOSTNAME ?? '').includes('demo.')) return 'demo';
   return env.NODE_ENV === 'production' ? 'production' : 'preview';
 }
