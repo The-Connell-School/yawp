@@ -303,7 +303,7 @@ candidate_priority_class() {
 }
 
 sleep_lru_candidate() {
-  local candidate oldest_pr="" oldest_epoch="" epoch class oldest_class=""
+  local candidate oldest_pr="" oldest_epoch="" epoch class oldest_class="" lease lease_deploy
   while IFS= read -r candidate; do
     [[ -n "$candidate" && "$candidate" != "$PR_NUMBER" ]] || continue
     [[ -f "$ROOT/previews/pr-${candidate}/docker-compose.yml" ]] || continue
@@ -311,7 +311,14 @@ sleep_lru_candidate() {
     epoch="$(access_epoch "$candidate")"
     class="$(candidate_priority_class "$candidate")"
     is_nonnegative_integer "$epoch" || epoch=0
-    if (( epoch > NOW_EPOCH || NOW_EPOCH - epoch < WAKE_LEASE_SECONDS )); then
+    lease=0
+    if [[ -f "$ACCESS_DIR/pr-$candidate" ]]; then IFS= read -r lease < "$ACCESS_DIR/pr-$candidate" || true; fi
+    is_nonnegative_integer "$lease" || lease=0
+    lease_deploy=0
+    if [[ -f "$ROOT/previews/pr-$candidate/last-deploy" ]]; then IFS= read -r lease_deploy < "$ROOT/previews/pr-$candidate/last-deploy" || true; fi
+    is_nonnegative_integer "$lease_deploy" || lease_deploy=0
+    (( lease_deploy > lease )) && lease="$lease_deploy"
+    if (( lease > NOW_EPOCH || NOW_EPOCH - lease < WAKE_LEASE_SECONDS )); then
       continue
     fi
     if [[ -z "$oldest_pr" ]] \

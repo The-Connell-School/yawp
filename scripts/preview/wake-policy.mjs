@@ -22,7 +22,7 @@ export function createWakeLimiter({ perPrSeconds = 60, perIpHour = 10, globalHou
   const ips = new Map();
   const globals = new Map();
   return {
-    take(pr, ip, { credentialed = false } = {}) {
+    check(pr, ip, { credentialed = false, commit = false } = {}) {
       const budget = credentialed ? 'credentialed' : 'anonymous';
       const ipKey = `${budget}:${ip}`;
       const at = now();
@@ -36,8 +36,27 @@ export function createWakeLimiter({ perPrSeconds = 60, perIpHour = 10, globalHou
       if (prs.has(pr)) return Math.ceil(perPrSeconds - (at - prs.get(pr)));
       if (times.length >= perIpHour) return Math.ceil(3600 - (at - times[0]));
       if (global.length >= (credentialed ? credentialedHour : globalHour)) return Math.ceil(3600 - (at - global[0]));
-      prs.set(pr, at); ips.set(ipKey, [...times, at]); globals.set(budget, [...global, at]);
+      if (commit) { prs.set(pr, at); ips.set(ipKey, [...times, at]); globals.set(budget, [...global, at]); }
       return 0;
     },
+    take(pr, ip, options = {}) { return this.check(pr, ip, { ...options, commit: true }); },
+  };
+}
+
+// Bound expensive credential resolution independently of successful wake budgets.
+export function createWakeAttemptLimiter({ now = () => Date.now() / 1000, perIpMinute = 10, globalMinute = 60 } = {}) {
+  const ips = new Map();
+  let global = [];
+  return (ip) => {
+    const at = now();
+    for (const [key, times] of ips) {
+      const live = times.filter(time => at - time < 60);
+      if (live.length) ips.set(key, live); else ips.delete(key);
+    }
+    global = global.filter(time => at - time < 60);
+    const times = ips.get(ip) || [];
+    if (times.length >= perIpMinute || global.length >= globalMinute) return 60;
+    ips.set(ip, [...times, at]); global.push(at);
+    return 0;
   };
 }

@@ -40,4 +40,7 @@ test('status idle deadlines ignore legacy wake leases and human activity dual-wr
   const human = readFileSync(path.join(dir, 'last-human-activity'), 'utf8');
   expect(readFileSync(path.join(dir, 'last-request'), 'utf8')).toBe(human);
   expect(readFileSync(path.join(root, 'wake/access/pr-484'), 'utf8')).toBe(human);
+  writeFileSync(path.join(root, 'wake/access/pr-484'), '1\n');
+  await ops.recordHumanActivity(484);
+  expect(readFileSync(path.join(root, 'wake/access/pr-484'), 'utf8')).toBe('1\n');
 });

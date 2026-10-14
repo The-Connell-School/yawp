@@ -44,7 +44,7 @@ describe('bootstrap-host.sh', () => {
     expect(script).not.toContain('PREVIEW_ACCESS_LOG=');
     expect(script).not.toContain('--accesslog');
     expect(ingress).toContain('isHumanActivity(request)');
-    expect(ingress).toContain('recordAccess(pr)');
+    expect(ingress).toContain('recordHumanActivity');
   });
 
   test('cuts over to the custom ingress with TLS canary and rollback', () => {

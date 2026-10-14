@@ -240,6 +240,19 @@ describe('preview ingress', () => {
     expect(wakes).toEqual([]);
   });
 
+  test('credential resolution is bounded before database work, including after wake-budget exhaustion', async () => {
+    let calls = 0;
+    const port = await listen(createServer(createPreviewIngress({
+      domain: 'preview.yawp.school', resolveTarget: async () => null, isOpen: async () => true,
+      authorizeWake: async () => { calls++; return true; }, ensureRunning: async () => {}, recordAccess: async () => {},
+      wakeLimits: { credentialedHour: 1 },
+    })));
+    expect((await request(port, { method: 'POST', path: '/__wake?code=test' })).status).toBe(202);
+    await Bun.sleep(10);
+    for (let i = 0; i < 4; i++) expect((await request(port, { method: 'POST', path: '/__wake?code=test', headers: { host: `pr-${242+i}.preview.yawp.school` } })).status).toBe(429);
+    expect(calls).toBe(1);
+  });
+
   test('GETs, rejected bots, and over-budget wakes do not spend GitHub lookups', async () => {
     let checks = 0;
     const port = await listen(createServer(createPreviewIngress({
@@ -295,7 +308,7 @@ describe('preview ingress', () => {
 
   test('records only human document navigations and API/login POSTs, including app access gate', async () => {
     const accesses = [];
-    const upstreamPort = await listen(createServer((_req, res) => { res.statusCode = 401; res.end('access gate'); }));
+    const upstreamPort = await listen(createServer((req, res) => { res.statusCode = req.url === '/api/rejected' ? 401 : 302; res.end('access gate'); }));
     const port = await listen(createServer(createPreviewIngress({
       domain: 'preview.yawp.school', resolveTarget: async () => ({ host: '127.0.0.1', port: upstreamPort }),
       ensureRunning: async () => {}, recordAccess: async (pr) => accesses.push(pr),
@@ -305,7 +318,7 @@ describe('preview ingress', () => {
     await request(port, { method: 'POST', path: '/api/lessons', headers: { 'user-agent': 'Mozilla/5.0' } });
     await request(port, { headers: { 'sec-fetch-mode': 'navigate', 'user-agent': 'Mozilla/5.0' } });
     for (const options of [
-      { path: '/assets/app.js' }, { path: '/__wake' }, { path: '/api/healthcheck', headers: { accept: 'text/html' } },
+      { method: 'POST', path: '/api/rejected' }, { path: '/assets/app.js' }, { path: '/__wake' }, { path: '/api/healthcheck', headers: { accept: 'text/html' } },
       { headers: { accept: 'text/html', 'user-agent': 'Googlebot' } },
       { headers: { accept: 'text/html', 'user-agent': 'ELB-HealthChecker/2.0' } },
       { method: 'HEAD', headers: { accept: 'text/html' } },

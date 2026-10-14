@@ -734,6 +734,30 @@ export function createDefaultWakeOperations({
   const recentAccess = new Map();
   const accessWrites = new Map();
   const queuedWakeWrites = new Map();
+  async function recordHuman(pr, { capacity = false } = {}) {
+    const now = Math.floor(Date.now() / 1000);
+    const key = `${pr}:${capacity}`;
+    if (now - (recentAccess.get(key) || 0) < 60) return;
+    if (accessWrites.has(key)) return accessWrites.get(key);
+    const operation = (async () => {
+      const accessDir = path.join(root, 'wake', 'access');
+      const previewDir = path.join(root, 'previews', `pr-${pr}`);
+      await mkdir(accessDir, { recursive: true, mode: 0o700 });
+      await mkdir(previewDir, { recursive: true, mode: 0o755 });
+      for (const target of [
+        path.join(previewDir, 'last-human-activity'),
+        path.join(previewDir, 'last-request'),
+        ...(capacity ? [path.join(accessDir, `pr-${pr}`)] : []),
+      ]) {
+        const temporary = `${target}.${process.pid}.${now}.${capacity ? 'capacity' : 'human'}.tmp`;
+        await writeFile(temporary, `${now}\n`, { mode: 0o600 });
+        await rename(temporary, target);
+      }
+      recentAccess.set(key, now);
+    })().finally(() => accessWrites.delete(key));
+    accessWrites.set(key, operation);
+    return operation;
+  }
   return {
     async ensureRunning(pr, { allowDisplacement = false, authorization } = {}) {
       const organizationId = String(authorization?.organizationId || '');
@@ -781,29 +805,8 @@ export function createDefaultWakeOperations({
         resolveCredential: credentialResolver,
       });
     },
-    async recordAccess(pr) {
-      const now = Math.floor(Date.now() / 1000);
-      if (now - (recentAccess.get(pr) || 0) < 60) return;
-      if (accessWrites.has(pr)) return accessWrites.get(pr);
-      const operation = (async () => {
-        const accessDir = path.join(root, 'wake', 'access');
-        const previewDir = path.join(root, 'previews', `pr-${pr}`);
-        await mkdir(accessDir, { recursive: true, mode: 0o700 });
-        await mkdir(previewDir, { recursive: true, mode: 0o755 });
-        for (const target of [
-          path.join(previewDir, 'last-human-activity'),
-          path.join(previewDir, 'last-request'),
-          path.join(accessDir, `pr-${pr}`),
-        ]) {
-          const temporary = `${target}.${process.pid}.${now}.tmp`;
-          await writeFile(temporary, `${now}\n`, { mode: 0o600 });
-          await rename(temporary, target);
-        }
-        recentAccess.set(pr, now);
-      })().finally(() => accessWrites.delete(pr));
-      accessWrites.set(pr, operation);
-      return operation;
-    },
+    recordAccess: (pr) => recordHuman(pr, { capacity: true }),
+    recordHumanActivity: (pr) => recordHuman(pr),
     async isOpen(pr) {
       const metadata = await prStateLookup(pr);
       if (metadata?.state !== 'open') return false;

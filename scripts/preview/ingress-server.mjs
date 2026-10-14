@@ -13,7 +13,7 @@ import {
   parsePreviewPr,
   previewServiceHostname,
 } from './wake-server.mjs';
-import { isBotRequest, isHumanActivity, createWakeLimiter } from './wake-policy.mjs';
+import { isBotRequest, isHumanActivity, createWakeLimiter, createWakeAttemptLimiter } from './wake-policy.mjs';
 
 export function isDirectExecution(moduleUrl, argv1 = process.argv[1]) {
   if (!argv1) return false;
@@ -295,7 +295,7 @@ function createWakeCoordinator({
   };
 }
 
-function proxyHttp({ request, response, target, hostname, pr, recordAccess }) {
+function proxyHttp({ request, response, target, hostname, pr, recordAccess, recordHumanActivity }) {
   return new Promise((resolve) => {
     let settled = false;
     const upstream = httpRequest({
@@ -305,12 +305,13 @@ function proxyHttp({ request, response, target, hostname, pr, recordAccess }) {
       path: request.url,
       headers: forwardedHeaders(request, hostname),
     }, (upstreamResponse) => {
+      const authorized = String(upstreamResponse.headers['x-yawp-preview-authorized'] || '') === '1';
       const status = upstreamResponse.statusCode || 503;
       response.writeHead(status, downstreamHeaders(upstreamResponse.headers));
       upstreamResponse.pipe(response);
       upstreamResponse.once('end', () => {
-        if (isHumanActivity(request) && status < 500) {
-          Promise.resolve(recordAccess(pr)).catch(() => {
+        if (isHumanActivity(request) && status < 400) {
+          Promise.resolve((authorized ? recordAccess : recordHumanActivity)(pr)).catch(() => {
             console.error('Preview activity recording failed');
           });
         }
@@ -349,6 +350,7 @@ export function createPreviewIngress({
   wakeLimits,
   now,
   recordAccess,
+  recordHumanActivity = recordAccess,
   recordQueuedWake,
   clearQueuedWake,
   getStatus,
@@ -363,6 +365,8 @@ export function createPreviewIngress({
   });
 
   const limiter = createWakeLimiter({ ...wakeLimits, now });
+  const attemptLimit = createWakeAttemptLimiter({ now });
+  let credentialChecks = 0;
 
   async function queueWake({ parsed, request, response }) {
     const resident = await isResident(parsed.pr);
@@ -378,7 +382,18 @@ export function createPreviewIngress({
     }
     const hasCredential = Boolean(request.headers.cookie) || new URL(request.url, 'https://preview.invalid').searchParams.has('code');
     const anonymous = plainWakeEnabled && request.headers['x-preview-wake'] === '1';
-    const authorization = (!anonymous || hasCredential) ? await authorizeWake(parsed.pr, request.url, request) : null;
+    const ip = request.socket?.remoteAddress || 'unknown';
+    const preflight = limiter.check(parsed.pr, ip, { credentialed: !anonymous || hasCredential });
+    if (preflight || attemptLimit(ip) || credentialChecks >= 2) {
+      json(response, 429, { status: 'rate-limited', pr: parsed.pr }, { 'retry-after': String(preflight || 60) });
+      return;
+    }
+    let authorization = null;
+    if (!anonymous || hasCredential) {
+      credentialChecks++;
+      try { authorization = await authorizeWake(parsed.pr, request.url, request); }
+      finally { credentialChecks--; }
+    }
     if (!anonymous && !authorization) {
       json(response, 401, { status: 'unauthorized', pr: parsed.pr });
       return;
@@ -387,7 +402,7 @@ export function createPreviewIngress({
       json(response, 202, { status: 'waking', pr: parsed.pr });
       return;
     }
-    const retryAfter = limiter.take(parsed.pr, request.socket?.remoteAddress || 'unknown', { credentialed: Boolean(authorization) });
+    const retryAfter = limiter.take(parsed.pr, ip, { credentialed: Boolean(authorization) });
     if (retryAfter) {
       json(response, 429, { status: 'rate-limited', pr: parsed.pr }, { 'retry-after': String(retryAfter) });
       return;
@@ -456,6 +471,7 @@ export function createPreviewIngress({
       hostname,
       pr: parsed.pr,
       recordAccess,
+      recordHumanActivity,
     });
   };
 }
