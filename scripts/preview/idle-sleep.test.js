@@ -7,13 +7,12 @@ const roots = [];
 afterEach(() => roots.splice(0).forEach(root => rmSync(root, { recursive: true, force: true })));
 function fixture() {
   const root = mkdtempSync(path.join(tmpdir(), 'preview-idle-')); roots.push(root);
-  for (const [pr, human, deploy, pinned] of [[100, 1, 1, true], [101, 1, 250000, false], [102, 250000, 1, false], [103, 1, 1, false]]) {
+  for (const [pr, human, deploy] of [[100, 1, 1], [101, 1, 250000], [102, 250000, 1], [103, 1, 1]]) {
     const dir = path.join(root, 'previews', `pr-${pr}`); mkdirSync(dir, { recursive: true });
     writeFileSync(path.join(dir, 'docker-compose.yml'), 'services:\n  web: {}\n  renderer: {}\n');
     writeFileSync(path.join(dir, 'last-human-activity'), `${human}\n`);
     writeFileSync(path.join(dir, 'last-deploy'), `${deploy}\n`);
     writeFileSync(path.join(dir, 'last-request'), '399999\n'); // Polling/wake leases must not extend human idle deadlines.
-    if (pinned) writeFileSync(path.join(dir, 'keep-awake'), 'true\n');
   }
   mkdirSync(path.join(root, 'inflight', 'pr-103'), { recursive: true });
   writeFileSync(path.join(root, 'inflight', 'pr-103', '1-1'), 'deploying\n');
@@ -24,7 +23,7 @@ function fixture() {
   });
   return { root, log, run };
 }
-test('48h idle stops even pinned previews, preserves data, and skips recent deploy/activity and inflight deploys', () => {
+test('48h idle stops previews, preserves data, and skips recent deploy/activity and inflight deploys', () => {
   const { root, log, run } = fixture(); const result = run();
   expect(result.status).toBe(0);
   expect(result.stdout).toContain('IDLE_SLEPT=100');

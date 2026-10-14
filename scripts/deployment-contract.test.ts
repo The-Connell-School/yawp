@@ -838,7 +838,7 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain('PREVIEW_MAX_RUNNING');
     expect(previewWorkflow).toContain('PREVIEW_MAX_RESIDENT');
     expect(previewWorkflow).toContain('PREVIEW_SLEEP_ENABLED');
-    expect(previewWorkflow).toContain('preview:keep-awake');
+    expect(previewWorkflow).toContain('types: [opened, synchronize, reopened, ready_for_review, closed]');
     expect(previewWorkflow).toContain('PREVIEW_MODE=reconcile');
     expect(previewWorkflow).toContain('CAP_SLEPT');
   });

@@ -351,28 +351,6 @@ describe('enforce-cap.sh', () => {
     expect(existsSync(previewDir)).toBe(true);
   });
 
-  test('atomically refreshes a read-only keep-awake marker', () => {
-    const root = makeRoot();
-    const { previewDir } = makeEnv(root, 252);
-    const marker = path.join(previewDir, 'keep-awake');
-    writeFileSync(marker, 'stale\n');
-    chmodSync(marker, 0o444);
-    const docker = makeDockerStub(root);
-
-    const result = run(root, {
-      OPEN_PR_NUMBERS: '252',
-      PR_ACTIVITY: '252 1 0 1',
-      PREVIEW_MODE: 'reconcile',
-      PREVIEW_MAX_RESIDENT: '30',
-      PREVIEW_DOCKER: docker.stub,
-      PREVIEW_DOCKER_STATE: docker.state,
-      PREVIEW_DOCKER_LOG: docker.log,
-    });
-
-    expect(result.status).toBe(0);
-    expect(readFileSync(marker, 'utf8')).toBe('true\n');
-  });
-
   test('refreshes PR state after locking instead of trusting a queued snapshot', () => {
     const root = makeRoot();
     const first = makeEnv(root, 232);
@@ -388,7 +366,7 @@ describe('enforce-cap.sh', () => {
         number: 233,
         updated_at: '2026-08-11T11:00:00Z',
         draft: true,
-        labels: [{ name: 'preview:keep-awake' }],
+        labels: [],
       },
     ]);
 
@@ -493,31 +471,14 @@ describe('enforce-cap.sh', () => {
     expect(existsSync(path.join(root, 'previews/pr-102'))).toBe(true);
   });
 
-  test('resident pressure never deletes a keep-awake marker preview', () => {
-    const root = makeRoot();
-    const pinned = makeEnv(root, 100);
-    const candidate = makeEnv(root, 101);
-    writeFileSync(path.join(pinned.previewDir, 'keep-awake'), 'true\n');
-
-    const result = run(root, {
-      OPEN_PR_NUMBERS: '100 101',
-      PREVIEW_MODE: 'reconcile',
-      PREVIEW_MAX_RESIDENT: '1',
-      PR_ACTIVITY: '100 1 0 1\n101 2 0 0',
-    });
-
-    expect(result.status).toBe(0);
-    expect(parse(result.stdout).CAP_EVICTED).toBe('101');
-    expect(existsSync(pinned.previewDir)).toBe(true);
-    expect(existsSync(candidate.previewDir)).toBe(false);
-  });
-
-  test('running pressure sleeps lane previews before human PRs', () => {
+  test('running pressure sleeps oldest human activity irrespective of branch', () => {
     const root = makeRoot();
     makeEnv(root, 100, { withCompose: true });
     makeEnv(root, 101, { withCompose: true });
     writeFileSync(path.join(root, 'previews/pr-100/branch'), 'human/fix-login\n');
     writeFileSync(path.join(root, 'previews/pr-101/branch'), 'codex/preview-lru\n');
+    writeFileSync(path.join(root, 'previews/pr-100/last-human-activity'), '990\n');
+    writeFileSync(path.join(root, 'previews/pr-101/last-human-activity'), '991\n');
     const docker = makeDockerStub(root, [100, 101]);
 
     const result = run(root, {
@@ -534,8 +495,8 @@ describe('enforce-cap.sh', () => {
     });
 
     expect(result.status).toBe(0);
-    expect(parse(result.stdout).CAP_SLEPT).toBe('101');
-    expect(readFileSync(docker.state, 'utf8').trim()).toBe('100');
+    expect(parse(result.stdout).CAP_SLEPT).toBe('100');
+    expect(readFileSync(docker.state, 'utf8').trim()).toBe('101');
   });
 
   test.if(canReproduce)(
@@ -748,13 +709,13 @@ describe('enforce-cap.sh', () => {
     });
   });
 
-  test('running pressure prefers sleeping the least recently used URL', () => {
+  test('running pressure uses human activity rather than requests or GitHub activity', () => {
     const root = makeRoot();
     for (const pr of [100, 101, 102]) makeEnv(root, pr, { withCompose: true });
     mkdirSync(path.join(root, 'wake', 'access'), { recursive: true });
-    writeFileSync(path.join(root, 'wake', 'access', 'pr-100'), '9000\n');
-    writeFileSync(path.join(root, 'wake', 'access', 'pr-101'), '1000\n');
-    writeFileSync(path.join(root, 'wake', 'access', 'pr-102'), '2000\n');
+    writeFileSync(path.join(root, 'previews/pr-100/last-human-activity'), '9000\n');
+    writeFileSync(path.join(root, 'previews/pr-101/last-human-activity'), '1000\n');
+    writeFileSync(path.join(root, 'previews/pr-102/last-human-activity'), '2000\n');
     const docker = makeDockerStub(root, [100, 101, 102]);
 
     const result = run(root, {
@@ -777,58 +738,23 @@ describe('enforce-cap.sh', () => {
     });
   });
 
-  test('running pressure sleeps drafts before ready PRs', () => {
+  test('admission evicts oldest activity even when all are recent, independent of draft or PR snapshot', () => {
     const root = makeRoot();
     for (const pr of [100, 101, 102]) makeEnv(root, pr, { withCompose: true });
-    const docker = makeDockerStub(root, [100, 101, 102]);
-
+    for (const [pr, epoch] of [[100, 4998], [101, 4999], [102, 1]]) {
+      writeFileSync(path.join(root, `previews/pr-${pr}/last-human-activity`), `${epoch}\n`);
+      writeFileSync(path.join(root, `previews/pr-${pr}/last-deploy`), '4999\n');
+    }
+    const docker = makeDockerStub(root, [100, 101]);
     const result = run(root, {
-      OPEN_PR_NUMBERS: '100 101 102',
-      PR_ACTIVITY: '100 1000 0 0\n101 3000 1 0\n102 2000 0 0',
-      PREVIEW_MODE: 'reconcile',
-      PREVIEW_DOCKER: docker.stub,
-      PREVIEW_DOCKER_STATE: docker.state,
-      PREVIEW_DOCKER_LOG: docker.log,
-      PREVIEW_SLEEP_ENABLED: 'true',
-      PREVIEW_IDLE_SLEEP_HOURS: '999999',
-      PREVIEW_MAX_RESIDENT: '20',
-      PREVIEW_MAX_RUNNING: '2',
+      OPEN_PR_NUMBERS: '100 101 102', PR_ACTIVITY: '101 1 1',
+      PREVIEW_MODE: 'admit', KEEP_PR: '102', PREVIEW_NOW_EPOCH: '5000',
+      PREVIEW_MAX_RUNNING: '2', PREVIEW_MAX_RESIDENT: '20',
+      PREVIEW_DOCKER: docker.stub, PREVIEW_DOCKER_STATE: docker.state, PREVIEW_DOCKER_LOG: docker.log,
     });
-
-    expect(parse(result.stdout)).toMatchObject({
-      CAP_SLEPT: '101',
-      CAP_RUNNING: '2',
-      CAP_RESULT: 'ok',
-    });
-  });
-
-  test('never sleeps a pinned PR and reports a full running cap honestly', () => {
-    const root = makeRoot();
-    makeEnv(root, 100, { withCompose: true });
-    makeEnv(root, 101, { withCompose: true });
-    const docker = makeDockerStub(root, [100]);
-
-    const result = run(root, {
-      OPEN_PR_NUMBERS: '100 101',
-      PR_ACTIVITY: '100 1 1 1\n101 2 0 0',
-      PREVIEW_MODE: 'admit',
-      KEEP_PR: '101',
-      PREVIEW_DOCKER: docker.stub,
-      PREVIEW_DOCKER_STATE: docker.state,
-      PREVIEW_DOCKER_LOG: docker.log,
-      PREVIEW_SLEEP_ENABLED: 'true',
-      PREVIEW_NOW_EPOCH: '999999',
-      PREVIEW_MAX_RESIDENT: '20',
-      PREVIEW_MAX_RUNNING: '1',
-    });
-
-    expect(parse(result.stdout)).toMatchObject({
-      CAP_SLEPT: '',
-      CAP_RUNNING: '1',
-      CAP_RESULT: 'full',
-      CAP_REASON: 'running-cap',
-    });
-    expect(readFileSync(docker.state, 'utf8')).toContain('100');
+    expect(parse(result.stdout)).toMatchObject({ CAP_SLEPT: '100', CAP_RESULT: 'ok', CAP_EVICTED: '' });
+    expect(existsSync(path.join(root, 'previews/pr-100/.database-marker'))).toBe(true);
+    expect(readFileSync(docker.log, 'utf8')).not.toMatch(/ down |volume rm|dropdb|image rm/);
   });
 
   test('reconcile mode does not invent an incoming resident slot', () => {

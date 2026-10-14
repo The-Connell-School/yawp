@@ -24,15 +24,14 @@ function makeRoot() {
   return root;
 }
 
-function makePreview(root, pr, { access = 0, pinned = false } = {}) {
+function makePreview(root, pr, { access = 0 } = {}) {
   const preview = path.join(root, 'previews', `pr-${pr}`);
   mkdirSync(preview, { recursive: true });
   writeFileSync(path.join(preview, 'docker-compose.yml'), 'services:\n  web: {}\n');
   writeFileSync(path.join(preview, 'state-marker'), `state-${pr}\n`);
   writeFileSync(path.join(preview, 'access-secret'), `${'a'.repeat(64)}\n`);
-  if (pinned) writeFileSync(path.join(preview, 'keep-awake'), 'true\n');
   if (access > 0) {
-    writeFileSync(path.join(root, 'wake', 'access', `pr-${pr}`), `${access}\n`);
+    writeFileSync(path.join(preview, 'last-human-activity'), `${access}\n`);
   }
   return preview;
 }
@@ -91,6 +90,10 @@ fi
   fi
 fi
 if [[ "$1" == "inspect" ]]; then
+  if [[ "$*" == *"State.StartedAt"* ]]; then
+    echo "1970-01-01T00:00:10Z"
+    exit 0
+  fi
   if [[ "$*" == *"NetworkSettings.Networks"* ]]; then
     echo "172.18.0.245"
     exit 0
@@ -277,9 +280,9 @@ printf 'OK\\n'
     );
   });
 
-  test('at the running cap sleeps the least recently accessed unpinned preview', () => {
+  test('at the running cap sleeps the oldest human activity and preserves resident state', () => {
     const root = makeRoot();
-    makePreview(root, 100, { access: 10, pinned: true });
+    makePreview(root, 100, { access: 200 });
     makePreview(root, 101, { access: 20 });
     makePreview(root, 102, { access: 30 });
     const docker = makeDockerStub(root, [100, 101]);
@@ -295,7 +298,7 @@ printf 'OK\\n'
     expect(log).not.toContain('compose -p yawp-pr-100');
   });
 
-  test('at the running cap sleeps a lane preview before an older human preview', () => {
+  test('at the running cap sleeps an older human preview before a newer lane', () => {
     const root = makeRoot();
     makePreview(root, 100, { access: 10 });
     makePreview(root, 101, { access: 20 });
@@ -307,8 +310,8 @@ printf 'OK\\n'
     const result = run(root, 102, docker);
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain('WAKE_SLEPT=101');
-    expect(readFileSync(docker.state, 'utf8').trim().split('\n').sort()).toEqual(['100', '102']);
+    expect(result.stdout).toContain('WAKE_SLEPT=100');
+    expect(readFileSync(docker.state, 'utf8').trim().split('\n').sort()).toEqual(['101', '102']);
   });
 
   test('sleep stops renderer but wake starts only web and blackboard services', () => {
@@ -351,19 +354,34 @@ printf 'OK\\n'
     expect(log).not.toContain(' start');
   });
 
-  test('fails closed when every running preview is pinned', () => {
+  test('evicts the oldest activity even when every running preview has a recent wake lease', () => {
     const root = makeRoot();
-    makePreview(root, 100, { pinned: true });
-    makePreview(root, 101, { pinned: true });
-    makePreview(root, 102);
+    makePreview(root, 100, { access: 4998 });
+    makePreview(root, 101, { access: 4999 });
+    makePreview(root, 102, { access: 1 });
+    for (const pr of [100, 101]) {
+      writeFileSync(path.join(root, 'wake/access', `pr-${pr}`), '4999\n');
+      writeFileSync(path.join(root, 'previews', `pr-${pr}`, 'last-deploy'), '4999\n');
+    }
     const docker = makeDockerStub(root, [100, 101]);
+    const result = run(root, 102, docker, { PREVIEW_NOW_EPOCH: '5000' });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('WAKE_SLEPT=100');
+    expect(readFileSync(docker.state, 'utf8').trim().split('\n').sort()).toEqual(['101', '102']);
+    expect(readFileSync(path.join(root, 'previews/pr-100/state-marker'), 'utf8')).toBe('state-100\n');
+    expect(readFileSync(docker.log, 'utf8')).not.toMatch(/ down |volume rm|dropdb|image rm/);
+  });
 
+  test('missing human activity falls back to container start time, with numeric PR tie breaking', () => {
+    const root = makeRoot();
+    makePreview(root, 100);
+    makePreview(root, 101);
+    makePreview(root, 102, { access: 1 });
+    writeFileSync(path.join(root, 'previews/pr-100/last-request'), '999999\n');
+    const docker = makeDockerStub(root, [100, 101]);
     const result = run(root, 102, docker);
-
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain('capacity');
-    expect(readFileSync(docker.state, 'utf8').trim().split('\n').sort()).toEqual(['100', '101']);
-    expect(readFileSync(docker.log, 'utf8')).not.toContain(' start');
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('WAKE_SLEPT=100');
   });
 
   test('sleep kill switch prevents capacity displacement during wake', () => {
@@ -397,10 +415,10 @@ printf 'OK\\n'
     expect(readFileSync(docker.log, 'utf8')).not.toContain(' stop');
   });
 
-  test('unauthorized human timestamps cannot renew the LRU capacity lease', () => {
+  test('anonymous request and deploy timestamps cannot override human activity', () => {
     const root = makeRoot();
-    makePreview(root, 100, { access: 10, pinned: true });
-    makePreview(root, 101, { access: 1000 });
+    makePreview(root, 100, { access: 200 });
+    makePreview(root, 101, { access: 100 });
     makePreview(root, 102);
     writeFileSync(path.join(root, 'previews/pr-101/last-request'), '4999\n');
     const docker = makeDockerStub(root, [100, 101]);
@@ -455,7 +473,7 @@ printf 'OK\\n'
 
   test('restores the displaced preview when the requested wake is unhealthy', () => {
     const root = makeRoot();
-    makePreview(root, 100, { access: 10, pinned: true });
+    makePreview(root, 100, { access: 200 });
     makePreview(root, 101, { access: 20 });
     makePreview(root, 102, { access: 30 });
     const docker = makeDockerStub(root, [100, 101], 102);
@@ -472,7 +490,7 @@ printf 'OK\\n'
 
   test('restores the displaced preview when the requested Compose start fails', () => {
     const root = makeRoot();
-    makePreview(root, 100, { access: 10, pinned: true });
+    makePreview(root, 100, { access: 200 });
     makePreview(root, 101, { access: 20 });
     makePreview(root, 102, { access: 30 });
     const docker = makeDockerStub(root, [100, 101]);
@@ -558,7 +576,7 @@ printf 'OK\\n'
 
   test('does not restore a displaced preview until a failed target is confirmed stopped', () => {
     const root = makeRoot();
-    makePreview(root, 100, { access: 10, pinned: true });
+    makePreview(root, 100, { access: 200 });
     makePreview(root, 101, { access: 20 });
     makePreview(root, 102, { access: 30 });
     const docker = makeDockerStub(root, [100, 101], 102);
@@ -574,7 +592,7 @@ printf 'OK\\n'
 
   test('signal cancellation rolls back the target before restoring displacement', async () => {
     const root = makeRoot();
-    makePreview(root, 100, { access: 10, pinned: true });
+    makePreview(root, 100, { access: 200 });
     makePreview(root, 101, { access: 20 });
     makePreview(root, 102, { access: 30 });
     const docker = makeDockerStub(root, [100, 101], 102);
@@ -605,7 +623,7 @@ printf 'OK\\n'
 
   test('signal cancellation during victim stop restores the displaced preview', async () => {
     const root = makeRoot();
-    makePreview(root, 100, { access: 10, pinned: true });
+    makePreview(root, 100, { access: 200 });
     makePreview(root, 101, { access: 20 });
     makePreview(root, 102, { access: 30 });
     const docker = makeDockerStub(root, [100, 101]);
@@ -644,26 +662,18 @@ printf 'OK\\n'
     expect(log).not.toContain('compose -p yawp-pr-102');
   });
 
-  test('protects a newly awakened preview from immediate capacity ping-pong', () => {
+  test('recently awakened previews still compete by oldest human activity at capacity', () => {
     const root = makeRoot();
-    makePreview(root, 100, { access: 10, pinned: true });
+    makePreview(root, 100, { access: 999 });
     makePreview(root, 101, { access: 20 });
     makePreview(root, 102);
     makePreview(root, 103);
     const docker = makeDockerStub(root, [100, 101]);
-
-    const first = run(root, 102, docker, {
-      PREVIEW_NOW_EPOCH: '1000',
-      PREVIEW_WAKE_LEASE_SECONDS: '120',
-    });
-    const second = run(root, 103, docker, {
-      PREVIEW_NOW_EPOCH: '1001',
-      PREVIEW_WAKE_LEASE_SECONDS: '120',
-    });
-
+    const first = run(root, 102, docker, { PREVIEW_NOW_EPOCH: '1000' });
+    const second = run(root, 103, docker, { PREVIEW_NOW_EPOCH: '1001' });
     expect(first.status).toBe(0);
-    expect(second.status).not.toBe(0);
-    expect(second.stderr).toContain('capacity');
-    expect(readFileSync(docker.state, 'utf8').trim().split('\n').sort()).toEqual(['100', '102']);
+    expect(second.status).toBe(0);
+    expect(second.stdout).toContain('WAKE_SLEPT=100');
+    expect(readFileSync(docker.state, 'utf8').trim().split('\n').sort()).toEqual(['102', '103']);
   });
 });
