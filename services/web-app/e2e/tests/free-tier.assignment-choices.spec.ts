@@ -282,3 +282,65 @@ for (const width of [1280, 390]) {
     ).toBeDisabled();
   });
 }
+
+for (const width of [1280, 390]) {
+  test(`existing locked paid assignment remains editable with an empty creation catalog (${width})`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const membership = await db.orgMembership.findFirstOrThrow({
+      where: { user: { email: 'dev.teacher@yawp.local' }, role: 'TEACHER' },
+      select: { id: true, assignmentTypesCustomized: true },
+    });
+    const paidClass = await db.class.findFirstOrThrow({
+      where: { teachers: { some: { id: membership.id } } },
+      select: { id: true },
+    });
+    const catalog = await db.teacherAssignmentType.findMany({ where: { membershipId: membership.id } });
+    const title = `Existing locked essay ${width} ${Date.now()}`;
+    const assignment = await db.assignment.create({
+      data: {
+        title, prompt: 'Existing community garden prompt.', assignmentTypeId: paidType.id,
+        collaborationEnabled: true,
+        classAssignments: { create: { classId: paidClass.id } },
+      },
+    });
+    try {
+      await db.teacherAssignmentType.deleteMany({ where: { membershipId: membership.id } });
+      await db.orgMembership.update({ where: { id: membership.id }, data: { assignmentTypesCustomized: true } });
+      await login(page, 'dev.teacher@yawp.local');
+      await page.goto(`/app/assignments/${assignment.id}?classId=${paidClass.id}`);
+      await page.getByRole('button', { name: 'Edit', exact: true }).click();
+      const sheet = page.getByRole('dialog');
+      await expect(sheet.getByRole('combobox').first()).toBeDisabled();
+      await expect(sheet.getByText(/type is fixed because shared group drafts/)).toBeVisible();
+      const save = sheet.getByRole('button', { name: 'Save Changes', exact: true });
+      await capture(page, 'existing-locked-empty-catalog');
+      await expect(sheet.locator('input[name="assignmentTypeId"]')).toHaveValue(paidType.id);
+      await expect(save).toBeEnabled();
+      await sheet.getByLabel(/^Title/).fill(`${title} updated`);
+      await sheet.getByLabel('Prompt', { exact: true }).fill('Updated community garden prompt.');
+      const response = page.waitForResponse(r => r.url().includes(`/app/assignments/${assignment.id}`) && r.request().method() === 'POST');
+      await save.click();
+      expect((await response).status()).toBe(200);
+      await expect(sheet).not.toBeVisible();
+      const saved = await db.assignment.findUniqueOrThrow({ where: { id: assignment.id } });
+      expect(saved.assignmentTypeId).toBe(paidType.id);
+      expect(saved.title).toBe(`${title} updated`);
+      expect(saved.prompt).toBe('Updated community garden prompt.');
+      expect(saved.collaborationEnabled).toBe(true);
+      await page.reload();
+      await expect(page.getByText(`${title} updated`, { exact: true }).first()).toBeVisible();
+      await capture(page, 'existing-locked-saved');
+      await page.goto(`/app/my-classes/${paidClass.id}?tab=assignments`);
+      await page.getByRole('button', { name: /New Assignment/i }).first().click();
+      const createSheet = page.getByRole('dialog');
+      await expect(createSheet.getByText(/No assignment types are available/)).toBeVisible();
+      await expect(createSheet.getByRole('button', { name: 'Create Assignment', exact: true })).toBeDisabled();
+      await capture(page, 'existing-catalog-create-blocked');
+    } finally {
+      await db.assignment.delete({ where: { id: assignment.id } });
+      await db.teacherAssignmentType.deleteMany({ where: { membershipId: membership.id } });
+      if (catalog.length) await db.teacherAssignmentType.createMany({ data: catalog });
+      await db.orgMembership.update({ where: { id: membership.id }, data: { assignmentTypesCustomized: membership.assignmentTypesCustomized } });
+    }
+  });
+}

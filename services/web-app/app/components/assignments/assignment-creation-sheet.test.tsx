@@ -238,6 +238,59 @@ describe('AssignmentCreationSheetContent', () => {
     root = null;
   });
 
+  it.each([false, true])('preserves an absent existing type for ordinary edits (locked=%s)', (locked) => {
+    ({ root } = renderSheet({
+      assignmentTypes: [],
+      editingAssignment: { id: 'existing-assignment', assignmentTypeLocked: locked },
+      initialAssignmentTypeId: 'existing-type',
+      fixedClassId: 'class-1',
+      initialTitle: 'Existing essay',
+      initialPrompt: 'Existing prompt',
+    }));
+    expect(inputByName('assignmentTypeId').value).toBe('existing-type');
+    expect((document.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
+    act(() => setTextareaValue(textareaByName('prompt'), 'Updated prompt'));
+    expect(inputByName('assignmentTypeId').value).toBe('existing-type');
+    expect((document.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('keeps an absent existing type when other creation choices remain', () => {
+    ({ root } = renderSheet({
+      editingAssignment: { id: 'existing-assignment' },
+      initialAssignmentTypeId: 'existing-type',
+      fixedClassId: 'class-1',
+      initialTitle: 'Existing essay',
+      initialPrompt: 'Existing prompt',
+    }));
+    expect(inputByName('assignmentTypeId').value).toBe('existing-type');
+    expect((document.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('allows unchanged-type edits after creation availability is exhausted', () => {
+    ({ root } = renderSheet({
+      assignmentTypes: [{ ...assignmentTypes[0], quotaExhausted: true, unavailableReason: 'Available with a paid plan.' }],
+      editingAssignment: { id: 'existing-assignment' },
+      initialAssignmentTypeId: 'type-1',
+      fixedClassId: 'class-1',
+      initialPrompt: 'Existing prompt',
+    }));
+    expect(inputByName('assignmentTypeId').value).toBe('type-1');
+    expect((document.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it.each([undefined, 'existing-type'])('blocks creation with an absent preferred type and empty catalog (fixed=%s)', (fixedType) => {
+    ({ root } = renderSheet({
+      assignmentTypes: [],
+      initialAssignmentTypeId: 'existing-type',
+      fixedAssignmentTypeId: fixedType,
+      fixedClassId: 'class-1',
+      initialTitle: 'New essay',
+      initialPrompt: 'New prompt',
+    }));
+    expect((document.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(true);
+    expectText('No assignment types are available');
+  });
+
   it('skips paid and exhausted types when choosing the default', () => {
     ({ root } = renderSheet({
       assignmentTypes: [

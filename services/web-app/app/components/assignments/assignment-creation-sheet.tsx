@@ -349,10 +349,15 @@ export function assignmentCreationClassLabel(
 function initialAssignmentTypeSelection(
   assignmentTypes: AssignmentCreationAssignmentType[],
   fixedAssignmentTypeId?: string,
-  initialAssignmentTypeId?: string
+  initialAssignmentTypeId?: string,
+  isEditing = false
 ) {
   const preferredId =
     fixedAssignmentTypeId ?? initialAssignmentTypeId ?? undefined;
+  // Creation availability can change after an assignment is posted. Preserve
+  // its current type for ordinary edits; selecting a replacement still requires
+  // an available catalog type.
+  if (isEditing && preferredId) return preferredId;
   if (preferredId) {
     const preferred = assignmentTypes.find((type) => type.id === preferredId);
     if (
@@ -532,7 +537,8 @@ export function AssignmentCreationSheetContent({
     initialAssignmentTypeSelection(
       assignmentTypes,
       fixedAssignmentTypeId,
-      initialAssignmentTypeId
+      initialAssignmentTypeId,
+      Boolean(editingAssignment)
     )
   );
   const [selectedClassId, setSelectedClassId] = useState(
@@ -550,7 +556,8 @@ export function AssignmentCreationSheetContent({
       initialAssignmentTypeSelection(
         assignmentTypes,
         fixedAssignmentTypeId,
-        initialAssignmentTypeId
+        initialAssignmentTypeId,
+        Boolean(editingAssignment)
       )
     ),
     initialSubmitForGrade,
@@ -574,7 +581,8 @@ export function AssignmentCreationSheetContent({
         initialAssignmentTypeSelection(
           assignmentTypes,
           fixedAssignmentTypeId,
-          initialAssignmentTypeId
+          initialAssignmentTypeId,
+          Boolean(editingAssignment)
         )
       ),
       initialTutorEnabled,
@@ -648,8 +656,12 @@ export function AssignmentCreationSheetContent({
   const isExtracting = extractFetcher.state !== 'idle';
   const requestedTypeId = fixedAssignmentTypeId ?? selectedAssignmentTypeId ?? '';
   const selectedType = assignmentTypes.find((type) => type.id === requestedTypeId);
+  const unchangedTypeEdit =
+    isEditing &&
+    requestedTypeId === (fixedAssignmentTypeId ?? initialAssignmentTypeId);
   const assignmentTypeId =
-    !isEditing && (selectedType?.unavailableReason || selectedType?.quotaExhausted)
+    !unchangedTypeEdit &&
+    (!selectedType || selectedType.unavailableReason || selectedType.quotaExhausted)
       ? ''
       : requestedTypeId;
   // Collaboration is offered for every assignment type now, so this only asks
@@ -803,7 +815,8 @@ export function AssignmentCreationSheetContent({
       initialAssignmentTypeSelection(
         assignmentTypes,
         fixedAssignmentTypeId,
-        initialAssignmentTypeId
+        initialAssignmentTypeId,
+        Boolean(editingAssignment)
       )
     );
     setSelectedClassId(fixedClassId ?? teacherClasses[0]?.id ?? '');
@@ -817,7 +830,8 @@ export function AssignmentCreationSheetContent({
         initialAssignmentTypeSelection(
           assignmentTypes,
           fixedAssignmentTypeId,
-          initialAssignmentTypeId
+          initialAssignmentTypeId,
+          Boolean(editingAssignment)
         )
       ),
       initialSubmitForGrade,
@@ -836,7 +850,8 @@ export function AssignmentCreationSheetContent({
           initialAssignmentTypeSelection(
             assignmentTypes,
             fixedAssignmentTypeId,
-            initialAssignmentTypeId
+            initialAssignmentTypeId,
+            Boolean(editingAssignment)
           )
         ),
         initialTutorEnabled,
@@ -952,9 +967,11 @@ export function AssignmentCreationSheetContent({
   const isSubmitDisabled =
     isSaving ||
     isExtracting ||
-    !selectedType ||
-    Boolean(selectedType.unavailableReason) ||
-    (!isEditing && Boolean(selectedType.quotaExhausted)) ||
+    !assignmentTypeId ||
+    (!unchangedTypeEdit &&
+      (!selectedType ||
+        Boolean(selectedType.unavailableReason) ||
+        Boolean(selectedType.quotaExhausted))) ||
     (!isEditing && selectedClassCount === 0) ||
     (isExitTicket ? !exitTicketPrompt : !prompt.trim()) ||
     (titleRequired && !title.trim()) ||
