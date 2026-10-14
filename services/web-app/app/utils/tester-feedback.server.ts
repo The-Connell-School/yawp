@@ -174,27 +174,49 @@ function headerOrigin(value: string | null) {
   }
 }
 
+function isDemoOrigin(origin: string | null) {
+  if (!origin) return false;
+  try {
+    return new URL(origin).hostname === 'demo.yawp.school';
+  } catch {
+    return false;
+  }
+}
+
+function isAcceptedSourceOrigin(
+  request: Request,
+  source: string | null,
+  publicOrigins: Set<string>
+) {
+  return (
+    !!source &&
+    (source === new URL(request.url).origin ||
+      source === forwardedOrigin(request) ||
+      source === hostedRequestOrigin(request, source) ||
+      publicOrigins.has(source))
+  );
+}
+
 function acceptsFeedbackOrigin(request: Request, environment: string) {
   const originHeader = request.headers.get('origin');
   const origin = headerOrigin(originHeader);
   if (originHeader && !origin) return false;
   if (origin && origin === new URL(request.url).origin) return true;
-  if (environment.toLowerCase() === 'production') return false;
   const publicOrigins = configuredPublicOrigins();
+  const isProduction = environment.toLowerCase() === 'production';
   if (!origin) {
     const referer = headerOrigin(request.headers.get('referer'));
-    return (
-      !!referer &&
-      (referer === new URL(request.url).origin ||
-        referer === forwardedOrigin(request) ||
-        referer === hostedRequestOrigin(request, referer) ||
-        publicOrigins.has(referer))
+    const acceptedReferer = isAcceptedSourceOrigin(
+      request,
+      referer,
+      publicOrigins
     );
+    if (isProduction) return acceptedReferer && isDemoOrigin(referer);
+    return acceptedReferer;
   }
+  if (isProduction) return false;
   return (
-    origin === forwardedOrigin(request) ||
-    origin === hostedRequestOrigin(request, origin) ||
-    publicOrigins.has(origin)
+    isAcceptedSourceOrigin(request, origin, publicOrigins)
   );
 }
 

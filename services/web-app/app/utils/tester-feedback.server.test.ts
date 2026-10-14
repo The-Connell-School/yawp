@@ -252,6 +252,28 @@ describe('tester feedback submission', () => {
     expect(saved).toHaveLength(1);
     expect(saved[0]).toMatchObject({ environment: 'demo' });
   });
+  test('accepts demo .data form posts without origin when the same-origin referer is present', async () => {
+    const { deps, saved } = setup({ environment: () => 'production' });
+    const response = await submitTesterFeedback(
+      new Request('https://demo.yawp.school/api/tester-feedback.data', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          referer: 'https://demo.yawp.school/app/assignments?tab=work',
+        },
+        body: new URLSearchParams({
+          url: '/app/assignments?tab=work',
+          whatIDid: 'Opened',
+          whatHappened: 'Froze',
+          whatIWish: 'Save',
+        }),
+      }),
+      deps
+    );
+    expect(response.status).toBe(201);
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject({ environment: 'production' });
+  });
   test('accepts demo hosted form posts through an internal proxy host when PRIMARY_APP_URL matches the browser referer', async () => {
     const originalPrimary = process.env.PRIMARY_APP_URL;
     process.env.PRIMARY_APP_URL = 'https://demo.yawp.school';
@@ -362,6 +384,9 @@ describe('tester feedback submission', () => {
         referer: 'https://yawp.school/app',
         host: 'yawp.school',
       },
+      {
+        referer: 'https://yawp.school/app/assignments?tab=work',
+      },
     ];
     for (const headers of productionOriginHeaders) {
       const response = await submitTesterFeedback(
@@ -382,6 +407,26 @@ describe('tester feedback submission', () => {
       );
       expect(response.status).toBe(403);
     }
+    expect(
+      (
+        await submitTesterFeedback(
+          new Request('https://yawp.school/api/tester-feedback.data', {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/x-www-form-urlencoded',
+              referer: 'https://yawp.school/app/assignments?tab=work',
+            },
+            body: new URLSearchParams({
+              url: '/app?tab=work',
+              whatIDid: 'Opened',
+              whatHappened: 'Froze',
+              whatIWish: 'Save',
+            }),
+          }),
+          deps
+        )
+      ).status
+    ).toBe(403);
     expect(saved).toHaveLength(0);
   });
   test('reports modest rate limiting without saving', async () => {
