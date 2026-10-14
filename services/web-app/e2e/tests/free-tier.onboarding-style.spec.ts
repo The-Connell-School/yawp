@@ -328,8 +328,42 @@ for (const viewport of [
         );
         await capture(`teacher-${status.toLowerCase()}`);
         if (status === 'REJECTED') {
-          await admin.goto(replacement.approveUrl);
+          const declined = await mintFreeTierLinkForE2E(prisma, {
+            applicationId: app.id,
+            purpose: 'ADMIN_APPROVE',
+          });
+          await admin.goto(
+            `/free/admin/approve?t=${encodeURIComponent(declined.token)}`
+          );
+          await expect(
+            admin.getByRole('heading', {
+              name: 'Request not approved',
+              exact: true,
+            })
+          ).toBeVisible();
           await capture('approval-declined', admin);
+          const expired = await mintFreeTierLinkForE2E(prisma, {
+            applicationId: app.id,
+            purpose: 'ADMIN_APPROVE',
+            ttlMs: -1000,
+          });
+          await admin.goto(
+            `/free/admin/approve?t=${encodeURIComponent(expired.token)}`
+          );
+          await expect(
+            admin.getByRole('heading', {
+              name: 'Link expired or already used',
+              exact: true,
+            })
+          ).toBeVisible();
+          await capture('approval-expired', admin);
+          expect(
+            (
+              await prisma.freeTierSignedLink.findUnique({
+                where: { id: expired.linkId },
+              })
+            )?.usedAt
+          ).toBeNull();
         }
       }
     } finally {
