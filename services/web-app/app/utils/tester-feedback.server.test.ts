@@ -274,6 +274,58 @@ describe('tester feedback submission', () => {
     expect(saved).toHaveLength(1);
     expect(saved[0]).toMatchObject({ environment: 'production' });
   });
+  test('accepts demo .data form posts with opaque origin when the same-origin referer is present', async () => {
+    const { deps, saved } = setup({ environment: () => 'production' });
+    const response = await submitTesterFeedback(
+      new Request('https://demo.yawp.school/api/tester-feedback.data', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          origin: 'null',
+          referer: 'https://demo.yawp.school/app/assignments?tab=work',
+        },
+        body: new URLSearchParams({
+          url: '/app/assignments?tab=work',
+          whatIDid: 'Opened',
+          whatHappened: 'Froze',
+          whatIWish: 'Save',
+        }),
+      }),
+      deps
+    );
+    expect(response.status).toBe(201);
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject({ environment: 'production' });
+  });
+  test('does not treat opaque origin as proxy-stripped source headers', async () => {
+    const originalPrimary = process.env.PRIMARY_APP_URL;
+    process.env.PRIMARY_APP_URL = 'https://demo.yawp.school';
+    try {
+      const { deps, saved } = setup({ environment: () => 'demo' });
+      const response = await submitTesterFeedback(
+        new Request('http://app-runner.internal/api/tester-feedback.data', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+            origin: 'null',
+            host: 'app-runner.internal',
+          },
+          body: new URLSearchParams({
+            url: '/app/assignments?tab=work',
+            whatIDid: 'Opened',
+            whatHappened: 'Froze',
+            whatIWish: 'Save',
+          }),
+        }),
+        deps
+      );
+      expect(response.status).toBe(403);
+      expect(saved).toHaveLength(0);
+    } finally {
+      if (originalPrimary === undefined) delete process.env.PRIMARY_APP_URL;
+      else process.env.PRIMARY_APP_URL = originalPrimary;
+    }
+  });
   test('accepts deployed demo .data posts through an internal host when only the demo app referer is public', async () => {
     const originalPrimary = process.env.PRIMARY_APP_URL;
     const originalYawpOrigin = process.env.YAWP_APP_ORIGIN;
