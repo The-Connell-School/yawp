@@ -1,7 +1,7 @@
-# PLAN: admin-migrate-1 preview-ban fix
+# PLAN: admin-migrate-4
 
-- Keep the retained `codex/admin-migrate-1-20261013` branch and PR #470; do not open a replacement PR or touch TeacherKev PRs.
-- Fix the PR preview workflow so a body whose first line is `[skip preview]` cannot deploy or comment preview access details.
-- Remove or invalidate the stale PR #470 preview exposure without waking any other previews.
-- Run focused preview workflow/tooling checks only, because the tester-feedback implementation and routed screenshots are unchanged.
-- Refresh PR #470 notes only if needed, preserving `[skip preview]` as the first line, then restore `state/BUILD_RESULT.md` for driver merge.
+- Keep all Free Trial mutations behind signed `/api/internal/v1/free-tier/...` endpoints with existing HMAC, operator attribution, audit, bounded CSV, and formula-safe export behavior.
+- Do not add email behavior; preserve existing platform-side hooks called by the signed endpoints.
+- Gate `/app/admin/free-tier` as moved so it is no longer the primary operator surface.
+- Add focused platform tests for the moved legacy route and any touched signed endpoint behavior.
+- Capture a local screenshot of the moved platform page after focused tests pass.
