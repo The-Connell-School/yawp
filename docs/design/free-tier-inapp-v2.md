@@ -47,6 +47,7 @@ Playwright output must point into the lane-private `TMPDIR`.
 - Start the isolated server with `./bin/project dev start --json`, then run
   `./bin/project test --profile free-tier-inapp-browser --json` in that same
   process session, and always run `./bin/project dev stop --json` afterwards.
+- `FREE_INAPP_REGRESSION=navigation` runs the existing join and trial-status flows against the new class heading and Usage status entry. These flows need an ephemeral local `FREE_TIER_LINK_HMAC_SECRET` and the local `PRIMARY_APP_URL` on the dev server, as in CI. No auth implementation is changed.
 - `FREE_INAPP_REGRESSION=1` runs the existing quota and assignment-choice browser files.
 - `PW_EXECUTABLE_PATH` can select an already installed Chromium through the supported configuration override.
 - `FREE_INAPP_SHOTS` selects permanent local screenshot evidence.

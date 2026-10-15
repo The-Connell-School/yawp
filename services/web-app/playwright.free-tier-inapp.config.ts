@@ -11,11 +11,15 @@ if (
 export default defineConfig({
   testDir: './e2e/tests',
   testMatch:
-    process.env.FREE_INAPP_REGRESSION === 'bundle'
-      ? /free-tier\.bundle-quotas\.spec\.ts/
-      : process.env.FREE_INAPP_REGRESSION === '1'
-        ? /free-tier\.(bundle-quotas|assignment-choices)\.spec\.ts/
-        : /free-tier\.inapp\.spec\.ts/,
+    process.env.FREE_INAPP_REGRESSION === 'handle'
+      ? /auth\.free-tier-handle-join\.spec\.ts/
+      : process.env.FREE_INAPP_REGRESSION === 'navigation'
+      ? /(auth\.free-tier-handle-join|free-tier\.trial-status)\.spec\.ts/
+      : process.env.FREE_INAPP_REGRESSION === 'bundle'
+        ? /free-tier\.bundle-quotas\.spec\.ts/
+        : process.env.FREE_INAPP_REGRESSION === '1'
+          ? /free-tier\.(bundle-quotas|assignment-choices)\.spec\.ts/
+          : /free-tier\.inapp\.spec\.ts/,
   fullyParallel: false,
   workers: 1,
   retries: 0,

@@ -13,7 +13,6 @@ test.describe('Free-tier handle student', () => {
     page,
     browser,
     helpers,
-    e2eContext: _e2eContext,
   }) => {
     test.setTimeout(120_000);
     const prisma = createE2EPrismaClient();
@@ -105,6 +104,7 @@ test.describe('Free-tier handle student', () => {
 
     try {
       await page.goto(`/join?t=${joinToken}`);
+      await page.waitForLoadState('networkidle');
       await page.getByLabel('Display name').fill(displayName);
       await page.getByLabel('Handle').fill(handle);
       await page.getByLabel('Password', { exact: true }).fill(password);
@@ -134,6 +134,7 @@ test.describe('Free-tier handle student', () => {
       const teacherContext = await browser.newContext();
       const teacherPage = await teacherContext.newPage();
       await teacherPage.goto('/auth/login');
+      await teacherPage.waitForLoadState('networkidle');
       await teacherPage.getByLabel('Email or handle').fill(teacherEmail);
       await teacherPage.getByLabel('Password').fill(teacherPassword);
       await teacherPage.getByRole('button', { name: 'Log in' }).click();
@@ -141,7 +142,7 @@ test.describe('Free-tier handle student', () => {
       await teacherPage.goto(`/app/my-classes/${klass.id}?tab=students`);
       await expect(teacherPage.getByText(displayName)).toBeVisible();
       await expect(teacherPage.getByText(`@${handle}`)).toBeVisible();
-      await expect(teacherPage.getByText('Student join link')).toBeVisible();
+      await expect(teacherPage.getByRole('heading', { name: /^(How students join|Student join link)$/ })).toBeVisible();
 
       await teacherPage.goto(`/app/my-classes/${klass.id}?tab=documents`);
       await expect(teacherPage.getByText(displayName)).toBeVisible({
@@ -168,6 +169,7 @@ test.describe('Free-tier handle student', () => {
 
       await page.request.post('/auth/logout');
       await page.goto('/auth/login');
+      await page.waitForLoadState('networkidle');
       await page.getByLabel('Email or handle').fill(handle);
       await page.getByLabel('Password').fill(tempPassword);
       await page.getByRole('button', { name: 'Log in' }).click();
@@ -181,6 +183,7 @@ test.describe('Free-tier handle student', () => {
 
       await page.request.post('/auth/logout');
       await page.goto('/auth/login');
+      await page.waitForLoadState('networkidle');
       await page.getByLabel('Email or handle').fill(handle);
       await page.getByLabel('Password').fill(newPassword);
       await page.getByRole('button', { name: 'Log in' }).click();
