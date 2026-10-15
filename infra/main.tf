@@ -357,6 +357,10 @@ resource "aws_iam_role_policy" "apprunner_instance_policy" {
             aws_secretsmanager_secret.free_tier_link_hmac[0].arn
           ] : [],
           module.internal_platform_integration.secret_arns,
+          local.google_oauth_enabled ? [
+            aws_secretsmanager_secret.google_oauth_client_id["production"].arn,
+            aws_secretsmanager_secret.google_oauth_client_secret["production"].arn
+          ] : [],
           var.internal_platform_integration != null ? [
             aws_secretsmanager_secret.internal_platform_signing_keys["production"].arn
           ] : [],
@@ -579,6 +583,9 @@ resource "aws_apprunner_service" "web" {
           STRIPE_WEBHOOK_SECRET = aws_secretsmanager_secret.stripe_webhook_secret[0].arn
           } : {}, var.internal_platform_integration != null ? {
           YAWP_INTERNAL_API_KEYS = aws_secretsmanager_secret.internal_platform_signing_keys["production"].arn
+          } : {}, local.google_oauth_enabled ? {
+          GOOGLE_OAUTH_CLIENT_ID     = aws_secretsmanager_secret.google_oauth_client_id["production"].arn
+          GOOGLE_OAUTH_CLIENT_SECRET = aws_secretsmanager_secret.google_oauth_client_secret["production"].arn
         } : {}, module.internal_platform_integration.secrets)
       }
     }

@@ -228,6 +228,36 @@ variable "stripe_secret_key" {
   default     = ""
 }
 
+variable "google_oauth_credentials_configured" {
+  type        = bool
+  description = "Adopt existing production Google OAuth secret metadata and wire App Runner ARNs. Does not enable unified-sign-on."
+  default     = false
+
+  validation {
+    condition = !var.google_oauth_credentials_configured || (
+      var.env == "production" && var.aws_region == "us-east-1" && var.google_oauth_secret_arns != null
+    )
+    error_message = "Google OAuth adoption requires production in us-east-1 and both existing secret ARNs."
+  }
+}
+
+variable "google_oauth_secret_arns" {
+  type = object({
+    client_id     = string
+    client_secret = string
+  })
+  description = "Existing secret ARNs (including AWS suffixes), never credential values. Used only when google_oauth_credentials_configured is true."
+  default     = null
+
+  validation {
+    condition = var.google_oauth_secret_arns == null ? true : (
+      can(regex("^arn:aws:secretsmanager:us-east-1:422348803522:secret:yawp-production-google-oauth-client-id-[A-Za-z0-9]{6}$", var.google_oauth_secret_arns.client_id)) &&
+      can(regex("^arn:aws:secretsmanager:us-east-1:422348803522:secret:yawp-production-google-oauth-client-secret-[A-Za-z0-9]{6}$", var.google_oauth_secret_arns.client_secret))
+    )
+    error_message = "Google OAuth ARNs must identify the existing production client ID and client secret in account 422348803522, us-east-1."
+  }
+}
+
 variable "stripe_webhook_secret" {
   type        = string
   description = "Signing secret for the target environment's Stripe webhook endpoint."

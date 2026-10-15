@@ -205,6 +205,8 @@ ${uaStudentBillingEnvironment}      INTERNAL_COMMAND_TOKEN: ${q(optionalEnv('PRE
   // it those routes 404, which is the right state for every PR preview.
   // Compose expands dollar signs even in quoted YAML. Preserve literal key bytes.
   const webEnvironment = commonEnvironment
+    + `\n      GOOGLE_OAUTH_CLIENT_ID: ${q(optionalEnv('PREVIEW_GOOGLE_OAUTH_CLIENT_ID').replaceAll('$', '$$$$'))}`
+    + `\n      GOOGLE_OAUTH_CLIENT_SECRET: ${q(optionalEnv('PREVIEW_GOOGLE_OAUTH_CLIENT_SECRET').replaceAll('$', '$$$$'))}`
     + (previewManagementServiceKey
       ? `\n      YAWP_MANAGEMENT_SERVICE_KEY: ${q(previewManagementServiceKey)}` : '')
     + (demoKeys
