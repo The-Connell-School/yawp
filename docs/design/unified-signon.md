@@ -153,3 +153,39 @@ for this presentation/fixture/test-only correction. Hosted QA remains omitted.
 One intermediate broad screenshot run had a local Chromium
 `ERR_NETWORK_CHANGED` loading fixture modules; its remaining 11 tests passed.
 Final results are recorded in the lane evidence `checks/review-fixes/`.
+
+
+## Remaining status/card review corrections (di-signon-ui)
+
+The second REJECT in `state/REVIEW.md` identified missing status badges and the
+shared class-summary treatment. Trial status now uses a clock for waitlist,
+administrator-pending and manual-review states, an envelope for an invitation,
+and information for rejected/expired requests. Inactive-account screens use
+information; joined screens use the circled check. Each decorative badge uses
+the existing secondary/foreground tokens, a 40px circle and a 22px Lucide icon,
+with 8px to the heading. Status copy sits 8px below its heading; actions sit
+24px below the copy. Empty action forms no longer add space to read-only statuses.
+
+Class summaries now use the shared white auth-card surface, the existing border
+token at 1px, 12px vertical/14px horizontal padding, and a 2px content gap.
+The DOM exports specify 20px class-name and 18px detail lines; these keep the
+summary content at the reference's 40px height before padding/border. These
+changes apply only inside the default-off unified UI. Shared legacy auth
+components, server operations, validators and settings remain unchanged.
+
+Desktop/mobile regression assertions cover every trial/inactive/joined fixture's
+icon choice, badge size, header/copy/action gaps, and class-summary geometry in
+all seven consuming screen families. The badge assertion failed before the fix;
+the additional line-height assertion caught inherited 22.5px text before the
+spacing correction. Final validation: 90 targeted flag/login unit/route tests,
+project CLI typecheck, and all 14 standalone Playwright tests pass with one
+worker. All 210 viewport captures are refreshed; 98 affected comparisons across
+18 artboards are committed. Prior affected evidence is preserved in the lane's
+`status-card-fixes/before/`; final logs are `status-card-*-final.log` and
+`status-card-targeted.log`. The manifest's `statusCardReviewFixes` links this set.
+
+Server-backed compatibility/status browser checks and the six identical flag-off
+comparisons remain the earlier evidence; these were not rerun for this scoped
+presentation correction. Hosted QA remains omitted under the preview ban.
+PR 3 contracts and all remote feature settings remain unchanged. Repeat Ship
+Review and check final CI before the driver handles rebase, merge lock and merge.

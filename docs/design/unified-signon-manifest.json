@@ -4686,5 +4686,37 @@
       "email and membership design geometry at 390"
     ],
     "backendDependency": "unchanged: live OTP and membership selection require PR 3; recovery tests use isolated fixture transport only"
+  },
+  "statusCardReviewFixes": {
+    "reviewSlug": "di-signon-ui",
+    "source": "state/REVIEW.md (second REJECT; status badges and class-summary treatment)",
+    "artboards": [
+      "signon-15",
+      "signon-16",
+      "signon-17",
+      "signon-18",
+      "signon-21",
+      "signon-22",
+      "signon-25",
+      "signon-26",
+      "classcode-03",
+      "classcode-04",
+      "classcode-05",
+      "classcode-06",
+      "classcode-07",
+      "classcode-08",
+      "classcode-09",
+      "classcode-10",
+      "classcode-11",
+      "classcode-12"
+    ],
+    "comparisonCount": 98,
+    "previousEvidence": "status-card-fixes/before/",
+    "checks": "status-badges-red.log, class-summary-line-height-red.log, status-badges-green.log, status-card-targeted.log, status-card-typecheck-final.log, status-card-playwright-final.log",
+    "regressionTests": [
+      "status badges and class summaries match artboards at 1280",
+      "status badges and class summaries match artboards at 390"
+    ],
+    "backendDependency": "unchanged; presentation only, no new operations or authorization behavior"
   }
 }
