@@ -1,0 +1,39 @@
+@media print {
+  @page { margin: 16mm; }
+  html:has(#classroom-report),
+  body:has(#classroom-report) {
+    height: auto !important;
+    overflow: visible !important;
+    background: white !important;
+  }
+  body:has(#classroom-report) * {
+    visibility: hidden !important;
+  }
+  body:has(#classroom-report) *:has(#classroom-report) {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+    transform: none !important;
+    position: static !important;
+  }
+  #classroom-report {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    max-width: none;
+    padding: 0;
+    background: white;
+    color: black;
+  }
+  body:has(#classroom-report) #classroom-report,
+  body:has(#classroom-report) #classroom-report * {
+    visibility: visible !important;
+  }
+  #classroom-report [data-report-controls],
+  #classroom-report [data-report-controls] * {
+    display: none !important;
+  }
+  #classroom-report dl > div { break-inside: avoid; background: white; }
+  #classroom-report li { break-inside: avoid; }
+  #classroom-report .text-muted-foreground { color: #333; }
+}
