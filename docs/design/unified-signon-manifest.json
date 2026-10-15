@@ -4712,11 +4712,12 @@
     ],
     "comparisonCount": 98,
     "previousEvidence": "status-card-fixes/before/",
-    "checks": "status-badges-red.log, class-summary-line-height-red.log, status-badges-green.log, status-card-targeted.log, status-card-typecheck-final.log, status-card-playwright-final.log",
+    "checks": "status-badges-red.log, class-summary-line-height-red.log, status-badges-green.log, status-card-targeted.log, status-card-typecheck-final.log, status-card-playwright-final.log, inactive-staff-action-red.log, inactive-staff-playwright-final.log",
     "regressionTests": [
       "status badges and class summaries match artboards at 1280",
       "status badges and class summaries match artboards at 390"
     ],
-    "backendDependency": "unchanged; presentation only, no new operations or authorization behavior"
+    "backendDependency": "unchanged; presentation only, no new operations or authorization behavior",
+    "inactiveStaffAction": "Existing POST /auth/logout form moved into card as primary action; no nested form or server contract change. signon-26 desktop/mobile comparisons refreshed after final adjustment."
   }
 }

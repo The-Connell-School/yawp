@@ -189,3 +189,10 @@ comparisons remain the earlier evidence; these were not rerun for this scoped
 presentation correction. Hosted QA remains omitted under the preview ban.
 PR 3 contracts and all remote feature settings remain unchanged. Repeat Ship
 Review and check final CI before the driver handles rebase, merge lock and merge.
+
+The inactive staff comparison also exposed an existing sign-out placement mismatch.
+Its unchanged `POST /auth/logout` form now sits inside the card as the primary
+action, with support below, matching signon-26. Student sign-out remains below.
+Regression assertions verify the native form method/action and primary styling;
+all 14 browser tests pass again after this adjustment, with the four signon-26
+viewport captures refreshed (`inactive-staff-playwright-final.log`).

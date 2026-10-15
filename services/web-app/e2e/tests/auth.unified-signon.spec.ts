@@ -261,6 +261,14 @@ for (const width of [1280, 390]) {
       await expect(icon).toHaveAttribute('width', '22');
       await expect(icon).toHaveAttribute('height', '22');
       const variant = fixture.state.variant;
+      if (fixture.state.screen === 'inactive' && variant === 'staff') {
+        const logout = page.locator('.signon-card form');
+        await expect(logout).toHaveAttribute('action', '/auth/logout');
+        await expect(logout).toHaveAttribute('method', 'post');
+        await expect(
+          logout.getByRole('button', { name: 'Sign out' })
+        ).toHaveClass(/signon-primary/);
+      }
       const expectedIcon =
         fixture.state.screen === 'joined'
           ? 'circle-check'

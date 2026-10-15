@@ -693,7 +693,13 @@ export function UnifiedSignon({
           ? 'Ask your school admin to turn it back on.'
           : 'You are not in any active classes.';
       body =
-        variant === 'staff' ? null : (
+        variant === 'staff' ? (
+          <form method="post" action="/auth/logout">
+            <Button type="submit" className="signon-primary">
+              Sign out
+            </Button>
+          </form>
+        ) : (
           <Button
             type="button"
             className="signon-primary"
@@ -702,18 +708,16 @@ export function UnifiedSignon({
             Enter a class code
           </Button>
         );
-      below = (
-        <>
+      below =
+        variant === 'staff' ? (
+          <a href="mailto:support@yawp.school">Contact support</a>
+        ) : (
           <form method="post" action="/auth/logout">
             <Button type="submit" variant="link">
               Sign out
             </Button>
           </form>
-          {variant === 'staff' && (
-            <a href="mailto:support@yawp.school">Contact support</a>
-          )}
-        </>
-      );
+        );
       break;
     case 'membership':
       title = 'Where are you working today?';
@@ -968,6 +972,9 @@ export function UnifiedSignon({
                 ? Info
                 : Clock
             : undefined;
+  const hasNativeForm =
+    (!!passwordForm && ['password', 'required-password'].includes(screen)) ||
+    (screen === 'inactive' && variant === 'staff');
 
   return (
     <section
@@ -1019,8 +1026,7 @@ export function UnifiedSignon({
                 {state.notice}
               </div>
             )}
-            {passwordForm &&
-            ['password', 'required-password'].includes(screen) ? (
+            {hasNativeForm ? (
               body
             ) : body ? (
               <form noValidate onSubmit={submit} className="signon-fields">
