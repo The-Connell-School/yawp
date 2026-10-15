@@ -108,7 +108,7 @@ The existing required-password action retains its `/app` destination; PR 3 owns
 any new server-held destination handoff through password reset/OAuth steps.
 
 
-Validation: 70 targeted unit/route checks; seven fixture browser tests; thirteen
+Original implementation validation: 70 targeted unit/route checks; seven fixture browser tests; thirteen
 server-backed compatibility/status checks (the enabled-entry check reran alone
 after correcting an overbroad assertion about client-hint preference cookies).
 The live enabled-entry test verifies no new database sessions and no HTTP-only
@@ -121,3 +121,35 @@ excluded from default app-server discovery. Broad default `--list` also loads
 unrelated existing Bun-only and database-dependent specs and could not complete
 in plain Node discovery without their setup. Those broader checks are left to
 CI; this item used the targeted configurations above.
+
+## Ship Review corrections (di-signon-ui)
+
+The rejected review in the lane's `state/REVIEW.md` is addressed on the same PR.
+The feature-flag HTTP expectations now include `unified-sign-on` and explicitly
+assert persisted/effective off with no runtime override. Both class signup entry
+paths use the same account-mode decision and retain class context and destination.
+A transition-only email-class fixture complements the handle-class design fixture;
+it is available only in the standalone fixture server. Expired-code resend clears
+the expired presentation variant and error before returning to verification. All
+OTP results remain in-memory fixture data with no delivery or authentication.
+
+Email-code screens now include the 40px envelope badge, 22px icon, 8px heading
+gaps, 24px copy-to-fields gap, and 18px monospaced code with 3.24px letter spacing.
+Membership options use white outlined horizontal rows, 12px column gaps,
+14px/16px padding, 15px organization text, 12px role pills and 16px chevrons,
+with 10px between rows. Measurements were checked against the corresponding v2
+DOM exports; the unchanged design PNG crops remain the comparison references.
+The new scoped styles do not change shared auth components or flag-off pages.
+
+Regression coverage adds both handle/email class transitions, expired → resend
+→ verify, and desktop/mobile geometry plus keyboard membership selection.
+Current local validation: 90 targeted unit/route tests, full project typecheck,
+and 12 standalone Playwright tests with one worker. The full fixture run captures
+all 210 comparisons; the 18 comparisons for signon-13/14/27/28 are refreshed and
+committed for review. The lane evidence's `review-fixes/before/` preserves their
+previous images. Prior server-backed compatibility results above were not rerun
+for this presentation/fixture/test-only correction. Hosted QA remains omitted.
+
+One intermediate broad screenshot run had a local Chromium
+`ERR_NETWORK_CHANGED` loading fixture modules; its remaining 11 tests passed.
+Final results are recorded in the lane evidence `checks/review-fixes/`.

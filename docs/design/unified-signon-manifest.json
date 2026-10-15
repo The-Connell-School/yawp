@@ -4667,5 +4667,24 @@
         19
       ]
     }
-  ]
+  ],
+  "reviewFixes": {
+    "reviewSlug": "di-signon-ui",
+    "artboards": [
+      "signon-13",
+      "signon-14",
+      "signon-27",
+      "signon-28"
+    ],
+    "previousEvidence": "review-fixes/before/",
+    "checks": "checks/review-fixes/",
+    "regressionTests": [
+      "class handle signup keeps its mode and context after sign-in",
+      "class email signup keeps its mode and context after sign-in",
+      "expired fixture code can be resent and then verified without server effects",
+      "email and membership design geometry at 1280",
+      "email and membership design geometry at 390"
+    ],
+    "backendDependency": "unchanged: live OTP and membership selection require PR 3; recovery tests use isolated fixture transport only"
+  }
 }
