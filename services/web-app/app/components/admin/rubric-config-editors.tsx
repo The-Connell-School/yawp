@@ -1423,7 +1423,7 @@ function CompiledPromptSheet({
         </SheetHeader>
         <div className="mt-4 space-y-4">
           <p className="text-sm text-muted-foreground text-pretty">
-            This is the primary grading request sent to the AI. Recovery and
+            This is the primary grading request sent to the model. Recovery and
             grammar-check requests run as separate follow-up calls only when
             needed.
           </p>
@@ -1598,7 +1598,7 @@ function ScratchTestSheet({
               rows={3}
               value={criterion}
               onChange={(event) => setCriterion(event.target.value)}
-              placeholder="What should the AI check for? e.g. Does the thesis take a clear position?"
+              placeholder="What should the grader check for? e.g. Does the thesis take a clear position?"
               disabled={isRunning}
             />
           </div>

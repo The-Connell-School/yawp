@@ -807,7 +807,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse(
       {
         success: false,
-        message: 'You cannot run AI grading on your own submission.',
+        message: 'You cannot run grading on your own submission.',
       },
       { status: 403 }
     );

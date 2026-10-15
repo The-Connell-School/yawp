@@ -33,7 +33,7 @@ export function renderAdminApprovalEmailBody(args: {
 
 ${args.teacherName} (${args.teacherEmail}) at ${args.schoolName} would like to use YAWP in their classroom.
 
-YAWP helps students draft essays with AI-assisted feedback. Teachers stay in control of assignments and grading. Student writing is not used to train public AI models.
+YAWP helps students draft essays with feedback while teachers stay in control of assignments and grading. Student writing is not used to train public language models.
 
 Approve YAWP for this school (link expires in ${APPROVAL_LINK_DAYS} days):
 ${args.approveUrl}

@@ -73,7 +73,7 @@ export default function PrivacyRoute() {
             feedback.
           </li>
           <li>
-            To provide AI-assisted writing feedback and related product
+            To provide automated writing feedback and related product
             features.
           </li>
           <li>
@@ -87,9 +87,9 @@ export default function PrivacyRoute() {
         </List>
       </PublicLegalSection>
 
-      <PublicLegalSection title="AI-Assisted Feedback">
+      <PublicLegalSection title="Automated Feedback">
         <p>
-          YAWP! includes AI-assisted feedback features that help students revise
+          YAWP! includes automated feedback features that help students revise
           and help teachers review writing. Student work, prompts, and related
           context may be processed to provide those features. YAWP! is designed
           for classroom use where teachers remain responsible for assignments,
@@ -99,7 +99,7 @@ export default function PrivacyRoute() {
 
       <PublicLegalSection title="Sharing">
         <p>
-          YAWP! uses service providers for hosting, email, AI-assisted features,
+          YAWP! uses service providers for hosting, email, automated feedback features,
           and analytics where configured. Information is processed by those
           providers to deliver the enabled features. Classroom work and feedback
           are available to users according to their roles and access permissions.

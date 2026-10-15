@@ -49,7 +49,7 @@ export const adminTabs = [
     icon: <GraduationCap size={16} className="opacity-75 mr-1" />,
   },
   {
-    label: 'AI Evaluations',
+    label: 'Grading Evaluations',
     to: '/app/admin/ai-evaluations',
     icon: <FlaskConical size={16} className="opacity-75 mr-1" />,
   },

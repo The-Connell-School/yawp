@@ -592,7 +592,7 @@ function AiLogItem({ item }: { item: AiLogEntry }) {
         </span>
 
         <span className="font-medium text-sm shrink-0 min-w-0 truncate max-w-[240px]">
-          {label || 'AI call'}
+          {label || 'Model call'}
         </span>
 
         <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
@@ -681,7 +681,7 @@ export default function AuditRoute() {
       <div className="p-6 space-y-3" data-testid="audit-moved">
         <h2 className="text-xl font-semibold">Audit moved to Yawp Internal</h2>
         <p>
-          Document writes and AI context logs are read-only per environment in
+          Document writes and model context logs are read-only per environment in
           Internal.
         </p>
         <a className="underline" href={loaded.destination}>
@@ -766,13 +766,13 @@ function LegacyAuditRoute() {
           <Input
             name="feature"
             defaultValue={filters.feature}
-            placeholder="AI feature"
+            placeholder="Feature"
             className="h-8 w-32 text-sm"
           />
           <Input
             name="kind"
             defaultValue={filters.kind}
-            placeholder="AI kind"
+            placeholder="Kind"
             className="h-8 w-44 text-sm"
           />
           <Input
@@ -851,7 +851,7 @@ function LegacyAuditRoute() {
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <CardTitle>AI Context Logs</CardTitle>
+            <CardTitle>Model Context Logs</CardTitle>
             {aiLogs.length > 0 ? (
               <span className="text-xs text-muted-foreground">
                 {aiLogs.length}
@@ -862,7 +862,7 @@ function LegacyAuditRoute() {
         <CardContent className="p-0">
           {aiLogs.length === 0 ? (
             <p className="px-4 pb-4 text-sm text-muted-foreground">
-              No AI logs found.
+              No model logs found.
             </p>
           ) : (
             <div className="divide-y divide-border">

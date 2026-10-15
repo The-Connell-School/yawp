@@ -11,6 +11,6 @@ describe('terms route', () => {
     expect('action' in route).toBe(false);
     expect(html).toContain('Terms of Service');
     expect(html).toContain('Free classroom access');
-    expect(html).toContain('AI-assisted feedback');
+    expect(html).toContain('automated feedback');
   });
 });

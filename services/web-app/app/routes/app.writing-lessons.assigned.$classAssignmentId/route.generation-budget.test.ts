@@ -52,7 +52,7 @@ mock.module('~/domain/free-tier/usage-budget.server', () => ({
 }));
 const { loader, action } = await import('./route');
 const budgetMessage =
-  'AI tools are paused because this free-tier environment has reached its current budget.';
+  'Writing tools are paused because this free-tier environment has reached its current budget.';
 const stored = [
   {
     kind: 'composition',

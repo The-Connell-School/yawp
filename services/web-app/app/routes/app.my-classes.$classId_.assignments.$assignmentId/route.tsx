@@ -332,13 +332,13 @@ export default function AssignmentSubmissionsRoute() {
           if (retryAfter > MAX_AUTO_WAIT_SECONDS || attempt >= MAX_PACING_ATTEMPTS) {
             const minutes = Math.ceil(retryAfter / 60);
             const remaining = ids.length - index;
-            stoppedMessage = `AI grading is paused by the usage limit. ${remaining} essay${remaining === 1 ? ' was' : 's were'} not graded and still selected. Try again in about ${
+            stoppedMessage = `Grading is paused by the usage limit. ${remaining} essay${remaining === 1 ? ' was' : 's were'} not graded and still selected. Try again in about ${
               retryAfter > 90 ? `${minutes} minute${minutes === 1 ? '' : 's'}` : `${retryAfter} seconds`
             }.`;
             break;
           }
           setGradingNotice(
-            `Pacing AI grading to stay within the usage limit. Resuming in ${retryAfter} seconds…`
+            `Pacing grading to stay within the usage limit. Resuming in ${retryAfter} seconds…`
           );
           await new Promise((resolve) =>
             setTimeout(resolve, (retryAfter + 1) * 1000)
@@ -474,7 +474,7 @@ export default function AssignmentSubmissionsRoute() {
           ))}
         </div>
 
-        {/* Grade with AI toolbar — submitted only */}
+        {/* Grade toolbar — submitted only */}
         {status === 'submitted' && (
           <div className="mb-3 flex items-center gap-3">
             <Button
@@ -490,7 +490,7 @@ export default function AssignmentSubmissionsRoute() {
                   {hasRetryingSubmission ? 'Retrying...' : 'Grading…'}
                 </>
               ) : (
-                `Grade with AI${selected.size > 0 ? ` (${selected.size})` : ''}`
+                `Grade${selected.size > 0 ? ` (${selected.size})` : ''}`
               )}
             </Button>
             {selected.size > 0 && !isGrading && (

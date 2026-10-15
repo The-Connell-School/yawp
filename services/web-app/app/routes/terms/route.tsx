@@ -66,12 +66,12 @@ export default function TermsRoute() {
         </p>
       </PublicLegalSection>
 
-      <PublicLegalSection title="AI-Assisted Features">
+      <PublicLegalSection title="Automated Feedback Features">
         <p>
-          YAWP! includes AI-assisted feedback and drafting-support features.
+          YAWP! includes automated feedback and drafting-support features.
           These features are intended to support writing instruction, not
           replace teacher judgment or student authorship. Teachers and students
-          should review AI-assisted feedback for accuracy, appropriateness, and
+          should review automated feedback for accuracy, appropriateness, and
           fit with classroom expectations.
         </p>
       </PublicLegalSection>

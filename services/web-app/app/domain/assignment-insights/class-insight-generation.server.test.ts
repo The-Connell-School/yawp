@@ -30,7 +30,7 @@ mock.module('~/utils/ai-admission.server', () => ({
   AiFreeTierBudgetExceededError,
   AiRateLimitError: class AiRateLimitError extends Error {},
   aiFreeTierBudgetExceededMessage: () =>
-    'AI tools are paused because this free-tier environment has reached its current budget.',
+    'Writing tools are paused because this free-tier environment has reached its current budget.',
 }));
 
 // bun's mock.module is global to the whole test run and mock.restore() does not
@@ -276,7 +276,7 @@ describe('generateClassAssignmentInsight rubric scoping', () => {
       success: false,
       status: 402,
       message:
-        'AI tools are paused because this free-tier environment has reached its current budget.',
+        'Writing tools are paused because this free-tier environment has reached its current budget.',
     });
     expect(generateClassInsight).not.toHaveBeenCalled();
     expect(prisma.classAssignmentInsight.upsert).not.toHaveBeenCalled();

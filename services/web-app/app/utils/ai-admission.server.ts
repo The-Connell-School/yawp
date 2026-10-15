@@ -45,11 +45,11 @@ export class AiFreeTierBudgetExceededError extends Error {
 }
 
 export function aiLockedForFreeTierMessage() {
-  return 'AI tools unlock after your school administrator approves YAWP for your classroom.';
+  return 'Writing tools unlock after your school administrator approves YAWP for your classroom.';
 }
 
 export function aiFreeTierBudgetExceededMessage() {
-  return 'AI tools are paused because this free-tier environment has reached its current budget.';
+  return 'Writing tools are paused because this free-tier environment has reached its current budget.';
 }
 
 export function aiAdmissionErrorResponse(error: unknown): Response | null {

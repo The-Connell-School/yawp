@@ -112,7 +112,7 @@ test.describe.serial('Inline grammar issue actions', () => {
       await page
         .getByRole('button', { name: /Grammar\/Syntax\/Formatting/i })
         .click();
-      await expect(page.getByText('AI grammar issues: 3')).toBeVisible();
+      await expect(page.getByText('Grammar issues: 3')).toBeVisible();
       const removeButtons = page.getByRole('button', { name: /^remove$/i });
       await expect(removeButtons).toHaveCount(3);
 
@@ -126,7 +126,7 @@ test.describe.serial('Inline grammar issue actions', () => {
         .locator('..')
         .getByRole('button', { name: /^remove$/i })
         .click();
-      await expect(page.getByText('AI grammar issues: 1')).toBeVisible();
+      await expect(page.getByText('Grammar issues: 1')).toBeVisible();
       await expect
         .poll(() => grammarSaveRequestCount)
         .toBeGreaterThanOrEqual(1);
@@ -155,7 +155,7 @@ test.describe.serial('Inline grammar issue actions', () => {
       await page
         .getByRole('button', { name: /Grammar\/Syntax\/Formatting/i })
         .click();
-      await expect(page.getByText('AI grammar issues: 1')).toBeVisible();
+      await expect(page.getByText('Grammar issues: 1')).toBeVisible();
       await expect(
         page.getByText('Grammar issue that should remain.')
       ).toBeVisible();

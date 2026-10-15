@@ -12,7 +12,7 @@ const provider = mock();
 class AiFreeTierBudgetExceededError extends Error {}
 class AiRateLimitError extends Error {}
 const message =
-  'AI tools are paused because this free-tier environment has reached its current budget.';
+  'Writing tools are paused because this free-tier environment has reached its current budget.';
 mock.module('~/utils/auth.server', () => ({
   requireUserId: async () => 'u1',
   requireMembership: async () => ({ id: 'm1', organization: { id: 'org1' } }),

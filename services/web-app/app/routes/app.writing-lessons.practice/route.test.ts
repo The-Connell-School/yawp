@@ -36,7 +36,7 @@ mock.module('~/utils/ai-admission.server', () => ({
   AiFreeTierBudgetExceededError: MockAiFreeTierBudgetExceededError,
   AiRateLimitError: MockAiRateLimitError,
   aiFreeTierBudgetExceededMessage: () =>
-    'AI tools are paused because this free-tier environment has reached its current budget.',
+    'Writing tools are paused because this free-tier environment has reached its current budget.',
   reserveAiRequest,
 }));
 
@@ -294,7 +294,7 @@ describe('self-directed practice session loader', () => {
     expect(response.data).toEqual({
       error: 'free_tier_budget_exceeded',
       message:
-        'AI tools are paused because this free-tier environment has reached its current budget.',
+        'Writing tools are paused because this free-tier environment has reached its current budget.',
     });
     expect(getLLMCompletion).not.toHaveBeenCalled();
   });
@@ -488,7 +488,7 @@ describe('self-directed practice session action', () => {
       questionId: 'act-1',
       error: 'free_tier_budget_exceeded',
       message:
-        'AI tools are paused because this free-tier environment has reached its current budget.',
+        'Writing tools are paused because this free-tier environment has reached its current budget.',
     });
     expect(getLLMCompletion).not.toHaveBeenCalled();
   });
@@ -655,7 +655,7 @@ describe('self-directed practice session action', () => {
         recorded: false,
         feedback: {
           summary:
-            'AI tools are paused because this free-tier environment has reached its current budget.',
+            'Writing tools are paused because this free-tier environment has reached its current budget.',
         },
       });
       expect(getLLMCompletion).not.toHaveBeenCalled();
