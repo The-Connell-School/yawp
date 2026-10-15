@@ -101,8 +101,8 @@ describe('free._index action', () => {
     expect(redeemToken).toHaveBeenCalledWith(expect.any(Object), { scanDedupeCookie: 'decoded-scan-cookie' });
     expect(sendReleaseEmailsForApplicationIds).not.toHaveBeenCalled();
     expect(freeTierSubmitSuccessCopy(result)).toEqual({
-      headline: "You're on the list.",
-      detail: "We'll email you when a spot opens.",
+      headline: "You're on the list",
+      detail: "We will email you when your classroom is ready.",
     });
   });
 
@@ -126,8 +126,8 @@ describe('free._index action', () => {
     expect(result).toEqual({ ok: true, redeemed: true, bypassWaitlist: true });
     expect(sendReleaseEmailsForApplicationIds).toHaveBeenCalledWith(['app-1']);
     expect(freeTierSubmitSuccessCopy(result)).toEqual({
-      headline: 'Check your email for your join link.',
-      detail: null,
+      headline: 'Check your email',
+      detail: 'Your join link is on its way.',
     });
   });
 

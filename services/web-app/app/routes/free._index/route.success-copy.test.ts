@@ -9,15 +9,15 @@ describe('freeTierSubmitSuccessCopy', () => {
         bypassWaitlist: true,
       })
     ).toEqual({
-      headline: 'Check your email for your join link.',
-      detail: null,
+      headline: 'Check your email',
+      detail: 'Your join link is on its way.',
     });
   });
 
   test('waitlist and non-bypass event token keep waitlist confirmation copy', () => {
     expect(freeTierSubmitSuccessCopy({})).toEqual({
-      headline: "You're on the list.",
-      detail: "We'll email you when a spot opens.",
+      headline: "You're on the list",
+      detail: "We will email you when your classroom is ready.",
     });
     expect(
       freeTierSubmitSuccessCopy({
@@ -25,8 +25,8 @@ describe('freeTierSubmitSuccessCopy', () => {
         bypassWaitlist: false,
       })
     ).toEqual({
-      headline: "You're on the list.",
-      detail: "We'll email you when a spot opens.",
+      headline: "You're on the list",
+      detail: "We will email you when your classroom is ready.",
     });
   });
 });

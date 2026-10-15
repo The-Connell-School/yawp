@@ -4,6 +4,7 @@ import {
   useActionData,
   useLoaderData,
 } from 'react-router';
+import { CircleAlert, Send } from 'lucide-react';
 import { Form } from 'react-router';
 import { peekSignedLink } from '~/domain/free-tier/signed-link.server';
 import { redirectSchoolAdmin } from '~/domain/free-tier/approval-flow.server';
@@ -45,10 +46,9 @@ export default function FreeAdminNotRightPersonRoute() {
 
   if (actionData?.ok) {
     return (
-      <FreeTierAuthCard title="Request forwarded">
+      <FreeTierAuthCard title="Request forwarded" icon={<Send />}>
         <p className="text-sm text-muted-foreground">
-          We emailed the administrator you named. The previous link is no longer
-          active.
+          We emailed the administrator you named. You're all set.
         </p>
       </FreeTierAuthCard>
     );
@@ -57,12 +57,12 @@ export default function FreeAdminNotRightPersonRoute() {
   if (actionData && !actionData.ok) {
     const message =
       actionData.reason === 'email_failed'
-        ? 'We could not send the email. Try again or contact support@yawp.school.'
+        ? "We couldn't send the email. Try again."
         : actionData.reason === 'chain_cap'
-          ? 'This request has been forwarded too many times. Contact support@yawp.school.'
+          ? 'This request was forwarded too many times. Email support@yawp.school and we will sort it out.'
           : 'We could not forward this request. The link may be invalid or already used.';
     return (
-      <FreeTierAuthCard title="Unable to forward">
+      <FreeTierAuthCard title="Unable to forward" icon={<CircleAlert />}>
         <p className="text-sm text-muted-foreground">{message}</p>
       </FreeTierAuthCard>
     );
@@ -70,9 +70,9 @@ export default function FreeAdminNotRightPersonRoute() {
 
   if (!data.ok) {
     return (
-      <FreeTierAuthCard title="Link expired or already used">
+      <FreeTierAuthCard title="This link expired or was used" icon={<CircleAlert />}>
         <p className="text-sm text-muted-foreground">
-          This link is no longer valid.
+          Ask the teacher to send a reminder.
         </p>
       </FreeTierAuthCard>
     );
@@ -80,7 +80,7 @@ export default function FreeAdminNotRightPersonRoute() {
   return (
     <FreeTierAuthCard
       title="Send to the right person"
-      subtitle="Tell us who can approve classroom software for this school (site or district administrator)."
+      subtitle="Who approves classroom software for this site or district?"
     >
       <Form method="post" className="flex flex-col gap-4">
         <input type="hidden" name="token" value={data.token} />
@@ -91,6 +91,7 @@ export default function FreeAdminNotRightPersonRoute() {
           <FreeTierTextInput
             id="adminEmail"
             name="adminEmail"
+            placeholder="name@district.org"
             type="email"
             required
           />

@@ -1,21 +1,23 @@
 export function FreeTierLegalLinks() {
   return (
-    <p className="mt-3 text-center text-xs leading-5 text-muted-foreground">
-      By continuing, you agree to the{' '}
+    <p className="free-tier-legal text-center text-xs leading-5 text-muted-foreground">
       <a
-        className="font-medium text-foreground underline underline-offset-4"
+        className="underline underline-offset-2"
         href="/terms"
+        aria-label="Terms of Service"
       >
-        Terms of Service
-      </a>{' '}
-      and acknowledge the{' '}
-      <a
-        className="font-medium text-foreground underline underline-offset-4"
-        href="/privacy"
-      >
-        Privacy Policy
+        Terms
       </a>
-      .
+      <span className="px-3" aria-hidden="true">
+        ·
+      </span>
+      <a
+        className="underline underline-offset-2"
+        href="/privacy"
+        aria-label="Privacy Policy"
+      >
+        Privacy
+      </a>
     </p>
   );
 }
