@@ -38,6 +38,9 @@ export type SignonMembership = {
 export type SignonState = {
   screen: SignonScreen;
   identifier?: string;
+  organizationName?: string;
+  adminName?: string;
+  sentDate?: string;
   /** Opaque, expiring server context; never authorization by itself. PR 3. */
   flowToken?: string;
   classInfo?: SignonClass;
@@ -72,6 +75,7 @@ export type SignonOperation =
   | 'resend-approval';
 
 export type SignonResult =
+  | { redirectTo: string }
   | { state: SignonState }
   | {
       error: string;

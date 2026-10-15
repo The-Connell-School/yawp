@@ -1,0 +1,719 @@
+import { randomInt, timingSafeEqual } from 'node:crypto';
+import type { Prisma } from '@app/prisma';
+import { z } from 'zod';
+import { safeRedirect } from 'remix-utils/safe-redirect';
+import { prisma } from '~/utils/db.server';
+import { getUserId, getPasswordHash } from '~/utils/auth.server';
+import {
+  NameSchema,
+  PasswordAndConfirmPasswordSchema,
+} from '~/utils/schemas/user';
+import { UsernameFieldSchema } from '~/utils/schemas/username';
+import {
+  enforceUnauthByIpAndTarget,
+  enforceUnauthByIpOnly,
+} from '~/utils/rate-limit.server';
+import { RATE_LIMITS } from '~/config/rate-limits';
+import { registerFreeTierStudent } from '~/domain/free-tier/student-join.server';
+import { assertFreeClassSeatAvailableInTx } from '~/domain/free-tier/class-seat-cap.server';
+import { assertFreeTierSpendAllowed } from '~/domain/free-tier/usage-budget.server';
+import {
+  getUaPartnerContext,
+  isUaPartnerHost,
+  isValidUaPartnerCode,
+  requireUaOrganizationId,
+  commitUaPartnerContext,
+} from '~/utils/ua-partner.server';
+import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
+import {
+  sendReleaseEmailsForApplicationIds,
+  resendFreeTierAdminApprovalReminder,
+} from '~/domain/free-tier/approval-flow.server';
+import { normalizeIdentifier, codeDigest } from './policy.server';
+import {
+  assertCurrentIdentity,
+  createFlow,
+  flowCookie,
+  FlowError,
+  opaque,
+  saveNewFlow,
+  stateFor,
+  withFlow,
+  type Flow,
+} from './flow.server';
+import {
+  classSummary,
+  chooseClass,
+  lookupClasses,
+  resolveClasses,
+  selectedClass,
+} from './classes.server';
+import { deliverCode } from './mail.server';
+import { finishAuthentication } from './authentication.server';
+import {
+  readInvitation,
+  prepareInvitation,
+  acceptExistingInvitation,
+} from './invitations.server';
+import { beginGoogle, googleAvailable } from './google.server';
+
+export async function limit(
+  request: Request,
+  target: string,
+  kind: 'signup' | 'verify' | 'forgotPassword' = 'signup'
+) {
+  const cfg = RATE_LIMITS.unauth[kind];
+  const decision = await enforceUnauthByIpAndTarget({
+    request,
+    route: `/auth/unified/${kind}`,
+    targetKey: target,
+    perIpPerMinute: cfg.perIpPerMinute,
+    perIpPerHour: cfg.perIpPerHour,
+    perTargetPerHour: cfg.perEmailPerHour,
+  });
+  if (!decision.allowed)
+    throw new FlowError(
+      'Too many attempts. Please wait and try again.',
+      429,
+      decision.retryAfterSeconds
+    );
+}
+export async function resolveIdentifier(
+  tx: Prisma.TransactionClient,
+  flow: Flow,
+  raw: string
+) {
+  const parsed = normalizeIdentifier(raw);
+  if (!parsed)
+    throw new FlowError('Enter a valid email, handle or class code.');
+  const user = await tx.user.findFirst({
+    where:
+      parsed.kind === 'email'
+        ? { email: { equals: parsed.value, mode: 'insensitive' } }
+        : { username: parsed.value },
+    select: { id: true, password: { select: { userId: true } } },
+  });
+  const classes =
+    parsed.kind === 'handle-or-code'
+      ? await lookupClasses(tx, parsed.value)
+      : [];
+  // Resolving an identity discards prior proof and code, but retains a selected
+  // class and destination held by this browser's flow.
+  if (flow.data.pendingGoogle?.email !== parsed.value)
+    flow.data.pendingGoogle = undefined;
+  flow.data.identifier =
+    parsed.kind === 'email' ? parsed.value : '@' + parsed.value;
+  flow.data.userId = user?.id;
+  flow.data.proof = undefined;
+  flow.data.otp = undefined;
+  flow.data.purpose = undefined;
+  if (classes.length && parsed.kind !== 'email') {
+    flow.data.classCode = parsed.value;
+    flow.data.classCandidates = classes.map((k) => k.id);
+    if (user)
+      return stateFor(flow, {
+        screen: 'ambiguity',
+        identifier: parsed.value,
+        classInfo: classSummary(classes[0]),
+        classes: classes.map(classSummary),
+      });
+    flow.data.identifier = undefined;
+    return resolveClasses(tx, flow, parsed.value);
+  }
+  if (parsed.kind !== 'email') {
+    // Same password surface for unknown handles; no account status is revealed.
+    return stateFor(flow, {
+      screen: 'password',
+      identifier: '@' + parsed.value,
+    });
+  }
+  const invitation = await tx.invitation.findFirst({
+    where: {
+      target: { equals: parsed.value, mode: 'insensitive' },
+      type: { in: ['onboard-student', 'onboard-teacher', 'onboard-owner'] },
+      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+    },
+    select: { id: true },
+  });
+  flow.data.invitationId = invitation?.id;
+  if (user)
+    return stateFor(flow, {
+      screen: user.password ? 'password' : 'activation',
+      identifier: parsed.value,
+    });
+  if (flow.data.classId || invitation)
+    return stateFor(flow, {
+      screen: 'activation',
+      identifier: parsed.value,
+      classInfo: flow.data.state.classInfo,
+    });
+  if (flow.data.partnerEntry)
+    return stateFor(flow, {
+      screen: flow.data.partner ? 'activation' : 'partner-code',
+      identifier: parsed.value,
+    });
+  return stateFor(flow, { screen: 'account-type', identifier: parsed.value });
+}
+function otpContext(flow: Flow, generation: string) {
+  return {
+    flow: flow.id,
+    identity: flow.data.identifier!,
+    purpose: flow.data.purpose!,
+    classId: flow.data.classId || '',
+    invitation: flow.data.invitationId || '',
+    partner: flow.data.partner ? 'ua' : '',
+    generation,
+  };
+}
+async function issueCode(
+  tx: Prisma.TransactionClient,
+  flow: Flow,
+  request: Request,
+  purpose?: string,
+  resend = false
+) {
+  const parsed = normalizeIdentifier(flow.data.identifier || '');
+  if (parsed?.kind !== 'email')
+    throw new FlowError('Ask your teacher to reset it.');
+  await assertCurrentIdentity(tx, flow);
+  const now = Date.now();
+  if (flow.data.otp && now - flow.data.otp.sent < 60000)
+    throw new FlowError(
+      'Please wait before requesting another code.',
+      429,
+      Math.ceil((flow.data.otp.sent + 60000 - now) / 1000)
+    );
+  await limit(request, parsed.value, 'forgotPassword');
+  if (!resend) {
+    flow.data.purpose =
+      purpose === 'reset-password'
+        ? 'reset'
+        : purpose === 'trial'
+          ? 'trial'
+          : flow.data.userId
+            ? 'signin'
+            : 'signup';
+    // Invitations are chosen server-side only and revalidated on use.
+    const invitation = await tx.invitation.findFirst({
+      where: {
+        target: { equals: parsed.value, mode: 'insensitive' },
+        type: { in: ['onboard-teacher', 'onboard-owner', 'onboard-student'] },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    flow.data.invitationId = invitation?.id;
+  }
+  if (!flow.data.purpose) throw new FlowError();
+  const generation = opaque();
+  const code = randomInt(0, 1000000).toString().padStart(6, '0');
+  flow.data.otp = {
+    generation,
+    hash: codeDigest(otpContext(flow, generation), code),
+    expires: now + 600000,
+    attempts: 0,
+    sent: now,
+  };
+  flow.data.proof = undefined;
+  // Reset has the same response for existing/missing identities. Missing users
+  // get no deliverable challenge; a guessed code cannot create an account.
+  if (flow.data.purpose !== 'reset' || flow.data.userId)
+    await deliverCode(parsed.value, code);
+  return stateFor(flow, {
+    screen: 'email-code',
+    identifier: parsed.value,
+    variant: flow.data.purpose === 'reset' ? 'reset' : undefined,
+    classInfo: flow.data.state.classInfo,
+  });
+}
+async function trialStatus(
+  tx: Prisma.TransactionClient,
+  flow: Flow,
+  request: Request
+) {
+  await requireFreeTierEnabled();
+  if (!flow.data.proof) throw new FlowError('Verify your email first.', 401);
+  const application = await tx.freeTierApplication.findFirst({
+    where: { email: { equals: flow.data.identifier, mode: 'insensitive' } },
+    include: { adminApprovals: { orderBy: { createdAt: 'desc' }, take: 1 } },
+  });
+  const variants: Record<string, string> = {
+    LEAD: 'lead',
+    INVITED: 'invited',
+    SENT: 'sent',
+    MANUAL_REVIEW: 'review',
+    REJECTED: 'rejected',
+    EXPIRED: 'expired',
+  };
+  if (application?.userId && flow.data.userId === application.userId)
+    return finishAuthentication(tx, flow, request, application.userId);
+  return stateFor(flow, {
+    screen: 'trial-status',
+    identifier: flow.data.identifier,
+    variant: variants[application?.status || 'LEAD'] || 'lead',
+    adminName: application?.adminApprovals[0]?.adminName,
+    sentDate: application?.adminApprovals[0]?.createdAt.toLocaleDateString(
+      'en-US',
+      { month: 'short', day: 'numeric', timeZone: 'UTC' }
+    ),
+  });
+}
+async function verifyCode(
+  tx: Prisma.TransactionClient,
+  flow: Flow,
+  request: Request,
+  raw: string
+) {
+  await limit(request, flow.data.identifier || flow.id, 'verify');
+  await assertCurrentIdentity(tx, flow);
+  const otp = flow.data.otp;
+  if (!otp || otp.attempts >= 5 || otp.expires <= Date.now())
+    return Response.json(
+      { error: 'That code expired. Request a new one.' },
+      { status: 400 }
+    );
+  otp.attempts++;
+  const actual = codeDigest(otpContext(flow, otp.generation), raw);
+  if (
+    !/^\d{6}$/.test(raw) ||
+    !timingSafeEqual(Buffer.from(actual), Buffer.from(otp.hash))
+  )
+    return Response.json(
+      { error: 'That code is not right. Try again.' },
+      { status: 400 }
+    );
+  // The flow row lock makes consumption and proof persistence atomic.
+  flow.data.otp = undefined;
+  if (flow.data.purpose === 'reset' && !flow.data.userId)
+    return Response.json(
+      { error: 'That code is not right. Try again.' },
+      { status: 400 }
+    );
+  flow.data.proof = 'email';
+  if (flow.data.purpose === 'trial') return trialStatus(tx, flow, request);
+  if (flow.data.purpose === 'reset')
+    return stateFor(flow, {
+      screen: 'name-password',
+      identifier: flow.data.identifier,
+      variant: 'reset',
+    });
+  if (flow.data.userId) {
+    const user = await tx.user.findUniqueOrThrow({
+      where: { id: flow.data.userId },
+      select: { password: { select: { userId: true } } },
+    });
+    if (user.password) {
+      await acceptExistingInvitation(tx, flow, flow.data.userId);
+      return finishAuthentication(tx, flow, request, flow.data.userId);
+    }
+  }
+  const invitationState = await prepareInvitation(tx, flow, request);
+  if (invitationState)
+    return invitationState instanceof Response
+      ? invitationState
+      : stateFor(flow, invitationState);
+  return stateFor(flow, {
+    screen: 'name-password',
+    identifier: flow.data.identifier,
+    classInfo: flow.data.state.classInfo,
+  });
+}
+async function createAccount(
+  tx: Prisma.TransactionClient,
+  flow: Flow,
+  request: Request,
+  values: Record<string, string>
+) {
+  if (
+    !flow.data.proof ||
+    !flow.data.identifier ||
+    flow.data.identifier.startsWith('@')
+  )
+    throw new FlowError('Verify your email first.');
+  await limit(request, flow.data.identifier);
+  const google = flow.data.proof === 'google';
+  const reset = flow.data.purpose === 'reset';
+  const schema = (reset ? z.object({}) : z.object({ name: NameSchema })).and(
+    google ? z.object({}) : PasswordAndConfirmPasswordSchema
+  );
+  const parsed = schema.safeParse(values);
+  if (!parsed.success)
+    return Response.json(
+      {
+        error: 'Check your details.',
+        fieldErrors: Object.fromEntries(
+          parsed.error.issues.map((i) => [String(i.path[0]), i.message])
+        ),
+      },
+      { status: 400 }
+    );
+  const hash = google ? undefined : await getPasswordHash(values.password);
+  let user = await tx.user.findFirst({
+    where: { email: { equals: flow.data.identifier, mode: 'insensitive' } },
+    include: { password: true },
+  });
+  if (reset || (user && !user.password)) {
+    if (!user || user.id !== flow.data.userId || !hash)
+      throw new FlowError('Please sign in again.');
+    await tx.password.upsert({
+      where: { userId: user.id },
+      create: { userId: user.id, hash },
+      update: { hash },
+    });
+    await tx.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerifiedAt: new Date(),
+        mustChangePassword: false,
+        ...(!reset ? { name: values.name } : {}),
+      },
+    });
+    if (!reset) await acceptExistingInvitation(tx, flow, user.id);
+    if (reset) await tx.session.deleteMany({ where: { userId: user.id } });
+    return finishAuthentication(tx, flow, request, user.id);
+  }
+  if (user)
+    throw new FlowError('An account already exists. Sign in to continue.');
+  const invitation = await readInvitation(tx, flow);
+  const klass =
+    invitation?.role === 'TEACHER' ? null : await selectedClass(tx, flow);
+  const organizationId =
+    invitation?.organizationId ||
+    (flow.data.partner
+      ? requireUaOrganizationId()
+      : klass?.school.organizationId);
+  const role = invitation?.role || 'STUDENT';
+  const owner = invitation?.owner || false;
+  const schoolId =
+    invitation && 'schoolId' in invitation ? invitation.schoolId : undefined;
+  if (!organizationId || (!klass && role === 'STUDENT' && !flow.data.partner))
+    throw new FlowError('Enter your class code to continue.');
+  if (klass?.school.organization.plan === 'FREE_CLASSROOM')
+    throw new FlowError('Use a handle to join this class.');
+  if (klass) {
+    const seat = await assertFreeClassSeatAvailableInTx(tx, {
+      classId: klass.id,
+      organizationId,
+    });
+    if (!seat.ok) throw new FlowError(seat.error);
+  }
+  if (invitation)
+    await tx.invitation.delete({ where: { id: invitation.invite.id } });
+  user = await tx.user.create({
+    data: {
+      email: flow.data.identifier,
+      name: values.name,
+      emailVerifiedAt: new Date(),
+      ...(hash ? { password: { create: { hash } } } : {}),
+      memberships: {
+        create: {
+          organizationId,
+          role,
+          isOrgOwner: owner,
+          ...(klass ? { classesAsStudent: { connect: { id: klass.id } } } : {}),
+          ...(schoolId ? { schools: { connect: { id: schoolId } } } : {}),
+        },
+      },
+    },
+    include: { password: true },
+  });
+  if (google && flow.data.pendingGoogle) {
+    await tx.signonIdentity.create({
+      data: {
+        provider: 'google',
+        subject: flow.data.pendingGoogle.subject,
+        userId: user.id,
+      },
+    });
+    flow.data.pendingGoogle = undefined;
+  }
+  // Already connected by the authoritative signup operation in this transaction.
+  flow.data.classId = undefined;
+  flow.data.classCode = undefined;
+  if (flow.data.partner) flow.data.destination = '/billing/ua';
+  return finishAuthentication(tx, flow, request, user.id);
+}
+async function operate(
+  tx: Prisma.TransactionClient,
+  flow: Flow,
+  request: Request,
+  operation: string,
+  values: Record<string, string>,
+  authenticatedUserId: string | null
+) {
+  if (operation === 'resolve')
+    return resolveIdentifier(tx, flow, values.identifier || '');
+  if (operation === 'resolve-class') {
+    if (flow.data.purpose === 'reset')
+      throw new FlowError('Finish resetting your password first.');
+    if (flow.data.state.screen === 'ambiguity') {
+      flow.data.identifier = undefined;
+      flow.data.userId = undefined;
+    }
+    if (flow.data.proof === 'email') flow.data.proof = undefined;
+    const result = await resolveClasses(tx, flow, values.classCode || '');
+    flow.data.otp = undefined; // A new class context requires a new challenge.
+    if (
+      authenticatedUserId &&
+      authenticatedUserId === flow.data.userId &&
+      flow.data.classId &&
+      result.state.variant !== 'full' &&
+      result.state.variant !== 'multiple'
+    )
+      return finishAuthentication(
+        tx,
+        flow,
+        request,
+        authenticatedUserId,
+        false
+      );
+    return result;
+  }
+  if (operation === 'choose-class') {
+    if (
+      !flow.data.invitationId &&
+      flow.data.classId !== values.classId &&
+      flow.data.proof === 'email'
+    )
+      flow.data.proof = undefined;
+    flow.data.otp = undefined;
+    const result = await chooseClass(tx, flow, values.classId || '');
+    if (
+      authenticatedUserId &&
+      authenticatedUserId === flow.data.userId &&
+      result.state.variant !== 'full'
+    )
+      return finishAuthentication(
+        tx,
+        flow,
+        request,
+        authenticatedUserId,
+        false
+      );
+    return result;
+  }
+  if (operation === 'send-code')
+    return issueCode(tx, flow, request, values.purpose);
+  if (operation === 'resend-code')
+    return issueCode(tx, flow, request, undefined, true);
+  if (operation === 'verify-code')
+    return verifyCode(tx, flow, request, values.code || '');
+  if (operation === 'create-account')
+    return createAccount(tx, flow, request, values);
+  if (operation === 'google') return beginGoogle(flow, request);
+  if (operation === 'partner-code') {
+    if (
+      !isUaPartnerHost(request) ||
+      !isValidUaPartnerCode(values.organizationCode)
+    )
+      throw new FlowError('Enter a valid organization code.');
+    requireUaOrganizationId();
+    flow.data.partner = true;
+    return Response.json(
+      stateFor(flow, {
+        screen: flow.data.proof ? 'name-password' : 'activation',
+        identifier: flow.data.identifier,
+        variant: flow.data.proof === 'google' ? 'google' : undefined,
+      }),
+      { headers: { 'set-cookie': await commitUaPartnerContext() } }
+    );
+  }
+  if (operation === 'join-handle') {
+    const parsed = z
+      .object({ name: NameSchema, username: UsernameFieldSchema })
+      .and(PasswordAndConfirmPasswordSchema)
+      .safeParse(values);
+    if (!parsed.success)
+      return Response.json(
+        {
+          error: 'Check your details.',
+          fieldErrors: Object.fromEntries(
+            parsed.error.issues.map((i) => [String(i.path[0]), i.message])
+          ),
+        },
+        { status: 400 }
+      );
+    await limit(request, parsed.data.username, 'signup');
+    const klass = await selectedClass(tx, flow);
+    if (
+      !klass ||
+      klass.school.organization.plan !== 'FREE_CLASSROOM' ||
+      !flow.data.joinToken
+    )
+      throw new FlowError('Class not found.');
+    const result = await registerFreeTierStudent({
+      ...parsed.data,
+      classId: klass.id,
+      joinToken: flow.data.joinToken,
+      client: tx,
+    });
+    if (result.status === 'error')
+      return Response.json(
+        { error: result.error, fieldErrors: { [result.field]: result.error } },
+        { status: 400 }
+      );
+    // registerFreeTierStudent preserves the legacy handle/session/seat/budget
+    // operation. Reuse its session rather than allocating a second session.
+    const { authSessionStorage } =
+      await import('~/cookie-session-storages/authentication.server');
+    const { sessionKey } = await import('~/utils/auth.server');
+    const { setMembershipId } = await import('~/cookies/membership-id.server');
+    const auth = await authSessionStorage.getSession(
+      request.headers.get('cookie')
+    );
+    auth.set(sessionKey, result.session.id);
+    flow.data.completed = true;
+    const headers = new Headers({ Location: flow.data.destination });
+    headers.append(
+      'set-cookie',
+      await authSessionStorage.commitSession(auth, {
+        expires: result.session.expirationDate,
+      })
+    );
+    headers.append('set-cookie', await setMembershipId(result.membershipId));
+    return new Response(null, { status: 302, headers });
+  }
+  if (operation === 'select-membership') {
+    if (!authenticatedUserId) throw new FlowError('Sign in to continue.', 401);
+    if (!values.membershipId)
+      throw new FlowError('Choose an active membership.', 400);
+    if (authenticatedUserId !== flow.data.userId)
+      throw new FlowError('Sign in to continue.', 403);
+    return finishAuthentication(
+      tx,
+      flow,
+      request,
+      authenticatedUserId,
+      false,
+      values.membershipId
+    );
+  }
+  if (operation === 'link-google' || operation === 'skip-google') {
+    if (
+      !authenticatedUserId ||
+      authenticatedUserId !== flow.data.userId ||
+      !flow.data.pendingGoogle
+    )
+      throw new FlowError('Sign in to link this account.', 401);
+    if (operation === 'link-google') {
+      if (!googleAvailable())
+        throw new FlowError('Google sign-in is unavailable.', 503);
+      const existing = await tx.signonIdentity.findFirst({
+        where: {
+          provider: 'google',
+          OR: [
+            { subject: flow.data.pendingGoogle.subject },
+            { userId: authenticatedUserId },
+          ],
+        },
+      });
+      if (
+        existing &&
+        (existing.subject !== flow.data.pendingGoogle.subject ||
+          existing.userId !== authenticatedUserId)
+      )
+        throw new FlowError('This Google identity is already linked.', 403);
+      if (!existing)
+        await tx.signonIdentity.create({
+          data: {
+            provider: 'google',
+            subject: flow.data.pendingGoogle.subject,
+            userId: authenticatedUserId,
+          },
+        });
+    }
+    flow.data.pendingGoogle = undefined;
+    return finishAuthentication(tx, flow, request, authenticatedUserId, false);
+  }
+  if (operation === 'trial-status') {
+    if (!flow.data.proof) return issueCode(tx, flow, request, 'trial');
+    return trialStatus(tx, flow, request);
+  }
+  if (operation === 'resend-invite' || operation === 'resend-approval') {
+    await requireFreeTierEnabled();
+    if (
+      process.env.NODE_ENV !== 'production' &&
+      !process.env.SIGNON_MAIL_CAPTURE_DIR
+    )
+      throw new FlowError('Email delivery is unavailable.', 503);
+    if (!flow.data.proof) throw new FlowError('Verify your email first.', 401);
+    await limit(request, flow.data.identifier || flow.id, 'forgotPassword');
+    const application = await tx.freeTierApplication.findFirst({
+      where: { email: { equals: flow.data.identifier, mode: 'insensitive' } },
+    });
+    if (
+      application &&
+      operation === 'resend-invite' &&
+      application.status === 'INVITED'
+    )
+      await sendReleaseEmailsForApplicationIds([application.id]);
+    if (
+      application &&
+      operation === 'resend-approval' &&
+      authenticatedUserId === application.userId
+    )
+      await resendFreeTierAdminApprovalReminder({
+        applicationId: application.id,
+        request,
+      });
+    return {
+      state: {
+        ...flow.data.state,
+        notice: 'If available, an email is on its way.',
+      },
+    };
+  }
+  throw new FlowError('This sign-in option is unavailable.', 400);
+}
+export async function unifiedAction(
+  request: Request,
+  values: Record<string, string>
+) {
+  const operation = values.intent;
+  const decision = await enforceUnauthByIpOnly({
+    request,
+    route: '/auth/unified/lookup',
+    ...RATE_LIMITS.unauth.joinLookup,
+  });
+  if (!decision.allowed)
+    throw new FlowError(
+      'Too many attempts. Please wait and try again.',
+      429,
+      decision.retryAfterSeconds
+    );
+  const authenticatedUserId = await getUserId(request);
+  if (!values.flowToken && ['resolve', 'google'].includes(operation)) {
+    const flow = await createFlow(
+      request,
+      safeRedirect(values.redirectTo, '/app')
+    );
+    flow.data.partnerEntry = isUaPartnerHost(request);
+    flow.data.partner = Boolean(
+      isUaPartnerHost(request) && (await getUaPartnerContext(request))
+    );
+    const result = await prisma.$transaction(
+      (tx) =>
+        operate(tx, flow, request, operation, values, authenticatedUserId),
+      { timeout: 20000 }
+    );
+    await saveNewFlow(flow);
+    const response =
+      result instanceof Response ? result : Response.json(result);
+    response.headers.append(
+      'set-cookie',
+      await flowCookie.serialize({ browser: flow.browser, token: flow.token })
+    );
+    return response;
+  }
+  return withFlow(request, values.flowToken, async (flow, tx) => {
+    const result = await operate(
+      tx,
+      flow,
+      request,
+      operation,
+      values,
+      authenticatedUserId
+    );
+    return result instanceof Response ? result : Response.json(result);
+  });
+}

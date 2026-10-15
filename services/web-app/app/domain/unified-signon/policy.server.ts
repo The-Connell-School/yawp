@@ -7,10 +7,17 @@ export function normalizeIdentifier(raw: string) {
   const value = raw.trim().toLowerCase();
   if (!value || value.length > 100) return null;
   if (value.includes('@') && !value.startsWith('@'))
-    return EmailSchema.safeParse(value).success ? { kind: 'email' as const, value } : null;
+    return EmailSchema.safeParse(value).success
+      ? { kind: 'email' as const, value }
+      : null;
   const canonical = value.replace(/^@/, '');
   if (!validateUsername(canonical).ok) return null;
-  return { kind: value.startsWith('@') ? 'handle' as const : 'handle-or-code' as const, value: canonical };
+  return {
+    kind: value.startsWith('@')
+      ? ('handle' as const)
+      : ('handle-or-code' as const),
+    value: canonical,
+  };
 }
 
 export function postAuthenticationDestination(input: {
@@ -28,6 +35,12 @@ export function postAuthenticationDestination(input: {
 
 export function codeDigest(context: Record<string, string>, code: string) {
   return createHmac('sha256', process.env.SESSION_SECRET.split(',')[0])
-    .update(JSON.stringify(Object.entries(context).sort(([a], [b]) => a.localeCompare(b))))
-    .update('\0').update(code).digest('hex');
+    .update(
+      JSON.stringify(
+        Object.entries(context).sort(([a], [b]) => a.localeCompare(b))
+      )
+    )
+    .update('\0')
+    .update(code)
+    .digest('hex');
 }

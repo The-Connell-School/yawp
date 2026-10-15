@@ -1,61 +1,197 @@
 import type { Prisma } from '@app/prisma';
 import { redirect } from 'react-router';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
-import { getSessionExpirationDateForUser, sessionKey } from '~/utils/auth.server';
+import {
+  getSessionExpirationDateForUser,
+  sessionKey,
+} from '~/utils/auth.server';
 import { setMembershipId } from '~/cookies/membership-id.server';
-import { enforceFreeTierTeacherGate, loadFreeTierGateApplication } from '~/domain/free-tier/free-tier-gate.server';
-import { enrollExistingStudentByCode } from '~/domain/free-tier/existing-student-enrollment.server';
-import { getPreviewAccessSeat, isIsolatedPreviewSeatMode } from '~/utils/preview-access.server';
+import {
+  enforceFreeTierTeacherGate,
+  loadFreeTierGateApplication,
+} from '~/domain/free-tier/free-tier-gate.server';
+import {
+  enrollExistingStudentByCode,
+  enrollUnassignedStudentByCode,
+} from '~/domain/free-tier/existing-student-enrollment.server';
+import {
+  getPreviewAccessSeat,
+  isIsolatedPreviewSeatMode,
+} from '~/utils/preview-access.server';
 import { previewSessionAllowedWithoutSeatMembership } from '~/utils/preview-session-seat.server';
 import { FlowError, stateFor, type Flow } from './flow.server';
 import { postAuthenticationDestination } from './policy.server';
 
-export async function finishAuthentication(tx: Prisma.TransactionClient, flow: Flow, request: Request, userId: string, issueSession = true, selectedMembershipId?: string): Promise<Response> {
-  const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { id: true, email: true, mustChangePassword: true } });
-  let memberships = await tx.orgMembership.findMany({ where: { userId, isActive: true }, include: { organization: { select: { name: true, plan: true } } }, orderBy: { id: 'asc' } });
+export async function finishAuthentication(
+  tx: Prisma.TransactionClient,
+  flow: Flow,
+  request: Request,
+  userId: string,
+  issueSession = true,
+  selectedMembershipId?: string
+): Promise<Response> {
+  const user = await tx.user.findUniqueOrThrow({
+    where: { id: userId },
+    select: { id: true, email: true, mustChangePassword: true },
+  });
+  let memberships = await tx.orgMembership.findMany({
+    where: { userId, isActive: true },
+    include: { organization: { select: { name: true, plan: true } } },
+    orderBy: { id: 'asc' },
+  });
   if (isIsolatedPreviewSeatMode()) {
     const seat = await getPreviewAccessSeat(request);
-    memberships = memberships.filter(m => m.organizationId === seat?.organizationId);
-    if (!memberships.length && !(await previewSessionAllowedWithoutSeatMembership(userId))) throw new FlowError('Sign-in is unavailable for this account.', 403);
+    memberships = memberships.filter(
+      (m) => m.organizationId === seat?.organizationId
+    );
+    if (
+      !memberships.length &&
+      !(await previewSessionAllowedWithoutSeatMembership(userId))
+    )
+      throw new FlowError('Sign-in is unavailable for this account.', 403);
   }
-  if (selectedMembershipId && !memberships.some(m => m.id === selectedMembershipId)) throw new FlowError('Choose an active membership.', 403);
+  if (
+    selectedMembershipId &&
+    !memberships.some((m) => m.id === selectedMembershipId)
+  )
+    throw new FlowError('Choose an active membership.', 403);
   flow.data.userId = userId;
+  if (flow.data.pendingGoogle && flow.data.proof && !user.mustChangePassword) {
+    const headers = new Headers({ 'Cache-Control': 'private, no-store' });
+    if (issueSession) {
+      const session = await tx.session.create({
+        data: { userId, expirationDate: getSessionExpirationDateForUser(user) },
+      });
+      const auth = await authSessionStorage.getSession(
+        request.headers.get('cookie')
+      );
+      auth.set(sessionKey, session.id);
+      headers.append(
+        'set-cookie',
+        await authSessionStorage.commitSession(auth, {
+          expires: session.expirationDate,
+        })
+      );
+    }
+    return Response.json(
+      stateFor(flow, {
+        screen: 'link-google',
+        identifier: flow.data.identifier,
+      }),
+      { headers }
+    );
+  }
   // A forced password change must complete before a class is joined.
   if (!user.mustChangePassword && flow.data.classId && flow.data.classCode) {
-    const source = memberships.find(m => m.role === 'STUDENT' && !m.isOrgOwner);
-    if (!source) throw new FlowError('Use a student account to join this class.', 403);
-    const enrollment = await enrollExistingStudentByCode({ userId, sourceMembershipId: source.id, sourceOrganizationId: source.organizationId, code: flow.data.classCode, classId: flow.data.classId });
+    const target = await tx.class.findUnique({
+      where: { id: flow.data.classId },
+      select: { school: { select: { organizationId: true } } },
+    });
+    const source =
+      memberships.find(
+        (m) =>
+          m.role === 'STUDENT' &&
+          !m.isOrgOwner &&
+          m.organizationId === target?.school.organizationId
+      ) ?? memberships.find((m) => m.role === 'STUDENT' && !m.isOrgOwner);
+    const enrollment = source
+      ? await enrollExistingStudentByCode({
+          userId,
+          sourceMembershipId: source.id,
+          sourceOrganizationId: source.organizationId,
+          code: flow.data.classCode,
+          classId: flow.data.classId,
+          client: tx,
+        })
+      : await enrollUnassignedStudentByCode(tx, {
+          userId,
+          code: flow.data.classCode,
+          classId: flow.data.classId,
+        });
     if (!enrollment.ok) throw new FlowError(enrollment.error);
     selectedMembershipId = enrollment.membershipId;
     // Class context is consumed only by the existing enrollment operation.
     flow.data.classId = undefined;
     flow.data.classCode = undefined;
-    memberships = await tx.orgMembership.findMany({ where: { userId, isActive: true }, include: { organization: { select: { name: true, plan: true } } }, orderBy: { id: 'asc' } });
+    memberships = await tx.orgMembership.findMany({
+      where: { userId, isActive: true },
+      include: { organization: { select: { name: true, plan: true } } },
+      orderBy: { id: 'asc' },
+    });
   }
   let trialDestination: string | null = null;
   if (!user.mustChangePassword && memberships.length) {
     const application = await loadFreeTierGateApplication(userId);
-    try { await enforceFreeTierTeacherGate({ userId, pathname: flow.data.destination, application }); }
-    catch (response) {
-      if (!(response instanceof Response) || !response.headers.get('Location')) throw response;
+    try {
+      await enforceFreeTierTeacherGate({
+        userId,
+        pathname: flow.data.destination,
+        application,
+      });
+    } catch (response) {
+      if (!(response instanceof Response) || !response.headers.get('Location'))
+        throw response;
       trialDestination = response.headers.get('Location');
     }
   }
-  const destination = postAuthenticationDestination({ mustChangePassword: user.mustChangePassword, activeMemberships: selectedMembershipId ? 1 : memberships.length, trialDestination, redirectTo: flow.data.destination });
+  const destination = postAuthenticationDestination({
+    mustChangePassword: user.mustChangePassword,
+    activeMemberships: selectedMembershipId ? 1 : memberships.length,
+    trialDestination,
+    redirectTo: flow.data.destination,
+  });
   const headers = new Headers({ 'Cache-Control': 'private, no-store' });
   if (issueSession) {
-    const session = await tx.session.create({ data: { userId, expirationDate: getSessionExpirationDateForUser(user) } });
-    const auth = await authSessionStorage.getSession(request.headers.get('cookie'));
+    const session = await tx.session.create({
+      data: { userId, expirationDate: getSessionExpirationDateForUser(user) },
+    });
+    const auth = await authSessionStorage.getSession(
+      request.headers.get('cookie')
+    );
     auth.set(sessionKey, session.id);
-    headers.append('set-cookie', await authSessionStorage.commitSession(auth, { expires: session.expirationDate }));
+    headers.append(
+      'set-cookie',
+      await authSessionStorage.commitSession(auth, {
+        expires: session.expirationDate,
+      })
+    );
   }
   if (destination === 'inactive') {
-    const anyStaff = await tx.orgMembership.findFirst({ where: { userId, role: 'TEACHER' }, select: { id: true } });
-    return Response.json(stateFor(flow, { screen: 'inactive', variant: anyStaff ? 'staff' : 'student', identifier: flow.data.identifier }), { headers });
+    const anyStaff = await tx.orgMembership.findFirst({
+      where: { userId, role: 'TEACHER' },
+      select: { id: true },
+    });
+    return Response.json(
+      stateFor(flow, {
+        screen: 'inactive',
+        variant: anyStaff ? 'staff' : 'student',
+        identifier: flow.data.identifier,
+      }),
+      { headers }
+    );
   }
-  if (destination === 'membership') return Response.json(stateFor(flow, { screen: 'membership', memberships: memberships.map(m => ({ id: m.id, organization: m.organization.name, role: m.role === 'TEACHER' ? 'Teacher' : 'Student' })) }), { headers });
-  const membershipId = selectedMembershipId || (memberships.length === 1 ? memberships[0].id : undefined);
-  if (membershipId) headers.append('set-cookie', await setMembershipId(membershipId));
-  if (destination !== '/auth/required-password-change') flow.data.completed = true;
+  if (destination === 'membership')
+    return Response.json(
+      stateFor(flow, {
+        screen: 'membership',
+        memberships: memberships.map((m) => ({
+          id: m.id,
+          organization: m.organization.name,
+          role: m.isOrgOwner
+            ? 'School admin'
+            : m.role === 'TEACHER'
+              ? 'Teacher'
+              : 'Student',
+        })),
+      }),
+      { headers }
+    );
+  const membershipId =
+    selectedMembershipId ||
+    (memberships.length === 1 ? memberships[0].id : undefined);
+  if (membershipId)
+    headers.append('set-cookie', await setMembershipId(membershipId));
+  if (destination !== '/auth/required-password-change')
+    flow.data.completed = true;
   return redirect(destination, { headers });
 }

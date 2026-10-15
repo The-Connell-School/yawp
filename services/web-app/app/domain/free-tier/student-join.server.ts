@@ -1,3 +1,4 @@
+import type { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 import { getPasswordHash } from '~/utils/auth.server';
 import { clearFailedLoginRateLimitsForTarget } from '~/utils/rate-limit.server';
@@ -128,13 +129,16 @@ export async function registerFreeTierStudent({
   password,
   classId,
   joinToken,
+  client,
 }: {
   name: string;
   username: string;
   password: string;
   classId: string;
   joinToken: string;
+  client?: Prisma.TransactionClient;
 }) {
+  const db = client ?? prisma;
   const usernameResult = validateUsername(rawUsername);
   if (!usernameResult.ok) {
     const suggestions = await suggestAvailableUsernames(rawUsername);
@@ -147,7 +151,7 @@ export async function registerFreeTierStudent({
   }
 
   const trimmedToken = joinToken.trim();
-  const klass = await prisma.class.findFirst({
+  const klass = await db.class.findFirst({
     where: {
       id: classId,
       isArchived: false,
@@ -171,7 +175,7 @@ export async function registerFreeTierStudent({
 
   const hashedPassword = await getPasswordHash(password);
   try {
-    const membership = await prisma.$transaction(async (tx) => {
+    const createMembership = async (tx: Prisma.TransactionClient) => {
       // Serialize concurrent sign-ups for the same handle so one succeeds and the
       // other gets a username conflict instead of both racing past a pre-check.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${usernameResult.username}))`;
@@ -217,9 +221,10 @@ export async function registerFreeTierStudent({
         },
         select: { id: true, userId: true },
       });
-    });
+    };
+    const membership = client ? await createMembership(client) : await prisma.$transaction(createMembership);
 
-    const session = await prisma.session.create({
+    const session = await db.session.create({
       data: {
         userId: membership.userId,
         expirationDate: getSessionExpirationDateForUser({ email: null }),
@@ -228,7 +233,7 @@ export async function registerFreeTierStudent({
     });
 
     await runFreeTierAnalytics(async () => {
-      const application = await prisma.freeTierApplication.findFirst({
+      const application = await db.freeTierApplication.findFirst({
         where: { organizationId: klass.school.organizationId },
         select: {
           id: true,

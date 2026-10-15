@@ -8,14 +8,47 @@ import { FlowError, opaque } from './flow.server';
 export async function deliverCode(email: string, code: string) {
   const capture = process.env.SIGNON_MAIL_CAPTURE_DIR;
   const db = new URL(process.env.DATABASE_URL!);
-  if (process.env.NODE_ENV !== 'production' && ['127.0.0.1', 'localhost'].includes(db.hostname)) {
+  if (
+    process.env.NODE_ENV !== 'production' ||
+    ['127.0.0.1', 'localhost'].includes(db.hostname)
+  ) {
+    if (
+      process.env.NODE_ENV === 'production' ||
+      !['127.0.0.1', 'localhost'].includes(db.hostname)
+    )
+      throw new FlowError('Email delivery is unavailable.', 503);
     const tmp = process.env.TMPDIR;
-    if (!capture || !tmp || !path.resolve(capture).startsWith(path.resolve(tmp) + path.sep)) throw new FlowError('Email delivery is unavailable.', 503);
+    if (
+      !capture ||
+      !tmp ||
+      !path.resolve(capture).startsWith(path.resolve(tmp) + path.sep)
+    )
+      throw new FlowError('Email delivery is unavailable.', 503);
     await mkdir(capture, { recursive: true, mode: 0o700 });
-    await writeFile(path.join(capture, opaque() + '.json'), JSON.stringify({ email, code }), { mode: 0o600 });
+    await writeFile(
+      path.join(capture, opaque() + '.json'),
+      JSON.stringify({ email, code }),
+      { mode: 0o600 }
+    );
     return;
   }
-  if (!(process.env.EMAIL_PROVIDER === 'ses' || process.env.EMAIL_PROVIDER === 'aws-ses' || process.env.RESEND_API_KEY)) throw new FlowError('Email delivery is unavailable.', 503);
-  const result = await sendEmail({ to: email, subject: 'Your Yawp sign-in code', text: `Your code is ${code}. It expires in 10 minutes.`, html: `<p>Your code is <strong>${code}</strong>. It expires in 10 minutes.</p>` });
-  if (result.status !== 'success') throw new FlowError('Email delivery is unavailable. Please try again later.', 503);
+  if (
+    !(
+      process.env.EMAIL_PROVIDER === 'ses' ||
+      process.env.EMAIL_PROVIDER === 'aws-ses' ||
+      process.env.RESEND_API_KEY
+    )
+  )
+    throw new FlowError('Email delivery is unavailable.', 503);
+  const result = await sendEmail({
+    to: email,
+    subject: 'Your Yawp sign-in code',
+    text: `Your code is ${code}. It expires in 10 minutes.`,
+    html: `<p>Your code is <strong>${code}</strong>. It expires in 10 minutes.</p>`,
+  });
+  if (result.status !== 'success')
+    throw new FlowError(
+      'Email delivery is unavailable. Please try again later.',
+      503
+    );
 }
