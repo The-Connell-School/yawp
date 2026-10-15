@@ -119,10 +119,16 @@ describe('internal feature-flag endpoints', () => {
       FLAG,
       'internal_rubrics',
       'free_tier',
+      'unified-sign-on',
     ]);
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[1]).toMatchObject({ key: 'internal_rubrics', label: 'Rubrics from Yawp Internal', mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[2]).toMatchObject({ key: 'free_tier', label: 'Free tier', mode: 'off', orgIds: [], enabled: false });
+    expect(body.flags[3]).toMatchObject({
+      key: 'unified-sign-on', mode: 'off', orgIds: [], enabled: false,
+      persisted: { mode: 'off', orgIds: [] },
+      effective: { mode: 'off', orgIds: [] }, runtimeOverride: null,
+    });
   });
 
   test('lists free tier as open on demo even when the stored flag is off', async () => {
@@ -171,6 +177,7 @@ describe('internal feature-flag endpoints', () => {
       FLAG,
       'internal_rubrics',
       'free_tier',
+      'unified-sign-on',
     ]);
   });
 
