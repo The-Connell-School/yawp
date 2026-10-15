@@ -54,6 +54,116 @@ function listTrackedRepoFiles(): string[] {
     .filter(Boolean);
 }
 
+describe('optional Google OAuth deployment credentials', () => {
+  test('production adoption is default-off, protected, and uses only existing secret ARNs', () => {
+    const variables = readRepoFile('infra/variables.tf');
+    const adoption = readRepoFile('infra/google-oauth.tf');
+    const main = readRepoFile('infra/main.tf');
+    expect(variables).toMatch(/variable "google_oauth_credentials_configured"\s*\{[^}]*default\s*= false/s);
+    expect(adoption).toContain('var.google_oauth_credentials_configured && var.env == "production"');
+    for (const key of ['client_id', 'client_secret']) {
+      expect(adoption).toContain(`name        = "yawp-production-google-oauth-${key.replace('_', '-')}"`);
+      expect(adoption).toContain(`to       = aws_secretsmanager_secret.google_oauth_${key}[each.key]`);
+      expect(adoption).toContain(`id       = var.google_oauth_secret_arns.${key}`);
+      expect(main).toContain(`aws_secretsmanager_secret.google_oauth_${key}["production"].arn`);
+    }
+    expect(adoption.match(/prevent_destroy = true/g)?.length).toBe(2);
+    expect(adoption.match(/for_each\s*= local.google_oauth_adoption/g)?.length).toBe(4);
+    expect(adoption).not.toMatch(/secret_version|secret_string|data\s+"aws_secretsmanager/);
+    expect(variables).toContain('arn:aws:secretsmanager:us-east-1:422348803522:secret:yawp-production-google-oauth-');
+    expect(main).toMatch(/local.google_oauth_enabled \? \[\s*aws_secretsmanager_secret.google_oauth_client_id\["production"\].arn,\s*aws_secretsmanager_secret.google_oauth_client_secret\["production"\].arn\s*\] : \[\]/);
+    expect(main).toMatch(/local.google_oauth_enabled \? \{\s*GOOGLE_OAUTH_CLIENT_ID\s*= aws_secretsmanager_secret.google_oauth_client_id\["production"\].arn\s*GOOGLE_OAUTH_CLIENT_SECRET\s*= aws_secretsmanager_secret.google_oauth_client_secret\["production"\].arn\s*\} : \{\}/);
+  });
+
+  for (const target of ['demo', 'preview']) {
+    const path = `.github/workflows/${target === 'demo' ? 'demo-environment' : 'preview-environments'}.yml`;
+    test(`${target} masks optional credentials before transport and forwards them into the web container`, () => {
+      const workflow = readRepoFile(path);
+      const parsed = Bun.YAML.parse(workflow) as any;
+      const job = Object.values(parsed.jobs).find((job: any) => job.env?.PREVIEW_GOOGLE_OAUTH_CLIENT_ID) as any;
+      expect(job).toBeDefined();
+      const mask = job.steps[0].run;
+      expect(execFileSync('bash', ['-c', mask], { encoding: 'utf8', env: {
+        ...process.env, PREVIEW_GOOGLE_OAUTH_CLIENT_ID: '', PREVIEW_GOOGLE_OAUTH_CLIENT_SECRET: '',
+      } })).toBe('');
+      const assignments: string[] = [];
+      for (const key of ['CLIENT_ID', 'CLIENT_SECRET']) {
+        const name = `PREVIEW_GOOGLE_OAUTH_${key}`;
+        expect(job.env[name]).toBe(`\u0024{{ secrets.${target.toUpperCase()}_GOOGLE_OAUTH_${key} }}`);
+        assignments.push(workflow.split('\n').find(line => line.includes(`"${name}=$(shell_quote`))!.trim());
+        expect(workflow).not.toMatch(new RegExp(`test -n "\\$${name}"`));
+      }
+      const synthetic = "fixture oauth $value 'quoted' \\ tail";
+      const env = {
+        ...process.env,
+        PREVIEW_GOOGLE_OAUTH_CLIENT_ID: synthetic,
+        PREVIEW_GOOGLE_OAUTH_CLIENT_SECRET: `${synthetic}\nsecond line%`,
+      };
+      const masked = execFileSync('bash', ['-c', mask], { env, encoding: 'utf8' });
+      const masks = masked.trim().split('\n').map(line => {
+        expect(line.startsWith('::add-mask::')).toBe(true);
+        return line.slice('::add-mask::'.length).replaceAll('%0A', '\n').replaceAll('%0D', '\r').replaceAll('%25', '%');
+      });
+      for (const value of [env.PREVIEW_GOOGLE_OAUTH_CLIENT_ID, env.PREVIEW_GOOGLE_OAUTH_CLIENT_SECRET]) {
+        expect(masks.includes(value)).toBe(true);
+        const quoted = execFileSync('bash', ['-c', 'printf "%q" "$VALUE"'], { env: { ...process.env, VALUE: value }, encoding: 'utf8' });
+        expect(masks.includes(quoted)).toBe(true);
+      }
+      // Execute the workflow's actual shell-quoted assignments and the renderer
+      // reached by deploy.sh, without contacting a host or running a container.
+      const render = `shell_quote() { printf '%q' "$1"; }; remote_env=(\n${assignments.join('\n')}\n); eval "\u0024{remote_env[*]} node scripts/preview/render-compose.mjs"`;
+      const fixture = {
+        ...process.env, PR_NUMBER: target === 'preview' ? '142' : '', PREVIEW_SLUG: target === 'demo' ? 'demo' : '',
+        PREVIEW_DOMAIN: 'example.test', PREVIEW_ROOT: process.env.TMPDIR!, SOURCE_DIR: repoRoot,
+        PREVIEW_RUNTIME: 'production', PREVIEW_AI_MODE: 'disabled', PREVIEW_UA_STUDENT_BILLING_ENABLED: 'false',
+        PREVIEW_ACCESS_SEATS: JSON.stringify([{ code: 'fixture-otter-4193', organizationId: 'local-dev-org', label: 'Master' }]),
+        PREVIEW_ACCESS_SECRET: 'fixture-access-secret-32-characters', PREVIEW_SESSION_SECRET: 'fixture-session-secret-32-characters',
+        PREVIEW_DB_PASSWORD: 'fixture-database-password-00010001', DEMO_INTERNAL_API_KEYS: '',
+      };
+      for (const configured of [false, true]) {
+        const result = execFileSync('bash', ['-c', render], { cwd: repoRoot, encoding: 'utf8', env: {
+          ...fixture,
+          PREVIEW_GOOGLE_OAUTH_CLIENT_ID: configured ? env.PREVIEW_GOOGLE_OAUTH_CLIENT_ID : '',
+          PREVIEW_GOOGLE_OAUTH_CLIENT_SECRET: configured ? env.PREVIEW_GOOGLE_OAUTH_CLIENT_SECRET : '',
+        } });
+        const compose = Bun.YAML.parse(result) as any;
+        for (const key of ['CLIENT_ID', 'CLIENT_SECRET']) {
+          const expected = configured ? env[`PREVIEW_GOOGLE_OAUTH_${key}` as keyof typeof env] : '';
+          // Compose decodes $$ into a literal $ when starting the container.
+          expect(compose.services.web.environment[`GOOGLE_OAUTH_${key}`].replaceAll('$$', '$') === expected).toBe(true);
+          expect(compose.services.toolbox.environment[`GOOGLE_OAUTH_${key}`]).toBeUndefined();
+        }
+        expect(result).not.toContain('UNIFIED_SIGN_ON');
+      }
+      expect(readRepoFile('scripts/preview/deploy.sh')).toContain('node "$SCRIPT_DIR/render-compose.mjs" > "$PREVIEW_DIR/docker-compose.yml"');
+    });
+  }
+
+  test('failure log redaction hides host and runtime assignments including shell quoting', () => {
+    const script = readRepoFile('scripts/preview/run-host-deploy-detached.sh');
+    const mask = script.match(/mask_deploy_log\(\) \{[\s\S]*?\n\}/)?.[0];
+    expect(mask).toBeDefined();
+    const synthetic = "fixture oauth $value 'quoted' \\ tail";
+    const quoted = execFileSync('bash', ['-c', 'printf "%q" "$VALUE"'], { env: { ...process.env, VALUE: `${synthetic}\nsecond-line` }, encoding: 'utf8' });
+    for (const prefix of ['', 'PREVIEW_']) {
+      for (const key of ['CLIENT_ID', 'CLIENT_SECRET']) {
+        for (const value of [synthetic, quoted, JSON.stringify(synthetic)]) {
+          for (const separator of ['=', ': ']) {
+            const input = `before\n${prefix}GOOGLE_OAUTH_${key}${separator}${value}\nafter\n`;
+            const output = execFileSync('bash', ['-c', `${mask}\nmask_deploy_log`], { input, encoding: 'utf8' });
+            expect(output).toContain('[REDACTED]');
+            expect(output.includes('fixture')).toBe(false);
+            expect(output.includes('quoted')).toBe(false);
+            expect(output.includes('tail')).toBe(false);
+            expect(output).toContain('before\n');
+            expect(output).toContain('\nafter\n');
+          }
+        }
+      }
+    }
+  });
+});
+
 describe('production deployment contract', () => {
   test('CI isolates free-tier Prisma module mocks from the combined real-DB suite', () => {
     const workflow = readRepoFile('.github/workflows/ci.yml');

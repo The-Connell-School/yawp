@@ -25,6 +25,7 @@ mask_deploy_log() {
     -e 's/(PREVIEW_MANAGEMENT_SERVICE_KEY=)[^[:space:]]*/\1[REDACTED]/g' \
     -e 's/((DEMO_INTERNAL_API_KEYS|YAWP_INTERNAL_API_KEYS)=).*/\1[REDACTED]/g' \
     -e 's/(PREVIEW_RESEND_API_KEY=)[^[:space:]]*/\1[REDACTED]/g' \
+    -e 's/((PREVIEW_)?GOOGLE_OAUTH_CLIENT_(ID|SECRET)[=:][[:space:]]*).*/\1[REDACTED]/g' \
     -e 's/(PREVIEW_STRIPE_SECRET_KEY=)[^[:space:]]*/\1[REDACTED]/g' \
     -e 's/(PREVIEW_STRIPE_WEBHOOK_SECRET=)[^[:space:]]*/\1[REDACTED]/g'
 }
