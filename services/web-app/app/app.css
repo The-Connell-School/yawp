@@ -1550,11 +1550,11 @@ body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
 
 /* Free-tier artboards use the existing sign-in shell, tokens and form controls. */
 .free-tier-page .auth-page-shell {
-  min-height: max(800px, 100dvh);
+  min-height: 800px;
   padding: 32px 16px 24px;
 }
 .free-tier-page .auth-page-frame {
-  min-height: calc(max(800px, 100dvh) - 56px);
+  min-height: 744px;
 }
 .free-tier-page .auth-page-logo img {
   width: 208px;
@@ -1611,3 +1611,11 @@ body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
 .free-tier-page .free-tier-form-card:has(.free-tier-state-icon) > div:last-child { margin-top: 8px; }
 
 .free-tier-page input:not([type="hidden"]) { font-size: 16px; }
+
+.free-tier-page .free-tier-footer button {
+  height: auto;
+  padding: 0;
+  font-size: 14px;
+  line-height: 21px;
+  text-decoration: underline;
+}
