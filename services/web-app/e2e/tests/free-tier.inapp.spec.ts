@@ -32,6 +32,8 @@ async function capture(page: import('@playwright/test').Page, state: string) {
   }
   await page.mouse.move(0, 0);
   await page.evaluate(() => document.fonts.ready);
+  // Existing hover/focus transitions last 300ms; capture the settled layout.
+  await page.waitForTimeout(400);
   await page.screenshot({ path: join(evidence, file), animations: 'disabled' });
   appendFileSync(
     join(evidence, 'manifest.jsonl'),

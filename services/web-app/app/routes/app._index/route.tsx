@@ -14,7 +14,7 @@ import {
   useNavigate,
 } from 'react-router';
 import { PenLine } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import type { Route as RootRoute } from '../../+types/root';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import { Button } from '~/components/ui/button';
@@ -372,6 +372,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export default function AppRoute() {
   const data = useLoaderData<typeof loader>();
   const freeUsage = useFreeAccountUsage();
+  const ContentColumn = freeUsage ? 'div' : Fragment;
   const navigate = useNavigate();
   const user = useUser();
   const rootData =
@@ -417,8 +418,8 @@ export default function AppRoute() {
               : 'mx-auto flex w-full max-w-screen-lg flex-col gap-8 px-3 py-6 pb-24 sm:px-5'
           }
         >
-          <div
-            className={freeUsage ? 'flex min-w-0 flex-col gap-4' : 'contents'}
+          <ContentColumn
+            {...(freeUsage ? { className: 'flex min-w-0 flex-col gap-4' } : {})}
           >
             <ClassesAtAGlance
               classes={data.teacherClassCards}
@@ -513,7 +514,7 @@ export default function AppRoute() {
                 readyToReleaseCount={readyToReleaseCount}
               />
             )}
-          </div>
+          </ContentColumn>
           {freeUsage && <FreeAccountChecklist usage={freeUsage} />}
         </div>
       </section>

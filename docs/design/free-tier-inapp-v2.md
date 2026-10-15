@@ -31,6 +31,7 @@ matches the requested Needs Grading view; its existing status URL is used.
   entitlement checks remain in place.
 - “Talk to us” links lead to the existing free-account status page. No mail action
   or new external destination is introduced.
+- The existing Create Class control and its blocked-cap explanation remain available on My Classes; the reference omits that control. This preserves the current action outcome rather than changing the class-creation flow.
 - Existing class art, names, tables and document data remain live. Broken image
   placeholders and example students in the export are not copied into the app.
 
