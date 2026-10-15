@@ -53,7 +53,7 @@ for (const width of [1280, 390]) test(`expiry, rejection, budget pause, reading 
     await capture(page, 'expired');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     if (!before) {
-      await expect(page.getByRole('link', { name: 'Contact support', exact: true })).toHaveAttribute('href', 'mailto:support@yawp.school');
+      await expect(page.getByRole('link', { name: 'Email support', exact: true })).toHaveAttribute('href', 'mailto:support@yawp.school');
       await expect(page.getByRole('link', { name: 'Back to My Classes', exact: true })).toHaveCount(0);
       await page.getByRole('button', { name: 'Sign out', exact: true }).click();
       await expect(page).toHaveURL(/\/auth\/login$/);

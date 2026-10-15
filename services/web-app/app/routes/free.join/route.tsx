@@ -5,6 +5,7 @@ import {
   useLoaderData,
   useActionData,
 } from 'react-router';
+import { CircleAlert, Shield } from 'lucide-react';
 import { Form } from 'react-router';
 import { peekSignedLink } from '~/domain/free-tier/signed-link.server';
 import { createFreeTierTeacherAccount } from '~/domain/free-tier/approval-flow.server';
@@ -100,9 +101,9 @@ export default function FreeJoinRoute() {
   const actionData = useActionData<typeof action>();
   if (!data.ok) {
     return (
-      <FreeTierAuthCard title="This link is not valid">
+      <FreeTierAuthCard title="This invite link isn't valid" icon={<CircleAlert />}>
         <p className="text-sm text-muted-foreground">
-          Request a new invite from the YAWP team.
+          It may have expired. Invites last 30 days.
         </p>
       </FreeTierAuthCard>
     );
@@ -110,20 +111,9 @@ export default function FreeJoinRoute() {
 
   return (
     <FreeTierAuthCard
-      title="Before we begin"
-      subtitle="Create your free classroom account."
+      title="Create your free classroom"
+      subtitle="You're in. Set up your account."
     >
-      <ul className="flex flex-col gap-2 text-sm text-muted-foreground">
-        <li>
-          Students&apos; drafts stay in your classroom. You decide what to
-          assign and when work is final.
-        </li>
-        <li>
-          The writing tutor gives feedback while students draft. You always
-          review grades and submissions.
-        </li>
-        <li>Student writing is not used to train public AI models.</li>
-      </ul>
       {actionData && !actionData.ok ? (
         <p role="alert" className="text-sm text-destructive">
           Check your name and matching passwords, then try again. If your invite
@@ -143,7 +133,7 @@ export default function FreeJoinRoute() {
         <FreeTierFieldLabel label="School email">
           <FreeTierTextInput value={data.email} readOnly className="bg-muted" />
         </FreeTierFieldLabel>
-        <FreeTierFieldLabel label="Password" htmlFor="password">
+        <FreeTierFieldLabel label="Password" htmlFor="password" hint="At least 6 characters.">
           <FreeTierTextInput
             id="password"
             name="password"
@@ -161,6 +151,7 @@ export default function FreeJoinRoute() {
         </FreeTierFieldLabel>
         <FreeTierButton type="submit">Create account</FreeTierButton>
       </Form>
+      <p className="flex items-start gap-2 text-xs text-muted-foreground"><Shield aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />Student writing is never used to train outside models.</p>
     </FreeTierAuthCard>
   );
 }

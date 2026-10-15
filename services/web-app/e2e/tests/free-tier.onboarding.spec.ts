@@ -27,12 +27,12 @@ test.describe('Free tier public flow', () => {
 
   test('admin approve page rejects missing token', async ({ page }) => {
     await page.goto('/free/admin/approve');
-    await expect(page.getByText(/not valid|expired/i)).toBeVisible();
+    await expect(page.getByRole('heading', { name: "We couldn't open this link" })).toBeVisible();
   });
 
   test('join page does not treat release token as acquisition token', async ({ page }) => {
     await page.goto('/free/join?t=not-a-real-signed-token');
-    await expect(page.getByText(/This link is not valid/i)).toBeVisible();
+    await expect(page.getByText(/This invite link isn't valid/i)).toBeVisible();
     await expect(page.getByText(/no longer valid/i)).not.toBeVisible();
   });
 
@@ -94,7 +94,7 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     const adminPage = await browser.newPage();
     await adminPage.goto(approveUrl!);
     await adminPage.fill('input[name="adminRole"]', 'Principal');
-    await adminPage.getByRole('checkbox', { name: /authorized/i }).check();
+    await adminPage.getByRole('checkbox', { name: /I can approve classroom software/i }).check();
     await adminPage.getByRole('button', { name: /Approve YAWP/i }).click();
     await expect(adminPage.getByRole('heading', { name: /Thank you/i })).toBeVisible({
       timeout: 30_000,
@@ -228,7 +228,7 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     await page.fill('input[name="adminRole"]', 'Principal');
     await page.getByRole('button', { name: /Send approval request/i }).click();
     await page.waitForURL('**/app/free-tier/pending**', { timeout: 30_000 });
-    await expect(page.getByText(/reviewing this request manually/i)).toBeVisible();
+    await expect(page.getByRole('heading', { name: "We're reviewing your request", exact: true })).toBeVisible();
 
     const sent = await prisma.freeTierEmailLog.findFirst({
       where: { applicationId: app.id, kind: 'admin_approval', success: true },

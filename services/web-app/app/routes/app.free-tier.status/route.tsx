@@ -1,3 +1,4 @@
+import { CircleAlert } from 'lucide-react';
 import { data, Link, type LoaderFunctionArgs, useLoaderData } from 'react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { enforceFreeTierTeacherGate, loadFreeTierGateApplication } from '~/domain/free-tier/free-tier-gate.server';
@@ -57,12 +58,12 @@ const content = {
     copy: 'Your free classroom application is marked expired, so classroom access is no longer available. Contact support to ask about next steps for your classroom.',
   },
   'invite-expired': {
-    title: 'Invite expired',
-    copy: 'Your free classroom invitation has expired. Contact support to ask for a new link.',
+    title: 'Your invite expired',
+    copy: 'Email support@yawp.school for a new link.',
   },
   rejected: {
     title: 'Request not approved',
-    copy: 'This request was not approved. Contact support if you have questions about the decision or next steps.',
+    copy: 'Questions? Email support@yawp.school.',
   },
   'budget-paused': {
     title: 'Free classroom spending is paused',
@@ -79,12 +80,12 @@ export default function FreeTierStatusRoute() {
   const { title, copy } = content[state];
   const canRead = state === 'budget-paused' || state === 'available';
   return (
-    <FreeTierAuthCard title={title}>
+    <FreeTierAuthCard title={title} icon={<CircleAlert />} footer={<FreeTierSignOut />}>
       <p className="text-sm text-muted-foreground">{copy}</p>
       {state === 'budget-paused' ? (
         <p className="text-sm text-muted-foreground">You can still read your existing classroom work. Check again later or contact support about the pause.</p>
       ) : null}
-      <Button variant="outline" asChild><a href="mailto:support@yawp.school">Contact support</a></Button>
+      <Button variant={canRead ? "outline" : "default"} asChild><a href="mailto:support@yawp.school">Email support</a></Button>
       {canRead ? (
         <>
           <Button asChild><Link to="/app/my-classes">Back to My Classes</Link></Button>
@@ -93,7 +94,6 @@ export default function FreeTierStatusRoute() {
           <Link to="/app/free-tier/status" reloadDocument className="text-sm underline">Check again</Link>
         </>
       ) : null}
-      <FreeTierSignOut />
     </FreeTierAuthCard>
   );
 }

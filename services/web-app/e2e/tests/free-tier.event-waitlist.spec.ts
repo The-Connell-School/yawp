@@ -126,7 +126,7 @@ test.describe('Free-tier event waitlist QA', () => {
       await expect(status).toBeVisible({ timeout: 15_000 });
       await shot(page, '02-event-waitlist-submitted.png');
       const statusText = (await status.textContent())?.trim() ?? '';
-      await expect(status).toContainText("You're on the list.");
+      await expect(status).toContainText("You're on the list");
       await expect(status).not.toContainText('join link');
 
       const app = await prisma.freeTierApplication.findUniqueOrThrow({
@@ -182,7 +182,7 @@ test.describe('Free-tier event waitlist QA', () => {
           `label: ${label}`,
           `email: ${email}`,
           `applicationId: ${app.id}`,
-          'expected copy: You\'re on the list.',
+          'expected copy: You\'re on the list',
           `actual copy: ${statusText}`,
           'database status: LEAD',
           'releasedAt: null',
@@ -251,7 +251,7 @@ test.describe('Free-tier event waitlist QA', () => {
       const releaseToken = releaseTokenFromJoinUrl(releasePayload.joinUrl);
 
       await page.goto(`/free/join?t=${encodeURIComponent(releaseToken)}`);
-      await expect(page.getByRole('heading', { name: 'Before we begin' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Create your free classroom' })).toBeVisible();
       await shot(page, '04-release-youre-in-join-form.png');
 
       await page.getByLabel('Your name').fill(teacherName);

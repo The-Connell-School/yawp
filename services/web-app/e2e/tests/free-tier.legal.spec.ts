@@ -86,8 +86,8 @@ test('signup visibly links to both public legal pages', async ({ page }) => {
 });
 
 for (const [name, result, message] of [
-  ['waitlist', { ok: true, redeemed: true, bypassWaitlist: false }, "You're on the list."],
-  ['bypass', { ok: true, redeemed: true, bypassWaitlist: true }, 'Check your email for your join link.'],
+  ['waitlist', { ok: true, redeemed: true, bypassWaitlist: false }, "You're on the list"],
+  ['bypass', { ok: true, redeemed: true, bypassWaitlist: true }, 'Check your email'],
   ['cap', { ok: false, error: 'cap_reached' }, 'This free classroom event is full.'],
   ['budget', { ok: false, error: 'budget_exceeded' }, 'This event link is paused because the current free-tier budget has been reached.'],
 ] as const) {

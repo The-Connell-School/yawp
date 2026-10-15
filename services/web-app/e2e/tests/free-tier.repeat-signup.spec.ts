@@ -189,7 +189,7 @@ test.describe('Free-tier repeat sign-up QA', () => {
       await shot(page, '01-repeat-signup-form-before-submit.png');
 
       await submitEventSignup(page, baseInput);
-      await expect(page.getByText('Check your email for your join link.')).toBeVisible();
+      await expect(page.getByText('Check your email')).toBeVisible();
       await shot(page, '02-repeat-signup-first-success.png');
 
       const firstState = await expectSingleInvitedApplication(prisma, token.id, email, 1);
@@ -199,7 +199,7 @@ test.describe('Free-tier repeat sign-up QA', () => {
         ...baseInput,
         name: `${baseInput.name} Same Browser`,
       });
-      await expect(page.getByText('Check your email for your join link.')).toBeVisible();
+      await expect(page.getByText('Check your email')).toBeVisible();
       await shot(page, '03-repeat-signup-same-browser.png');
       const sameBrowserState = await expectSingleInvitedApplication(
         prisma,
@@ -215,7 +215,7 @@ test.describe('Free-tier repeat sign-up QA', () => {
           ...baseInput,
           name: `${baseInput.name} Cleared Cookie`,
         });
-        await expect(clearedPage.getByText('Check your email for your join link.')).toBeVisible();
+        await expect(clearedPage.getByText('Check your email')).toBeVisible();
         await shot(clearedPage, '04-repeat-signup-cleared-cookie.png');
       } finally {
         await clearedContext.close();
@@ -235,7 +235,7 @@ test.describe('Free-tier repeat sign-up QA', () => {
           name: `${baseInput.name} Uppercase Email`,
           email: email.toUpperCase(),
         });
-        await expect(freshPage.getByText('Check your email for your join link.')).toBeVisible();
+        await expect(freshPage.getByText('Check your email')).toBeVisible();
       } finally {
         await freshContext.close();
       }

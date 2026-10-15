@@ -4,6 +4,7 @@ import {
   redirect,
   useActionData,
   useLoaderData,
+  useNavigation,
 } from 'react-router';
 import { Form } from 'react-router';
 import { requireUserId } from '~/utils/auth.server';
@@ -15,6 +16,7 @@ import {
   FreeTierFieldLabel,
   FreeTierSignOut,
   FreeTierTextInput,
+  FreeTierProgress,
 } from '../free-tier/FreeTierAuthCard';
 import { freeTierConfigErrorMessage } from '~/domain/free-tier/free-tier-config.server';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
@@ -95,21 +97,23 @@ export async function action({ request }: ActionFunctionArgs) {
 export default function FreeTierOnboardingRoute() {
   const { app, lastFailedEmail, pending } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const navigation = useNavigation();
   const errorMessage =
     actionData && !actionData.ok
       ? actionData.reason === 'config'
         ? actionData.message
         : actionData.reason === 'email_failed'
-          ? 'We could not send the approval email. Try again or contact support@yawp.school.'
+          ? "We couldn't send the email. Try again, or contact support@yawp.school."
           : actionData.reason === 'illegal_state'
-            ? 'This application is not ready for administrator details yet.'
+            ? "This application isn't ready for administrator details yet. Contact support@yawp.school."
             : 'Something went wrong. Try again.'
       : null;
 
   return (
     <FreeTierAuthCard
-      title="Administrator approval"
-      subtitle="Site- or district-level administrators can approve YAWP. Department chairs and classroom teachers cannot."
+      title="Who can approve YAWP?"
+      footer={<FreeTierSignOut />}
+      subtitle="A site or district administrator. Department chairs and teachers can’t."
     >
       {errorMessage ? (
         <p className="text-sm text-destructive" role="alert">
@@ -118,8 +122,7 @@ export default function FreeTierOnboardingRoute() {
       ) : null}
       {lastFailedEmail && app?.status === 'ADMIN_SUBMITTED' ? (
         <p className="text-sm text-destructive" role="alert">
-          We could not send the approval email last time. Update the
-          administrator details below and send again.
+          We couldn't send the email. Try again, or contact support@yawp.school.
         </p>
       ) : null}
       <Form method="post" className="flex flex-col gap-4">
@@ -136,6 +139,7 @@ export default function FreeTierOnboardingRoute() {
           <FreeTierTextInput
             id="adminEmail"
             name="adminEmail"
+            placeholder="name@district.org"
             type="email"
             required
             maxLength={320}
@@ -146,14 +150,15 @@ export default function FreeTierOnboardingRoute() {
           <FreeTierTextInput
             id="adminRole"
             name="adminRole"
+            placeholder="Principal, Technology Director"
             required
             maxLength={100}
             defaultValue={pending?.adminRole ?? ''}
           />
         </FreeTierFieldLabel>
-        <FreeTierButton type="submit">Send approval request</FreeTierButton>
+        <FreeTierProgress steps={['Account created', 'Ask your administrator', 'Start teaching']} current={1} />
+        <FreeTierButton type="submit">{navigation.state === 'submitting' ? 'Sending…' : 'Send approval request'}</FreeTierButton>
       </Form>
-      <FreeTierSignOut />
     </FreeTierAuthCard>
   );
 }

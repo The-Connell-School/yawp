@@ -23,7 +23,8 @@ import {
   FreeTierFieldLabel,
   FreeTierTextInput,
 } from '../free-tier/FreeTierAuthCard';
-import { FreeTierLegalLinks } from './LegalLinks';
+import { useState } from 'react';
+import { CircleCheck, CircleAlert, Mail } from 'lucide-react';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -68,6 +69,7 @@ const formSchema = waitlistInputSchema;
 type FreeTierSubmitSuccessInput = {
   redeemed?: boolean;
   bypassWaitlist?: boolean;
+  email?: string;
 };
 
 export function freeTierSubmitSuccessCopy(
@@ -75,13 +77,13 @@ export function freeTierSubmitSuccessCopy(
 ) {
   if (submission?.redeemed && submission.bypassWaitlist) {
     return {
-      headline: 'Check your email for your join link.',
-      detail: null,
+      headline: 'Check your email',
+      detail: submission.email ? `Your join link is on its way to ${submission.email}.` : 'Your join link is on its way.',
     };
   }
   return {
-    headline: "You're on the list.",
-    detail: "We'll email you when a spot opens.",
+    headline: "You're on the list",
+    detail: submission?.email ? `We will email ${submission.email} when your classroom is ready.` : "We will email you when your classroom is ready.",
   };
 }
 
@@ -166,45 +168,33 @@ export async function action({ request }: ActionFunctionArgs) {
 export default function FreeTierLandingRoute() {
   const data = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
+  const [submittedEmail, setSubmittedEmail] = useState('');
   const submitted = fetcher.data?.ok === true;
   const submitSuccess = submitted
-    ? freeTierSubmitSuccessCopy(fetcher.data)
+    ? freeTierSubmitSuccessCopy({ ...fetcher.data, email: submittedEmail })
     : null;
 
-  const title =
-    data.mode === 'token'
-      ? 'Try YAWP with your students'
-      : 'Try YAWP with your students';
-  const subtitle =
-    data.mode === 'token'
-      ? 'Use your event link to continue.'
-      : 'Join the waitlist or use your event link.';
+  const title = data.mode === 'token' && data.linkClosed
+    ? 'This link is closed'
+    : submitSuccess?.headline ?? 'Try YAWP with your students';
+  const subtitle = submitted || (data.mode === 'token' && data.linkClosed)
+    ? undefined
+    : data.mode === 'token' ? 'Use your event link to continue.'
+    : 'Join the waitlist. We let teachers in a group at a time.';
 
   return (
-    <FreeTierAuthCard title={title} subtitle={subtitle}>
-      <p className="text-sm text-muted-foreground">
-        YAWP helps students draft essays with AI-assisted feedback while
-        teachers stay in control of assignments and grading.
-      </p>
-
+    <FreeTierAuthCard status={submitted || (data.mode === 'token' && data.linkClosed)} title={title} subtitle={subtitle} icon={data.mode === 'token' && data.linkClosed ? <CircleAlert /> : submitted ? (fetcher.data && 'bypassWaitlist' in fetcher.data && fetcher.data.bypassWaitlist ? <Mail /> : <CircleCheck />) : undefined}>
       {data.mode === 'token' && data.linkClosed ? (
-        <div className="flex flex-col gap-4" role="status">
-          <p className="text-sm font-medium text-foreground">
-            This event link is closed.
-          </p>
+        <div className="flex flex-col gap-4">
           <p className="text-sm text-muted-foreground">
-            The link may have expired, reached its limit, or been disabled. You
-            can still join the waitlist below.
+            It expired, reached its limit, or was turned off.
           </p>
           <FreeTierButton asChild>
             <a href="/free">Join the waitlist</a>
           </FreeTierButton>
         </div>
       ) : submitSuccess ? (
-        <div className="flex flex-col gap-4" role="status">
-          <p className="text-sm font-medium text-foreground">
-            {submitSuccess.headline}
-          </p>
+        <div className="flex flex-col gap-4">
           {submitSuccess.detail ? (
             <p className="text-sm text-muted-foreground">
               {submitSuccess.detail}
@@ -212,7 +202,7 @@ export default function FreeTierLandingRoute() {
           ) : null}
         </div>
       ) : (
-        <fetcher.Form method="post" className="flex flex-col gap-4">
+        <fetcher.Form method="post" className="flex flex-col gap-4" onSubmit={event => setSubmittedEmail(String(new FormData(event.currentTarget).get('email') ?? ''))}>
           <input
             type="hidden"
             name="intent"
@@ -233,13 +223,13 @@ export default function FreeTierLandingRoute() {
             <FreeTierTextInput id="name" name="name" required />
           </FreeTierFieldLabel>
           <FreeTierFieldLabel label="School email" htmlFor="email">
-            <FreeTierTextInput id="email" name="email" type="email" required />
+            <FreeTierTextInput id="email" name="email" type="email" placeholder="you@school.edu" required />
           </FreeTierFieldLabel>
           <FreeTierFieldLabel label="School name" htmlFor="schoolName">
             <FreeTierTextInput id="schoolName" name="schoolName" required />
           </FreeTierFieldLabel>
           <FreeTierFieldLabel label="Location" htmlFor="location">
-            <FreeTierTextInput id="location" name="location" required />
+            <FreeTierTextInput id="location" name="location" placeholder="City, state" required />
           </FreeTierFieldLabel>
           <FreeTierFieldLabel label="Grade level" htmlFor="gradeLevel">
             <FreeTierTextInput id="gradeLevel" name="gradeLevel" required />
@@ -247,25 +237,25 @@ export default function FreeTierLandingRoute() {
           {data.mode === 'token' &&
           data.tokenValid &&
           !data.tokenValid.valid ? (
-            <p className="text-sm text-destructive">
+            <p className="text-sm text-destructive" role="alert">
               This link is no longer valid.
             </p>
           ) : null}
           {fetcher.data?.ok === false &&
           fetcher.data.error === 'rate_limited' ? (
-            <p className="text-sm text-destructive">
+            <p className="text-sm text-destructive" role="alert">
               Too many attempts. Please wait and try again.
             </p>
           ) : null}
           {fetcher.data?.ok === false &&
           fetcher.data.error === 'cap_reached' ? (
-            <p className="text-sm text-destructive">
+            <p className="text-sm text-destructive" role="alert">
               This free classroom event is full.
             </p>
           ) : null}
           {fetcher.data?.ok === false &&
           fetcher.data.error === 'budget_exceeded' ? (
-            <p className="text-sm text-destructive">
+            <p className="text-sm text-destructive" role="alert">
               This event link is paused because the current free-tier budget has been reached.
             </p>
           ) : null}
@@ -276,7 +266,6 @@ export default function FreeTierLandingRoute() {
           <FreeTierButton type="submit">
             {data.mode === 'token' ? 'Continue' : 'Join the waitlist'}
           </FreeTierButton>
-          <FreeTierLegalLinks />
         </fetcher.Form>
       )}
     </FreeTierAuthCard>
