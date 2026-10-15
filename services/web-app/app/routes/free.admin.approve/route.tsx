@@ -144,9 +144,10 @@ export default function FreeAdminApproveRoute() {
     return (
       <FreeTierAuthCard
         title={declined ? 'This request is closed' : actionData.reason === 'email_failed' ? 'Thank you' : actionData.reason === 'superseded' ? 'This link was replaced' : actionData.reason === 'budget_exceeded' ? 'Free classrooms are paused' : 'Unable to approve'}
-        icon={<CircleAlert />}
+        icon={actionData.reason === 'email_failed' ? <CircleCheck /> : <CircleAlert />}
       >
-        <p className="text-sm text-muted-foreground">{message}</p>
+        {actionData.reason === 'email_failed' ? <p className="text-sm text-muted-foreground">The teacher can start using YAWP.</p> : null}
+        <p className={actionData.reason === 'email_failed' ? 'rounded-lg bg-secondary p-3 text-sm text-muted-foreground' : 'text-sm text-muted-foreground'}>{message}</p>
       </FreeTierAuthCard>
     );
   }

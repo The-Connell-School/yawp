@@ -85,7 +85,7 @@ export default function FreeTierStatusRoute() {
       {state === 'budget-paused' ? (
         <p className="text-sm text-muted-foreground">You can still read your existing classroom work. Check again later or contact support about the pause.</p>
       ) : null}
-      <Button variant="outline" asChild><a href="mailto:support@yawp.school">Email support</a></Button>
+      <Button variant={canRead ? "outline" : "default"} asChild><a href="mailto:support@yawp.school">Email support</a></Button>
       {canRead ? (
         <>
           <Button asChild><Link to="/app/my-classes">Back to My Classes</Link></Button>
