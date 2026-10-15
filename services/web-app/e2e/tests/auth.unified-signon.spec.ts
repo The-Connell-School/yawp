@@ -312,6 +312,8 @@ for (const width of [1280, 390]) {
       );
       await expect(summary).toHaveCSS('padding', '12px 14px');
       await expect(summary).toHaveCSS('gap', '2px');
+      await expect(summary.locator('strong')).toHaveCSS('line-height', '20px');
+      await expect(summary.locator('span')).toHaveCSS('line-height', '18px');
     }
   });
 

@@ -212,9 +212,11 @@
 .unified-signon .signon-class strong {
   font-size: 15px;
   font-weight: 600;
+  line-height: 20px;
 }
 .unified-signon .signon-class span {
   font-size: 13px;
+  line-height: 18px;
   color: #5e5d5a;
 }
 .unified-signon .signon-chips {
