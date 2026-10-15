@@ -1668,3 +1668,122 @@ suite(
     );
   }
 );
+
+suite(
+  'existing passwordless account activates only after email proof and keeps its membership',
+  async () => {
+    cookie = '';
+    flowToken = '';
+    const email = `passwordless-${prefix}@example.test`;
+    const user = await prisma.user.create({
+      data: {
+        email,
+        name: 'LTI Student',
+        memberships: { create: { organizationId: prefix, role: 'STUDENT' } },
+      },
+    });
+    expect(
+      (
+        await post('resolve', {
+          identifier: email,
+          redirectTo: '/app/my-classes',
+        })
+      ).data.state.screen
+    ).toBe('activation');
+    expect(
+      (
+        await post('create-account', {
+          name: 'Student',
+          password: 'abcdef',
+          confirmPassword: 'abcdef',
+        })
+      ).response.status
+    ).toBe(400);
+    expect(await prisma.password.count({ where: { userId: user.id } })).toBe(0);
+    await post('send-code');
+    expect(
+      (await post('verify-code', { code: await code(email) })).data.state.screen
+    ).toBe('name-password');
+    const activated = await post('create-account', {
+      name: 'Activated Student',
+      password: 'abcdef',
+      confirmPassword: 'abcdef',
+    });
+    expect(activated.response.headers.get('location')).toBe('/app/my-classes');
+    const stored = await prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+      include: { password: true, memberships: true, sessions: true },
+    });
+    expect(stored.name).toBe('Activated Student');
+    expect(await Bun.password.verify('abcdef', stored.password!.hash)).toBe(
+      true
+    );
+    expect(stored.memberships).toHaveLength(1);
+    expect(stored.sessions).toHaveLength(1);
+  }
+);
+suite(
+  'read-only authenticated GET continuation cannot accept invitations or enroll classes',
+  async () => {
+    cookie = '';
+    flowToken = '';
+    const email = `readonly-get-${prefix}@example.test`;
+    const user = await prisma.user.create({
+      data: {
+        email,
+        password: { create: { hash: await getPasswordHash('abcdef') } },
+      },
+    });
+    const invitation = await prisma.invitation.create({
+      data: {
+        type: 'onboard-student',
+        target: email,
+        secret: 'local-secret',
+        algorithm: 'SHA-256',
+        digits: 6,
+        period: 600,
+        charSet: '0123456789',
+        expiresAt: new Date(Date.now() + 600000),
+        metadata: JSON.stringify({ klassId: prefix }),
+      },
+    });
+    await post('resolve', { identifier: email });
+    await post('resolve-class', { classCode: prefix });
+    await post('password', { password: 'abcdef' });
+    const { authSessionStorage } =
+      await import('~/cookie-session-storages/authentication.server');
+    const { readOnlyImpersonationMode, impersonationModeKey } =
+      await import('~/utils/auth.server');
+    const session = await authSessionStorage.getSession(cookie);
+    session.set(impersonationModeKey, readOnlyImpersonationMode);
+    const entry = (await authSessionStorage.commitSession(session)).split(
+      ';'
+    )[0];
+    cookie = cookie
+      .split('; ')
+      .filter((c) => !c.startsWith(entry.split('=')[0] + '='))
+      .concat(entry)
+      .join('; ');
+    let blocked: unknown;
+    try {
+      await unifiedEntry(
+        new Request(url + '?continue=1', { headers: { cookie } })
+      );
+    } catch (error) {
+      blocked = error;
+    }
+    expect(blocked).toBeInstanceOf(Response);
+    expect((blocked as Response).headers.get('location')).toBe('/app');
+    expect(
+      await prisma.orgMembership.count({ where: { userId: user.id } })
+    ).toBe(0);
+    expect(
+      await prisma.invitation.count({ where: { id: invitation.id } })
+    ).toBe(1);
+    expect(
+      await prisma.orgMembership.count({
+        where: { userId: user.id, classesAsStudent: { some: { id: prefix } } },
+      })
+    ).toBe(0);
+  }
+);

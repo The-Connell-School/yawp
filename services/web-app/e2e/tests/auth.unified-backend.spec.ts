@@ -95,6 +95,9 @@ for (const width of [1280, 390])
     });
     const address = `maya${width}@yawp.local`;
     await page.goto('/auth/login?redirectTo=%2Fapp%2Fmy-classes');
+    await page.waitForFunction(() =>
+      Boolean((window as any).__reactRouterDataRouter)
+    );
     await expect(
       page.getByRole('button', { name: 'Continue with Google' })
     ).toBeDisabled();
@@ -141,6 +144,9 @@ for (const width of [1280, 390])
     });
     await page.reload(); // A fresh loader resumes only with the explicit continuation.
     await page.goto('/auth/login?continue=1');
+    await page.waitForFunction(() =>
+      Boolean((window as any).__reactRouterDataRouter)
+    );
     await page.getByLabel('Code', { exact: true }).fill(await codeFor(address));
     await page.getByRole('button', { name: 'Verify', exact: true }).click();
     await expect(page.getByRole('alert')).toHaveText(
@@ -177,6 +183,9 @@ for (const width of [1280, 390])
     expect(user.memberships[0].role).toBe('STUDENT');
     await page.context().clearCookies();
     await page.goto('/auth/login?redirectTo=%2Fapp%2Fmy-classes');
+    await page.waitForFunction(() =>
+      Boolean((window as any).__reactRouterDataRouter)
+    );
     await page.getByLabel('Email, handle, or class code').fill(address);
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(
@@ -238,5 +247,30 @@ test('flag off retains live legacy login, signup, class links, and direct callba
       await page.goto(route);
       await shot(page, `flag-off-${name}`, width);
     }
+  }
+});
+
+test('bare short and reserved handle words resolve as real class codes in the browser', async ({
+  page,
+}) => {
+  await db.setting.upsert({
+    where: { name: flag },
+    update: { value: 'true' },
+    create: { name: flag, value: 'true', valueType: 'boolean' },
+  });
+  for (const classCode of ['12', 'student']) {
+    await db.class.update({ where: { id: prefix }, data: { code: classCode } });
+    await page.goto('/auth/login');
+    await page.waitForFunction(() =>
+      Boolean((window as any).__reactRouterDataRouter)
+    );
+    await page.getByLabel('Email, handle, or class code').fill(classCode);
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Join your class' })
+    ).toBeVisible();
+    await expect(
+      page.getByText('English 11, Period 2', { exact: true })
+    ).toBeVisible();
   }
 });

@@ -4,6 +4,7 @@ import { authSessionStorage } from '~/cookie-session-storages/authentication.ser
 import {
   getSessionExpirationDateForUser,
   sessionKey,
+  getImpersonationState,
 } from '~/utils/auth.server';
 import { setMembershipId } from '~/cookies/membership-id.server';
 import {
@@ -69,6 +70,9 @@ export async function finishAuthentication(
   issueSession = true,
   selectedMembershipId?: string
 ): Promise<Response> {
+  // This continuation can mutate enrollment even when reached through GET.
+  if ((await getImpersonationState(request)).isReadOnly)
+    throw new FlowError('Read-only impersonation active.', 403);
   const membershipChosen = Boolean(selectedMembershipId);
   const user = await tx.user.findUniqueOrThrow({
     where: { id: userId },

@@ -912,7 +912,7 @@ export function UnifiedSignon({
       )
         errors.identifier =
           'That email looks incomplete. Check it and try again.';
-      else if (identifierKind(id) === 'handle-or-code') {
+      else if (id.startsWith('@')) {
         const result = validateUsername(id.replace(/^@/, ''));
         if (!result.ok) errors.identifier = result.message;
       }

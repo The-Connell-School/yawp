@@ -101,6 +101,9 @@ for (const width of [1280, 390])
       }
     );
     await page.goto('/auth/login?redirectTo=%2Fapp%2Fmy-classes');
+    await page.waitForFunction(() =>
+      Boolean((window as any).__reactRouterDataRouter)
+    );
     await page.getByRole('button', { name: 'Continue with Google' }).click();
     await expect(page.getByRole('status')).toContainText('cancelled');
     await shot(page, 'signon-04-google-cancel', width);
