@@ -25,6 +25,23 @@ async function capture(page: import('@playwright/test').Page, state: string) {
   if (!evidence) return;
   mkdirSync(evidence, { recursive: true });
   const file = `${state}-${before ? 'before' : 'impl'}.png`;
+  const viewport = page.viewportSize()!;
+  const mobileUsage =
+    viewport.width === 390 &&
+    (state === 'mobile-usage-opened' ||
+      state === 'freetier-21-dashboard-usage-opened-warning-mobile');
+  const mobileReporter =
+    viewport.width === 390 &&
+    state === 'freetier-45-reporter-not-in-free-classroom-mobile';
+  // Match the actual exported device panels, not the multi-panel canvas:
+  // board 23 grows to 1283.59px; board 46 is the 844px minimum height.
+  if (mobileUsage || mobileReporter) {
+    await page.setViewportSize({
+      width: 390,
+      height: mobileUsage ? 1284 : 844,
+    });
+    if (mobileUsage && !before) await assertMobileUsage(page);
+  }
   if (state.startsWith('paid-lesson-planner')) {
     await page
       .getByRole('textbox', { name: 'Message the Lesson Planner' })
@@ -46,6 +63,37 @@ async function capture(page: import('@playwright/test').Page, state: string) {
         'isolated local-dev free account; lifetime quota rows; no external providers',
     }) + '\n'
   );
+  if (mobileUsage || mobileReporter) await page.setViewportSize(viewport);
+}
+
+async function assertMobileUsage(page: import('@playwright/test').Page) {
+  const sheet = page.getByRole('dialog', { name: 'Usage', exact: true });
+  await expect(sheet).toHaveCSS('position', 'fixed');
+  await expect(sheet).toHaveCSS('border-top-left-radius', '16px');
+  await expect
+    .poll(async () => {
+      const box = await sheet.boundingBox();
+      return (
+        box && {
+          x: Math.round(box.x),
+          width: Math.round(box.width),
+          bottom: Math.round(box.y + box.height),
+        }
+      );
+    })
+    .toEqual({ x: 0, width: 390, bottom: page.viewportSize()!.height });
+  await expect(page.locator('.free-usage-overlay')).toBeVisible();
+  await expect(
+    sheet.getByRole('button', { name: 'Close', exact: true })
+  ).toBeVisible();
+  // The drawer must be closed behind the modal, leaving the dashboard dimmed.
+  await expect
+    .poll(async () => (await page.locator('nav').boundingBox())!.x)
+    .toBeLessThan(0);
+  await page.keyboard.press('Tab');
+  await expect
+    .poll(() => sheet.evaluate((el) => el.contains(document.activeElement)))
+    .toBe(true);
 }
 
 test.describe.configure({ mode: 'serial' });
@@ -187,6 +235,7 @@ for (const width of [1440, 390]) {
         await expect(page.getByRole('dialog', { name: 'Usage' })).toContainText(
           '3 of 12 · 9 left'
         );
+        if (width === 390) await assertMobileUsage(page);
         await capture(
           page,
           width === 1440
@@ -194,7 +243,27 @@ for (const width of [1440, 390]) {
             : 'mobile-usage-opened'
         );
         await page.keyboard.press('Escape');
-        await expect(usage).toBeFocused();
+        await expect(
+          width === 390
+            ? page.getByRole('button', { name: 'Open app navigation' })
+            : usage
+        ).toBeFocused();
+        if (width === 390) {
+          await page
+            .getByRole('button', { name: 'Open app navigation' })
+            .click();
+          await usage.click();
+          await page
+            .getByRole('dialog', { name: 'Usage' })
+            .getByRole('button', { name: 'Close', exact: true })
+            .click();
+          await expect(page.getByRole('dialog', { name: 'Usage' })).toHaveCount(
+            0
+          );
+          await expect(
+            page.getByRole('button', { name: 'Open app navigation' })
+          ).toBeFocused();
+        }
       }
       for (const [route, board] of [
         ['/app/my-classes', 'freetier-25-my-classes-my-classes'],
@@ -300,6 +369,27 @@ for (const width of [1440, 390]) {
         }
         if (!before && route === '/app/reporter') {
           await expect(page.getByTestId('free-reporter-locked')).toBeVisible();
+          const card = page.getByTestId('free-reporter-card');
+          await expect(card).toHaveCSS('border-radius', '12px');
+          await expect(card).toHaveCSS('align-items', 'flex-start');
+          await expect(card).toHaveCSS('text-align', 'left');
+          const header = page
+            .getByTestId('free-reporter-locked')
+            .getByRole('heading', { name: 'Reporter', exact: true });
+          const headerBox = (await header.boundingBox())!;
+          const cardBox = (await card.boundingBox())!;
+          expect(
+            cardBox.y - (headerBox.y + headerBox.height)
+          ).toBeLessThanOrEqual(50);
+          expect(cardBox.x).toBeCloseTo(headerBox.x, 0);
+          await expect(card.getByTestId('reporter-lock-badge')).toHaveCSS(
+            'border-radius',
+            '9999px'
+          );
+          await expect(card.locator('li svg')).toHaveCount(2);
+          await expect(
+            card.getByRole('link', { name: 'Talk to us' })
+          ).toHaveCSS('border-radius', '9999px');
           await expect(page.getByRole('textbox')).toHaveCount(0);
           const response = await page.request.post('/api/domain/reporter', {
             data: {},
@@ -399,11 +489,27 @@ for (const width of [1440, 390]) {
             .getByRole('button', { name: 'Open app navigation' })
             .click();
         await page.getByRole('button', { name: 'Usage', exact: true }).click();
+        if (width === 390) {
+          await assertMobileUsage(page);
+          await expect(
+            page.getByRole('dialog', { name: 'Usage' })
+          ).toContainText('3 of 3 · none left');
+        }
         await capture(
           page,
           `freetier-21-dashboard-usage-opened-warning${width === 390 ? '-mobile' : ''}`
         );
-        await page.keyboard.press('Escape');
+        if (width === 390) {
+          await page
+            .locator('.free-usage-overlay')
+            .click({ position: { x: 10, y: 10 } });
+          await expect(page.getByRole('dialog', { name: 'Usage' })).toHaveCount(
+            0
+          );
+          await expect(
+            page.getByRole('button', { name: 'Open app navigation' })
+          ).toBeFocused();
+        } else await page.keyboard.press('Escape');
       }
       if (assignment?.assignment.assignmentTypeId) {
         const type = await db.assignmentType.findUniqueOrThrow({

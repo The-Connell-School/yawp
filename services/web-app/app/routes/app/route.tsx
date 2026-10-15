@@ -18,7 +18,7 @@ import {
   useRouteLoaderData,
 } from 'react-router';
 import { Settings2, Cog, Microscope, Lock } from 'lucide-react';
-import { useCallback, useEffect, useState, createContext } from 'react';
+import { useCallback, useEffect, useState, useRef, createContext } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import {
   DoubleArrowLeftIcon,
@@ -229,6 +229,7 @@ export default function Route() {
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
   const isReadOnlyImpersonation = rootData?.impersonation?.isReadOnly ?? false;
+  const mobileNavTrigger = useRef<HTMLButtonElement>(null);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -418,6 +419,9 @@ export default function Route() {
             <FreeAccountUsagePopover
               usage={freeAccountUsage}
               expanded={navExpanded}
+              isMobile={isMobile}
+              onMobileOpen={() => setIsMobileNavOpen(false)}
+              onMobileClose={() => mobileNavTrigger.current?.focus()}
             />
           )}
           <Popover>
@@ -549,6 +553,7 @@ export default function Route() {
           <Button
             variant="outline"
             size="icon"
+            ref={mobileNavTrigger}
             aria-label="Open app navigation"
             onClick={() => setIsMobileNavOpen(true)}
           >

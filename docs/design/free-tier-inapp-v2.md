@@ -59,3 +59,24 @@ bucket rows in `finally`. No hosted preview, AI call or mail call is needed.
 
 Ship Review must inspect the screenshot manifest and the v2 side-by-side
 artboards, verify paid and flag-off controls, and confirm CI before approval.
+
+## Ship Review corrections
+
+The Reporter locked presentation uses the v2 card immediately below its header:
+24px top spacing, 28px card padding, a circular lock badge, left-aligned benefit
+rows with icons, and a rounded action. Approved paid-plan wording and the
+existing Reporter API entitlement denial remain in place.
+
+Mobile Usage uses the existing modal Sheet primitive at the bottom of the
+viewport, with full width, 16px top corners, a dimmed dashboard, and an explicit
+close control. Opening it closes the navigation drawer. Escape, the close control,
+and the overlay dismiss it and return focus to the visible navigation opener.
+Desktop Usage retains the existing popover and restores focus to its trigger.
+
+Focused in-app browser checks cover those layouts, ordinary and exhausted Usage,
+modal focus containment, all three mobile dismissal methods, and the Reporter
+API denial. Evidence uses the exported device panel dimensions: Usage at
+390×1284 (board 23's measured content height is 1283.59px), Reporter at 390×844
+(board 46), and the existing desktop 1440×1000 viewport. The screenshot manifest
+records each capture's actual dimensions; the implementation comparisons preserve
+natural screenshot sizes rather than stretching the device viewport to the export.
