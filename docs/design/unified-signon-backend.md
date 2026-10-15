@@ -156,3 +156,48 @@ The broad migration diff has 28 unrelated statements matching the origin/main
 baseline exactly; the new tables' columns/indexes are checked against real Postgres.
 See `checks/migration-drift.json` for the comparison. This evidence does not claim
 that the repository's pre-existing global schema drift is resolved.
+
+
+## Review correction: passwordless teacher location selection
+
+The driver's P2 rejection of PR #560 at `69c23422` reproduced a missing
+combination: an existing passwordless identity with a teacher invitation requiring
+location selection. The continuation attempted a new user insert and failed on
+its existing email. This correction updates the proved identity, retains its user
+and membership IDs and existing location relations, and adds the authorized teacher
+location grant in the same transaction. Unrelated memberships remain unchanged.
+The original flow destination reaches authentication routing unchanged.
+
+The invitation now remains stored through selection and is consumed only when
+activation and the grant succeed. Completion locks and rechecks the resolved
+identity, verifies the still-current invitation and organization, rejects a foreign
+location and refuses to overwrite credentials established after proof. Expired or
+revoked invitations and changed email ownership cause no partial writes. The
+existing Google new-account path and legacy selector rendering are retained.
+
+Fresh correction validation: 37 database scenarios / 223 assertions; 31 focused
+policy, Google and flag-dispatch tests / 93 assertions; project typecheck with
+`NODE_OPTIONS=--max-old-space-size=4096`; and six actual-handler Playwright scenarios
+at one worker pass. The latter include desktop/mobile existing teacher activation,
+desktop/mobile signup/reset, flag-off compatibility, and class-code resolution.
+Prisma validate/status pass against the fresh 174-migration local database. This
+correction adds no migration. Earlier broader results above describe the original
+implementation and are retained as historical evidence.
+
+[Correction comparisons and check metadata](evidence/unified-signon-backend/teacher-activation-fix/)
+include the actual failing desktop selector before the correction and successful
+arrival at the retained destination afterward. Full local evidence and logs:
+`shots/di-signon-backend/activation-fix/`. Four desktop/mobile artboard comparisons
+cover activation and location selection; six fresh flag-off images are pixel
+identical to the prior implementation. The existing legacy location selector has
+no dedicated unified artboard: signon-15 is shown as the nearest name/password
+reference, with its existing location field, layout and copy explicitly retained.
+The actual activation screen is compared with signon-23/24. Real test identifiers,
+existing logo rendering and existing validator-policy deviations remain visible.
+
+The earlier Ship Review approval is superseded by the driver's rejection. The
+required P2 fix is ready for repeat driver Ship Review and fresh exact-head CI;
+this builder does not claim a new independent approval or merge. The driver must
+arrange the RDS snapshot before any production migration. Unified sign-on remains
+default OFF; no demo/production flag changes, remote migration, external email,
+live OAuth, hosted QA, preview or deployment was performed.

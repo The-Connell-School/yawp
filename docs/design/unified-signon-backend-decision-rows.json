@@ -183,7 +183,9 @@
       ],
       "assertions": [
         "invitation email proof supplies student class context",
-        "teacher invitations with multiple schools"
+        "teacher invitations with multiple schools",
+        "existing passwordless teacher activates through the multi-location selector with original user and membership IDs, retained memberships and safe destination",
+        "location grant and invitation consumption commit atomically; invalid location, expired/revoked invitation, reassigned identity or newly established credentials cause no partial writes"
       ]
     },
     {
