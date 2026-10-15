@@ -257,11 +257,20 @@ export default function FreeTierLandingRoute() {
             </p>
           ) : null}
           {fetcher.data?.ok === false &&
+          fetcher.data.error === 'cap_reached' ? (
+            <p className="text-sm text-destructive">
+              This free classroom event is full.
+            </p>
+          ) : null}
+          {fetcher.data?.ok === false &&
           fetcher.data.error === 'budget_exceeded' ? (
             <p className="text-sm text-destructive">
-              This free classroom event is full. Join the waitlist and we will
-              follow up.
+              This event link is paused because the current free-tier budget has been reached.
             </p>
+          ) : null}
+          {fetcher.data?.ok === false &&
+          (fetcher.data.error === 'cap_reached' || fetcher.data.error === 'budget_exceeded') ? (
+            <a href="/free" className="text-sm underline">Join the waitlist</a>
           ) : null}
           <FreeTierButton type="submit">
             {data.mode === 'token' ? 'Continue' : 'Join the waitlist'}

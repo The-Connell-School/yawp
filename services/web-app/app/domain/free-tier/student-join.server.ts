@@ -21,6 +21,10 @@ import {
 } from './prisma-username-conflict';
 import { evaluateTeacherResetHandleStudentEligibility } from './teacher-reset-handle-student';
 import { generateStudentJoinToken } from '~/utils/student-join-token';
+import {
+  assertFreeTierSpendAllowed,
+  FreeTierSpendGuardDeniedError,
+} from './usage-budget.server';
 
 export type FreeTierClassSummary = {
   id: string;
@@ -170,6 +174,16 @@ export async function registerFreeTierStudent({
         organizationId: klass.school.organizationId,
       });
       throwIfSeatCheckFailed(seat);
+      try {
+        await assertFreeTierSpendAllowed(tx);
+      } catch (error) {
+        if (error instanceof FreeTierSpendGuardDeniedError) {
+          throw Object.assign(new Error('budget_exceeded'), {
+            code: 'FREE_TIER_BUDGET_EXCEEDED',
+          });
+        }
+        throw error;
+      }
 
       const takenInTx = await tx.user.findFirst({
         where: { username: usernameResult.username },
@@ -218,6 +232,18 @@ export async function registerFreeTierStudent({
         status: 'error' as const,
         field: 'classId' as const,
         error: error.message,
+        formLevel: true as const,
+      };
+    }
+    if (
+      error &&
+      typeof error === 'object' &&
+      (error as { code?: string }).code === 'FREE_TIER_BUDGET_EXCEEDED'
+    ) {
+      return {
+        status: 'error' as const,
+        field: 'classId' as const,
+        error: 'This free classroom is not accepting new students right now.',
         formLevel: true as const,
       };
     }

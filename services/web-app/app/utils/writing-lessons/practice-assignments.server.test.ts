@@ -5,6 +5,7 @@ const writingPracticeAttempt = { create: mock() };
 const writingPracticeClassAssignment = { findMany: mock(), findFirst: mock() };
 const writingPracticePromptSet = { findUnique: mock(), create: mock() };
 const getLLMCompletion = mock();
+mock.module('~/utils/ai-admission.server', () => ({ assertAiFreeTierSpendAllowed: async () => {} }));
 
 mock.module('~/utils/db.server', () => ({
   prisma: {
@@ -343,6 +344,7 @@ describe('getOrCreateStudentPracticeSet', () => {
     });
 
     const items = await getOrCreateStudentPracticeSet({
+      organizationId: 'org-1',
       classAssignmentId: 'ca-1',
       membershipId: 'student-1',
       lessonSlugs: ['fixing-comma-splices'],
@@ -382,6 +384,7 @@ describe('getOrCreateStudentPracticeSet', () => {
     );
 
     const items = await getOrCreateStudentPracticeSet({
+      organizationId: 'org-1',
       classAssignmentId: 'ca-1',
       membershipId: 'student-1',
       lessonSlugs: ['fixing-comma-splices'],

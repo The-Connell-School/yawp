@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 const submitWaitlist = mock();
 const count = mock();
 const redeemToken = mock(
-  async (): Promise<{ ok: boolean; reason?: 'invalid' | 'budget_exceeded'; bypassWaitlist?: boolean }> => ({
+  async (): Promise<{ ok: boolean; reason?: 'invalid' | 'budget_exceeded' | 'cap_reached'; bypassWaitlist?: boolean }> => ({
     ok: false,
     reason: 'invalid',
   })
@@ -147,6 +147,25 @@ describe('free._index action', () => {
     } as never);
 
     expect(result).toEqual({ ok: false, error: 'budget_exceeded' });
+    expect(sendReleaseEmailsForApplicationIds).not.toHaveBeenCalled();
+  });  test('bypass event token cap-full failure does not send a release email', async () => {
+    redeemToken.mockResolvedValueOnce({ ok: false, reason: 'cap_reached' });
+    const form = new FormData();
+    form.set('intent', 'redeem');
+    form.set('token', 'bypass-code');
+    form.set('name', 'Invited');
+    form.set('email', 'invited@school.example');
+    form.set('schoolName', 'School');
+    form.set('location', 'Here');
+    form.set('gradeLevel', '10');
+
+    const result = await action({
+      request: new Request('https://yawp.test/free?t=bypass-code', { method: 'POST', body: form }),
+      params: {},
+      context: {},
+    } as never);
+
+    expect(result).toEqual({ ok: false, error: 'cap_reached' });
     expect(sendReleaseEmailsForApplicationIds).not.toHaveBeenCalled();
   });
 });

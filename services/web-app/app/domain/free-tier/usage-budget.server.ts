@@ -17,6 +17,13 @@ export class FreeTierBudgetExceededError extends Error {
   }
 }
 
+export class FreeTierSpendGuardDeniedError extends Error {
+  constructor(readonly summary: FreeTierUsageSummary) {
+    super('Free-tier spend is paused because the budget is exhausted.');
+    this.name = 'FreeTierSpendGuardDeniedError';
+  }
+}
+
 export type FreeTierBudgetEnvironment = 'demo' | 'production' | 'preview';
 
 export type FreeTierBudgetBasis = {
@@ -133,6 +140,17 @@ export async function assertFreeTierBudgetHeadroom(
   );
   if (after.overBudget) throw new FreeTierBudgetExceededError(after);
   return after;
+}
+
+export async function assertFreeTierSpendAllowed(
+  client: Pick<Prisma.TransactionClient, 'freeTierApplication'> = prisma,
+  env: Env = process.env
+) {
+  const current = await readFreeTierUsageSummary(client, env);
+  if (current.overBudget || freeTierBudgetRemainingActivations(current) <= 0) {
+    throw new FreeTierSpendGuardDeniedError(current);
+  }
+  return current;
 }
 
 export async function assertFreeTierBudgetHeadroomForTransition(

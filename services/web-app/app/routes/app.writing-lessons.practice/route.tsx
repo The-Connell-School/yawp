@@ -33,7 +33,9 @@ import {
   type QuickWritingPracticePrompt,
 } from '~/utils/writing-lessons/static-lessons.server';
 import {
+  AiFreeTierBudgetExceededError,
   AiRateLimitError,
+  aiFreeTierBudgetExceededMessage,
   reserveAiRequest,
 } from '~/utils/ai-admission.server';
 
@@ -197,6 +199,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
       });
       sequence = await buildTopicSequence(skills, count, topic);
     } catch (error) {
+      if (error instanceof AiFreeTierBudgetExceededError) {
+        return dataResponse(
+          {
+            error: 'free_tier_budget_exceeded',
+            message: aiFreeTierBudgetExceededMessage(),
+          },
+          { status: 402 }
+        );
+      }
       // Degrade to fallback prompts per composition skill — never crash
       const fallback = skills
         .map((slug) => {
@@ -244,7 +255,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
         policy: PRACTICE_GEN_POLICY,
       });
       sequence = (await buildMixedGeneratedPracticeSequence(skills, count)).items;
-    } catch {
+    } catch (error) {
+      if (error instanceof AiFreeTierBudgetExceededError) {
+        return dataResponse(
+          {
+            error: 'free_tier_budget_exceeded',
+            message: aiFreeTierBudgetExceededMessage(),
+          },
+          { status: 402 }
+        );
+      }
       // Degrade to static bank: ACT from offline bank + composition from static prompts
       const grammarSlugs = skills.filter((s) => !isComposition(s));
       const compositionSlugs = skills.filter(isComposition);
@@ -360,6 +380,17 @@ export async function action({ request }: ActionFunctionArgs) {
         policy: COMPOSITION_ADMISSION_POLICY,
       });
     } catch (error) {
+      if (error instanceof AiFreeTierBudgetExceededError) {
+        return dataResponse(
+          {
+            intent: 'check-rewrite' as const,
+            questionId: String(formData.get('questionId') ?? ''),
+            error: 'free_tier_budget_exceeded',
+            message: aiFreeTierBudgetExceededMessage(),
+          },
+          { status: 402 }
+        );
+      }
       if (error instanceof AiRateLimitError) {
         return dataResponse(
           {
@@ -438,6 +469,24 @@ export async function action({ request }: ActionFunctionArgs) {
         policy: COMPOSITION_ADMISSION_POLICY,
       });
     } catch (error) {
+      if (error instanceof AiFreeTierBudgetExceededError) {
+        return dataResponse(
+          {
+            kind: 'composition',
+            position: safePosition,
+            feedback: {
+              status: 'needs_revision',
+              summary: aiFreeTierBudgetExceededMessage(),
+              degraded: false,
+              strengths: [],
+              focus: [],
+              encouragement: '',
+            } as any,
+            recorded: false,
+          },
+          { status: 402 }
+        );
+      }
       if (error instanceof AiRateLimitError) {
         return dataResponse(
           {
@@ -484,6 +533,26 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function WritingPracticeSessionRoute() {
+  const loaderData = useLoaderData<typeof loader>();
+
+  if ('error' in loaderData) {
+    return (
+      <PracticeRunner
+        eyebrow="Your practice"
+        title="Practice paused"
+        instructions={loaderData.message}
+        problemCount={0}
+        items={[]}
+        hasComposition={false}
+        backTo="/app/writing-lessons"
+        backLabel="Back to practice"
+        reviewFrom="/app/writing-lessons"
+        lessonRecaps={[]}
+        emptyMessage={loaderData.message}
+      />
+    );
+  }
+
   const {
     title,
     skillTitles,
@@ -494,7 +563,7 @@ export default function WritingPracticeSessionRoute() {
     topicDeclined,
     sessionPath,
     lessonRecaps,
-  } = useLoaderData<typeof loader>();
+  } = loaderData;
 
   return (
     <PracticeRunner

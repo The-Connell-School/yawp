@@ -15,6 +15,7 @@ const prisma = {
 const resolveAssignmentTypeGradingConfig = mock();
 const generateClassInsight = mock();
 const reserveAiRequest = mock();
+class AiFreeTierBudgetExceededError extends Error {}
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module(
@@ -26,7 +27,10 @@ mock.module('./class-insight-synthesis.server', () => ({
 }));
 mock.module('~/utils/ai-admission.server', () => ({
   reserveAiRequest,
+  AiFreeTierBudgetExceededError,
   AiRateLimitError: class AiRateLimitError extends Error {},
+  aiFreeTierBudgetExceededMessage: () =>
+    'AI tools are paused because this free-tier environment has reached its current budget.',
 }));
 
 // bun's mock.module is global to the whole test run and mock.restore() does not
@@ -257,6 +261,26 @@ describe('generateClassAssignmentInsight rubric scoping', () => {
       coldWrite: false,
       grammarGraded: null,
     });
+  });
+
+  test('denies class insight generation when the free-tier AI budget is exhausted', async () => {
+    reserveAiRequest.mockRejectedValueOnce(new AiFreeTierBudgetExceededError());
+
+    const result = await generateClassAssignmentInsight({
+      classAssignmentId: 'ca-1',
+      organizationId: 'org-1',
+      generatedByMembershipId: 'teacher-1',
+    });
+
+    expect(result).toEqual({
+      success: false,
+      status: 402,
+      message:
+        'AI tools are paused because this free-tier environment has reached its current budget.',
+    });
+    expect(generateClassInsight).not.toHaveBeenCalled();
+    expect(prisma.classAssignmentInsight.upsert).not.toHaveBeenCalled();
+    expect(prisma.classAssignmentInsight.create).not.toHaveBeenCalled();
   });
 
   /**

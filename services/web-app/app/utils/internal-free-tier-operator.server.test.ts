@@ -245,4 +245,52 @@ describe('free-tier operator HTTP', () => {
       result: 'authorized',
     });
   });
+
+  test('release batch budget denial records an operator audit row', async () => {
+    const { FreeTierBudgetExceededError } = await import(
+      '~/domain/free-tier/usage-budget.server'
+    );
+    mock.module('~/domain/free-tier/service.server', () => ({
+      releaseBatch: async () => {
+        throw new FreeTierBudgetExceededError({
+          environment: 'production',
+          budgetUsd: 10,
+          unitCostUsd: 5,
+          activeApplications: 3,
+          spendUsd: 15,
+          remainingUsd: 0,
+          percentUsed: 100,
+          overBudget: true,
+        });
+      },
+      releaseBatchSchema: {
+        parse: (v: unknown) => v,
+      },
+      createAcquisitionTokens: async () => [],
+      listAcquisitionTokensWithStats: async () => [],
+      getFreeTierReleaseCap: () => 100,
+      tokenCreateSchema: { parse: (v: unknown) => v },
+      tokenPatchSchema: { parse: (v: unknown) => v },
+      patchAcquisitionToken: async () => ({}),
+      setAcquisitionTokenDisabled: async () => ({}),
+    }));
+    const { releaseBatchHttp } = await import('./internal-free-tier-http.server');
+    const body = JSON.stringify({ applicationIds: ['app-1'] });
+    const request = await sign('POST', 'https://yawp.test/api/internal/v1/free-tier/release', body);
+    request.headers.set('content-type', 'application/json');
+    const res = await releaseBatchHttp(request);
+    expect(res.status).toBe(402);
+    expect(auditCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        actorEmail: 'operator@yawp.school',
+        actorUserId: 'internal-api:writer',
+        action: 'waitlist.release.denied',
+        result: 'denied',
+        metadata: expect.objectContaining({
+          reason: 'budget_exceeded',
+          budget: expect.objectContaining({ environment: 'production' }),
+        }),
+      }),
+    });
+  });
 });

@@ -50,6 +50,7 @@ class AiRateLimitError extends Error {
     super('rate limited');
   }
 }
+class AiFreeTierBudgetExceededError extends Error {}
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/grading-auth.server', () => ({
@@ -60,7 +61,10 @@ mock.module('~/utils/getLLMCompletion/getLLMCompletion', () => ({
   getLLMCompletion,
 }));
 mock.module('~/utils/ai-admission.server', () => ({
+  AiFreeTierBudgetExceededError,
   AiRateLimitError,
+  aiFreeTierBudgetExceededMessage: () =>
+    'AI tools are paused because this free-tier environment has reached its current budget.',
   reserveAiRequest,
 }));
 

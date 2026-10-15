@@ -1,10 +1,16 @@
-import { recordTesterAudit, type TesterAuditActor } from '~/domain/free-tier/tester-audit.server';
+import {
+  recordFreeTierCapDenialAudit,
+  recordTesterAudit,
+  type TesterAuditActor,
+} from '~/domain/free-tier/tester-audit.server';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import {
   authenticateInternalManagementRequest,
   type InternalApiAuthContext,
+  INTERNAL_API_HEADER_ACTOR,
+  INTERNAL_API_HEADER_KEY_ID,
   INTERNAL_API_HEADER_SIGNATURE,
   recordInternalPlatformWriteAudit,
 } from '~/utils/internal-platform-auth.server';
@@ -52,6 +58,16 @@ function budgetExceededResponse(error: FreeTierBudgetExceededError) {
   );
 }
 
+function auditActorFromInternalRequest(request: Request, action: string): TesterAuditActor {
+  const signedActor = request.headers.get(INTERNAL_API_HEADER_ACTOR)?.trim().toLowerCase();
+  const signedKeyId = request.headers.get(INTERNAL_API_HEADER_KEY_ID)?.trim();
+  return {
+    actorUserId: signedKeyId ? `internal-api:${signedKeyId}` : 'internal-api:legacy',
+    actorEmail: signedActor || 'legacy@yawp.internal',
+    environment: 'internal-api',
+    action,
+  };
+}
 /**
  * The management-key check every internal endpoint shares (free tier, feature
  * flags). Returns a response to send back when the request is not allowed.
@@ -347,7 +363,7 @@ export async function releaseBatchHttp(request: Request) {
   let body: any; try { body = JSON.parse(text); } catch { return response({ error: 'Malformed JSON' }, 400); }
   try {
     const parsed = releaseBatchSchema.parse(body);
-    const result = await releaseBatch(parsed);
+    const result = await releaseBatch(parsed, auditActorFromInternalRequest(request, 'waitlist.release'));
     if (result.released > 0) {
       const leads = await prisma.freeTierApplication.findMany({
         where: { id: { in: parsed.applicationIds }, status: 'INVITED' },
@@ -360,7 +376,15 @@ export async function releaseBatchHttp(request: Request) {
     }
     return response(result);
   } catch (error) {
-    if (error instanceof FreeTierBudgetExceededError) return budgetExceededResponse(error);
+    if (error instanceof FreeTierBudgetExceededError) {
+      await recordFreeTierCapDenialAudit(
+        prisma,
+        auditActorFromInternalRequest(request, 'waitlist.release.denied'),
+        null,
+        { reason: 'budget_exceeded', budget: error.summary }
+      );
+      return budgetExceededResponse(error);
+    }
     return response({ error: 'Invalid input' }, 400);
   }
 }
@@ -697,6 +721,22 @@ async function transition(args: {
         to: { status: args.to, releasedAt: app.releasedAt },
       });
       if (!headroom.ok) {
+        await recordFreeTierCapDenialAudit(
+          tx,
+          args.audit ?? {
+            actorUserId: `operator:${args.decidedByEmail}`,
+            actorEmail: args.decidedByEmail,
+            environment: 'operator',
+            action: 'approval.approve.denied',
+          },
+          args.id,
+          {
+            reason: headroom.reason,
+            previousStatus: app.status,
+            requestedStatus: args.to,
+            ...(headroom.budget ? { budget: headroom.budget } : {}),
+          }
+        );
         return {
           status: headroom.budget ? 402 as const : 409 as const,
           payload: headroom.budget
@@ -868,6 +908,22 @@ export async function reopenApplication(args: { id: string; decidedByEmail: stri
         to: { status: 'MANUAL_REVIEW', releasedAt: app.releasedAt },
       });
       if (!headroom.ok) {
+        await recordFreeTierCapDenialAudit(
+          tx,
+          args.audit ?? {
+            actorUserId: `operator:${args.decidedByEmail}`,
+            actorEmail: args.decidedByEmail,
+            environment: 'operator',
+            action: 'approval.reopen.denied',
+          },
+          id,
+          {
+            reason: headroom.reason,
+            previousStatus: app.status,
+            requestedStatus: 'MANUAL_REVIEW',
+            ...(headroom.budget ? { budget: headroom.budget } : {}),
+          }
+        );
         return {
           status: headroom.budget ? 402 as const : 409 as const,
           payload: headroom.budget
