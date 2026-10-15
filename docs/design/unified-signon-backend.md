@@ -233,3 +233,21 @@ are committed; full local captures/logs are in `shots/di-signon-backend/ci-follo
 The APPROVE at `7616f025` is historical; the changed head requires repeat driver
 Ship Review and passing exact-head GitHub checks. No new independent approval is
 claimed. The driver handles merge and the RDS snapshot before any production migration.
+
+
+The first follow-up CI at `94d81a14` passed the broad browser suite and all six
+real-handler sign-on cases, including the original mobile reset failure. It then
+exposed the corresponding readiness gap after the mocked Google cancellation
+callback. The corrected artifact path captured its trace: the continuation GET
+rendered the cancellation message, but the test's retry click sent no request.
+A slow-client local regression reproduced the same missing password heading.
+
+The mocked-provider test now waits for the new client after both cancelled and
+successful callback reloads. Its script-latency interceptor delegates through
+`route.fallback`, retaining the provider mock and preventing live provider calls.
+Both desktop/mobile slow-client cases and fresh typecheck pass; all heading,
+linking, membership ownership, identity-count and destination assertions and
+existing timeouts remain. Four additional callback/proof comparisons and the CI
+before screenshot are in the [Google callback evidence](evidence/unified-signon-backend/ci-followup/google-callback/).
+There are still no application, schema, flag-default or rendered changes. Final
+exact-head CI and repeat driver Ship Review are required for merge.

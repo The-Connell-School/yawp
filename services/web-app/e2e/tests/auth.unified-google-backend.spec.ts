@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Route } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
 import bcrypt from 'bcryptjs';
 import fs from 'node:fs';
@@ -104,14 +104,29 @@ for (const width of [1280, 390])
     await page.waitForFunction(() =>
       Boolean((window as any).__reactRouterDataRouter)
     );
+    // Both provider cancellation and success reload the application document.
+    // Keep the provider mock active while exercising slow callback hydration.
+    const delayCallbackScripts = async (route: Route) => {
+      if (route.request().resourceType() === 'script')
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      await route.fallback();
+    };
+    await page.route('**/*', delayCallbackScripts);
     await page.getByRole('button', { name: 'Continue with Google' }).click();
     await expect(page.getByRole('status')).toContainText('cancelled');
+    await page.waitForFunction(() =>
+      Boolean((window as any).__reactRouterDataRouter)
+    );
     await shot(page, 'signon-04-google-cancel', width);
     cancel = false;
     await page.getByRole('button', { name: 'Continue with Google' }).click();
     await expect(
       page.getByRole('heading', { name: 'Enter your password' })
     ).toBeVisible();
+    await page.waitForFunction(() =>
+      Boolean((window as any).__reactRouterDataRouter)
+    );
+    await page.unroute('**/*', delayCallbackScripts);
     await shot(page, 'signon-05-google-account-proof', width);
     await page.getByLabel('Password', { exact: true }).fill('local-password');
     await page.getByRole('button', { name: 'Log In', exact: true }).click();

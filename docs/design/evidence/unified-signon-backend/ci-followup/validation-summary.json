@@ -28,5 +28,14 @@
     "exceptions": "Retain existing validator policy (6 characters), real local fixture data, logo rendering and legacy location selector exceptions."
   },
   "review": "Ship Review APPROVE at 7616f025 remains historical. New head requires repeat driver Ship Review; builder checklist completed, no independent approval claimed.",
-  "remote": "No remote migration, flag write, external email, live provider, credentials, preview or deployment. Unified sign-on default OFF and demo/production disabled; production free_tier remains OFF."
+  "remote": "No remote migration, flag write, external email, live provider, credentials, preview or deployment. Unified sign-on default OFF and demo/production disabled; production free_tier remains OFF.",
+  "googleCallbackFollowup": {
+    "diagnosedRun": "https://github.com/The-Connell-School/yawp/actions/runs/38819160004/job/116712812324",
+    "originalResetCI": "pass; all six real-handler cases",
+    "cause": "Cancellation continuation rendered before hydration; CI trace shows no request from the retry click. Slow-client local regression reproduces the missing password heading.",
+    "correction": "Client-readiness waits after cancelled and successful full-document callbacks; slow-client regression at both widths uses route.fallback to preserve provider interception. All assertions and timeouts retained.",
+    "validation": "Two slow-client real-handler mock-provider cases and fresh typecheck pass; no runtime or schema changes.",
+    "freshComparisons": 4,
+    "review": "Repeat independent driver Ship Review required on the final head."
+  }
 }
