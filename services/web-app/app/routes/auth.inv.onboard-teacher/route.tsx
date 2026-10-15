@@ -30,6 +30,13 @@ import { clearSchoolYearScope } from '~/cookies/school-year.server';
 import { combineHeaders } from '~/utils/misc';
 import { normalizeEmail } from '~/utils/normalize-email';
 
+const GoogleSchema = z.object({
+  name: NameSchema,
+  schoolId: z.string(),
+  password: z.string().optional(),
+  confirmPassword: z.string().optional(),
+});
+
 export const Schema = z
   .object({ name: NameSchema, schoolId: z.string() })
   .and(PasswordAndConfirmPasswordSchema);
@@ -58,23 +65,61 @@ async function requireInvitation(request: Request) {
     );
   }
 
-  return { email, organizationId };
+  let unifiedContext: { google: boolean } | null = null;
+  if (invitation.get('unifiedSignon') === true) {
+    const { legacyTeacherContext } =
+      await import('~/domain/unified-signon/legacy-continuation.server');
+    unifiedContext = await legacyTeacherContext(request, email, organizationId);
+    if (!unifiedContext)
+      throw redirect('/auth/login', {
+        headers: {
+          'set-cookie':
+            await invitationCookieStorage.destroySession(invitation),
+        },
+      });
+  }
+  return { email, organizationId, unifiedContext };
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAnonymous(request);
-  const { email, organizationId } = await requireInvitation(request);
+  const { email, organizationId, unifiedContext } =
+    await requireInvitation(request);
 
   const schools = await prisma.school.findMany({
     where: { organizationId },
     select: { id: true, name: true },
   });
 
-  return { email, organizationId, schools };
+  return {
+    email,
+    organizationId,
+    schools,
+    ...(unifiedContext ? { unifiedGoogle: unifiedContext.google } : {}),
+  };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const { email, organizationId } = await requireInvitation(request);
+  const { email, organizationId, unifiedContext } =
+    await requireInvitation(request);
+  const { completeLegacyTeacherSignup } =
+    await import('~/domain/unified-signon/legacy-continuation.server');
+  if (unifiedContext) {
+    try {
+      const values = Object.fromEntries(await request.formData()) as Record<
+        string,
+        string
+      >;
+      return await completeLegacyTeacherSignup(request, values);
+    } catch {
+      return validationError({
+        fieldErrors: {
+          schoolId:
+            'Check your details and choose a school from your invitation.',
+        },
+      });
+    }
+  }
   const { data, error } = await parseFormData(request, Schema);
   if (error) return validationError(error);
 
@@ -140,7 +185,7 @@ export default function Route() {
   const isLoading = navigation.state !== 'idle';
 
   const form = useForm({
-    schema: Schema,
+    schema: data.unifiedGoogle ? GoogleSchema : Schema,
     method: 'POST',
     defaultValues: {
       name: '',
@@ -178,18 +223,22 @@ export default function Route() {
             label: school.name,
           }))}
         />
-        <FormInput
-          scope={form.scope('password')}
-          label="Password"
-          autoComplete="new-password"
-          type="password"
-        />
-        <FormInput
-          scope={form.scope('confirmPassword')}
-          label="Confirm Password"
-          autoComplete="new-password"
-          type="password"
-        />
+        {!data.unifiedGoogle && (
+          <>
+            <FormInput
+              scope={form.scope('password')}
+              label="Password"
+              autoComplete="new-password"
+              type="password"
+            />
+            <FormInput
+              scope={form.scope('confirmPassword')}
+              label="Confirm Password"
+              autoComplete="new-password"
+              type="password"
+            />
+          </>
+        )}
         <Button
           className="h-11 w-full text-base sm:h-10 sm:text-sm"
           type="submit"

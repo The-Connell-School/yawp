@@ -60,7 +60,7 @@ export function UnifiedSignon({
   const renderedPasswordForm =
     typeof passwordForm === 'function' ? passwordForm(state) : passwordForm;
   const variant = state.variant ?? '';
-  const googleUser = variant.includes('google');
+  const googleUser = state.provider === 'google' || variant.includes('google');
   const identifier = state.identifier ?? '';
   const handleUser = identifierKind(identifier) !== 'email';
 
@@ -101,7 +101,15 @@ export function UnifiedSignon({
     });
   const reset = () => {
     setHistory([]);
-    setState({ screen: 'entry' });
+    setState(
+      state.classInfo
+        ? {
+            screen: 'class-signin',
+            classInfo: state.classInfo,
+            flowToken: state.flowToken,
+          }
+        : { screen: 'entry' }
+    );
     setValues({ identifier: '' });
   };
   const back = () => {
@@ -130,7 +138,8 @@ export function UnifiedSignon({
         { ...values, ...extra },
         { state, redirectTo }
       );
-      if ('state' in result) go(result.state);
+      if ('redirectTo' in result) window.location.assign(result.redirectTo);
+      else if ('state' in result) go(result.state);
       else setState((s) => ({ ...s, ...result }));
     } catch {
       setState((s) => ({
@@ -191,9 +200,11 @@ export function UnifiedSignon({
         )}
         {name === 'username' && variant === 'taken' && (
           <div className="signon-chips">
-            {(screen === 'class-handle'
-              ? ['maya.r', 'maya-11', 'mayawrites']
-              : ['maya_r', 'maya7', 'mayawrites']
+            {(
+              state.handleSuggestions ??
+              (screen === 'class-handle'
+                ? ['maya.r', 'maya-11', 'mayawrites']
+                : ['maya_r', 'maya7', 'mayawrites'])
             ).map((handle) => (
               <Button
                 type="button"
@@ -506,7 +517,8 @@ export function UnifiedSignon({
       break;
     case 'name-password': {
       showIdentity = true;
-      const invited = variant === 'teacher' || variant === 'admin';
+      const invited =
+        variant.startsWith('teacher') || variant.startsWith('admin');
       title =
         variant === 'reset'
           ? 'Set a new password'
@@ -516,7 +528,7 @@ export function UnifiedSignon({
               ? 'Confirm your name'
               : 'Create your account';
       subtitle = invited
-        ? `[Lincoln High School] invited you ${variant === 'teacher' ? 'to teach' : 'as school admin'}.`
+        ? `${state.organizationName ?? 'Your organization'} invited you ${variant.startsWith('teacher') ? 'to teach' : 'as school admin'}.`
         : undefined;
       body = (
         <>
@@ -619,7 +631,9 @@ export function UnifiedSignon({
         ],
         sent: [
           'Waiting on your administrator',
-          'Sent to [Admin name] on [Oct 14].',
+          state.adminName && state.sentDate
+            ? `Sent to ${state.adminName} on ${state.sentDate}.`
+            : 'Waiting for your administrator to respond.',
         ],
         review: [
           "We're reviewing your request",
@@ -627,7 +641,9 @@ export function UnifiedSignon({
         ],
         rejected: [
           'Request not approved',
-          '[Admin name] declined your free trial.',
+          state.adminName
+            ? `${state.adminName} declined your free trial.`
+            : 'Your free trial was not approved.',
         ],
         expired: ['Your invite expired', 'Email support for a new link.'],
       };
@@ -682,7 +698,9 @@ export function UnifiedSignon({
                 ? 'This account has no password yet.'
                 : variant === 'expired'
                   ? 'Ask your school admin to invite you again.'
-                  : '[Lincoln High School] invited you. Finish with a code by email.'}
+                  : state.organizationName
+                    ? `${state.organizationName} invited you. Finish with a code by email.`
+                    : 'Finish with a code by email.'}
             </p>
             {variant !== 'expired' && primary('Email me a code', 'send-code')}
           </>
@@ -827,7 +845,7 @@ export function UnifiedSignon({
           {choice(
             "Yes, it's a class code",
             `Join ${state.classInfo?.name ?? 'your class'}`,
-            () => go({ screen: 'class-found', classInfo: state.classInfo })
+            () => void run('resolve-class', { classCode: identifier })
           )}
           {choice(
             "No, it's my handle",
@@ -894,7 +912,7 @@ export function UnifiedSignon({
       )
         errors.identifier =
           'That email looks incomplete. Check it and try again.';
-      else if (identifierKind(id) === 'handle-or-code') {
+      else if (id.startsWith('@')) {
         const result = validateUsername(id.replace(/^@/, ''));
         if (!result.ok) errors.identifier = result.message;
       }

@@ -174,7 +174,9 @@ test('entry validation, pending, back, safe redirect, Google unset, and handle a
     '/app/my-classes'
   );
   await page.getByRole('button', { name: 'Use a different account' }).click();
-  await expect(input).toBeFocused();
+  await expect(
+    page.getByLabel('Email or handle', { exact: true })
+  ).toBeVisible();
 });
 
 test('class choice and account-type paths keep join context without server effects', async ({

@@ -629,3 +629,6 @@ for (const fixture of signonFixtures)
   fixture.initialValues = (
     designInputs as Record<string, Record<string, string>>
   )[fixture.id];
+
+// Reference placeholders remain isolated from deployed identity responses.
+for (const fixture of signonFixtures) Object.assign(fixture.state, { organizationName: '[Lincoln High School]', adminName: '[Admin name]', sentDate: '[Oct 14]' });

@@ -60,6 +60,14 @@ export async function sendEmail(options: SendEmailOptions) {
 		text: content.text,
 	}
 
+  // Opt-in capture for isolated local authentication QA. Intercept at the
+  // existing abstraction so invitation/approval helpers cannot send externally.
+  if (process.env.SIGNON_MAIL_CAPTURE_DIR) {
+    const { captureLocalEmail } = await import('./local-email-capture.server');
+    await captureLocalEmail(email);
+    return { status: 'success', data: { id: 'local-captured' } } as const;
+  }
+
 	if (getEmailProvider() === 'ses') {
 		return sendEmailWithSes(email)
 	}

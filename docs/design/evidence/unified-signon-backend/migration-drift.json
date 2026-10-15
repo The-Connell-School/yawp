@@ -1,0 +1,6 @@
+{
+  "unrelatedDriftMatchesOriginMain": true,
+  "unrelatedStatements": 28,
+  "newTablesValidatedBy": "backend.real-db.integration.test.ts: additive flow and identity tables expose intended boundaries",
+  "note": "Schema diff is diagnostic only. No diff SQL was executed."
+}

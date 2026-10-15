@@ -8,6 +8,7 @@ export default defineConfig({
   retries: 0,
   forbidOnly: !!process.env.CI,
   reporter: 'list',
+  outputDir: process.env.TMPDIR + '/signon-fixture-results',
   use: {
     baseURL: `http://127.0.0.1:${port}`,
     trace: 'retain-on-failure',

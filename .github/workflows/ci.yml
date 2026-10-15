@@ -451,6 +451,20 @@ jobs:
           bun test app/routes/auth.login/login.server.test.ts
           bun test app/utils/entitlements.db.test.ts
 
+      - name: Unified sign-on boundaries and fresh-schema integration
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          SIGNON_LOCAL_TEST: '1'
+          SESSION_SECRET: ci-local-signon-session-secret
+          TMPDIR: ${{ runner.temp }}/signon
+        run: |
+          mkdir -p "$TMPDIR"
+          bun test ./services/web-app/app/domain/unified-signon/policy.test.ts
+          bun test ./services/web-app/app/domain/unified-signon/google.test.ts
+          bun test ./services/web-app/app/routes/auth.login/unified-dispatch.test.ts
+          bun test ./services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts
+
       # Mocks prisma; must not share a bun process with real-DB rate limit tests.
       - name: 🧪 Login limiter fail-closed timeout
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -708,6 +722,44 @@ jobs:
           TRIAL_STATUS_SHOTS: test-results/trial-status
         run: bun run test:e2e:smoke
 
+      - name: Unified sign-on local-handler browser flows
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
+        working-directory: services/web-app
+        env:
+          CI: true
+          NODE_ENV: development
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          SESSION_SECRET: ci-local-signon-session-secret
+          SIGNON_LOCAL_TEST: '1'
+          SIGNON_START_SERVER: '1'
+          SIGNON_MAIL_CAPTURE_DIR: ${{ runner.temp }}/signon/mail
+          TMPDIR: ${{ runner.temp }}/signon
+        run: |
+          mkdir -p "$TMPDIR"
+          trap 'rm -rf "$SIGNON_MAIL_CAPTURE_DIR"' EXIT
+          bun x playwright test --config playwright.unified-backend.config.ts --workers=1
+
+      - name: Unified sign-on mocked-provider browser flows
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
+        working-directory: services/web-app
+        env:
+          CI: true
+          NODE_ENV: development
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          SESSION_SECRET: ci-local-signon-session-secret
+          SIGNON_LOCAL_TEST: '1'
+          SIGNON_START_SERVER: '1'
+          SIGNON_MOCK_GOOGLE: '1'
+          GOOGLE_OAUTH_CLIENT_ID: local-client
+          GOOGLE_OAUTH_CLIENT_SECRET: local-secret
+          TMPDIR: ${{ runner.temp }}/signon
+        run: |
+          mkdir -p "$TMPDIR"
+          export NODE_OPTIONS="--import=$PWD/e2e/unified-google-provider.mjs"
+          bun x playwright test --config playwright.unified-backend.config.ts --workers=1 --grep 'mocked Google'
+
       - name: Upload free classroom status evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
@@ -726,6 +778,7 @@ jobs:
           path: |
             services/web-app/playwright-report/
             services/web-app/test-results/
+            ${{ runner.temp }}/signon/signon-playwright-results/
           retention-days: 7
 
       - name: 🔐 Run preview access gate tests

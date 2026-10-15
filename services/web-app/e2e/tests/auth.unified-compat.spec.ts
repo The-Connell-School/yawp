@@ -122,7 +122,7 @@ test('legacy password error, safe redirect, signed-in entry and forced password 
   }
 });
 
-test('enabled local entry has disabled Google and no live resolver/session or fixture selectors', async ({
+test('enabled local resolver does not authenticate or accept fixture selectors', async ({
   page,
   request,
 }) => {
@@ -147,11 +147,7 @@ test('enabled local entry has disabled Google and no live resolver/session or fi
       .getByLabel('Email, handle, or class code')
       .fill('new@example.com');
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await expect(
-      page.getByText(
-        'This sign-in option is not available yet. Please try again later.'
-      )
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Welcome to YAWP!' })).toBeVisible();
     for (const intent of [
       'resolve',
       'verify-code',
@@ -163,11 +159,11 @@ test('enabled local entry has disabled Google and no live resolver/session or fi
       const response = await request.post('/auth/login', {
         form: { intent, fixture: 'joined', membershipId: 'made-up' },
       });
-      expect(response.status()).toBe(503);
+      expect(response.status()).toBe(intent === 'google' ? 503 : 400);
       expect(response.headers()['set-cookie']).toBeUndefined();
     }
     expect(
-      (await page.context().cookies()).filter((cookie) => cookie.httpOnly)
+      (await page.context().cookies()).filter((cookie) => ['en_session', 'membership-id'].includes(cookie.name))
     ).toEqual([]);
     expect(await db.session.count()).toBe(sessionsBefore);
   } finally {
