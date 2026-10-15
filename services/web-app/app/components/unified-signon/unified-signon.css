@@ -326,3 +326,68 @@
     Arial,
     sans-serif;
 }
+
+/* signon-13/14: badge 40px, heading gaps 8px, fields 24px below copy. */
+.unified-signon .signon-email-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 8px;
+  border-radius: 9999px;
+  background: hsl(var(--secondary));
+  color: hsl(var(--card-foreground));
+}
+.unified-signon[data-signon-screen='email-code'] .signon-card > .mt-6 {
+  margin-top: 8px;
+}
+.unified-signon[data-signon-screen='email-code']
+  .signon-card
+  > .mt-6
+  > .signon-fields {
+  gap: 24px;
+}
+.unified-signon[data-signon-screen='email-code'] input[name='code'] {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 18px;
+  letter-spacing: 3.24px;
+}
+/* signon-27/28: outlined horizontal rows with role pills and chevrons. */
+.unified-signon .signon-memberships {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.unified-signon .signon-membership {
+  width: 100%;
+  height: auto;
+  padding: 14px 14px 14px 16px;
+  gap: 12px;
+  border-radius: 8px;
+  background: white;
+  color: hsl(var(--card-foreground));
+  white-space: normal;
+  text-align: left;
+}
+.unified-signon .signon-membership-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+}
+.unified-signon .signon-membership-role {
+  flex-shrink: 0;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  background: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 17px;
+}
+.unified-signon .signon-membership svg {
+  flex-shrink: 0;
+}

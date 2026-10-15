@@ -11,7 +11,10 @@ for (const width of [1280, 390]) {
   }) => {
     test.setTimeout(180_000);
     await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
-    for (const fixture of signonFixtures) {
+    const artboards = process.env.SIGNON_ARTBOARDS?.split(',');
+    for (const fixture of signonFixtures.filter(
+      (f) => !artboards || artboards.includes(f.artboard)
+    )) {
       await page.goto(
         `/e2e/fixtures/unified-signon/index.html?state=${fixture.id}`
       );
@@ -164,3 +167,118 @@ test('configured Google cancellation and safe destinations stay local', async ({
   ).toHaveAttribute('href', '/app');
   expect(await page.context().cookies()).toEqual([]);
 });
+
+for (const mode of ['handle', 'email']) {
+  test(`class ${mode} signup keeps its mode and context after sign-in`, async ({
+    page,
+  }) => {
+    const requests: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() !== 'GET') requests.push(request.url());
+    });
+    await page.goto(
+      `/e2e/fixtures/unified-signon/index.html?state=class-found${mode === 'email' ? '-email' : ''}&redirectTo=%2Fapp%2Fmy-classes`
+    );
+    await page.getByRole('button', { name: "I'm new to YAWP" }).click();
+    const target = mode === 'email' ? 'class-email' : 'class-handle';
+    await expect(page.locator('[data-signon-screen]')).toHaveAttribute(
+      'data-signon-screen',
+      target
+    );
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await page
+      .getByRole('button', { name: 'I already have an account' })
+      .click();
+    await page
+      .getByRole('button', { name: 'New to YAWP? Create an account' })
+      .click();
+    await expect(page.locator('[data-signon-screen]')).toHaveAttribute(
+      'data-signon-screen',
+      target
+    );
+    await expect(
+      page.getByText('[English 11, Period 2]', { exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByText('[Ms. Okafor] · [Lincoln High School]', { exact: true })
+    ).toBeVisible();
+    await expect(page.locator('input[name=redirectTo]')).toHaveValue(
+      '/app/my-classes'
+    );
+    await expect(
+      page.getByLabel(mode === 'email' ? 'School email' : 'Handle', {
+        exact: true,
+      })
+    ).toBeVisible();
+    expect(requests).toEqual([]);
+    expect(await page.context().cookies()).toEqual([]);
+  });
+}
+
+test('expired fixture code can be resent and then verified without server effects', async ({
+  page,
+}) => {
+  const requests: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() !== 'GET') requests.push(request.url());
+  });
+  await page.goto(
+    '/e2e/fixtures/unified-signon/index.html?state=email-code-expired'
+  );
+  await page
+    .getByRole('button', { name: 'Send a new code', exact: true })
+    .click();
+  await expect(page.getByText('New code sent. Check spam too.')).toBeVisible();
+  await expect(
+    page.getByText('That code has expired. Send yourself a new one.')
+  ).toHaveCount(0);
+  await page.getByLabel('Code', { exact: true }).fill('123456');
+  await page.getByRole('button', { name: 'Verify', exact: true }).click();
+  await expect(page.locator('[data-signon-screen]')).toHaveAttribute(
+    'data-signon-screen',
+    'name-password'
+  );
+  expect(requests).toEqual([]);
+  expect(await page.context().cookies()).toEqual([]);
+});
+
+for (const width of [1280, 390]) {
+  test(`email and membership design geometry at ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
+    await page.goto('/e2e/fixtures/unified-signon/index.html?state=email-code');
+    await expect(page.locator('.signon-email-badge')).toHaveCSS(
+      'width',
+      '40px'
+    );
+    await expect(page.locator('.signon-email-badge')).toHaveCSS(
+      'height',
+      '40px'
+    );
+    await expect(page.getByLabel('Code', { exact: true })).toHaveCSS(
+      'font-size',
+      '18px'
+    );
+    await expect(page.getByLabel('Code', { exact: true })).toHaveCSS(
+      'letter-spacing',
+      '3.24px'
+    );
+    await page.goto('/e2e/fixtures/unified-signon/index.html?state=membership');
+    const rows = page
+      .getByRole('group', { name: 'Choose organization and role' })
+      .getByRole('button');
+    await expect(rows).toHaveCount(3);
+    for (const row of await rows.all()) {
+      const name = await row.locator('.signon-membership-name').boundingBox();
+      const role = await row.locator('.signon-membership-role').boundingBox();
+      const chevron = await row.locator('svg').boundingBox();
+      expect(name!.x + name!.width).toBeLessThanOrEqual(role!.x);
+      expect(role!.x + role!.width).toBeLessThanOrEqual(chevron!.x);
+      await expect(row).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    }
+    await rows.first().focus();
+    await page.keyboard.press('Enter');
+    await expect(
+      page.getByRole('heading', { name: "You're in!" })
+    ).toBeVisible();
+  });
+}

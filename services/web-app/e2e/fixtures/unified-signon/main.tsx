@@ -9,8 +9,22 @@ import { signonFixtures } from './states';
 import '../../../app/app.css';
 
 const search = new URLSearchParams(location.search);
+const classFound = signonFixtures.find((f) => f.id === 'class-found')!;
+// Transition-only fixture; no extra artboard or deployed state selector.
 const fixture =
-  signonFixtures.find((f) => f.id === search.get('state')) ?? signonFixtures[0];
+  search.get('state') === 'class-found-email'
+    ? {
+        ...classFound,
+        state: {
+          ...classFound.state,
+          classInfo: {
+            ...classFound.state.classInfo!,
+            accountMode: 'email' as const,
+          },
+        },
+      }
+    : (signonFixtures.find((f) => f.id === search.get('state')) ??
+      signonFixtures[0]);
 const transport: SignonTransport = async (operation, values, { state }) => {
   await new Promise((resolve) => setTimeout(resolve, 350));
   const target = (id: string) => ({
@@ -35,6 +49,8 @@ const transport: SignonTransport = async (operation, values, { state }) => {
       return {
         state: {
           ...state,
+          variant: state.variant === 'expired' ? undefined : state.variant,
+          error: undefined,
           notice: 'New code sent. Check spam too.',
           fieldErrors: {},
         },

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
+import { ChevronRight, Mail } from 'lucide-react';
 import { safeRedirect } from 'remix-utils/safe-redirect';
 import { z } from 'zod';
 import { Button } from '~/components/ui/button';
@@ -90,6 +91,14 @@ export function UnifiedSignon({
       classInfo: next.classInfo ?? state.classInfo,
     });
   };
+  const createClassAccount = () =>
+    go({
+      screen:
+        state.classInfo?.accountMode === 'email'
+          ? 'class-email'
+          : 'class-handle',
+      classInfo: state.classInfo,
+    });
   const reset = () => {
     setHistory([]);
     setState({ screen: 'entry' });
@@ -340,7 +349,7 @@ export function UnifiedSignon({
   let body: ReactNode;
   let below: ReactNode = textButton('Back', back);
   let showIdentity = false;
-  let subtitle: string | undefined;
+  let subtitle: ReactNode;
   switch (screen) {
     case 'entry':
       title = 'Sign in or create an account';
@@ -466,9 +475,13 @@ export function UnifiedSignon({
     case 'email-code':
       title = variant === 'reset' ? 'Reset your password' : 'Check your email';
       subtitle =
-        variant === 'reset'
-          ? `If ${identifier} has an account, a code is on its way.`
-          : `Sent to ${identifier}. Expires in 10 minutes.`;
+        variant === 'reset' ? (
+          `If ${identifier} has an account, a code is on its way.`
+        ) : (
+          <>
+            Sent to <b>{identifier}</b>. Expires in 10 minutes.
+          </>
+        );
       body = (
         <>
           {field('code', 'Code', { autoComplete: 'one-time-code' })}
@@ -705,22 +718,34 @@ export function UnifiedSignon({
     case 'membership':
       title = 'Where are you working today?';
       body = (
-        <>
+        <div
+          className="signon-memberships"
+          role="group"
+          aria-label="Choose organization and role"
+        >
           {state.memberships?.map((membership) => (
-            <div key={membership.id}>
-              {choice(
-                membership.organization,
-                membership.role,
-                () =>
-                  void run('select-membership', { membershipId: membership.id })
-              )}
-            </div>
+            <Button
+              key={membership.id}
+              type="button"
+              variant="outline"
+              className="signon-membership"
+              disabled={blocked}
+              onClick={() =>
+                void run('select-membership', { membershipId: membership.id })
+              }
+            >
+              <span className="signon-membership-name">
+                {membership.organization}
+              </span>
+              <span className="signon-membership-role">{membership.role}</span>
+              <ChevronRight aria-hidden="true" width={16} height={16} />
+            </Button>
           ))}
-        </>
+        </div>
       );
       below = (
         <form method="post" action="/auth/logout">
-          <Button type="submit" variant="link">
+          <Button type="submit" variant="link" className="signon-text-button">
             Sign out
           </Button>
         </form>
@@ -826,7 +851,7 @@ export function UnifiedSignon({
         screen === 'class-email'
           ? textButton('Back', back)
           : textButton('New to YAWP? Create an account', () =>
-              go({ screen: 'class-email', classInfo: state.classInfo })
+              createClassAccount()
             );
       break;
     case 'joined':
@@ -908,13 +933,7 @@ export function UnifiedSignon({
       return;
     }
     if (screen === 'class-found' && variant !== 'multiple')
-      return go({
-        screen:
-          state.classInfo?.accountMode === 'email'
-            ? 'class-email'
-            : 'class-handle',
-        classInfo: state.classInfo,
-      });
+      return createClassAccount();
     const operations: Partial<Record<SignonState['screen'], SignonOperation>> =
       {
         entry: 'resolve',
@@ -948,7 +967,17 @@ export function UnifiedSignon({
             your free trial.
           </div>
         )}
-        <AuthFormCard title={title} className="signon-card">
+        <AuthFormCard
+          title={title}
+          className="signon-card"
+          icon={
+            screen === 'email-code' ? (
+              <div className="signon-email-badge" aria-hidden="true">
+                <Mail width={22} height={22} />
+              </div>
+            ) : undefined
+          }
+        >
           {/* AuthFormCard retains the shared heading; focus it after transitions. */}
           <span
             ref={(node) => {
