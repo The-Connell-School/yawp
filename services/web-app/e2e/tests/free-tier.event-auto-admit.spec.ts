@@ -101,7 +101,7 @@ test.describe('Free-tier event auto-admit QA', () => {
       await page.getByLabel('Location').fill('Demo QA');
       await page.getByLabel('Grade level').fill('9');
       await page.getByRole('button', { name: 'Continue' }).click();
-      await expect(page.getByText('Check your email for your join link.')).toBeVisible({
+      await expect(page.getByText('Check your email')).toBeVisible({
         timeout: 15_000,
       });
       await shot(page, '02-event-auto-admit-redeemed.png');
@@ -126,7 +126,7 @@ test.describe('Free-tier event auto-admit QA', () => {
       });
 
       await page.goto(`/free/join?t=${encodeURIComponent(release.token)}`);
-      await expect(page.getByRole('heading', { name: 'Before we begin' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Create your free classroom' })).toBeVisible();
       await shot(page, '03-release-join-account-form.png');
 
       await page.getByLabel('Your name').fill(teacherName);

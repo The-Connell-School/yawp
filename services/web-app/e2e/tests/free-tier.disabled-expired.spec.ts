@@ -115,10 +115,10 @@ test.describe('Free-tier rejected event link QA', () => {
         );
         expect(firstResponse?.status()).toBe(200);
         await expect(page.getByRole('status')).toContainText(
-          'This event link is closed.'
+          'This link is closed'
         );
         await expect(page.getByRole('status')).toContainText(
-          'The link may have expired, reached its limit, or been disabled.'
+          'It expired, reached its limit, or was turned off.'
         );
         await expect(
           page.getByRole('link', { name: 'Join the waitlist' })
@@ -164,7 +164,7 @@ test.describe('Free-tier rejected event link QA', () => {
 
         await page.goto(`/free?t=${encodeURIComponent(code)}`);
         await expect(page.getByRole('status')).toContainText(
-          'This event link is closed.'
+          'This link is closed'
         );
         await shot(page, `02-${item.key}-repeat-deduped.png`);
 

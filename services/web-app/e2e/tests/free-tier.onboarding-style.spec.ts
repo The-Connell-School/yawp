@@ -11,7 +11,7 @@ import { waitForFreeTierEmailPayload } from '../helpers/free-tier-email';
 const before = process.env.ONBOARDING_EVIDENCE_PHASE === 'before';
 const evidence = process.env.ONBOARDING_EVIDENCE_DIR;
 for (const viewport of [
-  { width: 1280, height: 900 },
+  { width: 1280, height: 1000 },
   { width: 390, height: 844 },
 ]) {
   test(`onboarding uses login controls and completes approval at ${viewport.width}px`, async ({
@@ -21,10 +21,10 @@ for (const viewport of [
     test.setTimeout(180_000);
     await page.setViewportSize(viewport);
     const prisma = createE2EPrismaClient();
-    const stamp = `${Date.now()}-${viewport.width}`;
-    let reference: Record<string, string> = {};
+    const stamp = `artboard-${viewport.width}`;
     const capture = async (state: string, target = page) => {
       await target.locator('h1').waitFor();
+      await target.locator('h1').click();
       await expect(target.locator('[role="progressbar"] > div')).toHaveCSS(
         'opacity',
         '0'
@@ -34,9 +34,9 @@ for (const viewport of [
         return document.fonts.ready;
       });
       if (!before && state !== 'sign-in') {
-        await expect(target.locator('.auth-page-content > div')).toBeVisible();
+        await expect(target.locator('.auth-page-content > .free-tier-form-card')).toBeVisible();
         const geometry = await target
-          .locator('.auth-page-content > div')
+          .locator('.auth-page-content > .free-tier-form-card')
           .evaluate((el) => {
             const s = getComputedStyle(el);
             return {
@@ -88,20 +88,6 @@ for (const viewport of [
     const admin = await browser.newPage({ viewport });
     try {
       await page.goto('/auth/login');
-      reference = await page
-        .locator('.auth-page-content > div')
-        .evaluate((el) => {
-          const s = getComputedStyle(el);
-          return {
-            width: s.width,
-            left: String(el.getBoundingClientRect().left),
-            top: String(el.getBoundingClientRect().top),
-            padding: s.padding,
-            borderRadius: s.borderRadius,
-            background: s.backgroundColor,
-            shadow: s.boxShadow,
-          };
-        });
       await capture('sign-in');
       await page.goto('/free');
       await capture('waitlist');
@@ -111,9 +97,9 @@ for (const viewport of [
         .click();
       await expect(page.locator('input[name="name"]:invalid')).toHaveCount(1);
       for (const [field, value] of Object.entries({
-        name: 'Local Teacher',
+        name: 'Grace Okafor',
         email: `wait-${stamp}@example.edu`,
-        schoolName: 'Example High',
+        schoolName: 'Lincoln High School',
         location: 'Local',
         gradeLevel: '10',
       }))
@@ -140,9 +126,9 @@ for (const viewport of [
         await capture(`event-${mode}`);
         if (mode !== 'closed') {
           for (const [field, value] of Object.entries({
-            name: 'Local Teacher',
+            name: 'Grace Okafor',
             email: `event-${mode}-${stamp}@example.edu`,
-            schoolName: 'Example High',
+            schoolName: 'Lincoln High School',
             location: 'Local',
             gradeLevel: '10',
           }))
@@ -167,8 +153,8 @@ for (const viewport of [
       const app = await prisma.freeTierApplication.create({
         data: {
           email: `teacher-${stamp}@example.edu`,
-          name: 'Local Teacher',
-          schoolName: 'Example High',
+          name: 'Grace Okafor',
+          schoolName: 'Lincoln High School',
           location: 'Local',
           gradeLevel: '10',
           status: 'INVITED',
@@ -230,10 +216,10 @@ for (const viewport of [
       await expect(page.locator('input[name="adminName"]:invalid')).toHaveCount(
         1
       );
-      await page.locator('input[name="adminName"]').fill('Principal Pat');
+      await page.locator('input[name="adminName"]').fill('Dr. Patel');
       await page
         .locator('input[name="adminEmail"]')
-        .fill(`principal-${stamp}@example.edu`);
+        .fill('patel@example.edu');
       await page.locator('input[name="adminRole"]').fill('Principal');
       // A crafted request must not restore the removed introduction.
       await page
@@ -313,13 +299,14 @@ for (const viewport of [
         admin.locator('input[name="adminRole"]:invalid')
       ).toHaveCount(1);
       await admin.locator('input[name="adminRole"]').fill('Principal');
-      await admin.getByRole('checkbox', { name: /authorized/i }).check();
+      await admin.getByRole('checkbox', { name: before ? /authorized/i : /I can approve classroom software/i }).check();
       await admin
         .getByRole('button', { name: 'Approve YAWP', exact: true })
         .click();
       await expect(
         admin.getByRole('heading', { name: 'Thank you', exact: true })
       ).toBeVisible({ timeout: 30_000 });
+      if (!before) await expect(admin.getByText('Grace Okafor can start using YAWP. We let them know.', { exact: true })).toBeVisible();
       await capture('approval-confirmation', admin);
       await admin.goto(replacement.approveUrl);
       await capture('approval-already-approved', admin);
@@ -328,6 +315,7 @@ for (const viewport of [
           ?.status
       ).toBe('APPROVED');
       // Disposable status fixtures reach the same guarded routes without email.
+      await prisma.freeTierEmailLog.deleteMany({ where: { applicationId: app.id, success: false } });
       for (const status of ['REJECTED', 'EXPIRED', 'MANUAL_REVIEW'] as const) {
         await prisma.freeTierApplication.update({
           where: { id: app.id },
@@ -349,7 +337,7 @@ for (const viewport of [
           );
           await expect(
             admin.getByRole('heading', {
-              name: 'Request not approved',
+              name: before ? 'Request not approved' : 'This request is closed',
               exact: true,
             })
           ).toBeVisible();
@@ -364,7 +352,7 @@ for (const viewport of [
           );
           await expect(
             admin.getByRole('heading', {
-              name: 'Link expired or already used',
+              name: before ? 'Link expired or already used' : 'This link expired or was used',
               exact: true,
             })
           ).toBeVisible();
