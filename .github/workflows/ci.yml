@@ -356,7 +356,7 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun test ./services/web-app/app/domain/free-tier/student-join.server.test.ts
 
-      - name: 🧪 Classroom report aggregation and loader access (isolated)
+      - name: 🧪 Classroom report and free classroom status access (isolated)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         working-directory: services/web-app
         env:
@@ -366,6 +366,7 @@ jobs:
           bun test app/utils/classroom-report.test.ts app/utils/classroom-report.server.test.ts app/utils/pitch-packet.test.ts
           bun test app/routes/app.classroom-report/route.test.ts
           bun test app/routes/app.pitch-packet/route.test.ts
+          bun test app/routes/app.free-tier.status/route.test.ts
 
       - name: 🎨 Backfill class artwork keys
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -685,7 +686,17 @@ jobs:
           PRIMARY_APP_URL: http://127.0.0.1:5173
           RESEND_API_KEY: ''
           RESEND_FROM_EMAIL: ''
+          TRIAL_STATUS_SHOTS: test-results/trial-status
         run: bun run test:e2e:smoke
+
+      - name: Upload free classroom status evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: free-classroom-status-evidence
+          path: services/web-app/test-results/trial-status/
+          if-no-files-found: ignore
+          retention-days: 7
 
       # HTML report + traces for smoke failures (see playwright.config.ts).
       - name: Upload Playwright report on failure
