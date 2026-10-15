@@ -120,7 +120,7 @@ export default function FreeAdminApproveRoute() {
     return (
       <FreeTierAuthCard title="Thank you" icon={<CircleCheck />}>
         <p className="text-sm text-muted-foreground">
-          The teacher can start using YAWP. We let them know.
+          {actionData.app.name} can start using YAWP. We let them know.
         </p>
       </FreeTierAuthCard>
     );
