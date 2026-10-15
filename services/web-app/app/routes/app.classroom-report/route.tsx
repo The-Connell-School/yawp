@@ -8,6 +8,10 @@ import { getClassroomActivityReport } from '~/utils/classroom-report.server';
 import { CLASSROOM_REPORT_METRICS, CLASSROOM_REPORT_RULES, CLASSROOM_REPORT_SCOPE, classroomReportSummary } from '~/utils/classroom-report';
 import './report.css';
 
+export function headers() {
+  return { 'Cache-Control': 'private, no-store' };
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const membership = await requireMembership(request, userId);
