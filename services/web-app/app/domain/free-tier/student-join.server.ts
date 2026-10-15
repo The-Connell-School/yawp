@@ -25,6 +25,13 @@ import {
   assertFreeTierSpendAllowed,
   FreeTierSpendGuardDeniedError,
 } from './usage-budget.server';
+import {
+  runFreeTierAnalytics,
+  acquisitionChannel,
+  captureFreeTierAnalyticsEvent,
+  freeTierOrganizationDistinctId,
+  FREE_TIER_ANALYTICS_EVENTS,
+} from './posthog-analytics.server';
 
 export type FreeTierClassSummary = {
   id: string;
@@ -220,6 +227,36 @@ export async function registerFreeTierStudent({
       select: { id: true, expirationDate: true },
     });
 
+    await runFreeTierAnalytics(async () => {
+      const application = await prisma.freeTierApplication.findFirst({
+        where: { organizationId: klass.school.organizationId },
+        select: {
+          id: true,
+          acquisitionTokenId: true,
+          acquisitionToken: { select: { sourceName: true, label: true } },
+        },
+      });
+      captureFreeTierAnalyticsEvent({
+        event: FREE_TIER_ANALYTICS_EVENTS.studentJoin,
+        distinctId: freeTierOrganizationDistinctId(klass.school.organizationId),
+        properties: {
+          student_user_id: membership.userId,
+          membership_id: membership.id,
+          organization_id: klass.school.organizationId,
+          class_id: klass.id,
+          join_method: 'student_join_link',
+          application_id: application?.id ?? null,
+          acquisition_token_id: application?.acquisitionTokenId ?? null,
+          source_name: application?.acquisitionToken?.sourceName ?? null,
+          token_label: application?.acquisitionToken?.label ?? null,
+          acquisition_channel: acquisitionChannel({
+            acquisitionTokenId: application?.acquisitionTokenId,
+            sourceName: application?.acquisitionToken?.sourceName,
+          }),
+        },
+      });
+    });
+
     return {
       status: 'ok' as const,
       membershipId: membership.id,
@@ -253,7 +290,9 @@ export async function registerFreeTierStudent({
         typeof error === 'object' &&
         (error as { code?: string }).code === 'USERNAME_TAKEN')
     ) {
-      const suggestions = await suggestAvailableUsernames(usernameResult.username);
+      const suggestions = await suggestAvailableUsernames(
+        usernameResult.username
+      );
       return {
         status: 'error' as const,
         field: 'username' as const,
@@ -322,7 +361,10 @@ export async function teacherResetStudentPassword({
     },
   });
   if (!student) {
-    return { status: 'error' as const, error: 'Student not found in this class.' };
+    return {
+      status: 'error' as const,
+      error: 'Student not found in this class.',
+    };
   }
 
   const eligibility = evaluateTeacherResetHandleStudentEligibility(

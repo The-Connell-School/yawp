@@ -1,8 +1,12 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
+const capture = mock();
+mock.module('~/services/posthog.server', () => ({
+  posthog: { capture, alias: mock() },
+}));
 const prisma = {
   class: { findMany: mock(), findFirst: mock(), update: mock() },
-  freeTierApplication: { count: mock() },
+  freeTierApplication: { count: mock(), findFirst: mock() },
   user: { findFirst: mock(), update: mock() },
   orgMembership: { create: mock(), findFirst: mock(), count: mock() },
   invitation: { count: mock() },
@@ -35,13 +39,15 @@ const {
 
 describe('student-join', () => {
   beforeEach(() => {
+    capture.mockReset();
+    prisma.freeTierApplication.findFirst.mockResolvedValue(null);
     Object.values(prisma).forEach((v) => {
       if (typeof v === 'object' && v && 'mockReset' in v) {
         (v as { mockReset: () => void }).mockReset();
       }
     });
-    prisma.$transaction.mockImplementation(async (fn: (tx: typeof prisma) => unknown) =>
-      fn(prisma)
+    prisma.$transaction.mockImplementation(
+      async (fn: (tx: typeof prisma) => unknown) => fn(prisma)
     );
     prisma.orgMembership.create.mockReset();
     prisma.session.create.mockReset();
@@ -57,9 +63,9 @@ describe('student-join', () => {
   test('findFreeTierClassesByCode scopes to FREE_CLASSROOM', async () => {
     prisma.class.findMany.mockResolvedValue([]);
     await findFreeTierClassesByCode('ABC');
-    expect(prisma.class.findMany.mock.calls[0]?.[0].where.school.organization.plan).toBe(
-      'FREE_CLASSROOM'
-    );
+    expect(
+      prisma.class.findMany.mock.calls[0]?.[0].where.school.organization.plan
+    ).toBe('FREE_CLASSROOM');
   });
 
   test('registerFreeTierStudent rejects reserved handles', async () => {
@@ -131,19 +137,48 @@ describe('student-join', () => {
     }
     expect(prisma.orgMembership.create).not.toHaveBeenCalled();
     expect(prisma.session.create).not.toHaveBeenCalled();
+    expect(capture).not.toHaveBeenCalled();
   });
 
   test('registerFreeTierStudent creates enrollment and session below the budget', async () => {
     prisma.class.findFirst
-      .mockResolvedValueOnce({ id: 'class-1', school: { organizationId: 'org-free' } })
-      .mockResolvedValueOnce({ school: { organization: { plan: 'FREE_CLASSROOM' } } });
+      .mockResolvedValueOnce({
+        id: 'class-1',
+        school: { organizationId: 'org-free' },
+      })
+      .mockResolvedValueOnce({
+        school: { organization: { plan: 'FREE_CLASSROOM' } },
+      });
     prisma.user.findFirst.mockResolvedValue(null);
-    prisma.orgMembership.create.mockResolvedValue({ id: 'membership-1', userId: 'user-1' });
-    prisma.session.create.mockResolvedValue({ id: 'session-1', expirationDate: new Date('2030-01-01') });
-    const result = await registerFreeTierStudent({ name: 'Sam', username: 'sam123', password: 'secret12', classId: 'class-1', joinToken: 'token-1' });
+    prisma.orgMembership.create.mockResolvedValue({
+      id: 'membership-1',
+      userId: 'user-1',
+    });
+    prisma.session.create.mockResolvedValue({
+      id: 'session-1',
+      expirationDate: new Date('2030-01-01'),
+    });
+    const result = await registerFreeTierStudent({
+      name: 'Sam',
+      username: 'sam123',
+      password: 'secret12',
+      classId: 'class-1',
+      joinToken: 'token-1',
+    });
     expect(result.status).toBe('ok');
     expect(prisma.orgMembership.create).toHaveBeenCalledTimes(1);
     expect(prisma.session.create).toHaveBeenCalledTimes(1);
+    expect(capture).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'free_tier.student_join',
+        distinctId: 'free-tier-organization:org-free',
+        properties: expect.objectContaining({
+          membership_id: 'membership-1',
+          acquisition_channel: 'organic',
+          join_method: 'student_join_link',
+        }),
+      })
+    );
   });
 
   test('teacherResetStudentPassword updates password for eligible handle student', async () => {
