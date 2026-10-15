@@ -54,6 +54,7 @@ for (const width of [1280, 390]) {
         await expect(copy).toHaveCSS('gap', '2px');
         await expect(copy.locator('strong')).toHaveCSS('font-size', '16px');
         await expect(copy.locator('strong')).toHaveCSS('font-weight', '600');
+        await expect(copy.locator('strong')).toHaveCSS('line-height', '22px');
         await expect(copy.locator('span')).toHaveCSS('font-size', '14px');
         await expect(copy.locator('span')).toHaveCSS('line-height', '20.3px');
         const chevron = choice.locator('svg');
