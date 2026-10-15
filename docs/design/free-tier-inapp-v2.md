@@ -1,0 +1,59 @@
+# Free-account in-app presentation (v2)
+
+Merge is held through the Friday October 16 intern session. The driver owns release.
+No schema, policy, cap, permission, grading action, feature-setting or auth changes.
+
+The app parent reads presentation data only for an eligible free-account teacher
+while the existing free-tier gate is open. The existing demo exception still
+applies. All other accounts retain the previous rendering. Documents already
+matches the requested Needs Grading view; its existing status URL is used.
+
+## Data and design discrepancies for Ship Review
+
+- Assignment counters use `FreeClassroomAssignmentKindUsage.lifetimeCreatedCount`,
+  with existing 12/3/3 limits. Deletion does not return an assignment allowance.
+- Students include active roster seats and unexpired invitations, exactly as the
+  existing seat guard does. A design sample omitting reserved seats may differ.
+- Lesson plans count organization-wide nondeleted conversations, with the existing
+  five-plan cap. Deleting a draft continues to make room for another plan.
+- No “class code shared” event exists. The checklist's first completed step means
+  a class code is ready to share; it does not claim a measured sharing event.
+  Submission and grading steps use existing submission status, including manual
+  grades. No progress or tracking writes were added.
+- The current free-account join card requires the join link to create a handle
+  account. The new card preserves that instruction rather than promising a new
+  class-code enrollment path. Board and QR controls use the same existing link.
+- The grading limiter refills token buckets continuously. The pause shows the
+  actual available-token time for a blocked teacher window, not the artboard's
+  sample “12 minutes” or a fabricated hourly reset.
+- Reporter uses “Reporter comes with a YAWP paid plan” to comply with lane copy
+  constraints. The locked page performs no report reads. Existing report API
+  entitlement checks remain in place.
+- “Talk to us” links lead to the existing free-account status page. No mail action
+  or new external destination is introduced.
+- Existing class art, names, tables and document data remain live. Broken image
+  placeholders and example students in the export are not copied into the app.
+
+## Local verification
+
+Use `./bin/project capabilities --json`, `doctor --json`, and
+`bootstrap --fresh --json` for the pinned runtime and isolated database.
+`BUN_TMPDIR`, `BUN_INSTALL_CACHE_DIR`, `XDG_CACHE_HOME`, browser temp files and
+Playwright output must point into the lane-private `TMPDIR`.
+
+- `./bin/project test --profile free-tier-inapp-unit --json`
+- `NODE_OPTIONS=--max-old-space-size=4096 ./bin/project test --profile typecheck --json`
+- Start the isolated server with `./bin/project dev start --json`, then run
+  `./bin/project test --profile free-tier-inapp-browser --json` in that same
+  process session, and always run `./bin/project dev stop --json` afterwards.
+- `FREE_INAPP_REGRESSION=1` runs the existing quota and assignment-choice browser files.
+- `PW_EXECUTABLE_PATH` can select an already installed Chromium through the supported configuration override.
+- `FREE_INAPP_SHOTS` selects permanent local screenshot evidence.
+- `FREE_INAPP_BEFORE=1` captures the same local states against the parent revision.
+
+The browser profile uses one Chromium worker and only loopback URLs. It restores
+quota rows, class rosters, generated local users, lesson fixtures and grading
+bucket rows in `finally`. No hosted preview, AI call or mail call is needed.
+
+Ship Review must inspect the screenshot manifest and the v2 side-by-side
+artboards, verify paid and flag-off controls, and confirm CI before approval.

@@ -25,10 +25,12 @@ test.describe('Free classroom bundle quotas', () => {
     }
 
     await page.goto('/app');
+    const v2 = await page.getByTestId('free-assignment-tiles').isVisible();
     await page
       .getByRole('button', { name: /new assignment|create assignment/i })
       .first()
       .click();
+    if (v2) await page.getByRole('button', { name: /^Class Starter.*left/ }).click();
     const typeTrigger = page
       .locator('[role="combobox"]')
       .filter({ hasText: /Class Starter|Prewriting|Thesis Statement/i })
@@ -40,6 +42,11 @@ test.describe('Free classroom bundle quotas', () => {
       page.getByRole('option', { name: /Prewriting/i })
     ).toContainText(/\d+ of \d+/);
     await page.keyboard.press('Escape');
+    if (v2) {
+      await page.keyboard.press('Escape');
+      await expect(page.getByTestId('free-assignment-tiles').getByRole('button', { name: /^New .* assignment$/ })).toHaveCount(3);
+      return;
+    }
     const tileTitles = await page
       .getByTestId('teacher-assignments-grid')
       .locator('h3')
