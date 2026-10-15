@@ -201,3 +201,35 @@ this builder does not claim a new independent approval or merge. The driver must
 arrange the RDS snapshot before any production migration. Unified sign-on remains
 default OFF; no demo/production flag changes, remote migration, external email,
 live OAuth, hosted QA, preview or deployment was performed.
+
+
+## CI mobile reset follow-up
+
+Run [38815971146](https://github.com/The-Connell-School/yawp/actions/runs/38815971146/job/116702444776)
+failed at the mobile reset heading after the full-document continuation. The
+unchanged narrow local test passed. A slow-client regression then reproduced the
+same missing heading: its trace showed a native GET carrying the code query
+parameter, rather than a verification POST, because the test interacted with the
+server-rendered form before hydration. The CI upload omitted the sign-on output
+directory, so that historical trace could not be inspected.
+
+Commit `6254fc8c` adds the missing client-readiness wait at the reset reload, keeps
+script latency in the desktop/mobile regression, and removes that latency before
+the destination navigation. The existing heading and destination assertions,
+5000ms assertion timeout, real handlers, mail capture and authentication protections
+remain. CI now uploads sign-on traces and failure screenshots. No rendered or
+backend behavior, flag defaults, schema or migration changed in this follow-up.
+
+Fresh validation: 37 database scenarios / 223 assertions, 31 focused tests / 93
+assertions, six actual-handler browser scenarios and two mocked-provider browser
+scenarios pass with one browser worker. Full typecheck and Prisma validate/status
+pass; bootstrap applied all 174 migrations to fresh disposable local Postgres.
+Six fresh desktop/mobile signup/reset comparisons and six pixel-identical
+flag-off pairs supplement the retained 34 original and four activation comparisons.
+Existing validator and legacy location-selector exceptions remain.
+
+[Diagnosis, validation and screenshot comparisons](evidence/unified-signon-backend/ci-followup/)
+are committed; full local captures/logs are in `shots/di-signon-backend/ci-followup/`.
+The APPROVE at `7616f025` is historical; the changed head requires repeat driver
+Ship Review and passing exact-head GitHub checks. No new independent approval is
+claimed. The driver handles merge and the RDS snapshot before any production migration.
