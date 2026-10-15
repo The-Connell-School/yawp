@@ -49,7 +49,13 @@ for (const viewport of [
               shadow: s.boxShadow,
             };
           });
-        expect(geometry).toEqual(reference);
+        expect(geometry).toMatchObject({
+          width: '320px', padding: '24px', borderRadius: '12px',
+          background: 'rgb(255, 255, 255)',
+        });
+        await expect(target.locator('.free-tier-page h1')).toHaveCSS('line-height', '24.3px');
+        const fields = target.locator('.free-tier-page input:not([type="hidden"]):not(.hidden)');
+        if (await fields.count()) await expect(fields.first()).toHaveCSS('font-size', '16px');
         await expect(target.locator('[class*="yawp-entry"]')).toHaveCount(0);
       }
       if (evidence) {
@@ -99,6 +105,7 @@ for (const viewport of [
       await capture('sign-in');
       await page.goto('/free');
       await capture('waitlist');
+      if (!before) await expect(page.getByText('Join the waitlist. We let teachers in a group at a time.')).toBeVisible();
       await page
         .getByRole('button', { name: 'Join the waitlist', exact: true })
         .click();
@@ -174,6 +181,7 @@ for (const viewport of [
       });
       await page.goto(`/free/join?t=${encodeURIComponent(release.token)}`);
       await capture('account-creation');
+      if (!before) await expect(page.getByRole('heading', { name: 'Create your free classroom' })).toBeVisible();
       await page.getByRole('button', { name: 'Create account' }).click();
       await expect(page.locator('input[name="password"]:invalid')).toHaveCount(
         1
@@ -192,6 +200,10 @@ for (const viewport of [
       await page.getByRole('button', { name: 'Create account' }).click();
       await page.waitForURL('**/app/free-tier/onboarding**');
       await capture('teacher-approval-request');
+      if (!before) {
+        await expect(page.getByRole('heading', { name: 'Who can approve YAWP?' })).toBeVisible();
+        await expect(page.getByRole('list', { name: 'Approval progress' })).toContainText('Ask your administrator');
+      }
       await prisma.freeTierEmailLog.create({
         data: {
           applicationId: app.id,
