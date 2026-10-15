@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "project.doctor/v1",
+  "status": "pass",
+  "checks": [
+    {
+      "id": "bun",
+      "status": "pass",
+      "detail": "/home/bryant/.bun/bin/bun"
+    },
+    {
+      "id": "node",
+      "status": "pass",
+      "detail": "Node 22.23.3 at node"
+    },
+    {
+      "id": "docker",
+      "status": "pass",
+      "detail": "Docker daemon reachable"
+    },
+    {
+      "id": "git",
+      "status": "pass",
+      "detail": "Git worktree reachable"
+    }
+  ],
+  "suggestedCommands": [
+    "./bin/project bootstrap --fresh --json"
+  ]
+}

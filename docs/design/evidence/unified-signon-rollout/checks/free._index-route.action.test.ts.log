@@ -1,0 +1,13 @@
+bun test v1.3.1 (89fa0f34)
+
+services/web-app/app/routes/free._index/route.action.test.ts:
+(pass) free._index action > returns 404 and does not submit waitlist when the flag is off [0.63ms]
+(pass) free._index action > non-bypass event token redemption returns waitlist confirmation branch [1.08ms]
+(pass) free._index action > bypass event token redemption keeps join-link confirmation branch [0.40ms]
+(pass) free._index action > bypass event token budget failure does not send a release email [0.29ms]
+(pass) free._index action > bypass event token cap-full failure does not send a release email [0.29ms]
+
+ 5 pass
+ 0 fail
+ 13 expect() calls
+Ran 5 tests across 1 file. [510.00ms]
