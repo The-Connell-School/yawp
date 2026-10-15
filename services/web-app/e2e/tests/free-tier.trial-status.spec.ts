@@ -74,8 +74,8 @@ for (const width of [1280, 390]) test(`expiry, rejection, budget pause, reading 
     await capture(page, 'budget-paused');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     if (!before) {
-      await expect(page.locator('main')).toContainText('environment');
-      await expect(page.locator('main')).toContainText('not a personal allowance');
+      await expect(page.locator('.auth-page-shell')).toContainText('environment');
+      await expect(page.locator('.auth-page-shell')).toContainText('not a personal allowance');
       await page.getByRole('button', { name: 'Sign out', exact: true }).click();
       await expect(page).toHaveURL(/\/auth\/login$/);
       await login(page);
