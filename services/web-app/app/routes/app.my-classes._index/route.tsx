@@ -400,7 +400,7 @@ function TeacherMyClassesView({
                 assignments.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className={data.canShareClassroomReport ? 'flex flex-wrap gap-2' : 'contents'}>
               {data.canShareClassroomReport ? (
                 <Button size="sm" variant="outline" asChild>
                   <Link to="/app/classroom-report">Share this report</Link>

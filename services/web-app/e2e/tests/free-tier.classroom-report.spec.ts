@@ -198,8 +198,13 @@ test('anonymous, student, paid, inactive, approval and feature gates protect dir
   expect(await anonymous.text()).not.toContain('submittedWriting');
   for (const key of ['student', 'paidTeacher']) {
     await login(page, key);
+    if (key === 'paidTeacher') await page.setViewportSize({ width: 390, height: 900 });
     await page.goto('/app/my-classes');
     await expect(page.getByRole('link', { name: 'Share this report', exact: true })).toHaveCount(0);
+    if (key === 'paidTeacher') {
+      const create = await page.getByRole('button', { name: 'Create Class', exact: true }).first().boundingBox();
+      expect(create!.width).toBeGreaterThan(300);
+    }
     const denied = await page.request.get(`${reportUrl}.data?_routes=routes/app.classroom-report`, { maxRedirects: 0 });
     expect(denied.status()).toBe(403);
     expect(await denied.text()).not.toContain('submittedWriting');
