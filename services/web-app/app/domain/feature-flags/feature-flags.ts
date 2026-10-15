@@ -37,6 +37,9 @@ export const INTERNAL_RUBRICS_FLAG = 'internal_rubrics' as const;
  */
 export const FREE_TIER_FLAG = 'free_tier' as const;
 
+/** Unified sign-on UI. Default off; anonymous entry requires everyone mode. */
+export const UNIFIED_SIGN_ON_FLAG = 'unified-sign-on' as const;
+
 export const FEATURE_FLAGS = {
   [LESSON_PLANNER_FLAG]: {
     label: 'Lesson Planner',
@@ -52,6 +55,11 @@ export const FEATURE_FLAGS = {
     label: 'Free tier',
     description:
       'Enables Free Tier C teacher onboarding, school-admin approval links, operator release tools, and related UI. Off: those routes and release APIs return 404; waitlist/token APIs behave as on main until yawp-internal turns this on for everyone.',
+  },
+  [UNIFIED_SIGN_ON_FLAG]: {
+    label: 'Unified sign-on',
+    description:
+      'Shows the unified sign-on at /auth/login. Default off. Keep disabled on demo and production during October 16 testing. Backend-dependent operations remain unavailable until the backend integration ships.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 
