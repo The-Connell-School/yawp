@@ -114,3 +114,10 @@ after correcting an overbroad assertion about client-hint preference cookies).
 The live enabled-entry test verifies no new database sessions and no HTTP-only
 cookies. It also exercises direct stub requests. All 210 comparison files were
 checked for existence. Hosted QA was omitted under the preview ban.
+
+Scoped discovery verifies three compatibility specs in the default configuration
+and seven UI specs in the dedicated fixture configuration; the latter are
+excluded from default app-server discovery. Broad default `--list` also loads
+unrelated existing Bun-only and database-dependent specs and could not complete
+in plain Node discovery without their setup. Those broader checks are left to
+CI; this item used the targeted configurations above.
