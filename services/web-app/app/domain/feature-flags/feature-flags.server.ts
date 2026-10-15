@@ -114,7 +114,9 @@ export function isLessonPlannerEnabled(
  * Whether Free Tier C is live. Only `everyone` counts as on; `targeted` is off
  * for anonymous `/free` routes because there is no school context.
  */
-export async function isFreeTierEnabled(): Promise<boolean> {
+export async function isFreeTierEnabled(
+  { throwOnError = false }: { throwOnError?: boolean } = {}
+): Promise<boolean> {
   try {
     const row = await prisma.setting.findUnique({
       where: { name: featureFlagSettingName(FREE_TIER_FLAG) },
@@ -122,6 +124,8 @@ export async function isFreeTierEnabled(): Promise<boolean> {
     });
     return isFreeTierGloballyEnabled(parseFeatureFlagValue(row?.value));
   } catch (error) {
+    // Personalized status checks must distinguish a failed read from flag off.
+    if (throwOnError) throw error;
     console.error('feature_flag_read_failed', {
       key: FREE_TIER_FLAG,
       error: error instanceof Error ? error.message : String(error),

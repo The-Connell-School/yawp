@@ -409,6 +409,9 @@ function TeacherMyClassesView({
                   <Button size="sm" variant="outline" asChild>
                     <Link to="/app/pitch-packet">Trial pitch packet</Link>
                   </Button>
+                  <Button size="sm" variant="outline" asChild>
+                    <Link to="/app/free-tier/status">Free classroom status</Link>
+                  </Button>
                 </>
               ) : null}
               <Button size="sm" onClick={openCreate} className="shrink-0">

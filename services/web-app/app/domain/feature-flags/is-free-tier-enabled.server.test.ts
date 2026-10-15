@@ -31,3 +31,10 @@ describe('isFreeTierEnabled', () => {
     });
   });
 });
+
+test('status checks can propagate read failures while existing callers still fail closed', async () => {
+  const failure = new Error('fixture read failed');
+  prisma.setting.findUnique.mockRejectedValue(failure);
+  expect(await isFreeTierEnabled()).toBe(false);
+  await expect(isFreeTierEnabled({ throwOnError: true })).rejects.toBe(failure);
+});

@@ -10,6 +10,23 @@ import {
   resolveFreeTierBudgetBasis,
 } from './usage-budget.server';
 
+for (const [label, count, budget, unitCost, denied] of [
+  ['below', 99, 250, 2.5, false],
+  ['at', 100, 250, 2.5, true],
+  ['above', 101, 250, 2.5, true],
+  ['less than one activation remaining', 99, 249, 2.5, true],
+  ['zero budget', 0, 0, 2.5, true],
+  ['zero cost and zero budget', 100, 0, 0, false],
+] as const) test(`status source: existing spend guard at ${label} budget`, async () => {
+  const client = { freeTierApplication: { count: async () => count } };
+  const check = assertFreeTierSpendAllowed(client as any, {
+    FREE_TIER_BUDGET_USD: String(budget),
+    FREE_TIER_UNIT_COST_USD: String(unitCost),
+  });
+  if (denied) await expect(check).rejects.toBeInstanceOf(FreeTierSpendGuardDeniedError);
+  else expect((await check).activeApplications).toBe(count);
+});
+
 describe('free-tier usage budget', () => {
   test('calculates spend percentage from a dollar budget', () => {
     const usage = calculateFreeTierUsage(
