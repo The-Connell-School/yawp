@@ -11,6 +11,7 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:5396',
     trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
     launchOptions: { executablePath: process.env.PW_EXECUTABLE_PATH },
   },
   webServer:

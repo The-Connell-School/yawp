@@ -778,6 +778,7 @@ jobs:
           path: |
             services/web-app/playwright-report/
             services/web-app/test-results/
+            ${{ runner.temp }}/signon/signon-playwright-results/
           retention-days: 7
 
       - name: 🔐 Run preview access gate tests

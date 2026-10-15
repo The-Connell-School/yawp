@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type Route } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -300,16 +300,31 @@ for (const width of [1280, 390])
       page.getByRole('heading', { name: 'Enter your password' })
     ).toBeVisible();
     await shot(page, 'signon-05-resolved-password', width);
+    // Exercise the full-document reset continuation with slow client startup.
+    // Server-rendered headings alone do not prove React handlers are attached.
+    const delayResetScripts = async (route: Route) => {
+      if (route.request().resourceType() === 'script')
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      await route.continue();
+    };
+    await page.route('**/*', delayResetScripts);
     await page.getByRole('button', { name: 'Forgot password?' }).click();
     await expect(
       page.getByRole('heading', { name: 'Reset your password', exact: true })
     ).toBeVisible();
+    // Forgot password performs a full document navigation. Wait for the new
+    // client's handlers, as at the other entry/continuation boundaries above.
+    await page.waitForFunction(() =>
+      Boolean((window as any).__reactRouterDataRouter)
+    );
+    await page.unroute('**/*', delayResetScripts);
     await shot(page, 'signon-13-reset-code', width);
     await page.getByLabel('Code', { exact: true }).fill(await codeFor(address));
     await page.getByRole('button', { name: 'Verify', exact: true }).click();
     await expect(
       page.getByRole('heading', { name: 'Set a new password' })
     ).toBeVisible();
+    await shot(page, 'signon-16-reset-password', width);
     await page
       .getByLabel('New password', { exact: true })
       .fill('new-local-password');
