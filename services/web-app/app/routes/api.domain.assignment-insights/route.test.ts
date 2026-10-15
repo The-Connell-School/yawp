@@ -64,7 +64,7 @@ mock.module('~/utils/ai-admission.server', () => ({
   AiFreeTierBudgetExceededError,
   AiRateLimitError,
   aiFreeTierBudgetExceededMessage: () =>
-    'AI tools are paused because this free-tier environment has reached its current budget.',
+    'Writing tools are paused because this free-tier environment has reached its current budget.',
   reserveAiRequest,
 }));
 

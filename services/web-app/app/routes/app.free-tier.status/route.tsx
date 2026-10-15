@@ -67,7 +67,7 @@ const content = {
   },
   'budget-paused': {
     title: 'Free classroom spending is paused',
-    copy: 'This environment has reached its current free classroom budget. AI tools and other operations covered by the spending guard are paused. This is an environment limit, not a personal allowance or a permanent trial expiration.',
+    copy: 'This environment has reached its current free classroom budget. Writing tools and other operations covered by the spending guard are paused. This is an environment limit, not a personal allowance or a permanent trial expiration.',
   },
   available: {
     title: 'Free classroom access',

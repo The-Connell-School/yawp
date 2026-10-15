@@ -256,7 +256,7 @@ export default function OrganizationRoute() {
                       <span className="min-w-0">
                         <span className="block font-medium">Class Summary</span>
                         <span className="block text-xs text-muted-foreground">
-                          Enables assignment-level AI class summaries.
+                          Enables assignment-level class summaries.
                         </span>
                       </span>
                     </label>

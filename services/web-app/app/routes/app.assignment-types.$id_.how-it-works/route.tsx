@@ -141,7 +141,7 @@ const GRADING_POINTS = [
   {
     title: 'What it isn’t',
     detail:
-      'The final grade. Students see nothing until you release it, and it never accuses a student of cheating or of using AI.',
+      'The final grade. Students see nothing until you release it, and it never accuses a student of cheating or of using outside tools.',
   },
   {
     title: 'Why we use it',
@@ -164,7 +164,7 @@ const WONT = [
   'Let the Tutor see other students’ essays.',
   'Show a student a grade before you release it.',
   'Grade an essay until you ask it to.',
-  'Accuse a student of cheating or of using AI.',
+  'Accuse a student of cheating or of using outside tools.',
 ];
 
 function clip(name: string, label: string) {

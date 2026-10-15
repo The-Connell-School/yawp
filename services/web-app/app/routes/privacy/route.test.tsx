@@ -13,6 +13,6 @@ describe('privacy route', () => {
     expect(html).toContain('service providers');
     expect(html).not.toContain('does not sell');
     expect(html).not.toContain('as long as needed');
-    expect(html).toContain('AI-assisted feedback');
+    expect(html).toContain('automated feedback');
   });
 });

@@ -34,7 +34,7 @@ export function ApHistoryGradingBreakdown({ audience }: Props) {
                   Every point below is all-or-nothing — a student either earns
                   it or doesn&rsquo;t, and grammar or spelling slips never cost
                   one. The tutor coaches toward these points while students
-                  write; after they submit, the AI returns feedback point by
+                  write; after they submit, YAWP returns feedback point by
                   point for you to review and override before releasing grades.
                 </>
               ) : (

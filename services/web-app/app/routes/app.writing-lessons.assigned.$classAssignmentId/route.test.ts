@@ -33,7 +33,7 @@ mock.module('~/utils/ai-admission.server', () => ({
   AiLockedForFreeTierError: class extends Error {},
   aiLockedForFreeTierMessage: () => "AI tools are locked pending administrator approval.",
   aiFreeTierBudgetExceededMessage: () =>
-    'AI tools are paused because this free-tier environment has reached its current budget.',
+    'Writing tools are paused because this free-tier environment has reached its current budget.',
   reserveAiRequest,
 }));
 
@@ -107,7 +107,7 @@ describe('assigned writing practice action', () => {
       recorded: false,
       feedback: {
         summary:
-          'AI tools are paused because this free-tier environment has reached its current budget.',
+          'Writing tools are paused because this free-tier environment has reached its current budget.',
       },
     });
     expect(generatePracticeFeedback).not.toHaveBeenCalled();

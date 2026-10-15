@@ -43,7 +43,7 @@ mock.module('~/utils/ai-admission.server', () => ({
   AiFreeTierBudgetExceededError,
   AiRateLimitError,
   aiFreeTierBudgetExceededMessage: () =>
-    'AI tools are paused because this free-tier environment has reached its current budget.',
+    'Writing tools are paused because this free-tier environment has reached its current budget.',
   reserveAiRequest,
 }));
 
@@ -264,7 +264,7 @@ describe('api.domain.reporter action', () => {
     expect((response as any).data).toEqual({
       error: 'free_tier_budget_exceeded',
       message:
-        'AI tools are paused because this free-tier environment has reached its current budget.',
+        'Writing tools are paused because this free-tier environment has reached its current budget.',
     });
     expect(getLLMCompletion).not.toHaveBeenCalled();
     expect(prisma.reporterConversation.create).not.toHaveBeenCalled();

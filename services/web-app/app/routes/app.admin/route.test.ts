@@ -43,6 +43,6 @@ describe('admin tabs', () => {
       (tab) => tab.to === '/app/admin/ai-evaluations'
     );
 
-    expect(aiEvaluationsTab?.label).toBe('AI Evaluations');
+    expect(aiEvaluationsTab?.label).toBe('Grading Evaluations');
   });
 });
