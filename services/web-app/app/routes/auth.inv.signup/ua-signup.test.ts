@@ -36,7 +36,9 @@ function signup(fields: Record<string, string>) {
 
 describe('UA student signup', () => {
   let previousResponse: typeof Response;
-  afterEach(() => { globalThis.Response = previousResponse; });
+  afterEach(() => {
+    globalThis.Response = previousResponse;
+  });
   beforeEach(() => {
     previousResponse = globalThis.Response;
     globalThis.Response = globalThis.__serverResponse;
@@ -124,6 +126,30 @@ describe('UA student signup', () => {
 
     expect(response).not.toBeInstanceOf(Response);
     expect(prisma.invitation.create).not.toHaveBeenCalled();
+  });
+
+  test('ordinary signup preserves valid code targets for new-student onboarding', async () => {
+    prisma.class.findMany.mockResolvedValue([{ id: 'free-class' }]);
+    const response = (await studentSignupAction({
+      request: signup({ email: 'new-student@example.com', code: ' FREE123 ' }),
+    } as any)) as Response;
+    expect(response.status).toBe(302);
+    expect(prisma.class.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          code: { equals: 'FREE123', mode: 'insensitive' },
+          isArchived: false,
+        },
+      })
+    );
+    expect(prisma.invitation.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        type: 'onboard-student',
+        metadata: JSON.stringify({ klassId: 'free-class' }),
+      }),
+    });
+    // Email transport is mocked in this suite; no delivery occurs.
+    expect(sendEmail).toHaveBeenCalledTimes(1);
   });
 
   test('UA signup refuses to overwrite a pending ordinary class invitation', async () => {
