@@ -22,11 +22,11 @@ beforeAll(async () => {
       observed = new URLSearchParams(init?.body as URLSearchParams);
       const token = await new SignJWT(claims)
         .setProtectedHeader({ alg: 'RS256', kid: 'local' })
-        .setIssuer('https://accounts.google.com')
-        .setAudience('local-client')
+        .setIssuer((claims.iss as string) || 'https://accounts.google.com')
+        .setAudience((claims.aud as string | string[]) || 'local-client')
         .setSubject('subject-1')
-        .setIssuedAt()
-        .setExpirationTime('5m')
+        .setIssuedAt(typeof claims.iat === 'number' ? claims.iat : undefined)
+        .setExpirationTime(typeof claims.exp === 'number' ? claims.exp : '5m')
         .sign(privateKey);
       return Response.json({ id_token: token }, { status: tokenStatus });
     }
@@ -86,6 +86,11 @@ for (const invalid of [
   { nonce: 'foreign' },
   { email: 'bad-email' },
   { azp: 'foreign-client' },
+  { aud: 'foreign-client' },
+  { aud: ['local-client', 'foreign-client'] },
+  { iss: 'https://evil.example' },
+  { exp: 0 },
+  { iat: 0 },
 ])
   test(`Google rejects ${JSON.stringify(invalid)}`, async () => {
     const context = flow();

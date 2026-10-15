@@ -5,7 +5,10 @@ const loginAction = mock(async (_args: unknown) => new Response('legacy'));
 const findUnique = mock(
   async (_args: unknown): Promise<{ value: string } | null> => null
 );
-mock.module('~/utils/auth.server', () => ({ requireAnonymous }));
+mock.module('~/utils/auth.server', () => ({
+  requireAnonymous,
+  requireMutableRequest: async () => {},
+}));
 mock.module('./login.server', () => ({ loginAction }));
 mock.module('~/utils/db.server', () => ({
   prisma: { setting: { findUnique } },

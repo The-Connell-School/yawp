@@ -38,6 +38,7 @@ export type SignonMembership = {
 export type SignonState = {
   screen: SignonScreen;
   identifier?: string;
+  provider?: 'google';
   organizationName?: string;
   adminName?: string;
   sentDate?: string;
@@ -46,6 +47,7 @@ export type SignonState = {
   classInfo?: SignonClass;
   classes?: SignonClass[];
   memberships?: SignonMembership[];
+  handleSuggestions?: string[];
   variant?: string;
   notice?: string;
   error?: string;

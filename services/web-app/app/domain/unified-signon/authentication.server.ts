@@ -19,8 +19,47 @@ import {
   isIsolatedPreviewSeatMode,
 } from '~/utils/preview-access.server';
 import { previewSessionAllowedWithoutSeatMembership } from '~/utils/preview-session-seat.server';
-import { FlowError, stateFor, type Flow } from './flow.server';
+import {
+  FlowError,
+  stateFor,
+  assertCurrentIdentity,
+  type Flow,
+} from './flow.server';
+import {
+  readInvitation,
+  prepareInvitation,
+  acceptExistingInvitation,
+  acceptStudentInvitation,
+} from './invitations.server';
 import { postAuthenticationDestination } from './policy.server';
+
+async function authenticationHeaders(
+  tx: Prisma.TransactionClient,
+  request: Request,
+  user: { id: string; email: string | null },
+  issueSession: boolean
+) {
+  const headers = new Headers({ 'Cache-Control': 'private, no-store' });
+  if (issueSession) {
+    const session = await tx.session.create({
+      data: {
+        userId: user.id,
+        expirationDate: getSessionExpirationDateForUser(user),
+      },
+    });
+    const auth = await authSessionStorage.getSession(
+      request.headers.get('cookie')
+    );
+    auth.set(sessionKey, session.id);
+    headers.append(
+      'set-cookie',
+      await authSessionStorage.commitSession(auth, {
+        expires: session.expirationDate,
+      })
+    );
+  }
+  return headers;
+}
 
 export async function finishAuthentication(
   tx: Prisma.TransactionClient,
@@ -30,6 +69,7 @@ export async function finishAuthentication(
   issueSession = true,
   selectedMembershipId?: string
 ): Promise<Response> {
+  const membershipChosen = Boolean(selectedMembershipId);
   const user = await tx.user.findUniqueOrThrow({
     where: { id: userId },
     select: { id: true, email: true, mustChangePassword: true },
@@ -57,22 +97,12 @@ export async function finishAuthentication(
     throw new FlowError('Choose an active membership.', 403);
   flow.data.userId = userId;
   if (flow.data.pendingGoogle && flow.data.proof && !user.mustChangePassword) {
-    const headers = new Headers({ 'Cache-Control': 'private, no-store' });
-    if (issueSession) {
-      const session = await tx.session.create({
-        data: { userId, expirationDate: getSessionExpirationDateForUser(user) },
-      });
-      const auth = await authSessionStorage.getSession(
-        request.headers.get('cookie')
-      );
-      auth.set(sessionKey, session.id);
-      headers.append(
-        'set-cookie',
-        await authSessionStorage.commitSession(auth, {
-          expires: session.expirationDate,
-        })
-      );
-    }
+    const headers = await authenticationHeaders(
+      tx,
+      request,
+      user,
+      issueSession
+    );
     return Response.json(
       stateFor(flow, {
         screen: 'link-google',
@@ -80,6 +110,26 @@ export async function finishAuthentication(
       }),
       { headers }
     );
+  }
+  if (!user.mustChangePassword && flow.data.invitationId && flow.data.proof) {
+    await assertCurrentIdentity(tx, flow);
+    const invitation = await readInvitation(tx, flow);
+    if (invitation?.role === 'TEACHER')
+      await acceptExistingInvitation(tx, flow, userId);
+    else if (invitation?.role === 'STUDENT') {
+      const next = await prepareInvitation(tx, flow, request);
+      if (next && !(next instanceof Response) && next.variant === 'multiple') {
+        return Response.json(stateFor(flow, next), {
+          headers: await authenticationHeaders(tx, request, user, issueSession),
+        });
+      }
+      selectedMembershipId = await acceptStudentInvitation(tx, flow, userId);
+    }
+    memberships = await tx.orgMembership.findMany({
+      where: { userId, isActive: true },
+      include: { organization: { select: { name: true, plan: true } } },
+      orderBy: { id: 'asc' },
+    });
   }
   // A forced password change must complete before a class is joined.
   if (!user.mustChangePassword && flow.data.classId && flow.data.classCode) {
@@ -136,26 +186,11 @@ export async function finishAuthentication(
   }
   const destination = postAuthenticationDestination({
     mustChangePassword: user.mustChangePassword,
-    activeMemberships: selectedMembershipId ? 1 : memberships.length,
+    activeMemberships: membershipChosen ? 1 : memberships.length,
     trialDestination,
     redirectTo: flow.data.destination,
   });
-  const headers = new Headers({ 'Cache-Control': 'private, no-store' });
-  if (issueSession) {
-    const session = await tx.session.create({
-      data: { userId, expirationDate: getSessionExpirationDateForUser(user) },
-    });
-    const auth = await authSessionStorage.getSession(
-      request.headers.get('cookie')
-    );
-    auth.set(sessionKey, session.id);
-    headers.append(
-      'set-cookie',
-      await authSessionStorage.commitSession(auth, {
-        expires: session.expirationDate,
-      })
-    );
-  }
+  const headers = await authenticationHeaders(tx, request, user, issueSession);
   if (destination === 'inactive') {
     const anyStaff = await tx.orgMembership.findFirst({
       where: { userId, role: 'TEACHER' },

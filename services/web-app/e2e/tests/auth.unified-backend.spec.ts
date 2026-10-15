@@ -125,7 +125,7 @@ for (const width of [1280, 390])
     await expect(page.getByRole('alert')).toContainText('code');
     await shot(page, 'signon-14-code-error', width);
     await page.getByRole('button', { name: 'Resend code' }).click();
-    await expect(page.getByRole('alert')).toContainText('wait');
+    await expect(page.getByRole('alert')).toContainText('Too many attempts');
     await shot(page, 'signon-14-code-retry', width);
     // Retry delay is server enforced; expire the cooldown only in this local fixture.
     const flowRow = await db.signonFlow.findFirstOrThrow({
@@ -134,12 +134,26 @@ for (const width of [1280, 390])
     });
     const flow = flowRow.data as any;
     flow.otp.sent = 0;
+    flow.otp.expires = 0;
     await db.signonFlow.update({
       where: { id: flowRow.id },
       data: { data: flow },
     });
     await page.reload(); // A fresh loader resumes only with the explicit continuation.
     await page.goto('/auth/login?continue=1');
+    await page.getByLabel('Code', { exact: true }).fill(await codeFor(address));
+    await page.getByRole('button', { name: 'Verify', exact: true }).click();
+    await expect(page.getByRole('alert')).toHaveText(
+      'That code has expired. Send yourself a new one.'
+    );
+    await shot(page, 'signon-14-code-expired', width);
+    await page
+      .getByRole('button', { name: 'Send a new code', exact: true })
+      .click();
+    await expect(page.getByRole('status')).toHaveText(
+      'New code sent. Check spam too.'
+    );
+    await shot(page, 'signon-14-code-resent', width);
     await page.getByLabel('Code', { exact: true }).fill(await codeFor(address));
     await page.getByRole('button', { name: 'Verify', exact: true }).click();
     await expect(

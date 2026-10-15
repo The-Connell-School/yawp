@@ -18,6 +18,14 @@ test('canonical identifiers accept the display prefix and preserve class collisi
     kind: 'handle-or-code',
     value: 'eng-11x',
   });
+  expect(normalizeIdentifier('12')).toEqual({
+    kind: 'handle-or-code',
+    value: '12',
+  });
+  expect(normalizeIdentifier('student')).toEqual({
+    kind: 'handle-or-code',
+    value: 'student',
+  });
   for (const invalid of ['', '@', 'bad@', 'a b', 'x'.repeat(101)])
     expect(normalizeIdentifier(invalid)).toBeNull();
 });

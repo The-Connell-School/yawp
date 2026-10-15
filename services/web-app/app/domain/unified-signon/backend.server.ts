@@ -8,6 +8,7 @@ import {
   NameSchema,
   PasswordAndConfirmPasswordSchema,
 } from '~/utils/schemas/user';
+import { validateUsername } from '~/utils/username';
 import { UsernameFieldSchema } from '~/utils/schemas/username';
 import {
   enforceUnauthByIpAndTarget,
@@ -50,11 +51,7 @@ import {
 } from './classes.server';
 import { deliverCode } from './mail.server';
 import { finishAuthentication } from './authentication.server';
-import {
-  readInvitation,
-  prepareInvitation,
-  acceptExistingInvitation,
-} from './invitations.server';
+import { readInvitation, prepareInvitation } from './invitations.server';
 import { beginGoogle, googleAvailable } from './google.server';
 
 export async function limit(
@@ -73,7 +70,7 @@ export async function limit(
   });
   if (!decision.allowed)
     throw new FlowError(
-      'Too many attempts. Please wait and try again.',
+      `Too many attempts. Try again in ${Math.ceil(decision.retryAfterSeconds / 60)} minutes.`,
       429,
       decision.retryAfterSeconds
     );
@@ -121,6 +118,11 @@ export async function resolveIdentifier(
     return resolveClasses(tx, flow, parsed.value);
   }
   if (parsed.kind !== 'email') {
+    const handle = validateUsername(parsed.value);
+    if (!user && !handle.ok)
+      throw new FlowError(handle.message, 400, undefined, {
+        identifier: handle.message,
+      });
     // Same password surface for unknown handles; no account status is revealed.
     return stateFor(flow, {
       screen: 'password',
@@ -131,7 +133,9 @@ export async function resolveIdentifier(
     where: {
       target: { equals: parsed.value, mode: 'insensitive' },
       type: { in: ['onboard-student', 'onboard-teacher', 'onboard-owner'] },
-      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      ...(user
+        ? { OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }
+        : {}),
     },
     select: { id: true },
   });
@@ -179,7 +183,7 @@ async function issueCode(
   const now = Date.now();
   if (flow.data.otp && now - flow.data.otp.sent < 60000)
     throw new FlowError(
-      'Please wait before requesting another code.',
+      'Too many attempts. Try again in 1 minute.',
       429,
       Math.ceil((flow.data.otp.sent + 60000 - now) / 1000)
     );
@@ -198,7 +202,9 @@ async function issueCode(
       where: {
         target: { equals: parsed.value, mode: 'insensitive' },
         type: { in: ['onboard-teacher', 'onboard-owner', 'onboard-student'] },
-        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        ...(flow.data.userId
+          ? { OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }
+          : {}),
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -223,6 +229,7 @@ async function issueCode(
     screen: 'email-code',
     identifier: parsed.value,
     variant: flow.data.purpose === 'reset' ? 'reset' : undefined,
+    notice: resend ? 'New code sent. Check spam too.' : undefined,
     classInfo: flow.data.state.classInfo,
   });
 }
@@ -269,7 +276,14 @@ async function verifyCode(
   const otp = flow.data.otp;
   if (!otp || otp.attempts >= 5 || otp.expires <= Date.now())
     return Response.json(
-      { error: 'That code expired. Request a new one.' },
+      stateFor(flow, {
+        screen: 'email-code',
+        identifier: flow.data.identifier,
+        variant: 'expired',
+        fieldErrors: {
+          code: 'That code has expired. Send yourself a new one.',
+        },
+      }),
       { status: 400 }
     );
   otp.attempts++;
@@ -279,14 +293,24 @@ async function verifyCode(
     !timingSafeEqual(Buffer.from(actual), Buffer.from(otp.hash))
   )
     return Response.json(
-      { error: 'That code is not right. Try again.' },
+      {
+        error: '',
+        fieldErrors: {
+          code: "That code isn't right. Use the one from our most recent email.",
+        },
+      },
       { status: 400 }
     );
   // The flow row lock makes consumption and proof persistence atomic.
   flow.data.otp = undefined;
   if (flow.data.purpose === 'reset' && !flow.data.userId)
     return Response.json(
-      { error: 'That code is not right. Try again.' },
+      {
+        error: '',
+        fieldErrors: {
+          code: "That code isn't right. Use the one from our most recent email.",
+        },
+      },
       { status: 400 }
     );
   flow.data.proof = 'email';
@@ -303,15 +327,34 @@ async function verifyCode(
       select: { password: { select: { userId: true } } },
     });
     if (user.password) {
-      await acceptExistingInvitation(tx, flow, flow.data.userId);
       return finishAuthentication(tx, flow, request, flow.data.userId);
     }
   }
-  const invitationState = await prepareInvitation(tx, flow, request);
-  if (invitationState)
-    return invitationState instanceof Response
-      ? invitationState
-      : stateFor(flow, invitationState);
+  try {
+    const invitationState = await prepareInvitation(tx, flow, request);
+    if (invitationState)
+      return invitationState instanceof Response
+        ? invitationState
+        : stateFor(flow, invitationState);
+  } catch (error) {
+    if (
+      error instanceof FlowError &&
+      error.message === 'Your invitation expired.'
+    )
+      return stateFor(flow, {
+        screen: 'activation',
+        identifier: flow.data.identifier,
+        variant: 'expired',
+      });
+    if (error instanceof FlowError)
+      return Response.json(
+        {
+          error: 'Something went wrong with this sign-up. Please start again.',
+        },
+        { status: 400 }
+      );
+    throw error;
+  }
   return stateFor(flow, {
     screen: 'name-password',
     identifier: flow.data.identifier,
@@ -330,6 +373,7 @@ async function createAccount(
     flow.data.identifier.startsWith('@')
   )
     throw new FlowError('Verify your email first.');
+  await assertCurrentIdentity(tx, flow);
   await limit(request, flow.data.identifier);
   const google = flow.data.proof === 'google';
   const reset = flow.data.purpose === 'reset';
@@ -368,12 +412,11 @@ async function createAccount(
         ...(!reset ? { name: values.name } : {}),
       },
     });
-    if (!reset) await acceptExistingInvitation(tx, flow, user.id);
     if (reset) await tx.session.deleteMany({ where: { userId: user.id } });
     return finishAuthentication(tx, flow, request, user.id);
   }
   if (user)
-    throw new FlowError('An account already exists. Sign in to continue.');
+    throw new FlowError('You already have an account. Sign in instead.');
   const invitation = await readInvitation(tx, flow);
   const klass =
     invitation?.role === 'TEACHER' ? null : await selectedClass(tx, flow);
@@ -397,8 +440,10 @@ async function createAccount(
     });
     if (!seat.ok) throw new FlowError(seat.error);
   }
-  if (invitation)
+  if (invitation) {
     await tx.invitation.delete({ where: { id: invitation.invite.id } });
+    flow.data.invitationId = undefined;
+  }
   user = await tx.user.create({
     data: {
       email: flow.data.identifier,
@@ -506,7 +551,15 @@ async function operate(
       !isUaPartnerHost(request) ||
       !isValidUaPartnerCode(values.organizationCode)
     )
-      throw new FlowError('Enter a valid organization code.');
+      throw new FlowError(
+        "We couldn't find that organization code. Check it with your program coordinator.",
+        400,
+        undefined,
+        {
+          organizationCode:
+            "We couldn't find that organization code. Check it with your program coordinator.",
+        }
+      );
     requireUaOrganizationId();
     flow.data.partner = true;
     return Response.json(
@@ -547,11 +600,34 @@ async function operate(
       joinToken: flow.data.joinToken,
       client: tx,
     });
-    if (result.status === 'error')
+    if (result.status === 'error') {
+      if (result.error.includes('full'))
+        return Response.json(
+          stateFor(flow, {
+            screen: 'class-handle',
+            variant: 'full',
+            classInfo: classSummary(klass),
+          }),
+          { status: 400 }
+        );
+      if (result.field === 'username' && result.suggestions?.length)
+        return Response.json(
+          stateFor(flow, {
+            screen: 'class-handle',
+            variant: 'taken',
+            classInfo: classSummary(klass),
+            handleSuggestions: result.suggestions,
+            fieldErrors: {
+              username: `@${parsed.data.username} is taken. Try one of these:`,
+            },
+          }),
+          { status: 400 }
+        );
       return Response.json(
         { error: result.error, fieldErrors: { [result.field]: result.error } },
         { status: 400 }
       );
+    }
     // registerFreeTierStudent preserves the legacy handle/session/seat/budget
     // operation. Reuse its session rather than allocating a second session.
     const { authSessionStorage } =
@@ -596,6 +672,7 @@ async function operate(
     )
       throw new FlowError('Sign in to link this account.', 401);
     if (operation === 'link-google') {
+      await assertCurrentIdentity(tx, flow);
       if (!googleAvailable())
         throw new FlowError('Google sign-in is unavailable.', 503);
       const existing = await tx.signonIdentity.findFirst({
@@ -650,6 +727,7 @@ async function operate(
     if (
       application &&
       operation === 'resend-approval' &&
+      authenticatedUserId &&
       authenticatedUserId === application.userId
     )
       await resendFreeTierAdminApprovalReminder({
@@ -677,7 +755,7 @@ export async function unifiedAction(
   });
   if (!decision.allowed)
     throw new FlowError(
-      'Too many attempts. Please wait and try again.',
+      `Too many attempts. Try again in ${Math.ceil(decision.retryAfterSeconds / 60)} minutes.`,
       429,
       decision.retryAfterSeconds
     );

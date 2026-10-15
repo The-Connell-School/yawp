@@ -438,7 +438,7 @@ suite(
     const replay = await unifiedEntry(
       new Request(url + '?continue=1', { headers: { cookie } })
     );
-    expect(replay?.initialState?.error).toContain('failed');
+    expect(replay?.initialState?.error).toContain('connect to Google');
     await prisma.setting.update({
       where: { name: 'feature_flag.unified-sign-on' },
       data: { value: 'false' },
@@ -614,6 +614,19 @@ suite(
     });
     process.env.GOOGLE_OAUTH_CLIENT_ID = 'local-client';
     process.env.GOOGLE_OAUTH_CLIENT_SECRET = 'local-secret';
+    await prisma.invitation.create({
+      data: {
+        type: 'onboard-owner',
+        target: email,
+        secret: 'legacy-secret',
+        algorithm: 'SHA-256',
+        digits: 6,
+        period: 600,
+        charSet: '0123456789',
+        expiresAt: new Date(Date.now() + 600000),
+        metadata: JSON.stringify({ organizationId: prefix }),
+      },
+    });
     let nonce = '';
     let tokenRequests = 0;
     globalThis.fetch = (async (target: any, init?: RequestInit) => {
@@ -680,6 +693,24 @@ suite(
       ).toBe(1);
       cookie = '';
       flowToken = '';
+      expect(
+        await prisma.orgMembership.count({
+          where: { userId: user.id, organizationId: prefix, isOrgOwner: true },
+        })
+      ).toBe(1);
+      await prisma.invitation.create({
+        data: {
+          type: 'onboard-teacher',
+          target: email,
+          secret: 'legacy-secret',
+          algorithm: 'SHA-256',
+          digits: 6,
+          period: 600,
+          charSet: '0123456789',
+          expiresAt: new Date(Date.now() + 600000),
+          metadata: JSON.stringify({ organizationId: prefix + '-b' }),
+        },
+      });
       const linkedStart = await post('google');
       const linkedAuthorization = new URL(linkedStart.data.redirectTo);
       nonce = linkedAuthorization.searchParams.get('nonce')!;
@@ -691,6 +722,15 @@ suite(
       expect(responses.filter((r) => r.headers.has('set-cookie'))).toHaveLength(
         1
       );
+      expect(
+        await prisma.orgMembership.count({
+          where: {
+            userId: user.id,
+            organizationId: prefix + '-b',
+            role: 'TEACHER',
+          },
+        })
+      ).toBe(1);
       expect(tokenRequests).toBe(2); // One provider exchange for each distinct authorization.
     } finally {
       globalThis.fetch = originalFetch;
@@ -1269,5 +1309,362 @@ suite(
       delete process.env.GOOGLE_OAUTH_CLIENT_ID;
       delete process.env.GOOGLE_OAUTH_CLIENT_SECRET;
     }
+  }
+);
+
+suite(
+  'unified teacher handoff cannot fall back to legacy authorization after expiry or flag-off',
+  async () => {
+    cookie = '';
+    flowToken = '';
+    const email = `expired-handoff-${prefix}@example.test`;
+    const second = prefix + '-handoff';
+    await prisma.school.create({
+      data: {
+        id: second,
+        code: second,
+        name: 'Second campus',
+        organizationId: prefix,
+      },
+    });
+    try {
+      await prisma.invitation.create({
+        data: {
+          type: 'onboard-teacher',
+          target: email,
+          secret: 'legacy-secret',
+          algorithm: 'SHA-256',
+          digits: 6,
+          period: 600,
+          charSet: '0123456789',
+          expiresAt: new Date(Date.now() + 600000),
+          metadata: JSON.stringify({ organizationId: prefix }),
+        },
+      });
+      await post('resolve', { identifier: email });
+      await post('send-code');
+      await post('verify-code', { code: await code(email) });
+      await prisma.setting.update({
+        where: { name: 'feature_flag.unified-sign-on' },
+        data: { value: 'false' },
+      });
+      const { action } =
+        await import('~/routes/auth.inv.onboard-teacher/route');
+      try {
+        await action({
+          request: new Request(
+            'http://127.0.0.1:5396/auth/inv/onboard-teacher',
+            {
+              method: 'POST',
+              headers: { cookie },
+              body: new URLSearchParams({
+                name: 'Forbidden Teacher',
+                schoolId: second,
+                password: 'abcdef',
+                confirmPassword: 'abcdef',
+              }),
+            }
+          ),
+          params: {},
+          context: {},
+        } as any);
+        throw new Error('Expected rejection');
+      } catch (response) {
+        expect((response as Response).headers.get('location')).toBe(
+          '/auth/login'
+        );
+        expect(
+          (response as Response).headers
+            .getSetCookie()
+            .some(
+              (c) => c.startsWith('en_invitation=') && c.includes('Expires=')
+            )
+        ).toBe(true);
+      }
+      expect(await prisma.user.count({ where: { email } })).toBe(0);
+    } finally {
+      await prisma.setting.update({
+        where: { name: 'feature_flag.unified-sign-on' },
+        data: { value: 'true' },
+      });
+      await prisma.school.delete({ where: { id: second } });
+    }
+  }
+);
+suite(
+  'reset proof cannot change credentials after email reassignment, and substituted class context invalidates a code',
+  async () => {
+    cookie = '';
+    flowToken = '';
+    const email = `reset-race-${prefix}@example.test`;
+    const user = await prisma.user.create({
+      data: {
+        email,
+        password: { create: { hash: await getPasswordHash('abcdef') } },
+      },
+    });
+    await post('resolve', { identifier: email });
+    await post('send-code', { purpose: 'reset-password' });
+    await post('verify-code', { code: await code(email) });
+    const old = await prisma.password.findUniqueOrThrow({
+      where: { userId: user.id },
+    });
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { email: `reset-moved-${prefix}@example.test` },
+    });
+    expect(
+      (
+        await post('create-account', {
+          password: 'new-password',
+          confirmPassword: 'new-password',
+        })
+      ).response.status
+    ).toBe(400);
+    expect(
+      (await prisma.password.findUniqueOrThrow({ where: { userId: user.id } }))
+        .hash
+    ).toBe(old.hash);
+  }
+);
+suite(
+  'Google multi-class invitations keep the exact picker variant and require an authorized class choice',
+  async () => {
+    const { googleCallback } = await import('./google.server');
+    const { generateKeyPair, exportJWK, SignJWT } = await import('jose');
+    const previousFetch = globalThis.fetch;
+    const pair = await generateKeyPair('RS256');
+    const email = `google-multi-${prefix}@example.test`;
+    const second = prefix + '-google-multi';
+    await prisma.class.create({
+      data: { id: second, code: second, schoolId: prefix },
+    });
+    await prisma.invitation.create({
+      data: {
+        type: 'onboard-student',
+        target: email,
+        secret: 'legacy-secret',
+        algorithm: 'SHA-256',
+        digits: 6,
+        period: 600,
+        charSet: '0123456789',
+        expiresAt: new Date(Date.now() + 600000),
+        metadata: JSON.stringify({ klassIds: [prefix, second] }),
+      },
+    });
+    process.env.GOOGLE_OAUTH_CLIENT_ID = 'local-client';
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET = 'local-secret';
+    cookie = '';
+    flowToken = '';
+    const authorization = new URL((await post('google')).data.redirectTo);
+    globalThis.fetch = (async (target: any) => {
+      if (target === 'https://www.googleapis.com/oauth2/v3/certs')
+        return Response.json({
+          keys: [
+            {
+              ...(await exportJWK(pair.publicKey)),
+              kid: 'local',
+              alg: 'RS256',
+            },
+          ],
+        });
+      if (target === 'https://oauth2.googleapis.com/token')
+        return Response.json({
+          id_token: await new SignJWT({
+            nonce: authorization.searchParams.get('nonce'),
+            email,
+            email_verified: true,
+          })
+            .setProtectedHeader({ alg: 'RS256', kid: 'local' })
+            .setIssuer('https://accounts.google.com')
+            .setAudience('local-client')
+            .setSubject(`multi-subject-${prefix}`)
+            .setIssuedAt()
+            .setExpirationTime('5m')
+            .sign(pair.privateKey),
+        });
+      throw new Error('External calls forbidden');
+    }) as typeof fetch;
+    try {
+      await googleCallback(
+        new Request(
+          `http://127.0.0.1:5396/auth/unified/google/callback?code=mock&state=${authorization.searchParams.get('state')}`,
+          { headers: { cookie } }
+        )
+      );
+      const entry = await unifiedEntry(
+        new Request(url + '?continue=1', { headers: { cookie } })
+      );
+      flowToken = entry!.initialState!.flowToken!;
+      expect(entry?.initialState?.variant).toBe('multiple');
+      expect(entry?.initialState?.provider).toBe('google');
+      expect(entry?.initialState?.classes).toHaveLength(2);
+      expect(
+        (await post('choose-class', { classId: second })).data.state.screen
+      ).toBe('name-password');
+      expect(
+        (await post('create-account', { name: 'Google Student' })).response
+          .status
+      ).toBe(302);
+    } finally {
+      globalThis.fetch = previousFetch;
+      delete process.env.GOOGLE_OAUTH_CLIENT_ID;
+      delete process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+      await prisma.class.delete({ where: { id: second } });
+    }
+  }
+);
+
+suite(
+  'expired invitation status is revealed only after email proof and cannot create an account',
+  async () => {
+    cookie = '';
+    flowToken = '';
+    const email = `expired-invite-${prefix}@example.test`;
+    await prisma.invitation.create({
+      data: {
+        type: 'onboard-owner',
+        target: email,
+        secret: 'legacy-secret',
+        algorithm: 'SHA-256',
+        digits: 6,
+        period: 600,
+        charSet: '0123456789',
+        expiresAt: new Date(0),
+        metadata: JSON.stringify({ organizationId: prefix }),
+      },
+    });
+    const resolved = await post('resolve', { identifier: email });
+    expect(resolved.data.state.screen).toBe('activation');
+    expect(resolved.data.state.variant).toBeUndefined();
+    await post('send-code');
+    const verified = await post('verify-code', { code: await code(email) });
+    expect(verified.data.state.variant).toBe('expired');
+    expect(
+      (
+        await post('create-account', {
+          name: 'Expired Teacher',
+          password: 'abcdef',
+          confirmPassword: 'abcdef',
+        })
+      ).response.status
+    ).toBe(400);
+    expect(await prisma.user.count({ where: { email } })).toBe(0);
+  }
+);
+
+suite(
+  'anonymous trial status requires email proof and resends only through the existing captured invitation contract',
+  async () => {
+    cookie = '';
+    flowToken = '';
+    const email = `status-${prefix}@example.test`;
+    const flagName = 'feature_flag.free_tier';
+    const oldFlag = await prisma.setting.findUnique({
+      where: { name: flagName },
+    });
+    const oldKey = process.env.FREE_TIER_LINK_HMAC_SECRET;
+    const oldOrigin = process.env.PRIMARY_APP_URL;
+    process.env.FREE_TIER_LINK_HMAC_SECRET =
+      'local-test-free-tier-signing-key-32bytes';
+    process.env.PRIMARY_APP_URL = 'http://127.0.0.1:5396';
+    await prisma.setting.upsert({
+      where: { name: flagName },
+      create: { name: flagName, value: 'true', valueType: 'boolean' },
+      update: { value: 'true' },
+    });
+    const application = await prisma.freeTierApplication.create({
+      data: {
+        email,
+        name: 'Local Teacher',
+        schoolName: 'Local',
+        location: 'Local',
+        gradeLevel: '11',
+        status: 'INVITED',
+      },
+    });
+    try {
+      await post('resolve', { identifier: email });
+      expect((await post('resend-invite')).response.status).toBe(401);
+      expect((await post('trial-status')).data.state.screen).toBe('email-code');
+      expect(
+        (await post('verify-code', { code: await code(email) })).data.state
+          .variant
+      ).toBe('invited');
+      expect(
+        (await post('resend-invite', { applicationId: 'foreign' })).response
+          .status
+      ).toBe(200);
+      expect(
+        await prisma.freeTierEmailLog.count({
+          where: {
+            applicationId: application.id,
+            kind: 'release',
+            success: true,
+          },
+        })
+      ).toBe(1);
+      expect(cookie).not.toContain('en_session=');
+    } finally {
+      await prisma.freeTierApplication.delete({
+        where: { id: application.id },
+      });
+      if (oldFlag)
+        await prisma.setting.update({
+          where: { name: flagName },
+          data: { value: oldFlag.value },
+        });
+      else await prisma.setting.delete({ where: { name: flagName } });
+      if (oldKey === undefined) delete process.env.FREE_TIER_LINK_HMAC_SECRET;
+      else process.env.FREE_TIER_LINK_HMAC_SECRET = oldKey;
+      if (oldOrigin === undefined) delete process.env.PRIMARY_APP_URL;
+      else process.env.PRIMARY_APP_URL = oldOrigin;
+    }
+  }
+);
+suite(
+  'enabled mutations retain the existing read-only impersonation guard',
+  async () => {
+    const { authSessionStorage } =
+      await import('~/cookie-session-storages/authentication.server');
+    const { readOnlyImpersonationMode, impersonationModeKey } =
+      await import('~/utils/auth.server');
+    cookie = '';
+    flowToken = '';
+    await post('resolve', { identifier: `readonly-${prefix}@example.test` });
+    const session = await authSessionStorage.getSession(cookie);
+    session.set(impersonationModeKey, readOnlyImpersonationMode);
+    cookie +=
+      '; ' + (await authSessionStorage.commitSession(session)).split(';')[0];
+    expect((await post('send-code')).response.status).toBe(403);
+  }
+);
+suite(
+  'additive flow and identity tables expose the intended unique and foreign-key boundaries',
+  async () => {
+    const rows = await prisma.$queryRaw<
+      Array<{ table_name: string; column_name: string }>
+    >`SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public' AND table_name IN ('SignonFlow','SignonIdentity')`;
+    expect(
+      rows
+        .filter((r) => r.table_name === 'SignonFlow')
+        .map((r) => r.column_name)
+        .sort()
+    ).toEqual(['browserHash', 'data', 'expiresAt', 'id']);
+    expect(
+      rows
+        .filter((r) => r.table_name === 'SignonIdentity')
+        .map((r) => r.column_name)
+        .sort()
+    ).toEqual(['createdAt', 'id', 'provider', 'subject', 'userId']);
+    const indexes = await prisma.$queryRaw<
+      Array<{ indexname: string }>
+    >`SELECT indexname FROM pg_indexes WHERE schemaname='public' AND tablename='SignonIdentity'`;
+    expect(indexes.map((i) => i.indexname)).toContain(
+      'SignonIdentity_provider_subject_key'
+    );
+    expect(indexes.map((i) => i.indexname)).toContain(
+      'SignonIdentity_provider_userId_key'
+    );
   }
 );

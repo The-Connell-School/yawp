@@ -73,7 +73,12 @@ export async function unifiedEntry(request: Request) {
 
 export async function dispatchUnifiedLogin(args: ActionFunctionArgs) {
   if (!(await isUnifiedSignOnEnabled())) return loginAction(args);
-  const form = await args.request.clone().formData();
+  let form: FormData;
+  try {
+    form = await args.request.clone().formData();
+  } catch {
+    return Response.json({ error: 'Invalid form.' }, { status: 400 });
+  }
   if (
     !form.has('intent') ||
     (form.get('intent') === 'password' && !form.get('flowToken'))
@@ -85,6 +90,8 @@ export async function dispatchUnifiedLogin(args: ActionFunctionArgs) {
     const origin = args.request.headers.get('Origin');
     if (origin && origin !== new URL(args.request.url).origin)
       throw new FlowError('Invalid request origin.', 403);
+    const { requireMutableRequest } = await import('~/utils/auth.server');
+    await requireMutableRequest(args.request);
     if (form.get('intent') === 'password') {
       await requireAnonymous(args.request);
       return await withFlow(
@@ -105,10 +112,6 @@ export async function dispatchUnifiedLogin(args: ActionFunctionArgs) {
           );
           if (response instanceof Response && response.status === 302) {
             flow.data.proof = 'password';
-            const { acceptExistingInvitation } =
-              await import('./invitations.server');
-            if (flow.data.userId)
-              await acceptExistingInvitation(tx, flow, flow.data.userId);
           }
           return response;
         }
@@ -126,7 +129,8 @@ export async function dispatchUnifiedLogin(args: ActionFunctionArgs) {
     if (error instanceof FlowError)
       return Response.json(
         {
-          error: error.message,
+          error: error.fieldErrors ? '' : error.message,
+          ...(error.fieldErrors ? { fieldErrors: error.fieldErrors } : {}),
           ...(error.retryAfterSeconds
             ? { retryAfterSeconds: error.retryAfterSeconds }
             : {}),

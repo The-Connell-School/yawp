@@ -45,6 +45,7 @@ export async function readInvitation(tx: Prisma.TransactionClient, flow: Flow) {
       select: { name: true },
     });
     if (!organization) throw new FlowError('Invalid invitation.');
+    flow.data.partner = false;
     // A staff invitation must never carry a student class selected in another step.
     flow.data.classId = undefined;
     flow.data.classCode = undefined;
@@ -121,8 +122,11 @@ export async function readInvitation(tx: Prisma.TransactionClient, flow: Flow) {
       ? classes[0]
       : undefined;
   flow.data.classCandidates = classes.map((k) => k.id);
-  if (!selected)
+  if (!selected) {
+    flow.data.classId = undefined;
+    flow.data.classCode = undefined;
     return { invite, role: 'STUDENT' as const, owner: false, classes };
+  }
   flow.data.classId = selected.id;
   flow.data.classCode = selected.code;
   return {
@@ -150,6 +154,7 @@ export async function prepareInvitation(
     );
     cookie.set('email', flow.data.identifier);
     cookie.set('organizationId', invitation.organizationId);
+    cookie.set('unifiedSignon', true);
     await tx.invitation.delete({ where: { id: invitation.invite.id } });
     flow.data.invitationId = undefined;
     flow.data.legacyOrganizationId = invitation.organizationId;
@@ -223,4 +228,88 @@ export async function acceptExistingInvitation(
     });
   await tx.invitation.delete({ where: { id: invitation.invite.id } });
   flow.data.invitationId = undefined;
+}
+
+/** Existing identities may accept a proved, scoped student invitation without
+ * moving prior memberships. Shared enrollment guards still own capacity/budget. */
+export async function acceptStudentInvitation(
+  tx: Prisma.TransactionClient,
+  flow: Flow,
+  userId: string
+) {
+  const invitation = await readInvitation(tx, flow);
+  if (
+    !invitation ||
+    invitation.role !== 'STUDENT' ||
+    !invitation.organizationId ||
+    !flow.data.classId ||
+    !flow.data.classCode
+  )
+    throw new FlowError('Choose a class from your invitation.');
+  const { resolveStudentClassCode } =
+    await import('~/domain/free-tier/existing-student-enrollment.server');
+  const classes = await resolveStudentClassCode(
+    tx,
+    invitation.organizationId,
+    flow.data.classCode
+  );
+  if (!classes.some((k) => k.id === flow.data.classId))
+    throw new FlowError('Class not found.');
+  const { assertFreeClassSeatAvailableInTx, enrollStudentInClassWithSeatCap } =
+    await import('~/domain/free-tier/class-seat-cap.server');
+  const { assertFreeTierSpendAllowed } =
+    await import('~/domain/free-tier/usage-budget.server');
+  const member = await tx.orgMembership.findUnique({
+    where: {
+      userId_organizationId: {
+        userId,
+        organizationId: invitation.organizationId,
+      },
+    },
+    include: {
+      classesAsStudent: {
+        where: { id: flow.data.classId },
+        select: { id: true },
+      },
+    },
+  });
+  if (
+    member &&
+    (!member.isActive || member.role !== 'STUDENT' || member.isOrgOwner)
+  )
+    throw new FlowError(
+      'Use an active student account for this invitation.',
+      403
+    );
+  if (!member?.classesAsStudent.length) {
+    const seat = await assertFreeClassSeatAvailableInTx(tx, {
+      classId: flow.data.classId,
+      organizationId: invitation.organizationId,
+    });
+    if (!seat.ok) throw new FlowError(seat.error);
+    if (seat.plan === 'FREE_CLASSROOM') await assertFreeTierSpendAllowed(tx);
+  }
+  const target =
+    member ||
+    (await tx.orgMembership.create({
+      data: {
+        userId,
+        organizationId: invitation.organizationId,
+        role: 'STUDENT',
+      },
+    }));
+  if (!member?.classesAsStudent.length) {
+    const enrolled = await enrollStudentInClassWithSeatCap({
+      membershipId: target.id,
+      classId: flow.data.classId,
+      organizationId: invitation.organizationId,
+      client: tx,
+    });
+    if (!enrolled.ok) throw new FlowError(enrolled.error);
+  }
+  await tx.invitation.delete({ where: { id: invitation.invite.id } });
+  flow.data.invitationId = undefined;
+  flow.data.classId = undefined;
+  flow.data.classCode = undefined;
+  return target.id;
 }

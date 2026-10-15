@@ -58,7 +58,8 @@ export class FlowError extends Error {
   constructor(
     message = 'This sign-in session expired. Please start again.',
     readonly status = 400,
-    readonly retryAfterSeconds?: number
+    readonly retryAfterSeconds?: number,
+    readonly fieldErrors?: Record<string, string>
   ) {
     super(message);
   }
@@ -145,6 +146,7 @@ export function stateFor(flow: Flow, state: SignonState) {
   flow.data.state = {
     ...(classInfo ? { classInfo } : {}),
     ...state,
+    ...(flow.data.proof === 'google' ? { provider: 'google' as const } : {}),
     flowToken: flow.token,
   };
   return { state: flow.data.state };

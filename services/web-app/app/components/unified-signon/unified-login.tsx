@@ -56,7 +56,7 @@ export function UnifiedLogin({
         entry.initialState ?? {
           screen: 'entry',
           error: search.has('googleError')
-            ? 'Google sign-in failed. Please try again, or use your email.'
+            ? "We couldn't connect to Google. Try again, or use your email below."
             : undefined,
           variant:
             search.get('message') === 'existing_account'

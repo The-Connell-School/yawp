@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { createLocalJWKSet, jwtVerify, type JSONWebKeySet } from 'jose';
 import { redirect } from 'react-router';
 import { EmailSchema } from '~/utils/schemas/user';
-import { getUserId } from '~/utils/auth.server';
+import { getUserId, getImpersonationState } from '~/utils/auth.server';
 import { isUnifiedSignOnEnabled } from './gate.server';
 import {
   browserContext,
@@ -76,7 +76,9 @@ export async function exchangeGoogle(
     signal: AbortSignal.timeout(10000),
   });
   if (!response.ok)
-    throw new FlowError('Google sign-in failed. Please try again.');
+    throw new FlowError(
+      "We couldn't connect to Google. Try again, or use your email below."
+    );
   const tokens: unknown = await response.json();
   const idToken = (tokens as { id_token?: unknown })?.id_token;
   if (typeof idToken !== 'string' || idToken.length > 20000)
@@ -100,6 +102,9 @@ export async function exchangeGoogle(
     typeof payload.sub !== 'string' ||
     !payload.sub ||
     !EmailSchema.safeParse(payload.email).success ||
+    (Array.isArray(payload.aud) &&
+      payload.aud.length > 1 &&
+      payload.azp !== process.env.GOOGLE_OAUTH_CLIENT_ID) ||
     (payload.azp !== undefined &&
       payload.azp !== process.env.GOOGLE_OAUTH_CLIENT_ID)
   )
@@ -118,6 +123,8 @@ export async function googleCallback(request: Request): Promise<Response> {
       { status: 503 }
     );
   try {
+    if ((await getImpersonationState(request)).isReadOnly)
+      throw new FlowError('Read-only impersonation active.', 403);
     const context = await browserContext(request);
     const params = new URL(request.url).searchParams;
     // Consume state before any provider request, even on cancellation or failure.
@@ -134,8 +141,8 @@ export async function googleCallback(request: Request): Promise<Response> {
           screen: 'entry',
           notice:
             params.get('error') === 'access_denied'
-              ? 'Google sign-in was cancelled. Use your email or try again.'
-              : 'Google sign-in failed. Please try again.',
+              ? 'Google sign-in was cancelled. Try again, or use your email below.'
+              : "We couldn't connect to Google. Try again, or use your email below.",
         })
       );
       return redirect('/auth/login?continue=1');
@@ -158,6 +165,24 @@ export async function googleCallback(request: Request): Promise<Response> {
           throw new FlowError('This Google identity is already linked.', 403);
         flow.data.identifier = identity.email;
         flow.data.proof = 'google';
+        const linkedUser = await tx.user.findUniqueOrThrow({
+          where: { id: linked.userId },
+          select: { email: true },
+        });
+        if (linkedUser.email?.toLowerCase() === identity.email) {
+          const invite = await tx.invitation.findFirst({
+            where: {
+              target: { equals: identity.email, mode: 'insensitive' },
+              type: {
+                in: ['onboard-student', 'onboard-teacher', 'onboard-owner'],
+              },
+              OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+            },
+            orderBy: { createdAt: 'desc' },
+            select: { id: true },
+          });
+          flow.data.invitationId = invite?.id;
+        }
         return finishAuthentication(tx, flow, request, linked.userId);
       }
       const account = await tx.user.findFirst({
@@ -170,25 +195,44 @@ export async function googleCallback(request: Request): Promise<Response> {
       flow.data.pendingGoogle = identity;
       flow.data.otp = undefined;
       flow.data.proof = account ? undefined : 'google';
-      if (!account) {
-        const invitation = await tx.invitation.findFirst({
-          where: {
-            target: { equals: identity.email, mode: 'insensitive' },
-            type: {
-              in: ['onboard-student', 'onboard-teacher', 'onboard-owner'],
-            },
-            OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      const invitation = await tx.invitation.findFirst({
+        where: {
+          target: { equals: identity.email, mode: 'insensitive' },
+          type: {
+            in: ['onboard-student', 'onboard-teacher', 'onboard-owner'],
           },
-          select: { id: true },
-        });
-        flow.data.invitationId = invitation?.id;
+          ...(account
+            ? { OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }
+            : {}),
+        },
+        select: { id: true },
+      });
+      flow.data.invitationId = invitation?.id;
+      if (!account) {
         if (invitation) {
+          if (invitation) {
+            const currentInvite = await tx.invitation.findUnique({
+              where: { id: invitation.id },
+              select: { expiresAt: true },
+            });
+            if (
+              currentInvite?.expiresAt &&
+              currentInvite.expiresAt <= new Date()
+            ) {
+              stateFor(flow, {
+                screen: 'activation',
+                identifier: identity.email,
+                variant: 'expired',
+              });
+              return redirect('/auth/login?continue=1');
+            }
+          }
           const next = await prepareInvitation(tx, flow, request);
           if (next instanceof Response) return next;
           if (next) {
             stateFor(flow, {
               ...next,
-              variant: next.variant ? next.variant + '-google' : 'google',
+              provider: 'google',
             });
             return redirect('/auth/login?continue=1');
           }
@@ -222,7 +266,8 @@ export async function googleCallback(request: Request): Promise<Response> {
       await withFlow(request, context?.token, async (flow) =>
         stateFor(flow, {
           screen: 'entry',
-          error: 'Google sign-in failed. Please try again, or use your email.',
+          error:
+            "We couldn't connect to Google. Try again, or use your email below.",
         })
       );
       return redirect('/auth/login?continue=1');

@@ -11,7 +11,12 @@ export function normalizeIdentifier(raw: string) {
       ? { kind: 'email' as const, value }
       : null;
   const canonical = value.replace(/^@/, '');
-  if (!validateUsername(canonical).ok) return null;
+  if (
+    value.startsWith('@')
+      ? !validateUsername(canonical).ok
+      : !/^[a-z0-9._-]+$/.test(canonical)
+  )
+    return null;
   return {
     kind: value.startsWith('@')
       ? ('handle' as const)

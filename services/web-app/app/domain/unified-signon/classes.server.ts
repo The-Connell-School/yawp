@@ -106,7 +106,16 @@ export async function resolveClasses(
   code: string
 ) {
   const classes = await lookupClasses(tx, code);
-  if (!classes.length) throw new FlowError('Invalid code.');
+  if (!classes.length)
+    throw new FlowError(
+      "We couldn't find a class with that code. Check it with your teacher.",
+      400,
+      undefined,
+      {
+        classCode:
+          "We couldn't find a class with that code. Check it with your teacher.",
+      }
+    );
   flow.data.classCode = code.trim();
   flow.data.classCandidates = classes.map((k) => k.id);
   if (classes.length === 1) return chooseClass(tx, flow, classes[0].id);

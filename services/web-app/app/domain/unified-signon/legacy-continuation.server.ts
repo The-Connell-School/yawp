@@ -5,7 +5,7 @@ import {
   NameSchema,
   PasswordAndConfirmPasswordSchema,
 } from '~/utils/schemas/user';
-import { getPasswordHash } from '~/utils/auth.server';
+import { getPasswordHash, requireMutableRequest } from '~/utils/auth.server';
 import { finishAuthentication } from './authentication.server';
 
 export async function legacyTeacherContext(
@@ -34,6 +34,7 @@ export async function completeLegacyTeacherSignup(
   request: Request,
   values: Record<string, string>
 ) {
+  await requireMutableRequest(request);
   const context = await browserContext(request);
   return withFlow(request, context?.token, async (flow, tx) => {
     if (
@@ -82,6 +83,16 @@ export async function completeLegacyTeacherSignup(
       });
     flow.data.pendingGoogle = undefined;
     flow.data.legacyOrganizationId = undefined;
-    return finishAuthentication(tx, flow, request, user.id);
+    const response = await finishAuthentication(tx, flow, request, user.id);
+    const { invitationCookieStorage } =
+      await import('~/cookie-session-storages/invitation.server');
+    const invitation = await invitationCookieStorage.getSession(
+      request.headers.get('cookie')
+    );
+    response.headers.append(
+      'set-cookie',
+      await invitationCookieStorage.destroySession(invitation)
+    );
+    return response;
   });
 }

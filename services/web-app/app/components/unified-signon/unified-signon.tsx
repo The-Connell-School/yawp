@@ -60,7 +60,7 @@ export function UnifiedSignon({
   const renderedPasswordForm =
     typeof passwordForm === 'function' ? passwordForm(state) : passwordForm;
   const variant = state.variant ?? '';
-  const googleUser = variant.includes('google');
+  const googleUser = state.provider === 'google' || variant.includes('google');
   const identifier = state.identifier ?? '';
   const handleUser = identifierKind(identifier) !== 'email';
 
@@ -200,9 +200,11 @@ export function UnifiedSignon({
         )}
         {name === 'username' && variant === 'taken' && (
           <div className="signon-chips">
-            {(screen === 'class-handle'
-              ? ['maya.r', 'maya-11', 'mayawrites']
-              : ['maya_r', 'maya7', 'mayawrites']
+            {(
+              state.handleSuggestions ??
+              (screen === 'class-handle'
+                ? ['maya.r', 'maya-11', 'mayawrites']
+                : ['maya_r', 'maya7', 'mayawrites'])
             ).map((handle) => (
               <Button
                 type="button"

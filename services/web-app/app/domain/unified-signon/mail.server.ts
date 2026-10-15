@@ -16,14 +16,20 @@ export async function deliverCode(email: string, code: string) {
       process.env.NODE_ENV === 'production' ||
       !['127.0.0.1', 'localhost'].includes(db.hostname)
     )
-      throw new FlowError('Email delivery is unavailable.', 503);
+      throw new FlowError(
+        "We couldn't send the email. Try again in a moment.",
+        503
+      );
     const tmp = process.env.TMPDIR;
     if (
       !capture ||
       !tmp ||
       !path.resolve(capture).startsWith(path.resolve(tmp) + path.sep)
     )
-      throw new FlowError('Email delivery is unavailable.', 503);
+      throw new FlowError(
+        "We couldn't send the email. Try again in a moment.",
+        503
+      );
     await mkdir(capture, { recursive: true, mode: 0o700 });
     await writeFile(
       path.join(capture, opaque() + '.json'),
@@ -39,7 +45,10 @@ export async function deliverCode(email: string, code: string) {
       process.env.RESEND_API_KEY
     )
   )
-    throw new FlowError('Email delivery is unavailable.', 503);
+    throw new FlowError(
+      "We couldn't send the email. Try again in a moment.",
+      503
+    );
   const result = await sendEmail({
     to: email,
     subject: 'Your Yawp sign-in code',
@@ -48,7 +57,7 @@ export async function deliverCode(email: string, code: string) {
   });
   if (result.status !== 'success')
     throw new FlowError(
-      'Email delivery is unavailable. Please try again later.',
+      "We couldn't send the email. Try again in a moment.",
       503
     );
 }
