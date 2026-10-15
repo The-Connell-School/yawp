@@ -1,3 +1,8 @@
+import {
+  useFreeAccountUsage,
+  FreeAssignmentTiles,
+  FreeAccountChecklist,
+} from '~/components/free-account-usage';
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
 import {
   Form,
@@ -273,12 +278,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const enabledTeacherClasses =
     !useStudentExperience && assignmentsEnabled ? teacherClassesOrdered : [];
   const assignmentCreationClasses = enabledTeacherClasses;
-  const creationTypeRows = filterAssignmentTypesForOrganizationPlan<AssignmentTypeRow>(
-    profile.organization,
-    teacherAssignmentTypes.filter(
-      (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
-    )
-  );
+  const creationTypeRows =
+    filterAssignmentTypesForOrganizationPlan<AssignmentTypeRow>(
+      profile.organization,
+      teacherAssignmentTypes.filter(
+        (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
+      )
+    );
   const teacherAssignmentTypesForGlance =
     filterAssignmentTypesForOrganizationPlan<AssignmentTypeRow>(
       profile.organization,
@@ -309,41 +315,41 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // dashboard alongside their classes (each card links into the practice
   // runner). Grammar sets report answered progress; composition sets report
   // mastery.
-  const writingPracticeAssignments =
-    useStudentExperience
-      ? (await getAssignedPracticeForStudent(profile.id))
-          .map((classAssignment) => {
-            const { assignment } = classAssignment;
-            const progress = computeAssignedProgress(
-              classAssignment.attempts.map((attempt) => ({
-                promptId: attempt.promptId,
-                lessonSlug: attempt.lessonSlug,
-                status: attempt.status,
-              }))
-            );
-            const hasComposition = assignment.lessonSlugs.some(
-              (slug) =>
-                getQuickWritingLessonBySlug(slug)?.section === 'Composition'
-            );
-            return {
-              id: classAssignment.id,
-              title: writingPracticeAssignmentTitle(assignment),
-              problemCount: assignment.problemCount,
-              dueAt: assignment.dueAt ? assignment.dueAt.toISOString() : null,
-              hasComposition,
-              doneCount: Math.min(progress.doneCount, assignment.problemCount),
-              masteredCount: Math.min(
-                progress.masteredCount,
-                assignment.problemCount
-              ),
-              classLabel: {
-                grade: classAssignment.class.grade,
-                period: classAssignment.class.period,
-                title: classAssignment.class.title,
-              },
-            };
-          })
-      : [];
+  const writingPracticeAssignments = useStudentExperience
+    ? (await getAssignedPracticeForStudent(profile.id)).map(
+        (classAssignment) => {
+          const { assignment } = classAssignment;
+          const progress = computeAssignedProgress(
+            classAssignment.attempts.map((attempt) => ({
+              promptId: attempt.promptId,
+              lessonSlug: attempt.lessonSlug,
+              status: attempt.status,
+            }))
+          );
+          const hasComposition = assignment.lessonSlugs.some(
+            (slug) =>
+              getQuickWritingLessonBySlug(slug)?.section === 'Composition'
+          );
+          return {
+            id: classAssignment.id,
+            title: writingPracticeAssignmentTitle(assignment),
+            problemCount: assignment.problemCount,
+            dueAt: assignment.dueAt ? assignment.dueAt.toISOString() : null,
+            hasComposition,
+            doneCount: Math.min(progress.doneCount, assignment.problemCount),
+            masteredCount: Math.min(
+              progress.masteredCount,
+              assignment.problemCount
+            ),
+            classLabel: {
+              grade: classAssignment.class.grade,
+              period: classAssignment.class.period,
+              title: classAssignment.class.title,
+            },
+          };
+        }
+      )
+    : [];
 
   return dataResponse({
     requiresClassCode: isStudentOnlyWithNoClasses,
@@ -365,6 +371,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function AppRoute() {
   const data = useLoaderData<typeof loader>();
+  const freeUsage = useFreeAccountUsage();
   const navigate = useNavigate();
   const user = useUser();
   const rootData =
@@ -396,57 +403,118 @@ export default function AppRoute() {
             <div className="flex flex-col">
               <h2>Welcome, {user.name}!</h2>
               <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
-                Your classes, assignments, and grading in one place.
+                {freeUsage
+                  ? 'Your class, assignments and grading in one place.'
+                  : 'Your classes, assignments, and grading in one place.'}
               </p>
             </div>
           </div>
         </div>
-        <div className="mx-auto flex w-full max-w-screen-lg flex-col gap-8 px-3 py-6 pb-24 sm:px-5">
-          <ClassesAtAGlance
-            classes={data.teacherClassCards}
-            totalClassCount={data.totalTeacherClassCount}
-          />
-          {assignmentsEnabled ? (
-            <>
-              <AssignmentsAtAGlance
-                assignmentTypes={data.teacherAssignmentTypes}
-                onCreateAssignment={() => {
-                  setCreateAssignmentTypeId(undefined);
-                  setIsCreateSheetOpen(true);
-                }}
-                onCreateAssignmentForType={(assignmentTypeId) => {
-                  const assignmentType = data.teacherAssignmentTypes.find(
-                    (type) => type.id === assignmentTypeId
-                  );
-                  if (
-                    assignmentType?.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY
-                  ) {
-                    void navigate(`/app/assignment-types/${assignmentTypeId}`);
-                    return;
-                  }
-                  setCreateAssignmentTypeId(assignmentTypeId);
-                  setIsCreateSheetOpen(true);
-                }}
+        <div
+          className={
+            freeUsage
+              ? 'free-dashboard grid w-full max-w-[1136px] items-start gap-7 px-5 py-6 pb-24 sm:px-12 lg:grid-cols-[minmax(0,1fr)_300px]'
+              : 'mx-auto flex w-full max-w-screen-lg flex-col gap-8 px-3 py-6 pb-24 sm:px-5'
+          }
+        >
+          <div
+            className={freeUsage ? 'flex min-w-0 flex-col gap-4' : 'contents'}
+          >
+            <ClassesAtAGlance
+              classes={data.teacherClassCards}
+              totalClassCount={data.totalTeacherClassCount}
+            />
+            {assignmentsEnabled ? (
+              <>
+                {freeUsage ? (
+                  <FreeAssignmentTiles
+                    usage={freeUsage}
+                    types={data.assignmentCreationTypes}
+                    onCreate={(id) => {
+                      setCreateAssignmentTypeId(id);
+                      setIsCreateSheetOpen(true);
+                    }}
+                  />
+                ) : (
+                  <AssignmentsAtAGlance
+                    assignmentTypes={data.teacherAssignmentTypes}
+                    onCreateAssignment={() => {
+                      setCreateAssignmentTypeId(undefined);
+                      setIsCreateSheetOpen(true);
+                    }}
+                    onCreateAssignmentForType={(assignmentTypeId) => {
+                      const assignmentType = data.teacherAssignmentTypes.find(
+                        (type) => type.id === assignmentTypeId
+                      );
+                      if (
+                        assignmentType?.systemKey ===
+                        AP_HISTORY_ASSIGNMENT_TYPE_KEY
+                      ) {
+                        void navigate(
+                          `/app/assignment-types/${assignmentTypeId}`
+                        );
+                        return;
+                      }
+                      setCreateAssignmentTypeId(assignmentTypeId);
+                      setIsCreateSheetOpen(true);
+                    }}
+                  />
+                )}
+                <AssignmentCreationSheet
+                  open={isCreateSheetOpen}
+                  onOpenChange={(open) => {
+                    setIsCreateSheetOpen(open);
+                    if (!open) {
+                      setCreateAssignmentTypeId(undefined);
+                    }
+                  }}
+                  entryPoint="dashboard"
+                  assignmentTypes={data.assignmentCreationTypes}
+                  teacherClasses={data.assignmentCreationClasses}
+                  initialAssignmentTypeId={createAssignmentTypeId}
+                />
+              </>
+            ) : null}
+            {freeUsage?.gradingPause ? (
+              <div>
+                <h2 className="mb-4 text-lg font-bold">Grading</h2>
+                <div className="rounded-xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-900">
+                  <p className="font-medium">
+                    Grading assistant paused for{' '}
+                    {Math.max(
+                      1,
+                      Math.ceil(
+                        (new Date(freeUsage.gradingPause.retryAt).getTime() -
+                          Date.now()) /
+                          60000
+                      )
+                    )}{' '}
+                    minutes
+                  </p>
+                  <p className="mt-1">
+                    You hit the {freeUsage.gradingPause.window} limit of{' '}
+                    {freeUsage.gradingPause.limit}. It picks back up at{' '}
+                    <time dateTime={freeUsage.gradingPause.retryAt}>
+                      {new Date(
+                        freeUsage.gradingPause.retryAt
+                      ).toLocaleTimeString([], {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}
+                    </time>
+                    .
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <TeacherGradingAtAGlance
+                freeAccount={Boolean(freeUsage)}
+                needsGradingCount={needsGradingCount}
+                readyToReleaseCount={readyToReleaseCount}
               />
-              <AssignmentCreationSheet
-                open={isCreateSheetOpen}
-                onOpenChange={(open) => {
-                  setIsCreateSheetOpen(open);
-                  if (!open) {
-                    setCreateAssignmentTypeId(undefined);
-                  }
-                }}
-                entryPoint="dashboard"
-                assignmentTypes={data.assignmentCreationTypes}
-                teacherClasses={data.assignmentCreationClasses}
-                initialAssignmentTypeId={createAssignmentTypeId}
-              />
-            </>
-          ) : null}
-          <TeacherGradingAtAGlance
-            needsGradingCount={needsGradingCount}
-            readyToReleaseCount={readyToReleaseCount}
-          />
+            )}
+          </div>
+          {freeUsage && <FreeAccountChecklist usage={freeUsage} />}
         </div>
       </section>
     );
