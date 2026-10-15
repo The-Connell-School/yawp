@@ -1581,7 +1581,7 @@ body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
 }
 .free-tier-page {
   --muted-foreground: 50 2.4% 36%;
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: Arial, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
 }
 .free-tier-page .auth-form-card-heading > p {
   font-size: 14px;
