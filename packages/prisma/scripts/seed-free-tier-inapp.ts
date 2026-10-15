@@ -6,6 +6,16 @@ import { ensurePreviewFreeClassroomFixture } from './local-dev/seed-preview-free
 assertLocalSeedTarget();
 const prisma = createPrismaClient();
 try {
+  const staleDocuments = await prisma.document.findMany({
+    where: { id: { startsWith: 'inapp-' } },
+    select: { id: true },
+  });
+  await prisma.submission.deleteMany({
+    where: { documentId: { in: staleDocuments.map((doc) => doc.id) } },
+  });
+  await prisma.document.deleteMany({
+    where: { id: { in: staleDocuments.map((doc) => doc.id) } },
+  });
   // Recover only records owned by this local evidence profile after an interrupted run.
   const originalClass = await prisma.class.findFirst({
     where: {

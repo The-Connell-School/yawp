@@ -17,14 +17,18 @@ async function login(page: import('@playwright/test').Page, free = true) {
     .fill(free ? 'dev.teacher.free@yawp.local' : 'dev.teacher@yawp.local');
   await page.locator('input[type="password"]').fill('yawp-dev');
   await page.getByRole('button', { name: /Log in/i }).click();
-  await page.waitForURL(url => url.pathname.replace(/\/$/, '') === '/app', { timeout: 15000 });
+  await page.waitForURL((url) => url.pathname.replace(/\/$/, '') === '/app', {
+    timeout: 15000,
+  });
 }
 async function capture(page: import('@playwright/test').Page, state: string) {
   if (!evidence) return;
   mkdirSync(evidence, { recursive: true });
   const file = `${state}-${before ? 'before' : 'impl'}.png`;
   if (state.startsWith('paid-lesson-planner')) {
-    await page.getByRole('textbox', { name: 'Message the Lesson Planner' }).fill('A local lesson for this class.');
+    await page
+      .getByRole('textbox', { name: 'Message the Lesson Planner' })
+      .fill('A local lesson for this class.');
   }
   await page.mouse.move(0, 0);
   await page.evaluate(() => document.fonts.ready);
@@ -64,6 +68,7 @@ for (const width of [1440, 390]) {
     });
     const fixturePrefix = `inapp-${width}-`;
     const fixtureUsers: string[] = [];
+    const fixtureDocuments: string[] = [];
     const partialRoster = [...klass.students];
     const spareClass = await db.class.create({
       data: {
@@ -207,19 +212,89 @@ for (const width of [1440, 390]) {
         ['/app/lesson-planner', 'freetier-42-lesson-planner-3-of-5-left'],
         ['/app/reporter', 'freetier-45-reporter-not-in-free-classroom'],
       ]) {
+        await db.freeClassroomAssignmentKindUsage.update({
+          where: {
+            organizationId_kind: { organizationId: orgId, kind: 'prewriting' },
+          },
+          data: { lifetimeCreatedCount: route === '/app/assignments' ? 3 : 1 },
+        });
+        if (route?.startsWith('/app/documents?')) {
+          const deployment = await db.classAssignment.findFirstOrThrow({
+            where: {
+              classId: klass.id,
+              assignment: { assignmentType: { kind: 'prewriting' } },
+            },
+            include: { assignment: true },
+          });
+          for (const [index, title] of [
+            'My garden plan',
+            'Why gardens matter',
+            'The first line',
+            'Places I go',
+          ].entries()) {
+            const doc = await db.document.create({
+              data: {
+                id: `${fixturePrefix}writing-${index}`,
+                title,
+                text: 'Local student writing for the grading queue.',
+                membershipId: partialRoster[index]!.id,
+                assignmentId: deployment.assignmentId,
+                assignmentTypeId: deployment.assignment.assignmentTypeId,
+                classAssignmentId: deployment.id,
+                submissions: {
+                  create: {
+                    title,
+                    text: 'Local student writing for the grading queue.',
+                    html: '<p>Local student writing for the grading queue.</p>',
+                    submittedAt: new Date('2026-10-14T12:00:00Z'),
+                  },
+                },
+              },
+            });
+            fixtureDocuments.push(doc.id);
+          }
+        }
         await page.goto(route!);
         await capture(page, `${board}${width === 390 ? '-mobile' : ''}`);
+        if (route?.startsWith('/app/documents?')) {
+          await expect(
+            page.getByText('My garden plan', { exact: true }).first()
+          ).toBeVisible();
+          await expect(
+            page.getByText('Places I go', { exact: true }).first()
+          ).toBeVisible();
+          await db.submission.deleteMany({
+            where: { documentId: { in: fixtureDocuments } },
+          });
+          await db.document.deleteMany({
+            where: { id: { in: fixtureDocuments } },
+          });
+        }
         if (!before && route?.endsWith('?tab=students')) {
-          const sections = page.getByRole('tablist', { name: 'Class sections' });
+          const sections = page.getByRole('tablist', {
+            name: 'Class sections',
+          });
           await sections.getByRole('tab', { name: /^Assignments/ }).click();
-          await expect(sections.getByRole('tab', { name: /^Assignments/ })).toHaveAttribute('aria-selected', 'true');
+          await expect(
+            sections.getByRole('tab', { name: /^Assignments/ })
+          ).toHaveAttribute('aria-selected', 'true');
           await sections.getByRole('tab', { name: /^Students/ }).click();
-          await page.getByRole('button', { name: 'QR code', exact: true }).click();
-          await expect(page.getByAltText('QR code for class join link')).toBeVisible();
-          await page.getByRole('button', { name: 'QR code', exact: true }).click();
-          await page.getByRole('button', { name: 'Show on board', exact: true }).click();
+          await page
+            .getByRole('button', { name: 'QR code', exact: true })
+            .click();
+          await expect(
+            page.getByAltText('QR code for class join link')
+          ).toBeVisible();
+          await page
+            .getByRole('button', { name: 'QR code', exact: true })
+            .click();
+          await page
+            .getByRole('button', { name: 'Show on board', exact: true })
+            .click();
           await expect(page.getByTestId('free-class-board')).toBeVisible();
-          await page.getByRole('button', { name: 'Show on board', exact: true }).click();
+          await page
+            .getByRole('button', { name: 'Show on board', exact: true })
+            .click();
         }
         if (!before && route === '/app/reporter') {
           await expect(page.getByTestId('free-reporter-locked')).toBeVisible();
@@ -231,7 +306,10 @@ for (const width of [1440, 390]) {
         }
       }
       const assignment = await db.classAssignment.findFirst({
-        where: { classId: klass.id },
+        where: {
+          classId: klass.id,
+          assignment: { assignmentType: { kind: 'prewriting' } },
+        },
         include: { assignment: true },
       });
       if (assignment) {
@@ -241,6 +319,12 @@ for (const width of [1440, 390]) {
           `freetier-35-my-assignments-assignment-page${width === 390 ? '-mobile' : ''}`
         );
       }
+      await db.freeClassroomAssignmentKindUsage.update({
+        where: {
+          organizationId_kind: { organizationId: orgId, kind: 'prewriting' },
+        },
+        data: { lifetimeCreatedCount: 3 },
+      });
       await page.goto('/app/assignments');
       await page
         .getByRole('button', { name: 'New Assignment', exact: true })
@@ -250,6 +334,9 @@ for (const width of [1440, 390]) {
         `freetier-33-my-assignments-type-picker${width === 390 ? '-mobile' : ''}`
       );
       if (!before) {
+        await expect(
+          page.getByRole('button', { name: /Prewriting.*None left/ })
+        ).toBeDisabled();
         await page
           .getByRole('button', { name: /Class Starter.*9 of 12 left/ })
           .click();
@@ -486,6 +573,10 @@ for (const width of [1440, 390]) {
         );
       }
     } finally {
+      await db.submission.deleteMany({
+        where: { documentId: { in: fixtureDocuments } },
+      });
+      await db.document.deleteMany({ where: { id: { in: fixtureDocuments } } });
       await db.classAssignment.updateMany({
         where: { classId: spareClass.id },
         data: { classId: klass.id },
