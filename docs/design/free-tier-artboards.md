@@ -134,3 +134,45 @@ artboards and 88 raw captures per phase (including the unchanged sign-in page).
 Normal manual-review captures clear the earlier disposable mail-failure fixture;
 mail failure is captured separately. All server loader/action/header exports
 match the pinned base. No migration is included.
+
+## PR #557 browser CI follow-up
+
+CI run [38784725889, job 116595619970](https://github.com/The-Connell-School/yawp/actions/runs/38784725889/job/116595619970)
+at reviewed head `400c1e9a` completed with 248 passes and two failures:
+`free-tier.trial-status.spec.ts:39`, “expiry, rejection, budget pause, reading and
+recovery”, at 1280px and 390px. Both failed at line 56 on the initial attempt
+and both retries: the exact `Contact support` link locator found no element
+within 5000ms. The failure artifact's accessibility snapshot shows an
+`Email support` link with `href="mailto:support@yawp.school"` on the expected
+trial-ended page. This is a task-related stale copy assertion, not an
+infrastructure failure. Other model/sourcemap warnings did not fail tests.
+
+The reviewed presentation intentionally uses “Email support”, as specified in
+the freetier-10 text export and desktop/mobile comparison captures. The only
+test correction changes that exact accessible-name expectation; the exact
+mailto destination, terminal-state navigation restrictions, sign-out,
+authorization, direct-data protection, budget denial and recovery checks remain.
+No application source or presentation changed after the approved head, so the
+existing 86 before/design/implementation/side-by-side comparisons remain valid.
+All 344 referenced comparison files and the independent reviewer evidence were
+checked locally before handoff. A reviewer must assess this test-only follow-up;
+the earlier Ship Review approval applies to `400c1e9a`.
+
+Local reproduction uses a temporary config that imports
+`playwright.free-tier-style.config.ts`, selects only
+`free-tier.trial-status.spec.ts`, and uses its existing local server setup.
+The CLI-selected runtimes, isolated E2E database on the lane's Postgres instance,
+empty mail credentials, and one browser worker are retained. The original
+1280px test reproduces the exact line-56 failure before the assertion correction.
+No full local suite or hosted preview is needed for this test-only change.
+
+After the assertion correction, all seven trial-status browser tests pass with
+one worker and no retries, including both viewport flows and the direct-data
+authorization/gate cases. Fourteen fresh status captures and their manifest
+are retained under `shots/di-freetier-ui/ci-followup/` in the lane. The earlier
+38 builder route tests, 50 reviewer route/feature-gate/sign-in tests, 23 focused
+browser passes and artboard comparisons still describe the unchanged app code.
+The supported project CLI typecheck passes again with the existing 3GB heap
+setting. The follow-up evidence's `diagnosis.json` records the exact commands,
+failure details and manifest validation; `run-browser.py` and
+`playwright-trial.config.ts` archive the temporary local runner/config.
