@@ -2,6 +2,9 @@ import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { encode } = require(require.resolve('turbo-stream', { paths: [require.resolve('react-router')] }));
 
 const before = process.env.LEGAL_EVIDENCE_PHASE === 'before';
 const evidence = process.env.LEGAL_EVIDENCE_DIR;
@@ -14,7 +17,8 @@ async function capture(page: import('@playwright/test').Page, name: string, stat
   fs.appendFileSync(path.join(evidence, 'manifest.jsonl'), JSON.stringify({
     file: `${name}.png`, url: page.url(), status, viewport: page.viewportSize(),
     timestamp: new Date().toISOString(), sha: execFileSync('git', ['rev-parse', 'HEAD']).toString().trim(),
-    fixture: 'Unauthenticated browser, isolated project CLI local-dev database, no live providers',
+    fixture: name.startsWith('fixture-') ? 'Real signup DOM with intercepted single-fetch action result; no application writes or provider calls' : 'Unauthenticated browser, isolated project CLI local-dev database, no live providers',
+    baseSha: '954fbaae',
     configuration: process.env.LEGAL_CONFIGURATION || 'production gate off',
   }) + '\n');
 }
@@ -52,3 +56,29 @@ test('signup visibly links to both public legal pages', async ({ page }) => {
     await expect(page.getByRole('button', { name: 'Join the waitlist', exact: true })).toBeVisible();
   }
 });
+
+for (const [name, result, message] of [
+  ['waitlist', { ok: true, redeemed: true, bypassWaitlist: false }, "You're on the list."],
+  ['bypass', { ok: true, redeemed: true, bypassWaitlist: true }, 'Check your email for your join link.'],
+  ['cap', { ok: false, error: 'cap_reached' }, 'This free classroom event is full.'],
+  ['budget', { ok: false, error: 'budget_exceeded' }, 'This event link is paused because the current free-tier budget has been reached.'],
+] as const) {
+  test(`signup ${name} presentation with intercepted action (no email or analytics)`, async ({ page }) => {
+    test.skip(before || legalOnly, 'After-change UI regression only');
+    await page.goto('/free?t=legal-presentation-fixture');
+    await page.route(/\/free\.data(?:\?|$)/, async route => {
+      expect(route.request().method()).toBe('POST');
+      await route.fulfill({
+        status: 200, contentType: 'text/x-script',
+        body: await new Response(encode({ data: result })).text(),
+      });
+    });
+    for (const [field, value] of Object.entries({
+      name: 'Local Teacher', email: 'legal-fixture@example.test', schoolName: 'Example Organization', location: 'Local', gradeLevel: '10',
+    })) await page.locator(`input[name="${field}"]`).fill(value);
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await expect(page.getByText(message, { exact: true })).toBeVisible();
+    if (!result.ok) await expect(page.getByRole('link', { name: 'Join the waitlist', exact: true })).toBeVisible();
+    await capture(page, `fixture-${name}`);
+  });
+}

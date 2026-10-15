@@ -23,6 +23,7 @@ import {
   FreeTierFieldLabel,
   FreeTierTextInput,
 } from '../free-tier/FreeTierAuthCard';
+import { FreeTierLegalLinks } from './LegalLinks';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -275,6 +276,7 @@ export default function FreeTierLandingRoute() {
           <FreeTierButton type="submit">
             {data.mode === 'token' ? 'Continue' : 'Join the waitlist'}
           </FreeTierButton>
+          <FreeTierLegalLinks />
         </fetcher.Form>
       )}
     </FreeTierAuthCard>
