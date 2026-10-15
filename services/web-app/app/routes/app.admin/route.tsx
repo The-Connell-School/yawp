@@ -1,3 +1,4 @@
+import { auditMovedToInternal } from '~/utils/admin-audit-migration.server';
 import {
   data as dataResponse,
   Link,
@@ -22,7 +23,11 @@ import { requireAdmin } from '~/utils/auth.server';
 import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
 
 export const adminTabs = [
-  { label: 'Tester feedback (moved)', to: '/app/tester/feedback', icon: <MessageSquare size={16} className="opacity-75 mr-1" /> },
+  {
+    label: 'Tester feedback (moved)',
+    to: '/app/tester/feedback',
+    icon: <MessageSquare size={16} className="opacity-75 mr-1" />,
+  },
   {
     label: 'General',
     to: '/app/admin/general',
@@ -64,11 +69,14 @@ export const handle: BreadcrumbHandle = { breadcrumb: 'Admin' };
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
-  return dataResponse({ freeTierEnabled: await isFreeTierEnabled() });
+  return dataResponse({
+    freeTierEnabled: await isFreeTierEnabled(),
+    auditMoved: auditMovedToInternal(),
+  });
 }
 
 export default function Route() {
-  const { freeTierEnabled } = useLoaderData<typeof loader>();
+  const { freeTierEnabled, auditMoved } = useLoaderData<typeof loader>();
   const location = useLocation();
   const pathname = location.pathname;
   const visibleTabs = adminTabs.filter(
@@ -94,7 +102,9 @@ export default function Route() {
             >
               <Link to={tab.to}>
                 {tab.icon}
-                {tab.label}
+                {tab.to === '/app/admin/audit' && auditMoved
+                  ? 'Audit (moved)'
+                  : tab.label}
               </Link>
             </Button>
           ))}

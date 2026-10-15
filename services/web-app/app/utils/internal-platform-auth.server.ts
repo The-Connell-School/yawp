@@ -140,7 +140,7 @@ export function resolveInternalApiScope(
   if (pathname === '/api/internal/v1/stats/grading') {
     return 'stats:read';
   }
-  if (pathname === '/api/internal/v1/audit') {
+  if (pathname === '/api/internal/v1/audit' || pathname.startsWith('/api/internal/v1/admin/audit/')) {
     return 'audit:read';
   }
   if (pathname.startsWith('/api/internal/v1/feature-flags')) {
