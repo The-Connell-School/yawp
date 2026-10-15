@@ -1,0 +1,33 @@
+import { createHmac } from 'node:crypto';
+import { safeRedirect } from 'remix-utils/safe-redirect';
+import { EmailSchema } from '~/utils/schemas/user';
+import { validateUsername } from '~/utils/username';
+
+export function normalizeIdentifier(raw: string) {
+  const value = raw.trim().toLowerCase();
+  if (!value || value.length > 100) return null;
+  if (value.includes('@') && !value.startsWith('@'))
+    return EmailSchema.safeParse(value).success ? { kind: 'email' as const, value } : null;
+  const canonical = value.replace(/^@/, '');
+  if (!validateUsername(canonical).ok) return null;
+  return { kind: value.startsWith('@') ? 'handle' as const : 'handle-or-code' as const, value: canonical };
+}
+
+export function postAuthenticationDestination(input: {
+  mustChangePassword: boolean;
+  activeMemberships: number;
+  trialDestination: string | null;
+  redirectTo: string;
+}) {
+  if (input.mustChangePassword) return '/auth/required-password-change';
+  if (!input.activeMemberships) return 'inactive';
+  if (input.trialDestination) return input.trialDestination;
+  if (input.activeMemberships > 1) return 'membership';
+  return safeRedirect(input.redirectTo, '/app');
+}
+
+export function codeDigest(context: Record<string, string>, code: string) {
+  return createHmac('sha256', process.env.SESSION_SECRET.split(',')[0])
+    .update(JSON.stringify(Object.entries(context).sort(([a], [b]) => a.localeCompare(b))))
+    .update('\0').update(code).digest('hex');
+}
