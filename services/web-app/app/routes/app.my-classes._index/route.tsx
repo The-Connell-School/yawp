@@ -402,9 +402,14 @@ function TeacherMyClassesView({
             </div>
             <div className={data.canShareClassroomReport ? 'flex flex-wrap gap-2' : 'contents'}>
               {data.canShareClassroomReport ? (
-                <Button size="sm" variant="outline" asChild>
-                  <Link to="/app/classroom-report">Share this report</Link>
-                </Button>
+                <>
+                  <Button size="sm" variant="outline" asChild>
+                    <Link to="/app/classroom-report">Share this report</Link>
+                  </Button>
+                  <Button size="sm" variant="outline" asChild>
+                    <Link to="/app/pitch-packet">Trial pitch packet</Link>
+                  </Button>
+                </>
               ) : null}
               <Button size="sm" onClick={openCreate} className="shrink-0">
                 <Plus className="mr-2 h-4 w-4" />
