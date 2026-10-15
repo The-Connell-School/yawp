@@ -305,6 +305,18 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun test ./services/web-app/app/domain/free-tier/email.server.test.ts
 
+      - name: 🧪 Free-tier PostHog signup tests (isolated; mocks prisma)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./services/web-app/app/domain/free-tier/service.analytics.server.test.ts
+
+      - name: 🧪 Free-tier PostHog activation tests (isolated; mocks prisma)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./services/web-app/app/domain/free-tier/provision.analytics.server.test.ts
+
       - name: 🧪 Free-tier token idempotency tests (isolated; mocks prisma)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
@@ -510,8 +522,6 @@ jobs:
             app/domain/free-tier/posthog-analytics.server.test.ts \
             app/domain/free-tier/posthog-disabled.server.test.ts \
             app/domain/free-tier/posthog-dashboard.contract.test.ts \
-            app/domain/free-tier/service.analytics.server.test.ts \
-            app/domain/free-tier/provision.analytics.server.test.ts \
             app/domain/collaboration/submit.server.test.ts \
             app/routes/api.domain.submit-document/route.test.ts \
             app/routes/api.free-tier.token/route.test.ts \
