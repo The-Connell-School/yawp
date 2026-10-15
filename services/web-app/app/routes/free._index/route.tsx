@@ -13,7 +13,7 @@ import {
   submitWaitlist,
   waitlistInputSchema,
 } from '~/domain/free-tier/service.server';
-import { readOrMintScanDedupeCookie } from '~/domain/free-tier/acquisition-token-scan.server';
+import { readOrMintScanDedupeCookie, readScanDedupeCookie } from '~/domain/free-tier/acquisition-token-scan.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
 import { enforceUnauthByIpAndTarget } from '~/utils/rate-limit.server';
 import { z } from 'zod';
@@ -129,7 +129,7 @@ export async function action({ request }: ActionFunctionArgs) {
       })
       .safeParse(raw);
     if (!parsed.success) return { ok: false, error: 'invalid' as const };
-    const result = await redeemToken(parsed.data);
+    const result = await redeemToken(parsed.data, { scanDedupeCookie: await readScanDedupeCookie(request) });
     if (!result.ok) return { ok: false, error: result.reason };
     if (result.bypassWaitlist) {
       const { sendReleaseEmailsForApplicationIds } =

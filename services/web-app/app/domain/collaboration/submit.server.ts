@@ -1,3 +1,8 @@
+import {
+  lockFreeTierFirstEssay,
+  isFirstFreeTierEssayInTx,
+  captureFirstFreeTierEssay,
+} from '~/domain/free-tier/first-essay-analytics.server';
 import { createHash } from 'node:crypto';
 import { prisma } from '~/utils/db.server';
 import { isDocumentSubmittableContent } from '~/utils/document-submittable';
@@ -37,6 +42,8 @@ export async function submitGroupDraft({
   userId,
   membershipId,
   organizationId,
+  organizationPlan,
+  classId,
   now = new Date(),
 }: {
   document: {
@@ -49,6 +56,8 @@ export async function submitGroupDraft({
   userId: string;
   membershipId: string;
   organizationId: string;
+  organizationPlan?: string;
+  classId?: string;
   now?: Date;
 }): Promise<{ submissionId: string; created: boolean }> {
   // An existing submission wins. Checked before anything is written so a second
@@ -105,6 +114,8 @@ export async function submitGroupDraft({
 
   try {
     const result = await prisma.$transaction(async (tx) => {
+      if (organizationPlan === 'FREE_CLASSROOM')
+        await lockFreeTierFirstEssay(tx, organizationId);
       // Serialize submitters on the shared artifact. The fast check above keeps
       // ordinary repeat clicks cheap; this in-transaction check closes the
       // two-members-at-once race.
@@ -118,7 +129,11 @@ export async function submitGroupDraft({
         select: { id: true },
       });
       if (winner) {
-        return { submission: winner, created: false as const };
+        return {
+          submission: winner,
+          created: false as const,
+          firstFreeTierEssay: false,
+        };
       }
 
       const created = await tx.submission.create({
@@ -157,7 +172,15 @@ export async function submitGroupDraft({
         },
       });
 
-      return { submission: created, created: true as const };
+      const firstFreeTierEssay =
+        organizationPlan === 'FREE_CLASSROOM'
+          ? await isFirstFreeTierEssayInTx(tx, organizationId)
+          : false;
+      return {
+        submission: created,
+        created: true as const,
+        firstFreeTierEssay,
+      };
     });
 
     await prisma.documentWriteJournal.update({
@@ -165,6 +188,13 @@ export async function submitGroupDraft({
       data: { status: 'accepted', resultingRevision: document.revision },
     });
 
+    if (result.created && result.firstFreeTierEssay)
+      await captureFirstFreeTierEssay({
+        organizationId,
+        submissionId: result.submission.id,
+        documentId: document.id,
+        classId,
+      });
     return { submissionId: result.submission.id, created: result.created };
   } catch (error) {
     await prisma.documentWriteJournal.update({

@@ -41,7 +41,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
       text: true,
       classAssignment: {
         select: {
-          class: { select: { school: { select: { organizationId: true } } } },
+          class: {
+            select: {
+              id: true,
+              school: {
+                select: {
+                  organizationId: true,
+                  organization: { select: { plan: true } },
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -59,6 +69,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
       document,
       userId,
       membershipId: profile.id,
+      organizationPlan:
+        document.classAssignment?.class.school.organization.plan ??
+        profile.organization.plan,
+      classId: document.classAssignment?.class.id,
       organizationId:
         document.classAssignment?.class.school.organizationId ??
         profile.organization.id,

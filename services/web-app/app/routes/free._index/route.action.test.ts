@@ -23,6 +23,7 @@ mock.module('~/domain/free-tier/service.server', () => ({
 }));
 
 mock.module('~/domain/free-tier/acquisition-token-scan.server', () => ({
+  readScanDedupeCookie: async () => 'decoded-scan-cookie',
   readOrMintScanDedupeCookie: async () => ({ value: 'test-cookie', setCookie: null }),
 }));
 
@@ -97,6 +98,7 @@ describe('free._index action', () => {
     } as never);
 
     expect(result).toEqual({ ok: true, redeemed: true, bypassWaitlist: false });
+    expect(redeemToken).toHaveBeenCalledWith(expect.any(Object), { scanDedupeCookie: 'decoded-scan-cookie' });
     expect(sendReleaseEmailsForApplicationIds).not.toHaveBeenCalled();
     expect(freeTierSubmitSuccessCopy(result)).toEqual({
       headline: "You're on the list.",

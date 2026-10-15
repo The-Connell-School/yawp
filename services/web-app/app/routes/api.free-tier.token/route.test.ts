@@ -12,6 +12,7 @@ mock.module('~/domain/free-tier/service.server', () => ({
 mock.module('~/utils/rate-limit.server', () => ({
   enforceUnauthByIpAndTarget: async () => ({ allowed: true }),
 }));
+const { readOrMintScanDedupeCookie } = await import('~/domain/free-tier/acquisition-token-scan.server');
 const { action } = await import('./route');
 beforeEach(() => redeemToken.mockReset());
 
@@ -27,3 +28,14 @@ for (const [reason, status] of [['cap_reached', 409], ['budget_exceeded', 402]] 
     expect(result.headers.get('cache-control')).toBe('no-store');
   });
 }
+
+ test('passes scan identity to redemption without exposing it in the response', async () => {
+  redeemToken.mockResolvedValue({ ok: true, bypassWaitlist: true });
+  const scan = await readOrMintScanDedupeCookie(new Request('http://localhost/free'));
+  const response = await action({ request: new Request('http://localhost/api/free-tier/token', {
+    method: 'POST', headers: { 'content-type': 'application/json', cookie: `other=x; ${scan.setCookie!.split(';')[0]}` },
+    body: JSON.stringify({ token: 'event', email: 'teacher@yawp.local' }),
+  }) } as never);
+  expect(redeemToken).toHaveBeenCalledWith(expect.any(Object), { scanDedupeCookie: scan.value });
+  expect(await response.json()).toEqual({ ok: true, bypassWaitlist: true });
+});
