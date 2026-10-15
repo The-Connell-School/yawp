@@ -1,4 +1,11 @@
-import { useId, useState, type ReactNode } from 'react';
+import {
+  useId,
+  useState,
+  cloneElement,
+  isValidElement,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import { Check, Circle, CircleDot, UserRound } from 'lucide-react';
 import { FreeTierLegalLinks } from '../free._index/LegalLinks';
 import { Form } from 'react-router';
@@ -67,13 +74,18 @@ export function FreeTierFieldLabel(props: {
   children: ReactNode;
   hint?: string;
 }) {
+  const labelId = useId();
   return (
     <label
       className="flex flex-col gap-1.5 text-left text-card-foreground"
       htmlFor={props.htmlFor}
     >
-      <span>{props.label}</span>
-      {props.children}
+      <span id={labelId}>{props.label}</span>
+      {isValidElement(props.children)
+        ? cloneElement(props.children as ReactElement<InputProps>, {
+            'aria-labelledby': labelId,
+          })
+        : props.children}
       {props.hint ? (
         <span className="text-xs text-muted-foreground">{props.hint}</span>
       ) : null}
@@ -109,9 +121,10 @@ export function FreeTierTextInput({
         onInvalid={(event) => {
           props.onInvalid?.(event);
           setError(
-            invalidMessage ?? (props.type === 'email'
-              ? 'Enter a valid email address.'
-              : (missing[props.name ?? ''] ?? 'Complete this field.'))
+            invalidMessage ??
+              (props.type === 'email'
+                ? 'Enter a valid email address.'
+                : (missing[props.name ?? ''] ?? 'Complete this field.'))
           );
         }}
         onInput={(event) => {

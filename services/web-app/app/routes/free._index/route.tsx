@@ -183,9 +183,9 @@ export default function FreeTierLandingRoute() {
     : 'Join the waitlist. We let teachers in a group at a time.';
 
   return (
-    <FreeTierAuthCard status={submitted} title={title} subtitle={subtitle} icon={data.mode === 'token' && data.linkClosed ? <CircleAlert /> : submitted ? (fetcher.data && 'bypassWaitlist' in fetcher.data && fetcher.data.bypassWaitlist ? <Mail /> : <CircleCheck />) : undefined}>
+    <FreeTierAuthCard status={submitted || (data.mode === 'token' && data.linkClosed)} title={title} subtitle={subtitle} icon={data.mode === 'token' && data.linkClosed ? <CircleAlert /> : submitted ? (fetcher.data && 'bypassWaitlist' in fetcher.data && fetcher.data.bypassWaitlist ? <Mail /> : <CircleCheck />) : undefined}>
       {data.mode === 'token' && data.linkClosed ? (
-        <div className="flex flex-col gap-4" role="status">
+        <div className="flex flex-col gap-4">
           <p className="text-sm text-muted-foreground">
             It expired, reached its limit, or was turned off.
           </p>
