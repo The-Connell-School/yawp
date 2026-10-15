@@ -1,0 +1,463 @@
+{
+  "source": "design/v2/artboards/signon-01-decision-tree-all-30-rows.dom.html",
+  "rows": [
+    {
+      "row": 1,
+      "coverage": "identifier/class resolution and permitted choices",
+      "referenceScreens": [
+        "ambiguity",
+        "class-code",
+        "class-email",
+        "class-found",
+        "email-code",
+        "joined",
+        "name-password"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts"
+      ],
+      "assertions": [
+        "resolver derives identity and class context",
+        "multiple class matches require a current server-issued choice"
+      ]
+    },
+    {
+      "row": 2,
+      "coverage": "verified email class signup",
+      "referenceScreens": [
+        "class-code",
+        "class-email",
+        "class-found",
+        "joined",
+        "name-password"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts"
+      ],
+      "assertions": [
+        "resolver derives identity and class context",
+        "student invitations can choose among permitted classes"
+      ]
+    },
+    {
+      "row": 3,
+      "coverage": "handle/class ambiguity and free handle registration",
+      "referenceScreens": [
+        "ambiguity",
+        "class-found",
+        "class-handle",
+        "handle-join",
+        "joined"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts"
+      ],
+      "assertions": [
+        "handle/code ambiguity offers both meanings",
+        "free-class code uses handle-only registration"
+      ]
+    },
+    {
+      "row": 4,
+      "coverage": "unknown identity account choice and existing free entry",
+      "referenceScreens": [
+        "account-type",
+        "teacher"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts",
+        "services/web-app/app/routes/free._index/route.action.test.ts"
+      ],
+      "assertions": [
+        "resolver derives identity and class context"
+      ]
+    },
+    {
+      "row": 5,
+      "coverage": "proved trial status",
+      "referenceScreens": [
+        "teacher",
+        "trial-status"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts",
+        "services/web-app/app/routes/free._index/route.action.test.ts"
+      ],
+      "assertions": [
+        "trial routing uses existing application guards",
+        "local mailer captures existing free-tier helper"
+      ]
+    },
+    {
+      "row": 6,
+      "coverage": "existing invitation release contract",
+      "referenceScreens": [
+        "teacher",
+        "trial-status"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts",
+        "services/web-app/app/routes/free._index/route.action.test.ts"
+      ],
+      "assertions": [
+        "trial routing uses existing application guards"
+      ]
+    },
+    {
+      "row": 7,
+      "coverage": "trial onboarding after password proof",
+      "referenceScreens": [
+        "password",
+        "trial-status"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts"
+      ],
+      "assertions": [
+        "trial routing uses existing application guards"
+      ]
+    },
+    {
+      "row": 8,
+      "coverage": "pending/manual-review routing",
+      "referenceScreens": [
+        "trial-status"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts"
+      ],
+      "assertions": [
+        "trial routing uses existing application guards"
+      ]
+    },
+    {
+      "row": 9,
+      "coverage": "approved trial destination",
+      "referenceScreens": [
+        "password",
+        "trial-status"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts"
+      ],
+      "assertions": [
+        "trial routing uses existing application guards"
+      ]
+    },
+    {
+      "row": 10,
+      "coverage": "rejected trial guard",
+      "referenceScreens": [
+        "trial-status"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts"
+      ],
+      "assertions": [
+        "trial routing uses existing application guards"
+      ]
+    },
+    {
+      "row": 11,
+      "coverage": "expired trial guard",
+      "referenceScreens": [
+        "trial-status"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts"
+      ],
+      "assertions": [
+        "trial routing uses existing application guards"
+      ]
+    },
+    {
+      "row": 12,
+      "coverage": "invited account activation",
+      "referenceScreens": [
+        "activation",
+        "email-code",
+        "name-password"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts"
+      ],
+      "assertions": [
+        "invitation email proof supplies student class context",
+        "teacher invitations with multiple schools"
+      ]
+    },
+    {
+      "row": 13,
+      "coverage": "existing password identity",
+      "referenceScreens": [
+        "password"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts"
+      ],
+      "assertions": [
+        "enabled password POST keeps validators/session handling"
+      ]
+    },
+    {
+      "row": 14,
+      "coverage": "explicit first-time Google linking",
+      "referenceScreens": [
+        "link-google"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts",
+        "services/web-app/app/domain/unified-signon/google.test.ts"
+      ],
+      "assertions": [
+        "Google matching email requires account proof and explicit first-time linking"
+      ]
+    },
+    {
+      "row": 15,
+      "coverage": "no-password account setup",
+      "referenceScreens": [
+        "activation",
+        "name-password",
+        "password"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts"
+      ],
+      "assertions": [
+        "existing passwordless account activates only after email proof and keeps its membership"
+      ]
+    },
+    {
+      "row": 16,
+      "coverage": "existing administrator approval link contract",
+      "referenceScreens": [
+        "account-type"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts",
+        "services/web-app/app/routes/free.admin.approve/route.loader.test.ts"
+      ],
+      "assertions": [
+        "existing account accepts owner invitation only after real password proof"
+      ]
+    },
+    {
+      "row": 17,
+      "coverage": "active staff sign-in",
+      "referenceScreens": [
+        "password"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts"
+      ],
+      "assertions": [
+        "enabled password POST keeps validators/session handling"
+      ]
+    },
+    {
+      "row": 18,
+      "coverage": "existing student class context",
+      "referenceScreens": [
+        "class-signin",
+        "joined",
+        "password"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts"
+      ],
+      "assertions": [
+        "student without membership can recover through a class",
+        "handle/code ambiguity offers both meanings"
+      ]
+    },
+    {
+      "row": 19,
+      "coverage": "handle and required-password routing",
+      "referenceScreens": [
+        "class-signin",
+        "joined",
+        "password",
+        "required-password"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts"
+      ],
+      "assertions": [
+        "required password change outranks membership",
+        "free-class code uses handle-only registration"
+      ]
+    },
+    {
+      "row": 20,
+      "coverage": "Google choice/handle-only account boundaries",
+      "referenceScreens": [
+        "account-type"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts",
+        "services/web-app/app/domain/unified-signon/google.test.ts"
+      ],
+      "assertions": [
+        "new Google classroom signup is name-only",
+        "free-class code uses handle-only registration"
+      ]
+    },
+    {
+      "row": 21,
+      "coverage": "active owned membership selection",
+      "referenceScreens": [
+        "membership"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts"
+      ],
+      "assertions": [
+        "membership picker validates active ownership"
+      ]
+    },
+    {
+      "row": 22,
+      "coverage": "inactive and unassigned student recovery",
+      "referenceScreens": [
+        "inactive"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts"
+      ],
+      "assertions": [
+        "student without membership can recover through a class",
+        "existing account accepts owner invitation"
+      ]
+    },
+    {
+      "row": 23,
+      "coverage": "unknown email student signup",
+      "referenceScreens": [
+        "account-type"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts"
+      ],
+      "assertions": [
+        "resolver derives identity and class context"
+      ]
+    },
+    {
+      "row": 24,
+      "coverage": "new verified Google signup",
+      "referenceScreens": [
+        "account-type"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts",
+        "services/web-app/app/domain/unified-signon/google.test.ts"
+      ],
+      "assertions": [
+        "new Google classroom signup is name-only",
+        "Google multi-class invitations"
+      ]
+    },
+    {
+      "row": 25,
+      "coverage": "expired invitation/code after proof",
+      "referenceScreens": [
+        "activation",
+        "email-code"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts"
+      ],
+      "assertions": [
+        "expired invitation status is revealed only after email proof",
+        "OTP attempts, supersession, context substitution"
+      ]
+    },
+    {
+      "row": 26,
+      "coverage": "canonical handles and ambiguity",
+      "referenceScreens": [
+        "ambiguity",
+        "entry",
+        "password"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts",
+        "services/web-app/app/domain/unified-signon/policy.test.ts"
+      ],
+      "assertions": [
+        "enabled password POST keeps validators/session handling",
+        "handle/code ambiguity offers both meanings"
+      ]
+    },
+    {
+      "row": 27,
+      "coverage": "identifier validation",
+      "referenceScreens": [
+        "entry"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts",
+        "services/web-app/app/domain/unified-signon/policy.test.ts"
+      ],
+      "assertions": [
+        "canonical identifiers accept the display prefix"
+      ]
+    },
+    {
+      "row": 28,
+      "coverage": "bounded code attempts/rate limits/retry",
+      "referenceScreens": [
+        "entry"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts",
+        "services/web-app/app/domain/unified-signon/policy.test.ts"
+      ],
+      "assertions": [
+        "OTP attempts, supersession, context substitution",
+        "reset responses are uniform"
+      ]
+    },
+    {
+      "row": 29,
+      "coverage": "UA code/context/billing guards",
+      "referenceScreens": [
+        "partner-code"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts",
+        "services/web-app/app/domain/unified-signon/google.test.ts"
+      ],
+      "assertions": [
+        "partner context uses the existing UA organization/code/cookie guards"
+      ]
+    },
+    {
+      "row": 30,
+      "coverage": "authenticated entry and safe routing",
+      "referenceScreens": [
+        "entry"
+      ],
+      "tests": [
+        "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts",
+        "services/web-app/app/domain/unified-signon/policy.test.ts"
+      ],
+      "assertions": [
+        "required password change outranks membership",
+        "membership picker validates active ownership"
+      ]
+    }
+  ],
+  "classCodeBranches": {
+    "signon-33/34": [
+      "email and Google identifier continuation",
+      "invalid and full class response",
+      "multiple matches and stale/foreign choices",
+      "email and handle class modes",
+      "existing identity join and already-member guards",
+      "capacity recheck on submit",
+      "preserved destination/class through password/code/provider flows"
+    ]
+  }
+}

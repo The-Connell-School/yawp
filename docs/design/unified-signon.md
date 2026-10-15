@@ -5,69 +5,35 @@ There is no seed, environment override, or migration enabling it. Keep the setti
 absent/off on demo and production through the October 16 intern session. Anonymous
 entry requires `everyone`; targeted settings, missing/malformed settings, and read
 failures retain the previous UI and POST dispatch. The existing `/auth/login`
-anonymous guard still redirects authenticated visitors to the existing `/` destination. The required-password page
-retains its authentication guard and action and changes presentation only when enabled.
+anonymous guard still redirects authenticated visitors to the existing `/` destination
+when the flag is off. The required-password page retains its authentication guard
+and existing credential-write operation.
 
-The enabled entry is intentionally incomplete until **di-signon-backend (PR 3)**.
-The UI item cannot resolve live identities, issue/verify codes, create accounts,
-link Google, or select memberships. Those POST intents return 503 without side
-effects. The enabled UI uses the router fetcher to read that response. Credential form submissions retain the original `loginAction`, including
-validation, rate limits, password checks, session creation, forced-password
-redirects, preview seat checks, and safe destinations. A selector in a URL or form
-cannot select a screen or authenticate. No new app routes/APIs were added.
+The enabled entry now uses the [flag-gated backend](unified-signon-backend.md).
+It resolves identifiers/classes, issues browser-bound email challenges, completes
+verified setup/reset, links Google after account proof, and validates authenticated
+membership choices. Password validation and sessions still use the existing login
+action. Required-password and legacy invitation selectors retain their existing
+contracts and now preserve the server-held destination when part of a live flow.
 
-The UI and `SignonTransport` contract are in
-`services/web-app/app/components/unified-signon/` and
-`services/web-app/app/domain/unified-signon/contracts.ts`. Local state selection
-exists only in `e2e/fixtures/unified-signon/`, served by the separate loopback Vite
-configuration. It is outside the route tree and production build. Its transport
-only returns in-memory presentation data; it never makes an authentication,
-account creation, email, membership, or class-join request. Fixture success is not
-a server capability. Production modules do not import fixtures.
+The UI and `SignonTransport` remain in `services/web-app/app/components/unified-signon/`
+and `services/web-app/app/domain/unified-signon/contracts.ts`. Presentation fixtures
+remain isolated in `e2e/fixtures/unified-signon/`; deployed modules never import them.
+Only server-held flow data determines authorization. Google stays disabled without
+both configured credentials, and no demo/production flag is enabled by this change.
 
-## PR 3 integration contract
-
-Every operation receives an operation name, field values, a safe `redirectTo`,
-and the current presentation context. Return `{ state: SignonState }`, or
-`{ error, fieldErrors?, retryAfterSeconds? }`. `flowToken` is reserved for an
-opaque, expiring, server-held challenge reference. Posted state/identity/role/IDs
-are never authoritative. Validate again on the server and bind every step to the
-challenge/session, including the destination. Do not expose account/membership
-status before the appropriate identity proof. The resolver must distinguish
-email, handle, class code, and an ambiguous code/handle using live data.
-
-| Operations | Integration required |
-|---|---|
-| `resolve`, `resolve-class`, `choose-class` | Authoritative identifier/class lookup, ambiguity, multiple matches, invalid/full states; retain class links and selected class through identity proof. Reuse existing class lookup/join semantics. |
-| `password` | Existing `loginAction` and `UnifiedPasswordForm`; email field is the resolved identifier. Never replace password policy, rate limits or session logic. |
-| `required-password` | Existing `/auth/required-password-change` form/action, already connected behind the flag. |
-| `send-code`, `resend-code`, `verify-code` | PR 3 hashed expiring OTP, uniform reset response, rate limits and captured mail in tests. Bind purpose (signup/reset/sign-in) and invitation/class context. |
-| `create-account` | Verified email or Google identity, invitation/account type and existing signup validators; Google variant collects name only. |
-| `join-handle` | Existing `/join` operation: verified join token, class and capacity checks, existing username/password validators; never persist an email for a handle class. Recheck capacity on submit. |
-| `trial-status`, `resend-invite`, `resend-approval` | Existing free-tier operations and guards; uniform anonymous status response. Existing `/free` and onboarding links stay in place. |
-| `google`, `link-google`, `skip-google` | PR 3 OAuth state/nonce/PKCE, verified provider identity, callback/error/cancel mapping and first-time linking. Read `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET` only when this path is implemented. Never create credentials. |
-| `select-membership` | Authenticated active membership ownership check, current membership cookie contract, safe redirect. Reject stale/foreign/inactive IDs. |
-| `partner-code` | Existing `/ua` context/validation and partner routing; PR 3 integration must preserve that contract. |
-
-After authentication, enforce: required password change → no active membership →
-free-trial onboarding/status → multiple active memberships → destination. The UI
-renders these outcomes, but never calculates authorization from fixture data.
-Use the existing class destinations only after a verified join. Signed-in login
-entry retains the existing `/` redirect when off. Enabled authenticated entry maps to `/app` without changing the legacy path. Preserve safe `redirectTo` and class
-context through every back/continue step, including reset and OAuth.
-
-Google is disabled on the deployed entry regardless of environment variables
-until a real OAuth action exists. Configuring credentials alone cannot enable an
-inert control. Local fixtures show configured, cancellation, and failure variants.
+See the backend document for operation boundaries, migration, captured-mail rules,
+provider verification, tests, decision-row coverage and current evidence. The
+remaining sections preserve the merged UI's design and review provenance.
 
 ## Reference and policy deviations
 
 - Source: `design/artboards/signon-01..32` and `classcode-01..12` in the design-impl lane; PNGs, copy exports, and computed DOM styles were read. Free classroom app artboards are excluded.
-- Existing password minimum is **6**, not the design's placeholder `[8]`. Existing handles accept **3–30** letters, numbers, dots, underscores and hyphens, including reserved-name validation. Entry design's 3–20/underscore-only copy is replaced with the existing policy. Existing validators remain unchanged. The new entry strips a display `@` only for UI validation; PR 3 must normalize the canonical identifier before calling the unchanged password action.
+- Existing password minimum is **6**, not the design's placeholder `[8]`. Existing handles accept **3–30** letters, numbers, dots, underscores and hyphens, including reserved-name validation. Entry design's 3–20/underscore-only copy is replaced with the existing policy. Existing validators remain unchanged. The new entry strips a display `@` only for UI validation; the backend normalizes the canonical identifier before calling the existing password action.
 - All-states artboards contain broken logo references. Implementation uses the real app logo. Desktop variants have desktop design PNGs; additional state references exist only as 390px panels and are centered without scaling for desktop comparison. Mobile desktop-default references use the corresponding all-states default panel.
 - Use Arial followed by the system stack, matching the existing free-tier artboard implementation and supplied PNG font metrics. Use existing Input, Button, AuthFormCard and auth shell; scope new spacing/styles to the unified screens. Preserve existing theme colors and clear focus rings. Error, pending and disabled states remain keyboard readable; fields have labels and described errors.
-- Status placeholders (`[Admin name]`, dates, organization/class names) occur in isolated fixtures only. PR 3 must supply authorized real data. No new resolver/OTP success is exposed in the live entry.
-- Support links use the existing `mailto:support@yawp.school` destination; no mail is sent by the app. New UI does not send mail.
+- Status placeholders (`[Admin name]`, dates, organization/class names) occur in isolated fixtures only. The backend supplies authorized real data after proof; reference placeholders stay isolated in fixtures.
+- Support links use the existing `mailto:support@yawp.school` destination; no mail is sent by the app. Delivery follows the backend mailer contract.
 
 ## Evidence and Ship Review
 
