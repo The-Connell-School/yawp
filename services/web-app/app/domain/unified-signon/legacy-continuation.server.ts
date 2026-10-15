@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { isUnifiedSignOnEnabled } from './gate.server';
-import { browserContext, withFlow, FlowError } from './flow.server';
+import {
+  browserContext,
+  withFlow,
+  FlowError,
+  assertCurrentIdentity,
+} from './flow.server';
+import { readInvitation } from './invitations.server';
 import {
   NameSchema,
   PasswordAndConfirmPasswordSchema,
@@ -43,6 +49,15 @@ export async function completeLegacyTeacherSignup(
       !flow.data.legacyOrganizationId
     )
       throw new FlowError('Invalid invitation.');
+    await assertCurrentIdentity(tx, flow);
+    const invitation = await readInvitation(tx, flow);
+    if (
+      !invitation ||
+      invitation.role !== 'TEACHER' ||
+      invitation.owner ||
+      invitation.organizationId !== flow.data.legacyOrganizationId
+    )
+      throw new FlowError('Invalid invitation.');
     const google = flow.data.proof === 'google';
     const parsed = z
       .object({ name: NameSchema, schoolId: z.string().min(1) })
@@ -58,20 +73,49 @@ export async function completeLegacyTeacherSignup(
     });
     if (!school) throw new FlowError('Choose a school from your invitation.');
     const hash = google ? undefined : await getPasswordHash(values.password);
-    const user = await tx.user.create({
-      data: {
-        email: flow.data.identifier,
-        name: values.name,
-        emailVerifiedAt: new Date(),
-        ...(hash ? { password: { create: { hash } } } : {}),
-        memberships: {
-          create: {
-            organizationId: flow.data.legacyOrganizationId,
-            role: 'TEACHER',
-            schools: { connect: { id: school.id } },
+    const existing = flow.data.userId
+      ? await tx.user.findUniqueOrThrow({
+          where: { id: flow.data.userId },
+          include: { password: true },
+        })
+      : null;
+    // Email proof can activate the originally resolved passwordless identity.
+    // It must never replace credentials established since that proof, or link
+    // an existing account through the new Google signup continuation.
+    if (existing && (existing.password || !hash))
+      throw new FlowError('Please sign in again.');
+    const user = existing
+      ? await tx.user.update({
+          where: { id: existing.id },
+          data: {
+            name: values.name,
+            emailVerifiedAt: new Date(),
+            mustChangePassword: false,
+            password: { create: { hash: hash! } },
           },
+        })
+      : await tx.user.create({
+          data: {
+            email: flow.data.identifier,
+            name: values.name,
+            emailVerifiedAt: new Date(),
+            ...(hash ? { password: { create: { hash } } } : {}),
+          },
+        });
+    await tx.orgMembership.upsert({
+      where: {
+        userId_organizationId: {
+          userId: user.id,
+          organizationId: invitation.organizationId,
         },
       },
+      create: {
+        userId: user.id,
+        organizationId: invitation.organizationId,
+        role: 'TEACHER',
+        schools: { connect: { id: school.id } },
+      },
+      update: { role: 'TEACHER', schools: { connect: { id: school.id } } },
     });
     if (google && flow.data.pendingGoogle)
       await tx.signonIdentity.create({
@@ -81,17 +125,19 @@ export async function completeLegacyTeacherSignup(
           userId: user.id,
         },
       });
+    await tx.invitation.delete({ where: { id: invitation.invite.id } });
+    flow.data.invitationId = undefined;
     flow.data.pendingGoogle = undefined;
     flow.data.legacyOrganizationId = undefined;
     const response = await finishAuthentication(tx, flow, request, user.id);
     const { invitationCookieStorage } =
       await import('~/cookie-session-storages/invitation.server');
-    const invitation = await invitationCookieStorage.getSession(
+    const invitationCookie = await invitationCookieStorage.getSession(
       request.headers.get('cookie')
     );
     response.headers.append(
       'set-cookie',
-      await invitationCookieStorage.destroySession(invitation)
+      await invitationCookieStorage.destroySession(invitationCookie)
     );
     return response;
   });

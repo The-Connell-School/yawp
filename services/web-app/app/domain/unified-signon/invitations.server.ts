@@ -155,8 +155,8 @@ export async function prepareInvitation(
     cookie.set('email', flow.data.identifier);
     cookie.set('organizationId', invitation.organizationId);
     cookie.set('unifiedSignon', true);
-    await tx.invitation.delete({ where: { id: invitation.invite.id } });
-    flow.data.invitationId = undefined;
+    // Retain the invitation until activation and the selected location grant
+    // commit together. The continuation rechecks expiry and authorization.
     flow.data.legacyOrganizationId = invitation.organizationId;
     return redirect('/auth/inv/onboard-teacher', {
       headers: {

@@ -69,7 +69,12 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   await db.setting.deleteMany({ where: { name: flag } });
   const users = await db.user.findMany({
-    where: { email: { in: ['maya1280@yawp.local', 'maya390@yawp.local'] } },
+    where: {
+      OR: [
+        { email: { in: ['maya1280@yawp.local', 'maya390@yawp.local'] } },
+        { email: { contains: prefix } },
+      ],
+    },
     select: { id: true },
   });
   const ids = users.map((u) => u.id);
@@ -82,6 +87,109 @@ test.afterAll(async () => {
   await db.organization.delete({ where: { id: prefix } });
   await db.$disconnect();
 });
+for (const width of [1280, 390])
+  test(`existing passwordless teacher activates through the location selector at ${width}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
+    await db.setting.upsert({
+      where: { name: flag },
+      update: { value: 'true' },
+      create: { name: flag, value: 'true', valueType: 'boolean' },
+    });
+    const address = `${prefix}-teacher-${width}@example.test`;
+    const second = `${prefix}-${width}`;
+    const user = await db.user.create({
+      data: {
+        email: address,
+        name: 'Existing Teacher',
+        memberships: { create: { organizationId: prefix, role: 'STUDENT' } },
+      },
+      include: { memberships: true },
+    });
+    await db.school.create({
+      data: {
+        id: second,
+        code: second,
+        name: 'Selected location',
+        organizationId: prefix,
+      },
+    });
+    const invitation = await db.invitation.create({
+      data: {
+        type: 'onboard-teacher',
+        target: address,
+        secret: 'local-only',
+        algorithm: 'SHA-256',
+        digits: 6,
+        period: 600,
+        charSet: '0123456789',
+        expiresAt: new Date(Date.now() + 600000),
+        metadata: JSON.stringify({ organizationId: prefix }),
+      },
+    });
+    try {
+      await page.goto('/auth/login?redirectTo=%2Fapp%2Fmy-classes');
+      await page.waitForFunction(() =>
+        Boolean((window as any).__reactRouterDataRouter)
+      );
+      await page.getByLabel('Email, handle, or class code').fill(address);
+      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      await expect(
+        page.getByRole('heading', { name: 'Finish setting up your account' })
+      ).toBeVisible();
+      await shot(page, 'signon-23-teacher-activation', width);
+      await page
+        .getByRole('button', { name: 'Email me a code', exact: true })
+        .click();
+      await expect(
+        page.getByRole('heading', { name: 'Check your email' })
+      ).toBeVisible();
+      await page
+        .getByLabel('Code', { exact: true })
+        .fill(await codeFor(address));
+      await page.getByRole('button', { name: 'Verify', exact: true }).click();
+      await expect(page).toHaveURL(/\/auth\/inv\/onboard-teacher$/);
+      await page.getByLabel('Name', { exact: true }).fill('Activated Teacher');
+      await page.getByRole('combobox').click();
+      await page
+        .getByRole('option', { name: 'Selected location', exact: true })
+        .click();
+      await page.getByLabel('Password', { exact: true }).fill('local-password');
+      await page
+        .getByLabel('Confirm Password', { exact: true })
+        .fill('local-password');
+      await shot(page, 'teacher-location-selector', width);
+      await page
+        .getByRole('button', { name: 'Create an account', exact: true })
+        .click();
+      await page.waitForLoadState('networkidle');
+      if (page.url().endsWith('/auth/inv/onboard-teacher'))
+        await shot(page, 'teacher-location-submitted', width);
+      await expect(page).toHaveURL(/\/app\/my-classes$/);
+      await shot(page, 'teacher-location-completed', width);
+      const stored = await db.user.findUniqueOrThrow({
+        where: { email: address },
+        include: {
+          password: true,
+          memberships: { include: { schools: true } },
+        },
+      });
+      expect(stored.id).toBe(user.id);
+      expect(stored.emailVerifiedAt).not.toBeNull();
+      expect(stored.password).not.toBeNull();
+      expect(stored.memberships).toHaveLength(1);
+      expect(stored.memberships[0].id).toBe(user.memberships[0].id);
+      expect(stored.memberships[0].role).toBe('TEACHER');
+      expect(stored.memberships[0].schools.map((s) => s.id)).toContain(second);
+      expect(await db.invitation.count({ where: { id: invitation.id } })).toBe(
+        0
+      );
+    } finally {
+      await db.invitation.deleteMany({ where: { id: invitation.id } });
+      await db.school.delete({ where: { id: second } });
+    }
+  });
 for (const width of [1280, 390])
   test(`real handlers: class, email code errors/retry, verified signup and reset at ${width}`, async ({
     page,

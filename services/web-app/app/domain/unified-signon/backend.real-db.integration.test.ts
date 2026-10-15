@@ -1240,6 +1240,262 @@ suite(
   }
 );
 suite(
+  'existing passwordless teacher activation retains identity, memberships and destination through the location selector',
+  async () => {
+    cookie = '';
+    flowToken = '';
+    const email = `passwordless-teacher-${prefix}@example.test`;
+    const second = prefix + '-activation';
+    await prisma.school.create({
+      data: {
+        id: second,
+        code: second,
+        name: 'Selected location',
+        organizationId: prefix,
+      },
+    });
+    const user = await prisma.user.create({
+      data: {
+        email,
+        name: 'Existing identity',
+        username: `teacher-${prefix}`,
+        mustChangePassword: true,
+        memberships: {
+          create: [
+            {
+              organizationId: prefix,
+              role: 'STUDENT',
+              schools: { connect: { id: prefix } },
+            },
+            { organizationId: prefix + '-b', role: 'STUDENT', isActive: false },
+          ],
+        },
+      },
+      include: { memberships: true },
+    });
+    const invitation = await prisma.invitation.create({
+      data: {
+        type: 'onboard-teacher',
+        target: email,
+        secret: 'local-secret',
+        algorithm: 'SHA-256',
+        digits: 6,
+        period: 600,
+        charSet: '0123456789',
+        expiresAt: new Date(Date.now() + 600000),
+        metadata: JSON.stringify({ organizationId: prefix }),
+      },
+    });
+    try {
+      await post('resolve', {
+        identifier: email,
+        redirectTo: '/app/my-classes',
+      });
+      await post('send-code');
+      const verified = await post('verify-code', { code: await code(email) });
+      expect(verified.response.headers.get('location')).toBe(
+        '/auth/inv/onboard-teacher'
+      );
+      const { action } =
+        await import('~/routes/auth.inv.onboard-teacher/route');
+      const submit = (schoolId: string) =>
+        action({
+          request: new Request(
+            'http://127.0.0.1:5396/auth/inv/onboard-teacher',
+            {
+              method: 'POST',
+              headers: { cookie },
+              body: new URLSearchParams({
+                name: 'Activated Teacher',
+                schoolId,
+                password: 'abcdef',
+                confirmPassword: 'abcdef',
+                userId: 'foreign',
+                organizationId: prefix + '-b',
+                role: 'ADMIN',
+              }),
+            }
+          ),
+          params: {},
+          context: {},
+        } as any);
+      await submit('foreign-location');
+      expect(await prisma.password.count({ where: { userId: user.id } })).toBe(
+        0
+      );
+      expect(
+        await prisma.orgMembership.findMany({ where: { userId: user.id } })
+      ).toEqual(user.memberships);
+      expect(
+        await prisma.invitation.count({ where: { id: invitation.id } })
+      ).toBe(1);
+      const result = await submit(second);
+      expect((result as Response).headers.get('location')).toBe(
+        '/app/my-classes'
+      );
+      const stored = await prisma.user.findUniqueOrThrow({
+        where: { id: user.id },
+        include: {
+          password: true,
+          memberships: { include: { schools: true } },
+          sessions: true,
+        },
+      });
+      expect(stored.username).toBe(user.username);
+      expect(stored.name).toBe('Activated Teacher');
+      expect(stored.emailVerifiedAt).not.toBeNull();
+      expect(stored.mustChangePassword).toBe(false);
+      expect(await Bun.password.verify('abcdef', stored.password!.hash)).toBe(
+        true
+      );
+      expect(stored.memberships).toHaveLength(2);
+      const membership = stored.memberships.find(
+        (m) => m.organizationId === prefix
+      )!;
+      expect(membership.id).toBe(
+        user.memberships.find((m) => m.organizationId === prefix)!.id
+      );
+      expect(membership.role).toBe('TEACHER');
+      expect(membership.schools.map((s) => s.id).sort()).toEqual(
+        [prefix, second].sort()
+      );
+      const { schools, ...unrelated } = stored.memberships.find(
+        (m) => m.organizationId === prefix + '-b'
+      )!;
+      expect(unrelated).toEqual(
+        user.memberships.find((m) => m.organizationId === prefix + '-b')!
+      );
+      expect(stored.sessions).toHaveLength(1);
+      expect(await prisma.user.count({ where: { email } })).toBe(1);
+      expect(
+        await prisma.invitation.count({ where: { id: invitation.id } })
+      ).toBe(0);
+      expect(
+        (result as Response).headers
+          .getSetCookie()
+          .some((c) => c.startsWith('en_invitation=') && c.includes('Expires='))
+      ).toBe(true);
+    } finally {
+      await prisma.school.delete({ where: { id: second } });
+    }
+  }
+);
+for (const change of [
+  'expired',
+  'revoked',
+  'reassigned',
+  'credentialed',
+] as const)
+  suite(
+    `teacher activation rejects ${change} authorization without partial writes`,
+    async () => {
+      cookie = '';
+      flowToken = '';
+      const email = `${change}-teacher-${prefix}@example.test`;
+      const second = `${prefix}-${change}`;
+      await prisma.school.create({
+        data: {
+          id: second,
+          code: second,
+          name: 'Second location',
+          organizationId: prefix,
+        },
+      });
+      const user = await prisma.user.create({
+        data: {
+          email,
+          name: 'Existing identity',
+          memberships: { create: { organizationId: prefix, role: 'STUDENT' } },
+        },
+        include: { memberships: true },
+      });
+      const invitation = await prisma.invitation.create({
+        data: {
+          type: 'onboard-teacher',
+          target: email,
+          secret: 'local-only',
+          algorithm: 'SHA-256',
+          digits: 6,
+          period: 600,
+          charSet: '0123456789',
+          expiresAt: new Date(Date.now() + 600000),
+          metadata: JSON.stringify({ organizationId: prefix }),
+        },
+      });
+      try {
+        await post('resolve', { identifier: email });
+        await post('send-code');
+        expect(
+          (
+            await post('verify-code', { code: await code(email) })
+          ).response.headers.get('location')
+        ).toBe('/auth/inv/onboard-teacher');
+        if (change === 'expired')
+          await prisma.invitation.update({
+            where: { id: invitation.id },
+            data: { expiresAt: new Date(0) },
+          });
+        if (change === 'revoked')
+          await prisma.invitation.delete({ where: { id: invitation.id } });
+        if (change === 'reassigned')
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { email: `moved-${email}` },
+          });
+        if (change === 'credentialed')
+          await prisma.password.create({
+            data: {
+              userId: user.id,
+              hash: await getPasswordHash('existing-password'),
+            },
+          });
+        const before = await prisma.user.findUniqueOrThrow({
+          where: { id: user.id },
+          include: { password: true, memberships: true },
+        });
+        const { action } =
+          await import('~/routes/auth.inv.onboard-teacher/route');
+        const result = await action({
+          request: new Request(
+            'http://127.0.0.1:5396/auth/inv/onboard-teacher',
+            {
+              method: 'POST',
+              headers: { cookie },
+              body: new URLSearchParams({
+                name: 'Forbidden activation',
+                schoolId: second,
+                password: 'abcdef',
+                confirmPassword: 'abcdef',
+              }),
+            }
+          ),
+          params: {},
+          context: {},
+        } as any);
+        expect((result as Response).headers?.get('location')).toBeUndefined();
+        expect(
+          await prisma.user.findUniqueOrThrow({
+            where: { id: user.id },
+            include: { password: true, memberships: true },
+          })
+        ).toEqual(before);
+        expect(await prisma.session.count({ where: { userId: user.id } })).toBe(
+          0
+        );
+        expect(
+          await prisma.orgMembership.count({
+            where: { userId: user.id, schools: { some: { id: second } } },
+          })
+        ).toBe(0);
+        expect(
+          await prisma.invitation.count({ where: { id: invitation.id } })
+        ).toBe(change === 'revoked' ? 0 : 1);
+      } finally {
+        await prisma.school.delete({ where: { id: second } });
+      }
+    }
+  );
+suite(
   'new Google classroom signup is name-only and links the verified subject atomically',
   async () => {
     const { googleCallback } = await import('./google.server');
