@@ -3,12 +3,12 @@ import { getClassroomActivityReport } from './classroom-report.server';
 
 describe('classroom activity aggregation', () => {
   test('every query uses active classes owned by the authenticated teacher in the selected organization', async () => {
-    const countClasses = mock(async () => 2);
-    const students = mock(async () => [{ userId: 'one' }, { userId: 'two' }]);
-    const assignments = mock(async () => 2);
-    const documents = mock(async () => 3);
+    const countClasses = mock(async (_args: unknown) => 2);
+    const students = mock(async (_args: unknown) => [{ userId: 'one' }, { userId: 'two' }]);
+    const assignments = mock(async (_args: unknown) => 2);
+    const documents = mock(async (_args: unknown) => 3);
     const tx = { class: { count: countClasses }, orgMembership: { findMany: students }, classAssignment: { count: assignments }, document: { count: documents } };
-    const transaction = mock(async (work: (tx: unknown) => unknown) => work(tx));
+    const transaction = mock(async (work: (tx: unknown) => unknown, _options: unknown) => work(tx));
     const client = { $transaction: transaction };
     const report = await getClassroomActivityReport({ membershipId: 'session-teacher', organizationId: 'session-org' }, client as any, new Date('2026-10-01T12:00:00Z'));
     const scope = { isArchived: false, teachers: { some: { id: 'session-teacher', role: 'TEACHER', isActive: true, organizationId: 'session-org' } }, school: { organizationId: 'session-org' } };

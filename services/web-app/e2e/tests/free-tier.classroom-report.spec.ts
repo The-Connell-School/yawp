@@ -4,6 +4,9 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import bcrypt from 'bcryptjs';
 import { createE2EPrismaClient } from '../prisma-client';
+import { loadE2eEnvFromFile } from '../test-setup';
+
+loadE2eEnvFromFile();
 
 const db = createE2EPrismaClient();
 const before = process.env.REPORT_BEFORE === '1';
@@ -20,8 +23,8 @@ test.beforeAll(async () => {
   const previousOrgs = await db.organization.findMany({ where: { name: { startsWith: 'Report fixture ' } }, select: { id: true } });
   const orgIds = previousOrgs.map(o => o.id);
   const oldDocuments = { classAssignment: { class: { school: { organizationId: { in: orgIds } } } } };
-  await db.documentGroup.deleteMany({ where: { classAssignment: { class: { school: { organizationId: { in: orgIds } } } } } });
   await db.submission.deleteMany({ where: { document: oldDocuments } });
+  await db.documentGroup.deleteMany({ where: { classAssignment: { class: { school: { organizationId: { in: orgIds } } } } } });
   await db.document.deleteMany({ where: oldDocuments });
   const oldAssignments = await db.classAssignment.findMany({ where: { class: { school: { organizationId: { in: orgIds } } } }, select: { assignmentId: true } });
   await db.assignment.deleteMany({ where: { id: { in: oldAssignments.map(a => a.assignmentId) } } });
@@ -172,7 +175,9 @@ test('direct requests use the session membership despite crafted teacher, organi
   await expect(page.getByTestId('submittedWriting')).toHaveText('3');
   const direct = await page.request.get(`${crafted.replace('?', '.data?')}&_routes=routes/app.classroom-report`);
   expect(direct.status()).toBe(200);
+  expect(direct.headers()['cache-control']).toBe('private, no-store');
   const body = await direct.text();
+  expect(body).toContain('submittedWriting');
   expect(body).not.toContain('PRIVATE STUDENT WRITING');
   expect(body).not.toContain(ids.foreignClass!);
   await page.context().clearCookies();

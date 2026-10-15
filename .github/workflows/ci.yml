@@ -356,6 +356,16 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun test ./services/web-app/app/domain/free-tier/student-join.server.test.ts
 
+      - name: 🧪 Classroom report aggregation and loader access (isolated)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: |
+          set -e
+          bun test app/utils/classroom-report.test.ts app/utils/classroom-report.server.test.ts
+          bun test app/routes/app.classroom-report/route.test.ts
+
       - name: 🎨 Backfill class artwork keys
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
