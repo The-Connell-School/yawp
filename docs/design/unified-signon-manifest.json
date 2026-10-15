@@ -4719,5 +4719,48 @@
     ],
     "backendDependency": "unchanged; presentation only, no new operations or authorization behavior",
     "inactiveStaffAction": "Existing POST /auth/logout form moved into card as primary action; no nested form or server contract change. signon-26 desktop/mobile comparisons refreshed after final adjustment."
+  },
+  "choiceCardReviewFixes": {
+    "reviewSlug": "di-signon-ui",
+    "source": "state/REVIEW.md (third REJECT; outlined choice cards and class-found subtitles)",
+    "designSources": [
+      "design/v2/artboards/signon-09-new-account-who-are-you-desktop.dom.html",
+      "design/v2/artboards/signon-35-class-code-class-found-desktop.dom.html"
+    ],
+    "artboards": [
+      "classcode-03",
+      "classcode-04",
+      "signon-09",
+      "signon-10"
+    ],
+    "comparisonCount": 16,
+    "comparisons": [
+      "signon-09-account-type-1280-side-by-side.png",
+      "signon-09-account-type-390-side-by-side.png",
+      "signon-10-account-type-email-1280-side-by-side.png",
+      "signon-10-account-type-email-390-side-by-side.png",
+      "signon-10-account-type-google-1280-side-by-side.png",
+      "signon-10-account-type-google-390-side-by-side.png",
+      "classcode-03-class-found-1280-side-by-side.png",
+      "classcode-03-class-found-390-side-by-side.png",
+      "classcode-04-class-found-single-1280-side-by-side.png",
+      "classcode-04-class-found-single-390-side-by-side.png",
+      "classcode-04-class-found-multiple-1280-side-by-side.png",
+      "classcode-04-class-found-multiple-390-side-by-side.png",
+      "classcode-04-class-found-full-1280-side-by-side.png",
+      "classcode-04-class-found-full-390-side-by-side.png",
+      "classcode-04-class-found-ambiguity-1280-side-by-side.png",
+      "classcode-04-class-found-ambiguity-390-side-by-side.png"
+    ],
+    "previousEvidence": "choice-card-fixes/before/",
+    "checks": "choice-cards-red.log, choice-cards-title-red.log, choice-cards-green.log, choice-cards-targeted.log, choice-cards-typecheck-final.log, choice-cards-playwright-final.log, choice-cards-playwright-spacing-final.log",
+    "regressionTests": [
+      "choice cards match artboard copy, geometry and keyboard paths at 1280",
+      "choice cards match artboard copy, geometry and keyboard paths at 390",
+      "class handle signup keeps its mode and context after sign-in",
+      "class email signup keeps its mode and context after sign-in"
+    ],
+    "backendDependency": "unchanged; existing mode-aware account transition and sign-in paths, no server operation changes",
+    "titleLineHeight": "22px reference text height; regression caught inherited 24px before final spacing correction"
   }
 }

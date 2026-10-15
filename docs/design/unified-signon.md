@@ -196,3 +196,41 @@ action, with support below, matching signon-26. Student sign-out remains below.
 Regression assertions verify the native form method/action and primary styling;
 all 14 browser tests pass again after this adjustment, with the four signon-26
 viewport captures refreshed (`inactive-staff-playwright-final.log`).
+
+## Choice-card review correction (di-signon-ui)
+
+The third REJECT in `state/REVIEW.md` identified missing class-found subtitles
+and a shared choice-card layout mismatch. Account-type, class-found and
+code/handle ambiguity choices now use white outlined horizontal cards, the
+existing input-border and foreground tokens, 16px/18px padding, a 14px gap,
+two text lines separated by 2px, and an 18px decorative trailing chevron.
+Title weight/size and subtitle size/line height follow the v2 signon-09/35 DOM
+exports, with an explicit 22px title line matching the reference text height.
+Both class-found subtitles are restored verbatim: “Create an account”
+and “Sign in to join”. The new-account card calls the existing mode-aware
+transition; handle/email account paths, class context and safe destination
+retention remain covered by the existing browser regressions.
+
+Focused desktop/mobile tests check copy, outline/surface, spacing, typography,
+chevron geometry, keyboard navigation and destination screens across all three
+choice screens. The tests failed on the filled background before implementation.
+The affected 16 comparisons span signon-09/10 and classcode-03/04 (v2
+signon-35/36); earlier images are preserved under `choice-card-fixes/before/`
+in the lane evidence directory. The manifest's `choiceCardReviewFixes` links
+the comparisons and checks. Backend contracts and remote settings are unchanged.
+
+Final local validation for this correction: 90 targeted unit/route tests, project
+CLI typecheck (4 GB Node heap), and all 16 standalone Playwright tests pass with
+one worker. All 210 states/viewports were captured again and all 630 adjacent
+design/implementation/comparison files verified. The 16 affected comparisons are
+committed with this revision. Existing duplicate LTI route warnings remain.
+Prior server-backed browser checks and six flag-off comparisons remain earlier
+evidence; they were not rerun for this scoped UI correction. Hosted QA remains
+omitted under the preview ban. Repeat Ship Review and verify final CI before merge.
+
+Final comparison inspection caught an inherited 24px title line, adding 2px per
+choice card. An added assertion reproduced that difference before the 22px fix.
+All 16 browser tests and typecheck pass again after this spacing correction;
+the final browser run refreshes just the 16 affected comparisons. See
+`choice-cards-title-red.log`, `choice-cards-playwright-spacing-final.log` and
+`choice-cards-typecheck-final.log` in the lane evidence directory.
