@@ -96,6 +96,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const publicLandingPage =
     url.pathname === '/' ||
     url.pathname === '/info' ||
+    /^\/(privacy|terms)(?:\/|\.data)?$/.test(url.pathname) ||
     url.pathname === '/auth/preview-access' ||
     url.pathname === '/auth/preview-access.data';
   const cookieHeader = request.headers.get('Cookie');

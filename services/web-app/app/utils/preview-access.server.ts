@@ -609,6 +609,12 @@ export function createPreviewAccessMiddleware(
     if (!isPreviewAccessGateEnabled()) return next();
 
     const pathname = new URL(request.url).pathname;
+    // Legal documents are public reads, including React Router data requests.
+    // Do not grant a seat or extend activity for these anonymous requests.
+    if (
+      ['GET', 'HEAD'].includes(request.method) &&
+      /^\/(privacy|terms)(?:\/|\.data)?$/.test(pathname)
+    ) return next();
     if (isOpenPath(pathname)) return next();
 
     const seat = await getPreviewAccessSeat(request, repository);
