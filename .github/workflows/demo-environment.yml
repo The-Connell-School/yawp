@@ -215,6 +215,8 @@ jobs:
              HOST_METRICS_SCRIPT=$(printf '%q' "$remote_metrics") \
              HOST_METRICS_SERVICE=yawp-demo-metrics \
              bash $(printf '%q' "${remote_control}/scripts/preview/install-host-metrics.sh")"
+          ssh -i ~/.ssh/demo_key "$ssh_target" \
+            "bash $(printf '%q' "${remote_control}/scripts/preview/reclaim-demo-disk.sh")"
 
       - name: Deploy demo
         id: deploy

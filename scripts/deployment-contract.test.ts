@@ -1482,6 +1482,35 @@ describe('PR preview deployment contract', () => {
 });
 
 describe('demo environment deployment contract', () => {
+  test('demo capacity cleanup protects all container images before the build', () => {
+    const workflow = readRepoFile('.github/workflows/demo-environment.yml');
+    const prepare = workflow.slice(
+      workflow.indexOf('- name: Prepare demo host capacity'),
+      workflow.indexOf('- name: Deploy demo')
+    );
+    expect(prepare).toContain('remote_control="${PREVIEW_ROOT}/control/demo"');
+    expect(prepare).toContain('${remote_control}/scripts/preview/reclaim-demo-disk.sh');
+    expect(prepare).toContain('ensure-host-swap.sh');
+    expect(prepare).toContain('install-host-metrics.sh');
+    expect(workflow.indexOf('Checkout reviewed demo control plane')).toBeLessThan(
+      workflow.indexOf('- name: Prepare demo host capacity')
+    );
+
+    const cleanup = readRepoFile('scripts/preview/reclaim-demo-disk.sh');
+    expect(cleanup).toContain('docker ps -a --quiet --no-trunc');
+    expect(cleanup).toContain("docker container inspect --format '{{.Image}}'");
+    expect(cleanup).toContain("docker image inspect --format '{{.Id}}'");
+    expect(cleanup).toContain('protected_images[');
+    expect(cleanup).toContain('docker image rm "$image_id"');
+    expect(cleanup).toContain('docker builder prune -af --keep-storage 2GB');
+    expect(cleanup).toContain('Demo disk free before cleanup');
+    expect(cleanup).toContain('Demo disk free after cleanup');
+    for (const source of [prepare, cleanup]) {
+      expect(source).not.toMatch(/docker\s+(?:system\s+prune|container\s+(?:prune|rm)|volume\s+(?:prune|rm)|rm\b|compose\s+down)/);
+      expect(source).not.toMatch(/docker\s+image\s+(?:prune|rm[^\n]*(?:--force|\s-[a-z]*f))/);
+    }
+  });
+
   test('demo host diagnostics expose only non-secret container and mount metadata', () => {
     const diagnostics = readRepoFile(
       '.github/workflows/demo-host-diagnostics.yml'
