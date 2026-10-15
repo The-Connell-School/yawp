@@ -301,8 +301,11 @@ export function UnifiedSignon({
       disabled={blocked}
       onClick={action}
     >
-      <strong>{title}</strong>
-      <span>{subtitle}</span>
+      <span className="signon-choice-copy">
+        <strong>{title}</strong>
+        <span>{subtitle}</span>
+      </span>
+      <ChevronRight aria-hidden="true" width={18} height={18} />
     </Button>
   );
   const passwords = (isNew = false, handle = false) => (
@@ -801,8 +804,12 @@ export function UnifiedSignon({
               <p className="signon-copy">Ask your teacher to make room.</p>
             ) : (
               <>
-                {primary("I'm new to YAWP", undefined)}
-                {choice('I already have an account', '', () =>
+                {choice(
+                  "I'm new to YAWP",
+                  'Create an account',
+                  createClassAccount
+                )}
+                {choice('I already have an account', 'Sign in to join', () =>
                   go({ screen: 'class-signin', classInfo: state.classInfo })
                 )}
               </>

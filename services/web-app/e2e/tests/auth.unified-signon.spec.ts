@@ -6,6 +6,86 @@ import { signonFixtures } from '../fixtures/unified-signon/states';
 const evidence = process.env.SIGNON_EVIDENCE_DIR;
 
 for (const width of [1280, 390]) {
+  test(`choice cards match artboard copy, geometry and keyboard paths at ${width}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
+    for (const [state, labels] of [
+      [
+        'account-type',
+        [
+          "I'm a student I have a class code",
+          "I'm a teacher Start or check a free trial",
+        ],
+      ],
+      [
+        'class-found',
+        [
+          "I'm new to YAWP Create an account",
+          'I already have an account Sign in to join',
+        ],
+      ],
+      [
+        'class-found-ambiguity',
+        [
+          "Yes, it's a class code Join [English 11, Period 2]",
+          "No, it's my handle Sign in as @eng-11x",
+        ],
+      ],
+    ] as const) {
+      await page.goto(`/e2e/fixtures/unified-signon/index.html?state=${state}`);
+      const choices = page.locator('.signon-choice');
+      await expect(choices).toHaveCount(2);
+      for (const [i, label] of labels.entries()) {
+        const choice = choices.nth(i);
+        await expect(choice).toHaveAccessibleName(label);
+        await expect(choice).toHaveCSS(
+          'background-color',
+          'rgb(255, 255, 255)'
+        );
+        await expect(choice).toHaveCSS(
+          'border-top',
+          '1px solid rgb(177, 175, 163)'
+        );
+        await expect(choice).toHaveCSS('padding', '16px 16px 16px 18px');
+        await expect(choice).toHaveCSS('flex-direction', 'row');
+        await expect(choice).toHaveCSS('gap', '14px');
+        const copy = choice.locator('.signon-choice-copy');
+        await expect(copy).toHaveCSS('gap', '2px');
+        await expect(copy.locator('strong')).toHaveCSS('font-size', '16px');
+        await expect(copy.locator('strong')).toHaveCSS('font-weight', '600');
+        await expect(copy.locator('span')).toHaveCSS('font-size', '14px');
+        await expect(copy.locator('span')).toHaveCSS('line-height', '20.3px');
+        const chevron = choice.locator('svg');
+        await expect(chevron).toHaveAttribute('aria-hidden', 'true');
+        await expect(chevron).toHaveCSS('width', '18px');
+        await expect(chevron).toHaveCSS('height', '18px');
+        const textBox = (await copy.boundingBox())!;
+        const iconBox = (await chevron.boundingBox())!;
+        expect(iconBox.x - textBox.x - textBox.width).toBeCloseTo(14, 0);
+        expect(iconBox.y + iconBox.height / 2).toBeCloseTo(
+          textBox.y + textBox.height / 2,
+          0
+        );
+      }
+      await choices.first().focus();
+      await page.keyboard.press('Tab');
+      await expect(choices.last()).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(page.locator('[data-signon-screen]')).toHaveAttribute(
+        'data-signon-screen',
+        state === 'account-type'
+          ? 'teacher'
+          : state === 'class-found'
+            ? 'class-signin'
+            : 'password'
+      );
+      expect(await page.context().cookies()).toEqual([]);
+    }
+  });
+}
+
+for (const width of [1280, 390]) {
   test(`every artboard state is accessible and responsive at ${width}`, async ({
     page,
   }) => {
