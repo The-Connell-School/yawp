@@ -202,10 +202,11 @@
 .unified-signon .signon-class {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 12px;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid hsl(var(--border));
   border-radius: 8px;
-  background: hsl(var(--secondary));
+  background: white;
   line-height: 1.5;
 }
 .unified-signon .signon-class strong {
@@ -327,8 +328,8 @@
     sans-serif;
 }
 
-/* signon-13/14: badge 40px, heading gaps 8px, fields 24px below copy. */
-.unified-signon .signon-email-badge {
+/* Status headers share the artboards' 40px badge and 8px heading gaps. */
+.unified-signon .signon-status-badge {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -339,6 +340,24 @@
   background: hsl(var(--secondary));
   color: hsl(var(--card-foreground));
 }
+.unified-signon:is(
+    [data-signon-screen='trial-status'],
+    [data-signon-screen='inactive']
+  )
+  .signon-card
+  > .mt-6 {
+  margin-top: 8px;
+}
+.unified-signon:is(
+    [data-signon-screen='trial-status'],
+    [data-signon-screen='inactive']
+  )
+  .signon-card
+  > .mt-6
+  > .signon-fields {
+  gap: 24px;
+}
+/* signon-13/14: fields 24px below copy. */
 .unified-signon[data-signon-screen='email-code'] .signon-card > .mt-6 {
   margin-top: 8px;
 }

@@ -243,6 +243,78 @@ test('expired fixture code can be resent and then verified without server effect
 });
 
 for (const width of [1280, 390]) {
+  test(`status badges and class summaries match artboards at ${width}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
+    for (const fixture of signonFixtures.filter((f) =>
+      ['trial-status', 'inactive', 'joined'].includes(f.state.screen)
+    )) {
+      await page.goto(
+        `/e2e/fixtures/unified-signon/index.html?state=${fixture.id}`
+      );
+      const badge = page.locator('.signon-status-badge');
+      await expect(badge).toHaveCSS('width', '40px');
+      await expect(badge).toHaveCSS('height', '40px');
+      await expect(badge).toHaveCSS('background-color', 'rgb(230, 226, 214)');
+      const icon = badge.locator('svg');
+      await expect(icon).toHaveAttribute('width', '22');
+      await expect(icon).toHaveAttribute('height', '22');
+      const variant = fixture.state.variant;
+      const expectedIcon =
+        fixture.state.screen === 'joined'
+          ? 'circle-check'
+          : fixture.state.screen === 'inactive' ||
+              ['rejected', 'expired'].includes(variant ?? '')
+            ? 'info'
+            : variant === 'invited'
+              ? 'mail'
+              : 'clock';
+      await expect(icon).toHaveClass(new RegExp(`lucide-${expectedIcon}`));
+      const badgeBox = (await badge.boundingBox())!;
+      const titleBox = (await page
+        .getByRole('heading', { level: 1 })
+        .boundingBox())!;
+      expect(titleBox.y - badgeBox.y - badgeBox.height).toBeCloseTo(8, 0);
+      const copy = page.locator(
+        '.signon-card > .mt-6 > .signon-fields > .signon-copy'
+      );
+      if (await copy.count()) {
+        const copyBox = (await copy.boundingBox())!;
+        expect(copyBox.y - titleBox.y - titleBox.height).toBeCloseTo(8, 0);
+        const form = page.locator('.signon-card form');
+        if (await form.count()) {
+          const formBox = (await form.boundingBox())!;
+          expect(formBox.y - copyBox.y - copyBox.height).toBeCloseTo(24, 0);
+        } else {
+          const cardBox = (await page.locator('.signon-card').boundingBox())!;
+          expect(
+            cardBox.y + cardBox.height - copyBox.y - copyBox.height
+          ).toBeCloseTo(24, 0);
+        }
+      }
+    }
+    for (const state of [
+      'class-found',
+      'class-handle',
+      'class-email',
+      'class-signin',
+      'joined',
+      'handle-join',
+      'name-password',
+    ]) {
+      await page.goto(`/e2e/fixtures/unified-signon/index.html?state=${state}`);
+      const summary = page.locator('.signon-class');
+      await expect(summary).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+      await expect(summary).toHaveCSS(
+        'border-top',
+        '1px solid rgb(214, 213, 207)'
+      );
+      await expect(summary).toHaveCSS('padding', '12px 14px');
+      await expect(summary).toHaveCSS('gap', '2px');
+    }
+  });
+
   test(`email and membership design geometry at ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
     await page.goto('/e2e/fixtures/unified-signon/index.html?state=email-code');

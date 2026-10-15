@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { ChevronRight, Mail } from 'lucide-react';
+import { ChevronRight, CircleCheck, Clock, Info, Mail } from 'lucide-react';
 import { safeRedirect } from 'remix-utils/safe-redirect';
 import { z } from 'zod';
 import { Button } from '~/components/ui/button';
@@ -954,6 +954,21 @@ export function UnifiedSignon({
     });
   };
 
+  const StatusIcon =
+    screen === 'email-code'
+      ? Mail
+      : screen === 'joined'
+        ? CircleCheck
+        : screen === 'inactive'
+          ? Info
+          : screen === 'trial-status'
+            ? variant === 'invited'
+              ? Mail
+              : ['rejected', 'expired'].includes(variant)
+                ? Info
+                : Clock
+            : undefined;
+
   return (
     <section
       className="unified-signon"
@@ -971,9 +986,12 @@ export function UnifiedSignon({
           title={title}
           className="signon-card"
           icon={
-            screen === 'email-code' ? (
-              <div className="signon-email-badge" aria-hidden="true">
-                <Mail width={22} height={22} />
+            StatusIcon ? (
+              <div
+                className={`signon-status-badge${screen === 'email-code' ? ' signon-email-badge' : ''}`}
+                aria-hidden="true"
+              >
+                <StatusIcon width={22} height={22} />
               </div>
             ) : undefined
           }
@@ -1004,12 +1022,12 @@ export function UnifiedSignon({
             {passwordForm &&
             ['password', 'required-password'].includes(screen) ? (
               body
-            ) : (
+            ) : body ? (
               <form noValidate onSubmit={submit} className="signon-fields">
                 <input type="hidden" name="redirectTo" value={redirectTo} />
                 {body}
               </form>
-            )}
+            ) : null}
           </div>
         </AuthFormCard>
         {below && <div className="signon-below">{below}</div>}
