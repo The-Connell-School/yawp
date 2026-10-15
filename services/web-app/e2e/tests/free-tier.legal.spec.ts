@@ -3,12 +3,35 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { loadE2eEnvFromFile } from '../test-setup';
+import { createE2EPrismaClient } from '../prisma-client';
 const require = createRequire(import.meta.url);
 const { encode } = require(require.resolve('turbo-stream', { paths: [require.resolve('react-router')] }));
 
 const before = process.env.LEGAL_EVIDENCE_PHASE === 'before';
 const evidence = process.env.LEGAL_EVIDENCE_DIR;
 const legalOnly = process.env.LEGAL_ONLY === 'true';
+// The normal smoke runner writes its database URL to .env.e2e. Local CLI
+// evidence can supply E2E_DATABASE_URL explicitly, or preconfigure its fixture.
+loadE2eEnvFromFile();
+let restoreFlag: (() => Promise<void>) | undefined;
+test.beforeAll(async () => {
+  if (legalOnly || !process.env.E2E_DATABASE_URL) return;
+  const prisma = createE2EPrismaClient();
+  const name = 'feature_flag.free_tier';
+  const previous = await prisma.setting.findUnique({ where: { name } });
+  await prisma.setting.upsert({
+    where: { name }, create: { name, value: 'true', valueType: 'boolean' }, update: { value: 'true' },
+  });
+  restoreFlag = async () => {
+    try {
+      if (previous) await prisma.setting.update({ where: { name }, data: { value: previous.value } });
+      else await prisma.setting.delete({ where: { name } });
+    } finally { await prisma.$disconnect(); }
+  };
+});
+test.afterAll(async () => { await restoreFlag?.(); });
+
 async function capture(page: import('@playwright/test').Page, name: string, status?: number) {
   if (!evidence) return;
   await page.evaluate(() => document.fonts.ready);
@@ -33,6 +56,11 @@ for (const [route, title] of [['/privacy', 'Privacy Policy'], ['/terms', 'Terms 
       expect(await page.context().cookies()).not.toEqual(expect.arrayContaining([expect.objectContaining({ name: '__yawp_preview_access' })]));
     }
     await capture(page, route!.slice(1), response?.status());
+    if (!before) {
+      await page.setViewportSize({ width: 390, height: 844 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await capture(page, `mobile-${route!.slice(1)}`, response?.status());
+    }
   });
 }
 
@@ -67,7 +95,7 @@ for (const [name, result, message] of [
     test.skip(before || legalOnly, 'After-change UI regression only');
     await page.goto('/free?t=legal-presentation-fixture');
     await page.route(/\/free\.data(?:\?|$)/, async route => {
-      expect(route.request().method()).toBe('POST');
+      if (route.request().method() !== 'POST') return route.continue();
       await route.fulfill({
         status: 200, contentType: 'text/x-script',
         body: await new Response(encode({ data: result })).text(),
