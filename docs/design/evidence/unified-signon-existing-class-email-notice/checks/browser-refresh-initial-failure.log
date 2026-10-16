@@ -1,0 +1,57 @@
+
+Running 13 tests using 1 worker
+
+(node:86) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:86) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 [chromium] › e2e/tests/auth.unified-backend.spec.ts:102:3 › email-origin free-class notice survives navigation and validation at 1280 (7.6s)
+  ✓   2 [chromium] › e2e/tests/auth.unified-backend.spec.ts:102:3 › email-origin free-class notice survives navigation and validation at 390 (3.5s)
+  ✓   3 [chromium] › e2e/tests/auth.unified-backend.spec.ts:332:3 › school class existing-email notice retains context and requires password proof at 1280 (3.2s)
+  ✓   4 [chromium] › e2e/tests/auth.unified-backend.spec.ts:332:3 › school class existing-email notice retains context and requires password proof at 390 (3.1s)
+  ✓   5 [chromium] › e2e/tests/auth.unified-backend.spec.ts:514:3 › school email Back restores primary New registration at 1280 (1.8s)
+  ✘   6 [chromium] › e2e/tests/auth.unified-backend.spec.ts:514:3 › school email Back restores primary New registration at 390 (45.1s)
+  -   7 [chromium] › e2e/tests/auth.unified-backend.spec.ts:580:3 › existing passwordless teacher activates through the location selector at 1280
+  -   8 [chromium] › e2e/tests/auth.unified-backend.spec.ts:580:3 › existing passwordless teacher activates through the location selector at 390
+  -   9 [chromium] › e2e/tests/auth.unified-backend.spec.ts:683:3 › real handlers: invited student, email code errors/retry, verified signup and reset at 1280
+  -  10 [chromium] › e2e/tests/auth.unified-backend.spec.ts:683:3 › real handlers: invited student, email code errors/retry, verified signup and reset at 390
+  -  11 [chromium] › e2e/tests/auth.unified-backend.spec.ts:836:1 › flag off retains live legacy login, signup, class links, and direct callback gates
+  -  12 [chromium] › e2e/tests/auth.unified-backend.spec.ts:873:1 › bare short and reserved handle words resolve as real class codes in the browser
+  -  13 [chromium] › e2e/tests/auth.unified-backend.spec.ts:898:1 › local rollout rollback restores legacy views and blocks an in-flight reset
+
+
+  1) [chromium] › e2e/tests/auth.unified-backend.spec.ts:514:3 › school email Back restores primary New registration at 390
+
+    [31mTest timeout of 45000ms exceeded.[39m
+
+    Error: page.waitForFunction: Test timeout of 45000ms exceeded.
+
+      528 |     const mailBefore = fs.readdirSync(capture).length;
+      529 |     await page.goto('/auth/login');
+    > 530 |     await page.waitForFunction(() =>
+          |                ^
+      531 |       Boolean((window as any).__reactRouterDataRouter)
+      532 |     );
+      533 |     await page.getByLabel('Email or class code').fill(prefix);
+        at /home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-existing-class-email-notice/services/web-app/e2e/tests/auth.unified-backend.spec.ts:530:16
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../tmp/design-impl/signon-playwright-results/auth.unified-backend-schoo-e26c5-ary-New-registration-at-390-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../tmp/design-impl/signon-playwright-results/auth.unified-backend-schoo-e26c5-ary-New-registration-at-390-chromium/error-context.md
+
+    Error Context: ../../../../../../tmp/design-impl/signon-playwright-results/auth.unified-backend-schoo-e26c5-ary-New-registration-at-390-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../tmp/design-impl/signon-playwright-results/auth.unified-backend-schoo-e26c5-ary-New-registration-at-390-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../tmp/design-impl/signon-playwright-results/auth.unified-backend-schoo-e26c5-ary-New-registration-at-390-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium] › e2e/tests/auth.unified-backend.spec.ts:514:3 › school email Back restores primary New registration at 390
+  7 did not run
+  5 passed (1.1m)

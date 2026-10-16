@@ -45,9 +45,10 @@ export async function chooseStudent(
   choice: string
 ) {
   if (
-    !['class-found', 'class-handle', 'class-signin'].includes(
+    (!['class-found', 'class-handle', 'class-signin'].includes(
       flow.data.state.screen
-    ) ||
+    ) &&
+      !flow.data.studentEmailSignup) ||
     !['new', 'returning'].includes(choice)
   )
     throw new FlowError();
@@ -65,6 +66,12 @@ export async function chooseStudent(
     flow.data.proof !== 'google' &&
     !flow.data.pendingGoogle &&
     !flow.data.studentGoogle;
+  if (flow.data.studentEmailSignup) {
+    flow.data.proof = undefined;
+    flow.data.pendingGoogle = undefined;
+    flow.data.studentGoogle = undefined;
+  }
+  flow.data.studentEmailSignup = undefined;
   flow.data.studentChoice = choice as 'new' | 'returning';
   flow.data.identifier = undefined;
   flow.data.userId = undefined;

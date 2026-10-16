@@ -1,0 +1,23 @@
+bun test v1.3.1 (89fa0f34)
+
+services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts:
+prisma:query - 30.177861000000007ms - INSERT INTO "public"."Setting" ("id","createdAt","updatedAt","name","value","valueType") VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT ("name") DO UPDATE SET "value" = $7 WHERE ("public"."Setting"."name" = $8 AND 1=1) RETURNING "public"."Setting"."id", "public"."Setting"."createdAt", "public"."Setting"."updatedAt", "public"."Setting"."name", "public"."Setting"."description", "public"."Setting"."value", "public"."Setting"."valueType"
+2250 |     // rediscovers the notice; neither a stale UI nor posted identity proves access.
+2251 |     expect(
+2252 |       (await post('resolve', { identifier: email })).data.state.variant
+2253 |     ).toBe('existing');
+2254 |     await post('resolve', { identifier: `${prefix}-back-unknown@example.test` });
+2255 |     expect((await post('class-email-signin', { identifier: email })).data.state).toMatchObject({ screen: 'password', identifier: email });
+                                                                                        ^
+error: expect(received).toMatchObject(expected)
+
+Matcher error: received value must be a non-null object
+
+      at <anonymous> (/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-existing-class-email-notice/services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts:2255:82)
+(fail) school email signup shows an existing-account notice before ordinary proof and keeps the class [682.52ms]
+
+ 0 pass
+ 40 filtered out
+ 1 fail
+ 8 expect() calls
+Ran 1 test across 1 file. [1.55s]

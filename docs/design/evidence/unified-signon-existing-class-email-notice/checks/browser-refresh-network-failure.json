@@ -1,0 +1,54 @@
+[
+  {
+    "text": "Failed to load resource: net::ERR_NETWORK_CHANGED",
+    "url": "http://localhost:5396/node_modules/.vite/deps/@radix-ui_react-label.js"
+  },
+  {
+    "text": "Failed to load resource: net::ERR_NETWORK_CHANGED",
+    "url": "http://localhost:5396/node_modules/.vite/deps/clsx.js"
+  },
+  {
+    "text": "Failed to load resource: net::ERR_NETWORK_CHANGED",
+    "url": "http://localhost:5396/node_modules/.vite/deps/spin-delay.js"
+  },
+  {
+    "text": "Failed to load resource: net::ERR_NETWORK_CHANGED",
+    "url": "http://localhost:5396/node_modules/.vite/deps/tailwind-merge.js"
+  },
+  {
+    "text": "Failed to load resource: net::ERR_NETWORK_CHANGED",
+    "url": "http://localhost:5396/node_modules/.vite/deps/chunk-NQZGFNAC.js"
+  },
+  {
+    "text": "Failed to load resource: net::ERR_NETWORK_CHANGED",
+    "url": "http://localhost:5396/node_modules/.vite/deps/chunk-TTYH2YKU.js"
+  },
+  {
+    "text": "Failed to load resource: net::ERR_NETWORK_CHANGED",
+    "url": "http://localhost:5396/node_modules/.vite/deps/@radix-ui_react-popover.js"
+  },
+  {
+    "text": "Failed to load resource: net::ERR_NETWORK_CHANGED",
+    "url": "http://localhost:5396/node_modules/.vite/deps/@radix-ui_react-tooltip.js"
+  },
+  {
+    "text": "Failed to load resource: net::ERR_NETWORK_CHANGED",
+    "url": "http://localhost:5396/node_modules/.vite/deps/@epic-web_invariant.js"
+  },
+  {
+    "text": "Failed to load resource: net::ERR_NETWORK_CHANGED",
+    "url": "http://localhost:5396/node_modules/.vite/deps/chunk-MGBSDZM3.js"
+  },
+  {
+    "text": "Failed to load resource: net::ERR_NETWORK_CHANGED",
+    "url": "http://localhost:5396/node_modules/.vite/deps/chunk-LUEYFRXR.js"
+  },
+  {
+    "text": "Failed to load resource: net::ERR_NETWORK_CHANGED",
+    "url": "http://localhost:5396/node_modules/.vite/deps/chunk-3OJEYFQQ.js"
+  },
+  {
+    "text": "Failed to load resource: net::ERR_NETWORK_CHANGED",
+    "url": "http://localhost:5396/node_modules/.vite/deps/chunk-NEQER33S.js"
+  }
+]
