@@ -215,6 +215,76 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
     await api.runApprovalJobs(new Date(+now + api.WEEK_MS));
     expect(send).toHaveBeenCalledTimes(0);
   });
+  for (const pause of ['off', 'untargeted'] as const) {
+    for (const source of ['auto', 'manual'] as const) {
+      test(`${source} delivery resumes when ${pause} rollout pauses after the claim commits`, async () => {
+        const { app, approval } = await fixture();
+        const clock = new Date(+now + api.WEEK_MS);
+        // Isolate the administrator slot from the independent teacher cadence.
+        await db.freeTierAdminApproval.update({
+          where: { id: approval.id },
+          data: { nextTeacherFollowUpAt: new Date(+clock + api.WEEK_MS) },
+        });
+        const args = {
+          applicationId: app.id,
+          idempotencyKey: `claim-pause-${pause}-${source}`,
+          now: clock,
+        };
+        if (source === 'manual')
+          expect((await api.queueManualApprovalReminder(args)).ok).toBe(true);
+
+        // A fixture-scoped trigger changes rollout in the claim transaction;
+        // the dispatch transaction therefore observes the committed pause.
+        const trigger = `approval_pause_${crypto.randomUUID().replaceAll('-', '')}`;
+        const pausedValue = JSON.stringify({ mode: pause === 'off' ? 'off' : 'targeted', orgIds: [] });
+        await db.$executeRawUnsafe(`CREATE FUNCTION "${trigger}"() RETURNS trigger LANGUAGE plpgsql AS $$
+          BEGIN
+            IF NEW."approvalId" = '${approval.id}' AND NEW.state = 'DELIVERING' AND OLD.state = 'QUEUED' THEN
+              UPDATE "Setting" SET value = '${pausedValue}' WHERE name = 'feature_flag.free-tier-onboarding-v2';
+            END IF;
+            RETURN NEW;
+          END $$`);
+        try {
+          await db.$executeRawUnsafe(`CREATE TRIGGER "${trigger}" AFTER UPDATE ON "FreeTierApprovalDelivery"
+            FOR EACH ROW EXECUTE FUNCTION "${trigger}"()`);
+          await api.runApprovalJobs(clock);
+          expect((await db.setting.findUniqueOrThrow({
+            where: { name: 'feature_flag.free-tier-onboarding-v2' },
+          })).value).toBe(pausedValue);
+        } finally {
+          await db.$executeRawUnsafe(`DROP TRIGGER IF EXISTS "${trigger}" ON "FreeTierApprovalDelivery"`);
+          await db.$executeRawUnsafe(`DROP FUNCTION "${trigger}"()`);
+        }
+        expect(send).toHaveBeenCalledTimes(0);
+        const slot = await db.freeTierApprovalDelivery.findFirstOrThrow({
+          where: { approvalId: approval.id, kind: 'admin_reminder' },
+          select: { id: true, state: true, attempts: true, attemptedAt: true },
+        });
+        expect(slot).toMatchObject({ state: 'QUEUED', attempts: 0, attemptedAt: null });
+        await flag();
+        await Promise.all([api.runApprovalJobs(clock), api.runApprovalJobs(clock)]);
+        await api.runApprovalJobs(clock);
+        expect(send).toHaveBeenCalledTimes(1);
+        expect(await db.freeTierApprovalDelivery.findUniqueOrThrow({ where: { id: slot.id } }))
+          .toMatchObject({ state: 'SENT', attempts: 1, acceptedReminderCount: 1 });
+        expect(await db.freeTierAdminApproval.findUniqueOrThrow({ where: { id: approval.id } }))
+          .toMatchObject({ reminderCount: 1, needsManualFollowUp: false });
+        if (source === 'manual') {
+          const accepted = await api.resendApprovalReminder(args);
+          expect(accepted).toMatchObject({ ok: true, reminderCount: 1, sentAt: clock });
+          expect(await api.resendApprovalReminder(args)).toEqual(accepted);
+          expect(send).toHaveBeenCalledTimes(1);
+        }
+        // A fresh key works at the shared cooldown boundary and is replayable.
+        const next = { ...args, idempotencyKey: `${args.idempotencyKey}-next`, now: new Date(+clock + 600000) };
+        const accepted = await api.resendApprovalReminder(next);
+        expect(accepted).toMatchObject({ ok: true, reminderCount: 2, sentAt: next.now });
+        expect(await api.resendApprovalReminder(next)).toEqual(accepted);
+        expect(send).toHaveBeenCalledTimes(2);
+      });
+    }
+  }
+
   test('confirmed rejection retries without incrementing counts; ambiguous send never repeats', async () => {
     const { approval } = await fixture();
     send.mockImplementationOnce(async () => ({
