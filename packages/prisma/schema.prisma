@@ -28,6 +28,8 @@ model FreeTierApplication {
   email            String                    @unique
   schoolName       String
   location         String
+  starterClassName String? @db.VarChar(100)
+  starterClassGrade String? @db.VarChar(5)
   gradeLevel       String
   tags             String[]                  @default([])
   acquisitionTokenId String?
