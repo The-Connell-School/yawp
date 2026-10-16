@@ -5,6 +5,14 @@ flag override, seed enabling it, remote migration, preview, or rollout in this P
 Only the isolated local test database enables the flag. The October 16 legacy
 sign-in and free-tier entry paths retain their existing handlers when it is off.
 
+## Rollout handoff
+
+See the [rollout and rollback runbook](../runbooks/unified-signon-rollout.md) and
+[local decision-tree QA matrix](../runbooks/unified-signon-local-qa.md). Backend
+#560 merged at `591b48024c8773eed8a0c32b478f0abf12ce2420`; historical pending-review
+paragraphs below describe earlier heads. Hosted rollout remains unperformed and
+pending explicit authorization. Demo and production remain OFF.
+
 ## Entry and authority
 
 `/auth/login` dispatches the existing transport operations only after the existing

@@ -1,0 +1,16 @@
+
+Running 7 tests using 1 worker
+
+(node:94) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:94) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › e2e/tests/auth.unified-backend.spec.ts:91:3 › existing passwordless teacher activates through the location selector at 1280 (5.6s)
+  ✓  2 [chromium] › e2e/tests/auth.unified-backend.spec.ts:91:3 › existing passwordless teacher activates through the location selector at 390 (2.4s)
+  ✓  3 [chromium] › e2e/tests/auth.unified-backend.spec.ts:194:3 › real handlers: class, email code errors/retry, verified signup and reset at 1280 (11.3s)
+  ✓  4 [chromium] › e2e/tests/auth.unified-backend.spec.ts:194:3 › real handlers: class, email code errors/retry, verified signup and reset at 390 (11.0s)
+  ✓  5 [chromium] › e2e/tests/auth.unified-backend.spec.ts:339:1 › flag off retains live legacy login, signup, class links, and direct callback gates (2.8s)
+  ✓  6 [chromium] › e2e/tests/auth.unified-backend.spec.ts:376:1 › bare short and reserved handle words resolve as real class codes in the browser (1.1s)
+  ✓  7 [chromium] › e2e/tests/auth.unified-backend.spec.ts:401:1 › local rollout rollback restores legacy views and blocks an in-flight reset (5.2s)
+
+  7 passed (40.6s)

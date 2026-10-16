@@ -2,6 +2,7 @@ import { test, expect, type Page, type Route } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
 import fs from 'node:fs';
 import path from 'node:path';
+import bcrypt from 'bcryptjs';
 
 test.skip(
   process.env.SIGNON_LOCAL_TEST !== '1',
@@ -396,4 +397,101 @@ test('bare short and reserved handle words resolve as real class codes in the br
       page.getByText('English 11, Period 2', { exact: true })
     ).toBeVisible();
   }
+});
+
+test('local rollout rollback restores legacy views and blocks an in-flight reset', async ({
+  page,
+  request,
+}) => {
+  for (const width of [1280, 390]) {
+    const address = `rollback-${width}-${prefix}@example.test`;
+    await db.user.create({
+      data: {
+        email: address,
+        password: {
+          create: {
+            hash: await bcrypt.hash('local-password', 10),
+          },
+        },
+      },
+    });
+    await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
+    await db.setting.deleteMany({ where: { name: flag } });
+    for (const [route, name] of [
+      ['/auth/login', 'login'],
+      ['/auth/inv/signup', 'signup'],
+      ['/auth/inv/forgot-password', 'reset'],
+    ]) {
+      await page.goto(route);
+      await page.waitForFunction(() =>
+        Boolean((window as any).__reactRouterDataRouter)
+      );
+      await expect(page.locator('[data-signon-screen]')).toHaveCount(0);
+      await page.mouse.move(0, 0);
+      await shot(page, `flag-off-before-${name}`, width);
+    }
+    await db.setting.create({
+      data: {
+        name: flag,
+        value: '{"mode":"everyone","orgIds":[]}',
+        valueType: 'json',
+      },
+    });
+    await page.goto('/auth/login');
+    await page.waitForFunction(() =>
+      Boolean((window as any).__reactRouterDataRouter)
+    );
+    await page.getByLabel('Email, handle, or class code').fill(address);
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Enter your password' })
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Forgot password?' }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Reset your password', exact: true })
+    ).toBeVisible();
+    await page.waitForFunction(() =>
+      Boolean((window as any).__reactRouterDataRouter)
+    );
+    await shot(page, 'signon-13-before-rollback-reset', width);
+    const sessionsBefore = await db.session.count();
+    await db.setting.update({
+      where: { name: flag },
+      data: { value: '{"mode":"off","orgIds":[]}' },
+    });
+    await page.getByLabel('Code', { exact: true }).fill(await codeFor(address));
+    const rejected = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname.startsWith('/auth/login')
+    );
+    await page.getByRole('button', { name: 'Verify', exact: true }).click();
+    // The already-open client can retain its old screen. The OFF server dispatch
+    // rejects this unified payload through legacy form validation. A fresh GET
+    // below must render legacy UI; no session is issued by the rejected POST.
+    expect((await rejected).status()).toBe(422);
+    expect(await db.session.count()).toBe(sessionsBefore);
+    expect(
+      (
+        await request.get(
+          '/auth/unified/google/callback?code=forged&state=forged'
+        )
+      ).status()
+    ).toBe(404);
+    for (const [route, name] of [
+      ['/auth/login', 'login'],
+      ['/auth/inv/signup', 'signup'],
+      ['/auth/inv/forgot-password', 'reset'],
+    ]) {
+      await page.goto(route);
+      await page.waitForFunction(() =>
+        Boolean((window as any).__reactRouterDataRouter)
+      );
+      await expect(page.locator('[data-signon-screen]')).toHaveCount(0);
+      await page.mouse.move(0, 0);
+      await shot(page, `flag-off-after-${name}`, width);
+    }
+  }
+  // This database began without the flag. Restore that exact local state.
+  await db.setting.deleteMany({ where: { name: flag } });
 });
