@@ -273,6 +273,12 @@ quick once its questions are answered.
 6. **Put the decks in the module** (Kevin, later the same day): each deck
    now sits inside its step in the Thesis-Driven Essay's Modules, behind the
    `thesis_essay_decks` flag. Formatting of that section is still open.
+7. **Lesson plans that correspond to the decks** (Kevin, 2026-10-16): a
+   lesson plan PDF next to each deck in the Modules, Brian's plans with
+   slide numbers and only the changes the decks need; a new Lesson 7 plan
+   from the video; a new student sign-up handout; and the Body Paragraphs
+   house analogy moved before the writing slide to follow the plan. Teachers
+   use PowerPoint and Google Slides.
 
 ## Questions that were settled above
 
