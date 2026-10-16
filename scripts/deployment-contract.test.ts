@@ -78,6 +78,9 @@ describe('private preview sign-in code deployment contract', () => {
       const demo = (Bun.YAML.parse(renderPreviewCompose({ ...options, prNumber: undefined, slug: 'demo', runtime })) as any).services.web.environment;
       for (const [configuration, expected] of [
         [preview, { enabled: true, status: 404, get: 404 }], // No challenge yet.
+        [{ ...preview, DATABASE_URL: `${preview.DATABASE_URL}?schema=public&sslmode=require` }, { enabled: true, status: 404, get: 404 }],
+        [{ ...preview, DATABASE_URL: `${preview.DATABASE_URL}?host=127.0.0.1` }, { enabled: false, status: 404, get: 404 }],
+        [{ ...preview, DATABASE_URL: `${preview.DATABASE_URL}?host=%2Fvar%2Frun%2Fpostgresql` }, { enabled: false, status: 404, get: 404 }],
         [demo, { enabled: false, status: 404, get: 404 }], // Shared renderer says preview; isolated DB gate rejects demo.
         [{ ...preview, YAWP_ENVIRONMENT: 'demo' }, { enabled: false, status: 404, get: 404 }],
         [{ ...preview, YAWP_ENVIRONMENT: 'production' }, { enabled: false, status: 404, get: 404 }],

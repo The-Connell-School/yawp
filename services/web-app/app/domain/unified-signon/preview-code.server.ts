@@ -14,6 +14,12 @@ function previewDatabase(): string | null {
   if (process.env.YAWP_ENVIRONMENT !== 'preview' || process.env.PREVIEW_SLUG === 'demo') return null;
   try {
     const url = new URL(process.env.DATABASE_URL ?? '');
+    // pg accepts query overrides, including a nested connectionString. Require
+    // the connection target to come only from the authority validated below.
+    // URLSearchParams decodes keys so encoded and duplicate overrides also fail.
+    for (const key of url.searchParams.keys()) {
+      if (['host', 'hostaddr', 'port', 'connectionstring'].includes(key.toLowerCase())) return null;
+    }
     // PostgreSQL URLs use WHATWG's non-special parsing. Normalize just the
     // hostname as a special URL as well, rejecting encoded/numeric loopback forms.
     const host = new URL(`http://${url.host}`).hostname.toLowerCase().replace(/\.$/, '');

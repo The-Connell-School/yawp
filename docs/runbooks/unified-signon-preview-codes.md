@@ -8,7 +8,10 @@ No email is sent on that path. Capture and retrieval require all of:
 - The deployment is not the shared renderer's `PREVIEW_SLUG=demo` target.
 - A valid PostgreSQL `DATABASE_URL` whose database passes
   `isYawpPrPreviewDatabase` (`yawp_pr_N`); missing/malformed URLs, local hosts,
-  demo and production databases are rejected.
+  demo and production databases are rejected. Connection target query overrides
+  (`host`, `hostaddr`, `port`, `connectionString`) are rejected, including encoded
+  or duplicate keys. Set the host and port in the URL authority instead. Ordinary
+  `schema` and `sslmode` options remain supported.
 - The existing server-side `PREVIEW_ACCESS_SECRET` (at least 32 characters),
   already forwarded by the preview compose renderer. No new secret is needed.
 

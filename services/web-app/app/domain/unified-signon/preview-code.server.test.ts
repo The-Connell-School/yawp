@@ -7,7 +7,7 @@ const provider = mock(async () => ({ status: 'success' as const }));
 mock.module('~/utils/email.server', () => ({ sendEmail: provider }));
 const { deliverCode } = await import('./mail.server');
 const { action, loader } = await import('~/routes/api.preview.qa.signon-code/route');
-const { previewCodeCaptureEnabled } = await import('./preview-code.server');
+const { capturePreviewCode, previewCodeCaptureEnabled } = await import('./preview-code.server');
 const originalEnv = { ...process.env };
 const secret = 'unit-test-preview-access-secret-32-characters';
 const isolated = 'postgresql://app:placeholder@preview-postgres:5432/yawp_pr_565';
@@ -110,6 +110,36 @@ for (const database of [undefined, '', 'malformed/yawp_pr_565', 'https://remote/
 }
 test('supports production runtime on isolated preview, never calls configured provider', async () => {
   process.env.NODE_ENV = 'production';
+  await deliverCode(recipient, '126890');
+  expect((await retrieve()).status).toBe(200);
+  expect(provider).not.toHaveBeenCalled();
+});
+for (const query of [
+  'host=127.0.0.1',
+  'host=%2Fvar%2Frun%2Fpostgresql',
+  '%68ost=127.0.0.1',
+  'host=preview-postgres&host=127.0.0.1',
+  'hostaddr=127.0.0.1',
+  'port=5433',
+  `connectionString=${encodeURIComponent('postgresql://127.0.0.1/yawp_pr_565')}`,
+]) {
+  test(`connection target override fails capture, delivery and authenticated retrieval: ${query}`, async () => {
+    process.env.DATABASE_URL = `${isolated}?${query}`;
+    expect(previewCodeCaptureEnabled()).toBe(false);
+    expect(capturePreviewCode(recipient, '126890')).toBe(false);
+    for (const runtime of ['development', 'production'] as const) {
+      process.env.NODE_ENV = runtime;
+      await expect(deliverCode(recipient, '126890')).rejects.toMatchObject({ status: 503 });
+      const response = await retrieve();
+      expect(response.status).toBe(404);
+      expect(response.headers.get('cache-control')).toBe('private, no-store');
+    }
+    expect(provider).not.toHaveBeenCalled();
+  });
+}
+test('ordinary schema and TLS query options preserve eligible preview capture', async () => {
+  process.env.DATABASE_URL = `${isolated}?schema=public&sslmode=require`;
+  expect(previewCodeCaptureEnabled()).toBe(true);
   await deliverCode(recipient, '126890');
   expect((await retrieve()).status).toBe(200);
   expect(provider).not.toHaveBeenCalled();
