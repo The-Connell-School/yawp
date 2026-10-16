@@ -12,7 +12,11 @@ import { z } from 'zod';
 import { parseFormData, useForm, validationError } from '@rvf/react-router';
 import { Button } from '~/components/ui/button';
 import { FormInput } from '~/components/rvf-forms/form-input';
-import { requireAnonymous, sessionKey } from '~/utils/auth.server';
+import {
+  requireAnonymous,
+  requireMutableRequest,
+  sessionKey,
+} from '~/utils/auth.server';
 import { NameSchema, PasswordAndConfirmPasswordSchema } from '~/utils/schemas/user';
 import {
   enforceUnauthByIpAndTarget,
@@ -95,6 +99,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
+  await requireMutableRequest(request);
   await requireAnonymous(request);
   const formData = await request.formData();
   const { error, data } = await parseFormData(formData, JoinSchema);
