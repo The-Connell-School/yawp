@@ -1787,6 +1787,7 @@ model User {
   loungeMentionsOfMe    LoungeMention[] @relation("LoungeMentionOf")
   loungeReportsFiled    LoungeReport[]  @relation("LoungeReportReporter")
   loungeReportsResolved LoungeReport[]  @relation("LoungeReportResolver")
+  loungeAttachmentUses  LoungeAttachmentUse[]
 }
 
 model Invitation {
@@ -2309,6 +2310,16 @@ model LoungePost {
   hiddenAt         DateTime?            @db.Timestamptz(6)
   hiddenByUserId   String?
   deletedAt        DateTime?            @db.Timestamptz(6)
+  /// Pinned to the top of the feed by the Yawp team ("This week from Brian").
+  pinnedAt         DateTime?            @db.Timestamptz(6)
+  pinnedByUserId   String?
+  /// A video the Yawp team recorded or uploaded for this post. Storage key,
+  /// never a URL: playback URLs are signed per request.
+  videoKey         String?
+  videoContentType String?
+  videoDurationSeconds Int?
+  videoTitle       String?
+  attachment       LoungeAttachment?
   replies          LoungeReply[]
   votes            LoungeVote[]
   mentions         LoungeMention[]
@@ -2318,6 +2329,7 @@ model LoungePost {
   @@index([staffStatus, staffRequestedAt])
   @@index([authorUserId])
   @@index([topic, createdAt(sort: Desc)])
+  @@index([pinnedAt])
 }
 
 model LoungeReply {
@@ -2335,6 +2347,11 @@ model LoungeReply {
   isStaff        Boolean         @default(false)
   /// Optional video answer (a Loom or YouTube link) on a staff reply.
   videoUrl       String?
+  /// A video recorded or uploaded in Yawp: storage key, signed per request.
+  videoKey       String?
+  videoContentType String?
+  videoDurationSeconds Int?
+  videoTitle     String?
   hiddenAt       DateTime?       @db.Timestamptz(6)
   hiddenByUserId String?
   deletedAt      DateTime?       @db.Timestamptz(6)
@@ -2400,4 +2417,39 @@ model LoungeReport {
 
   @@index([resolvedAt, createdAt])
   @@index([postId])
+}
+
+/// A Yawp thing shared in a post, frozen when it was shared. Other teachers
+/// copy from this snapshot, never from the author's live records, so a share
+/// keeps working after the original changes and never exposes another
+/// school's data. One per post.
+model LoungeAttachment {
+  id                 String                @id @default(cuid())
+  createdAt          DateTime              @default(now()) @db.Timestamptz(6)
+  postId             String                @unique
+  post               LoungePost            @relation(fields: [postId], references: [id], onDelete: Cascade)
+  /// "assignment" for now.
+  kind               String
+  /// The record it was copied from. No foreign key: the source may be deleted.
+  sourceId           String?
+  assignmentTypeId   String
+  assignmentTypeTitle String
+  title              String
+  prompt             String
+  /// Grading and tutor settings at share time, for display.
+  settings           Json?
+  uses               LoungeAttachmentUse[]
+}
+
+/// A teacher using a share in their own class. One row per teacher, for the
+/// "used by N teachers" count.
+model LoungeAttachmentUse {
+  id           String           @id @default(cuid())
+  createdAt    DateTime         @default(now()) @db.Timestamptz(6)
+  attachmentId String
+  attachment   LoungeAttachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([attachmentId, userId])
 }
