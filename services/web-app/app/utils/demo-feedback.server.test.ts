@@ -105,7 +105,7 @@ describe('demo feedback endpoint', () => {
       ['https://demo.yawp.school', 201],
       ['https://yawp.school', 403],
       ['https://evil.example', 403],
-    ]) {
+    ] as const) {
       const req = new Request('http://app-runner.internal/api/demo-feedback', {
         method: 'POST',
         headers: { origin, 'content-type': 'application/json' },
