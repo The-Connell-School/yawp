@@ -44,6 +44,7 @@ for (const width of [1280, 390]) {
             ),
           ].map((element) => ({
             text: element.textContent,
+            isCode: element.getAttribute('autocomplete') === 'one-time-code',
             font: getComputedStyle(element).fontFamily,
           })),
           headingWeight: getComputedStyle(shell.querySelector('h1')!)
@@ -55,9 +56,13 @@ for (const width of [1280, 390]) {
       });
       expect(typography.expected).toMatch(/^ui-sans-serif, system-ui,/);
       for (const element of typography.elements) {
-        expect(element.font, `${state}: ${element.text}`).toBe(
-          typography.expected
-        );
+        if (element.isCode) {
+          expect(element.font).toMatch(/^ui-monospace,/);
+        } else {
+          expect(element.font, `${state}: ${element.text}`).toBe(
+            typography.expected
+          );
+        }
       }
       expect(typography.headingWeight).toBe('600');
       expect(typography.overflow).toBe(false);

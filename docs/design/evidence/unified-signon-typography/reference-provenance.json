@@ -1,0 +1,16 @@
+[
+  {
+    "file": "signon-03-entry-1280-design.png",
+    "source": "design/v2/artboards/signon-03-entry-desktop.png",
+    "source_sha256": "eff2e8da4a7f4007a311a5637e377a764d59ae0aa7489beaf25cc8d3b48fadec",
+    "crop": null,
+    "note": "V2 supplied PNG. Mobile broken logo/frame are reference artifacts."
+  },
+  {
+    "file": "signon-03-entry-390-design.png",
+    "source": "design/v2/artboards/signon-04-entry-all-states.png",
+    "source_sha256": "b6b0c988ce8aed4e5e617150e7e5abd3a409ada1a9cbdb499b1422d4e4e633c3",
+    "crop": "390x844+48+134",
+    "note": "V2 supplied PNG. Mobile broken logo/frame are reference artifacts."
+  }
+]
