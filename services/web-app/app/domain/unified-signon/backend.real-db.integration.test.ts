@@ -27,11 +27,13 @@ async function post(
     headers: { ...(withCookie ? { cookie } : {}), 'x-forwarded-for': testIp },
     body: new URLSearchParams({ intent, flowToken, ...values }),
   });
-  const response = (await dispatchUnifiedLogin({
+  const result = await dispatchUnifiedLogin({
     request,
     params: {},
     context: {},
-  } as any)) as Response;
+  } as any);
+  // The legacy password validator returns router data for a failed proof.
+  const response = result instanceof Response ? result : Response.json(result, { status: 400 });
   for (const c of response.headers.getSetCookie()) {
     const entry = c.split(';')[0];
     const name = entry.split('=')[0];
@@ -2912,7 +2914,7 @@ suite('email-code class proof confirms only after verification, retaining email 
 for (const invalidation of ['inactive', 'archived', 'code', 'expired'] as const) {
   suite(`pending class confirmation revalidates ${invalidation} before explicit continuation`, async () => {
     cookie = ''; flowToken = '';
-    const email = `joined-${invalidation}-${prefix}@example.test`;
+    const email = `joined-invalid-${invalidation}-${prefix}@example.test`;
     const user = await prisma.user.create({ data: { email,
       password: { create: { hash: await getPasswordHash('abcdef') } },
       memberships: { create: { organizationId: prefix, role: 'STUDENT' } },

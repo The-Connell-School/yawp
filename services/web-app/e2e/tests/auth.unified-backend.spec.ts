@@ -101,7 +101,6 @@ test.afterAll(async () => {
 for (const width of [1280, 390]) {
   for (const journey of ['password-new', 'password-already', 'handle', 'email-signup']) {
     test(`class confirmation ${journey} at ${width}`, async ({ page }) => {
-      test.fail(process.env.SIGNON_EXPECT_FAILURE === '1', 'Current main skips the class confirmation');
       test.setTimeout(60000);
       await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
       await db.setting.upsert({
@@ -156,6 +155,7 @@ for (const width of [1280, 390]) {
       }
       await page.waitForLoadState('networkidle');
       await shot(page, `signon-${already ? '44' : '43'}-${journey}`, width);
+      test.fail(process.env.SIGNON_EXPECT_FAILURE === '1', 'Current main skips the class confirmation');
       await expect(page.getByRole('heading', {
         name: already ? "You're already in this class" : "You're in!", exact: true,
       })).toBeVisible({ timeout: 8000 });
@@ -180,6 +180,37 @@ for (const width of [1280, 390]) {
     });
   }
 }
+for (const width of [1280, 390])
+  test(`confirmation flag-OFF legacy controls at ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
+    await db.setting.deleteMany({ where: { name: flag } });
+    for (const [route, name] of [
+      ['/auth/login?screen=joined&variant=already', 'login'],
+      ['/auth/inv/signup', 'signup'],
+      ['/join?t=invalid-local-token', 'class-link'],
+      ['/free', 'free-trial'],
+    ]) {
+      await page.goto(route);
+      await expect(page.locator('[data-signon-screen]')).toHaveCount(0);
+      await shot(page, `flag-off-${name}`, width);
+    }
+    const address = `${prefix}-legacy-${width}@example.test`;
+    const user = await db.user.create({ data: { email: address,
+      password: { create: { hash: await bcrypt.hash('local-password', 10) } },
+      memberships: { create: { organizationId: prefix, role: 'STUDENT' } },
+    } });
+    await page.goto('/auth/login?redirectTo=https%3A%2F%2Fevil.example');
+    await page.getByLabel('Email or handle').fill(address);
+    await page.getByLabel('Password', { exact: true }).fill('wrong-password');
+    await page.getByRole('button', { name: 'Log in', exact: true }).click();
+    await expect(page.getByText('Invalid email or password')).toBeVisible();
+    expect(await db.session.count({ where: { userId: user.id } })).toBe(0);
+    await page.getByLabel('Password', { exact: true }).fill('local-password');
+    await page.getByRole('button', { name: 'Log in', exact: true }).click();
+    await expect(page).toHaveURL(/\/app\/?$/);
+    expect(await db.session.count({ where: { userId: user.id } })).toBe(1);
+    expect(await db.orgMembership.count({ where: { userId: user.id, classesAsStudent: { some: { id: prefix } } } })).toBe(0);
+  });
 // Real resolver/registration regression for FAILURES.md di-signon-fix-email-handle-notice.
 for (const width of [1280, 390])
   test(`email-origin free-class notice survives navigation and validation at ${width}`, async ({
