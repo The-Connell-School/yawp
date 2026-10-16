@@ -438,7 +438,9 @@ export async function resendFreeTierAdminApprovalReminder(args: {
   request: Request;
   idempotencyKey?: string;
   actorEmail?: string;
+  requireV2?: boolean;
 }) {
+  if (args.requireV2) return { ok: false as const, reason: 'flag_off' as const };
   const identity = await prisma.freeTierApplication.findUnique({
     where: { id: args.applicationId },
     select: { id: true, userId: true, organizationId: true },
