@@ -2,11 +2,14 @@ import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
   redirect,
+  data,
   useActionData,
   useLoaderData,
   useNavigation,
 } from 'react-router';
 import { Form } from 'react-router';
+import { useState } from 'react';
+import { selfAdminEmailError } from '~/domain/free-tier/admin-email';
 import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { submitAdminDetails } from '~/domain/free-tier/approval-flow.server';
@@ -81,6 +84,8 @@ export async function action({ request }: ActionFunctionArgs) {
         .slice(0, 100),
     });
     if (!result.ok) {
+      if (result.reason === 'same_as_teacher')
+        return data(result, { status: 400 });
       return result;
     }
     throw redirect('/app/free-tier/pending');
@@ -98,15 +103,27 @@ export default function FreeTierOnboardingRoute() {
   const { app, lastFailedEmail, pending } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
+  const [editedAdminEmail, setEditedAdminEmail] = useState<string>();
+  const adminEmail = editedAdminEmail ?? pending?.adminEmail ?? '';
+  const adminEmailError =
+    selfAdminEmailError(app?.email ?? '', adminEmail) ??
+    (editedAdminEmail === undefined &&
+    actionData &&
+    !actionData.ok &&
+    actionData.reason === 'same_as_teacher'
+      ? actionData.fieldErrors.adminEmail
+      : null);
   const errorMessage =
     actionData && !actionData.ok
-      ? actionData.reason === 'config'
-        ? actionData.message
-        : actionData.reason === 'email_failed'
-          ? "We couldn't send the email. Try again, or contact support@yawp.school."
-          : actionData.reason === 'illegal_state'
-            ? "This application isn't ready for administrator details yet. Contact support@yawp.school."
-            : 'Something went wrong. Try again.'
+      ? actionData.reason === 'same_as_teacher'
+        ? null
+        : actionData.reason === 'config'
+          ? actionData.message
+          : actionData.reason === 'email_failed'
+            ? "We couldn't send the email. Try again, or contact support@yawp.school."
+            : actionData.reason === 'illegal_state'
+              ? "This application isn't ready for administrator details yet. Contact support@yawp.school."
+              : 'Something went wrong. Try again.'
       : null;
 
   return (
@@ -125,7 +142,18 @@ export default function FreeTierOnboardingRoute() {
           We couldn't send the email. Try again, or contact support@yawp.school.
         </p>
       ) : null}
-      <Form method="post" className="flex flex-col gap-4">
+      <Form
+        method="post"
+        className="flex flex-col gap-4"
+        onSubmit={(event) => {
+          if (adminEmailError) {
+            event.preventDefault();
+            event.currentTarget
+              .querySelector<HTMLInputElement>('#adminEmail')
+              ?.focus();
+          }
+        }}
+      >
         <FreeTierFieldLabel label="Administrator name" htmlFor="adminName">
           <FreeTierTextInput
             id="adminName"
@@ -143,9 +171,22 @@ export default function FreeTierOnboardingRoute() {
             type="email"
             required
             maxLength={320}
-            defaultValue={pending?.adminEmail ?? ''}
+            value={adminEmail}
+            onChange={(event) => setEditedAdminEmail(event.currentTarget.value)}
+            aria-invalid={adminEmailError ? true : undefined}
+            aria-describedby={adminEmailError ? 'adminEmail-error' : undefined}
+            variant={adminEmailError ? 'destructive' : undefined}
           />
         </FreeTierFieldLabel>
+        {adminEmailError ? (
+          <p
+            id="adminEmail-error"
+            className="text-sm text-destructive"
+            role="alert"
+          >
+            {adminEmailError}
+          </p>
+        ) : null}
         <FreeTierFieldLabel label="Administrator role" htmlFor="adminRole">
           <FreeTierTextInput
             id="adminRole"
@@ -156,8 +197,19 @@ export default function FreeTierOnboardingRoute() {
             defaultValue={pending?.adminRole ?? ''}
           />
         </FreeTierFieldLabel>
-        <FreeTierProgress steps={['Account created', 'Ask your administrator', 'Start teaching']} current={1} />
-        <FreeTierButton type="submit">{navigation.state === 'submitting' ? 'Sending…' : 'Send approval request'}</FreeTierButton>
+        <FreeTierProgress
+          steps={[
+            'Account created',
+            'Ask your administrator',
+            'Start teaching',
+          ]}
+          current={1}
+        />
+        <FreeTierButton type="submit">
+          {navigation.state === 'submitting'
+            ? 'Sending…'
+            : 'Send approval request'}
+        </FreeTierButton>
       </Form>
     </FreeTierAuthCard>
   );

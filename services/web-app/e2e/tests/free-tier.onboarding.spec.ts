@@ -197,6 +197,7 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
   });
 
   test('self administrator is rejected inline and by direct POST before any approval writes', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1000 });
     const prisma = createE2EPrismaClient();
     const stamp = Date.now();
     const teacherEmail = `ft-self-${stamp}@${ADMIN_DOMAIN}`;
@@ -234,10 +235,15 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     page.on('request', (request) => {
       if (request.method() === 'POST' && request.url().includes('/app/free-tier/onboarding')) posts++;
     });
-    for (const adminEmail of [teacherEmail, `  ${teacherEmail.toUpperCase()}  `, `ft-self-${stamp}+alias@${ADMIN_DOMAIN}`]) {
+    for (const [variant, adminEmail] of [
+      ['exact', teacherEmail],
+      ['case-whitespace', `  ${teacherEmail.toUpperCase()}  `],
+      ['alias', `ft-self-${stamp}+alias@${ADMIN_DOMAIN}`],
+    ]) {
       await email.fill(adminEmail);
       await email.blur();
-      if (shots) await page.screenshot({ path: path.join(shots, `${stage}-self-${adminEmail.includes('+') ? 'alias' : 'exact'}.png`), mask: [email] });
+      await page.evaluate(() => document.fonts.ready);
+      if (shots) await page.screenshot({ path: path.join(shots, `${stage}-self-${variant}.png`), fullPage: true, animations: 'disabled', mask: [email] });
       await expect(email).toHaveAttribute('aria-invalid', 'true');
       await expect(email).toHaveAccessibleDescription(message);
       await page.getByRole('button', { name: /Send approval request/i }).click();
@@ -261,7 +267,7 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     await email.fill(`principal@${ADMIN_DOMAIN}`);
     await expect(email).not.toHaveAttribute('aria-invalid', 'true');
     await expect(page.getByText(message, { exact: true })).toHaveCount(0);
-    if (shots) await page.screenshot({ path: path.join(shots, `${stage}-distinct-control.png`), mask: [email] });
+    if (shots) await page.screenshot({ path: path.join(shots, `${stage}-distinct-control.png`), fullPage: true, animations: 'disabled', mask: [email] });
     await page.getByRole('button', { name: /Send approval request/i }).click();
     await page.waitForURL('**/app/free-tier/pending**');
     expect((await prisma.freeTierApplication.findUnique({ where: { id: app.id } }))?.status).toBe('SENT');

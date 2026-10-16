@@ -21,6 +21,9 @@ test.each([
   ['teacher@gmail.com', 'principal@gmail.com'],
   ['first.last@district.org', 'firstlast@district.org'],
   ['teacher@district.org', ''],
-])('leaves distinct or empty administrator addresses to existing validation: %s / %s', (teacher, admin) => {
-  expect(selfAdminEmailError(teacher, admin)).toBeNull();
-});
+])(
+  'leaves distinct or empty administrator addresses to existing validation: %s / %s',
+  (teacher, admin) => {
+    expect(selfAdminEmailError(teacher, admin)).toBeNull();
+  }
+);

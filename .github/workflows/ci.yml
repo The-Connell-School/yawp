@@ -604,6 +604,9 @@ jobs:
             app/routes/free._index/route.loader.test.ts \
             app/routes/api.preview.qa.free-tier-manifest/route.test.ts \
             app/routes/app.free-tier.onboarding/route.test.tsx \
+            app/routes/app.free-tier.onboarding/route.self-admin.test.tsx \
+            app/domain/free-tier/admin-email.test.ts \
+            app/domain/free-tier/admin-email-rules.server.test.ts \
             app/routes/app.free-tier.pending/route.test.tsx \
             app/routes/free.admin.approve/route.loader.test.ts \
             app/routes/free._index/route.action.test.ts \
