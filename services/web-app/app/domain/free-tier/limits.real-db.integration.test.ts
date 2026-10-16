@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
 import { PrismaClient, type Prisma } from '@app/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { acceptStudentInvitation } from '~/domain/unified-signon/invitations.server';
+import type { Flow } from '~/domain/unified-signon/flow.server';
 import { prisma } from '~/utils/db.server';
 import { signInternalApiRequest } from '~/utils/internal-platform-auth.server';
 import { loader, action } from '~/routes/api.internal.v1.free-tier.limits/route';
@@ -59,6 +61,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   if (!enabled) return;
   await prisma.setting.deleteMany({ where: { name: FREE_TIER_LIMITS_SETTING } });
+  await prisma.freeTierApplication.deleteMany({ where: { organizationId: orgId } });
   await setting(baseFlag, 'true'); await setting(v2Flag, 'true');
   await prisma.lessonPlanConversation.deleteMany({ where: { organizationId: orgId } });
   await prisma.invitation.deleteMany({ where: { organizationId: orgId } });
@@ -181,6 +184,140 @@ local('configured caps include pending invites and block only new enrollment', a
   const existing = await enrollExistingStudentByCode({ userId: newcomer.userId,
     sourceOrganizationId: orgId, sourceMembershipId: newcomer.id, code: 'I5LIMITS', classId });
   expect(existing.ok).toBe(true);
+});
+// Exercise the real proved-invitation path, including both enrollment checks.
+async function reservedStudent(suffix: string, expiresAt: Date | null = null) {
+  const member = await student(suffix, false);
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: member.userId } });
+  const invite = await prisma.invitation.create({ data: {
+    type: 'onboard-student', target: user.email!, organizationId: orgId,
+    studentClassId: classId, metadata: JSON.stringify({ klassId: classId }),
+    secret: 'local-only', algorithm: 'SHA256', digits: 6, period: 600,
+    charSet: '0123456789', expiresAt,
+  } });
+  const flow = (): Flow => ({ id: suffix, token: suffix, browser: suffix, data: {
+    state: { screen: 'entry' }, destination: '/', identifier: user.email!,
+    invitationId: invite.id, proof: 'password',
+  } });
+  return { member, invite, flow };
+}
+async function approvedClass() {
+  await prisma.freeTierApplication.create({ data: {
+    name: 'Teacher', email: `${prefix}-redemption@example.test`, schoolName: 'Demo',
+    location: 'Here', gradeLevel: '11', status: 'APPROVED', organizationId: orgId,
+  } });
+}
+const seatCount = () => prisma.orgMembership.count({ where: {
+  organizationId: orgId, role: 'STUDENT', isActive: true,
+  classesAsStudent: { some: { id: classId } },
+} });
+const redeem = (reserved: Awaited<ReturnType<typeof reservedStudent>>) =>
+  prisma.$transaction(tx => acceptStudentInvitation(tx, reserved.flow(), reserved.member.userId));
+
+for (const expiring of [false, true]) {
+  local(`verified ${expiring ? 'expiring' : 'non-expiring'} invitation redeems its reserved 35th seat`, async () => {
+    await approvedClass();
+    for (let i = 0; i < 34; i++) await student(`reserved-${expiring}-${i}`);
+    const reserved = await reservedStudent(`reserved-${expiring}`, expiring ? new Date(Date.now() + 60000) : null);
+    const unrelated = await student(`unrelated-${expiring}`, false);
+    expect(await enrollStudentInClassWithSeatCap({ membershipId: unrelated.id, classId, organizationId: orgId }))
+      .toMatchObject({ ok: false, code: 'class_full' });
+    expect(await redeem(reserved)).toBe(reserved.member.id);
+    expect(await seatCount()).toBe(35);
+    expect(await prisma.invitation.findUnique({ where: { id: reserved.invite.id } })).toBeNull();
+    expect(await enrollStudentInClassWithSeatCap({ membershipId: unrelated.id, classId, organizationId: orgId }))
+      .toMatchObject({ ok: false, code: 'class_full' });
+  });
+}
+local('redemption preserves other reservations and rolls back a denied invitation consumption', async () => {
+  await approvedClass();
+  await updateFreeTierLimits({ version: 0, studentSeatCap: 2 }, 'staff@example.test');
+  const first = await reservedStudent('first');
+  const second = await reservedStudent('second');
+  expect(await redeem(first)).toBe(first.member.id);
+  expect(await prisma.invitation.findUnique({ where: { id: second.invite.id } })).not.toBeNull();
+  const unrelated = await student('other-reservation', false);
+  expect(await enrollStudentInClassWithSeatCap({ membershipId: unrelated.id, classId, organizationId: orgId }))
+    .toMatchObject({ ok: false, code: 'class_full' });
+  await updateFreeTierLimits({ version: 1, studentSeatCap: 1 }, 'staff@example.test');
+  await expect(redeem(second)).rejects.toThrow('This class is full.');
+  expect(await seatCount()).toBe(1);
+  expect(await prisma.invitation.findUnique({ where: { id: second.invite.id } })).not.toBeNull();
+});
+local('unproved, wrong-recipient and expired invitations cannot release a reservation', async () => {
+  await approvedClass();
+  const reserved = await reservedStudent('invalid');
+  for (const patch of [{ proof: undefined }, { identifier: 'other@example.test' }]) {
+    const flow = reserved.flow(); Object.assign(flow.data, patch);
+    await expect(prisma.$transaction(tx => acceptStudentInvitation(tx, flow, reserved.member.userId))).rejects.toThrow();
+    expect(await prisma.invitation.findUnique({ where: { id: reserved.invite.id } })).not.toBeNull();
+  }
+  await prisma.invitation.update({ where: { id: reserved.invite.id }, data: { expiresAt: new Date(0) } });
+  await expect(redeem(reserved)).rejects.toThrow('Your invitation expired.');
+  expect(await prisma.invitation.findUnique({ where: { id: reserved.invite.id } })).not.toBeNull();
+  expect(await seatCount()).toBe(0);
+});
+local('flag-off invitation redemption keeps the default capacity behavior', async () => {
+  await approvedClass();
+  await setting(v2Flag, 'false');
+  // Configured v2 limits cannot affect flag-off redemption.
+  await updateFreeTierLimits({ version: 0, studentSeatCap: 1 }, 'staff@example.test');
+  for (let i = 0; i < 34; i++) await student(`legacy-reserved-${i}`);
+  const reserved = await reservedStudent('legacy-reserved');
+  expect(await redeem(reserved)).toBe(reserved.member.id);
+  expect(await seatCount()).toBe(35);
+});
+local('a concurrent unrelated admission cannot steal a reserved seat', async () => {
+  await approvedClass();
+  await updateFreeTierLimits({ version: 0, studentSeatCap: 1 }, 'staff@example.test');
+  const reserved = await reservedStudent('race-reserved');
+  const unrelated = await student('race-unrelated', false);
+  const [accepted, denied] = await Promise.all([
+    clients[0].$transaction(tx => acceptStudentInvitation(tx, reserved.flow(), reserved.member.userId)),
+    clients[1].$transaction(tx => enrollStudentInClassWithSeatCap({
+      membershipId: unrelated.id, classId, organizationId: orgId, client: tx,
+    })),
+  ]);
+  expect(accepted).toBe(reserved.member.id);
+  expect(denied).toMatchObject({ ok: false, code: 'class_full' });
+  expect(await seatCount()).toBe(1);
+});
+local('two concurrent verified redemptions preserve the cap and consume each reservation once', async () => {
+  await approvedClass();
+  await updateFreeTierLimits({ version: 0, studentSeatCap: 3 }, 'staff@example.test');
+  await student('concurrent-enrolled');
+  const reservations = await Promise.all([reservedStudent('concurrent-a'), reservedStudent('concurrent-b')]);
+  const results = await Promise.allSettled(reservations.map((reserved, index) => clients[index].$transaction(
+    tx => acceptStudentInvitation(tx, reserved.flow(), reserved.member.userId))));
+  expect(results).toEqual(reservations.map(value => ({ status: 'fulfilled', value: value.member.id })));
+  expect(await seatCount()).toBe(3);
+  expect(await prisma.invitation.count({ where: { organizationId: orgId } })).toBe(0);
+});
+local('concurrent attempts to redeem the same verified invitation cannot admit twice', async () => {
+  await approvedClass();
+  await updateFreeTierLimits({ version: 0, studentSeatCap: 1 }, 'staff@example.test');
+  const reserved = await reservedStudent('double-redemption');
+  // Both requests read the same valid invitation before either consumes it.
+  let arrived = 0; let release!: () => void;
+  const barrier = new Promise<void>(resolve => { release = resolve; });
+  const results = await Promise.allSettled(clients.map(client => client.$transaction(async tx => {
+    const wrapped = new Proxy(tx, { get(target, property) {
+      if (property !== 'invitation') return Reflect.get(target, property);
+      return new Proxy(target.invitation, { get(invites, method) {
+        if (method !== 'findUnique') return Reflect.get(invites, method);
+        return async (args: any) => {
+          const value = await invites.findUnique(args);
+          if (++arrived === 2) release();
+          await barrier; return value;
+        };
+      } });
+    } });
+    return acceptStudentInvitation(wrapped, reserved.flow(), reserved.member.userId);
+  })));
+  expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+  expect(results.filter(result => result.status === 'rejected')).toHaveLength(1);
+  expect(await seatCount()).toBe(1);
+  expect(await prisma.invitation.findUnique({ where: { id: reserved.invite.id } })).toBeNull();
 });
 local('flag-off, targeted organizations, base access and paid seats retain rollout behavior', async () => {
   await updateFreeTierLimits({ version: 0, studentSeatCap: 1 }, 'staff@example.test');

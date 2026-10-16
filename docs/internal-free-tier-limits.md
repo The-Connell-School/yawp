@@ -70,7 +70,12 @@ limits to `getEntitlementsForPlan`. The in-app usage reader uses that same polic
 The shared locked student enrollment check reads configured caps for v2
 organizations. It counts active enrolled students plus unexpired pending invites,
 including invitations without an expiry. Flag-off counting retains its prior
-expiry filter.
+expiry filter. Verified student invitation acceptance consumes only its own
+invitation inside the enrollment transaction before the locked capacity checks.
+This converts the reserved seat to enrollment without counting it twice; all
+other pending reservations still count. A failed capacity or budget check rolls
+back consumption. Deleting the unique invitation prevents concurrent redemption
+of the same reservation from admitting twice.
 A lower cap blocks new adds and never removes memberships, disconnects students
 or changes their access. Already-enrolled student admission keeps its existing
 early success path. Non-free plans retain their current seat behavior. Teacher,
