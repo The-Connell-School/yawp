@@ -9,7 +9,7 @@ const realGate = {
 const realFlow = {
   ...(await import('~/domain/free-tier/approval-flow.server')),
 };
-const findFirst = mock(async () => ({
+const findFirst = mock(async (_args: unknown) => ({
   id: 'self-admin-application',
   status: 'ACCOUNT_CREATED',
   email: 'Teacher+account@gmail.com',
