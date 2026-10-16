@@ -489,6 +489,7 @@ function runTestProfile(profile, { json }) {
     runWebApp("demo-feedback-analytics", ["test", "app/utils/demo-feedback-analytics.test.ts"]);
     runWebApp("demo-feedback", ["test", "app/utils/demo-feedback-context.test.ts", "app/utils/demo-feedback.server.test.ts"]);
     runWebApp("tester-feedback-compatibility", ["test", "app/utils/tester-feedback.server.test.ts", "app/utils/tester-feedback-runtime.server.test.ts"]);
+    runWebApp("feedback-flag-api", ["test", "app/utils/internal-feature-flags-http.server.test.ts"]);
     runWebApp("feedback-flag-defaults", ["test", "app/domain/feature-flags/feature-flags.test.ts", "app/domain/feature-flags/feature-flags.server.test.ts"]);
     results.push({ id: "demo-feedback-seed", ...execute(selected.bun, ["test", "scripts/local-dev/seed-demo-feedback.test.ts"], { json, env: selected.env, cwd: path.join(ROOT, "packages/prisma"), timeout: 120000 }) });
   }
