@@ -394,6 +394,27 @@ jobs:
           cd services/web-app
           bun test --max-concurrency=2 app/domain/free-tier/limits.real-db.integration.test.ts
 
+      - name: 🧪 Signed duplicate class-code reads (isolated unit tests)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test app/utils/internal-class-code-duplicates.server.test.ts
+
+      - name: 🧪 Duplicate class-code metadata and read-only queries (dedicated PostgreSQL)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          PGPASSWORD: postgres
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_ia-i3-dupes
+          E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_ia-i3-dupes
+          CLASS_CODE_DUPLICATES_LOCAL_TEST: '1'
+        run: |
+          set -e
+          createdb -h 127.0.0.1 -U postgres 'yawp_ia-i3-dupes'
+          bun run --cwd packages/prisma prisma migrate deploy
+          cd services/web-app
+          bun test --max-concurrency=2 app/utils/internal-class-code-duplicates.real-db.integration.test.ts
+
       - name: 🧪 Existing student code authorization (isolated; mocks prisma)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
