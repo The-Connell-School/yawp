@@ -87,7 +87,7 @@ export default function LoungeFeedRoute() {
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <LoungeHeader
         active="community"
-        description={`Ask questions, share ideas, and connect with teachers using YAWP!. Brian and the ${LOUNGE_TEAM_NAME} read every question.`}
+        description={`Ask questions, share ideas, and connect with other teachers. Brian and the ${LOUNGE_TEAM_NAME} read every question.`}
         action={
           <Link
             to="/app/lounge/new"

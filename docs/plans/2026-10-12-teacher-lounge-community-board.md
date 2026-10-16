@@ -81,9 +81,61 @@ at the pilot schools from Yawp Internal.
 Before relying on recording in production: the videos bucket's CORS allows
 PUT from https://yawp.school and the App Runner URL, which covers the app.
 
+### Round 3 (2026-10-16): Brian's launch notes ("Seeding the Faculty Lounge")
+
+- **Name.** With the community on, the Lounge is the **Faculty Lounge** (nav,
+  header, emails) and the team is the **YAWP! team**. Off, it stays
+  Teacher's Lounge. One constant (`LOUNGE_NAME` in
+  `app/domain/lounge/launch.ts`) if we change our minds.
+- **Welcome box.** A teacher's first visit to any Lounge page opens Brian's
+  welcome text and seven House Rules. "Enter the Lounge" stays off until
+  "I agree to follow the Lounge's House Rules." is checked. The optional
+  "YAWP! may share my posts, with my name removed…" consent is stored
+  (`LoungeProfile.shareConsentAt`) and can be changed in Lounge settings,
+  which also hold the email switch. The YAWP! team skips the box.
+- **Names.** Always first name, last initial, and school. The identity-card
+  choice is gone; old profiles keep their stored style but it is ignored.
+- **Student writing** is allowed with the name taken off (replaces the 10/9
+  "no student writing" rule). The composer says so; the name nudge stays.
+- **Contact Us** sits in the Lounge header. Messages never post in the
+  Lounge: they land in a Messages section of the inbox (Mark handled) and
+  email `LOUNGE_CONTACT_EMAILS`, falling back to
+  `LOUNGE_STAFF_NOTIFY_EMAILS`. Whether that is Brian, Brock, or both is an
+  environment setting.
+- **Pins.** Several pinned posts show above the feed, oldest pin first, so
+  the welcome post leads and the House Rules follow.
+- **Drafts and scheduling.** The YAWP! team can post now, save a draft, or
+  schedule a time. Teachers never see a draft or a scheduled post before it
+  goes live, and nobody is notified until then. The inbox lists drafts and
+  scheduled posts with Publish now and a date picker, flags bracketed
+  `[notes]`, and refuses to publish a post that still has them.
+- **Editing.** Authors edit their own posts and replies. Edits made after a
+  post went live show "edited".
+- **Launch content.** `packages/prisma/scripts/lounge-launch/content.ts` holds
+  Brian's text word for word: the welcome post and House Rules (pinned), Q1
+  to Q6 asked by Kevin with Brian's answers as YAWP! team replies, the Wins
+  and Assignment Share threads, and the hopper (revision policy, "is it
+  really theirs", Tutor off, the essay stack, Lessons Learned) as drafts to
+  release about weekly. Seeding is create-only by seed key, so it never
+  duplicates or overwrites edits, and a live post may not contain
+  `[placeholders]`. PR previews seed it automatically under stand-in authors
+  who cannot sign in. For a real database:
+
+  ```
+  LOUNGE_SEED_BRIAN_EMAIL=… LOUNGE_SEED_KEVIN_EMAIL=… bun run seed-lounge-launch          # dry run
+  LOUNGE_SEED_BRIAN_EMAIL=… LOUNGE_SEED_KEVIN_EMAIL=… bun run seed-lounge-launch --yes    # create
+  ```
+
+  Both accounts must be YAWP! team (admin) accounts. Not seeded, because the
+  notes do not have the text yet: Brian's own first reply under the welcome
+  post, his first posts in Wins and Assignment Share, and his answers to the
+  hopper questions. Lessons Learned is seeded with his bracketed notes and
+  cannot go live until they are filled in. Replies from Kevin, Bryant, and
+  Eric are for them to write in the app.
+
 Not built yet: Discuss tabs on modules and lessons, sharing Lesson Planner
-lessons and rubrics, captions for videos, unread badge, editing,
-notification settings, weekly digest, search.
+lessons and rubrics, captions for videos, unread badge, weekly digest,
+search, using the share consent anywhere outside the Lounge.
 
 ## Why now
 

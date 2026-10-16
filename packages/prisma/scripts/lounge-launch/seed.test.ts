@@ -79,10 +79,10 @@ describe('seedLoungeLaunch', () => {
     expect(answer.createdAt.getTime()).toBeGreaterThan(q1.createdAt.getTime());
     expect(replies).toHaveLength(6);
 
-    // Live posts keep Brian's order and are all in the past; drafts wait.
+    // Newest first in the feed reads in Brian's order; everything is in the past; drafts wait.
     const live = posts.filter((p) => !p.draft);
     for (let i = 1; i < live.length; i++) {
-      expect(live[i].createdAt.getTime()).toBeGreaterThan(live[i - 1].createdAt.getTime());
+      expect(live[i].createdAt.getTime()).toBeLessThan(live[i - 1].createdAt.getTime());
     }
     expect(Math.max(...replies.map((r) => r.createdAt.getTime()))).toBeLessThanOrEqual(now.getTime());
     expect(posts.filter((p) => p.draft).map((p) => p.seedKey)).toEqual(HOPPER.map((p) => p.seedKey));

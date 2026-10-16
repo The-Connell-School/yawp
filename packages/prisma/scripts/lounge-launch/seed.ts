@@ -29,8 +29,8 @@ const MINUTE = 60_000;
 /**
  * Seeds the Faculty Lounge launch content. Create-only by seedKey: anything
  * already there (including edits made in the app, or a post the team
- * deleted) is left alone. Live posts go up a minute apart so the feed keeps
- * Brian's order; the hopper goes in as drafts for the team to finish and
+ * deleted) is left alone. Live posts go up two minutes apart so the newest-first
+ * feed keeps Brian's order; the hopper goes in as drafts for the team to finish and
  * schedule from the inbox. A live post may never carry [placeholder] text.
  */
 export async function seedLoungeLaunch(
@@ -63,10 +63,10 @@ export async function seedLoungeLaunch(
         result.skipped.push(post.seedKey);
         continue;
       }
-      // First live post is the oldest, so newest-first feeds read bottom-up
-      // like a conversation and the pinned posts lead.
+      // The feed shows newest first, so the first live post is the newest:
+      // the launch questions read top to bottom in Brian's order.
       const liveIndex = live.indexOf(post);
-      const createdAt = post.draft ? now : new Date(now.getTime() - (live.length - liveIndex) * 2 * MINUTE);
+      const createdAt = post.draft ? now : new Date(now.getTime() - (liveIndex + 1) * 2 * MINUTE);
       const pinIndex = pinned.indexOf(post);
       const answered = Boolean(post.answer);
       const created = await tx.loungePost.create({
