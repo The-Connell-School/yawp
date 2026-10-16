@@ -10,14 +10,19 @@ Authoritative spec: `FREE_TIER_SPEC.md` v2 — see §5.1 (contents) and §5.3 (e
   - Active classes: 1
   - Reporter: gated off
   - Class Insights: on
-  - Lesson Planner quota: 4 (TODO: confirm exact count — spec §5.1 says “around 3–4”)
+  - Lesson Planner quota: 5
+
+Editable seat and monthly limits, including their default-off rollout policy,
+are documented in [the I5 API contract](../internal-free-tier-limits.md).
+Reporter configuration does not grant Reporter access.
 
 Module: `services/web-app/app/utils/entitlements.server.ts`
 - Returns per-plan caps and feature booleans
 - Predicates short-circuit to “allowed / current behavior” for `SCHOOL`
 - Reporter gate consumes this module (`utils/reporter/reporter-access.server.ts`)
 
-Out of scope for this PR: enforcing seat/class caps in routes; only the Reporter gate is wired now.
+F1 introduced the Reporter gate. Current seat and Lesson Planner enforcement
+and the editable-limit rollout are described in the I5 contract linked above.
 
 
 ## Rollout, rollback and known gaps

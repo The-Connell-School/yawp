@@ -368,6 +368,32 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun test ./services/web-app/app/domain/free-tier/student-join.server.test.ts
 
+      - name: 🧪 Signed free-tier limits and entitlement tests (isolated processes)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: |
+          set -e
+          bun test app/utils/internal-free-tier-limits.server.test.ts
+          bun test app/domain/free-tier/limits.test.ts
+          bun test app/utils/entitlements.server.test.ts
+          bun test app/utils/lesson-planner/lesson-planner-quota.server.test.ts
+
+      - name: 🧪 Free-tier limits concurrency and enforcement (dedicated PostgreSQL)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          PGPASSWORD: postgres
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_ia-i5-limits
+          E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_ia-i5-limits
+          FREE_TIER_LIMITS_LOCAL_TEST: '1'
+        run: |
+          set -e
+          createdb -h 127.0.0.1 -U postgres 'yawp_ia-i5-limits'
+          bun run --cwd packages/prisma prisma migrate deploy
+          cd services/web-app
+          bun test --max-concurrency=2 app/domain/free-tier/limits.real-db.integration.test.ts
+
       - name: 🧪 Existing student code authorization (isolated; mocks prisma)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
