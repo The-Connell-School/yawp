@@ -1,0 +1,53 @@
+{
+  "normalization": "Original before captures unchanged. Dedicated comparable-before copies overlay only exact RGB magenta pixels from after captures, accounting for added code/OTP masking. No other pixels changed.",
+  "pairs": [
+    {
+      "before": "before/flag-off-class-link-1280-impl.png",
+      "after": "flag-off-class-link-1280-impl.png",
+      "original_changed_pixels": 0,
+      "byte_identical": true,
+      "common_mask_before": "flag-off-class-link-1280-impl-common-mask-before.png",
+      "common_mask_changed_pixels": 0
+    },
+    {
+      "before": "before/flag-off-class-link-390-impl.png",
+      "after": "flag-off-class-link-390-impl.png",
+      "original_changed_pixels": 0,
+      "byte_identical": true,
+      "common_mask_before": "flag-off-class-link-390-impl-common-mask-before.png",
+      "common_mask_changed_pixels": 0
+    },
+    {
+      "before": "before/flag-off-login-1280-impl.png",
+      "after": "flag-off-login-1280-impl.png",
+      "original_changed_pixels": 0,
+      "byte_identical": true,
+      "common_mask_before": "flag-off-login-1280-impl-common-mask-before.png",
+      "common_mask_changed_pixels": 0
+    },
+    {
+      "before": "before/flag-off-login-390-impl.png",
+      "after": "flag-off-login-390-impl.png",
+      "original_changed_pixels": 0,
+      "byte_identical": true,
+      "common_mask_before": "flag-off-login-390-impl-common-mask-before.png",
+      "common_mask_changed_pixels": 0
+    },
+    {
+      "before": "before/flag-off-signup-1280-impl.png",
+      "after": "flag-off-signup-1280-impl.png",
+      "original_changed_pixels": 10560,
+      "byte_identical": false,
+      "common_mask_before": "flag-off-signup-1280-impl-common-mask-before.png",
+      "common_mask_changed_pixels": 0
+    },
+    {
+      "before": "before/flag-off-signup-390-impl.png",
+      "after": "flag-off-signup-390-impl.png",
+      "original_changed_pixels": 10880,
+      "byte_identical": false,
+      "common_mask_before": "flag-off-signup-390-impl-common-mask-before.png",
+      "common_mask_changed_pixels": 0
+    }
+  ]
+}

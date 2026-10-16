@@ -1,0 +1,56 @@
+
+Running 2 tests using 1 worker
+
+(node:85) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:85) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [chromium] › e2e/tests/auth.unified-backend.spec.ts:331:3 › school class existing-email notice retains context and requires password proof at 1280 (9.3s)
+  -  2 [chromium] › e2e/tests/auth.unified-backend.spec.ts:331:3 › school class existing-email notice retains context and requires password proof at 390
+
+
+  1) [chromium] › e2e/tests/auth.unified-backend.spec.ts:331:3 › school class existing-email notice retains context and requires password proof at 1280 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoHaveCSS[2m([22m[32mexpected[39m[2m)[22m failed
+
+    Locator:  getByRole('status').filter({ hasText: 'You already have an account with this email. Sign in to join this class.' })
+    Expected: [32m"rgb([7m6[27m0, [7m56[27m, [7m4[27m0)"[39m
+    Received: [31m"rgb(0, [7m0[27m, 0)"[39m
+    Timeout:  5000ms
+
+    Call log:
+    [2m  - Expect "toHaveCSS" with timeout 5000ms[22m
+    [2m  - waiting for getByRole('status').filter({ hasText: 'You already have an account with this email. Sign in to join this class.' })[22m
+    [2m    14 × locator resolved to <div role="status" class="signon-banner signon-origin-notice">…</div>[22m
+    [2m       - unexpected value "rgb(0, 0, 0)"[22m
+
+
+      385 |       await expect(banner).toHaveCSS('line-height', '21px');
+      386 |       await expect(banner).toHaveCSS('background-color', 'rgb(230, 226, 214)');
+    > 387 |       await expect(banner).toHaveCSS('color', 'rgb(60, 56, 40)');
+          |                            ^
+      388 |       await expect(banner).toHaveCSS('border-radius', '6px');
+      389 |       await expect(banner.locator('svg')).toHaveAttribute('width', '16');
+      390 |       const classBox = (await page.locator('.signon-class').boundingBox())!;
+        at expectNotice (/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-existing-class-email-notice/services/web-app/e2e/tests/auth.unified-backend.spec.ts:387:28)
+        at /home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-existing-class-email-notice/services/web-app/e2e/tests/auth.unified-backend.spec.ts:411:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../tmp/design-impl/signon-playwright-results/auth.unified-backend-schoo-dde64-ires-password-proof-at-1280-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../tmp/design-impl/signon-playwright-results/auth.unified-backend-schoo-dde64-ires-password-proof-at-1280-chromium/error-context.md
+
+    Error Context: ../../../../../../tmp/design-impl/signon-playwright-results/auth.unified-backend-schoo-dde64-ires-password-proof-at-1280-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../tmp/design-impl/signon-playwright-results/auth.unified-backend-schoo-dde64-ires-password-proof-at-1280-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../tmp/design-impl/signon-playwright-results/auth.unified-backend-schoo-dde64-ires-password-proof-at-1280-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium] › e2e/tests/auth.unified-backend.spec.ts:331:3 › school class existing-email notice retains context and requires password proof at 1280 
+  1 did not run
