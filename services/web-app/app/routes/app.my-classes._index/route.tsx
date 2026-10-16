@@ -1,3 +1,4 @@
+import { useFreeAccountUsage } from '~/components/free-account-usage';
 import { Plus, User } from 'lucide-react';
 import {
   type ActionFunctionArgs,
@@ -362,6 +363,7 @@ function TeacherMyClassesView({
     { role: 'TEACHER' }
   >;
 }) {
+  const freeUsage = useFreeAccountUsage();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedSchoolId = searchParams.get('school') ?? 'all';
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -401,7 +403,7 @@ function TeacherMyClassesView({
               </p>
             </div>
             <div className={data.canShareClassroomReport ? 'flex flex-wrap gap-2' : 'contents'}>
-              {data.canShareClassroomReport ? (
+              {data.canShareClassroomReport && !freeUsage ? (
                 <>
                   <Button size="sm" variant="outline" asChild>
                     <Link to="/app/classroom-report">Share this report</Link>

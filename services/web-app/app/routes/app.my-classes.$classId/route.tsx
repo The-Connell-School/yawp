@@ -1,3 +1,4 @@
+import { useFreeAccountUsage } from '~/components/free-account-usage';
 import { Prisma } from '@app/prisma';
 import {
   type ActionFunctionArgs,
@@ -155,7 +156,10 @@ import {
   lockStudentRosters,
 } from '~/domain/collaboration/class-assignment-lock.server';
 import { filterClassStudentsByQuery } from './class-students-search';
-import { formatUserContactLabel, formatUserDisplayName } from '~/utils/user-display';
+import {
+  formatUserContactLabel,
+  formatUserDisplayName,
+} from '~/utils/user-display';
 import {
   StudentGrowthPlansSheet,
   type StudentGrowthPlan,
@@ -1118,7 +1122,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                     select: {
                       id: true,
                       user: {
-                        select: { id: true, name: true, email: true, username: true },
+                        select: {
+                          id: true,
+                          name: true,
+                          email: true,
+                          username: true,
+                        },
                       },
                     },
                   },
@@ -1451,7 +1460,11 @@ type ClassDocumentRow = {
   updatedAt: Date;
   membership: {
     id: string;
-    user: { name: string | null; email: string | null; username?: string | null };
+    user: {
+      name: string | null;
+      email: string | null;
+      username?: string | null;
+    };
   };
   group: TeacherDocumentWorkRow['group'];
   assignment: {
@@ -1482,6 +1495,7 @@ export default function ClassDetailRoute() {
 }
 
 function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
+  const freeUsage = useFreeAccountUsage();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -2261,10 +2275,21 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
 
       return (
         <div className="space-y-4">
+          {freeUsage?.classId === data.klass.id &&
+            freeUsage.students.remaining === 0 && (
+              <p
+                className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
+                role="status"
+              >
+                This class is full. Students who try to join see "This class is
+                full." Remove a student to open a seat.
+              </p>
+            )}
           {data.studentJoinUrl ? (
             <FreeClassStudentJoinCard
               joinUrl={data.studentJoinUrl}
               classCode={data.klass.code}
+              compact={Boolean(freeUsage)}
             />
           ) : null}
           <div className="flex flex-wrap items-center justify-between gap-3">

@@ -1,3 +1,4 @@
+import { signonRequestOrigin } from './origin.server';
 import { createHash } from 'node:crypto';
 import { createLocalJWKSet, jwtVerify, type JSONWebKeySet } from 'jose';
 import { redirect } from 'react-router';
@@ -33,7 +34,7 @@ export function beginGoogle(flow: Flow, request: Request, linkUserId?: string) {
   const verifier = opaque();
   const callback = new URL(
     '/auth/unified/google/callback',
-    request.url
+    signonRequestOrigin(request)
   ).toString();
   flow.data.google = {
     state: digest(state),

@@ -48,9 +48,11 @@ const sheetVariants = cva(
 );
 
 interface SheetContentProps
-  extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
+  extends
+    React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
     VariantProps<typeof sheetVariants> {
   includeOverlay?: boolean;
+  overlayClassName?: string;
   /**
    * Dim the page for a NON-modal sheet. Radix renders no overlay at all unless
    * the dialog is modal, so a sheet that must leave the page behind clickable
@@ -70,13 +72,14 @@ const SheetContent = React.forwardRef<
       className,
       children,
       includeOverlay = true,
+      overlayClassName,
       dimBehind = false,
       ...props
     },
     ref
   ) => (
     <SheetPortal>
-      {includeOverlay ? <SheetOverlay /> : null}
+      {includeOverlay ? <SheetOverlay className={overlayClassName} /> : null}
       {dimBehind ? (
         <div
           aria-hidden
