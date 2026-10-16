@@ -23,7 +23,7 @@ async function shot(page: Page, name: string, width: number) {
       fullPage: true,
       mask: [
         page.locator(
-          'input[type="password"], input[name="username"], input[name="identifier"], .signon-identity'
+          'input[type="password"], input[name="username"], input[name="identifier"], .signon-identity, .signon-chips, #signon-username-help[role="alert"]'
         ),
       ],
     });
