@@ -15,6 +15,8 @@ const prefix = `origin-browser-${Date.now()}`;
 const publicUrl = process.env.SIGNON_ORIGIN_URL!;
 const beforeFix = process.env.SIGNON_ORIGIN_BEFORE === '1';
 let proxy: Server;
+let localResources = false;
+let originalFlag: { value: string; valueType: string } | null = null;
 async function shot(page: Page, name: string, width: number) {
   if (!process.env.SIGNON_EVIDENCE_DIR) return;
   mkdirSync(process.env.SIGNON_EVIDENCE_DIR, { recursive: true });
@@ -38,6 +40,11 @@ test.beforeAll(async () => {
     new URL(publicUrl).hostname !== '127.0.0.1'
   )
     throw new Error('Local resources required');
+  localResources = true;
+  originalFlag = await db.setting.findUnique({
+    where: { name: flag },
+    select: { value: true, valueType: true },
+  });
   await db.organization.create({
     data: { id: prefix, name: 'Lincoln High', plan: 'SCHOOL' },
   });
@@ -94,11 +101,21 @@ test.beforeAll(async () => {
   );
 });
 test.afterAll(async () => {
+  if (!localResources) {
+    await db.$disconnect();
+    return;
+  }
   if (proxy) {
     proxy.closeAllConnections();
     await new Promise<void>((resolve) => proxy.close(() => resolve()));
   }
-  await db.setting.deleteMany({ where: { name: flag } });
+  if (originalFlag)
+    await db.setting.upsert({
+      where: { name: flag },
+      create: { name: flag, ...originalFlag },
+      update: originalFlag,
+    });
+  else await db.setting.deleteMany({ where: { name: flag } });
   await db.class.deleteMany({ where: { id: prefix } });
   await db.school.deleteMany({ where: { id: prefix } });
   await db.organization.deleteMany({ where: { id: prefix } });
@@ -113,7 +130,7 @@ for (const width of [1280, 390]) {
     await setFlag(true);
     for (const [identifier, heading, name] of [
       ['dev.teacher@yawp.local', 'Enter your password', 'signon-05-password'],
-      [prefix, 'Join your class', 'signon-20-class'],
+      [prefix, 'Join your class', 'signon-35-class'],
     ]) {
       await page.goto(`${publicUrl}/auth/login`);
       await page.waitForFunction(() =>
@@ -131,7 +148,7 @@ for (const width of [1280, 390]) {
       );
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
       const submitted = await response;
-      expect(submitted.request().headers().origin).toBe(publicUrl);
+      expect((await submitted.request().allHeaders()).origin).toBe(publicUrl);
       expect(submitted.status()).toBe(beforeFix ? 403 : 200);
       if (beforeFix)
         await expect(page.getByRole('alert')).toContainText(
@@ -143,15 +160,43 @@ for (const width of [1280, 390]) {
         ).toBeVisible();
       await shot(page, beforeFix ? `before-${name}` : name, width);
     }
+    if (!beforeFix) {
+      await page.goto(`${publicUrl}/auth/login`);
+      await page.waitForFunction(() =>
+        Boolean((window as any).__reactRouterDataRouter)
+      );
+      await page
+        .getByLabel('Email, handle, or class code')
+        .fill(`${prefix}-${width}@example.test`);
+      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      await expect(
+        page.getByRole('heading', { name: 'Welcome to YAWP!' })
+      ).toBeVisible();
+      await page
+        .getByRole('button', { name: "I'm a student I have a class code" })
+        .click();
+      await page.getByLabel('Class code').fill(prefix);
+      const classResponse = page.waitForResponse(
+        (r) =>
+          r.request().method() === 'POST' &&
+          new URL(r.url()).pathname.startsWith('/auth/login')
+      );
+      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      expect((await classResponse).status()).toBe(200);
+      await expect(
+        page.getByRole('heading', { name: 'Finish setting up your account' })
+      ).toBeVisible();
+      await shot(page, 'signon-23-class-code-resolved', width);
+    }
     const google = await request.post(`${publicUrl}/auth/login`, {
       headers: { Origin: publicUrl },
       form: { intent: 'google' },
     });
     expect(google.status()).toBe(beforeFix ? 403 : 503);
     if (!beforeFix)
-      expect(await google.json()).toMatchObject({
-        error: 'Google sign-in is unavailable. Use your email or handle.',
-      });
+      expect(await google.text()).toContain(
+        'Google sign-in is unavailable. Use your email or handle.'
+      );
     const foreign = await request.post(`${publicUrl}/auth/login`, {
       headers: {
         Origin: 'https://evil.example',
@@ -160,7 +205,18 @@ for (const width of [1280, 390]) {
       },
       form: { intent: 'resolve', identifier: prefix },
     });
-    expect(foreign.status()).toBe(403);
+    // React Router rejects a different forwarded Host before our action.
+    // The dispatcher unit regressions separately assert our own HTTP 403.
+    expect(foreign.status()).toBe(400);
+    expect(await foreign.text()).toBe('Bad Request');
+    if (!beforeFix) {
+      const downgraded = await request.post(`${publicUrl}/auth/login`, {
+        headers: { Origin: publicUrl.replace('https:', 'http:') },
+        form: { intent: 'resolve', identifier: prefix },
+      });
+      expect(downgraded.status()).toBe(403);
+      expect(await downgraded.text()).toContain('Invalid request origin.');
+    }
   });
   test(`flag OFF retains login, signup and reset at ${width}`, async ({
     page,

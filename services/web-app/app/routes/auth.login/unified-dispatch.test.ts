@@ -198,7 +198,7 @@ function proxyRequest(
   host = 'pr-565.preview.yawp.school',
   intent = 'resolve'
 ) {
-  return new Request(`http://${host}/auth/login`, {
+  return new Request(`http://${host}/auth/login.data`, {
     method: 'POST',
     headers: {
       host,
@@ -252,6 +252,7 @@ test('preview Google start reaches the real unavailable-provider outcome without
 
 for (const origin of [
   'https://evil.example',
+  'http://pr-565.preview.yawp.school',
   'null',
   'garbage',
   `${publicOrigin}/path`,
@@ -333,7 +334,14 @@ test('direct same-origin and missing-Origin behavior remain supported', async ()
         identifier: 'local@example.test',
       }),
     }),
-    proxyRequest('http://pr-565.preview.yawp.school'),
+    new Request('http://localhost:5176/auth/login', {
+      method: 'POST',
+      headers: { Origin: 'http://localhost:5176' },
+      body: new URLSearchParams({
+        intent: 'resolve',
+        identifier: 'local@example.test',
+      }),
+    }),
   ]) {
     expect((await action(args(request))) as Response).toMatchObject({
       status: 200,
