@@ -6,8 +6,6 @@ import { prisma } from '~/utils/db.server';
 import {
   guidedToursAvailable,
   isTourId,
-  isTourStatus,
-  nextTourStatus,
   type TourId,
   type TourStatus,
 } from './tours';
@@ -30,17 +28,19 @@ export async function recordTourOutcome(
   tourId: TourId,
   outcome: TourStatus
 ) {
-  const existing = await prisma.userTour.findUnique({
-    where: { userId_tourId: { userId, tourId } },
-    select: { status: true },
-  });
-  const previous = isTourStatus(existing?.status) ? existing.status : null;
-  const status = nextTourStatus(previous, outcome);
-  if (!status) return;
+  if (outcome === 'dismissed') {
+    // ON CONFLICT DO NOTHING: a late Skip must never overwrite Finish from
+    // another tab, even when both requests started with no progress row.
+    await prisma.userTour.createMany({
+      data: [{ userId, tourId, status: outcome }],
+      skipDuplicates: true,
+    });
+    return;
+  }
   await prisma.userTour.upsert({
     where: { userId_tourId: { userId, tourId } },
-    create: { userId, tourId, status },
-    update: { status },
+    create: { userId, tourId, status: outcome },
+    update: { status: outcome },
   });
 }
 
