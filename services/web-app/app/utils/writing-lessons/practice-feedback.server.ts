@@ -88,6 +88,8 @@ export async function generatePracticeFeedback(
     classId?: string;
     route?: string;
     requestId?: string;
+    organizationName?: string;
+    deidentificationPhrases?: unknown;
   }
 ): Promise<PracticeFeedbackResult> {
   const guardrail = detectPracticeGuardrail(input);
@@ -108,6 +110,10 @@ export async function generatePracticeFeedback(
         skill: input.skill,
         lessonTitle: input.lessonTitle,
       },
+      deidentificationPhrases: [
+        attribution?.organizationName,
+        attribution?.deidentificationPhrases,
+      ],
       attribution: {
         organizationId: attribution?.organizationId ?? null,
         membershipId: attribution?.membershipId ?? null,

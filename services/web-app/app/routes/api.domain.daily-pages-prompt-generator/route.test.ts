@@ -46,7 +46,11 @@ describe('api.domain.daily-pages-prompt-generator', () => {
     getLLMCompletion.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
-    requireMembership.mockResolvedValue({ id: 'teacher-1', role: 'TEACHER' });
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', name: 'Holy Family School' },
+    });
   });
 
   test('returns the reply and drafted options from the model', async () => {
@@ -83,6 +87,7 @@ describe('api.domain.daily-pages-prompt-generator', () => {
     const call = getLLMCompletion.mock.calls[0][0];
     expect(call.system).toContain('Daily Pages');
     expect(call.model).toContain('claude');
+    expect(call.deidentificationPhrases).toEqual(['Holy Family School']);
     // Three options plus the reply must fit without truncating the JSON.
     expect(call.maxTokens).toBeGreaterThanOrEqual(1500);
   });

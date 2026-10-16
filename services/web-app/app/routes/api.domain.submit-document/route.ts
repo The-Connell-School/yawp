@@ -14,6 +14,11 @@ import {
   resolveSubmissionActivityActorMembershipId,
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
+import {
+  lockFreeTierFirstEssay,
+  isFirstFreeTierEssayInTx,
+  captureFirstFreeTierEssay,
+} from '~/domain/free-tier/first-essay-analytics.server';
 
 const POST = z.object({ documentId: z.string(), title: z.string().optional() });
 
@@ -80,6 +85,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
       membership: {
         select: {
           organizationId: true,
+          organization: { select: { plan: true } },
           classesAsStudent: {
             select: {
               id: true,
@@ -115,6 +121,10 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
   const text = document.text ?? '';
   const now = new Date();
   const documentOrganizationId = document.membership.organizationId;
+  const freeTierOrganizationId =
+    document.membership.organization.plan === 'FREE_CLASSROOM'
+      ? documentOrganizationId
+      : null;
 
   const journal = await prisma.documentWriteJournal.create({
     data: {
@@ -138,74 +148,96 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
   });
 
   try {
-    const { submission: createdSubmission, document: finalDocument } =
-      await prisma.$transaction(async (tx) => {
-        const updatedDocument = await tx.document.updateMany({
-          where: {
-            ...documentAccessWhere,
-            revision: document.revision,
-            updatedAt: document.updatedAt,
-            html: document.html,
-            text: document.text,
-          },
-          data: { updatedAt: now },
-        });
-        if (updatedDocument.count !== 1) {
-          throw new SubmitDocumentConflictError();
-        }
-
-        const submission = await tx.submission.create({
-          data: {
-            documentId: document.id,
-            title: data.title || (document.title ?? ''),
-            html,
-            text,
-            submittedAt: now,
-          },
-          select: { id: true, title: true, submittedAt: true },
-        });
-
-        const doc = await tx.document.findUniqueOrThrow({
-          where: { id: document.id },
-        });
-
-        await recordSubmissionActivity(tx, {
-          submissionId: submission.id,
-          organizationId: documentOrganizationId ?? profile.organization.id,
-          actorMembershipId: resolveSubmissionActivityActorMembershipId({
-            actorMembershipId: profile.id,
-            actorOrganizationId: profile.organization.id,
-            submissionOrganizationId:
-              documentOrganizationId ?? profile.organization.id,
-          }),
-          actorUserId: userId,
-          eventType: submissionActivityEventTypes.created,
-          source: 'submit-document',
-          occurredAfterRelease: false,
-          changes: buildSubmissionActivityChanges({
-            before: { title: null, submittedAt: null },
-            after: {
-              title: submission.title,
-              submittedAt: submission.submittedAt,
-            },
-            fields: ['title', 'submittedAt'],
-          }),
-          metadata: {
-            body: buildSubmissionBodyAuditMetadata({ text, html }),
-            documentId: document.id,
-          },
-        });
-
-        await tx.documentWriteJournal.update({
-          where: { id: journal.id },
-          data: {
-            status: 'accepted',
-            resultingRevision: document.revision,
-          },
-        });
-
-        return { submission, document: doc };
+    const {
+      submission: createdSubmission,
+      document: finalDocument,
+      isFirstFreeTierEssay,
+    } = await prisma.$transaction(async (tx) => {
+      // Serialize first-submission decisions for this free classroom.
+      if (freeTierOrganizationId) {
+        await lockFreeTierFirstEssay(tx, freeTierOrganizationId);
+      }
+      const updatedDocument = await tx.document.updateMany({
+        where: {
+          ...documentAccessWhere,
+          revision: document.revision,
+          updatedAt: document.updatedAt,
+          html: document.html,
+          text: document.text,
+        },
+        data: { updatedAt: now },
       });
+      if (updatedDocument.count !== 1) {
+        throw new SubmitDocumentConflictError();
+      }
+
+      const submission = await tx.submission.create({
+        data: {
+          documentId: document.id,
+          title: data.title || (document.title ?? ''),
+          html,
+          text,
+          submittedAt: now,
+        },
+        select: { id: true, title: true, submittedAt: true },
+      });
+
+      const doc = await tx.document.findUniqueOrThrow({
+        where: { id: document.id },
+      });
+
+      await recordSubmissionActivity(tx, {
+        submissionId: submission.id,
+        organizationId: documentOrganizationId ?? profile.organization.id,
+        actorMembershipId: resolveSubmissionActivityActorMembershipId({
+          actorMembershipId: profile.id,
+          actorOrganizationId: profile.organization.id,
+          submissionOrganizationId:
+            documentOrganizationId ?? profile.organization.id,
+        }),
+        actorUserId: userId,
+        eventType: submissionActivityEventTypes.created,
+        source: 'submit-document',
+        occurredAfterRelease: false,
+        changes: buildSubmissionActivityChanges({
+          before: { title: null, submittedAt: null },
+          after: {
+            title: submission.title,
+            submittedAt: submission.submittedAt,
+          },
+          fields: ['title', 'submittedAt'],
+        }),
+        metadata: {
+          body: buildSubmissionBodyAuditMetadata({ text, html }),
+          documentId: document.id,
+        },
+      });
+
+      await tx.documentWriteJournal.update({
+        where: { id: journal.id },
+        data: {
+          status: 'accepted',
+          resultingRevision: document.revision,
+        },
+      });
+
+      const isFirstFreeTierEssay = freeTierOrganizationId
+        ? await isFirstFreeTierEssayInTx(tx, freeTierOrganizationId)
+        : false;
+      return { submission, document: doc, isFirstFreeTierEssay };
+    });
+
+    if (documentOrganizationId && isFirstFreeTierEssay) {
+      await captureFirstFreeTierEssay({
+        organizationId: documentOrganizationId,
+        submissionId: createdSubmission.id,
+        documentId: document.id,
+        classId:
+          document.classAssignment?.class.id ??
+          document.membership?.classesAsStudent[0]?.id ??
+          null,
+      });
+    }
 
     return dataResponse({
       success: true,

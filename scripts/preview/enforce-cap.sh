@@ -10,16 +10,15 @@ set -euo pipefail
 ROOT="${PREVIEW_ROOT:-/srv/yawp-preview}"
 export PREVIEW_ROOT="$ROOT"
 MODE="${PREVIEW_MODE:-admit}"
-RESIDENT_CAP="${PREVIEW_MAX_RESIDENT:-${PREVIEW_MAX_ENVS:-30}}"
-RUNNING_CAP="${PREVIEW_MAX_RUNNING:-4}"
+RESIDENT_CAP="${PREVIEW_MAX_RESIDENT:-${PREVIEW_MAX_ENVS:-40}}"
+RUNNING_CAP="${PREVIEW_MAX_RUNNING:-8}"
 KEEP_PR="${KEEP_PR:-}"
 OPEN_PR_NUMBERS="${OPEN_PR_NUMBERS:-}"
 PR_ACTIVITY="${PR_ACTIVITY:-}"
 PR_STATE_AUTHORITATIVE="${PREVIEW_PR_STATE_AUTHORITATIVE:-false}"
 POSTGRES_CONTAINER="${PREVIEW_POSTGRES_CONTAINER:-preview-postgres}"
 SLEEP_ENABLED="${PREVIEW_SLEEP_ENABLED:-true}"
-DRAFT_IDLE_HOURS="${PREVIEW_DRAFT_IDLE_HOURS:-48}"
-READY_IDLE_HOURS="${PREVIEW_READY_IDLE_HOURS:-48}"
+IDLE_SLEEP_HOURS="${PREVIEW_IDLE_SLEEP_HOURS:-48}"
 NOW_EPOCH="${PREVIEW_NOW_EPOCH:-$(date +%s)}"
 DOCKER="${PREVIEW_DOCKER:-docker}"
 LOCK_WAIT_SECONDS="${PREVIEW_LOCK_WAIT_SECONDS:-900}"
@@ -39,6 +38,11 @@ if ! declare -F preview_remove_path >/dev/null 2>&1; then
   source "$SCRIPT_DIR/remove-preview-path.sh"
 fi
 
+if ! declare -F preview_idle_deadline >/dev/null 2>&1; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  source "$SCRIPT_DIR/idle-policy.sh"
+fi
+
 is_positive_integer() {
   [[ "$1" =~ ^[1-9][0-9]*$ ]]
 }
@@ -54,7 +58,7 @@ esac
 for value in "$RESIDENT_CAP" "$RUNNING_CAP"; do
   is_positive_integer "$value" || { echo "Preview caps must be positive integers" >&2; exit 1; }
 done
-for value in "$DRAFT_IDLE_HOURS" "$READY_IDLE_HOURS" "$NOW_EPOCH" "$LOCK_WAIT_SECONDS" "$INFLIGHT_TTL_SECONDS"; do
+for value in "$IDLE_SLEEP_HOURS" "$NOW_EPOCH" "$LOCK_WAIT_SECONDS" "$INFLIGHT_TTL_SECONDS"; do
   is_nonnegative_integer "$value" || { echo "Preview timing values must be nonnegative integers" >&2; exit 1; }
 done
 case "$SLEEP_ENABLED" in
@@ -117,7 +121,7 @@ refresh_pr_state() {
     }
     page_numbers="$("$JQ" -r '[.[].number] | join(" ")' <<<"$response")"
     page_activity="$(
-      "$JQ" -r '.[] | "\(.number) \(.updated_at | fromdateiso8601) \(if .draft then 1 else 0 end) \(if any(.labels[]?; .name == "preview:keep-awake") then 1 else 0 end)"' \
+      "$JQ" -r '.[] | "\(.number) \(.updated_at | fromdateiso8601) \(if .draft then 1 else 0 end)"' \
         <<<"$response"
     )"
     if [[ -n "$page_numbers" ]]; then
@@ -198,23 +202,23 @@ is_open_pr() {
   [[ " ${OPEN_PR_NUMBERS} " == *" ${1} "* ]]
 }
 
-activity_record() {
-  local target="$1"
-  printf '%s\n' "$PR_ACTIVITY" | awk -v target="$target" '
-    $1 == target && NF >= 3 {
-      pinned = (NF >= 4 && $4 == "1") ? 1 : 0
-      print $1, $2, $3, pinned
-      exit
-    }'
+file_epoch() {
+  local file="$1"
+  local value=""
+  [[ -f "$file" ]] || { echo 0; return 0; }
+  IFS= read -r value < "$file" || true
+  is_nonnegative_integer "$value" && printf '%s\n' "$value" || echo 0
 }
 
 access_epoch() {
   local pr="$1"
-  local value=""
-  local access_file="$ACCESS_DIR/pr-${pr}"
-  [[ -f "$access_file" ]] || { echo 0; return 0; }
-  IFS= read -r value < "$access_file" || true
-  is_nonnegative_integer "$value" && printf '%s\n' "$value" || echo 0
+  local preview_dir="$previews_dir/pr-${pr}"
+  local access last_request last_deploy
+  access="$(file_epoch "$ACCESS_DIR/pr-${pr}")"
+  last_request="$(file_epoch "$preview_dir/last-request")"
+  last_deploy="$(file_epoch "$preview_dir/last-deploy")"
+  printf '%s\n' "$access $last_request $last_deploy" \
+    | awk '{ max = 0; for (i = 1; i <= NF; i++) if ($i > max) max = $i; print max }'
 }
 
 effective_activity_epoch() {
@@ -227,36 +231,6 @@ effective_activity_epoch() {
   else
     printf '%s\n' "$github_epoch"
   fi
-}
-
-write_keep_awake_marker() {
-  local marker="$1"
-  local replacement="${marker}.tmp.$$"
-
-  # Container-backed deploys can leave the existing marker owned by root. The preview
-  # directory remains owned by the deploy user, so replace the file through that
-  # directory instead of truncating the inode in place.
-  if ! (umask 022; printf 'true\n' > "$replacement" && mv -f -- "$replacement" "$marker"); then
-    rm -f -- "$replacement" 2>/dev/null || true
-    echo "::error::could not update keep-awake marker ${marker}" >&2
-    return 1
-  fi
-}
-
-sync_keep_awake_markers() {
-  local pr record pinned marker
-  while IFS= read -r pr; do
-    [[ -d "$previews_dir/pr-${pr}" ]] || continue
-    record="$(activity_record "$pr")"
-    [[ -n "$record" ]] || continue
-    read -r _ _ _ pinned <<<"$record"
-    marker="$previews_dir/pr-${pr}/keep-awake"
-    if [[ "$pinned" == "1" ]]; then
-      write_keep_awake_marker "$marker"
-    else
-      rm -f -- "$marker"
-    fi
-  done < <(resident_env_numbers)
 }
 
 is_running() {
@@ -347,12 +321,19 @@ stop_env() {
   local path="$previews_dir/pr-${pr}"
   local compose_file="$path/docker-compose.yml"
   local project="yawp-pr-${pr}"
+  local services=(web)
 
   [[ -f "$compose_file" ]] || {
     echo "::error::cannot sleep pr-${pr}; compose file missing"
     return 1
   }
-  if ! "$DOCKER" compose -p "$project" -f "$compose_file" stop; then
+  if grep -qE '^[[:space:]]*blackboard-lti-mock:' "$compose_file"; then
+    services+=(blackboard-lti-mock)
+  fi
+  if grep -qE '^[[:space:]]*renderer:' "$compose_file"; then
+    services+=(renderer)
+  fi
+  if ! "$DOCKER" compose -p "$project" -f "$compose_file" stop "${services[@]}"; then
     # Tolerate an invalid or stale compose file: fall back to removing running containers.
     "$DOCKER" ps -aq --filter "label=com.docker.compose.project=${project}" 2>/dev/null \
       | xargs -r "$DOCKER" rm -f >/dev/null 2>&1 || true
@@ -364,32 +345,29 @@ stop_env() {
 }
 
 rank_candidates() {
-  local scope="$1"
-  local keep="$2"
-  local candidates=""
-  local pr
+  local scope="$1" keep="$2" pr updated draft ignored effective
   if [[ "$scope" == "running" ]]; then
     while IFS= read -r pr; do
-      [[ -n "$pr" ]] || continue
-      is_inflight "$pr" || candidates="${candidates:+${candidates} }${pr}"
-    done < <(running_env_numbers)
-  else
-    while IFS= read -r pr; do
-      [[ -n "$pr" ]] || continue
-      is_inflight "$pr" || candidates="${candidates:+${candidates} }${pr}"
-    done < <(resident_env_numbers)
+      [[ -n "$pr" && "$pr" != "$keep" ]] || continue
+      printf '%s %s\n' "$(preview_activity_epoch "$ROOT" "$pr")" "$pr"
+    done < <(running_env_numbers) | sort -k1,1n -k2,2n | awk '{print $2}'
+    return
   fi
 
-  local updated draft pinned effective
-  while read -r pr updated draft pinned; do
+  # Preserve resident reclamation's existing draft/activity eligibility and data
+  # removal paths. Running admission never feeds this destructive ranking.
+  local candidates=""
+  while IFS= read -r pr; do
     [[ -n "$pr" ]] || continue
-    pinned="${pinned:-0}"
-    [[ "$pr" != "$keep" && "$pinned" != "1" ]] || continue
+    is_inflight "$pr" || candidates="${candidates:+${candidates} }${pr}"
+  done < <(resident_env_numbers)
+  while read -r pr updated draft ignored; do
+    [[ -n "$pr" && "$pr" != "$keep" ]] || continue
     [[ " $candidates " == *" $pr "* ]] || continue
     is_nonnegative_integer "$updated" || continue
     effective="$(effective_activity_epoch "$pr" "$updated")"
     printf '%d %d %s\n' "$([[ "$draft" == "1" ]] && echo 0 || echo 1)" "$effective" "$pr"
-  done <<<"$PR_ACTIVITY" | sort -k1,1n -k2,2n | awk '{print $3}'
+  done <<<"$PR_ACTIVITY" | sort -k1,1n -k2,2n -k3,3n | awk '{print $3}'
 }
 
 append_number() {
@@ -417,7 +395,6 @@ incoming_running_slots() {
 acquire_host_lock
 prune_stale_inflight_markers
 refresh_pr_state
-sync_keep_awake_markers
 
 reclaimed=0
 evicted=""
@@ -442,26 +419,18 @@ while IFS= read -r pr; do
   fi
 done < <(resident_env_numbers)
 
-# Idle leases stop every PR-scoped service. State stays resident and any new deploy wakes it.
+# The human idle deadline applies to all previews.
 if [[ "$SLEEP_ENABLED" == "true" ]]; then
   while IFS= read -r pr; do
-    [[ -n "$pr" ]] || continue
+    [[ -n "$pr" && "$pr" != "$KEEP_PR" ]] || continue
     is_inflight "$pr" && continue
-    record="$(activity_record "$pr")"
-    [[ -n "$record" ]] || continue
-    read -r _ updated draft pinned <<<"$record"
-    is_nonnegative_integer "$updated" || continue
-    updated="$(effective_activity_epoch "$pr" "$updated")"
-    [[ "$pinned" == "1" ]] && continue
-    idle_hours="$READY_IDLE_HOURS"
-    [[ "$draft" == "1" ]] && idle_hours="$DRAFT_IDLE_HOURS"
-    if (( NOW_EPOCH - updated >= idle_hours * 3600 )); then
-      echo "sleep pr-${pr}: idle lease expired"
-      if stop_env "$pr"; then
-        slept="$(append_number "$slept" "$pr")"
-      fi
+    preview_idle_protected "$ROOT" "$pr" "$NOW_EPOCH" "$INFLIGHT_TTL_SECONDS" && continue
+    deadline="$(preview_idle_deadline "$previews_dir/pr-$pr" "$IDLE_SLEEP_HOURS")"
+    if (( deadline > 0 && NOW_EPOCH >= deadline )); then
+      echo "sleep pr-${pr}: human idle deadline expired"
+      if stop_env "$pr"; then slept="$(append_number "$slept" "$pr")"; fi
     fi
-  done < <(rank_candidates running "$KEEP_PR")
+  done < <(running_env_numbers)
 fi
 
 # Resident pressure deletes derived environments, drafts then oldest activity.
@@ -487,7 +456,6 @@ if (( running_needed > RUNNING_CAP )) && [[ "$SLEEP_ENABLED" == "true" ]]; then
   while IFS= read -r pr; do
     [[ -n "$pr" ]] || continue
     (( running_needed > RUNNING_CAP )) || break
-    is_inflight "$pr" && continue
     echo "sleep pr-${pr}: running cap ${RUNNING_CAP}, least active candidate"
     if stop_env "$pr"; then
       slept="$(append_number "$slept" "$pr")"

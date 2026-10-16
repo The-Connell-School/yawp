@@ -28,6 +28,7 @@ const { loader } = await import('./route');
 
 describe('admin audit loader', () => {
   beforeEach(() => {
+    process.env.INTERNAL_ADMIN_AUDIT_MOVED = 'false';
     requireAdmin.mockReset();
     requireMutableRequest.mockReset();
     prisma.documentWriteJournal.findMany.mockReset();
@@ -122,5 +123,54 @@ describe('admin audit loader', () => {
         response: 'AI response',
       }),
     ]);
+  });
+});
+
+describe('staged Audit entry migration', () => {
+  test('enabled gate authorizes first and returns destination without reading payloads, including detailId', async () => {
+    process.env.INTERNAL_ADMIN_AUDIT_MOVED = 'true';
+    try {
+      requireAdmin.mockReset().mockResolvedValue({ id: 'admin-1' });
+      for (const delegate of Object.values(prisma))
+        for (const method of Object.values(delegate)) method.mockClear();
+      for (const suffix of ['', '?detailId=write-1']) {
+        const result = await loader({
+          request: new Request('http://platform.test/app/admin/audit' + suffix),
+        } as any);
+        expect(result.data).toMatchObject({
+          moved: true,
+          destination: 'https://internal.yawp.school/audit?env=demo',
+        });
+      }
+      for (const delegate of Object.values(prisma))
+        for (const method of Object.values(delegate))
+          expect(method).not.toHaveBeenCalled();
+      requireAdmin.mockRejectedValueOnce(
+        new Response('Forbidden', { status: 403 })
+      );
+      try {
+        await loader({
+          request: new Request(
+            'http://platform.test/app/admin/audit?detailId=write-1'
+          ),
+        } as any);
+        throw new Error('allowed');
+      } catch (error) {
+        expect((error as Response).status).toBe(403);
+      }
+      requireAdmin.mockRejectedValueOnce(
+        new Response('Login', { status: 302 })
+      );
+      try {
+        await loader({
+          request: new Request('http://platform.test/app/admin/audit'),
+        } as any);
+        throw new Error('allowed');
+      } catch (error) {
+        expect((error as Response).status).toBe(302);
+      }
+    } finally {
+      delete process.env.INTERNAL_ADMIN_AUDIT_MOVED;
+    }
   });
 });

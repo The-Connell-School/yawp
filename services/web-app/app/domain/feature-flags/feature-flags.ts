@@ -37,6 +37,9 @@ export const INTERNAL_RUBRICS_FLAG = 'internal_rubrics' as const;
  */
 export const FREE_TIER_FLAG = 'free_tier' as const;
 
+/** Unified sign-on UI. Default off; anonymous entry requires everyone mode. */
+export const UNIFIED_SIGN_ON_FLAG = 'unified-sign-on' as const;
+
 /**
  * Thesis-Driven Essay slide decks on the assignment type's page (#452). On:
  * each step in the Modules list offers its lesson's deck to download, and
@@ -49,7 +52,7 @@ export const FEATURE_FLAGS = {
   [LESSON_PLANNER_FLAG]: {
     label: 'Lesson Planner',
     description:
-      'Shows the Lesson Planner in the teacher nav and allows planner pages, exports, and AI generation. Off: entry points are hidden and direct URLs are blocked; saved lessons are not deleted.',
+      'Shows the Lesson Planner in the teacher nav and allows planner pages, exports, and lesson generation. Off: entry points are hidden and direct URLs are blocked; saved lessons are not deleted.',
   },
   [INTERNAL_RUBRICS_FLAG]: {
     label: 'Rubrics from Yawp Internal',
@@ -60,6 +63,11 @@ export const FEATURE_FLAGS = {
     label: 'Free tier',
     description:
       'Enables Free Tier C teacher onboarding, school-admin approval links, operator release tools, and related UI. Off: those routes and release APIs return 404; waitlist/token APIs behave as on main until yawp-internal turns this on for everyone.',
+  },
+  [UNIFIED_SIGN_ON_FLAG]: {
+    label: 'Unified sign-on',
+    description:
+      'Shows the unified sign-on at /auth/login. Default off. Keep disabled on demo and production during October 16 testing. Backend-dependent operations remain unavailable until the backend integration ships.',
   },
   [THESIS_ESSAY_DECKS_FLAG]: {
     label: 'Thesis-Driven Essay slide decks',

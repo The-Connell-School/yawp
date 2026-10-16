@@ -33,7 +33,7 @@ async function fillCodeInputWithRetry(page: Page, code: string) {
 }
 
 function parseGrammarIssueCount(text: string): number {
-  const match = text.match(/AI grammar issues:\s*(\d+)/i);
+  const match = text.match(/Grammar issues:\s*(\d+)/i);
   if (!match) {
     throw new Error(`Unable to parse grammar issue count from: ${text}`);
   }
@@ -229,7 +229,7 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
         { timeout: 120000 }
       );
 
-      await expect(page.getByText(/AI grammar issues:/i)).toBeVisible({
+      await expect(page.getByText(/Grammar issues:/i)).toBeVisible({
         timeout: 30000,
       });
       await expect(
@@ -239,7 +239,7 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
         ''
       );
 
-      const grammarCounter = page.getByText(/AI grammar issues:/i);
+      const grammarCounter = page.getByText(/Grammar issues:/i);
       const beforeRemove = parseGrammarIssueCount(
         (await grammarCounter.textContent()) ?? ''
       );
@@ -263,7 +263,7 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       await page.reload();
       await page.waitForLoadState('networkidle');
       const afterReload = parseGrammarIssueCount(
-        ((await page.getByText(/AI grammar issues:/i).textContent()) ??
+        ((await page.getByText(/Grammar issues:/i).textContent()) ??
           '') as string
       );
       expect(afterReload).toBe(Math.max(0, beforeRemove - 1));

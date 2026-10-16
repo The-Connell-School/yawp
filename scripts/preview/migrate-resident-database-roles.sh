@@ -167,9 +167,14 @@ const updated = source.replace(pattern, replacement);
 if (updated === source && !source.includes(replacement)) {
   throw new Error(`No replaceable DATABASE_URL found in ${composeFile}`);
 }
+if (updated === source) {
+  process.stdout.write('false\n');
+  process.exit(0);
+}
 const temporary = `${composeFile}.${process.pid}.tmp`;
 fs.writeFileSync(temporary, updated, { mode: 0o600 });
 fs.renameSync(temporary, composeFile);
+process.stdout.write('true\n');
 NODE
 }
 
@@ -189,6 +194,7 @@ while IFS= read -r database; do
     "REVOKE CONNECT ON DATABASE \"${database}\" FROM PUBLIC;" >/dev/null
 done <<< "$database_list"
 
+preserved_running=false
 shopt -s nullglob
 for preview_dir in "$ROOT"/previews/*; do
   [[ -d "$preview_dir" ]] || continue
@@ -199,6 +205,12 @@ for preview_dir in "$ROOT"/previews/*; do
   }
   compose_file="$preview_dir/docker-compose.yml"
   [[ -f "$compose_file" ]] || continue
+  if [[ "${PREVIEW_PRESERVE_RUNNING_RESIDENTS:-false}" == true ]] \
+    && [[ -n "$($DOCKER ps --filter "label=com.docker.compose.project=yawp-$slug" --filter label=com.docker.compose.service=web --filter status=running -q)" ]]; then
+    preserved_running=true
+    echo "Preserving running resident $slug; role migration deferred until stopped"
+    continue
+  fi
   database="yawp_${slug//-/_}"
   role="${database}_app"
   role_file="$preview_dir/database-role"
@@ -238,28 +250,43 @@ for preview_dir in "$ROOT"/previews/*; do
   cp -p -- "$compose_file" "$active_backup"
   chmod 600 "$active_backup"
   ensure_database_role "$database" "$role" "$password"
-  rewrite_compose_database_url "$compose_file" "$database" "$role" "$password_file"
-  if [[ "$was_running" == "true" ]]; then
-    "${compose[@]}" up -d --force-recreate web >/dev/null
+  compose_database_url_changed="$(
+    rewrite_compose_database_url "$compose_file" "$database" "$role" "$password_file"
+  )"
+  if [[ "$compose_database_url_changed" == "true" ]]; then
+    if [[ "$was_running" == "true" ]]; then
+      "${compose[@]}" up -d --force-recreate web >/dev/null
+    else
+      "${compose[@]}" create --force-recreate web >/dev/null
+    fi
   else
-    "${compose[@]}" create --force-recreate web >/dev/null
+    echo "Resident $slug already uses isolated database role $role"
+    rm -f -- "$active_backup"
+    active_backup=''
   fi
   verify_role_database "$database" "$role" "$password" || {
     echo "Isolated database role could not connect to $database" >&2
     exit 1
   }
-  if [[ "$was_running" == "true" ]] && ! wait_for_web_health "$compose_file" "$project"; then
+  if [[ "$compose_database_url_changed" == "true" && "$was_running" == "true" ]] \
+    && ! wait_for_web_health "$compose_file" "$project"; then
     echo "Migrated running preview $slug did not become healthy" >&2
     exit 1
   fi
-  rm -f -- "$active_backup"
-  active_backup=''
+  if [[ -n "$active_backup" ]]; then
+    rm -f -- "$active_backup"
+    active_backup=''
+  fi
   echo "Migrated $slug to isolated database role $role"
 done
 
 # Existing Postgres volumes ignore POSTGRES_PASSWORD changes. Rotate the actual admin
 # role only after every resident compose file no longer contains the previous credential.
-$DOCKER exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 -U postgres -d postgres -c \
-  "ALTER ROLE postgres WITH PASSWORD '${ADMIN_PASSWORD}';" >/dev/null
-echo "Resident preview database roles isolated and Postgres administrator rotated"
+if [[ "$preserved_running" == true ]]; then
+  echo "Postgres administrator rotation deferred while preserving running residents"
+else
+  $DOCKER exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 -U postgres -d postgres -c \
+    "ALTER ROLE postgres WITH PASSWORD '${ADMIN_PASSWORD}';" >/dev/null
+  echo "Resident preview database roles isolated and Postgres administrator rotated"
+fi
 trap - EXIT TERM INT

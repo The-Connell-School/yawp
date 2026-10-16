@@ -1,0 +1,44 @@
+{
+  "comparisons": [
+    {
+      "state": "signon-04-google-cancel",
+      "width": 1280,
+      "design": "signon-04-google-cancel-1280-design.png",
+      "implementation": "signon-04-google-cancel-1280-impl.png",
+      "comparison": "signon-04-google-cancel-1280-side-by-side.png",
+      "source": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/shots/di-signon-backend/signon-04-google-cancel-1280-design.png",
+      "renderedChange": false,
+      "evidence": "Real local handlers, disposable database and provider mock; no live OAuth."
+    },
+    {
+      "state": "signon-05-google-account-proof",
+      "width": 1280,
+      "design": "signon-05-google-account-proof-1280-design.png",
+      "implementation": "signon-05-google-account-proof-1280-impl.png",
+      "comparison": "signon-05-google-account-proof-1280-side-by-side.png",
+      "source": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/shots/di-signon-backend/signon-05-google-account-proof-1280-design.png",
+      "renderedChange": false,
+      "evidence": "Real local handlers, disposable database and provider mock; no live OAuth."
+    },
+    {
+      "state": "signon-04-google-cancel",
+      "width": 390,
+      "design": "signon-04-google-cancel-390-design.png",
+      "implementation": "signon-04-google-cancel-390-impl.png",
+      "comparison": "signon-04-google-cancel-390-side-by-side.png",
+      "source": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/shots/di-signon-backend/signon-04-google-cancel-390-design.png",
+      "renderedChange": false,
+      "evidence": "Real local handlers, disposable database and provider mock; no live OAuth."
+    },
+    {
+      "state": "signon-05-google-account-proof",
+      "width": 390,
+      "design": "signon-05-google-account-proof-390-design.png",
+      "implementation": "signon-05-google-account-proof-390-impl.png",
+      "comparison": "signon-05-google-account-proof-390-side-by-side.png",
+      "source": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/shots/di-signon-backend/signon-05-google-account-proof-390-design.png",
+      "renderedChange": false,
+      "evidence": "Real local handlers, disposable database and provider mock; no live OAuth."
+    }
+  ]
+}

@@ -1,0 +1,239 @@
+{
+  "name": "Free tier first 100 teacher activation funnel",
+  "description": "Manual setup recipe for the existing YAWP PostHog project. Not a native PostHog dashboard export or API request. No dashboard has been installed or verified by this change.",
+  "filters": {
+    "environment": [
+      "demo",
+      "production",
+      "preview"
+    ],
+    "acquisition_channel": [
+      "event_link",
+      "organic"
+    ],
+    "preview_slug": "optional"
+  },
+  "events": [
+    {
+      "event": "free_tier.scan",
+      "step": "QR/event-link scan",
+      "distinct_id": "free-tier-token:{acquisition_token_id}:{dedupe_cookie_hash}",
+      "required_properties": [
+        "environment",
+        "product_area",
+        "acquisition_channel",
+        "acquisition_token_id"
+      ],
+      "optional_properties": [
+        "preview_slug",
+        "token_label",
+        "source_name",
+        "event_location",
+        "event_date",
+        "bypass_waitlist"
+      ]
+    },
+    {
+      "event": "free_tier.signup",
+      "step": "Signup/application",
+      "distinct_id": "free-tier-application:{application_id}",
+      "aliases": [
+        "previous scan -> new application before signup capture"
+      ],
+      "required_properties": [
+        "environment",
+        "product_area",
+        "application_id",
+        "application_status",
+        "acquisition_channel",
+        "created"
+      ],
+      "optional_properties": [
+        "preview_slug",
+        "acquisition_token_id",
+        "token_label",
+        "source_name",
+        "event_location",
+        "event_date",
+        "bypass_waitlist"
+      ]
+    },
+    {
+      "event": "free_tier.activation",
+      "step": "Teacher activation",
+      "distinct_id": "free-tier-organization:{organization_id}",
+      "aliases": [
+        "previous application -> new organization before activation capture"
+      ],
+      "required_properties": [
+        "environment",
+        "product_area",
+        "application_id",
+        "application_status",
+        "organization_id",
+        "activation_step",
+        "acquisition_channel",
+        "teacher_user_id"
+      ],
+      "optional_properties": [
+        "preview_slug",
+        "acquisition_token_id",
+        "token_label",
+        "source_name",
+        "event_location",
+        "event_date",
+        "bypass_waitlist"
+      ]
+    },
+    {
+      "event": "free_tier.student_join",
+      "step": "Student join",
+      "distinct_id": "free-tier-organization:{organization_id}",
+      "required_properties": [
+        "environment",
+        "product_area",
+        "student_user_id",
+        "membership_id",
+        "organization_id",
+        "class_id",
+        "acquisition_channel",
+        "join_method"
+      ],
+      "optional_properties": [
+        "preview_slug",
+        "application_id",
+        "acquisition_token_id",
+        "source_name",
+        "token_label"
+      ]
+    },
+    {
+      "event": "free_tier.first_essay",
+      "step": "First essay",
+      "distinct_id": "free-tier-organization:{organization_id}",
+      "required_properties": [
+        "environment",
+        "product_area",
+        "organization_id",
+        "submission_id",
+        "document_id",
+        "is_first_essay",
+        "submission_count",
+        "acquisition_channel"
+      ],
+      "optional_properties": [
+        "preview_slug",
+        "class_id",
+        "application_id",
+        "acquisition_token_id",
+        "token_label",
+        "source_name",
+        "event_location",
+        "event_date",
+        "bypass_waitlist"
+      ]
+    }
+  ],
+  "insights": [
+    {
+      "name": "All applicants to first essay (includes organic)",
+      "type": "funnel",
+      "steps": [
+        {
+          "event": "free_tier.signup"
+        },
+        {
+          "event": "free_tier.activation"
+        },
+        {
+          "event": "free_tier.student_join"
+        },
+        {
+          "event": "free_tier.first_essay"
+        }
+      ],
+      "order": "ordered",
+      "conversion_window_days": 30,
+      "breakdowns": [
+        "acquisition_channel",
+        "source_name",
+        "token_label"
+      ],
+      "breakdown_attribution": "entry step; one breakdown per saved view",
+      "environment_filter": "apply the selected environment to every step"
+    },
+    {
+      "name": "Event-link / QR scan to first essay",
+      "type": "funnel",
+      "steps": [
+        {
+          "event": "free_tier.scan"
+        },
+        {
+          "event": "free_tier.signup"
+        },
+        {
+          "event": "free_tier.activation"
+        },
+        {
+          "event": "free_tier.student_join"
+        },
+        {
+          "event": "free_tier.first_essay"
+        }
+      ],
+      "order": "ordered",
+      "conversion_window_days": 30,
+      "entry_filter": {
+        "acquisition_channel": "event_link"
+      },
+      "environment_filter": "apply the selected environment to every step",
+      "breakdowns": [
+        "source_name",
+        "token_label"
+      ]
+    },
+    {
+      "name": "First 100 unique activated teachers",
+      "type": "sql",
+      "query": "SELECT uniqExact(toString(properties.teacher_user_id)) AS activated_teachers, 100 AS target, greatest(0, 100 - activated_teachers) AS remaining FROM events WHERE event = 'free_tier.activation' AND properties.product_area = 'free_tier' AND properties.environment = 'production' AND properties.activation_step = 'provisioned' AND properties.teacher_user_id IS NOT NULL AND toString(properties.teacher_user_id) != ''",
+      "count_unit": "teacher_user_id",
+      "target": 100,
+      "environment": "production",
+      "date_range": "all time since instrumentation; operator may add launch-window timestamp filter"
+    },
+    {
+      "name": "Acquisition conversion counts",
+      "type": "trends",
+      "events": [
+        "free_tier.signup",
+        "free_tier.activation",
+        "free_tier.first_essay"
+      ],
+      "aggregation": "unique users",
+      "breakdowns": [
+        "acquisition_channel",
+        "environment"
+      ],
+      "note": "Use separate saved views for each breakdown; never sum daily uniques for the first-100 target."
+    },
+    {
+      "name": "Student joins and first essays",
+      "type": "trends",
+      "events": [
+        "free_tier.student_join",
+        "free_tier.first_essay"
+      ],
+      "aggregation": "total count",
+      "breakdowns": [
+        "environment"
+      ],
+      "note": "student_join counts successful student enrollments; first_essay counts organization conversions"
+    }
+  ],
+  "definition_version": 1,
+  "format": "yawp-operator-recipe",
+  "installation_status": "repository_definition_only",
+  "default_environment": "production",
+  "conversion_window_days": 30
+}

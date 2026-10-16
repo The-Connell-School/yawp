@@ -1,4 +1,8 @@
 import {
+  auditMovedToInternal,
+  internalAuditDestination,
+} from '~/utils/admin-audit-migration.server';
+import {
   data as dataResponse,
   Form,
   useLoaderData,
@@ -117,13 +121,16 @@ function metadataFilter(
   key: string,
   value: string | null
 ): Prisma.LlmLogWhereInput | null {
-  return value
-    ? { metadata: { path: [key], equals: value } }
-    : null;
+  return value ? { metadata: { path: [key], equals: value } } : null;
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
+  if (auditMovedToInternal())
+    return dataResponse(
+      { moved: true as const, destination: internalAuditDestination() },
+      { headers: { 'cache-control': 'no-store' } }
+    );
   const url = new URL(request.url);
 
   // Detail (metadata) request -- called lazily from expanded items
@@ -191,7 +198,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
         OR: [
           { userId: userOrEmail },
           { membershipId: userOrEmail },
-          ...(matchedUserIds.length ? [{ userId: { in: matchedUserIds } }] : []),
+          ...(matchedUserIds.length
+            ? [{ userId: { in: matchedUserIds } }]
+            : []),
           ...(matchedMembershipIds.length
             ? [{ membershipId: { in: matchedMembershipIds } }]
             : []),
@@ -515,9 +524,7 @@ function AuditItem({ item }: { item: TimelineEntry }) {
           {item.editorSessionId ? (
             <DetailRow label="Editor session" value={item.editorSessionId} />
           ) : null}
-          {item.userId ? (
-            <DetailRow label="User" value={item.userId} />
-          ) : null}
+          {item.userId ? <DetailRow label="User" value={item.userId} /> : null}
           {item.membershipId ? (
             <DetailRow label="Membership" value={item.membershipId} />
           ) : null}
@@ -531,11 +538,12 @@ function AuditItem({ item }: { item: TimelineEntry }) {
             <DetailRow label="Base revision" value={item.baseRevision} />
           ) : null}
           {item.resultingRevision !== null ? (
-            <DetailRow label="Resulting revision" value={item.resultingRevision} />
+            <DetailRow
+              label="Resulting revision"
+              value={item.resultingRevision}
+            />
           ) : null}
-          {item.title ? (
-            <DetailRow label="Title" value={item.title} />
-          ) : null}
+          {item.title ? <DetailRow label="Title" value={item.title} /> : null}
           {item.failureReason ? (
             <DetailRow label="Failure reason" value={item.failureReason} />
           ) : null}
@@ -584,7 +592,7 @@ function AiLogItem({ item }: { item: AiLogEntry }) {
         </span>
 
         <span className="font-medium text-sm shrink-0 min-w-0 truncate max-w-[240px]">
-          {label || 'AI call'}
+          {label || 'Model call'}
         </span>
 
         <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
@@ -666,8 +674,28 @@ function AiLogItem({ item }: { item: AiLogEntry }) {
   );
 }
 
-export default function AdminAuditRoute() {
-  const data = useLoaderData<typeof loader>();
+export default function AuditRoute() {
+  const loaded = useLoaderData<typeof loader>();
+  if ('moved' in loaded)
+    return (
+      <div className="p-6 space-y-3" data-testid="audit-moved">
+        <h2 className="text-xl font-semibold">Audit moved to Yawp Internal</h2>
+        <p>
+          Document writes and model context logs are read-only per environment in
+          Internal.
+        </p>
+        <a className="underline" href={loaded.destination}>
+          Open Audit in Internal
+        </a>
+      </div>
+    );
+  return <LegacyAuditRoute />;
+}
+function LegacyAuditRoute() {
+  const data = useLoaderData<typeof loader>() as Exclude<
+    Awaited<ReturnType<typeof loader>>['data'],
+    { moved: true }
+  >;
   if (!('timeline' in data)) {
     return null;
   }
@@ -738,13 +766,13 @@ export default function AdminAuditRoute() {
           <Input
             name="feature"
             defaultValue={filters.feature}
-            placeholder="AI feature"
+            placeholder="Feature"
             className="h-8 w-32 text-sm"
           />
           <Input
             name="kind"
             defaultValue={filters.kind}
-            placeholder="AI kind"
+            placeholder="Kind"
             className="h-8 w-44 text-sm"
           />
           <Input
@@ -823,7 +851,7 @@ export default function AdminAuditRoute() {
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <CardTitle>AI Context Logs</CardTitle>
+            <CardTitle>Model Context Logs</CardTitle>
             {aiLogs.length > 0 ? (
               <span className="text-xs text-muted-foreground">
                 {aiLogs.length}
@@ -834,7 +862,7 @@ export default function AdminAuditRoute() {
         <CardContent className="p-0">
           {aiLogs.length === 0 ? (
             <p className="px-4 pb-4 text-sm text-muted-foreground">
-              No AI logs found.
+              No model logs found.
             </p>
           ) : (
             <div className="divide-y divide-border">

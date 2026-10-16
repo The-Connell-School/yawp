@@ -1,7 +1,13 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
+const capture = mock();
+mock.module('~/services/posthog.server', () => ({
+  posthog: { capture, alias: mock() },
+}));
 const prisma = {
-  submission: { findFirst: mock(), create: mock() },
+  freeTierApplication: { findFirst: mock() },
+  $executeRaw: mock(),
+  submission: { findFirst: mock(), create: mock(), count: mock() },
   document: { update: mock() },
   user: { findUnique: mock() },
   submissionActivity: { create: mock() },
@@ -40,6 +46,10 @@ afterAll(() => {
 
 describe('submitGroupDraft', () => {
   beforeEach(() => {
+    capture.mockReset();
+    prisma.submission.count.mockReset().mockResolvedValue(1);
+    prisma.$executeRaw.mockReset().mockResolvedValue(1);
+    prisma.freeTierApplication.findFirst.mockReset().mockResolvedValue(null);
     prisma.submission.findFirst.mockReset().mockResolvedValue(null);
     prisma.submission.create
       .mockReset()
@@ -57,6 +67,7 @@ describe('submitGroupDraft', () => {
     prisma.documentWriteJournal.update.mockReset().mockResolvedValue({});
     prisma.$transaction.mockReset().mockImplementation(async (fn: any) =>
       fn({
+        $executeRaw: prisma.$executeRaw,
         submission: prisma.submission,
         document: prisma.document,
         user: prisma.user,
@@ -198,5 +209,32 @@ describe('submitGroupDraft', () => {
 
     await expect(submit()).rejects.toThrow(GroupSubmitError);
     expect(prisma.submission.create).not.toHaveBeenCalled();
+  });
+  test('first free classroom group essay emits once; group replay stays a no-op', async () => {
+    await submit({ organizationPlan: 'FREE_CLASSROOM' });
+    expect(capture).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'free_tier.first_essay',
+        distinctId: 'free-tier-organization:org-1',
+      })
+    );
+    expect(prisma.$executeRaw.mock.calls.length).toBeGreaterThanOrEqual(3);
+    capture.mockClear();
+    prisma.submission.findFirst.mockResolvedValue({ id: 'sub-1' });
+    await submit({ organizationPlan: 'FREE_CLASSROOM' });
+    expect(capture).not.toHaveBeenCalled();
+  });
+  test('paid group essays do not perform analytics count or capture', async () => {
+    await submit();
+    expect(prisma.submission.count).not.toHaveBeenCalled();
+    expect(capture).not.toHaveBeenCalled();
+  });
+  test('optional analytics count failure leaves group submission accepted', async () => {
+    prisma.submission.count.mockRejectedValue(new Error('optional count'));
+    expect(await submit({ organizationPlan: 'FREE_CLASSROOM' })).toEqual({
+      submissionId: 'sub-1',
+      created: true,
+    });
+    expect(capture).not.toHaveBeenCalled();
   });
 });

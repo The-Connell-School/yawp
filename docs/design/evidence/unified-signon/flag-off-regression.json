@@ -1,0 +1,32 @@
+[
+  {
+    "page": "login",
+    "width": 1280,
+    "differentPixels": "0 (0)"
+  },
+  {
+    "page": "login",
+    "width": 390,
+    "differentPixels": "0 (0)"
+  },
+  {
+    "page": "signup",
+    "width": 1280,
+    "differentPixels": "0 (0)"
+  },
+  {
+    "page": "signup",
+    "width": 390,
+    "differentPixels": "0 (0)"
+  },
+  {
+    "page": "class-link",
+    "width": 1280,
+    "differentPixels": "0 (0)"
+  },
+  {
+    "page": "class-link",
+    "width": 390,
+    "differentPixels": "0 (0)"
+  }
+]

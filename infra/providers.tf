@@ -9,9 +9,13 @@ terraform {
       source  = "hashicorp/random"
       version = ">= 3.0"
     }
+    archive = {
+      source  = "hashicorp/archive"
+      version = ">= 2.7"
+    }
   }
 }
 
 provider "aws" {
-  region  = var.aws_region
+  region = var.aws_region
 }
