@@ -30,4 +30,14 @@ Evidence is lane-local at `lanes/di-freetier-inapp/shots/fto-create-class-step/`
 
 Read v2 `DIFF.md`, artboard 07's desktop DOM/text, and artboard 08's state DOM/text. Board 07 is the existing approval/form reference: 320 px card, 24 px padding, 18 px heading, 40 px controls, and the sign-in shell's colors and spacing. Create-class and the revised administrator timeline are new Brian-call states with no exact artboard. Their comparison images explicitly label board 07 as a form-system reference, rather than claiming an exact layout/copy match. Native desktop and mobile implementation screenshots are preserved alongside those references.
 
-The driver must obtain green required CI and independent Ship Review approval for the final head before merge. Merge remains held until after the Friday intern session. The driver owns the production RDS snapshot before applying this additive migration. No remote environment or flag is changed by this work.
+The driver must obtain green required CI and independent Ship Review approval for the final head before merge. The manager released the Friday intern-session merge hold on 2026-10-16 at 15:12 CDT; review, CI, and snapshot gates remain. The driver owns the production RDS snapshot before applying this additive migration. No remote environment or flag is changed by this work.
+
+## Rebase verification
+
+Rebased the existing PR onto `3574fd55` from current origin/main. Resolved only the
+shared CLI profile/help conflict, retaining both `signon-classcode` and the two
+class-step profiles. The runner isolation correction is unchanged. Local evidence
+is refreshed under `shots/fto-create-class-step/rebase/`, including a paid-membership
+control with the rollout flag locally enabled: legacy rendering remains, forged
+preparation leaves application state and class count unchanged. This extends the
+existing dedicated browser test without adding it to standard discovery.

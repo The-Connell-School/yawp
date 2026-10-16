@@ -312,9 +312,10 @@ test('missing and unsupported grades require an explicit choice', async ({
     ]);
   }
 });
-test('flag off preserves legacy onboarding; existing requests stay pending', async ({
+test('flag off and paid memberships preserve legacy onboarding; existing requests stay pending', async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 1280, height: 1000 });
   const { user } = await fixture();
   await flag(false);
   await login(page, user.email!);
@@ -324,6 +325,38 @@ test('flag off preserves legacy onboarding; existing requests stay pending', asy
   await expect(page.getByLabel('Class name')).toHaveCount(0);
   await capture(page, '1280-legacy');
   await flag(true);
+  const paid = await fixture();
+  const org = await prisma.organization.create({
+    data: { name: 'Local paid membership control', plan: 'CLASSROOM_LICENSE' },
+  });
+  try {
+    await prisma.orgMembership.create({
+      data: { userId: paid.user.id, organizationId: org.id, role: 'TEACHER' },
+    });
+    await login(page, paid.user.email!);
+    await expect(
+      page.getByRole('heading', { name: 'Who can approve YAWP?' })
+    ).toBeVisible();
+    await expect(page.getByLabel('Class name')).toHaveCount(0);
+    await capture(page, '1280-non-free');
+    await page.request.post('/app/free-tier/onboarding', {
+      form: { intent: 'prepare-class', className: 'Blocked class', grade: '11' },
+    });
+    const unchanged = await prisma.freeTierApplication.findUniqueOrThrow({
+      where: { id: paid.app.id },
+    });
+    expect(unchanged.starterClassName).toBeNull();
+    expect(unchanged.starterClassGrade).toBeNull();
+    expect(unchanged.status).toBe('ACCOUNT_CREATED');
+    expect(
+      await prisma.class.count({
+        where: { teachers: { some: { userId: paid.user.id } } },
+      })
+    ).toBe(0);
+  } finally {
+    await prisma.orgMembership.deleteMany({ where: { organizationId: org.id } });
+    await prisma.organization.delete({ where: { id: org.id } });
+  }
   const inflight = await fixture('10', 'SENT');
   await login(page, inflight.user.email!);
   await expect(page).toHaveURL(/free-tier\/pending/);
