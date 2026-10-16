@@ -67,6 +67,30 @@ export async function loader({ request }: LoaderFunctionArgs) {
     );
   }
   const klass = await findFreeTierClassByJoinToken(token);
+  if (klass) {
+    const { isUnifiedSignOnEnabled } =
+      await import('~/domain/unified-signon/gate.server');
+    if (await isUnifiedSignOnEnabled()) {
+      const { createFlow, saveNewFlow, flowCookie } =
+        await import('~/domain/unified-signon/flow.server');
+      const { chooseClass } =
+        await import('~/domain/unified-signon/classes.server');
+      const { prisma } = await import('~/utils/db.server');
+      const flow = await createFlow(request, '/app');
+      flow.data.classCode = klass.code;
+      flow.data.classCandidates = [klass.id];
+      await prisma.$transaction((tx) => chooseClass(tx, flow, klass.id));
+      await saveNewFlow(flow);
+      throw redirect('/auth/login?continue=1', {
+        headers: {
+          'set-cookie': await flowCookie.serialize({
+            browser: flow.browser,
+            token: flow.token,
+          }),
+        },
+      });
+    }
+  }
   return { joinToken: token, klass };
 }
 
