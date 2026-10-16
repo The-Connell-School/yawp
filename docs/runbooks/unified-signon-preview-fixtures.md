@@ -53,14 +53,68 @@ Do not paste access codes, cookies or captured sign-in codes into evidence.
 An ordinary default-seat code cannot reach accounts in these separate fixture
 organizations. No master credential is created by this change.
 
-The existing preview seat policy filters active memberships to the selected
-organization, with at most one membership per user/organization. Therefore **row
-21's multi-membership picker cannot be reached in hosted seed mode**, even though
-the data exists and its normal-runtime handler is verified locally. **Row 22's
-truly inactive/orphan account cannot pass legacy password sign-in in this mode**.
-These remain hosted blockers requiring a separately reviewed preview-policy
-change, never an auth bypass. Ungated local evidence proves the fixture/data
-branch only. Tests also prove the deployed policy restrictions remain in force.
+The ordinary preview seat policy filters active memberships to the selected
+organization. Its deployed-policy regression still proves row 21 cannot show the
+multi-membership picker and row 22 inactive/orphan accounts cannot authenticate
+in that ordinary context. Do not change memberships or activation to evade these
+cases. The separate QA context below is the supported, disposable-fixture-only
+policy path. Historical hosted rows remain **blocked until separately executed on
+#565**; local policy tests and screenshots are not hosted results.
+
+### Explicit row 21/22 QA context
+
+Prerequisites: the existing generic master access code and signing configuration,
+`PREVIEW_ACCESS_GATE=on`, seed mode, `unified-sign-on` enabled for everyone in this
+isolated PR database only, and the merged preview fixtures. No new secret,
+environment toggle, deployment or migration is required. Ordinary organization
+codes (including the default seat code) cannot issue this context. This runbook
+does not authorize deployment, hosted requests, #565 refresh, or flag changes.
+
+1. Open `/auth/preview-access` and enter the existing **master** access code.
+   The short-lived verified master organization picker must be current. An old
+   selected master seat alone is insufficient; re-enter the master code.
+2. In **Sign-on QA account**, choose **Multiple memberships**, **Inactive
+   student**, **No memberships**, or **Student without a class**. Click **Open
+   sign-on QA**. This clears the previous application login and membership choice,
+   selects the fixture master seat, and opens `/auth/login`. It creates no session.
+3. Enter the chosen fixture's email from rows 21/22 and its normal fixture
+   password. Real resolver, password verification, rate limiting, session creation,
+   continuation, membership ownership and recovery handlers remain authoritative.
+4. `multiple` offers only its two owned active memberships (student in `school`,
+   teacher in `second`); the inactive `free` membership is excluded. Choosing either
+   continues through the existing handler. `inactive` and `orphan` show the real
+   student inactive screen and its class-code recovery entry. `unassigned` keeps
+   its existing active-membership destination; context does not invent a new state.
+5. Repeat step 1 for another account or after ten minutes. Wrong passwords and
+   unrelated accounts receive no QA privilege. Do not screenshot password inputs,
+   cookies, master codes or one-time codes.
+
+The HTTP-only, SameSite=Lax signed context expires server-side after ten minutes.
+It is bound to the exact signed master access cookie, selected fixture account and
+PR database. Runtime validation reuses the seed's exact target restrictions and
+checks actual `current_database()` / `current_user`. A mismatched role, URL query,
+schema override, non-preview database, wrong PR slug, or nonlocal/non-preview DB
+host fails closed. The four allowlisted user IDs must retain their exact `.invalid`
+emails, no handle/admin privilege, and memberships only in the four fixture
+organizations. New non-fixture memberships or changed identities revoke eligibility.
+
+The access gate remains in front of every normal route. The session guard permits
+only that authenticated fixture user, with no selected membership while showing
+picker/recovery, or a selected active membership actually owned by that user. It
+never trusts a posted user ID or membership list. Tampered/expired/future/missing
+context, missing/revoked master access, and ordinary seat codes restore ordinary
+seat restrictions. Demo, production, sanitized mode and flag-OFF paths receive no
+exception. Existing ordinary seat/free-tier behavior is retained. No bypass header,
+provider identity or fabricated session is supported.
+
+Rollback: use **Use a different access code** / gate sign-out to clear the context,
+master access and application login, then enter an ordinary seat. All access/code
+switches clear the context. Expiry removes only the QA privilege: a session still
+valid under the ordinary selected-seat policy can continue normally; out-of-seat
+and recovery sessions fail the normal guard. Turning the sign-on flag OFF through
+the existing separately authorized rollout procedure also disables issuance and
+validation. Reverting this PR makes the cookie inert. No secret rotation, fixture
+reset, account activation or membership edit is needed.
 
 UA codes are environment configuration, not a database model. Organization
 `preview-signon-qa-partner`, student `partner-student` and invitation `partner-invite`
@@ -106,8 +160,8 @@ with existing master access when running the hosted seed-mode target.
 | 18 | `password`, class `QA-EMAIL-101` | code → existing student sign-in → joined/already member | school organization; real email class relation already present |
 | 19 | `@qa-handle`, `forced` | handle password → class continuation; forced email password → `/auth/required-password-change` | free / school organization respectively; password change needs reset |
 | 20 | `qa-handle` free class; unknown Google email | provider account choice; handle-only class keeps existing boundaries | human Google; free organization; email-less handle cannot be Google email-linked |
-| 21 | `multiple`, active school STUDENT + second TEACHER, inactive free membership | normal runtime password → membership picker; choose only owned active ID | **hosted seed seat policy blocker** above; local branch verified |
-| 22 | `inactive` (inactive student), `unassigned` (active student with no class), `orphan` (no membership) | normal runtime inactive/recovery branch; class recovery where handler permits | **hosted inactive/orphan sign-in blocker**; unassigned still has one active organization membership |
+| 21 | `multiple`, active school STUDENT + second TEACHER, inactive free membership | normal runtime password → membership picker; choose only owned active ID | explicit `multiple` QA context above; hosted execution still pending |
+| 22 | `inactive` (inactive student), `unassigned` (active student with no class), `orphan` (no membership) | normal runtime inactive/recovery branch; class recovery where handler permits | explicit per-account QA context above; hosted execution still pending; unassigned retains one active organization membership |
 | 23 | absent `new-student`, `QA-EMAIL-101` | account choice → student → code → email proof → name/password | school organization; private OTP; fresh email each completed signup |
 | 24 | absent operator Google email + `QA-EMAIL-101` | verified provider identity → name-only signup → class | human Google; no fabricated provider identities seeded |
 | 25 | `expired-invite`, `expired-invite-mobile` | activation reveals no expiry → code proof → expired variant; create-account rejected | private OTP; separate mobile recipient avoids cooldown; seed expiry fixed in past; code expiry is generated/waited, not preseeded |
@@ -172,7 +226,10 @@ CI=1 ./bin/project test --profile typecheck --json
 ```
 
 The profile includes guard/deployment tests, flag-OFF dispatch regression tests,
-and opt-in real-database tests. CI creates/destroys its own database/role and runs
+and opt-in real-database fixture and seat-policy tests. The latter enter the real
+access action with the deployed gate/seed settings, check the request-boundary
+middleware and database-backed handlers, and cover the ordinary restrictions and
+positive/negative QA contexts. CI creates/destroys its own database/role and runs
 the same profile. Browser tests use `playwright.preview-fixtures.config.ts`,
 `--workers=1`, desktop 1280 and mobile 390. Start/stop the server with project CLI
 in one process lifecycle; use `SIGNON_FIXTURE_PHASE=before` against the unseeded
@@ -186,3 +243,16 @@ images compare representative states; a local membership picker image is
 explicitly ungated evidence, not proof of hosted seat compatibility. Stop all
 owned servers, Chromium, runners and the disposable database container; delete
 private captures/caches/env/test output before handoff.
+
+For gated row 21/22 browser evidence, use
+`playwright.preview-seat-policy.config.ts` with one worker, local port 5397, and
+`SIGNON_PREVIEW_FIXTURE_TEST=1`. `SIGNON_POLICY_PHASE=before` uses ordinary
+master-selected fixture access and reproduces the restrictions; `after` uses the
+explicit account context. `off-before` / `off-after` capture the unchanged legacy
+login with the local flag OFF. Enable/disable only that disposable local DB flag
+between runs; do not run handler tests concurrently with browser flag changes.
+Start the server and run Playwright in one trapped CLI lifecycle, then stop it.
+Fresh evidence is `shots/di-signon-preview-seat-policy/` under this lane. All images
+and before/after labels are **local**, including the ordinary-policy baseline.
+
+[Local policy evidence and comparisons](../design/evidence/unified-signon-preview-seat-policy/README.md).
