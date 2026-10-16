@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e/tests',
-  testMatch: /auth\.unified-(google-)?backend\.spec\.ts/,
+  testMatch: /auth\.unified-(google-|origin-)?backend\.spec\.ts/,
   workers: 1,
   fullyParallel: false,
   retries: 0,
@@ -10,6 +10,7 @@ export default defineConfig({
   outputDir: process.env.TMPDIR + '/signon-playwright-results',
   use: {
     baseURL: 'http://localhost:5396',
+    ignoreHTTPSErrors: process.env.SIGNON_ORIGIN_LOCAL === '1',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     launchOptions: { executablePath: process.env.PW_EXECUTABLE_PATH },

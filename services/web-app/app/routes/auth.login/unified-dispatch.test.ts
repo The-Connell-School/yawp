@@ -1,4 +1,4 @@
-import { beforeEach, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
 
 const requireAnonymous = mock(async (_request: Request) => {});
 const loginAction = mock(async (_args: unknown) => new Response('legacy'));
@@ -29,6 +29,12 @@ mock.module('~/domain/unified-signon/backend.server', () => ({
 const { loader, action } = await import('./route');
 
 beforeEach(() => {
+  unifiedAction.mockReset();
+  unifiedAction.mockImplementation(async () =>
+    Response.json({
+      state: { screen: 'account-type', flowToken: 'server-flow' },
+    })
+  );
   requireAnonymous.mockClear();
   loginAction.mockClear();
   findUnique.mockReset();
@@ -169,4 +175,168 @@ test('enabled password submission delegates unchanged to existing action', async
     expect.objectContaining({ request })
   );
   expect(request.bodyUsed).toBe(false);
+});
+
+// The fast preview runtime is Vite over HTTP behind the TLS ingress. Its
+// node-fetch-server adapter uses the socket protocol and Host (not XFP).
+const deploymentEnv = {
+  YAWP_ENVIRONMENT: process.env.YAWP_ENVIRONMENT,
+  PRIMARY_APP_URL: process.env.PRIMARY_APP_URL,
+  GOOGLE_OAUTH_CLIENT_ID: process.env.GOOGLE_OAUTH_CLIENT_ID,
+  GOOGLE_OAUTH_CLIENT_SECRET: process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+};
+afterEach(() => {
+  for (const [name, value] of Object.entries(deploymentEnv)) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
+});
+const publicOrigin = 'https://pr-565.preview.yawp.school';
+function proxyRequest(
+  origin: string | null = publicOrigin,
+  headers = {},
+  host = 'pr-565.preview.yawp.school',
+  intent = 'resolve'
+) {
+  return new Request(`http://${host}/auth/login`, {
+    method: 'POST',
+    headers: {
+      host,
+      'x-forwarded-host': host,
+      'x-forwarded-proto': 'https',
+      'x-forwarded-port': '443',
+      ...(origin === null ? {} : { Origin: origin }),
+      ...headers,
+    },
+    body: new URLSearchParams({ intent, identifier: 'DEV-CLASS-101' }),
+  });
+}
+function enablePreview() {
+  findUnique.mockResolvedValue({ value: 'true' });
+  process.env.YAWP_ENVIRONMENT = 'preview';
+  process.env.PRIMARY_APP_URL = publicOrigin;
+}
+for (const [intent, identifier] of [
+  ['resolve', 'existing@example.test'],
+  ['resolve', 'DEV-CLASS-101'],
+  ['class-code', 'DEV-CLASS-101'],
+  ['google', ''],
+])
+  test(`HTTPS preview ${intent} ${identifier} reaches the backend`, async () => {
+    enablePreview();
+    const request = proxyRequest(publicOrigin, {}, undefined, intent);
+    const form = new URLSearchParams({ intent, identifier });
+    const submitted = new Request(request, { body: form });
+    const response = await action(args(submitted));
+    expect((response as Response).status).toBe(200);
+    expect(unifiedAction).toHaveBeenCalledTimes(1);
+  });
+
+test('preview Google start reaches the real unavailable-provider outcome without credentials', async () => {
+  enablePreview();
+  delete process.env.GOOGLE_OAUTH_CLIENT_ID;
+  delete process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+  const { beginGoogle } = await import('~/domain/unified-signon/google.server');
+  unifiedAction.mockImplementationOnce(async (request) => {
+    beginGoogle({ data: {} } as any, request);
+    throw new Error('Expected unavailable Google');
+  });
+  const response = (await action(
+    args(proxyRequest(publicOrigin, {}, undefined, 'google'))
+  )) as Response;
+  expect(response.status).toBe(503);
+  expect(await response.json()).toEqual({
+    error: 'Google sign-in is unavailable. Use your email or handle.',
+  });
+});
+
+for (const origin of [
+  'https://evil.example',
+  'null',
+  'garbage',
+  `${publicOrigin}/path`,
+  `${publicOrigin}, https://evil.example`,
+  'https://pr-565.preview.yawp.school.evil.test',
+]) {
+  test(`preview rejects foreign or malformed Origin: ${origin}`, async () => {
+    enablePreview();
+    const response = (await action(args(proxyRequest(origin)))) as Response;
+    expect(response.status).toBe(403);
+    expect(unifiedAction).not.toHaveBeenCalled();
+  });
+}
+for (const headers of [
+  { 'x-forwarded-host': 'evil.example' },
+  { 'x-forwarded-host': 'evil.example, pr-565.preview.yawp.school' },
+  { 'x-forwarded-proto': 'https, http' },
+  { 'x-forwarded-proto': 'javascript' },
+  {
+    'x-forwarded-proto': 'https',
+    'x-forwarded-host': 'evil.example',
+    Forwarded: 'host=evil.example;proto=https',
+  },
+])
+  test(`forwarded headers cannot authorize an attacker: ${JSON.stringify(headers)}`, async () => {
+    enablePreview();
+    const response = (await action(
+      args(proxyRequest('https://evil.example', headers))
+    )) as Response;
+    expect(response.status).toBe(403);
+    expect(unifiedAction).not.toHaveBeenCalled();
+  });
+
+test('configured origin cannot authorize another request host', async () => {
+  enablePreview();
+  expect(
+    (
+      (await action(
+        args(proxyRequest(publicOrigin, {}, 'pr-566.preview.yawp.school'))
+      )) as Response
+    ).status
+  ).toBe(403);
+});
+for (const environment of ['demo', 'production', 'development', '']) {
+  test(`no proxy correction outside preview: ${environment}`, async () => {
+    enablePreview();
+    process.env.YAWP_ENVIRONMENT = environment;
+    expect((await action(args(proxyRequest()))) as Response).toMatchObject({
+      status: 403,
+    });
+  });
+}
+for (const configured of [
+  undefined,
+  'broken',
+  'https://evil.example',
+  'http://pr-565.preview.yawp.school',
+  'https://user:password@pr-565.preview.yawp.school',
+]) {
+  test(`invalid or unrelated deployment URL does not widen origins: ${configured}`, async () => {
+    enablePreview();
+    if (configured === undefined) delete process.env.PRIMARY_APP_URL;
+    else process.env.PRIMARY_APP_URL = configured;
+    expect((await action(args(proxyRequest()))) as Response).toMatchObject({
+      status: 403,
+    });
+  });
+}
+
+test('direct same-origin and missing-Origin behavior remain supported', async () => {
+  enablePreview();
+  for (const request of [
+    proxyRequest(null),
+    new Request(`${publicOrigin}/auth/login`, {
+      method: 'POST',
+      headers: { Origin: publicOrigin },
+      body: new URLSearchParams({
+        intent: 'resolve',
+        identifier: 'local@example.test',
+      }),
+    }),
+    proxyRequest('http://pr-565.preview.yawp.school'),
+  ]) {
+    expect((await action(args(request))) as Response).toMatchObject({
+      status: 200,
+    });
+  }
 });
