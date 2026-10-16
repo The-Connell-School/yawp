@@ -10,6 +10,7 @@
 import { Lock } from 'lucide-react';
 import { useLoaderData, type LoaderFunctionArgs } from 'react-router';
 import { ApHistoryGuide } from '~/components/how-it-works/ap-history-guide';
+import { DailyPagesGuide } from '~/components/how-it-works/daily-pages-guide';
 import { ThesisEssayGuide } from '~/components/how-it-works/thesis-essay-guide';
 import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
 import {
@@ -60,9 +61,7 @@ export default function AssignmentTypePreviewRoute() {
     startTo: '/app',
     startLabel: 'Back to dashboard',
   };
-  return slug === 'ap-history-essay' ? (
-    <ApHistoryGuide {...frame} />
-  ) : (
-    <ThesisEssayGuide {...frame} />
-  );
+  if (slug === 'ap-history-essay') return <ApHistoryGuide {...frame} />;
+  if (slug === 'daily-pages') return <DailyPagesGuide {...frame} />;
+  return <ThesisEssayGuide {...frame} />;
 }

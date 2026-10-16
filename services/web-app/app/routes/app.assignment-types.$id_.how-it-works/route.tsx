@@ -1,13 +1,16 @@
 /**
- * "See how it works" for an assignment type, opened from the type's page. Two
- * types have a guide: The Thesis-Driven Essay and the AP History Essay. The
+ * "See how it works" for an assignment type, opened from the type's page.
+ * Three types have a guide: The Thesis-Driven Essay, the AP History Essay,
+ * and Daily Pages. The
  * guides themselves are in components/how-it-works; free classroom teachers
  * see the same guides as teasers at /app/assignment-type-previews/<slug>.
  */
 import { redirect, useLoaderData, type LoaderFunctionArgs } from 'react-router';
 import { ApHistoryGuide } from '~/components/how-it-works/ap-history-guide';
+import { DailyPagesGuide } from '~/components/how-it-works/daily-pages-guide';
 import { ThesisEssayGuide } from '~/components/how-it-works/thesis-essay-guide';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import { DAILY_PAGES_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/daily-pages-rubric';
 import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
 import { isAssignmentTypeAvailableForAnyScope } from '~/utils/assignment-type-access.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
@@ -16,8 +19,13 @@ import { prisma } from '~/utils/db.server';
 const THESIS_COURSE_TITLE = 'The Thesis-Driven Essay';
 
 /** Which guide an assignment type has, or null for types without one. */
-function guideFor(type: { title: string; systemKey: string | null }) {
+function guideFor(type: {
+  title: string;
+  systemKey: string | null;
+  kind: string | null;
+}) {
   if (type.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) return 'ap-history';
+  if (type.kind === DAILY_PAGES_ASSIGNMENT_TYPE_KIND) return 'daily-pages';
   if (isThesisDrivenEssayTitle(type.title)) return 'thesis-essay';
   return null;
 }
@@ -57,7 +65,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const assignmentType = await prisma.assignmentType.findFirst({
     where: { id: assignmentTypeId, archivedAt: null },
-    select: { id: true, title: true, systemKey: true },
+    select: { id: true, title: true, systemKey: true, kind: true },
   });
   const guide = assignmentType ? guideFor(assignmentType) : null;
   if (!assignmentType || !guide) throw redirect(pagePath);
@@ -88,6 +96,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 export default function AssignmentTypeHowItWorksRoute() {
   const { pagePath, guide, coursePath } = useLoaderData<typeof loader>();
+  if (guide === 'daily-pages') {
+    return (
+      <DailyPagesGuide
+        backTo={pagePath}
+        backLabel="Back to Daily Pages"
+        startTo={pagePath}
+        startLabel="Create an assignment"
+      />
+    );
+  }
   if (guide === 'ap-history') {
     return (
       <ApHistoryGuide
