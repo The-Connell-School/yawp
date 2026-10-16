@@ -4,6 +4,8 @@ FAILURES.md slug: `di-signon-fix-email-handle-notice`.
 
 Unknown local email → student → real `qa-handle` free class → new account now shows exactly **We won't save your email. This class uses a handle and password.** after the class card and before Display name. A presentation boolean is retained for client history and derived from the existing server flow for server redisplay. It never supplies identity proof or changes registration input/persistence.
 
+Clean-runner continuation: [capture fixture fix, fresh browser evidence and commands](ci-clean-capture/README.md).
+
 ## Verification
 
 - TDD: both real browser flows failed on the missing notice before implementation; handler regression failed on missing `emailOrigin` during capacity redisplay. Logs in `checks/red-*`.
