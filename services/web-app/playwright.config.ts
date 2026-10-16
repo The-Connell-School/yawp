@@ -7,6 +7,7 @@ export default defineConfig({
   testDir: './e2e',
   // These fixtures use their own local server/configuration and database lifecycle.
   testIgnore: [
+    '**/free-tier.welcome-components.spec.ts',
     '**/auth.unified-signon.spec.ts',
     '**/auth.unified-backend.spec.ts',
     '**/auth.unified-google-backend.spec.ts',

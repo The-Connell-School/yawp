@@ -175,7 +175,7 @@ export function capabilities() {
       "./bin/project qa prepare --json",
     ],
   };
-  result.proofProfiles.unshift("free-tier-class-step-unit", "free-tier-class-step-browser");
+  result.proofProfiles.unshift("free-tier-class-step-unit", "free-tier-class-step-browser", "free-tier-welcome-unit", "free-tier-welcome-browser");
   return result;
 }
 
@@ -474,6 +474,12 @@ function runTestProfile(profile, { json }) {
       env: { ...selected.env, ...parseEnvFile(fs.readFileSync(path.join(webAppRoot, '.env'), 'utf8')), CI: '1', DATABASE_URL: local.DATABASE_URL, CLASS_STEP_PORT: local.DEV_PORT },
     }) });
   }
+  else if (chosen === "free-tier-welcome-unit") {
+    runWebApp(chosen, ["test", "app/domain/free-tier/email-copy.server.test.ts", "app/domain/free-tier/release-email-v2.test.ts"]);
+  }
+  else if (chosen === "free-tier-welcome-browser") {
+    runWebApp(chosen, ["x", "playwright", "test", "--config=playwright.free-tier-welcome.config.ts", "--workers=1"]);
+  }
   else if (chosen === "free-tier-inapp-unit") {
     for (const file of ["app/domain/feature-flags/feature-flags.test.ts", "app/domain/feature-flags/feature-flags.server.test.ts", "app/utils/internal-feature-flags-http.server.test.ts", "app/domain/feature-flags/is-free-tier-enabled.server.test.ts", "app/domain/free-tier/inapp-usage.test.ts", "app/domain/free-tier/inapp-usage.server.test.ts", "app/utils/grading-limit-status.server.test.ts", "app/utils/assignment-quota.server.test.ts", "app/utils/entitlements.server.test.ts", "app/domain/free-tier/class-seat-cap.test.ts", "app/utils/lesson-planner/lesson-planner-quota.server.test.ts", "app/routes/app/route.test.tsx", "app/components/assignments/assignment-creation-sheet.test.tsx"]) runWebApp(file, ["test", file]);
   }
@@ -685,7 +691,7 @@ function help(topic = "root") {
     test: "Usage: ./bin/project test --profile <demo-feedback-unit|demo-feedback-browser|signon-classcode|classcode-unit|classcode-db|classcode-browser|classcode-enter-code|classcode-report|unified-signon-preview-fixtures|free-tier-inapp-unit|free-tier-inapp-browser|changed|project-cli|internal-preview-auth|internal-grade-declines|internal-grade-declines-integration|internal-free-tier-limits|internal-free-tier-limits-integration|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n",
     qa: "Usage: ./bin/project qa prepare [--routes /,/route] [--json]\n",
   };
-  const classStepHelp = "\nAdditional test profiles: free-tier-class-step-unit|free-tier-class-step-browser\n";
+  const classStepHelp = "\nAdditional test profiles: free-tier-class-step-unit|free-tier-class-step-browser|free-tier-welcome-unit|free-tier-welcome-browser\n";
   pages.root += classStepHelp;
   pages.test += classStepHelp;
   return pages[topic] || pages.root;
