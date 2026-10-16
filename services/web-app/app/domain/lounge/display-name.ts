@@ -20,9 +20,10 @@ export function loungeDisplayName(
 }
 
 /**
- * The name and the grey detail after it ("Maria S." · "Cristo Rey"). The
- * Yawp team always appears by full name. A teacher who chose first name only
- * keeps their school hidden.
+ * The name and the grey detail after it ("Maria S." · "Cristo Rey"). Teachers
+ * always appear as first name and last initial (Brian's launch rule); the
+ * stored style is kept for old rows but no longer chosen. The YAWP! team
+ * appears by full name.
  */
 export function loungeByline(params: {
   name: string | null | undefined;
@@ -31,11 +32,10 @@ export function loungeByline(params: {
   isStaff: boolean;
 }): { name: string; detail: string | null } {
   if (params.isStaff) {
-    return { name: loungeDisplayName(params.name, 'FULL_NAME'), detail: 'Yawp team' };
+    return { name: loungeDisplayName(params.name, 'FULL_NAME'), detail: 'YAWP! team' };
   }
-  const style = params.style ?? DEFAULT_LOUNGE_DISPLAY_NAME_STYLE;
   return {
-    name: loungeDisplayName(params.name, style),
-    detail: style === 'FIRST_NAME_ONLY' ? null : params.schoolName?.trim() || null,
+    name: loungeDisplayName(params.name, DEFAULT_LOUNGE_DISPLAY_NAME_STYLE),
+    detail: params.schoolName?.trim() || null,
   };
 }

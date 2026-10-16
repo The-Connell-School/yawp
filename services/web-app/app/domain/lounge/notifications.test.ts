@@ -33,7 +33,7 @@ describe('buildLoungeEmail', () => {
       { kind: 'staff-request', postId: 'p9', postTitle: 'Rubric', actorName: 'Maria S.', excerpt: 'Help', isPrivate: true },
       origin
     );
-    expect(email.subject).toBe('Private question for the Yawp team: "Rubric"');
+    expect(email.subject).toBe('Private question for the YAWP! team: "Rubric"');
     expect(email.text).toContain('https://yawp.school/app/admin/lounge?post=p9');
   });
 
@@ -45,6 +45,18 @@ describe('buildLoungeEmail', () => {
     expect(email.html).not.toContain('<script>');
     expect(email.html).toContain('&lt;script&gt;');
     expect(email.html).toContain('A &amp; B');
+  });
+});
+
+describe('Contact Us email', () => {
+  test('says who wrote and links to the team inbox', () => {
+    const email = buildLoungeEmail(
+      { kind: 'contact', messageId: 'm1', actorName: 'Maria S.', excerpt: 'The grade did not release.' },
+      origin
+    );
+    expect(email.subject).toBe('Faculty Lounge: message from Maria S.');
+    expect(email.text).toContain('The grade did not release.');
+    expect(email.text).toContain('https://yawp.school/app/admin/lounge#messages');
   });
 });
 

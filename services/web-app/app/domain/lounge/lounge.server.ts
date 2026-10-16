@@ -18,6 +18,7 @@ import { assignmentShareSnapshot } from './shares';
 import { loungeTopicLabel, type LoungePostKindKey } from './topics';
 import type { LoungePostInput, LoungeReplyInput } from './validation';
 import { baseVideoContentType, type LoungeVideo } from './video';
+import { hasPlaceholderText, type LoungeSchedule } from './launch';
 
 export type CreateLoungePostInput = LoungePostInput & {
   /** One of the author's own assignments to share, frozen at post time. */
@@ -26,6 +27,8 @@ export type CreateLoungePostInput = LoungePostInput & {
   video?: LoungeVideo | null;
   /** Yawp team only; ignored for teachers. */
   pin?: boolean;
+  /** Yawp team only; ignored for teachers. Draft, or a time to go live. */
+  schedule?: LoungeSchedule | null;
 };
 
 export type CreateLoungeReplyInput = LoungeReplyInput & {
@@ -34,6 +37,13 @@ export type CreateLoungeReplyInput = LoungeReplyInput & {
 };
 
 export class LoungeShareError extends Error {}
+
+/** A draft still has Brian's "[fill this in]" notes in it. */
+export class LoungePlaceholderError extends Error {
+  constructor() {
+    super('Fill in the [bracketed] notes before this goes live.');
+  }
+}
 
 export type LoungeViewer = { userId: string; isStaff: boolean };
 export type LoungeSort = 'new' | 'top' | 'unanswered';
@@ -71,6 +81,12 @@ export type LoungeNotification =
       actorName: string;
       excerpt: string;
       isPrivate: boolean;
+    }
+  | {
+      kind: 'contact';
+      messageId: string;
+      actorName: string;
+      excerpt: string;
     };
 
 const PAGE_SIZE = 30;
@@ -107,8 +123,19 @@ function excerptOf(body: string, length = 280): string {
 
 const liveReply = { deletedAt: null, hiddenAt: null } satisfies Prisma.LoungeReplyWhereInput;
 
-function feedWhere(viewer: LoungeViewer, topic?: string | null): Prisma.LoungePostWhereInput {
+/**
+ * A post is live once it is not a draft and its createdAt has arrived. For
+ * posts, createdAt is when the post went (or goes) live: a scheduled post is
+ * stored with createdAt at its scheduled time, and publishing a draft sets it
+ * to the moment it is published, so every list sorts and labels by it.
+ */
+function liveWhere(now: Date): Prisma.LoungePostWhereInput {
+  return { draft: false, createdAt: { lte: now } };
+}
+
+function feedWhere(viewer: LoungeViewer, topic?: string | null, now: Date = new Date()): Prisma.LoungePostWhereInput {
   return {
+    ...liveWhere(now),
     deletedAt: null,
     hiddenAt: null,
     ...(topic ? { topic } : {}),
@@ -132,6 +159,8 @@ function summarySelect(viewer: LoungeViewer) {
     _count: { select: { replies: { where: liveReply }, votes: true } },
     videoKey: true,
     pinnedAt: true,
+    editedAt: true,
+    draft: true,
     attachment: {
       select: {
         id: true,
@@ -162,6 +191,9 @@ export type LoungePostSummary = {
   isPinned: boolean;
   isPrivate: boolean;
   isOwn: boolean;
+  isEdited: boolean;
+  /** Draft or scheduled for later; only the YAWP! team ever sees these. */
+  isUnpublished: boolean;
   attachment: { id: string; title: string; typeTitle: string; useCount: number } | null;
 };
 
@@ -183,6 +215,9 @@ function toSummary(row: SummaryRow, viewer: LoungeViewer): LoungePostSummary {
     isPinned: row.pinnedAt !== null,
     isPrivate: row.visibility === 'STAFF_ONLY',
     isOwn: row.authorUserId === viewer.userId,
+    // Changes made before it went live are not edits anyone needs to see.
+    isEdited: row.editedAt !== null && row.editedAt > row.createdAt,
+    isUnpublished: row.draft || row.createdAt.getTime() > Date.now(),
     attachment: row.attachment
       ? {
           id: row.attachment.id,
@@ -234,7 +269,7 @@ export async function listLoungePosts(
 ): Promise<{ posts: LoungePostSummary[]; nextCursor: string | null }> {
   const now = options.now ?? new Date();
   const select = summarySelect(viewer);
-  const base = feedWhere(viewer, options.topic);
+  const base = feedWhere(viewer, options.topic, now);
 
   if (options.sort === 'top') {
     const since = new Date(now.getTime() - TOP_WINDOW_DAYS * 86_400_000);
@@ -292,6 +327,7 @@ export type LoungeReplyView = {
   viewerVoted: boolean;
   isOwn: boolean;
   isHidden: boolean;
+  isEdited: boolean;
 };
 
 export type LoungeShareDetail = {
@@ -320,10 +356,21 @@ export type LoungeThread = {
 async function findVisiblePost(viewer: LoungeViewer, postId: string) {
   const post = await prisma.loungePost.findFirst({
     where: { id: postId, deletedAt: null },
-    select: { id: true, title: true, authorUserId: true, visibility: true, hiddenAt: true, staffStatus: true },
+    select: {
+      id: true,
+      title: true,
+      authorUserId: true,
+      visibility: true,
+      hiddenAt: true,
+      staffStatus: true,
+      draft: true,
+      createdAt: true,
+    },
   });
   if (!post) return null;
   if (post.hiddenAt && !viewer.isStaff) return null;
+  const live = !post.draft && post.createdAt.getTime() <= Date.now();
+  if (!live && !viewer.isStaff) return null;
   if (post.visibility === 'STAFF_ONLY' && !viewer.isStaff && post.authorUserId !== viewer.userId) {
     return null;
   }
@@ -369,6 +416,7 @@ export async function getLoungeThread(
       videoUrl: true,
       ...videoSelect,
       hiddenAt: true,
+      editedAt: true,
       authorUserId: true,
       author: { select: authorSelect },
       organization: { select: { name: true } },
@@ -388,6 +436,7 @@ export async function getLoungeThread(
     viewerVoted: reply.votes.length > 0,
     isOwn: reply.authorUserId === viewer.userId,
     isHidden: reply.hiddenAt !== null,
+    isEdited: reply.editedAt !== null,
   }));
   return {
     post: {
@@ -447,7 +496,7 @@ async function threadParticipantIds(postId: string): Promise<Set<string>> {
 function dedupeNotifications(notifications: LoungeNotification[]): LoungeNotification[] {
   const seen = new Set<string>();
   return notifications.filter((notification) => {
-    if (notification.kind === 'staff-request') return true;
+    if (!('toUserId' in notification)) return true;
     if (seen.has(notification.toUserId)) return false;
     seen.add(notification.toUserId);
     return true;
@@ -487,6 +536,8 @@ export async function createLoungePost(params: {
   const staffMentioned = mentioned.size > 0;
   const needsStaff = input.askStaff || staffMentioned;
   const now = new Date();
+  const schedule = viewer.isStaff ? input.schedule ?? null : null;
+  const goesLiveNow = !schedule || (!schedule.draft && !schedule.publishAt);
   const post = await prisma.$transaction(async (tx) => {
     const created = await tx.loungePost.create({
       data: {
@@ -501,6 +552,8 @@ export async function createLoungePost(params: {
         staffRequestedAt: needsStaff ? now : null,
         ...(viewer.isStaff ? videoData(input.video) : {}),
         ...(viewer.isStaff && input.pin ? { pinnedAt: now, pinnedByUserId: viewer.userId } : {}),
+        ...(schedule?.draft ? { draft: true } : {}),
+        ...(schedule?.publishAt ? { publishAt: schedule.publishAt, createdAt: schedule.publishAt } : {}),
         ...(snapshot
           ? {
               attachment: {
@@ -531,6 +584,8 @@ export async function createLoungePost(params: {
     return created;
   });
 
+  // Nobody hears about a draft or a scheduled post before it is live.
+  if (!goesLiveNow) return { postId: post.id, notifications: [] };
   const name = await actorName(viewer, params.organizationId);
   const excerpt = excerptOf(input.body);
   const notifications: LoungeNotification[] = [];
@@ -752,11 +807,21 @@ export type LoungeReportItem = {
   reporter: LoungeByline;
 };
 
+export type LoungeContactItem = {
+  id: string;
+  createdAt: string;
+  message: string;
+  pageUrl: string | null;
+  from: LoungeByline;
+  email: string | null;
+};
+
 export async function listLoungeStaffInbox(): Promise<{
   waiting: LoungeInboxItem[];
   reports: LoungeReportItem[];
+  messages: LoungeContactItem[];
 }> {
-  const [waiting, reports] = await Promise.all([
+  const [waiting, reports, messages] = await Promise.all([
     prisma.loungePost.findMany({
       where: { staffStatus: 'OPEN', deletedAt: null, hiddenAt: null },
       orderBy: { staffRequestedAt: 'asc' },
@@ -788,7 +853,25 @@ export async function listLoungeStaffInbox(): Promise<{
         reporter: { select: authorSelect },
       },
     }),
+    prisma.loungeContactMessage.findMany({
+      where: { resolvedAt: null },
+      orderBy: { createdAt: 'asc' },
+      take: 100,
+      select: {
+        id: true,
+        createdAt: true,
+        message: true,
+        pageUrl: true,
+        organizationId: true,
+        user: { select: { ...authorSelect, email: true } },
+      },
+    }),
   ]);
+  const schoolIds = [...new Set(messages.map((m) => m.organizationId).filter((id): id is string => !!id))];
+  const schools = schoolIds.length
+    ? await prisma.organization.findMany({ where: { id: { in: schoolIds } }, select: { id: true, name: true } })
+    : [];
+  const schoolName = new Map(schools.map((school) => [school.id, school.name]));
   return {
     waiting: waiting.map((post) => ({
       id: post.id,
@@ -809,7 +892,133 @@ export async function listLoungeStaffInbox(): Promise<{
       excerpt: excerptOf(report.reply?.body ?? report.post.body, 400),
       reporter: bylineFor(report.reporter, null, report.reporter.isAdmin),
     })),
+    messages: messages.map((message) => ({
+      id: message.id,
+      createdAt: message.createdAt.toISOString(),
+      message: message.message,
+      pageUrl: message.pageUrl,
+      from: bylineFor(
+        message.user,
+        message.organizationId ? schoolName.get(message.organizationId) : null,
+        message.user.isAdmin
+      ),
+      email: message.user.email,
+    })),
   };
+}
+
+export async function createLoungeContactMessage(
+  viewer: LoungeViewer,
+  input: { organizationId: string | null; message: string; pageUrl: string | null }
+): Promise<{ messageId: string; notification: LoungeNotification }> {
+  const row = await prisma.loungeContactMessage.create({
+    data: {
+      userId: viewer.userId,
+      organizationId: input.organizationId,
+      message: input.message,
+      pageUrl: input.pageUrl,
+    },
+    select: { id: true },
+  });
+  return {
+    messageId: row.id,
+    notification: {
+      kind: 'contact',
+      messageId: row.id,
+      actorName: await actorName(viewer, input.organizationId),
+      excerpt: excerptOf(input.message, 1200),
+    },
+  };
+}
+
+export async function resolveLoungeContactMessage(staffUserId: string, messageId: string): Promise<void> {
+  await prisma.loungeContactMessage.updateMany({
+    where: { id: messageId, resolvedAt: null },
+    data: { resolvedAt: new Date(), resolvedByUserId: staffUserId },
+  });
+}
+
+export type LoungeUnpublishedItem = {
+  id: string;
+  title: string;
+  draft: boolean;
+  publishAt: string | null;
+  hasPlaceholders: boolean;
+  author: LoungeByline;
+};
+
+/** Drafts and scheduled posts, soonest first, for the YAWP! team. */
+export async function listLoungeUnpublished(now: Date = new Date()): Promise<LoungeUnpublishedItem[]> {
+  const rows = await prisma.loungePost.findMany({
+    where: { deletedAt: null, OR: [{ draft: true }, { createdAt: { gt: now } }] },
+    orderBy: [{ draft: 'asc' }, { createdAt: 'asc' }],
+    take: 100,
+    select: {
+      id: true,
+      title: true,
+      body: true,
+      draft: true,
+      createdAt: true,
+      author: { select: authorSelect },
+    },
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    draft: row.draft,
+    publishAt: row.draft ? null : row.createdAt.toISOString(),
+    hasPlaceholders: hasPlaceholderText(row.body),
+    author: bylineFor(row.author, null, row.author.isAdmin),
+  }));
+}
+
+async function assertReadyToGoLive(postId: string) {
+  const post = await prisma.loungePost.findFirst({ where: { id: postId, deletedAt: null }, select: { body: true } });
+  if (!post) throw new LoungeNotFoundError();
+  if (hasPlaceholderText(post.body)) throw new LoungePlaceholderError();
+}
+
+/** Put a draft or scheduled post live right now. */
+export async function publishLoungePostNow(postId: string): Promise<void> {
+  await assertReadyToGoLive(postId);
+  const now = new Date();
+  await prisma.loungePost.updateMany({
+    where: { id: postId, deletedAt: null },
+    data: { draft: false, createdAt: now, publishAt: now },
+  });
+}
+
+/** Schedule a draft (or move a scheduled post); it goes live at publishAt. */
+export async function scheduleLoungePost(postId: string, publishAt: Date): Promise<void> {
+  await assertReadyToGoLive(postId);
+  await prisma.loungePost.updateMany({
+    where: { id: postId, deletedAt: null },
+    data: { draft: false, createdAt: publishAt, publishAt },
+  });
+}
+
+export async function editOwnLoungePost(
+  viewer: LoungeViewer,
+  postId: string,
+  input: { title: string; body: string }
+): Promise<boolean> {
+  const result = await prisma.loungePost.updateMany({
+    where: { id: postId, authorUserId: viewer.userId, deletedAt: null },
+    data: { title: input.title, body: input.body, editedAt: new Date() },
+  });
+  return result.count > 0;
+}
+
+export async function editOwnLoungeReply(
+  viewer: LoungeViewer,
+  replyId: string,
+  input: { body: string }
+): Promise<boolean> {
+  const result = await prisma.loungeReply.updateMany({
+    where: { id: replyId, authorUserId: viewer.userId, deletedAt: null },
+    data: { body: input.body, editedAt: new Date() },
+  });
+  return result.count > 0;
 }
 
 export async function closeLoungeStaffRequest(postId: string): Promise<void> {
@@ -857,19 +1066,46 @@ export async function dismissLoungeReport(staffUserId: string, reportId: string)
 export async function getLoungeProfile(userId: string) {
   return prisma.loungeProfile.findUnique({
     where: { userId },
-    select: { displayNameStyle: true, guidelinesAcceptedAt: true, emailNotifications: true },
+    select: {
+      displayNameStyle: true,
+      guidelinesAcceptedAt: true,
+      emailNotifications: true,
+      shareConsentAt: true,
+    },
   });
 }
 
-export async function acceptLoungeGuidelines(
+/** The first-visit welcome box: house rules (required) and sharing consent (optional). */
+export async function acceptLoungeHouseRules(
   userId: string,
-  style: LoungeDisplayNameStyleKey
+  { shareConsent }: { shareConsent: boolean }
 ): Promise<void> {
   const now = new Date();
+  const consent = { shareConsentAt: shareConsent ? now : null };
   await prisma.loungeProfile.upsert({
     where: { userId },
-    create: { userId, displayNameStyle: style, guidelinesAcceptedAt: now },
-    update: { displayNameStyle: style, guidelinesAcceptedAt: now },
+    create: { userId, guidelinesAcceptedAt: now, ...consent },
+    update: { guidelinesAcceptedAt: now, ...consent },
+  });
+}
+
+export async function updateLoungeSettings(
+  userId: string,
+  settings: { shareConsent?: boolean; emailNotifications?: boolean }
+): Promise<void> {
+  const current = await prisma.loungeProfile.findUnique({
+    where: { userId },
+    select: { shareConsentAt: true },
+  });
+  if (!current) return;
+  await prisma.loungeProfile.update({
+    where: { userId },
+    data: {
+      ...(settings.emailNotifications === undefined ? {} : { emailNotifications: settings.emailNotifications }),
+      ...(settings.shareConsent === undefined
+        ? {}
+        : { shareConsentAt: settings.shareConsent ? current.shareConsentAt ?? new Date() : null }),
+    },
   });
 }
 
@@ -1005,11 +1241,17 @@ export type LoungePinnedPost = {
   hasVideo: boolean;
 };
 
-/** The most recently pinned post the viewer can see, for the top of the feed. */
-export async function getPinnedLoungePost(viewer: LoungeViewer): Promise<LoungePinnedPost | null> {
-  const row = await prisma.loungePost.findFirst({
-    where: { ...feedWhere(viewer), pinnedAt: { not: null } },
-    orderBy: { pinnedAt: 'desc' },
+const MAX_PINNED = 4;
+
+/** Pinned posts the viewer can see, oldest pin first (welcome, house rules, then the weekly prompt). */
+export async function listPinnedLoungePosts(
+  viewer: LoungeViewer,
+  now: Date = new Date()
+): Promise<LoungePinnedPost[]> {
+  const rows = await prisma.loungePost.findMany({
+    where: { ...feedWhere(viewer, null, now), pinnedAt: { not: null } },
+    orderBy: { pinnedAt: 'asc' },
+    take: MAX_PINNED,
     select: {
       id: true,
       title: true,
@@ -1019,16 +1261,15 @@ export async function getPinnedLoungePost(viewer: LoungeViewer): Promise<LoungeP
       _count: { select: { replies: { where: liveReply } } },
     },
   });
-  if (!row) return null;
-  return {
+  return rows.map((row) => ({
     id: row.id,
     title: row.title,
-    authorFirstName: (row.author.name ?? '').trim().split(/\s+/)[0] || 'the Yawp team',
+    authorFirstName: (row.author.name ?? '').trim().split(/\s+/)[0] || 'the YAWP! team',
     authorIsStaff: row.author.isAdmin,
     replyCount: row._count.replies,
     videoDurationSeconds: row.videoDurationSeconds,
     hasVideo: row.videoKey !== null,
-  };
+  }));
 }
 
 export async function setLoungePostPinned(

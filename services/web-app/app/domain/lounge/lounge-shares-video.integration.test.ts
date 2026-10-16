@@ -62,7 +62,7 @@ suite('Lounge shares, video, and pinning against the database', () => {
     const m = await makeTeacher('Maria Santos', ids.orgB);
     const b = await makeTeacher('Brian Connell', ids.orgA, true);
     Object.assign(ids, { devin: d.userId, devinMembership: d.membershipId, maria: m.userId, mariaMembership: m.membershipId, brian: b.userId });
-    for (const id of [ids.devin, ids.maria]) await lounge.acceptLoungeGuidelines(id, 'FULL_NAME');
+    for (const id of [ids.devin, ids.maria]) await lounge.acceptLoungeHouseRules(id, { shareConsent: false });
 
     const klass = await prisma.class.create({
       data: { code: `C${stamp}`, schoolId: ids.schoolA, teachers: { connect: { id: ids.devinMembership } } },
@@ -225,8 +225,8 @@ suite('Lounge shares, video, and pinning against the database', () => {
         pin: true,
       },
     });
-    const pinned = await lounge.getPinnedLoungePost(maria());
-    expect(pinned).toMatchObject({ id: postId, authorFirstName: 'Brian', authorIsStaff: true, videoDurationSeconds: 58 });
+    const pinned = await lounge.listPinnedLoungePosts(maria());
+    expect(pinned.find((p) => p.id === postId)).toMatchObject({ authorFirstName: 'Brian', authorIsStaff: true, videoDurationSeconds: 58 });
 
     // Teachers cannot pin; asking to is ignored.
     const { postId: teacherPost } = await lounge.createLoungePost({
@@ -235,10 +235,11 @@ suite('Lounge shares, video, and pinning against the database', () => {
       membershipId: ids.mariaMembership,
       input: { ...basePost, title: `Teacher pin ${stamp}`, pin: true },
     });
-    expect((await lounge.getPinnedLoungePost(maria()))?.id).toBe(postId);
-    expect(teacherPost).toBeTruthy();
+    const ids2 = (await lounge.listPinnedLoungePosts(maria())).map((p) => p.id);
+    expect(ids2).toContain(postId);
+    expect(ids2).not.toContain(teacherPost);
 
     await lounge.setLoungePostPinned(ids.brian, postId, false);
-    expect((await lounge.getPinnedLoungePost(maria()))?.id ?? null).not.toBe(postId);
+    expect((await lounge.listPinnedLoungePosts(maria())).map((p) => p.id)).not.toContain(postId);
   });
 });

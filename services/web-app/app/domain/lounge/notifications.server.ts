@@ -3,8 +3,9 @@
  * request that caused it: callers fire and forget, and every failure is
  * logged and swallowed.
  *
- * Questions for the Yawp team go to LOUNGE_STAFF_NOTIFY_EMAILS (comma
- * separated). When it is unset they still wait in the admin inbox.
+ * Questions for the YAWP! team go to LOUNGE_STAFF_NOTIFY_EMAILS (comma
+ * separated). Contact Us messages go to LOUNGE_CONTACT_EMAILS, falling back
+ * to the same list. When unset they still wait in the admin inbox.
  */
 import { prisma } from '~/utils/db.server';
 import { sendEmail } from '~/utils/email.server';
@@ -29,7 +30,9 @@ export async function sendLoungeNotifications(
 
     for (const notification of notifications) {
       const recipients =
-        notification.kind === 'staff-request'
+        notification.kind === 'contact'
+          ? staffNotifyEmails(process.env.LOUNGE_CONTACT_EMAILS || process.env.LOUNGE_STAFF_NOTIFY_EMAILS)
+          : notification.kind === 'staff-request'
           ? staffNotifyEmails(process.env.LOUNGE_STAFF_NOTIFY_EMAILS)
           : (() => {
               const user = byId.get(notification.toUserId);

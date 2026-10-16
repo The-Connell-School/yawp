@@ -30,24 +30,23 @@ describe('loungeDisplayName', () => {
 });
 
 describe('loungeByline', () => {
-  test('shows the school unless the teacher chose first name only', () => {
-    expect(
-      loungeByline({ name: 'Maria Santos', style: 'FIRST_NAME_LAST_INITIAL', schoolName: 'Cristo Rey', isStaff: false })
-    ).toEqual({ name: 'Maria S.', detail: 'Cristo Rey' });
-    expect(
-      loungeByline({ name: 'Maria Santos', style: 'FIRST_NAME_ONLY', schoolName: 'Cristo Rey', isStaff: false })
-    ).toEqual({ name: 'Maria', detail: null });
+  test('teachers always appear as first name, last initial, and school', () => {
+    for (const style of ['FIRST_NAME_LAST_INITIAL', 'FULL_NAME', 'FIRST_NAME_ONLY', null] as const) {
+      expect(
+        loungeByline({ name: 'Maria Santos', style, schoolName: 'Cristo Rey', isStaff: false })
+      ).toEqual({ name: 'Maria S.', detail: 'Cristo Rey' });
+    }
   });
 
-  test('a teacher with no profile yet reads as first name and last initial', () => {
+  test('no school means no detail', () => {
     expect(
       loungeByline({ name: 'Maria Santos', style: null, schoolName: null, isStaff: false })
     ).toEqual({ name: 'Maria S.', detail: null });
   });
 
-  test('the Yawp team always shows full name and "Yawp team"', () => {
+  test('the YAWP! team always shows full name and "YAWP! team"', () => {
     expect(
       loungeByline({ name: 'Brian Connell', style: 'FIRST_NAME_ONLY', schoolName: 'The Connell School', isStaff: true })
-    ).toEqual({ name: 'Brian Connell', detail: 'Yawp team' });
+    ).toEqual({ name: 'Brian Connell', detail: 'YAWP! team' });
   });
 });

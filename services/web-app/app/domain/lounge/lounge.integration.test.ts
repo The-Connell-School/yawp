@@ -42,8 +42,8 @@ suite('Teacher Lounge against the database', () => {
     ids.devin = await makeUser('Devin Reyes', { orgId: ids.orgB, role: 'TEACHER' });
     ids.brian = await makeUser('Brian Connell', { orgId: ids.orgA, role: 'TEACHER', isAdmin: true });
     ids.student = await makeUser('Sam Student', { orgId: ids.orgA, role: 'STUDENT' });
-    await lounge.acceptLoungeGuidelines(ids.maria, 'FIRST_NAME_LAST_INITIAL');
-    await lounge.acceptLoungeGuidelines(ids.devin, 'FIRST_NAME_ONLY');
+    await lounge.acceptLoungeHouseRules(ids.maria, { shareConsent: false });
+    await lounge.acceptLoungeHouseRules(ids.devin, { shareConsent: false });
   });
 
   afterAll(async () => {
@@ -115,7 +115,7 @@ suite('Teacher Lounge against the database', () => {
     const thread = await lounge.getLoungeThread(devin(), postId);
     expect(thread?.staffReplies).toHaveLength(1);
     expect(thread?.staffReplies[0]).toMatchObject({
-      author: { name: 'Brian Connell', detail: 'Yawp team' },
+      author: { name: 'Brian Connell', detail: 'YAWP! team' },
       videoUrl: 'https://www.loom.com/share/abc',
     });
     expect(thread?.replies).toHaveLength(0);
@@ -231,7 +231,7 @@ suite('Teacher Lounge against the database', () => {
     const devinIndex = candidates.findIndex((c) => c.userId === ids.devin);
     expect(brianIndex).toBeGreaterThanOrEqual(0);
     expect(devinIndex).toBeGreaterThan(brianIndex);
-    expect(candidates[devinIndex]).toMatchObject({ label: 'Devin', detail: null });
+    expect(candidates[devinIndex]).toMatchObject({ label: 'Devin R.', detail: `St. Ignatius ${stamp}` });
     expect(candidates.some((c) => c.userId === ids.maria)).toBe(false);
   });
 });

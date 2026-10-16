@@ -20,13 +20,26 @@ export function buildLoungeEmail(
   notification: LoungeNotification,
   origin: string
 ): { subject: string; text: string; html: string } {
+  if (notification.kind === 'contact') {
+    const link = `${origin}/app/admin/lounge#messages`;
+    const lead = `${notification.actorName} used Contact Us in the Faculty Lounge:`;
+    return {
+      subject: `Faculty Lounge: message from ${notification.actorName}`,
+      text: [lead, '', notification.excerpt, '', `Open the inbox: ${link}`].join('\n'),
+      html: [
+        `<p>${escapeHtml(lead)}</p>`,
+        `<blockquote style="margin:0;padding-left:12px;border-left:3px solid #D2714F;color:#3C3828">${escapeHtml(notification.excerpt)}</blockquote>`,
+        `<p><a href="${escapeHtml(link)}">Open the inbox</a></p>`,
+      ].join('\n'),
+    };
+  }
   const title = notification.postTitle;
   let subject: string;
   let link: string;
   if (notification.kind === 'staff-request') {
     subject = notification.isPrivate
-      ? `Private question for the Yawp team: "${title}"`
-      : `New question for the Yawp team: "${title}"`;
+      ? `Private question for the YAWP! team: "${title}"`
+      : `New question for the YAWP! team: "${title}"`;
     link = `${origin}/app/admin/lounge?post=${encodeURIComponent(notification.postId)}`;
   } else {
     link = `${origin}/app/lounge/${encodeURIComponent(notification.postId)}`;
