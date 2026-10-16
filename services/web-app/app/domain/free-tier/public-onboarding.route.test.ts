@@ -92,3 +92,16 @@ test('a failed decline write never shows the decline confirmation', async () => 
   expect((await post('free', '7')).body.ok).toBe(false);
   expect(submit).not.toHaveBeenCalled();
 });
+
+for (const [value, expected] of [['true', true], ['false', false], ['{"mode":"targeted","orgIds":["default-org"]}', false], [null, false]] as const) {
+  test(`public loader: ${value} returns anonymous rollout ${expected}`, async () => {
+    setting.mockResolvedValue(value === null ? null : { value });
+    const result = await landing.loader({ request: new Request('http://localhost/free') } as never);
+    expect(result).toMatchObject({ onboardingV2: expected });
+    expect(setting.mock.calls[0][0]).toEqual({ where: { name: 'feature_flag.free-tier-onboarding-v2' }, select: { value: true } });
+  });
+}
+test('unreadable setting keeps the legacy public loader', async () => {
+  setting.mockRejectedValue(new Error('local unreadable setting'));
+  expect(await landing.loader({ request: new Request('http://localhost/free') } as never)).toMatchObject({ onboardingV2: false });
+});

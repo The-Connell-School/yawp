@@ -34,7 +34,7 @@ async function fixture(suffix: string, override: object = {}) {
 beforeAll(async () => {
   if (process.env.FREE_WELCOME_DB_TESTS !== '1') return;
   const url = new URL(process.env.DATABASE_URL!);
-  if (!['localhost', '127.0.0.1'].includes(url.hostname) || !url.pathname.includes('fto-free-page')) throw new Error('Dedicated local welcome database required');
+  if (!['localhost', '127.0.0.1'].includes(url.hostname) || !(url.pathname.includes('fto-free-page') || (process.env.GITHUB_ACTIONS === 'true' && url.pathname === '/yawp_migration_ci'))) throw new Error('Dedicated local welcome database required');
   saved = await prisma.setting.findMany({ where: { name: { in: [flagName, baseFlag] } } });
   await prisma.setting.upsert({ where: { name: baseFlag }, create: { name: baseFlag, value: 'true' }, update: { value: 'true' } });
   process.env.FREE_TIER_LINK_HMAC_SECRET = 'local-public-route-tests';

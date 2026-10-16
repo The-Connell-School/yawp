@@ -8,6 +8,7 @@ export default defineConfig({
   // These fixtures use their own local server/configuration and database lifecycle.
   testIgnore: [
     '**/free-tier.welcome-components.spec.ts',
+    '**/free-tier.welcome-live.spec.ts',
     '**/auth.unified-signon.spec.ts',
     '**/auth.unified-backend.spec.ts',
     '**/auth.unified-google-backend.spec.ts',

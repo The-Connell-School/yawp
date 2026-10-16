@@ -12,7 +12,7 @@ let old: any;
 beforeAll(async () => {
   if (process.env.FREE_WELCOME_DB_TESTS !== '1') return;
   const url = new URL(process.env.DATABASE_URL!);
-  if (!['localhost', '127.0.0.1'].includes(url.hostname) || !url.pathname.includes('fto-free-page')) throw new Error('Dedicated local welcome database required');
+  if (!['localhost', '127.0.0.1'].includes(url.hostname) || !(url.pathname.includes('fto-free-page') || (process.env.GITHUB_ACTIONS === 'true' && url.pathname === '/yawp_migration_ci'))) throw new Error('Dedicated local welcome database required');
   old = await prisma.setting.findUnique({ where: { name: 'feature_flag.free-tier-onboarding-v2' } });
   process.env.FREE_TIER_LINK_HMAC_SECRET = 'local-welcome-copy-tests';
   process.env.PRIMARY_APP_URL = 'http://localhost:5241';

@@ -175,7 +175,7 @@ export function capabilities() {
       "./bin/project qa prepare --json",
     ],
   };
-  result.proofProfiles.unshift("free-tier-class-step-unit", "free-tier-class-step-browser", "free-tier-welcome-unit", "free-tier-welcome-browser");
+  result.proofProfiles.unshift("free-tier-class-step-unit", "free-tier-class-step-browser", "free-tier-welcome-unit", "free-tier-welcome-browser", "free-tier-welcome-live-browser", "free-tier-welcome-db");
   return result;
 }
 
@@ -475,7 +475,21 @@ function runTestProfile(profile, { json }) {
     }) });
   }
   else if (chosen === "free-tier-welcome-unit") {
-    runWebApp(chosen, ["test", "app/domain/free-tier/email-copy.server.test.ts", "app/domain/free-tier/release-email-v2.test.ts"]);
+    for (const file of ["app/domain/free-tier/email-copy.server.test.ts", "app/domain/free-tier/release-email-v2.test.ts", "app/domain/free-tier/public-onboarding.route.test.ts", "app/routes/free._index/route.action.test.ts", "app/routes/free._index/route.loader.test.ts", "app/routes/free._index/route.denial.test.tsx", "app/routes/free._index/route.success-copy.test.ts", "app/routes/api.free-tier.token/route.test.ts"]) runWebApp(file, ["test", file]);
+  }
+  else if (chosen === "free-tier-welcome-db") {
+    const local = requireConfig();
+    for (const file of ["app/domain/free-tier/welcome-copy.real-db.integration.test.ts", "app/domain/free-tier/public-onboarding.real-db.integration.test.ts", "app/routes/api.free-tier.waitlist/route.integration.test.ts"]) results.push({ id: file, ...execute(selected.bun, ["test", file], {
+      json, cwd: webAppRoot, timeout: 120000,
+      env: { ...selected.env, DATABASE_URL: local.DATABASE_URL, PRIMARY_APP_URL: `http://localhost:${local.DEV_PORT}`, FREE_WELCOME_DB_TESTS: "1", FREE_TIER_DB_TESTS: "1", FREE_TIER_BUDGET_ENVIRONMENT: "preview" },
+    }) });
+  }
+  else if (chosen === "free-tier-welcome-live-browser") {
+    const local = requireConfig();
+    results.push({ id: chosen, ...execute(selected.bun, ["x", "playwright", "test", "--config=playwright.free-tier-welcome-live.config.ts", "--workers=1"], {
+      json, cwd: webAppRoot, timeout: 600000,
+      env: { ...selected.env, ...parseEnvFile(fs.readFileSync(path.join(webAppRoot, '.env'), 'utf8')), CI: '1', DATABASE_URL: local.DATABASE_URL, E2E_DATABASE_URL: process.env.E2E_DATABASE_URL || local.DATABASE_URL, FREE_WELCOME_PORT: local.DEV_PORT },
+    }) });
   }
   else if (chosen === "free-tier-welcome-browser") {
     runWebApp(chosen, ["x", "playwright", "test", "--config=playwright.free-tier-welcome.config.ts", "--workers=1"]);
@@ -691,7 +705,7 @@ function help(topic = "root") {
     test: "Usage: ./bin/project test --profile <demo-feedback-unit|demo-feedback-browser|signon-classcode|classcode-unit|classcode-db|classcode-browser|classcode-enter-code|classcode-report|unified-signon-preview-fixtures|free-tier-inapp-unit|free-tier-inapp-browser|changed|project-cli|internal-preview-auth|internal-grade-declines|internal-grade-declines-integration|internal-free-tier-limits|internal-free-tier-limits-integration|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n",
     qa: "Usage: ./bin/project qa prepare [--routes /,/route] [--json]\n",
   };
-  const classStepHelp = "\nAdditional test profiles: free-tier-class-step-unit|free-tier-class-step-browser|free-tier-welcome-unit|free-tier-welcome-browser\n";
+  const classStepHelp = "\nAdditional test profiles: free-tier-class-step-unit|free-tier-class-step-browser|free-tier-welcome-unit|free-tier-welcome-browser|free-tier-welcome-live-browser|free-tier-welcome-db\n";
   pages.root += classStepHelp;
   pages.test += classStepHelp;
   return pages[topic] || pages.root;
