@@ -16,13 +16,13 @@ Running 1 test using 1 worker
   ✘  1 [chromium] › e2e/tests/auth.unified-backend.spec.ts:101:3 › email-origin free-class notice survives navigation and validation at 1280 (7.4s)
 
 
-  1) [chromium] › e2e/tests/auth.unified-backend.spec.ts:101:3 › email-origin free-class notice survives navigation and validation at 1280 
+  1) [chromium] › e2e/tests/auth.unified-backend.spec.ts:101:3 › email-origin free-class notice survives navigation and validation at 1280
 
-    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoHaveLength[2m([22m[32mexpected[39m[2m)[22m
+    Error: expect(received).toHaveLength(expected)
 
-    Expected length: [32m0[39m
-    Received length: [31m1[39m
-    Received array:  [31m["negative-control.json"][39m
+    Expected length: 0
+    Received length: 1
+    Received array:  ["negative-control.json"]
 
       301 |       expect(await db.signonIdentity.count()).toBe(identityCount);
       302 |       fs.writeFileSync(path.join(capture, 'negative-control.json'), '{}', { mode: 0o600 });
@@ -50,7 +50,7 @@ Running 1 test using 1 worker
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
   1 failed
-    [chromium] › e2e/tests/auth.unified-backend.spec.ts:101:3 › email-origin free-class notice survives navigation and validation at 1280 
+    [chromium] › e2e/tests/auth.unified-backend.spec.ts:101:3 › email-origin free-class notice survives navigation and validation at 1280
 {
   "schemaVersion": "project.dev/v1",
   "status": "stopped",
