@@ -8,7 +8,7 @@ Running 1 test using 1 worker
   ✘  1 [chromium] › e2e/tests/auth.unified-backend.spec.ts:98:3 › email-origin free-class notice survives navigation and validation at 390 (6.2s)
 
 
-  1) [chromium] › e2e/tests/auth.unified-backend.spec.ts:98:3 › email-origin free-class notice survives navigation and validation at 390 
+  1) [chromium] › e2e/tests/auth.unified-backend.spec.ts:98:3 › email-origin free-class notice survives navigation and validation at 390
 
     Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoHaveCount[2m([22m[32mexpected[39m[2m)[22m failed
 
@@ -51,4 +51,4 @@ Running 1 test using 1 worker
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
   1 failed
-    [chromium] › e2e/tests/auth.unified-backend.spec.ts:98:3 › email-origin free-class notice survives navigation and validation at 390 
+    [chromium] › e2e/tests/auth.unified-backend.spec.ts:98:3 › email-origin free-class notice survives navigation and validation at 390
