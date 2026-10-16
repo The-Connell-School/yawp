@@ -2452,3 +2452,62 @@ suite(
     ).toBe(0);
   }
 );
+
+for (const outcome of ['access_denied', 'server_error', 'invalid_state'])
+  suite(
+    `school email Google ${outcome} returns to ordinary class-code entry without proof`,
+    async () => {
+      cookie = '';
+      flowToken = '';
+      const original = [
+        process.env.GOOGLE_OAUTH_CLIENT_ID,
+        process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+      ];
+      const sessionCount = await prisma.session.count();
+      process.env.GOOGLE_OAUTH_CLIENT_ID = 'local-client';
+      process.env.GOOGLE_OAUTH_CLIENT_SECRET = 'local-secret';
+      try {
+        await post('resolve', { identifier: prefix });
+        await post('student-choice', { choice: 'new' });
+        await post('student-email');
+        const started = await post('google');
+        const target = new URL(started.data.redirectTo);
+        const callback = new URL('/auth/unified/google/callback', url);
+        callback.searchParams.set(
+          'state',
+          outcome === 'invalid_state'
+            ? 'invalid'
+            : target.searchParams.get('state')!
+        );
+        callback.searchParams.set(
+          'error',
+          outcome === 'invalid_state' ? 'access_denied' : outcome
+        );
+        const { googleCallback } = await import('./google.server');
+        const result = await googleCallback(
+          new Request(callback, { headers: { cookie } })
+        );
+        expect(result.headers.get('location')).toBe('/auth/login?continue=1');
+        const entry = await unifiedEntry(
+          new Request(url + '?continue=1', { headers: { cookie } })
+        );
+        expect(entry?.initialState?.screen).toBe('entry');
+        expect(
+          (await post('resolve', { identifier: prefix })).data.state
+        ).toMatchObject({ screen: 'class-found', classInfo: { id: prefix } });
+        expect(
+          (await post('student-choice', { choice: 'returning' })).data.state
+            .screen
+        ).toBe('class-signin');
+        expect(await prisma.session.count()).toBe(sessionCount);
+      } finally {
+        for (const [index, name] of [
+          'GOOGLE_OAUTH_CLIENT_ID',
+          'GOOGLE_OAUTH_CLIENT_SECRET',
+        ].entries()) {
+          if (original[index] === undefined) delete process.env[name];
+          else process.env[name] = original[index];
+        }
+      }
+    }
+  );

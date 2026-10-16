@@ -145,6 +145,8 @@ export async function saveNewFlow(flow: Flow) {
   });
 }
 export function stateFor(flow: Flow, state: SignonState) {
+  // Leaving school-email signup restores the ordinary email-or-class-code entry.
+  if (state.screen === 'entry') flow.data.studentEmailSignup = undefined;
   const classInfo =
     flow.data.classId && flow.data.state.classInfo?.id === flow.data.classId
       ? flow.data.state.classInfo
