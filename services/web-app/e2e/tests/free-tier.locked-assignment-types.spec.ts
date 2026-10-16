@@ -145,9 +145,7 @@ test.describe.serial('Free tier: locked assignment types', () => {
       page.getByRole('heading', { level: 1, name: /daily writing/i })
     ).toBeVisible();
     await expect(page.getByTestId('locked-type-banner')).toBeVisible();
-    await expect(page.getByTestId('guide-wont')).toContainText(
-      /grammar/i
-    );
+    await expect(page.getByTestId('guide-wont')).toContainText(/grammar/i);
     await expect(page.locator('video source').first()).toHaveAttribute(
       'src',
       /^\/img\/daily-pages-guide\/.+\.mp4$/
@@ -168,11 +166,7 @@ test.describe.serial('Free tier: locked assignment types', () => {
   test('teasers stay in bounds on a phone', async ({ page }) => {
     await logInAsFreeTeacher(page);
     await page.setViewportSize({ width: 390, height: 844 });
-    for (const path of [
-      THESIS_TEASER,
-      AP_HISTORY_TEASER,
-      DAILY_PAGES_TEASER,
-    ]) {
+    for (const path of [THESIS_TEASER, AP_HISTORY_TEASER, DAILY_PAGES_TEASER]) {
       await page.goto(path);
       await expect(page.getByTestId('guide-wont')).toBeVisible();
       const overflow = await page.evaluate(
