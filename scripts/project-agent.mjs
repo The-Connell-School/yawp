@@ -474,7 +474,7 @@ function runTestProfile(profile, { json }) {
   }
   else if (chosen === "classcode-browser") {
     const local = requireConfig();
-    results.push({ id: chosen, ...execute(selected.bun, ["x", "playwright", "test", "--config=playwright.classcode.config.ts", "--workers=1"], { json, env: { ...selected.env, DATABASE_URL: local.DATABASE_URL, E2E_DATABASE_URL: local.DATABASE_URL, CLASSCODE_URL: `http://127.0.0.1:${local.DEV_PORT}` }, cwd: webAppRoot, timeout: 240000 }) });
+    results.push({ id: chosen, ...execute(selected.bun, ["x", "playwright", "test", "--config=playwright.classcode-unique.config.ts", "--workers=1"], { json, env: { ...selected.env, DATABASE_URL: local.DATABASE_URL, E2E_DATABASE_URL: local.DATABASE_URL, CLASSCODE_URL: `http://127.0.0.1:${local.DEV_PORT}` }, cwd: webAppRoot, timeout: 240000 }) });
   }
   else if (chosen === "unit") run("unit", ["run", "--cwd", "services/web-app", "test"]);
   else if (chosen === "typecheck") run("typecheck", ["run", "web-app:typecheck"]);
