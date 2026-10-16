@@ -92,7 +92,17 @@ stale rows cannot starve later work. Unique (approvalId, kind, sequence) rows an
 application advisory locks prevent duplicate scheduling and concurrent sends.
 The loop handles pending work after process restarts; due times live in Postgres.
 
-DELIVERING is committed before contacting the provider. Provider SDK retries are
+DELIVERING is committed before contacting the provider. If the dispatch
+transaction observes a disabled or untargeted rollout after that claim, it
+restores QUEUED, clears the claim timestamp, and reverses that claim's attempt
+increment before any provider call. The unique delivery slot, encrypted message,
+idempotency key and cadence survive the pause. Re-enabling resumes that same
+slot under the normal locks and eligibility checks; terminal/replaced requests
+still cannot send. Repeated/concurrent drains and same-key manual replays do not
+create another acceptance. This restoration applies only to a worker that knows
+it has not called the provider, never to abandoned or ambiguous claims.
+
+Provider SDK retries are
 disabled for these messages. Only explicit HTTP 4xx rejection (except timeout)
 is safely retried automatically. Network failures, ambiguous acceptance,
 interruption after claiming, corrupt payloads, and exhausted rejection retries

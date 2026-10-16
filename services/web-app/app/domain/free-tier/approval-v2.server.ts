@@ -650,8 +650,8 @@ async function allowedToDeliver(
   app: FreeTierApplication,
   now: Date
 ) {
-  if (!(await isApprovalV2Enabled(app, tx)) || approval.status !== 'PENDING')
-    return false;
+  // Callers check rollout eligibility before entering this status check.
+  if (approval.status !== 'PENDING') return false;
   const current = await tx.freeTierAdminApproval.findFirst({
     where: { applicationId: app.id, status: 'PENDING' },
     orderBy: { createdAt: 'desc' },
@@ -775,9 +775,25 @@ async function deliverJob(id: string, now: Date) {
       });
       const app = job.approval.application;
       if (job.state !== 'DELIVERING') return;
-      const approval = (await isApprovalV2Enabled(app, tx))
+      const rolloutEnabled = await isApprovalV2Enabled(app, tx);
+      const approval = rolloutEnabled
         ? await enroll(tx, app, job.approval)
         : job.approval;
+      if (!rolloutEnabled || !(await isApprovalV2Enabled(app, tx))) {
+        // This worker has not contacted the provider. A rollout/targeting pause
+        // must retain the unique slot and must not consume a provider attempt.
+        // Requeue only here; abandoned or ambiguous claims remain UNCERTAIN.
+        await tx.freeTierApprovalDelivery.update({
+          where: { id },
+          data: {
+            state: 'QUEUED',
+            attemptedAt: null,
+            attempts: { decrement: 1 },
+            error: 'rollout_paused',
+          },
+        });
+        return;
+      }
       if (!(await allowedToDeliver(tx, job, approval, app, now))) {
         await tx.freeTierApprovalDelivery.update({
           where: { id },
