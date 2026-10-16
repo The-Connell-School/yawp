@@ -125,3 +125,15 @@ and preview access policy are unchanged. The local
 43 dispatch, 9 fixture database and 12 seat-policy database cases) against a
 disposable loopback database with its own fixture-only database role. The
 43 dispatch checks overlap the class-code profile. No hosted preview is used.
+
+Browser compatibility follow-up: the older backend/TLS specs now use the exact
+"Email or class code" label. Invited students retain a correctly scoped existing
+invitation fixture for email-code, signup and password-reset coverage; new
+class-code registration stays in the generated-handle suite. Local HTTP browser
+checks pass 7 cases and local HTTPS proxy checks pass 4 cases at 1280/390 with
+one worker. The TLS checks cover legitimate origins, foreign/downgraded origins,
+missing Google configuration, New student forms and flag-off pages. The old
+label assertion failed before this test-only update. Additional screenshots live
+under the lane evidence directory's browser-compat/ subdirectory. No product
+behavior, fixture seed data, preview access policy or hosted preview changed.
+Typecheck passes after these updates.
