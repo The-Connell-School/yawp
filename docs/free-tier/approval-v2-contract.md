@@ -124,5 +124,6 @@ or video content is invented. All approval validation and link budget protection
 remain in the existing transaction.
 
 Apply the additive migration locally for tests only. The driver must take an RDS
-snapshot before any production application. Merge remains held by state/MERGE_HOLD
-until explicitly released; CI and independent Ship Review approval are required.
+snapshot before any production application. The manager released the merge hold.
+The driver owns merge and requires available, current manager snapshot confirmation,
+green final-head CI and independent Ship Review approval.

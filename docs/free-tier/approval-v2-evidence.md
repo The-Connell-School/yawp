@@ -46,8 +46,8 @@ non-target organization and paid membership controls. Compositions preserve the
 full reference and implementation with explicit labels; originals retain their
 native resolution. `checks/` holds final transcripts and initial red-test evidence.
 
-Merge remains held. The driver requires independent Ship Review APPROVE and CI
-before any release of state/MERGE_HOLD or merge. An RDS snapshot is required before
+Historical merge hold is released. The driver requires exact-head independent
+Ship Review APPROVE, green CI and valid manager snapshot confirmation before merge. An RDS snapshot is required before
 applying the additive migration to production. No environment flag is enabled.
 
 ## Review corrections, October 16
@@ -82,7 +82,7 @@ The all-states references use representative mobile captures; the other states
 are saved separately. Earlier complete evidence remains in the parent directory.
 
 Driver `state/REVIEW.md` remains untouched; a fresh standalone Ship Review records
-the resulting head in `state/SHIP_REVIEW.md`. Merge remains held. No hosted
+the resulting head in `state/SHIP_REVIEW.md`. The historical merge hold is now released. No hosted
 environment was accessed, and no actual email, remote migration, flag activation,
 preview action or merge was performed.
 
@@ -109,3 +109,44 @@ sets, four flag-off/flag-on compositions, and `checks/` red/green/typecheck/brow
 transcripts. Earlier evidence remains available for comparison. No UI code
 changed in this correction. Independent Ship Review results are recorded in lane
 `state/SHIP_REVIEW.md` for the final reviewed head.
+
+## Rebase onto merged onboarding and guard contracts
+
+Rebased the existing PR #581 branch onto `41fede7b1e8d8fca6ebc3e8f149bbfc88c0f7a68`.
+Recovery branch `recovery/fto-approval-page-before-rebase-20261016` preserves
+`19707bddd442f7c5b0036c3f1429c3ddcebff928`. Source revision for the refreshed
+captures is `8711375f7`; the final published head is recorded by the evidence
+manifest and lane `state/BUILD_RESULT.md`. The only subsequent changes are these
+review/handoff documents. Conflict repair retains main's class-preparation and
+below-HS reopen guards, all shared schema additions, both CI registrations and
+all dedicated/standard browser discovery exclusions. Durable approval source,
+its 22 lifecycle tests and both migration SQL files are unchanged by the rebase.
+
+Renewed checks through `./bin/project` with `CI=1`:
+
+- 72 approval tests pass, including all 22 durable delivery cases and the 30
+  legacy approval database cases. Email is mocked or captured locally.
+- 108 project CLI/contract checks pass, including standard-runner discovery.
+- Main class-step compatibility: 57 pass, 15 legacy DB cases skipped in that
+  profile; those legacy cases pass separately in the approval profile above.
+- Full typecheck passes; existing duplicate LTI route warnings remain.
+- All six one-worker local Playwright flows pass in 25.7 seconds: desktop/mobile
+  waiting/date/mailto, forwarding and validation, old-link rejection,
+  administrator form/guide slot, terminal states, flag-off, untargeted and paid
+  membership controls. The owned server is stopped by the runner.
+
+Evidence under lane `shots/fto-approval-page/rebase/` contains 37 original local
+captures, six design/implementation/side-by-side sets, four flag-off/on
+comparisons and permanent check transcripts. References are v2 freetier-09..14
+DOM/text/PNG. Compositions label representative states and Brian-call extensions;
+they do not claim exact artboards exist for the added sent-date/direct-email or
+information-left administrator layout. Original captures keep native resolution.
+The manifest records final head/base, screenshot hashes, local ports and command
+provenance. Prior `rollout-pause/` evidence is preserved.
+
+The manager released the merge hold. Fresh independent Ship Review and relevant
+GitHub CI must name the final head; historical approval does not satisfy those
+gates. The driver alone verifies the available manager RDS snapshot and its
+six-hour validity window, takes the merge lock and merges. Exact additive SQL is
+in lane `state/NEEDS_SNAPSHOT.md`. No production migration, flag activation,
+actual email delivery, hosted preview, remote environment change or merge.
