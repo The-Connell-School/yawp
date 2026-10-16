@@ -4,7 +4,7 @@ import { assertTransition } from './state';
 import { normalizeEmail } from './service.server';
 import {
   ADMIN_REDIRECT_CHAIN_CAP,
-  evaluateAdminEmail,
+  evaluateAdminEmailForRuntime,
 } from './admin-email-rules.server';
 import { adminApprovalEmailCopyVersionHash } from './email-copy.server';
 import {
@@ -29,6 +29,7 @@ import { getClientIp } from '~/utils/ip.server';
 import {
   assertFreeTierBudgetHeadroomForTransition,
   FreeTierBudgetExceededError,
+  resolveFreeTierRuntimeEnvironment,
   type FreeTierUsageSummary,
 } from './usage-budget.server';
 
@@ -126,7 +127,10 @@ export async function submitAdminDetails(args: {
     return { ok: false as const, reason: 'illegal_state' as const, status: app.status };
   }
 
-  const rules = evaluateAdminEmail({ teacherEmail: app.email, adminEmail, schoolName: app.schoolName });
+  const rules = evaluateAdminEmailForRuntime(
+    { teacherEmail: app.email, adminEmail, schoolName: app.schoolName },
+    resolveFreeTierRuntimeEnvironment()
+  );
 
   const copyHash = adminApprovalEmailCopyVersionHash();
   // Kept in the API for older callers; introductions are no longer accepted.
@@ -481,11 +485,14 @@ export async function redirectSchoolAdmin(args: {
   });
   if (!prePending) return { ok: false as const, reason: 'not_found' as const };
 
-  const rules = evaluateAdminEmail({
+  const rules = evaluateAdminEmailForRuntime(
+    {
     teacherEmail: preApp.email,
     adminEmail: newEmail,
     schoolName: preApp.schoolName,
-  });
+  },
+    resolveFreeTierRuntimeEnvironment()
+  );
 
   const newAdminNameTrim = args.newAdminName.trim();
 

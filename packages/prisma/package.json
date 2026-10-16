@@ -34,6 +34,7 @@
     "seed-free-tier-ship-review": "bun run scripts/seed-free-tier-ship-review.ts",
     "seed-grading-evaluations": "bun run scripts/seed-grading-evaluations.ts",
     "sync-prod-fidelity-fixtures": "bun run scripts/sync-prod-fidelity-fixtures.ts",
+    "seed-preview-signon-qa": "bun run scripts/seed-preview-signon-qa.ts",
     "seed-preview-seats": "bun run scripts/seed-preview-seats.ts",
     "seed-preview-teacher-notes-qa": "bun run scripts/seed-preview-teacher-notes-qa.ts",
     "seed-preview-planner-qa": "bun run scripts/seed-preview-planner-qa.ts",

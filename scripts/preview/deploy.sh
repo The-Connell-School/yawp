@@ -9,6 +9,10 @@ export PREVIEW_CONTROL_DIR="$SCRIPT_DIR"
 source "$SCRIPT_DIR/tooling-artifacts.sh"
 
 export PREVIEW_DATA_MODE="${PREVIEW_DATA_MODE:-seed}"
+
+should_run_signon_qa_seed() {
+  [[ "$SLUG" =~ ^pr-[0-9]+$ && "$DATA_MODE" == "seed" ]]
+}
 export PREVIEW_DEV_LOGIN_EMAIL="${PREVIEW_DEV_LOGIN_EMAIL:-dev.teacher@yawp.local}"
 # Derive paths and database identity before creating the per-preview credential.
 # The placeholder URL never reaches a container or persistent compose file.
@@ -652,6 +656,8 @@ compute_tooling_fingerprint() {
         packages/prisma/scripts/seed-local-dev.ts \
         packages/prisma/scripts/seed-class-starter-assignment-type.ts \
         packages/prisma/scripts/apply-daily-pages-engagement-v2-seed.ts \
+        packages/prisma/scripts/seed-preview-signon-qa.ts \
+        services/web-app/app/utils/preview-email-capture.server.ts \
         packages/prisma/scripts/seed-preview-teacher-notes-qa.ts \
         packages/prisma/scripts/local-dev/preview-teacher-notes-qa.ts \
         packages/prisma/scripts/assets/class-starter.jpg \
@@ -733,6 +739,9 @@ run_tooling_if_needed() {
         echo "Warning: idempotent preview seeds failed; continuing deploy (non-fatal)." >&2
       fi
     fi
+    if should_run_signon_qa_seed && [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-signon-qa.ts" ]]; then
+      "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && cd packages/prisma && bun run seed-preview-signon-qa'
+    fi
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-free-tier-ship-review.ts" ]] && should_run_free_tier_ship_review_seed; then
       echo "Running free-tier ship-review fixture seed on existing preview database (skip path)."
       "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && bun run seed-free-tier-ship-review'
@@ -788,6 +797,9 @@ run_tooling_if_needed() {
   fi
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/apply-daily-pages-engagement-v2-seed.ts" ]]; then
     tooling_command+=' && (bun run scripts/apply-daily-pages-engagement-v2-seed.ts || true)'
+  fi
+  if should_run_signon_qa_seed && [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-signon-qa.ts" ]]; then
+    tooling_command+=' && bun run seed-preview-signon-qa'
   fi
   if [[ "$DATA_MODE" == "seed" && -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-teacher-notes-qa.ts" ]]; then
     tooling_command+=' && bun run seed-preview-teacher-notes-qa'
