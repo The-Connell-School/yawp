@@ -77,6 +77,7 @@ export async function resolveIdentifier(
 ) {
   const parsed = normalizeIdentifier(raw);
   if (!parsed) throw new FlowError('Enter your email or class code.');
+  flow.data.studentEmailOrigin = undefined;
   if (parsed.kind !== 'email') {
     flow.data.identifier = undefined;
     flow.data.userId = undefined;

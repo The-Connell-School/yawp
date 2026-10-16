@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "project.dev/v1",
+  "status": "ready",
+  "reused": false,
+  "pid": 46,
+  "url": "http://localhost:5406/",
+  "log": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-email-handle-notice/.worktree-local/dev.log"
+}
+
+Running 9 tests using 1 worker
+
+(node:98) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:98) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › e2e/tests/auth.unified-backend.spec.ts:101:3 › email-origin free-class notice survives navigation and validation at 1280 (8.5s)
+  ✓  2 [chromium] › e2e/tests/auth.unified-backend.spec.ts:101:3 › email-origin free-class notice survives navigation and validation at 390 (3.6s)
+  ✓  3 [chromium] › e2e/tests/auth.unified-backend.spec.ts:330:3 › existing passwordless teacher activates through the location selector at 1280 (2.7s)
+  ✓  4 [chromium] › e2e/tests/auth.unified-backend.spec.ts:330:3 › existing passwordless teacher activates through the location selector at 390 (2.1s)
+  ✓  5 [chromium] › e2e/tests/auth.unified-backend.spec.ts:433:3 › real handlers: invited student, email code errors/retry, verified signup and reset at 1280 (11.6s)
+  ✓  6 [chromium] › e2e/tests/auth.unified-backend.spec.ts:433:3 › real handlers: invited student, email code errors/retry, verified signup and reset at 390 (11.2s)
+  ✓  7 [chromium] › e2e/tests/auth.unified-backend.spec.ts:586:1 › flag off retains live legacy login, signup, class links, and direct callback gates (3.1s)
+  ✓  8 [chromium] › e2e/tests/auth.unified-backend.spec.ts:623:1 › bare short and reserved handle words resolve as real class codes in the browser (1.3s)
+  ✓  9 [chromium] › e2e/tests/auth.unified-backend.spec.ts:648:1 › local rollout rollback restores legacy views and blocks an in-flight reset (5.7s)
+
+  9 passed (51.5s)
+
+Running 2 tests using 1 worker
+
+(node:659) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:659) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › e2e/tests/auth.unified-classcode.spec.ts:51:3 › class code New and Returning real handlers at 1280 (4.3s)
+  ✓  2 [chromium] › e2e/tests/auth.unified-classcode.spec.ts:51:3 › class code New and Returning real handlers at 390 (3.7s)
+
+  2 passed (9.4s)
+{
+  "schemaVersion": "project.dev/v1",
+  "status": "stopped",
+  "pid": 46,
+  "url": "http://localhost:5406/",
+  "log": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-email-handle-notice/.worktree-local/dev.log"
+}

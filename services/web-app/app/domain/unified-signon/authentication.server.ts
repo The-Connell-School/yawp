@@ -178,7 +178,7 @@ export async function finishAuthentication(
     });
   }
   let trialDestination: string | null = null;
-  if (!user.mustChangePassword && memberships.length) {
+  if (!user.mustChangePassword) {
     const application = await loadFreeTierGateApplication(userId);
     try {
       await enforceFreeTierTeacherGate({

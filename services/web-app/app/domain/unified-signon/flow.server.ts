@@ -3,7 +3,7 @@ import { createCookie } from 'react-router';
 import type { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 import { shouldUseSecureCookies } from '~/utils/cookie-security.server';
-import type { SignonState } from './contracts';
+import { identifierKind, type SignonState } from './contracts';
 
 export const digest = (value: string) =>
   createHash('sha256').update(value).digest('hex');
@@ -46,6 +46,8 @@ export type FlowData = {
     linkUserId?: string;
   };
   pendingGoogle?: { subject: string; email: string };
+  /** Display context retained after the student flow discards its email. */
+  studentEmailOrigin?: boolean;
   studentChoice?: 'new' | 'returning';
   studentGoogle?: { subject: string };
   completed?: boolean;
@@ -148,6 +150,16 @@ export function stateFor(flow: Flow, state: SignonState) {
   flow.data.state = {
     ...(classInfo ? { classInfo } : {}),
     ...state,
+    ...(state.screen === 'class-handle'
+      ? {
+          emailOrigin:
+            (flow.data.studentEmailOrigin ??
+              identifierKind(flow.data.identifier ?? '') === 'email') &&
+            flow.data.proof !== 'google' &&
+            !flow.data.pendingGoogle &&
+            !flow.data.studentGoogle,
+        }
+      : {}),
     ...(flow.data.proof === 'google' ? { provider: 'google' as const } : {}),
     flowToken: flow.token,
   };

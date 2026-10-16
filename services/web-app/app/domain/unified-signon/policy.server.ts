@@ -32,8 +32,10 @@ export function postAuthenticationDestination(input: {
   redirectTo: string;
 }) {
   if (input.mustChangePassword) return '/auth/required-password-change';
-  if (!input.activeMemberships) return 'inactive';
+  // A free-trial application decides the next page even before the account
+  // has any active role (for example a student account applying to teach).
   if (input.trialDestination) return input.trialDestination;
+  if (!input.activeMemberships) return 'inactive';
   if (input.activeMemberships > 1) return 'membership';
   return safeRedirect(input.redirectTo, '/app');
 }

@@ -1,0 +1,18 @@
+/* Match the unified sign-in's system sans typography, white card and existing Button tokens. */
+.demo-feedback-trigger,
+.demo-feedback-panel,
+.demo-feedback-panel :is(h2, p, label, textarea, button) {
+  font-family: var(--font-system-sans);
+}
+.demo-feedback-panel h2 {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.demo-feedback-panel textarea {
+  font-size: 16px;
+}
+.demo-feedback-panel label {
+  font-size: 16px;
+  line-height: 22px;
+}
