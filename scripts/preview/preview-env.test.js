@@ -306,7 +306,8 @@ describe('buildPreviewEnv', () => {
     expect(workflow).toContain('PREVIEW_SANITIZED_DUMP_VERSION');
     expect(workflow).toContain('PREVIEW_DB_DUMP_VERSION');
     expect(workflow).toContain('PREVIEW_ACCESS_MASTER_ORGANIZATION_ID');
-    const events = Bun.YAML.parse(workflow).on.pull_request_target.types;
+    // Quote GitHub's YAML key so Bun's YAML 1.1 parser keeps it a string.
+    const events = Bun.YAML.parse(workflow.replace(/^on:/m, '"on":')).on.pull_request_target.types;
     for (const event of ['opened', 'synchronize', 'reopened', 'ready_for_review', 'labeled', 'unlabeled', 'closed']) {
       expect(events).toContain(event);
     }
