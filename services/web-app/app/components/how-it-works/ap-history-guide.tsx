@@ -9,13 +9,15 @@
  * (domain/ap-history/rubric.ts, api.domain.grade-essay-ai), the grade release
  * route and the paste report. See docs/how-to-guides.md.
  *
- * The stills were captured in YAWP! with a demo class and live in
- * public/img/ap-history-guide, so the page reaches no outside site.
+ * The clips and stills were recorded in YAWP! with a demo class and live in
+ * public/img/ap-history-guide, so the page reaches no outside site. The
+ * grading step stays a still: the rubric is the thing to show there.
  *
  * Paid teachers open it from the type's page; free classroom teachers open it
  * as a teaser from a locked tile. Each route frames it with its own way back.
  */
 import {
+  GuideClip,
   GuideCopy,
   GuideFooter,
   GuideH3,
@@ -36,7 +38,7 @@ const WILL = [
   'Coach each student toward the points on the College Board DBQ and LEQ rubrics.',
   'Keep the prompt and every source beside the student’s draft.',
   'Lock in the prompt, sources, and rubric when you assign it.',
-  'Suggest a score and feedback for each rubric point for you to review.',
+  'Suggest a rubric score and feedback for you to review.',
   'Show you any text pasted in from outside YAWP!',
 ];
 
@@ -53,6 +55,16 @@ const WHERE = [
   'At the end of a unit, to practice that period’s essay.',
   'In the weeks before the AP exam.',
 ];
+
+function clip(name: string, label: string) {
+  return (
+    <GuideClip
+      src={`${MEDIA}/${name}.mp4`}
+      poster={`${MEDIA}/${name}.jpg`}
+      label={label}
+    />
+  );
+}
 
 function still(name: string, alt: string, height: number) {
   return (
@@ -79,8 +91,8 @@ export function ApHistoryGuide({
         highlight="one rubric point at a time."
         lede="Students write DBQs and LEQs with the sources beside their draft and a Tutor that coaches toward each point on the College Board rubric. You pick the prompt and release the grade."
         image={{
-          src: `${MEDIA}/student.jpg`,
-          alt: 'A student’s Civil War and Reconstruction DBQ. The Tutor is on the left, the student’s opening sentences are in the middle, and Document A, the Emancipation Proclamation, is open on the right.',
+          src: `${MEDIA}/hero.jpg`,
+          alt: 'A student’s Civil War and Reconstruction DBQ. The Tutor is on the left, the student’s draft is in the middle, and Document C, the Mississippi Black Codes, is open on the right.',
           width: 1120,
           height: 700,
           caption: 'A DBQ on the Civil War and Reconstruction',
@@ -93,10 +105,9 @@ export function ApHistoryGuide({
         title="DBQs and LEQs for three AP History courses"
       >
         <GuideRow
-          media={still(
+          media={clip(
             'library',
-            'The AP History Prompt Library, filtered by course, essay type, reasoning skill, and difficulty. Each prompt shows its essay type, period, reasoning skill, and number of sources.',
-            863
+            'The AP History Prompt Library, filtered to AP U.S. History DBQs, then opening Civil War and Reconstruction.'
           )}
         >
           <GuideH3>A prompt library ready to assign</GuideH3>
@@ -118,10 +129,9 @@ export function ApHistoryGuide({
       >
         <GuideRow
           flip
-          media={still(
+          media={clip(
             'assign',
-            'The New Assignment sheet for the Civil War and Reconstruction DBQ, with a class checked, optional dates, and the first of seven sources showing.',
-            1167
+            'The New Assignment sheet for the Civil War and Reconstruction DBQ: a class is checked, the teacher pages through the first three of seven sources, and creates the assignment.'
           )}
         >
           <GuideStep n={1}>Pick a prompt</GuideStep>
@@ -133,10 +143,9 @@ export function ApHistoryGuide({
         </GuideRow>
 
         <GuideRow
-          media={still(
+          media={clip(
             'student',
-            'A student writing a DBQ. The Tutor’s first section is Read the Documents, and the sources sit in a panel beside the draft.',
-            700
+            'A student writing a DBQ. The Tutor’s first section is Read the Documents. The student opens Document A, writes an opening sentence, then opens Document C.'
           )}
         >
           <GuideStep n={2}>Students write with the Tutor</GuideStep>
@@ -159,11 +168,11 @@ export function ApHistoryGuide({
           )}
         >
           <GuideStep n={3}>Grade and release</GuideStep>
-          <GuideH3>Feedback on every rubric point</GuideH3>
+          <GuideH3>Scored on the AP rubric</GuideH3>
           <GuideCopy>
-            After students submit, the Grading Assistant suggests each point
-            with a comment. Change anything you disagree with, then release the
-            grade.
+            After students submit, the Grading Assistant scores the essay on the
+            AP rubric and drafts feedback. Change anything you disagree with,
+            then release the grade.
           </GuideCopy>
         </GuideRow>
 
@@ -183,7 +192,7 @@ export function ApHistoryGuide({
       <WillWont will={WILL} wont={WONT} />
 
       <GuideFooter
-        note="Screenshots use a demo class and a sample draft."
+        note="Clips and screenshots use a demo class and a sample draft."
         startTo={startTo}
         startLabel={startLabel}
       />
