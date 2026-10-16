@@ -1,7 +1,13 @@
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { THESIS_ESSAY_DECKS, type ThesisEssayDeck } from './thesis-essay-decks';
+import {
+  THESIS_ESSAY_DECKS,
+  THESIS_ESSAY_MATERIALS,
+  deckMaterial,
+  type ThesisEssayDeck,
+  type ThesisEssayMaterial,
+} from './thesis-essay-decks';
 
 /**
  * Where the deck files are. The server runs from services/web-app (start.sh
@@ -17,22 +23,29 @@ function deckDirectory(): string | null {
   return candidates.find((dir) => existsSync(dir)) ?? null;
 }
 
-function deckPath(deck: ThesisEssayDeck): string | null {
+function materialPath(material: ThesisEssayMaterial): string | null {
   const dir = deckDirectory();
-  return dir ? path.join(dir, `${deck.slug}.pptx`) : null;
+  return dir ? path.join(dir, material.fileName) : null;
+}
+
+function isOnDisk(material: ThesisEssayMaterial): boolean {
+  const file = materialPath(material);
+  return file != null && existsSync(file);
 }
 
 /** The decks that have a file on disk, in lesson order. */
 export function listAvailableThesisEssayDecks(): ThesisEssayDeck[] {
-  return THESIS_ESSAY_DECKS.filter((deck) => {
-    const file = deckPath(deck);
-    return file != null && existsSync(file);
-  });
+  return THESIS_ESSAY_DECKS.filter((deck) => isOnDisk(deckMaterial(deck)));
 }
 
-/** A deck's bytes, or null when its file is not there. */
-export async function readThesisEssayDeck(deck: ThesisEssayDeck): Promise<Buffer | null> {
-  const file = deckPath(deck);
+/** The slugs of every deck, lesson plan and handout that has a file on disk. */
+export function listAvailableThesisEssayMaterialSlugs(): Set<string> {
+  return new Set(THESIS_ESSAY_MATERIALS.filter(isOnDisk).map((material) => material.slug));
+}
+
+/** A deck's, lesson plan's or handout's bytes, or null when its file is not there. */
+export async function readThesisEssayMaterial(material: ThesisEssayMaterial): Promise<Buffer | null> {
+  const file = materialPath(material);
   if (!file || !existsSync(file)) return null;
   return readFile(file);
 }

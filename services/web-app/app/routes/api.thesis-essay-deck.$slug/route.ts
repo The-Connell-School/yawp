@@ -2,13 +2,14 @@ import { invariantResponse } from '@epic-web/invariant';
 import { type LoaderFunctionArgs } from 'react-router';
 import { THESIS_ESSAY_DECKS_FLAG } from '~/domain/feature-flags/feature-flags';
 import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { PPTX_CONTENT_TYPE, deckBySlug } from '~/domain/thesis-essay-decks/thesis-essay-decks';
-import { readThesisEssayDeck } from '~/domain/thesis-essay-decks/thesis-essay-decks.server';
+import { materialBySlug } from '~/domain/thesis-essay-decks/thesis-essay-decks';
+import { readThesisEssayMaterial } from '~/domain/thesis-essay-decks/thesis-essay-decks.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 
 /**
- * A Thesis-Driven Essay lesson deck, for a teacher to download from the
- * assignment type's Modules. Teachers only, and only while the flag is on;
+ * A Thesis-Driven Essay lesson deck, its lesson plan, or the Day 1 student
+ * sign-up handout, for a teacher to download from the assignment type's
+ * Modules. Teachers only, and only while the flag is on;
  * anything else is a 404, as if the route did not exist.
  */
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -21,16 +22,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     { status: 404 }
   );
 
-  const deck = params.slug ? deckBySlug(params.slug) : null;
-  invariantResponse(deck, 'Not found', { status: 404 });
-  const bytes = await readThesisEssayDeck(deck);
+  const material = params.slug ? materialBySlug(params.slug) : null;
+  invariantResponse(material, 'Not found', { status: 404 });
+  const bytes = await readThesisEssayMaterial(material);
   invariantResponse(bytes, 'Not found', { status: 404 });
 
   return new Response(new Uint8Array(bytes), {
     headers: {
-      'Content-Type': PPTX_CONTENT_TYPE,
+      'Content-Type': material.contentType,
       'Content-Length': bytes.byteLength.toString(),
-      'Content-Disposition': `attachment; filename="${deck.downloadName}"`,
+      'Content-Disposition': `attachment; filename="${material.downloadName}"`,
       // Behind a session and a flag, so never in a shared cache.
       'Cache-Control': 'private, max-age=3600',
     },

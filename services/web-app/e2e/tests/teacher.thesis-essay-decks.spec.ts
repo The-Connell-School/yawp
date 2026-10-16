@@ -49,14 +49,17 @@ test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
     await page.getByRole('button', { name: 'Pre-writing' }).click();
     await expect(page.getByText('Find a specific focus for your essay.')).toBeVisible();
     await expect(page.getByRole('link', { name: /slide deck/i })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /lesson plan:/i })).toHaveCount(0);
     // The Teachers' Lounge pointer is unchanged.
     await expect(page.getByText(/lesson materials are available in the teachers/i)).toBeVisible();
 
     const response = await page.request.get('/api/thesis-essay-deck/lesson-2-pre-writing');
     expect(response.status()).toBe(404);
+    const plan = await page.request.get('/api/thesis-essay-deck/lesson-2-pre-writing-lesson-plan');
+    expect(plan.status()).toBe(404);
   });
 
-  test('puts each step’s deck in its module, and it downloads', async ({
+  test('puts each step’s deck and lesson plan in its module, and they download', async ({
     page,
     signIn,
     e2eContext,
@@ -66,17 +69,27 @@ test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
     await page.goto(`/app/assignment-types/${e2eContext.thesisEssayAssignmentTypeId}`);
 
     await page.getByRole('button', { name: 'Modules' }).click();
-    await expect(page.getByText(/each module has its slide deck/i)).toBeVisible();
-    // Day 1 has no step of its own, so its deck sits above the list.
+    await expect(page.getByText(/each module has its slide deck and lesson plan/i)).toBeVisible();
+    // Day 1 has no step of its own, so its materials sit above the list.
     await expect(page.getByText(/introduce YAWP! on Day 1/i)).toBeVisible();
     await expect(
       page.getByRole('link', { name: /slide deck: lesson 1 · introduce students to yawp!/i })
     ).toHaveAttribute('href', '/api/thesis-essay-deck/lesson-1-day-1');
+    await expect(
+      page.getByRole('link', { name: /lesson plan: lesson 1 · introduce students to yawp!/i })
+    ).toHaveAttribute('href', '/api/thesis-essay-deck/lesson-1-day-1-lesson-plan');
+    await expect(page.getByRole('link', { name: /student sign-up handout/i })).toHaveAttribute(
+      'href',
+      '/api/thesis-essay-deck/student-sign-up'
+    );
 
     await page.getByRole('button', { name: 'Pre-writing' }).click();
     const preWriting = page.getByRole('link', { name: /slide deck: lesson 2 · pre-writing/i });
     await expect(preWriting).toBeVisible();
     await expect(preWriting).toHaveAttribute('href', '/api/thesis-essay-deck/lesson-2-pre-writing');
+    await expect(
+      page.getByRole('link', { name: /lesson plan: lesson 2 · pre-writing/i })
+    ).toHaveAttribute('href', '/api/thesis-essay-deck/lesson-2-pre-writing-lesson-plan');
 
     await page.getByRole('button', { name: 'Thesis Statement' }).click();
     await expect(
@@ -87,6 +100,7 @@ test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
     // plus the two steps.
     await page.getByRole('button', { name: 'The Thesis-Driven Essay' }).click();
     await expect(page.getByRole('link', { name: /slide deck/i })).toHaveCount(3);
+    await expect(page.getByRole('link', { name: /lesson plan:/i })).toHaveCount(3);
 
     const response = await page.request.get('/api/thesis-essay-deck/lesson-2-pre-writing');
     expect(response.status()).toBe(200);
@@ -96,6 +110,12 @@ test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
     expect(response.headers()['content-disposition']).toContain('.pptx');
     // A .pptx is a zip: it starts with "PK".
     expect((await response.body()).subarray(0, 2).toString()).toBe('PK');
+
+    const plan = await page.request.get('/api/thesis-essay-deck/lesson-2-pre-writing-lesson-plan');
+    expect(plan.status()).toBe(200);
+    expect(plan.headers()['content-type']).toBe('application/pdf');
+    expect(plan.headers()['content-disposition']).toContain('.pdf');
+    expect((await plan.body()).subarray(0, 5).toString()).toBe('%PDF-');
   });
 
   test('has no decks on other assignment types', async ({ page, signIn, e2eContext }) => {
@@ -104,5 +124,6 @@ test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
     await page.goto(`/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`);
     await expect(page.getByRole('heading', { level: 1, name: 'Daily Pages' })).toBeVisible();
     await expect(page.getByRole('link', { name: /slide deck/i })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /lesson plan:/i })).toHaveCount(0);
   });
 });

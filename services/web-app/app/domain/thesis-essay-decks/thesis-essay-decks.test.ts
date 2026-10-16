@@ -1,10 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 import {
   DAY_ONE_DECK,
+  SIGN_UP_HANDOUT,
   THESIS_ESSAY_DECKS,
+  THESIS_ESSAY_MATERIALS,
   deckBySlug,
   deckForModuleTitle,
   deckHref,
+  materialBySlug,
+  materialHref,
+  materialsForDeck,
 } from './thesis-essay-decks';
 
 describe('THESIS_ESSAY_DECKS', () => {
@@ -65,5 +70,42 @@ describe('deckBySlug / deckHref', () => {
   test('Day 1 has its own deck, which no step matches', () => {
     expect(DAY_ONE_DECK.lesson).toBe(1);
     expect(deckForModuleTitle(DAY_ONE_DECK.title)).toBeNull();
+  });
+});
+
+describe('THESIS_ESSAY_MATERIALS', () => {
+  test('gives every deck its lesson plan, as a PDF next to it', () => {
+    for (const deck of THESIS_ESSAY_DECKS) {
+      const [slides, plan] = materialsForDeck(deck);
+      expect(slides).toMatchObject({ slug: deck.slug, kind: 'deck', fileName: `${deck.slug}.pptx` });
+      expect(plan).toMatchObject({
+        slug: `${deck.slug}-lesson-plan`,
+        kind: 'lesson-plan',
+        fileName: `${deck.slug}-lesson-plan.pdf`,
+        contentType: 'application/pdf',
+      });
+      expect(plan.downloadName).toMatch(/ - Lesson Plan\.pdf$/);
+    }
+  });
+
+  test('adds the student sign-up handout to Day 1 only', () => {
+    expect(materialsForDeck(DAY_ONE_DECK).map((m) => m.kind)).toEqual(['deck', 'lesson-plan', 'handout']);
+    expect(materialsForDeck(THESIS_ESSAY_DECKS[1]).map((m) => m.kind)).toEqual(['deck', 'lesson-plan']);
+    expect(SIGN_UP_HANDOUT.fileName).toBe('student-sign-up.pdf');
+  });
+
+  test('gives every material a unique, URL-safe slug', () => {
+    const slugs = THESIS_ESSAY_MATERIALS.map((material) => material.slug);
+    expect(new Set(slugs).size).toBe(slugs.length);
+    for (const slug of slugs) expect(slug).toMatch(/^[a-z0-9-]+$/);
+  });
+
+  test('finds a material by slug, and nothing for an unknown one', () => {
+    const plan = materialBySlug('lesson-2-pre-writing-lesson-plan');
+    expect(plan?.kind).toBe('lesson-plan');
+    expect(plan && materialHref(plan)).toBe('/api/thesis-essay-deck/lesson-2-pre-writing-lesson-plan');
+    expect(materialBySlug('lesson-2-pre-writing')?.kind).toBe('deck');
+    expect(materialBySlug('../student-sign-up')).toBeNull();
+    expect(materialBySlug('constructor')).toBeNull();
   });
 });

@@ -47,10 +47,13 @@ import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.serve
 import {
   DAY_ONE_DECK,
   deckForModuleTitle,
-  deckHref,
   deckLabel,
+  materialHref,
+  materialsForDeck,
+  type ThesisEssayDeck,
+  type ThesisEssayMaterial,
 } from '~/domain/thesis-essay-decks/thesis-essay-decks';
-import { listAvailableThesisEssayDecks } from '~/domain/thesis-essay-decks/thesis-essay-decks.server';
+import { listAvailableThesisEssayMaterialSlugs } from '~/domain/thesis-essay-decks/thesis-essay-decks.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
@@ -722,31 +725,30 @@ export async function action({ request, params }: ActionFunctionArgs) {
   );
 }
 
-type ThesisDeckLink = { label: string; href: string };
+type ThesisDeckLink = { kind: ThesisEssayMaterial['kind']; label: string; href: string };
 
 /**
- * The deck links for the Thesis-Driven Essay's Modules, by module id. Null
- * when no deck file is there at all, so the page keeps its usual wording.
+ * The deck, lesson plan (and, on Day 1, sign-up handout) links for the
+ * Thesis-Driven Essay's Modules, by module id. Only files that are there are
+ * offered. Null when none are, so the page keeps its usual wording.
  */
 function buildThesisDecks(modules: Array<{ id: string; title: string }>): {
-  dayOne: ThesisDeckLink | null;
-  byModuleId: Record<string, ThesisDeckLink>;
+  dayOne: ThesisDeckLink[];
+  byModuleId: Record<string, ThesisDeckLink[]>;
 } | null {
-  const available = new Set(listAvailableThesisEssayDecks().map((deck) => deck.slug));
+  const available = listAvailableThesisEssayMaterialSlugs();
   if (available.size === 0) return null;
-  const link = (deck: typeof DAY_ONE_DECK): ThesisDeckLink => ({
-    label: deckLabel(deck),
-    href: deckHref(deck),
-  });
-  const byModuleId: Record<string, ThesisDeckLink> = {};
+  const links = (deck: ThesisEssayDeck): ThesisDeckLink[] =>
+    materialsForDeck(deck)
+      .filter((material) => available.has(material.slug))
+      .map((material) => ({ kind: material.kind, label: deckLabel(deck), href: materialHref(material) }));
+  const byModuleId: Record<string, ThesisDeckLink[]> = {};
   for (const module of modules) {
     const deck = deckForModuleTitle(module.title);
-    if (deck && available.has(deck.slug)) byModuleId[module.id] = link(deck);
+    const moduleLinks = deck ? links(deck) : [];
+    if (moduleLinks.length) byModuleId[module.id] = moduleLinks;
   }
-  return {
-    dayOne: available.has(DAY_ONE_DECK.slug) ? link(DAY_ONE_DECK) : null,
-    byModuleId,
-  };
+  return { dayOne: links(DAY_ONE_DECK), byModuleId };
 }
 
 /**
@@ -766,17 +768,31 @@ export function showModulesAccordion(
   return !isExitTicketAssignmentType(assignmentType);
 }
 
-/** A lesson's slide deck, as a download link styled like a small button. */
-function ThesisDeckDownload({ deck }: { deck: ThesisDeckLink }) {
+const THESIS_LINK_TEXT: Record<ThesisDeckLink['kind'], { prefix: string; type: string }> = {
+  deck: { prefix: 'Slide deck', type: '.pptx' },
+  'lesson-plan': { prefix: 'Lesson plan', type: '.pdf' },
+  handout: { prefix: 'Student sign-up handout', type: '.pdf' },
+};
+
+/** A lesson's deck, lesson plan or handout, as download links styled like small buttons. */
+function ThesisDeckDownloads({ links }: { links: ThesisDeckLink[] }) {
   return (
-    <a
-      href={deck.href}
-      download
-      className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-accent"
-    >
-      Slide deck: {deck.label}
-      <span className="text-xs text-muted-foreground">(.pptx)</span>
-    </a>
+    <div className="flex flex-wrap gap-2">
+      {links.map((link) => {
+        const text = THESIS_LINK_TEXT[link.kind];
+        return (
+          <a
+            key={link.href}
+            href={link.href}
+            download
+            className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-accent"
+          >
+            {link.kind === 'handout' ? text.prefix : `${text.prefix}: ${link.label}`}
+            <span className="text-xs text-muted-foreground">({text.type})</span>
+          </a>
+        );
+      })}
+    </div>
   );
 }
 
@@ -1069,8 +1085,8 @@ export default function AppAssignmentTypesIdRoute() {
                   <p className="mb-3 text-sm text-muted-foreground">
                     Click on the modules to see the overview of the writing
                     process that you&rsquo;ll teach your students. Each module
-                    has its slide deck to download and teach from. Training
-                    videos and lesson plans are in the Teachers&rsquo; Lounge.
+                    has its slide deck and lesson plan to download and teach
+                    from. Training videos are in the Teachers&rsquo; Lounge.
                   </p>
                 ) : showThesisLibrary ? (
                   <p className="mb-3 text-sm text-muted-foreground">
@@ -1080,10 +1096,10 @@ export default function AppAssignmentTypesIdRoute() {
                     Teachers&rsquo; Lounge.
                   </p>
                 ) : null}
-                {data.thesisDecks?.dayOne ? (
+                {data.thesisDecks?.dayOne.length ? (
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
                     <span>Before the first module: introduce YAWP! on Day 1.</span>
-                    <ThesisDeckDownload deck={data.thesisDecks.dayOne} />
+                    <ThesisDeckDownloads links={data.thesisDecks.dayOne} />
                   </div>
                 ) : null}
                 <Accordion type="multiple">
@@ -1100,8 +1116,8 @@ export default function AppAssignmentTypesIdRoute() {
                         {cm.description || 'No description.'}
                         {data.thesisDecks?.byModuleId[cm.id] ? (
                           <div className="mt-3">
-                            <ThesisDeckDownload
-                              deck={data.thesisDecks.byModuleId[cm.id]}
+                            <ThesisDeckDownloads
+                              links={data.thesisDecks.byModuleId[cm.id]}
                             />
                           </div>
                         ) : null}

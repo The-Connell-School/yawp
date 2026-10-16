@@ -4,12 +4,12 @@ import { redirect } from 'react-router';
 const requireUserId = mock();
 const requireMembership = mock();
 const isFeatureFlagEnabled = mock();
-const readThesisEssayDeck = mock();
+const readThesisEssayMaterial = mock();
 
 mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
 mock.module('~/domain/feature-flags/feature-flags.server', () => ({ isFeatureFlagEnabled }));
 mock.module('~/domain/thesis-essay-decks/thesis-essay-decks.server', () => ({
-  readThesisEssayDeck,
+  readThesisEssayMaterial,
 }));
 
 const { loader } = await import('./route');
@@ -34,13 +34,13 @@ async function statusOf(promise: Promise<unknown>): Promise<number> {
 
 describe('api.thesis-essay-deck.$slug', () => {
   beforeEach(() => {
-    for (const fn of [requireUserId, requireMembership, isFeatureFlagEnabled, readThesisEssayDeck]) {
+    for (const fn of [requireUserId, requireMembership, isFeatureFlagEnabled, readThesisEssayMaterial]) {
       fn.mockReset();
     }
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({ id: 'm-1', role: 'TEACHER', organization: { id: 'org-1' } });
     isFeatureFlagEnabled.mockResolvedValue(true);
-    readThesisEssayDeck.mockResolvedValue(Buffer.from('PK deck bytes'));
+    readThesisEssayMaterial.mockResolvedValue(Buffer.from('PK deck bytes'));
   });
 
   test('refuses a caller with no session', async () => {
@@ -48,7 +48,7 @@ describe('api.thesis-essay-deck.$slug', () => {
       throw redirect('/auth/login');
     });
     await expect(call('lesson-2-pre-writing')).rejects.toBeDefined();
-    expect(readThesisEssayDeck).not.toHaveBeenCalled();
+    expect(readThesisEssayMaterial).not.toHaveBeenCalled();
   });
 
   test('serves a teacher the deck as a .pptx download', async () => {
@@ -64,25 +64,43 @@ describe('api.thesis-essay-deck.$slug', () => {
     expect(isFeatureFlagEnabled).toHaveBeenCalledWith('thesis_essay_decks', 'org-1');
   });
 
+  test('serves a lesson plan as a .pdf download', async () => {
+    readThesisEssayMaterial.mockResolvedValue(Buffer.from('%PDF- plan bytes'));
+    const response = await call('lesson-2-pre-writing-lesson-plan');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toBe('application/pdf');
+    expect(response.headers.get('Content-Disposition')).toContain('Lesson Plan.pdf');
+    expect(readThesisEssayMaterial).toHaveBeenCalledWith(
+      expect.objectContaining({ fileName: 'lesson-2-pre-writing-lesson-plan.pdf' })
+    );
+  });
+
+  test('serves the Day 1 student sign-up handout', async () => {
+    readThesisEssayMaterial.mockResolvedValue(Buffer.from('%PDF- handout'));
+    const response = await call('student-sign-up');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toBe('application/pdf');
+  });
+
   test('is not there while the flag is off', async () => {
     isFeatureFlagEnabled.mockResolvedValue(false);
     expect(await statusOf(call('lesson-2-pre-writing'))).toBe(404);
-    expect(readThesisEssayDeck).not.toHaveBeenCalled();
+    expect(readThesisEssayMaterial).not.toHaveBeenCalled();
   });
 
   test('is not there for students', async () => {
     requireMembership.mockResolvedValue({ id: 'm-2', role: 'STUDENT', organization: { id: 'org-1' } });
     expect(await statusOf(call('lesson-2-pre-writing'))).toBe(404);
-    expect(readThesisEssayDeck).not.toHaveBeenCalled();
+    expect(readThesisEssayMaterial).not.toHaveBeenCalled();
   });
 
   test('404s an unknown slug without touching the disk', async () => {
     expect(await statusOf(call('../../etc/passwd'))).toBe(404);
-    expect(readThesisEssayDeck).not.toHaveBeenCalled();
+    expect(readThesisEssayMaterial).not.toHaveBeenCalled();
   });
 
   test('404s a known deck that has not been built yet', async () => {
-    readThesisEssayDeck.mockResolvedValue(null);
+    readThesisEssayMaterial.mockResolvedValue(null);
     expect(await statusOf(call('lesson-7-titles'))).toBe(404);
   });
 });

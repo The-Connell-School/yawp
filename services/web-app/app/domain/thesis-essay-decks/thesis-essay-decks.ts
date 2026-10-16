@@ -22,6 +22,23 @@ export interface ThesisEssayDeck {
 
 export const PPTX_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+export const PDF_CONTENT_TYPE = 'application/pdf';
+
+/**
+ * A file a teacher can download from the Modules: a lesson's deck, its
+ * lesson plan, or the Day 1 student sign-up handout. All are generated
+ * together by scripts/thesis-essay-decks, so a plan's slide numbers match
+ * its deck.
+ */
+export interface ThesisEssayMaterial {
+  /** Its address: /api/thesis-essay-deck/<slug>. */
+  slug: string;
+  kind: 'deck' | 'lesson-plan' | 'handout';
+  /** Its file in resources/thesis-essay-decks. */
+  fileName: string;
+  downloadName: string;
+  contentType: string;
+}
 
 export const THESIS_ESSAY_DECKS: readonly ThesisEssayDeck[] = [
   {
@@ -98,8 +115,57 @@ export function deckBySlug(slug: string): ThesisEssayDeck | null {
   return THESIS_ESSAY_DECKS.find((deck) => deck.slug === slug) ?? null;
 }
 
+export function deckMaterial(deck: ThesisEssayDeck): ThesisEssayMaterial {
+  return {
+    slug: deck.slug,
+    kind: 'deck',
+    fileName: `${deck.slug}.pptx`,
+    downloadName: deck.downloadName,
+    contentType: PPTX_CONTENT_TYPE,
+  };
+}
+
+/** The lesson plan that goes with a deck: same lesson, same slide numbers. */
+export function lessonPlanMaterial(deck: ThesisEssayDeck): ThesisEssayMaterial {
+  return {
+    slug: `${deck.slug}-lesson-plan`,
+    kind: 'lesson-plan',
+    fileName: `${deck.slug}-lesson-plan.pdf`,
+    downloadName: deck.downloadName.replace(/\.pptx$/, ' - Lesson Plan.pdf'),
+    contentType: PDF_CONTENT_TYPE,
+  };
+}
+
+/** Day 1's handout for students: today's join flow. */
+export const SIGN_UP_HANDOUT: ThesisEssayMaterial = {
+  slug: 'student-sign-up',
+  kind: 'handout',
+  fileName: 'student-sign-up.pdf',
+  downloadName: 'YAWP! Day 1 - Student Sign-up.pdf',
+  contentType: PDF_CONTENT_TYPE,
+};
+
+export const THESIS_ESSAY_MATERIALS: readonly ThesisEssayMaterial[] = [
+  ...THESIS_ESSAY_DECKS.flatMap((deck) => [deckMaterial(deck), lessonPlanMaterial(deck)]),
+  SIGN_UP_HANDOUT,
+];
+
+/** What a step offers, in order: its deck, its lesson plan (and Day 1's handout). */
+export function materialsForDeck(deck: ThesisEssayDeck): ThesisEssayMaterial[] {
+  const materials = [deckMaterial(deck), lessonPlanMaterial(deck)];
+  return deck === DAY_ONE_DECK ? [...materials, SIGN_UP_HANDOUT] : materials;
+}
+
+export function materialBySlug(slug: string): ThesisEssayMaterial | null {
+  return THESIS_ESSAY_MATERIALS.find((material) => material.slug === slug) ?? null;
+}
+
+export function materialHref(material: ThesisEssayMaterial): string {
+  return `/api/thesis-essay-deck/${material.slug}`;
+}
+
 export function deckHref(deck: ThesisEssayDeck): string {
-  return `/api/thesis-essay-deck/${deck.slug}`;
+  return materialHref(deckMaterial(deck));
 }
 
 /** What the page shows for a deck: "Lesson 3 · Thesis Statement". */
