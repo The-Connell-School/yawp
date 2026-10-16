@@ -45,6 +45,8 @@ export const UNIFIED_SIGN_ON_FLAG = 'unified-sign-on' as const;
 
 /** Free tier onboarding v2. Missing or invalid Setting values stay off in every environment. */
 export const FREE_TIER_ONBOARDING_V2_FLAG = 'free-tier-onboarding-v2' as const;
+/** Global class-code validation and Generate code controls. Default off. */
+export const CLASS_CODE_UNIQUE_FLAG = 'classcode-unique' as const;
 
 export const FEATURE_FLAGS = {
   [LESSON_PLANNER_FLAG]: {
@@ -76,6 +78,10 @@ export const FEATURE_FLAGS = {
     label: 'Free tier onboarding v2',
     description:
       'Approval reminders, forward requests, create-your-class step and locked preview for free-tier teachers.',
+  },
+  [CLASS_CODE_UNIQUE_FLAG]: {
+    label: 'Unique class codes',
+    description: 'Enforces global class-code availability and shows Generate code. Default off on demo and production. Only everyone mode is supported; targeted mode stays off because uniqueness spans all organizations.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 
