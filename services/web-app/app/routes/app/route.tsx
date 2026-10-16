@@ -1,3 +1,6 @@
+import './free-account.css';
+import { readFreeAccountUsage } from '~/domain/free-tier/inapp-usage.server';
+import { FreeAccountUsagePopover } from '~/components/free-account-usage';
 import { canUseMockAdmin, requireMockAdmin } from '~/utils/mock-admin.server';
 import {
   Form,
@@ -14,8 +17,8 @@ import {
   useRevalidator,
   useRouteLoaderData,
 } from 'react-router';
-import { Settings2, Cog } from 'lucide-react';
-import { useCallback, useEffect, useState, createContext } from 'react';
+import { Settings2, Cog, Microscope, Lock } from 'lucide-react';
+import { useCallback, useEffect, useState, useRef, createContext } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import {
   DoubleArrowLeftIcon,
@@ -91,6 +94,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     await requireMockAdmin(request);
     return data({
       mockAdminAvailable: true,
+      freeAccountUsage: null,
       schoolYearScope: {
         selected: ALL_SCHOOL_YEARS,
         options: [] as string[],
@@ -100,23 +104,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
   const userId = await requireUserId(request);
   const mockAdminAvailable = await canUseMockAdmin(userId);
-  const { isFreeTierEnabled } = await import(
-    '~/domain/feature-flags/feature-flags.server'
-  );
+  const { isFreeTierEnabled } =
+    await import('~/domain/feature-flags/feature-flags.server');
   const freeTierFeatureOn = await isFreeTierEnabled();
   const freeTierRouteOpen =
     freeTierFeatureOn || isDemoFreeTierRouteOpen(process.env);
-  const { loadFreeTierGateApplication, enforceFreeTierTeacherGate } = await import(
-    '~/domain/free-tier/free-tier-gate.server'
-  );
+  const { loadFreeTierGateApplication, enforceFreeTierTeacherGate } =
+    await import('~/domain/free-tier/free-tier-gate.server');
   const freeTierApplication = freeTierRouteOpen
     ? await loadFreeTierGateApplication(userId)
     : null;
 
   if (freeTierApplication) {
-    const { retryFreeClassroomProvisioningForUser } = await import(
-      '~/domain/free-tier/provision-free-classroom.server'
-    );
+    const { retryFreeClassroomProvisioningForUser } =
+      await import('~/domain/free-tier/provision-free-classroom.server');
     await retryFreeClassroomProvisioningForUser(userId);
     await enforceFreeTierTeacherGate({
       userId,
@@ -127,6 +128,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     if (pathname.startsWith('/app/free-tier')) {
       return data({
         mockAdminAvailable,
+        freeAccountUsage: null,
         schoolYearScope: {
           selected: ALL_SCHOOL_YEARS,
           options: [],
@@ -182,6 +184,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return data({
     mockAdminAvailable,
+    freeAccountUsage: await readFreeAccountUsage(profile, freeTierRouteOpen),
     schoolYearScope: {
       selected,
       options: selectableOptions,
@@ -214,10 +217,14 @@ function isAppNavLinkActive(linkTo: string, pathname: string) {
 export default function Route() {
   const location = useLocation();
   const user = useUser();
-  const { schoolYearScope, mockAdminAvailable } = useLoaderData<typeof loader>();
+  const shellData = useLoaderData<typeof loader>();
+  const { schoolYearScope, mockAdminAvailable } = shellData;
+  const freeAccountUsage =
+    'freeAccountUsage' in shellData ? shellData.freeAccountUsage : null;
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
   const isReadOnlyImpersonation = rootData?.impersonation?.isReadOnly ?? false;
+  const mobileNavTrigger = useRef<HTMLButtonElement>(null);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -277,7 +284,8 @@ export default function Route() {
     location.pathname
   );
 
-  const isFreeTierOnboardingShell = location.pathname.startsWith('/app/free-tier');
+  const isFreeTierOnboardingShell =
+    location.pathname.startsWith('/app/free-tier');
 
   if (isFreeTierOnboardingShell) {
     return (
@@ -289,6 +297,7 @@ export default function Route() {
 
   return (
     <main
+      data-free-account={freeAccountUsage ? true : undefined}
       className={cn(
         'flex h-screen min-h-screen overflow-hidden bg-background',
         {
@@ -364,7 +373,35 @@ export default function Route() {
             </Link>
           )}
           <SidebarNavLinks
-            sections={FLAT_SIDEBAR_SECTIONS}
+            sections={
+              freeAccountUsage
+                ? [
+                    {
+                      links: [
+                        ...FLAT_SIDEBAR_SECTIONS[0].links.filter((link) =>
+                          [
+                            '/app',
+                            '/app/my-classes',
+                            '/app/assignments',
+                            '/app/documents',
+                            '/app/lesson-planner',
+                          ].includes(link.to)
+                        ),
+                        {
+                          to: '/app/reporter',
+                          label: 'Reporter',
+                          icon: (
+                            <>
+                              <Microscope size={18} />
+                              <Lock size={12} />
+                            </>
+                          ),
+                        },
+                      ],
+                    },
+                  ]
+                : FLAT_SIDEBAR_SECTIONS
+            }
             user={user}
             navExpanded={navExpanded}
             pathname={location.pathname}
@@ -373,6 +410,15 @@ export default function Route() {
           />
         </div>
         <div className="flex flex-grow flex-col justify-end">
+          {freeAccountUsage && (
+            <FreeAccountUsagePopover
+              usage={freeAccountUsage}
+              expanded={navExpanded}
+              isMobile={isMobile}
+              onMobileOpen={() => setIsMobileNavOpen(false)}
+              onMobileClose={() => mobileNavTrigger.current?.focus()}
+            />
+          )}
           <Popover>
             <PopoverTrigger>
               <div className="flex items-center gap-2 border-t p-4 pb-6 transition hover:bg-foreground/5 sm:pb-3">
@@ -502,23 +548,30 @@ export default function Route() {
           <Button
             variant="outline"
             size="icon"
+            ref={mobileNavTrigger}
+            aria-label={freeAccountUsage ? 'Open app navigation' : undefined}
             onClick={() => setIsMobileNavOpen(true)}
           >
             <HamburgerIcon />
           </Button>
           <div className="flex items-center">
-            {breadcrumbs.map((bc, i) => (
-              <slot key={bc.key}>
-                {i === 0 ? (
-                  bc
-                ) : (
-                  <>
-                    <SlashIcon />
-                    {bc}
-                  </>
-                )}
-              </slot>
-            ))}
+            {freeAccountUsage &&
+            normalizePathname(location.pathname) === '/app' ? (
+              <span className="px-3 text-sm">Dashboard</span>
+            ) : (
+              breadcrumbs.map((bc, i) => (
+                <slot key={bc.key}>
+                  {i === 0 ? (
+                    bc
+                  ) : (
+                    <>
+                      <SlashIcon />
+                      {bc}
+                    </>
+                  )}
+                </slot>
+              ))
+            )}
           </div>
           <Button
             variant="outline"
