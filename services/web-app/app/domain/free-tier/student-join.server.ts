@@ -2,7 +2,10 @@ import type { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 import { getPasswordHash } from '~/utils/auth.server';
 import { clearFailedLoginRateLimitsForTarget } from '~/utils/rate-limit.server';
-import { normalizeLoginRateLimitTargetKey } from '~/utils/login-rate-limit-target';
+import {
+  classStudentLoginRateLimitTarget,
+  normalizeLoginRateLimitTargetKey,
+} from '~/utils/login-rate-limit-target';
 import {
   suggestAvailableUsernames,
   validateUsername,
@@ -138,7 +141,9 @@ export async function registerFreeTierStudent({
   joinToken: string;
   client?: Prisma.TransactionClient;
 }) {
-  const db = client ?? prisma;
+  // Typed as the transaction client: comparing the full client against it
+  // exceeds TypeScript's depth limit now that the schema is larger.
+  const db = client ?? (prisma as unknown as Prisma.TransactionClient);
   const usernameResult = validateUsername(rawUsername);
   if (!usernameResult.ok) {
     const suggestions = await suggestAvailableUsernames(rawUsername);
@@ -359,8 +364,13 @@ export async function teacherResetStudentPassword({
           isAdmin: true,
           isSuperAdmin: true,
           memberships: {
-            select: { role: true, isActive: true },
+            select: {
+              role: true,
+              isActive: true,
+              classesAsStudent: { select: { id: true } },
+            },
           },
+          classStudentHandles: { select: { classId: true, handle: true } },
         },
       },
     },
@@ -394,10 +404,29 @@ export async function teacherResetStudentPassword({
     prisma.session.deleteMany({ where: { userId: student.userId } }),
   ]);
 
-  if (student.user.username) {
+  // A reset changes this student's password everywhere. Unlock both legacy
+  // login and each active enrolled class's accepted handles, while preserving
+  // other students' limits and shared per-IP abuse controls.
+  const targets = new Set<string>();
+  if (student.user.username)
+    targets.add(normalizeLoginRateLimitTargetKey(student.user.username));
+  for (const membership of student.user.memberships) {
+    if (!membership.isActive || membership.role !== 'STUDENT') continue;
+    for (const klass of membership.classesAsStudent) {
+      if (student.user.username)
+        targets.add(
+          classStudentLoginRateLimitTarget(klass.id, student.user.username)
+        );
+      for (const alias of student.user.classStudentHandles) {
+        if (alias.classId === klass.id)
+          targets.add(classStudentLoginRateLimitTarget(klass.id, alias.handle));
+      }
+    }
+  }
+  for (const targetKey of targets) {
     await clearFailedLoginRateLimitsForTarget({
       route: '/auth/login',
-      targetKey: normalizeLoginRateLimitTargetKey(student.user.username),
+      targetKey,
     });
   }
 

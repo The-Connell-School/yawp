@@ -1,3 +1,4 @@
+import { signonRequestOrigin } from './origin.server';
 import { createHash } from 'node:crypto';
 import { createLocalJWKSet, jwtVerify, type JSONWebKeySet } from 'jose';
 import { redirect } from 'react-router';
@@ -13,7 +14,6 @@ import {
   withFlow,
   type Flow,
 } from './flow.server';
-import { prepareInvitation } from './invitations.server';
 import { finishAuthentication } from './authentication.server';
 
 export function googleAvailable() {
@@ -25,7 +25,7 @@ export function googleAvailable() {
 export function beginGoogle(flow: Flow, request: Request, linkUserId?: string) {
   if (!googleAvailable())
     throw new FlowError(
-      'Google sign-in is unavailable. Use your email or handle.',
+      'Google sign-in is unavailable. Use your email or class code.',
       503
     );
   const state = opaque();
@@ -33,7 +33,7 @@ export function beginGoogle(flow: Flow, request: Request, linkUserId?: string) {
   const verifier = opaque();
   const callback = new URL(
     '/auth/unified/google/callback',
-    request.url
+    signonRequestOrigin(request)
   ).toString();
   flow.data.google = {
     state: digest(state),
@@ -163,12 +163,18 @@ export async function googleCallback(request: Request): Promise<Response> {
       if (linked) {
         if (oauth.linkUserId && linked.userId !== oauth.linkUserId)
           throw new FlowError('This Google identity is already linked.', 403);
-        flow.data.identifier = identity.email;
+        flow.data.pendingGoogle = undefined;
+        flow.data.studentGoogle = undefined;
+        flow.data.invitationId = undefined;
+        flow.data.otp = undefined;
         flow.data.proof = 'google';
         const linkedUser = await tx.user.findUniqueOrThrow({
           where: { id: linked.userId },
-          select: { email: true },
+          select: { email: true, username: true },
         });
+        flow.data.identifier =
+          linkedUser.email ||
+          (linkedUser.username ? '@' + linkedUser.username : undefined);
         if (linkedUser.email?.toLowerCase() === identity.email) {
           const invite = await tx.invitation.findFirst({
             where: {
@@ -209,34 +215,22 @@ export async function googleCallback(request: Request): Promise<Response> {
       });
       flow.data.invitationId = invitation?.id;
       if (!account) {
-        if (invitation) {
-          if (invitation) {
-            const currentInvite = await tx.invitation.findUnique({
-              where: { id: invitation.id },
-              select: { expiresAt: true },
-            });
-            if (
-              currentInvite?.expiresAt &&
-              currentInvite.expiresAt <= new Date()
-            ) {
-              stateFor(flow, {
-                screen: 'activation',
-                identifier: identity.email,
-                variant: 'expired',
-              });
-              return redirect('/auth/login?continue=1');
-            }
-          }
-          const next = await prepareInvitation(tx, flow, request);
-          if (next instanceof Response) return next;
-          if (next) {
-            stateFor(flow, {
-              ...next,
-              provider: 'google',
-            });
-            return redirect('/auth/login?continue=1');
-          }
-        }
+        // A new Google subject is not an email-based student identity.
+        flow.data.identifier = undefined;
+        flow.data.userId = undefined;
+        flow.data.pendingGoogle = undefined;
+        flow.data.studentGoogle = { subject: identity.subject };
+        flow.data.proof = undefined;
+        flow.data.invitationId = undefined;
+        flow.data.classId = undefined;
+        flow.data.classCode = undefined;
+        flow.data.classCandidates = undefined;
+        flow.data.studentChoice = undefined;
+        stateFor(flow, {
+          screen: 'class-code',
+          notice: 'Enter your class code to continue.',
+        });
+        return redirect('/auth/login?continue=1');
       }
 
       stateFor(flow, {

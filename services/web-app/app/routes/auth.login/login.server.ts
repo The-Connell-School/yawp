@@ -31,7 +31,9 @@ export async function loginAction(
   { request }: ActionFunctionArgs,
   options: { client?: Prisma.TransactionClient } = {}
 ) {
-  const db = options.client ?? prisma;
+  // Typed as the transaction client: comparing the full client against it
+  // exceeds TypeScript's depth limit now that the schema is larger.
+  const db = options.client ?? (prisma as unknown as Prisma.TransactionClient);
   await requireAnonymous(request);
   const { error, data } = await parseFormData(request, LoginSchema);
   if (error) return validationError(error);
@@ -71,6 +73,9 @@ export async function loginAction(
 
     let previewMembershipId: string | null = null;
     if (isIsolatedPreviewSeatMode()) {
+      const { hasPreviewSignonQaContext } =
+        await import('~/utils/preview-signon-qa.server');
+      const signonQa = await hasPreviewSignonQaContext(request, user.id, db);
       const seat = await getPreviewAccessSeat(request);
       const seatMembership = seat
         ? await db.orgMembership.findFirst({
@@ -83,6 +88,7 @@ export async function loginAction(
           })
         : null;
       if (
+        !signonQa &&
         !seatMembership &&
         !(await previewSessionAllowedWithoutSeatMembership(user.id))
       ) {
@@ -91,7 +97,7 @@ export async function loginAction(
           data
         );
       }
-      previewMembershipId = seatMembership?.id ?? null;
+      previewMembershipId = signonQa ? null : (seatMembership?.id ?? null);
     }
 
     await refundLoginAttemptRateLimits(charged);

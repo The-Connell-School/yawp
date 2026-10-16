@@ -283,7 +283,7 @@ jobs:
           ./services/web-app/app/utils/preview-access-rate-limit.server.test.ts
           ./services/web-app/app/utils/internal-free-tier-http.server.test.ts
           ./services/web-app/app/utils/mock-admin-environment.test.ts
-          $(find ./services/web-app/app/domain/free-tier -type f -name '*.test.ts' ! -name 'student-join.server.test.ts' ! -name 'email.server.test.ts' ! -name 'service.create-token-idempotency.test.ts' ! -name 'posthog-*.test.ts' ! -name 'service.analytics.server.test.ts' ! -name 'provision.analytics.server.test.ts' ! -name '*.integration.test.ts')
+          $(find ./services/web-app/app/domain/free-tier -type f -name '*.test.ts' ! -name 'student-join.server.test.ts' ! -name 'inapp-usage.server.test.ts' ! -name 'email.server.test.ts' ! -name 'service.create-token-idempotency.test.ts' ! -name 'posthog-*.test.ts' ! -name 'service.analytics.server.test.ts' ! -name 'provision.analytics.server.test.ts' ! -name '*.integration.test.ts')
           ./services/web-app/app/routes/app/sidebar-nav.reporter.test.ts
           ./packages/prisma/preview-access-code.free-classroom.test.ts
           ./packages/prisma/scripts/preview-seats.test.ts
@@ -296,6 +296,18 @@ jobs:
           './services/web-app/app/routes/app_.documents_.$id/route.test.ts'
           ./services/web-app/e2e/decode-router-data.test.ts
           # decode-router-data: turbo .data assertions in student.unreleased-grade-loader-privacy E2E
+
+      - name: 🧪 Free-account in-app usage adapter (isolated; mocks prisma)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./services/web-app/app/domain/free-tier/inapp-usage.server.test.ts
+
+      - name: 🧪 Read-only grading status (isolated; mocks prisma)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./services/web-app/app/utils/grading-limit-status.server.test.ts
 
       # Bun module mocks persist across files. The email recipient tests stub
       # Prisma's email log, so keep them out of the combined real-DB run above.
@@ -463,7 +475,26 @@ jobs:
           bun test ./services/web-app/app/domain/unified-signon/policy.test.ts
           bun test ./services/web-app/app/domain/unified-signon/google.test.ts
           bun test ./services/web-app/app/routes/auth.login/unified-dispatch.test.ts
+          bun test ./services/web-app/app/utils/login-rate-limit-target.test.ts
+          bun test ./services/web-app/app/domain/free-tier/student-join.server.test.ts
+          bun test ./services/web-app/app/domain/unified-signon/class-student.real-db.integration.test.ts
           bun test ./services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts
+
+      - name: Preview-only sign-on fixture guards and real handlers
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          PGPASSWORD: postgres
+          DATABASE_URL: postgresql://yawp_pr_999565_app:ci-fixture-only@127.0.0.1:5432/yawp_pr_999565
+          SESSION_SECRET: ci-local-signon-session-secret
+          SIGNON_PREVIEW_FIXTURE_TEST: '1'
+          TMPDIR: ${{ runner.temp }}/signon-fixtures
+        run: |
+          mkdir -p "$TMPDIR"
+          trap 'psql -h 127.0.0.1 -U postgres -d postgres -c "DROP DATABASE IF EXISTS yawp_pr_999565 WITH (FORCE)" -c "DROP ROLE IF EXISTS yawp_pr_999565_app"' EXIT
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE yawp_pr_999565_app LOGIN PASSWORD 'ci-fixture-only'" -c "CREATE DATABASE yawp_pr_999565 OWNER yawp_pr_999565_app"
+          bun run --cwd packages/prisma prisma migrate deploy
+          bun run packages/prisma/scripts/seed-local-dev.ts
+          ./bin/project test --profile unified-signon-preview-fixtures --json
 
       # Mocks prisma; must not share a bun process with real-DB rate limit tests.
       - name: 🧪 Login limiter fail-closed timeout

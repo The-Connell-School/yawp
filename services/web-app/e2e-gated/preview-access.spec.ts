@@ -124,22 +124,23 @@ test.describe('in-app preview access gate', () => {
       .locator('[data-preview-access-screen]')
       .evaluate((screen) => {
         const screenStyle = window.getComputedStyle(screen);
-        const card = screen.querySelector('section');
+        const card = screen.querySelector('.signon-card');
         if (!card) throw new Error('Preview access card was not rendered.');
         const cardStyle = window.getComputedStyle(card);
         return {
+          cardBackground: cardStyle.backgroundColor,
           cardBorderRadius: Number.parseFloat(cardStyle.borderRadius),
+          cardImages: card.querySelectorAll('img').length,
           cardPadding: Number.parseFloat(cardStyle.padding),
           display: screenStyle.display,
-          minHeight: Number.parseFloat(screenStyle.minHeight),
         };
       });
     expect(renderedStyles.display).toBe('flex');
-    expect(renderedStyles.minHeight).toBeGreaterThanOrEqual(
-      page.viewportSize()?.height ?? 1
-    );
-    expect(renderedStyles.cardBorderRadius).toBeGreaterThanOrEqual(16);
-    expect(renderedStyles.cardPadding).toBeGreaterThanOrEqual(32);
+    expect(renderedStyles.cardBackground).toBe('rgb(255, 255, 255)');
+    expect(renderedStyles.cardBorderRadius).toBeGreaterThanOrEqual(12);
+    expect(renderedStyles.cardPadding).toBeGreaterThanOrEqual(24);
+    // The auth layout shows the logo once; the card itself has none.
+    expect(renderedStyles.cardImages).toBe(0);
 
     const apiRejection = await page.evaluate(async () => {
       const response = await fetch('/api/student-preview', {

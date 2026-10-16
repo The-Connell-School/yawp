@@ -79,6 +79,7 @@ test.afterAll(async () => {
     select: { id: true },
   });
   const ids = users.map((u) => u.id);
+  await db.invitation.deleteMany({ where: { studentClassId: prefix } });
   await db.session.deleteMany({ where: { userId: { in: ids } } });
   await db.password.deleteMany({ where: { userId: { in: ids } } });
   await db.orgMembership.deleteMany({ where: { userId: { in: ids } } });
@@ -134,7 +135,7 @@ for (const width of [1280, 390])
       await page.waitForFunction(() =>
         Boolean((window as any).__reactRouterDataRouter)
       );
-      await page.getByLabel('Email, handle, or class code').fill(address);
+      await page.getByLabel('Email or class code').fill(address);
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
       await expect(
         page.getByRole('heading', { name: 'Finish setting up your account' })
@@ -192,7 +193,7 @@ for (const width of [1280, 390])
     }
   });
 for (const width of [1280, 390])
-  test(`real handlers: class, email code errors/retry, verified signup and reset at ${width}`, async ({
+  test(`real handlers: invited student, email code errors/retry, verified signup and reset at ${width}`, async ({
     page,
   }) => {
     test.setTimeout(120000);
@@ -203,6 +204,22 @@ for (const width of [1280, 390])
       create: { name: flag, value: 'true', valueType: 'boolean' },
     });
     const address = `maya${width}@yawp.local`;
+    // Email identity is retained only for the existing invitation path. New
+    // class-code registrations use generated handles in auth.unified-classcode.
+    await db.invitation.create({
+      data: {
+        type: 'onboard-student',
+        target: address,
+        studentClassId: prefix,
+        metadata: JSON.stringify({ klassId: prefix }),
+        secret: 'local-only',
+        algorithm: 'SHA-256',
+        digits: 6,
+        period: 600,
+        charSet: '0123456789',
+        expiresAt: new Date(Date.now() + 600000),
+      },
+    });
     await page.goto('/auth/login?redirectTo=%2Fapp%2Fmy-classes');
     await page.waitForFunction(() =>
       Boolean((window as any).__reactRouterDataRouter)
@@ -211,15 +228,7 @@ for (const width of [1280, 390])
       page.getByRole('button', { name: 'Continue with Google' })
     ).toBeDisabled();
     await shot(page, 'signon-03-google-unavailable', width);
-    await page.getByLabel('Email, handle, or class code').fill(address);
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await expect(
-      page.getByRole('heading', { name: 'Welcome to YAWP!' })
-    ).toBeVisible();
-    await page
-      .getByRole('button', { name: "I'm a student I have a class code" })
-      .click();
-    await page.getByLabel('Class code').fill(prefix);
+    await page.getByLabel('Email or class code').fill(address);
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(
       page.getByRole('heading', { name: 'Finish setting up your account' })
@@ -295,7 +304,7 @@ for (const width of [1280, 390])
     await page.waitForFunction(() =>
       Boolean((window as any).__reactRouterDataRouter)
     );
-    await page.getByLabel('Email, handle, or class code').fill(address);
+    await page.getByLabel('Email or class code').fill(address);
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(
       page.getByRole('heading', { name: 'Enter your password' })
@@ -388,7 +397,7 @@ test('bare short and reserved handle words resolve as real class codes in the br
     await page.waitForFunction(() =>
       Boolean((window as any).__reactRouterDataRouter)
     );
-    await page.getByLabel('Email, handle, or class code').fill(classCode);
+    await page.getByLabel('Email or class code').fill(classCode);
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(
       page.getByRole('heading', { name: 'Join your class' })
@@ -441,7 +450,7 @@ test('local rollout rollback restores legacy views and blocks an in-flight reset
     await page.waitForFunction(() =>
       Boolean((window as any).__reactRouterDataRouter)
     );
-    await page.getByLabel('Email, handle, or class code').fill(address);
+    await page.getByLabel('Email or class code').fill(address);
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(
       page.getByRole('heading', { name: 'Enter your password' })

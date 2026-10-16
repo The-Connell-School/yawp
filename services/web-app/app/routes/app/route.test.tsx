@@ -102,6 +102,7 @@ describe('app parent free-tier loader gate', () => {
     });
     expect(requireMembership).not.toHaveBeenCalled();
     expect((response as { data: unknown }).data).toEqual({
+      freeAccountUsage: null,
       mockAdminAvailable: false,
       schoolYearScope: {
         selected: 'all',

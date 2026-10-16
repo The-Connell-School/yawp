@@ -21,7 +21,7 @@ const {
   setFeatureFlag,
   findUnknownOrganizationIds,
 } = await import('./feature-flags.server');
-const { INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, UNIFIED_SIGN_ON_FLAG, LOUNGE_COMMUNITY_FLAG } = await import(
+const { INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, FREE_TIER_INAPP_V2_FLAG, UNIFIED_SIGN_ON_FLAG, FREE_TIER_ONBOARDING_V2_FLAG, LOUNGE_COMMUNITY_FLAG } = await import(
   './feature-flags'
 );
 
@@ -140,7 +140,9 @@ describe('feature flags (server)', () => {
       LESSON_PLANNER_FLAG,
       INTERNAL_RUBRICS_FLAG,
       FREE_TIER_FLAG,
+      FREE_TIER_INAPP_V2_FLAG,
       UNIFIED_SIGN_ON_FLAG,
+      FREE_TIER_ONBOARDING_V2_FLAG,
       LOUNGE_COMMUNITY_FLAG,
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
@@ -165,7 +167,9 @@ describe('feature flags (server)', () => {
       LESSON_PLANNER_FLAG,
       INTERNAL_RUBRICS_FLAG,
       FREE_TIER_FLAG,
+      FREE_TIER_INAPP_V2_FLAG,
       UNIFIED_SIGN_ON_FLAG,
+      FREE_TIER_ONBOARDING_V2_FLAG,
       LOUNGE_COMMUNITY_FLAG,
     ]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });

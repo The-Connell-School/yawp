@@ -1,3 +1,4 @@
+import type { FeatureFlagKey } from '../app/domain/feature-flags/feature-flags';
 import { createE2EPrismaClient } from './prisma-client';
 
 // Mirrors featureFlagSettingName(LESSON_PLANNER_FLAG) in
@@ -6,7 +7,6 @@ import { createE2EPrismaClient } from './prisma-client';
 // worker, so a spec's setting cannot leak into another running at the same time.
 const LESSON_PLANNER_SETTING = 'feature_flag.lesson_planner';
 const FREE_TIER_SETTING = 'feature_flag.free_tier';
-const LOUNGE_COMMUNITY_SETTING = 'feature_flag.teacher_lounge_community';
 
 export async function setFreeTierFlag(enabled: boolean) {
   const prisma = createE2EPrismaClient();
@@ -44,21 +44,27 @@ export async function setLessonPlannerFlag(enabled: boolean) {
   }
 }
 
-/** Teacher's Lounge community board for everyone (true) or no one (false). */
-export async function setLoungeCommunityFlag(enabled: boolean) {
+/** Local test toggle for registered feature flags. */
+export async function setFeatureFlag(key: FeatureFlagKey, enabled: boolean) {
   const prisma = createE2EPrismaClient();
   try {
+    const name = `feature_flag.${key}`;
     await prisma.setting.upsert({
-      where: { name: LOUNGE_COMMUNITY_SETTING },
+      where: { name },
       create: {
-        name: LOUNGE_COMMUNITY_SETTING,
-        value: enabled ? 'true' : 'false',
+        name,
+        value: String(enabled),
         valueType: 'boolean',
         description: 'Set by e2e',
       },
-      update: { value: enabled ? 'true' : 'false', updatedAt: new Date() },
+      update: { value: String(enabled), updatedAt: new Date() },
     });
   } finally {
     await prisma.$disconnect();
   }
+}
+
+/** Teacher's Lounge community board for everyone (true) or no one (false). */
+export async function setLoungeCommunityFlag(enabled: boolean) {
+  await setFeatureFlag('teacher_lounge_community', enabled);
 }

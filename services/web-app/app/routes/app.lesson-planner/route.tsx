@@ -1,3 +1,4 @@
+import { useFreeAccountUsage } from '~/components/free-account-usage';
 import { useEffect, useRef, useState } from 'react';
 import {
   Link,
@@ -930,6 +931,8 @@ function LessonPlannerEmptyState({
   onInput: (value: string) => void;
   onSend: () => void;
 }) {
+  const freeUsage = useFreeAccountUsage();
+  const exhausted = freeUsage?.lessonPlans.remaining === 0;
   return (
     <div className="flex flex-col items-center gap-8">
       <div className="flex w-full max-w-3xl flex-col items-center gap-5 text-center">
@@ -938,16 +941,40 @@ function LessonPlannerEmptyState({
         </h3>
         <p className="max-w-lg text-sm text-muted-foreground">
           Say it the way you'd say it to a colleague in the hallway. The planner
-          builds the lesson — slides, activities, handouts, exit tickets —
-          around the room you actually teach.
+          {freeUsage
+            ? ' builds the lesson around the room you actually teach.'
+            : ' builds the lesson — slides, activities, handouts, exit tickets — around the room you actually teach.'}
         </p>
         <LessonComposer
           hero
           value={input}
           onChange={onInput}
           onSend={onSend}
-          disabled={disabled}
+          disabled={disabled || exhausted}
         />
+        {freeUsage && (
+          <div
+            className="text-sm text-muted-foreground"
+            data-testid="free-lesson-remaining"
+          >
+            {exhausted ? (
+              <>
+                <p>
+                  You have used all {freeUsage.lessonPlans.total} lesson plans.
+                  Delete one to plan another.
+                </p>
+                <Link
+                  className="mt-2 inline-block text-primary underline"
+                  to="/app/free-tier/status"
+                >
+                  Need more? Talk to us
+                </Link>
+              </>
+            ) : (
+              `${freeUsage.lessonPlans.remaining} of ${freeUsage.lessonPlans.total} lesson plans left`
+            )}
+          </div>
+        )}
       </div>
       {seedContext ? (
         <div
@@ -968,7 +995,11 @@ function LessonPlannerEmptyState({
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Or start from one of these
         </p>
-        <PromptTiles prompts={prompts} onPick={onPick} disabled={disabled} />
+        <PromptTiles
+          prompts={prompts}
+          onPick={onPick}
+          disabled={disabled || exhausted}
+        />
       </div>
     </div>
   );
@@ -1125,8 +1156,7 @@ function MessageBubble({
                   }
                   onToggle={
                     message.id
-                      ? (added) =>
-                          onMaterial(message.id!, part.blockKey, added)
+                      ? (added) => onMaterial(message.id!, part.blockKey, added)
                       : null
                   }
                   disabled={disabled}

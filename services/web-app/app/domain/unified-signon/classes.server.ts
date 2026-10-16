@@ -87,7 +87,12 @@ export async function chooseClass(
       classInfo: info,
       variant: 'full',
     });
-  if (flow.data.identifier && info.accountMode === 'email')
+  // Verified legacy invitations keep their existing email enrollment path.
+  if (
+    flow.data.invitationId &&
+    flow.data.identifier &&
+    info.accountMode === 'email'
+  )
     return stateFor(flow, {
       screen: flow.data.proof ? 'name-password' : 'activation',
       identifier: flow.data.identifier,

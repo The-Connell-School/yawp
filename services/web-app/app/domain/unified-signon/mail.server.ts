@@ -2,10 +2,16 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { sendEmail } from '~/utils/email.server';
 import { FlowError, opaque } from './flow.server';
+import { capturePreviewCode } from './preview-code.server';
 
-/** Local delivery is captured before the provider abstraction can log or send it.
- * No capture files, endpoints or environment overrides exist on deployed hosts. */
+/** Capture before the provider abstraction can log or send a code. */
 export async function deliverCode(email: string, code: string) {
+  // The shared renderer also calls the hosted demo environment "preview".
+  // Preserve its existing delivery path and reserve capture for isolated PRs.
+  if (process.env.YAWP_ENVIRONMENT === 'preview' && process.env.PREVIEW_SLUG !== 'demo') {
+    if (capturePreviewCode(email, code)) return;
+    throw new FlowError("We couldn't send the email. Try again in a moment.", 503);
+  }
   const capture = process.env.SIGNON_MAIL_CAPTURE_DIR;
   const db = new URL(process.env.DATABASE_URL!);
   if (

@@ -319,31 +319,18 @@
   display: inline;
 }
 
+/* Keep the theme token consistent through the legacy per-element font override. */
+.auth-page-shell:has(.unified-signon),
+.auth-page-shell:has(.unified-signon) * {
+  --font-sans: var(--font-system-sans);
+}
 .auth-page-shell:has(.unified-signon) {
   background: hsl(var(--background));
-  font-family:
-    Arial,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    'Helvetica Neue',
-    Arial,
-    sans-serif;
+  font-family: var(--font-sans);
 }
 .unified-signon,
 .unified-signon .signon-card h1 {
-  font-family:
-    Arial,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    'Helvetica Neue',
-    Arial,
-    sans-serif;
+  font-family: var(--font-sans);
 }
 
 /* Status headers share the artboards' 40px badge and 8px heading gaps. */
@@ -427,4 +414,25 @@
 }
 .unified-signon .signon-membership svg {
   flex-shrink: 0;
+}
+
+/* Private preview access gate (preview environments only). */
+.unified-signon .preview-access-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  background: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+}
+.unified-signon[data-signon-screen='preview-access'] .signon-card > .mt-6 {
+  margin-top: 8px;
+}
+.unified-signon[data-signon-screen='preview-access'] select {
+  font-size: 16px;
 }

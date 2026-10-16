@@ -1,0 +1,40 @@
+[
+  {
+    "name": "signon-23-activation-1280",
+    "source": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/design/v2/artboards/signon-23-not-activated-no-password-desktop.png",
+    "sha256": "cba9fc66668c08ee226341585d7a610095bcee6913e18cc5ca55e59022bb8872",
+    "crop": null,
+    "notes": "Supplied v2 PNG; reference mobile retains frame/broken image. Fixture copy/choices differ. Membership is local ungated evidence only."
+  },
+  {
+    "name": "signon-23-activation-390",
+    "source": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/design/v2/artboards/signon-24-not-activated-no-password-all-states.png",
+    "sha256": "78dfdee9222329a7156a7bb65ee92ba5db713b7fa1aaa58e585d451520bec409",
+    "crop": [
+      49,
+      140,
+      390,
+      844
+    ],
+    "notes": "Supplied v2 PNG; reference mobile retains frame/broken image. Fixture copy/choices differ. Membership is local ungated evidence only."
+  },
+  {
+    "name": "signon-27-membership-1280",
+    "source": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/design/v2/artboards/signon-27-school-amp-role-picker-desktop.png",
+    "sha256": "989bb674ee071acd249763508570345bf25e462b254ef03d6a3af106195d81c0",
+    "crop": null,
+    "notes": "Supplied v2 PNG; reference mobile retains frame/broken image. Fixture copy/choices differ. Membership is local ungated evidence only."
+  },
+  {
+    "name": "signon-27-membership-390",
+    "source": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/design/v2/artboards/signon-28-school-amp-role-picker-all-states.png",
+    "sha256": "a1a743179ef3d51d715256a210e36780f45f42dd283c9d24c8828167b22293ad",
+    "crop": [
+      49,
+      183,
+      390,
+      844
+    ],
+    "notes": "Supplied v2 PNG; reference mobile retains frame/broken image. Fixture copy/choices differ. Membership is local ungated evidence only."
+  }
+]
