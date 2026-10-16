@@ -48,6 +48,9 @@ export const FREE_TIER_ONBOARDING_V2_FLAG = 'free-tier-onboarding-v2' as const;
 /** Global class-code validation and Generate code controls. Default off. */
 export const CLASS_CODE_UNIQUE_FLAG = 'classcode-unique' as const;
 
+/** Demo feedback. Default off everywhere; only demo seed code opts in. */
+export const DEMO_FEEDBACK_FLAG = 'demo-feedback-widget' as const;
+
 export const FEATURE_FLAGS = {
   [LESSON_PLANNER_FLAG]: {
     label: 'Lesson Planner',
@@ -82,6 +85,10 @@ export const FEATURE_FLAGS = {
   [CLASS_CODE_UNIQUE_FLAG]: {
     label: 'Unique class codes',
     description: 'Enforces global class-code availability and shows Generate code. Default off on demo and production. Only everyone mode is supported; targeted mode stays off because uniqueness spans all organizations.',
+  },
+  [DEMO_FEEDBACK_FLAG]: {
+    label: 'Demo feedback widget',
+    description: 'Shows the feedback note panel for signed-in demo users. Default off; production submissions are always denied.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

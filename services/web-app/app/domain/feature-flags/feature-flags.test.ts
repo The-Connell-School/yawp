@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   FEATURE_FLAGS,
   CLASS_CODE_UNIQUE_FLAG,
+  DEMO_FEEDBACK_FLAG,
   INTERNAL_RUBRICS_FLAG,
   LESSON_PLANNER_FLAG,
   FREE_TIER_FLAG,
@@ -89,6 +90,7 @@ describe('feature flag registry', () => {
       UNIFIED_SIGN_ON_FLAG,
       FREE_TIER_ONBOARDING_V2_FLAG,
       CLASS_CODE_UNIQUE_FLAG,
+      DEMO_FEEDBACK_FLAG,
     ]);
   });
 
