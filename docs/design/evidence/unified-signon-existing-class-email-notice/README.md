@@ -3,8 +3,10 @@
 FAILURES.md slug: `di-signon-fix-existing-class-email-notice`.
 
 Base: `9b78657e3` (main includes merged #579). Application/test source:
-`10f3eff5d490c23b0e75ce64f05a8240d03bc1bc`. Evidence was captured locally on
-2026-10-16 against those exact application/test contents before their commit.
+`20d099fbd3b3befcecd45a0669a5432dec800941`. Final evidence was captured locally
+on 2026-10-16 against those exact application/test contents. The initial notice
+implementation was committed at `10f3eff5d`; the follow-up clears its email-only
+mode when Google cancellation or callback errors return to ordinary entry.
 Final PR head, CI and independent Ship Review are recorded in the lane build result.
 
 Current main's New action intentionally uses first/last name and a generated handle
@@ -40,14 +42,16 @@ package; recovery used lane-private Bun/XDG caches and the same worktree only.
 - TDD: both widths fail on current main because School email entry is absent;
   focused handlers fail for the missing operation. Additional real red cases cover
   stale Back identity, missing activation Back, primary-registration Back, and the
-  notice foreground color. `checks/red-*` retains the actual failures; initial
+  notice foreground color. Three more red cases record the Google-callback mode
+  lifecycle problem before its correction. `checks/red-*` retains the actual failures; initial
   browser runs that stopped a serial suite do not count unexecuted cases as passes.
-- Project `signon-classcode` profile: **129 passed, 679 assertions**. This includes
-  41 real-handler backend cases, 14 main class-student DB cases and existing policy,
-  provider, flag dispatch and legacy registration/rate-limit controls. Three new
+- Project `signon-classcode` profile: **132 passed, 694 assertions**. This includes
+  44 real-handler backend cases, 14 main class-student DB cases and existing policy,
+  provider, flag dispatch and legacy registration/rate-limit controls. Six new
   handler cases cover no access/enrollment before proof, wrong passwords, safe
   continuation after valid proof, forged/stale/free contexts, unknown-email verified
-  signup, passwordless activation and unavailable Google.
+  signup, passwordless activation, unavailable Google, and cancellation/provider-error/invalid-state
+  callbacks returning to normal class-code entry without a new session.
 - Project typecheck: **passed**; existing duplicate LTI route-ID warnings retained.
 - Entire affected real-handler backend browser file: **13 passed** at 1280/390.
   Includes existing #579 email-origin/no-email registration checks and teacher,
@@ -55,6 +59,12 @@ package; recovery used lane-private Bun/XDG caches and the same worktree only.
   cover existing notice, exact banner CSS, client/server validation, changed-email
   Back, password proof/enrollment, and immediate return to primary registration.
 - Main New/Returning browser cases: **2 passed** (1280/390).
+- A later final-source browser refresh initially stopped at mobile hydration: five
+  passed, one timed out, seven did not run. The trace recorded 13
+  `ERR_NETWORK_CHANGED` failures fetching Vite modules. The failed log and sanitized
+  network summary are retained separately. No source, timeout or retry change was
+  made; the affected file was rerun on the same source. Final counts above refer
+  only to that completed passing run.
 - Final backend browser run began with an absent private mail capture directory.
   Setup creates it after the loopback DB guard; filesystem reads remain strict.
   No-email assertions remain active and pass. Local mail is captured only; no real

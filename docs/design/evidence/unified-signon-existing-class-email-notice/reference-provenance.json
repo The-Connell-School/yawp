@@ -10,5 +10,13 @@
   },
   "notice_reference": "Playwright render of supplied v2 DOM: Email has an account parent frame, scripts removed; source inline styles unchanged. This exact state exists only as a mobile frame; the same frame is supplied alongside the 1280px implementation. Default desktop PNG recorded separately and not mislabeled as the existing state.",
   "password_reference": "1280px supplied v2 signon-05 PNG; 390px Playwright render of supplied v2 signon-06 Email user frame.",
-  "differences": "Real logo replaces broken reference logo; supplied rounded frame and placeholder class labels are reference artifacts. Runtime Google is unavailable and disabled. Back action added for pending email class continuation. Main name/handle New remains primary; email option is additional. Validation targets combine existing notice with validation errors; no exact separate source frame exists."
+  "differences": "Real logo replaces broken reference logo; supplied rounded frame and placeholder class labels are reference artifacts. Runtime Google is unavailable and disabled. Back action added for pending email class continuation. Main name/handle New remains primary; email option is additional. Validation targets combine existing notice with validation errors; no exact separate source frame exists.",
+  "final_application_source": "20d099fbd3b3befcecd45a0669a5432dec800941",
+  "final_validation": {
+    "profile_tests": 132,
+    "assertions": 694,
+    "browser_backend": 13,
+    "browser_main_new_returning": 2,
+    "typecheck": "passed"
+  }
 }
