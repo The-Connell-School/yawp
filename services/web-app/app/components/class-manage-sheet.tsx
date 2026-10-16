@@ -1,3 +1,4 @@
+import { ClassCodeInput } from '~/components/class-code-input';
 import { useEffect, useState } from 'react';
 import { useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
@@ -47,6 +48,7 @@ export function ClassManageSheet({
   onSuccess,
   classCreateBlockedMessage = null,
   preferredSchoolYear = null,
+  classCodeUniqueEnabled = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -58,6 +60,7 @@ export function ClassManageSheet({
   classCreateBlockedMessage?: string | null;
   /** Align new-class school year with the teacher's scoped year on My Classes. */
   preferredSchoolYear?: string | null;
+  classCodeUniqueEnabled?: boolean;
 }) {
   const fetcher = useFetcher({
     key: editingClass ? `edit-${editingClass.id}` : 'create',
@@ -68,9 +71,12 @@ export function ClassManageSheet({
   const [period, setPeriod] = useState('');
   const [title, setTitle] = useState('');
   const [code, setCode] = useState(generateClassCode());
+  const [generatedCode, setGeneratedCode] = useState('');
+  const [submittedCode, setSubmittedCode] = useState<string | null>(null);
   const yearChoices = selectableSchoolYears({ include: schoolYear });
 
   useEffect(() => {
+    setSubmittedCode(null);
     if (editingClass) {
       setSchoolId(editingClass.schoolId);
       setSchoolYear(editingClass.schoolYear);
@@ -78,6 +84,7 @@ export function ClassManageSheet({
       setPeriod(editingClass.period ?? '');
       setTitle(editingClass.title || '');
       setCode(editingClass.code);
+      setGeneratedCode('');
       return;
     }
 
@@ -86,7 +93,8 @@ export function ClassManageSheet({
     setGrade('');
     setPeriod('');
     setTitle('');
-    setCode(generateClassCode());
+    const next = generateClassCode();
+    setCode(next); setGeneratedCode(next);
   }, [editingClass, open, schools, preferredSchoolYear]);
 
   useEffect(() => {
@@ -110,6 +118,8 @@ export function ClassManageSheet({
     formData.append('period', period);
     formData.append('title', title);
     formData.append('code', code);
+    if (classCodeUniqueEnabled && !editingClass && code === generatedCode) formData.append('codeWasGenerated', 'true');
+    setSubmittedCode(code);
     fetcher.submit(formData, { method: 'POST', action: actionUrl });
   };
 
@@ -125,7 +135,7 @@ export function ClassManageSheet({
           </SheetDescription>
         </SheetHeader>
 
-        {fetcher.data?.error ? (
+        {fetcher.data?.error && !(classCodeUniqueEnabled && fetcher.data?.field === 'code') ? (
           <div className="mt-4 rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
             {fetcher.data.error}
           </div>
@@ -160,12 +170,15 @@ export function ClassManageSheet({
           </div>
 
           <div className="space-y-2">
-            <Label>Class Code</Label>
-            <Input
-              value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-              required
-              className="font-mono"
+            <Label htmlFor="managed-class-code">Class Code</Label>
+            <ClassCodeInput
+              id="managed-class-code" value={code} onChange={setCode}
+              enabled={classCodeUniqueEnabled}
+              error={fetcher.state === 'idle' && submittedCode === code && fetcher.data?.field === 'code' ? fetcher.data.error : null}
+              onGenerate={() => {
+                const next = generateClassCode();
+                setCode(next); setGeneratedCode(next);
+              }}
             />
           </div>
 

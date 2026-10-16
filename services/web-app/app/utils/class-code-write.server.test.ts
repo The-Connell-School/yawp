@@ -28,9 +28,13 @@ describe('transactional class codes', () => {
   });
   test('takes the transaction lock before checking availability', async () => {
     const tx = fixture();
+    const order: string[] = [];
+    tx.$executeRaw.mockImplementation(async () => { order.push('lock'); return 1; });
+    tx.class.findMany.mockImplementation(async () => { order.push('scan'); return []; });
     expect(await resolveClassCode(tx as any, ' abc123 ')).toBe('ABC123');
     expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
     expect(tx.class.findMany).toHaveBeenCalledTimes(1);
+    expect(order).toEqual(['lock', 'scan']);
   });
   test('manual collision returns only a code-field error', async () => {
     const tx = fixture(true, 1);

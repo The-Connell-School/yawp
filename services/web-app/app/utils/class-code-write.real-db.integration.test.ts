@@ -39,14 +39,19 @@ describe.skipIf(!process.env.DATABASE_URL)('global class codes (local Postgres)'
     await setup(); await flag('false');
     const a = await create(schools[0], `  ${prefix}ß\t`);
     const b = await create(schools[1], `${prefix}SS`.toUpperCase());
-    const before = await db.class.findMany({ where: { id: { in: [a.id, b.id] } }, orderBy: { id: 'asc' } });
+    const c = await create(schools[0], `${prefix}SS`.toUpperCase());
+    const before = await db.class.findMany({ where: { id: { in: [a.id, b.id, c.id] } }, orderBy: { id: 'asc' } });
     const report = await readDuplicateClassCodes(db);
     const group = report.find(g => g.code === `${prefix}SS`.toUpperCase());
-    expect(group?.count).toBe(2);
-    expect(group?.classes.map(c => c.organizationId).sort()).toEqual([...orgIds].sort());
-    expect(await db.class.findMany({ where: { id: { in: [a.id, b.id] } }, orderBy: { id: 'asc' } })).toEqual(before);
+    expect(group?.count).toBe(3);
+    expect(group?.classes.map(c => c.organizationId).sort()).toEqual([orgIds[0], orgIds[0], orgIds[1]].sort());
+    expect(await db.class.findMany({ where: { id: { in: [a.id, b.id, c.id] } }, orderBy: { id: 'asc' } })).toEqual(before);
     await flag('true');
-    await expect(db.$transaction(tx => resolveClassCode(tx, a.code, { classId: a.id }))).resolves.toBe(a.code);
+    const updated = await db.$transaction(async tx => {
+      const code = await resolveClassCode(tx, a.code.trim().toUpperCase(), { classId: a.id });
+      return tx.class.update({ where: { id: a.id }, data: { code, title: 'Unchanged legacy code' } });
+    });
+    expect(updated.code).toBe(a.code);
   });
   test('same-organization and cross-organization collisions and code edits reject', async () => {
     await setup(); await flag('true');
