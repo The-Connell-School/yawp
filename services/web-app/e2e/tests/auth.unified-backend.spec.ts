@@ -326,6 +326,73 @@ for (const width of [1280, 390])
     }
   });
 
+// FAILURES.md: di-signon-fix-existing-class-email-notice. Real handlers only.
+for (const width of [1280, 390])
+  test(`school class existing-email notice retains context and requires password proof at ${width}`, async ({ page }) => {
+    test.setTimeout(120000);
+    await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
+    await db.setting.upsert({ where: { name: flag }, update: { value: 'true' }, create: { name: flag, value: 'true', valueType: 'boolean' } });
+    const address = `${prefix}-existing-${width}@example.test`;
+    const password = 'disposable-password';
+    const user = await db.user.create({ data: {
+      email: address, name: 'Local Student', emailVerifiedAt: new Date(),
+      password: { create: { hash: await bcrypt.hash(password, 10) } },
+      memberships: { create: { organizationId: prefix, role: 'STUDENT' } },
+    }});
+    const mailBefore = fs.readdirSync(capture).length;
+    const notice = 'You already have an account with this email. Sign in to join this class.';
+    const continueButton = () => page.getByRole('button', { name: 'Continue', exact: true });
+    await page.goto('/auth/login?redirectTo=%2Fapp%2Fmy-classes');
+    await page.waitForFunction(() => Boolean((window as any).__reactRouterDataRouter));
+    await page.getByLabel('Email or class code').fill(prefix);
+    await continueButton().click();
+    await page.getByRole('button', { name: /^New/ }).click();
+    // Main's generated-handle registration remains available; email classes
+    // additionally expose their v2 school-email option.
+    await shot(page, 'signon-40-new-before-email-option', width);
+    await page.getByRole('button', { name: 'Use school email', exact: true }).click();
+    await page.getByLabel('School email', { exact: true }).fill(address);
+    await continueButton().click();
+    await shot(page, 'signon-40-existing-before-assertion', width);
+    const expectNotice = async () => {
+      await expect(page.getByRole('heading', { name: 'Create your account', exact: true })).toBeVisible();
+      await expect(page.getByText('English 11, Period 2', { exact: true })).toBeVisible();
+      await expect(page.getByText(notice, { exact: true })).toBeVisible();
+      await expect(page.getByLabel('School email', { exact: true })).toHaveValue(address);
+      await expect(page.getByRole('button', { name: 'Sign in instead', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Continue with Google', exact: true })).toBeDisabled();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    };
+    await expectNotice();
+    await shot(page, 'signon-40-existing', width);
+    expect(await db.session.count({ where: { userId: user.id } })).toBe(0);
+    expect(await db.orgMembership.count({ where: { userId: user.id, classesAsStudent: { some: { id: prefix } } } })).toBe(0);
+    await page.getByRole('button', { name: 'Sign in instead', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Enter your password', exact: true })).toBeVisible();
+    await shot(page, 'signon-05-class-password', width);
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await expectNotice();
+    // Changing the email and client/server validation do not lose the class.
+    await page.getByLabel('School email', { exact: true }).fill('bad@');
+    await page.getByRole('button', { name: 'Sign in instead', exact: true }).click();
+    await expect(page.getByText('That email looks incomplete. Check it and try again.', { exact: true })).toBeVisible();
+    await shot(page, 'signon-40-validation', width);
+    await page.getByLabel('School email', { exact: true }).fill(address);
+    await page.getByRole('button', { name: 'Sign in instead', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Enter your password', exact: true })).toBeVisible();
+    await page.getByLabel('Password', { exact: true }).fill('wrong-password');
+    await page.getByRole('button', { name: 'Log In', exact: true }).click();
+    await expect(page.getByText('Invalid email or password', { exact: true })).toBeVisible();
+    expect(await db.session.count({ where: { userId: user.id } })).toBe(0);
+    expect(await db.orgMembership.count({ where: { userId: user.id, classesAsStudent: { some: { id: prefix } } } })).toBe(0);
+    await page.getByLabel('Password', { exact: true }).fill(password);
+    await page.getByRole('button', { name: 'Log In', exact: true }).click();
+    await page.waitForURL('**/app/my-classes');
+    expect(await db.session.count({ where: { userId: user.id } })).toBe(1);
+    expect(await db.orgMembership.count({ where: { userId: user.id, role: 'STUDENT', classesAsStudent: { some: { id: prefix } } } })).toBe(1);
+    expect(fs.readdirSync(capture)).toHaveLength(mailBefore);
+  });
+
 for (const width of [1280, 390])
   test(`existing passwordless teacher activates through the location selector at ${width}`, async ({
     page,
