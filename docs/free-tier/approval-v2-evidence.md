@@ -49,3 +49,39 @@ native resolution. `checks/` holds final transcripts and initial red-test eviden
 Merge remains held. The driver requires independent Ship Review APPROVE and CI
 before any release of state/MERGE_HOLD or merge. An RDS snapshot is required before
 applying the additive migration to production. No environment flag is enabled.
+
+## Review corrections, October 16
+
+The three P2 findings in lane `state/REVIEW.md` at `388b78ba` are addressed by
+`9ebba777` (failing regressions) and `3a60b7a4` (implementation). Every eligibility
+check recovers successful legacy reminders after rollout pauses without counting
+delivery-backed logs twice. Recovered accepted-send times enforce the ten-minute
+cooldown. Deliveries persist immutable acceptance count/cadence for idempotent
+replays. A second additive migration backfills earlier accepted slots; it was
+applied only to isolated local Postgres.
+
+Final local validation: 68 focused tests pass, including 18 durable lifecycle
+cases; full typecheck passes with the existing duplicate LTI route warnings.
+Five added cases cover pause/re-enable at the shared cap, legacy cooldown just
+before/at ten minutes, replay after later manual/automatic sends, a queued job
+resuming after a legacy send, and the real acceptance backfill against older
+deliveries. The database suite uses a unique targeted rollout to exclude unrelated
+local fixtures. An independent Ship Reviewer also ran all 68 focused tests and
+full typecheck successfully.
+
+Six one-worker local Playwright flows pass on the corrected implementation.
+The first run had five passing flows and an aggregate test timeout during a
+desktop administrator screenshot while typecheck was running; the isolated rerun
+passed all six in 23 seconds. No product code or timeout was changed for the rerun.
+Fresh desktop/mobile before/after, validation, forwarding, terminal, flag-off,
+non-target and paid-member captures are in `shots/fto-approval-page/review-fix/`
+under the writable lane. That directory includes six canonical design,
+implementation and side-by-side sets, four flag-off/flag-on comparisons, and
+`checks/` with red-regression, focused-test, typecheck and browser transcripts.
+The all-states references use representative mobile captures; the other states
+are saved separately. Earlier complete evidence remains in the parent directory.
+
+Driver `state/REVIEW.md` remains untouched; a fresh standalone Ship Review records
+the resulting head in `state/SHIP_REVIEW.md`. Merge remains held. No hosted
+environment was accessed, and no actual email, remote migration, flag activation,
+preview action or merge was performed.
