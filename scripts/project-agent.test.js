@@ -15,6 +15,17 @@ import {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("Yawp project agent CLI", () => {
+  test("advertises class-step profiles in capabilities and CLI help", () => {
+    const profiles = ["free-tier-class-step-unit", "free-tier-class-step-browser"];
+    const result = spawnSync(path.join(root, "bin/project"), ["test", "--help"], {
+      cwd: root, encoding: "utf8", timeout: 10000, env: { ...process.env, CI: "1" },
+    });
+    expect(result.status).toBe(0);
+    for (const profile of profiles) {
+      expect(capabilities().proofProfiles).toContain(profile);
+      expect(result.stdout).toContain(profile);
+    }
+  });
   test("class-code and sign-on browser profiles select their own specs", () => {
     const source = fs.readFileSync(path.join(root, "scripts/project-agent.mjs"), "utf8");
     for (const profile of ["signon-classcode", "classcode-unit", "classcode-db", "classcode-browser", "classcode-enter-code", "classcode-report"])
