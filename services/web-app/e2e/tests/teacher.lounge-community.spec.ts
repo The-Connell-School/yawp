@@ -31,7 +31,7 @@ async function logout(page: import('@playwright/test').Page) {
   await page.context().clearCookies();
 }
 
-test.describe.serial("Teacher's Lounge community board", () => {
+test.describe.serial("Faculty Lounge community board", () => {
   test.beforeAll(async () => {
     await clearLounge();
   });
@@ -57,7 +57,7 @@ test.describe.serial("Teacher's Lounge community board", () => {
     expect(response?.status()).toBe(404);
   });
 
-  test('a teacher sets how they appear, then asks the Yawp team a question', async ({
+  test('a teacher agrees to the House Rules, then asks the YAWP! team a question', async ({
     page,
     signIn,
     e2eContext,
@@ -65,9 +65,13 @@ test.describe.serial("Teacher's Lounge community board", () => {
     await setLoungeCommunityFlag(true);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
 
-    await page.getByRole('link', { name: "Teacher's Lounge" }).first().click();
+    await page.getByRole('link', { name: 'Faculty Lounge' }).first().click();
+    await expect(page).toHaveURL(/\/app\/lounge\/welcome/);
+    await page.getByLabel('I agree to follow the Lounge’s House Rules.').check();
+    await page.getByRole('button', { name: 'Enter the Lounge' }).click();
+
     await expect(page).toHaveURL(/\/app\/lounge$/);
-    await expect(page.getByRole('heading', { name: "Teacher's Lounge" })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Faculty Lounge' })).toBeVisible();
     await expect(page.getByText('No posts yet')).toBeVisible();
 
     // The course grid is one tab away, and the nav still reads as the Lounge there.
@@ -77,11 +81,6 @@ test.describe.serial("Teacher's Lounge community board", () => {
     await page.getByRole('link', { name: 'Community' }).click();
 
     await page.getByRole('link', { name: 'New post' }).click();
-    await expect(page.getByRole('heading', { name: 'How should other teachers see you?' })).toBeVisible();
-    await page.getByLabel('First name, last initial, and school').check();
-    await page.getByLabel(/community guidelines/).check();
-    await page.getByRole('button', { name: 'Continue' }).click();
-
     await expect(page).toHaveURL(/\/app\/lounge\/new/);
     await page.getByLabel('Question').check();
     await page.getByLabel('Title').fill(QUESTION_TITLE);
@@ -90,28 +89,28 @@ test.describe.serial("Teacher's Lounge community board", () => {
     await page.getByLabel('Details').fill(QUESTION_BODY);
     await expect(page.getByText(/may include a student's name/)).toHaveCount(0);
     await page.getByLabel('Topic').selectOption({ label: 'Daily Pages' });
-    await page.getByLabel('Ask the Yawp team to answer this').check();
+    await page.getByLabel('Ask the YAWP! team to answer this').check();
     await page.getByRole('button', { name: 'Post', exact: true }).click();
 
     await expect(page.getByRole('heading', { name: QUESTION_TITLE })).toBeVisible();
     await expect(page.getByText(QUESTION_BODY)).toBeVisible();
-    await expect(page.getByText('Waiting on the Yawp team')).toBeVisible();
+    await expect(page.getByText('Waiting on the YAWP! team')).toBeVisible();
   });
 
-  test('the Yawp team answers from the admin inbox', async ({ page, signIn, e2eContext }) => {
+  test('the YAWP! team answers from the admin inbox', async ({ page, signIn, e2eContext }) => {
     await signIn(e2eContext.adminEmail, ADMIN_PASSWORD);
     await page.goto('/app/admin/lounge');
     await expect(page.getByRole('heading', { name: 'Lounge inbox' })).toBeVisible();
     await page.getByRole('link', { name: QUESTION_TITLE }).click();
     await expect(page.getByText(QUESTION_BODY)).toBeVisible();
-    await page.getByLabel('Reply as the Yawp team').fill(STAFF_ANSWER);
+    await page.getByLabel('Reply as the YAWP! team').fill(STAFF_ANSWER);
     await page.getByLabel('Video link (optional)').fill('https://www.loom.com/share/e2e-answer');
     await page.getByRole('button', { name: 'Post reply' }).click();
     await expect(page.getByText('Nothing waiting. Nice.')).toBeVisible();
 
     await page.goto('/app/lounge');
     const thread = page.getByRole('article').filter({ hasText: QUESTION_TITLE });
-    await expect(thread.getByText('Yawp team answered')).toBeVisible();
+    await expect(thread.getByText('YAWP! team answered')).toBeVisible();
   });
 
   test('another teacher finds it, marks it helpful, and replies with a mention', async ({
@@ -121,9 +120,12 @@ test.describe.serial("Teacher's Lounge community board", () => {
   }) => {
     await signIn(e2eContext.ua.teacher.email, e2eContext.ua.teacher.password);
     await page.goto('/app/lounge');
+    // First visit: the welcome box, then back to the feed.
+    await page.getByLabel('I agree to follow the Lounge’s House Rules.').check();
+    await page.getByRole('button', { name: 'Enter the Lounge' }).click();
     await page.getByRole('link', { name: QUESTION_TITLE }).click();
 
-    const answers = page.getByRole('region', { name: 'Answers from the Yawp team' });
+    const answers = page.getByRole('region', { name: 'Answers from the YAWP! team' });
     await expect(answers.getByText(STAFF_ANSWER)).toBeVisible();
     await expect(answers.getByRole('link', { name: 'Watch the video' })).toHaveAttribute(
       'href',
@@ -135,13 +137,6 @@ test.describe.serial("Teacher's Lounge community board", () => {
     await helpful.click();
     await expect(helpful).toHaveAttribute('aria-pressed', 'true');
     await expect(helpful).toContainText('1');
-
-    // First reply asks for the identity card, then comes back to the thread.
-    await page.getByRole('link', { name: 'Choose how you appear to reply' }).click();
-    await page.getByLabel('First name only').check();
-    await page.getByLabel(/community guidelines/).check();
-    await page.getByRole('button', { name: 'Continue' }).click();
-    await expect(page.getByRole('heading', { name: QUESTION_TITLE })).toBeVisible();
 
     const reply = page.getByLabel('Your reply');
     await reply.fill('Opener here too. Thanks ');
@@ -156,7 +151,7 @@ test.describe.serial("Teacher's Lounge community board", () => {
     await expect(replies.getByText(/\(user:/)).toHaveCount(0);
   });
 
-  test('a reported reply disappears once the Yawp team hides it', async ({
+  test('a reported reply disappears once the YAWP! team hides it', async ({
     page,
     signIn,
     e2eContext,
@@ -169,7 +164,7 @@ test.describe.serial("Teacher's Lounge community board", () => {
     await item.getByText('Report', { exact: true }).click();
     await item.getByLabel('What is wrong?').fill('Testing moderation');
     await item.getByRole('button', { name: 'Send report' }).click();
-    await expect(page.getByText('Thanks. The Yawp team will take a look.')).toBeVisible();
+    await expect(page.getByText('Thanks. The YAWP! team will take a look.')).toBeVisible();
 
     await logout(page);
     await signIn(e2eContext.adminEmail, ADMIN_PASSWORD);

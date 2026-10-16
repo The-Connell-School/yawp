@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
+import { LOUNGE_NAME } from '~/domain/lounge/launch';
 import type { useUser } from '~/hooks/useUser';
 
 type User = ReturnType<typeof useUser>;
@@ -139,8 +140,8 @@ const LOUNGE_TRAININGS_PATH = '/app/teacher-trainings';
 const LOUNGE_COMMUNITY_PATH = '/app/lounge';
 
 /**
- * With the Teacher's Lounge community flag on, the existing Lounge item
- * opens the community feed and stays highlighted on the course grid, which
+ * With the Lounge community flag on, the existing Lounge item becomes the
+ * Faculty Lounge: it opens the community feed and stays highlighted on the course grid, which
  * keeps its URL one tab away. Off: the item is untouched.
  */
 export function applyLoungeCommunityLink(
@@ -152,7 +153,7 @@ export function applyLoungeCommunityLink(
     ...section,
     links: section.links.map((link) =>
       link.to === LOUNGE_TRAININGS_PATH
-        ? { ...link, to: LOUNGE_COMMUNITY_PATH, alsoActiveFor: [LOUNGE_TRAININGS_PATH] }
+        ? { ...link, label: LOUNGE_NAME, to: LOUNGE_COMMUNITY_PATH, alsoActiveFor: [LOUNGE_TRAININGS_PATH] }
         : link,
     ),
   }));

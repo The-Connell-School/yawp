@@ -194,6 +194,7 @@ export type LoungePostSummary = {
   isEdited: boolean;
   /** Draft or scheduled for later; only the YAWP! team ever sees these. */
   isUnpublished: boolean;
+  isDraft: boolean;
   attachment: { id: string; title: string; typeTitle: string; useCount: number } | null;
 };
 
@@ -218,6 +219,7 @@ function toSummary(row: SummaryRow, viewer: LoungeViewer): LoungePostSummary {
     // Changes made before it went live are not edits anyone needs to see.
     isEdited: row.editedAt !== null && row.editedAt > row.createdAt,
     isUnpublished: row.draft || row.createdAt.getTime() > Date.now(),
+    isDraft: row.draft,
     attachment: row.attachment
       ? {
           id: row.attachment.id,

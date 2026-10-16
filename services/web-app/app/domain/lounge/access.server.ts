@@ -3,7 +3,7 @@
  * who may not use it, so the feature stays invisible while the flag is off
  * for a school and always for students.
  */
-import { data } from 'react-router';
+import { data, redirect } from 'react-router';
 import { isLoungeCommunityEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { prisma } from '~/utils/db.server';
 import {
@@ -12,7 +12,7 @@ import {
   type RequiredMembership,
 } from '~/utils/auth.server';
 import { decideLoungeAccess } from './access';
-import type { LoungeViewer } from './lounge.server';
+import { getLoungeProfile, type LoungeViewer } from './lounge.server';
 
 export type LoungeAccess = {
   viewer: LoungeViewer;
@@ -34,13 +34,36 @@ export async function requireLoungeAccess(request: Request): Promise<LoungeAcces
     flagOn,
   });
   if (!decision.allowed) {
-    throw data({ error: "The Teacher's Lounge community is not available." }, { status: 404 });
+    throw data({ error: 'The Faculty Lounge is not available.' }, { status: 404 });
   }
   return {
     viewer: { userId, isStaff: decision.isStaff },
     membership,
     organizationId: membership.organization.id,
   };
+}
+
+/** Lounge pages a teacher may be sent back to after the welcome box. */
+export function safeLoungeReturnPath(value: string | null | undefined): string {
+  if (value && /^\/app\/lounge(\/[A-Za-z0-9_-]+)?$/.test(value) && value !== '/app/lounge/welcome') return value;
+  return '/app/lounge';
+}
+
+/**
+ * requireLoungeAccess, plus the first-visit welcome box: a teacher who has
+ * not agreed to the House Rules is sent there first, once. The YAWP! team
+ * skips it.
+ */
+export async function requireLoungeMember(request: Request): Promise<LoungeAccess> {
+  const access = await requireLoungeAccess(request);
+  if (!access.viewer.isStaff) {
+    const profile = await getLoungeProfile(access.viewer.userId);
+    if (!profile) {
+      const back = safeLoungeReturnPath(new URL(request.url).pathname);
+      throw redirect(`/app/lounge/welcome?redirectTo=${encodeURIComponent(back)}`);
+    }
+  }
+  return access;
 }
 
 /**

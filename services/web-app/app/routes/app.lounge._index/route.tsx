@@ -9,12 +9,13 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { HelpfulButton } from '~/components/lounge/helpful-button';
 import { LoungeByline } from '~/components/lounge/lounge-byline';
 import { LoungeHeader } from '~/components/lounge/lounge-header';
-import { FileText, Play, Video } from 'lucide-react';
-import { requireLoungeAccess } from '~/domain/lounge/access.server';
+import { FileText, Pin, Play, Video } from 'lucide-react';
+import { requireLoungeMember } from '~/domain/lounge/access.server';
+import { LOUNGE_TEAM_NAME } from '~/domain/lounge/launch';
 import {
   LoungeNotFoundError,
-  getPinnedLoungePost,
   listLoungePosts,
+  listPinnedLoungePosts,
   toggleLoungeVote,
   type LoungeSort,
 } from '~/domain/lounge/lounge.server';
@@ -32,7 +33,7 @@ const SORTS: Array<{ key: LoungeSort; label: string }> = [
 const KIND_LABEL = { QUESTION: 'Question', SHARE: 'Share', WIN: 'Win' } as const;
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const { viewer } = await requireLoungeAccess(request);
+  const { viewer } = await requireLoungeMember(request);
   const url = new URL(request.url);
   const sortParam = url.searchParams.get('sort');
   const sort: LoungeSort = sortParam === 'top' || sortParam === 'unanswered' ? sortParam : 'new';
@@ -42,8 +43,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const now = new Date();
   const [{ posts, nextCursor }, pinned] = await Promise.all([
     listLoungePosts(viewer, { sort, topic, before, now }),
-    before ? Promise.resolve(null) : getPinnedLoungePost(viewer),
+    before ? Promise.resolve([]) : listPinnedLoungePosts(viewer, now),
   ]);
+  const pinnedIds = new Set(pinned.map((post) => post.id));
   return data({
     pinned,
     sort,
@@ -51,13 +53,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     topicLabel: topic ? loungeTopicLabel(topic) : null,
     nextCursor,
     posts: posts
-      .filter((post) => post.id !== pinned?.id)
+      .filter((post) => !pinnedIds.has(post.id))
       .map((post) => ({ ...post, when: formatLoungeTime(post.createdAt, now) })),
   });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const { viewer } = await requireLoungeAccess(request);
+  const { viewer } = await requireLoungeMember(request);
   const form = await request.formData();
   if (form.get('intent') !== 'vote') return data({ ok: false }, { status: 400 });
   const postId = String(form.get('postId') ?? '');
@@ -85,7 +87,7 @@ export default function LoungeFeedRoute() {
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <LoungeHeader
         active="community"
-        description="Ask the teachers using Yawp how they teach it. Share what worked. Brian and the Yawp team read every question."
+        description={`Ask questions, share ideas, and connect with teachers using YAWP!. Brian and the ${LOUNGE_TEAM_NAME} read every question.`}
         action={
           <Link
             to="/app/lounge/new"
@@ -96,34 +98,37 @@ export default function LoungeFeedRoute() {
         }
       />
       <div className="mx-auto w-full max-w-screen-md px-3 py-6 sm:px-5">
-        {pinned ? (
-          <section aria-label="Pinned" className="mb-6">
-            <Link
-              to={`/app/lounge/${pinned.id}`}
-              className="flex flex-wrap items-center gap-4 rounded-xl border bg-background p-3 hover:border-primary/50"
-            >
-              {pinned.hasVideo ? (
-                <span className="relative flex aspect-video w-40 shrink-0 items-center justify-center rounded-lg bg-[#2A2824]">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                    <Play size={16} fill="currentColor" aria-hidden="true" />
-                  </span>
-                  {pinned.videoDurationSeconds ? (
-                    <span className="absolute bottom-1.5 right-2 text-xs text-white">
-                      {formatVideoDuration(pinned.videoDurationSeconds)}
+        {pinned.length > 0 ? (
+          <section aria-label="Pinned" className="mb-6 flex flex-col gap-2">
+            {pinned.map((post) => (
+              <Link
+                key={post.id}
+                to={`/app/lounge/${post.id}`}
+                className="flex flex-wrap items-center gap-4 rounded-xl border bg-background p-3 hover:border-primary/50"
+              >
+                {post.hasVideo ? (
+                  <span className="relative flex aspect-video w-32 shrink-0 items-center justify-center rounded-lg bg-[#2A2824]">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                      <Play size={14} fill="currentColor" aria-hidden="true" />
                     </span>
-                  ) : null}
+                    {post.videoDurationSeconds ? (
+                      <span className="absolute bottom-1.5 right-2 text-xs text-white">
+                        {formatVideoDuration(post.videoDurationSeconds)}
+                      </span>
+                    ) : null}
+                  </span>
+                ) : (
+                  <Pin size={16} aria-hidden="true" className="shrink-0 text-primary" />
+                )}
+                <span className="flex min-w-0 flex-[1_1_240px] flex-col">
+                  <span className="font-medium leading-snug">{post.title}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {post.authorIsStaff ? `From ${post.authorFirstName}` : 'Pinned'} · {post.replyCount}{' '}
+                    {post.replyCount === 1 ? 'reply' : 'replies'}
+                  </span>
                 </span>
-              ) : null}
-              <span className="flex min-w-0 flex-[1_1_240px] flex-col gap-1">
-                <span className="text-xs font-bold uppercase tracking-wider text-primary">
-                  {pinned.authorIsStaff ? `This week from ${pinned.authorFirstName}` : 'Pinned'}
-                </span>
-                <span className="text-lg font-medium leading-snug">{pinned.title}</span>
-                <span className="text-sm text-muted-foreground">
-                  {pinned.replyCount} {pinned.replyCount === 1 ? 'reply' : 'replies'} · add yours in the thread
-                </span>
-              </span>
-            </Link>
+              </Link>
+            ))}
           </section>
         ) : null}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b">
@@ -190,19 +195,19 @@ export default function LoungeFeedRoute() {
                     </span>
                   ) : null}
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-                    <LoungeByline byline={post.author} when={post.when} />
+                    <LoungeByline byline={post.author} when={post.when} edited={post.isEdited} />
                     <span>{KIND_LABEL[post.kind]}</span>
                     <Link to={feedHref({ sort, topic: post.topic })} className="hover:underline">
                       {post.topicLabel}
                     </Link>
-                    {post.isPrivate ? <span>Private to the Yawp team</span> : null}
+                    {post.isPrivate ? <span>Private to the {LOUNGE_TEAM_NAME}</span> : null}
                     {post.staffAnsweredOnVideo ? (
                       <span className="inline-flex items-center gap-1 font-medium text-primary">
                         <Video size={14} aria-hidden="true" />
-                        Yawp team answered on video
+                        {LOUNGE_TEAM_NAME} answered on video
                       </span>
                     ) : post.staffAnswered ? (
-                      <span className="font-medium text-primary">Yawp team answered</span>
+                      <span className="font-medium text-primary">{LOUNGE_TEAM_NAME} answered</span>
                     ) : null}
                     <span className="ml-auto inline-flex items-center gap-4">
                       <span>

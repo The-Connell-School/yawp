@@ -14,14 +14,15 @@ import { FileText, X } from 'lucide-react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { MentionTextarea } from '~/components/lounge/mention-textarea';
 import { LoungeVideoRecorder } from '~/components/lounge/lounge-video-recorder';
+import { LocalDateTimeInput } from '~/components/lounge/local-time';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
-import { requireLoungeAccess } from '~/domain/lounge/access.server';
-import { loungeByline, type LoungeDisplayNameStyleKey } from '~/domain/lounge/display-name';
+import { requireLoungeMember } from '~/domain/lounge/access.server';
+import { loungeByline } from '~/domain/lounge/display-name';
+import { LOUNGE_NAME, LOUNGE_TEAM_NAME, parseLoungeSchedule } from '~/domain/lounge/launch';
 import {
   LoungeShareError,
   createLoungePost,
-  getLoungeProfile,
   listMentionCandidates,
   listShareableAssignments,
   type ShareableAssignment,
@@ -38,11 +39,7 @@ import { cn } from '~/utils/misc';
 import { enforceAuthenticatedUserAndIp } from '~/utils/rate-limit.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const { viewer, membership } = await requireLoungeAccess(request);
-  const profile = await getLoungeProfile(viewer.userId);
-  if (!profile && !viewer.isStaff) {
-    throw redirect('/app/lounge/welcome?redirectTo=/app/lounge/new');
-  }
+  const { viewer, membership } = await requireLoungeMember(request);
   const [candidates, user, shareable] = await Promise.all([
     listMentionCandidates(viewer, null),
     prisma.user.findUnique({ where: { id: viewer.userId }, select: { name: true } }),
@@ -54,7 +51,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     isStaff: viewer.isStaff,
     postingAs: loungeByline({
       name: user?.name,
-      style: (profile?.displayNameStyle ?? null) as LoungeDisplayNameStyleKey | null,
+      style: null,
       schoolName: membership.organization.name,
       isStaff: viewer.isStaff,
     }),
@@ -62,11 +59,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const access = await requireLoungeAccess(request);
+  const access = await requireLoungeMember(request);
   const { viewer } = access;
-  if (!viewer.isStaff && !(await getLoungeProfile(viewer.userId))) {
-    throw redirect('/app/lounge/welcome?redirectTo=/app/lounge/new');
-  }
   const form = Object.fromEntries(await request.formData());
   const values = {
     kind: String(form.kind ?? 'QUESTION'),
@@ -77,11 +71,14 @@ export async function action({ request }: ActionFunctionArgs) {
     askPrivately: form.askPrivately === 'on',
     attachAssignmentId: String(form.attachAssignmentId ?? ''),
     pin: form.pin === 'on',
+    publishMode: String(form.publishMode ?? 'now'),
   };
   const parsed = parseLoungePostInput(form);
   if (!parsed.ok) return data({ errors: parsed.errors, values }, { status: 400 });
   const video = parseLoungeVideoInput(form, { userId: viewer.userId, isStaff: viewer.isStaff });
   if (!video.ok) return data({ errors: video.errors, values }, { status: 400 });
+  const schedule = viewer.isStaff ? parseLoungeSchedule(form, new Date()) : null;
+  if (schedule && !schedule.ok) return data({ errors: { publishAt: schedule.error }, values }, { status: 400 });
 
   const limit = await enforceAuthenticatedUserAndIp({
     request,
@@ -109,6 +106,7 @@ export async function action({ request }: ActionFunctionArgs) {
         attachAssignmentId: values.attachAssignmentId || null,
         video: video.value,
         pin: viewer.isStaff && values.pin,
+        schedule: schedule?.ok ? schedule.value : null,
       },
     });
   } catch (error) {
@@ -122,6 +120,13 @@ export async function action({ request }: ActionFunctionArgs) {
   throw redirect(`/app/lounge/${postId}`);
 }
 
+const PUBLISH_MODES = [
+  { key: 'now', label: 'Post now', submit: 'Post' },
+  { key: 'draft', label: 'Save as draft', submit: 'Save draft' },
+  { key: 'schedule', label: 'Schedule', submit: 'Schedule post' },
+] as const;
+type PublishMode = (typeof PUBLISH_MODES)[number]['key'];
+
 export default function LoungeNewPostRoute() {
   const { candidates, postingAs, shareable, isStaff } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
@@ -134,6 +139,9 @@ export default function LoungeNewPostRoute() {
   );
   const [bodyText, setBodyText] = useState(initialBody.text);
   const [askPrivately, setAskPrivately] = useState(values?.askPrivately ?? false);
+  const [publishMode, setPublishMode] = useState<PublishMode>(
+    (PUBLISH_MODES.find((option) => option.key === values?.publishMode)?.key ?? 'now') as PublishMode
+  );
   const nudge = privacyConcernMessage(findPrivacyConcerns(bodyText));
   const titleLabel = LOUNGE_POST_KINDS.find((k) => k.key === kind)?.titleLabel ?? 'Title';
 
@@ -141,7 +149,7 @@ export default function LoungeNewPostRoute() {
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <div className="mx-auto w-full max-w-2xl px-4 py-8">
         <Link to="/app/lounge" className="inline-flex min-h-11 items-center text-sm text-muted-foreground">
-          ← Teacher&apos;s Lounge
+          ← {LOUNGE_NAME}
         </Link>
         <h1 className="mt-2 text-2xl font-bold">New post</h1>
 
@@ -203,7 +211,7 @@ export default function LoungeNewPostRoute() {
               candidates={candidates}
               defaultText={initialBody.text}
               defaultMentions={initialBody.mentions}
-              placeholder="Type @ to mention Brian or the Yawp team."
+              placeholder={`Type @ to mention Brian or the ${LOUNGE_TEAM_NAME}.`}
               onTextChange={setBodyText}
               aria-invalid={Boolean(errors.body)}
               aria-describedby={errors.body ? 'lounge-body-error' : nudge ? 'lounge-body-nudge' : undefined}
@@ -217,7 +225,11 @@ export default function LoungeNewPostRoute() {
               <p id="lounge-body-nudge" className="text-sm text-amber-800" aria-live="polite">
                 {nudge}
               </p>
-            ) : null}
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Sharing student writing is welcome. Take the student&apos;s name off first.
+              </p>
+            )}
           </div>
 
           {shareable.length > 0 ? (
@@ -268,7 +280,7 @@ export default function LoungeNewPostRoute() {
                 className="mt-1 h-4 w-4 accent-[hsl(var(--primary))]"
               />
               <span className="flex flex-col">
-                <span>Ask the Yawp team to answer this</span>
+                <span>Ask the {LOUNGE_TEAM_NAME} to answer this</span>
                 <span className="text-sm text-muted-foreground">
                   Brian or someone on the team replies here, usually within two school days.
                 </span>
@@ -283,7 +295,7 @@ export default function LoungeNewPostRoute() {
                 className="mt-1 h-4 w-4 accent-[hsl(var(--primary))]"
               />
               <span className="flex flex-col">
-                <span>Keep it private between me and the Yawp team</span>
+                <span>Keep it private between me and the {LOUNGE_TEAM_NAME}</span>
                 <span className="text-sm text-muted-foreground">
                   Other teachers won&apos;t see it. Use this for anything about a specific student.
                 </span>
@@ -302,7 +314,7 @@ export default function LoungeNewPostRoute() {
               <span className="flex flex-col">
                 <span>Pin to the top of the Lounge</span>
                 <span className="text-sm text-muted-foreground">
-                  Use it for the weekly prompt. It replaces whatever is pinned now.
+                  Pinned posts sit above the feed, oldest pin first. Unpin from the post.
                 </span>
               </span>
             </label>
@@ -314,16 +326,43 @@ export default function LoungeNewPostRoute() {
             </p>
           ) : null}
 
+          {isStaff ? (
+            <fieldset className="flex flex-col gap-3">
+              <legend className="mb-2 text-sm text-muted-foreground">When</legend>
+              <div className="flex flex-wrap gap-x-6 gap-y-2">
+                {PUBLISH_MODES.map((option) => (
+                  <label key={option.key} className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="radio"
+                      name="publishMode"
+                      value={option.key}
+                      checked={publishMode === option.key}
+                      onChange={() => setPublishMode(option.key)}
+                      className="h-4 w-4 accent-[hsl(var(--primary))]"
+                    />
+                    {option.label}
+                  </label>
+                ))}
+              </div>
+              {publishMode === 'schedule' ? (
+                <LocalDateTimeInput id="lounge-publish-at" name="publishAt" label="Post on" />
+              ) : null}
+              {publishMode === 'draft' ? (
+                <span className="text-sm text-muted-foreground">
+                  Only the {LOUNGE_TEAM_NAME} sees drafts. Publish or schedule it from the Lounge inbox.
+                </span>
+              ) : null}
+              {errors.publishAt ? <p className="text-sm text-destructive">{errors.publishAt}</p> : null}
+            </fieldset>
+          ) : null}
+
           <div className="flex flex-wrap items-center gap-4">
             <Button type="submit" disabled={navigation.state === 'submitting'}>
-              Post
+              {PUBLISH_MODES.find((option) => option.key === publishMode)?.submit ?? 'Post'}
             </Button>
             <span className="text-sm text-muted-foreground">
               as {postingAs.name}
-              {postingAs.detail ? ` · ${postingAs.detail}` : ''} ·{' '}
-              <Link to="/app/lounge/welcome?redirectTo=/app/lounge/new" className="underline">
-                change
-              </Link>
+              {postingAs.detail ? ` · ${postingAs.detail}` : ''}
             </span>
           </div>
         </Form>
@@ -364,7 +403,7 @@ function AttachFromYawp({
 
   return (
     <div className="relative flex flex-col gap-2">
-      <span className="text-sm text-muted-foreground">Attached from Yawp</span>
+      <span className="text-sm text-muted-foreground">Attached from YAWP!</span>
       <input type="hidden" name="attachAssignmentId" value={selectedId ?? ''} />
       {selected ? (
         <div className="flex items-center gap-3 rounded-xl border bg-background px-3 py-2.5">
@@ -393,14 +432,14 @@ function AttachFromYawp({
           onClick={() => setOpen((value) => !value)}
           className="inline-flex min-h-11 items-center gap-2 self-start rounded-lg border border-dashed border-muted-foreground/50 px-4 text-[15px] hover:bg-secondary"
         >
-          Attach from Yawp
+          Attach from YAWP!
         </button>
       )}
       {open && !selected ? (
         <div
           ref={panelRef}
           role="dialog"
-          aria-label="Attach from Yawp"
+          aria-label="Attach from YAWP!"
           className="absolute left-0 top-full z-20 mt-1 w-full max-w-md overflow-hidden rounded-xl border bg-background shadow-lg"
         >
           <p className="border-b px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">

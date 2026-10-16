@@ -18,15 +18,19 @@ import { MentionTextarea } from '~/components/lounge/mention-textarea';
 import { LoungeVideoPlayer } from '~/components/lounge/lounge-video-player';
 import { LoungeVideoRecorder } from '~/components/lounge/lounge-video-recorder';
 import { FileText } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { LocalTime } from '~/components/lounge/local-time';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
-import { requireLoungeAccess } from '~/domain/lounge/access.server';
+import { requireLoungeMember } from '~/domain/lounge/access.server';
+import { LOUNGE_NAME, LOUNGE_TEAM_NAME } from '~/domain/lounge/launch';
 import {
   LoungeNotFoundError,
   createLoungeReply,
   deleteOwnLoungePost,
   deleteOwnLoungeReply,
-  getLoungeProfile,
+  editOwnLoungePost,
+  editOwnLoungeReply,
   getLoungeThread,
   listMentionCandidates,
   recordShareUse,
@@ -42,7 +46,7 @@ import { loungeVideoPlaybackUrl } from '~/domain/lounge/video-storage.server';
 import { decodeMentions } from '~/domain/lounge/mentions';
 import { sendLoungeNotifications } from '~/domain/lounge/notifications.server';
 import { formatLoungeTime } from '~/domain/lounge/time';
-import { parseLoungeReplyInput } from '~/domain/lounge/validation';
+import { parseLoungePostEdit, parseLoungeReplyEdit, parseLoungeReplyInput } from '~/domain/lounge/validation';
 import { getDomainUrl } from '~/utils/misc';
 import { enforceAuthenticatedUserAndIp } from '~/utils/rate-limit.server';
 
@@ -55,14 +59,11 @@ async function withPlayback(video: LoungeVideo | null) {
 }
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  const { viewer, membership } = await requireLoungeAccess(request);
+  const { viewer, membership } = await requireLoungeMember(request);
   const postId = params.postId ?? '';
   const thread = await getLoungeThread(viewer, postId);
   if (!thread) throw notFound();
-  const [profile, candidates] = await Promise.all([
-    getLoungeProfile(viewer.userId),
-    listMentionCandidates(viewer, postId),
-  ]);
+  const candidates = await listMentionCandidates(viewer, postId);
   const now = new Date();
   const withWhen = async (reply: LoungeReplyView) => ({
     ...reply,
@@ -90,12 +91,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     replies: await Promise.all(thread.replies.map(withWhen)),
     candidates,
     isStaff: viewer.isStaff,
-    canReply: viewer.isStaff || Boolean(profile),
   });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
-  const access = await requireLoungeAccess(request);
+  const access = await requireLoungeMember(request);
   const { viewer } = access;
   const postId = params.postId ?? '';
   const form = await request.formData();
@@ -105,9 +105,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
   try {
     switch (intent) {
       case 'reply': {
-        if (!viewer.isStaff && !(await getLoungeProfile(viewer.userId))) {
-          throw redirect(`/app/lounge/welcome?redirectTo=/app/lounge/${postId}`);
-        }
         const fields = Object.fromEntries(form);
         const parsed = parseLoungeReplyInput(fields, { isStaff: viewer.isStaff });
         if (!parsed.ok) {
@@ -163,6 +160,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
         if (!viewer.isStaff) return data({ intent, error: 'Not allowed' }, { status: 403 });
         await setLoungePostPinned(viewer.userId, postId, intent === 'pin');
         return data({ intent, ok: true });
+      case 'edit-post': {
+        const parsed = parseLoungePostEdit(Object.fromEntries(form));
+        if (!parsed.ok) return data({ intent, errors: parsed.errors }, { status: 400 });
+        if (!(await editOwnLoungePost(viewer, postId, parsed.value))) throw notFound();
+        throw redirect(`/app/lounge/${postId}`);
+      }
+      case 'edit-reply': {
+        const parsed = parseLoungeReplyEdit(Object.fromEntries(form));
+        if (!parsed.ok) return data({ intent, replyId, errors: parsed.errors }, { status: 400 });
+        if (!replyId || !(await editOwnLoungeReply(viewer, replyId, parsed.value))) throw notFound();
+        throw redirect(`/app/lounge/${postId}#reply-${replyId}`);
+      }
       case 'delete-post':
         await deleteOwnLoungePost(viewer, postId);
         throw redirect('/app/lounge');
@@ -178,10 +187,192 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 }
 
-type ReplyWithWhen = LoungeReplyView & { when: string };
+type ReplyWithWhen = Omit<LoungeReplyView, 'video'> & {
+  when: string;
+  video: (LoungeVideo & { url: string | null }) | null;
+};
+type Candidates = Parameters<typeof MentionTextarea>[0]['candidates'];
+
+/**
+ * Close an edit form once its save has gone through. A save redirects back
+ * to this same page, which keeps component state, so the form would
+ * otherwise stay open; a save that comes back with errors keeps it open.
+ */
+function useCloseAfterSave(intent: string, replyId: string | null, close: () => void) {
+  const navigation = useNavigation();
+  const actionData = useActionData<typeof action>();
+  const saving = useRef(false);
+  useEffect(() => {
+    const form = navigation.formData;
+    if (navigation.state !== 'idle') {
+      if (form?.get('intent') === intent && (replyId === null || form.get('replyId') === replyId)) saving.current = true;
+      return;
+    }
+    if (!saving.current) return;
+    saving.current = false;
+    const failed = actionData && 'errors' in actionData && actionData.intent === intent;
+    if (!failed) close();
+  }, [navigation.state, navigation.formData, actionData, intent, replyId, close]);
+}
+
+function EditPostForm({
+  title,
+  body,
+  candidates,
+  onCancel,
+}: {
+  title: string;
+  body: string;
+  candidates: Candidates;
+  onCancel: () => void;
+}) {
+  const actionData = useActionData<typeof action>();
+  const errors =
+    actionData && 'errors' in actionData && actionData.intent === 'edit-post' ? actionData.errors : undefined;
+  const initial = decodeMentions(body);
+  return (
+    <Form method="post" className="flex flex-col gap-3">
+      <input type="hidden" name="intent" value="edit-post" />
+      <label htmlFor="edit-post-title" className="text-sm text-muted-foreground">
+        Edit title
+      </label>
+      <Input id="edit-post-title" name="title" defaultValue={title} className="h-12 text-lg" />
+      <label htmlFor="edit-post-body" className="text-sm text-muted-foreground">
+        Edit details
+      </label>
+      <MentionTextarea
+        id="edit-post-body"
+        name="body"
+        rows={10}
+        candidates={candidates}
+        defaultText={initial.text}
+        defaultMentions={initial.mentions}
+      />
+      <FormErrors errors={errors} />
+      <div className="flex gap-3">
+        <Button type="submit">Save changes</Button>
+        <Button type="button" variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </Form>
+  );
+}
+
+function FormErrors({ errors }: { errors?: Record<string, string | undefined> }) {
+  if (!errors) return null;
+  return (
+    <>
+      {Object.values(errors).map((message) => (
+        <p key={message} role="alert" className="text-sm text-destructive">
+          {message}
+        </p>
+      ))}
+    </>
+  );
+}
+
+/** One reply: a YAWP! team answer (accented) or a teacher's reply. Authors can edit their own. */
+function ReplyItem({
+  reply,
+  candidates,
+  variant,
+}: {
+  reply: ReplyWithWhen;
+  candidates: Candidates;
+  variant: 'staff' | 'community';
+}) {
+  const [editing, setEditing] = useState(false);
+  useCloseAfterSave('edit-reply', reply.id, () => setEditing(false));
+  const actionData = useActionData<typeof action>();
+  const errors =
+    actionData && 'errors' in actionData && actionData.intent === 'edit-reply' && actionData.replyId === reply.id
+      ? actionData.errors
+      : undefined;
+  const initial = decodeMentions(reply.body);
+  const staff = variant === 'staff';
+  return (
+    <article
+      id={`reply-${reply.id}`}
+      className={
+        staff
+          ? 'flex flex-col gap-3 border-l-[3px] border-primary bg-background px-5 py-4'
+          : 'flex flex-col gap-2 border-t py-5'
+      }
+    >
+      <LoungeByline byline={reply.author} when={reply.when} edited={reply.isEdited} />
+      {reply.isHidden ? (
+        <p className="text-sm font-medium text-destructive">Hidden by the {LOUNGE_TEAM_NAME}.</p>
+      ) : null}
+      {editing ? (
+        <Form method="post" className="flex flex-col gap-2">
+          <input type="hidden" name="intent" value="edit-reply" />
+          <input type="hidden" name="replyId" value={reply.id} />
+          <label htmlFor={`edit-reply-${reply.id}`} className="sr-only">
+            Edit reply
+          </label>
+          <MentionTextarea
+            id={`edit-reply-${reply.id}`}
+            name="body"
+            rows={4}
+            candidates={candidates}
+            defaultText={initial.text}
+            defaultMentions={initial.mentions}
+          />
+          <div className="flex gap-3">
+            <Button type="submit" size="sm">
+              Save changes
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+          </div>
+        </Form>
+      ) : (
+        <LoungeBody body={reply.body} className={staff ? 'text-base' : undefined} />
+      )}
+      <FormErrors errors={errors} />
+      {reply.video ? (
+        <LoungeVideoPlayer
+          url={reply.video.url}
+          title={reply.video.title}
+          durationSeconds={reply.video.durationSeconds}
+          label={`Video answer from ${reply.author.name}`}
+        />
+      ) : null}
+      {reply.videoUrl ? (
+        <a
+          href={reply.videoUrl}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="self-start text-sm font-medium text-primary underline"
+        >
+          Watch the video
+        </a>
+      ) : null}
+      <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+        <HelpfulButton count={reply.helpfulCount} voted={reply.viewerVoted} isOwn={reply.isOwn} replyId={reply.id} />
+        <span className="ml-auto flex items-center gap-4">
+          {reply.isOwn && !editing ? (
+            <button type="button" onClick={() => setEditing(true)} className="text-sm hover:text-foreground">
+              Edit
+            </button>
+          ) : null}
+          {reply.isOwn ? (
+            <DeleteButton intent="delete-reply" replyId={reply.id} label="Delete" />
+          ) : staff ? null : (
+            <ReportForm replyId={reply.id} />
+          )}
+        </span>
+      </div>
+    </article>
+  );
+}
 
 export default function LoungeThreadRoute() {
-  const { post, share, staffReplies, replies, candidates, canReply, isStaff } = useLoaderData<typeof loader>();
+  const { post, share, staffReplies, replies, candidates, isStaff } = useLoaderData<typeof loader>();
+  const [editingPost, setEditingPost] = useState(false);
+  useCloseAfterSave('edit-post', null, () => setEditingPost(false));
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const replyErrors =
@@ -195,22 +386,44 @@ export default function LoungeThreadRoute() {
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <div className="mx-auto w-full max-w-2xl px-4 py-8">
         <Link to="/app/lounge" className="inline-flex min-h-11 items-center text-sm text-muted-foreground">
-          ← Teacher&apos;s Lounge
+          ← {LOUNGE_NAME}
         </Link>
 
         <article className="mt-3 flex flex-col gap-3">
-          <h1 className="text-2xl font-bold leading-snug">{post.title}</h1>
-          <p className="text-sm text-muted-foreground">
-            <LoungeByline byline={post.author} when={post.when} /> ·{' '}
-            <Link to={`/app/lounge?topic=${post.topic}`} className="hover:underline">
-              {post.topicLabel}
-            </Link>
-          </p>
-          {post.isPrivate ? (
-            <p className="text-sm text-muted-foreground">Only you and the Yawp team can see this.</p>
+          {post.isUnpublished ? (
+            <p className="rounded-lg bg-secondary px-3 py-2 text-sm font-medium">
+              {post.isDraft ? (
+                <>Draft. Only the {LOUNGE_TEAM_NAME} can see this.</>
+              ) : (
+                <>
+                  Scheduled for <LocalTime iso={post.createdAt} />. Only the {LOUNGE_TEAM_NAME} can see it until then.
+                </>
+              )}
+            </p>
           ) : null}
-          {post.isHidden ? <p className="text-sm font-medium text-destructive">Hidden by the Yawp team.</p> : null}
-          <LoungeBody body={post.body} className="text-base" />
+          {editingPost ? (
+            <EditPostForm
+              title={post.title}
+              body={post.body}
+              candidates={candidates}
+              onCancel={() => setEditingPost(false)}
+            />
+          ) : (
+            <>
+              <h1 className="text-2xl font-bold leading-snug">{post.title}</h1>
+              <p className="text-sm text-muted-foreground">
+                <LoungeByline byline={post.author} when={post.when} edited={post.isEdited} /> ·{' '}
+                <Link to={`/app/lounge?topic=${post.topic}`} className="hover:underline">
+                  {post.topicLabel}
+                </Link>
+              </p>
+            </>
+          )}
+          {post.isPrivate ? (
+            <p className="text-sm text-muted-foreground">Only you and the {LOUNGE_TEAM_NAME} can see this.</p>
+          ) : null}
+          {post.isHidden ? <p className="text-sm font-medium text-destructive">Hidden by the {LOUNGE_TEAM_NAME}.</p> : null}
+          {editingPost ? null : <LoungeBody body={post.body} className="text-base" testId="lounge-post-body" />}
           {post.video ? (
             <LoungeVideoPlayer
               url={post.video.url}
@@ -221,15 +434,13 @@ export default function LoungeThreadRoute() {
           ) : null}
           {share ? <ShareCard share={share} isOwn={post.isOwn} /> : null}
           {post.staffStatus === 'OPEN' && staffReplies.length === 0 ? (
-            <p className="text-sm font-medium text-primary">Waiting on the Yawp team</p>
+            <p className="text-sm font-medium text-primary">Waiting on the {LOUNGE_TEAM_NAME}</p>
           ) : null}
           <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
             <HelpfulButton count={post.helpfulCount} voted={post.viewerVoted} isOwn={post.isOwn} postId={post.id} />
-            {canReply ? (
-              <a href="#reply" className="hover:text-foreground">
-                Reply
-              </a>
-            ) : null}
+            <a href="#reply" className="hover:text-foreground">
+              Reply
+            </a>
             <span className="ml-auto flex items-center gap-4">
               {isStaff ? (
                 <Form method="post">
@@ -238,6 +449,15 @@ export default function LoungeThreadRoute() {
                     {post.isPinned ? 'Unpin' : 'Pin to top'}
                   </button>
                 </Form>
+              ) : null}
+              {post.isOwn && !editingPost ? (
+                <button
+                  type="button"
+                  onClick={() => setEditingPost(true)}
+                  className="text-sm text-muted-foreground hover:text-foreground"
+                >
+                  Edit post
+                </button>
               ) : null}
               {post.isOwn ? (
                 <DeleteButton intent="delete-post" label="Delete post" />
@@ -249,43 +469,9 @@ export default function LoungeThreadRoute() {
         </article>
 
         {staffReplies.length > 0 ? (
-          <section aria-label="Answers from the Yawp team" className="mt-8 flex flex-col gap-4">
+          <section aria-label={`Answers from the ${LOUNGE_TEAM_NAME}`} className="mt-8 flex flex-col gap-4">
             {staffReplies.map((reply) => (
-              <article
-                key={reply.id}
-                id={`reply-${reply.id}`}
-                className="flex flex-col gap-3 border-l-[3px] border-primary bg-background px-5 py-4"
-              >
-                <LoungeByline byline={reply.author} when={reply.when} />
-                <LoungeBody body={reply.body} className="text-base" />
-                {reply.video ? (
-                  <LoungeVideoPlayer
-                    url={reply.video.url}
-                    title={reply.video.title}
-                    durationSeconds={reply.video.durationSeconds}
-                    label={`Video answer from ${reply.author.name}`}
-                  />
-                ) : null}
-                {reply.videoUrl ? (
-                  <a
-                    href={reply.videoUrl}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="self-start text-sm font-medium text-primary underline"
-                  >
-                    Watch the video
-                  </a>
-                ) : null}
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                  <HelpfulButton
-                    count={reply.helpfulCount}
-                    voted={reply.viewerVoted}
-                    isOwn={reply.isOwn}
-                    replyId={reply.id}
-                  />
-                  {reply.isOwn ? <DeleteButton intent="delete-reply" replyId={reply.id} label="Delete" /> : null}
-                </div>
-              </article>
+              <ReplyItem key={reply.id} reply={reply} candidates={candidates} variant="staff" />
             ))}
           </section>
         ) : null}
@@ -296,35 +482,13 @@ export default function LoungeThreadRoute() {
               {replies.length} {replies.length === 1 ? 'reply' : 'replies'}
             </h2>
           ) : null}
-          {replies.map((reply: ReplyWithWhen) => (
-            <article key={reply.id} id={`reply-${reply.id}`} className="flex flex-col gap-2 border-t py-5">
-              <LoungeByline byline={reply.author} when={reply.when} />
-              {reply.isHidden ? (
-                <p className="text-sm font-medium text-destructive">Hidden by the Yawp team.</p>
-              ) : null}
-              <LoungeBody body={reply.body} />
-              <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                <HelpfulButton
-                  count={reply.helpfulCount}
-                  voted={reply.viewerVoted}
-                  isOwn={reply.isOwn}
-                  replyId={reply.id}
-                />
-                <span className="ml-auto">
-                  {reply.isOwn ? (
-                    <DeleteButton intent="delete-reply" replyId={reply.id} label="Delete" />
-                  ) : (
-                    <ReportForm replyId={reply.id} />
-                  )}
-                </span>
-              </div>
-            </article>
+          {replies.map((reply) => (
+            <ReplyItem key={reply.id} reply={reply} candidates={candidates} variant="community" />
           ))}
         </section>
 
         <div id="reply" className="border-t pt-6">
-          {canReply ? (
-            <Form method="post" className="flex flex-col gap-3">
+          <Form method="post" className="flex flex-col gap-3">
               <input type="hidden" name="intent" value="reply" />
               <label htmlFor="lounge-reply" className="text-sm text-muted-foreground">
                 Your reply
@@ -364,14 +528,6 @@ export default function LoungeThreadRoute() {
                 </Button>
               </div>
             </Form>
-          ) : (
-            <Link
-              to={`/app/lounge/welcome?redirectTo=/app/lounge/${post.id}`}
-              className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline"
-            >
-              Choose how you appear to reply
-            </Link>
-          )}
         </div>
       </div>
     </section>
@@ -395,7 +551,7 @@ function ShareCard({ share, isOwn }: { share: ShareView; isOwn: boolean }) {
   const used = `used by ${share.useCount} ${share.useCount === 1 ? 'teacher' : 'teachers'}`;
   return (
     <section
-      aria-label="Shared from Yawp"
+      aria-label="Shared from YAWP!"
       className="flex flex-col gap-3 rounded-xl border bg-background px-4 py-3.5"
     >
       <div className="flex items-start gap-3">
@@ -461,7 +617,7 @@ function DeleteButton({ intent, replyId, label }: { intent: string; replyId?: st
 function ReportForm({ replyId }: { replyId?: string }) {
   const fetcher = useFetcher<{ reported?: boolean }>();
   if (fetcher.data?.reported) {
-    return <span className="text-sm">Thanks. The Yawp team will take a look.</span>;
+    return <span className="text-sm">Thanks. The {LOUNGE_TEAM_NAME} will take a look.</span>;
   }
   return (
     <details className="text-sm">

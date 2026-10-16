@@ -1,7 +1,8 @@
 import type { PrismaClient } from '../../generated/prisma';
 import { LAUNCH_POSTS, type LaunchAuthor, type LaunchPost } from './content';
 
-export { LAUNCH_POSTS, type LaunchPost };
+export { LAUNCH_POSTS } from './content';
+export type { LaunchPost } from './content';
 
 /** Same rule as hasPlaceholderText in the web app: "[like this]" but not a markdown link. */
 export function hasLaunchPlaceholder(body: string): boolean {

@@ -37,7 +37,7 @@ async function resetLounge(e2eContext: {
     await prisma.loungeProfile.deleteMany({});
     for (const userId of [e2eContext.teacherUserId, e2eContext.adminUserId]) {
       await prisma.loungeProfile.create({
-        data: { userId, displayNameStyle: 'FIRST_NAME_LAST_INITIAL', guidelinesAcceptedAt: new Date() },
+        data: { userId, guidelinesAcceptedAt: new Date() },
       });
     }
     await prisma.assignment.deleteMany({ where: { prompt: SHARED_PROMPT } });
@@ -80,7 +80,7 @@ async function seedWaitingQuestion(teacherUserId: string, organizationId: string
   }
 }
 
-test.describe.serial("Teacher's Lounge shares and Brian's videos", () => {
+test.describe.serial("Faculty Lounge shares and Brian's videos", () => {
   test.beforeAll(async () => {
     await setLoungeCommunityFlag(true);
   });
@@ -98,14 +98,14 @@ test.describe.serial("Teacher's Lounge shares and Brian's videos", () => {
     await page.getByLabel('Details').fill('I give it the day before the essay is due.');
     await page.getByLabel('Topic').selectOption({ label: 'Writing Lessons' });
 
-    await page.getByRole('button', { name: 'Attach from Yawp' }).click();
-    const picker = page.getByRole('dialog', { name: 'Attach from Yawp' });
+    await page.getByRole('button', { name: 'Attach from YAWP!' }).click();
+    const picker = page.getByRole('dialog', { name: 'Attach from YAWP!' });
     await picker.getByRole('button', { name: /Conclusion checklist/ }).click();
     await expect(picker).toHaveCount(0);
     await expect(page.getByText('Conclusion checklist', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Post', exact: true }).click();
 
-    const card = page.getByRole('region', { name: 'Shared from Yawp' });
+    const card = page.getByRole('region', { name: 'Shared from YAWP!' });
     await expect(card.getByText('Conclusion checklist', { exact: true })).toBeVisible();
     await expect(card.getByText('Shared from your assignments')).toBeVisible();
     await expect(card.getByRole('button', { name: 'Use in my class' })).toHaveCount(0);
@@ -122,7 +122,7 @@ test.describe.serial("Teacher's Lounge shares and Brian's videos", () => {
     await expect(row.getByText(/Conclusion checklist/)).toBeVisible();
     await row.getByRole('link', { name: SHARE_TITLE }).click();
 
-    const card = page.getByRole('region', { name: 'Shared from Yawp' });
+    const card = page.getByRole('region', { name: 'Shared from YAWP!' });
     await card.getByText('Preview').click();
     await expect(card.getByText(SHARED_PROMPT)).toBeVisible();
     await card.getByRole('button', { name: 'Use in my class' }).click();
@@ -155,7 +155,7 @@ test.describe.serial("Teacher's Lounge shares and Brian's videos", () => {
     await page.getByRole('button', { name: 'Use this video' }).click();
     await expect(page.getByText(/Video ready/)).toBeVisible({ timeout: 20_000 });
     await page.getByLabel('Title on the video (optional)').fill('One lesson, two thesis shapes');
-    await page.getByLabel('Reply as the Yawp team').fill('Teach them together. Argument first, then flip it.');
+    await page.getByLabel('Reply as the YAWP! team').fill('Teach them together. Argument first, then flip it.');
     await page.getByRole('button', { name: 'Post reply' }).click();
     await expect(page.getByText('Nothing waiting. Nice.')).toBeVisible();
 
@@ -163,10 +163,10 @@ test.describe.serial("Teacher's Lounge shares and Brian's videos", () => {
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto('/app/lounge');
     const row = page.getByRole('article').filter({ hasText: QUESTION_TITLE });
-    await expect(row.getByText('Yawp team answered on video')).toBeVisible();
+    await expect(row.getByText('YAWP! team answered on video')).toBeVisible();
     await row.getByRole('link', { name: QUESTION_TITLE }).click();
 
-    const answers = page.getByRole('region', { name: 'Answers from the Yawp team' });
+    const answers = page.getByRole('region', { name: 'Answers from the YAWP! team' });
     await expect(answers.getByText('One lesson, two thesis shapes')).toBeVisible();
     const video = answers.locator('video');
     await expect(video).toHaveAttribute('src', /\/api\/lounge\/video-local\?key=lounge%2Fvideos%2F/);
@@ -190,7 +190,7 @@ test.describe.serial("Teacher's Lounge shares and Brian's videos", () => {
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto('/app/lounge');
     const pinned = page.getByRole('region', { name: 'Pinned' });
-    await expect(pinned.getByText('This week from Admin')).toBeVisible();
+    await expect(pinned.getByText('From Admin')).toBeVisible();
     await expect(pinned.getByRole('link', { name: PROMPT_TITLE })).toBeVisible();
     // Shown once, at the top, not again in the list below.
     await expect(page.getByRole('link', { name: PROMPT_TITLE })).toHaveCount(1);

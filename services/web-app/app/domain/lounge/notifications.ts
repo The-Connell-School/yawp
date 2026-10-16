@@ -52,13 +52,13 @@ export function buildLoungeEmail(
   }
   const lead =
     notification.kind === 'staff-request'
-      ? `${notification.actorName} asked in the Teacher's Lounge:`
+      ? `${notification.actorName} asked in the Faculty Lounge:`
       : `${notification.actorName} wrote:`;
-  const text = [lead, '', notification.excerpt, '', `Open it in Yawp: ${link}`].join('\n');
+  const text = [lead, '', notification.excerpt, '', `Open it in YAWP!: ${link}`].join('\n');
   const html = [
     `<p>${escapeHtml(lead)}</p>`,
     `<blockquote style="margin:0;padding-left:12px;border-left:3px solid #D2714F;color:#3C3828">${escapeHtml(notification.excerpt)}</blockquote>`,
-    `<p><a href="${escapeHtml(link)}">Open it in Yawp</a></p>`,
+    `<p><a href="${escapeHtml(link)}">Open it in YAWP!</a></p>`,
   ].join('\n');
   return { subject, text, html };
 }

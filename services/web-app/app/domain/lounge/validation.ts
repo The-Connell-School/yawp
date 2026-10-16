@@ -45,8 +45,7 @@ export function parseLoungePostInput(input: Input): Result<LoungePostInput> {
   const body = text(input.body);
   if (!isLoungePostKind(kind)) errors.kind = 'Choose Question, Share, or Win.';
   if (!isLoungeTopic(topic)) errors.topic = 'Choose a topic.';
-  if (title.length < LOUNGE_TITLE_MIN) errors.title = 'Give it a title of a few words.';
-  else if (title.length > LOUNGE_TITLE_MAX) errors.title = `Keep the title under ${LOUNGE_TITLE_MAX} characters.`;
+  checkTitle(title, errors);
   checkBody(body, errors);
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   const askPrivately = checked(input.askPrivately);
@@ -95,4 +94,28 @@ export function parseLoungeReplyInput(
   }
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   return { ok: true, value: { body, videoUrl: rawVideo || null } };
+}
+
+function checkTitle(title: string, errors: Errors) {
+  if (title.length < LOUNGE_TITLE_MIN) errors.title = 'Give it a title of a few words.';
+  else if (title.length > LOUNGE_TITLE_MAX) errors.title = `Keep the title under ${LOUNGE_TITLE_MAX} characters.`;
+}
+
+/** Editing your own post. The body may be empty: some questions are all title. */
+export function parseLoungePostEdit(input: Input): Result<{ title: string; body: string }> {
+  const errors: Errors = {};
+  const title = text(input.title);
+  const body = text(input.body);
+  checkTitle(title, errors);
+  if (body.length > LOUNGE_BODY_MAX) errors.body = 'Keep it under 5,000 characters.';
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return { ok: true, value: { title, body } };
+}
+
+export function parseLoungeReplyEdit(input: Input): Result<{ body: string }> {
+  const errors: Errors = {};
+  const body = text(input.body);
+  checkBody(body, errors);
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return { ok: true, value: { body } };
 }

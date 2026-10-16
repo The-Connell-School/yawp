@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { parseLoungePostInput, parseLoungeReplyInput } from './validation';
+import { parseLoungePostEdit, parseLoungePostInput, parseLoungeReplyEdit, parseLoungeReplyInput } from './validation';
 import { LOUNGE_TOPICS } from './topics';
 
 const goodPost = {
@@ -101,5 +101,26 @@ describe('parseLoungeReplyInput', () => {
 
   test('requires a body', () => {
     expect(parseLoungeReplyInput({ body: '  ' }, { isStaff: false }).ok).toBe(false);
+  });
+});
+
+describe('parseLoungePostEdit', () => {
+  test('keeps the title rules, and a question may stay all title', () => {
+    expect(parseLoungePostEdit({ title: '  Revision policy?  ', body: '' })).toEqual({
+      ok: true,
+      value: { title: 'Revision policy?', body: '' },
+    });
+    expect(parseLoungePostEdit({ title: 'Hi', body: 'x' })).toMatchObject({ ok: false, errors: { title: expect.any(String) } });
+    expect(parseLoungePostEdit({ title: 'A fine title', body: 'x'.repeat(5001) })).toMatchObject({
+      ok: false,
+      errors: { body: 'Keep it under 5,000 characters.' },
+    });
+  });
+});
+
+describe('parseLoungeReplyEdit', () => {
+  test('a reply still needs words', () => {
+    expect(parseLoungeReplyEdit({ body: ' Better. ' })).toEqual({ ok: true, value: { body: 'Better.' } });
+    expect(parseLoungeReplyEdit({ body: '   ' })).toMatchObject({ ok: false, errors: { body: 'Write a few words.' } });
   });
 });

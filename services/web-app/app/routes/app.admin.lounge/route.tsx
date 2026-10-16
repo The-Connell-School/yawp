@@ -14,17 +14,24 @@ import { LoungeBody } from '~/components/lounge/lounge-body';
 import { LoungeByline } from '~/components/lounge/lounge-byline';
 import { MentionTextarea } from '~/components/lounge/mention-textarea';
 import { LoungeVideoRecorder } from '~/components/lounge/lounge-video-recorder';
+import { LocalDateTimeInput, LocalTime } from '~/components/lounge/local-time';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
+import { LOUNGE_TEAM_NAME, parseLoungeSchedule } from '~/domain/lounge/launch';
 import {
   LoungeNotFoundError,
+  LoungePlaceholderError,
   closeLoungeStaffRequest,
   createLoungeReply,
   dismissLoungeReport,
   getLoungeThread,
   hideLoungeContent,
   listLoungeStaffInbox,
+  listLoungeUnpublished,
   listMentionCandidates,
+  publishLoungePostNow,
+  resolveLoungeContactMessage,
+  scheduleLoungePost,
 } from '~/domain/lounge/lounge.server';
 import { sendLoungeNotifications } from '~/domain/lounge/notifications.server';
 import { formatLoungeTime } from '~/domain/lounge/time';
@@ -42,7 +49,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const viewer = { userId: admin.id, isStaff: true };
   const url = new URL(request.url);
   const now = new Date();
-  const inbox = await listLoungeStaffInbox();
+  const [inbox, unpublished] = await Promise.all([listLoungeStaffInbox(), listLoungeUnpublished(now)]);
   const selectedId = url.searchParams.get('post') ?? inbox.waiting[0]?.id ?? null;
   const [thread, candidates] = selectedId
     ? await Promise.all([getLoungeThread(viewer, selectedId), listMentionCandidates(viewer, selectedId)])
@@ -50,6 +57,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return data({
     waiting: inbox.waiting.map((item) => ({ ...item, waitingFor: formatLoungeTime(item.requestedAt, now) })),
     reports: inbox.reports.map((item) => ({ ...item, when: formatLoungeTime(item.createdAt, now) })),
+    messages: inbox.messages.map((item) => ({ ...item, when: formatLoungeTime(item.createdAt, now) })),
+    unpublished,
     selected: thread
       ? {
           id: thread.post.id,
@@ -102,6 +111,20 @@ export async function action({ request }: ActionFunctionArgs) {
         await hideLoungeContent(admin.id, replyId ? { replyId } : { postId });
         return data({ ok: true });
       }
+      case 'resolve-message':
+        await resolveLoungeContactMessage(admin.id, String(form.get('messageId') ?? ''));
+        return data({ ok: true });
+      case 'publish-now':
+        await publishLoungePostNow(postId);
+        return data({ ok: true });
+      case 'schedule': {
+        const schedule = parseLoungeSchedule({ publishMode: 'schedule', publishAt: form.get('publishAt') }, new Date());
+        if (!schedule.ok || !schedule.value.publishAt) {
+          return data({ errors: { schedule: schedule.ok ? 'Pick a date and time.' : schedule.error } }, { status: 400 });
+        }
+        await scheduleLoungePost(postId, schedule.value.publishAt);
+        return data({ ok: true });
+      }
       case 'dismiss':
         await dismissLoungeReport(admin.id, String(form.get('reportId') ?? ''));
         return data({ ok: true });
@@ -109,6 +132,9 @@ export async function action({ request }: ActionFunctionArgs) {
         return data({ error: 'Unknown action' }, { status: 400 });
     }
   } catch (error) {
+    if (error instanceof LoungePlaceholderError) {
+      return data({ errors: { schedule: error.message } }, { status: 400 });
+    }
     if (error instanceof LoungeNotFoundError) {
       return data({ errors: { body: 'That post is gone.' } }, { status: 404 });
     }
@@ -117,7 +143,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function AdminLoungeRoute() {
-  const { waiting, reports, selected, candidates } = useLoaderData<typeof loader>();
+  const { waiting, reports, messages, unpublished, selected, candidates } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const errors = actionData && 'errors' in actionData ? actionData.errors : undefined;
@@ -127,13 +153,14 @@ export default function AdminLoungeRoute() {
       <div className="flex flex-wrap items-baseline gap-4">
         <h1 className="text-2xl font-bold">Lounge inbox</h1>
         <p className="text-sm text-muted-foreground">
-          {waiting.length} waiting for the Yawp team · {reports.length} open{' '}
+          {waiting.length} waiting for the {LOUNGE_TEAM_NAME} · {messages.length}{' '}
+          {messages.length === 1 ? 'message' : 'messages'} · {reports.length} open{' '}
           {reports.length === 1 ? 'report' : 'reports'}
         </p>
       </div>
 
       <div className="flex flex-wrap gap-8">
-        <section aria-label="Waiting for the Yawp team" className="flex min-w-0 flex-[1_1_280px] flex-col gap-1">
+        <section aria-label={`Waiting for the ${LOUNGE_TEAM_NAME}`} className="flex min-w-0 flex-[1_1_280px] flex-col gap-1">
           {waiting.length === 0 ? (
             <p className="py-4 text-muted-foreground">Nothing waiting. Nice.</p>
           ) : (
@@ -173,7 +200,7 @@ export default function AdminLoungeRoute() {
               <Form method="post" className="flex flex-col gap-3 border-t pt-4">
                 <input type="hidden" name="postId" value={selected.id} />
                 <label htmlFor="staff-reply" className="text-sm text-muted-foreground">
-                  Reply as the Yawp team
+                  Reply as the {LOUNGE_TEAM_NAME}
                 </label>
                 <MentionTextarea
                   key={selected.id}
@@ -210,6 +237,89 @@ export default function AdminLoungeRoute() {
           </section>
         ) : null}
       </div>
+
+      <section id="messages" aria-label="Messages" className="flex flex-col gap-2 border-t pt-6">
+        <h2 className="text-lg font-bold">Messages</h2>
+        <p className="text-sm text-muted-foreground">From the Contact Us button. Only the {LOUNGE_TEAM_NAME} sees these.</p>
+        {messages.length === 0 ? (
+          <p className="text-muted-foreground">No messages.</p>
+        ) : (
+          messages.map((message) => (
+            <article key={message.id} className="flex flex-col gap-2 rounded-lg border bg-background p-4">
+              <p className="text-sm text-muted-foreground">
+                <LoungeByline byline={message.from} when={message.when} />
+                {message.email ? (
+                  <>
+                    {' '}
+                    ·{' '}
+                    <a href={`mailto:${message.email}`} className="underline">
+                      {message.email}
+                    </a>
+                  </>
+                ) : null}
+                {message.pageUrl ? <> · from {message.pageUrl}</> : null}
+              </p>
+              <p className="whitespace-pre-wrap">{message.message}</p>
+              <Form method="post">
+                <input type="hidden" name="messageId" value={message.id} />
+                <Button type="submit" name="intent" value="resolve-message" size="sm" variant="outline">
+                  Mark handled
+                </Button>
+              </Form>
+            </article>
+          ))
+        )}
+      </section>
+
+      <section aria-label="Drafts and scheduled" className="flex flex-col gap-2 border-t pt-6">
+        <h2 className="text-lg font-bold">Drafts and scheduled</h2>
+        <p className="text-sm text-muted-foreground">
+          Only the {LOUNGE_TEAM_NAME} sees these until they go live. Open one to edit it; its author can.
+        </p>
+        {errors && 'schedule' in errors ? (
+          <p role="alert" className="text-sm text-destructive">
+            {String(errors.schedule)}
+          </p>
+        ) : null}
+        {unpublished.length === 0 ? (
+          <p className="text-muted-foreground">Nothing waiting to go up.</p>
+        ) : (
+          unpublished.map((item) => (
+            <article key={item.id} className="flex flex-col gap-2 rounded-lg border bg-background p-4">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <Link to={`/app/lounge/${item.id}`} className="font-medium underline-offset-2 hover:underline">
+                  {item.title}
+                </Link>
+                <span className="text-sm text-muted-foreground">
+                  {item.author.name} ·{' '}
+                  {item.publishAt ? (
+                    <>
+                      scheduled for <LocalTime iso={item.publishAt} />
+                    </>
+                  ) : (
+                    'draft'
+                  )}
+                </span>
+                {item.hasPlaceholders ? (
+                  <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
+                    Has [notes] to fill in
+                  </span>
+                ) : null}
+              </div>
+              <Form method="post" className="flex flex-wrap items-end gap-3">
+                <input type="hidden" name="postId" value={item.id} />
+                <Button type="submit" name="intent" value="publish-now" size="sm" variant="outline">
+                  Publish now
+                </Button>
+                <LocalDateTimeInput id={`schedule-${item.id}`} name="publishAt" label="Or post on" />
+                <Button type="submit" name="intent" value="schedule" size="sm" variant="ghost">
+                  {item.publishAt ? 'Move' : 'Schedule'}
+                </Button>
+              </Form>
+            </article>
+          ))
+        )}
+      </section>
 
       <section aria-label="Reports" className="flex flex-col gap-2 border-t pt-6">
         <h2 className="text-lg font-bold">Reports</h2>
