@@ -38,6 +38,7 @@ paid type, and a preview or local database may not have the type at all.
 | --- | --- | --- |
 | `thesis-driven-essay` | The Thesis-Driven Essay | `components/how-it-works/thesis-essay-guide.tsx` |
 | `ap-history-essay` | AP History Essay | `components/how-it-works/ap-history-guide.tsx` |
+| `daily-pages` | Daily Pages | `components/how-it-works/daily-pages-guide.tsx` |
 
 To add one:
 
@@ -54,7 +55,7 @@ that prefix as the bare onboarding shell, with no sidebar.
 
 ## Tests
 
-- `e2e/tests/free-tier.locked-assignment-types.spec.ts`: tiles, both
+- `e2e/tests/free-tier.locked-assignment-types.spec.ts`: tiles, all three
   teasers, 404 for unknown slugs, flag off, paid teachers and students, and
   phone width.
 - `locked-assignment-types.test.ts` and the teaser route's `route.test.ts`.
