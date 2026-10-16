@@ -52,4 +52,18 @@ export function evaluateAdminEmail(args: {
   return { ok: true, manualReview: false };
 }
 
+/**
+ * Demo sends every approval request straight to the named administrator
+ * (the teacher is BCC'd), so manual-review holds never apply there.
+ */
+export function evaluateAdminEmailForRuntime(
+  args: { teacherEmail: string; adminEmail: string; schoolName?: string },
+  runtimeEnvironment: string
+): AdminEmailCheckResult {
+  if (runtimeEnvironment === 'demo') {
+    return { ok: true, manualReview: false };
+  }
+  return evaluateAdminEmail(args);
+}
+
 export const ADMIN_REDIRECT_CHAIN_CAP = 3;
