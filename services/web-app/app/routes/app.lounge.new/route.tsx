@@ -88,6 +88,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const { postId, notifications } = await createLoungePost({
     viewer,
     organizationId: access.organizationId,
+    membershipId: access.membership.id,
     input: parsed.value,
   });
   void sendLoungeNotifications(notifications, getDomainUrl(request));

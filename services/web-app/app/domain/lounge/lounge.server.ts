@@ -14,8 +14,26 @@ import { prisma } from '~/utils/db.server';
 import { loungeByline, type LoungeDisplayNameStyleKey } from './display-name';
 import { mentionedUserIds, plainTextWithMentions } from './mentions';
 import { sortByTop } from './ranking';
+import { assignmentShareSnapshot } from './shares';
 import { loungeTopicLabel, type LoungePostKindKey } from './topics';
 import type { LoungePostInput, LoungeReplyInput } from './validation';
+import { baseVideoContentType, type LoungeVideo } from './video';
+
+export type CreateLoungePostInput = LoungePostInput & {
+  /** One of the author's own assignments to share, frozen at post time. */
+  attachAssignmentId?: string | null;
+  /** Yawp team only; ignored for teachers. */
+  video?: LoungeVideo | null;
+  /** Yawp team only; ignored for teachers. */
+  pin?: boolean;
+};
+
+export type CreateLoungeReplyInput = LoungeReplyInput & {
+  /** Yawp team only; ignored for teachers. */
+  video?: LoungeVideo | null;
+};
+
+export class LoungeShareError extends Error {}
 
 export type LoungeViewer = { userId: string; isStaff: boolean };
 export type LoungeSort = 'new' | 'top' | 'unanswered';
@@ -109,9 +127,19 @@ function summarySelect(viewer: LoungeViewer) {
     authorUserId: true,
     author: { select: authorSelect },
     organization: { select: { name: true } },
-    replies: { where: { ...liveReply, isStaff: true }, select: { id: true }, take: 1 },
+    replies: { where: { ...liveReply, isStaff: true }, select: { id: true, videoKey: true }, take: 5 },
     votes: { where: { userId: viewer.userId }, select: { id: true }, take: 1 },
     _count: { select: { replies: { where: liveReply }, votes: true } },
+    videoKey: true,
+    pinnedAt: true,
+    attachment: {
+      select: {
+        id: true,
+        title: true,
+        assignmentTypeTitle: true,
+        _count: { select: { uses: true } },
+      },
+    },
   } satisfies Prisma.LoungePostSelect;
 }
 
@@ -129,8 +157,12 @@ export type LoungePostSummary = {
   helpfulCount: number;
   viewerVoted: boolean;
   staffAnswered: boolean;
+  staffAnsweredOnVideo: boolean;
+  hasVideo: boolean;
+  isPinned: boolean;
   isPrivate: boolean;
   isOwn: boolean;
+  attachment: { id: string; title: string; typeTitle: string; useCount: number } | null;
 };
 
 function toSummary(row: SummaryRow, viewer: LoungeViewer): LoungePostSummary {
@@ -146,9 +178,54 @@ function toSummary(row: SummaryRow, viewer: LoungeViewer): LoungePostSummary {
     helpfulCount: row._count.votes,
     viewerVoted: row.votes.length > 0,
     staffAnswered: row.replies.length > 0,
+    staffAnsweredOnVideo: row.replies.some((reply) => reply.videoKey !== null),
+    hasVideo: row.videoKey !== null,
+    isPinned: row.pinnedAt !== null,
     isPrivate: row.visibility === 'STAFF_ONLY',
     isOwn: row.authorUserId === viewer.userId,
+    attachment: row.attachment
+      ? {
+          id: row.attachment.id,
+          title: row.attachment.title,
+          typeTitle: row.attachment.assignmentTypeTitle,
+          useCount: row.attachment._count.uses,
+        }
+      : null,
   };
+}
+
+const videoSelect = {
+  videoKey: true,
+  videoContentType: true,
+  videoDurationSeconds: true,
+  videoTitle: true,
+} as const;
+
+function videoFrom(row: {
+  videoKey: string | null;
+  videoContentType: string | null;
+  videoDurationSeconds: number | null;
+  videoTitle: string | null;
+}): LoungeVideo | null {
+  const contentType = baseVideoContentType(row.videoContentType);
+  if (!row.videoKey || !contentType) return null;
+  return {
+    key: row.videoKey,
+    contentType,
+    durationSeconds: row.videoDurationSeconds,
+    title: row.videoTitle,
+  };
+}
+
+function videoData(video: LoungeVideo | null | undefined) {
+  return video
+    ? {
+        videoKey: video.key,
+        videoContentType: video.contentType,
+        videoDurationSeconds: video.durationSeconds,
+        videoTitle: video.title,
+      }
+    : {};
 }
 
 export async function listLoungePosts(
@@ -210,17 +287,31 @@ export type LoungeReplyView = {
   author: LoungeByline;
   isStaff: boolean;
   videoUrl: string | null;
+  video: LoungeVideo | null;
   helpfulCount: number;
   viewerVoted: boolean;
   isOwn: boolean;
   isHidden: boolean;
 };
 
+export type LoungeShareDetail = {
+  id: string;
+  kind: string;
+  title: string;
+  typeTitle: string;
+  assignmentTypeId: string;
+  prompt: string;
+  useCount: number;
+  viewerUsed: boolean;
+};
+
 export type LoungeThread = {
-  post: LoungePostSummary & {
+  post: Omit<LoungePostSummary, 'attachment'> & {
     body: string;
     staffStatus: 'OPEN' | 'ANSWERED' | 'CLOSED' | null;
     isHidden: boolean;
+    video: LoungeVideo | null;
+    attachment: LoungeShareDetail | null;
   };
   staffReplies: LoungeReplyView[];
   replies: LoungeReplyView[];
@@ -248,9 +339,22 @@ export async function getLoungeThread(
     where: { id: postId },
     select: {
       ...summarySelect(viewer),
+      ...videoSelect,
       body: true,
       staffStatus: true,
       hiddenAt: true,
+      attachment: {
+        select: {
+          id: true,
+          kind: true,
+          title: true,
+          assignmentTypeTitle: true,
+          assignmentTypeId: true,
+          prompt: true,
+          _count: { select: { uses: true } },
+          uses: { where: { userId: viewer.userId }, select: { id: true }, take: 1 },
+        },
+      },
     },
   });
   if (!row) return null;
@@ -263,6 +367,7 @@ export async function getLoungeThread(
       body: true,
       isStaff: true,
       videoUrl: true,
+      ...videoSelect,
       hiddenAt: true,
       authorUserId: true,
       author: { select: authorSelect },
@@ -278,6 +383,7 @@ export async function getLoungeThread(
     author: bylineFor(reply.author, reply.organization?.name, reply.isStaff),
     isStaff: reply.isStaff,
     videoUrl: reply.videoUrl,
+    video: reply.isStaff ? videoFrom(reply) : null,
     helpfulCount: reply._count.votes,
     viewerVoted: reply.votes.length > 0,
     isOwn: reply.authorUserId === viewer.userId,
@@ -289,6 +395,19 @@ export async function getLoungeThread(
       body: row.body,
       staffStatus: row.staffStatus,
       isHidden: row.hiddenAt !== null,
+      video: videoFrom(row),
+      attachment: row.attachment
+        ? {
+            id: row.attachment.id,
+            kind: row.attachment.kind,
+            title: row.attachment.title,
+            typeTitle: row.attachment.assignmentTypeTitle,
+            assignmentTypeId: row.attachment.assignmentTypeId,
+            prompt: row.attachment.prompt,
+            useCount: row.attachment._count.uses,
+            viewerUsed: row.attachment.uses.length > 0,
+          }
+        : null,
     },
     staffReplies: views.filter((reply) => reply.isStaff),
     replies: views.filter((reply) => !reply.isStaff),
@@ -348,9 +467,22 @@ async function actorName(viewer: LoungeViewer, organizationId: string | null): P
 export async function createLoungePost(params: {
   viewer: LoungeViewer;
   organizationId: string | null;
-  input: LoungePostInput;
+  /** The author's school membership, to check an attached assignment is theirs. */
+  membershipId: string | null;
+  input: CreateLoungePostInput;
 }): Promise<{ postId: string; notifications: LoungeNotification[] }> {
   const { viewer, input } = params;
+  let snapshot: ReturnType<typeof assignmentShareSnapshot> | null = null;
+  if (input.attachAssignmentId) {
+    const source = params.membershipId
+      ? await prisma.assignment.findFirst({
+          where: { id: input.attachAssignmentId, ...ownAssignmentWhere(params.membershipId) },
+          select: shareSourceSelect,
+        })
+      : null;
+    if (!source) throw new LoungeShareError('That assignment is not one of yours.');
+    snapshot = assignmentShareSnapshot(source);
+  }
   const mentioned = await allowedMentionIds(viewer, null, mentionedUserIds(input.body));
   const staffMentioned = mentioned.size > 0;
   const needsStaff = input.askStaff || staffMentioned;
@@ -367,6 +499,23 @@ export async function createLoungePost(params: {
         visibility: input.askPrivately ? 'STAFF_ONLY' : 'COMMUNITY',
         staffStatus: needsStaff ? 'OPEN' : null,
         staffRequestedAt: needsStaff ? now : null,
+        ...(viewer.isStaff ? videoData(input.video) : {}),
+        ...(viewer.isStaff && input.pin ? { pinnedAt: now, pinnedByUserId: viewer.userId } : {}),
+        ...(snapshot
+          ? {
+              attachment: {
+                create: {
+                  kind: snapshot.kind,
+                  sourceId: snapshot.sourceId,
+                  assignmentTypeId: snapshot.assignmentTypeId,
+                  assignmentTypeTitle: snapshot.assignmentTypeTitle,
+                  title: snapshot.title,
+                  prompt: snapshot.prompt,
+                  settings: snapshot.settings,
+                },
+              },
+            }
+          : {}),
       },
       select: { id: true, title: true },
     });
@@ -413,7 +562,7 @@ export async function createLoungeReply(params: {
   viewer: LoungeViewer;
   organizationId: string | null;
   postId: string;
-  input: LoungeReplyInput;
+  input: CreateLoungeReplyInput;
 }): Promise<{ replyId: string; notifications: LoungeNotification[] }> {
   const { viewer, input, postId } = params;
   const post = await findVisiblePost(viewer, postId);
@@ -441,6 +590,7 @@ export async function createLoungeReply(params: {
         body: input.body,
         isStaff: viewer.isStaff,
         videoUrl: viewer.isStaff ? input.videoUrl : null,
+        ...(viewer.isStaff ? videoData(input.video) : {}),
       },
       select: { id: true },
     });
@@ -763,4 +913,133 @@ export async function listMentionCandidates(
     candidates.push({ userId: entry.author.id, label: byline.name, detail: byline.detail });
   }
   return candidates;
+}
+
+/** Assignments deployed to one of this teacher's classes. */
+function ownAssignmentWhere(membershipId: string): Prisma.AssignmentWhereInput {
+  return {
+    classAssignments: { some: { class: { teachers: { some: { id: membershipId } } } } },
+    assignmentType: { archivedAt: null },
+  };
+}
+
+const shareSourceSelect = {
+  id: true,
+  title: true,
+  prompt: true,
+  submitForGrade: true,
+  pointValue: true,
+  tutorEnabled: true,
+  gradingAssistantStrictnessLevel: true,
+  assignmentType: { select: { id: true, title: true } },
+} satisfies Prisma.AssignmentSelect;
+
+export type ShareableAssignment = { id: string; title: string; typeTitle: string; createdAt: string };
+
+/** The teacher's own recent assignments, for "Attach from Yawp". */
+export async function listShareableAssignments(membershipId: string): Promise<ShareableAssignment[]> {
+  const rows = await prisma.assignment.findMany({
+    where: ownAssignmentWhere(membershipId),
+    orderBy: { createdAt: 'desc' },
+    take: 40,
+    select: { ...shareSourceSelect, createdAt: true },
+  });
+  return rows.map((row) => {
+    const snapshot = assignmentShareSnapshot(row);
+    return {
+      id: row.id,
+      title: snapshot.title,
+      typeTitle: snapshot.assignmentTypeTitle,
+      createdAt: row.createdAt.toISOString(),
+    };
+  });
+}
+
+async function findVisibleAttachment(viewer: LoungeViewer, attachmentId: string) {
+  const attachment = await prisma.loungeAttachment.findUnique({
+    where: { id: attachmentId },
+    select: { id: true, postId: true, assignmentTypeId: true, prompt: true },
+  });
+  if (!attachment) return null;
+  const post = await findVisiblePost(viewer, attachment.postId);
+  if (!post || post.hiddenAt) return null;
+  return attachment;
+}
+
+/** A teacher clicked "Use in my class". Counts once per teacher. */
+export async function recordShareUse(
+  viewer: LoungeViewer,
+  attachmentId: string
+): Promise<{ assignmentTypeId: string }> {
+  const attachment = await findVisibleAttachment(viewer, attachmentId);
+  if (!attachment) throw new LoungeNotFoundError();
+  await prisma.loungeAttachmentUse.upsert({
+    where: { attachmentId_userId: { attachmentId, userId: viewer.userId } },
+    create: { attachmentId, userId: viewer.userId },
+    update: {},
+  });
+  return { assignmentTypeId: attachment.assignmentTypeId };
+}
+
+/**
+ * The prompt to pre-fill when a teacher arrives on an assignment type page
+ * from a share. Null unless they can see the share and it is for that type.
+ */
+export async function getSharePromptForViewer(
+  viewer: LoungeViewer,
+  attachmentId: string,
+  assignmentTypeId: string
+): Promise<string | null> {
+  const attachment = await findVisibleAttachment(viewer, attachmentId);
+  if (!attachment || attachment.assignmentTypeId !== assignmentTypeId) return null;
+  return attachment.prompt;
+}
+
+export type LoungePinnedPost = {
+  id: string;
+  title: string;
+  authorFirstName: string;
+  authorIsStaff: boolean;
+  replyCount: number;
+  videoDurationSeconds: number | null;
+  hasVideo: boolean;
+};
+
+/** The most recently pinned post the viewer can see, for the top of the feed. */
+export async function getPinnedLoungePost(viewer: LoungeViewer): Promise<LoungePinnedPost | null> {
+  const row = await prisma.loungePost.findFirst({
+    where: { ...feedWhere(viewer), pinnedAt: { not: null } },
+    orderBy: { pinnedAt: 'desc' },
+    select: {
+      id: true,
+      title: true,
+      videoKey: true,
+      videoDurationSeconds: true,
+      author: { select: { name: true, isAdmin: true } },
+      _count: { select: { replies: { where: liveReply } } },
+    },
+  });
+  if (!row) return null;
+  return {
+    id: row.id,
+    title: row.title,
+    authorFirstName: (row.author.name ?? '').trim().split(/\s+/)[0] || 'the Yawp team',
+    authorIsStaff: row.author.isAdmin,
+    replyCount: row._count.replies,
+    videoDurationSeconds: row.videoDurationSeconds,
+    hasVideo: row.videoKey !== null,
+  };
+}
+
+export async function setLoungePostPinned(
+  staffUserId: string,
+  postId: string,
+  pinned: boolean
+): Promise<void> {
+  await prisma.loungePost.updateMany({
+    where: { id: postId, deletedAt: null },
+    data: pinned
+      ? { pinnedAt: new Date(), pinnedByUserId: staffUserId }
+      : { pinnedAt: null, pinnedByUserId: null },
+  });
 }

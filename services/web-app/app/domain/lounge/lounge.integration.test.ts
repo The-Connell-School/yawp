@@ -62,6 +62,7 @@ suite('Teacher Lounge against the database', () => {
     const { postId, notifications } = await lounge.createLoungePost({
       viewer: maria(),
       organizationId: ids.orgA,
+      membershipId: null,
       input: {
         kind: 'QUESTION',
         topic: 'daily-pages',
@@ -98,6 +99,7 @@ suite('Teacher Lounge against the database', () => {
     const { postId } = await lounge.createLoungePost({
       viewer: maria(),
       organizationId: ids.orgA,
+      membershipId: null,
       input: { kind: 'QUESTION', topic: 'grading', title: `Rubric help ${stamp}`, body: 'How?', askStaff: true, askPrivately: false },
     });
     const { notifications } = await lounge.createLoungeReply({
@@ -129,6 +131,7 @@ suite('Teacher Lounge against the database', () => {
     const { postId } = await lounge.createLoungePost({
       viewer: maria(),
       organizationId: ids.orgA,
+      membershipId: null,
       input: { kind: 'QUESTION', topic: 'grading', title: `Private rubric ${stamp}`, body: 'One student.', askStaff: true, askPrivately: true },
     });
     expect(await lounge.getLoungeThread(devin(), postId)).toBeNull();
@@ -144,6 +147,7 @@ suite('Teacher Lounge against the database', () => {
     const { postId } = await lounge.createLoungePost({
       viewer: maria(),
       organizationId: ids.orgA,
+      membershipId: null,
       input: { kind: 'SHARE', topic: 'writing-lessons', title: `Checklist ${stamp}`, body: 'Here it is.', askStaff: false, askPrivately: false },
     });
     const { notifications } = await lounge.createLoungeReply({
@@ -169,6 +173,7 @@ suite('Teacher Lounge against the database', () => {
     const { postId } = await lounge.createLoungePost({
       viewer: maria(),
       organizationId: ids.orgA,
+      membershipId: null,
       input: { kind: 'WIN', topic: 'other', title: `A win ${stamp}`, body: 'She revised on her own.', askStaff: false, askPrivately: false },
     });
     expect(await lounge.toggleLoungeVote(devin(), { postId })).toEqual({ voted: true });
@@ -183,6 +188,7 @@ suite('Teacher Lounge against the database', () => {
     const { postId } = await lounge.createLoungePost({
       viewer: devin(),
       organizationId: ids.orgB,
+      membershipId: null,
       input: { kind: 'SHARE', topic: 'other', title: `Selling stuff ${stamp}`, body: 'Buy my course.', askStaff: false, askPrivately: false },
     });
     await lounge.reportLoungeContent(maria(), { postId, reason: 'Selling' });
@@ -200,6 +206,7 @@ suite('Teacher Lounge against the database', () => {
     const { postId } = await lounge.createLoungePost({
       viewer: maria(),
       organizationId: ids.orgA,
+      membershipId: null,
       input: { kind: 'SHARE', topic: 'other', title: `Delete me ${stamp}`, body: 'Oops.', askStaff: false, askPrivately: false },
     });
     const { replyId } = await lounge.createLoungeReply({ viewer: devin(), organizationId: ids.orgB, postId, input: { body: 'Nice', videoUrl: null } });
@@ -215,6 +222,7 @@ suite('Teacher Lounge against the database', () => {
     const { postId } = await lounge.createLoungePost({
       viewer: maria(),
       organizationId: ids.orgA,
+      membershipId: null,
       input: { kind: 'QUESTION', topic: 'other', title: `Who to ask ${stamp}`, body: 'Anyone?', askStaff: false, askPrivately: false },
     });
     await lounge.createLoungeReply({ viewer: devin(), organizationId: ids.orgB, postId, input: { body: 'Me', videoUrl: null } });
