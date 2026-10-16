@@ -18,6 +18,8 @@ CI=1 CLASS_STEP_EVIDENCE_DIR="$LANE_SHOTS/fto-create-class-step" ./bin/project t
 
 The browser profile uses one worker, the owned local server, a disposable database, and captured mail. It covers both viewports, supported and unsupported grade prefill, associated validation errors, keyboard focus, persistence, back navigation, direct administrator and pending POSTs, unauthenticated access, approval through a captured link, prepared starter-class values, one-class provisioning, request retries, existing pending requests, and legacy flag-off rendering. Service tests additionally cover ownership, concurrent saves/provisioning, every in-flight state, paid membership exclusion, and flag-off provisioning. The existing approval-flow and internal approval regressions run separately to isolate their mocks. CI runs the new real-database suite in its own process.
 
+Review correction: the standard Playwright runner excludes the class-step spec because its mutation fixtures require the dedicated worktree server/database lifecycle. The spec rejects a missing dedicated port before constructing its database client and preserves an explicitly supplied `E2E_DATABASE_URL`. A project CLI regression lists both runner configurations with an explicit unreachable E2E connection and no development connection: the standard runner discovers zero class-step tests, while the dedicated runner discovers all five without running hooks or starting a server. Fresh correction transcripts are `checks/review-runner-{cli,browser,typecheck}.log`; refreshed desktop/mobile captures and comparisons are in `review-fix/` under the evidence directory.
+
 ## Design evidence
 
 Evidence is lane-local at `lanes/di-freetier-inapp/shots/fto-create-class-step/`:

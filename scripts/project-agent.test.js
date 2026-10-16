@@ -25,6 +25,27 @@ describe("Yawp project agent CLI", () => {
     expect(fs.readFileSync(path.join(root, "services/web-app/playwright.classcode.config.ts"), "utf8")).toContain('auth\\.unified-classcode');
     expect(fs.readFileSync(path.join(root, "services/web-app/playwright.classcode-unique.config.ts"), "utf8")).toContain("classcode-unique.spec.ts");
   });
+  test("class-step mutation fixtures are discovered only by their dedicated browser runner", () => {
+    const webApp = path.join(root, "services/web-app");
+    const cli = path.join(webApp, "node_modules/@playwright/test/cli.js");
+    for (const [config, count] of [["playwright.config.ts", 0], ["playwright.class-step.config.ts", 5]]) {
+      const result = spawnSync(process.execPath, [cli, "test", "--config", config,
+        "--list", "--pass-with-no-tests", "--reporter=json", "free-tier.create-class.spec.ts"], {
+        cwd: webApp, encoding: "utf8", timeout: 30000,
+        // Listing must never connect or start a server. The dedicated spec must
+        // preserve this explicit E2E connection even without a development URL.
+        env: { ...process.env, CI: "1", CLASS_STEP_PORT: count ? "5204" : undefined,
+          DATABASE_URL: "",
+          E2E_DATABASE_URL: "postgresql://localhost:1/discovery_must_not_connect",
+          PLAYWRIGHT_HTML_OPEN: "never" },
+      });
+      const report = JSON.parse(result.stdout);
+      expect(report.errors).toEqual([]);
+      const specs = report.suites.flatMap((suite) => suite.specs);
+      expect(specs).toHaveLength(count);
+      expect(result.status).toBe(0);
+    }
+  }, 60000);
   test("advertises isolated fresh impersonation migration verification", () => {
     expect(capabilities().proofProfiles).toContain("internal-fresh-migrations");
     expect(capabilities().proofProfiles).toContain("internal-grade-declines");

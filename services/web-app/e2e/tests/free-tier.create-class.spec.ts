@@ -6,7 +6,12 @@ import { createE2EPrismaClient } from '../prisma-client';
 import { waitForFreeTierEmailPayload } from '../helpers/free-tier-email';
 
 // Dedicated worktree database; no hosted environments or delivered email.
-process.env.E2E_DATABASE_URL = process.env.DATABASE_URL;
+if (!process.env.CLASS_STEP_PORT) {
+  throw new Error(
+    'Run class-step tests with ./bin/project test --profile free-tier-class-step-browser'
+  );
+}
+process.env.E2E_DATABASE_URL ??= process.env.DATABASE_URL;
 const prisma = createE2EPrismaClient();
 const shots = process.env.CLASS_STEP_EVIDENCE_DIR;
 const users: string[] = [];
