@@ -8,7 +8,7 @@ Running 1 test using 1 worker
   ✘  1 [chromium] › e2e/tests/auth.unified-backend.spec.ts:331:3 › school class existing-email notice retains context and requires password proof at 1280 (2.0m)
 
 
-  1) [chromium] › e2e/tests/auth.unified-backend.spec.ts:331:3 › school class existing-email notice retains context and requires password proof at 1280 
+  1) [chromium] › e2e/tests/auth.unified-backend.spec.ts:331:3 › school class existing-email notice retains context and requires password proof at 1280
 
     [31mTest timeout of 120000ms exceeded.[39m
 
@@ -43,4 +43,4 @@ Running 1 test using 1 worker
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
   1 failed
-    [chromium] › e2e/tests/auth.unified-backend.spec.ts:331:3 › school class existing-email notice retains context and requires password proof at 1280 
+    [chromium] › e2e/tests/auth.unified-backend.spec.ts:331:3 › school class existing-email notice retains context and requires password proof at 1280

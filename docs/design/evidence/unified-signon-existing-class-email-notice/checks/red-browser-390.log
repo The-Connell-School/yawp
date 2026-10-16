@@ -8,7 +8,7 @@ Running 1 test using 1 worker
   ✘  1 [chromium] › e2e/tests/auth.unified-backend.spec.ts:331:3 › school class existing-email notice retains context and requires password proof at 390 (11.8s)
 
 
-  1) [chromium] › e2e/tests/auth.unified-backend.spec.ts:331:3 › school class existing-email notice retains context and requires password proof at 390 
+  1) [chromium] › e2e/tests/auth.unified-backend.spec.ts:331:3 › school class existing-email notice retains context and requires password proof at 390
 
     TimeoutError: locator.click: Timeout 8000ms exceeded.
     Call log:
@@ -41,4 +41,4 @@ Running 1 test using 1 worker
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
   1 failed
-    [chromium] › e2e/tests/auth.unified-backend.spec.ts:331:3 › school class existing-email notice retains context and requires password proof at 390 
+    [chromium] › e2e/tests/auth.unified-backend.spec.ts:331:3 › school class existing-email notice retains context and requires password proof at 390

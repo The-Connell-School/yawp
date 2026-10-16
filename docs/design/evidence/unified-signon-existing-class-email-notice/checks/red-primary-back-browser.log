@@ -8,7 +8,7 @@ Running 1 test using 1 worker
   ✘  1 [chromium] › e2e/tests/auth.unified-backend.spec.ts:495:3 › school email Back restores primary New registration at 1280 (9.1s)
 
 
-  1) [chromium] › e2e/tests/auth.unified-backend.spec.ts:495:3 › school email Back restores primary New registration at 1280 
+  1) [chromium] › e2e/tests/auth.unified-backend.spec.ts:495:3 › school email Back restores primary New registration at 1280
 
     Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
 
@@ -48,4 +48,4 @@ Running 1 test using 1 worker
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
   1 failed
-    [chromium] › e2e/tests/auth.unified-backend.spec.ts:495:3 › school email Back restores primary New registration at 1280 
+    [chromium] › e2e/tests/auth.unified-backend.spec.ts:495:3 › school email Back restores primary New registration at 1280
