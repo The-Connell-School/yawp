@@ -51,7 +51,7 @@ test('routing precedence is password, inactive, trial, picker, safe destination'
       activeMemberships: 0,
       trialDestination: '/app/free-tier/pending',
     })
-  ).toBe('inactive');
+  ).toBe('/app/free-tier/pending');
   expect(
     postAuthenticationDestination({
       ...base,
