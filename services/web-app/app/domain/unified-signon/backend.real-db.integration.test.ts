@@ -127,56 +127,82 @@ afterAll(async () => {
   await rm(capture, { recursive: true, force: true });
   await prisma.$disconnect();
 });
-suite('private preview capture uses the normal hashed challenge, verifier, cooldown, expiry and single use', async () => {
-  // Prisma is already connected to the CLI's isolated local database. Simulate
-  // preview deployment metadata only for capture/retrieval; never contact a host.
-  const { action: retrieve } = await import('~/routes/api.preview.qa.signon-code/route');
-  const original = {
-    YAWP_ENVIRONMENT: process.env.YAWP_ENVIRONMENT,
-    DATABASE_URL: process.env.DATABASE_URL,
-    PREVIEW_ACCESS_SECRET: process.env.PREVIEW_ACCESS_SECRET,
-  };
-  try {
-    process.env.YAWP_ENVIRONMENT = 'preview';
-    process.env.DATABASE_URL = 'postgresql://fixture@preview-postgres/yawp_pr_565';
-    process.env.PREVIEW_ACCESS_SECRET = 'fixture-private-preview-secret-32-characters';
-    for (const expired of [false, true]) {
+suite(
+  'private preview capture uses the normal hashed challenge, verifier, cooldown, expiry and single use',
+  async () => {
+    // Prisma is already connected to the CLI's isolated local database. Simulate
+    // preview deployment metadata only for capture/retrieval; never contact a host.
+    const { action: retrieve } =
+      await import('~/routes/api.preview.qa.signon-code/route');
+    const original = {
+      YAWP_ENVIRONMENT: process.env.YAWP_ENVIRONMENT,
+      DATABASE_URL: process.env.DATABASE_URL,
+      PREVIEW_ACCESS_SECRET: process.env.PREVIEW_ACCESS_SECRET,
+    };
+    try {
+      process.env.YAWP_ENVIRONMENT = 'preview';
+      process.env.DATABASE_URL =
+        'postgresql://fixture@preview-postgres/yawp_pr_565';
+      process.env.PREVIEW_ACCESS_SECRET =
+        'fixture-private-preview-secret-32-characters';
+      for (const expired of [false, true]) {
+        cookie = '';
+        flowToken = '';
+        const email = `preview-${expired}-${prefix}@example.test`;
+        await post('resolve', { identifier: email });
+        await post('resolve-class', { classCode: prefix });
+        expect((await post('send-code')).data.state.screen).toBe('email-code');
+        expect((await post('resend-code')).response.status).toBe(429);
+        const captured = await retrieve({
+          request: new Request(
+            'https://example.test/api/preview/qa/signon-code',
+            {
+              method: 'POST',
+              headers: {
+                'content-type': 'application/json',
+                authorization: `Bearer ${process.env.PREVIEW_ACCESS_SECRET}`,
+              },
+              body: JSON.stringify({ email }),
+            }
+          ),
+        } as any);
+        expect(captured.status).toBe(200);
+        const otp = (await captured.json()).code as string;
+        expect(/^\d{6}$/.test(otp)).toBe(true);
+        const row = await prisma.signonFlow.findFirstOrThrow({
+          where: { data: { path: ['identifier'], equals: email } },
+        });
+        const data = row.data as any;
+        expect(data.otp.hash).toHaveLength(64);
+        expect(JSON.stringify(row.data).includes(otp)).toBe(false);
+        if (expired) {
+          data.otp.expires = 0;
+          await prisma.signonFlow.update({
+            where: { id: row.id },
+            data: { data },
+          });
+          expect(
+            (await post('verify-code', { code: otp })).response.status
+          ).toBe(400);
+        } else {
+          expect(
+            (await post('verify-code', { code: otp })).data.state.screen
+          ).toBe('name-password');
+          expect(
+            (await post('verify-code', { code: otp })).response.status
+          ).toBe(400);
+        }
+      }
+    } finally {
       cookie = '';
       flowToken = '';
-      const email = `preview-${expired}-${prefix}@example.test`;
-      await post('resolve', { identifier: email });
-      await post('resolve-class', { classCode: prefix });
-      expect((await post('send-code')).data.state.screen).toBe('email-code');
-      expect((await post('resend-code')).response.status).toBe(429);
-      const captured = await retrieve({ request: new Request('https://example.test/api/preview/qa/signon-code', {
-        method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${process.env.PREVIEW_ACCESS_SECRET}` },
-        body: JSON.stringify({ email }),
-      }) } as any);
-      expect(captured.status).toBe(200);
-      const otp = (await captured.json()).code as string;
-      expect(/^\d{6}$/.test(otp)).toBe(true);
-      const row = await prisma.signonFlow.findFirstOrThrow({ where: { data: { path: ['identifier'], equals: email } } });
-      const data = row.data as any;
-      expect(data.otp.hash).toHaveLength(64);
-      expect(JSON.stringify(row.data).includes(otp)).toBe(false);
-      if (expired) {
-        data.otp.expires = 0;
-        await prisma.signonFlow.update({ where: { id: row.id }, data: { data } });
-        expect((await post('verify-code', { code: otp })).response.status).toBe(400);
-      } else {
-        expect((await post('verify-code', { code: otp })).data.state.screen).toBe('name-password');
-        expect((await post('verify-code', { code: otp })).response.status).toBe(400);
+      for (const [key, value] of Object.entries(original)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
       }
     }
-  } finally {
-    cookie = '';
-    flowToken = '';
-    for (const [key, value] of Object.entries(original)) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
   }
-});
+);
 suite(
   'resolver derives identity and class context; a token alone and posted screens prove nothing',
   async () => {
@@ -315,7 +341,7 @@ suite(
       },
     });
     await post('resolve', {
-      identifier: `@USER-${prefix}`,
+      identifier: email,
       redirectTo: '/app/my-classes',
     });
     const result = await post('password', {
@@ -610,7 +636,7 @@ suite(
   }
 );
 suite(
-  'handle/code ambiguity offers both meanings; choosing a class clears the handle identity',
+  'class codes take precedence over legacy handle names; email still works',
   async () => {
     cookie = '';
     flowToken = '';
@@ -627,7 +653,7 @@ suite(
       },
     });
     const ambiguous = await post('resolve', { identifier });
-    expect(ambiguous.data.state.screen).toBe('ambiguity');
+    expect(ambiguous.data.state.screen).toBe('class-found');
     expect(
       (await post('resolve-class', { classCode: identifier })).data.state.screen
     ).toBe('class-found');
@@ -896,15 +922,16 @@ suite(
     try {
       const resolved = await post('resolve', { identifier: prefix });
       expect(resolved.data.state.classInfo.accountMode).toBe('handle');
+      await post('student-choice', { choice: 'new' });
+      const values = {
+        firstName: 'Local',
+        lastName: 'Handle',
+        password: 'abcdef',
+        confirmPassword: 'abcdef',
+      };
       expect(
-        (
-          await post('join-handle', {
-            name: 'Local Handle',
-            username: 'admin',
-            password: 'abcdef',
-            confirmPassword: 'abcdef',
-          })
-        ).response.status
+        (await post('register-student', { ...values, firstName: '123' }))
+          .response.status
       ).toBe(400);
       await prisma.invitation.createMany({
         data: Array.from({ length: 35 }, (_, i) => ({
@@ -919,31 +946,23 @@ suite(
           expiresAt: new Date(Date.now() + 600000),
         })),
       });
-      const full = await post('join-handle', {
-        name: 'Local Handle',
-        username: `handle-${prefix}`,
-        password: 'abcdef',
-        confirmPassword: 'abcdef',
-        classId: 'foreign',
-        joinToken: 'forged',
-      });
+      const full = await post('register-student', values);
       expect(full.response.status).toBe(400);
       expect(JSON.stringify(full.data)).toContain('full');
       expect(
-        await prisma.user.count({ where: { username: `handle-${prefix}` } })
+        await prisma.classStudentHandle.count({ where: { classId: prefix } })
       ).toBe(0);
       await prisma.invitation.deleteMany({ where: { studentClassId: prefix } });
-      const joined = await post('join-handle', {
-        name: 'Local Handle',
-        username: `handle-${prefix}`,
-        password: 'abcdef',
-        confirmPassword: 'abcdef',
-        classId: 'foreign',
-        joinToken: 'forged',
-      });
-      expect(joined.response.status).toBe(302);
-      const handle = await prisma.user.findUniqueOrThrow({
-        where: { username: `handle-${prefix}` },
+      expect((await post('register-student', values)).data.state.screen).toBe(
+        'joined'
+      );
+      expect((await post('complete-student')).response.status).toBe(302);
+      const handle = await prisma.user.findFirstOrThrow({
+        where: {
+          classStudentHandles: {
+            some: { classId: prefix, handle: 'LocalHandle' },
+          },
+        },
         include: { memberships: true, sessions: true },
       });
       expect(handle.email).toBeNull();
@@ -952,6 +971,10 @@ suite(
       expect(
         handle.sessions[0].expirationDate.getTime() - Date.now()
       ).toBeLessThanOrEqual(12 * 60 * 60 * 1000);
+      await prisma.session.deleteMany({ where: { userId: handle.id } });
+      await prisma.password.deleteMany({ where: { userId: handle.id } });
+      await prisma.orgMembership.deleteMany({ where: { userId: handle.id } });
+      await prisma.user.delete({ where: { id: handle.id } });
     } finally {
       await prisma.organization.update({
         where: { id: prefix },
@@ -1546,7 +1569,7 @@ for (const change of [
     }
   );
 suite(
-  'new Google classroom signup is name-only and links the verified subject atomically',
+  'new Google identity ignores email, requires class selection and creates a password handle atomically',
   async () => {
     const { googleCallback } = await import('./google.server');
     const { generateKeyPair, exportJWK, SignJWT } = await import('jose');
@@ -1558,7 +1581,7 @@ suite(
     cookie = '';
     flowToken = '';
     await post('resolve', { identifier: prefix });
-    const authorization = new URL((await post('google')).data.redirectTo);
+    let authorization = new URL((await post('google')).data.redirectTo);
     globalThis.fetch = (async (target: any) => {
       if (target === 'https://www.googleapis.com/oauth2/v3/certs')
         return Response.json({
@@ -1598,18 +1621,68 @@ suite(
       const entry = await unifiedEntry(
         new Request(url + '?continue=1', { headers: { cookie } })
       );
-      expect(entry?.initialState?.screen).toBe('name-password');
-      expect(entry?.initialState?.variant).toBe('google');
+      expect(entry?.initialState?.screen).toBe('class-code');
+      expect(entry?.initialState?.identifier).toBeUndefined();
+      const row = await prisma.signonFlow.findUniqueOrThrow({
+        where: { id: (await import('./flow.server')).digest(flowToken) },
+      });
+      expect(JSON.stringify(row.data)).not.toContain(email);
       expect(
         (await post('create-account', { name: 'Google Student' })).response
           .status
-      ).toBe(302);
-      const user = await prisma.user.findUniqueOrThrow({
-        where: { email },
+      ).toBe(400);
+      expect(
+        (
+          await post('register-student', {
+            firstName: 'Google',
+            lastName: 'Student',
+            password: 'abcdef',
+            confirmPassword: 'abcdef',
+          })
+        ).response.status
+      ).toBe(400);
+      await post('resolve-class', { classCode: prefix });
+      await post('student-choice', { choice: 'new' });
+      expect(
+        (
+          await post('register-student', {
+            firstName: 'Google',
+            lastName: 'Student',
+            password: 'abcdef',
+            confirmPassword: 'abcdef',
+          })
+        ).data.state.screen
+      ).toBe('joined');
+      const user = await prisma.user.findFirstOrThrow({
+        where: {
+          signonIdentities: { some: { subject: `new-subject-${prefix}` } },
+        },
         include: { signonIdentities: true, password: true },
       });
-      expect(user.password).toBeNull();
+      expect(user.email).toBeNull();
+      expect(user.password).not.toBeNull();
       expect(user.signonIdentities).toHaveLength(1);
+      authorization = new URL((await post('google')).data.redirectTo);
+      const linkedResponse = await googleCallback(
+        new Request(
+          `http://127.0.0.1:5396/auth/unified/google/callback?code=mock&state=${authorization.searchParams.get('state')}`,
+          { headers: { cookie } }
+        )
+      );
+      expect(linkedResponse.status).toBe(302);
+      expect(linkedResponse.headers.get('location')).toBe('/app');
+      const linkedFlow = await prisma.signonFlow.findUniqueOrThrow({
+        where: { id: (await import('./flow.server')).digest(flowToken) },
+      });
+      expect(JSON.stringify(linkedFlow.data)).not.toContain(email);
+      expect(await prisma.session.count({ where: { userId: user.id } })).toBe(
+        1
+      );
+      await prisma.session.deleteMany({ where: { userId: user.id } });
+      await prisma.signonIdentity.deleteMany({ where: { userId: user.id } });
+      await prisma.password.deleteMany({ where: { userId: user.id } });
+      await prisma.orgMembership.deleteMany({ where: { userId: user.id } });
+      await prisma.user.delete({ where: { id: user.id } });
     } finally {
       globalThis.fetch = previousFetch;
       delete process.env.GOOGLE_OAUTH_CLIENT_ID;
@@ -1734,7 +1807,7 @@ suite(
   }
 );
 suite(
-  'Google multi-class invitations keep the exact picker variant and require an authorized class choice',
+  'new Google identities cannot use email invitations to skip class-code entry',
   async () => {
     const { googleCallback } = await import('./google.server');
     const { generateKeyPair, exportJWK, SignJWT } = await import('jose');
@@ -1802,16 +1875,19 @@ suite(
         new Request(url + '?continue=1', { headers: { cookie } })
       );
       flowToken = entry!.initialState!.flowToken!;
-      expect(entry?.initialState?.variant).toBe('multiple');
-      expect(entry?.initialState?.provider).toBe('google');
-      expect(entry?.initialState?.classes).toHaveLength(2);
+      expect(entry?.initialState?.screen).toBe('class-code');
+      expect(entry?.initialState?.classes).toBeUndefined();
       expect(
-        (await post('choose-class', { classId: second })).data.state.screen
-      ).toBe('name-password');
+        (await post('choose-class', { classId: second })).response.status
+      ).toBe(400);
       expect(
         (await post('create-account', { name: 'Google Student' })).response
           .status
-      ).toBe(302);
+      ).toBe(400);
+      expect(await prisma.user.count({ where: { email } })).toBe(0);
+      expect(
+        (await post('resolve-class', { classCode: second })).data.state.screen
+      ).toBe('class-found');
     } finally {
       globalThis.fetch = previousFetch;
       delete process.env.GOOGLE_OAUTH_CLIENT_ID;

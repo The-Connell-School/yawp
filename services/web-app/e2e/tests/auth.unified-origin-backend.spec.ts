@@ -140,7 +140,7 @@ for (const width of [1280, 390]) {
         page.getByRole('button', { name: 'Continue with Google' })
       ).toBeDisabled();
       await shot(page, beforeFix ? 'before-entry' : 'signon-03-entry', width);
-      await page.getByLabel('Email, handle, or class code').fill(identifier);
+      await page.getByLabel('Email or class code').fill(identifier);
       const response = page.waitForResponse(
         (r) =>
           r.request().method() === 'POST' &&
@@ -166,7 +166,7 @@ for (const width of [1280, 390]) {
         Boolean((window as any).__reactRouterDataRouter)
       );
       await page
-        .getByLabel('Email, handle, or class code')
+        .getByLabel('Email or class code')
         .fill(`${prefix}-${width}@example.test`);
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
       await expect(
@@ -184,8 +184,13 @@ for (const width of [1280, 390]) {
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
       expect((await classResponse).status()).toBe(200);
       await expect(
-        page.getByRole('heading', { name: 'Finish setting up your account' })
+        page.getByRole('heading', { name: 'Join your class' })
       ).toBeVisible();
+      await page.getByRole('button', { name: /^New/ }).click();
+      await expect(
+        page.getByLabel('First name', { exact: true })
+      ).toBeVisible();
+      await expect(page.getByLabel('Last name', { exact: true })).toBeVisible();
       await shot(page, 'signon-23-class-code-resolved', width);
     }
     const google = await request.post(`${publicUrl}/auth/login`, {
@@ -195,7 +200,7 @@ for (const width of [1280, 390]) {
     expect(google.status()).toBe(beforeFix ? 403 : 503);
     if (!beforeFix)
       expect(await google.text()).toContain(
-        'Google sign-in is unavailable. Use your email or handle.'
+        'Google sign-in is unavailable. Use your email or class code.'
       );
     const foreign = await request.post(`${publicUrl}/auth/login`, {
       headers: {
