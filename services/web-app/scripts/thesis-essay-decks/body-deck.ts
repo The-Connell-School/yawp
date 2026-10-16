@@ -154,6 +154,9 @@ export const BODY_DECK: HybridDeck = {
       notes:
         'Body paragraph 3: the result, and a turn toward a remedy (administrators supporting creative teaching), which sets up the conclusion nicely.',
     },
+    // The lesson plan explains the house analogy before students write, so it
+    // comes before the writing slide (Brian's deck had it last).
+    { ...HOUSE_ANALOGY },
     {
       layout: 'figure',
       eyebrow: 'Your turn',
@@ -169,6 +172,5 @@ export const BODY_DECK: HybridDeck = {
       notes:
         'Today’s YAWP! editor on the Body Paragraphs step. Students start with the first element of their thesis only. Work the room, read paragraphs, encourage; you’ll see confidence rise as the essays take shape. Celebrate it.',
     },
-    { ...HOUSE_ANALOGY },
   ],
 };
