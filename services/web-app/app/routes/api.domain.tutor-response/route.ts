@@ -115,6 +115,10 @@ export async function action({ request }: ActionFunctionArgs) {
   // when there is no session, and the catch-all would otherwise turn that into a 500.
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { name: true, email: true, username: true },
+  });
   const isAdmin = await getIsPlatformAdmin(userId);
 
   try {
@@ -395,6 +399,7 @@ export async function action({ request }: ActionFunctionArgs) {
           ...aiContextMetadata,
           moduleRubricRelationships,
         },
+        deidentificationPhrases: [user?.name, user?.email, user?.username],
         attribution: {
           organizationId: profile.organization.id,
           membershipId: profile.id,

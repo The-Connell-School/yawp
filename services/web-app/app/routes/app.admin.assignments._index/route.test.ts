@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 const requireAdmin = mock();
 const requireMutableRequest = mock();
+let currentLoaderData: unknown = { assignmentTypes: [] };
 
 const prisma = {
   assignmentType: { findMany: mock(), count: mock(), create: mock() },
@@ -12,8 +15,15 @@ mock.module('~/utils/auth.server', () => ({
   requireMutableRequest,
 }));
 mock.module('~/utils/db.server', () => ({ prisma }));
+mock.module('react-router', () => ({
+  data: (value: unknown) => ({ data: value }),
+  Link: ({ to, children, ...props }: { to: string; children: React.ReactNode }) =>
+    React.createElement('a', { ...props, href: to }, children),
+  useLoaderData: () => currentLoaderData,
+  useNavigate: () => () => undefined,
+}));
 
-const { loader } = await import('./route');
+const { default: AssignmentTypesRoute, loader } = await import('./route');
 
 const mockRequest = new Request('http://localhost/app/admin/assignments');
 
@@ -34,6 +44,7 @@ describe('AssignmentTypes loader', () => {
     requireMutableRequest.mockReset();
     prisma.assignmentType.findMany.mockReset();
     requireAdmin.mockResolvedValue(undefined);
+    currentLoaderData = { assignmentTypes: [] };
   });
 
   test('returns assignment types with rubric info', async () => {
@@ -54,5 +65,15 @@ describe('AssignmentTypes loader', () => {
     const data = (response as { data: any }).data;
 
     expect(data.assignmentTypes).toHaveLength(0);
+  });
+
+  test('renders moved notice while preserving the legacy create link', () => {
+    currentLoaderData = { assignmentTypes: [mockAssignmentType] };
+
+    const html = renderToStaticMarkup(React.createElement(AssignmentTypesRoute));
+
+    expect(html).toContain('Assignment Types read-only review moved to Yawp Internal.');
+    expect(html).toContain('href="/app/admin/assignment-types/new"');
+    expect(html).toContain('Create assignment type');
   });
 });

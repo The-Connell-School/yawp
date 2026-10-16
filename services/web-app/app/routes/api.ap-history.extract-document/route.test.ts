@@ -40,7 +40,11 @@ describe('api.ap-history.extract-document', () => {
     requireMembership.mockReset();
     messagesCreate.mockReset();
     requireUserId.mockResolvedValue('user-1');
-    requireMembership.mockResolvedValue({ id: 'teacher-1', role: 'TEACHER' });
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', name: 'Holy Family School' },
+    });
     prisma.llmLog.create.mockResolvedValue({ id: 'log-1' });
   });
 
@@ -59,8 +63,9 @@ describe('api.ap-history.extract-document', () => {
             sources: [
               {
                 title: 'Document 1',
-                attribution: 'Frederick Douglass, 1866',
-                body: 'The work does not end with the abolition of slavery...',
+                attribution: 'Brian Connell, Holy Family School, 1866',
+                body:
+                  'Brian Connell from Holy Family School wrote that the work does not end with the abolition of slavery...',
               },
               {
                 title: 'Document 2',
@@ -85,11 +90,19 @@ describe('api.ap-history.extract-document', () => {
     expect(body.sources).toHaveLength(2);
     expect(body.sources[0]).toMatchObject({
       position: 1,
-      attribution: 'Frederick Douglass, 1866',
+      attribution: 'Brian Connell, Holy Family School, 1866',
       isVisual: false,
     });
     expect(body.sources[1]).toMatchObject({ position: 2, isVisual: true });
     expect(prisma.llmLog.create).toHaveBeenCalled();
+    const log = prisma.llmLog.create.mock.calls[0][0].data;
+    const serialized = JSON.stringify(log);
+    expect(log.response).toContain('"essayType":"dbq"');
+    expect(log.response).toContain('Reconstruction DBQ');
+    expect(log.response).toContain('[name] from [name]');
+    expect(serialized).not.toContain('Brian');
+    expect(serialized).not.toContain('Connell');
+    expect(serialized).not.toContain('Holy Family');
   });
 
   test('infers LEQ when no sources are present', async () => {

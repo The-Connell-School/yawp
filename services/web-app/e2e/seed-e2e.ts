@@ -177,6 +177,8 @@ export async function seedE2E(): Promise<E2EContext> {
   }
   console.log('🌱 Seeding E2E DB...');
   await cleanupDb(prisma);
+  const { ensureE2eLiveRubricFixtures } = await import('./ensure-live-rubric-fixtures');
+  await ensureE2eLiveRubricFixtures(prisma);
 
   // Minimal org
   const org = await prisma.organization.create({

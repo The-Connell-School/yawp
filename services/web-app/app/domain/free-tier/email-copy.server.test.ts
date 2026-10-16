@@ -5,7 +5,7 @@ test('release email snapshot', () => {
   expect(renderReleaseEmailBody({ name: 'Ada', joinUrl: 'https://yawp.school/join' })).toMatchSnapshot();
 });
 
-test('admin approval email includes note and links', () => {
+test('admin approval email ignores a custom note and retains links', () => {
   const body = renderAdminApprovalEmailBody({
     teacherName: 'Ada',
     teacherEmail: 'ada@example.edu',
@@ -14,7 +14,7 @@ test('admin approval email includes note and links', () => {
     approveUrl: 'https://yawp.school/a',
     notRightPersonUrl: 'https://yawp.school/n',
   });
-  expect(body).toContain('Hi!');
+  expect(body).not.toContain('Hi!');
   expect(body).toContain('https://yawp.school/a');
   expect(body).toMatchSnapshot();
 });

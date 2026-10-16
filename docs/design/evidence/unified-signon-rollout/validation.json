@@ -1,0 +1,48 @@
+{
+  "task": "di-signon-flag-previews",
+  "implementationBase": "591b48024c8773eed8a0c32b478f0abf12ce2420",
+  "applicationChanges": false,
+  "migrationAdded": false,
+  "checks": {
+    "disposableDatabaseScenarios": 37,
+    "databaseAssertions": 223,
+    "focusedPolicyGoogleDispatchTests": 31,
+    "focusedAssertions": 93,
+    "managementContractTests": 24,
+    "managementAssertions": 85,
+    "legacyFreeEntryApprovalGateTests": 11,
+    "legacyAssertions": 22,
+    "actualHandlerBrowserCases": 7,
+    "mockProviderBrowserCases": 2,
+    "compatibilityBrowserCases": 3,
+    "finalRollbackRerun": "1 case at desktop and 390px after moving cursor off controls for stable captures; pass",
+    "workers": 1,
+    "typecheck": "pass; project CLI / 4GB heap",
+    "runbookScript": "syntax checked and executed with fetch intercepted to real signed/audited local handlers: OFF -> everyone -> OFF, targeted -> everyone -> same targeted org IDs; no hosted requests"
+  },
+  "screenshots": {
+    "freshComparisons": 54,
+    "navigationCaptures": 2,
+    "selectedCommittedComparisons": 10,
+    "retainedComparisons": [
+      210,
+      34,
+      4,
+      6,
+      4
+    ],
+    "freshRollbackPairs": 6,
+    "freshRollbackChangedPixels": 0,
+    "exceptions": "Existing validator policy, reference logo errors, real local data and legacy location selector; no dedicated unified artboard for selector. Full matrix separates DB and browser coverage."
+  },
+  "executionNotes": [
+    "Initial standalone CLI dev process did not survive its command sandbox; server/test/stop now share one owned command lifetime.",
+    "The initial new rollback assertion expected immediate legacy rendering. Trace showed the OFF server correctly returned legacy 422 validation while the existing client retained its screen; regression now asserts rejection/no session and fresh legacy navigation.",
+    "A repeat browser run encountered persisted disposable local issue budgets; cleared only that disposable database budget tables before final seven-case run.",
+    "Bun mock modules leaked between unrelated management/legacy test files in a combined run; each narrow file passed in its own process. No application code or limits changed."
+  ],
+  "hosted": "pending explicit Bryant authorization; no deployment, wake-up, visits, flag writes, remote migrations, live provider or external email",
+  "rollout": "default OFF; demo and production not accessed or changed; demo only after Oct 16 intern session AND Bryant authorization; production outside task",
+  "review": "Builder self-check only; independent driver Ship Review required; no merge",
+  "cleanup": "Recorded separately in checks/cleanup.json at handoff"
+}

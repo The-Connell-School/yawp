@@ -10,12 +10,16 @@ import { z } from 'zod';
 import { parseFormData, useForm, validationError } from '@rvf/react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { setMembershipId } from '~/cookies/membership-id.server';
+import {
+  resolveStudentClassCode,
+  enrollExistingStudentByCode,
+} from '~/domain/free-tier/existing-student-enrollment.server';
 import { Button } from '~/components/ui/button';
 import { FormInput } from '~/components/rvf-forms/form-input';
 import { FormSelect } from '~/components/rvf-forms/form-select';
 import { redirectWithToast } from '~/utils/toast.server';
 import { formatClassGradePeriod } from '~/utils/class-display';
-import { enrollStudentInClassWithSeatCap } from '~/domain/free-tier/class-seat-cap.server';
 import { FREE_CLASS_CLASS_FULL_MESSAGE } from '~/domain/free-tier/class-seat-cap';
 
 const CodeSchema = z.object({
@@ -30,24 +34,6 @@ const ClassSelectionSchema = z.object({
   code: z.string().min(1, 'Code is required'),
 });
 
-/**
- * Every class lookup on this route runs through here.
- *
- * `Class.code` is unique per school (`@@unique([schoolId, code])`), not globally, so a
- * bare code match spans organizations and a collision would enroll a student into
- * another tenant's class. A student only reaches this page from `/app`, already holding
- * a membership, so the organization that membership belongs to is the right scope: it
- * still allows the legitimate ambiguity of two schools inside one organization sharing a
- * code, which is what the selection step exists for.
- */
-function classCodeWhere(organizationId: string, code: string) {
-  return {
-    isArchived: false,
-    code: { equals: code, mode: 'insensitive' as const },
-    school: { organizationId },
-  };
-}
-
 function requireStudentMembership(membership: { role: string }) {
   if (membership.role !== 'STUDENT') {
     throw Response.json(
@@ -55,22 +41,6 @@ function requireStudentMembership(membership: { role: string }) {
       { status: 403 }
     );
   }
-}
-
-async function connectMembershipToClass(
-  membershipId: string,
-  classId: string,
-  organizationId: string
-) {
-  const result = await enrollStudentInClassWithSeatCap({
-    membershipId,
-    classId,
-    organizationId,
-  });
-  if (!result.ok) {
-    return result;
-  }
-  return { ok: true as const };
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -88,23 +58,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
-  const classes = await prisma.class.findMany({
-    where: classCodeWhere(membership.organization.id, code),
-    select: {
-      id: true,
-      code: true,
-      schoolYear: true,
-      period: true,
-      grade: true,
-      school: { select: { name: true } },
-      teachers: {
-        select: {
-          user: { select: { name: true } },
-        },
-      },
-    },
-    orderBy: [{ schoolYear: 'desc' }, { grade: 'asc' }, { period: 'asc' }],
-  });
+  const classes = await resolveStudentClassCode(
+    prisma,
+    membership.organization.id,
+    code
+  );
 
   return data({
     membership,
@@ -125,29 +83,24 @@ export async function action({ request }: ActionFunctionArgs) {
     const { error, data: codeData } = await parseFormData(formData, CodeSchema);
     if (error) return validationError(error);
 
-    const classes = await prisma.class.findMany({
-      where: classCodeWhere(membership.organization.id, codeData.code),
-      select: {
-        id: true,
-        schoolYear: true,
-        period: true,
-        grade: true,
-        school: { select: { name: true } },
-        teachers: { select: { user: { select: { name: true } } } },
-      },
-      orderBy: [{ schoolYear: 'desc' }, { grade: 'asc' }, { period: 'asc' }],
-    });
+    const classes = await resolveStudentClassCode(
+      prisma,
+      membership.organization.id,
+      codeData.code
+    );
 
     if (classes.length === 0) {
       return validationError({ fieldErrors: { code: 'Invalid code.' } });
     }
 
     if (classes.length === 1) {
-      const enrolled = await connectMembershipToClass(
-        membership.id,
-        classes[0]!.id,
-        membership.organization.id
-      );
+      const enrolled = await enrollExistingStudentByCode({
+        userId,
+        sourceMembershipId: membership.id,
+        sourceOrganizationId: membership.organization.id,
+        code: codeData.code,
+        classId: classes[0]!.id,
+      });
       if (!enrolled.ok) {
         const message =
           enrolled.code === 'class_full'
@@ -156,12 +109,19 @@ export async function action({ request }: ActionFunctionArgs) {
         return validationError({ fieldErrors: { code: message } });
       }
 
-      if (isModal) return data({ status: 'enrolled' as const });
+      const headers = {
+        'set-cookie': await setMembershipId(enrolled.membershipId),
+      };
+      if (isModal) return data({ status: 'enrolled' as const }, { headers });
 
-      return redirectWithToast('/app', {
-        title: 'Success',
-        description: 'You have been added to the class!',
-      });
+      return redirectWithToast(
+        '/app',
+        {
+          title: 'Success',
+          description: 'You have been added to the class!',
+        },
+        { headers }
+      );
     }
 
     if (isModal) {
@@ -196,23 +156,13 @@ export async function action({ request }: ActionFunctionArgs) {
     );
     if (error) return validationError(error);
 
-    const klass = await prisma.class.findFirst({
-      where: {
-        id: selectionData.classId,
-        ...classCodeWhere(membership.organization.id, selectionData.code),
-      },
-      select: { id: true },
+    const enrolled = await enrollExistingStudentByCode({
+      userId,
+      sourceMembershipId: membership.id,
+      sourceOrganizationId: membership.organization.id,
+      code: selectionData.code,
+      classId: selectionData.classId,
     });
-
-    if (!klass) {
-      return validationError({ fieldErrors: { classId: 'Class not found' } });
-    }
-
-    const enrolled = await connectMembershipToClass(
-      membership.id,
-      klass.id,
-      membership.organization.id
-    );
     if (!enrolled.ok) {
       const message =
         enrolled.code === 'class_full'
@@ -221,12 +171,19 @@ export async function action({ request }: ActionFunctionArgs) {
       return validationError({ fieldErrors: { classId: message } });
     }
 
-    if (isModal) return data({ status: 'enrolled' as const });
+    const headers = {
+      'set-cookie': await setMembershipId(enrolled.membershipId),
+    };
+    if (isModal) return data({ status: 'enrolled' as const }, { headers });
 
-    return redirectWithToast('/app', {
-      title: 'Success',
-      description: 'You have been added to the class!',
-    });
+    return redirectWithToast(
+      '/app',
+      {
+        title: 'Success',
+        description: 'You have been added to the class!',
+      },
+      { headers }
+    );
   }
 
   return null;

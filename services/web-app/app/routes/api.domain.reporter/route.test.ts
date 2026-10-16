@@ -11,6 +11,7 @@ class AiRateLimitError extends Error {
     super('rate limited');
   }
 }
+class AiFreeTierBudgetExceededError extends Error {}
 
 const prisma = {
   reporterConversation: {
@@ -39,7 +40,10 @@ mock.module('~/utils/getLLMCompletion', () => ({
   getLLMCompletion,
 }));
 mock.module('~/utils/ai-admission.server', () => ({
+  AiFreeTierBudgetExceededError,
   AiRateLimitError,
+  aiFreeTierBudgetExceededMessage: () =>
+    'Writing tools are paused because this free-tier environment has reached its current budget.',
   reserveAiRequest,
 }));
 
@@ -247,6 +251,23 @@ describe('api.domain.reporter action', () => {
       error: 'Too many reporter requests. Please wait a moment and try again.',
     });
     expect(getLLMCompletion).not.toHaveBeenCalled();
+  });
+
+  test('denies reporter generation when the free-tier AI budget is exhausted', async () => {
+    reserveAiRequest.mockRejectedValueOnce(new AiFreeTierBudgetExceededError());
+
+    const response = await action({
+      request: formRequest({ message: 'one more' }),
+    } as any);
+
+    expect(response.init?.status).toBe(402);
+    expect((response as any).data).toEqual({
+      error: 'free_tier_budget_exceeded',
+      message:
+        'Writing tools are paused because this free-tier environment has reached its current budget.',
+    });
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+    expect(prisma.reporterConversation.create).not.toHaveBeenCalled();
   });
 
   test('does not expose provider errors to the client', async () => {

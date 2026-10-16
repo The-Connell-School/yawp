@@ -47,7 +47,8 @@ describe('api.domain.rubric-extract', () => {
                 {
                   label: 'Organization',
                   weight: 0.5,
-                  description: 'Essay is structured clearly.',
+                  description:
+                    'Brian Connell from Holy Family School structures the essay clearly.',
                 },
                 {
                   label: 'Style',
@@ -78,6 +79,12 @@ describe('api.domain.rubric-extract', () => {
     expect(body.scoringScale.maxScore).toBe(5);
     expect(body.rubric.categories).toHaveLength(2);
     expect(body.rubric.categories[0].label).toBe('Organization');
+    const log = prisma.llmLog.create.mock.calls[0][0].data;
+    const serialized = JSON.stringify(log);
+    expect(log.response).toContain('[name] from [name]');
+    expect(serialized).not.toContain('Brian');
+    expect(serialized).not.toContain('Connell');
+    expect(serialized).not.toContain('Holy Family');
   });
 
   test('rejects requests without text or pdf', async () => {

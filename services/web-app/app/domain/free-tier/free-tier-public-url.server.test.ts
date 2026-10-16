@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
+import { buildFreeTierEventLink, freeTierPublicAppOrigin } from './free-tier-public-url.server';
 
 const saved: Record<string, string | undefined> = {};
 
@@ -23,6 +23,7 @@ describe('freeTierPublicAppOrigin', () => {
     save('PRIMARY_APP_URL');
     process.env.PRIMARY_APP_URL = 'https://app.example.com/';
     expect(freeTierPublicAppOrigin()).toBe('https://app.example.com');
+    expect(buildFreeTierEventLink('abc123')).toBe('https://app.example.com/free?t=abc123');
   });
 
   test('preview fallback from slug and domain when PRIMARY_APP_URL is absent', () => {

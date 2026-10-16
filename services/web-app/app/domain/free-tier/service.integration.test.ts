@@ -56,6 +56,33 @@ suite('waitlist', () => {
 });
 
 suite('token redemption', () => {
+  async function withFullActivationBudget(fn: () => Promise<void>) {
+    const previousEnv = process.env.FREE_TIER_BUDGET_ENVIRONMENT;
+    const previousBudget = process.env.FREE_TIER_PREVIEW_BUDGET_USD;
+    const previousUnitCost = process.env.FREE_TIER_PREVIEW_UNIT_COST_USD;
+    const active = await prisma!.freeTierApplication.count({
+      where: {
+        OR: [
+          { releasedAt: { not: null } },
+          { status: { in: ['INVITED', 'ACCOUNT_CREATED', 'ADMIN_SUBMITTED', 'SENT', 'MANUAL_REVIEW', 'APPROVED'] } },
+        ],
+      },
+    });
+    process.env.FREE_TIER_BUDGET_ENVIRONMENT = 'preview';
+    process.env.FREE_TIER_PREVIEW_BUDGET_USD = String(active);
+    process.env.FREE_TIER_PREVIEW_UNIT_COST_USD = '1';
+    try {
+      await fn();
+    } finally {
+      if (previousEnv === undefined) delete process.env.FREE_TIER_BUDGET_ENVIRONMENT;
+      else process.env.FREE_TIER_BUDGET_ENVIRONMENT = previousEnv;
+      if (previousBudget === undefined) delete process.env.FREE_TIER_PREVIEW_BUDGET_USD;
+      else process.env.FREE_TIER_PREVIEW_BUDGET_USD = previousBudget;
+      if (previousUnitCost === undefined) delete process.env.FREE_TIER_PREVIEW_UNIT_COST_USD;
+      else process.env.FREE_TIER_PREVIEW_UNIT_COST_USD = previousUnitCost;
+    }
+  }
+
   test('maxUses is exact under concurrency (10 people, 3 uses)', async () => {
     const token = await makeToken({ maxUses: 3 });
     const results = await Promise.all(Array.from({ length: 10 }, (_, i) => svc!.redeemToken({ ...person(`m${i}`), token })));
@@ -102,6 +129,104 @@ suite('token redemption', () => {
     expect((await get('j'))?.releasedAt).toBeNull();
   });
 
+  test('bypass token refuses a new active invite when the activation budget is full without consuming a use', async () => {
+    await withFullActivationBudget(async () => {
+      const bypass = await makeToken({ bypassWaitlist: true });
+      expect(await svc!.redeemToken({ ...person('budget-new'), token: bypass })).toEqual({
+        ok: false,
+        reason: 'budget_exceeded',
+      });
+      const tokenRow = await prisma!.acquisitionToken.findUnique({ where: { tokenHash: svc!.hashToken(bypass) } });
+      expect(tokenRow?.uses).toBe(0);
+      expect(await prisma!.freeTierApplication.count({ where: { email: `ft-${run}-budget-new@school.example` } })).toBe(0);
+    });
+  });
+
+  test('bypass token refuses waitlisted LEAD promotion when the activation budget is full without consuming a use', async () => {
+    await withFullActivationBudget(async () => {
+      const bypass = await makeToken({ bypassWaitlist: true });
+      await svc!.submitWaitlist(person('budget-lead'));
+      expect(await svc!.redeemToken({ ...person('budget-lead'), token: bypass })).toEqual({
+        ok: false,
+        reason: 'budget_exceeded',
+      });
+      const tokenRow = await prisma!.acquisitionToken.findUnique({ where: { tokenHash: svc!.hashToken(bypass) } });
+      expect(tokenRow?.uses).toBe(0);
+      const application = await prisma!.freeTierApplication.findUnique({
+        where: { email: `ft-${run}-budget-lead@school.example` },
+      });
+      expect(application?.status).toBe('LEAD');
+      expect(application?.releasedAt).toBeNull();
+      expect(application?.acquisitionTokenId).toBeNull();
+    });
+  });
+
+  async function withAdmissionHeadroom(capSlots: number, budgetSlots: number, fn: () => Promise<void>) {
+    const { readFreeTierUsageSummary } = await import('./usage-budget.server');
+    const active = (await readFreeTierUsageSummary()).activeApplications;
+    const overrides = {
+      FREE_TIER_RELEASE_CAP: String(active + capSlots),
+      FREE_TIER_BUDGET_ENVIRONMENT: 'preview',
+      FREE_TIER_PREVIEW_BUDGET_USD: String(active + budgetSlots),
+      FREE_TIER_PREVIEW_UNIT_COST_USD: '1',
+    };
+    const previous = Object.fromEntries(Object.keys(overrides).map((key) => [key, process.env[key]]));
+    Object.assign(process.env, overrides);
+    try { await fn(); } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  }
+
+  for (const lead of [false, true]) {
+    test(`bypass cap-full denial preserves ${lead ? 'LEAD' : 'new applicant'} and token with budget headroom`, async () => {
+      const applicant = person(lead ? 'cap-lead' : 'cap-new');
+      if (lead) await svc!.submitWaitlist(applicant);
+      const before = await prisma!.freeTierApplication.findUnique({ where: { email: applicant.email } });
+      const token = await makeToken({ bypassWaitlist: true });
+      await withAdmissionHeadroom(0, 10, async () => {
+        expect(await svc!.redeemToken({ ...applicant, token })).toEqual({ ok: false, reason: 'cap_reached' });
+        expect(await prisma!.freeTierApplication.findUnique({ where: { email: applicant.email } })).toEqual(before);
+        const row = await prisma!.acquisitionToken.findUnique({ where: { tokenHash: svc!.hashToken(token) } });
+        expect(row?.uses).toBe(0);
+      });
+    });
+  }
+
+  for (const limit of ['cap', 'budget'] as const) {
+    test(`concurrent bypass new/LEAD admissions cannot exceed ${limit} headroom`, async () => {
+      const token = await makeToken({ bypassWaitlist: true });
+      const applicants = Array.from({ length: 6 }, (_, i) => person(`race-${limit}-${i}`));
+      for (const applicant of applicants.slice(0, 3)) await svc!.submitWaitlist(applicant);
+      await withAdmissionHeadroom(limit === 'cap' ? 2 : 10, limit === 'budget' ? 2 : 10, async () => {
+        const results = await Promise.all(applicants.map((applicant) => svc!.redeemToken({ ...applicant, token })));
+        expect(results.filter((result) => result.ok)).toHaveLength(2);
+        expect(results.filter((result) => !result.ok && result.reason === (limit === 'cap' ? 'cap_reached' : 'budget_exceeded'))).toHaveLength(4);
+        const row = await prisma!.acquisitionToken.findUnique({ where: { tokenHash: svc!.hashToken(token) } });
+        expect(row?.uses).toBe(2);
+        for (const [index, applicant] of applicants.entries()) {
+          const application = await prisma!.freeTierApplication.findUnique({ where: { email: applicant.email } });
+          if (results[index]!.ok) expect(application?.status).toBe('INVITED');
+          else if (index < 3) expect(application).toMatchObject({ status: 'LEAD', releasedAt: null, acquisitionTokenId: null });
+          else expect(application).toBeNull();
+        }
+      });
+    });
+  }
+
+  test('concurrent replay of one bypass applicant uses one admission and token use', async () => {
+    const token = await makeToken({ bypassWaitlist: true, maxUses: 1 });
+    await withAdmissionHeadroom(1, 1, async () => {
+      const results = await Promise.all(Array.from({ length: 3 }, () => svc!.redeemToken({ ...person('race-replay'), token })));
+      expect(results.every((result) => result.ok)).toBe(true);
+      const row = await prisma!.acquisitionToken.findUnique({ where: { tokenHash: svc!.hashToken(token) } });
+      expect(row?.uses).toBe(1);
+      expect(await svc!.redeemToken({ ...person('race-replay'), token })).toEqual({ ok: true, bypassWaitlist: true });
+    });
+  });
+
   test('a bypass token never moves an advanced application backwards or overwrites its details', async () => {
     const bypass = await makeToken({ bypassWaitlist: true });
     for (const status of ['ACCOUNT_CREATED', 'APPROVED', 'REJECTED'] as const) {
@@ -121,6 +246,41 @@ suite('token redemption', () => {
     const rows = await prisma!.$queryRawUnsafe<{ tokenHash: string }[]>(`SELECT "tokenHash" FROM "AcquisitionToken" WHERE "label" = $1`, `t-${run}`);
     expect(rows.every((r) => r.tokenHash !== token && r.tokenHash.length === 64)).toBe(true);
     expect(await svc!.checkTokenValidity(token)).toMatchObject({ valid: true });
+  });
+
+  test('legacy long tokens without a code still redeem via hash lookup', async () => {
+    const legacy = svc!.generateToken();
+    await prisma!.acquisitionToken.create({
+      data: { tokenHash: svc!.hashToken(legacy), label: `legacy-${run}` },
+    });
+    expect(await svc!.checkTokenValidity(legacy)).toMatchObject({ valid: true });
+    await svc!.redeemToken({ ...person('legacy'), token: legacy });
+    expect(await prisma!.freeTierApplication.count({ where: { email: `ft-${run}-legacy@school.example` } })).toBe(1);
+    await prisma!.acquisitionToken.deleteMany({ where: { label: `legacy-${run}` } });
+  });
+
+  test('disabled tokens are refused for redemption', async () => {
+    const token = await makeToken();
+    const row = await prisma!.acquisitionToken.findUnique({
+      where: { tokenHash: svc!.hashToken(token) },
+    });
+    await prisma!.acquisitionToken.update({ where: { id: row!.id }, data: { disabledAt: new Date() } });
+    expect(await svc!.checkTokenValidity(token)).toEqual({ valid: false, reason: 'disabled' });
+    expect(await svc!.redeemToken({ ...person('dis'), token })).toEqual({ ok: false, reason: 'disabled' });
+  });
+
+  test('scan recording dedupes within ten minutes', async () => {
+    const token = await makeToken();
+    const row = await prisma!.acquisitionToken.findUnique({
+      where: { tokenHash: svc!.hashToken(token) },
+    });
+    const cookie = 'dedupe-cookie-value';
+    await svc!.recordAcquisitionTokenScan({ tokenId: row!.id, dedupeCookie: cookie, userAgent: 'TestAgent/1.0' });
+    await svc!.recordAcquisitionTokenScan({ tokenId: row!.id, dedupeCookie: cookie, userAgent: 'TestAgent/1.0' });
+    const updated = await prisma!.acquisitionToken.findUnique({ where: { id: row!.id } });
+    expect(updated?.scanCount).toBe(1);
+    const scans = await prisma!.acquisitionTokenScan.count({ where: { tokenId: row!.id } });
+    expect(scans).toBe(1);
   });
 });
 

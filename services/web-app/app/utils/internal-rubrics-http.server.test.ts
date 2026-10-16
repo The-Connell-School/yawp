@@ -1,6 +1,14 @@
-import { expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { createRubricHttp } from './internal-rubrics-http.server';
 const key = 'c'.repeat(43);
+const savedContentKey = process.env.YAWP_CONTENT_SERVICE_KEY;
+beforeEach(() => {
+  process.env.YAWP_CONTENT_SERVICE_KEY = key;
+});
+afterEach(() => {
+  if (savedContentKey === undefined) delete process.env.YAWP_CONTENT_SERVICE_KEY;
+  else process.env.YAWP_CONTENT_SERVICE_KEY = savedContentKey;
+});
 const schema = { name: 'qa-rubric', title: 'QA rubric', rubric: { categories: [{ key: 'claim', label: 'Claim', description: 'A claim', weight: 1 }] } };
 const payload = { requestId: crypto.randomUUID(), actorId: 'operator', reason: 'Publish reviewed draft', expectedFingerprint: null, source: { contentId: crypto.randomUUID(), version: 2, fingerprint: 'a'.repeat(64) }, schema };
 const request = (body: unknown, credential = key, path = '/api/internal/v1/rubrics') => new Request(`https://yawp.test${path}`, { method: 'POST', headers: { authorization: `Bearer ${credential}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });

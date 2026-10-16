@@ -2,11 +2,17 @@ import { AlertTriangle } from 'lucide-react';
 
 import { Badge } from '~/components/ui/badge';
 import { cn } from '~/utils/misc';
+import type { TeacherNotesUiState } from '~/domain/grading/teacher-notes';
 
 const TEACHER_NOTE_PREFIX_PATTERN =
   /^(?:private\s+)?(?:teacher\s+)?(?:note|notes|context|observation|observations)\s*:\s*/i;
 const TEACHER_NOTE_PRIVACY_PATTERN =
   /(?:^|\s*;?\s*)(?:use\s+this\s+only\s+as\s+teacher\s+context|teacher\s+context\s+only|internal\s+only|for\s+teacher\s+use\s+only)\.?$/i;
+
+const PENDING_MESSAGE =
+  'Teacher notes will appear here after the Grading Assistant runs.';
+const EMPTY_MESSAGE =
+  'No notes for you on this one. Nothing in the writing stood out as inconsistent.';
 
 function formatTeacherNoteItems(note: string): string[] {
   const cleaned = note
@@ -31,14 +37,22 @@ function formatTeacherNoteItems(note: string): string[] {
 }
 
 export function TeacherNotes({
-  note,
+  ui,
   variant = 'footer',
 }: {
-  note: string | null;
+  ui: TeacherNotesUiState;
   variant?: 'footer' | 'inline';
 }) {
-  if (!note?.trim()) return null;
-  const items = formatTeacherNoteItems(note);
+  if (!ui.visible) return null;
+
+  const body =
+    ui.phase === 'pending'
+      ? PENDING_MESSAGE
+      : ui.phase === 'empty'
+        ? EMPTY_MESSAGE
+        : null;
+  const items = ui.phase === 'content' ? formatTeacherNoteItems(ui.note) : null;
+
   return (
     <section
       aria-label="Teacher Context"
@@ -61,17 +75,22 @@ export function TeacherNotes({
           Not visible to students
         </Badge>
       </div>
-      <ul className="mt-2 space-y-1.5 text-foreground">
-        {items.map((item, index) => (
-          <li className="flex gap-2" key={`${item}-${index}`}>
-            <span
-              aria-hidden="true"
-              className="mt-2 size-1.5 shrink-0 rounded-full bg-muted-foreground/70"
-            />
-            <span className="text-pretty">{item}</span>
-          </li>
-        ))}
-      </ul>
+      {body ? (
+        <p className="mt-2 text-pretty text-foreground">{body}</p>
+      ) : null}
+      {items ? (
+        <ul className="mt-2 space-y-1.5 text-foreground">
+          {items.map((item, index) => (
+            <li className="flex gap-2" key={`${item}-${index}`}>
+              <span
+                aria-hidden="true"
+                className="mt-2 size-1.5 shrink-0 rounded-full bg-muted-foreground/70"
+              />
+              <span className="text-pretty">{item}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </section>
   );
 }

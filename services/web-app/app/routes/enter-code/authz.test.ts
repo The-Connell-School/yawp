@@ -23,14 +23,17 @@ import {
 
 const prisma = {
   class: { findMany: mock(), findFirst: mock() },
-  orgMembership: { update: mock() },
+  orgMembership: { update: mock(), findFirst: mock(), findUnique: mock() },
+  $transaction: mock(),
+  $executeRaw: mock(),
+  $queryRaw: mock(),
+  setting: { findUnique: mock(async () => null) },
 };
 
 const requireUserId = mock();
 const requireMembership = mock();
 const redirectWithToast = mock();
 const getStudentPreviewState = mock();
-
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
@@ -89,12 +92,37 @@ function classRow(klass: ScopedClass) {
     schoolYear: '2024-2025',
     period: null,
     grade: null,
-    school: { name: `school-${klass.organizationId}` },
+    school: {
+      name: `school-${klass.organizationId}`,
+      organizationId: klass.organizationId,
+      organization: { plan: 'SCHOOL' },
+    },
     teachers: [{ user: { name: 'Teacher' } }],
   };
 }
 
 function actingAs(membershipId: string, organizationId: string) {
+  prisma.orgMembership.findFirst.mockImplementation(async ({ where }: any) =>
+    where.id === membershipId &&
+    where.userId === `user-${membershipId}` &&
+    where.organizationId === organizationId
+      ? { id: membershipId }
+      : null
+  );
+  prisma.orgMembership.findUnique.mockImplementation(async ({ where }: any) =>
+    where.userId_organizationId.userId === `user-${membershipId}` &&
+    where.userId_organizationId.organizationId === organizationId
+      ? {
+          id: membershipId,
+          userId: `user-${membershipId}`,
+          organizationId,
+          role: 'STUDENT',
+          isOrgOwner: false,
+          isActive: true,
+          classesAsStudent: [],
+        }
+      : null
+  );
   requireUserId.mockResolvedValue(`user-${membershipId}`);
   requireMembership.mockResolvedValue({
     id: membershipId,
@@ -110,7 +138,10 @@ function actingAs(membershipId: string, organizationId: string) {
   });
 }
 
-function post(fields: Record<string, string>, url = 'https://example.com/enter-code') {
+function post(
+  fields: Record<string, string>,
+  url = 'https://example.com/enter-code'
+) {
   const form = new FormData();
   for (const [key, value] of Object.entries(fields)) form.append(key, value);
   return new Request(url, {
@@ -124,6 +155,11 @@ describe('enter-code authorization', () => {
     prisma.class.findMany.mockReset();
     prisma.class.findFirst.mockReset();
     prisma.orgMembership.update.mockReset();
+    prisma.orgMembership.findFirst.mockReset();
+    prisma.orgMembership.findUnique.mockReset();
+    prisma.$transaction.mockImplementation(async (fn: any) => fn(prisma));
+    prisma.$executeRaw.mockResolvedValue(1);
+    prisma.$queryRaw.mockResolvedValue([{ id: 'locked-row' }]);
     requireUserId.mockReset();
     requireMembership.mockReset();
     redirectWithToast.mockReset();
@@ -131,8 +167,11 @@ describe('enter-code authorization', () => {
 
     getStudentPreviewState.mockResolvedValue({ active: false });
     redirectWithToast.mockImplementation(
-      async (to: string) =>
-        new Response(null, { status: 302, headers: { location: to } })
+      async (to: string, _toast: unknown, init?: ResponseInit) =>
+        new Response(null, {
+          status: 302,
+          headers: { ...init?.headers, location: to },
+        })
     );
     // Stands in for the database: rows come back only when the query's own where
     // clause selects them.
@@ -307,6 +346,7 @@ describe('enter-code authorization', () => {
 
     const payload = response.data ?? response;
     expect(payload.status).toBe('enrolled');
+    expect(response.init.headers['set-cookie']).toContain('membership-id=');
     expect(prisma.orgMembership.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: { classesAsStudent: { connect: { id: 'class-a4' } } },
@@ -333,7 +373,7 @@ describe('enter-code authorization', () => {
     );
   });
 
-  test('the loader never lists another organization same-code class', async () => {
+  test('the loader never lists another paid organization same-code class', async () => {
     actingAs('membership-a', 'org-a');
 
     const loaded = (await loader({
@@ -344,5 +384,41 @@ describe('enter-code authorization', () => {
 
     const listed = (loaded.data ?? loaded).classes.map((k: any) => k.id);
     expect(listed).toEqual(['class-a3']);
+  });
+  test('unauthenticated callers cannot query codes or change a roster', async () => {
+    requireUserId.mockImplementation(async () => {
+      throw new Response(null, {
+        status: 302,
+        headers: { location: '/auth/login' },
+      });
+    });
+    for (const handler of [loader, action]) {
+      await expect(
+        handler({
+          request: post({ intent: 'validate-code', code: 'SECRET' }),
+          params: {},
+          context: {},
+        } as any)
+      ).rejects.toMatchObject({ status: 302 });
+    }
+    expect(prisma.class.findMany).not.toHaveBeenCalled();
+    expect(prisma.orgMembership.update).not.toHaveBeenCalled();
+  });
+
+  test('teacher loaders cannot list code matches', async () => {
+    actingAs('membership-a', 'org-a');
+    requireMembership.mockResolvedValue({
+      id: 'membership-a',
+      role: 'TEACHER',
+      organization: { id: 'org-a' },
+    });
+    await expect(
+      loader({
+        request: new Request('https://example.com/enter-code?code=SECRET'),
+        params: {},
+        context: {},
+      } as any)
+    ).rejects.toMatchObject({ status: 403 });
+    expect(prisma.class.findMany).not.toHaveBeenCalled();
   });
 });

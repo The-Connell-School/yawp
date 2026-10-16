@@ -1,3 +1,4 @@
+import { canUseMockAdmin, requireMockAdmin } from '~/utils/mock-admin.server';
 import {
   Form,
   Link,
@@ -79,6 +80,7 @@ import {
 } from '~/components/guided-tour/guided-tour';
 import { guidedToursAvailable } from '~/domain/guided-tours/tours';
 import { loadFinishedTourIds } from '~/domain/guided-tours/guided-tours.server';
+import { isDemoFreeTierRouteOpen } from '~/utils/free-tier/free-tier-feature-gate.server';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -88,16 +90,34 @@ export const NavExpandedContext = createContext({
 export const handle: BreadcrumbHandle = { breadcrumb: 'Home' };
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const userId = await requireUserId(request);
   const pathname = new URL(request.url).pathname;
+  if (
+    pathname.startsWith('/app/tester/') &&
+    pathname !== '/app/tester/feedback'
+  ) {
+    await requireMockAdmin(request);
+    return data({
+      mockAdminAvailable: true,
+      schoolYearScope: {
+        selected: ALL_SCHOOL_YEARS,
+        options: [] as string[],
+        isStudent: false,
+      },
+      guidedTours: null,
+    });
+  }
+  const userId = await requireUserId(request);
+  const mockAdminAvailable = await canUseMockAdmin(userId);
   const { isFreeTierEnabled } = await import(
     '~/domain/feature-flags/feature-flags.server'
   );
   const freeTierFeatureOn = await isFreeTierEnabled();
+  const freeTierRouteOpen =
+    freeTierFeatureOn || isDemoFreeTierRouteOpen(process.env);
   const { loadFreeTierGateApplication, enforceFreeTierTeacherGate } = await import(
     '~/domain/free-tier/free-tier-gate.server'
   );
-  const freeTierApplication = freeTierFeatureOn
+  const freeTierApplication = freeTierRouteOpen
     ? await loadFreeTierGateApplication(userId)
     : null;
 
@@ -114,6 +134,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
     if (pathname.startsWith('/app/free-tier')) {
       return data({
+        mockAdminAvailable,
         schoolYearScope: {
           selected: ALL_SCHOOL_YEARS,
           options: [],
@@ -125,7 +146,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   const profile = await requireMembership(request, userId);
-  if (freeTierFeatureOn && profile.role === 'TEACHER') {
+  if (freeTierRouteOpen && profile.role === 'TEACHER') {
     await enforceFreeTierTeacherGate({
       userId,
       pathname,
@@ -178,6 +199,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     : null;
 
   return data({
+    mockAdminAvailable,
     schoolYearScope: {
       selected,
       options: selectableOptions,
@@ -211,7 +233,8 @@ function isAppNavLinkActive(linkTo: string, pathname: string) {
 export default function Route() {
   const location = useLocation();
   const user = useUser();
-  const { schoolYearScope, guidedTours } = useLoaderData<typeof loader>();
+  const { schoolYearScope, guidedTours, mockAdminAvailable } =
+    useLoaderData<typeof loader>();
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
   const isReadOnlyImpersonation = rootData?.impersonation?.isReadOnly ?? false;
@@ -350,6 +373,17 @@ export default function Route() {
           </Button>
         </div>
         <div className="p-3">
+          {mockAdminAvailable && (
+            <Link
+              to="/app/tester/waitlist"
+              aria-label="Tester queues"
+              title="Tester queues"
+              className="flex items-center gap-2 rounded p-2"
+            >
+              <Settings2 size={20} />
+              {navExpanded && 'Tester queues'}
+            </Link>
+          )}
           <SidebarNavLinks
             sections={FLAT_SIDEBAR_SECTIONS}
             user={user}

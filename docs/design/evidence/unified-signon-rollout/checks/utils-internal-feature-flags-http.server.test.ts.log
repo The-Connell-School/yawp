@@ -1,0 +1,95 @@
+bun test v1.3.1 (89fa0f34)
+
+services/web-app/app/utils/internal-feature-flags-http.server.test.ts:
+(pass) internal feature-flag endpoints > are hidden when no management key is configured [0.85ms]
+(pass) internal feature-flag endpoints > reject a missing, short or wrong bearer before touching the database [0.96ms]
+(pass) internal feature-flag endpoints > enforce methods [0.15ms]
+(pass) internal feature-flag endpoints > lists the flags, off by default, without caching [0.44ms]
+(pass) internal feature-flag endpoints > lists free tier as open on demo even when the stored flag is off [0.21ms]
+feature_flag_set {
+  key: "free_tier",
+  mode: "off",
+  orgCount: 0,
+  changed: false,
+  operator: "ops@yawp.school",
+}
+(pass) internal feature-flag endpoints > demo writes report the saved value without losing the runtime override [3.76ms]
+(pass) internal feature-flag endpoints > no longer lists the removed writing-conditions flag, even if its row is still stored [0.32ms]
+(pass) internal feature-flag endpoints > lists each flag with its mode, schools, and legacy enabled [0.34ms]
+feature_flag_set {
+  key: "lesson_planner",
+  mode: "everyone",
+  orgCount: 0,
+  changed: true,
+  operator: "ops@yawp.school",
+}
+(pass) internal feature-flag endpoints > legacy {enabled: true} turns a flag on for everyone and reports the change [0.63ms]
+feature_flag_set {
+  key: "lesson_planner",
+  mode: "off",
+  orgCount: 0,
+  changed: true,
+  operator: "ops@yawp.school",
+}
+(pass) internal feature-flag endpoints > legacy {enabled: false} turns a flag off [0.45ms]
+feature_flag_set {
+  key: "lesson_planner",
+  mode: "targeted",
+  orgCount: 2,
+  changed: true,
+  operator: "ops@yawp.school",
+}
+(pass) internal feature-flag endpoints > targets a flag at schools after checking they exist [0.67ms]
+feature_flag_set {
+  key: "lesson_planner",
+  mode: "everyone",
+  orgCount: 0,
+  changed: true,
+  operator: "ops@yawp.school",
+}
+feature_flag_set {
+  key: "lesson_planner",
+  mode: "off",
+  orgCount: 0,
+  changed: true,
+  operator: "ops@yawp.school",
+}
+feature_flag_set {
+  key: "lesson_planner",
+  mode: "everyone",
+  orgCount: 0,
+  changed: true,
+  operator: "ops@yawp.school",
+}
+(pass) internal feature-flag endpoints > everyone and off clear any schools sent with them [1.43ms]
+(pass) internal feature-flag endpoints > refuses unknown organizations and names them [0.42ms]
+(pass) internal feature-flag endpoints > refuses targeted with no schools [0.71ms]
+feature_flag_set {
+  key: "lesson_planner",
+  mode: "targeted",
+  orgCount: 2000,
+  changed: true,
+  operator: "ops@yawp.school",
+}
+(pass) internal feature-flag endpoints > accepts up to 2000 schools and refuses more [6.94ms]
+(pass) internal feature-flag endpoints > refuses a malformed mode body [2.71ms]
+(pass) internal feature-flag endpoints > fails with 500, not a write, when the organization check fails [0.57ms]
+(pass) internal feature-flag endpoints > refuses an unknown flag [0.31ms]
+(pass) internal feature-flag endpoints > refuses the removed writing-conditions flag as unknown [0.28ms]
+(pass) internal feature-flag endpoints > refuses a body that is neither {enabled} nor {mode, orgIds} [1.55ms]
+(pass) internal feature-flag endpoints > refuses a non-JSON content type [0.29ms]
+(pass) internal feature-flag endpoints > requires the operator email so every change is attributable [1.39ms]
+(pass) internal feature-flag endpoints > signed demo reads expose persisted state independently of effective Everyone [1.21ms]
+feature_flag_set {
+  key: "lesson_planner",
+  mode: "everyone",
+  orgCount: 0,
+  changed: true,
+  operator: "ops@yawp.school",
+}
+(pass) internal feature-flag endpoints > signed writes record an internal platform audit row [1.10ms]
+
+ 24 pass
+ 0 fail
+ 85 expect() calls
+Ran 24 tests across 1 file. [527.00ms]

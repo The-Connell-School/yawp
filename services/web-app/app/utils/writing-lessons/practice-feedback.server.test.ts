@@ -74,6 +74,30 @@ describe('generatePracticeFeedback', () => {
     expect(callArgs.messages[0].content).toContain(baseInput.response);
   });
 
+  test('passes organization phrases for LlmLog de-identification', async () => {
+    getLLMCompletion.mockResolvedValueOnce(
+      JSON.stringify({
+        status: 'developing',
+        summary: 'Good direction.',
+        strengths: ['You made an edit.'],
+        focus: ['Reconsider the join.'],
+        encouragement: 'Keep going.',
+      })
+    );
+
+    await generatePracticeFeedback(baseInput, {
+      organizationId: 'org-1',
+      membershipId: 'mem-1',
+      organizationName: 'Holy Family School',
+    });
+
+    const callArgs = getLLMCompletion.mock.calls[0][0];
+    expect(callArgs.deidentificationPhrases).toEqual([
+      'Holy Family School',
+      undefined,
+    ]);
+  });
+
   test('short-circuits blank responses without calling the tutor', async () => {
     const result = await generatePracticeFeedback({
       ...baseInput,

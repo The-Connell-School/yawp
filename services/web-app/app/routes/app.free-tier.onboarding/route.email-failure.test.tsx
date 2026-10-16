@@ -4,6 +4,10 @@ afterAll(() => {
   mock.restore();
 });
 
+mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
+  requireFreeTierEnabled: async () => {},
+}));
+
 test('onboarding action surfaces email_failed without redirecting to pending', async () => {
   mock.module('~/utils/auth.server', () => ({
     requireUserId: async () => 'user-1',

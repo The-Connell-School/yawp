@@ -20,7 +20,7 @@ const {
   setFeatureFlag,
   findUnknownOrganizationIds,
 } = await import('./feature-flags.server');
-const { INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG } = await import(
+const { INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, UNIFIED_SIGN_ON_FLAG } = await import(
   './feature-flags'
 );
 
@@ -127,6 +127,7 @@ describe('feature flags (server)', () => {
       LESSON_PLANNER_FLAG,
       INTERNAL_RUBRICS_FLAG,
       FREE_TIER_FLAG,
+      UNIFIED_SIGN_ON_FLAG,
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[2]).toMatchObject({ key: FREE_TIER_FLAG, mode: 'off', enabled: false });
@@ -150,6 +151,7 @@ describe('feature flags (server)', () => {
       LESSON_PLANNER_FLAG,
       INTERNAL_RUBRICS_FLAG,
       FREE_TIER_FLAG,
+      UNIFIED_SIGN_ON_FLAG,
     ]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });
     const where = prisma.setting.findMany.mock.calls[0]?.[0].where;
@@ -296,3 +298,29 @@ describe('feature flags (server)', () => {
     expect(prisma.organization.findMany).toHaveBeenCalledTimes(1);
   });
 });
+
+for (const deployment of ['demo', 'production']) {
+  for (const mode of ['off', 'everyone', 'targeted']) {
+    test(`reports persisted and effective free tier separately: ${deployment} / ${mode}`, async () => {
+      const oldEnvironment = process.env.YAWP_ENVIRONMENT;
+      const oldSlug = process.env.PREVIEW_SLUG;
+      process.env.YAWP_ENVIRONMENT = deployment;
+      delete process.env.PREVIEW_SLUG;
+      try {
+        const orgIds = mode === 'targeted' ? ['org-1'] : [];
+        prisma.setting.findMany.mockResolvedValue([{ name: 'feature_flag.free_tier', value: JSON.stringify({ mode, orgIds }), description: null, updatedAt: new Date('2026-10-14T00:00:00Z') }]);
+        const flag = (await listFeatureFlags()).find((f) => f.key === FREE_TIER_FLAG)!;
+        expect(flag).toMatchObject({
+          mode: deployment === 'demo' ? 'everyone' : mode,
+          persisted: { mode, orgIds },
+          effective: deployment === 'demo' ? { mode: 'everyone', orgIds: [] } : { mode, orgIds },
+          runtimeOverride: deployment === 'demo' ? 'demo_free_tier' : null,
+        });
+        expect(prisma.setting.upsert).not.toHaveBeenCalled();
+      } finally {
+        if (oldEnvironment === undefined) delete process.env.YAWP_ENVIRONMENT; else process.env.YAWP_ENVIRONMENT = oldEnvironment;
+        if (oldSlug === undefined) delete process.env.PREVIEW_SLUG; else process.env.PREVIEW_SLUG = oldSlug;
+      }
+    });
+  }
+}

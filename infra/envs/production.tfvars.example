@@ -1,10 +1,22 @@
-# Non-secret production Terraform inputs (copy to your private tfvars).
-# Order for free-tier go-live:
-# 1. Create aws_secretsmanager_secret free_tier_link_hmac and set its secret value in AWS
-# 2. Set primary_app_url and yawp_app_origin below
-# 3. terraform apply (App Runner needs the secret version before the service can start)
+# Non-secret production Terraform inputs only (placeholders).
+# Live values: Secrets Manager secret yawp/terraform/production-tfvars (us-east-1, JSON). Never commit tfvars.
 
-yawp_app_origin  = "https://ua.yawp.school"
-primary_app_url  = "https://yawp.school"
+# yawp_app_origin = "https://ua.yawp.school"
+# primary_app_url omitted by default (matches live App Runner: PRIMARY_APP_URL unset)
+# free_tier_link_hmac_enabled = false
+# legacy_internal_key_allowed = false
+# internal_platform_signing_keys_secret_arn = "arn:aws:secretsmanager:us-east-1:ACCOUNT:secret:yawp-internal/production-signing-platform-keys-XXXX"
 
-# free_tier_link_hmac_secret = "<32+ byte random; never commit>"
+# Database export objects and eligible manual RDS snapshots are retained for 90 days.
+# The scheduled snapshot cleanup logs deletions and always keeps the newest pre-deploy snapshot.
+# database_export_retention_days = 90
+# manual_snapshot_retention_days = 90
+# rds_snapshot_cleanup_schedule_expression = "cron(30 8 * * ? *)"
+
+# CloudTrail is enabled automatically for env = "production"; override only if
+# importing pre-existing names differs from Terraform defaults.
+# cloudtrail_enabled = true
+# cloudtrail_name = "yawp-production-management-events"
+# cloudtrail_log_bucket_name = "yawp-production-cloudtrail-ACCOUNT"
+# cloudtrail_s3_key_prefix = "cloudtrail"
+# cloudtrail_log_retention_days = 365

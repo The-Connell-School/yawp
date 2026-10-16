@@ -1,0 +1,242 @@
+[
+  {
+    "origin": "https://pr-999999.preview.yawp.school",
+    "authorization": "LOCAL-INTERCEPTED-HANDLERS-NO-HOSTED-AUTHORIZATION",
+    "flag": {
+      "key": "unified-sign-on",
+      "label": "Unified sign-on",
+      "description": "Shows the unified sign-on at /auth/login. Default off. Keep disabled on demo and production during October 16 testing. Backend-dependent operations remain unavailable until the backend integration ships.",
+      "mode": "off",
+      "orgIds": [],
+      "persisted": {
+        "mode": "off",
+        "orgIds": []
+      },
+      "effective": {
+        "mode": "off",
+        "orgIds": []
+      },
+      "runtimeOverride": null,
+      "enabled": false,
+      "updatedAt": null,
+      "lastChangedBy": null
+    },
+    "execution": "In-process signed actual handlers; fetch intercepted locally; no hosted request"
+  },
+  {
+    "origin": "https://pr-999999.preview.yawp.school",
+    "authorization": "LOCAL-INTERCEPTED-HANDLERS-NO-HOSTED-AUTHORIZATION",
+    "actor": "operator@example.test",
+    "flag": {
+      "key": "unified-sign-on",
+      "label": "Unified sign-on",
+      "description": "Shows the unified sign-on at /auth/login. Default off. Keep disabled on demo and production during October 16 testing. Backend-dependent operations remain unavailable until the backend integration ships.",
+      "mode": "everyone",
+      "orgIds": [],
+      "persisted": {
+        "mode": "everyone",
+        "orgIds": []
+      },
+      "effective": {
+        "mode": "everyone",
+        "orgIds": []
+      },
+      "runtimeOverride": null,
+      "enabled": true,
+      "updatedAt": "2026-10-15T23:52:32.357Z",
+      "lastChangedBy": "operator@example.test"
+    },
+    "previous": {
+      "mode": "off",
+      "orgIds": []
+    },
+    "changed": true,
+    "execution": "In-process signed actual handlers; fetch intercepted locally; no hosted request"
+  },
+  {
+    "origin": "https://pr-999999.preview.yawp.school",
+    "authorization": "LOCAL-INTERCEPTED-HANDLERS-NO-HOSTED-AUTHORIZATION",
+    "actor": "operator@example.test",
+    "flag": {
+      "key": "unified-sign-on",
+      "label": "Unified sign-on",
+      "description": "Shows the unified sign-on at /auth/login. Default off. Keep disabled on demo and production during October 16 testing. Backend-dependent operations remain unavailable until the backend integration ships.",
+      "mode": "off",
+      "orgIds": [],
+      "persisted": {
+        "mode": "off",
+        "orgIds": []
+      },
+      "effective": {
+        "mode": "off",
+        "orgIds": []
+      },
+      "runtimeOverride": null,
+      "enabled": false,
+      "updatedAt": "2026-10-15T23:52:32.748Z",
+      "lastChangedBy": "operator@example.test"
+    },
+    "previous": {
+      "mode": "everyone",
+      "orgIds": []
+    },
+    "changed": true,
+    "execution": "In-process signed actual handlers; fetch intercepted locally; no hosted request"
+  },
+  {
+    "origin": "https://pr-999999.preview.yawp.school",
+    "authorization": "LOCAL-INTERCEPTED-HANDLERS-NO-HOSTED-AUTHORIZATION",
+    "flag": {
+      "key": "unified-sign-on",
+      "label": "Unified sign-on",
+      "description": "Shows the unified sign-on at /auth/login. Default off. Keep disabled on demo and production during October 16 testing. Backend-dependent operations remain unavailable until the backend integration ships.",
+      "mode": "off",
+      "orgIds": [],
+      "persisted": {
+        "mode": "off",
+        "orgIds": []
+      },
+      "effective": {
+        "mode": "off",
+        "orgIds": []
+      },
+      "runtimeOverride": null,
+      "enabled": false,
+      "updatedAt": "2026-10-15T23:52:32.748Z",
+      "lastChangedBy": "operator@example.test"
+    },
+    "execution": "In-process signed actual handlers; fetch intercepted locally; no hosted request"
+  },
+  {
+    "origin": "https://pr-999999.preview.yawp.school",
+    "authorization": "LOCAL-INTERCEPTED-HANDLERS-NO-HOSTED-AUTHORIZATION",
+    "flag": {
+      "key": "unified-sign-on",
+      "label": "Unified sign-on",
+      "description": "Shows the unified sign-on at /auth/login. Default off. Keep disabled on demo and production during October 16 testing. Backend-dependent operations remain unavailable until the backend integration ships.",
+      "mode": "targeted",
+      "orgIds": [
+        "local-rollout-target"
+      ],
+      "persisted": {
+        "mode": "targeted",
+        "orgIds": [
+          "local-rollout-target"
+        ]
+      },
+      "effective": {
+        "mode": "targeted",
+        "orgIds": [
+          "local-rollout-target"
+        ]
+      },
+      "runtimeOverride": null,
+      "enabled": false,
+      "updatedAt": "2026-10-15T23:57:23.973Z",
+      "lastChangedBy": null
+    },
+    "execution": "In-process signed actual handlers; fetch intercepted locally; no hosted request",
+    "scenario": "targeted prior value restoration"
+  },
+  {
+    "origin": "https://pr-999999.preview.yawp.school",
+    "authorization": "LOCAL-INTERCEPTED-HANDLERS-NO-HOSTED-AUTHORIZATION",
+    "actor": "operator@example.test",
+    "flag": {
+      "key": "unified-sign-on",
+      "label": "Unified sign-on",
+      "description": "Shows the unified sign-on at /auth/login. Default off. Keep disabled on demo and production during October 16 testing. Backend-dependent operations remain unavailable until the backend integration ships.",
+      "mode": "everyone",
+      "orgIds": [],
+      "persisted": {
+        "mode": "everyone",
+        "orgIds": []
+      },
+      "effective": {
+        "mode": "everyone",
+        "orgIds": []
+      },
+      "runtimeOverride": null,
+      "enabled": true,
+      "updatedAt": "2026-10-15T23:57:24.518Z",
+      "lastChangedBy": "operator@example.test"
+    },
+    "previous": {
+      "mode": "targeted",
+      "orgIds": [
+        "local-rollout-target"
+      ]
+    },
+    "changed": true,
+    "execution": "In-process signed actual handlers; fetch intercepted locally; no hosted request",
+    "scenario": "targeted prior value restoration"
+  },
+  {
+    "origin": "https://pr-999999.preview.yawp.school",
+    "authorization": "LOCAL-INTERCEPTED-HANDLERS-NO-HOSTED-AUTHORIZATION",
+    "actor": "operator@example.test",
+    "flag": {
+      "key": "unified-sign-on",
+      "label": "Unified sign-on",
+      "description": "Shows the unified sign-on at /auth/login. Default off. Keep disabled on demo and production during October 16 testing. Backend-dependent operations remain unavailable until the backend integration ships.",
+      "mode": "targeted",
+      "orgIds": [
+        "local-rollout-target"
+      ],
+      "persisted": {
+        "mode": "targeted",
+        "orgIds": [
+          "local-rollout-target"
+        ]
+      },
+      "effective": {
+        "mode": "targeted",
+        "orgIds": [
+          "local-rollout-target"
+        ]
+      },
+      "runtimeOverride": null,
+      "enabled": false,
+      "updatedAt": "2026-10-15T23:57:24.825Z",
+      "lastChangedBy": "operator@example.test"
+    },
+    "previous": {
+      "mode": "everyone",
+      "orgIds": []
+    },
+    "changed": true,
+    "execution": "In-process signed actual handlers; fetch intercepted locally; no hosted request",
+    "scenario": "targeted prior value restoration"
+  },
+  {
+    "origin": "https://pr-999999.preview.yawp.school",
+    "authorization": "LOCAL-INTERCEPTED-HANDLERS-NO-HOSTED-AUTHORIZATION",
+    "flag": {
+      "key": "unified-sign-on",
+      "label": "Unified sign-on",
+      "description": "Shows the unified sign-on at /auth/login. Default off. Keep disabled on demo and production during October 16 testing. Backend-dependent operations remain unavailable until the backend integration ships.",
+      "mode": "targeted",
+      "orgIds": [
+        "local-rollout-target"
+      ],
+      "persisted": {
+        "mode": "targeted",
+        "orgIds": [
+          "local-rollout-target"
+        ]
+      },
+      "effective": {
+        "mode": "targeted",
+        "orgIds": [
+          "local-rollout-target"
+        ]
+      },
+      "runtimeOverride": null,
+      "enabled": false,
+      "updatedAt": "2026-10-15T23:57:24.825Z",
+      "lastChangedBy": "operator@example.test"
+    },
+    "execution": "In-process signed actual handlers; fetch intercepted locally; no hosted request",
+    "scenario": "targeted prior value restoration"
+  }
+]

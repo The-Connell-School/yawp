@@ -12,7 +12,9 @@ import {
 } from '~/domain/reporter/reporter-tools.server';
 import { buildReporterSystemPromptBlocks } from './build-system-prompt';
 import {
+  AiFreeTierBudgetExceededError,
   AiRateLimitError,
+  aiFreeTierBudgetExceededMessage,
   reserveAiRequest,
 } from '~/utils/ai-admission.server';
 import {
@@ -171,6 +173,15 @@ export async function action({ request }: ActionFunctionArgs) {
       policy: REPORTER_ADMISSION_POLICY,
     });
   } catch (error) {
+    if (error instanceof AiFreeTierBudgetExceededError) {
+      return dataResponse(
+        {
+          error: 'free_tier_budget_exceeded',
+          message: aiFreeTierBudgetExceededMessage(),
+        },
+        { status: 402 }
+      );
+    }
     if (!(error instanceof AiRateLimitError)) {
       // A store failure is not an admission decision, so it is not logged as one.
       return dataResponse({ error: REPORTER_FAILED }, { status: 503 });

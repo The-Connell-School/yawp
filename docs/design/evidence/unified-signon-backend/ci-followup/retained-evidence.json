@@ -1,0 +1,16 @@
+{
+  "validated": [
+    {
+      "manifest": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/shots/di-signon-backend/comparisons.json",
+      "comparisons": 34,
+      "sha256": "719cc7933cdf9adcd55d831b952c4826826bd52ebcc940e017c50a335a975d21"
+    },
+    {
+      "manifest": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/shots/di-signon-backend/activation-fix/comparisons.json",
+      "comparisons": 4,
+      "sha256": "dd686736515250c9003b901e0dbb3c01bce124af409b19f3700ec05ce366d6a6"
+    }
+  ],
+  "renderedChange": false,
+  "notes": "Retain validator-policy and legacy location-selector exceptions from approved evidence. Test/CI changes only."
+}

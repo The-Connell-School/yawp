@@ -1,3 +1,7 @@
+### PR previews
+
+Open `https://pr-<number>.preview.yawp.school` in a browser to wake a sleeping preview. At the eight-running cap, the oldest human activity yields its slot; database and access state remain resident. All previews sleep after 48 hours idle. See the [preview runbook](docs/runbooks/preview.md) and [control-plane README](scripts/preview/README.md).
+
 ### Setting Up Checklist
 
 - [ ] Configure the backend on s3 (replace vars, only 1 per app {not per env})
