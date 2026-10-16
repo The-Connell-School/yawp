@@ -562,7 +562,7 @@ async function consumeCodeQueryParam(
   request: Request,
   repository: PreviewAccessSeatRepository
 ): Promise<Response | null> {
-  if (request.method !== 'GET') return null;
+  if (request.method !== 'GET' || isProviderCallback(request)) return null;
 
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
@@ -582,8 +582,18 @@ async function consumeCodeQueryParam(
   });
 }
 
+/**
+ * OAuth provider callbacks carry their own one-time `code`; it is not a preview
+ * access code and must reach the route untouched. The gate still applies.
+ */
+const PROVIDER_CALLBACK_PATHS = new Set(['/auth/unified/google/callback']);
+
+function isProviderCallback(request: Request) {
+  return PROVIDER_CALLBACK_PATHS.has(new URL(request.url).pathname);
+}
+
 function stripCodeQueryParam(request: Request): Response | null {
-  if (request.method !== 'GET') return null;
+  if (request.method !== 'GET' || isProviderCallback(request)) return null;
 
   const url = new URL(request.url);
   if (!url.searchParams.has('code')) return null;

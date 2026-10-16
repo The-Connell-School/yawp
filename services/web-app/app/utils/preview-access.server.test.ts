@@ -596,6 +596,29 @@ describe('preview access gate', () => {
       expect(response?.headers.get('set-cookie')).toBeNull();
       expect(next).not.toHaveBeenCalled();
     });
+
+    test('leaves the Google OAuth callback code for the route', async () => {
+      const cookie = (
+        await grantPreviewAccessCookie({
+          organizationId: 'local-dev-org',
+          label: 'Master',
+        })
+      ).split(';', 1)[0];
+      const next = mock(async () => new Response('callback'));
+      const middleware = createPreviewAccessMiddleware(async () => null);
+
+      const response = await middleware(
+        middlewareArgs(
+          request('/auth/unified/google/callback?state=abc&code=4%2F0Axyz', {
+            headers: { cookie },
+          })
+        ),
+        next
+      );
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(response?.status).toBe(200);
+    });
   });
 });
 
