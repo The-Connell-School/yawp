@@ -19,7 +19,8 @@ already enrolled student to sign in. Screenshots include flag-off legacy login.
 ## Identity and deployment
 
 The additive `ClassStudentHandle` table has unique (classId, handleKey) and
-(classId, userId) constraints, foreign keys and a userId index. Handles preserve
+(classId, userId) constraints, foreign keys and a userId index. Both impersonation mutation-audit
+and truncate-guard triggers are installed when the table is created. Handles preserve
 name casing, fold accents, omit spaces/apostrophes/hyphens, support Unicode
 letters, contain at least the two required names' letters and at most 30 Unicode
 characters. Names accept 1–80 characters of letters with internal separators.
@@ -40,7 +41,10 @@ username (an opaque suffix when necessary). Class aliases are authoritative in t
 new form. The legacy username may differ from the alias if another class owns
 that global name; rollback users can use their legacy roster username. This
 preserves legacy login and teacher password-reset support, including existing
-accounts. No old identities are renamed or migrated. Returning class login can
+accounts. An authorized teacher reset clears the legacy login target plus the
+class-scoped alias and legacy-handle targets for all active student enrollments.
+Other students' targets and shared IP abuse controls retain their budgets. The
+login and reset paths share one normalization helper for those targets. No old identities are renamed or migrated. Returning class login can
 also resolve existing enrolled legacy handles. Ambiguous alias/legacy ownership
 fails closed. It never enrolls a newly authenticated account into a different
 class. Password policy, failed-login limits, active membership requirements,
@@ -54,7 +58,7 @@ conflict resolution; this task does not rebuild class-code uniqueness.
 
 ## Local checks
 
-Use `./bin/project bootstrap --fresh --json`, then source the generated local
+Use `CI=1 ./bin/project bootstrap --fresh --json`, then source the generated local
 config without printing it. With `CI=1 SIGNON_LOCAL_TEST=1`, run
 `./bin/project test --profile signon-classcode --json` and the typecheck profile.
 For browser checks start the server through `./bin/project dev start --json`, set
@@ -72,17 +76,41 @@ Side-by-side images pair each revised desktop screen with its corresponding v2
 reference. Mobile reference boards contain multiple states; the evidence notes
 identify the relevant state rather than claiming a pixel match to the montage.
 
-Validation for this change: 111 focused checks pass (3 handle normalization,
-3 existing policy, 14 Google provider, 43 dispatch/flag/origin, 10 new real-database
-student scenarios and 38 existing real-database sign-on cases). The project CLI
-profile adds 103 passing contract checks. Typecheck passes; its existing duplicate
-LTI route-ID warnings remain. Local browser evidence: 2 original-component cases,
-4 final class-code/Google-no-account cases, and 2 existing Google regression cases,
-all at 1280 / 390 with one worker. Hosted demo and production checks were excluded
-by task scope. Green CI and independent Ship Review are still driver merge gates.
+Validation after review fixes: 126 focused checks pass (1 route contract,
+3 login-target normalization, 7 existing student-join, 3 generated-handle,
+3 policy, 14 Google provider, 43 dispatch/flag/origin, 14 class-student database
+scenarios and 38 existing sign-on database cases). The project CLI profile adds
+103 passing contract checks. Typecheck passes with a 4 GB Node heap inside the
+6 GB lane limit; its existing duplicate LTI route-ID warnings remain.
+
+The four new database regressions first failed against the reviewed head. They
+cover both target and per-IP/handle lockouts, authorized and denied resets,
+multiple enrolled classes, another student's same handle in a different class,
+normalized alias input and temporary-password continuation; anonymous flag-off
+join and read-only mutation rejection; and exact trigger coverage plus attributed
+create/update/delete, rollback, denied truncation and ordinary-write isolation.
+The existing coverage guard is unchanged. The browser focus regression now waits
+for enabled inputs to commit before focusing the first server-reported error;
+clearing an error while typing does not move focus. The table-specific trigger tests run
+against fresh migrations. A metadata-only local query also found 26 pre-existing
+application tables without full trigger coverage, including SignonFlow and
+SignonIdentity; these remain a separate driver follow-up. No exemptions were
+added for ClassStudentHandle or any other table.
+
+Local browser evidence retains the original 2 before captures and 2 Google
+regressions, with refreshed class-code and mocked-Google screenshots at 1280 and
+390 using one worker. Hosted demo and production checks remain excluded by task
+scope. Green CI and independent Ship Review are driver merge gates.
 
 Local setup needed a temporary hoisted dependency layout after the default
 isolated install timed out; stale workspace links were moved aside. Prisma's
 read-only global engine cache was copied to lane-private XDG cache storage.
 No setup-script changes remain in the PR. Generated clients, route types,
 browser output, runtime caches and temporary logs were kept in `$TMPDIR`.
+
+Review follow-up source: lane `state/REVIEW.md` REJECT for slug
+`signon-classcode-flow`, PR #577. No matching QA FAILURES.md entry was supplied.
+The same class-student database file, login-target tests and student-join unit
+tests now run in the required Prisma migrations CI job. `/join` calls the
+existing mutable-request guard before its anonymous check; the route-contract
+allowlist and the impersonation coverage guard retain their original rules.

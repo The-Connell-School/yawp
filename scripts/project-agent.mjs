@@ -395,6 +395,9 @@ function runTestProfile(profile, { json }) {
     if (process.env.SIGNON_PREVIEW_FIXTURE_TEST === "1") runWebApp("preview-seat-policy-real-database", ["test", "app/domain/unified-signon/preview-seat-policy.real-db.integration.test.ts"]);
   }
   else if (chosen === "signon-classcode") {
+    run("read-only-route-contract", ["test", "./scripts/read-only-impersonation-contract.test.ts"]);
+    runWebApp("login-rate-limit-target", ["test", "app/utils/login-rate-limit-target.test.ts"]);
+    runWebApp("student-join", ["test", "app/domain/free-tier/student-join.server.test.ts"]);
     runWebApp("student-handle", ["test", "app/domain/unified-signon/student-handle.test.ts"]);
     runWebApp("signon-policy", ["test", "app/domain/unified-signon/policy.test.ts"]);
     runWebApp("signon-google", ["test", "app/domain/unified-signon/google.test.ts"]);
