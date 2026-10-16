@@ -60,6 +60,11 @@ for (const width of [1280, 390])
           `${name}-${width}-${process.env.SIGNON_BEFORE === '1' ? 'before' : 'impl'}.png`
         ),
         fullPage: true,
+        mask: [
+          page.locator(
+            'input[type="password"], input[name="username"], .signon-identity, .signon-copy strong'
+          ),
+        ],
       });
     };
     await page.setViewportSize({ width, height: width === 1280 ? 1006 : 844 });

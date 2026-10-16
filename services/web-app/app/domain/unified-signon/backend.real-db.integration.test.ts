@@ -970,7 +970,12 @@ suite(
       });
       const full = await post('register-student', values);
       expect(full.response.status).toBe(400);
-      expect(full.data.state.emailOrigin).toBe(true);
+      // Main returns errors without a replacement state. Redisplay resumes the
+      // existing server context, which must still carry the notice.
+      const redisplay = await unifiedEntry(
+        new Request(url + '?continue=1', { headers: { cookie } })
+      );
+      expect(redisplay?.initialState?.emailOrigin).toBe(true);
       expect(JSON.stringify(full.data)).toContain('full');
       expect(
         await prisma.classStudentHandle.count({ where: { classId: prefix } })
