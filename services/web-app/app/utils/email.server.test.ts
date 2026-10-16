@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const sesSend = mock();
-const sesClientConfigs: Array<{ region?: string }> = [];
+const sesClientConfigs: Array<{ region?: string; maxAttempts?: number }> = [];
 
 class MockSESv2Client {
 	constructor(config: { region?: string }) {
@@ -74,6 +74,19 @@ describe('sendEmail', () => {
 			}
 		}
 	});
+
+  test('durable approval delivery disables SDK retries without changing legacy callers', async () => {
+    process.env.EMAIL_PROVIDER = 'ses';
+    sesSend.mockResolvedValue({ MessageId: 'captured' });
+    await sendEmail({
+      to: 'local@example.org',
+      subject: 'Captured',
+      html: '<p>Captured</p>',
+      text: 'Captured',
+      singleAttempt: true,
+    });
+    expect(sesClientConfigs[0]?.maxAttempts).toBe(1);
+  });
 
 	test('sends through AWS SES when EMAIL_PROVIDER is ses', async () => {
 		process.env.EMAIL_PROVIDER = 'ses';

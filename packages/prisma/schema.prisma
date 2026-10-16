@@ -98,7 +98,47 @@ model FreeTierAdminApproval {
   redirects            FreeTierAdminApproval[]     @relation("AdminApprovalRedirectChain")
   personalNote         String?
 
+  // Cadence belongs to the current administrator; forwarding starts a new series.
+  firstSentAt          DateTime? @db.Timestamptz(6)
+  reminderCount        Int       @default(0)
+  lastReminderAt       DateTime? @db.Timestamptz(6)
+  lastReminderSource   String?
+  nextAutoReminderAt   DateTime? @db.Timestamptz(6)
+  autoRemindersStopped Boolean   @default(false)
+  stopReason           String?
+  needsManualFollowUp  Boolean   @default(false)
+  teacherFollowUpCount Int       @default(0)
+  lastTeacherFollowUpAt DateTime? @db.Timestamptz(6)
+  nextTeacherFollowUpAt DateTime? @db.Timestamptz(6)
+  forwardedByRole      String?
+  deliveries           FreeTierApprovalDelivery[]
+
   @@index([applicationId, createdAt(sort: Desc)])
+}
+
+// Payload contains signed URLs and is encrypted with the existing link secret.
+// DELIVERING is committed before contacting the provider; uncertain attempts
+// require reconciliation, never an automatic re-send.
+model FreeTierApprovalDelivery {
+  id            String @id @default(cuid())
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+  approvalId    String
+  approval      FreeTierAdminApproval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+  kind          String
+  sequence      Int
+  source        String?
+  actorEmail    String?
+  idempotencyKey String? @unique
+  state         String @default("QUEUED")
+  availableAt   DateTime @db.Timestamptz(6)
+  attemptedAt   DateTime? @db.Timestamptz(6)
+  sentAt        DateTime? @db.Timestamptz(6)
+  attempts      Int @default(0)
+  payload       String
+  error         String?
+
+  @@unique([approvalId, kind, sequence])
+  @@index([state, availableAt])
 }
 
 model FreeTierEmailLog {
