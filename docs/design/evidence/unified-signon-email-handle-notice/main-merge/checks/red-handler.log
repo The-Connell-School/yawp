@@ -1,0 +1,24 @@
+bun test v1.3.1 (89fa0f34)
+
+app/domain/unified-signon/backend.real-db.integration.test.ts:
+prisma:query - 31.854006000000027ms - INSERT INTO "public"."Setting" ("id","createdAt","updatedAt","name","value","valueType") VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT ("name") DO UPDATE SET "value" = $7 WHERE ("public"."Setting"."name" = $8 AND 1=1) RETURNING "public"."Setting"."id", "public"."Setting"."createdAt", "public"."Setting"."updatedAt", "public"."Setting"."name", "public"."Setting"."description", "public"."Setting"."value", "public"."Setting"."valueType"
+922 |     try {
+923 |       await post('resolve', { identifier: `${prefix}-handle-origin@example.test` });
+924 |       const resolved = await post('resolve-class', { classCode: prefix });
+925 |       expect(resolved.data.state.classInfo.accountMode).toBe('handle');
+926 |       const chosen = await post('student-choice', { choice: 'new' });
+927 |       expect(chosen.data.state.emailOrigin).toBe(true);
+                                                  ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-email-handle-notice/services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts:927:45)
+(fail) free-class code uses handle-only registration, validates policy and rechecks capacity at submit [517.16ms]
+
+ 0 pass
+ 37 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [1352.00ms]

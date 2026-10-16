@@ -38,6 +38,7 @@ import {
   getApprovalHooks,
 } from '~/domain/free-tier/approval-hooks.server';
 import type { FreeTierApplicationStatus } from '@app/prisma';
+import { BELOW_HS_TAG } from '~/domain/free-tier/grade-gate';
 
 const response = (value: unknown, status = 200, headers?: HeadersInit) =>
   Response.json(value, { status, headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', ...(headers || {}) } });
@@ -708,9 +709,11 @@ async function transition(args: {
         userId: true,
         organizationId: true,
         releasedAt: true,
+        tags: true,
       },
     });
     if (!app) return { status: 404 as const, payload: { error: 'Not found' }, changed: false };
+    if (app.tags?.includes(BELOW_HS_TAG)) return { status: 409 as const, payload: { error: 'grade_gate_declined' }, changed: false };
     if (app.status === args.to) return { status: 200 as const, payload: { ok: true, idempotent: true, status: app.status }, changed: false };
     if (!args.from.includes(app.status)) {
       return { status: 409 as const, payload: { error: 'Illegal state', status: app.status }, changed: false };
@@ -896,8 +899,9 @@ export async function decideApplication(args: {
 export async function reopenApplication(args: { id: string; decidedByEmail: string; audit?: TesterAuditActor }) {
   const { id } = args;
   const result = await prisma.$transaction(async (tx) => {
-    const app = await tx.freeTierApplication.findUnique({ where: { id }, select: { id: true, status: true, releasedAt: true } });
+    const app = await tx.freeTierApplication.findUnique({ where: { id }, select: { id: true, status: true, releasedAt: true, tags: true } });
     if (!app) return { status: 404 as const, payload: { error: 'Not found' } };
+    if (app.tags?.includes(BELOW_HS_TAG)) return { status: 409 as const, payload: { error: 'grade_gate_declined' } };
     if (app.status === 'MANUAL_REVIEW') return { status: 200 as const, payload: { ok: true, idempotent: true, status: app.status } };
     if (app.status !== 'REJECTED') return { status: 409 as const, payload: { error: 'Illegal state', status: app.status } };
     // A released application already holds a slot under the F3 cap (released rows

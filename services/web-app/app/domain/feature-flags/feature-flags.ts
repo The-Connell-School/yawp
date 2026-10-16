@@ -57,6 +57,9 @@ export const CLASS_CODE_UNIQUE_FLAG = 'classcode-unique' as const;
  */
 export const THESIS_ESSAY_DECKS_FLAG = 'thesis_essay_decks' as const;
 
+/** Demo feedback. Default off everywhere; only demo seed code opts in. */
+export const DEMO_FEEDBACK_FLAG = 'demo-feedback-widget' as const;
+
 export const FEATURE_FLAGS = {
   [LESSON_PLANNER_FLAG]: {
     label: 'Lesson Planner',
@@ -96,6 +99,10 @@ export const FEATURE_FLAGS = {
     label: 'Thesis-Driven Essay slide decks',
     description:
       "Shows each lesson's slide deck and lesson plan inside the Thesis-Driven Essay's Modules, for teachers to download. Off: the Modules list points to the Teachers' Lounge as before and the downloads return 404.",
+  },
+  [DEMO_FEEDBACK_FLAG]: {
+    label: 'Demo feedback widget',
+    description: 'Shows the feedback note panel for signed-in demo users. Default off; production submissions are always denied.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

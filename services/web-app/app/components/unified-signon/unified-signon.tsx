@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { ChevronRight, CircleCheck, Clock, Info, Mail } from 'lucide-react';
+import {
+  ChevronRight,
+  CircleCheck,
+  Clock,
+  Info,
+  Mail,
+  Shield,
+} from 'lucide-react';
 import { safeRedirect } from 'remix-utils/safe-redirect';
 import { z } from 'zod';
 import { Button } from '~/components/ui/button';
@@ -580,6 +587,15 @@ export function UnifiedSignon({
         ) : (
           <>
             {classCard()}
+            {screen === 'class-handle' && state.emailOrigin && (
+              <div role="status" className="signon-banner signon-origin-notice">
+                <Shield aria-hidden="true" width={16} height={16} />
+                <span>
+                  We won't save your email. This class uses a handle and
+                  password.
+                </span>
+              </div>
+            )}
             {variant === 'full' ? (
               <p className="signon-copy">Ask your teacher to make room.</p>
             ) : (

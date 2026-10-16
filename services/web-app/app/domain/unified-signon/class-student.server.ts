@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { identifierKind } from './contracts';
 import type { Prisma } from '@app/prisma';
 import { z } from 'zod';
 import { getPasswordHash, verifyUserPassword } from '~/utils/auth.server';
@@ -58,6 +59,12 @@ export async function chooseStudent(
     });
     if (!seat.ok) throw new FlowError(seat.error);
   }
+  // Retain only display context before discarding the entered email.
+  flow.data.studentEmailOrigin ??=
+    identifierKind(flow.data.identifier ?? '') === 'email' &&
+    flow.data.proof !== 'google' &&
+    !flow.data.pendingGoogle &&
+    !flow.data.studentGoogle;
   flow.data.studentChoice = choice as 'new' | 'returning';
   flow.data.identifier = undefined;
   flow.data.userId = undefined;

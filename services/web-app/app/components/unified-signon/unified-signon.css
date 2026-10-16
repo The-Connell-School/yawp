@@ -143,6 +143,14 @@
   font-size: 14px;
   line-height: 1.5;
 }
+.unified-signon .signon-origin-notice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.unified-signon .signon-origin-notice svg {
+  flex-shrink: 0;
+}
 .unified-signon .signon-error {
   border: 1px solid hsl(var(--destructive));
   background: hsl(var(--destructive) / 0.05);

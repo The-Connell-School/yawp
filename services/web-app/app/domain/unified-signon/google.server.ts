@@ -114,6 +114,21 @@ export async function exchangeGoogle(
     email: (payload.email as string).trim().toLowerCase(),
   };
 }
+/** The callback is a top-level browser navigation: any screen state
+ * finishAuthentication returns as JSON (inactive, membership, link-google) is
+ * already saved on the flow, so send the browser back to the sign-in page to
+ * render it, keeping the session cookie. */
+export function toCallbackRedirect(response: Response): Response {
+  if (response.status >= 300 && response.status < 400) return response;
+  const headers = new Headers();
+  response.headers.forEach((value, key) => {
+    if (key.toLowerCase() !== 'set-cookie' && key.toLowerCase() !== 'content-type')
+      headers.set(key, value);
+  });
+  for (const cookie of response.headers.getSetCookie()) headers.append('set-cookie', cookie);
+  headers.set('Location', '/auth/login?continue=1');
+  return new Response(null, { status: 302, headers });
+}
 export async function googleCallback(request: Request): Promise<Response> {
   if (!(await isUnifiedSignOnEnabled()))
     return new Response('Not found', { status: 404 });
@@ -189,7 +204,9 @@ export async function googleCallback(request: Request): Promise<Response> {
           });
           flow.data.invitationId = invite?.id;
         }
-        return finishAuthentication(tx, flow, request, linked.userId);
+        return toCallbackRedirect(
+          await finishAuthentication(tx, flow, request, linked.userId)
+        );
       }
       const account = await tx.user.findFirst({
         where: { email: { equals: identity.email, mode: 'insensitive' } },

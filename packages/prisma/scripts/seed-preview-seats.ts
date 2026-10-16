@@ -27,6 +27,7 @@ import {
 } from './local-dev/seed-lesson-planner-feature-flag';
 import { ensureThesisEssayDecksEnabledForPreview } from './local-dev/seed-thesis-essay-decks-feature-flag';
 import { ensureFreeTierEnabledForPreview } from './local-dev/seed-free-tier-feature-flag';
+import { ensureDemoFeedbackEnabled } from './local-dev/seed-demo-feedback';
 import {
   seedPreviewTeacherNotesQa,
   shouldRunPreviewTeacherNotesQaSeed,
@@ -42,6 +43,7 @@ const prisma = createPrismaClient();
 const databaseName = process.env.DATABASE_URL?.split('/').pop()?.split('?')[0] ?? '';
 
 try {
+  await ensureDemoFeedbackEnabled(prisma);
   const freeTierFlag = await ensureFreeTierEnabledForPreview(prisma, databaseName);
   console.log(`Free tier feature flag seed: ${JSON.stringify(freeTierFlag)}`);
   const thesisEssayDecksFlag = await ensureThesisEssayDecksEnabledForPreview(prisma, databaseName);
