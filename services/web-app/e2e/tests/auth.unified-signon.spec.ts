@@ -6,6 +6,82 @@ import { signonFixtures } from '../fixtures/unified-signon/states';
 const evidence = process.env.SIGNON_EVIDENCE_DIR;
 
 for (const width of [1280, 390]) {
+  test(`unified typography uses the system sans token after fonts load at ${width}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
+    for (const state of [
+      'entry',
+      'entry-invalid-email',
+      'password',
+      'account-type',
+      'email-code',
+      'trial',
+      'membership',
+    ]) {
+      await page.goto(`/e2e/fixtures/unified-signon/index.html?state=${state}`);
+      await expect(page.locator('.unified-signon')).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      const typography = await page.evaluate(() => {
+        const shell = document.querySelector('.auth-page-shell')!;
+        const probe = document.createElement('span');
+        probe.style.fontFamily = 'var(--font-sans)';
+        shell.append(probe);
+        const expected = getComputedStyle(probe).fontFamily;
+        const heading = shell.querySelector('h1')!;
+        // V2 signon-03/04 uses this stack and 18px / 600 / 1.35 heading.
+        // Measure wrapping with the same OS fonts rather than assuming a PNG's font installation.
+        probe.textContent = heading.textContent;
+        probe.style.cssText = `position: absolute; visibility: hidden; display: block; width: ${heading.getBoundingClientRect().width}px; font: 600 18px/1.35 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;`;
+        const referenceHeight = probe.getBoundingClientRect().height;
+        probe.remove();
+        return {
+          referenceHeight,
+          expected,
+          elements: [
+            ...shell.querySelectorAll(
+              '.unified-signon h1, .unified-signon p, .unified-signon label, .unified-signon input, .unified-signon button, .unified-signon a'
+            ),
+          ].map((element) => ({
+            text: element.textContent,
+            isCode: element.getAttribute('autocomplete') === 'one-time-code',
+            font: getComputedStyle(element).fontFamily,
+          })),
+          headingWeight: getComputedStyle(shell.querySelector('h1')!)
+            .fontWeight,
+          headingHeight: shell.querySelector('h1')!.getBoundingClientRect()
+            .height,
+          overflow: document.documentElement.scrollWidth > innerWidth,
+        };
+      });
+      expect(typography.expected).toMatch(/^ui-sans-serif, system-ui,/);
+      for (const element of typography.elements) {
+        if (element.isCode) {
+          expect(element.font).toMatch(/^ui-monospace,/);
+        } else {
+          expect(element.font, `${state}: ${element.text}`).toBe(
+            typography.expected
+          );
+        }
+      }
+      expect(typography.headingWeight).toBe('600');
+      expect(typography.overflow).toBe(false);
+      expect(typography.headingHeight).toBeCloseTo(
+        typography.referenceHeight,
+        1
+      );
+      if (evidence) {
+        fs.mkdirSync(evidence, { recursive: true });
+        fs.appendFileSync(
+          path.join(evidence, 'typography.jsonl'),
+          JSON.stringify({ state, width, ...typography }) + '\n'
+        );
+      }
+    }
+  });
+}
+
+for (const width of [1280, 390]) {
   test(`choice cards match artboard copy, geometry and keyboard paths at ${width}`, async ({
     page,
   }) => {

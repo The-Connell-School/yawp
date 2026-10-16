@@ -1,0 +1,420 @@
+[
+  {
+    "width": 1280,
+    "referenceSource": "design/v2/artboards/signon-03-entry-desktop.dom.html",
+    "fontsStatus": "loaded",
+    "reference": [
+      {
+        "tag": "H1",
+        "text": "Sign in or create an account",
+        "font": "ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+        "size": "18px",
+        "weight": "600",
+        "lineHeight": "24.3px",
+        "box": {
+          "x": 504,
+          "y": 288,
+          "width": 272,
+          "height": 48.59375,
+          "top": 288,
+          "right": 776,
+          "bottom": 336.59375,
+          "left": 504
+        },
+        "glyphWidth": 286.154296875
+      },
+      {
+        "tag": "LABEL",
+        "text": "Email, handle, or class code",
+        "font": "ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+        "size": "16px",
+        "weight": "400",
+        "lineHeight": "normal",
+        "box": {
+          "x": 504,
+          "y": 451.59375,
+          "width": 272,
+          "height": 19,
+          "top": 451.59375,
+          "right": 776,
+          "bottom": 470.59375,
+          "left": 504
+        },
+        "glyphWidth": 224.109375
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "font": "ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+        "size": "16px",
+        "weight": "400",
+        "lineHeight": "normal",
+        "box": {
+          "x": 504,
+          "y": 476.59375,
+          "width": 272,
+          "height": 40,
+          "top": 476.59375,
+          "right": 776,
+          "bottom": 516.59375,
+          "left": 504
+        },
+        "glyphWidth": 195.3046875
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Continue",
+        "font": "ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+        "size": "14px",
+        "weight": "500",
+        "lineHeight": "normal",
+        "box": {
+          "x": 504,
+          "y": 532.59375,
+          "width": 272,
+          "height": 44,
+          "top": 532.59375,
+          "right": 776,
+          "bottom": 576.59375,
+          "left": 504
+        },
+        "glyphWidth": 62.9521484375
+      }
+    ],
+    "implementation": [
+      {
+        "tag": "H1",
+        "text": "Sign in or create an account",
+        "font": "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "size": "18px",
+        "weight": "600",
+        "lineHeight": "24.3px",
+        "box": {
+          "x": 504,
+          "y": 288,
+          "width": 272,
+          "height": 48.59375,
+          "top": 288,
+          "right": 776,
+          "bottom": 336.59375,
+          "left": 504
+        },
+        "glyphWidth": 286.154296875
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Continue with Google",
+        "font": "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "size": "14px",
+        "weight": "500",
+        "lineHeight": "20px",
+        "box": {
+          "x": 504,
+          "y": 360.59375,
+          "width": 272,
+          "height": 44,
+          "top": 360.59375,
+          "right": 776,
+          "bottom": 404.59375,
+          "left": 504
+        },
+        "glyphWidth": 150.923828125
+      },
+      {
+        "tag": "LABEL",
+        "text": "Email, handle, or class code",
+        "font": "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "size": "16px",
+        "weight": "400",
+        "lineHeight": "22px",
+        "box": {
+          "x": 504,
+          "y": 454.59375,
+          "width": 272,
+          "height": 22,
+          "top": 454.59375,
+          "right": 776,
+          "bottom": 476.59375,
+          "left": 504
+        },
+        "glyphWidth": 224.109375
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "font": "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "size": "16px",
+        "weight": "400",
+        "lineHeight": "20px",
+        "box": {
+          "x": 504,
+          "y": 482.59375,
+          "width": 272,
+          "height": 40,
+          "top": 482.59375,
+          "right": 776,
+          "bottom": 522.59375,
+          "left": 504
+        },
+        "glyphWidth": 195.3046875
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Continue",
+        "font": "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "size": "14px",
+        "weight": "500",
+        "lineHeight": "20px",
+        "box": {
+          "x": 504,
+          "y": 538.59375,
+          "width": 272,
+          "height": 44,
+          "top": 538.59375,
+          "right": 776,
+          "bottom": 582.59375,
+          "left": 504
+        },
+        "glyphWidth": 62.9521484375
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Type the class code above",
+        "font": "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "size": "14px",
+        "weight": "500",
+        "lineHeight": "21px",
+        "box": {
+          "x": 603.421875,
+          "y": 655.59375,
+          "width": 184.390625,
+          "height": 21,
+          "top": 655.59375,
+          "right": 787.8125,
+          "bottom": 676.59375,
+          "left": 603.421875
+        },
+        "glyphWidth": 184.37890625
+      }
+    ],
+    "renderedFonts": {
+      "fonts": [
+        {
+          "familyName": "DejaVu Sans",
+          "postScriptName": "DejaVuSans-Bold",
+          "isCustomFont": false,
+          "glyphCount": 27
+        }
+      ]
+    }
+  },
+  {
+    "width": 390,
+    "referenceSource": "design/v2/artboards/signon-04-entry-all-states.dom.html",
+    "fontsStatus": "loaded",
+    "reference": [
+      {
+        "tag": "H1",
+        "text": "Sign in or create an account",
+        "font": "ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+        "size": "18px",
+        "weight": "600",
+        "lineHeight": "24.3px",
+        "box": {
+          "x": 108,
+          "y": 425,
+          "width": 272,
+          "height": 48.59375,
+          "top": 425,
+          "right": 380,
+          "bottom": 473.59375,
+          "left": 108
+        },
+        "glyphWidth": 286.154296875
+      },
+      {
+        "tag": "LABEL",
+        "text": "Email, handle, or class code",
+        "font": "ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+        "size": "16px",
+        "weight": "400",
+        "lineHeight": "normal",
+        "box": {
+          "x": 108,
+          "y": 588.59375,
+          "width": 272,
+          "height": 19,
+          "top": 588.59375,
+          "right": 380,
+          "bottom": 607.59375,
+          "left": 108
+        },
+        "glyphWidth": 224.109375
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "font": "ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+        "size": "16px",
+        "weight": "400",
+        "lineHeight": "normal",
+        "box": {
+          "x": 108,
+          "y": 613.59375,
+          "width": 272,
+          "height": 40,
+          "top": 613.59375,
+          "right": 380,
+          "bottom": 653.59375,
+          "left": 108
+        },
+        "glyphWidth": 195.3046875
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Continue",
+        "font": "ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+        "size": "14px",
+        "weight": "500",
+        "lineHeight": "normal",
+        "box": {
+          "x": 108,
+          "y": 669.59375,
+          "width": 272,
+          "height": 44,
+          "top": 669.59375,
+          "right": 380,
+          "bottom": 713.59375,
+          "left": 108
+        },
+        "glyphWidth": 62.9521484375
+      }
+    ],
+    "implementation": [
+      {
+        "tag": "H1",
+        "text": "Sign in or create an account",
+        "font": "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "size": "18px",
+        "weight": "600",
+        "lineHeight": "24.3px",
+        "box": {
+          "x": 59,
+          "y": 288,
+          "width": 272,
+          "height": 48.59375,
+          "top": 288,
+          "right": 331,
+          "bottom": 336.59375,
+          "left": 59
+        },
+        "glyphWidth": 286.154296875
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Continue with Google",
+        "font": "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "size": "14px",
+        "weight": "500",
+        "lineHeight": "20px",
+        "box": {
+          "x": 59,
+          "y": 360.59375,
+          "width": 272,
+          "height": 44,
+          "top": 360.59375,
+          "right": 331,
+          "bottom": 404.59375,
+          "left": 59
+        },
+        "glyphWidth": 150.923828125
+      },
+      {
+        "tag": "LABEL",
+        "text": "Email, handle, or class code",
+        "font": "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "size": "16px",
+        "weight": "400",
+        "lineHeight": "22px",
+        "box": {
+          "x": 59,
+          "y": 454.59375,
+          "width": 272,
+          "height": 22,
+          "top": 454.59375,
+          "right": 331,
+          "bottom": 476.59375,
+          "left": 59
+        },
+        "glyphWidth": 224.109375
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "font": "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "size": "16px",
+        "weight": "400",
+        "lineHeight": "20px",
+        "box": {
+          "x": 59,
+          "y": 482.59375,
+          "width": 272,
+          "height": 40,
+          "top": 482.59375,
+          "right": 331,
+          "bottom": 522.59375,
+          "left": 59
+        },
+        "glyphWidth": 195.3046875
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Continue",
+        "font": "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "size": "14px",
+        "weight": "500",
+        "lineHeight": "20px",
+        "box": {
+          "x": 59,
+          "y": 538.59375,
+          "width": 272,
+          "height": 44,
+          "top": 538.59375,
+          "right": 331,
+          "bottom": 582.59375,
+          "left": 59
+        },
+        "glyphWidth": 62.9521484375
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Type the class code above",
+        "font": "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+        "size": "14px",
+        "weight": "500",
+        "lineHeight": "21px",
+        "box": {
+          "x": 158.421875,
+          "y": 655.59375,
+          "width": 184.390625,
+          "height": 21,
+          "top": 655.59375,
+          "right": 342.8125,
+          "bottom": 676.59375,
+          "left": 158.421875
+        },
+        "glyphWidth": 184.37890625
+      }
+    ],
+    "renderedFonts": {
+      "fonts": [
+        {
+          "familyName": "DejaVu Sans",
+          "postScriptName": "DejaVuSans-Bold",
+          "isCustomFont": false,
+          "glyphCount": 27
+        }
+      ]
+    }
+  }
+]
