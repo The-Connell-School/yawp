@@ -20,7 +20,7 @@ const {
   setFeatureFlag,
   findUnknownOrganizationIds,
 } = await import('./feature-flags.server');
-const { INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, FREE_TIER_INAPP_V2_FLAG, UNIFIED_SIGN_ON_FLAG } = await import(
+const { INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, FREE_TIER_INAPP_V2_FLAG, UNIFIED_SIGN_ON_FLAG, FREE_TIER_ONBOARDING_V2_FLAG } = await import(
   './feature-flags'
 );
 
@@ -129,6 +129,7 @@ describe('feature flags (server)', () => {
       FREE_TIER_FLAG,
       FREE_TIER_INAPP_V2_FLAG,
       UNIFIED_SIGN_ON_FLAG,
+      FREE_TIER_ONBOARDING_V2_FLAG,
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[2]).toMatchObject({ key: FREE_TIER_FLAG, mode: 'off', enabled: false });
@@ -154,6 +155,7 @@ describe('feature flags (server)', () => {
       FREE_TIER_FLAG,
       FREE_TIER_INAPP_V2_FLAG,
       UNIFIED_SIGN_ON_FLAG,
+      FREE_TIER_ONBOARDING_V2_FLAG,
     ]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });
     const where = prisma.setting.findMany.mock.calls[0]?.[0].where;
