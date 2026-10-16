@@ -1,3 +1,4 @@
+import { resolveClassCode } from '~/utils/class-code-write.server';
 import {
   runFreeTierAnalytics,
   acquisitionChannel,
@@ -179,7 +180,7 @@ export async function provisionFreeClassroom(
       select: { id: true },
     });
 
-    const classCode = generateClassCode();
+    const classCode = await resolveClassCode(tx, generateClassCode(), { generated: true });
     const classArtKey = await pickClassArtKeyForOrganization(org.id);
     await tx.class.create({
       data: {

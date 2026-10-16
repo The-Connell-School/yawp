@@ -15,6 +15,16 @@ import {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("Yawp project agent CLI", () => {
+  test("class-code and sign-on browser profiles select their own specs", () => {
+    const source = fs.readFileSync(path.join(root, "scripts/project-agent.mjs"), "utf8");
+    for (const profile of ["signon-classcode", "classcode-unit", "classcode-db", "classcode-browser", "classcode-enter-code", "classcode-report"])
+      expect(capabilities().proofProfiles).toContain(profile);
+    const profileBody = (profile) => source.split(`else if (chosen === "${profile}") {`)[1].split('\n  else if')[0];
+    expect(profileBody("signon-classcode")).toContain('"playwright.classcode.config.ts"');
+    expect(profileBody("classcode-browser")).toContain('"--config=playwright.classcode-unique.config.ts"');
+    expect(fs.readFileSync(path.join(root, "services/web-app/playwright.classcode.config.ts"), "utf8")).toContain('auth\\.unified-classcode');
+    expect(fs.readFileSync(path.join(root, "services/web-app/playwright.classcode-unique.config.ts"), "utf8")).toContain("classcode-unique.spec.ts");
+  });
   test("advertises isolated fresh impersonation migration verification", () => {
     expect(capabilities().proofProfiles).toContain("internal-fresh-migrations");
   });

@@ -122,6 +122,7 @@ describe('internal feature-flag endpoints', () => {
       'free-tier-inapp-v2',
       'unified-sign-on',
       'free-tier-onboarding-v2',
+      'classcode-unique',
       'teacher_lounge_community',
     ]);
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
@@ -222,6 +223,7 @@ describe('internal feature-flag endpoints', () => {
       'free-tier-inapp-v2',
       'unified-sign-on',
       'free-tier-onboarding-v2',
+      'classcode-unique',
       'teacher_lounge_community',
     ]);
   });

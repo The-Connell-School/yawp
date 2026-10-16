@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { prisma } from '~/utils/db.server';
 import { assertTransition } from './state';
 import { normalizeEmail } from './service.server';
+import { selfAdminEmailError } from './admin-email';
 import {
   ADMIN_REDIRECT_CHAIN_CAP,
   evaluateAdminEmailForRuntime,
@@ -125,6 +126,17 @@ export async function submitAdminDetails(args: {
   if (!app) return { ok: false as const, reason: 'not_found' as const };
   if (app.status !== 'ACCOUNT_CREATED' && app.status !== 'ADMIN_SUBMITTED') {
     return { ok: false as const, reason: 'illegal_state' as const, status: app.status };
+  }
+
+  // Use the authorized persisted application, before demo's manual-review bypass
+  // and before minting links, writing approval state, or dispatching mail.
+  const adminEmailError = selfAdminEmailError(app.email, adminEmail);
+  if (adminEmailError) {
+    return {
+      ok: false as const,
+      reason: 'same_as_teacher' as const,
+      fieldErrors: { adminEmail: adminEmailError },
+    };
   }
 
   const rules = evaluateAdminEmailForRuntime(

@@ -1,3 +1,5 @@
+import { ClassCodeInput } from '~/components/class-code-input';
+import { classCodeUniquenessEnabled, resolveClassCode, ClassCodeCollisionError } from '~/utils/class-code-write.server';
 import {
   data as dataResponse,
   redirect,
@@ -249,6 +251,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   ]);
 
   return {
+    classCodeUniqueEnabled: await classCodeUniquenessEnabled(prisma),
     classes,
     totalCount,
     schools,
@@ -354,6 +357,7 @@ export async function action({ request }: ActionFunctionArgs) {
       try {
         await prisma.$transaction(async (tx) => {
           await assertCanCreateClassForOrganizationPlan(tx, profile.organization);
+          code = await resolveClassCode(tx, code, { generated: codeWasGenerated });
           await tx.class.create({
             data: {
               schoolId,
@@ -378,6 +382,9 @@ export async function action({ request }: ActionFunctionArgs) {
 
         return dataResponse({ success: true });
       } catch (error: unknown) {
+        if (error instanceof ClassCodeCollisionError) {
+          return dataResponse({ error: error.message, field: 'code' }, { status: 400 });
+        }
         const uniqueTargets = prismaUniqueConstraintTargets(error);
         const isCodeCollision =
           uniqueTargets && uniqueConstraintIncludes(uniqueTargets, 'code');
@@ -389,7 +396,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
         if (isCodeCollision) {
           return dataResponse(
-            { error: 'Class code already in use. Choose a different code.' },
+            { error: 'Class code already in use. Choose a different code.', field: 'code' },
             { status: 400 }
           );
         }
@@ -460,6 +467,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     try {
       await prisma.$transaction(async (tx) => {
+        const resolvedCode = await resolveClassCode(tx, code, { classId });
         await tx.class.update({
           where: { id: classId },
           data: {
@@ -470,7 +478,7 @@ export async function action({ request }: ActionFunctionArgs) {
             grade,
             period,
             title,
-            code,
+            code: resolvedCode,
             teachers: {
               set: teacherIds.map((id) => ({ id })),
             },
@@ -482,11 +490,14 @@ export async function action({ request }: ActionFunctionArgs) {
 
       return dataResponse({ success: true });
     } catch (error: unknown) {
+      if (error instanceof ClassCodeCollisionError) {
+        return dataResponse({ error: error.message, field: 'code' }, { status: 400 });
+      }
       const uniqueTargets = prismaUniqueConstraintTargets(error);
       if (uniqueTargets) {
         if (uniqueConstraintIncludes(uniqueTargets, 'code')) {
           return dataResponse(
-            { error: 'Class code already in use. Choose a different code.' },
+            { error: 'Class code already in use. Choose a different code.', field: 'code' },
             { status: 400 }
           );
         }
@@ -705,7 +716,7 @@ function CopyCodeButton({ code }: { code: string }) {
 }
 
 export default function OrganizationClassesRoute() {
-  const { classes, totalCount, schools, teachers, table, q } =
+  const { classes, totalCount, schools, teachers, table, q, classCodeUniqueEnabled } =
     useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [searchParams] = useSearchParams();
@@ -1034,6 +1045,7 @@ export default function OrganizationClassesRoute() {
       </div>
 
       <ClassSheet
+        classCodeUniqueEnabled={classCodeUniqueEnabled}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         editingClass={editingClass}
@@ -1054,6 +1066,7 @@ export default function OrganizationClassesRoute() {
 }
 
 function ClassSheet({
+  classCodeUniqueEnabled,
   open,
   onOpenChange,
   editingClass,
@@ -1065,6 +1078,7 @@ function ClassSheet({
   onOpenChange: (open: boolean) => void;
   editingClass: any | null;
   duplicatingClass: any | null;
+  classCodeUniqueEnabled: boolean;
   schools: any[];
   teachers: any[];
 }) {
@@ -1082,10 +1096,12 @@ function ClassSheet({
   const [title, setTitle] = useState('');
   const [code, setCode] = useState('');
   const [generatedCode, setGeneratedCode] = useState('');
+  const [submittedCode, setSubmittedCode] = useState<string | null>(null);
   const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
 
   // Reset form when editingClass or duplicatingClass changes or sheet opens/closes
   useEffect(() => {
+    setSubmittedCode(null);
     const sourceClass = editingClass || duplicatingClass;
     setSchoolId(sourceClass?.schoolId || '');
     setSchoolYear(sourceClass?.schoolYear || currentSchoolYear());
@@ -1118,6 +1134,7 @@ function ClassSheet({
     selectedTeachers.forEach((teacherId) => {
       formData.append('teacherIds', teacherId);
     });
+    setSubmittedCode(code);
     fetcher.submit(formData, { method: 'POST' });
   };
 
@@ -1148,7 +1165,7 @@ function ClassSheet({
           </SheetDescription>
         </SheetHeader>
 
-        {fetcher.data?.error && (
+        {fetcher.data?.error && !(classCodeUniqueEnabled && fetcher.data?.field === 'code') && (
           <div className="mt-4 p-3 rounded-md bg-destructive/10 border border-destructive text-destructive text-sm">
             {fetcher.data.error}
           </div>
@@ -1173,13 +1190,16 @@ function ClassSheet({
 
           <div className="space-y-2">
             <Label htmlFor="code">Class Code</Label>
-            <Input
+            <ClassCodeInput
               id="code"
-              placeholder="A3B9X2"
               value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-              required
-              className="font-mono"
+              onChange={setCode}
+              enabled={classCodeUniqueEnabled}
+              error={fetcher.state === 'idle' && submittedCode === code && fetcher.data?.field === 'code' ? fetcher.data.error : null}
+              onGenerate={() => {
+                const next = generateClassCode();
+                setCode(next); setGeneratedCode(next);
+              }}
             />
             <p className="text-xs text-muted-foreground">
               Class code students use to join
