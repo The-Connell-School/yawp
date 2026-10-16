@@ -39,6 +39,8 @@ export type SignonState = {
   screen: SignonScreen;
   identifier?: string;
   provider?: 'google';
+  /** Display context only; never email proof or an account identity. */
+  emailOrigin?: boolean;
   organizationName?: string;
   adminName?: string;
   sentDate?: string;

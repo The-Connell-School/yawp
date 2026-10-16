@@ -3,7 +3,7 @@ import { createCookie } from 'react-router';
 import type { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 import { shouldUseSecureCookies } from '~/utils/cookie-security.server';
-import type { SignonState } from './contracts';
+import { identifierKind, type SignonState } from './contracts';
 
 export const digest = (value: string) =>
   createHash('sha256').update(value).digest('hex');
@@ -146,6 +146,14 @@ export function stateFor(flow: Flow, state: SignonState) {
   flow.data.state = {
     ...(classInfo ? { classInfo } : {}),
     ...state,
+    ...(state.screen === 'class-handle'
+      ? {
+          emailOrigin:
+            identifierKind(flow.data.identifier ?? '') === 'email' &&
+            flow.data.proof !== 'google' &&
+            !flow.data.pendingGoogle,
+        }
+      : {}),
     ...(flow.data.proof === 'google' ? { provider: 'google' as const } : {}),
     flowToken: flow.token,
   };
