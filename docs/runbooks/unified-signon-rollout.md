@@ -1,9 +1,13 @@
 # Unified sign-on rollout and rollback
 
-Status: **local QA only; hosted single-preview QA pending Bryant's explicit
-preview authorization**. `unified-sign-on` remains default OFF, including demo
-and production. This runbook grants no deployment, preview visit/wake-up, flag
-write, credential access, external email or migration permission.
+Status: **guarded deployment path implemented; hosted decision-tree QA remains
+separate**. `unified-sign-on` remains default OFF, including demo and production.
+Bryant's BACKLOG authorization dated 2026-10-15 20:55 CT covers only PR **#565**
+(`qa/unified-signon-preview`, `https://pr-565.preview.yawp.school`) for subsequent
+hosted activation in `di-signon-hosted-qa`, after this implementation merges.
+This implementation task does not visit, wake, label, redeploy, rebase, merge or
+close #565. Every implementation PR body starts with `[skip preview]`.
+The generic updater does not grant permission to activate any other preview.
 
 ## Gates and prerequisites
 
@@ -18,8 +22,9 @@ write, credential access, external email or migration permission.
   merge nor local bootstrap proves a snapshot exists. No remote migration here.
 - **No demo enablement before the Friday October 16, 2026 intern session has
   ended AND Bryant has authorized it. Production enablement is outside this task.**
-- Arrange disposable accounts/classes, local or authorized isolated mail capture,
-  and an operator with flag-edit permission and existing management credentials.
+- Arrange disposable accounts/classes and local or authorized isolated mail
+  capture. The preview deployment updater needs no management signing key; do
+  not add `YAWP_INTERNAL_API_KEYS` to previews to activate sign-on.
   Never retrieve Internal's Google credentials. Secret wiring belongs to
   `di-signon-secrets`; do not create, rotate or print credentials.
 - Google requires both `GOOGLE_OAUTH_CLIENT_ID` and
@@ -49,10 +54,11 @@ shared definition or other flags to activate anonymous sign-on.
 `requireHybridCoreEnvironment` accepts only demo/production for flag writes.
 The preview columns on `/flags` are not writable rollout controls. Do not pass a
 preview ID to `set_mode`, substitute demo, repoint demo's connection, or scrape
-platform admin. The isolated-preview procedure below uses the same existing
-signed/audited platform API directly; it does not create an Internal rollout row.
-If that approved operator path or a correctly scoped key is unavailable, stop and
-record hosted QA pending. No new Internal UI is delivered by this change.
+platform admin. The isolated-preview deployment procedure below applies just the
+sign-on Setting from reviewed deploy tooling; it does not create an Internal
+rollout row or expose an HTTP flag-write endpoint. Existing signed management
+APIs keep their authentication and audit requirements. No new Internal UI is
+delivered by this change.
 
 ## Management contract
 
@@ -91,131 +97,83 @@ returns 404. Rollback blocks unfinished unified flows. An already-open client ca
 screen until navigation; verify rollback through fresh requests. It does not delete accounts,
 memberships, provider identities or revoke already-issued sessions.
 
-## Authorized single-preview procedure
+## Authorized isolated-preview deployment procedure
 
-Only after the gates above, copy this JavaScript into a private file under
-`$TMPDIR` and run it with the project's pinned Bun from the platform checkout.
-Supply these values through the approved operator environment, with shell tracing
-OFF: `SIGNON_PREVIEW_ORIGIN`, `SIGNON_CONFIRM_ORIGIN` (the same exact HTTPS origin),
-`SIGNON_AUTHORIZATION_REF`, `SIGNON_OPERATOR_EMAIL`, `SIGNON_KEY_ID`,
-`SIGNON_KEY_SECRET`, `SIGNON_CHECKOUT` (absolute checkout path),
-`SIGNON_STATE_FILE` (new private file under `$TMPDIR`). No values are supplied by
-this document. Inspect the script first. It never deploys or provisions a key.
+After driver merge, the separate `di-signon-hosted-qa` task may operate only
+**#565** under the authorization above. Do not use a TeacherKev PR. Implementation
+PRs retain `[skip preview]`; label events never bypass that directive, fork/base
+checks, admission limits or existing access controls. The following steps are a
+runbook for that later task, not actions performed by this implementation.
 
-```js
-import fs from 'node:fs';
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-const e = process.env;
-const required = name => {
-  if (!e[name]?.trim()) throw new Error(`Missing ${name}`);
-  return e[name].trim();
-};
-const origin = required('SIGNON_PREVIEW_ORIGIN');
-const target = new URL(origin);
-if (target.origin !== origin ||
-    !/^https:\/\/pr-[1-9][0-9]*\.preview\.yawp\.school$/.test(origin))
-  throw new Error('Expected one exact isolated preview origin');
-const authorization = required('SIGNON_AUTHORIZATION_REF');
-const actor = required('SIGNON_OPERATOR_EMAIL').toLowerCase();
-const stateFile = path.resolve(required('SIGNON_STATE_FILE'));
-if (!stateFile.startsWith(path.resolve(required('TMPDIR')) + path.sep))
-  throw new Error('State must stay under private TMPDIR');
-const { signInternalApiRequest } = await import(pathToFileURL(path.join(
-  required('SIGNON_CHECKOUT'),
-  'services/web-app/app/utils/internal-platform-signing.server.ts')));
-const confirm = () => {
-  if (required('SIGNON_CONFIRM_ORIGIN') !== origin)
-    throw new Error('Reconfirm the authorized target before every write');
-};
-const call = async (method, body) => {
-  const url = origin + '/api/internal/v1/feature-flags' +
-    (method === 'POST' ? '/unified-sign-on' : '');
-  const text = body ? JSON.stringify(body) : '';
-  const signed = signInternalApiRequest({ method, url, body: text, actor,
-    keyId: required('SIGNON_KEY_ID'), secret: required('SIGNON_KEY_SECRET') });
-  const result = await fetch(url, { method, redirect: 'error',
-    signal: AbortSignal.timeout(15000),
-    headers: { ...signed.headers, 'content-type': 'application/json',
-      'x-yawp-operator-email': actor }, body: text || undefined });
-  if (!result.ok) throw new Error(`Management request failed: ${result.status}`);
-  return result.json();
-};
-const read = async () => {
-  const flag = (await call('GET')).flags.find(f => f.key === 'unified-sign-on');
-  if (!flag || !flag.persisted || !flag.effective || flag.runtimeOverride !== null)
-    throw new Error('Missing explicit flag readback; stop');
-  return flag;
-};
-const equal = (a, b) => a.mode === b.mode &&
-  JSON.stringify([...a.orgIds].sort()) === JSON.stringify([...b.orgIds].sort());
-const write = async (next, expected) => {
-  confirm();
-  if (!equal((await read()).persisted, expected))
-    throw new Error('Prior value changed; coordinate with its operator');
-  const result = await call('POST', next);
-  const flag = await read();
-  if (!equal(result.previous, expected) || !equal(flag.persisted, next) ||
-      !equal(flag.effective, next) || flag.lastChangedBy !== actor)
-    throw new Error('Readback mismatch; inspect audit and coordinate rollback');
-  console.log(JSON.stringify({ origin, authorization, actor, flag,
-    previous: result.previous, changed: result.changed }));
-};
-const mode = process.argv[2];
-if (mode === 'read') {
-  console.log(JSON.stringify({ origin, authorization, flag: await read() }));
-} else if (mode === 'enable') {
-  confirm();
-  const prior = await read();
-  if (!equal(prior.persisted, prior.effective) || prior.persisted.mode === 'everyone')
-    throw new Error('Expected a disabled isolated preview; stop');
-  fs.writeFileSync(stateFile, JSON.stringify({ origin, authorization,
-    prior: prior.persisted, priorRead: prior }), { mode: 0o600, flag: 'wx' });
-  await write({ mode: 'everyone', orgIds: [] }, prior.persisted);
-} else if (mode === 'restore') {
-  const saved = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
-  if (saved.origin !== origin || saved.authorization !== authorization)
-    throw new Error('Wrong rollback record');
-  const now = (await read()).persisted;
-  if (!equal(now, saved.prior))
-    await write(saved.prior, { mode: 'everyone', orgIds: [] });
-  else console.log('Prior value already restored; retain readback evidence');
-} else throw new Error('Choose read, enable or restore');
-```
+1. Record authorization, operator, exact PR/hostname, deployed application SHA
+   and reviewed control-plane SHA. Confirm the preview owns its isolated
+   database: `yawp_pr_565`, application role `yawp_pr_565_app`, host
+   `preview-postgres`, port `5432`. Do not print its URL/password. Do not use a
+   shared database, external database, demo or production. No remote SQL writes
+   or migrations are authorized by this runbook.
+2. Activation uses the exact, case-sensitive PR label
+   **`preview-flag:unified-sign-on`**. The existing preview workflow handles
+   `labeled` and `unlabeled` events for this label; unrelated labels do not request
+   a deploy. It reads the current live PR labels, emits a boolean and forwards
+   `PREVIEW_UNIFIED_SIGN_ON` with shell quoting through the detached deployment
+   helper, admission wrapper and toolbox configuration. A similar label or a
+   label embedded in another name does not activate the flag.
+3. On every deployment, after migrations and **all** seeds (including preview
+   seats), the reviewed, read-only mounted
+   `scripts/preview/unified-signon-flag.mjs` runs in the toolbox before web rollout.
+   It runs outside the tooling-fingerprint early return, so unchanged-tooling and
+   code-only redeploys also apply the label-selected state. Both fast and
+   production-image preview runtimes use it; runtime image mode does not grant
+   permission to touch the production environment.
+4. The updater first requires `YAWP_ENVIRONMENT=preview`, then validates the
+   complete `DATABASE_URL` with `isYawpPrPreviewDatabase`: PostgreSQL scheme,
+   exact dedicated host/port, matching positive PR database/application role,
+   URL-safe password, canonical URL, no query/fragment. Missing, malformed,
+   shared, demo, production, mismatched-role and alternate-host URLs fail before
+   constructing a database client. Named environment deployments never invoke
+   it. The toolbox alone receives the boolean; it is not a runtime application
+   override and does not change the flag's default.
+5. Exact label present writes only `Setting.name = feature_flag.unified-sign-on`,
+   `valueType=json`, `value={"mode":"everyone","orgIds":[]}`. Label absent writes
+   explicit `{"mode":"off","orgIds":[]}`, including a previously enabled
+   database. Upserts are idempotent; unrelated settings are preserved. A seed
+   cannot overwrite this final state. Invalid transport or updater failure is
+   fatal and prevents rollout; the admission wrapper stops the failed preview.
+   Logs report only the selected mode, never connection details. The Setting
+   description identifies `preview deployment label` as its last writer.
+6. After the authorized workflow succeeds, confirm its exact application and
+   control-plane SHAs, then check entry in a fresh browser at the authorized
+   hostname. Clear the existing preview access gate with the authorized seat;
+   this change does not bypass it. `/auth/login` must show the unified identifier
+   field and Continue with Google control when ON. Missing Google credentials
+   still leave Google disabled. Save desktop/mobile entry readback and continue
+   the full decision-tree matrix in the separate hosted QA task. No signed API
+   key or captured-email inspection is needed just to read the entry surface.
 
-1. Independently confirm the authorized preview is already running at its recorded
-   commit, with its own database and correct management key scopes. An HTTP request
-   can wake a sleeping preview: do not run even `read` before authorization.
-2. Run `bun "$TMPDIR/<operator-script>.mjs" read`. Save sanitized output outside
-   temporary storage with the authorization, host and deployed SHA.
-3. Reconfirm `SIGNON_CONFIRM_ORIGIN`, then run the same script with `enable`.
-   Save the prior-value record and successful readback before starting QA. The
-   read/check/write sequence has no compare-and-swap guarantee: reserve the
-   operator window and stop on concurrent changes. The snapshot is written before
-   POST so it survives interruption. On ambiguous network failure, read first.
-4. Verify anonymous entry in a fresh browser, direct gated paths, every decision
-   row in the [local matrix](unified-signon-local-qa.md), desktop/mobile copy and
-   layout, and explicit provider linking. Only use authorized disposable accounts
-   and captured delivery. Record hosted gaps instead of sending real email.
-5. In a `finally`/incident handoff, reconfirm the same origin and run `restore`.
-   Reread with `read` even when restoration reports already restored. Confirm
-   prior persisted/effective mode and IDs; then verify legacy login, signup,
-   reset, class links, and callback 404 in a fresh browser. A targeted prior mode
-   remains targeted and blocks anonymous sign-on. An absent/legacy/malformed raw
-   setting is exposed only as normalized OFF by this API: restoration writes
-   explicit OFF, not the original bytes or row absence. There is no delete API;
-   do not edit remote storage to recreate absence or malformed data.
-6. Retain sanitized before/enable/restore readbacks, operator/audit references,
-   deployed SHA, test results and comparison index. Delete temporary state/mail
-   and stop local processes. Close the operator window only after rollback
-   readback and compatibility checks pass. If restoration fails, report the exact
-   environment and last observed mode to the authorized driver; do not claim OFF.
+### Removal and rollback
+
+Removing the exact label requests the same gated deployment with `false`; the
+updater restores explicit OFF even for an existing database with unchanged
+tooling. Wait for successful deployment and verify legacy `/auth/login` in a
+fresh request, along with legacy signup/reset and callback 404 when rollback
+verification is authorized. An already-open page can retain its old client state
+until navigation. OFF does not delete accounts, memberships or identities, or
+revoke sessions. An absent label is the rollback source of truth, so later
+redeploys keep OFF; manual management changes on this isolated preview will be
+overwritten by its next deployment. Coordinate operators accordingly.
+
+The manager's current #565 QA instructions require leaving its flag ON until
+told otherwise; do not remove its label merely to exercise this rollback text.
+If a deployment or updater fails, do not claim readback or OFF, bypass its guards,
+add signing keys or edit remote storage. Record the failure and hand it to the
+authorized driver. Rollback requires the same reviewed deployment path and
+explicit authorization for the target. Demo/production remain OFF.
 
 For a later **separately authorized** demo rollout, use Internal's Demo site
 rollout panel for `unified-sign-on`: refresh/read, record prior rollout, choose
 Everyone, verify readback, then restore the recorded mode/groups/org IDs through
 that same panel and reread. This paragraph does not authorize that action now.
-Do not use the preview script for demo or production, or alter `free_tier`.
+Do not use the preview updater for demo or production, or alter `free_tier`.
 
 ## Evidence and Ship Review
 
@@ -229,5 +187,5 @@ Before approval, Ship Review must assess flag-OFF compatibility and rollback,
 targeted tests, project typecheck, desktop/mobile side-by-side artboard comparisons,
 retained validator/location-selector exceptions, honest matrix gaps, and exact-head
 required CI. Preview deployment must remain skipped. Only the driver rebases,
-takes the merge lock and merges. Keep the backlog in progress while the hosted
-gate remains unresolved.
+takes the merge lock and merges. Keep `di-signon-preview-flag` in progress until driver-verified merge. Hosted
+activation and decision-tree QA remain tracked separately in `di-signon-hosted-qa`.

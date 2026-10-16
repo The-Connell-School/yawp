@@ -133,7 +133,8 @@ describe('optional Google OAuth deployment credentials', () => {
           expect(compose.services.web.environment[`GOOGLE_OAUTH_${key}`].replaceAll('$$', '$') === expected).toBe(true);
           expect(compose.services.toolbox.environment[`GOOGLE_OAUTH_${key}`]).toBeUndefined();
         }
-        expect(result).not.toContain('UNIFIED_SIGN_ON');
+        expect(compose.services.web.environment.PREVIEW_UNIFIED_SIGN_ON).toBeUndefined();
+        expect(compose.services.web.environment.UNIFIED_SIGN_ON).toBeUndefined();
       }
       expect(readRepoFile('scripts/preview/deploy.sh')).toContain('node "$SCRIPT_DIR/render-compose.mjs" > "$PREVIEW_DIR/docker-compose.yml"');
     });
@@ -604,7 +605,7 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain('name: PR preview');
     expect(previewWorkflow).toContain('pull_request_target');
     expect(previewWorkflow).toContain(
-      'types: [opened, synchronize, reopened, ready_for_review, closed]'
+      'types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled, closed]'
     );
     expect(previewWorkflow).toContain(
       'github.event.pull_request.head.repo.full_name == github.repository'
@@ -966,7 +967,7 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain('PREVIEW_MAX_RUNNING');
     expect(previewWorkflow).toContain('PREVIEW_MAX_RESIDENT');
     expect(previewWorkflow).toContain('PREVIEW_SLEEP_ENABLED');
-    expect(previewWorkflow).toContain('types: [opened, synchronize, reopened, ready_for_review, closed]');
+    expect(previewWorkflow).toContain('types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled, closed]');
     expect(previewWorkflow).toContain('PREVIEW_MODE=reconcile');
     expect(previewWorkflow).toContain('CAP_SLEPT');
   });
@@ -1914,5 +1915,32 @@ describe('Internal preview database classification', () => {
     expect(isLocalDatabaseUrl('postgresql://fixture:fixture@yawp-internal-preview-postgres:5432/yawp_fixture')).toBe(true);
     expect(isLocalDatabaseUrl('postgresql://fixture:fixture@preview-postgres:5432/yawp_fixture')).toBe(true);
     expect(isLocalDatabaseUrl('postgresql://fixture:fixture@db.cafmse4qcmw7.us-east-1.rds.amazonaws.com:5432/yawp')).toBe(false);
+  });
+});
+
+describe('isolated preview unified sign-on label deployment contract', () => {
+  test('exact label addition/removal follows the gated, shell-quoted detached transport', () => {
+    const workflow = readRepoFile('.github/workflows/preview-environments.yml');
+    expect(workflow).toContain('ready_for_review, labeled, unlabeled, closed]');
+    expect(workflow).toContain("PREVIEW_UNIFIED_SIGN_ON: ${{ needs.preview-policy.outputs.unified_sign_on }}");
+    expect(workflow).toContain('"PREVIEW_UNIFIED_SIGN_ON=$(shell_quote "$PREVIEW_UNIFIED_SIGN_ON")"');
+    expect(workflow).toContain('REMOTE_COMMAND=');
+    expect(workflow).toContain('run-host-deploy-detached.sh');
+    expect(workflow).toContain("needs.preview-policy.outputs.should_deploy == 'true'");
+    expect(workflow).toContain("startsWith(github.event.pull_request.body || '', '[skip preview]') == false");
+    expect(workflow).toContain('bash scripts/preview/check-skip-preview.sh');
+    expect(readRepoFile('.github/workflows/demo-environment.yml')).not.toContain('PREVIEW_UNIFIED_SIGN_ON');
+  });
+  test('reviewed updater is available in both toolbox runtimes after all seeds and before traffic', () => {
+    const compose = readRepoFile('scripts/preview/render-compose.mjs');
+    const deploy = readRepoFile('scripts/preview/deploy.sh');
+    expect(compose).toContain('PREVIEW_UNIFIED_SIGN_ON:');
+    expect(compose).toContain('/preview-control:ro');
+    expect(deploy).toContain('export PREVIEW_CONTROL_DIR="$SCRIPT_DIR"');
+    expect(deploy).toContain('bun /preview-control/unified-signon-flag.mjs');
+    const order = deploy.slice(deploy.indexOf('\nrun_tooling_if_needed\n'));
+    expect(order.indexOf('\napply_preview_signon_flag\n')).toBeGreaterThan(order.indexOf('\nensure_preview_seats\n'));
+    expect(order.indexOf('\napply_preview_signon_flag\n')).toBeLessThan(order.indexOf('\nstart_or_refresh_web\n'));
+    expect(deploy).toContain('[[ "$SLUG" =~ ^pr-[1-9][0-9]*$ ]] || return 0');
   });
 });
