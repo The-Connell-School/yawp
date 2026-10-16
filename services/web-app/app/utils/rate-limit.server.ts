@@ -513,6 +513,54 @@ export async function enforceGradingLimits(params: {
   ]);
 }
 
+/** Read existing grading buckets without reserving tokens or writing audit rows. */
+export async function readGradingLimitStatus(
+  membershipId: string,
+  nowMs = Date.now()
+) {
+  const limits = RATE_LIMITS.grading;
+  const base = {
+    route: '/app',
+    feature: 'grading',
+    nowMs,
+    scope: 'user' as const,
+    subjectKey: `user:grading:${membershipId}`,
+  };
+  const windows = [
+    {
+      suffix: 'm',
+      limit: limits.perMinute,
+      windowMs: MINUTE_MS,
+      label: 'minute',
+    },
+    {
+      suffix: '10m',
+      limit: limits.perTenMinutes,
+      windowMs: TEN_MINUTES_MS,
+      label: 'ten-minute',
+    },
+    { suffix: 'h', limit: limits.perHour, windowMs: HOUR_MS, label: 'hourly' },
+    { suffix: 'd', limit: limits.perDay, windowMs: DAY_MS, label: 'daily' },
+  ];
+  let pause: { retryAt: string; limit: number; window: string } | null = null;
+  for (const window of windows) {
+    const spec = {
+      ...base,
+      key: `${base.subjectKey}:${window.suffix}`,
+      limit: window.limit,
+      windowMs: window.windowMs,
+    };
+    if (!(await peekWindowBucket(spec))) {
+      const retryAt = new Date(
+        nowMs + (await secondsUntilAvailable(windowBucket(spec))) * 1000
+      ).toISOString();
+      if (!pause || retryAt > pause.retryAt)
+        pause = { retryAt, limit: window.limit, window: window.label };
+    }
+  }
+  return pause;
+}
+
 function perTeacherThreeWindows(
   limits: { perMinute: number; perHour: number; perDay: number },
   params: { membershipId: string; route: string; feature: string; nowMs?: number }

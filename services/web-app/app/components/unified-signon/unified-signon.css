@@ -319,31 +319,18 @@
   display: inline;
 }
 
+/* Keep the theme token consistent through the legacy per-element font override. */
+.auth-page-shell:has(.unified-signon),
+.auth-page-shell:has(.unified-signon) * {
+  --font-sans: var(--font-system-sans);
+}
 .auth-page-shell:has(.unified-signon) {
   background: hsl(var(--background));
-  font-family:
-    Arial,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    'Helvetica Neue',
-    Arial,
-    sans-serif;
+  font-family: var(--font-sans);
 }
 .unified-signon,
 .unified-signon .signon-card h1 {
-  font-family:
-    Arial,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    'Helvetica Neue',
-    Arial,
-    sans-serif;
+  font-family: var(--font-sans);
 }
 
 /* Status headers share the artboards' 40px badge and 8px heading gaps. */

@@ -1,0 +1,13 @@
+{
+  "screenshots": "6/6 byte-identical before/after",
+  "styles_and_boxes": "6/6 byte-identical",
+  "viewports": [
+    1280,
+    390
+  ],
+  "routes": [
+    "/auth/login",
+    "/auth/inv/signup",
+    "/auth/inv/forgot-password"
+  ]
+}

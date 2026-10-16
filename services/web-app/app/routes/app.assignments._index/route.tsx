@@ -1,3 +1,4 @@
+import { useFreeAccountUsage } from '~/components/free-account-usage';
 import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
@@ -463,6 +464,7 @@ function SavedAssignmentsPanel({
 }
 
 export default function MyAssignmentsRoute() {
+  const freeUsage = useFreeAccountUsage();
   const {
     assignments,
     savedAssignments,
@@ -640,11 +642,17 @@ export default function MyAssignmentsRoute() {
             className="shrink-0"
             data-testid="my-assignments-new-assignment"
             data-tour="my-assignments-new"
+            disabled={freeUsage?.allAssignmentsUsed}
             onClick={() => setIsCreateSheetOpen(true)}
           >
             <Plus className="mr-2 h-4 w-4" />
             New Assignment
           </Button>
+          {freeUsage?.allAssignmentsUsed && (
+            <span className="text-xs text-amber-800">
+              No free assignments left
+            </span>
+          )}
         </div>
       </div>
 
