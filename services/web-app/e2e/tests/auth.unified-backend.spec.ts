@@ -21,6 +21,11 @@ async function shot(page: Page, name: string, width: number) {
     await page.screenshot({
       path: path.join(evidence, `${name}-${width}-impl.png`),
       fullPage: true,
+      mask: [
+        page.locator(
+          'input[type="password"], input[name="username"], input[name="identifier"], .signon-identity'
+        ),
+      ],
     });
   }
 }
@@ -88,6 +93,196 @@ test.afterAll(async () => {
   await db.organization.delete({ where: { id: prefix } });
   await db.$disconnect();
 });
+// Real resolver/registration regression for FAILURES.md di-signon-fix-email-handle-notice.
+for (const width of [1280, 390])
+  test(`email-origin free-class notice survives navigation and validation at ${width}`, async ({
+    page,
+  }) => {
+    test.setTimeout(120000);
+    const id = `${prefix}-free-${width}`;
+    const address = `${id}@example.test`;
+    const username = `notice${width}${Date.now()}`;
+    const notice =
+      "We won't save your email. This class uses a handle and password.";
+    await db.setting.upsert({
+      where: { name: flag },
+      update: { value: 'true' },
+      create: { name: flag, value: 'true', valueType: 'boolean' },
+    });
+    await db.organization.create({
+      data: { id, name: 'Lincoln High', plan: 'FREE_CLASSROOM' },
+    });
+    await db.school.create({
+      data: { id, code: id, name: 'Lincoln High', organizationId: id },
+    });
+    await db.class.create({
+      data: {
+        id,
+        code: 'qa-handle',
+        title: 'English 11, Period 2',
+        schoolId: id,
+        studentJoinToken: id,
+      },
+    });
+    const identityCount = await db.signonIdentity.count();
+    const mailBefore = fs.readdirSync(capture).length;
+    const expectForm = async (origin: boolean) => {
+      await expect(
+        page.getByRole('heading', { name: 'Create your account', exact: true })
+      ).toBeVisible();
+      await expect(
+        page.getByText('English 11, Period 2', { exact: true })
+      ).toBeVisible();
+      await expect(page.getByLabel('Display name')).toBeVisible();
+      await expect(page.getByLabel('Handle', { exact: true })).toBeVisible();
+      await expect(page.getByText(notice, { exact: true })).toHaveCount(
+        origin ? 1 : 0
+      );
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth
+        )
+      ).toBe(true);
+    };
+    try {
+      await page.setViewportSize({
+        width,
+        height: width === 1280 ? 1000 : 844,
+      });
+      await page.goto('/auth/login?redirectTo=%2Fapp%2Fmy-classes');
+      await page.waitForFunction(() =>
+        Boolean((window as any).__reactRouterDataRouter)
+      );
+      await page.getByLabel('Email, handle, or class code').fill(address);
+      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      await page
+        .getByRole('button', { name: "I'm a student I have a class code" })
+        .click();
+      await page.getByLabel('Class code', { exact: true }).fill('qa-handle');
+      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      await page
+        .getByRole('button', { name: "I'm new to YAWP Create an account" })
+        .click();
+      // Capture the pre-fix omission before the intentionally failing assertion.
+      await shot(page, 'signon-38-email-origin', width);
+      await expectForm(true);
+      const banner = page.getByText(notice, { exact: true });
+      const card = page.locator('.signon-class');
+      expect((await banner.boundingBox())!.y).toBeGreaterThan(
+        (await card.boundingBox())!.y
+      );
+      expect((await banner.boundingBox())!.y).toBeLessThan(
+        (await page.getByLabel('Display name').boundingBox())!.y
+      );
+      await page
+        .getByRole('button', { name: 'Join class', exact: true })
+        .click();
+      await expect(page.locator('[aria-invalid="true"]').first()).toBeVisible();
+      await expectForm(true);
+      await page.getByRole('button', { name: 'Back', exact: true }).click();
+      await page
+        .getByRole('button', {
+          name: 'Wrong class? Re-enter the code',
+          exact: true,
+        })
+        .click();
+      await page
+        .getByLabel('Class code', { exact: true })
+        .fill('missing-local-class');
+      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      await expect(
+        page
+          .getByText(
+            "We couldn't find a class with that code. Check it with your teacher.",
+            { exact: true }
+          )
+          .first()
+      ).toBeVisible();
+      await page.getByLabel('Class code', { exact: true }).fill('qa-handle');
+      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      await page
+        .getByRole('button', { name: "I'm new to YAWP Create an account" })
+        .click();
+      await expectForm(true);
+      await page.getByLabel('Display name').fill('Local Notice Student');
+      // Existing seeded handle forces a real server redisplay with suggestions.
+      await db.user.create({ data: { username, name: 'Taken Local Handle' } });
+      await page.getByLabel('Handle', { exact: true }).fill(username);
+      await page.getByLabel('Password', { exact: true }).fill('local-password');
+      await page
+        .getByLabel('Confirm password', { exact: true })
+        .fill('local-password');
+      await page
+        .getByRole('button', { name: 'Join class', exact: true })
+        .click();
+      await expect(
+        page.getByText(`@${username} is taken. Try one of these:`, {
+          exact: true,
+        })
+      ).toBeVisible();
+      await expectForm(true);
+      await shot(page, 'signon-38-email-origin-taken', width);
+      await page.getByLabel('Display name').fill('Local Notice Student');
+      await page.getByLabel('Handle', { exact: true }).fill(username + 'x');
+      await page.getByLabel('Password', { exact: true }).fill('local-password');
+      await page
+        .getByLabel('Confirm password', { exact: true })
+        .fill('local-password');
+      await page
+        .getByRole('button', { name: 'Join class', exact: true })
+        .click();
+      await expect(page).toHaveURL(/\/app\/my-classes$/);
+      const stored = await db.user.findUniqueOrThrow({
+        where: { username: username + 'x' },
+        include: {
+          password: true,
+          memberships: { include: { classesAsStudent: true } },
+          sessions: true,
+        },
+      });
+      expect(stored.email).toBeNull();
+      expect(stored.emailVerifiedAt).toBeNull();
+      expect(stored.password).not.toBeNull();
+      expect(
+        await bcrypt.compare('local-password', stored.password!.hash)
+      ).toBe(true);
+      expect(stored.sessions).toHaveLength(1);
+      expect(stored.memberships).toHaveLength(1);
+      expect(stored.memberships[0].role).toBe('STUDENT');
+      expect(stored.memberships[0].classesAsStudent.map((k) => k.id)).toContain(
+        id
+      );
+      expect(await db.user.count({ where: { email: address } })).toBe(0);
+      expect(await db.signonIdentity.count()).toBe(identityCount);
+      expect(fs.readdirSync(capture)).toHaveLength(mailBefore);
+      await page.context().clearCookies();
+      await page.goto('/auth/login');
+      await page.waitForFunction(() =>
+        Boolean((window as any).__reactRouterDataRouter)
+      );
+      await page.getByLabel('Email, handle, or class code').fill('qa-handle');
+      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      await page
+        .getByRole('button', { name: "I'm new to YAWP Create an account" })
+        .click();
+      await expectForm(false);
+      await shot(page, 'signon-38-direct-code', width);
+    } finally {
+      const users = await db.user.findMany({
+        where: { username: { startsWith: username } },
+        select: { id: true },
+      });
+      const ids = users.map((u) => u.id);
+      await db.session.deleteMany({ where: { userId: { in: ids } } });
+      await db.password.deleteMany({ where: { userId: { in: ids } } });
+      await db.orgMembership.deleteMany({ where: { userId: { in: ids } } });
+      await db.user.deleteMany({ where: { id: { in: ids } } });
+      await db.class.delete({ where: { id } });
+      await db.school.delete({ where: { id } });
+      await db.organization.delete({ where: { id } });
+    }
+  });
+
 for (const width of [1280, 390])
   test(`existing passwordless teacher activates through the location selector at ${width}`, async ({
     page,
