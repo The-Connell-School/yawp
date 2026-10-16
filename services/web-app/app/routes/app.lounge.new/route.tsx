@@ -9,18 +9,24 @@ import {
   useLoaderData,
   useNavigation,
 } from 'react-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { FileText, X } from 'lucide-react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { MentionTextarea } from '~/components/lounge/mention-textarea';
+import { LoungeVideoRecorder } from '~/components/lounge/lounge-video-recorder';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { requireLoungeAccess } from '~/domain/lounge/access.server';
 import { loungeByline, type LoungeDisplayNameStyleKey } from '~/domain/lounge/display-name';
 import {
+  LoungeShareError,
   createLoungePost,
   getLoungeProfile,
   listMentionCandidates,
+  listShareableAssignments,
+  type ShareableAssignment,
 } from '~/domain/lounge/lounge.server';
+import { parseLoungeVideoInput } from '~/domain/lounge/video';
 import { decodeMentions } from '~/domain/lounge/mentions';
 import { sendLoungeNotifications } from '~/domain/lounge/notifications.server';
 import { findPrivacyConcerns, privacyConcernMessage } from '~/domain/lounge/privacy-nudge';
@@ -37,12 +43,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (!profile && !viewer.isStaff) {
     throw redirect('/app/lounge/welcome?redirectTo=/app/lounge/new');
   }
-  const [candidates, user] = await Promise.all([
+  const [candidates, user, shareable] = await Promise.all([
     listMentionCandidates(viewer, null),
     prisma.user.findUnique({ where: { id: viewer.userId }, select: { name: true } }),
+    membership.role === 'TEACHER' ? listShareableAssignments(membership.id) : Promise.resolve([]),
   ]);
   return data({
     candidates,
+    shareable,
+    isStaff: viewer.isStaff,
     postingAs: loungeByline({
       name: user?.name,
       style: (profile?.displayNameStyle ?? null) as LoungeDisplayNameStyleKey | null,
@@ -66,9 +75,13 @@ export async function action({ request }: ActionFunctionArgs) {
     body: String(form.body ?? ''),
     askStaff: form.askStaff === 'on',
     askPrivately: form.askPrivately === 'on',
+    attachAssignmentId: String(form.attachAssignmentId ?? ''),
+    pin: form.pin === 'on',
   };
   const parsed = parseLoungePostInput(form);
   if (!parsed.ok) return data({ errors: parsed.errors, values }, { status: 400 });
+  const video = parseLoungeVideoInput(form, { userId: viewer.userId, isStaff: viewer.isStaff });
+  if (!video.ok) return data({ errors: video.errors, values }, { status: 400 });
 
   const limit = await enforceAuthenticatedUserAndIp({
     request,
@@ -85,18 +98,32 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const { postId, notifications } = await createLoungePost({
-    viewer,
-    organizationId: access.organizationId,
-    membershipId: access.membership.id,
-    input: parsed.value,
-  });
+  let created: Awaited<ReturnType<typeof createLoungePost>>;
+  try {
+    created = await createLoungePost({
+      viewer,
+      organizationId: access.organizationId,
+      membershipId: access.membership.id,
+      input: {
+        ...parsed.value,
+        attachAssignmentId: values.attachAssignmentId || null,
+        video: video.value,
+        pin: viewer.isStaff && values.pin,
+      },
+    });
+  } catch (error) {
+    if (error instanceof LoungeShareError) {
+      return data({ errors: { form: error.message }, values }, { status: 400 });
+    }
+    throw error;
+  }
+  const { postId, notifications } = created;
   void sendLoungeNotifications(notifications, getDomainUrl(request));
   throw redirect(`/app/lounge/${postId}`);
 }
 
 export default function LoungeNewPostRoute() {
-  const { candidates, postingAs } = useLoaderData<typeof loader>();
+  const { candidates, postingAs, shareable, isStaff } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const values = actionData?.values;
@@ -125,7 +152,7 @@ export default function LoungeNewPostRoute() {
               <label
                 key={option.key}
                 className={cn(
-                  '-mb-px cursor-pointer border-b-2 pb-2 text-[15px] has-[:focus-visible]:outline has-[:focus-visible]:outline-2',
+                  'relative -mb-px cursor-pointer border-b-2 pb-2 text-[15px] has-[:focus-visible]:outline has-[:focus-visible]:outline-2',
                   kind === option.key
                     ? 'border-foreground font-medium'
                     : 'border-transparent text-muted-foreground'
@@ -137,7 +164,7 @@ export default function LoungeNewPostRoute() {
                   value={option.key}
                   checked={kind === option.key}
                   onChange={() => setKind(option.key)}
-                  className="sr-only"
+                  className="absolute inset-0 m-0 cursor-pointer opacity-0"
                 />
                 {option.label}
               </label>
@@ -192,6 +219,22 @@ export default function LoungeNewPostRoute() {
               </p>
             ) : null}
           </div>
+
+          {shareable.length > 0 ? (
+            <AttachFromYawp
+              assignments={shareable}
+              defaultId={values?.attachAssignmentId || null}
+              error={errors.attachAssignmentId}
+            />
+          ) : null}
+
+          {isStaff ? (
+            <div className="flex flex-col gap-2">
+              <span className="text-sm text-muted-foreground">Video (optional)</span>
+              <LoungeVideoRecorder />
+              {errors.video ? <p className="text-sm text-destructive">{errors.video}</p> : null}
+            </div>
+          ) : null}
 
           <div className="flex flex-col gap-2">
             <label htmlFor="lounge-topic" className="text-sm text-muted-foreground">
@@ -248,6 +291,23 @@ export default function LoungeNewPostRoute() {
             </label>
           </div>
 
+          {isStaff ? (
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                name="pin"
+                defaultChecked={values?.pin}
+                className="mt-1 h-4 w-4 accent-[hsl(var(--primary))]"
+              />
+              <span className="flex flex-col">
+                <span>Pin to the top of the Lounge</span>
+                <span className="text-sm text-muted-foreground">
+                  Use it for the weekly prompt. It replaces whatever is pinned now.
+                </span>
+              </span>
+            </label>
+          ) : null}
+
           {errors.form ? (
             <p role="alert" className="text-sm text-destructive">
               {errors.form}
@@ -269,6 +329,104 @@ export default function LoungeNewPostRoute() {
         </Form>
       </div>
     </section>
+  );
+}
+
+/**
+ * One quiet button that opens a short list of the teacher's own assignments.
+ * The chosen one shows as a single small card; the post carries its id.
+ */
+function AttachFromYawp({
+  assignments,
+  defaultId,
+  error,
+}: {
+  assignments: ShareableAssignment[];
+  defaultId: string | null;
+  error?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    assignments.some((a) => a.id === defaultId) ? defaultId : null
+  );
+  const selected = assignments.find((a) => a.id === selectedId) ?? null;
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('keydown', onKey);
+    panelRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  return (
+    <div className="relative flex flex-col gap-2">
+      <span className="text-sm text-muted-foreground">Attached from Yawp</span>
+      <input type="hidden" name="attachAssignmentId" value={selectedId ?? ''} />
+      {selected ? (
+        <div className="flex items-center gap-3 rounded-xl border bg-background px-3 py-2.5">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <FileText size={18} aria-hidden="true" />
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate font-medium">{selected.title}</span>
+            <span className="text-xs text-muted-foreground">
+              {selected.typeTitle} · other teachers get a copy, never your students&apos; work
+            </span>
+          </span>
+          <button
+            type="button"
+            aria-label="Remove attachment"
+            onClick={() => setSelectedId(null)}
+            className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary"
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+          className="inline-flex min-h-11 items-center gap-2 self-start rounded-lg border border-dashed border-muted-foreground/50 px-4 text-[15px] hover:bg-secondary"
+        >
+          Attach from Yawp
+        </button>
+      )}
+      {open && !selected ? (
+        <div
+          ref={panelRef}
+          role="dialog"
+          aria-label="Attach from Yawp"
+          className="absolute left-0 top-full z-20 mt-1 w-full max-w-md overflow-hidden rounded-xl border bg-background shadow-lg"
+        >
+          <p className="border-b px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Your assignments
+          </p>
+          <ul className="max-h-72 overflow-y-auto py-1">
+            {assignments.map((assignment) => (
+              <li key={assignment.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedId(assignment.id);
+                    setOpen(false);
+                  }}
+                  className="flex w-full flex-col items-start px-4 py-2.5 text-left hover:bg-secondary focus:bg-secondary focus:outline-none"
+                >
+                  <span className="text-[15px]">{assignment.title}</span>
+                  <span className="text-xs text-muted-foreground">{assignment.typeTitle}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+    </div>
   );
 }
 

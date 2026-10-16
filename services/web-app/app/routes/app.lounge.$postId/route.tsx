@@ -15,6 +15,9 @@ import { HelpfulButton } from '~/components/lounge/helpful-button';
 import { LoungeBody } from '~/components/lounge/lounge-body';
 import { LoungeByline } from '~/components/lounge/lounge-byline';
 import { MentionTextarea } from '~/components/lounge/mention-textarea';
+import { LoungeVideoPlayer } from '~/components/lounge/lounge-video-player';
+import { LoungeVideoRecorder } from '~/components/lounge/lounge-video-recorder';
+import { FileText } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { requireLoungeAccess } from '~/domain/lounge/access.server';
@@ -26,10 +29,16 @@ import {
   getLoungeProfile,
   getLoungeThread,
   listMentionCandidates,
+  recordShareUse,
   reportLoungeContent,
+  setLoungePostPinned,
   toggleLoungeVote,
   type LoungeReplyView,
 } from '~/domain/lounge/lounge.server';
+import { canMembershipUseAssignmentType } from '~/domain/lounge/share-access.server';
+import { loungeShareHref } from '~/domain/lounge/shares';
+import { parseLoungeVideoInput, type LoungeVideo } from '~/domain/lounge/video';
+import { loungeVideoPlaybackUrl } from '~/domain/lounge/video-storage.server';
 import { decodeMentions } from '~/domain/lounge/mentions';
 import { sendLoungeNotifications } from '~/domain/lounge/notifications.server';
 import { formatLoungeTime } from '~/domain/lounge/time';
@@ -41,8 +50,12 @@ function notFound() {
   return data({ error: 'This post is not available.' }, { status: 404 });
 }
 
+async function withPlayback(video: LoungeVideo | null) {
+  return video ? { ...video, url: await loungeVideoPlaybackUrl(video.key) } : null;
+}
+
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  const { viewer } = await requireLoungeAccess(request);
+  const { viewer, membership } = await requireLoungeAccess(request);
   const postId = params.postId ?? '';
   const thread = await getLoungeThread(viewer, postId);
   if (!thread) throw notFound();
@@ -51,11 +64,30 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     listMentionCandidates(viewer, postId),
   ]);
   const now = new Date();
-  const withWhen = (reply: LoungeReplyView) => ({ ...reply, when: formatLoungeTime(reply.createdAt, now) });
+  const withWhen = async (reply: LoungeReplyView) => ({
+    ...reply,
+    when: formatLoungeTime(reply.createdAt, now),
+    video: await withPlayback(reply.video),
+  });
+  const share = thread.post.attachment;
+  const canUseShare =
+    share && !thread.post.isOwn
+      ? await canMembershipUseAssignmentType({
+          membershipId: membership.id,
+          organizationId: membership.organization.id,
+          role: membership.role,
+          assignmentTypeId: share.assignmentTypeId,
+        })
+      : false;
   return data({
-    post: { ...thread.post, when: formatLoungeTime(thread.post.createdAt, now) },
-    staffReplies: thread.staffReplies.map(withWhen),
-    replies: thread.replies.map(withWhen),
+    post: {
+      ...thread.post,
+      when: formatLoungeTime(thread.post.createdAt, now),
+      video: await withPlayback(thread.post.video),
+    },
+    share: share ? { ...share, canUse: canUseShare } : null,
+    staffReplies: await Promise.all(thread.staffReplies.map(withWhen)),
+    replies: await Promise.all(thread.replies.map(withWhen)),
     candidates,
     isStaff: viewer.isStaff,
     canReply: viewer.isStaff || Boolean(profile),
@@ -76,9 +108,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
         if (!viewer.isStaff && !(await getLoungeProfile(viewer.userId))) {
           throw redirect(`/app/lounge/welcome?redirectTo=/app/lounge/${postId}`);
         }
-        const parsed = parseLoungeReplyInput(Object.fromEntries(form), { isStaff: viewer.isStaff });
+        const fields = Object.fromEntries(form);
+        const parsed = parseLoungeReplyInput(fields, { isStaff: viewer.isStaff });
         if (!parsed.ok) {
           return data({ intent, errors: parsed.errors, body: String(form.get('body') ?? '') }, { status: 400 });
+        }
+        const video = parseLoungeVideoInput(fields, { userId: viewer.userId, isStaff: viewer.isStaff });
+        if (!video.ok) {
+          return data({ intent, errors: video.errors, body: parsed.value.body }, { status: 400 });
         }
         const limit = await enforceAuthenticatedUserAndIp({
           request,
@@ -102,7 +139,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           viewer,
           organizationId: access.organizationId,
           postId,
-          input: parsed.value,
+          input: { ...parsed.value, video: video.value },
         });
         void sendLoungeNotifications(result.notifications, getDomainUrl(request));
         throw redirect(`/app/lounge/${postId}#reply-${result.replyId}`);
@@ -116,6 +153,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
           reason: String(form.get('reason') ?? ''),
         });
         return data({ intent, reported: true });
+      case 'use-share': {
+        const attachmentId = String(form.get('attachmentId') ?? '');
+        const { assignmentTypeId } = await recordShareUse(viewer, attachmentId);
+        throw redirect(loungeShareHref(assignmentTypeId, attachmentId));
+      }
+      case 'pin':
+      case 'unpin':
+        if (!viewer.isStaff) return data({ intent, error: 'Not allowed' }, { status: 403 });
+        await setLoungePostPinned(viewer.userId, postId, intent === 'pin');
+        return data({ intent, ok: true });
       case 'delete-post':
         await deleteOwnLoungePost(viewer, postId);
         throw redirect('/app/lounge');
@@ -134,7 +181,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 type ReplyWithWhen = LoungeReplyView & { when: string };
 
 export default function LoungeThreadRoute() {
-  const { post, staffReplies, replies, candidates, canReply, isStaff } = useLoaderData<typeof loader>();
+  const { post, share, staffReplies, replies, candidates, canReply, isStaff } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const replyErrors =
@@ -164,6 +211,15 @@ export default function LoungeThreadRoute() {
           ) : null}
           {post.isHidden ? <p className="text-sm font-medium text-destructive">Hidden by the Yawp team.</p> : null}
           <LoungeBody body={post.body} className="text-base" />
+          {post.video ? (
+            <LoungeVideoPlayer
+              url={post.video.url}
+              title={post.video.title}
+              durationSeconds={post.video.durationSeconds}
+              label={`Video from ${post.author.name}`}
+            />
+          ) : null}
+          {share ? <ShareCard share={share} isOwn={post.isOwn} /> : null}
           {post.staffStatus === 'OPEN' && staffReplies.length === 0 ? (
             <p className="text-sm font-medium text-primary">Waiting on the Yawp team</p>
           ) : null}
@@ -175,6 +231,14 @@ export default function LoungeThreadRoute() {
               </a>
             ) : null}
             <span className="ml-auto flex items-center gap-4">
+              {isStaff ? (
+                <Form method="post">
+                  <input type="hidden" name="intent" value={post.isPinned ? 'unpin' : 'pin'} />
+                  <button type="submit" className="text-sm text-muted-foreground hover:text-foreground">
+                    {post.isPinned ? 'Unpin' : 'Pin to top'}
+                  </button>
+                </Form>
+              ) : null}
               {post.isOwn ? (
                 <DeleteButton intent="delete-post" label="Delete post" />
               ) : (
@@ -194,6 +258,14 @@ export default function LoungeThreadRoute() {
               >
                 <LoungeByline byline={reply.author} when={reply.when} />
                 <LoungeBody body={reply.body} className="text-base" />
+                {reply.video ? (
+                  <LoungeVideoPlayer
+                    url={reply.video.url}
+                    title={reply.video.title}
+                    durationSeconds={reply.video.durationSeconds}
+                    label={`Video answer from ${reply.author.name}`}
+                  />
+                ) : null}
                 {reply.videoUrl ? (
                   <a
                     href={reply.videoUrl}
@@ -269,12 +341,15 @@ export default function LoungeThreadRoute() {
                 aria-invalid={Boolean(replyErrors?.body)}
               />
               {isStaff ? (
-                <div className="flex flex-col gap-1">
-                  <label htmlFor="lounge-video" className="text-sm text-muted-foreground">
-                    Video link (optional)
-                  </label>
-                  <Input id="lounge-video" name="videoUrl" type="url" placeholder="https://www.loom.com/share/…" />
-                </div>
+                <>
+                  <LoungeVideoRecorder key={replyBoxKey} />
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="lounge-video" className="text-sm text-muted-foreground">
+                      Or a video link (optional)
+                    </label>
+                    <Input id="lounge-video" name="videoUrl" type="url" placeholder="https://www.loom.com/share/…" />
+                  </div>
+                </>
               ) : null}
               {replyErrors
                 ? Object.values(replyErrors).map((message) => (
@@ -299,6 +374,69 @@ export default function LoungeThreadRoute() {
           )}
         </div>
       </div>
+    </section>
+  );
+}
+
+type ShareView = {
+  id: string;
+  title: string;
+  typeTitle: string;
+  prompt: string;
+  useCount: number;
+  viewerUsed: boolean;
+  canUse: boolean;
+};
+
+/** One small card and one button. Preview is tucked away until asked for. */
+function ShareCard({ share, isOwn }: { share: ShareView; isOwn: boolean }) {
+  const navigation = useNavigation();
+  const using = navigation.state !== 'idle' && navigation.formData?.get('intent') === 'use-share';
+  const used = `used by ${share.useCount} ${share.useCount === 1 ? 'teacher' : 'teachers'}`;
+  return (
+    <section
+      aria-label="Shared from Yawp"
+      className="flex flex-col gap-3 rounded-xl border bg-background px-4 py-3.5"
+    >
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <FileText size={20} aria-hidden="true" />
+        </span>
+        <span className="flex min-w-0 flex-col">
+          <span className="font-medium">{share.title}</span>
+          <span className="text-sm text-muted-foreground">
+            {share.typeTitle} · {used}
+          </span>
+        </span>
+      </div>
+      <details className="group text-sm">
+        <summary className="cursor-pointer list-none text-muted-foreground underline-offset-2 hover:underline">
+          Preview
+        </summary>
+        <p className="mt-2 whitespace-pre-wrap rounded-lg bg-secondary px-3 py-2.5 leading-relaxed text-foreground">
+          {share.prompt}
+        </p>
+      </details>
+      {isOwn ? (
+        <p className="text-sm text-muted-foreground">Shared from your assignments</p>
+      ) : share.canUse ? (
+        <Form method="post" className="flex flex-wrap items-center gap-3">
+          <input type="hidden" name="intent" value="use-share" />
+          <input type="hidden" name="attachmentId" value={share.id} />
+          <Button type="submit" disabled={using}>
+            Use in my class
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            {share.viewerUsed
+              ? 'You used this before. It opens a new copy.'
+              : 'Opens the assignment form with this prompt. You pick the classes.'}
+          </span>
+        </Form>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Your school doesn&apos;t offer {share.typeTitle} yet.
+        </p>
+      )}
     </section>
   );
 }

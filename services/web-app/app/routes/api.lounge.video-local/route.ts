@@ -24,7 +24,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const bytes = await readLocalLoungeVideo(key);
   if (!bytes) return notFound();
   const ext = key.split('.').pop() ?? '';
-  return new Response(bytes, {
+  const body = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  return new Response(body, {
     headers: {
       'Content-Type': TYPES[ext] ?? 'application/octet-stream',
       'Content-Length': String(bytes.byteLength),

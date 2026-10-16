@@ -13,6 +13,7 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { LoungeBody } from '~/components/lounge/lounge-body';
 import { LoungeByline } from '~/components/lounge/lounge-byline';
 import { MentionTextarea } from '~/components/lounge/mention-textarea';
+import { LoungeVideoRecorder } from '~/components/lounge/lounge-video-recorder';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import {
@@ -28,6 +29,7 @@ import {
 import { sendLoungeNotifications } from '~/domain/lounge/notifications.server';
 import { formatLoungeTime } from '~/domain/lounge/time';
 import { parseLoungeReplyInput } from '~/domain/lounge/validation';
+import { parseLoungeVideoInput } from '~/domain/lounge/video';
 import { requireAdmin } from '~/utils/auth.server';
 import { type BreadcrumbHandle } from '~/utils/breadcrumb';
 import { prisma } from '~/utils/db.server';
@@ -73,8 +75,11 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     switch (intent) {
       case 'reply': {
-        const parsed = parseLoungeReplyInput(Object.fromEntries(form), { isStaff: true });
+        const fields = Object.fromEntries(form);
+        const parsed = parseLoungeReplyInput(fields, { isStaff: true });
         if (!parsed.ok) return data({ errors: parsed.errors }, { status: 400 });
+        const video = parseLoungeVideoInput(fields, { userId: admin.id, isStaff: true });
+        if (!video.ok) return data({ errors: video.errors }, { status: 400 });
         const membership = await prisma.orgMembership.findFirst({
           where: { userId: admin.id, isActive: true },
           orderBy: { createdAt: 'asc' },
@@ -84,7 +89,7 @@ export async function action({ request }: ActionFunctionArgs) {
           viewer,
           organizationId: membership?.organizationId ?? null,
           postId,
-          input: parsed.value,
+          input: { ...parsed.value, video: video.value },
         });
         void sendLoungeNotifications(result.notifications, getDomainUrl(request));
         throw redirect('/app/admin/lounge');
@@ -178,6 +183,7 @@ export default function AdminLoungeRoute() {
                   candidates={candidates}
                   placeholder="Short version first. Then the why."
                 />
+                <LoungeVideoRecorder key={`video-${selected.id}`} />
                 <label htmlFor="staff-video" className="text-sm text-muted-foreground">
                   Video link (optional)
                 </label>

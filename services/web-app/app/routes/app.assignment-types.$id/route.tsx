@@ -1,3 +1,6 @@
+import { loungeViewerOrNull } from '~/domain/lounge/access.server';
+import { getSharePromptForViewer } from '~/domain/lounge/lounge.server';
+import { LOUNGE_SHARE_PARAM } from '~/domain/lounge/shares';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   type LoaderFunctionArgs,
@@ -594,7 +597,20 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const isStudent = profile.role === 'STUDENT';
 
+  // A teacher arriving from "Use in my class" in the Teacher's Lounge: hand
+  // the shared prompt to the creation sheet. Only when they can see the share
+  // and it is for this assignment type; otherwise the link is ignored.
+  const loungeShareId = new URL(request.url).searchParams.get(LOUNGE_SHARE_PARAM);
+  let loungeSharePrompt: string | null = null;
+  if (loungeShareId && isTeacher) {
+    const loungeViewer = await loungeViewerOrNull(userId, profile);
+    loungeSharePrompt = loungeViewer
+      ? await getSharePromptForViewer(loungeViewer, loungeShareId, assignmentType.id)
+      : null;
+  }
+
   return dataResponse({
+    loungeSharePrompt,
     assignmentType,
     assignmentTypeGradesGrammar,
     documents: isStudent
@@ -775,6 +791,28 @@ export default function AppAssignmentTypesIdRoute() {
       { replace: true, preventScrollReset: true }
     );
   }, [incomingPrompt, setSearchParams]);
+
+  // The Teacher's Lounge sends a teacher here to reuse another teacher's
+  // shared assignment. Same door as the planner's: open the sheet on the
+  // prompt once, then drop the param.
+  const incomingLoungeShare = searchParams.get(LOUNGE_SHARE_PARAM);
+  const loungeSharePrompt = data.loungeSharePrompt;
+  useEffect(() => {
+    if (!incomingLoungeShare) return;
+    if (loungeSharePrompt) {
+      setLibraryPrompt(loungeSharePrompt);
+      setApHistoryEntry(null);
+      setIsAssignmentSheetOpen(true);
+    }
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        next.delete(LOUNGE_SHARE_PARAM);
+        return next;
+      },
+      { replace: true, preventScrollReset: true }
+    );
+  }, [incomingLoungeShare, loungeSharePrompt, setSearchParams]);
 
   const showShortFormLibrary = data.shortFormPromptLibrary != null;
   const showDailyPagesAbout =

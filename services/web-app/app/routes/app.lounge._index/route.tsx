@@ -9,14 +9,17 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { HelpfulButton } from '~/components/lounge/helpful-button';
 import { LoungeByline } from '~/components/lounge/lounge-byline';
 import { LoungeHeader } from '~/components/lounge/lounge-header';
+import { FileText, Play, Video } from 'lucide-react';
 import { requireLoungeAccess } from '~/domain/lounge/access.server';
 import {
   LoungeNotFoundError,
+  getPinnedLoungePost,
   listLoungePosts,
   toggleLoungeVote,
   type LoungeSort,
 } from '~/domain/lounge/lounge.server';
 import { formatLoungeTime } from '~/domain/lounge/time';
+import { formatVideoDuration } from '~/domain/lounge/video';
 import { isLoungeTopic, loungeTopicLabel } from '~/domain/lounge/topics';
 import { cn } from '~/utils/misc';
 
@@ -37,13 +40,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const topic = isLoungeTopic(topicParam) ? topicParam : null;
   const before = url.searchParams.get('before');
   const now = new Date();
-  const { posts, nextCursor } = await listLoungePosts(viewer, { sort, topic, before, now });
+  const [{ posts, nextCursor }, pinned] = await Promise.all([
+    listLoungePosts(viewer, { sort, topic, before, now }),
+    before ? Promise.resolve(null) : getPinnedLoungePost(viewer),
+  ]);
   return data({
+    pinned,
     sort,
     topic,
     topicLabel: topic ? loungeTopicLabel(topic) : null,
     nextCursor,
-    posts: posts.map((post) => ({ ...post, when: formatLoungeTime(post.createdAt, now) })),
+    posts: posts
+      .filter((post) => post.id !== pinned?.id)
+      .map((post) => ({ ...post, when: formatLoungeTime(post.createdAt, now) })),
   });
 }
 
@@ -70,7 +79,7 @@ function feedHref(params: { sort: LoungeSort; topic: string | null; before?: str
 }
 
 export default function LoungeFeedRoute() {
-  const { posts, sort, topic, topicLabel, nextCursor } = useLoaderData<typeof loader>();
+  const { posts, sort, topic, topicLabel, nextCursor, pinned } = useLoaderData<typeof loader>();
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
@@ -87,6 +96,36 @@ export default function LoungeFeedRoute() {
         }
       />
       <div className="mx-auto w-full max-w-screen-md px-3 py-6 sm:px-5">
+        {pinned ? (
+          <section aria-label="Pinned" className="mb-6">
+            <Link
+              to={`/app/lounge/${pinned.id}`}
+              className="flex flex-wrap items-center gap-4 rounded-xl border bg-background p-3 hover:border-primary/50"
+            >
+              {pinned.hasVideo ? (
+                <span className="relative flex aspect-video w-40 shrink-0 items-center justify-center rounded-lg bg-[#2A2824]">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                    <Play size={16} fill="currentColor" aria-hidden="true" />
+                  </span>
+                  {pinned.videoDurationSeconds ? (
+                    <span className="absolute bottom-1.5 right-2 text-xs text-white">
+                      {formatVideoDuration(pinned.videoDurationSeconds)}
+                    </span>
+                  ) : null}
+                </span>
+              ) : null}
+              <span className="flex min-w-0 flex-[1_1_240px] flex-col gap-1">
+                <span className="text-xs font-bold uppercase tracking-wider text-primary">
+                  {pinned.authorIsStaff ? `This week from ${pinned.authorFirstName}` : 'Pinned'}
+                </span>
+                <span className="text-lg font-medium leading-snug">{pinned.title}</span>
+                <span className="text-sm text-muted-foreground">
+                  {pinned.replyCount} {pinned.replyCount === 1 ? 'reply' : 'replies'} · add yours in the thread
+                </span>
+              </span>
+            </Link>
+          </section>
+        ) : null}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b">
           <nav aria-label="Sort posts" className="flex gap-5">
             {SORTS.map((option) => (
@@ -137,6 +176,19 @@ export default function LoungeFeedRoute() {
                   >
                     {post.title}
                   </Link>
+                  {post.attachment ? (
+                    <span className="inline-flex items-center gap-2 text-sm">
+                      <FileText size={16} aria-hidden="true" className="shrink-0 text-primary" />
+                      <span>
+                        {post.attachment.typeTitle} · {post.attachment.title}
+                        <span className="text-muted-foreground">
+                          {' '}
+                          · used by {post.attachment.useCount}{' '}
+                          {post.attachment.useCount === 1 ? 'teacher' : 'teachers'}
+                        </span>
+                      </span>
+                    </span>
+                  ) : null}
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
                     <LoungeByline byline={post.author} when={post.when} />
                     <span>{KIND_LABEL[post.kind]}</span>
@@ -144,7 +196,12 @@ export default function LoungeFeedRoute() {
                       {post.topicLabel}
                     </Link>
                     {post.isPrivate ? <span>Private to the Yawp team</span> : null}
-                    {post.staffAnswered ? (
+                    {post.staffAnsweredOnVideo ? (
+                      <span className="inline-flex items-center gap-1 font-medium text-primary">
+                        <Video size={14} aria-hidden="true" />
+                        Yawp team answered on video
+                      </span>
+                    ) : post.staffAnswered ? (
                       <span className="font-medium text-primary">Yawp team answered</span>
                     ) : null}
                     <span className="ml-auto inline-flex items-center gap-4">

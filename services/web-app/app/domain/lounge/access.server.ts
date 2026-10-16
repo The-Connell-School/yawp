@@ -42,3 +42,25 @@ export async function requireLoungeAccess(request: Request): Promise<LoungeAcces
     organizationId: membership.organization.id,
   };
 }
+
+/**
+ * The Lounge viewer for someone who is already signed in, or null if they may
+ * not use the Lounge. Never throws, for pages outside the Lounge that only
+ * want to honor a link from it.
+ */
+export async function loungeViewerOrNull(
+  userId: string,
+  membership: Pick<RequiredMembership, 'role' | 'isActive' | 'organization'>
+): Promise<LoungeViewer | null> {
+  const [user, flagOn] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } }),
+    isLoungeCommunityEnabled(membership.organization.id),
+  ]);
+  const decision = decideLoungeAccess({
+    role: membership.role,
+    isActive: membership.isActive,
+    isAdmin: Boolean(user?.isAdmin),
+    flagOn,
+  });
+  return decision.allowed ? { userId, isStaff: decision.isStaff } : null;
+}
