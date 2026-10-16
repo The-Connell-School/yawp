@@ -9,6 +9,7 @@ export default defineConfig({
   testIgnore: [
     '**/auth.unified-signon.spec.ts',
     '**/auth.unified-backend.spec.ts',
+    '**/auth.unified-resend.spec.ts',
     '**/auth.unified-google-backend.spec.ts',
     '**/auth.unified-origin-backend.spec.ts',
   ],
