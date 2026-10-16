@@ -46,6 +46,10 @@ export type FlowData = {
     linkUserId?: string;
   };
   pendingGoogle?: { subject: string; email: string };
+  /** Display context retained after the student flow discards its email. */
+  studentEmailOrigin?: boolean;
+  studentChoice?: 'new' | 'returning';
+  studentGoogle?: { subject: string };
   completed?: boolean;
 };
 export type Flow = {
@@ -149,9 +153,11 @@ export function stateFor(flow: Flow, state: SignonState) {
     ...(state.screen === 'class-handle'
       ? {
           emailOrigin:
-            identifierKind(flow.data.identifier ?? '') === 'email' &&
+            (flow.data.studentEmailOrigin ??
+              identifierKind(flow.data.identifier ?? '') === 'email') &&
             flow.data.proof !== 'google' &&
-            !flow.data.pendingGoogle,
+            !flow.data.pendingGoogle &&
+            !flow.data.studentGoogle,
         }
       : {}),
     ...(flow.data.proof === 'google' ? { provider: 'google' as const } : {}),

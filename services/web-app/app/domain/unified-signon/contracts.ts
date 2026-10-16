@@ -59,6 +59,10 @@ export type SignonState = {
 };
 
 export type SignonOperation =
+  | 'student-choice'
+  | 'register-student'
+  | 'student-password'
+  | 'complete-student'
   | 'resolve'
   | 'password'
   | 'required-password'

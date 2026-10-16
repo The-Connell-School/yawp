@@ -475,6 +475,9 @@ jobs:
           bun test ./services/web-app/app/domain/unified-signon/policy.test.ts
           bun test ./services/web-app/app/domain/unified-signon/google.test.ts
           bun test ./services/web-app/app/routes/auth.login/unified-dispatch.test.ts
+          bun test ./services/web-app/app/utils/login-rate-limit-target.test.ts
+          bun test ./services/web-app/app/domain/free-tier/student-join.server.test.ts
+          bun test ./services/web-app/app/domain/unified-signon/class-student.real-db.integration.test.ts
           bun test ./services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts
 
       - name: Preview-only sign-on fixture guards and real handlers

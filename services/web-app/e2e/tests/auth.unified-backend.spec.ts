@@ -86,6 +86,7 @@ test.afterAll(async () => {
     select: { id: true },
   });
   const ids = users.map((u) => u.id);
+  await db.invitation.deleteMany({ where: { studentClassId: prefix } });
   await db.session.deleteMany({ where: { userId: { in: ids } } });
   await db.password.deleteMany({ where: { userId: { in: ids } } });
   await db.orgMembership.deleteMany({ where: { userId: { in: ids } } });
@@ -135,8 +136,10 @@ for (const width of [1280, 390])
       await expect(
         page.getByText('English 11, Period 2', { exact: true })
       ).toBeVisible();
-      await expect(page.getByLabel('Display name')).toBeVisible();
-      await expect(page.getByLabel('Handle', { exact: true })).toBeVisible();
+      await expect(
+        page.getByLabel('First name', { exact: true })
+      ).toBeVisible();
+      await expect(page.getByLabel('Last name', { exact: true })).toBeVisible();
       await expect(page.getByText(notice, { exact: true })).toHaveCount(
         origin ? 1 : 0
       );
@@ -155,17 +158,17 @@ for (const width of [1280, 390])
       await page.waitForFunction(() =>
         Boolean((window as any).__reactRouterDataRouter)
       );
-      await page.getByLabel('Email, handle, or class code').fill(address);
+      await page.getByLabel('Email or class code').fill(address);
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
       await page
         .getByRole('button', { name: "I'm a student I have a class code" })
         .click();
       await page.getByLabel('Class code', { exact: true }).fill('qa-handle');
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
-      await page
-        .getByRole('button', { name: "I'm new to YAWP Create an account" })
-        .click();
-      // Capture the pre-fix omission before the intentionally failing assertion.
+      await page.getByRole('button', { name: /^New/ }).click();
+      await expect(
+        page.getByRole('heading', { name: 'Create your account', exact: true })
+      ).toBeVisible();
       await shot(page, 'signon-38-email-origin', width);
       await expectForm(true);
       const banner = page.getByText(notice, { exact: true });
@@ -174,7 +177,7 @@ for (const width of [1280, 390])
         (await card.boundingBox())!.y
       );
       expect((await banner.boundingBox())!.y).toBeLessThan(
-        (await page.getByLabel('Display name').boundingBox())!.y
+        (await page.getByLabel('First name', { exact: true }).boundingBox())!.y
       );
       await page
         .getByRole('button', { name: 'Join class', exact: true })
@@ -202,14 +205,55 @@ for (const width of [1280, 390])
       ).toBeVisible();
       await page.getByLabel('Class code', { exact: true }).fill('qa-handle');
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
-      await page
-        .getByRole('button', { name: "I'm new to YAWP Create an account" })
-        .click();
+      await page.getByRole('button', { name: /^New/ }).click();
       await expectForm(true);
-      await page.getByLabel('Display name').fill('Local Notice Student');
-      // Existing seeded handle forces a real server redisplay with suggestions.
-      await db.user.create({ data: { username, name: 'Taken Local Handle' } });
-      await page.getByLabel('Handle', { exact: true }).fill(username);
+      await page.getByLabel('First name', { exact: true }).fill('Local');
+      await page.getByLabel('Last name', { exact: true }).fill('Notice');
+      await page.getByLabel('Password', { exact: true }).fill('local-password');
+      await page
+        .getByLabel('Confirm password', { exact: true })
+        .fill('local-password');
+      // Reach real server validation despite the client's valid values.
+      const invalidateOnce = async (route: Route) => {
+        const body = new URLSearchParams(route.request().postData() || '');
+        if (body.get('intent') !== 'register-student') return route.continue();
+        body.set('firstName', '123');
+        await route.continue({ postData: body.toString() });
+        await page.unroute('**/auth/login*', invalidateOnce);
+      };
+      await page.route('**/auth/login*', invalidateOnce);
+      await page
+        .getByRole('button', { name: 'Join class', exact: true })
+        .click();
+      await expect(
+        page.getByLabel('First name', { exact: true })
+      ).toHaveAttribute('aria-invalid', 'true');
+      await expectForm(true);
+      await shot(page, 'signon-38-email-origin-server-validation', width);
+      // Main assigns a suffix for an occupied class handle instead of asking
+      // the student to edit a taken handle. Exercise that real collision path.
+      const taken = await db.user.create({
+        data: {
+          username,
+          name: 'Taken Local Handle',
+          memberships: {
+            create: {
+              role: 'STUDENT',
+              organizationId: id,
+              classesAsStudent: { connect: { id } },
+            },
+          },
+          classStudentHandles: {
+            create: {
+              classId: id,
+              handle: 'LocalNotice',
+              handleKey: 'localnotice',
+            },
+          },
+        },
+      });
+      await page.getByLabel('First name', { exact: true }).fill('Local');
+      await page.getByLabel('Last name', { exact: true }).fill('Notice');
       await page.getByLabel('Password', { exact: true }).fill('local-password');
       await page
         .getByLabel('Confirm password', { exact: true })
@@ -218,24 +262,23 @@ for (const width of [1280, 390])
         .getByRole('button', { name: 'Join class', exact: true })
         .click();
       await expect(
-        page.getByText(`@${username} is taken. Try one of these:`, {
-          exact: true,
-        })
+        page.getByRole('heading', { name: "You're in!" })
       ).toBeVisible();
-      await expectForm(true);
-      await shot(page, 'signon-38-email-origin-taken', width);
-      await page.getByLabel('Display name').fill('Local Notice Student');
-      await page.getByLabel('Handle', { exact: true }).fill(username + 'x');
-      await page.getByLabel('Password', { exact: true }).fill('local-password');
+      await expect(
+        page.getByText('@LocalNotice1', { exact: true })
+      ).toBeVisible();
+      const alias = await db.classStudentHandle.findUniqueOrThrow({
+        where: {
+          classId_handleKey: { classId: id, handleKey: 'localnotice1' },
+        },
+      });
+      expect(alias.userId).not.toBe(taken.id);
       await page
-        .getByLabel('Confirm password', { exact: true })
-        .fill('local-password');
-      await page
-        .getByRole('button', { name: 'Join class', exact: true })
+        .getByRole('button', { name: 'Go to my class', exact: true })
         .click();
       await expect(page).toHaveURL(/\/app\/my-classes$/);
       const stored = await db.user.findUniqueOrThrow({
-        where: { username: username + 'x' },
+        where: { id: alias.userId },
         include: {
           password: true,
           memberships: { include: { classesAsStudent: true } },
@@ -262,16 +305,14 @@ for (const width of [1280, 390])
       await page.waitForFunction(() =>
         Boolean((window as any).__reactRouterDataRouter)
       );
-      await page.getByLabel('Email, handle, or class code').fill('qa-handle');
+      await page.getByLabel('Email or class code').fill('qa-handle');
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
-      await page
-        .getByRole('button', { name: "I'm new to YAWP Create an account" })
-        .click();
+      await page.getByRole('button', { name: /^New/ }).click();
       await expectForm(false);
       await shot(page, 'signon-38-direct-code', width);
     } finally {
       const users = await db.user.findMany({
-        where: { username: { startsWith: username } },
+        where: { memberships: { some: { organizationId: id } } },
         select: { id: true },
       });
       const ids = users.map((u) => u.id);
@@ -331,7 +372,7 @@ for (const width of [1280, 390])
       await page.waitForFunction(() =>
         Boolean((window as any).__reactRouterDataRouter)
       );
-      await page.getByLabel('Email, handle, or class code').fill(address);
+      await page.getByLabel('Email or class code').fill(address);
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
       await expect(
         page.getByRole('heading', { name: 'Finish setting up your account' })
@@ -389,7 +430,7 @@ for (const width of [1280, 390])
     }
   });
 for (const width of [1280, 390])
-  test(`real handlers: class, email code errors/retry, verified signup and reset at ${width}`, async ({
+  test(`real handlers: invited student, email code errors/retry, verified signup and reset at ${width}`, async ({
     page,
   }) => {
     test.setTimeout(120000);
@@ -400,6 +441,22 @@ for (const width of [1280, 390])
       create: { name: flag, value: 'true', valueType: 'boolean' },
     });
     const address = `maya${width}@yawp.local`;
+    // Email identity is retained only for the existing invitation path. New
+    // class-code registrations use generated handles in auth.unified-classcode.
+    await db.invitation.create({
+      data: {
+        type: 'onboard-student',
+        target: address,
+        studentClassId: prefix,
+        metadata: JSON.stringify({ klassId: prefix }),
+        secret: 'local-only',
+        algorithm: 'SHA-256',
+        digits: 6,
+        period: 600,
+        charSet: '0123456789',
+        expiresAt: new Date(Date.now() + 600000),
+      },
+    });
     await page.goto('/auth/login?redirectTo=%2Fapp%2Fmy-classes');
     await page.waitForFunction(() =>
       Boolean((window as any).__reactRouterDataRouter)
@@ -408,15 +465,7 @@ for (const width of [1280, 390])
       page.getByRole('button', { name: 'Continue with Google' })
     ).toBeDisabled();
     await shot(page, 'signon-03-google-unavailable', width);
-    await page.getByLabel('Email, handle, or class code').fill(address);
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await expect(
-      page.getByRole('heading', { name: 'Welcome to YAWP!' })
-    ).toBeVisible();
-    await page
-      .getByRole('button', { name: "I'm a student I have a class code" })
-      .click();
-    await page.getByLabel('Class code').fill(prefix);
+    await page.getByLabel('Email or class code').fill(address);
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(
       page.getByRole('heading', { name: 'Finish setting up your account' })
@@ -492,7 +541,7 @@ for (const width of [1280, 390])
     await page.waitForFunction(() =>
       Boolean((window as any).__reactRouterDataRouter)
     );
-    await page.getByLabel('Email, handle, or class code').fill(address);
+    await page.getByLabel('Email or class code').fill(address);
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(
       page.getByRole('heading', { name: 'Enter your password' })
@@ -585,7 +634,7 @@ test('bare short and reserved handle words resolve as real class codes in the br
     await page.waitForFunction(() =>
       Boolean((window as any).__reactRouterDataRouter)
     );
-    await page.getByLabel('Email, handle, or class code').fill(classCode);
+    await page.getByLabel('Email or class code').fill(classCode);
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(
       page.getByRole('heading', { name: 'Join your class' })
@@ -638,7 +687,7 @@ test('local rollout rollback restores legacy views and blocks an in-flight reset
     await page.waitForFunction(() =>
       Boolean((window as any).__reactRouterDataRouter)
     );
-    await page.getByLabel('Email, handle, or class code').fill(address);
+    await page.getByLabel('Email or class code').fill(address);
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(
       page.getByRole('heading', { name: 'Enter your password' })

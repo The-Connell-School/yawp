@@ -1,3 +1,8 @@
+import {
+  chooseStudent,
+  registerStudent,
+  studentPassword,
+} from './class-student.server';
 import { randomInt, timingSafeEqual } from 'node:crypto';
 import type { Prisma } from '@app/prisma';
 import { z } from 'zod';
@@ -8,16 +13,12 @@ import {
   NameSchema,
   PasswordAndConfirmPasswordSchema,
 } from '~/utils/schemas/user';
-import { validateUsername } from '~/utils/username';
-import { UsernameFieldSchema } from '~/utils/schemas/username';
 import {
   enforceUnauthByIpAndTarget,
   enforceUnauthByIpOnly,
 } from '~/utils/rate-limit.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
-import { registerFreeTierStudent } from '~/domain/free-tier/student-join.server';
 import { assertFreeClassSeatAvailableInTx } from '~/domain/free-tier/class-seat-cap.server';
-import { assertFreeTierSpendAllowed } from '~/domain/free-tier/usage-budget.server';
 import {
   getUaPartnerContext,
   isUaPartnerHost,
@@ -42,13 +43,7 @@ import {
   withFlow,
   type Flow,
 } from './flow.server';
-import {
-  classSummary,
-  chooseClass,
-  lookupClasses,
-  resolveClasses,
-  selectedClass,
-} from './classes.server';
+import { chooseClass, resolveClasses, selectedClass } from './classes.server';
 import { deliverCode } from './mail.server';
 import { finishAuthentication } from './authentication.server';
 import { readInvitation, prepareInvitation } from './invitations.server';
@@ -81,54 +76,42 @@ export async function resolveIdentifier(
   raw: string
 ) {
   const parsed = normalizeIdentifier(raw);
-  if (!parsed)
-    throw new FlowError('Enter a valid email, handle or class code.');
+  if (!parsed) throw new FlowError('Enter your email or class code.');
+  flow.data.studentEmailOrigin = undefined;
+  if (parsed.kind !== 'email') {
+    flow.data.identifier = undefined;
+    flow.data.userId = undefined;
+    flow.data.proof = undefined;
+    flow.data.purpose = undefined;
+    flow.data.otp = undefined;
+    flow.data.invitationId = undefined;
+    flow.data.studentChoice = undefined;
+    flow.data.classId = undefined;
+    flow.data.classCode = undefined;
+    try {
+      return await resolveClasses(tx, flow, parsed.value);
+    } catch (error) {
+      if (error instanceof FlowError && error.fieldErrors?.classCode)
+        throw new FlowError(
+          error.message,
+          error.status,
+          error.retryAfterSeconds,
+          { identifier: error.fieldErrors.classCode }
+        );
+      throw error;
+    }
+  }
   const user = await tx.user.findFirst({
-    where:
-      parsed.kind === 'email'
-        ? { email: { equals: parsed.value, mode: 'insensitive' } }
-        : { username: parsed.value },
+    where: { email: { equals: parsed.value, mode: 'insensitive' } },
     select: { id: true, password: { select: { userId: true } } },
   });
-  const classes =
-    parsed.kind === 'handle-or-code'
-      ? await lookupClasses(tx, parsed.value)
-      : [];
-  // Resolving an identity discards prior proof and code, but retains a selected
-  // class and destination held by this browser's flow.
-  if (flow.data.pendingGoogle?.email !== parsed.value)
-    flow.data.pendingGoogle = undefined;
-  flow.data.identifier =
-    parsed.kind === 'email' ? parsed.value : '@' + parsed.value;
+  flow.data.pendingGoogle = undefined;
+  flow.data.studentGoogle = undefined;
+  flow.data.identifier = parsed.value;
   flow.data.userId = user?.id;
   flow.data.proof = undefined;
   flow.data.otp = undefined;
   flow.data.purpose = undefined;
-  if (classes.length && parsed.kind !== 'email') {
-    flow.data.classCode = parsed.value;
-    flow.data.classCandidates = classes.map((k) => k.id);
-    if (user)
-      return stateFor(flow, {
-        screen: 'ambiguity',
-        identifier: parsed.value,
-        classInfo: classSummary(classes[0]),
-        classes: classes.map(classSummary),
-      });
-    flow.data.identifier = undefined;
-    return resolveClasses(tx, flow, parsed.value);
-  }
-  if (parsed.kind !== 'email') {
-    const handle = validateUsername(parsed.value);
-    if (!user && !handle.ok)
-      throw new FlowError(handle.message, 400, undefined, {
-        identifier: handle.message,
-      });
-    // Same password surface for unknown handles; no account status is revealed.
-    return stateFor(flow, {
-      screen: 'password',
-      identifier: '@' + parsed.value,
-    });
-  }
   const invitation = await tx.invitation.findFirst({
     where: {
       target: { equals: parsed.value, mode: 'insensitive' },
@@ -486,6 +469,23 @@ async function operate(
   values: Record<string, string>,
   authenticatedUserId: string | null
 ) {
+  if (operation === 'student-choice')
+    return chooseStudent(tx, flow, values.choice);
+  if (operation === 'register-student') {
+    await limit(request, flow.id);
+    return registerStudent(tx, flow, values);
+  }
+  if (operation === 'student-password')
+    return studentPassword(tx, flow, request, values);
+  if (operation === 'complete-student') {
+    if (
+      flow.data.state.screen !== 'joined' ||
+      !flow.data.userId ||
+      flow.data.proof !== 'password'
+    )
+      throw new FlowError();
+    return finishAuthentication(tx, flow, request, flow.data.userId);
+  }
   if (operation === 'resolve')
     return resolveIdentifier(tx, flow, values.identifier || '');
   if (operation === 'resolve-class') {
@@ -496,6 +496,9 @@ async function operate(
       flow.data.userId = undefined;
     }
     if (flow.data.proof === 'email') flow.data.proof = undefined;
+    flow.data.classId = undefined;
+    flow.data.classCandidates = undefined;
+    flow.data.studentChoice = undefined;
     const result = await resolveClasses(tx, flow, values.classCode || '');
     flow.data.otp = undefined; // A new class context requires a new challenge.
     if (
@@ -572,82 +575,7 @@ async function operate(
     );
   }
   if (operation === 'join-handle') {
-    const parsed = z
-      .object({ name: NameSchema, username: UsernameFieldSchema })
-      .and(PasswordAndConfirmPasswordSchema)
-      .safeParse(values);
-    if (!parsed.success)
-      return Response.json(
-        {
-          error: 'Check your details.',
-          fieldErrors: Object.fromEntries(
-            parsed.error.issues.map((i) => [String(i.path[0]), i.message])
-          ),
-        },
-        { status: 400 }
-      );
-    await limit(request, parsed.data.username, 'signup');
-    const klass = await selectedClass(tx, flow);
-    if (
-      !klass ||
-      klass.school.organization.plan !== 'FREE_CLASSROOM' ||
-      !flow.data.joinToken
-    )
-      throw new FlowError('Class not found.');
-    const result = await registerFreeTierStudent({
-      ...parsed.data,
-      classId: klass.id,
-      joinToken: flow.data.joinToken,
-      client: tx,
-    });
-    if (result.status === 'error') {
-      if (result.error.includes('full'))
-        return Response.json(
-          stateFor(flow, {
-            screen: 'class-handle',
-            variant: 'full',
-            classInfo: classSummary(klass),
-          }),
-          { status: 400 }
-        );
-      if (result.field === 'username' && result.suggestions?.length)
-        return Response.json(
-          stateFor(flow, {
-            screen: 'class-handle',
-            variant: 'taken',
-            classInfo: classSummary(klass),
-            handleSuggestions: result.suggestions,
-            fieldErrors: {
-              username: `@${parsed.data.username} is taken. Try one of these:`,
-            },
-          }),
-          { status: 400 }
-        );
-      return Response.json(
-        { error: result.error, fieldErrors: { [result.field]: result.error } },
-        { status: 400 }
-      );
-    }
-    // registerFreeTierStudent preserves the legacy handle/session/seat/budget
-    // operation. Reuse its session rather than allocating a second session.
-    const { authSessionStorage } =
-      await import('~/cookie-session-storages/authentication.server');
-    const { sessionKey } = await import('~/utils/auth.server');
-    const { setMembershipId } = await import('~/cookies/membership-id.server');
-    const auth = await authSessionStorage.getSession(
-      request.headers.get('cookie')
-    );
-    auth.set(sessionKey, result.session.id);
-    flow.data.completed = true;
-    const headers = new Headers({ Location: flow.data.destination });
-    headers.append(
-      'set-cookie',
-      await authSessionStorage.commitSession(auth, {
-        expires: result.session.expirationDate,
-      })
-    );
-    headers.append('set-cookie', await setMembershipId(result.membershipId));
-    return new Response(null, { status: 302, headers });
+    throw new FlowError('Choose New or Returning to continue.');
   }
   if (operation === 'select-membership') {
     if (!authenticatedUserId) throw new FlowError('Sign in to continue.', 401);
