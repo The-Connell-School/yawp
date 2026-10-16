@@ -1,10 +1,13 @@
 import {
+  redirect,
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
   useActionData,
   useLoaderData,
   useNavigation,
 } from 'react-router';
+import { isClassPreparationEnabled } from '~/domain/free-tier/class-preparation.server';
+import { needsClassPreparation } from '~/domain/free-tier/class-preparation';
 import { Clock } from 'lucide-react';
 import { Form } from 'react-router';
 import { requireUserId } from '~/utils/auth.server';
@@ -63,6 +66,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export async function action({ request }: ActionFunctionArgs) {
   await requireFreeTierEnabled();
   const userId = await requireUserId(request);
+  const preparing = await prisma.freeTierApplication.findFirst({
+    where: { userId, status: 'ACCOUNT_CREATED' },
+    select: {
+      status: true,
+      organizationId: true,
+      starterClassName: true,
+      starterClassGrade: true,
+    },
+  });
+  if (
+    preparing &&
+    needsClassPreparation(
+      preparing,
+      await isClassPreparationEnabled(userId, preparing.organizationId)
+    )
+  ) {
+    return redirect('/app/free-tier/onboarding');
+  }
   const intent = String((await request.formData()).get('intent'));
   const app = await prisma.freeTierApplication.findFirst({
     where: { userId, status: 'SENT' },
@@ -102,11 +123,17 @@ export default function FreeTierPendingRoute() {
   const resending = navigation.state === 'submitting';
   const adminName = pending?.adminName ?? 'your administrator';
   return (
-    <FreeTierAuthCard title={app?.status === 'MANUAL_REVIEW' ? "We're reviewing your request" : 'Waiting for your administrator'} icon={<Clock />} footer={<FreeTierSignOut />}>
+    <FreeTierAuthCard
+      title={
+        app?.status === 'MANUAL_REVIEW'
+          ? "We're reviewing your request"
+          : 'Waiting for your administrator'
+      }
+      icon={<Clock />}
+      footer={<FreeTierSignOut />}
+    >
       {pending && app?.status === 'SENT' ? (
-        <p className="text-sm text-muted-foreground">
-          Sent to {adminName}.
-        </p>
+        <p className="text-sm text-muted-foreground">Sent to {adminName}.</p>
       ) : (
         <p className="text-sm text-muted-foreground">
           We will email you when your request is ready.
@@ -118,8 +145,20 @@ export default function FreeTierPendingRoute() {
           administrator and try again, or contact support@yawp.school.
         </p>
       ) : null}
-      <FreeTierProgress steps={['Account created', 'Request sent', app?.status === 'MANUAL_REVIEW' ? 'YAWP review' : `${adminName} approves`, 'Start teaching']} current={2} />
-      {pending && app?.status === 'SENT' ? <FreeTierPerson name={adminName} email={pending.adminEmail} /> : null}
+      <FreeTierProgress
+        steps={[
+          'Account created',
+          'Request sent',
+          app?.status === 'MANUAL_REVIEW'
+            ? 'YAWP review'
+            : `${adminName} approves`,
+          'Start teaching',
+        ]}
+        current={2}
+      />
+      {pending && app?.status === 'SENT' ? (
+        <FreeTierPerson name={adminName} email={pending.adminEmail} />
+      ) : null}
       {actionData?.ok ? (
         <p className="text-sm text-muted-foreground" role="status">
           Reminder sent to {pending?.adminEmail}.

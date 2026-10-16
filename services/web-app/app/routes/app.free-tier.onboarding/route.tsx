@@ -3,6 +3,7 @@ import {
   type LoaderFunctionArgs,
   redirect,
   data,
+  Link,
   useActionData,
   useLoaderData,
   useNavigation,
@@ -24,7 +25,27 @@ import {
 import { freeTierConfigErrorMessage } from '~/domain/free-tier/free-tier-config.server';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
 
+import {
+  isClassPreparationEnabled,
+  saveClassPreparation,
+} from '~/domain/free-tier/class-preparation.server';
+import {
+  classGradePrefill,
+  needsClassPreparation,
+} from '~/domain/free-tier/class-preparation';
+import { ClassPreparationForm } from '../free-tier/ClassPreparationForm';
+import { FreeTierOnboardingTimeline } from '../free-tier/FreeTierOnboardingTimeline';
+
 const MAX_NAME = 200;
+
+function progressedDestination(status: string) {
+  if (status === 'SENT' || status === 'MANUAL_REVIEW')
+    return '/app/free-tier/pending';
+  if (status === 'APPROVED') return '/app/my-classes';
+  if (status === 'REJECTED' || status === 'EXPIRED')
+    return '/app/free-tier/status';
+  return null;
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireFreeTierEnabled();
@@ -34,11 +55,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
     select: {
       id: true,
       schoolName: true,
+      organizationId: true,
+      gradeLevel: true,
+      starterClassName: true,
+      starterClassGrade: true,
       name: true,
       email: true,
       status: true,
     },
   });
+  const onboardingV2 =
+    !!app && (await isClassPreparationEnabled(userId, app.organizationId));
+  const destination =
+    onboardingV2 && app ? progressedDestination(app.status) : null;
+  if (destination) throw redirect(destination);
+  const step = new URL(request.url).searchParams.get('step');
+  if (needsClassPreparation(app, onboardingV2) && step === 'administrator')
+    throw redirect('/app/free-tier/onboarding');
+  const showClass =
+    onboardingV2 &&
+    app?.status === 'ACCOUNT_CREATED' &&
+    (needsClassPreparation(app, true) || step === 'class');
   const lastFailedEmail = app
     ? await prisma.freeTierEmailLog.findFirst({
         where: {
@@ -57,7 +94,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         select: { adminName: true, adminEmail: true, adminRole: true },
       })
     : null;
-  return { app, lastFailedEmail, pending };
+  return { app, lastFailedEmail, pending, onboardingV2, showClass };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -66,9 +103,36 @@ export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const app = await prisma.freeTierApplication.findFirst({
     where: { userId },
-    select: { id: true },
+    select: {
+      id: true,
+      status: true,
+      organizationId: true,
+      starterClassName: true,
+      starterClassGrade: true,
+    },
   });
   if (!app) return redirect('/app/free-tier/onboarding');
+  const onboardingV2 = await isClassPreparationEnabled(
+    userId,
+    app.organizationId
+  );
+  const destination = onboardingV2 ? progressedDestination(app.status) : null;
+  if (destination) return redirect(destination);
+  if (formData.get('intent') === 'prepare-class') {
+    const values = {
+      className: String(formData.get('className') ?? ''),
+      grade: String(formData.get('grade') ?? ''),
+    };
+    const result = await saveClassPreparation({
+      applicationId: app.id,
+      userId,
+      ...values,
+    });
+    if (!result.ok) return { ...result, values };
+    return redirect('/app/free-tier/onboarding?step=administrator');
+  }
+  if (needsClassPreparation(app, onboardingV2))
+    return redirect('/app/free-tier/onboarding');
   try {
     const result = await submitAdminDetails({
       applicationId: app.id,
@@ -86,6 +150,8 @@ export async function action({ request }: ActionFunctionArgs) {
     if (!result.ok) {
       if (result.reason === 'same_as_teacher')
         return data(result, { status: 400 });
+      if (result.reason === 'class_required')
+        return redirect('/app/free-tier/onboarding');
       return result;
     }
     throw redirect('/app/free-tier/pending');
@@ -100,7 +166,8 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function FreeTierOnboardingRoute() {
-  const { app, lastFailedEmail, pending } = useLoaderData<typeof loader>();
+  const { app, lastFailedEmail, pending, onboardingV2, showClass } =
+    useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const [editedAdminEmail, setEditedAdminEmail] = useState<string>();
@@ -110,11 +177,12 @@ export default function FreeTierOnboardingRoute() {
     (editedAdminEmail === undefined &&
     actionData &&
     !actionData.ok &&
+    'reason' in actionData &&
     actionData.reason === 'same_as_teacher'
       ? actionData.fieldErrors.adminEmail
       : null);
   const errorMessage =
-    actionData && !actionData.ok
+    actionData && !actionData.ok && 'reason' in actionData
       ? actionData.reason === 'same_as_teacher'
         ? null
         : actionData.reason === 'config'
@@ -126,12 +194,46 @@ export default function FreeTierOnboardingRoute() {
               : 'Something went wrong. Try again.'
       : null;
 
+  if (showClass) {
+    const values =
+      actionData && 'values' in actionData ? actionData.values : null;
+    const errors =
+      actionData && 'errors' in actionData ? actionData.errors : undefined;
+    return (
+      <ClassPreparationForm
+        className={values?.className ?? app?.starterClassName ?? ''}
+        grade={
+          values?.grade ??
+          app?.starterClassGrade ??
+          classGradePrefill(app?.gradeLevel)
+        }
+        errors={errors}
+        saving={navigation.state === 'submitting'}
+        error={!!actionData && !actionData.ok && !errors}
+      />
+    );
+  }
+
   return (
     <FreeTierAuthCard
-      title="Who can approve YAWP?"
+      title={onboardingV2 ? 'Ask your administrator' : 'Who can approve YAWP?'}
       footer={<FreeTierSignOut />}
       subtitle="A site or district administrator. Department chairs and teachers can’t."
     >
+      {onboardingV2 ? (
+        <>
+          <FreeTierOnboardingTimeline current={1} />
+          <p className="text-sm text-muted-foreground">
+            You’re almost there. We’ll ask your administrator to approve YAWP
+            before you start teaching.
+          </p>
+          {app?.status === 'ACCOUNT_CREATED' ? (
+            <Link to="?step=class" className="text-sm text-primary underline">
+              Back to your class
+            </Link>
+          ) : null}
+        </>
+      ) : null}
       {errorMessage ? (
         <p className="text-sm text-destructive" role="alert">
           {errorMessage}
@@ -197,15 +299,20 @@ export default function FreeTierOnboardingRoute() {
             defaultValue={pending?.adminRole ?? ''}
           />
         </FreeTierFieldLabel>
-        <FreeTierProgress
-          steps={[
-            'Account created',
-            'Ask your administrator',
-            'Start teaching',
-          ]}
-          current={1}
-        />
-        <FreeTierButton type="submit">
+        {onboardingV2 ? null : (
+          <FreeTierProgress
+            steps={[
+              'Account created',
+              'Ask your administrator',
+              'Start teaching',
+            ]}
+            current={1}
+          />
+        )}
+        <FreeTierButton
+          type="submit"
+          disabled={onboardingV2 && navigation.state === 'submitting'}
+        >
           {navigation.state === 'submitting'
             ? 'Sending…'
             : 'Send approval request'}

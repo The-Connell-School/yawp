@@ -227,6 +227,16 @@ jobs:
           ./services/web-app/app/domain/free-tier/service.integration.test.ts
           ./services/web-app/app/routes/api.free-tier.waitlist/route.integration.test.ts
 
+      - name: Free tier class preparation (isolated Postgres)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          CLASS_STEP_DB_TESTS: '1'
+        run: >-
+          bun test --max-concurrency=2
+          ./services/web-app/app/domain/free-tier/class-preparation.test.ts
+          ./services/web-app/app/domain/free-tier/class-preparation.real-db.integration.test.ts
+
       - name: 🧪 Free-tier operator cap denial persistence (isolated)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:

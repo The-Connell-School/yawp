@@ -1,3 +1,5 @@
+import { isClassPreparationEnabled } from './class-preparation.server';
+import { needsClassPreparation } from './class-preparation';
 import { createHash } from 'node:crypto';
 import { prisma } from '~/utils/db.server';
 import { assertTransition } from './state';
@@ -121,7 +123,7 @@ export async function submitAdminDetails(args: {
   const adminEmail = normalizeEmail(args.adminEmail);
   const app = await prisma.freeTierApplication.findFirst({
     where: { id: args.applicationId, userId: args.userId },
-    select: { id: true, status: true, email: true, name: true, schoolName: true },
+    select: { id: true, status: true, email: true, name: true, schoolName: true, organizationId: true, starterClassName: true, starterClassGrade: true },
   });
   if (!app) return { ok: false as const, reason: 'not_found' as const };
   if (app.status !== 'ACCOUNT_CREATED' && app.status !== 'ADMIN_SUBMITTED') {
@@ -139,6 +141,11 @@ export async function submitAdminDetails(args: {
     };
   }
 
+  const classStepEnabled = await isClassPreparationEnabled(args.userId, app.organizationId);
+  if (needsClassPreparation(app, classStepEnabled)) {
+    return { ok: false as const, reason: 'class_required' as const };
+  }
+
   const rules = evaluateAdminEmailForRuntime(
     { teacherEmail: app.email, adminEmail, schoolName: app.schoolName },
     resolveFreeTierRuntimeEnvironment()
@@ -149,6 +156,9 @@ export async function submitAdminDetails(args: {
   const note = null;
 
   const result = await prisma.$transaction(async (tx) => {
+    if (classStepEnabled) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('free_tier_provision:' || ${app.id}))`;
+    }
     const current = await tx.freeTierApplication.findUnique({
       where: { id: app.id },
       select: { status: true },
