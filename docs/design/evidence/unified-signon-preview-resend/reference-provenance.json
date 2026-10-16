@@ -1,0 +1,6 @@
+{
+  "source": "design/v2/artboards/signon-22-free-trial-status-all-states.dom.html",
+  "desktopShell": "design/v2/artboards/signon-21-free-trial-status-desktop.dom.html",
+  "method": "Apply data-cs computed styles; extract 390x800 invited/SENT frame. Desktop uses unchanged 320px card with a 1280px-wide shell, consistent with signon-21. Viewport padding to 844/1000 is an evidence adaptation; stale blob logo reference artifacts retained.",
+  "notice": "No dedicated delivery notice artboard; invited reference reused beside corrected notice."
+}

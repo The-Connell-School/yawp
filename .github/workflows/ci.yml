@@ -509,6 +509,7 @@ jobs:
         run: |
           mkdir -p "$TMPDIR"
           bun test ./services/web-app/app/domain/unified-signon/policy.test.ts
+          bun test ./services/web-app/app/domain/unified-signon/resend-mail.server.test.ts
           bun test ./services/web-app/app/domain/unified-signon/google.test.ts
           bun test ./services/web-app/app/routes/auth.login/unified-dispatch.test.ts
           bun test ./services/web-app/app/utils/login-rate-limit-target.test.ts
@@ -809,6 +810,28 @@ jobs:
           mkdir -p "$TMPDIR"
           trap 'rm -rf "$SIGNON_MAIL_CAPTURE_DIR"' EXIT
           bun x playwright test --config playwright.unified-backend.config.ts --workers=1
+
+      - name: Unified sign-on isolated-preview resend browser flows
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
+        working-directory: services/web-app
+        env:
+          CI: true
+          NODE_ENV: development
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          SESSION_SECRET: ci-local-signon-session-secret
+          SIGNON_LOCAL_TEST: '1'
+          SIGNON_RESEND_CAPTURE_DIR: ${{ runner.temp }}/signon-resend/mail
+          TMPDIR: ${{ runner.temp }}/signon-resend
+          PREVIEW_ACCESS_SECRET: ci-local-preview-resend-private-secret-32bytes
+          FREE_TIER_LINK_HMAC_SECRET: ci-local-free-tier-resend-private-secret-32bytes
+          PRIMARY_APP_URL: http://localhost:5396
+          RESEND_API_KEY: ''
+          EMAIL_PROVIDER: ''
+        run: |
+          mkdir -p "$TMPDIR"
+          trap "python3 -c 'import os, shutil; shutil.rmtree(os.environ[\"SIGNON_RESEND_CAPTURE_DIR\"], ignore_errors=True)'" EXIT
+          bun x playwright test --config playwright.unified-resend.config.ts --workers=1
 
       - name: Unified sign-on mocked-provider browser flows
         if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
