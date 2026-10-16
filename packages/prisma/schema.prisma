@@ -31,6 +31,7 @@ model FreeTierApplication {
   starterClassName String? @db.VarChar(100)
   starterClassGrade String? @db.VarChar(5)
   gradeLevel       String
+  releaseEmailCopyVersion String? @db.VarChar(40)
   tags             String[]                  @default([])
   acquisitionTokenId String?
   acquisitionToken   AcquisitionToken? @relation(fields: [acquisitionTokenId], references: [id], onDelete: SetNull, onUpdate: Cascade)

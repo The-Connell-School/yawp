@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { CircleCheck, Mail } from 'lucide-react';
 import {
   FreeTierAuthCard,
@@ -6,9 +6,6 @@ import {
   FreeTierTextInput,
 } from '../free-tier/FreeTierAuthCard';
 
-// Presentation only. Connect to the public flag reader and server result only
-// after the shared decline writer and durable admission exclusions are available.
-// No application route imports these components yet.
 export function FreeTierWelcomeCard({
   children,
   onboardingV2 = false,
@@ -71,12 +68,32 @@ export function FreeTierBelowHighSchoolCard() {
   return (
     <FreeTierAuthCard status title="Free classrooms are for high school for now">
       <p className="text-sm text-muted-foreground">
-        Thank you for your interest! Free YAWP classrooms are currently available for grades 9–12.
+        Thank you for your interest! Free YAWP classrooms are currently available for grades 9–12. We’ve saved your email.
       </p>
       <p className="text-sm text-muted-foreground">
         YAWP is available for younger grades through a site license.
         {' '}Contact <a className="underline" href="mailto:hello@yawp.school">hello@yawp.school</a> to learn more.
       </p>
     </FreeTierAuthCard>
+  );
+}
+
+export function FreeTierGradeField({ serverError = false }: { serverError?: boolean }) {
+  const [invalid, setInvalid] = useState(false);
+  const showError = invalid || serverError;
+  return (
+    <>
+      <FreeTierFieldLabel label="Grade level" htmlFor="gradeLevel">
+        <select id="gradeLevel" name="gradeLevel" required defaultValue=""
+          aria-invalid={showError} aria-describedby={showError ? 'signup-grade-error' : undefined}
+          onInvalid={() => setInvalid(true)} onChange={() => setInvalid(false)}
+          className="h-10 w-full rounded-md border border-input bg-input-background px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        >
+          <option value="">Choose a grade</option>
+          {['K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'].map(grade => <option key={grade} value={grade}>{grade === 'K' ? 'Kindergarten' : grade}</option>)}
+        </select>
+      </FreeTierFieldLabel>
+      {showError ? <p id="signup-grade-error" role="alert" className="text-xs text-destructive">Choose a grade level.</p> : null}
+    </>
   );
 }

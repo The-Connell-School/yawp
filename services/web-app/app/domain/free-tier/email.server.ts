@@ -6,6 +6,7 @@ import {
   renderCongratulationsEmailBody,
   renderReleaseEmailBody,
 } from './email-copy.server';
+import { renderReleaseEmailSubject } from './email-copy';
 import { mintSignedLink, RELEASE_LINK_TTL_MS } from './signed-link.server';
 import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
 import { plainTextEmailToHtml } from './email-html.server';
@@ -80,6 +81,12 @@ export async function sendFreeTierReleaseEmail(
 ): Promise<EmailSendResult> {
   try {
     assertFreeTierRuntimeConfigured();
+    // Read the first-write application context for every caller, including
+    // delayed release/retries. Never infer copy from the current rollout flag.
+    const application = await prisma.freeTierApplication.findUniqueOrThrow({
+      where: { id: payload.applicationId }, select: { releaseEmailCopyVersion: true },
+    });
+    const copyVersion = application.releaseEmailCopyVersion ?? undefined;
     const base = freeTierPublicAppOrigin();
     const minted = await mintSignedLink({
       applicationId: payload.applicationId,
@@ -87,10 +94,10 @@ export async function sendFreeTierReleaseEmail(
       ttlMs: RELEASE_LINK_TTL_MS,
     });
     const joinUrl = `${base}/free/join?t=${encodeURIComponent(minted.token)}`;
-    const text = renderReleaseEmailBody({ name: payload.name, joinUrl });
+    const text = renderReleaseEmailBody({ name: payload.name, joinUrl, copyVersion });
     const delivered = await deliverEmail({
       to: payload.email,
-      subject: "You're in — start your YAWP classroom",
+      subject: renderReleaseEmailSubject({ copyVersion }),
       text,
     });
     if (!delivered.ok) {

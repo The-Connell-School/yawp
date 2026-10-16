@@ -1,7 +1,6 @@
 export const ADMIN_APPROVAL_EMAIL_COPY_VERSION = '2026-10-14-v5';
 // Pass the version stored with the application when admission was requested.
 // Do not derive delayed email wording from the flag at delivery time.
-// Persistence and sender integration wait for the shared onboarding contract.
 export const RELEASE_EMAIL_V2_COPY_VERSION = 'free-tier-onboarding-v2';
 
 export function renderReleaseEmailSubject(args: { copyVersion?: string } = {}) {

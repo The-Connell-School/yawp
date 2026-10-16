@@ -1,4 +1,6 @@
 import type { ActionFunctionArgs } from 'react-router';
+import { isBelowHsGrade } from '~/domain/free-tier/grade-gate';
+import { isPublicOnboardingV2Enabled, isSupportedSignupGrade } from '~/domain/free-tier/public-onboarding.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
 import { normalizeEmail, submitWaitlist, waitlistInputSchema } from '~/domain/free-tier/service.server';
 import { readBoundedText } from '~/utils/bounded-body.server';
@@ -49,6 +51,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const parsed = waitlistInputSchema.safeParse({ ...(input as object), middleName: undefined });
   if (!parsed.success) return bad(400, 'Invalid input');
-  await submitWaitlist(parsed.data);
+  const onboardingV2 = await isPublicOnboardingV2Enabled();
+  if (onboardingV2 && !isSupportedSignupGrade(parsed.data.gradeLevel)) return bad(400, 'Invalid grade');
+  if (onboardingV2 && isBelowHsGrade(parsed.data.gradeLevel)) return (await import('~/domain/free-tier/grade-gate.server')).recordBelowHsDecline(parsed.data);
+  if (onboardingV2) await submitWaitlist(parsed.data, { onboardingV2: true });
+  else await submitWaitlist(parsed.data);
   return ok();
 };
