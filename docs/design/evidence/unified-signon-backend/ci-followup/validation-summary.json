@@ -1,0 +1,41 @@
+{
+  "scope": "CI mobile reset follow-up; test and artifact collection only",
+  "implementationCommit": "6254fc8c",
+  "failedRun": "https://github.com/The-Connell-School/yawp/actions/runs/38815971146/job/116702444776",
+  "diagnosis": "The reset continuation reloads the document. The test filled/clicked the server-rendered form before hydration. With 1000ms script latency the old test reproduced the missing heading; trace showed a native GET with a code query parameter instead of a verify-code POST. Capture contains only disposable local data and was deleted after inspection. CI did not upload its sign-on trace directory, so the historical trace is unavailable.",
+  "regression": "Slow reset-client startup retained at both widths. Wait for the client router after the full-document continuation, then remove the latency before the destination navigation. Same 5000ms heading assertion and final destination assertion; no retries or assertion relaxation. Narrow mobile and full real-handler desktop/mobile flows pass.",
+  "checks": {
+    "databaseScenarios": 37,
+    "databaseAssertions": 223,
+    "focusedTests": 31,
+    "focusedAssertions": 93,
+    "actualHandlerBrowserScenarios": 6,
+    "mockedProviderBrowserScenarios": 2,
+    "browserWorkers": 1,
+    "typecheck": "pass; 4GB heap",
+    "freshMigrationChain": 174,
+    "prismaValidateAndStatus": "pass"
+  },
+  "evidence": {
+    "freshComparisons": 6,
+    "flagOffPairs": 6,
+    "flagOffChangedPixels": 0,
+    "retainedManifestComparisons": [
+      34,
+      4
+    ],
+    "renderedChanges": false,
+    "exceptions": "Retain existing validator policy (6 characters), real local fixture data, logo rendering and legacy location selector exceptions."
+  },
+  "review": "Ship Review APPROVE at 7616f025 remains historical. New head requires repeat driver Ship Review; builder checklist completed, no independent approval claimed.",
+  "remote": "No remote migration, flag write, external email, live provider, credentials, preview or deployment. Unified sign-on default OFF and demo/production disabled; production free_tier remains OFF.",
+  "googleCallbackFollowup": {
+    "diagnosedRun": "https://github.com/The-Connell-School/yawp/actions/runs/38819160004/job/116712812324",
+    "originalResetCI": "pass; all six real-handler cases",
+    "cause": "Cancellation continuation rendered before hydration; CI trace shows no request from the retry click. Slow-client local regression reproduces the missing password heading.",
+    "correction": "Client-readiness waits after cancelled and successful full-document callbacks; slow-client regression at both widths uses route.fallback to preserve provider interception. All assertions and timeouts retained.",
+    "validation": "Two slow-client real-handler mock-provider cases and fresh typecheck pass; no runtime or schema changes.",
+    "freshComparisons": 4,
+    "review": "Repeat independent driver Ship Review required on the final head."
+  }
+}

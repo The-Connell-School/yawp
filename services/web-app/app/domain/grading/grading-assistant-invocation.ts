@@ -1,5 +1,10 @@
 import { teacherNotesEnabled } from './teacher-notes';
 import { buildGradingPromptShape } from './grading-prompt-shape';
+import {
+  applyDisplayGrammarCategories,
+  resolveDisplayOptions,
+} from './rubric-display-options';
+import type { RubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import type { ResolvedAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import {
   getGradingAssistantStrictnessInstructions,
@@ -135,6 +140,8 @@ export function compileGradingAssistantInvocation({
   gradingContext,
   coldWrite,
   assignmentPointTotal,
+  assignmentGrammarGradingEnabled,
+  rubricCategories,
 }: {
   gradingConfig: Pick<
     ResolvedAssignmentTypeGradingConfig,
@@ -165,17 +172,38 @@ export function compileGradingAssistantInvocation({
   coldWrite?: boolean | null;
   /** The assignment's point total, for holistic scoring prompts. */
   assignmentPointTotal?: number | null;
+  /** Per-assignment grammar toggle; null keeps the rubric default. */
+  assignmentGrammarGradingEnabled?: boolean | null;
+  /** Categories after assignment-level grammar filtering, when already resolved. */
+  rubricCategories?: RubricCategory[];
 }): CompiledGradingAssistantInvocation {
   const { minScore, maxScore } = gradingConfig;
+  const sourceCategories = rubricCategories ?? gradingConfig.rubricCategories;
+  const display = resolveDisplayOptions(
+    gradingConfig.outputSchemaSnapshot,
+    sourceCategories,
+    { grammarGradingEnabled: assignmentGrammarGradingEnabled }
+  );
+  const categories = applyDisplayGrammarCategories(
+    sourceCategories,
+    gradingConfig.outputSchemaSnapshot,
+    { grammarGradingEnabled: assignmentGrammarGradingEnabled }
+  );
+  const notesEnabled = teacherNotesEnabled(
+    gradingConfig.outputSchemaSnapshot,
+    display
+  );
   const promptShape = buildGradingPromptShape({
-    categories: gradingConfig.rubricCategories,
+    categories,
     minScore,
     maxScore,
     studentFirstName,
-    teacherNotesEnabled: teacherNotesEnabled(gradingConfig.outputSchemaSnapshot),
+    teacherNotesEnabled: notesEnabled,
     gradingMode: gradingConfig.gradingMode,
     scoringMode: gradingConfig.scoringMode,
     assignmentPointTotal: assignmentPointTotal ?? null,
+    display,
+    outputSchema: gradingConfig.outputSchemaSnapshot,
   });
   const strictnessLabel = getGradingAssistantStrictnessLabel(strictnessLevel);
   const strictnessInstructions =
@@ -225,7 +253,7 @@ export function compileGradingAssistantInvocation({
   const renderedSystem = renderPromptTemplate(template.systemMessage, variables);
   // Older managed templates do not carry the response-contract variable. The
   // explicit opt-in must still keep private observations out of public fields.
-  const system = teacherNotesEnabled(gradingConfig.outputSchemaSnapshot) && !/{{\s*grading_response_instructions\s*}}/i.test(template.systemMessage)
+  const system = notesEnabled && !/{{\s*grading_response_instructions\s*}}/i.test(template.systemMessage)
     ? `${renderedSystem}\n\n${promptShape.systemPrompt}`
     : renderedSystem;
   const renderedUserMessage = renderPromptTemplate(template.userMessage, variables);

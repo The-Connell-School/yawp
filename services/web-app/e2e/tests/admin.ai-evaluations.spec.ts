@@ -8,9 +8,9 @@ test.describe('Admin AI evaluations', () => {
     await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
 
     await page.goto('/app/admin/general');
-    await page.getByRole('link', { name: 'AI Evaluations' }).click();
+    await page.getByRole('link', { name: 'Grading Evaluations' }).click();
     await expect(
-      page.getByRole('heading', { name: 'AI Evaluations', level: 1 })
+      page.getByRole('heading', { name: 'Grading Evaluations', level: 1 })
     ).toBeVisible();
     await expect(
       page.getByRole('heading', { name: 'Grading Evals', level: 2 })

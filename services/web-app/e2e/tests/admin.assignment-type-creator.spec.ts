@@ -12,7 +12,6 @@ test.describe('Admin assignment type creator', () => {
     try {
       await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
       await page.goto('/app/admin/assignment-types/new');
-      // The loader seeds the canonical protected library before we capture it.
       const rubric = await prisma.rubric.findUniqueOrThrow({ where: { name: 'daily-pages-engagement' } });
       await expect(page.getByTestId('rubric-add-category')).toHaveCount(0);
       await expect(page.getByTestId('rubric-paste-open')).toHaveCount(0);

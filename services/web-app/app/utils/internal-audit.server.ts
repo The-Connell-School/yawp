@@ -1,6 +1,8 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import type { Prisma } from '@app/prisma';
 import { z } from 'zod';
+import { authenticate } from '~/utils/internal-free-tier-http.server';
+import { internalApiKeysConfigured } from '~/utils/internal-platform-auth.server';
 
 export const auditSelect = {
   id: true, sessionId: true, actorId: true, userId: true, organizationId: true,
@@ -20,14 +22,12 @@ const reply = (body: unknown, status = 200) => Response.json(body, {
 
 export function createAuditHandler(
   database: { findMany(query: Prisma.InternalImpersonationEventFindManyArgs): Promise<Event[]> },
-  credential: () => string | undefined,
+  _credential: () => string | undefined,
 ) {
   return async (request: Request) => {
-    const key = credential();
-    if (!key) return reply({ error: 'Not found' }, 404);
-    if (!/^[A-Za-z0-9_-]{43,}$/.test(key)) return reply({ error: 'Integration unavailable' }, 503);
-    const supplied = request.headers.get('authorization') || '';
-    if (supplied.length > 512 || !timingSafeEqual(digest(supplied), digest(`Bearer ${key}`))) return reply({ error: 'Unauthorized' }, 401);
+    if (!internalApiKeysConfigured()) return reply({ error: 'Not found' }, 404);
+    const denied = await authenticate(request);
+    if (denied) return denied;
     if (request.method !== 'GET') return reply({ error: 'Method not allowed' }, 405);
     let query: Prisma.InternalImpersonationEventFindManyArgs;
     let binding: string, limit: number;

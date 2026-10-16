@@ -1,3 +1,4 @@
+import { TesterFeedbackWidget } from './components/tester-feedback-widget';
 import { internalImpersonationMiddleware } from './utils/internal-impersonation-runtime.server';
 import { getImpersonationAttribution } from './utils/internal-impersonation-context.server';
 import {
@@ -56,6 +57,7 @@ import {
 } from './utils/preview-access.server.ts';
 import { uaPartnerMiddleware } from './utils/ua-partner.server.ts';
 import { isLessonPlannerEnabled } from './domain/feature-flags/feature-flags.server.ts';
+import { getRootMembershipWhere } from './utils/root-membership-filter.server.ts';
 
 export const middleware = [internalImpersonationMiddleware, previewAccessMiddleware, uaPartnerMiddleware];
 
@@ -94,6 +96,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const publicLandingPage =
     url.pathname === '/' ||
     url.pathname === '/info' ||
+    /^\/(privacy|terms)(?:\/|\.data)?$/.test(url.pathname) ||
     url.pathname === '/auth/preview-access' ||
     url.pathname === '/auth/preview-access.data';
   const cookieHeader = request.headers.get('Cookie');
@@ -105,6 +108,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (publicLandingPage && !internal) {
     return data(
       {
+        testerFeedbackAvailable: false,
         user: null,
         internalImpersonation: null,
         requestInfo: {
@@ -146,6 +150,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const previewAccessSeat = isPreviewAccessGateEnabled()
     ? await getPreviewAccessSeat(request)
     : null;
+  const membershipWhere = userId
+    ? await getRootMembershipWhere({
+        userId,
+        internal,
+        previewAccessSeat,
+        isolatedPreviewSeatMode: isIsolatedPreviewSeatMode(),
+      })
+    : undefined;
 
   const user = userId
     ? await time(
@@ -157,15 +169,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
               email: true,
               username: true,
               mustChangePassword: true,
+              isTester: process.env.TESTER_FEEDBACK_ENABLED === 'true',
               isAdmin: true,
               memberships: {
-                ...(internal ? { where: { id: internal.membershipId, organizationId: internal.organizationId, isActive: true } } : previewAccessSeat && isIsolatedPreviewSeatMode()
-                  ? {
-                      where: {
-                        organizationId: previewAccessSeat.organizationId,
-                      },
-                    }
-                  : {}),
+                ...(membershipWhere ? { where: membershipWhere } : {}),
                 orderBy: { createdAt: 'asc' },
                 select: {
                   id: true,
@@ -230,6 +237,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         isAdmin: Boolean(user?.isAdmin),
         selectedMembership: membership,
       },
+      testerFeedbackAvailable: process.env.TESTER_FEEDBACK_ENABLED === 'true' && Boolean(user?.isTester),
       lessonPlannerEnabled,
       requestInfo: {
         hints: getHints(request),
@@ -420,6 +428,7 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
           <Outlet />
         </div>
       </div>
+      {data.testerFeedbackAvailable ? <TesterFeedbackWidget /> : null}
       <Toaster toast={data.toast} />
     </Document>
   );

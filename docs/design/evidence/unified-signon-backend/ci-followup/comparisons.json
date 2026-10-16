@@ -1,0 +1,102 @@
+{
+  "comparisons": [
+    {
+      "state": "signon-13-reset-code",
+      "width": 1280,
+      "design": "signon-13-reset-code-1280-design.png",
+      "implementation": "signon-13-reset-code-1280-impl.png",
+      "comparison": "signon-13-reset-code-1280-side-by-side.png",
+      "referenceSource": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/shots/di-signon-backend/signon-13-reset-code-1280-design.png",
+      "renderedChange": false,
+      "deviation": "Existing validator policy (6 characters), real local identifier and retained merged UI rendering."
+    },
+    {
+      "state": "signon-15-verified-signup",
+      "width": 1280,
+      "design": "signon-15-verified-signup-1280-design.png",
+      "implementation": "signon-15-verified-signup-1280-impl.png",
+      "comparison": "signon-15-verified-signup-1280-side-by-side.png",
+      "referenceSource": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/shots/di-signon-backend/signon-15-verified-signup-1280-design.png",
+      "renderedChange": false,
+      "deviation": "Existing validator policy (6 characters), real local identifier and retained merged UI rendering."
+    },
+    {
+      "state": "signon-16-reset-password",
+      "width": 1280,
+      "design": "signon-16-reset-password-1280-design.png",
+      "implementation": "signon-16-reset-password-1280-impl.png",
+      "comparison": "signon-16-reset-password-1280-side-by-side.png",
+      "referenceSource": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/shots/di-signon-ui/signon-16-name-password-reset-1280-design.png",
+      "renderedChange": false,
+      "deviation": "Existing validator policy (6 characters), real local identifier and retained merged UI rendering."
+    },
+    {
+      "state": "signon-13-reset-code",
+      "width": 390,
+      "design": "signon-13-reset-code-390-design.png",
+      "implementation": "signon-13-reset-code-390-impl.png",
+      "comparison": "signon-13-reset-code-390-side-by-side.png",
+      "referenceSource": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/shots/di-signon-backend/signon-13-reset-code-390-design.png",
+      "renderedChange": false,
+      "deviation": "Existing validator policy (6 characters), real local identifier and retained merged UI rendering."
+    },
+    {
+      "state": "signon-15-verified-signup",
+      "width": 390,
+      "design": "signon-15-verified-signup-390-design.png",
+      "implementation": "signon-15-verified-signup-390-impl.png",
+      "comparison": "signon-15-verified-signup-390-side-by-side.png",
+      "referenceSource": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/shots/di-signon-backend/signon-15-verified-signup-390-design.png",
+      "renderedChange": false,
+      "deviation": "Existing validator policy (6 characters), real local identifier and retained merged UI rendering."
+    },
+    {
+      "state": "signon-16-reset-password",
+      "width": 390,
+      "design": "signon-16-reset-password-390-design.png",
+      "implementation": "signon-16-reset-password-390-impl.png",
+      "comparison": "signon-16-reset-password-390-side-by-side.png",
+      "referenceSource": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/shots/di-signon-ui/signon-16-name-password-reset-390-design.png",
+      "renderedChange": false,
+      "deviation": "Existing validator policy (6 characters), real local identifier and retained merged UI rendering."
+    }
+  ],
+  "flagOff": [
+    {
+      "state": "login",
+      "width": 1280,
+      "changedPixels": "0 (0)",
+      "exit": 0
+    },
+    {
+      "state": "signup",
+      "width": 1280,
+      "changedPixels": "0 (0)",
+      "exit": 0
+    },
+    {
+      "state": "class-link",
+      "width": 1280,
+      "changedPixels": "0 (0)",
+      "exit": 0
+    },
+    {
+      "state": "login",
+      "width": 390,
+      "changedPixels": "0 (0)",
+      "exit": 0
+    },
+    {
+      "state": "signup",
+      "width": 390,
+      "changedPixels": "0 (0)",
+      "exit": 0
+    },
+    {
+      "state": "class-link",
+      "width": 390,
+      "changedPixels": "0 (0)",
+      "exit": 0
+    }
+  ]
+}

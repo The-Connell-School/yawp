@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
 import { RATE_LIMITS } from '~/config/rate-limits';
 import { checkTokenValidity, hashToken, normalizeEmail, redeemInputSchema, redeemToken } from '~/domain/free-tier/service.server';
+import { readScanDedupeCookie } from '~/domain/free-tier/acquisition-token-scan.server';
 import { readBoundedText } from '~/utils/bounded-body.server';
 import { enforceUnauthByIpAndTarget } from '~/utils/rate-limit.server';
 
@@ -49,9 +50,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (limited) return limited;
   const parsed = redeemInputSchema.safeParse(input);
   if (!parsed.success) return json({ error: 'Invalid input' }, 400);
-  const result = await redeemToken(parsed.data);
+  const cookie = await readScanDedupeCookie(request);
+  const result = await redeemToken(parsed.data, { scanDedupeCookie: cookie });
   if (!result.ok) {
-    const map = { invalid: 404, exhausted: 409, expired: 410 } as const;
+    const map = { invalid: 404, exhausted: 409, expired: 410, disabled: 410, budget_exceeded: 402, cap_reached: 409 } as const;
     return json({ ok: false, reason: result.reason }, map[result.reason] ?? 400);
   }
   // Nothing about the application (id, status, whether the email already

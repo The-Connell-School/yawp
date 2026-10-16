@@ -1,5 +1,9 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import type { Prisma } from '@app/prisma';
+import {
+  authenticateInternalManagementRequest,
+  internalApiKeysConfigured,
+} from '~/utils/internal-platform-auth.server';
 
 const select = {
   id: true, organizationId: true,
@@ -13,15 +17,11 @@ const response = (value: unknown, status = 200) => Response.json(value, {
 });
 const digest = (value: string) => createHash('sha256').update(value).digest();
 
-export function createUserManagementHandlers(directory: Directory, credential: () => string | undefined) {
-  function authenticate(request: Request) {
-    const key = credential();
-    if (!key) return response({ error: 'Not found' }, 404);
-    if (!/^[A-Za-z0-9_-]{43,}$/.test(key)) return response({ error: 'Integration unavailable' }, 503);
-    const supplied = request.headers.get('authorization') || '';
-    if (supplied.length > 512 || !timingSafeEqual(digest(supplied), digest(`Bearer ${key}`))) {
-      return response({ error: 'Unauthorized' }, 401);
-    }
+export function createUserManagementHandlers(directory: Directory, _credential: () => string | undefined) {
+  async function authenticate(request: Request) {
+    if (!internalApiKeysConfigured()) return response({ error: 'Not found' }, 404);
+    const denied = await authenticateInternalManagementRequest(request);
+    if (denied) return denied;
     if (request.method !== 'GET') return response({ error: 'Method not allowed' }, 405);
     return null;
   }
@@ -38,7 +38,7 @@ export function createUserManagementHandlers(directory: Directory, credential: (
 
   return {
     async search(request: Request) {
-      const denied = authenticate(request);
+      const denied = await authenticate(request);
       if (denied) return denied;
       let query: Prisma.OrgMembershipFindManyArgs;
       let binding: string;
@@ -87,7 +87,7 @@ export function createUserManagementHandlers(directory: Directory, credential: (
       } catch { return response({ error: 'User directory unavailable' }, 503); }
     },
     async lookup(request: Request, userId: string | undefined) {
-      const denied = authenticate(request);
+      const denied = await authenticate(request);
       if (denied) return denied;
       let organizationId: string | undefined;
       try {

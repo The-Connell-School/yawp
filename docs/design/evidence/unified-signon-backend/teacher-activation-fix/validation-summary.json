@@ -1,0 +1,27 @@
+{
+  "scope": "P2 existing passwordless teacher location-selector review correction",
+  "implementationCommit": "ca4beeb8",
+  "database": {
+    "scenarios": 37,
+    "assertions": 223,
+    "status": "pass"
+  },
+  "policyGoogleDispatch": {
+    "tests": 31,
+    "assertions": 93,
+    "status": "pass"
+  },
+  "browser": {
+    "actualHandlerScenarios": 6,
+    "workers": 1,
+    "status": "pass"
+  },
+  "typecheck": "pass; NODE_OPTIONS=--max-old-space-size=4096",
+  "migration": "174 fresh local migrations; validate/status pass; no new migration in correction",
+  "flagOffComparisons": {
+    "pairs": 6,
+    "changedPixels": 0
+  },
+  "review": "Previous APPROVE at 69c23422 superseded by driver REJECT. Required P2 addressed; corrected head needs repeat driver Ship Review.",
+  "remote": "No preview, deployment, external email, provider request, flag write or remote migration."
+}

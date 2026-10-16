@@ -1,8 +1,20 @@
-import { expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
 import { CatalogError } from '~/domain/rubrics/rubric-catalog.server';
 import { createRubricCatalogHttp } from './internal-rubric-catalog-http.server';
 
 const key = 'k'.repeat(43);
+const savedManagementKey = process.env.YAWP_MANAGEMENT_SERVICE_KEY;
+const savedInternalKeys = process.env.YAWP_INTERNAL_API_KEYS;
+beforeEach(() => {
+  process.env.YAWP_MANAGEMENT_SERVICE_KEY = key;
+  delete process.env.YAWP_INTERNAL_API_KEYS;
+});
+afterEach(() => {
+  if (savedManagementKey === undefined) delete process.env.YAWP_MANAGEMENT_SERVICE_KEY;
+  else process.env.YAWP_MANAGEMENT_SERVICE_KEY = savedManagementKey;
+  if (savedInternalKeys === undefined) delete process.env.YAWP_INTERNAL_API_KEYS;
+  else process.env.YAWP_INTERNAL_API_KEYS = savedInternalKeys;
+});
 const base = 'https://yawp.test/api/internal/v1/rubric-catalog';
 const get = (path = '', credential = key) => new Request(`${base}${path}`, { headers: { authorization: `Bearer ${credential}` } });
 const post = (body: unknown, credential = key, path = '/versions') => new Request(`${base}${path}`, { method: 'POST', headers: { authorization: `Bearer ${credential}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
@@ -22,8 +34,12 @@ test('every route requires the management key and the right method', async () =>
   expect((await http.save(post(valid, 'wrong'))).status).toBe(401);
   expect((await http.list(post({}, key, ''))).status).toBe(405);
   expect((await http.save(get('/versions'))).status).toBe(405);
+  delete process.env.YAWP_MANAGEMENT_SERVICE_KEY;
   expect((await createRubricCatalogHttp(service as any, () => undefined).list(get())).status).toBe(404);
+  process.env.YAWP_MANAGEMENT_SERVICE_KEY = key;
+  process.env.YAWP_MANAGEMENT_SERVICE_KEY = 'short';
   expect((await createRubricCatalogHttp(service as any, () => 'short').list(get())).status).toBe(503);
+  process.env.YAWP_MANAGEMENT_SERVICE_KEY = key;
   expect(calls).toHaveLength(0);
   const ok = await http.list(get());
   expect(ok.status).toBe(200); expect(ok.headers.get('cache-control')).toBe('no-store');
@@ -71,11 +87,13 @@ test('stage requires the management key, POST and exactly the documented body', 
   const http = createRubricCatalogHttp(service as any, () => key);
   expect((await http.stage(post(validStage, 'wrong', '/stage'))).status).toBe(401);
   expect((await http.stage(get('/stage'))).status).toBe(405);
+  delete process.env.YAWP_MANAGEMENT_SERVICE_KEY;
   expect((await createRubricCatalogHttp(service as any, () => undefined).stage(post(validStage, key, '/stage'))).status).toBe(404);
+  process.env.YAWP_MANAGEMENT_SERVICE_KEY = key;
   expect((await http.stage(post(validStage, key, '/stage?x=1'))).status).toBe(400);
   const { source: _source, ...noSource } = validStage;
   for (const body of [
-    noSource, { ...validStage, expectedFingerprint: 'a'.repeat(64) }, { ...validStage, requestId: 'nope' },
+    noSource, { ...validStage, expectedFingerprint: 'x' }, { ...validStage, requestId: 'nope' },
     { ...validStage, actorEmail: 'nope' }, { ...validStage, reason: 'no' }, { ...validStage, reason: 'x'.repeat(501) }, { ...validStage, document: [] },
     { ...validStage, source: { ...validStage.source, contentId: 'not-a-uuid' } },
     { ...validStage, source: { ...validStage.source, version: 0 } },
@@ -125,7 +143,9 @@ test('unrelease requires the management key, POST and exactly the documented bod
   const http = createRubricCatalogHttp(service as any, () => key);
   expect((await http.clearRelease(post(validClear, 'wrong', '/unrelease'))).status).toBe(401);
   expect((await http.clearRelease(get('/unrelease'))).status).toBe(405);
+  delete process.env.YAWP_MANAGEMENT_SERVICE_KEY;
   expect((await createRubricCatalogHttp(service as any, () => undefined).clearRelease(post(validClear, key, '/unrelease'))).status).toBe(404);
+  process.env.YAWP_MANAGEMENT_SERVICE_KEY = key;
   expect((await http.clearRelease(post(validClear, key, '/unrelease?x=1'))).status).toBe(400);
   for (const body of [{ ...validClear, extra: true }, { ...validClear, actorEmail: 'nope' }, { ...validClear, reason: 'no' }, { ...validClear, key: '' }]) {
     expect((await http.clearRelease(post(body, key, '/unrelease'))).status).toBe(400);
@@ -142,4 +162,63 @@ test('unrelease requires the management key, POST and exactly the documented bod
 test('the unrelease route delegates to the catalog clearRelease handler', async () => {
   const route = await import('~/routes/api.internal.v1.rubric-catalog.unrelease/route');
   expect(typeof route.action).toBe('function');
+});
+
+test('signed save requests record platform audit rows', async () => {
+  const platformAuth = await import('./internal-platform-auth.server');
+  const recordAudit = mock(async () => {});
+  mock.module('./internal-platform-auth.server', () => ({
+    ...platformAuth,
+    recordInternalPlatformWriteAudit: recordAudit,
+  }));
+  const secret = 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEF';
+  const saved = {
+    keys: process.env.YAWP_INTERNAL_API_KEYS,
+    legacy: process.env.LEGACY_INTERNAL_KEY_ALLOWED,
+    nonceStore: process.env.INTERNAL_API_NONCE_STORE,
+  };
+  process.env.YAWP_INTERNAL_API_KEYS = JSON.stringify([
+    { id: 'rubrics-writer', secret, scopes: ['rubrics:write'] },
+  ]);
+  process.env.LEGACY_INTERNAL_KEY_ALLOWED = 'false';
+  process.env.INTERNAL_API_NONCE_STORE = 'memory';
+  try {
+    platformAuth.resetInternalApiMemoryNonceStore();
+    const http = createRubricCatalogHttp(
+      fake({
+        save: async () => ({ revision: { version: 1 }, replayed: false, captured: null }),
+      }).service as any,
+      () => key
+    );
+    const body = JSON.stringify(valid);
+    const signed = platformAuth.signInternalApiRequest({
+      method: 'POST',
+      url: `${base}/versions`,
+      body,
+      keyId: 'rubrics-writer',
+      secret,
+      actor: 'ops@yawp.school',
+    });
+    const headers = new Headers(signed.headers);
+    headers.set('content-type', 'application/json');
+    const response = await http.save(new Request(`${base}/versions`, { method: 'POST', headers, body }));
+    expect(response.status).toBe(200);
+    expect(recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpoint: 'POST /api/internal/v1/rubric-catalog/versions',
+        result: 'success',
+        keyId: 'rubrics-writer',
+        actorEmail: 'ops@yawp.school',
+      })
+    );
+  } finally {
+    mock.module('./internal-platform-auth.server', () => platformAuth);
+    if (saved.keys === undefined) delete process.env.YAWP_INTERNAL_API_KEYS;
+    else process.env.YAWP_INTERNAL_API_KEYS = saved.keys;
+    if (saved.legacy === undefined) delete process.env.LEGACY_INTERNAL_KEY_ALLOWED;
+    else process.env.LEGACY_INTERNAL_KEY_ALLOWED = saved.legacy;
+    if (saved.nonceStore === undefined) delete process.env.INTERNAL_API_NONCE_STORE;
+    else process.env.INTERNAL_API_NONCE_STORE = saved.nonceStore;
+    platformAuth.resetInternalApiMemoryNonceStore();
+  }
 });

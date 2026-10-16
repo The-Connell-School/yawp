@@ -41,6 +41,7 @@ import {
   isAssignmentTypeAvailableForAnyScope,
   type AssignmentTypeAccessScope,
 } from '~/utils/assignment-type-access.server';
+import { loadAssignmentCreationQuotasForTypes } from '~/utils/assignment-quota.server';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -593,9 +594,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     }));
 
   const isStudent = profile.role === 'STUDENT';
+  const assignmentCreationAvailability = isTeacher
+    ? (await loadAssignmentCreationQuotasForTypes(profile.organization, [
+        assignmentType,
+      ])).get(assignmentType.id) ?? {}
+    : {};
 
   return dataResponse({
     assignmentType,
+    assignmentCreationAvailability,
     assignmentTypeGradesGrammar,
     documents: isStudent
       ? sanitizeDocumentListForStudents(documents)
@@ -927,6 +934,7 @@ export default function AppAssignmentTypesIdRoute() {
                 </DropdownMenu>
               ) : null}
               <CreateAssignmentSheet
+                assignmentTypeAvailability={data.assignmentCreationAvailability}
                 assignmentTypeId={data.assignmentType.id}
                 assignmentTypeTitle={data.assignmentType.title}
                 assignmentTypeKind={data.assignmentType.kind}

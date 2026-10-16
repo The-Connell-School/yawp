@@ -11,13 +11,26 @@ import {
   submitAdminInfoHttp,
 } from '~/utils/internal-free-tier-http.server';
 import { setApprovalHooks } from '~/domain/free-tier/approval-hooks.server';
+import {
+  resetInternalApiMemoryNonceStore,
+  signInternalApiRequest,
+} from '~/utils/internal-platform-auth.server';
 
 const enabled = process.env.FREE_TIER_DB_TESTS === '1';
 const suite = enabled ? describe : describe.skip;
 const run = Math.random().toString(36).slice(2, 9);
 const key = 'k'.repeat(43);
-const auth = new Headers({ authorization: `Bearer ${key}` });
+const signingSecret = 'approval-integration-secret-000000000000';
 process.env.YAWP_MANAGEMENT_SERVICE_KEY = key;
+process.env.INTERNAL_API_NONCE_STORE = 'memory';
+process.env.LEGACY_INTERNAL_KEY_ALLOWED = 'false';
+process.env.YAWP_INTERNAL_API_KEYS = JSON.stringify([
+  {
+    id: 'approval-integration',
+    secret: signingSecret,
+    scopes: ['management:read', 'management:write'],
+  },
+]);
 
 const op = { 'x-yawp-operator-email': 'approver@yawp.local' };
 
@@ -46,6 +59,7 @@ async function makeApp(emailSuffix: string, status: any = 'ADMIN_SUBMITTED') {
 
 beforeEach(async () => {
   if (!enabled) return;
+  resetInternalApiMemoryNonceStore();
   await prisma.freeTierApprovalDecision.deleteMany({
     where: { application: { email: { contains: `ft-${run}-` } } },
   });
@@ -65,6 +79,31 @@ afterAll(async () => {
 });
 
 suite('approval queue and actions', () => {
+  const signedRequest = (
+    url: string,
+    options: { method?: string; body?: string; headers?: Record<string, string>; operator?: boolean } = {},
+  ) => {
+    const method = options.method ?? 'GET';
+    const body = options.body ?? '';
+    const signed = signInternalApiRequest({
+      method,
+      url,
+      body,
+      keyId: 'approval-integration',
+      secret: signingSecret,
+      actor: 'approver@yawp.local',
+    });
+    return new Request(url, {
+      method,
+      headers: {
+        ...signed.headers,
+        ...(options.operator === false ? {} : op),
+        ...(options.headers ?? {}),
+      },
+      body: body || undefined,
+    });
+  };
+
   test('queue lists ADMIN_SUBMITTED and MANUAL_REVIEW with decision history', async () => {
     const a = await makeApp('a', 'ADMIN_SUBMITTED');
     const b = await makeApp('b', 'MANUAL_REVIEW');
@@ -72,7 +111,7 @@ suite('approval queue and actions', () => {
     await prisma.freeTierApprovalDecision.create({
       data: { applicationId: b.id, decision: 'MANUAL_REVIEW', decidedByEmail: 'ops@yawp.local' },
     });
-    const res = await approvalQueue(new Request('https://yawp.test/api/internal/v1/free-tier/approval/queue', { headers: auth }));
+    const res = await approvalQueue(signedRequest('https://yawp.test/api/internal/v1/free-tier/approval/queue'));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.counts.ADMIN_SUBMITTED).toBeDefined();
@@ -86,7 +125,7 @@ suite('approval queue and actions', () => {
       data: { applicationId: a.id, decision: 'MANUAL_REVIEW', decidedByEmail: 'ops@yawp.local' },
     });
     const res = await approvalDetail(
-      new Request(`https://yawp.test/api/internal/v1/free-tier/approval/applications/${a.id}`, { headers: auth }),
+      signedRequest(`https://yawp.test/api/internal/v1/free-tier/approval/applications/${a.id}`),
     );
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -97,17 +136,17 @@ suite('approval queue and actions', () => {
   test('reject requires reason and records audit', async () => {
     const a = await makeApp('reject', 'MANUAL_REVIEW');
     const noReason = await rejectHttp(
-      new Request(`https://yawp.test/api/internal/v1/free-tier/approval/${a.id}/reject`, {
+      signedRequest(`https://yawp.test/api/internal/v1/free-tier/approval/${a.id}/reject`, {
         method: 'POST',
-        headers: { ...Object.fromEntries(auth), ...op, 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({}),
       }),
     );
     expect(noReason.status).toBe(400);
     const ok = await rejectHttp(
-      new Request(`https://yawp.test/api/internal/v1/free-tier/approval/${a.id}/reject`, {
+      signedRequest(`https://yawp.test/api/internal/v1/free-tier/approval/${a.id}/reject`, {
         method: 'POST',
-        headers: { ...Object.fromEntries(auth), ...op, 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ reason: 'not eligible' }),
       }),
     );
@@ -121,9 +160,9 @@ suite('approval queue and actions', () => {
 
   const post = (fn: (r: Request) => Promise<Response>, id: string, action: string, body: unknown = {}) =>
     fn(
-      new Request(`https://yawp.test/api/internal/v1/free-tier/approval/${id}/${action}`, {
+      signedRequest(`https://yawp.test/api/internal/v1/free-tier/approval/${id}/${action}`, {
         method: 'POST',
-        headers: { ...Object.fromEntries(auth), ...op, 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
       }),
     );
@@ -136,6 +175,31 @@ suite('approval queue and actions', () => {
       expect((await res.json()).previousStatus).toBe(from);
       const row = await prisma.freeTierApplication.findUnique({ where: { id: a.id } });
       expect(row?.status).toBe('APPROVED');
+    }
+  });
+
+  test('approve does not spend another budget slot for an already-counted application', async () => {
+    const previousEnv = process.env.FREE_TIER_BUDGET_ENVIRONMENT;
+    const previousBudget = process.env.FREE_TIER_PREVIEW_BUDGET_USD;
+    const previousUnitCost = process.env.FREE_TIER_PREVIEW_UNIT_COST_USD;
+    process.env.FREE_TIER_BUDGET_ENVIRONMENT = 'preview';
+    process.env.FREE_TIER_PREVIEW_BUDGET_USD = '0';
+    process.env.FREE_TIER_PREVIEW_UNIT_COST_USD = '1';
+    try {
+      const a = await makeApp('approve-budget-full', 'SENT');
+      const res = await post(approveHttp, a.id, 'approve');
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.previousStatus).toBe('SENT');
+      const row = await prisma.freeTierApplication.findUnique({ where: { id: a.id } });
+      expect(row?.status).toBe('APPROVED');
+    } finally {
+      if (previousEnv === undefined) delete process.env.FREE_TIER_BUDGET_ENVIRONMENT;
+      else process.env.FREE_TIER_BUDGET_ENVIRONMENT = previousEnv;
+      if (previousBudget === undefined) delete process.env.FREE_TIER_PREVIEW_BUDGET_USD;
+      else process.env.FREE_TIER_PREVIEW_BUDGET_USD = previousBudget;
+      if (previousUnitCost === undefined) delete process.env.FREE_TIER_PREVIEW_UNIT_COST_USD;
+      else process.env.FREE_TIER_PREVIEW_UNIT_COST_USD = previousUnitCost;
     }
   });
 
@@ -212,9 +276,10 @@ suite('approval queue and actions', () => {
   test('operator email is required and validated for decisions', async () => {
     const a = await makeApp('noop', 'MANUAL_REVIEW');
     const res = await approveHttp(
-      new Request(`https://yawp.test/api/internal/v1/free-tier/approval/${a.id}/approve`, {
+      signedRequest(`https://yawp.test/api/internal/v1/free-tier/approval/${a.id}/approve`, {
         method: 'POST',
-        headers: { ...Object.fromEntries(auth), 'content-type': 'application/json' },
+        operator: false,
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ decidedByEmail: 'not-an-email' }),
       }),
     );
@@ -228,7 +293,7 @@ suite('approval queue and actions', () => {
 
   test('queue includes SENT and reports counts for every queue state', async () => {
     const s = await makeApp('queue-sent', 'SENT');
-    const res = await approvalQueue(new Request('https://yawp.test/api/internal/v1/free-tier/approval/queue?status=SENT', { headers: auth }));
+    const res = await approvalQueue(signedRequest('https://yawp.test/api/internal/v1/free-tier/approval/queue?status=SENT'));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.applications.map((r: any) => r.id)).toContain(s.id);
@@ -239,17 +304,17 @@ suite('approval queue and actions', () => {
   test('mark-manual-review from SENT and idempotent', async () => {
     const a = await makeApp('mmr', 'SENT');
     const r1 = await markManualReviewHttp(
-      new Request(`https://yawp.test/api/internal/v1/free-tier/approval/${a.id}/mark-manual-review`, {
+      signedRequest(`https://yawp.test/api/internal/v1/free-tier/approval/${a.id}/mark-manual-review`, {
         method: 'POST',
-        headers: { ...Object.fromEntries(auth), ...op, 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({}),
       }),
     );
     expect(r1.status).toBe(200);
     const r2 = await markManualReviewHttp(
-      new Request(`https://yawp.test/api/internal/v1/free-tier/approval/${a.id}/mark-manual-review`, {
+      signedRequest(`https://yawp.test/api/internal/v1/free-tier/approval/${a.id}/mark-manual-review`, {
         method: 'POST',
-        headers: { ...Object.fromEntries(auth), ...op, 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({}),
       }),
     );
@@ -264,9 +329,9 @@ suite('approval queue and actions', () => {
     process.env.FREE_TIER_RELEASE_CAP = '0';
     try {
       const denied = await reopenHttp(
-        new Request(`https://yawp.test/api/internal/v1/free-tier/approval/${a.id}/reopen`, {
+        signedRequest(`https://yawp.test/api/internal/v1/free-tier/approval/${a.id}/reopen`, {
           method: 'POST',
-          headers: { ...Object.fromEntries(auth), ...op, 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json' },
           body: JSON.stringify({}),
         }),
       );
@@ -287,24 +352,21 @@ suite('approval queue and actions', () => {
   test('submit ADMIN_SUBMITTED from ACCOUNT_CREATED only', async () => {
     const a = await makeApp('submit-acct', 'ACCOUNT_CREATED');
     const ok = await submitAdminInfoHttp(
-      new Request(`https://yawp.test/api/internal/v1/free-tier/approval/${a.id}/submit`, {
+      signedRequest(`https://yawp.test/api/internal/v1/free-tier/approval/${a.id}/submit`, {
         method: 'POST',
-        headers: { ...Object.fromEntries(auth) },
       }),
     );
     expect(ok.status).toBe(200);
     const again = await submitAdminInfoHttp(
-      new Request(`https://yawp.test/api/internal/v1/free-tier/approval/${a.id}/submit`, {
+      signedRequest(`https://yawp.test/api/internal/v1/free-tier/approval/${a.id}/submit`, {
         method: 'POST',
-        headers: { ...Object.fromEntries(auth) },
       }),
     );
     expect(again.status).toBe(200);
     const lead = await makeApp('submit-lead', 'LEAD');
     const bad = await submitAdminInfoHttp(
-      new Request(`https://yawp.test/api/internal/v1/free-tier/approval/${lead.id}/submit`, {
+      signedRequest(`https://yawp.test/api/internal/v1/free-tier/approval/${lead.id}/submit`, {
         method: 'POST',
-        headers: { ...Object.fromEntries(auth) },
       }),
     );
     expect(bad.status).toBe(409);

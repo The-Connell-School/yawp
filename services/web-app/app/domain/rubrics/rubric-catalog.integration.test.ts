@@ -330,3 +330,122 @@ run('staging keeps non-editable prompt keys and validates like save', async () =
   await db.assignmentType.update({ where: { id: linked.type.id }, data: { rubricJson: { categories: [{ key: 'old', label: 'Old', description: 'Unused', weight: 1 }] } } });
   await expect(catalog.stage({ key: perTypeKey(linked.type.id), requestId: randomUUID(), actorEmail: actor, reason: 'Read only', document, source: source() })).rejects.toMatchObject({ statusCode: 403 });
 });
+
+run('creates a new library rubric when expectedFingerprint is the empty-string sentinel', async () => {
+  const { db, catalog } = await setup();
+  const { NEW_LIBRARY_RUBRIC_EXPECTED_FINGERPRINT, toEditable } = await import('./rubric-catalog.server');
+  const source = prodLibrary('daily-pages-engagement');
+  const name = `new-library-${suffix}-${Math.random().toString(36).slice(2, 7)}`;
+  const document = structuredClone(
+    toEditable({ ...(source.schemaJson as object), name }, name).editable
+  ) as Record<string, unknown>;
+  document.name = name;
+
+  await expect(
+    catalog.save({
+      key: name,
+      requestId: randomUUID(),
+      actorEmail: actor,
+      reason: 'Create catalog rubric',
+      expectedFingerprint: 'a'.repeat(64),
+      document,
+    })
+  ).rejects.toMatchObject({ statusCode: 404 });
+
+  const created = await catalog.save({
+    key: name,
+    requestId: randomUUID(),
+    actorEmail: actor,
+    reason: 'Create catalog rubric',
+    expectedFingerprint: NEW_LIBRARY_RUBRIC_EXPECTED_FINGERPRINT,
+    document,
+  });
+  expect(created.replayed).toBe(false);
+  expect(created.revision.version).toBe(1);
+  expect(created.revision.rubricName).toBe(name);
+
+  const row = await db.rubric.findUniqueOrThrow({ where: { name } });
+  expect(row.currentRevisionId).toBe(created.revision.id);
+  expect((await db.assignmentType.findMany({ where: { rubricId: row.id } }))).toHaveLength(0);
+
+  await expect(
+    catalog.save({
+      key: name,
+      requestId: randomUUID(),
+      actorEmail: actor,
+      reason: 'Retry create',
+      expectedFingerprint: NEW_LIBRARY_RUBRIC_EXPECTED_FINGERPRINT,
+      document,
+    })
+  ).rejects.toMatchObject({ statusCode: 409 });
+
+  cleanup.push(async () => {
+    await db.rubricRevision.deleteMany({ where: { rubricName: name } });
+    await db.rubric.delete({ where: { id: row.id } });
+  });
+});
+
+run('stages a new library rubric when expectedFingerprint is the empty-string sentinel', async () => {
+  const { db, catalog } = await setup();
+  const { NEW_LIBRARY_RUBRIC_EXPECTED_FINGERPRINT, toEditable } = await import('./rubric-catalog.server');
+  const prod = prodLibrary('daily-pages-engagement');
+  const name = `new-library-staged-${suffix}-${Math.random().toString(36).slice(2, 7)}`;
+  const document = structuredClone(
+    toEditable({ ...(prod.schemaJson as object), name }, name).editable
+  ) as Record<string, unknown>;
+  document.name = name;
+  const internalSource = source();
+
+  await expect(
+    catalog.stage({
+      key: name,
+      requestId: randomUUID(),
+      actorEmail: actor,
+      reason: 'Stage new catalog rubric',
+      document,
+      source: internalSource,
+      expectedFingerprint: 'a'.repeat(64),
+    })
+  ).rejects.toMatchObject({ statusCode: 404 });
+
+  const staged = await catalog.stage({
+    key: name,
+    requestId: randomUUID(),
+    actorEmail: actor,
+    reason: 'Stage new catalog rubric',
+    document,
+    source: internalSource,
+    expectedFingerprint: NEW_LIBRARY_RUBRIC_EXPECTED_FINGERPRINT,
+  });
+  expect(staged.replayed).toBe(false);
+  expect(staged.revision.version).toBe(1);
+  expect(staged.revision.rubricName).toBe(name);
+  expect(staged.release?.revisionId).toBe(staged.revision.id);
+
+  const row = await db.rubric.findUniqueOrThrow({ where: { name } });
+  expect(row.currentRevisionId).toBeNull();
+  expect((row.schemaJson as { rubric: { categories: unknown[] } }).rubric.categories).toEqual([]);
+  expect((await db.assignmentType.findMany({ where: { rubricId: row.id } }))).toHaveLength(0);
+  const revision = await db.rubricRevision.findUniqueOrThrow({ where: { id: staged.revision.id } });
+  expect(revision.sourceContentId).toBe(internalSource.contentId);
+  expect(revision.sourceVersion).toBe(internalSource.version);
+  expect(revision.sourceFingerprint).toBe(internalSource.fingerprint);
+
+  await expect(
+    catalog.stage({
+      key: name,
+      requestId: randomUUID(),
+      actorEmail: actor,
+      reason: 'Retry stage create',
+      document,
+      source: internalSource,
+      expectedFingerprint: NEW_LIBRARY_RUBRIC_EXPECTED_FINGERPRINT,
+    })
+  ).rejects.toMatchObject({ statusCode: 409 });
+
+  cleanup.push(async () => {
+    await db.rubricRelease.deleteMany({ where: { catalogKey: name } });
+    await db.rubricRevision.deleteMany({ where: { rubricName: name } });
+    await db.rubric.delete({ where: { id: row.id } });
+  });
+});

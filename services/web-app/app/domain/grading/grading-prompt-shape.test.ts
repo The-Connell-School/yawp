@@ -184,6 +184,28 @@ describe('buildGradingPromptShape for a rubric that customizes nothing', () => {
   });
 });
 
+describe('buildGradingPromptShape display options', () => {
+  test('highlight mode asks for grammarImpairsMeaning and omits teacher notes when disabled', () => {
+    const shape = buildGradingPromptShape({
+      categories: thesisCategories,
+      minScore: 1,
+      maxScore: 5,
+      studentFirstName: 'Jordan',
+      teacherNotesEnabled: false,
+      display: {
+        showCategories: true,
+        perCategoryComments: true,
+        grammarHighlight: 'highlight',
+        teacherNotes: false,
+      },
+    });
+
+    expect(shape.systemPrompt).toContain('grammarImpairsMeaning');
+    expect(shape.systemPrompt).toContain('full credit unless');
+    expect(shape.systemPrompt).not.toContain('Teacher Note rules:');
+  });
+});
+
 describe('buildGradingPromptShape for the Cristo Rey rubric', () => {
   const rubric = CRISTO_REY_HORNBUCKLE_FIVE_PARAGRAPH_ESSAY;
   const shape = buildGradingPromptShape({

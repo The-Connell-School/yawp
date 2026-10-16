@@ -1,0 +1,172 @@
+{
+  "entry": {},
+  "entry-default": {},
+  "entry-focus": {},
+  "entry-loading": {
+    "identifier": "maya.r@lincolnhs.org"
+  },
+  "entry-empty": {},
+  "entry-invalid-email": {
+    "identifier": "maya.r@lincolnhs"
+  },
+  "entry-missing-class": {
+    "identifier": "ENG-11Q"
+  },
+  "entry-invalid-handle": {
+    "identifier": "@m"
+  },
+  "entry-throttled": {
+    "identifier": "maya.r@lincolnhs.org"
+  },
+  "entry-google-cancel": {},
+  "entry-google-error": {},
+  "entry-existing": {
+    "identifier": "maya.r@lincolnhs.org"
+  },
+  "password": {},
+  "password-email": {},
+  "password-wrong": {
+    "password": "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
+  },
+  "password-throttled": {},
+  "password-handle": {},
+  "password-handle-wrong": {
+    "password": "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
+  },
+  "password-handle-forgot": {},
+  "required-password": {},
+  "required-password-default": {},
+  "required-password-short": {
+    "password": "\u2022\u2022\u2022\u2022"
+  },
+  "required-password-mismatch": {
+    "confirmPassword": "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
+  },
+  "account-type": {},
+  "account-type-email": {},
+  "account-type-google": {},
+  "class-code": {},
+  "class-code-email": {},
+  "class-code-google": {},
+  "class-code-invalid": {
+    "classCode": "ENG-11X"
+  },
+  "class-code-full": {
+    "classCode": "ENG-11X"
+  },
+  "class-code-multiple": {},
+  "class-code-pending-invite": {},
+  "class-code-email-failed": {},
+  "email-code": {},
+  "email-code-default": {},
+  "email-code-resent": {},
+  "email-code-wrong": {
+    "code": "482913"
+  },
+  "email-code-expired": {
+    "code": "482913"
+  },
+  "email-code-reset": {},
+  "email-code-failed": {},
+  "name-password": {},
+  "name-password-email": {},
+  "name-password-google": {
+    "name": "Maya Reyes"
+  },
+  "name-password-teacher": {},
+  "name-password-admin": {},
+  "name-password-errors": {
+    "name": "Maya Reyes",
+    "password": "\u2022\u2022\u2022\u2022",
+    "confirmPassword": "\u2022\u2022\u2022\u2022\u2022"
+  },
+  "name-password-reset": {},
+  "handle-join": {},
+  "handle-join-default": {},
+  "handle-join-available": {
+    "name": "Maya Reyes",
+    "username": "maya_r"
+  },
+  "handle-join-taken": {
+    "name": "Maya Reyes",
+    "username": "maya"
+  },
+  "handle-join-full": {},
+  "handle-join-invalid-link": {},
+  "teacher": {},
+  "teacher-default": {},
+  "teacher-emailed": {},
+  "trial": {},
+  "trial-lead": {},
+  "trial-invited": {},
+  "trial-sent": {},
+  "trial-review": {},
+  "trial-rejected": {},
+  "trial-expired": {},
+  "activation": {},
+  "activation-invited": {},
+  "activation-lti": {},
+  "activation-google": {},
+  "activation-expired": {},
+  "inactive": {},
+  "inactive-student": {},
+  "inactive-staff": {},
+  "membership": {},
+  "membership-default": {},
+  "link-google": {},
+  "link-google-default": {},
+  "partner": {},
+  "partner-default": {},
+  "partner-invalid": {
+    "organizationCode": "UA-00"
+  },
+  "class-found": {},
+  "class-found-single": {},
+  "class-found-multiple": {},
+  "class-found-full": {},
+  "class-found-ambiguity": {},
+  "class-handle": {},
+  "class-handle-default": {},
+  "class-handle-available": {
+    "name": "Maya Reyes",
+    "username": "maya.r"
+  },
+  "class-handle-taken": {
+    "name": "Maya Reyes",
+    "username": "maya"
+  },
+  "class-handle-errors": {
+    "name": "Maya Reyes",
+    "username": "m!",
+    "password": "\u2022\u2022\u2022\u2022",
+    "confirmPassword": "\u2022\u2022\u2022\u2022\u2022"
+  },
+  "class-handle-filled": {
+    "name": "Maya Reyes"
+  },
+  "class-handle-from-email": {
+    "name": "Maya Reyes"
+  },
+  "class-handle-from-google": {
+    "name": "Maya Reyes"
+  },
+  "class-email": {},
+  "class-email-default": {},
+  "class-email-invalid": {
+    "identifier": "maya.r@lincolnhs"
+  },
+  "class-email-existing": {
+    "identifier": "maya.r@lincolnhs.org"
+  },
+  "class-email-cancel": {},
+  "class-email-failed": {},
+  "class-signin": {},
+  "class-signin-default": {},
+  "class-signin-invalid": {
+    "identifier": "@m"
+  },
+  "class-signin-throttled": {},
+  "joined": {},
+  "joined-default": {},
+  "joined-already": {}
+}

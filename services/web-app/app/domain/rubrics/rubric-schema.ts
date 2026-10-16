@@ -7,6 +7,7 @@ import {
   type RubricData,
   type ScoringScaleData,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
+import { validateOutputSchemaDisplay } from './output-schema-display';
 
 /**
  * One rubric, whole. The five things grading needs have always existed — they
@@ -107,6 +108,16 @@ export function parseRubricSchema(raw: unknown): RubricSchemaParseResult {
     };
   }
 
+  const outputSchema = isRecord(raw.outputSchema)
+    ? raw.outputSchema
+    : { ...DEFAULT_OUTPUT_SCHEMA_JSON };
+  const displayIssues = validateOutputSchemaDisplay(
+    (outputSchema as Record<string, unknown>).display
+  );
+  if (displayIssues.length > 0) {
+    return { ok: false, error: displayIssues[0].message };
+  }
+
   return {
     ok: true,
     schema: {
@@ -115,9 +126,7 @@ export function parseRubricSchema(raw: unknown): RubricSchemaParseResult {
       scoringScale: parseScoringScale(raw.scoringScale ?? null),
       rubric,
       promptConfig: parsePromptConfig(raw.promptConfig ?? null),
-      outputSchema: isRecord(raw.outputSchema)
-        ? raw.outputSchema
-        : { ...DEFAULT_OUTPUT_SCHEMA_JSON },
+      outputSchema,
       calibrationNotes: readString(raw.calibrationNotes) || null,
       ...(readString((raw as Record<string, unknown>).scoringMode) ===
       'holistic_tier'

@@ -130,7 +130,7 @@ test.describe.serial('Teacher grading: a Class Starter submission', () => {
 
     // No grammar or syntax markup anywhere on the panel.
     await expect(page.getByText(/grammar\/syntax issues/i)).toHaveCount(0);
-    await expect(page.getByText(/AI grammar issues:/i)).toHaveCount(0);
+    await expect(page.getByText(/Grammar issues:/i)).toHaveCount(0);
 
     await page.getByTestId('grading-assistant-generate').click();
     // The Absent chosen above is teacher feedback, so the assistant asks
@@ -151,7 +151,7 @@ test.describe.serial('Teacher grading: a Class Starter submission', () => {
     await expect(page.getByText('All in (3/3)')).toBeVisible({
       timeout: 30000,
     });
-    await expect(page.getByText(/AI grammar issues:/i)).toHaveCount(0);
+    await expect(page.getByText(/Grammar issues:/i)).toHaveCount(0);
 
     const grade = await readGrade(submissionId);
     expect(grade.rubricScores).toMatchObject({

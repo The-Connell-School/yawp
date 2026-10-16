@@ -22,22 +22,44 @@ test.describe('Thesis-Driven Essay: See how it works', () => {
         name: /teach the thesis-driven essay/i,
       })
     ).toBeVisible();
+    // What the assignment is comes first: the essay beyond the five-paragraph.
+    await expect(
+      page.getByRole('region', {
+        name: /any high school or college classroom/i,
+      })
+    ).toContainText(/five-paragraph essay/i);
+    // The teacher teaches each step; the Tutor reinforces it. The guide has to
+    // say that before it shows the Tutor.
+    const how = page.getByRole('region', { name: /teach it, step by step/i });
+    await expect(how).toContainText(/teacher creates the assignment/i);
+    await expect(how).toContainText(/you teach the process/i);
+    await expect(how).toContainText(/slide deck/i);
+    await expect(how).toContainText(/students write alongside the tutor/i);
     // The Tutor gets its own highlighted section, with its own clips.
     const tutor = page.getByRole('region', {
       name: 'How the Tutor works with students',
     });
     await expect(tutor).toBeVisible();
     await expect(tutor).toContainText(/feedback on their own draft/i);
-    await expect(tutor).toContainText(/questions instead of answers/i);
+    await expect(tutor).toContainText(/cardinal rule/i);
+    await expect(tutor).toContainText(/won’t write for the student/i);
+    await expect(tutor).toContainText(/the refusal is the point/i);
+    await expect(tutor).toContainText(/immediate feedback/i);
     await expect(tutor.locator('video source').first()).toHaveAttribute(
       'src',
       /^\/img\/thesis-essay-guide\/.+\.mp4$/
     );
-    // Grading gets the same treatment: what it is, what it isn't and why.
+    // Grading gets the same treatment: what it is, what it isn't, and why.
     const grading = page.getByRole('region', {
-      name: 'How the Grading Assistant helps you grade',
+      name: /students submit.*grading assistant/i,
     });
     await expect(grading).toBeVisible();
+    await expect(grading).toContainText(/a fully graded essay you can edit/i);
+    await expect(grading).toContainText(/consistent and fair/i);
+    // Tracking progress is a tip: cold write, teach, cold write again.
+    await expect(
+      page.getByRole('region', { name: /track student progress/i })
+    ).toContainText(/start the year with a cold write/i);
     await expect(grading).toContainText(/what it isn’t/i);
     await expect(grading).toContainText(/until you release it/i);
     // The section a school approving the Tutor reads first.

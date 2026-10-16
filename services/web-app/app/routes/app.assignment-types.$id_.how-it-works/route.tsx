@@ -13,6 +13,8 @@ import { isAssignmentTypeAvailableForAnyScope } from '~/utils/assignment-type-ac
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 
+const THESIS_COURSE_TITLE = 'The Thesis-Driven Essay';
+
 /** Which guide an assignment type has, or null for types without one. */
 function guideFor(type: { title: string; systemKey: string | null }) {
   if (type.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) return 'ap-history';
@@ -59,12 +61,33 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
   const guide = assignmentType ? guideFor(assignmentType) : null;
   if (!assignmentType || !guide) throw redirect(pagePath);
+  if (guide !== 'thesis-essay') return { pagePath, guide, coursePath: null };
 
-  return { pagePath, guide };
+  // The course that teaches teachers the process. It is linked only when this
+  // teacher can open it, by the same rule as the Teacher Training page.
+  const assigned = await prisma.orgMembership.findUnique({
+    where: { id: profile.id, role: 'TEACHER' },
+    select: { _count: { select: { assignedTeacherTrainings: true } } },
+  });
+  const course = await prisma.teacherTraining.findFirst({
+    where: {
+      title: { equals: THESIS_COURSE_TITLE, mode: 'insensitive' },
+      ...((assigned?._count.assignedTeacherTrainings ?? 0) > 0
+        ? { assignedTeachers: { some: { id: profile.id } } }
+        : {}),
+    },
+    select: { id: true },
+  });
+
+  return {
+    pagePath,
+    guide,
+    coursePath: course ? `/app/teacher-trainings/${course.id}` : null,
+  };
 }
 
 export default function AssignmentTypeHowItWorksRoute() {
-  const { pagePath, guide } = useLoaderData<typeof loader>();
+  const { pagePath, guide, coursePath } = useLoaderData<typeof loader>();
   if (guide === 'ap-history') {
     return (
       <ApHistoryGuide
@@ -81,6 +104,7 @@ export default function AssignmentTypeHowItWorksRoute() {
       backLabel="Back to The Thesis-Driven Essay"
       startTo={pagePath}
       startLabel="Create an assignment"
+      coursePath={coursePath}
     />
   );
 }

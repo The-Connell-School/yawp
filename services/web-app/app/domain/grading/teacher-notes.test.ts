@@ -4,9 +4,11 @@ import {
   gradingRepairPrivateObservationRules,
   normalizeTeacherNote,
   overallCommentWriterRules,
+  resolveTeacherNotesUiState,
   staffTeacherNoteLoaderField,
   teacherNotesEnabled,
 } from './teacher-notes';
+import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 
 const dailyPagesOnlyPhrases = [
   'Never mention grammar, spelling, syntax, or organization as a grading judgment.',
@@ -36,9 +38,20 @@ describe('teacher-notes', () => {
     expect(gradingRepairPrivateObservationRules(true)).toContain('Teacher Note rules:');
   });
 
-  test('teacherNotesEnabled is always true regardless of legacy outputSchema flag', () => {
+  test('teacherNotesEnabled honors display.teacherNotes and ignores legacy flag', () => {
     expect(teacherNotesEnabled({ teacherNotesEnabled: false })).toBe(true);
     expect(teacherNotesEnabled({})).toBe(true);
+    expect(
+      teacherNotesEnabled(
+        { display: { teacherNotes: false } },
+        {
+          showCategories: true,
+          perCategoryComments: true,
+          grammarHighlight: 'deduct',
+          teacherNotes: false,
+        }
+      )
+    ).toBe(false);
   });
 
   test('normalizeTeacherNote trims and enforces max length', () => {
@@ -47,6 +60,44 @@ describe('teacher-notes', () => {
     expect(normalizeTeacherNote(null)).toBeNull();
     expect(normalizeTeacherNote('a'.repeat(2001))).toBeNull();
     expect(normalizeTeacherNote('a'.repeat(2000))).toBe('a'.repeat(2000));
+  });
+
+  test('resolveTeacherNotesUiState covers pending, empty, and content', () => {
+    expect(
+      resolveTeacherNotesUiState({
+        assignmentTypeSystemKey: null,
+        teacherNotesEnabled: true,
+        runs: [],
+      })
+    ).toEqual({ visible: true, phase: 'pending' });
+    expect(
+      resolveTeacherNotesUiState({
+        assignmentTypeSystemKey: null,
+        teacherNotesEnabled: true,
+        runs: [{ status: 'failed' }],
+      })
+    ).toEqual({ visible: true, phase: 'pending' });
+    expect(
+      resolveTeacherNotesUiState({
+        assignmentTypeSystemKey: null,
+        teacherNotesEnabled: true,
+        runs: [{ status: 'succeeded', metadata: { teacherNote: '  ' } }],
+      })
+    ).toEqual({ visible: true, phase: 'empty' });
+    expect(
+      resolveTeacherNotesUiState({
+        assignmentTypeSystemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY,
+        teacherNotesEnabled: true,
+        runs: [{ status: 'succeeded', metadata: { teacherNote: 'x' } }],
+      })
+    ).toEqual({ visible: false });
+    expect(
+      resolveTeacherNotesUiState({
+        assignmentTypeSystemKey: null,
+        teacherNotesEnabled: false,
+        runs: [{ status: 'succeeded', metadata: { teacherNote: 'x' } }],
+      })
+    ).toEqual({ visible: false });
   });
 
   test('staffTeacherNoteLoaderField exposes notes to staff only', () => {
@@ -61,15 +112,14 @@ describe('teacher-notes', () => {
         isAdmin: false,
         run,
       })
-    ).toEqual({ teacherNote: 'PRIVATE: vocabulary shift.' });
-    expect(
-      staffTeacherNoteLoaderField({
-        isOwner: false,
-        isTeacher: true,
-        isAdmin: false,
-        run,
-      })
-    ).toEqual({ teacherNote: 'PRIVATE: vocabulary shift.' });
+    ).toEqual({
+      teacherNote: 'PRIVATE: vocabulary shift.',
+      teacherNotesUi: {
+        visible: true,
+        phase: 'content',
+        note: 'PRIVATE: vocabulary shift.',
+      },
+    });
     expect(
       staffTeacherNoteLoaderField({
         isOwner: true,
