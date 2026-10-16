@@ -112,10 +112,10 @@ changed in this correction. Independent Ship Review results are recorded in lane
 
 ## Rebase onto merged onboarding and guard contracts
 
-Rebased the existing PR #581 branch onto `41fede7b1e8d8fca6ebc3e8f149bbfc88c0f7a68`.
+Rebased the existing PR #581 branch onto `3656601963e942e3772ba1f950ec2cfc59cc0049`.
 Recovery branch `recovery/fto-approval-page-before-rebase-20261016` preserves
 `19707bddd442f7c5b0036c3f1429c3ddcebff928`. Source revision for the refreshed
-captures is `8711375f7`; the final published head is recorded by the evidence
+captures is `8ba50e4a5`; the final published head is recorded by the evidence
 manifest and lane `state/BUILD_RESULT.md`. The only subsequent changes are these
 review/handoff documents. Conflict repair retains main's class-preparation and
 below-HS reopen guards, all shared schema additions, both CI registrations and
@@ -126,7 +126,7 @@ Renewed checks through `./bin/project` with `CI=1`:
 
 - 72 approval tests pass, including all 22 durable delivery cases and the 30
   legacy approval database cases. Email is mocked or captured locally.
-- 108 project CLI/contract checks pass, including standard-runner discovery.
+- 109 project CLI/contract checks pass, including standard-runner discovery.
 - Main class-step compatibility: 57 pass, 15 legacy DB cases skipped in that
   profile; those legacy cases pass separately in the approval profile above.
 - Full typecheck passes; existing duplicate LTI route warnings remain.
@@ -150,3 +150,10 @@ gates. The driver alone verifies the available manager RDS snapshot and its
 six-hour validity window, takes the merge lock and merges. Exact additive SQL is
 in lane `state/NEEDS_SNAPSHOT.md`. No production migration, flag activation,
 actual email delivery, hosted preview, remote environment change or merge.
+
+Main advanced with the signed duplicate-class-code API (#590) during the first
+verification pass. A second minimal rebase retained its new CLI profile catalog
+entries alongside approval profiles. Earlier first-rebase checks are preserved
+under `checks/first-rebase/`; final-base transcripts are in `checks/`. Fresh
+screenshots are recaptured on the second rebase and final-head independent
+verification is recorded separately in `state/SHIP_REVIEW.md`.

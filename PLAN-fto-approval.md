@@ -9,7 +9,7 @@
 ## Rebase and renewed verification, October 16
 
 Preserve old head `19707bddd442f7c5b0036c3f1429c3ddcebff928` on a recovery
-branch and rebase the existing task branch onto `41fede7b1e8d8fca6ebc3e8f149bbfc88c0f7a68`.
+branch and rebase the existing task branch onto `3656601963e942e3772ba1f950ec2cfc59cc0049`.
 Keep main's class-preparation, below-HS and schema additions alongside delivery
 locking and prior reminder corrections. Preserve both CI registrations and all
 CLI/browser profile discovery protections. Re-run approval, CLI, main class-step
