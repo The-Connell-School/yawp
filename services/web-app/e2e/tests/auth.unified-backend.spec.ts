@@ -52,6 +52,8 @@ test.beforeAll(async () => {
     )
   )
     throw new Error('Local database required');
+  // No-mail flows run before the mailer has created its capture directory.
+  fs.mkdirSync(capture, { recursive: true, mode: 0o700 });
   await db.organization.create({
     data: { id: prefix, name: 'Lincoln High', plan: 'SCHOOL' },
   });
