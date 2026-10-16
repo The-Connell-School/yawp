@@ -13,7 +13,7 @@ export function ClassesAtAGlance({
   totalClassCount: number;
 }) {
   return (
-    <div data-testid="teacher-classes-grid">
+    <div data-testid="teacher-classes-grid" data-tour="dashboard-classes">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold">My Classes</h2>
         <div className="flex items-center gap-2">

@@ -42,6 +42,7 @@ mock.module('~/utils/auth.server.js', () => ({
 }));
 mock.module('~/domain/feature-flags/feature-flags.server', () => ({
   isFreeTierEnabled,
+  isFeatureFlagEnabled: mock(async () => false),
 }));
 mock.module('~/domain/free-tier/free-tier-gate.server', () => ({
   loadFreeTierGateApplication,
@@ -109,6 +110,7 @@ describe('app parent free-tier loader gate', () => {
         options: [],
         isStudent: false,
       },
+      guidedTours: null,
     });
   });
 });
