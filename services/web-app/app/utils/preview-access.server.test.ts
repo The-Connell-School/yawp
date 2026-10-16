@@ -147,12 +147,13 @@ describe('preview access gate', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  test('keeps only signed-service and access-code routes open', async () => {
+  test('keeps service-authenticated and access-code routes open', async () => {
     const next = mock(async () => new Response('ok'));
 
     for (const path of [
       '/api/healthcheck',
       '/api/stripe/webhook',
+      '/api/preview/qa/signon-code',
       '/auth/preview-access',
       '/auth/preview-access.data',
     ]) {
@@ -166,7 +167,7 @@ describe('preview access gate', () => {
       ).toBeNull();
     }
 
-    expect(next).toHaveBeenCalledTimes(4);
+    expect(next).toHaveBeenCalledTimes(5);
   });
 
   test('public legal reads need no seat and never authorize preview activity', async () => {

@@ -22,6 +22,8 @@ const ACCESS_CODE_PATTERN = /^[a-z]+-[a-z]+-[1-9][0-9]{3}$/;
 const MASTER_ACCESS_CODE_PATTERN =
   /^(?=.{8,64}$)[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/;
 const OPEN_PATHS = new Set([
+  // Private QA endpoint performs its own preview/database and Bearer checks.
+  '/api/preview/qa/signon-code',
   '/api/healthcheck',
   '/api/healthcheck/', // be tolerant of a trailing slash from probes
   // Stripe cannot present the human preview-access cookie. The route itself

@@ -127,6 +127,56 @@ afterAll(async () => {
   await rm(capture, { recursive: true, force: true });
   await prisma.$disconnect();
 });
+suite('private preview capture uses the normal hashed challenge, verifier, cooldown, expiry and single use', async () => {
+  // Prisma is already connected to the CLI's isolated local database. Simulate
+  // preview deployment metadata only for capture/retrieval; never contact a host.
+  const { action: retrieve } = await import('~/routes/api.preview.qa.signon-code/route');
+  const original = {
+    YAWP_ENVIRONMENT: process.env.YAWP_ENVIRONMENT,
+    DATABASE_URL: process.env.DATABASE_URL,
+    PREVIEW_ACCESS_SECRET: process.env.PREVIEW_ACCESS_SECRET,
+  };
+  try {
+    process.env.YAWP_ENVIRONMENT = 'preview';
+    process.env.DATABASE_URL = 'postgresql://fixture@preview-postgres/yawp_pr_565';
+    process.env.PREVIEW_ACCESS_SECRET = 'fixture-private-preview-secret-32-characters';
+    for (const expired of [false, true]) {
+      cookie = '';
+      flowToken = '';
+      const email = `preview-${expired}-${prefix}@example.test`;
+      await post('resolve', { identifier: email });
+      await post('resolve-class', { classCode: prefix });
+      expect((await post('send-code')).data.state.screen).toBe('email-code');
+      expect((await post('resend-code')).response.status).toBe(429);
+      const captured = await retrieve({ request: new Request('https://example.test/api/preview/qa/signon-code', {
+        method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${process.env.PREVIEW_ACCESS_SECRET}` },
+        body: JSON.stringify({ email }),
+      }) } as any);
+      expect(captured.status).toBe(200);
+      const otp = (await captured.json()).code as string;
+      expect(/^\d{6}$/.test(otp)).toBe(true);
+      const row = await prisma.signonFlow.findFirstOrThrow({ where: { data: { path: ['identifier'], equals: email } } });
+      const data = row.data as any;
+      expect(data.otp.hash).toHaveLength(64);
+      expect(JSON.stringify(row.data).includes(otp)).toBe(false);
+      if (expired) {
+        data.otp.expires = 0;
+        await prisma.signonFlow.update({ where: { id: row.id }, data: { data } });
+        expect((await post('verify-code', { code: otp })).response.status).toBe(400);
+      } else {
+        expect((await post('verify-code', { code: otp })).data.state.screen).toBe('name-password');
+        expect((await post('verify-code', { code: otp })).response.status).toBe(400);
+      }
+    }
+  } finally {
+    cookie = '';
+    flowToken = '';
+    for (const [key, value] of Object.entries(original)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
 suite(
   'resolver derives identity and class context; a token alone and posted screens prove nothing',
   async () => {

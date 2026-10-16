@@ -39,6 +39,18 @@ function renderCompose(overrides = {}) {
 }
 
 describe('renderPreviewCompose', () => {
+  test('private code capture reuses the web access secret and isolated PR database in both runtimes', () => {
+    for (const runtime of ['fast', 'production']) {
+      const preview = Bun.YAML.parse(renderCompose({ runtime }));
+      const demo = Bun.YAML.parse(renderCompose({ slug: 'demo', runtime }));
+      expect(preview.services.web.environment.PREVIEW_ACCESS_SECRET === previewAccessSecret).toBe(true);
+      expect(preview.services.web.environment.DATABASE_URL).toEndWith('/yawp_pr_142');
+      expect(demo.services.web.environment.DATABASE_URL).toEndWith('/yawp_demo');
+      for (const compose of [preview, demo]) {
+        expect(compose.services.web.environment.SIGNON_MAIL_CAPTURE_DIR).toBeUndefined();
+      }
+    }
+  });
   test('enables tester feedback only for demo', () => {
     const demo = Bun.YAML.parse(renderCompose({ slug: 'demo' }));
     const preview = Bun.YAML.parse(renderCompose());
