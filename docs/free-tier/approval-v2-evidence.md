@@ -126,7 +126,7 @@ Renewed checks through `./bin/project` with `CI=1`:
 
 - 72 approval tests pass, including all 22 durable delivery cases and the 30
   legacy approval database cases. Email is mocked or captured locally.
-- 109 project CLI/contract checks pass, including standard-runner discovery.
+- 108 project CLI/contract checks pass, including standard-runner discovery.
 - Main class-step compatibility: 57 pass, 15 legacy DB cases skipped in that
   profile; those legacy cases pass separately in the approval profile above.
 - Full typecheck passes; existing duplicate LTI route warnings remain.
