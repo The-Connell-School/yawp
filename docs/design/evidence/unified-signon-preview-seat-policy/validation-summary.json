@@ -34,9 +34,9 @@
         "id": "preview-seat-policy-real-database",
         "exitCode": 0,
         "counts": [
-          "11 pass",
+          "12 pass",
           "0 fail",
-          "167 expect() calls"
+          "193 expect() calls"
         ]
       }
     ]

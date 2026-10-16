@@ -53,8 +53,8 @@ installed fonts affect weight/wrapping. This PR does not alter sign-on CSS or
 redesign these screens. The added operator form reuses existing components/tokens
 and has no supplied artboard. `picker-*-before-after.png` captures that addition.
 
-Validation: the preview fixture profile passes 94 tests / 463 assertions,
-including 11 real-DB seat-policy cases; 21 access/session/password boundary tests
+Validation: the preview fixture profile passes 95 tests / 489 assertions,
+including 12 real-DB seat-policy cases; 21 access/session/password boundary tests
 and 12 CLI tests pass. Supplemental ordinary-seat coverage (one case / nine
 assertions) and real-session expiry coverage (one case / 24 assertions) also pass.
 Project typecheck passes. `validation-summary.json` and `tdd-evidence.md` retain
@@ -76,5 +76,5 @@ and the final commit/PR are recorded in state/BUILD_RESULT.md.
 | Master picker addition | [original/current](picker-1280-before-after.png) | [original/current](picker-390-before-after.png) |
 | Flag-OFF legacy login | [original/current](off-1280-before-after.png) | [original/current](off-390-before-after.png) |
 
-[Setup and rollback runbook](../../../../runbooks/unified-signon-preview-fixtures.md) ·
+[Setup and rollback runbook](../../../runbooks/unified-signon-preview-fixtures.md) ·
 [Builder self-check](ship-review.md) · [Validation](validation-summary.json).
