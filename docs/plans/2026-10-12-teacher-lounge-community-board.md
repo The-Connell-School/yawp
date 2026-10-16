@@ -52,8 +52,37 @@ Defaults chosen where the decisions below were still open:
 To pilot: set `LOUNGE_STAFF_NOTIFY_EMAILS` for Brian, then target the flag
 at the pilot schools from Yawp Internal.
 
-Not built yet (Phase 2 and later): Discuss tabs on modules and lessons,
-attaching Yawp objects to posts, video upload, unread badge, editing,
+### Round 2 (2026-10-16): one-click shares, Brian on video, pinned prompt
+
+- **Shares.** "Attach from Yawp" in the composer lists the teacher's own
+  assignments (deployed to one of their classes). The post stores a frozen
+  snapshot (`LoungeAttachment`), so the share survives edits to the original
+  and never reads another school's records. The feed shows it as one line;
+  the thread shows one card with Preview and "Use in my class". That button
+  counts the use (`LoungeAttachmentUse`, once per teacher) and opens
+  `/app/assignment-types/<type>?loungeShare=<id>`, where the normal creation
+  sheet opens with the prompt and the teacher picks classes. Schools without
+  that assignment type see "Your school doesn't offer … yet". Only the prompt
+  carries over; points, tutor, and grading settings use the teacher's
+  defaults. Lesson Planner lessons and rubrics are not shareable yet.
+- **Video.** The Yawp team can record in the browser (MediaRecorder, mp4
+  where supported, else webm, 5-minute cap) or upload a file (up to 500 MB)
+  on posts and replies. Files go straight from the browser to the videos
+  bucket with a presigned PUT; the database keeps only the key and playback
+  URLs are signed per page load. E2E, opted-in local dev
+  (`LOUNGE_VIDEO_LOCAL_STORE=true`), and PR previews store videos on disk
+  instead (`/api/lounge/video-local`); production and demo always use S3.
+  Captions and transcripts are not generated; the reply text is required and
+  shows above the video.
+- **Pinned prompt.** The Yawp team can pin a post (checkbox when posting, or
+  Pin to top / Unpin in the thread). The newest pinned post shows above the
+  feed as "This week from <first name>".
+
+Before relying on recording in production: the videos bucket's CORS allows
+PUT from https://yawp.school and the App Runner URL, which covers the app.
+
+Not built yet: Discuss tabs on modules and lessons, sharing Lesson Planner
+lessons and rubrics, captions for videos, unread badge, editing,
 notification settings, weekly digest, search.
 
 ## Why now
