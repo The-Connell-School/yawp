@@ -43,14 +43,7 @@ for (const width of [1280, 390]) test(`expiry, rejection, budget pause, reading 
     await page.goto('/app/my-classes');
     await capture(page, 'entry');
     if (!before) {
-      const statusLink = page.getByRole('link', { name: 'Free classroom status', exact: true });
-      if (await statusLink.isVisible()) {
-        await statusLink.click();
-      } else {
-        if (width === 390) await page.getByRole('button', { name: 'Open app navigation' }).click();
-        await page.getByRole('button', { name: 'Usage', exact: true }).click();
-        await page.getByRole('link', { name: 'Need more? Talk to us', exact: true }).click();
-      }
+      await page.getByRole('link', { name: 'Free classroom status', exact: true }).click();
       await expect(page.getByRole('heading', { name: 'Free classroom access', exact: true })).toBeVisible();
     }
     await status('EXPIRED');

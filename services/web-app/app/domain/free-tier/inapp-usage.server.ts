@@ -1,3 +1,7 @@
+import {
+  isFreeTierInappV2Enabled,
+  type FreeTierInappProfile,
+} from './inapp-feature-gate.server';
 import { prisma } from '~/utils/db.server';
 import { getFreeClassroomAssignmentQuotaUsage } from '~/utils/assignment-quota.server';
 import { countFreeClassSeatUsage } from './class-seat-cap.server';
@@ -9,11 +13,15 @@ import {
 import { buildFreeAccountUsage, type FreeAccountUsage } from './inapp-usage';
 import { readGradingLimitStatus } from '~/utils/rate-limit.server';
 
-/** Only called after the existing account/feature/teacher gates have passed. */
+/** Gate before performing any additional v2 usage reads. */
 export async function readFreeAccountUsage(
-  organizationId: string,
-  membershipId: string
-): Promise<FreeAccountUsage> {
+  profile: FreeTierInappProfile & { id: string },
+  freeTierRouteOpen: boolean
+): Promise<FreeAccountUsage | null> {
+  if (!(await isFreeTierInappV2Enabled(profile, freeTierRouteOpen)))
+    return null;
+  const organizationId = profile.organization.id;
+  const membershipId = profile.id;
   const entitlements = getEntitlements('FREE_CLASSROOM');
   const klass = await prisma.class.findFirst({
     where: {

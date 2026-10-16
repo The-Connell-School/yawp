@@ -43,10 +43,7 @@ async function openSheet(page: Page) {
     .getByRole('button', { name: /New Assignment/i })
     .first()
     .click();
-  const sheet = page.getByRole('dialog');
-  const firstType = sheet.getByRole('button', { name: /^Class Starter.*left/ });
-  if (await firstType.isVisible() && await firstType.isEnabled()) await firstType.click();
-  return sheet;
+  return page.getByRole('dialog');
 }
 
 test.beforeAll(async () => {

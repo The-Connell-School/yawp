@@ -4,6 +4,7 @@ import {
   INTERNAL_RUBRICS_FLAG,
   LESSON_PLANNER_FLAG,
   FREE_TIER_FLAG,
+  FREE_TIER_INAPP_V2_FLAG,
   UNIFIED_SIGN_ON_FLAG,
   FEATURE_FLAG_KEYS,
   isFreeTierGloballyEnabled,
@@ -54,11 +55,18 @@ describe('feature flag registry', () => {
     expect(featureFlagSettingName(FREE_TIER_FLAG)).toBe('feature_flag.free_tier');
   });
 
+  test('registers the default-off in-app presentation flag', () => {
+    expect(FREE_TIER_INAPP_V2_FLAG).toBe('free-tier-inapp-v2');
+    expect(FEATURE_FLAG_KEYS).toContain(FREE_TIER_INAPP_V2_FLAG);
+    expect(evaluateFeatureFlag(parseFeatureFlagValue(null), 'org-1')).toBe(false);
+  });
+
   test('lists every registered flag key', () => {
     expect(FEATURE_FLAG_KEYS).toEqual([
       LESSON_PLANNER_FLAG,
       INTERNAL_RUBRICS_FLAG,
       FREE_TIER_FLAG,
+      FREE_TIER_INAPP_V2_FLAG,
       UNIFIED_SIGN_ON_FLAG,
     ]);
   });

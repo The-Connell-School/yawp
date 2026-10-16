@@ -1,6 +1,5 @@
 import { FreeReporterLocked } from '~/components/free-account-usage';
-import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { isDemoFreeTierRouteOpen } from '~/utils/free-tier/free-tier-feature-gate.server';
+import { isFreeTierInappV2Enabled } from '~/domain/free-tier/inapp-feature-gate.server';
 import { useEffect, useRef, useState } from 'react';
 import {
   redirect,
@@ -36,8 +35,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const access = await getReporterAccess(request);
   if (
     access.isTeacher &&
-    access.membership.organization.plan === 'FREE_CLASSROOM' &&
-    (isDemoFreeTierRouteOpen(process.env) || (await isFreeTierEnabled()))
+    (await isFreeTierInappV2Enabled(access.membership))
   ) {
     return {
       freeLocked: true,

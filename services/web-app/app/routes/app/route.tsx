@@ -184,12 +184,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return data({
     mockAdminAvailable,
-    freeAccountUsage:
-      freeTierRouteOpen &&
-      profile.role === 'TEACHER' &&
-      profile.organization.plan === 'FREE_CLASSROOM'
-        ? await readFreeAccountUsage(profile.organization.id, profile.id)
-        : null,
+    freeAccountUsage: await readFreeAccountUsage(profile, freeTierRouteOpen),
     schoolYearScope: {
       selected,
       options: selectableOptions,
@@ -554,7 +549,7 @@ export default function Route() {
             variant="outline"
             size="icon"
             ref={mobileNavTrigger}
-            aria-label="Open app navigation"
+            aria-label={freeAccountUsage ? 'Open app navigation' : undefined}
             onClick={() => setIsMobileNavOpen(true)}
           >
             <HamburgerIcon />

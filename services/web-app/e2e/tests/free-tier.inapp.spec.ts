@@ -1,7 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { mkdirSync, appendFileSync } from 'node:fs';
+import { mkdirSync, appendFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { setFreeTierFlag, setLessonPlannerFlag } from '../feature-flags';
+import {
+  setFeatureFlag,
+  setFreeTierFlag,
+  setLessonPlannerFlag,
+} from '../feature-flags';
 import { createE2EPrismaClient } from '../prisma-client';
 
 const db = createE2EPrismaClient();
@@ -47,11 +51,59 @@ async function capture(page: import('@playwright/test').Page, state: string) {
       .getByRole('textbox', { name: 'Message the Lesson Planner' })
       .fill('A local lesson for this class.');
   }
+  await page.waitForLoadState('networkidle');
   await page.mouse.move(0, 0);
   await page.evaluate(() => document.fonts.ready);
   // Existing hover/focus transitions last 300ms; capture the settled layout.
   await page.waitForTimeout(400);
   await page.screenshot({ path: join(evidence, file), animations: 'disabled' });
+  if (
+    state.startsWith('v2-off-free-') ||
+    state.startsWith('paid-') ||
+    state.startsWith('flag-off-')
+  ) {
+    const layout = await page.locator('main').evaluate((main) =>
+      [main, ...main.querySelectorAll('*')].flatMap((el) => {
+        const box = el.getBoundingClientRect();
+        if (!box.width || !box.height) return [];
+        const css = getComputedStyle(el);
+        return [
+          {
+            tag: el.tagName,
+            role: el.getAttribute('role'),
+            label: el.getAttribute('aria-label'),
+            disabled: el.getAttribute('disabled'),
+            text: el.children.length ? null : el.textContent,
+            box: [box.x, box.y, box.width, box.height],
+            style: Object.fromEntries(
+              [
+                'display',
+                'position',
+                'color',
+                'background-color',
+                'font-family',
+                'font-size',
+                'font-weight',
+                'line-height',
+                'padding',
+                'margin',
+                'border',
+                'border-radius',
+                'box-shadow',
+                'transform',
+                'opacity',
+              ].map((key) => [key, css.getPropertyValue(key)])
+            ),
+          },
+        ];
+      })
+    );
+    writeFileSync(
+      join(evidence, file.replace('.png', '.layout.json')),
+      JSON.stringify(layout, null, 2) + '\n'
+    );
+  }
+
   appendFileSync(
     join(evidence, 'manifest.jsonl'),
     JSON.stringify({
@@ -99,9 +151,87 @@ async function assertMobileUsage(page: import('@playwright/test').Page) {
 test.describe.configure({ mode: 'serial' });
 test.beforeAll(async () => {
   await setFreeTierFlag(true);
+  await setFeatureFlag('free-tier-inapp-v2', true);
   await setLessonPlannerFlag(true);
 });
-test.afterAll(() => db.$disconnect());
+test.afterAll(async () => {
+  await setFeatureFlag('free-tier-inapp-v2', false);
+  await db.$disconnect();
+});
+for (const width of [1440, 390]) {
+  test(`free-account legacy controls with v2 off (${width})`, async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width, height: width === 390 ? 1400 : 1000 });
+    const klass = await db.class.findFirstOrThrow({
+      where: { school: { organizationId: orgId }, isArchived: false },
+    });
+    const assignment = await db.classAssignment.findFirstOrThrow({
+      where: { classId: klass.id },
+    });
+    try {
+      await db.setting.deleteMany({
+        where: { name: 'feature_flag.free-tier-inapp-v2' },
+      });
+      await login(page);
+      await expect(page.locator('[data-free-account]')).toHaveCount(0);
+      await setFeatureFlag('free-tier-inapp-v2', false);
+      for (const [route, name] of [
+        ['/app', 'dashboard'],
+        ['/app/my-classes', 'classes'],
+        [`/app/my-classes/${klass.id}?tab=students`, 'students'],
+        [`/app/my-classes/${klass.id}?tab=assignments`, 'class-assignments'],
+        ['/app/assignments', 'assignments'],
+        [`/app/assignments/${assignment.assignmentId}`, 'assignment'],
+        ['/app/documents?status=needs-grading&reset=1', 'documents'],
+        ['/app/lesson-planner', 'planner'],
+        ['/app/reporter', 'reporter-redirect'],
+      ]) {
+        await page.goto(route!);
+        await expect(page.locator('[data-free-account]')).toHaveCount(0);
+        await expect(page.getByTestId('free-reporter-locked')).toHaveCount(0);
+        await expect(
+          page.getByRole('button', { name: 'Usage', exact: true })
+        ).toHaveCount(0);
+        if (name === 'dashboard')
+          await expect(
+            page.getByTestId('teacher-assignments-grid')
+          ).toBeVisible();
+        if (name === 'classes')
+          await expect(
+            page.getByRole('link', {
+              name: 'Free classroom status',
+              exact: true,
+            })
+          ).toBeVisible();
+        if (name === 'students')
+          await expect(
+            page.getByRole('heading', {
+              name: 'Student join link',
+              exact: true,
+            })
+          ).toBeVisible();
+        if (name === 'reporter-redirect')
+          await expect(page).toHaveURL(/\/app\/?$/);
+        await capture(page, `v2-off-free-${name}-${width}`);
+        if (name === 'assignments') {
+          await page
+            .getByRole('button', { name: 'New Assignment', exact: true })
+            .click();
+          await expect(page.getByRole('combobox').first()).toBeVisible();
+          await capture(page, `v2-off-free-type-picker-${width}`);
+          await page.keyboard.press('Escape');
+        }
+      }
+      await setFeatureFlag('free-tier-inapp-v2', true);
+      await login(page, false);
+      await capture(page, `paid-app-${width}`);
+    } finally {
+      await setFeatureFlag('free-tier-inapp-v2', true);
+    }
+  });
+}
 for (const width of [1440, 390]) {
   test(`usage, exhausted types, page controls and paid control (${width})`, async ({
     page,

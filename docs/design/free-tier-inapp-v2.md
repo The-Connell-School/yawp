@@ -1,11 +1,17 @@
 # Free-account in-app presentation (v2)
 
-Merge is held through the Friday October 16 intern session. The driver owns release.
-No schema, policy, cap, permission, grading action, feature-setting or auth changes.
+The merge hold is released. The driver owns merge and release.
+The new `free-tier-inapp-v2` flag defaults OFF on demo and production; no Setting
+row is created by this change. Do not run the Demo environment workflow before
+October 16 at 6 PM America/Chicago.
+No schema, policy, cap, permission, grading action, environment setting or auth changes.
 
 The app parent reads presentation data only for an eligible free-account teacher
-while the existing free-tier gate is open. The existing demo exception still
-applies. All other accounts retain the previous rendering. Documents already
+while the existing free-tier gate is open and `free-tier-inapp-v2` is enabled
+for the authenticated organization. The existing demo exception still
+applies. All other accounts, including free accounts with the new flag missing or off,
+retain the current main rendering and controls. Reporter uses the same gate.
+When disabled, no additional v2 usage reads run. Documents already
 matches the requested Needs Grading view; its existing status URL is used.
 
 ## Data and design discrepancies for Ship Review
@@ -47,10 +53,11 @@ Playwright output must point into the lane-private `TMPDIR`.
 - Start the isolated server with `./bin/project dev start --json`, then run
   `./bin/project test --profile free-tier-inapp-browser --json` in that same
   process session, and always run `./bin/project dev stop --json` afterwards.
-- `FREE_INAPP_REGRESSION=navigation` runs the existing join and trial-status flows against the new class heading and Usage status entry. These flows need an ephemeral local `FREE_TIER_LINK_HMAC_SECRET` and the local `PRIMARY_APP_URL` on the dev server, as in CI. No auth implementation is changed.
+- `FREE_INAPP_REGRESSION=navigation` runs the existing join and trial-status flows with the v2 flag off and their original UI expectations. These flows need an ephemeral local `FREE_TIER_LINK_HMAC_SECRET` and the local `PRIMARY_APP_URL` on the dev server, as in CI. No auth implementation is changed.
 - `FREE_INAPP_REGRESSION=1` runs the existing quota and assignment-choice browser files.
 - `PW_EXECUTABLE_PATH` can select an already installed Chromium through the supported configuration override.
 - `FREE_INAPP_SHOTS` selects permanent local screenshot evidence.
+- `FREE_INAPP_CONTROLS=1` runs only the free-account legacy controls and paid dashboard comparisons.
 - `FREE_INAPP_BEFORE=1` captures the same local states against the parent revision.
 
 The browser profile uses one Chromium worker and only loopback URLs. It restores
@@ -80,3 +87,9 @@ API denial. Evidence uses the exported device panel dimensions: Usage at
 (board 46), and the existing desktop 1440×1000 viewport. The screenshot manifest
 records each capture's actual dimensions; the implementation comparisons preserve
 natural screenshot sizes rather than stretching the device viewport to the export.
+
+The in-app browser spec explicitly sets `free-tier-inapp-v2` through the local
+`setFeatureFlag` helper and turns it off afterwards. Its free-account controls
+exercise both a missing Setting and explicit off, the legacy assignment picker,
+class join card, status link, Reporter redirect, and all affected desktop/mobile
+pages. Existing free-tier regression expectations remain those of main.
