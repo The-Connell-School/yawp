@@ -47,6 +47,7 @@ describe('app.assignment-type-previews.$slug', () => {
     expect(await load('ap-history-essay')).toEqual({
       slug: 'ap-history-essay',
     });
+    expect(await load('daily-pages')).toEqual({ slug: 'daily-pages' });
   });
 
   test('is not found for an unknown slug', async () => {

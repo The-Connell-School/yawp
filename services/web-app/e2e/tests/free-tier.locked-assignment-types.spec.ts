@@ -10,6 +10,7 @@ const STUDENT_PASSWORD = 'johndoe';
 
 const THESIS_TEASER = '/app/assignment-type-previews/thesis-driven-essay';
 const AP_HISTORY_TEASER = '/app/assignment-type-previews/ap-history-essay';
+const DAILY_PAGES_TEASER = '/app/assignment-type-previews/daily-pages';
 
 async function logInAsFreeTeacher(page: Page) {
   await page.goto('/auth/login');
@@ -48,9 +49,15 @@ test.describe.serial('Free tier: locked assignment types', () => {
     ]);
 
     const locked = grid.locator('[data-locked="true"]');
-    await expect(locked).toHaveCount(2);
+    await expect(locked).toHaveCount(3);
     await expect(locked.nth(0)).toContainText('The Thesis-Driven Essay');
     await expect(locked.nth(1)).toContainText('AP History Essay');
+    await expect(locked.nth(2)).toContainText('Daily Pages');
+    // Daily Pages keeps the card art it has on a paid school's dashboard.
+    await expect(locked.nth(2).locator('img')).toHaveAttribute(
+      'src',
+      '/img/daily-pages-guide/card.jpg'
+    );
     // A locked tile can't make an assignment, so it has no + button.
     await expect(
       grid.getByRole('button', { name: /New The Thesis-Driven Essay/ })
@@ -120,9 +127,34 @@ test.describe.serial('Free tier: locked assignment types', () => {
     await expect(page.getByTestId('guide-wont')).toContainText(
       /write the essay for a student/i
     );
+    await expect(page.locator('video source').first()).toHaveAttribute(
+      'src',
+      /^\/img\/ap-history-guide\/.+\.mp4$/
+    );
+  });
+
+  test('the Daily Pages teaser shows its own guide', async ({ page }) => {
+    await logInAsFreeTeacher(page);
+    await page.goto('/app');
+    await page
+      .getByRole('link', { name: /Daily Pages, included with a paid plan/ })
+      .click();
+    await expect(page).toHaveURL(new RegExp(`${DAILY_PAGES_TEASER}$`));
+
     await expect(
-      page.locator('main img[src^="/img/ap-history-guide/"]').first()
+      page.getByRole('heading', { level: 1, name: /daily writing/i })
     ).toBeVisible();
+    await expect(page.getByTestId('locked-type-banner')).toBeVisible();
+    await expect(page.getByTestId('guide-wont')).toContainText(
+      /grammar/i
+    );
+    await expect(page.locator('video source').first()).toHaveAttribute(
+      'src',
+      /^\/img\/daily-pages-guide\/.+\.mp4$/
+    );
+    await expect(
+      page.getByRole('link', { name: 'Create an assignment' })
+    ).toHaveCount(0);
   });
 
   test('an unknown teaser is not found', async ({ page }) => {
@@ -136,7 +168,11 @@ test.describe.serial('Free tier: locked assignment types', () => {
   test('teasers stay in bounds on a phone', async ({ page }) => {
     await logInAsFreeTeacher(page);
     await page.setViewportSize({ width: 390, height: 844 });
-    for (const path of [THESIS_TEASER, AP_HISTORY_TEASER]) {
+    for (const path of [
+      THESIS_TEASER,
+      AP_HISTORY_TEASER,
+      DAILY_PAGES_TEASER,
+    ]) {
       await page.goto(path);
       await expect(page.getByTestId('guide-wont')).toBeVisible();
       const overflow = await page.evaluate(

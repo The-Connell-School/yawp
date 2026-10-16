@@ -86,10 +86,10 @@ test.describe('Thesis-Driven Essay: See how it works', () => {
   }) => {
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(
-      `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
+      `/app/assignment-types/${e2eContext.classStarterAssignmentTypeId}`
     );
     await expect(
-      page.getByRole('heading', { level: 1, name: 'Daily Pages' })
+      page.getByRole('heading', { level: 1, name: 'Class Starter' })
     ).toBeVisible();
     await expect(
       page.getByRole('link', { name: 'See how it works' })
@@ -97,11 +97,11 @@ test.describe('Thesis-Driven Essay: See how it works', () => {
 
     // And the guide's address sends a teacher back to the type's own page.
     await page.goto(
-      `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}/how-it-works`
+      `/app/assignment-types/${e2eContext.classStarterAssignmentTypeId}/how-it-works`
     );
     await expect(page).toHaveURL(
       new RegExp(
-        `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}$`
+        `/app/assignment-types/${e2eContext.classStarterAssignmentTypeId}$`
       )
     );
   });
@@ -123,12 +123,62 @@ test.describe('Thesis-Driven Essay: See how it works', () => {
     const wont = page.getByTestId('guide-wont');
     await expect(wont).toContainText(/write the essay for a student/i);
     await expect(wont).toContainText(/ready to submit/i);
-    await expect(
-      page.locator('img[src^="/img/ap-history-guide/"]').first()
-    ).toBeVisible();
+    await expect(page.locator('video source').first()).toHaveAttribute(
+      'src',
+      /^\/img\/ap-history-guide\/.+\.mp4$/
+    );
 
     await page.getByRole('link', { name: /back to AP History Essay/i }).click();
     await expect(page).toHaveURL(new RegExp(`${pagePath}$`));
+  });
+
+  test('Daily Pages opens its own guide', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    const pagePath = `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`;
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(pagePath);
+
+    await page.getByRole('link', { name: 'See how it works' }).click();
+    await expect(page).toHaveURL(new RegExp(`${pagePath}/how-it-works$`));
+    await expect(
+      page.getByRole('heading', { level: 1, name: /daily writing/i })
+    ).toBeVisible();
+    // The section a school reads first: what it never does to a student.
+    const wont = page.getByTestId('guide-wont');
+    await expect(wont).toContainText(/grammar/i);
+    await expect(wont).toContainText(/grade before you release it/i);
+    await expect(page.locator('video source').first()).toHaveAttribute(
+      'src',
+      /^\/img\/daily-pages-guide\/.+\.mp4$/
+    );
+
+    await page.getByRole('link', { name: /back to Daily Pages/i }).click();
+    await expect(page).toHaveURL(new RegExp(`${pagePath}$`));
+  });
+
+  test('keeps the Daily Pages guide in bounds on a phone', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    const pagePath = `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`;
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    await page.goto(pagePath);
+    await expect(
+      page.getByRole('link', { name: 'See how it works' })
+    ).toBeVisible();
+
+    await page.goto(`${pagePath}/how-it-works`);
+    await expect(page.getByTestId('guide-wont')).toBeVisible();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
   });
 
   test('keeps the guide teacher-only', async ({ page, signIn, e2eContext }) => {

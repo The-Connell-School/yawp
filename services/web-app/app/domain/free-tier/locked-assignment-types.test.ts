@@ -15,10 +15,18 @@ const FREE_TEACHER = {
 } as const;
 
 describe('locked assignment type teasers', () => {
-  test('start with The Thesis-Driven Essay and AP History Essay', () => {
+  test('are The Thesis-Driven Essay, AP History Essay, and Daily Pages', () => {
     expect(LOCKED_ASSIGNMENT_TYPE_TEASERS.map((teaser) => teaser.slug)).toEqual(
-      ['thesis-driven-essay', 'ap-history-essay']
+      ['thesis-driven-essay', 'ap-history-essay', 'daily-pages']
     );
+  });
+
+  test('give Daily Pages its own card art', () => {
+    expect(findLockedAssignmentTypeTeaser('daily-pages')).toEqual({
+      slug: 'daily-pages',
+      title: 'Daily Pages',
+      image: '/img/daily-pages-guide/card.jpg',
+    });
   });
 
   test('are shown to a free classroom teacher while the flag is on', () => {
