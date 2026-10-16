@@ -145,7 +145,7 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'my-classes-create',
         title: 'One class included',
-        body: 'Free classrooms include one class with up to 35 students. To start a new class, archive this one or upgrade.',
+        body: 'Your free classroom includes one class. Check the student limit shown for your classroom. To start a new class, archive this one or upgrade.',
       },
     ],
   },
@@ -280,7 +280,7 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'planner-rail',
         title: 'Your lessons',
-        body: 'Every lesson you plan is saved here. Your free classroom includes a limited number of lesson plans; deleting a draft frees one up.',
+        body: 'Every lesson you plan is saved here. Your free classroom includes a limited number of lesson plans. Check your usage before planning another lesson.',
       },
       {
         target: 'planner-guide',
@@ -300,7 +300,7 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'organization-tabs',
         title: 'Classes, schools, teachers, students',
-        body: 'Switch tabs to see everyone and everything in your account. Your free classroom has one class with room for up to 35 students.',
+        body: 'Switch tabs to see everyone and everything in your account. Your free classroom has one class with room for students up to your classroom’s current limit.',
       },
       {
         target: 'organization-content',
