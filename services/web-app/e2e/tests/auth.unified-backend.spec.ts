@@ -97,6 +97,89 @@ test.afterAll(async () => {
   await db.organization.delete({ where: { id: prefix } });
   await db.$disconnect();
 });
+// FAILURES.md: di-signon-fix-join-confirmation. No mocked auth responses.
+for (const width of [1280, 390]) {
+  for (const journey of ['password-new', 'password-already', 'handle', 'email-signup']) {
+    test(`class confirmation ${journey} at ${width}`, async ({ page }) => {
+      test.fail(process.env.SIGNON_EXPECT_FAILURE === '1', 'Current main skips the class confirmation');
+      test.setTimeout(60000);
+      await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
+      await db.setting.upsert({
+        where: { name: flag }, update: { value: 'true' },
+        create: { name: flag, value: 'true', valueType: 'boolean' },
+      });
+      const address = `${prefix}-${journey}-${width}@example.test`;
+      const username = `joined${width}${journey.replace(/-/g, '')}${Date.now()}`;
+      const password = 'local-password';
+      const already = journey === 'password-already' || journey === 'handle';
+      let userId: string;
+      if (journey !== 'email-signup') {
+        const user = await db.user.create({ data: {
+          email: address, username, name: 'Local Student',
+          password: { create: { hash: await bcrypt.hash(password, 10) } },
+          memberships: { create: {
+            organizationId: prefix, role: 'STUDENT',
+            ...(already ? { classesAsStudent: { connect: { id: prefix } } } : {}),
+          } },
+        } });
+        userId = user.id;
+      }
+      const next = () => page.getByRole('button', { name: 'Continue', exact: true });
+      await page.goto('/auth/login?redirectTo=%2Fapp%2Fmy-classes');
+      await page.waitForFunction(() => Boolean((window as any).__reactRouterDataRouter));
+      await page.getByLabel('Email or class code').fill(prefix);
+      await next().click();
+      await page.getByRole('button', { name: journey === 'handle' ? /^Returning/ : /^New/ }).click();
+      if (journey === 'handle') {
+        await page.getByLabel('Handle', { exact: true }).fill(username);
+        await page.getByLabel('Password', { exact: true }).fill(password);
+        await page.getByRole('button', { name: 'Log In', exact: true }).click();
+      } else {
+        await page.getByRole('button', { name: 'Use school email', exact: true }).click();
+        await page.getByLabel('School email', { exact: true }).fill(address);
+        await next().click();
+        if (journey === 'email-signup') {
+          await page.getByRole('button', { name: 'Email me a code', exact: true }).click();
+          await expect(page.getByLabel('Code', { exact: true })).toBeVisible();
+          await page.getByLabel('Code', { exact: true }).fill(await codeFor(address));
+          await page.getByRole('button', { name: 'Verify', exact: true }).click();
+          await page.getByLabel('Your name', { exact: true }).fill('Local Student');
+          await page.getByLabel('Password', { exact: true }).fill(password);
+          await page.getByLabel('Confirm password', { exact: true }).fill(password);
+          await page.getByRole('button', { name: 'Create Account', exact: true }).click();
+        } else {
+          await shot(page, `signon-40-${journey}-notice`, width);
+          await page.getByRole('button', { name: 'Sign in instead', exact: true }).click();
+          await page.getByLabel('Password', { exact: true }).fill(password);
+          await page.getByRole('button', { name: 'Log In', exact: true }).click();
+        }
+      }
+      await page.waitForLoadState('networkidle');
+      await shot(page, `signon-${already ? '44' : '43'}-${journey}`, width);
+      await expect(page.getByRole('heading', {
+        name: already ? "You're already in this class" : "You're in!", exact: true,
+      })).toBeVisible({ timeout: 8000 });
+      await expect(page.locator('.signon-class')).toContainText('English 11, Period 2');
+      await expect(page.locator('.signon-class')).toContainText('Lincoln High');
+      await expect(page.getByText('Your handle is', { exact: false })).toHaveCount(0);
+      const user = await db.user.findUniqueOrThrow({ where: { email: address } });
+      userId = user.id;
+      const sessionCount = await db.session.count({ where: { userId } });
+      expect(sessionCount).toBe(1);
+      const flowCookies = (await page.context().cookies()).filter(c => c.name === 'yawp_signon');
+      expect(flowCookies).toHaveLength(1);
+      await page.reload();
+      await expect(page.getByRole('button', { name: 'Go to my class', exact: true })).toBeVisible();
+      expect(await db.session.count({ where: { userId } })).toBe(sessionCount);
+      await page.getByRole('button', { name: 'Go to my class', exact: true }).click();
+      await expect(page).toHaveURL(/\/app\/my-classes$/);
+      await shot(page, `signon-${already ? '44' : '43'}-${journey}-destination`, width);
+      expect(await db.session.count({ where: { userId } })).toBe(sessionCount);
+      expect(await db.orgMembership.count({ where: { userId, classesAsStudent: { some: { id: prefix } } } })).toBe(1);
+      expect(await db.user.count({ where: { email: address } })).toBe(1);
+    });
+  }
+}
 // Real resolver/registration regression for FAILURES.md di-signon-fix-email-handle-notice.
 for (const width of [1280, 390])
   test(`email-origin free-class notice survives navigation and validation at ${width}`, async ({
