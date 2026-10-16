@@ -83,6 +83,76 @@ test.describe.serial('Free tier guided tour', () => {
     await setFreeTierFlag(true);
   });
 
+  for (const width of [1280, 390]) {
+    test(`onboarding keeps tours hidden until approval at ${width}px`, async ({ page }) => {
+      const prisma = createE2EPrismaClient();
+      const user = await prisma.user.findUniqueOrThrow({
+        where: { email: FREE_TEACHER_EMAIL },
+        include: { memberships: { include: { organization: true } } },
+      });
+      const organizationId = user.memberships.find(
+        membership => membership.organization.plan === 'FREE_CLASSROOM'
+      )!.organizationId;
+      const original = await prisma.freeTierApplication.findUnique({
+        where: { email: FREE_TEACHER_EMAIL },
+      });
+      const application = await prisma.freeTierApplication.upsert({
+        where: { email: FREE_TEACHER_EMAIL },
+        create: {
+          email: FREE_TEACHER_EMAIL, userId: user.id,
+          name: 'Local tour teacher', schoolName: 'Local tour fixture',
+          location: 'Local', gradeLevel: '11', status: 'ACCOUNT_CREATED',
+        },
+        update: { status: 'ACCOUNT_CREATED', organizationId: null, starterClassName: null, starterClassGrade: null },
+      });
+      const emailCount = await prisma.freeTierEmailLog.count({ where: { applicationId: application.id } });
+      try {
+        await setFeatureFlag('free-tier-onboarding-v2', true);
+        await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
+        await logInAsFreeTeacher(page);
+        await page.goto('/app');
+        await expect(page).toHaveURL(/\/app\/free-tier\/onboarding$/);
+        await expect(page.getByRole('heading', { name: 'Create your class' })).toBeVisible();
+        await expect(page.getByTestId('guided-tour-welcome')).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'Tour this page' })).toHaveCount(0);
+        await expect(page.locator('[aria-current="step"]')).toContainText('Create your class');
+        await shot(page, `onboarding-${width}-class`);
+        await page.getByLabel('Class name').fill('AP English 11');
+        await page.getByLabel('Grade').selectOption('11');
+        await page.getByRole('button', { name: 'Continue', exact: true }).click();
+        await expect(page.getByRole('heading', { name: 'Ask your administrator' })).toBeVisible();
+        await expect(page.getByTestId('guided-tour-welcome')).toHaveCount(0);
+        await shot(page, `onboarding-${width}-administrator`);
+        expect(await tourOutcome('dashboard')).toBeNull();
+        expect(await prisma.freeTierEmailLog.count({ where: { applicationId: application.id } })).toBe(emailCount);
+
+        // Approval is a local fixture transition; no approval request is sent.
+        await prisma.freeTierApplication.update({
+          where: { id: application.id }, data: { status: 'APPROVED', organizationId },
+        });
+        await page.goto('/app');
+        await expect(page.getByTestId('guided-tour-welcome')).toBeVisible();
+        await shot(page, `onboarding-${width}-approved-tour`);
+      } finally {
+        if (original) {
+          await prisma.freeTierApplication.update({
+            where: { id: original.id },
+            data: {
+              status: original.status,
+              organizationId: original.organizationId,
+              starterClassName: original.starterClassName,
+              starterClassGrade: original.starterClassGrade,
+            },
+          });
+        } else {
+          await prisma.freeTierApplication.delete({ where: { id: application.id } });
+        }
+        await setFeatureFlag('free-tier-onboarding-v2', false);
+        await prisma.$disconnect();
+      }
+    });
+  }
+
   test('dashboard welcome card walks through the tour step by step', async ({
     page,
   }) => {
