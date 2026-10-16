@@ -45,6 +45,7 @@ import {
 } from './flow.server';
 import { chooseClass, resolveClasses, selectedClass } from './classes.server';
 import { deliverCode } from './mail.server';
+import { assertResendMailAvailable } from './resend-mail.server';
 import { finishAuthentication } from './authentication.server';
 import { readInvitation, prepareInvitation } from './invitations.server';
 import { beginGoogle, googleAvailable } from './google.server';
@@ -697,11 +698,7 @@ async function operate(
   }
   if (operation === 'resend-invite' || operation === 'resend-approval') {
     await requireFreeTierEnabled();
-    if (
-      process.env.NODE_ENV !== 'production' &&
-      !process.env.SIGNON_MAIL_CAPTURE_DIR
-    )
-      throw new FlowError('Email delivery is unavailable.', 503);
+    assertResendMailAvailable();
     if (!flow.data.proof) throw new FlowError('Verify your email first.', 401);
     await limit(request, flow.data.identifier || flow.id, 'forgotPassword');
     const application = await tx.freeTierApplication.findFirst({

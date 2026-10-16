@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, expect, test, spyOn } from 'bun:test';
+import { createHash } from 'node:crypto';
 import { readdir, readFile, rm, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { prisma } from '~/utils/db.server';
@@ -2029,6 +2030,130 @@ suite(
       else process.env.FREE_TIER_LINK_HMAC_SECRET = oldKey;
       if (oldOrigin === undefined) delete process.env.PRIMARY_APP_URL;
       else process.env.PRIMARY_APP_URL = oldOrigin;
+    }
+  }
+);
+suite(
+  'isolated preview resends capture real mail while proof, flow, status, ownership, feature gate and rate limits remain enforced',
+  async () => {
+    const original = { ...process.env };
+    const { takePreviewCode } = await import('./preview-code.server');
+    const emailModule = await import('~/utils/email.server');
+    const mail = spyOn(emailModule, 'sendEmail'); // Call through the real mailer.
+    const info = spyOn(console, 'info').mockImplementation(() => {});
+    const originalFetch = globalThis.fetch;
+    let providerCalls = 0;
+    globalThis.fetch = (async () => { providerCalls++; throw new Error('External delivery forbidden'); }) as any;
+    const email = `preview-resend-${prefix}@example.test`;
+    const foreign = `foreign-resend-${prefix}@example.test`;
+    const flagName = 'feature_flag.free_tier';
+    const oldFlag = await prisma.setting.findUnique({ where: { name: flagName } });
+    const user = await prisma.user.create({ data: { email: `owner-resend-${prefix}@example.test` } });
+    const otherUser = await prisma.user.create({ data: { email: `other-owner-resend-${prefix}@example.test` } });
+    const application = await prisma.freeTierApplication.create({ data: {
+      email, userId: user.id, name: 'Private QA Teacher', schoolName: 'Local', location: 'Local', gradeLevel: '11', status: 'INVITED',
+    } });
+    const foreignApplication = await prisma.freeTierApplication.create({ data: {
+      email: foreign, userId: otherUser.id, name: 'Other Teacher', schoolName: 'Local', location: 'Local', gradeLevel: '11', status: 'INVITED',
+    } });
+    try {
+      process.env.YAWP_ENVIRONMENT = 'preview';
+      process.env.PREVIEW_SLUG = 'pr-565';
+      process.env.PREVIEW_DATA_MODE = 'seed';
+      delete process.env.DATABASE_SCHEMA;
+      process.env.DATABASE_URL = 'postgresql://yawp_pr_565_app:fixture-password@preview-postgres:5432/yawp_pr_565';
+      process.env.PREVIEW_ACCESS_SECRET = 'local-preview-resend-private-secret-32bytes';
+      process.env.FREE_TIER_LINK_HMAC_SECRET = 'local-free-tier-resend-private-secret-32bytes';
+      process.env.PRIMARY_APP_URL = 'http://127.0.0.1:5396';
+      delete process.env.SIGNON_MAIL_CAPTURE_DIR;
+      delete process.env.RESEND_API_KEY;
+      delete process.env.EMAIL_PROVIDER;
+      await prisma.setting.upsert({ where: { name: flagName }, create: { name: flagName, value: 'true', valueType: 'boolean' }, update: { value: 'true' } });
+      cookie = ''; flowToken = '';
+      await post('resolve', { identifier: email });
+      expect((await post('resend-invite')).response.status).toBe(401);
+      expect((await post('resend-approval')).response.status).toBe(401);
+      await post('trial-status');
+      const request = new Request('http://local/api/preview/qa/signon-code', { headers: { authorization: `Bearer ${process.env.PREVIEW_ACCESS_SECRET}` } });
+      const otp = takePreviewCode(request, email)!;
+      expect(typeof otp === 'string').toBe(true);
+      expect((await post('verify-code', { code: otp })).data.state.variant).toBe('invited');
+      const proofCookie = cookie;
+      expect((await post('resend-invite', {}, false)).response.status).toBe(400);
+      cookie = proofCookie;
+      const result = await post('resend-invite', { applicationId: foreignApplication.id, identifier: foreign });
+      expect(result.response.status).toBe(200);
+      expect(result.data.state.notice).toBe('If available, an email is on its way.');
+      expect(mail.mock.calls.length).toBe(1);
+      const delivered = mail.mock.calls[0][0] as any;
+      // Never expose recipient/link values through failed assertion diagnostics.
+      expect(delivered.to === email).toBe(true);
+      expect(delivered.subject === "You're in — start your YAWP classroom").toBe(true);
+      expect(delivered.text.includes('/free/join?t=')).toBe(true);
+      expect(delivered.html.includes('/free/join?t=')).toBe(true);
+      expect(info.mock.calls.some(call => String(call[0]).includes('[preview-email-capture]'))).toBe(true);
+      expect(await prisma.freeTierEmailLog.count({ where: { applicationId: application.id, kind: 'release', success: true } })).toBe(1);
+      expect(await prisma.freeTierEmailLog.count({ where: { applicationId: foreignApplication.id } })).toBe(0);
+      expect(cookie.includes('en_session=')).toBe(false);
+      // Eligibility still comes from the persisted application, not posted state.
+      for (const status of ['LEAD', 'SENT', 'REJECTED', 'EXPIRED', 'APPROVED', 'MANUAL_REVIEW', 'ACCOUNT_CREATED'] as const) {
+        testIp = `198.18.1.${Math.floor(Math.random() * 250)}`;
+        // Each target has a six/hour cap; clear only this disposable test's bucket.
+        await prisma.rateLimitBucket.deleteMany({ where: { key: { startsWith: `target:${createHash('sha256').update(email).digest('hex').slice(0, 32)}:/auth/unified/forgotPassword` } } });
+        await prisma.freeTierApplication.update({ where: { id: application.id }, data: { status } });
+        expect((await post('resend-invite', { status: 'INVITED' })).response.status).toBe(200);
+        expect(mail.mock.calls.length).toBe(1);
+      }
+      await prisma.rateLimitBucket.deleteMany({ where: { key: { startsWith: `target:${createHash('sha256').update(email).digest('hex').slice(0, 32)}:/auth/unified/forgotPassword` } } });
+      await prisma.freeTierApplication.update({ where: { id: application.id }, data: { status: 'SENT' } });
+      await prisma.freeTierAdminApproval.create({ data: { applicationId: application.id, adminEmail: `admin-${prefix}@example.test`, adminName: 'QA Admin', adminRole: 'Principal', status: 'PENDING', emailCopyVersionHash: 'local' } });
+      expect((await post('resend-approval')).response.status).toBe(200); // Anonymous proof is insufficient.
+      expect(mail.mock.calls.length).toBe(1);
+      const { authSessionStorage } = await import('~/cookie-session-storages/authentication.server');
+      const { sessionKey } = await import('~/utils/auth.server');
+      const attachUser = async (userId: string) => {
+        const row = await prisma.session.create({ data: { userId, expirationDate: new Date(Date.now() + 600000) } });
+        const session = await authSessionStorage.getSession(cookie);
+        session.set(sessionKey, row.id);
+        cookie = proofCookie + '; ' + (await authSessionStorage.commitSession(session)).split(';')[0];
+      };
+      await attachUser(otherUser.id);
+      expect((await post('resend-approval', { applicationId: application.id })).response.status).toBe(200);
+      expect(mail.mock.calls.length).toBe(1);
+      await attachUser(user.id);
+      expect((await post('resend-approval', { applicationId: foreignApplication.id })).response.status).toBe(200);
+      expect(mail.mock.calls.length).toBe(2);
+      const reminder = mail.mock.calls[1][0] as any;
+      expect(reminder.to === `admin-${prefix}@example.test`).toBe(true);
+      expect(reminder.text.includes('/free/admin/approve?t=')).toBe(true);
+      expect(reminder.text.includes('/free/admin/not-right-person?t=')).toBe(true);
+      await prisma.rateLimitBucket.deleteMany({ where: { key: { startsWith: `target:${createHash('sha256').update(email).digest('hex').slice(0, 32)}:/auth/unified/forgotPassword` } } });
+      await prisma.freeTierApplication.update({ where: { id: application.id }, data: { status: 'REJECTED' } });
+      expect((await post('resend-approval')).response.status).toBe(200);
+      expect(mail.mock.calls.length).toBe(2);
+      await prisma.freeTierApplication.delete({ where: { id: application.id } });
+      expect((await post('resend-invite')).response.status).toBe(200);
+      expect((await post('resend-approval')).response.status).toBe(200);
+      expect(mail.mock.calls.length).toBe(2);
+      await prisma.freeTierApplication.create({ data: { id: application.id, email, userId: user.id, name: 'Private QA Teacher', schoolName: 'Local', location: 'Local', gradeLevel: '11', status: 'INVITED' } });
+      await prisma.setting.update({ where: { name: flagName }, data: { value: 'false' } });
+      expect((await post('resend-invite')).response.status).toBe(404);
+      expect(mail.mock.calls.length).toBe(2);
+      await prisma.setting.update({ where: { name: flagName }, data: { value: 'true' } });
+      await prisma.rateLimitBucket.deleteMany({ where: { key: { startsWith: `target:${createHash('sha256').update(email).digest('hex').slice(0, 32)}:/auth/unified/forgotPassword` } } });
+      await prisma.freeTierApplication.update({ where: { id: application.id }, data: { status: 'INVITED' } });
+      for (let i = 0; i < 6; i++) expect((await post('resend-invite')).response.status).toBe(200);
+      expect((await post('resend-invite')).response.status).toBe(429);
+      expect(mail.mock.calls.length).toBe(8);
+      expect(providerCalls).toBe(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+      mail.mockRestore(); info.mockRestore();
+      await prisma.freeTierApplication.deleteMany({ where: { id: { in: [application.id, foreignApplication.id] } } });
+      if (oldFlag) await prisma.setting.update({ where: { name: flagName }, data: { value: oldFlag.value } });
+      else await prisma.setting.deleteMany({ where: { name: flagName } });
+      for (const key of Object.keys(process.env)) if (!(key in original)) delete process.env[key];
+      Object.assign(process.env, original);
     }
   }
 );
