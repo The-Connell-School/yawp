@@ -1794,6 +1794,7 @@ model User {
   loungeReportsFiled    LoungeReport[]  @relation("LoungeReportReporter")
   loungeReportsResolved LoungeReport[]  @relation("LoungeReportResolver")
   loungeAttachmentUses  LoungeAttachmentUse[]
+  loungeContactMessages LoungeContactMessage[]
 }
 
 model Invitation {
@@ -2293,6 +2294,9 @@ model LoungeProfile {
   displayNameStyle     LoungeDisplayNameStyle @default(FIRST_NAME_LAST_INITIAL)
   guidelinesAcceptedAt DateTime               @db.Timestamptz(6)
   emailNotifications   Boolean                @default(true)
+  /// Optional consent from the welcome box: YAWP! may share this teacher's
+  /// posts, with their name removed. Null means no; changeable in settings.
+  shareConsentAt       DateTime?              @db.Timestamptz(6)
 }
 
 model LoungePost {
@@ -2316,6 +2320,13 @@ model LoungePost {
   hiddenAt         DateTime?            @db.Timestamptz(6)
   hiddenByUserId   String?
   deletedAt        DateTime?            @db.Timestamptz(6)
+  /// Not posted yet: visible only to the YAWP! team until published.
+  draft            Boolean              @default(false)
+  /// Scheduled: hidden from teachers until this time. Null posts immediately.
+  publishAt        DateTime?            @db.Timestamptz(6)
+  editedAt         DateTime?            @db.Timestamptz(6)
+  /// Stable key for seeded launch content, so seeding twice changes nothing.
+  seedKey          String?              @unique
   /// Pinned to the top of the feed by the Yawp team ("This week from Brian").
   pinnedAt         DateTime?            @db.Timestamptz(6)
   pinnedByUserId   String?
@@ -2361,6 +2372,8 @@ model LoungeReply {
   hiddenAt       DateTime?       @db.Timestamptz(6)
   hiddenByUserId String?
   deletedAt      DateTime?       @db.Timestamptz(6)
+  editedAt       DateTime?       @db.Timestamptz(6)
+  seedKey        String?         @unique
   votes          LoungeVote[]
   mentions       LoungeMention[]
   reports        LoungeReport[]
@@ -2423,6 +2436,24 @@ model LoungeReport {
 
   @@index([resolvedAt, createdAt])
   @@index([postId])
+}
+
+/// A message from the Lounge's Contact Us button, straight to the YAWP!
+/// team. Shows in the admin Lounge inbox until someone marks it handled.
+model LoungeContactMessage {
+  id               String    @id @default(cuid())
+  createdAt        DateTime  @default(now()) @db.Timestamptz(6)
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The sender's school at the time. No foreign key: kept if the school goes.
+  organizationId   String?
+  message          String
+  /// The Lounge page they were on, to help reproduce what they saw.
+  pageUrl          String?
+  resolvedAt       DateTime? @db.Timestamptz(6)
+  resolvedByUserId String?
+
+  @@index([resolvedAt, createdAt])
 }
 
 /// A Yawp thing shared in a post, frozen when it was shared. Other teachers
