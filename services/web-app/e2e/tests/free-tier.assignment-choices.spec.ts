@@ -31,6 +31,7 @@ async function capture(page: Page, name: string) {
 }
 async function login(page: Page, email = 'dev.teacher.free@yawp.local') {
   await page.goto('/auth/login');
+  await page.waitForLoadState('networkidle');
   await page.getByLabel('Email or handle').fill(email);
   await page.locator('input[type="password"]').fill('yawp-dev');
   await page.getByRole('button', { name: /Log in/i }).click();

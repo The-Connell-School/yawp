@@ -1,3 +1,5 @@
+import { FreeReporterLocked } from '~/components/free-account-usage';
+import { isFreeTierInappV2Enabled } from '~/domain/free-tier/inapp-feature-gate.server';
 import { useEffect, useRef, useState } from 'react';
 import {
   redirect,
@@ -31,6 +33,17 @@ type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const access = await getReporterAccess(request);
+  if (
+    access.isTeacher &&
+    (await isFreeTierInappV2Enabled(access.membership))
+  ) {
+    return {
+      freeLocked: true,
+      conversations: [],
+      selectedConversation: null,
+      recommendedPrompts: [],
+    };
+  }
   if (!access.allowed) {
     // Keep the feature invisible for orgs without it / non-teachers.
     throw redirect('/app');
@@ -69,6 +82,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : null;
 
   return {
+    freeLocked: false,
     conversations: conversations.map((conversation) => ({
       id: conversation.id,
       title: conversation.title,
@@ -104,8 +118,12 @@ type GrowthPlanProposal = {
 };
 
 export default function ReporterRoute() {
-  const { conversations, selectedConversation, recommendedPrompts } =
-    useLoaderData<typeof loader>();
+  const {
+    freeLocked,
+    conversations,
+    selectedConversation,
+    recommendedPrompts,
+  } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const fetcher = useFetcher<ReporterActionData>();
 
@@ -240,6 +258,8 @@ export default function ReporterRoute() {
   }
 
   const hasMessages = messages.length > 0;
+
+  if (freeLocked) return <FreeReporterLocked />;
 
   return (
     <section className="flex h-full w-full">

@@ -45,7 +45,9 @@ function GradingModeCard({
       aria-label={ariaLabel}
       className="group flex h-full min-w-0 flex-col overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md"
     >
-      <div className={cn('flex h-16 items-center justify-center', accentClassName)}>
+      <div
+        className={cn('flex h-16 items-center justify-center', accentClassName)}
+      >
         <Icon className="h-6 w-6 text-foreground/80" aria-hidden="true" />
       </div>
       <div className="flex flex-1 flex-col p-3">
@@ -90,9 +92,11 @@ function GradingQueueStatStrip({
 }
 
 export function TeacherGradingAtAGlance({
+  freeAccount = false,
   needsGradingCount,
   readyToReleaseCount,
 }: {
+  freeAccount?: boolean;
   needsGradingCount: number;
   readyToReleaseCount: number;
 }) {
@@ -117,7 +121,9 @@ export function TeacherGradingAtAGlance({
             All caught up
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
-            No submissions waiting for grades or release.
+            {freeAccount
+              ? 'No submissions waiting for grades.'
+              : 'No submissions waiting for grades or release.'}
           </p>
         </div>
       ) : (

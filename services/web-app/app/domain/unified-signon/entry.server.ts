@@ -1,3 +1,4 @@
+import { signonRequestOrigin } from './origin.server';
 import { safeRedirect } from 'remix-utils/safe-redirect';
 import { requireAnonymous } from '~/utils/auth.server';
 import { isUnifiedSignOnEnabled } from './gate.server';
@@ -88,7 +89,7 @@ export async function dispatchUnifiedLogin(args: ActionFunctionArgs) {
     await import('./flow.server');
   try {
     const origin = args.request.headers.get('Origin');
-    if (origin && origin !== new URL(args.request.url).origin)
+    if (origin && origin !== signonRequestOrigin(args.request))
       throw new FlowError('Invalid request origin.', 403);
     const { requireMutableRequest } = await import('~/utils/auth.server');
     await requireMutableRequest(args.request);

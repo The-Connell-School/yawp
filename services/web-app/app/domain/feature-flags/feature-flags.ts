@@ -37,6 +37,9 @@ export const INTERNAL_RUBRICS_FLAG = 'internal_rubrics' as const;
  */
 export const FREE_TIER_FLAG = 'free_tier' as const;
 
+/** Free-account v2 presentation only. Missing Setting row stays off in every environment. */
+export const FREE_TIER_INAPP_V2_FLAG = 'free-tier-inapp-v2' as const;
+
 /** Unified sign-on UI. Default off; anonymous entry requires everyone mode. */
 export const UNIFIED_SIGN_ON_FLAG = 'unified-sign-on' as const;
 
@@ -64,6 +67,11 @@ export const FEATURE_FLAGS = {
     label: 'Free tier',
     description:
       'Enables Free Tier C teacher onboarding, school-admin approval links, operator release tools, and related UI. Off: those routes and release APIs return 404; waitlist/token APIs behave as on main until yawp-internal turns this on for everyone.',
+  },
+  [FREE_TIER_INAPP_V2_FLAG]: {
+    label: 'Free tier in-app v2',
+    description:
+      'Shows the v2 usage and limit presentation for eligible free-account teachers when free tier is available. Default off on demo and production; existing controls and enforcement remain active when off.',
   },
   [UNIFIED_SIGN_ON_FLAG]: {
     label: 'Unified sign-on',

@@ -1,7 +1,8 @@
+import { useFreeAccountUsage } from '~/components/free-account-usage';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type * as React from 'react';
 import { useFetcher, useNavigate } from 'react-router';
-import { FileUp, Loader2 } from 'lucide-react';
+import { Check, Lock, FileUp, Loader2 } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
@@ -484,10 +485,86 @@ export function AssignmentCreationSheet({
   const createFetcher = useFetcher<CreateFetcherData>();
   const extractFetcher = useFetcher<ExtractFetcherData>();
   const navigate = useNavigate();
-
+  const usage = useFreeAccountUsage();
+  const [pickedTypeId, setPickedTypeId] = useState<string>();
+  useEffect(() => {
+    if (!props.open) setPickedTypeId(undefined);
+  }, [props.open]);
+  if (
+    usage &&
+    props.assignmentTypes.some(
+      (type) => !type.unavailableReason && !type.quotaExhausted
+    ) &&
+    !props.editingAssignment &&
+    !props.fixedAssignmentTypeId &&
+    !props.initialAssignmentTypeId &&
+    !pickedTypeId
+  ) {
+    return (
+      <Sheet open={props.open} onOpenChange={props.onOpenChange}>
+        <SheetContent
+          className="w-full sm:max-w-[480px]"
+          overlayClassName="bg-black/35"
+        >
+          <SheetHeader>
+            <SheetTitle>New Assignment</SheetTitle>
+          </SheetHeader>
+          <p className="mb-3 mt-6 text-sm font-medium">Assignment type</p>
+          <div className="rounded-xl border bg-popover p-1 shadow-sm">
+            {usage.assignments.map((row) => {
+              const type = props.assignmentTypes.find(
+                (type) => type.kind === row.kind
+              );
+              const selected =
+                type?.id ===
+                initialAssignmentTypeSelection(props.assignmentTypes);
+              return (
+                <button
+                  type="button"
+                  key={row.kind}
+                  disabled={
+                    !type ||
+                    row.remaining === 0 ||
+                    Boolean(type.unavailableReason)
+                  }
+                  onClick={() => setPickedTypeId(type?.id)}
+                  className={cn(
+                    'flex min-h-[60px] w-full items-center gap-3 rounded-lg p-3 text-left text-sm disabled:text-muted-foreground',
+                    selected && 'bg-secondary'
+                  )}
+                >
+                  <span className="w-4 shrink-0">
+                    {selected && <Check size={14} />}
+                  </span>
+                  <span className="flex flex-1 flex-col gap-1">
+                    <span>{row.label}</span>
+                    <span
+                      className={cn(
+                        'text-xs text-muted-foreground',
+                        row.remaining === 0 && 'text-amber-800'
+                      )}
+                    >
+                      {row.remaining
+                        ? `${row.remaining} of ${row.total} left`
+                        : 'None left'}
+                    </span>
+                  </span>
+                  {row.remaining === 0 && <Lock size={14} />}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-5 text-xs text-muted-foreground">
+            Deleting an assignment doesn't give it back.
+          </p>
+        </SheetContent>
+      </Sheet>
+    );
+  }
   return (
     <AssignmentCreationSheetContent
       {...props}
+      initialAssignmentTypeId={props.initialAssignmentTypeId ?? pickedTypeId}
       createFetcher={createFetcher}
       extractFetcher={extractFetcher}
       navigate={navigate}
@@ -654,14 +731,19 @@ export function AssignmentCreationSheetContent({
   const CreateForm = createFetcher.Form;
   const isSaving = createFetcher.state !== 'idle';
   const isExtracting = extractFetcher.state !== 'idle';
-  const requestedTypeId = fixedAssignmentTypeId ?? selectedAssignmentTypeId ?? '';
-  const selectedType = assignmentTypes.find((type) => type.id === requestedTypeId);
+  const requestedTypeId =
+    fixedAssignmentTypeId ?? selectedAssignmentTypeId ?? '';
+  const selectedType = assignmentTypes.find(
+    (type) => type.id === requestedTypeId
+  );
   const unchangedTypeEdit =
     isEditing &&
     requestedTypeId === (fixedAssignmentTypeId ?? initialAssignmentTypeId);
   const assignmentTypeId =
     !unchangedTypeEdit &&
-    (!selectedType || selectedType.unavailableReason || selectedType.quotaExhausted)
+    (!selectedType ||
+      selectedType.unavailableReason ||
+      selectedType.quotaExhausted)
       ? ''
       : requestedTypeId;
   // Collaboration is offered for every assignment type now, so this only asks

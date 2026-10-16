@@ -1,0 +1,87 @@
+/* V2 presentation is scoped to the existing eligible free-account gate. */
+[data-free-account] > nav:not(.items-center) {
+  width: 204px;
+  min-width: 204px;
+  background: hsl(var(--sidebar));
+}
+[data-free-account] > nav > div:first-child {
+  min-height: 116px;
+}
+[data-free-account] > nav a {
+  border-radius: 8px;
+}
+[data-free-account] > nav a svg {
+  width: 18px;
+  height: 18px;
+}
+[data-free-account] .free-dashboard h2 {
+  font-size: 18px;
+  font-weight: 700;
+}
+[data-free-account]
+  .free-dashboard
+  [data-testid='teacher-classes-grid']
+  > div:first-child
+  > div {
+  display: none;
+}
+[data-free-account]
+  .free-dashboard
+  [data-testid='teacher-classes-grid']
+  > div:last-child {
+  display: grid;
+  grid-template-columns: minmax(0, 320px);
+}
+[data-free-account]
+  .free-dashboard
+  [data-testid='teacher-grading-grid']
+  > div:first-child
+  > a {
+  display: none;
+}
+[data-free-account]
+  .free-dashboard
+  [data-testid='teacher-grading-grid']
+  > div:nth-child(2) {
+  border-radius: 12px;
+}
+@media (min-width: 1024px) {
+  [data-free-account] [data-testid='app._index'] > div:first-child > div {
+    max-width: 1236px;
+    padding: 24px 48px;
+  }
+}
+@media (max-width: 639px) {
+  [data-free-account] > nav:not(.items-center) {
+    width: 212px;
+    min-width: 212px;
+  }
+  [data-free-account]
+    .free-dashboard
+    [data-testid='teacher-classes-grid']
+    > div:last-child {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+[data-free-account] [data-testid='app._index'] > div:first-child h2 {
+  font-size: 28px;
+  line-height: 1.2;
+}
+[data-free-account] [data-testid='app._index'] > div:first-child p {
+  margin-top: 8px;
+  max-width: none;
+}
+[data-free-account]
+  .free-dashboard
+  [data-testid='teacher-classes-grid']
+  > div:last-child
+  > div
+  > a
+  > div:first-child {
+  height: 112px;
+}
+
+[data-free-account] > nav a span { white-space: nowrap; }
+[data-free-account] > nav a { gap: 10px; padding-top: 10px; padding-bottom: 10px; }
+[data-free-account] > nav > div:first-child img { width: 64px; }

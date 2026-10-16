@@ -1,3 +1,4 @@
+import type { FeatureFlagKey } from '../app/domain/feature-flags/feature-flags';
 import { createE2EPrismaClient } from './prisma-client';
 
 // Mirrors featureFlagSettingName(LESSON_PLANNER_FLAG) in
@@ -56,6 +57,26 @@ export async function setThesisEssayDecksFlag(enabled: boolean) {
         description: 'Set by e2e',
       },
       update: { value: enabled ? 'true' : 'false', updatedAt: new Date() },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/** Local test toggle for registered feature flags. */
+export async function setFeatureFlag(key: FeatureFlagKey, enabled: boolean) {
+  const prisma = createE2EPrismaClient();
+  try {
+    const name = `feature_flag.${key}`;
+    await prisma.setting.upsert({
+      where: { name },
+      create: {
+        name,
+        value: String(enabled),
+        valueType: 'boolean',
+        description: 'Set by e2e',
+      },
+      update: { value: String(enabled), updatedAt: new Date() },
     });
   } finally {
     await prisma.$disconnect();
