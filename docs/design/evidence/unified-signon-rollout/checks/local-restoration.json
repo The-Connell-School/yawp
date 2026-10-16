@@ -1,0 +1,5 @@
+{
+  "scope": "disposable local database only",
+  "auditRows": 2,
+  "restoredFlagRows": 0
+}
