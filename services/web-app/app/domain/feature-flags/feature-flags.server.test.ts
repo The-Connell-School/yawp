@@ -20,7 +20,7 @@ const {
   setFeatureFlag,
   findUnknownOrganizationIds,
 } = await import('./feature-flags.server');
-const { INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, FREE_TIER_INAPP_V2_FLAG, UNIFIED_SIGN_ON_FLAG, FREE_TIER_ONBOARDING_V2_FLAG } = await import(
+const { DEMO_FEEDBACK_FLAG, INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, FREE_TIER_INAPP_V2_FLAG, UNIFIED_SIGN_ON_FLAG, FREE_TIER_ONBOARDING_V2_FLAG } = await import(
   './feature-flags'
 );
 
@@ -36,6 +36,21 @@ describe('feature flags (server)', () => {
     prisma.setting.findMany.mockReset();
     prisma.setting.upsert.mockReset();
     prisma.organization.findMany.mockReset();
+  });
+
+  test('demo feedback has no runtime override and stays off without a row in demo and production', async () => {
+    const previous = process.env.YAWP_ENVIRONMENT;
+    try {
+      for (const environment of ['demo', 'production']) {
+        process.env.YAWP_ENVIRONMENT = environment;
+        prisma.setting.findUnique.mockResolvedValue(null);
+        expect(await isFeatureFlagEnabled(DEMO_FEEDBACK_FLAG)).toBe(false);
+        expect(prisma.setting.findUnique).toHaveBeenCalledWith({ where: { name: 'feature_flag.demo-feedback-widget' }, select: { value: true } });
+      }
+    } finally {
+      if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
+      else process.env.YAWP_ENVIRONMENT = previous;
+    }
   });
 
   test('Rubrics from Yawp Internal is off with no row and follows per-school targeting', async () => {
@@ -131,6 +146,7 @@ describe('feature flags (server)', () => {
       UNIFIED_SIGN_ON_FLAG,
       FREE_TIER_ONBOARDING_V2_FLAG,
       'classcode-unique',
+      DEMO_FEEDBACK_FLAG,
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[2]).toMatchObject({ key: FREE_TIER_FLAG, mode: 'off', enabled: false });
@@ -158,6 +174,7 @@ describe('feature flags (server)', () => {
       UNIFIED_SIGN_ON_FLAG,
       FREE_TIER_ONBOARDING_V2_FLAG,
       'classcode-unique',
+      DEMO_FEEDBACK_FLAG,
     ]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });
     const where = prisma.setting.findMany.mock.calls[0]?.[0].where;

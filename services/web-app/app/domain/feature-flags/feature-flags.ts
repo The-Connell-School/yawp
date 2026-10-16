@@ -52,10 +52,6 @@ export const CLASS_CODE_UNIQUE_FLAG = 'classcode-unique' as const;
 export const DEMO_FEEDBACK_FLAG = 'demo-feedback-widget' as const;
 
 export const FEATURE_FLAGS = {
-  [DEMO_FEEDBACK_FLAG]: {
-    label: 'Demo feedback widget',
-    description: 'Shows the feedback note panel for signed-in demo users. Default off; production submissions are always denied.',
-  },
   [LESSON_PLANNER_FLAG]: {
     label: 'Lesson Planner',
     description:
@@ -89,6 +85,10 @@ export const FEATURE_FLAGS = {
   [CLASS_CODE_UNIQUE_FLAG]: {
     label: 'Unique class codes',
     description: 'Enforces global class-code availability and shows Generate code. Default off on demo and production. Only everyone mode is supported; targeted mode stays off because uniqueness spans all organizations.',
+  },
+  [DEMO_FEEDBACK_FLAG]: {
+    label: 'Demo feedback widget',
+    description: 'Shows the feedback note panel for signed-in demo users. Default off; production submissions are always denied.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 
