@@ -41,10 +41,11 @@ export const FREE_TIER_FLAG = 'free_tier' as const;
 export const UNIFIED_SIGN_ON_FLAG = 'unified-sign-on' as const;
 
 /**
- * Thesis-Driven Essay slide decks on the assignment type's page (#452). On:
- * each step in the Modules list offers its lesson's deck to download, and
- * Day 1's deck sits above them. Off: the Modules list is as before, pointing
- * teachers to the Teachers' Lounge, and the download route returns 404.
+ * Thesis-Driven Essay slide decks and lesson plans on the assignment type's
+ * page (#452). On: each step in the Modules list offers its lesson's deck and
+ * lesson plan to download, and Day 1's (with the student sign-up handout)
+ * sits above them. Off: the Modules list is as before, pointing teachers to
+ * the Teachers' Lounge, and the download route returns 404.
  */
 export const THESIS_ESSAY_DECKS_FLAG = 'thesis_essay_decks' as const;
 
@@ -72,7 +73,7 @@ export const FEATURE_FLAGS = {
   [THESIS_ESSAY_DECKS_FLAG]: {
     label: 'Thesis-Driven Essay slide decks',
     description:
-      "Shows each lesson's slide deck inside the Thesis-Driven Essay's Modules, for teachers to download. Off: the Modules list points to the Teachers' Lounge as before and the deck downloads return 404.",
+      "Shows each lesson's slide deck and lesson plan inside the Thesis-Driven Essay's Modules, for teachers to download. Off: the Modules list points to the Teachers' Lounge as before and the downloads return 404.",
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 
