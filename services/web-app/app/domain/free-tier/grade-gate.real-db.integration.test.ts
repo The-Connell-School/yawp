@@ -22,7 +22,7 @@ async function v2(value: string) {
 beforeAll(async () => {
   if (!enabled) return;
   const url = new URL(process.env.DATABASE_URL!);
-  if (!['localhost', '127.0.0.1'].includes(url.hostname) || !url.pathname.includes('ia-i4-declines')) throw new Error('Dedicated I4 local database required');
+  if (!['localhost', '127.0.0.1'].includes(url.hostname) || !['ia-i4-declines', 'fto-free-page'].some(name => url.pathname.includes(name))) throw new Error('Dedicated I4 local database required');
   savedFlags = await prisma.setting.findMany({ where: { name: { in: [flag, baseFlag] } } });
   await prisma.setting.upsert({ where: { name: baseFlag }, create: { name: baseFlag, value: 'true' }, update: { value: 'true' } });
   process.env.YAWP_INTERNAL_API_KEYS = JSON.stringify([{ id: 'grade-db-test', secret: 'local-grade-gate-test-secret-32-characters', scopes: ['management:read'] }]);

@@ -1,4 +1,13 @@
 export const ADMIN_APPROVAL_EMAIL_COPY_VERSION = '2026-10-14-v5';
+// Pass the version stored with the application when admission was requested.
+// Do not derive delayed email wording from the flag at delivery time.
+export const RELEASE_EMAIL_V2_COPY_VERSION = 'free-tier-onboarding-v2';
+
+export function renderReleaseEmailSubject(args: { copyVersion?: string } = {}) {
+  return args.copyVersion === RELEASE_EMAIL_V2_COPY_VERSION
+    ? "You're in!"
+    : "You're in — start your YAWP classroom";
+}
 
 const APPROVAL_LINK_DAYS = 14;
 
@@ -50,9 +59,12 @@ export function renderReleaseEmailBody(args: {
   copyVersion?: string;
 }) {
   const version = args.copyVersion ?? ADMIN_APPROVAL_EMAIL_COPY_VERSION;
+  const welcome = version === RELEASE_EMAIL_V2_COPY_VERSION
+    ? "You're in!\n\nWe'd love to have you try YAWP with your students."
+    : "You're in — we'd love to have you try YAWP with your students.";
   return `Hi ${args.name},
 
-You're in — we'd love to have you try YAWP with your students.
+${welcome}
 
 Create your teacher account to get started:
 ${args.joinUrl}

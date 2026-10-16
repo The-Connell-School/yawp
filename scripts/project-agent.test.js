@@ -16,7 +16,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("Yawp project agent CLI", () => {
   test("advertises class-step profiles in capabilities and CLI help", () => {
-    const profiles = ["free-tier-class-step-unit", "free-tier-class-step-browser"];
+    const profiles = ["free-tier-class-step-unit", "free-tier-class-step-browser", "free-tier-welcome-unit", "free-tier-welcome-browser", "free-tier-welcome-live-browser", "free-tier-welcome-db"];
     const result = spawnSync(path.join(root, "bin/project"), ["test", "--help"], {
       cwd: root, encoding: "utf8", timeout: 10000, env: { ...process.env, CI: "1" },
     });
@@ -46,6 +46,27 @@ describe("Yawp project agent CLI", () => {
         // Listing must never connect or start a server. The dedicated spec must
         // preserve this explicit E2E connection even without a development URL.
         env: { ...process.env, CI: "1", CLASS_STEP_PORT: count ? "5204" : undefined,
+          DATABASE_URL: "",
+          E2E_DATABASE_URL: "postgresql://localhost:1/discovery_must_not_connect",
+          PLAYWRIGHT_HTML_OPEN: "never" },
+      });
+      const report = JSON.parse(result.stdout);
+      expect(report.errors).toEqual([]);
+      const specs = report.suites.flatMap((suite) => suite.specs);
+      expect(specs).toHaveLength(count);
+      expect(result.status).toBe(0);
+    }
+  }, 60000);
+  test("welcome mutation fixtures are discovered only by their dedicated browser runner", () => {
+    const webApp = path.join(root, "services/web-app");
+    const cli = path.join(webApp, "node_modules/@playwright/test/cli.js");
+    for (const [config, count] of [["playwright.config.ts", 0], ["playwright.free-tier-welcome-live.config.ts", 2]]) {
+      const result = spawnSync(process.execPath, [cli, "test", "--config", config,
+        "--list", "--pass-with-no-tests", "--reporter=json", "free-tier.welcome-live.spec.ts"], {
+        cwd: webApp, encoding: "utf8", timeout: 30000,
+        // Listing must never connect or start a server. The dedicated spec must
+        // preserve this explicit E2E connection even without a development URL.
+        env: { ...process.env, CI: "1", FREE_WELCOME_PORT: count ? "5204" : undefined,
           DATABASE_URL: "",
           E2E_DATABASE_URL: "postgresql://localhost:1/discovery_must_not_connect",
           PLAYWRIGHT_HTML_OPEN: "never" },
