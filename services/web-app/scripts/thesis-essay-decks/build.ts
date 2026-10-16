@@ -3,14 +3,18 @@
  *
  *   bun scripts/thesis-essay-decks/build.ts [outDir] [deck ...]
  *
- * Defaults to services/web-app/resources/thesis-essay-decks, where the app
- * serves them from (the Thesis-Driven Essay page's Modules), and all decks.
+ * Each deck is written with its lesson plan (`<deck>-lesson-plan.pdf`), plus
+ * the Day 1 student sign-up handout. Defaults to
+ * services/web-app/resources/thesis-essay-decks, where the app serves them
+ * from (the Thesis-Driven Essay page's Modules), and all decks.
  * Name decks to build only those, e.g. `build.ts "" lesson-3-thesis-statement`.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { DECKS } from './decks';
+import { LESSON_PLANS } from './lesson-plans';
 import { renderHybridDeck } from './render-hybrid-deck';
+import { renderLessonPlan, renderSignUpHandout } from './render-lesson-plan';
 
 const [outArg, ...only] = process.argv.slice(2);
 const outDir = resolve(outArg || join(import.meta.dir, '../../resources/thesis-essay-decks'));
@@ -21,4 +25,18 @@ for (const { file, deck } of DECKS) {
   const path = join(outDir, `${file}.pptx`);
   writeFileSync(path, await renderHybridDeck(deck));
   console.log(`wrote ${path} (${deck.slides.length} slides)`);
+
+  // Its lesson plan, written from the same deck so its slide numbers match.
+  const plan = LESSON_PLANS.find((candidate) => candidate.deck === file);
+  if (plan) {
+    const planPath = join(outDir, `${file}-lesson-plan.pdf`);
+    writeFileSync(planPath, await renderLessonPlan(plan, deck));
+    console.log(`wrote ${planPath}`);
+  }
+}
+
+if (!only.length || only.includes('student-sign-up')) {
+  const handoutPath = join(outDir, 'student-sign-up.pdf');
+  writeFileSync(handoutPath, await renderSignUpHandout());
+  console.log(`wrote ${handoutPath}`);
 }
