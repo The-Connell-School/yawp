@@ -288,7 +288,7 @@ export async function action({ request }: ActionFunctionArgs) {
     } catch (quotaError) {
       if (quotaError instanceof LessonPlanQuotaExceededError) {
         return dataResponse(
-          { error: lessonPlanQuotaMessage(quotaError.quota) },
+          { error: lessonPlanQuotaMessage(quotaError.quota, quotaError.monthly) },
           { status: 403 }
         );
       }

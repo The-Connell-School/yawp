@@ -8,8 +8,9 @@ import { countFreeClassSeatUsage } from './class-seat-cap.server';
 import { countOrganizationLessonPlans } from '~/utils/lesson-planner/lesson-planner-quota.server';
 import {
   FREE_CLASSROOM_ASSIGNMENT_QUOTAS,
-  getEntitlements,
+  getEntitlementsForPlan,
 } from '~/utils/entitlements.server';
+import { effectiveFreeTierLimits } from './limits.server';
 import { buildFreeAccountUsage, type FreeAccountUsage } from './inapp-usage';
 import { readGradingLimitStatus } from '~/utils/rate-limit.server';
 
@@ -22,7 +23,8 @@ export async function readFreeAccountUsage(
     return null;
   const organizationId = profile.organization.id;
   const membershipId = profile.id;
-  const entitlements = getEntitlements('FREE_CLASSROOM');
+  const { limits, monthly } = await effectiveFreeTierLimits(organizationId);
+  const entitlements = getEntitlementsForPlan('FREE_CLASSROOM', limits);
   const klass = await prisma.class.findFirst({
     where: {
       isArchived: false,
@@ -43,11 +45,12 @@ export async function readFreeAccountUsage(
     klass
       ? countFreeClassSeatUsage(
           prisma as Parameters<typeof countFreeClassSeatUsage>[0],
-          klass.id
+          klass.id,
+          monthly
         )
       : { currentStudents: 0, pendingInvites: 0 },
     getFreeClassroomAssignmentQuotaUsage(organizationId),
-    countOrganizationLessonPlans(organizationId),
+    countOrganizationLessonPlans(organizationId, monthly),
     klass
       ? prisma.document.count({
           where: {
