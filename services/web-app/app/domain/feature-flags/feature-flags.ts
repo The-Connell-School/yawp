@@ -43,6 +43,9 @@ export const FREE_TIER_INAPP_V2_FLAG = 'free-tier-inapp-v2' as const;
 /** Unified sign-on UI. Default off; anonymous entry requires everyone mode. */
 export const UNIFIED_SIGN_ON_FLAG = 'unified-sign-on' as const;
 
+/** Free tier onboarding v2. Missing or invalid Setting values stay off in every environment. */
+export const FREE_TIER_ONBOARDING_V2_FLAG = 'free-tier-onboarding-v2' as const;
+
 export const FEATURE_FLAGS = {
   [LESSON_PLANNER_FLAG]: {
     label: 'Lesson Planner',
@@ -68,6 +71,11 @@ export const FEATURE_FLAGS = {
     label: 'Unified sign-on',
     description:
       'Shows the unified sign-on at /auth/login. Default off. Keep disabled on demo and production during October 16 testing. Backend-dependent operations remain unavailable until the backend integration ships.',
+  },
+  [FREE_TIER_ONBOARDING_V2_FLAG]: {
+    label: 'Free tier onboarding v2',
+    description:
+      'Approval reminders, forward requests, create-your-class step and locked preview for free-tier teachers.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 
