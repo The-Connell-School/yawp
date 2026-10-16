@@ -1,0 +1,13 @@
+bun test v1.3.1 (89fa0f34)
+
+services/web-app/app/utils/free-tier/free-tier-feature-gate.server.test.ts:
+(pass) requireFreeTierEnabled > recognizes the long-lived demo deployment override [0.14ms]
+(pass) requireFreeTierEnabled > allows when the flag is on [0.13ms]
+(pass) requireFreeTierEnabled > allows demo routes when the stored flag is off [0.11ms]
+(pass) requireFreeTierEnabled > throws 404 when the flag is off [0.25ms]
+(pass) requireFreeTierEnabled > keeps production closed when the flag is off [0.11ms]
+
+ 5 pass
+ 0 fail
+ 8 expect() calls
+Ran 5 tests across 1 file. [492.00ms]

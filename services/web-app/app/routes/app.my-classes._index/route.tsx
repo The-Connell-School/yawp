@@ -38,6 +38,8 @@ import { getStudentEnrolledClasses } from '~/utils/student-classes.server';
 import { ALL_SCHOOL_YEARS } from '~/utils/school-year';
 import { resolveTeacherSchoolYearScope } from '~/utils/school-year-scope.server';
 import { resolveStudentSchoolYearScope } from '~/utils/school-year-scope.server';
+import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { isDemoFreeTierRouteOpen } from '~/utils/free-tier/free-tier-feature-gate.server';
 
 async function getTeacherSchoolIds(membershipId: string) {
   const teacher = await prisma.orgMembership.findUnique({
@@ -141,6 +143,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 
   const entitlements = getEntitlements(profile.organization);
+  const canShareClassroomReport = profile.organization.plan === 'FREE_CLASSROOM'
+    && (isDemoFreeTierRouteOpen(process.env) || await isFreeTierEnabled());
   let classCreateBlockedMessage: string | null = null;
   if (entitlements.activeClassCap != null) {
     const activeClassCount = await prisma.class.count({
@@ -163,6 +167,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     schools,
     manageSchools: teacherSchools?.schools ?? [],
     classCreateBlockedMessage,
+    canShareClassroomReport,
   });
 }
 
@@ -395,10 +400,25 @@ function TeacherMyClassesView({
                 assignments.
               </p>
             </div>
-            <Button size="sm" onClick={openCreate} className="shrink-0">
-              <Plus className="mr-2 h-4 w-4" />
-              Create Class
-            </Button>
+            <div className={data.canShareClassroomReport ? 'flex flex-wrap gap-2' : 'contents'}>
+              {data.canShareClassroomReport ? (
+                <>
+                  <Button size="sm" variant="outline" asChild>
+                    <Link to="/app/classroom-report">Share this report</Link>
+                  </Button>
+                  <Button size="sm" variant="outline" asChild>
+                    <Link to="/app/pitch-packet">Trial pitch packet</Link>
+                  </Button>
+                  <Button size="sm" variant="outline" asChild>
+                    <Link to="/app/free-tier/status">Free classroom status</Link>
+                  </Button>
+                </>
+              ) : null}
+              <Button size="sm" onClick={openCreate} className="shrink-0">
+                <Plus className="mr-2 h-4 w-4" />
+                Create Class
+              </Button>
+            </div>
           </div>
         </div>
       </div>

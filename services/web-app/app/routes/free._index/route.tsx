@@ -13,19 +13,30 @@ import {
   submitWaitlist,
   waitlistInputSchema,
 } from '~/domain/free-tier/service.server';
-import { readOrMintScanDedupeCookie } from '~/domain/free-tier/acquisition-token-scan.server';
+import { readOrMintScanDedupeCookie, readScanDedupeCookie } from '~/domain/free-tier/acquisition-token-scan.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
 import { enforceUnauthByIpAndTarget } from '~/utils/rate-limit.server';
 import { z } from 'zod';
-import { FreeTierEntryHeader } from '../free.join/FreeTierEntryHeader';
-import { FreeTierFieldLabel, FreeTierTextInput } from '../free-tier/FreeTierAuthCard';
+import {
+  FreeTierAuthCard,
+  FreeTierButton,
+  FreeTierFieldLabel,
+  FreeTierTextInput,
+} from '../free-tier/FreeTierAuthCard';
+import { useState } from 'react';
+import { CircleCheck, CircleAlert, Mail } from 'lucide-react';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireFreeTierEnabled();
   const url = new URL(request.url);
   const token = url.searchParams.get('t')?.trim();
-  if (!token) return { mode: 'waitlist' as const, tokenValid: null, linkClosed: false as const };
+  if (!token)
+    return {
+      mode: 'waitlist' as const,
+      tokenValid: null,
+      linkClosed: false as const,
+    };
   const cookie = await readOrMintScanDedupeCookie(request);
   const row = await findAcquisitionTokenByCredential(token);
   if (row) {
@@ -38,8 +49,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const validity = await checkTokenValidity(token);
   const linkClosed =
     validity.valid === false &&
-    (validity.reason === 'disabled' || validity.reason === 'expired' || validity.reason === 'exhausted');
-  const payload = { mode: 'token' as const, token, tokenValid: validity, linkClosed };
+    (validity.reason === 'disabled' ||
+      validity.reason === 'expired' ||
+      validity.reason === 'exhausted');
+  const payload = {
+    mode: 'token' as const,
+    token,
+    tokenValid: validity,
+    linkClosed,
+  };
   if (cookie.setCookie) {
     return data(payload, { headers: { 'Set-Cookie': cookie.setCookie } });
   }
@@ -48,19 +66,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 const formSchema = waitlistInputSchema;
 
-export function freeTierSubmitSuccessCopy(loaderData: {
-  mode: 'waitlist' | 'token';
-  tokenValid: { valid: boolean } | null;
-}) {
-  if (loaderData.mode === 'token' && loaderData.tokenValid?.valid) {
+type FreeTierSubmitSuccessInput = {
+  redeemed?: boolean;
+  bypassWaitlist?: boolean;
+  email?: string;
+};
+
+export function freeTierSubmitSuccessCopy(
+  submission: FreeTierSubmitSuccessInput | undefined
+) {
+  if (submission?.redeemed && submission.bypassWaitlist) {
     return {
-      headline: 'Check your email for your join link.',
-      detail: null,
+      headline: 'Check your email',
+      detail: submission.email ? `Your join link is on its way to ${submission.email}.` : 'Your join link is on its way.',
     };
   }
   return {
-    headline: "You're on the list.",
-    detail: "We'll email you when a spot opens.",
+    headline: "You're on the list",
+    detail: submission?.email ? `We will email ${submission.email} when your classroom is ready.` : "We will email you when your classroom is ready.",
   };
 }
 
@@ -79,10 +102,13 @@ export async function action({ request }: ActionFunctionArgs) {
   };
 
   const cfg =
-    intent === 'redeem' ? RATE_LIMITS.unauth.freeTierToken : RATE_LIMITS.unauth.freeTierWaitlist;
+    intent === 'redeem'
+      ? RATE_LIMITS.unauth.freeTierToken
+      : RATE_LIMITS.unauth.freeTierWaitlist;
   const gate = await enforceUnauthByIpAndTarget({
     request,
-    route: intent === 'redeem' ? '/api/free-tier/token' : '/api/free-tier/waitlist',
+    route:
+      intent === 'redeem' ? '/api/free-tier/token' : '/api/free-tier/waitlist',
     targetKey: raw.email.toLowerCase().slice(0, 320) || 'none',
     perIpPerMinute: cfg.perIpPerMinute,
     perIpPerHour: cfg.perIpPerHour,
@@ -106,10 +132,11 @@ export async function action({ request }: ActionFunctionArgs) {
       })
       .safeParse(raw);
     if (!parsed.success) return { ok: false, error: 'invalid' as const };
-    const result = await redeemToken(parsed.data);
+    const result = await redeemToken(parsed.data, { scanDedupeCookie: await readScanDedupeCookie(request) });
     if (!result.ok) return { ok: false, error: result.reason };
     if (result.bypassWaitlist) {
-      const { sendReleaseEmailsForApplicationIds } = await import('~/domain/free-tier/approval-flow.server');
+      const { sendReleaseEmailsForApplicationIds } =
+        await import('~/domain/free-tier/approval-flow.server');
       const row = await import('~/utils/db.server').then((m) =>
         m.prisma.freeTierApplication.findUnique({
           where: { email: parsed.data.email.toLowerCase() },
@@ -118,7 +145,11 @@ export async function action({ request }: ActionFunctionArgs) {
       );
       if (row) await sendReleaseEmailsForApplicationIds([row.id]);
     }
-    return { ok: true as const, redeemed: true as const };
+    return {
+      ok: true as const,
+      redeemed: true as const,
+      bypassWaitlist: result.bypassWaitlist,
+    };
   }
 
   const parsed = formSchema.safeParse({
@@ -137,75 +168,106 @@ export async function action({ request }: ActionFunctionArgs) {
 export default function FreeTierLandingRoute() {
   const data = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
+  const [submittedEmail, setSubmittedEmail] = useState('');
   const submitted = fetcher.data?.ok === true;
-  const submitSuccess = submitted ? freeTierSubmitSuccessCopy(data) : null;
+  const submitSuccess = submitted
+    ? freeTierSubmitSuccessCopy({ ...fetcher.data, email: submittedEmail })
+    : null;
 
-  const title =
-    data.mode === 'token' ? 'Try YAWP with your students' : 'Try YAWP with your students';
-  const subtitle =
-    data.mode === 'token' ? 'Use your event link to continue.' : 'Join the waitlist or use your event link.';
+  const title = data.mode === 'token' && data.linkClosed
+    ? 'This link is closed'
+    : submitSuccess?.headline ?? 'Try YAWP with your students';
+  const subtitle = submitted || (data.mode === 'token' && data.linkClosed)
+    ? undefined
+    : data.mode === 'token' ? 'Use your event link to continue.'
+    : 'Join the waitlist. We let teachers in a group at a time.';
 
   return (
-    <main className="yawp-entry yawp-entry-auth">
-      <section className="yawp-entry-shell yawp-entry-auth-shell yawp-entry-auth-shell-fit">
-        <FreeTierEntryHeader title={title} subtitle={subtitle} kicker="Free classroom" />
-        <p className="text-sm text-foreground/80 -mt-1">
-          YAWP helps students draft essays with AI-assisted feedback while teachers stay in control of
-          assignments and grading.
-        </p>
-
-        {data.mode === 'token' && data.linkClosed ? (
-          <div className="yawp-entry-auth-body" role="status">
-            <p className="text-sm font-medium text-foreground">This event link is closed.</p>
+    <FreeTierAuthCard status={submitted || (data.mode === 'token' && data.linkClosed)} title={title} subtitle={subtitle} icon={data.mode === 'token' && data.linkClosed ? <CircleAlert /> : submitted ? (fetcher.data && 'bypassWaitlist' in fetcher.data && fetcher.data.bypassWaitlist ? <Mail /> : <CircleCheck />) : undefined}>
+      {data.mode === 'token' && data.linkClosed ? (
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-muted-foreground">
+            It expired, reached its limit, or was turned off.
+          </p>
+          <FreeTierButton asChild>
+            <a href="/free">Join the waitlist</a>
+          </FreeTierButton>
+        </div>
+      ) : submitSuccess ? (
+        <div className="flex flex-col gap-4">
+          {submitSuccess.detail ? (
             <p className="text-sm text-muted-foreground">
-              The link may have expired, reached its limit, or been disabled. You can still join the
-              waitlist below.
+              {submitSuccess.detail}
             </p>
-            <a href="/free" className="yawp-entry-button yawp-entry-button-primary w-full mt-4 inline-block text-center">
-              Join the waitlist
-            </a>
-          </div>
-        ) : submitSuccess ? (
-          <div className="yawp-entry-auth-body" role="status">
-            <p className="text-sm font-medium text-foreground">{submitSuccess.headline}</p>
-            {submitSuccess.detail ? (
-              <p className="text-sm text-muted-foreground">{submitSuccess.detail}</p>
-            ) : null}
-          </div>
-        ) : (
-          <fetcher.Form method="post" className="yawp-entry-auth-body">
-            <input type="hidden" name="intent" value={data.mode === 'token' ? 'redeem' : 'waitlist'} />
-            {data.mode === 'token' && data.token ? (
-              <input type="hidden" name="token" value={data.token} />
-            ) : null}
-            <input type="text" name="middleName" className="hidden" tabIndex={-1} autoComplete="off" aria-hidden />
-            <FreeTierFieldLabel label="Your name" htmlFor="name">
-              <FreeTierTextInput id="name" name="name" required />
-            </FreeTierFieldLabel>
-            <FreeTierFieldLabel label="School email" htmlFor="email">
-              <FreeTierTextInput id="email" name="email" type="email" required />
-            </FreeTierFieldLabel>
-            <FreeTierFieldLabel label="School name" htmlFor="schoolName">
-              <FreeTierTextInput id="schoolName" name="schoolName" required />
-            </FreeTierFieldLabel>
-            <FreeTierFieldLabel label="Location" htmlFor="location">
-              <FreeTierTextInput id="location" name="location" required />
-            </FreeTierFieldLabel>
-            <FreeTierFieldLabel label="Grade level" htmlFor="gradeLevel">
-              <FreeTierTextInput id="gradeLevel" name="gradeLevel" required />
-            </FreeTierFieldLabel>
-            {data.mode === 'token' && data.tokenValid && !data.tokenValid.valid ? (
-              <p className="text-sm text-destructive">This link is no longer valid.</p>
-            ) : null}
-            {fetcher.data?.ok === false && fetcher.data.error === 'rate_limited' ? (
-              <p className="text-sm text-destructive">Too many attempts. Please wait and try again.</p>
-            ) : null}
-            <button type="submit" className="yawp-entry-button yawp-entry-button-primary w-full">
-              {data.mode === 'token' ? 'Continue' : 'Join the waitlist'}
-            </button>
-          </fetcher.Form>
-        )}
-      </section>
-    </main>
+          ) : null}
+        </div>
+      ) : (
+        <fetcher.Form method="post" className="flex flex-col gap-4" onSubmit={event => setSubmittedEmail(String(new FormData(event.currentTarget).get('email') ?? ''))}>
+          <input
+            type="hidden"
+            name="intent"
+            value={data.mode === 'token' ? 'redeem' : 'waitlist'}
+          />
+          {data.mode === 'token' && data.token ? (
+            <input type="hidden" name="token" value={data.token} />
+          ) : null}
+          <input
+            type="text"
+            name="middleName"
+            className="hidden"
+            tabIndex={-1}
+            autoComplete="off"
+            aria-hidden
+          />
+          <FreeTierFieldLabel label="Your name" htmlFor="name">
+            <FreeTierTextInput id="name" name="name" required />
+          </FreeTierFieldLabel>
+          <FreeTierFieldLabel label="School email" htmlFor="email">
+            <FreeTierTextInput id="email" name="email" type="email" placeholder="you@school.edu" required />
+          </FreeTierFieldLabel>
+          <FreeTierFieldLabel label="School name" htmlFor="schoolName">
+            <FreeTierTextInput id="schoolName" name="schoolName" required />
+          </FreeTierFieldLabel>
+          <FreeTierFieldLabel label="Location" htmlFor="location">
+            <FreeTierTextInput id="location" name="location" placeholder="City, state" required />
+          </FreeTierFieldLabel>
+          <FreeTierFieldLabel label="Grade level" htmlFor="gradeLevel">
+            <FreeTierTextInput id="gradeLevel" name="gradeLevel" required />
+          </FreeTierFieldLabel>
+          {data.mode === 'token' &&
+          data.tokenValid &&
+          !data.tokenValid.valid ? (
+            <p className="text-sm text-destructive" role="alert">
+              This link is no longer valid.
+            </p>
+          ) : null}
+          {fetcher.data?.ok === false &&
+          fetcher.data.error === 'rate_limited' ? (
+            <p className="text-sm text-destructive" role="alert">
+              Too many attempts. Please wait and try again.
+            </p>
+          ) : null}
+          {fetcher.data?.ok === false &&
+          fetcher.data.error === 'cap_reached' ? (
+            <p className="text-sm text-destructive" role="alert">
+              This free classroom event is full.
+            </p>
+          ) : null}
+          {fetcher.data?.ok === false &&
+          fetcher.data.error === 'budget_exceeded' ? (
+            <p className="text-sm text-destructive" role="alert">
+              This event link is paused because the current free-tier budget has been reached.
+            </p>
+          ) : null}
+          {fetcher.data?.ok === false &&
+          (fetcher.data.error === 'cap_reached' || fetcher.data.error === 'budget_exceeded') ? (
+            <a href="/free" className="text-sm underline">Join the waitlist</a>
+          ) : null}
+          <FreeTierButton type="submit">
+            {data.mode === 'token' ? 'Continue' : 'Join the waitlist'}
+          </FreeTierButton>
+        </fetcher.Form>
+      )}
+    </FreeTierAuthCard>
   );
 }

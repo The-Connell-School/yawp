@@ -39,6 +39,12 @@ function renderCompose(overrides = {}) {
 }
 
 describe('renderPreviewCompose', () => {
+  test('enables tester feedback only for demo', () => {
+    const demo = Bun.YAML.parse(renderCompose({ slug: 'demo' }));
+    const preview = Bun.YAML.parse(renderCompose());
+    expect(demo.services.web.environment.TESTER_FEEDBACK_ENABLED).toBe('true');
+    expect(preview.services.web.environment.TESTER_FEEDBACK_ENABLED).toBe('false');
+  });
   test('renders the fast full-stack preview runtime by default', () => {
     const compose = renderCompose();
     const parsed = Bun.YAML.parse(compose);
@@ -543,4 +549,26 @@ test('mock admin is enabled only in demo compose configuration', () => {
   const preview = Bun.YAML.parse(renderCompose());
   expect(demo.services.web.environment.MOCK_ADMIN_ENABLED).toBe('true');
   expect(preview.services.web.environment.MOCK_ADMIN_ENABLED).toBe('false');
+});
+
+describe('deployment-only unified sign-on control', () => {
+  for (const runtime of ['fast', 'production']) {
+    test(`forwards label boolean only to the isolated PR toolbox (${runtime})`, () => {
+      for (const enabled of ['true', 'false']) {
+        const parsed = Bun.YAML.parse(renderCompose({ runtime, unifiedSignOn: enabled, controlDir: '/reviewed/control' }));
+        expect(parsed.services.toolbox.environment.PREVIEW_UNIFIED_SIGN_ON).toBe(enabled);
+        expect(parsed.services.toolbox.environment.YAWP_ENVIRONMENT).toBe('preview');
+        expect(parsed.services.toolbox.volumes).toContain('/reviewed/control:/preview-control:ro');
+        expect(parsed.services.web.environment.PREVIEW_UNIFIED_SIGN_ON).toBeUndefined();
+        expect(parsed.services.web.environment.UNIFIED_SIGN_ON).toBeUndefined();
+        expect(parsed.services.web.environment.YAWP_INTERNAL_API_KEYS).toBeUndefined();
+        const demo = Bun.YAML.parse(renderCompose({ runtime, slug: 'demo', unifiedSignOn: enabled }));
+        expect(demo.services.toolbox.environment.PREVIEW_UNIFIED_SIGN_ON).toBeUndefined();
+        expect(demo.services.toolbox.volumes?.some(volume => volume.includes('/preview-control')) ?? false).toBe(false);
+      }
+    });
+  }
+  test('refuses malformed label transport boolean', () => {
+    expect(() => renderCompose({ unifiedSignOn: 'true; echo bad' })).toThrow('true or false');
+  });
 });

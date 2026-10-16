@@ -1,0 +1,9 @@
+bun test v1.3.1 (89fa0f34)
+
+services/web-app/app/routes/free.admin.approve/route.loader.test.ts:
+(pass) free.admin.approve loader > does not offer the approve form when the application was rejected [0.33ms]
+
+ 1 pass
+ 0 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [507.00ms]

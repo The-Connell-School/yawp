@@ -271,6 +271,24 @@ describe('buildPreviewEnv', () => {
     expect(githubConfig).not.toContain(deprecatedTransportAuth);
   });
 
+  test('checks live PR metadata before deploying skipped previews', () => {
+    const workflow = readFileSync(
+      new URL(
+        '../../.github/workflows/preview-environments.yml',
+        import.meta.url
+      ),
+      'utf8'
+    );
+
+    expect(workflow).toContain('preview-policy:');
+    expect(workflow).toContain('gh pr view "$PR_NUMBER"');
+    expect(workflow).toContain('body="$(jq -r');
+    expect(workflow).toContain('reason=skip_preview');
+    expect(workflow).toContain(
+      "needs.preview-policy.outputs.should_deploy == 'true'"
+    );
+  });
+
   test('opts labeled PRs into versioned scrubbed production data', () => {
     const workflow = readFileSync(
       new URL(
@@ -288,7 +306,11 @@ describe('buildPreviewEnv', () => {
     expect(workflow).toContain('PREVIEW_SANITIZED_DUMP_VERSION');
     expect(workflow).toContain('PREVIEW_DB_DUMP_VERSION');
     expect(workflow).toContain('PREVIEW_ACCESS_MASTER_ORGANIZATION_ID');
-    expect(workflow).toContain('labeled');
+    // Quote GitHub's YAML key so Bun's YAML 1.1 parser keeps it a string.
+    const events = Bun.YAML.parse(workflow.replace(/^on:/m, '"on":')).on.pull_request_target.types;
+    for (const event of ['opened', 'synchronize', 'reopened', 'ready_for_review', 'labeled', 'unlabeled', 'closed']) {
+      expect(events).toContain(event);
+    }
     expect(deploy).toContain('DATA_SOURCE_FINGERPRINT_FILE');
     expect(deploy).toContain('PREVIEW_DB_DUMP_VERSION');
     expect(deploy).toContain('reset_preview_database_for_data_source_change');

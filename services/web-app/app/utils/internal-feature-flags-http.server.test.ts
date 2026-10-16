@@ -47,11 +47,14 @@ function post(
 
 describe('internal feature-flag endpoints', () => {
   let old: string | undefined;
+  let oldYawpEnvironment: string | undefined;
   beforeEach(() => {
     // Other suites mock db.server in the same process; take it back.
     mock.module('~/utils/db.server', () => ({ prisma }));
     old = process.env.YAWP_MANAGEMENT_SERVICE_KEY;
+    oldYawpEnvironment = process.env.YAWP_ENVIRONMENT;
     process.env.YAWP_MANAGEMENT_SERVICE_KEY = key;
+    delete process.env.YAWP_ENVIRONMENT;
     prisma.setting.findUnique.mockReset().mockResolvedValue(null);
     prisma.setting.findMany.mockReset().mockResolvedValue([]);
     prisma.setting.upsert.mockReset().mockImplementation(
@@ -73,6 +76,8 @@ describe('internal feature-flag endpoints', () => {
   afterEach(() => {
     if (old === undefined) delete process.env.YAWP_MANAGEMENT_SERVICE_KEY;
     else process.env.YAWP_MANAGEMENT_SERVICE_KEY = old;
+    if (oldYawpEnvironment === undefined) delete process.env.YAWP_ENVIRONMENT;
+    else process.env.YAWP_ENVIRONMENT = oldYawpEnvironment;
   });
 
   test('are hidden when no management key is configured', async () => {
@@ -114,11 +119,46 @@ describe('internal feature-flag endpoints', () => {
       FLAG,
       'internal_rubrics',
       'free_tier',
+      'unified-sign-on',
       'teacher_lounge_community',
     ]);
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[1]).toMatchObject({ key: 'internal_rubrics', label: 'Rubrics from Yawp Internal', mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[2]).toMatchObject({ key: 'free_tier', label: 'Free tier', mode: 'off', orgIds: [], enabled: false });
+    expect(body.flags[3]).toMatchObject({
+      key: 'unified-sign-on', mode: 'off', orgIds: [], enabled: false,
+      persisted: { mode: 'off', orgIds: [] },
+      effective: { mode: 'off', orgIds: [] }, runtimeOverride: null,
+    });
+  });
+
+  test('lists free tier as open on demo even when the stored flag is off', async () => {
+    process.env.YAWP_ENVIRONMENT = 'demo';
+    const response = await featureFlagsList(
+      new Request(BASE, { headers: { authorization: `Bearer ${key}` } })
+    );
+    const body = await response.json();
+    expect(body.flags.find((flag: { key: string }) => flag.key === 'free_tier')).toMatchObject({
+      key: 'free_tier',
+      mode: 'everyone',
+      orgIds: [],
+      persisted: { mode: 'off', orgIds: [] },
+      effective: { mode: 'everyone', orgIds: [] },
+      runtimeOverride: 'demo_free_tier',
+      enabled: true,
+    });
+  });
+
+  test('demo writes report the saved value without losing the runtime override', async () => {
+    process.env.YAWP_ENVIRONMENT = 'demo';
+    const response = await featureFlagUpdate(post({ mode: 'off' }, {}, 'free_tier'), 'free_tier');
+    expect(response.status).toBe(200);
+    expect((await response.json()).flag).toMatchObject({
+      mode: 'off', enabled: false,
+      persisted: { mode: 'off', orgIds: [] },
+      effective: { mode: 'everyone', orgIds: [] }, runtimeOverride: 'demo_free_tier',
+    });
+    expect(prisma.setting.upsert.mock.calls[0][0].where).toEqual({ name: 'feature_flag.free_tier' });
   });
 
   test('no longer lists the removed writing-conditions flag, even if its row is still stored', async () => {
@@ -138,6 +178,7 @@ describe('internal feature-flag endpoints', () => {
       FLAG,
       'internal_rubrics',
       'free_tier',
+      'unified-sign-on',
       'teacher_lounge_community',
     ]);
   });
@@ -161,6 +202,9 @@ describe('internal feature-flag endpoints', () => {
       description: expect.any(String),
       mode: 'targeted',
       orgIds: ['org-1'],
+      persisted: { mode: 'targeted', orgIds: ['org-1'] },
+      effective: { mode: 'targeted', orgIds: ['org-1'] },
+      runtimeOverride: null,
       enabled: false,
       updatedAt: '2026-10-07T16:00:00.000Z',
       lastChangedBy: 'ops@yawp.school',
@@ -342,6 +386,32 @@ describe('internal feature-flag endpoints', () => {
       expect((await featureFlagUpdate(missing, FLAG)).status).toBe(400);
     }
     expect(prisma.setting.upsert).not.toHaveBeenCalled();
+  });
+
+  test('signed demo reads expose persisted state independently of effective Everyone', async () => {
+    const signingFixture = 'flags-read-fixture-key'.repeat(3);
+    const names = ['YAWP_INTERNAL_API_KEYS', 'LEGACY_INTERNAL_KEY_ALLOWED', 'INTERNAL_API_NONCE_STORE'] as const;
+    const saved = names.map((name) => process.env[name]);
+    const { signInternalApiRequest, resetInternalApiMemoryNonceStore } = await import('./internal-platform-auth.server');
+    process.env.YAWP_INTERNAL_API_KEYS = JSON.stringify([{ id: 'flags-reader', secret: signingFixture, scopes: ['flags:read'] }]);
+    process.env.LEGACY_INTERNAL_KEY_ALLOWED = 'false';
+    process.env.INTERNAL_API_NONCE_STORE = 'memory';
+    process.env.YAWP_ENVIRONMENT = 'demo';
+    resetInternalApiMemoryNonceStore();
+    prisma.setting.findMany.mockResolvedValue([{ name: 'feature_flag.free_tier', value: '{"mode":"off","orgIds":[]}', description: null, updatedAt: new Date('2026-10-14T00:00:00Z') }]);
+    try {
+      const signed = signInternalApiRequest({ method: 'GET', url: BASE, body: '', keyId: 'flags-reader', secret: signingFixture, actor: 'reader@example.test' });
+      const response = await featureFlagsList(new Request(BASE, { headers: signed.headers }));
+      expect(response.status).toBe(200);
+      expect((await response.json()).flags.find((f: { key: string }) => f.key === 'free_tier')).toMatchObject({
+        mode: 'everyone', persisted: { mode: 'off', orgIds: [] },
+        effective: { mode: 'everyone', orgIds: [] }, runtimeOverride: 'demo_free_tier',
+      });
+      expect(prisma.setting.upsert).not.toHaveBeenCalled();
+    } finally {
+      names.forEach((name, index) => { if (saved[index] === undefined) delete process.env[name]; else process.env[name] = saved[index]; });
+      resetInternalApiMemoryNonceStore();
+    }
   });
 
   test('signed writes record an internal platform audit row', async () => {

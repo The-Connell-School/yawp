@@ -20,6 +20,7 @@ const findUnique = mock(async () => ({
   mockAdminGranted: true,
 }));
 const findMany = mock(async () => []);
+const auditCreate = mock(async () => ({}));
 const releaseBatch = mock(async () => ({ released: 1 }));
 const sendReleaseEmailsForApplicationIds = mock(async () => []);
 const decideApplication = mock(async () => ({
@@ -32,7 +33,11 @@ const reopenApplication = mock(async () => ({
 }));
 mock.module('~/utils/auth.server', () => ({ requireUserId }));
 mock.module('~/utils/db.server', () => ({
-  prisma: { user: { findUnique }, freeTierApplication: { findMany } },
+  prisma: {
+    user: { findUnique },
+    freeTierApplication: { findMany },
+    internalPlatformApiAudit: { create: auditCreate },
+  },
 }));
 mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
   requireFreeTierEnabled: async () => {},
@@ -73,6 +78,9 @@ beforeEach(() => {
     mockAdminGranted: true,
   }));
   releaseBatch.mockClear();
+  releaseBatch.mockImplementation(async () => ({ released: 1 }));
+  auditCreate.mockClear();
+  sendReleaseEmailsForApplicationIds.mockClear();
   decideApplication.mockClear();
   reopenApplication.mockClear();
   findMany.mockClear();
@@ -162,6 +170,45 @@ describe('tester routes', () => {
       })
     );
     expect(sendReleaseEmailsForApplicationIds).toHaveBeenCalled();
+  });
+  test('waitlist release returns clear budget feedback when budget is exhausted', async () => {
+    const { FreeTierBudgetExceededError } = await import(
+      '~/domain/free-tier/usage-budget.server'
+    );
+    releaseBatch.mockImplementation(async () => {
+      throw new FreeTierBudgetExceededError({
+        environment: 'demo',
+        budgetUsd: 10,
+        unitCostUsd: 5,
+        activeApplications: 3,
+        spendUsd: 15,
+        remainingUsd: 0,
+        percentUsed: 100,
+        overBudget: true,
+      });
+    });
+
+    const response = (await waitlist.action(args('release'))) as Response;
+    expect(response.status).toBe(402);
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      error: 'Free-tier budget reached',
+      operatorMessage: 'Free-tier demo budget reached: $15.00 of $10.00 used.',
+    });
+    expect(sendReleaseEmailsForApplicationIds).not.toHaveBeenCalled();
+    expect(auditCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        actorUserId: 'intern',
+        actorEmail: 'intern@yawp.local',
+        action: 'waitlist.release.denied',
+        targetId: 'application',
+        result: 'denied',
+        metadata: expect.objectContaining({
+          reason: 'budget_exceeded',
+          budget: expect.objectContaining({ environment: 'demo' }),
+        }),
+      }),
+    });
   });
   test('approval and rejection use shared services with authenticated actor', async () => {
     for (const intent of ['approve', 'reject']) {

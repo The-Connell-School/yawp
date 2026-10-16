@@ -1,9 +1,16 @@
-import { recordTesterAudit, type TesterAuditActor } from '~/domain/free-tier/tester-audit.server';
+import {
+  recordFreeTierCapDenialAudit,
+  recordTesterAudit,
+  type TesterAuditActor,
+} from '~/domain/free-tier/tester-audit.server';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import {
   authenticateInternalManagementRequest,
+  type InternalApiAuthContext,
+  INTERNAL_API_HEADER_ACTOR,
+  INTERNAL_API_HEADER_KEY_ID,
   INTERNAL_API_HEADER_SIGNATURE,
   recordInternalPlatformWriteAudit,
 } from '~/utils/internal-platform-auth.server';
@@ -18,6 +25,13 @@ import {
   tokenCreateSchema,
   tokenPatchSchema,
 } from '~/domain/free-tier/service.server';
+import {
+  assertFreeTierBudgetHeadroomForTransition,
+  FREE_TIER_BUDGET_ACTIVE_STATUSES,
+  FreeTierBudgetExceededError,
+  freeTierApplicationConsumesBudget,
+  readFreeTierUsageSummary,
+} from '~/domain/free-tier/usage-budget.server';
 import { readBoundedText } from '~/utils/bounded-body.server';
 import {
   ensureFreeTierProductionApprovalHooks,
@@ -28,6 +42,32 @@ import type { FreeTierApplicationStatus } from '@app/prisma';
 const response = (value: unknown, status = 200, headers?: HeadersInit) =>
   Response.json(value, { status, headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', ...(headers || {}) } });
 const digest = (value: string) => createHash('sha256').update(value).digest();
+const idempotencyKeySchema = z.string().trim().regex(/^[A-Za-z0-9._:-]{1,200}$/);
+const tokenCreateRequestSchema = tokenCreateSchema
+  .extend({ createIdempotencyKey: idempotencyKeySchema.nullish() })
+  .strict();
+
+function budgetExceededResponse(error: FreeTierBudgetExceededError) {
+  return response(
+    {
+      error: 'Free-tier budget reached',
+      operatorMessage: `Free-tier ${error.summary.environment} budget reached: $${error.summary.spendUsd.toFixed(2)} of $${error.summary.budgetUsd.toFixed(2)} used.`,
+      usage: error.summary,
+    },
+    402
+  );
+}
+
+function auditActorFromInternalRequest(request: Request, action: string): TesterAuditActor {
+  const signedActor = request.headers.get(INTERNAL_API_HEADER_ACTOR)?.trim().toLowerCase();
+  const signedKeyId = request.headers.get(INTERNAL_API_HEADER_KEY_ID)?.trim();
+  return {
+    actorUserId: signedKeyId ? `internal-api:${signedKeyId}` : 'internal-api:legacy',
+    actorEmail: signedActor || 'legacy@yawp.internal',
+    environment: 'internal-api',
+    action,
+  };
+}
 /**
  * The management-key check every internal endpoint shares (free tier, feature
  * flags). Returns a response to send back when the request is not allowed.
@@ -45,6 +85,14 @@ export async function authenticateAndAuditWrite(
   request: Request,
   options: { body?: Uint8Array | string } = {}
 ) {
+  const auth = await authenticateAndAuditWriteContext(request, options);
+  return auth instanceof Response ? auth : null;
+}
+
+async function authenticateAndAuditWriteContext(
+  request: Request,
+  options: { body?: Uint8Array | string } = {}
+): Promise<Response | InternalApiAuthContext> {
   const { authorizeInternalApiRequest } = await import(
     '~/utils/internal-platform-auth.server'
   );
@@ -65,7 +113,7 @@ export async function authenticateAndAuditWrite(
       result: 'authorized',
     });
   }
-  return null;
+  return auth;
 }
 
 async function authorizeManagement(request: Request) {
@@ -85,32 +133,42 @@ async function authorizeFreeTierReleaseManagement(
   request: Request,
   options: { body?: Uint8Array | string } = {}
 ) {
+  const auth = await authorizeFreeTierReleaseManagementAuth(request, options);
+  return auth instanceof Response ? auth : null;
+}
+
+async function authorizeFreeTierReleaseManagementAuth(
+  request: Request,
+  options: { body?: Uint8Array | string } = {}
+): Promise<Response | InternalApiAuthContext> {
   const { isFreeTierEnabled } = await import('~/domain/feature-flags/feature-flags.server');
   if (!(await isFreeTierEnabled())) {
     return response({ error: 'Not found' }, 404);
   }
   const signed = Boolean(request.headers.get(INTERNAL_API_HEADER_SIGNATURE));
-  if (signed) {
-    const denied = await authenticateAndAuditWrite(request, options);
-    if (denied) return denied;
-    return null;
-  }
-  const denied = await authorizeManagement(request);
-  if (denied) return denied;
-  return null;
+  if (!signed) return response({ error: 'Unauthorized' }, 401);
+  return authenticateAndAuditWriteContext(request, options);
 }
 
 async function guardFreeTierPost(request: Request, body?: string) {
+  const auth = await guardFreeTierPostAuth(request, body);
+  return auth instanceof Response ? auth : null;
+}
+
+async function guardFreeTierPostAuth(
+  request: Request,
+  body?: string
+): Promise<Response | InternalApiAuthContext | null> {
   const signed = Boolean(request.headers.get(INTERNAL_API_HEADER_SIGNATURE));
-  if (!signed) {
-    const denied = await authorizeFreeTierReleaseManagement(request);
-    if (denied) return denied;
+  if (body === undefined) {
+    const { isFreeTierEnabled } = await import('~/domain/feature-flags/feature-flags.server');
+    if (!(await isFreeTierEnabled())) {
+      return response({ error: 'Not found' }, 404);
+    }
+    if (!signed) return response({ error: 'Unauthorized' }, 401);
     return null;
   }
-  if (body === undefined) return null;
-  const denied = await authorizeFreeTierReleaseManagement(request, { body });
-  if (denied) return denied;
-  return null;
+  return authorizeFreeTierReleaseManagementAuth(request, { body });
 }
 
 const searchQuery = z
@@ -209,6 +267,13 @@ export async function tokensList(request: Request) {
   return response({ tokens });
 }
 
+export async function usageSummaryHttp(request: Request) {
+  const denied = await authorizeFreeTierRead(request);
+  if (denied) return denied;
+  if (request.method !== 'GET') return response({ error: 'Method not allowed' }, 405);
+  return response({ usage: await readFreeTierUsageSummary() });
+}
+
 export async function tokensPatch(request: Request, tokenId: string) {
   if (request.method !== 'PATCH') return response({ error: 'Method not allowed' }, 405);
   const pre = await guardFreeTierPost(request);
@@ -271,13 +336,18 @@ export async function tokensCreate(request: Request) {
   if (!request.headers.get('content-type')?.startsWith('application/json')) return response({ error: 'Invalid content type' }, 400);
   const text = await readBoundedText(request, 32768);
   if (text === null) return response({ error: 'Payload too large' }, 413);
-  const post = await guardFreeTierPost(request, text ?? '');
-  if (post) return post;
-  let parsed: z.infer<typeof tokenCreateSchema>;
+  const post = await guardFreeTierPostAuth(request, text ?? '');
+  if (post instanceof Response) return post;
+  if (!post) return response({ error: 'Unauthorized' }, 401);
+  let parsed: z.infer<typeof tokenCreateRequestSchema>;
   try {
-    parsed = tokenCreateSchema.parse(JSON.parse(text));
+    parsed = tokenCreateRequestSchema.parse(JSON.parse(text));
   } catch { return response({ error: 'Invalid input' }, 400); }
-  const created = await createAcquisitionTokens(parsed);
+  const { createIdempotencyKey, createdBy: _ignoredCreatedBy, ...tokenInput } = parsed;
+  const created = await createAcquisitionTokens(
+    { ...tokenInput, createdBy: post.actorEmail },
+    { idempotencyKey: createIdempotencyKey ?? null }
+  );
   return response({ tokens: created });
 }
 
@@ -293,7 +363,7 @@ export async function releaseBatchHttp(request: Request) {
   let body: any; try { body = JSON.parse(text); } catch { return response({ error: 'Malformed JSON' }, 400); }
   try {
     const parsed = releaseBatchSchema.parse(body);
-    const result = await releaseBatch(parsed);
+    const result = await releaseBatch(parsed, auditActorFromInternalRequest(request, 'waitlist.release'));
     if (result.released > 0) {
       const leads = await prisma.freeTierApplication.findMany({
         where: { id: { in: parsed.applicationIds }, status: 'INVITED' },
@@ -305,18 +375,30 @@ export async function releaseBatchHttp(request: Request) {
       return response({ ...result, emailFailures, emailFailureCount: emailFailures.length });
     }
     return response(result);
-  } catch { return response({ error: 'Invalid input' }, 400); }
+  } catch (error) {
+    if (error instanceof FreeTierBudgetExceededError) {
+      await recordFreeTierCapDenialAudit(
+        prisma,
+        auditActorFromInternalRequest(request, 'waitlist.release.denied'),
+        null,
+        { reason: 'budget_exceeded', budget: error.summary }
+      );
+      return budgetExceededResponse(error);
+    }
+    return response({ error: 'Invalid input' }, 400);
+  }
 }
 
 export async function exportCsv(request: Request) {
   const denied = await authorizeFreeTierRead(request);
   if (denied) return denied;
   if (request.method !== 'GET') return response({ error: 'Method not allowed' }, 405);
-  // Reuse search filter parsing
+  // Validate client filters and pagination using the search contract.
+  // Export uses its own row bound below; never inject that bound into search validation.
   let input: z.infer<typeof searchQuery>;
   try {
     const params = Object.fromEntries(new URL(request.url).searchParams.entries());
-    input = searchQuery.parse({ ...params, limit: '1000' });
+    input = searchQuery.parse(params);
   } catch { return response({ error: 'Invalid query' }, 400); }
   const where: any = {};
   if (input.status) where.status = input.status;
@@ -521,23 +603,36 @@ function parseOperatorEmail(request: Request, body?: unknown): string | { error:
   }
 }
 
-const ACTIVE_STATUSES: FreeTierApplicationStatus[] = [
-  'INVITED',
-  'ACCOUNT_CREATED',
-  'ADMIN_SUBMITTED',
-  'SENT',
-  'MANUAL_REVIEW',
-  'APPROVED',
-];
-
-async function enforceHeadroomForActivation(tx: any) {
+async function enforceHeadroomForActivation(
+  tx: any,
+  transition: {
+    from: { status: FreeTierApplicationStatus; releasedAt?: Date | string | null };
+    to: { status: FreeTierApplicationStatus; releasedAt?: Date | string | null };
+  }
+) {
   const cap = getFreeTierReleaseCap();
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('free_tier_release'))`;
-  const current = await tx.freeTierApplication.count({
-    where: { OR: [{ releasedAt: { not: null } }, { status: { in: ACTIVE_STATUSES } }] },
-  });
-  const remaining = Math.max(0, cap - current);
-  return remaining > 0;
+  const wasActive = freeTierApplicationConsumesBudget(transition.from);
+  const willBeActive = freeTierApplicationConsumesBudget(transition.to);
+  if (!wasActive && willBeActive) {
+    const current = await tx.freeTierApplication.count({
+      where: {
+        OR: [
+          { releasedAt: { not: null } },
+          { status: { in: FREE_TIER_BUDGET_ACTIVE_STATUSES } },
+        ],
+      },
+    });
+    const remaining = Math.max(0, cap - current);
+    if (remaining <= 0) return { ok: false as const, reason: 'Release cap reached' };
+  }
+  try {
+    await assertFreeTierBudgetHeadroomForTransition(tx, transition);
+  } catch (error) {
+    if (error instanceof FreeTierBudgetExceededError) return { ok: false as const, reason: 'Free-tier budget reached', budget: error.summary };
+    throw error;
+  }
+  return { ok: true as const };
 }
 
 type HookApp = {
@@ -600,7 +695,7 @@ async function transition(args: {
   decidedByEmail: string;
   reason?: string;
   audit?: TesterAuditActor;
-}): Promise<{ status: 200 | 404 | 409; payload: Record<string, unknown>; app?: HookApp; changed: boolean }> {
+}): Promise<{ status: 200 | 402 | 404 | 409; payload: Record<string, unknown>; app?: HookApp; changed: boolean }> {
   return prisma.$transaction(async (tx) => {
     const app = await tx.freeTierApplication.findUnique({
       where: { id: args.id },
@@ -612,12 +707,48 @@ async function transition(args: {
         schoolName: true,
         userId: true,
         organizationId: true,
+        releasedAt: true,
       },
     });
     if (!app) return { status: 404 as const, payload: { error: 'Not found' }, changed: false };
     if (app.status === args.to) return { status: 200 as const, payload: { ok: true, idempotent: true, status: app.status }, changed: false };
     if (!args.from.includes(app.status)) {
       return { status: 409 as const, payload: { error: 'Illegal state', status: app.status }, changed: false };
+    }
+    if (args.to === 'APPROVED') {
+      const headroom = await enforceHeadroomForActivation(tx, {
+        from: { status: app.status, releasedAt: app.releasedAt },
+        to: { status: args.to, releasedAt: app.releasedAt },
+      });
+      if (!headroom.ok) {
+        await recordFreeTierCapDenialAudit(
+          tx,
+          args.audit ?? {
+            actorUserId: `operator:${args.decidedByEmail}`,
+            actorEmail: args.decidedByEmail,
+            environment: 'operator',
+            action: 'approval.approve.denied',
+          },
+          args.id,
+          {
+            reason: headroom.reason,
+            previousStatus: app.status,
+            requestedStatus: args.to,
+            ...(headroom.budget ? { budget: headroom.budget } : {}),
+          }
+        );
+        return {
+          status: headroom.budget ? 402 as const : 409 as const,
+          payload: headroom.budget
+            ? {
+                error: 'Free-tier budget reached',
+                operatorMessage: `Free-tier ${headroom.budget.environment} budget reached: $${headroom.budget.spendUsd.toFixed(2)} of $${headroom.budget.budgetUsd.toFixed(2)} used.`,
+                usage: headroom.budget,
+              }
+            : { error: headroom.reason },
+          changed: false,
+        };
+      }
     }
     const updated = await tx.freeTierApplication.updateMany({ where: { id: args.id, status: app.status }, data: { status: args.to } });
     if (updated.count === 0) return { status: 409 as const, payload: { error: 'Conflict' }, changed: false };
@@ -772,8 +903,38 @@ export async function reopenApplication(args: { id: string; decidedByEmail: stri
     // A released application already holds a slot under the F3 cap (released rows
     // count whatever their status), so only unreleased ones need new headroom.
     if (!app.releasedAt) {
-      const hasRoom = await enforceHeadroomForActivation(tx);
-      if (!hasRoom) return { status: 409 as const, payload: { error: 'Release cap reached' } };
+      const headroom = await enforceHeadroomForActivation(tx, {
+        from: { status: app.status, releasedAt: app.releasedAt },
+        to: { status: 'MANUAL_REVIEW', releasedAt: app.releasedAt },
+      });
+      if (!headroom.ok) {
+        await recordFreeTierCapDenialAudit(
+          tx,
+          args.audit ?? {
+            actorUserId: `operator:${args.decidedByEmail}`,
+            actorEmail: args.decidedByEmail,
+            environment: 'operator',
+            action: 'approval.reopen.denied',
+          },
+          id,
+          {
+            reason: headroom.reason,
+            previousStatus: app.status,
+            requestedStatus: 'MANUAL_REVIEW',
+            ...(headroom.budget ? { budget: headroom.budget } : {}),
+          }
+        );
+        return {
+          status: headroom.budget ? 402 as const : 409 as const,
+          payload: headroom.budget
+            ? {
+                error: 'Free-tier budget reached',
+                operatorMessage: `Free-tier ${headroom.budget.environment} budget reached: $${headroom.budget.spendUsd.toFixed(2)} of $${headroom.budget.budgetUsd.toFixed(2)} used.`,
+                usage: headroom.budget,
+              }
+            : { error: headroom.reason },
+        };
+      }
     }
     const updated = await tx.freeTierApplication.updateMany({ where: { id, status: 'REJECTED' }, data: { status: 'MANUAL_REVIEW' } });
     if (updated.count === 0) return { status: 409 as const, payload: { error: 'Conflict' } };

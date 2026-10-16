@@ -4,6 +4,7 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { connect as netConnect } from 'node:net';
 import { createSecureContext } from 'node:tls';
+import { createHash, timingSafeEqual, createPrivateKey, createPublicKey, X509Certificate } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import {
@@ -12,6 +13,7 @@ import {
   parsePreviewPr,
   previewServiceHostname,
 } from './wake-server.mjs';
+import { isBotRequest, isHumanActivity, createWakeLimiter, createWakeAttemptLimiter } from './wake-policy.mjs';
 
 export function isDirectExecution(moduleUrl, argv1 = process.argv[1]) {
   if (!argv1) return false;
@@ -48,6 +50,99 @@ function send(response, status, body = '', headers = {}) {
     ...headers,
   });
   response.end(body);
+}
+
+function htmlEscape(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[char]));
+}
+
+function isStatusHost(host, domain) {
+  const hostname = String(host || '').toLowerCase().replace(/:\d+$/, '');
+  return hostname === `status.${String(domain || '').toLowerCase()}`;
+}
+
+function isStatusPath(url) {
+  return String(url || '/').split('?')[0] === '/__status';
+}
+
+function isWakePath(url) {
+  return String(url || '/').split('?')[0] === '/__wake';
+}
+
+function sendWakingPage(response, pr) {
+  const title = `Waking preview pr-${pr}`;
+  const body = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>${htmlEscape(title)}</title>
+  <style>
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; font: 16px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #172033; background: #f6f8fb; }
+    main { width: min(520px, calc(100vw - 32px)); }
+    h1 { margin: 0 0 8px; font-size: 1.5rem; }
+    p { margin: 0; color: #46556c; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Waking preview&hellip;</h1>
+    <p>pr-${htmlEscape(pr)} is starting. This usually takes a minute. Keep this page open.</p>
+  </main>
+  <script>
+  (async () => {
+    const message = document.querySelector('p');
+    const pause = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+    for (;;) {
+      try {
+        const wake = await fetch('/__wake' + (location.search || ''), { method: 'POST', headers: { 'x-preview-wake': '1' } });
+        if (wake.status === 404 || wake.status === 401 || wake.status === 403) {
+          message.textContent = 'This preview is unavailable. Use its access URL if access is required.';
+          return;
+        }
+        for (let attempt = 0; attempt < 30; attempt++) {
+          const response = await fetch('/__wake', { cache: 'no-store' });
+          const status = await response.json();
+          if (status.status === 'running') { location.reload(); return; }
+          await pause(5000);
+        }
+      } catch { message.textContent = 'Waiting for the preview host. Retrying shortly…'; }
+      await pause(15000);
+    }
+  })()
+  </script>
+</body>
+</html>`;
+  response.writeHead(503, {
+    'content-type': 'text/html; charset=utf-8',
+    'retry-after': '5',
+    'cache-control': 'no-store',
+  });
+  response.end(body);
+}
+
+function sendNoPreviewPage(response, pr) {
+  response.writeHead(404, {
+    'content-type': 'text/html; charset=utf-8',
+    'cache-control': 'no-store',
+  });
+  response.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>No preview</title></head><body><main><h1>No preview for pr-${htmlEscape(pr)}</h1><p>Push a commit to rebuild it.</p></main></body></html>`);
+}
+
+function json(response, status, value, headers = {}) {
+  response.writeHead(status, {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-store',
+    ...headers,
+  });
+  response.end(`${JSON.stringify(value, null, 2)}\n`);
 }
 
 function connectionHeaderNames(headers) {
@@ -110,38 +205,54 @@ function wakeErrorResponse(error) {
   if (error?.code === 'not-resident') {
     return [404, 'Preview is no longer resident.\n'];
   }
-  console.error('Preview wake failed', error);
+  console.error('Preview wake failed', error?.code || 'unavailable');
   return [503, 'Preview is temporarily unavailable; retry shortly.\n'];
 }
 
-function createWakeCoordinator({ ensureRunning, maxConcurrentWakes }) {
+function createWakeCoordinator({
+  ensureRunning,
+  maxConcurrentWakes,
+  recordQueuedWake = async () => {},
+  clearQueuedWake = async () => {},
+}) {
   if (!Number.isSafeInteger(maxConcurrentWakes) || maxConcurrentWakes < 1) {
     throw new Error('maxConcurrentWakes must be a positive integer');
   }
   const inFlight = new Map();
-  return async (pr, authorization) => {
-    if (!inFlight.has(pr)) {
-      if (inFlight.size >= maxConcurrentWakes) {
-        const error = new Error('Preview wake concurrency is full');
-        error.code = 'capacity-full';
-        throw error;
+  return {
+    isWaking(pr) {
+      return inFlight.has(pr);
+    },
+    wakingPrs() {
+      return [...inFlight.keys()];
+    },
+    enqueue(pr, authorization) {
+      if (!inFlight.has(pr)) {
+        if (inFlight.size >= maxConcurrentWakes) {
+          const error = new Error('Preview wake concurrency is full');
+          error.code = 'capacity-full';
+          throw error;
+        }
+        const options = {
+          allowDisplacement: true,
+          ...(typeof authorization === 'object' && authorization
+            ? { authorization }
+            : {}),
+        };
+        const operation = Promise.resolve()
+          .then(() => recordQueuedWake(pr))
+          .then(() => ensureRunning(pr, options))
+          .finally(async () => {
+            try { await clearQueuedWake(pr); } finally { inFlight.delete(pr); }
+          });
+        inFlight.set(pr, operation);
       }
-      const options = {
-        allowDisplacement: true,
-        ...(typeof authorization === 'object' && authorization
-          ? { authorization }
-          : {}),
-      };
-      const operation = Promise.resolve()
-        .then(() => ensureRunning(pr, options))
-        .finally(() => inFlight.delete(pr));
-      inFlight.set(pr, operation);
-    }
-    return inFlight.get(pr);
+      return inFlight.get(pr);
+    },
   };
 }
 
-function proxyHttp({ request, response, target, hostname, pr, recordAccess, recordWithoutMarker = false }) {
+function proxyHttp({ request, response, target, hostname, pr, recordAccess, recordHumanActivity }) {
   return new Promise((resolve) => {
     let settled = false;
     const upstream = httpRequest({
@@ -156,14 +267,9 @@ function proxyHttp({ request, response, target, hostname, pr, recordAccess, reco
       response.writeHead(status, downstreamHeaders(upstreamResponse.headers));
       upstreamResponse.pipe(response);
       upstreamResponse.once('end', () => {
-        if (
-          (authorized || recordWithoutMarker)
-          && status < 400
-          && request.method !== 'HEAD'
-          && request.method !== 'OPTIONS'
-        ) {
-          Promise.resolve(recordAccess(pr)).catch((error) => {
-            console.error('Preview activity recording failed', error);
+        if (isHumanActivity(request) && status < 400) {
+          Promise.resolve((authorized ? recordAccess : recordHumanActivity)(pr)).catch(() => {
+            console.error('Preview activity recording failed');
           });
         }
         if (!settled) {
@@ -195,41 +301,139 @@ export function createPreviewIngress({
   resolveTarget,
   authorizeWake,
   ensureRunning,
+  isResident = async () => true,
+  isOpen = async () => false,
+  plainWakeEnabled = true,
+  wakeLimits,
+  now,
   recordAccess,
+  recordHumanActivity = recordAccess,
+  recordQueuedWake,
+  clearQueuedWake,
+  getStatus,
+  statusToken,
   maxConcurrentWakes = 2,
 }) {
   if (!domain) throw new Error('preview ingress domain is required');
-  const wake = createWakeCoordinator({ ensureRunning, maxConcurrentWakes });
+  // Fixed-size digests keep the secret comparison constant-time, including unequal lengths.
+  const statusDigest = statusToken ? createHash('sha256').update(statusToken).digest() : null;
+  function statusAuthorized(request) {
+    if (!statusDigest) return true;
+    const header = request.headers.authorization;
+    const match = typeof header === 'string' ? /^Bearer ([^\s,]+)$/i.exec(header) : null;
+    const suppliedDigest = createHash('sha256').update(match?.[1] || '').digest();
+    const equal = timingSafeEqual(statusDigest, suppliedDigest);
+    return Boolean(match) && equal;
+  }
+  const wake = createWakeCoordinator({
+    ensureRunning,
+    maxConcurrentWakes,
+    recordQueuedWake,
+    clearQueuedWake,
+  });
+
+  const limiter = createWakeLimiter({ ...wakeLimits, now });
+  const attemptLimit = createWakeAttemptLimiter({ now });
+  let credentialChecks = 0;
+
+  async function queueWake({ parsed, request, response }) {
+    const resident = await isResident(parsed.pr);
+    if (!resident) {
+      json(response, 404, { status: 'not-resident', pr: parsed.pr });
+      return;
+    }
+    if (isBotRequest(request)
+      || request.headers['sec-fetch-site'] === 'cross-site'
+      || (request.headers.origin && request.headers.origin !== `https://${request.headers.host}`)) {
+      json(response, 403, { status: 'forbidden', pr: parsed.pr });
+      return;
+    }
+    const hasCredential = Boolean(request.headers.cookie) || new URL(request.url, 'https://preview.invalid').searchParams.has('code');
+    const anonymous = plainWakeEnabled && request.headers['x-preview-wake'] === '1';
+    const ip = request.socket?.remoteAddress || 'unknown';
+    const preflight = limiter.check(parsed.pr, ip, { credentialed: !anonymous || hasCredential });
+    if (preflight || attemptLimit(ip) || credentialChecks >= 2) {
+      json(response, 429, { status: 'rate-limited', pr: parsed.pr }, { 'retry-after': String(preflight || 60) });
+      return;
+    }
+    let authorization = null;
+    if (!anonymous || hasCredential) {
+      credentialChecks++;
+      try { authorization = await authorizeWake(parsed.pr, request.url, request); }
+      finally { credentialChecks--; }
+    }
+    if (!anonymous && !authorization) {
+      json(response, 401, { status: 'unauthorized', pr: parsed.pr });
+      return;
+    }
+    if (wake.isWaking(parsed.pr)) {
+      json(response, 202, { status: 'waking', pr: parsed.pr });
+      return;
+    }
+    const retryAfter = limiter.take(parsed.pr, ip, { credentialed: Boolean(authorization) });
+    if (retryAfter) {
+      json(response, 429, { status: 'rate-limited', pr: parsed.pr }, { 'retry-after': String(retryAfter) });
+      return;
+    }
+    if (!await isOpen(parsed.pr)) {
+      json(response, 404, { status: 'not-resident', pr: parsed.pr });
+      return;
+    }
+    try {
+      wake.enqueue(parsed.pr, authorization).catch((error) => {
+        console.error(`Preview pr-${parsed.pr} wake failed`, error?.code || 'unavailable');
+      });
+    } catch (error) {
+      const [status, body] = wakeErrorResponse(error);
+      json(response, status, { status: 'error', pr: parsed.pr, message: body.trim() }, status === 503 ? { 'retry-after': '15' } : {});
+      return;
+    }
+    json(response, 202, { status: 'waking', pr: parsed.pr }, { 'retry-after': '5' });
+  }
 
   return async (request, response) => {
     const rawHost = Array.isArray(request.headers.host)
       ? request.headers.host[0]
       : request.headers.host || '';
+    if (isStatusPath(request.url) && getStatus) {
+      if (!statusAuthorized(request)) {
+        json(response, 401, { status: 'unauthorized' }, { 'www-authenticate': 'Bearer' });
+        return;
+      }
+      const status = await getStatus({ wakingPrs: wake.wakingPrs() });
+      json(response, 200, status);
+      return;
+    }
+    if (isStatusHost(rawHost, domain)) {
+      send(response, 302, '', {
+        location: 'https://internal.yawp.school/previews',
+        'cache-control': 'no-store',
+      });
+      return;
+    }
     const parsed = parsePreviewHost(rawHost, domain);
     if (parsed === null) {
       send(response, 404, 'Not found.\n');
       return;
     }
     const hostname = previewServiceHostname(parsed.pr, domain, parsed.service);
-    let target = await resolveTarget(parsed.pr, { service: parsed.service });
-    if (!target) {
-      try {
-        const authorization = await authorizeWake(parsed.pr, request.url, request);
-        if (!authorization) {
-          send(response, 401, 'Open this sleeping preview with its one-click access URL.\n');
-          return;
-        }
-        await wake(parsed.pr, authorization);
-        target = await resolveTarget(parsed.pr, { fresh: true, service: parsed.service });
-        if (!target) {
-          send(response, 503, 'Preview is starting; retry shortly.\n', { 'retry-after': '5' });
-          return;
-        }
-      } catch (error) {
-        const [status, body] = wakeErrorResponse(error);
-        send(response, status, body, status === 503 ? { 'retry-after': '15' } : {});
-        return;
+    const target = await resolveTarget(parsed.pr, { service: parsed.service });
+    if (isWakePath(request.url)) {
+      if (!['GET', 'POST'].includes(request.method)) {
+        json(response, 405, { status: 'method-not-allowed' }, { allow: 'GET, POST' });
+      } else if (target && !wake.isWaking(parsed.pr)) {
+        json(response, 200, { status: 'running', pr: parsed.pr });
+      } else if (request.method === 'GET') {
+        json(response, 200, { status: wake.isWaking(parsed.pr) ? 'waking' : 'sleeping', pr: parsed.pr });
+      } else {
+        await queueWake({ parsed, request, response });
       }
+      return;
+    }
+    if (!target) {
+      if (!await isResident(parsed.pr)) sendNoPreviewPage(response, parsed.pr);
+      else sendWakingPage(response, parsed.pr);
+      return;
     }
     await proxyHttp({
       request,
@@ -238,7 +442,7 @@ export function createPreviewIngress({
       hostname,
       pr: parsed.pr,
       recordAccess,
-      recordWithoutMarker: parsed.service === 'blackboard',
+      recordHumanActivity,
     });
   };
 }
@@ -260,11 +464,19 @@ export function createWebSocketUpgradeHandler({
   resolveTarget,
   authorizeWake,
   ensureRunning,
+  isResident = async () => true,
   recordAccess = async () => {},
+  recordQueuedWake,
+  clearQueuedWake,
   maxConcurrentWakes = 2,
   connectTarget = netConnect,
 }) {
-  const wake = createWakeCoordinator({ ensureRunning, maxConcurrentWakes });
+  const wake = createWakeCoordinator({
+    ensureRunning,
+    maxConcurrentWakes,
+    recordQueuedWake,
+    clearQueuedWake,
+  });
   return async (request, socket, head) => {
     socket.on('error', () => {});
     socket.resume();
@@ -277,24 +489,9 @@ export function createWebSocketUpgradeHandler({
       return;
     }
     const hostname = previewServiceHostname(parsed.pr, domain, parsed.service);
-    let target = await resolveTarget(parsed.pr, { service: parsed.service });
+    const target = await resolveTarget(parsed.pr, { service: parsed.service });
     if (!target) {
-      try {
-        const authorization = await authorizeWake(parsed.pr, request.url, request);
-        if (!authorization) {
-          writeSocketResponse(socket, '401 Unauthorized', 'Open this sleeping preview with its one-click access URL.\n');
-          return;
-        }
-        await wake(parsed.pr, authorization);
-        target = await resolveTarget(parsed.pr, { fresh: true, service: parsed.service });
-      } catch (error) {
-        const [status, body] = wakeErrorResponse(error);
-        writeSocketResponse(socket, `${status} Service Unavailable`, body);
-        return;
-      }
-    }
-    if (!target) {
-      writeSocketResponse(socket, '503 Service Unavailable', 'Preview is starting; retry shortly.\n');
+      writeSocketResponse(socket, '503 Service Unavailable', 'Open this preview in a browser to wake it.\n');
       return;
     }
 
@@ -318,17 +515,11 @@ export function createWebSocketUpgradeHandler({
         const headerBlock = responsePreamble.subarray(0, boundary).toString('latin1');
         const remainder = responsePreamble.subarray(boundary + 4);
         const lines = headerBlock.split('\r\n');
-        const authorized = lines.some((line) => /^x-yawp-preview-authorized:\s*1\s*$/i.test(line));
         const sanitized = lines.filter((line) => !/^x-yawp-preview-authorized:/i.test(line));
         socket.write(`${sanitized.join('\r\n')}\r\n\r\n`);
         if (remainder.length) socket.write(remainder);
         responsePreamble = Buffer.alloc(0);
         responseHeadersComplete = true;
-        if (authorized && /^HTTP\/1\.[01] 101\b/.test(lines[0] || '')) {
-          Promise.resolve(recordAccess(parsed.pr)).catch((error) => {
-            console.error('Preview activity recording failed', error);
-          });
-        }
       });
       socket.on('data', (chunk) => {
         if (!upstreamSocket.destroyed) upstreamSocket.write(chunk);
@@ -359,7 +550,9 @@ export function createWebSocketUpgradeHandler({
 
 export function targetFromDockerInspect(inspect, port = 8080) {
   const address = inspect?.NetworkSettings?.Networks?.preview?.IPAddress;
-  if (!inspect?.State?.Running || typeof address !== 'string' || !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(address)) {
+  if (!inspect?.State?.Running
+    || (inspect.State.Health && inspect.State.Health.Status !== 'healthy')
+    || typeof address !== 'string' || !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(address)) {
     return null;
   }
   return { host: address, port };
@@ -435,6 +628,11 @@ export function createHttpRedirectHandler({ domain, readChallenge }) {
     const rawHost = Array.isArray(request.headers.host)
       ? request.headers.host[0]
       : request.headers.host || '';
+    if (isStatusHost(rawHost, domain)) {
+      response.writeHead(308, { location: `https://status.${domain.toLowerCase()}${request.url || '/'}` });
+      response.end();
+      return;
+    }
     const parsed = parsePreviewHost(rawHost, domain);
     if (parsed === null) {
       send(response, 404, 'Not found.\n');
@@ -467,6 +665,10 @@ function certificatePaths(certRoot, hostname) {
   };
 }
 
+function wildcardCertificateStorageName(domain) {
+  return `_wildcard.${domain}`;
+}
+
 function loadCertificatePair(certRoot, hostname) {
   const paths = certificatePaths(certRoot, hostname);
   return {
@@ -476,7 +678,37 @@ function loadCertificatePair(certRoot, hostname) {
   };
 }
 
+function publicKeyDer(key) {
+  return createPublicKey(key).export({ type: 'spki', format: 'der' });
+}
+
+function validCertificatePair({ hostname, key, cert, now = Date.now() }) {
+  try {
+    const certificate = new X509Certificate(cert);
+    const validationHostname = hostname.startsWith('*.') ? `wildcard-probe.${hostname.slice(2)}` : hostname;
+    if (!certificate.checkHost(validationHostname)) return false;
+    const validFrom = Date.parse(certificate.validFrom);
+    const validTo = Date.parse(certificate.validTo);
+    if (!Number.isFinite(validFrom) || !Number.isFinite(validTo) || now < validFrom || now >= validTo) {
+      return false;
+    }
+    const privatePublic = publicKeyDer(createPrivateKey(key));
+    const certificatePublic = certificate.publicKey.export({ type: 'spki', format: 'der' });
+    return Buffer.from(privatePublic).equals(Buffer.from(certificatePublic));
+  } catch {
+    return false;
+  }
+}
+
 async function findDefaultHostname(certRoot, domain) {
+  const wildcardName = wildcardCertificateStorageName(domain);
+  try {
+    await stat(path.join(certRoot, wildcardName, 'fullchain.pem'));
+    await stat(path.join(certRoot, wildcardName, 'privkey.pem'));
+    return wildcardName;
+  } catch {
+    // Fall back to a resident exact certificate during migration.
+  }
   const entries = await readdir(certRoot, { withFileTypes: true });
   return entries
     .filter((entry) => entry.isDirectory() && parsePreviewHost(entry.name, domain)?.service === 'web')
@@ -486,25 +718,36 @@ async function findDefaultHostname(certRoot, domain) {
 
 export function createCertificateStore({ certRoot, domain, defaultHostname }) {
   const cache = new Map();
-  function pair(hostname) {
-    if (parsePreviewPr(hostname, domain) === null) return null;
+  function pairByName(storageName, hostname = storageName) {
     try {
-      const loaded = loadCertificatePair(certRoot, hostname.toLowerCase());
-      const cached = cache.get(hostname);
+      const loaded = loadCertificatePair(certRoot, storageName.toLowerCase());
+      if (!validCertificatePair({ hostname, ...loaded })) return null;
+      const cached = cache.get(storageName);
       if (cached?.version === loaded.version) return cached;
       const value = { ...loaded, context: createSecureContext(loaded) };
-      cache.set(hostname, value);
+      cache.set(storageName, value);
       return value;
     } catch {
       return null;
     }
   }
-  const defaultPair = pair(defaultHostname);
+  function pair(hostname) {
+    if (parsePreviewPr(hostname, domain) === null) return null;
+    return pairByName(wildcardCertificateStorageName(domain), `*.${domain}`)
+      || pairByName(hostname, hostname);
+  }
+  const defaultPair = pairByName(
+    defaultHostname,
+    defaultHostname === wildcardCertificateStorageName(domain) ? `*.${domain}` : defaultHostname,
+  );
   if (!defaultPair) throw new Error(`No valid default certificate found for ${defaultHostname}`);
   return {
     defaultPair,
     sniCallback(servername, callback) {
-      const match = pair(String(servername || '').toLowerCase());
+      const hostname = String(servername || '').toLowerCase();
+      const match = isStatusHost(hostname, domain)
+        ? pairByName(wildcardCertificateStorageName(domain), `*.${domain}`)
+        : pair(hostname);
       if (match) callback(null, match.context);
       else callback(new Error('No certificate provisioned for preview hostname'));
     },
@@ -518,7 +761,7 @@ if (isDirectExecution(import.meta.url)) {
   const httpPort = Number(process.env.PREVIEW_HTTP_PORT || '80');
   const httpsPort = Number(process.env.PREVIEW_HTTPS_PORT || '443');
   const bind = process.env.PREVIEW_INGRESS_BIND || '0.0.0.0';
-  const maxRunning = process.env.PREVIEW_MAX_RUNNING || '4';
+  const maxRunning = process.env.PREVIEW_MAX_RUNNING || '8';
   const maxConcurrentWakes = Number(process.env.PREVIEW_MAX_CONCURRENT_WAKES || '2');
   const wakeScript = process.env.PREVIEW_WAKE_SCRIPT
     || path.join(root, 'bootstrap', 'scripts', 'preview', 'wake-preview.sh');
@@ -532,6 +775,8 @@ if (isDirectExecution(import.meta.url)) {
     domain,
     resolveTarget,
     maxConcurrentWakes,
+    statusToken: process.env.PREVIEW_STATUS_TOKEN,
+    plainWakeEnabled: process.env.PREVIEW_PLAIN_WAKE_ENABLED === 'true',
     ...operations,
   });
   const upgrades = createWebSocketUpgradeHandler({

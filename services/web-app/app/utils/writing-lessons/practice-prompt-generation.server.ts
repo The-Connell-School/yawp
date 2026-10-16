@@ -126,6 +126,7 @@ export async function generatePracticePrompts(input: {
           'utils/writing-lessons/practice-prompt-generation',
         requestId: attribution?.requestId ?? `${Date.now()}-${Math.random()}`,
       },
+      deidentificationPhrases: [input.topic],
     });
 
     const parsed = generationSchema.safeParse(

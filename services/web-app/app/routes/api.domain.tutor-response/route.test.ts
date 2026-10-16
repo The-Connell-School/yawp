@@ -11,6 +11,7 @@ const requireAdmin = mock();
 const requireUserId = mock();
 const requireMembership = mock();
 const prisma = {
+  $queryRawUnsafe: mock(),
   user: { findUnique: mock() },
   setting: { findUnique: mock() },
   assignmentModuleSession: {
@@ -49,6 +50,8 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     requireMutableRequest.mockResolvedValue(undefined);
     requireUserId.mockReset();
     requireMembership.mockReset();
+    prisma.$queryRawUnsafe.mockReset();
+    prisma.$queryRawUnsafe.mockResolvedValue([{ ok: 1 }]);
     requireUserId.mockResolvedValue('user-1');
     // The AI usage log (#404) attributes every call to the caller's organization.
     requireMembership.mockResolvedValue({ id: 'profile-1', role: 'STUDENT', organization: { id: 'org-1' } });
@@ -191,6 +194,12 @@ describe('api.domain.tutor-response read-only impersonation', () => {
 
   test('sends the current document as explicit auditable tutor context', async () => {
     getLLMCompletion.mockResolvedValue('Draft a clearer thesis.');
+    prisma.user.findUnique.mockResolvedValue({
+      isAdmin: false,
+      name: 'Jane Student',
+      email: 'jane.student@example.edu',
+      username: 'jstudent',
+    });
     mockCms();
     prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
       id: 'cms-1',
@@ -271,6 +280,11 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     expect(completionArgs.messages.at(-1)?.content).toBe(
       'Can you review this?'
     );
+    expect(completionArgs.deidentificationPhrases).toEqual([
+      'Jane Student',
+      'jane.student@example.edu',
+      'jstudent',
+    ]);
 
     expect(completionArgs.metadata).toEqual(
       expect.objectContaining({
@@ -310,7 +324,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
 
     expect(prisma.assignmentModuleSession.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        include: expect.objectContaining({
+        select: expect.objectContaining({
           document: {
             select: expect.objectContaining({
               assignment: {
@@ -767,6 +781,8 @@ describe('api.domain.tutor-response authorization', () => {
     requireAdmin.mockReset();
     requireUserId.mockReset();
     requireMembership.mockReset();
+    prisma.$queryRawUnsafe.mockReset();
+    prisma.$queryRawUnsafe.mockResolvedValue([{ ok: 1 }]);
     prisma.user.findUnique.mockReset();
     prisma.assignmentModuleSession.findFirst.mockReset();
     prisma.assignmentModuleSession.findUnique.mockReset();
@@ -774,7 +790,11 @@ describe('api.domain.tutor-response authorization', () => {
 
     requireMutableRequest.mockResolvedValue(undefined);
     requireUserId.mockResolvedValue('user-b');
-    requireMembership.mockResolvedValue({ id: 'profile-b', role: 'STUDENT' });
+    requireMembership.mockResolvedValue({
+      id: 'profile-b',
+      role: 'STUDENT',
+      organization: { id: 'org-1' },
+    });
     prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
     getLLMCompletion.mockResolvedValue('Try tightening your thesis.');
 

@@ -2,31 +2,31 @@ import { describe, expect, test } from 'bun:test';
 import { freeTierSubmitSuccessCopy } from './route';
 
 describe('freeTierSubmitSuccessCopy', () => {
-  test('valid event token shows join-link email copy after sign-up', () => {
+  test('bypass event token shows join-link email copy after sign-up', () => {
     expect(
       freeTierSubmitSuccessCopy({
-        mode: 'token',
-        tokenValid: { valid: true },
+        redeemed: true,
+        bypassWaitlist: true,
       })
     ).toEqual({
-      headline: 'Check your email for your join link.',
-      detail: null,
+      headline: 'Check your email',
+      detail: 'Your join link is on its way.',
     });
   });
 
-  test('waitlist and invalid token keep waitlist confirmation copy', () => {
-    expect(freeTierSubmitSuccessCopy({ mode: 'waitlist', tokenValid: null })).toEqual({
-      headline: "You're on the list.",
-      detail: "We'll email you when a spot opens.",
+  test('waitlist and non-bypass event token keep waitlist confirmation copy', () => {
+    expect(freeTierSubmitSuccessCopy({})).toEqual({
+      headline: "You're on the list",
+      detail: "We will email you when your classroom is ready.",
     });
     expect(
       freeTierSubmitSuccessCopy({
-        mode: 'token',
-        tokenValid: { valid: false },
+        redeemed: true,
+        bypassWaitlist: false,
       })
     ).toEqual({
-      headline: "You're on the list.",
-      detail: "We'll email you when a spot opens.",
+      headline: "You're on the list",
+      detail: "We will email you when your classroom is ready.",
     });
   });
 });

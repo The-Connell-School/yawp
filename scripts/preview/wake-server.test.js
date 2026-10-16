@@ -584,7 +584,7 @@ describe('preview wake server', () => {
       domain: 'preview.yawp.school',
       secret: 'wake-secret',
       ensureRunning: async () => {
-        const error = new Error('all running previews are pinned');
+        const error = new Error('running capacity cannot be reclaimed');
         error.code = 'capacity-full';
         throw error;
       },

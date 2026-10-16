@@ -60,7 +60,8 @@ describe('api.domain.assignment-pdf-extract', () => {
             type: 'text',
             text: JSON.stringify({
               title: 'Extracted Assignment',
-              prompt: 'Write a literary analysis essay.',
+              prompt:
+                'Brian Connell at Holy Family School should write a literary analysis essay.',
             }),
           },
         ],
@@ -89,7 +90,8 @@ describe('api.domain.assignment-pdf-extract', () => {
     expect(body).toEqual({
       success: true,
       title: 'Extracted Assignment',
-      prompt: 'Write a literary analysis essay.',
+      prompt:
+        'Brian Connell at Holy Family School should write a literary analysis essay.',
       truncated: false,
     });
     expect(capturedArgs.system).toContain(
@@ -97,6 +99,13 @@ describe('api.domain.assignment-pdf-extract', () => {
     );
     expect(capturedArgs.max_tokens).toBe(1200);
     expect(capturedOptions.signal).toBeInstanceOf(AbortSignal);
+    const log = prisma.llmLog.create.mock.calls[0][0].data;
+    const serialized = JSON.stringify(log);
+    expect(log.response).toContain('Extracted Assignment');
+    expect(log.response).toContain('[name] at [name]');
+    expect(serialized).not.toContain('Brian');
+    expect(serialized).not.toContain('Connell');
+    expect(serialized).not.toContain('Holy Family');
   });
 
   test('salvages a truncated prompt and flags it when the model hits the token limit', async () => {

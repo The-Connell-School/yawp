@@ -4,6 +4,7 @@ import {
   INTERNAL_RUBRICS_FLAG,
   LESSON_PLANNER_FLAG,
   FREE_TIER_FLAG,
+  UNIFIED_SIGN_ON_FLAG,
   LOUNGE_COMMUNITY_FLAG,
   FEATURE_FLAG_KEYS,
   isFreeTierGloballyEnabled,
@@ -70,6 +71,7 @@ describe('feature flag registry', () => {
       LESSON_PLANNER_FLAG,
       INTERNAL_RUBRICS_FLAG,
       FREE_TIER_FLAG,
+      UNIFIED_SIGN_ON_FLAG,
       LOUNGE_COMMUNITY_FLAG,
     ]);
   });

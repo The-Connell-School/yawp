@@ -22,7 +22,13 @@ export type FeatureFlagState = {
   key: FeatureFlagKey;
   label: string;
   description: string;
+  /** Existing response mode, retained for backward compatibility. */
   mode: FeatureFlagMode;
+  /** Parsed Setting value, before any deployment override. */
+  persisted: FeatureFlagValue;
+  /** Rollout used by the route gate; targeted still blocks anonymous entry. */
+  effective: FeatureFlagValue;
+  runtimeOverride: 'demo_free_tier' | null;
   /** Schools the flag is on for; empty unless mode is "targeted". */
   orgIds: string[];
   /** On for everyone. Kept for readers that predate per-school targeting. */
@@ -47,12 +53,29 @@ function stateFor(
     description: FEATURE_FLAGS[key].description,
     mode,
     orgIds,
+    persisted: { mode, orgIds },
+    effective: key === FREE_TIER_FLAG && isDemoDeployment(process.env)
+      ? { mode: 'everyone', orgIds: [] } : { mode, orgIds },
+    runtimeOverride: key === FREE_TIER_FLAG && isDemoDeployment(process.env)
+      ? 'demo_free_tier' : null,
     enabled: mode === 'everyone',
     updatedAt: row ? row.updatedAt.toISOString() : null,
     lastChangedBy: description.startsWith(LAST_CHANGED_BY_PREFIX)
       ? description.slice(LAST_CHANGED_BY_PREFIX.length)
       : null,
   };
+}
+
+function isDemoDeployment(env: Record<string, string | undefined>) {
+  return (
+    env.PREVIEW_SLUG?.trim().toLowerCase() === 'demo' ||
+    env.YAWP_ENVIRONMENT?.trim().toLowerCase() === 'demo'
+  );
+}
+
+function applyRuntimeOverrides(state: FeatureFlagState): FeatureFlagState {
+  if (state.key !== FREE_TIER_FLAG || !isDemoDeployment(process.env)) return state;
+  return { ...state, mode: 'everyone', orgIds: [], enabled: true };
 }
 
 /**
@@ -99,7 +122,9 @@ export function isLoungeCommunityEnabled(
  * Whether Free Tier C is live. Only `everyone` counts as on; `targeted` is off
  * for anonymous `/free` routes because there is no school context.
  */
-export async function isFreeTierEnabled(): Promise<boolean> {
+export async function isFreeTierEnabled(
+  { throwOnError = false }: { throwOnError?: boolean } = {}
+): Promise<boolean> {
   try {
     const row = await prisma.setting.findUnique({
       where: { name: featureFlagSettingName(FREE_TIER_FLAG) },
@@ -107,6 +132,8 @@ export async function isFreeTierEnabled(): Promise<boolean> {
     });
     return isFreeTierGloballyEnabled(parseFeatureFlagValue(row?.value));
   } catch (error) {
+    // Personalized status checks must distinguish a failed read from flag off.
+    if (throwOnError) throw error;
     console.error('feature_flag_read_failed', {
       key: FREE_TIER_FLAG,
       error: error instanceof Error ? error.message : String(error),
@@ -123,7 +150,7 @@ export async function listFeatureFlags(): Promise<FeatureFlagState[]> {
   });
   const byName = new Map(rows.map((row) => [row.name, row]));
   return FEATURE_FLAG_KEYS.map((key) =>
-    stateFor(key, byName.get(featureFlagSettingName(key)) ?? null)
+    applyRuntimeOverrides(stateFor(key, byName.get(featureFlagSettingName(key)) ?? null))
   );
 }
 

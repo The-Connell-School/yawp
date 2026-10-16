@@ -169,6 +169,23 @@ describe('preview access gate', () => {
     expect(next).toHaveBeenCalledTimes(4);
   });
 
+  test('public legal reads need no seat and never authorize preview activity', async () => {
+    const next = mock(async () => new Response('legal'));
+    for (const path of ['/privacy', '/privacy/', '/privacy.data', '/terms', '/terms/', '/terms.data']) {
+      for (const method of ['GET', 'HEAD']) {
+        const response = await previewAccessMiddleware(middlewareArgs(request(path, { method })), next);
+        expect(response?.status).toBe(200);
+        expect(response?.headers.get(PREVIEW_AUTHORIZED_ACTIVITY_HEADER)).toBeNull();
+      }
+    }
+    expect(next).toHaveBeenCalledTimes(12);
+    for (const [path, method] of [['/privacy', 'POST'], ['/terms', 'POST'], ['/privacy/private', 'GET'], ['/free', 'GET'], ['/app', 'GET']]) {
+      const response = await previewAccessMiddleware(middlewareArgs(request(path!, { method })), next);
+      expect(response?.status).not.toBe(200);
+    }
+    expect(next).toHaveBeenCalledTimes(12);
+  });
+
   test('lets Yawp Internal reach the rubric catalog without a preview cookie', async () => {
     const next = mock(async () => new Response('ok'));
 
@@ -231,12 +248,14 @@ describe('preview access gate', () => {
     expect(next).toHaveBeenCalledTimes(open.length);
   });
 
-  test('lets Yawp Internal reach free-tier operator routes without a preview cookie', async () => {
+  test('lets Yawp Internal reach operator routes without a preview cookie', async () => {
     const next = mock(async () => new Response('ok'));
     for (const [method, path] of [
       ['GET', '/api/internal/v1/free-tier/tokens'],
       ['POST', '/api/internal/v1/free-tier/release'],
       ['GET', '/api/internal/v1/free-tier/applications?q=x'],
+      ['GET', '/api/internal/v1/admin/organizations'],
+      ['GET', '/api/internal/v1/admin/organizations/org-1'],
     ] as const) {
       const response = await previewAccessMiddleware(
         middlewareArgs(request(path, { method })),
@@ -244,7 +263,7 @@ describe('preview access gate', () => {
       );
       expect(await response?.text()).toBe('ok');
     }
-    expect(next).toHaveBeenCalledTimes(3);
+    expect(next).toHaveBeenCalledTimes(5);
   });
 
   test('fails closed when no access codes are configured', async () => {

@@ -129,6 +129,7 @@ model AcquisitionToken {
   expiresAt      DateTime? @db.Timestamptz(6)
   disabledAt     DateTime? @db.Timestamptz(6)
   createdBy      String?
+  createIdempotencyKey String? @unique
   applications   FreeTierApplication[]
   scans          AcquisitionTokenScan[]
 
@@ -1764,6 +1765,7 @@ model WritingPracticeClassAssignment {
 // Upload table removed. Videos will be stored in S3 and referenced by key.
 
 model User {
+  signonIdentities SignonIdentity[]
   id                 String          @id @default(cuid())
   createdAt          DateTime        @default(now()) @db.Timestamptz(6)
   updatedAt          DateTime        @default(now()) @db.Timestamptz(6)
@@ -1775,6 +1777,8 @@ model User {
   password           Password?
   sessions           Session[]
   memberships        OrgMembership[]
+  isTester           Boolean         @default(false)
+  testerFeedback     TesterFeedback[]
   isAdmin            Boolean         @default(false)
   isSuperAdmin       Boolean         @default(false)
   mockAdminGranted   Boolean         @default(false)
@@ -2452,4 +2456,45 @@ model LoungeAttachmentUse {
   user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([attachmentId, userId])
+}
+
+model TesterFeedback {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  url          String   @db.VarChar(2048)
+  userAgent    String   @db.VarChar(1000)
+  whatIDid     String   @db.VarChar(4000)
+  whatHappened String   @db.VarChar(4000)
+  whatIWish    String   @db.VarChar(4000)
+  severity     String?  @db.VarChar(20)
+  environment  String   @db.VarChar(100)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([createdAt, id])
+  @@index([userId, createdAt])
+  @@index([environment, createdAt])
+}
+
+/// Browser-bound, expiring unified sign-on context. Contains no plaintext OTP.
+model SignonFlow {
+  id          String   @id
+  browserHash String
+  expiresAt   DateTime @db.Timestamptz(6)
+  data        Json
+
+  @@index([expiresAt])
+}
+
+/// A provider subject is linked only after explicit consent and account proof.
+model SignonIdentity {
+  id        String @id @default(cuid())
+  provider  String
+  subject   String
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([provider, subject])
+  @@unique([provider, userId])
 }

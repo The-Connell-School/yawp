@@ -130,17 +130,15 @@ describe('getLLMCompletion', () => {
         metadata: {
           feature: 'tutor',
           kind: 'assignment-module-tutor',
-          organizationId: 'org-1',
-          membershipId: 'mem-1',
-          classId: 'class-1',
           route: 'routes/api.domain.tutor-response',
-          requestId: 'req-1',
           messageCount: 2,
           messageTextLengths: [12, 10],
           hasTools: false,
           toolRoundCount: 0,
           cacheCreationInputTokens: 0,
           cacheReadInputTokens: 0,
+          deidentified: true,
+          deidentificationVersion: 1,
         },
       }),
     });
@@ -353,14 +351,208 @@ describe('getLLMCompletion', () => {
     expect(log.metadata).toMatchObject({
       feature: 'reporter',
       payloadLogging: 'metadata-only',
-      organizationId: 'org-1',
-      membershipId: 'mem-1',
       route: 'routes/api.domain.reporter',
-      requestId: 'req-2',
       messageCount: 3,
       toolRoundCount: 1,
+      deidentified: true,
+      deidentificationVersion: 1,
     });
+    expect(JSON.stringify(log.metadata)).not.toContain('org-1');
+    expect(JSON.stringify(log.metadata)).not.toContain('mem-1');
+    expect(JSON.stringify(log.metadata)).not.toContain('req-2');
     expect(usageLogCreate).toHaveBeenCalledTimes(1);
+  });
+
+  test('de-identifies attribution identifiers and ipHash before writing LlmLog rows', async () => {
+    const ipHash =
+      'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
+    anthropicCreate.mockResolvedValueOnce(
+      anthropicTextResponse(`Reply for org-write-1 hash ${ipHash}`)
+    );
+
+    await getLLMCompletion({
+      model: 'claude-sonnet-4-6',
+      system: `System for org-write-1 membership mem-write-1 request req-write-1 hash ${ipHash}.`,
+      messages: [
+        {
+          role: 'user',
+          content:
+            'Please help membership mem-write-1 for organization org-write-1.',
+        },
+      ],
+      metadata: {
+        feature: 'tutor',
+        userId: 'user-write-1',
+      },
+      attribution: {
+        organizationId: 'org-write-1',
+        membershipId: 'mem-write-1',
+        classId: 'class-write-1',
+        route: 'routes/api.domain.tutor-response',
+        requestId: 'req-write-1',
+        ipHash,
+      },
+    });
+
+    const log = llmLogCreate.mock.calls[0]?.[0].data;
+    const serialized = JSON.stringify(log);
+    expect(log.metadata).toMatchObject({
+      feature: 'tutor',
+      route: 'routes/api.domain.tutor-response',
+      deidentified: true,
+      deidentificationVersion: 1,
+    });
+    expect(serialized).not.toContain('org-write-1');
+    expect(serialized).not.toContain('mem-write-1');
+    expect(serialized).not.toContain('class-write-1');
+    expect(serialized).not.toContain('req-write-1');
+    expect(serialized).not.toContain('user-write-1');
+    expect(serialized).not.toContain(ipHash);
+    expect(serialized).not.toContain('ipHash');
+  });
+
+  test('de-identifies known free-form names before writing full LlmLog rows', async () => {
+    anthropicCreate.mockResolvedValueOnce(
+      anthropicTextResponse(
+        '{"overallComment":"Jordan, strengthen the topic sentence. Jane, add one more source."}'
+      )
+    );
+
+    await getLLMCompletion({
+      model: 'claude-sonnet-4-6',
+      system:
+        'Student first name: Jordan\nIn overallComment, start with "Jordan," and continue with feedback.',
+      messages: [
+        {
+          role: 'user',
+          content:
+            'My name is Jane Student. I am Jane Student and this essay by Jane Student needs help.',
+        },
+      ],
+      metadata: {
+        feature: 'grading',
+        kind: 'rubric-evaluation',
+      },
+      deidentificationPhrases: ['Jane Student', 'Jordan'],
+      attribution: {
+        organizationId: 'org-write-2',
+        membershipId: 'mem-write-2',
+        route: 'routes/api.domain.grade-essay-ai',
+        requestId: 'req-write-2',
+      },
+    });
+
+    const log = llmLogCreate.mock.calls[0]?.[0].data;
+    const serialized = JSON.stringify(log);
+    expect(log.systemPrompt).toContain('Student first name: [name]');
+    expect(log.systemPrompt).toContain('start with "[name],"');
+    expect(log.messages).toEqual([
+      {
+        role: 'user',
+        content:
+          'My name is [name]. I am [name] and this essay by [name] needs help.',
+      },
+    ]);
+    expect(log.response).toContain('"overallComment":"[name],');
+    expect(log.response).toContain('[name], add one more source.');
+    expect(serialized).not.toContain('Jane Student');
+    expect(serialized).not.toContain('Jane,');
+    expect(serialized).not.toContain('Jordan');
+    expect(serialized).not.toContain('deidentificationPhrases');
+  });
+
+  test('de-identifies arbitrary contextual names for full-payload generator routes', async () => {
+    anthropicCreate.mockResolvedValueOnce(
+      anthropicTextResponse(
+        '{"reply":"For Brian Connell at Holy Family School, try three identity prompts.","options":[{"prompt":"What does belonging ask of you?"}]}'
+      )
+    );
+
+    await getLLMCompletion({
+      model: 'claude-sonnet-4-6',
+      system: 'You generate Daily Pages prompts.',
+      messages: [
+        {
+          role: 'user',
+          content:
+            'Create a prompt for Brian Connell at Holy Family School about belonging.',
+        },
+      ],
+      metadata: {
+        feature: 'daily-pages-prompt-generator',
+      },
+      attribution: {
+        organizationId: 'org-write-generator',
+        membershipId: 'mem-write-generator',
+        route: 'routes/api.domain.daily-pages-prompt-generator',
+        requestId: 'req-write-generator',
+      },
+    });
+
+    const log = llmLogCreate.mock.calls[0]?.[0].data;
+    const serialized = JSON.stringify(log);
+    expect(JSON.stringify(log.messages)).toContain('[name] at [name]');
+    expect(log.response).toContain('[name] at [name]');
+    expect(serialized).not.toContain('Brian');
+    expect(serialized).not.toContain('Connell');
+    expect(serialized).not.toContain('Holy Family');
+    expect(serialized).not.toContain('org-write-generator');
+    expect(serialized).not.toContain('mem-write-generator');
+    expect(serialized).not.toContain('req-write-generator');
+  });
+
+  test('de-identifies student-chosen writing-practice topics before writing LlmLog rows', async () => {
+    anthropicCreate.mockResolvedValueOnce(
+      anthropicTextResponse(
+        '{"prompts":[{"exercise":"Brian Connell at Holy Family School wrote quickly, the timer ended.","instruction":"Fix the comma splice."}]}'
+      )
+    );
+
+    await getLLMCompletion({
+      model: 'claude-sonnet-4-6',
+      system: 'You author short writing-practice items.',
+      messages: [
+        {
+          role: 'user',
+          content:
+            "The student's chosen topic: Brian Connell at Holy Family School",
+        },
+      ],
+      metadata: {
+        feature: 'writing-practice-prompt-generation',
+        skill: 'comma splices',
+        count: 1,
+      },
+      deidentificationPhrases: ['Brian Connell at Holy Family School'],
+      attribution: {
+        organizationId: 'org-writing-practice',
+        membershipId: 'mem-writing-practice',
+        route: 'routes/app.writing-lessons.practice',
+        requestId: 'req-writing-practice',
+      },
+    });
+
+    const log = llmLogCreate.mock.calls[0]?.[0].data;
+    const serialized = JSON.stringify(log);
+    expect(JSON.stringify(log.messages)).toContain(
+      "The student's chosen topic: [name]"
+    );
+    expect(log.response).toContain('[name] wrote quickly');
+    expect(log.metadata).toMatchObject({
+      feature: 'writing-practice-prompt-generation',
+      skill: 'comma splices',
+      count: 1,
+      route: 'routes/app.writing-lessons.practice',
+      deidentified: true,
+      deidentificationVersion: 1,
+    });
+    expect(serialized).not.toContain('Brian');
+    expect(serialized).not.toContain('Connell');
+    expect(serialized).not.toContain('Holy Family');
+    expect(serialized).not.toContain('org-writing-practice');
+    expect(serialized).not.toContain('mem-writing-practice');
+    expect(serialized).not.toContain('req-writing-practice');
+    expect(serialized).not.toContain('deidentificationPhrases');
   });
 
   test('falls back to gpt-4o-mini and opens the circuit after Anthropic 529', async () => {
@@ -410,10 +602,9 @@ describe('getLLMCompletion', () => {
       messageCount: 2,
       hasTools: false,
       toolRoundCount: 0,
-      organizationId: 'org-1',
-      membershipId: 'mem-1',
       route: 'routes/api.domain.tutor-response',
-      requestId: 'req-3',
+      deidentified: true,
+      deidentificationVersion: 1,
     });
     expect(usageLogCreate).toHaveBeenCalledTimes(1);
   });
@@ -576,10 +767,9 @@ describe('getLLMCompletion', () => {
       fallbackTriggered: true,
       toolRoundCount: 1,
       hasTools: true,
-      organizationId: 'org-1',
-      membershipId: 'mem-1',
       route: 'routes/api.domain.tutor-response',
-      requestId: 'req-4',
+      deidentified: true,
+      deidentificationVersion: 1,
     });
   });
 

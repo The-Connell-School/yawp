@@ -38,6 +38,9 @@ const OPEN_PATHS = new Set([
   // environment. These routes require YAWP_MANAGEMENT_SERVICE_KEY themselves.
   '/api/internal/v1/feature-flags',
   '/api/internal/v1/organizations',
+  // Staff feedback review uses signed-only HMAC authorization at the route;
+  // the Internal service cannot present a human access-code cookie.
+  '/api/internal/v1/tester-feedback',
   '/lti/jwks',
   PREVIEW_ACCESS_PATH,
   `${PREVIEW_ACCESS_PATH}.data`,
@@ -48,8 +51,8 @@ const OPEN_PATHS = new Set([
  * deeper path: `/api/internal/v1/feature-flags/<key>` only.
  */
 const OPEN_SINGLE_SEGMENT_PREFIXES = ['/api/internal/v1/feature-flags/'];
-/** Yawp Internal operator API for free-tier event links (HMAC still required on the route). */
-const OPEN_PATH_PREFIXES = ['/api/internal/v1/free-tier/'];
+/** Yawp Internal operator APIs; the routes still require HMAC/service auth. */
+const OPEN_PATH_PREFIXES = ['/api/internal/v1/free-tier/', '/api/internal/v1/admin/organizations'];
 const OPEN_SEGMENT = /^[A-Za-z0-9_-]{1,128}$/;
 
 function isOpenPath(pathname: string) {
@@ -606,6 +609,12 @@ export function createPreviewAccessMiddleware(
     if (!isPreviewAccessGateEnabled()) return next();
 
     const pathname = new URL(request.url).pathname;
+    // Legal documents are public reads, including React Router data requests.
+    // Do not grant a seat or extend activity for these anonymous requests.
+    if (
+      ['GET', 'HEAD'].includes(request.method) &&
+      /^\/(privacy|terms)(?:\/|\.data)?$/.test(pathname)
+    ) return next();
     if (isOpenPath(pathname)) return next();
 
     const seat = await getPreviewAccessSeat(request, repository);

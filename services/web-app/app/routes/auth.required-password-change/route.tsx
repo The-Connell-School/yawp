@@ -20,6 +20,8 @@ import { prisma } from '~/utils/db.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { getSessionExpirationDateForUser } from '~/utils/auth.server';
 import { mayChangeRequiredPassword } from '~/domain/free-tier/required-password-change';
+import { isUnifiedSignOnEnabled } from '~/domain/unified-signon/gate.server';
+import { UnifiedSignon } from '~/components/unified-signon/unified-signon';
 
 const Schema = PasswordAndConfirmPasswordSchema;
 
@@ -31,6 +33,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
   if (!user.mustChangePassword) {
     throw redirect('/app');
+  }
+  if (await isUnifiedSignOnEnabled()) {
+    return { username: user.username, unified: true as const };
   }
   return { username: user.username };
 }
@@ -67,17 +72,71 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   }
 
+  if (await isUnifiedSignOnEnabled()) {
+    const { browserContext, withFlow } =
+      await import('~/domain/unified-signon/flow.server');
+    const context = await browserContext(request);
+    if (context) {
+      try {
+        const resume = await withFlow(
+          request,
+          context.token,
+          async (flow) => flow.data.userId === userId
+        );
+        if (resume) return redirect('/auth/login?continue=1');
+      } catch {
+        /* An expired flow retains the legacy destination. */
+      }
+    }
+  }
   return redirect('/app');
 }
 
 export default function RequiredPasswordChangeRoute() {
-  const { username } = useLoaderData<typeof loader>();
+  const entry = useLoaderData<typeof loader>();
+  const { username } = entry;
   const navigation = useNavigation();
   const form = useForm({
     schema: Schema,
     method: 'POST',
     defaultValues: { password: '', confirmPassword: '' },
   });
+
+  if ('unified' in entry && entry.unified) {
+    return (
+      <UnifiedSignon
+        initialState={{ screen: 'required-password' }}
+        transport={async () => ({
+          error:
+            'This sign-in option is not available yet. Please try again later.',
+        })}
+        passwordForm={
+          <Form {...form.getFormProps()} className="signon-fields">
+            <FormInput
+              scope={form.scope('password')}
+              type="password"
+              label="New password"
+              autoComplete="new-password"
+            />
+            <p className="signon-hint">At least 6 characters.</p>
+            <FormInput
+              scope={form.scope('confirmPassword')}
+              type="password"
+              label="Confirm new password"
+              autoComplete="new-password"
+            />
+            <Button
+              type="submit"
+              className="signon-primary"
+              disabled={navigation.state !== 'idle'}
+            >
+              Save password
+            </Button>
+          </Form>
+        }
+      />
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-xs rounded-xl bg-white p-6 shadow-sm ring-1 ring-black/5 sm:p-7">
@@ -88,13 +147,22 @@ export default function RequiredPasswordChangeRoute() {
           : 'Your teacher reset your password. Set a new one before continuing.'}
       </p>
       <Form {...form.getFormProps()} className="mt-6 flex flex-col gap-4">
-        <FormInput scope={form.scope('password')} type="password" label="New password" autoFocus />
+        <FormInput
+          scope={form.scope('password')}
+          type="password"
+          label="New password"
+          autoFocus
+        />
         <FormInput
           scope={form.scope('confirmPassword')}
           type="password"
           label="Confirm new password"
         />
-        <Button type="submit" className="w-full" disabled={navigation.state !== 'idle'}>
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={navigation.state !== 'idle'}
+        >
           Save and continue
         </Button>
       </Form>

@@ -101,8 +101,9 @@ export function buildAssignmentCreationQuotaFields(
   kind: string | null | undefined,
   createdCount: number
 ) {
-  if (plan !== 'FREE_CLASSROOM' || !isFreeClassroomAssignmentKind(kind)) {
-    return {};
+  if (plan !== 'FREE_CLASSROOM') return {};
+  if (!isFreeClassroomAssignmentKind(kind)) {
+    return { unavailableReason: 'Available with a paid plan.' };
   }
   const cap = FREE_CLASSROOM_ASSIGNMENT_QUOTAS[kind];
   const remaining = Math.max(0, cap - createdCount);

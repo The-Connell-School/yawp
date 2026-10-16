@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { demoInternalApiKeys } from './demo-internal-api-config.mjs';
 import {
   buildPreviewEnv,
   requirePreviewAccessSecret,
@@ -42,6 +43,8 @@ export function renderPreviewCompose({
   enableTls = process.env.PREVIEW_TLS !== 'false',
   runtime = process.env.PREVIEW_RUNTIME || 'fast',
   dataMode = process.env.PREVIEW_DATA_MODE || 'seed',
+  unifiedSignOn = process.env.PREVIEW_UNIFIED_SIGN_ON ?? 'false',
+  controlDir = process.env.PREVIEW_CONTROL_DIR || dirname(fileURLToPath(import.meta.url)),
   databaseUser = process.env.PREVIEW_DB_USER,
   databasePassword = process.env.PREVIEW_DB_PASSWORD,
   accessSeats = process.env.PREVIEW_ACCESS_SEATS,
@@ -51,8 +54,12 @@ export function renderPreviewCompose({
   sessionSecret = process.env.PREVIEW_SESSION_SECRET,
   aiMode = process.env.PREVIEW_AI_MODE || 'live',
   managementServiceKey = process.env.PREVIEW_MANAGEMENT_SERVICE_KEY,
+  internalApiKeys = process.env.DEMO_INTERNAL_API_KEYS,
   customIngressActive = process.env.PREVIEW_CUSTOM_INGRESS_ACTIVE !== 'false',
 } = {}) {
+  if (!['true', 'false'].includes(unifiedSignOn)) {
+    throw new Error('PREVIEW_UNIFIED_SIGN_ON must be true or false');
+  }
   const previewAccessSeats = requirePreviewAccessSeats(accessSeats);
   const previewMasterAccessCode = masterOrgGateEnabled
     ? requirePreviewMasterAccessCode(masterAccessCode)
@@ -79,6 +86,10 @@ export function renderPreviewCompose({
     databaseUser,
     databasePassword,
   });
+  const demoKeys = demoInternalApiKeys(internalApiKeys);
+  if (demoKeys && (env.slug !== 'demo' || String(prNumber ?? '').trim())) {
+    throw new Error('Demo Internal API keys require the demo target');
+  }
   const directPortBlock = env.directPort
     ? `\n    ports:\n      - ${q(`127.0.0.1:${env.directPort}:8080`)}`
     : '';
@@ -170,6 +181,7 @@ ${tlsLabels}
       MOCK_ADMIN_ENABLED: ${q(env.slug === 'demo' ? 'true' : 'false')}
       PRIMARY_APP_URL: ${q(env.url)}
       PREVIEW_SLUG: ${q(env.slug)}
+      TESTER_FEEDBACK_ENABLED: ${q(env.slug === 'demo' ? 'true' : 'false')}
       PREVIEW_DOMAIN: ${q(env.domain)}
       PREVIEW_DATA_MODE: ${q(env.dataMode)}
       PREVIEW_ACCESS_GATE: "on"
@@ -196,14 +208,24 @@ ${uaStudentBillingEnvironment}      INTERNAL_COMMAND_TOKEN: ${q(optionalEnv('PRE
   // Only the demo deploy supplies this key (Yawp Internal publishes rubrics to
   // demo through the Rubric Catalog API). It goes to the web app alone; without
   // it those routes 404, which is the right state for every PR preview.
-  const webEnvironment = previewManagementServiceKey
-    ? `${commonEnvironment}
-      YAWP_MANAGEMENT_SERVICE_KEY: ${q(previewManagementServiceKey)}`
-    : commonEnvironment;
+  // Compose expands dollar signs even in quoted YAML. Preserve literal key bytes.
+  const webEnvironment = commonEnvironment
+    + `\n      GOOGLE_OAUTH_CLIENT_ID: ${q(optionalEnv('PREVIEW_GOOGLE_OAUTH_CLIENT_ID').replaceAll('$', '$$$$'))}`
+    + `\n      GOOGLE_OAUTH_CLIENT_SECRET: ${q(optionalEnv('PREVIEW_GOOGLE_OAUTH_CLIENT_SECRET').replaceAll('$', '$$$$'))}`
+    + (previewManagementServiceKey
+      ? `\n      YAWP_MANAGEMENT_SERVICE_KEY: ${q(previewManagementServiceKey)}` : '')
+    + (demoKeys
+      ? `\n      YAWP_INTERNAL_API_KEYS: ${q(demoKeys.replaceAll('$', '$$$$'))}` : '');
   const fastVolumes = `    volumes:
       - ${q(`${env.sourceDir}:/app`)}
       - ${env.composeProject}-node-modules:/app/node_modules
       - ${env.composeProject}-web-node-modules:/app/services/web-app/node_modules`;
+  // Mount reviewed default-branch tooling even when the PR source predates it.
+  // This also avoids baking control-plane updates into PR-owned Dockerfiles.
+  const toolboxControlVolume = env.prNumber
+    ? `      - ${q(`${controlDir}:/preview-control:ro`)}` : '';
+  const toolboxFlagEnvironment = env.prNumber
+    ? `      PREVIEW_UNIFIED_SIGN_ON: ${q(unifiedSignOn)}` : '';
   const toolboxService =
     env.runtime === 'fast'
       ? `  toolbox:
@@ -211,8 +233,10 @@ ${uaStudentBillingEnvironment}      INTERNAL_COMMAND_TOKEN: ${q(optionalEnv('PRE
     image: oven/bun:1.3.1
     working_dir: /app
 ${fastVolumes}
+${toolboxControlVolume}
     environment:
 ${commonEnvironment}
+${toolboxFlagEnvironment}
     networks:
       - preview
 `
@@ -224,8 +248,11 @@ ${commonEnvironment}
       target: deps
       args:
         DATABASE_URL: ${q(env.databaseUrl)}
+${toolboxControlVolume ? `    volumes:
+${toolboxControlVolume}` : ''}
     environment:
 ${commonEnvironment}
+${toolboxFlagEnvironment}
     networks:
       - preview
 `;

@@ -5,6 +5,7 @@ const requireMutableRequest = mock();
 const requireLessonPlannerAccess = mock();
 const handleLessonPlannerToolCall = mock();
 const reserveAiRequest = mock();
+class AiFreeTierBudgetExceededError extends Error {}
 class AiRateLimitError extends Error {
   constructor(
     readonly retryAfterSeconds: number,
@@ -74,7 +75,9 @@ mock.module('~/utils/getLLMCompletion', () => ({
 }));
 mock.module('~/utils/ai-admission.server', () => ({
   AiRateLimitError,
-  aiAdmissionErrorResponse: () => null,
+  aiAdmissionErrorResponse: (error: unknown) => error instanceof AiFreeTierBudgetExceededError
+    ? Response.json({ error: 'Free-tier AI is paused because the current budget has been reached.' }, { status: 402 })
+    : null,
   reserveAiRequest,
 }));
 
@@ -414,6 +417,18 @@ describe('api.domain.lesson-planner action', () => {
 
     expect(jsonResult(response).init?.status).toBe(422);
     expect(getLLMCompletion).not.toHaveBeenCalled();
+  });
+
+  test('free-tier budget denial creates no planner conversation, messages, units or provider output', async () => {
+    reserveAiRequest.mockRejectedValueOnce(new AiFreeTierBudgetExceededError());
+    const result = await action({ request: formRequest({ message: 'plan a lesson' }) } as any) as Response;
+    expect(result.status).toBe(402);
+    expect(await result.json()).toMatchObject({ error: expect.stringContaining('budget') });
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+    expect(prisma.lessonPlanConversation.create).not.toHaveBeenCalled();
+    expect(prisma.lessonPlanMessage.create).not.toHaveBeenCalled();
+    expect(prisma.lessonPlanUnit.create).not.toHaveBeenCalled();
+    expect(handleLessonPlannerToolCall).not.toHaveBeenCalled();
   });
 
   test('rate-limits rapid planner requests per teacher', async () => {

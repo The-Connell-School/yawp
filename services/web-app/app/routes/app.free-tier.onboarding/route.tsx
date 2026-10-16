@@ -4,37 +4,45 @@ import {
   redirect,
   useActionData,
   useLoaderData,
+  useNavigation,
 } from 'react-router';
 import { Form } from 'react-router';
 import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { submitAdminDetails } from '~/domain/free-tier/approval-flow.server';
-import { renderAdminApprovalEmailBody } from '~/domain/free-tier/email-copy';
 import {
   FreeTierAuthCard,
-  FreeTierEmailPreview,
+  FreeTierButton,
   FreeTierFieldLabel,
   FreeTierSignOut,
-  FreeTierTextArea,
   FreeTierTextInput,
+  FreeTierProgress,
 } from '../free-tier/FreeTierAuthCard';
 import { freeTierConfigErrorMessage } from '~/domain/free-tier/free-tier-config.server';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
 
-const MAX_NOTE = 500;
 const MAX_NAME = 200;
-const LINK_PLACEHOLDER = '(link included in the email we send)';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireFreeTierEnabled();
   const userId = await requireUserId(request);
   const app = await prisma.freeTierApplication.findFirst({
     where: { userId },
-    select: { id: true, schoolName: true, name: true, email: true, status: true },
+    select: {
+      id: true,
+      schoolName: true,
+      name: true,
+      email: true,
+      status: true,
+    },
   });
   const lastFailedEmail = app
     ? await prisma.freeTierEmailLog.findFirst({
-        where: { applicationId: app.id, kind: 'admin_approval', success: false },
+        where: {
+          applicationId: app.id,
+          kind: 'admin_approval',
+          success: false,
+        },
         orderBy: { createdAt: 'desc' },
         select: { id: true },
       })
@@ -43,7 +51,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ? await prisma.freeTierAdminApproval.findFirst({
         where: { applicationId: app.id, status: 'PENDING' },
         orderBy: { createdAt: 'desc' },
-        select: { adminName: true, adminEmail: true, adminRole: true, personalNote: true },
+        select: { adminName: true, adminEmail: true, adminRole: true },
       })
     : null;
   return { app, lastFailedEmail, pending };
@@ -53,16 +61,24 @@ export async function action({ request }: ActionFunctionArgs) {
   await requireFreeTierEnabled();
   const userId = await requireUserId(request);
   const formData = await request.formData();
-  const app = await prisma.freeTierApplication.findFirst({ where: { userId }, select: { id: true } });
+  const app = await prisma.freeTierApplication.findFirst({
+    where: { userId },
+    select: { id: true },
+  });
   if (!app) return redirect('/app/free-tier/onboarding');
   try {
     const result = await submitAdminDetails({
       applicationId: app.id,
       userId,
-      adminName: String(formData.get('adminName') ?? '').trim().slice(0, MAX_NAME),
-      adminEmail: String(formData.get('adminEmail') ?? '').trim().slice(0, 320),
-      adminRole: String(formData.get('adminRole') ?? '').trim().slice(0, 100),
-      personalNote: String(formData.get('personalNote') ?? '').trim().slice(0, MAX_NOTE),
+      adminName: String(formData.get('adminName') ?? '')
+        .trim()
+        .slice(0, MAX_NAME),
+      adminEmail: String(formData.get('adminEmail') ?? '')
+        .trim()
+        .slice(0, 320),
+      adminRole: String(formData.get('adminRole') ?? '')
+        .trim()
+        .slice(0, 100),
     });
     if (!result.ok) {
       return result;
@@ -70,44 +86,43 @@ export async function action({ request }: ActionFunctionArgs) {
     throw redirect('/app/free-tier/pending');
   } catch (error) {
     if (error instanceof Response) throw error;
-    return { ok: false as const, reason: 'config' as const, message: freeTierConfigErrorMessage(error) };
+    return {
+      ok: false as const,
+      reason: 'config' as const,
+      message: freeTierConfigErrorMessage(error),
+    };
   }
 }
 
 export default function FreeTierOnboardingRoute() {
   const { app, lastFailedEmail, pending } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
-  const preview = renderAdminApprovalEmailBody({
-    teacherName: app?.name ?? 'You',
-    teacherEmail: app?.email ?? 'teacher@school.edu',
-    schoolName: app?.schoolName ?? 'your school',
-    personalNote: '',
-    approveUrl: LINK_PLACEHOLDER,
-    notRightPersonUrl: LINK_PLACEHOLDER,
-  });
-
+  const navigation = useNavigation();
   const errorMessage =
     actionData && !actionData.ok
       ? actionData.reason === 'config'
         ? actionData.message
         : actionData.reason === 'email_failed'
-          ? 'We could not send the approval email. Try again or contact support@yawp.school.'
+          ? "We couldn't send the email. Try again, or contact support@yawp.school."
           : actionData.reason === 'illegal_state'
-            ? 'This application is not ready for administrator details yet.'
+            ? "This application isn't ready for administrator details yet. Contact support@yawp.school."
             : 'Something went wrong. Try again.'
       : null;
 
   return (
     <FreeTierAuthCard
-      title="Administrator approval"
-      subtitle="Site- or district-level administrators can approve YAWP. Department chairs and classroom teachers cannot."
+      title="Who can approve YAWP?"
+      footer={<FreeTierSignOut />}
+      subtitle="A site or district administrator. Department chairs and teachers can’t."
     >
       {errorMessage ? (
-        <p className="text-sm text-destructive" role="alert">{errorMessage}</p>
+        <p className="text-sm text-destructive" role="alert">
+          {errorMessage}
+        </p>
       ) : null}
       {lastFailedEmail && app?.status === 'ADMIN_SUBMITTED' ? (
         <p className="text-sm text-destructive" role="alert">
-          We could not send the approval email last time. Update the administrator details below and send again.
+          We couldn't send the email. Try again, or contact support@yawp.school.
         </p>
       ) : null}
       <Form method="post" className="flex flex-col gap-4">
@@ -124,6 +139,7 @@ export default function FreeTierOnboardingRoute() {
           <FreeTierTextInput
             id="adminEmail"
             name="adminEmail"
+            placeholder="name@district.org"
             type="email"
             required
             maxLength={320}
@@ -134,26 +150,15 @@ export default function FreeTierOnboardingRoute() {
           <FreeTierTextInput
             id="adminRole"
             name="adminRole"
+            placeholder="Principal, Technology Director"
             required
             maxLength={100}
             defaultValue={pending?.adminRole ?? ''}
           />
         </FreeTierFieldLabel>
-        <FreeTierFieldLabel label="Personal note (optional, shown at top of email)" htmlFor="personalNote">
-          <FreeTierTextArea
-            id="personalNote"
-            name="personalNote"
-            maxLength={MAX_NOTE}
-            rows={3}
-            defaultValue={pending?.personalNote ?? ''}
-          />
-        </FreeTierFieldLabel>
-        <FreeTierEmailPreview body={preview} />
-        <button type="submit" className="yawp-entry-button yawp-entry-button-primary w-full">
-          Send approval request
-        </button>
+        <FreeTierProgress steps={['Account created', 'Ask your administrator', 'Start teaching']} current={1} />
+        <FreeTierButton type="submit">{navigation.state === 'submitting' ? 'Sending…' : 'Send approval request'}</FreeTierButton>
       </Form>
-      <FreeTierSignOut />
     </FreeTierAuthCard>
   );
 }

@@ -1372,7 +1372,7 @@ export function TeacherGradingPanel({
                     {isGrammarCategory ? (
                       <div className="space-y-2">
                         <p className="text-xs text-muted-foreground">
-                          AI grammar issues: {grammarIssues.length}
+                          Grammar issues: {grammarIssues.length}
                         </p>
                         {grammarIssues.length === 0 ? (
                           <p className="text-xs text-muted-foreground">

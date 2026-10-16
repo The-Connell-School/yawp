@@ -5,7 +5,7 @@ export const meta: MetaFunction = () => [
   {
     name: 'description',
     content:
-      'Discover the YAWP! Writing Program, combining critical writing curriculum, AI-guided tutoring, and teacher training to improve student writing skills and academic integrity.',
+      'Discover the YAWP! Writing Program, combining critical writing curriculum, guided tutoring, and teacher training to improve student writing skills and academic integrity.',
   },
   {
     property: 'og:title',
@@ -14,7 +14,7 @@ export const meta: MetaFunction = () => [
   {
     property: 'og:description',
     content:
-      'Discover the YAWP! Writing Program, combining critical writing curriculum, AI-guided tutoring, and teacher training to improve student writing skills and academic integrity.',
+      'Discover the YAWP! Writing Program, combining critical writing curriculum, guided tutoring, and teacher training to improve student writing skills and academic integrity.',
   },
   { property: 'og:type', content: 'website' },
 ];
@@ -36,12 +36,12 @@ const stats = [
 const challenges = [
   {
     title: 'Students Over-Relying on ChatGPT',
-    body: 'Students are using AI to generate entire essays rather than developing their own critical thinking and writing skills.',
+    body: 'Students are using chatbots to generate entire essays rather than developing their own critical thinking and writing skills.',
     image: '/img/landing/ai-use-icon.webp',
   },
   {
-    title: 'Loss of Control Over AI Use',
-    body: 'Teachers struggle to monitor and control how students are using AI tools, making it difficult to maintain academic integrity.',
+    title: 'Loss of Control Over Chatbot Use',
+    body: 'Teachers struggle to monitor and control how students are using chatbots, making it difficult to maintain academic integrity.',
     image: '/img/landing/frustration-icon.webp',
   },
   {
@@ -58,8 +58,8 @@ const solutionBlocks = [
     image: '/img/landing/teacher-training-screen.webp',
   },
   {
-    title: 'AI that Guides, Never Writes',
-    body: 'Unlike other AI, the YAWP! Tutor is trained in our curriculum to deliver immediate, personalized feedback that reinforces the teacher’s lessons and guides students through the writing process, saving teachers and students a ton of time while maintaining academic integrity.',
+    title: 'A Tutor that Guides, Never Writes',
+    body: 'Unlike chatbots, the YAWP! Tutor is trained in our curriculum to deliver immediate, personalized feedback that reinforces the teacher’s lessons and guides students through the writing process, saving teachers and students a ton of time while maintaining academic integrity.',
     image: '/img/landing/tutor-feedback-screen.jpg',
   },
   {
@@ -184,7 +184,7 @@ export default function IndexRoute() {
           <h1>Transform Your Students’ Writing</h1>
           <h3>
             In the age of ChatGPT, students need more than answers—they need
-            genuine learning. YAWP! combines proven curriculum, an AI tutor
+            genuine learning. YAWP! combines proven curriculum, a writing tutor
             (that doesn&apos;t do the work for them), and teacher training to
             develop confident students who can write effectively in academic
             settings.
@@ -206,7 +206,7 @@ export default function IndexRoute() {
           <h2>The Writing Challenges Schools Face Today</h2>
           <p className="yawp-section-intro">
             We understand the pressures on teachers and the temptations students
-            face in the age of AI.
+            face in the age of ChatGPT.
           </p>
           <div className="yawp-challenge-grid">
             {challenges.map((challenge) => (
@@ -222,7 +222,7 @@ export default function IndexRoute() {
 
       <section className="yawp-section yawp-beige-section">
         <div className="yawp-section-inner yawp-solution-inner">
-          <h2>The YAWP! Solution: Real Teachers, an AI Tutor, Amazing Essays</h2>
+          <h2>The YAWP! Solution: Real Teachers, a Writing Tutor, Amazing Essays</h2>
           <div className="yawp-solution-stack">
             {solutionBlocks.map((block, index) => (
               <article

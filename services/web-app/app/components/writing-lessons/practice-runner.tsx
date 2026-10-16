@@ -62,6 +62,13 @@ export type PracticeRunnerItem = {
 /** What the route action returns after grading one attempt. */
 export type PracticeRunnerResult =
   | {
+      kind: 'denied';
+      position: number;
+      recorded: false;
+      error: string;
+      message: string;
+    }
+  | {
       kind: 'act';
       position: number;
       grade: ActGradeResult;
@@ -89,8 +96,10 @@ export type PracticeLessonRecap = {
 export type RewriteCheckResult = {
   intent: 'check-rewrite';
   questionId: string;
-  feedback: PracticeFeedbackResult;
-};
+} & (
+  | { feedback: PracticeFeedbackResult; error?: never; message?: never }
+  | { error: string; message: string; feedback?: never }
+);
 
 /**
  * The practice screen: one problem at a time, with the set's progress in the
@@ -330,6 +339,11 @@ export function PracticeRunner({
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
+      {currentResult?.kind === 'denied' ? (
+        <p role="alert" className="text-sm text-destructive">
+          {currentResult.message}
+        </p>
+      ) : null}
       <div className="flex w-full justify-between border-b bg-secondary">
         <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
           <Button asChild variant="outline" size="sm" className="mb-5">
@@ -709,11 +723,12 @@ function RewriteBox({
   const [rewrite, setRewrite] = useState('');
   const isChecking = rewriteFetcher.state !== 'idle';
   // A late response for a question the student already moved past is ignored.
-  const feedback =
+  const result =
     rewriteFetcher.data?.intent === 'check-rewrite' &&
     rewriteFetcher.data.questionId === question.id
-      ? rewriteFetcher.data.feedback
+      ? rewriteFetcher.data
       : null;
+  const feedback = result?.feedback;
 
   return (
     <div
@@ -767,6 +782,9 @@ function RewriteBox({
         Check my rewrite
       </Button>
 
+      {result?.error ? (
+        <p role="alert" className="text-sm text-destructive">{result.message}</p>
+      ) : null}
       {feedback ? <PracticeFeedbackPanel feedback={feedback} /> : null}
     </div>
   );

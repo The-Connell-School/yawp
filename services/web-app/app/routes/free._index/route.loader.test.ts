@@ -28,6 +28,7 @@ const readOrMintScanDedupeCookie = mock(async () => ({
 }));
 
 mock.module('~/domain/free-tier/acquisition-token-scan.server', () => ({
+  readScanDedupeCookie: async () => null,
   readOrMintScanDedupeCookie,
 }));
 

@@ -1,0 +1,66 @@
+[WebServer] [0m[2m[35m$[0m [2m[1mprisma generate[0m
+[WebServer] Loaded Prisma config from prisma.config.ts.
+[WebServer] 
+[WebServer] Prisma schema loaded from schema.prisma.
+[WebServer] [0m[2m[35m$[0m [2m[1mprisma migrate deploy[0m
+[WebServer] Loaded Prisma config from prisma.config.ts.
+[WebServer] 
+[WebServer] Prisma schema loaded from schema.prisma.
+[WebServer] [0m[2m[35m$[0m [2m[1mreact-router dev --port "5397" --host "127.0.0.1" --strictPort[0m
+[WebServer] (node:160) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] ⚠️ Route ID Collision: "routes/lti.jwks"
+[WebServer] 
+[WebServer] The following routes all define the same Route ID, only the first one will be used
+[WebServer] 
+[WebServer] 🟢 routes/lti.jwks/route.ts
+[WebServer] ⭕️️ routes/lti.jwks.ts
+[WebServer] 
+[WebServer] ⚠️ Route ID Collision: "routes/lti.launch"
+[WebServer] 
+[WebServer] The following routes all define the same Route ID, only the first one will be used
+[WebServer] 
+[WebServer] 🟢 routes/lti.launch/route.ts
+[WebServer] ⭕️️ routes/lti.launch.ts
+[WebServer] 
+[WebServer] ⚠️ Route ID Collision: "routes/lti.login"
+[WebServer] 
+[WebServer] The following routes all define the same Route ID, only the first one will be used
+[WebServer] 
+[WebServer] 🟢 routes/lti.login/route.ts
+[WebServer] ⭕️️ routes/lti.login.ts
+[WebServer] 
+[WebServer] ⚠️ Route ID Collision: "routes/lti.jwks"
+[WebServer] 
+[WebServer] The following routes all define the same Route ID, only the first one will be used
+[WebServer] 
+[WebServer] 🟢 routes/lti.jwks/route.ts
+[WebServer] ⭕️️ routes/lti.jwks.ts
+[WebServer] 
+[WebServer] ⚠️ Route ID Collision: "routes/lti.launch"
+[WebServer] 
+[WebServer] The following routes all define the same Route ID, only the first one will be used
+[WebServer] 
+[WebServer] 🟢 routes/lti.launch/route.ts
+[WebServer] ⭕️️ routes/lti.launch.ts
+[WebServer] 
+[WebServer] ⚠️ Route ID Collision: "routes/lti.login"
+[WebServer] 
+[WebServer] The following routes all define the same Route ID, only the first one will be used
+[WebServer] 
+[WebServer] 🟢 routes/lti.login/route.ts
+[WebServer] ⭕️️ routes/lti.login.ts
+[WebServer] 
+[WebServer] Sourcemap for "/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-flag-previews/node_modules/.bun/posthog-js@1.373.5/node_modules/posthog-js/react/dist/esm/index.js" points to missing source files
+
+Running 3 tests using 1 worker
+
+(node:192) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:192) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › e2e/tests/auth.unified-compat.spec.ts:14:1 › missing/malformed/off/targeted setting retains login, signup and class-link views (5.4s)
+  ✓  2 [chromium] › e2e/tests/auth.unified-compat.spec.ts:73:1 › legacy password error, safe redirect, signed-in entry and forced password change (2.7s)
+  ✓  3 [chromium] › e2e/tests/auth.unified-compat.spec.ts:125:1 › enabled local resolver does not authenticate or accept fixture selectors (962ms)
+
+  3 passed (38.4s)

@@ -15,6 +15,7 @@ import {
 } from '~/utils/rate-limit.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
 import { parseLoginIdentifier } from '~/utils/login-identifier.server';
+import type { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { posthog } from '~/services/posthog.server';
@@ -26,7 +27,11 @@ import { previewSessionAllowedWithoutSeatMembership } from '~/utils/preview-sess
 import { setMembershipId } from '~/cookies/membership-id.server';
 import { combineHeaders } from '~/utils/misc';
 
-export async function loginAction({ request }: ActionFunctionArgs) {
+export async function loginAction(
+  { request }: ActionFunctionArgs,
+  options: { client?: Prisma.TransactionClient } = {}
+) {
+  const db = options.client ?? prisma;
   await requireAnonymous(request);
   const { error, data } = await parseFormData(request, LoginSchema);
   if (error) return validationError(error);
@@ -68,7 +73,7 @@ export async function loginAction({ request }: ActionFunctionArgs) {
     if (isIsolatedPreviewSeatMode()) {
       const seat = await getPreviewAccessSeat(request);
       const seatMembership = seat
-        ? await prisma.orgMembership.findFirst({
+        ? await db.orgMembership.findFirst({
             where: {
               userId: user.id,
               organizationId: seat.organizationId,
@@ -77,7 +82,10 @@ export async function loginAction({ request }: ActionFunctionArgs) {
             select: { id: true },
           })
         : null;
-      if (!seatMembership && !(await previewSessionAllowedWithoutSeatMembership(user.id))) {
+      if (
+        !seatMembership &&
+        !(await previewSessionAllowedWithoutSeatMembership(user.id))
+      ) {
         return validationError(
           { fieldErrors: { email: 'Invalid email or password' } },
           data
@@ -88,7 +96,7 @@ export async function loginAction({ request }: ActionFunctionArgs) {
 
     await refundLoginAttemptRateLimits(charged);
 
-    const session = await prisma.session.create({
+    const session = await db.session.create({
       select: { id: true, expirationDate: true, userId: true },
       data: {
         expirationDate: getSessionExpirationDateForUser({

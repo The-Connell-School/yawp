@@ -543,7 +543,7 @@ export function TeacherGradingPanel({
                       <div className="space-y-2">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-xs text-muted-foreground">
-                            AI grammar issues shown: {shownGrammarCount}/
+                            Grammar issues shown: {shownGrammarCount}/
                             {grammarIssues.length}
                           </p>
                           {grammarIssues.length > 0 ? (
