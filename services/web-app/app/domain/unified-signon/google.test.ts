@@ -1,6 +1,11 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
-import { beginGoogle, exchangeGoogle, googleAvailable } from './google.server';
+import {
+  beginGoogle,
+  exchangeGoogle,
+  googleAvailable,
+  toCallbackRedirect,
+} from './google.server';
 import type { Flow } from './flow.server';
 
 const originalFetch = globalThis.fetch;
@@ -153,4 +158,18 @@ test('Google callback uses the configured HTTPS preview origin over the HTTP ada
       else process.env[name] = value;
     }
   }
+});
+
+test('linked Google callback turns a JSON screen state into a sign-in page redirect', async () => {
+  const json = Response.json(
+    { state: { screen: 'inactive' } },
+    { headers: { 'set-cookie': 'en_session=abc; Path=/; HttpOnly' } }
+  );
+  const response = toCallbackRedirect(json);
+  expect(response.status).toBe(302);
+  expect(response.headers.get('location')).toBe('/auth/login?continue=1');
+  expect(response.headers.getSetCookie()).toEqual(['en_session=abc; Path=/; HttpOnly']);
+  expect(await response.text()).toBe('');
+  const already = new Response(null, { status: 302, headers: { Location: '/app' } });
+  expect(toCallbackRedirect(already)).toBe(already);
 });
