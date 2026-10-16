@@ -51,7 +51,7 @@ test('routing precedence is password, inactive, trial, picker, safe destination'
       activeMemberships: 0,
       trialDestination: '/app/free-tier/pending',
     })
-  ).toBe('inactive');
+  ).toBe('/app/free-tier/pending');
   expect(
     postAuthenticationDestination({
       ...base,
@@ -83,4 +83,31 @@ test('OTP digest is keyed and bound to the entire server challenge context', () 
       original
     );
   expect(codeDigest(context, '654321')).not.toBe(original);
+});
+
+test('a free-trial destination wins over the inactive screen for accounts with no active roles', () => {
+  expect(
+    postAuthenticationDestination({
+      mustChangePassword: false,
+      activeMemberships: 0,
+      trialDestination: '/app/free-tier/onboarding',
+      redirectTo: '/app',
+    })
+  ).toBe('/app/free-tier/onboarding');
+  expect(
+    postAuthenticationDestination({
+      mustChangePassword: false,
+      activeMemberships: 0,
+      trialDestination: null,
+      redirectTo: '/app',
+    })
+  ).toBe('inactive');
+  expect(
+    postAuthenticationDestination({
+      mustChangePassword: true,
+      activeMemberships: 0,
+      trialDestination: '/app/free-tier/onboarding',
+      redirectTo: '/app',
+    })
+  ).toBe('/auth/required-password-change');
 });
