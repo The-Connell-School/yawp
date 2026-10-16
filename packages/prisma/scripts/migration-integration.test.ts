@@ -885,6 +885,9 @@ describe('migration integration (real Postgres)', () => {
         'emailLog', EXISTS (
           SELECT 1 FROM information_schema.tables WHERE table_name = 'FreeTierEmailLog'
         ),
+        'approvalDelivery', EXISTS (
+          SELECT 1 FROM information_schema.tables WHERE table_name = 'FreeTierApprovalDelivery'
+        ),
         'teacherNote', EXISTS (
           SELECT 1 FROM information_schema.columns
           WHERE table_name = 'FreeTierApplication' AND column_name = 'teacherPersonalNote'
@@ -895,8 +898,14 @@ describe('migration integration (real Postgres)', () => {
     expect(tables.adminApproval).toBe(true);
     expect(tables.emailLog).toBe(true);
     expect(tables.teacherNote).toBe(true);
+    expect(tables.approvalDelivery).toBe(true);
 
     prismaDeploy(PRISMA_DIR);
+
+    // This fixture exercises the historical #416 rollback after deploying today's
+    // schema. Remove the newer dependent outbox first; keep the original rollback
+    // and its foreign-key protections unchanged (no cascading teardown).
+    psql('DROP TABLE "FreeTierApprovalDelivery"');
 
     const approvalRollback = readFileSync(
       join(

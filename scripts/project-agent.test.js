@@ -15,8 +15,8 @@ import {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("Yawp project agent CLI", () => {
-  test("advertises class-step profiles in capabilities and CLI help", () => {
-    const profiles = ["free-tier-class-step-unit", "free-tier-class-step-browser", "free-tier-welcome-unit", "free-tier-welcome-browser", "free-tier-welcome-live-browser", "free-tier-welcome-db"];
+  test("advertises onboarding profiles in capabilities and CLI help", () => {
+    const profiles = ["free-tier-approval-migration", "free-tier-class-step-unit", "free-tier-class-step-browser", "free-tier-welcome-unit", "free-tier-welcome-browser", "free-tier-welcome-live-browser", "free-tier-welcome-db"];
     const result = spawnSync(path.join(root, "bin/project"), ["test", "--help"], {
       cwd: root, encoding: "utf8", timeout: 10000, env: { ...process.env, CI: "1" },
     });
@@ -80,6 +80,7 @@ describe("Yawp project agent CLI", () => {
   }, 60000);
 
   test("approval proof profiles isolate mutation fixtures from standard browser discovery", () => {
+    expect(capabilities().proofProfiles).toContain("free-tier-approval-migration");
     expect(capabilities().proofProfiles).toContain("free-tier-approval-unit");
     expect(capabilities().proofProfiles).toContain("free-tier-approval-browser");
     const web = path.join(root, "services", "web-app");

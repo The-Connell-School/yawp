@@ -114,10 +114,10 @@ changed in this correction. Independent Ship Review results are recorded in lane
 
 Rebased the existing PR #581 branch onto `3656601963e942e3772ba1f950ec2cfc59cc0049`.
 Recovery branch `recovery/fto-approval-page-before-rebase-20261016` preserves
-`19707bddd442f7c5b0036c3f1429c3ddcebff928`. Source revision for the refreshed
-captures is `8ba50e4a5`; the final published head is recorded by the evidence
-manifest and lane `state/BUILD_RESULT.md`. The only subsequent changes are these
-review/handoff documents. Conflict repair retains main's class-preparation and
+`19707bddd442f7c5b0036c3f1429c3ddcebff928`. The source revision for refreshed
+captures and final published head are recorded by the evidence manifest and
+lane `state/BUILD_RESULT.md`. The CI fixture correction below changes only
+test tooling; approval application source and production migration SQL stay intact. Conflict repair retains main's class-preparation and
 below-HS reopen guards, all shared schema additions, both CI registrations and
 all dedicated/standard browser discovery exclusions. Durable approval source,
 its 22 lifecycle tests and both migration SQL files are unchanged by the rebase.
@@ -157,3 +157,21 @@ entries alongside approval profiles. Earlier first-rebase checks are preserved
 under `checks/first-rebase/`; final-base transcripts are in `checks/`. Fresh
 screenshots are recaptured on the second rebase and final-head independent
 verification is recorded separately in `state/SHIP_REVIEW.md`.
+
+## Required CI historical rollback fixture correction
+
+Required Migration Integration exposed a legacy #416 rollback fixture failure:
+it deploys all current migrations, then drops the approval table while the newer
+`FreeTierApprovalDelivery` foreign key still references it. The existing test
+fails locally with that exact dependency error before the correction. It now
+asserts the outbox exists and explicitly removes that newer dependent table in
+the isolated test fixture before exercising the historical rollback. No CASCADE,
+production rollback or production migration SQL is changed.
+
+`CI=1 ./bin/project test --profile free-tier-approval-migration --json` selects
+only this historical case using the worktree's loopback Postgres host/port and
+the suite's dedicated `yawp_migration_integration` database. This avoids touching
+the approval fixture database or running unrelated migration cases locally.
+The corrected case passes, as do all 108 CLI/contract checks, including catalog,
+help and browser-discovery coverage. Red/green and CI-failure evidence is in
+`rebase/checks/`. Required full migration CI still owns the broader suite.
