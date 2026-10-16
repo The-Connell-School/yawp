@@ -97,6 +97,8 @@ describe("Yawp project agent CLI", () => {
     expect(capabilities().proofProfiles).toContain("internal-grade-declines");
     expect(capabilities().proofProfiles).toContain("internal-free-tier-limits");
     expect(capabilities().proofProfiles).toContain("internal-class-code-duplicates");
+    expect(capabilities().proofProfiles).toContain("internal-approvals");
+    expect(capabilities().proofProfiles).toContain("internal-approvals-integration");
     expect(capabilities().proofProfiles).toContain("internal-class-code-duplicates-integration");
     expect(capabilities().proofProfiles).toContain("internal-free-tier-limits-integration");
     expect(capabilities().proofProfiles).toContain("internal-grade-declines-integration");
