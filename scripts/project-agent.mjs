@@ -392,6 +392,7 @@ function runTestProfile(profile, { json }) {
     run("preview-fixture-guards", ["test", "./packages/prisma/scripts/seed-preview-signon-qa.test.ts", "./scripts/preview/signon-fixtures-contract.test.ts", "./scripts/preview/free-tier-bundle-deploy.test.ts", "./scripts/preview/unified-signon-deploy.test.ts"]);
     runWebApp("signon-dispatch", ["test", "app/routes/auth.login/unified-dispatch.test.ts"]);
     if (process.env.SIGNON_PREVIEW_FIXTURE_TEST === "1") runWebApp("preview-fixture-real-database", ["test", "app/domain/unified-signon/preview-fixtures.real-db.integration.test.ts"]);
+    if (process.env.SIGNON_PREVIEW_FIXTURE_TEST === "1") runWebApp("preview-seat-policy-real-database", ["test", "app/domain/unified-signon/preview-seat-policy.real-db.integration.test.ts"]);
   }
   else if (chosen === "unified-signon-preview-otp") {
     runWebApp("preview-code", ["test", "app/domain/unified-signon/preview-code.server.test.ts"]);

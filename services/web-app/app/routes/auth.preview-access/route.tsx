@@ -127,6 +127,49 @@ export default function PreviewAccessRoute({
                     Continue to organization
                   </Button>
                 </Form>
+                {loaderData.signonQaAvailable && (
+                  <Form
+                    method="post"
+                    replace
+                    className="signon-fields border-t pt-4"
+                  >
+                    <input
+                      type="hidden"
+                      name="intent"
+                      value="select-signon-qa"
+                    />
+                    <p className="signon-copy">
+                      Test sign-on with a disposable QA account. Enter its
+                      password after opening the context. Access expires in ten
+                      minutes.
+                    </p>
+                    <div className="signon-field">
+                      <label htmlFor="signon-qa-account">
+                        Sign-on QA account
+                      </label>
+                      <select
+                        id="signon-qa-account"
+                        name="account"
+                        required
+                        defaultValue=""
+                        className="h-10 w-full rounded-md border border-input bg-white px-3 text-base"
+                      >
+                        <option value="" disabled>
+                          Select a QA account
+                        </option>
+                        <option value="multiple">Multiple memberships</option>
+                        <option value="inactive">Inactive student</option>
+                        <option value="orphan">No memberships</option>
+                        <option value="unassigned">
+                          Student without a class
+                        </option>
+                      </select>
+                    </div>
+                    <Button type="submit" variant="outline">
+                      Open sign-on QA
+                    </Button>
+                  </Form>
+                )}
                 <Form method="post" replace className="text-center">
                   <input type="hidden" name="intent" value="cancel-master" />
                   <input
