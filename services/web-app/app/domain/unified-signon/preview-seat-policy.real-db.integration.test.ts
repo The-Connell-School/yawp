@@ -560,3 +560,51 @@ suite(
     }
   }
 );
+suite(
+  'expiry or removal of QA privilege rejects an already authenticated recovery session',
+  async () => {
+    const { createPreviewSignonQaCookie, PREVIEW_SIGNON_QA_COOKIE } =
+      await import('~/utils/preview-signon-qa.server');
+    for (const kind of ['expired', 'missing', 'tampered']) {
+      fresh();
+      await master('orphan');
+      const before = await prisma.session.count({
+        where: { userId: qaId('orphan') },
+      });
+      expect((await login('orphan')).response.status).toBe(302);
+      const qaCookie = createPreviewSignonQaCookie();
+      if (kind === 'expired') {
+        const data = await qaCookie.parse(cookie);
+        data.issuedAt = Math.floor(Date.now() / 1000) - 601;
+        merge(
+          new Response(null, {
+            headers: { 'Set-Cookie': await qaCookie.serialize(data) },
+          })
+        );
+      } else {
+        cookie = cookie
+          .split('; ')
+          .filter((c) => !c.startsWith(PREVIEW_SIGNON_QA_COOKIE + '='))
+          .join('; ');
+        if (kind === 'tampered')
+          cookie += '; ' + PREVIEW_SIGNON_QA_COOKIE + '=forged';
+      }
+      let reached = false;
+      const response = await createPreviewAccessMiddleware()(
+        { request: request('/auth/login?continue=1') } as any,
+        async () => {
+          reached = true;
+          return Response.json({});
+        }
+      );
+      expect(reached).toBe(false);
+      expect((response as Response).status).toBe(302);
+      expect((response as Response).headers.get('location')).toStartWith(
+        '/auth/login?'
+      );
+      expect(
+        await prisma.session.count({ where: { userId: qaId('orphan') } })
+      ).toBe(before);
+    }
+  }
+);
