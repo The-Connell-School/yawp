@@ -31,6 +31,12 @@ export const LOCKED_ASSIGNMENT_TYPE_TEASERS = [
     title: 'AP History Essay',
     image: '/img/ap-history-guide/card.webp',
   },
+  {
+    slug: 'daily-pages',
+    title: 'Daily Pages',
+    // The card art Daily Pages has on a paid school's dashboard.
+    image: '/img/daily-pages-guide/card.jpg',
+  },
 ] as const satisfies readonly LockedAssignmentTypeTeaser[];
 
 export type LockedAssignmentTypeSlug =
