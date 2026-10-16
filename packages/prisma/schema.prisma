@@ -211,6 +211,7 @@ enum DocumentArtifactKind {
 }
 
 model Class {
+  studentHandles ClassStudentHandle[]
   id                              String                           @id @default(cuid())
   createdAt                       DateTime                         @default(now()) @db.Timestamptz(6)
   updatedAt                       DateTime                         @default(now()) @db.Timestamptz(6)
@@ -1763,6 +1764,7 @@ model WritingPracticeClassAssignment {
 // Upload table removed. Videos will be stored in S3 and referenced by key.
 
 model User {
+  classStudentHandles ClassStudentHandle[]
   signonIdentities SignonIdentity[]
   id                 String          @id @default(cuid())
   createdAt          DateTime        @default(now()) @db.Timestamptz(6)
@@ -2275,4 +2277,19 @@ model SignonIdentity {
 
   @@unique([provider, subject])
   @@unique([provider, userId])
+}
+
+/// Class-context login aliases. Legacy User.username remains globally unique.
+model ClassStudentHandle {
+  id        String @id @default(cuid())
+  classId   String
+  userId    String
+  handle    String @db.VarChar(30)
+  handleKey String @db.VarChar(90)
+  class     Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, handleKey])
+  @@unique([classId, userId])
+  @@index([userId])
 }

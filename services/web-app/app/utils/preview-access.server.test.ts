@@ -147,12 +147,13 @@ describe('preview access gate', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  test('keeps only signed-service and access-code routes open', async () => {
+  test('keeps service-authenticated and access-code routes open', async () => {
     const next = mock(async () => new Response('ok'));
 
     for (const path of [
       '/api/healthcheck',
       '/api/stripe/webhook',
+      '/api/preview/qa/signon-code',
       '/auth/preview-access',
       '/auth/preview-access.data',
     ]) {
@@ -166,7 +167,7 @@ describe('preview access gate', () => {
       ).toBeNull();
     }
 
-    expect(next).toHaveBeenCalledTimes(4);
+    expect(next).toHaveBeenCalledTimes(5);
   });
 
   test('public legal reads need no seat and never authorize preview activity', async () => {
@@ -594,6 +595,29 @@ describe('preview access gate', () => {
       expect(response?.headers.get('location')).toBe('/app?tab=classes');
       expect(response?.headers.get('set-cookie')).toBeNull();
       expect(next).not.toHaveBeenCalled();
+    });
+
+    test('leaves the Google OAuth callback code for the route', async () => {
+      const cookie = (
+        await grantPreviewAccessCookie({
+          organizationId: 'local-dev-org',
+          label: 'Master',
+        })
+      ).split(';', 1)[0];
+      const next = mock(async () => new Response('callback'));
+      const middleware = createPreviewAccessMiddleware(async () => null);
+
+      const response = await middleware(
+        middlewareArgs(
+          request('/auth/unified/google/callback?state=abc&code=4%2F0Axyz', {
+            headers: { cookie },
+          })
+        ),
+        next
+      );
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(response?.status).toBe(200);
     });
   });
 });

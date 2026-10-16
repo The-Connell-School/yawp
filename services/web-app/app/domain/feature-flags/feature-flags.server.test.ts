@@ -26,6 +26,7 @@ const {
   FREE_TIER_FLAG,
   FREE_TIER_INAPP_V2_FLAG,
   UNIFIED_SIGN_ON_FLAG,
+  FREE_TIER_ONBOARDING_V2_FLAG,
   THESIS_ESSAY_DECKS_FLAG,
 } = await import(
   './feature-flags'
@@ -136,13 +137,15 @@ describe('feature flags (server)', () => {
       FREE_TIER_FLAG,
       FREE_TIER_INAPP_V2_FLAG,
       UNIFIED_SIGN_ON_FLAG,
+      FREE_TIER_ONBOARDING_V2_FLAG,
+      'classcode-unique',
       THESIS_ESSAY_DECKS_FLAG,
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[2]).toMatchObject({ key: FREE_TIER_FLAG, mode: 'off', enabled: false });
     expect(flags[3]).toMatchObject({ key: FREE_TIER_INAPP_V2_FLAG, mode: 'off', enabled: false });
     expect(flags[4]).toMatchObject({ key: UNIFIED_SIGN_ON_FLAG, mode: 'off', enabled: false });
-    expect(flags[5]).toMatchObject({ key: THESIS_ESSAY_DECKS_FLAG, mode: 'off', enabled: false });
+    expect(flags.find((flag) => flag.key === THESIS_ESSAY_DECKS_FLAG)).toMatchObject({ mode: 'off', enabled: false });
     expect(flags[0]).toMatchObject({
       key: LESSON_PLANNER_FLAG,
       mode: 'off',
@@ -165,6 +168,8 @@ describe('feature flags (server)', () => {
       FREE_TIER_FLAG,
       FREE_TIER_INAPP_V2_FLAG,
       UNIFIED_SIGN_ON_FLAG,
+      FREE_TIER_ONBOARDING_V2_FLAG,
+      'classcode-unique',
       THESIS_ESSAY_DECKS_FLAG,
     ]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });

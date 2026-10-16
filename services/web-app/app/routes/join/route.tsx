@@ -12,7 +12,11 @@ import { z } from 'zod';
 import { parseFormData, useForm, validationError } from '@rvf/react-router';
 import { Button } from '~/components/ui/button';
 import { FormInput } from '~/components/rvf-forms/form-input';
-import { requireAnonymous, sessionKey } from '~/utils/auth.server';
+import {
+  requireAnonymous,
+  requireMutableRequest,
+  sessionKey,
+} from '~/utils/auth.server';
 import { NameSchema, PasswordAndConfirmPasswordSchema } from '~/utils/schemas/user';
 import {
   enforceUnauthByIpAndTarget,
@@ -67,10 +71,35 @@ export async function loader({ request }: LoaderFunctionArgs) {
     );
   }
   const klass = await findFreeTierClassByJoinToken(token);
+  if (klass) {
+    const { isUnifiedSignOnEnabled } =
+      await import('~/domain/unified-signon/gate.server');
+    if (await isUnifiedSignOnEnabled()) {
+      const { createFlow, saveNewFlow, flowCookie } =
+        await import('~/domain/unified-signon/flow.server');
+      const { chooseClass } =
+        await import('~/domain/unified-signon/classes.server');
+      const { prisma } = await import('~/utils/db.server');
+      const flow = await createFlow(request, '/app');
+      flow.data.classCode = klass.code;
+      flow.data.classCandidates = [klass.id];
+      await prisma.$transaction((tx) => chooseClass(tx, flow, klass.id));
+      await saveNewFlow(flow);
+      throw redirect('/auth/login?continue=1', {
+        headers: {
+          'set-cookie': await flowCookie.serialize({
+            browser: flow.browser,
+            token: flow.token,
+          }),
+        },
+      });
+    }
+  }
   return { joinToken: token, klass };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
+  await requireMutableRequest(request);
   await requireAnonymous(request);
   const formData = await request.formData();
   const { error, data } = await parseFormData(formData, JoinSchema);

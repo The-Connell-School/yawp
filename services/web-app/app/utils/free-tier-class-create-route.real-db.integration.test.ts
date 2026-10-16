@@ -250,5 +250,57 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
       expect(after).toBe(2);
     });
+
+    test('direct create/edit requests enforce code fields across organizations and preserve own-code edits', async () => {
+      const a = await createTeacherFixture('SCHOOL');
+      const b = await createTeacherFixture('SCHOOL');
+      const takenCode = `TAKEN${Date.now()}`;
+      const ownCode = `OWN${Date.now()}`;
+      const taken = await prisma.class.findFirstOrThrow({ where: { schoolId: a.school.id } });
+      const own = await prisma.class.findFirstOrThrow({ where: { schoolId: b.school.id } });
+      await prisma.class.update({ where: { id: taken.id }, data: { code: takenCode.toLowerCase() } });
+      await prisma.class.update({ where: { id: own.id }, data: { code: ownCode } });
+      currentUserId = b.user.id;
+      currentProfile = { id: b.membership.id, role: 'TEACHER', isOrgOwner: true, organization: b.org };
+      const name = 'feature_flag.classcode-unique';
+      const previous = await prisma.setting.findUnique({ where: { name } });
+      try {
+        await prisma.setting.upsert({ where: { name }, create: { name, value: 'true', valueType: 'boolean' }, update: { value: 'true' } });
+        for (const action of [myClassesAction, orgClassesAction]) {
+          for (const intent of ['create-class', 'edit-class']) {
+            const body = createClassForm(b.school.id);
+            body.set('teacherIds', b.membership.id);
+            body.set('intent', intent); body.set('classId', own.id);
+            body.set('code', ` \t${takenCode.toLowerCase()}\n`);
+            const before = await prisma.class.count({ where: { schoolId: b.school.id } });
+            const response = await action({ request: new Request('https://example.test/app/my-classes?index', { method: 'POST', body }) } as any);
+            expect(actionHttpStatus(response)).toBe(400);
+            expect((response as any).data).toEqual({ error: 'Class code already in use. Choose a different code.', field: 'code' });
+            expect(await prisma.class.count({ where: { schoolId: b.school.id } })).toBe(before);
+            expect((await prisma.class.findUniqueOrThrow({ where: { id: own.id } })).code).toBe(ownCode);
+          }
+          const body = createClassForm(b.school.id);
+          body.set('teacherIds', b.membership.id); body.set('intent', 'edit-class');
+          body.set('classId', own.id); body.set('code', ownCode);
+          expect(actionHttpStatus(await action({ request: new Request('https://example.test/app/my-classes?index', { method: 'POST', body }) } as any))).toBe(200);
+        }
+        // Real action transactions serialize a simultaneous teacher/admin collision.
+        const raceCode = `RACE${Date.now()}`;
+        const results = await Promise.all([myClassesAction, orgClassesAction].map(action => {
+          const body = createClassForm(b.school.id); body.set('teacherIds', b.membership.id); body.set('code', raceCode);
+          return action({ request: new Request('https://example.test/app/my-classes?index', { method: 'POST', body }) } as any);
+        }));
+        expect(results.map(actionHttpStatus).sort()).toEqual([200, 400]);
+        expect(await prisma.class.count({ where: { code: raceCode } })).toBe(1);
+        // Unauthorized code edits never reach a write.
+        const body = createClassForm(b.school.id); body.set('intent', 'edit-class'); body.set('classId', taken.id);
+        expect(actionHttpStatus(await myClassesAction({ request: new Request('https://example.test/app/my-classes?index', { method: 'POST', body }) } as any))).toBe(404);
+        body.set('schoolId', a.school.id);
+        expect(actionHttpStatus(await myClassesAction({ request: new Request('https://example.test/app/my-classes?index', { method: 'POST', body }) } as any))).toBe(400);
+      } finally {
+        if (previous) await prisma.setting.update({ where: { name }, data: { value: previous.value } });
+        else await prisma.setting.deleteMany({ where: { name } });
+      }
+    });
   }
 );

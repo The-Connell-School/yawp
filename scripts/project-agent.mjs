@@ -166,7 +166,7 @@ export function capabilities() {
       qa: "./bin/project qa prepare --json",
     },
     fixtures: ["local-dev"],
-    proofProfiles: ["free-tier-inapp-unit", "free-tier-inapp-browser", "internal-preview-auth", "internal-scenario-browser", "internal-scenario-container", "internal-scenario-integration", "internal-fresh-migrations", "internal-content-pair", "internal-rubrics-http", "internal-rubrics-integration", "internal-content-validation", "internal-qa-http", "internal-qa-integration", "internal-audit", "internal-impersonation-browser", "internal-impersonation-http", "internal-impersonation-writes", "internal-impersonation", "internal-impersonation-integration", "internal-management", "internal-directory-integration", "project-cli", "unit", "typecheck", "build", "backend", "qa-smoke", "assignment-create", "grading-queue", "grading-queue-unit", "grading-points", "grading-points-unit", "assignment-rubric-unit", "assignment-prompt-unit", "teacher-paste-unit", "teacher-paste-browser", "private-notes-unit", "private-notes-browser", "daily-pages-scaling-unit", "collaboration-presence", "ua-billing", "ua-billing-e2e", "changed"],
+    proofProfiles: ["signon-classcode", "classcode-unit", "classcode-db", "classcode-browser", "classcode-enter-code", "classcode-report", "unified-signon-preview-fixtures", "unified-signon-preview-otp", "free-tier-inapp-unit", "free-tier-inapp-browser", "internal-preview-auth", "internal-scenario-browser", "internal-scenario-container", "internal-scenario-integration", "internal-fresh-migrations", "internal-content-pair", "internal-rubrics-http", "internal-rubrics-integration", "internal-content-validation", "internal-qa-http", "internal-qa-integration", "internal-audit", "internal-impersonation-browser", "internal-impersonation-http", "internal-impersonation-writes", "internal-impersonation", "internal-impersonation-integration", "internal-management", "internal-directory-integration", "project-cli", "unit", "typecheck", "build", "backend", "qa-smoke", "assignment-create", "grading-queue", "grading-queue-unit", "grading-points", "grading-points-unit", "assignment-rubric-unit", "assignment-prompt-unit", "teacher-paste-unit", "teacher-paste-browser", "private-notes-unit", "private-notes-browser", "daily-pages-scaling-unit", "collaboration-presence", "ua-billing", "ua-billing-e2e", "changed"],
     nextCommands: [
       "./bin/project doctor --json",
       "./bin/project fixture verify local-dev --json",
@@ -388,6 +388,36 @@ function runTestProfile(profile, { json }) {
     results.push({id: "internal-integration-infra", ...execute("terraform", ["-chdir=infra/modules/internal-integration", "test", "-no-color"], {json, env: selected.env, timeout: 30000})});
   }
   else if (chosen === "internal-integration-config") run("internal-integration-config", ["test", "./scripts/internal-integration-config.test.ts"]);
+  else if (chosen === "unified-signon-preview-fixtures") {
+    run("preview-fixture-guards", ["test", "./packages/prisma/scripts/seed-preview-signon-qa.test.ts", "./scripts/preview/signon-fixtures-contract.test.ts", "./scripts/preview/free-tier-bundle-deploy.test.ts", "./scripts/preview/unified-signon-deploy.test.ts"]);
+    runWebApp("signon-dispatch", ["test", "app/routes/auth.login/unified-dispatch.test.ts"]);
+    if (process.env.SIGNON_PREVIEW_FIXTURE_TEST === "1") runWebApp("preview-fixture-real-database", ["test", "app/domain/unified-signon/preview-fixtures.real-db.integration.test.ts"]);
+    if (process.env.SIGNON_PREVIEW_FIXTURE_TEST === "1") runWebApp("preview-seat-policy-real-database", ["test", "app/domain/unified-signon/preview-seat-policy.real-db.integration.test.ts"]);
+  }
+  else if (chosen === "signon-classcode") {
+    run("read-only-route-contract", ["test", "./scripts/read-only-impersonation-contract.test.ts"]);
+    runWebApp("login-rate-limit-target", ["test", "app/utils/login-rate-limit-target.test.ts"]);
+    runWebApp("student-join", ["test", "app/domain/free-tier/student-join.server.test.ts"]);
+    runWebApp("student-handle", ["test", "app/domain/unified-signon/student-handle.test.ts"]);
+    runWebApp("signon-policy", ["test", "app/domain/unified-signon/policy.test.ts"]);
+    runWebApp("signon-google", ["test", "app/domain/unified-signon/google.test.ts"]);
+    runWebApp("signon-dispatch", ["test", "app/routes/auth.login/unified-dispatch.test.ts"]);
+    if (process.env.SIGNON_LOCAL_TEST === "1") {
+      runWebApp("class-student-real-database", ["test", "app/domain/unified-signon/class-student.real-db.integration.test.ts"]);
+      runWebApp("signon-real-database", ["test", "app/domain/unified-signon/backend.real-db.integration.test.ts"]);
+    }
+    if (process.env.SIGNON_BROWSER_TEST === "1") runWebApp("class-student-browser", ["x", "playwright", "test", "--config", "playwright.classcode.config.ts", "--workers=1"]);
+  }
+  else if (chosen === "unified-signon-preview-otp") {
+    runWebApp("preview-code", ["test", "app/domain/unified-signon/preview-code.server.test.ts"]);
+    run("preview-code-deployment", ["test", "./scripts/deployment-contract.test.ts", "--test-name-pattern", "private preview sign-in code"]);
+    run("preview-compose", ["test", "./scripts/preview/preview-env.test.js", "./scripts/preview/render-compose.test.js"]);
+    runWebApp("preview-email-guards", ["test", "app/utils/preview-email-capture.server.test.ts"]);
+    runWebApp("preview-access", ["test", "app/utils/preview-access.server.test.ts"]);
+    runWebApp("signon-policy", ["test", "app/domain/unified-signon/policy.test.ts"]);
+    runWebApp("signon-dispatch", ["test", "app/routes/auth.login/unified-dispatch.test.ts"]);
+    if (process.env.SIGNON_LOCAL_TEST === "1") runWebApp("signon-real-database", ["test", "app/domain/unified-signon/backend.real-db.integration.test.ts"]);
+  }
   else if (chosen === "internal-preview-auth") runWebApp("internal-preview-auth", ["test", "app/routes/auth.dev-login/route.test.ts"]);
   else if (chosen === "internal-qa-http") runWebApp("internal-qa-http", ["test", "app/utils/internal-qa-http.server.test.ts"]);
   else if (chosen === "internal-audit") runWebApp("internal-audit", ["test", "app/utils/internal-audit.server.test.ts"]);
@@ -424,6 +454,27 @@ function runTestProfile(profile, { json }) {
       json, cwd: webAppRoot, timeout: 15 * 60 * 1000,
       env: { ...selected.env, CI: '1', E2E_DATABASE_URL: local.DATABASE_URL, FREE_INAPP_BASE_URL: `http://localhost:${local.DEV_PORT}` },
     }) });
+  }
+  else if (chosen === "classcode-unit") {
+    for (const file of ["app/utils/class-code-write.server.test.ts", "app/routes/app.organization.classes/route.test.ts", "app/routes/app.my-classes._index/route.test.ts", "app/domain/free-tier/provision-free-classroom.server.test.ts", "app/domain/free-tier/provision.analytics.server.test.ts", "app/components/class-manage-sheet.test.ts", "app/domain/feature-flags/feature-flags.test.ts", "app/domain/feature-flags/feature-flags.server.test.ts", "app/utils/internal-feature-flags-http.server.test.ts"])
+      runWebApp(file, ["test", file]);
+  }
+  else if (chosen === "classcode-report") {
+    const local = requireConfig();
+    results.push({ id: chosen, ...execute(selected.bun, ["run", "scripts/report-class-code-duplicates.ts"], { json, env: { ...selected.env, DATABASE_URL: local.DATABASE_URL }, cwd: webAppRoot, timeout: 120000 }) });
+  }
+  else if (chosen === "classcode-db") {
+    const local = requireConfig();
+    for (const file of ["app/utils/class-code-write.real-db.integration.test.ts", "app/utils/free-tier-class-create-route.real-db.integration.test.ts", "app/utils/class-code-provision.real-db.integration.test.ts", "app/domain/free-tier/existing-student-enrollment.integration.test.ts", "app/utils/internal-scenario.integration.test.ts"])
+      results.push({ id: file, ...execute(selected.bun, ["test", file], { json, env: { ...selected.env, DATABASE_URL: local.DATABASE_URL, FREE_TIER_DB_TESTS: "1", YAWP_ENVIRONMENT: "demo", FREE_TIER_BUDGET_ENVIRONMENT: "preview", INTERNAL_DIRECTORY_TEST_DATABASE_URL: local.DATABASE_URL }, cwd: webAppRoot, timeout: 120000 }) });
+  }
+  else if (chosen === "classcode-enter-code") {
+    const local = requireConfig();
+    results.push({ id: chosen, ...execute(selected.bun, ["x", "playwright", "test", "--config=playwright.enter-code.config.ts", "--workers=1", "--output", path.join(process.env.TMPDIR || ROOT, "classcode-enter-code-results")], { json, env: { ...selected.env, DATABASE_URL: local.DATABASE_URL, E2E_DATABASE_URL: local.DATABASE_URL, ENTER_CODE_URL: `http://127.0.0.1:${local.DEV_PORT}` }, cwd: webAppRoot, timeout: 240000 }) });
+  }
+  else if (chosen === "classcode-browser") {
+    const local = requireConfig();
+    results.push({ id: chosen, ...execute(selected.bun, ["x", "playwright", "test", "--config=playwright.classcode-unique.config.ts", "--workers=1"], { json, env: { ...selected.env, DATABASE_URL: local.DATABASE_URL, E2E_DATABASE_URL: local.DATABASE_URL, CLASSCODE_URL: `http://127.0.0.1:${local.DEV_PORT}` }, cwd: webAppRoot, timeout: 240000 }) });
   }
   else if (chosen === "unit") run("unit", ["run", "--cwd", "services/web-app", "test"]);
   else if (chosen === "typecheck") run("typecheck", ["run", "web-app:typecheck"]);
@@ -582,10 +633,10 @@ async function qaPrepare({ json, routes }) {
 
 function help(topic = "root") {
   const pages = {
-    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project internal-integration-config INPUT_JSON --json\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <free-tier-inapp-unit|free-tier-inapp-browser|changed|project-cli|internal-preview-auth|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
+    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project internal-integration-config INPUT_JSON --json\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <signon-classcode|classcode-unit|classcode-db|classcode-browser|classcode-enter-code|classcode-report|unified-signon-preview-fixtures|free-tier-inapp-unit|free-tier-inapp-browser|changed|project-cli|internal-preview-auth|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
     fixture: "Usage: ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n",
     dev: "Usage: ./bin/project dev <start|status|stop> [--json]\n",
-    test: "Usage: ./bin/project test --profile <free-tier-inapp-unit|free-tier-inapp-browser|changed|project-cli|internal-preview-auth|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n",
+    test: "Usage: ./bin/project test --profile <signon-classcode|classcode-unit|classcode-db|classcode-browser|classcode-enter-code|classcode-report|unified-signon-preview-fixtures|free-tier-inapp-unit|free-tier-inapp-browser|changed|project-cli|internal-preview-auth|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n",
     qa: "Usage: ./bin/project qa prepare [--routes /,/route] [--json]\n",
   };
   return pages[topic] || pages.root;

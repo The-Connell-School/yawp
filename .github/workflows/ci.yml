@@ -475,7 +475,26 @@ jobs:
           bun test ./services/web-app/app/domain/unified-signon/policy.test.ts
           bun test ./services/web-app/app/domain/unified-signon/google.test.ts
           bun test ./services/web-app/app/routes/auth.login/unified-dispatch.test.ts
+          bun test ./services/web-app/app/utils/login-rate-limit-target.test.ts
+          bun test ./services/web-app/app/domain/free-tier/student-join.server.test.ts
+          bun test ./services/web-app/app/domain/unified-signon/class-student.real-db.integration.test.ts
           bun test ./services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts
+
+      - name: Preview-only sign-on fixture guards and real handlers
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          PGPASSWORD: postgres
+          DATABASE_URL: postgresql://yawp_pr_999565_app:ci-fixture-only@127.0.0.1:5432/yawp_pr_999565
+          SESSION_SECRET: ci-local-signon-session-secret
+          SIGNON_PREVIEW_FIXTURE_TEST: '1'
+          TMPDIR: ${{ runner.temp }}/signon-fixtures
+        run: |
+          mkdir -p "$TMPDIR"
+          trap 'psql -h 127.0.0.1 -U postgres -d postgres -c "DROP DATABASE IF EXISTS yawp_pr_999565 WITH (FORCE)" -c "DROP ROLE IF EXISTS yawp_pr_999565_app"' EXIT
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE yawp_pr_999565_app LOGIN PASSWORD 'ci-fixture-only'" -c "CREATE DATABASE yawp_pr_999565 OWNER yawp_pr_999565_app"
+          bun run --cwd packages/prisma prisma migrate deploy
+          bun run packages/prisma/scripts/seed-local-dev.ts
+          ./bin/project test --profile unified-signon-preview-fixtures --json
 
       # Mocks prisma; must not share a bun process with real-DB rate limit tests.
       - name: 🧪 Login limiter fail-closed timeout
@@ -585,6 +604,9 @@ jobs:
             app/routes/free._index/route.loader.test.ts \
             app/routes/api.preview.qa.free-tier-manifest/route.test.ts \
             app/routes/app.free-tier.onboarding/route.test.tsx \
+            app/routes/app.free-tier.onboarding/route.self-admin.test.tsx \
+            app/domain/free-tier/admin-email.test.ts \
+            app/domain/free-tier/admin-email-rules.server.test.ts \
             app/routes/app.free-tier.pending/route.test.tsx \
             app/routes/free.admin.approve/route.loader.test.ts \
             app/routes/free._index/route.action.test.ts \

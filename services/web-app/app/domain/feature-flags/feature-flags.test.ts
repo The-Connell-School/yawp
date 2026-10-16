@@ -1,11 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 import {
   FEATURE_FLAGS,
+  CLASS_CODE_UNIQUE_FLAG,
   INTERNAL_RUBRICS_FLAG,
   LESSON_PLANNER_FLAG,
   FREE_TIER_FLAG,
   FREE_TIER_INAPP_V2_FLAG,
   UNIFIED_SIGN_ON_FLAG,
+  FREE_TIER_ONBOARDING_V2_FLAG,
   THESIS_ESSAY_DECKS_FLAG,
   FEATURE_FLAG_KEYS,
   isFreeTierGloballyEnabled,
@@ -62,6 +64,23 @@ describe('feature flag registry', () => {
     expect(evaluateFeatureFlag(parseFeatureFlagValue(null), 'org-1')).toBe(false);
   });
 
+  test('registers onboarding v2 exactly once with the I2 contract metadata', () => {
+    expect(FREE_TIER_ONBOARDING_V2_FLAG).toBe('free-tier-onboarding-v2');
+    expect(FEATURE_FLAG_KEYS.filter((key) => key === FREE_TIER_ONBOARDING_V2_FLAG)).toHaveLength(1);
+    expect(isFeatureFlagKey(FREE_TIER_ONBOARDING_V2_FLAG)).toBe(true);
+    expect(featureFlagSettingName(FREE_TIER_ONBOARDING_V2_FLAG)).toBe(
+      'feature_flag.free-tier-onboarding-v2'
+    );
+    expect(FEATURE_FLAGS[FREE_TIER_ONBOARDING_V2_FLAG]).toEqual({
+      label: 'Free tier onboarding v2',
+      description: 'Approval reminders, forward requests, create-your-class step and locked preview for free-tier teachers.',
+    });
+    for (const value of [null, undefined, '', 'invalid', '{"mode":"invalid"}']) {
+      expect(parseFeatureFlagValue(value)).toEqual({ mode: 'off', orgIds: [] });
+      expect(evaluateFeatureFlag(parseFeatureFlagValue(value), 'org-1')).toBe(false);
+    }
+  });
+
   test('lists every registered flag key', () => {
     expect(FEATURE_FLAG_KEYS).toEqual([
       LESSON_PLANNER_FLAG,
@@ -69,6 +88,8 @@ describe('feature flag registry', () => {
       FREE_TIER_FLAG,
       FREE_TIER_INAPP_V2_FLAG,
       UNIFIED_SIGN_ON_FLAG,
+      FREE_TIER_ONBOARDING_V2_FLAG,
+      CLASS_CODE_UNIQUE_FLAG,
       THESIS_ESSAY_DECKS_FLAG,
     ]);
   });

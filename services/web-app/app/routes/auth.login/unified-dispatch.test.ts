@@ -246,7 +246,7 @@ test('preview Google start reaches the real unavailable-provider outcome without
   )) as Response;
   expect(response.status).toBe(503);
   expect(await response.json()).toEqual({
-    error: 'Google sign-in is unavailable. Use your email or handle.',
+    error: 'Google sign-in is unavailable. Use your email or class code.',
   });
 });
 

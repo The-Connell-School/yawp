@@ -2,9 +2,10 @@ import { createHash } from 'node:crypto';
 import { prisma } from '~/utils/db.server';
 import { assertTransition } from './state';
 import { normalizeEmail } from './service.server';
+import { selfAdminEmailError } from './admin-email';
 import {
   ADMIN_REDIRECT_CHAIN_CAP,
-  evaluateAdminEmail,
+  evaluateAdminEmailForRuntime,
 } from './admin-email-rules.server';
 import { adminApprovalEmailCopyVersionHash } from './email-copy.server';
 import {
@@ -29,6 +30,7 @@ import { getClientIp } from '~/utils/ip.server';
 import {
   assertFreeTierBudgetHeadroomForTransition,
   FreeTierBudgetExceededError,
+  resolveFreeTierRuntimeEnvironment,
   type FreeTierUsageSummary,
 } from './usage-budget.server';
 
@@ -126,7 +128,21 @@ export async function submitAdminDetails(args: {
     return { ok: false as const, reason: 'illegal_state' as const, status: app.status };
   }
 
-  const rules = evaluateAdminEmail({ teacherEmail: app.email, adminEmail, schoolName: app.schoolName });
+  // Use the authorized persisted application, before demo's manual-review bypass
+  // and before minting links, writing approval state, or dispatching mail.
+  const adminEmailError = selfAdminEmailError(app.email, adminEmail);
+  if (adminEmailError) {
+    return {
+      ok: false as const,
+      reason: 'same_as_teacher' as const,
+      fieldErrors: { adminEmail: adminEmailError },
+    };
+  }
+
+  const rules = evaluateAdminEmailForRuntime(
+    { teacherEmail: app.email, adminEmail, schoolName: app.schoolName },
+    resolveFreeTierRuntimeEnvironment()
+  );
 
   const copyHash = adminApprovalEmailCopyVersionHash();
   // Kept in the API for older callers; introductions are no longer accepted.
@@ -481,11 +497,14 @@ export async function redirectSchoolAdmin(args: {
   });
   if (!prePending) return { ok: false as const, reason: 'not_found' as const };
 
-  const rules = evaluateAdminEmail({
+  const rules = evaluateAdminEmailForRuntime(
+    {
     teacherEmail: preApp.email,
     adminEmail: newEmail,
     schoolName: preApp.schoolName,
-  });
+  },
+    resolveFreeTierRuntimeEnvironment()
+  );
 
   const newAdminNameTrim = args.newAdminName.trim();
 

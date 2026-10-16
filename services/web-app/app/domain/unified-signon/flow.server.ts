@@ -46,6 +46,8 @@ export type FlowData = {
     linkUserId?: string;
   };
   pendingGoogle?: { subject: string; email: string };
+  studentChoice?: 'new' | 'returning';
+  studentGoogle?: { subject: string };
   completed?: boolean;
 };
 export type Flow = {

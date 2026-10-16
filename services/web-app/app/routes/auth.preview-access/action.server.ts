@@ -1,7 +1,10 @@
+import { setMembershipId } from '~/cookies/membership-id.server';
 import {
-  type ActionFunctionArgs,
-  type LoaderFunctionArgs,
-} from 'react-router';
+  clearPreviewSignonQaContext,
+  grantPreviewSignonQaContext,
+  previewSignonQaAvailable,
+} from '~/utils/preview-signon-qa.server';
+import { type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router';
 import { safeRedirect } from 'remix-utils/safe-redirect';
 import {
   PREVIEW_ACCESS_PATH,
@@ -95,6 +98,7 @@ export function createPreviewAccessLoader(
     return {
       configured,
       masterSelection,
+      signonQaAvailable: masterSelection && (await previewSignonQaAvailable()),
       organizations: masterSelection ? await listOrganizations() : [],
       returnTo,
     };
@@ -126,10 +130,7 @@ export function createPreviewAccessAction(
   return async ({ request }: ActionFunctionArgs): Promise<Response> => {
     const formData = await request.formData();
     const intent = String(formData.get('intent') ?? 'enter');
-    const returnTo = safeRedirect(
-      String(formData.get('returnTo') ?? ''),
-      '/'
-    );
+    const returnTo = safeRedirect(String(formData.get('returnTo') ?? ''), '/');
     const signOut =
       dependencies.logoutFunction ??
       (await import('~/utils/auth.server')).logout;
@@ -143,6 +144,7 @@ export function createPreviewAccessAction(
         { request, redirectTo },
         {
           headers: cookieHeaders(
+            await clearPreviewSignonQaContext(),
             await clearAccess(),
             await clearMasterSelection()
           ),
@@ -161,10 +163,69 @@ export function createPreviewAccessAction(
       );
     }
 
+    if (intent === 'select-signon-qa') {
+      if (!(await masterSelectionForRequest(request))) {
+        return Response.json(
+          { error: 'Enter the master access code first.' },
+          {
+            status: 401,
+            headers: { 'Cache-Control': 'no-store' },
+          }
+        );
+      }
+      if (!(await previewSignonQaAvailable())) {
+        return Response.json(
+          { error: 'Sign-on QA context is unavailable.' },
+          {
+            status: 404,
+            headers: { 'Cache-Control': 'no-store' },
+          }
+        );
+      }
+      const organization = await findOrganization('preview-signon-qa-school');
+      const access = organization
+        ? await grantAccess({
+            organizationId: organization.id,
+            label: organization.name,
+            accessKind: 'master',
+          })
+        : null;
+      const qaContext = access
+        ? await grantPreviewSignonQaContext(
+            String(formData.get('account') ?? ''),
+            access
+          )
+        : null;
+      if (!access || !qaContext) {
+        return Response.json(
+          { error: 'Choose an eligible sign-on QA fixture.' },
+          {
+            status: 400,
+            headers: { 'Cache-Control': 'no-store' },
+          }
+        );
+      }
+      await signOut(
+        { request, redirectTo: '/auth/login' },
+        {
+          headers: cookieHeaders(
+            access,
+            qaContext,
+            await setMembershipId(''),
+            await clearMasterSelection()
+          ),
+        }
+      );
+      throw new Error('Preview sign-on QA selection did not redirect.');
+    }
+
     if (intent === 'select-organization') {
       if (!(await masterSelectionForRequest(request))) {
         return Response.json(
-          { error: 'Enter the master access code before choosing an organization.' },
+          {
+            error:
+              'Enter the master access code before choosing an organization.',
+          },
           { status: 401, headers: { 'Cache-Control': 'no-store' } }
         );
       }
@@ -183,6 +244,7 @@ export function createPreviewAccessAction(
         { request, redirectTo: returnTo },
         {
           headers: cookieHeaders(
+            await clearPreviewSignonQaContext(),
             await grantAccess({
               organizationId: organization.id,
               label: organization.name,
@@ -225,6 +287,7 @@ export function createPreviewAccessAction(
         { request, redirectTo: selectionUrl(returnTo) },
         {
           headers: cookieHeaders(
+            await clearPreviewSignonQaContext(),
             await grantMasterSelection(),
             await clearAccess()
           ),
@@ -238,6 +301,7 @@ export function createPreviewAccessAction(
       { request, redirectTo: returnTo },
       {
         headers: cookieHeaders(
+          await clearPreviewSignonQaContext(),
           await grantAccess(credential.seat),
           await clearMasterSelection()
         ),

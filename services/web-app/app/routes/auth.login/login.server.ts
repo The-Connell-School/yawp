@@ -71,6 +71,9 @@ export async function loginAction(
 
     let previewMembershipId: string | null = null;
     if (isIsolatedPreviewSeatMode()) {
+      const { hasPreviewSignonQaContext } =
+        await import('~/utils/preview-signon-qa.server');
+      const signonQa = await hasPreviewSignonQaContext(request, user.id, db);
       const seat = await getPreviewAccessSeat(request);
       const seatMembership = seat
         ? await db.orgMembership.findFirst({
@@ -83,6 +86,7 @@ export async function loginAction(
           })
         : null;
       if (
+        !signonQa &&
         !seatMembership &&
         !(await previewSessionAllowedWithoutSeatMembership(user.id))
       ) {
@@ -91,7 +95,7 @@ export async function loginAction(
           data
         );
       }
-      previewMembershipId = seatMembership?.id ?? null;
+      previewMembershipId = signonQa ? null : (seatMembership?.id ?? null);
     }
 
     await refundLoginAttemptRateLimits(charged);

@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import {
   ADMIN_REDIRECT_CHAIN_CAP,
   evaluateAdminEmail,
+  evaluateAdminEmailForRuntime,
   mailboxIdentity,
 } from './admin-email-rules.server';
 import { isConsumerEmailDomain } from './consumer-email-domains';
@@ -44,4 +45,16 @@ test('consumer domain set', () => {
 
 test('redirect cap constant', () => {
   expect(ADMIN_REDIRECT_CHAIN_CAP).toBe(3);
+});
+
+test('demo sends approval requests without manual review holds', () => {
+  const args = { teacherEmail: 't@school.edu', adminEmail: 'a@other.edu' };
+  expect(evaluateAdminEmailForRuntime(args, 'demo')).toEqual({
+    ok: true,
+    manualReview: false,
+  });
+  expect(evaluateAdminEmailForRuntime(args, 'production')).toMatchObject({
+    manualReview: true,
+    reason: 'domain_mismatch',
+  });
 });

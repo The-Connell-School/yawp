@@ -84,15 +84,19 @@ export async function finishAuthentication(
     orderBy: { id: 'asc' },
   });
   if (isIsolatedPreviewSeatMode()) {
-    const seat = await getPreviewAccessSeat(request);
-    memberships = memberships.filter(
-      (m) => m.organizationId === seat?.organizationId
-    );
-    if (
-      !memberships.length &&
-      !(await previewSessionAllowedWithoutSeatMembership(userId))
-    )
-      throw new FlowError('Sign-in is unavailable for this account.', 403);
+    const { hasPreviewSignonQaContext } =
+      await import('~/utils/preview-signon-qa.server');
+    if (!(await hasPreviewSignonQaContext(request, userId, tx))) {
+      const seat = await getPreviewAccessSeat(request);
+      memberships = memberships.filter(
+        (m) => m.organizationId === seat?.organizationId
+      );
+      if (
+        !memberships.length &&
+        !(await previewSessionAllowedWithoutSeatMembership(userId))
+      )
+        throw new FlowError('Sign-in is unavailable for this account.', 403);
+    }
   }
   if (
     selectedMembershipId &&
