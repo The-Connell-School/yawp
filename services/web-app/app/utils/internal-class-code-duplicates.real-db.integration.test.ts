@@ -14,6 +14,7 @@ const keyId = prefix;
 const flags = ['feature_flag.free_tier', 'feature_flag.free-tier-onboarding-v2', 'feature_flag.classcode-unique'];
 const savedEnv = { ...process.env };
 let savedFlags: { name: string; value: string }[] = [];
+let localDatabaseValidated = false;
 const orgs: string[] = [];
 const schools: string[] = [];
 const classes: string[] = [];
@@ -41,9 +42,10 @@ async function snapshot() {
 }
 beforeAll(async () => {
   if (!enabled) return;
-  const database = new URL(process.env.DATABASE_URL!);
+  const database = new URL(process.env.E2E_DATABASE_URL || process.env.DATABASE_URL!);
   if (!['localhost', '127.0.0.1'].includes(database.hostname) || !database.pathname.startsWith('/yawp_ia-i3-dupes'))
     throw new Error('Dedicated I3 local database required');
+  localDatabaseValidated = true;
   process.env.YAWP_INTERNAL_API_KEYS = JSON.stringify([{ id: keyId, secret, scopes: ['management:read'] }]);
   delete process.env.INTERNAL_API_NONCE_STORE;
   savedFlags = await prisma.setting.findMany({ where: { name: { in: flags } }, select: { name: true, value: true } });
@@ -81,8 +83,8 @@ beforeAll(async () => {
   await prisma.document.create({ data: { assignmentTypeId, membershipId: studentId, updatedAt: new Date('2027-01-01T00:00:00Z') } });
 });
 afterAll(async () => {
-  if (!enabled) return;
-  await prisma.document.deleteMany({ where: { assignmentTypeId } });
+  if (!enabled || !localDatabaseValidated) return;
+  if (assignmentTypeId) await prisma.document.deleteMany({ where: { assignmentTypeId } });
   if (assignmentId) await prisma.assignment.delete({ where: { id: assignmentId } });
   if (assignmentTypeId) await prisma.assignmentType.delete({ where: { id: assignmentTypeId } });
   await prisma.class.deleteMany({ where: { id: { in: classes } } });
