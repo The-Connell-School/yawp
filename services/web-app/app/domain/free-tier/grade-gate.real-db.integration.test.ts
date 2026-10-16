@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
+import { readFile } from 'node:fs/promises';
 import { prisma } from '~/utils/db.server';
 import { recordBelowHsDecline } from './grade-gate.server';
 import { redeemToken, releaseBatch, submitWaitlist } from './service.server';
-import { reopenApplication } from '~/utils/internal-free-tier-http.server';
+import { decideApplication, reopenApplication } from '~/utils/internal-free-tier-http.server';
 import { loader } from '~/routes/api.internal.v1.free-tier.grade-gate-declines/route';
 import { signInternalApiRequest } from '~/utils/internal-platform-auth.server';
 
@@ -41,7 +42,20 @@ afterAll(async () => {
   }
   await prisma.$disconnect();
 });
-local('additive default is empty for existing applications and tags round-trip', async () => {
+local('migration gives both preexisting and new rows an empty non-null tags array', async () => {
+  const migration = await readFile(new URL('../../../../../packages/prisma/migrations/20261016190000_free_tier_application_tags/migration.sql', import.meta.url), 'utf8');
+  await prisma.$transaction(async tx => {
+    // Temp relation shadows the public table on this transaction's connection.
+    // ON COMMIT DROP cleans it without touching the actual application table.
+    await tx.$executeRawUnsafe('CREATE TEMPORARY TABLE "FreeTierApplication" (id TEXT PRIMARY KEY) ON COMMIT DROP');
+    await tx.$executeRawUnsafe('INSERT INTO "FreeTierApplication" (id) VALUES (\'before\')');
+    await tx.$executeRawUnsafe(migration);
+    await tx.$executeRawUnsafe('INSERT INTO "FreeTierApplication" (id) VALUES (\'after\')');
+    const rows = await tx.$queryRawUnsafe('SELECT id, tags FROM "FreeTierApplication" ORDER BY id');
+    expect(rows).toEqual([{ id: 'after', tags: [] }, { id: 'before', tags: [] }]);
+  });
+});
+local('default tags and tagged storage round-trip', async () => {
   await submitWaitlist(input('legacy'));
   const row = await prisma.freeTierApplication.findUniqueOrThrow({ where: { email: input('legacy').email } });
   expect(row.tags).toEqual([]);
@@ -64,6 +78,8 @@ local('create-only concurrent and repeated declines preserve existing eligible r
   for (const result of results) { expect(result.status).toBe(200); expect(await result.json()).toEqual({ ok: true }); }
   const row = await prisma.freeTierApplication.findUniqueOrThrow({ where: { email: input('repeat').email } });
   expect(row.status).toBe('REJECTED'); expect(row.tags).toEqual(['below-hs']); expect(row.releasedAt).toBeNull();
+  await recordBelowHsDecline({ ...input('repeat'), email: '  ' + input('repeat').email.toUpperCase() + '  ', name: 'Changed' });
+  expect(await prisma.freeTierApplication.findUniqueOrThrow({ where: { id: row.id } })).toEqual(row);
   await submitWaitlist({ ...input('eligible'), gradeLevel: '11' });
   const before = await prisma.freeTierApplication.findUniqueOrThrow({ where: { email: input('eligible').email } });
   expect(await (await recordBelowHsDecline(input('eligible'))).json()).toEqual({ ok: true });
@@ -86,6 +102,31 @@ local('valid token provenance is recorded without uses, invalid tokens do not pe
   expect((await releaseBatch({ applicationIds: [row.id] })).released).toBe(0);
   expect((await reopenApplication({ id: row.id, decidedByEmail: 'staff@example.test' })).status).toBe(409);
   expect((await prisma.freeTierApplication.findUniqueOrThrow({ where: { id: row.id } })).status).toBe('REJECTED');
+});
+local('tag exclusions protect operator release and approval regardless of status', async () => {
+  const row = await prisma.freeTierApplication.create({ data: { ...input('tagged-lead'), tags: ['below-hs', 'event'] } });
+  expect((await releaseBatch({ applicationIds: [row.id] })).released).toBe(0);
+  await prisma.freeTierApplication.update({ where: { id: row.id }, data: { status: 'MANUAL_REVIEW' } });
+  expect((await decideApplication({ id: row.id, decision: 'APPROVED', decidedByEmail: 'staff@example.test' })).status).toBe(409);
+  expect((await prisma.freeTierApplication.findUniqueOrThrow({ where: { id: row.id } })).status).toBe('MANUAL_REVIEW');
+});
+local('concurrent decline and bypass admission never produce a partial or promoted decline', async () => {
+  await v2('true');
+  const token = await prisma.acquisitionToken.create({ data: { label: prefix + '-race', tokenHash: prefix + '-race', code: prefix + '-race', bypassWaitlist: true, maxUses: 1 } });
+  const [decline, redemption] = await Promise.all([
+    recordBelowHsDecline({ ...input('race'), token: token.code! }),
+    redeemToken({ ...input('race'), gradeLevel: '11', token: token.code! }),
+  ]);
+  expect(decline.status).toBe(200);
+  expect(redemption.ok).toBe(true);
+  const row = await prisma.freeTierApplication.findUniqueOrThrow({ where: { email: input('race').email } });
+  const uses = (await prisma.acquisitionToken.findUniqueOrThrow({ where: { id: token.id } })).uses;
+  if (row.tags.includes('below-hs')) {
+    expect(row.status).toBe('REJECTED'); expect(row.releasedAt).toBeNull(); expect(uses).toBe(0);
+    expect(redemption).toEqual({ ok: true, bypassWaitlist: false });
+  } else {
+    expect(row.status).toBe('INVITED'); expect(row.releasedAt).not.toBeNull(); expect(uses).toBe(1);
+  }
 });
 local('real query excludes untagged low grades, binds totals, and paginates equal timestamps', async () => {
   const createdAt = new Date('2026-10-16T12:00:00Z');
