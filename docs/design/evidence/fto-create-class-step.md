@@ -44,7 +44,7 @@ control with the rollout flag locally enabled: legacy rendering remains, forged
 preparation leaves application state and class count unchanged. This extends the
 existing dedicated browser test without adding it to standard discovery.
 
-Final-base evidence lives under `shots/fto-create-class-step/rebase/main-0f05b16a/`.
+The overlapping-base evidence lives under `shots/fto-create-class-step/rebase/main-0f05b16a/`.
 The focused profile also runs existing administrator-email policy/route and real-DB
 class-code provisioning regressions. Dedicated browser flows assert self-administrator
 POST rejection and associated UI errors before allowing a distinct administrator,
@@ -54,3 +54,9 @@ the mutation suite; its dedicated discovery still contains five flows.
 A subsequent conflict-free rebase includes main `9b78657e` (#579) without changing
 its sign-in implementation. Final-head checks and captures are repeated after this
 rebase; the evidence manifest records the exact resulting SHA and latest base.
+
+Main advanced again to `2f2fe6cb` (#580/#585) while CI was running. The only
+conflict was the shared CLI profile/help list; retained main's grade-decline
+profiles alongside all existing profiles. No application implementation changed
+in this resolution. Latest exact-head checks/captures and review are under
+`shots/fto-create-class-step/rebase/main-2f2fe6cb/`. Earlier evidence is retained.
