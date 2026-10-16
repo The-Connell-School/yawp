@@ -128,6 +128,63 @@ local('concurrent decline and bypass admission never produce a partial or promot
     expect(row.status).toBe('INVITED'); expect(row.releasedAt).not.toBeNull(); expect(uses).toBe(1);
   }
 });
+local('a queued decline wins over ordinary token redemption without consuming capacity', async () => {
+  await v2('true');
+  const token = await prisma.acquisitionToken.create({ data: {
+    label: prefix + '-ordinary-race', tokenHash: prefix + '-ordinary-race',
+    code: prefix + '-ordinary-race', bypassWaitlist: false, maxUses: 1,
+  } });
+  let unlock!: () => void;
+  let locked!: (pid: number) => void;
+  const gate = new Promise<void>(resolve => { unlock = resolve; });
+  const ready = new Promise<number>(resolve => { locked = resolve; });
+  const holder = prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('free_tier_release'))`;
+    const [row] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+    locked(row.pid);
+    await gate;
+  }, { timeout: 10000 });
+  const pid = await ready;
+  const blocked = async () => {
+    const [row] = await prisma.$queryRaw<{ count: number }[]>`
+      SELECT count(*)::int AS count FROM pg_stat_activity
+      WHERE datname = current_database() AND ${pid} = ANY(pg_blocking_pids(pid))`;
+    return row.count;
+  };
+  const waitUntil = async (condition: () => Promise<boolean>) => {
+    const deadline = Date.now() + 3000;
+    while (!(await condition())) {
+      if (Date.now() > deadline) throw new Error('Expected database lock queue did not form');
+      await Bun.sleep(10);
+    }
+  };
+  let decline: Promise<Response> | undefined;
+  let redemption: ReturnType<typeof redeemToken> | undefined;
+  try {
+    decline = recordBelowHsDecline({ ...input('ordinary-race'), token: token.code! });
+    // Observe the decline waiting on the held lock before starting redemption.
+    await waitUntil(async () => (await blocked()) === 1);
+    let settled = false;
+    redemption = redeemToken({ ...input('ordinary-race'), gradeLevel: '11', token: token.code! });
+    void redemption.then(() => { settled = true; }, () => { settled = true; });
+    // Before the fix redemption completes ahead of the queued decline. After
+    // the fix both requests wait, with the decline first in the database queue.
+    await waitUntil(async () => settled || (await blocked()) >= 2);
+    unlock();
+    await holder;
+    expect((await decline).status).toBe(200);
+    expect(await redemption).toEqual({ ok: true, bypassWaitlist: false });
+    const row = await prisma.freeTierApplication.findUniqueOrThrow({ where: { email: input('ordinary-race').email } });
+    expect(row.status).toBe('REJECTED');
+    expect(row.tags).toEqual(['below-hs']);
+    expect(row.releasedAt).toBeNull();
+    expect(row.acquisitionTokenId).toBe(token.id);
+    expect((await prisma.acquisitionToken.findUniqueOrThrow({ where: { id: token.id } })).uses).toBe(0);
+  } finally {
+    unlock();
+    await Promise.allSettled([holder, decline, redemption]);
+  }
+}, 15000);
 local('real query excludes untagged low grades, binds totals, and paginates equal timestamps', async () => {
   const createdAt = new Date('2026-10-16T12:00:00Z');
   await prisma.freeTierApplication.createMany({ data: ['a', 'b', 'c', 'untagged'].map(id => ({

@@ -29,7 +29,7 @@ export async function recordBelowHsDecline(input: BelowHsDeclineInput): Promise<
   const token = credential ? await findAcquisitionTokenByCredential(credential) : null;
   if (credential && (!token || !canRedeemToken(token).ok)) return response({ error: 'Invalid token' }, 400);
   await prisma.$transaction(async tx => {
-    // Serialize with bypass-token admission and operator release. The unique
+    // Serialize with all token redemption and operator release. The unique
     // email and create-only insert also protect other concurrent submissions.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('free_tier_release'))`;
     await tx.freeTierApplication.createMany({

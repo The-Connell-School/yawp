@@ -493,11 +493,11 @@ export async function redeemToken(
       return { ok: false as const, reason: 'disabled' as const };
     const token = resolved;
 
-    // Read the applicant after admission is serialized. Concurrent scans of the
-    // same email must see the committed invite and reuse its token admission.
-    if (token.bypassWaitlist) {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('free_tier_release'))`;
-    }
+    // Serialize every redemption with decline creation before reading the
+    // applicant or charging a use. Ordinary tokens must also see a committed
+    // decline; a later conflicting insert cannot undo an already charged use.
+    // Concurrent scans reuse the committed application's token admission.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('free_tier_release'))`;
     const existing = await tx.freeTierApplication.findUnique({
       where: { email },
       select: {

@@ -38,7 +38,7 @@ route calls the new writer in this PR; existing signup behavior stays unchanged.
   The token relation records its current label and source context for Internal;
   no token use, slot, signed link, account, enrollment or email is created.
   Token provenance is first-write-only, including a first organic submission.
-- The transaction shares the existing admission lock with bypass-token redemption
+- The transaction shares the existing admission lock with every token redemption
   and operator release. Existing tagged applications cannot consume token uses,
   be released, reopened or approved through operator transitions, even with v2
   off. Token redemption returns the existing generic waitlist success response
