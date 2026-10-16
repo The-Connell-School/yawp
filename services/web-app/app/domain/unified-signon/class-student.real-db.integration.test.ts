@@ -1,4 +1,6 @@
 import { beforeAll, afterAll, expect, test } from 'bun:test';
+import { randomBytes } from 'node:crypto';
+import type { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 import { dispatchUnifiedLogin } from './entry.server';
 const suite = process.env.SIGNON_LOCAL_TEST === '1' ? test : test.skip;
@@ -11,10 +13,12 @@ const details = {
   password,
   confirmPassword: password,
 };
-function browser() {
+function browser(clientIp?: string) {
   let cookie = '',
     flowToken = '';
-  const ip = `198.19.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
+  const ip =
+    clientIp ??
+    `198.19.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
   return async (intent: string, values: Record<string, string> = {}) => {
     const response = (await dispatchUnifiedLogin({
       request: new Request('http://localhost:5396/auth/login', {
@@ -516,6 +520,376 @@ suite(
       await prisma.organization.update({
         where: { id },
         data: { plan: 'SCHOOL' },
+      });
+    }
+  }
+);
+
+for (const budget of ['target', 'ip-handle'] as const)
+  suite(
+    `teacher reset unlocks class aliases and legacy handles after ${budget} lockout only for that student`,
+    async () => {
+      const { consumeLoginAttemptRateLimits } =
+        await import('~/utils/rate-limit.server');
+      const { hashLoginRateLimitTarget } =
+        await import('~/utils/login-rate-limit-target');
+      const { RATE_LIMITS } = await import('~/config/rate-limits');
+      const { teacherResetStudentPassword } =
+        await import('~/domain/free-tier/student-join.server');
+      const post = browser();
+      await post('resolve', { identifier: id });
+      await post('student-choice', { choice: 'new' });
+      const firstName = budget === 'target' ? 'Target' : 'Address';
+      const handle = firstName + 'Unlock';
+      expect(
+        (
+          await post('register-student', {
+            ...details,
+            firstName,
+            lastName: 'Unlock',
+          })
+        ).data.state.screen
+      ).toBe('joined');
+      const alias = await prisma.classStudentHandle.findUniqueOrThrow({
+        where: {
+          classId_handleKey: { classId: id, handleKey: handle.toLowerCase() },
+        },
+        include: { user: { include: { memberships: true } } },
+      });
+      const legacy = `${id}-${budget}-login`;
+      await prisma.user.update({
+        where: { id: alias.userId },
+        data: { username: legacy },
+      });
+      await prisma.orgMembership.update({
+        where: { id: alias.user.memberships[0].id },
+        data: { classesAsStudent: { connect: { id: id + '-b' } } },
+      });
+      await prisma.classStudentHandle.create({
+        data: {
+          classId: id + '-b',
+          userId: alias.userId,
+          handle: handle + 'Other',
+          handleKey: (handle + 'Other').toLowerCase(),
+        },
+      });
+      const teacher = await prisma.user.create({
+        data: {
+          email: `${id}-${budget}@example.test`,
+          memberships: {
+            create: {
+              organizationId: id,
+              role: 'TEACHER',
+              classesAsTeacher: { connect: { id } },
+            },
+          },
+        },
+      });
+      const ip = budget === 'target' ? '198.18.20.1' : '198.18.20.2';
+      const targets = [
+        legacy,
+        `${id}:${handle.toLowerCase()}`,
+        `${id}:${legacy}`,
+        `${id}-b:${(handle + 'Other').toLowerCase()}`,
+        `${id}-b:${legacy}`,
+      ];
+      // Same handle in another class belongs to somebody else and must stay locked.
+      const unrelated = `${id}-unrelated:${handle.toLowerCase()}`;
+      const locked = [...targets, unrelated];
+      const cfg = RATE_LIMITS.unauth.login;
+      for (const targetKey of locked) {
+        const count =
+          budget === 'target'
+            ? cfg.perEmailPerHour
+            : cfg.perIpHandlePer15Minutes;
+        for (let attempt = 0; attempt < count; attempt++) {
+          const decision = await consumeLoginAttemptRateLimits({
+            request: new Request('http://localhost/auth/login', {
+              headers: { 'x-forwarded-for': ip },
+            }),
+            route: '/auth/login',
+            targetKey,
+            perIpPerMinute: 1000,
+            perIpPerHour: 1000,
+            perIpSprayPerHour: 1000,
+            perTargetPerHour: budget === 'target' ? cfg.perEmailPerHour : 1000,
+            perIpHandlePer15Minutes:
+              budget === 'ip-handle' ? cfg.perIpHandlePer15Minutes : 1000,
+          });
+          expect(decision.allowed).toBe(true);
+        }
+      }
+      const failed = browser(ip);
+      await failed('resolve', { identifier: id });
+      await failed('student-choice', { choice: 'returning' });
+      expect(
+        (await failed('student-password', { username: handle, password }))
+          .response.status
+      ).toBe(429);
+      const bucketFilter = (target: string) => ({
+        key: { contains: hashLoginRateLimitTarget(target) },
+      });
+      const before = await prisma.rateLimitBucket.findMany({
+        where: bucketFilter(unrelated),
+        orderBy: { key: 'asc' },
+      });
+      const reset = (actorUserId: string) =>
+        teacherResetStudentPassword({
+          studentMembershipId: alias.user.memberships[0].id,
+          classId: id,
+          organizationId: id,
+          actorUserId,
+          temporaryPassword: 'temporary-password',
+        });
+      expect((await reset(alias.userId)).status).toBe('error');
+      expect(
+        (await failed('student-password', { username: handle, password }))
+          .response.status
+      ).toBe(429);
+      expect((await reset(teacher.id)).status).toBe('ok');
+      for (const target of targets)
+        expect(
+          await prisma.rateLimitBucket.count({ where: bucketFilter(target) })
+        ).toBe(0);
+      expect(
+        await prisma.rateLimitBucket.findMany({
+          where: bucketFilter(unrelated),
+          orderBy: { key: 'asc' },
+        })
+      ).toEqual(before);
+      // Full-width input exercises the same normalization used when clearing aliases.
+      const username = handle.replace('U', 'Ｕ');
+      const result = await failed('student-password', {
+        username: '@' + username,
+        password: 'temporary-password',
+      });
+      expect(result.response.status).toBe(302);
+      expect(result.response.headers.get('location')).toContain(
+        '/auth/change-password'
+      );
+      expect(
+        (await prisma.user.findUniqueOrThrow({ where: { id: alias.userId } }))
+          .mustChangePassword
+      ).toBe(true);
+    }
+  );
+
+suite(
+  'join action blocks read-only mutations and still accepts anonymous flag-off enrollment',
+  async () => {
+    const { action } = await import('~/routes/join/route');
+    const { authSessionStorage } =
+      await import('~/cookie-session-storages/authentication.server');
+    const session = await authSessionStorage.getSession();
+    session.set('impersonationMode', 'read-only');
+    session.set('impersonatorUserId', 'local-operator');
+    const before = await prisma.user.count();
+    await expect(
+      action({
+        request: new Request('http://localhost/join', {
+          method: 'POST',
+          headers: { cookie: await authSessionStorage.commitSession(session) },
+          body: new URLSearchParams(),
+        }),
+      } as any)
+    ).rejects.toMatchObject({ status: 403 });
+    expect(await prisma.user.count()).toBe(before);
+    await prisma.setting.update({
+      where: { name: flag },
+      data: { value: 'false' },
+    });
+    await prisma.organization.update({
+      where: { id },
+      data: { plan: 'FREE_CLASSROOM' },
+    });
+    await prisma.class.update({
+      where: { id },
+      data: { studentJoinToken: id },
+    });
+    try {
+      const username = `anon${Date.now()}`;
+      const response = await action({
+        request: new Request('http://localhost/join', {
+          method: 'POST',
+          body: new URLSearchParams({
+            name: 'Anonymous Student',
+            username,
+            classId: id,
+            joinToken: id,
+            password,
+            confirmPassword: password,
+          }),
+        }),
+      } as any);
+      expect(response).toBeInstanceOf(Response);
+      expect((response as Response).status).toBe(302);
+      expect((response as Response).headers.get('location')).toBe('/app');
+      expect(
+        await prisma.orgMembership.count({
+          where: {
+            user: { username },
+            role: 'STUDENT',
+            classesAsStudent: { some: { id } },
+          },
+        })
+      ).toBe(1);
+    } finally {
+      await prisma.setting.update({
+        where: { name: flag },
+        data: { value: 'true' },
+      });
+      await prisma.organization.update({
+        where: { id },
+        data: { plan: 'SCHOOL' },
+      });
+    }
+  }
+);
+
+suite(
+  'class handle audit triggers cover mutations, atomic rollback and truncation',
+  async () => {
+    const coverage = await prisma.$queryRaw<Array<{ name: string }>>`
+    SELECT t.tgname AS name FROM pg_trigger t
+    WHERE t.tgrelid = '"ClassStudentHandle"'::regclass
+      AND ((t.tgname = 'internal_impersonation_mutation_audit' AND t.tgtype = 29
+        AND t.tgfoid = to_regprocedure('internal_impersonation_mutation_audit()'))
+      OR (t.tgname = 'internal_impersonation_truncate_guard' AND t.tgtype = 34
+        AND t.tgfoid = to_regprocedure('internal_impersonation_truncate_guard()')))
+      AND t.tgenabled IN ('O', 'A')`;
+    expect(coverage.map((t) => t.name).sort()).toEqual([
+      'internal_impersonation_mutation_audit',
+      'internal_impersonation_truncate_guard',
+    ]);
+    const user = await prisma.user.create({
+      data: {
+        username: `audit${Date.now()}`,
+        memberships: {
+          create: {
+            organizationId: id,
+            role: 'STUDENT',
+            classesAsStudent: { connect: { id } },
+          },
+        },
+      },
+      include: { memberships: true },
+    });
+    const audit = {
+      id: `${id}-audit`,
+      actorId: 'local-operator',
+      userId: user.id,
+      organizationId: id,
+      expiresAt: new Date(Date.now() + 60000).toISOString(),
+    };
+    const { InternalImpersonationSessions } =
+      await import('~/utils/internal-impersonation-sessions.server');
+    const service = new InternalImpersonationSessions(prisma, {
+      redeem: async () => audit,
+      context: async () => audit,
+      end: async () => {},
+    });
+    await service.start(randomBytes(32).toString('base64url'));
+    // Exercise the database triggers directly. Other tables added on main after
+    // the original audit migration have independent coverage gaps; this test
+    // neither exempts this table nor changes the application coverage guard.
+    const attributed = async (
+      requestId: string,
+      work: (tx: Prisma.TransactionClient) => Promise<unknown>
+    ) =>
+      prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT set_config('yawp.impersonation.session', ${audit.id}, true),
+      set_config('yawp.impersonation.request', ${requestId}, true),
+      set_config('yawp.impersonation.action', 'test.class-handle', true)`;
+        return work(tx);
+      });
+    const aliasId = `${id}-audit-handle`;
+    try {
+      await attributed(`${id}-commit`, async (tx) => {
+        await tx.classStudentHandle.create({
+          data: {
+            id: aliasId,
+            classId: id,
+            userId: user.id,
+            handle: 'AuditStudent',
+            handleKey: 'auditstudent',
+          },
+        });
+        await tx.classStudentHandle.update({
+          where: { id: aliasId },
+          data: { handle: 'AuditUpdated', handleKey: 'auditupdated' },
+        });
+      });
+      const events = await prisma.internalImpersonationEvent.findMany({
+        where: { sessionId: audit.id, resourceType: 'ClassStudentHandle' },
+        orderBy: { createdAt: 'asc' },
+      });
+      expect(events).toHaveLength(2);
+      expect(events.map((e) => e.action).sort()).toEqual([
+        'row.created',
+        'row.updated',
+      ]);
+      expect(
+        events.every(
+          (e) =>
+            e.actorId === audit.actorId &&
+            e.userId === user.id &&
+            e.organizationId === id &&
+            e.requestAction === 'test.class-handle' &&
+            JSON.parse(e.resourceId).id === aliasId
+        )
+      ).toBe(true);
+      expect(JSON.stringify(events)).not.toContain('AuditStudent');
+      await expect(
+        attributed(`${id}-rollback`, async (tx) => {
+          await tx.classStudentHandle.delete({ where: { id: aliasId } });
+          throw new Error('rollback alias and audit');
+        })
+      ).rejects.toThrow('rollback alias and audit');
+      expect(
+        await prisma.classStudentHandle.count({ where: { id: aliasId } })
+      ).toBe(1);
+      expect(
+        await prisma.internalImpersonationEvent.count({
+          where: { requestId: `${id}-rollback` },
+        })
+      ).toBe(0);
+      await expect(
+        attributed(`${id}-truncate`, async (tx) => {
+          await tx.$executeRaw`TRUNCATE TABLE "ClassStudentHandle"`;
+        })
+      ).rejects.toThrow('Truncation cannot preserve impersonation audit');
+      expect(
+        await prisma.classStudentHandle.count({ where: { id: aliasId } })
+      ).toBe(1);
+      await attributed(`${id}-delete`, async (tx) => {
+        await tx.classStudentHandle.delete({ where: { id: aliasId } });
+      });
+      expect(
+        await prisma.internalImpersonationEvent.count({
+          where: {
+            sessionId: audit.id,
+            resourceType: 'ClassStudentHandle',
+            action: 'row.deleted',
+          },
+        })
+      ).toBe(1);
+      await prisma.classStudentHandle.create({
+        data: {
+          id: aliasId,
+          classId: id,
+          userId: user.id,
+          handle: 'Ordinary',
+          handleKey: 'ordinary',
+        },
+      });
+      expect(
+        await prisma.internalImpersonationEvent.count({
+          where: { sessionId: audit.id, resourceType: 'ClassStudentHandle' },
+        })
+      ).toBe(3);
+    } finally {
+      await prisma.internalImpersonationSession.delete({
+        where: { id: audit.id },
       });
     }
   }
