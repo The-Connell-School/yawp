@@ -49,6 +49,27 @@ test('queue preserves fields and detail includes bounded redacted log with v2 of
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { id: true, createdAt: true, kind: true, toEmail: true, success: true } });
   expect(v2).not.toHaveBeenCalled(); expect(response.headers.get('cache-control')).toBe('no-store');
 });
+test('signed flag-off reads reconcile migrated defaults and reminders accepted after a rollout pause', async () => {
+  const at = (day: number) => new Date(Date.UTC(2026, 9, day));
+  const approval = { id: 'admin', applicationId: 'a', createdAt: at(1), adminName: 'Administrator',
+    adminEmail: 'admin@example.test', adminRole: null, status: 'PENDING', decidedAt: null, redirectedFromId: null,
+    firstSentAt: null, reminderCount: 0, lastReminderAt: null, lastReminderSource: null };
+  approvals.mockResolvedValue([approval]);
+  const evidence = [2, 3, 4].map(day => ({ id: 'log-' + day, applicationId: 'a', createdAt: at(day),
+    kind: day === 2 ? 'admin_approval' : 'admin_approval_reminder', toEmail: approval.adminEmail, success: true }));
+  logs.mockResolvedValue(evidence);
+  const queue = await approvalQueue(request());
+  expect(queue.status).toBe(200);
+  expect((await queue.json()).applications[0].adminRequest).toMatchObject({ reminderCount: 2,
+    firstSentAt: at(2).toISOString(), lastReminderAt: at(4).toISOString(), lastReminderSource: null });
+  approvals.mockResolvedValue([{ ...approval, firstSentAt: at(2), reminderCount: 1,
+    lastReminderAt: at(3), lastReminderSource: 'auto' }]);
+  const detail = await approvalDetail(request('applications/a'));
+  expect(detail.status).toBe(200);
+  expect((await detail.json()).application.adminRequest).toMatchObject({ reminderCount: 2,
+    lastReminderAt: at(4).toISOString(), lastReminderSource: null });
+  expect(v2).not.toHaveBeenCalled();
+});
 test('persisted follow-up filter applies before pagination and grouped totals and is cursor bound', async () => {
   reads.mockResolvedValue([row, { ...row, id: 'b' }]);
   const response = await approvalQueue(request('queue', '?needsFollowUp=true&q=Teacher&limit=1'));

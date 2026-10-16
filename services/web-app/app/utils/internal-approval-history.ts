@@ -26,6 +26,14 @@ export function approvalHistory(approvals: ApprovalHistoryRow[], emails: Approva
   };
   const currentEmails = current ? evidence(current) : [];
   const reminders = currentEmails.filter(log => log.kind === 'admin_approval_reminder');
+  const latestReminder = reminders.at(-1)?.createdAt;
+  const recoveredReminder = latestReminder && (!current?.lastReminderAt || latestReminder > current.lastReminderAt);
+  // Persisted counts and logs overlap. V2 writes sentAt/lastReminderAt and its
+  // matching log's createdAt to the same acceptance timestamp. Only strictly
+  // newer accepted logs extend that counter (e.g. legacy sends during a pause).
+  // The full log count also recovers newly migrated DEFAULT 0 rows.
+  const reminderCount = Math.max(reminders.length, (current?.reminderCount ?? 0)
+    + (current?.lastReminderAt ? reminders.filter(log => log.createdAt > current.lastReminderAt!).length : 0));
   const followUps = emails.filter(log => log.success && log.kind === 'teacher_followup').sort(order);
   const persistedTeacherCounts = rows.some(row => row.teacherFollowUpCount !== undefined);
   const latestTeacher = rows.map(row => row.lastTeacherFollowUpAt).filter((at): at is Date => !!at)
@@ -35,9 +43,11 @@ export function approvalHistory(approvals: ApprovalHistoryRow[], emails: Approva
       currentApprovalId: current.id, adminName: current.adminName, adminEmail: current.adminEmail,
       adminRole: current.adminRole, status: current.status,
       firstSentAt: iso(current.firstSentAt ?? currentEmails.find(log => log.kind === 'admin_approval')?.createdAt),
-      reminderCount: current.reminderCount ?? reminders.length,
-      lastReminderAt: iso(current.lastReminderAt ?? reminders.at(-1)?.createdAt),
-      lastReminderSource: ['auto', 'manual'].includes(current.lastReminderSource ?? '') ? current.lastReminderSource : null,
+      reminderCount,
+      lastReminderAt: iso(recoveredReminder ? latestReminder : current.lastReminderAt),
+      // Historical log metadata does not prove a source. Never attach an older
+      // persisted source to a later accepted legacy send.
+      lastReminderSource: !recoveredReminder && ['auto', 'manual'].includes(current.lastReminderSource ?? '') ? current.lastReminderSource : null,
       nextAutoReminderAt: current.autoRemindersStopped ? null : iso(current.nextAutoReminderAt),
       autoRemindersStopped: current.autoRemindersStopped ?? false,
       stopReason: stop(current.stopReason), needsManualFollowUp: current.needsManualFollowUp ?? false,

@@ -27,6 +27,33 @@ test('persisted cadence remains readable and authoritative, including uncertaint
     stopReason: 'max_reached', needsManualFollowUp: true,
   });
 });
+test('migrated zero counters do not hide accepted legacy reminders with v2 off', () => {
+  expect(approvalHistory([row('a', { firstSentAt: null, reminderCount: 0, lastReminderAt: null,
+    lastReminderSource: null })], [log('admin_approval', 2), log('admin_approval_reminder', 3),
+    log('admin_approval_reminder', 4, false)]).adminRequest).toMatchObject({
+    firstSentAt: at(2).toISOString(), reminderCount: 1, lastReminderAt: at(3).toISOString(), lastReminderSource: null,
+  });
+});
+test('accepted legacy reminders during a rollout pause advance count/date without inventing source', () => {
+  const approval = row('a', { firstSentAt: at(2), reminderCount: 1, lastReminderAt: at(3),
+    lastReminderSource: 'auto', nextAutoReminderAt: at(10), autoRemindersStopped: false });
+  const accepted = [log('admin_approval', 2), log('admin_approval_reminder', 3), log('admin_approval_reminder', 4)];
+  expect(approvalHistory([approval], accepted).adminRequest).toMatchObject({ reminderCount: 2,
+    lastReminderAt: at(4).toISOString(), lastReminderSource: null, nextAutoReminderAt: at(10).toISOString() });
+  // Delivery metadata and the log for the same acceptance must count only once.
+  expect(approvalHistory([{ ...approval, reminderCount: 2, lastReminderAt: at(4), lastReminderSource: 'manual' }], accepted)
+    .adminRequest).toMatchObject({ reminderCount: 2, lastReminderAt: at(4).toISOString(), lastReminderSource: 'manual' });
+});
+test('newer accepted evidence extends persisted counts even with incomplete older logs', () => {
+  const approval = row('a', { reminderCount: 3, lastReminderAt: at(3), lastReminderSource: 'manual' });
+  expect(approvalHistory([approval], [log('admin_approval_reminder', 4)]).adminRequest)
+    .toMatchObject({ reminderCount: 4, lastReminderAt: at(4).toISOString(), lastReminderSource: null });
+});
+test('older and failed evidence cannot replace a newer accepted timestamp or its source', () => {
+  expect(approvalHistory([row('a', { reminderCount: 2, lastReminderAt: at(5), lastReminderSource: 'auto' })],
+    [log('admin_approval_reminder', 3), log('admin_approval_reminder', 6, false)]).adminRequest)
+    .toMatchObject({ reminderCount: 2, lastReminderAt: at(5).toISOString(), lastReminderSource: 'auto' });
+});
 test('multi-hop history uses previous decision time and replacement role, with truthful legacy nulls', () => {
   const result = approvalHistory([row('c', { createdAt: at(5), redirectedFromId: 'b', forwardedByRole: 'teacher',
     teacherFollowUpCount: 1, lastTeacherFollowUpAt: at(8) }),

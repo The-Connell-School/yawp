@@ -10,7 +10,16 @@ exists, including historical rows; row creation is never delivery evidence.
 Legacy reminders count successful `admin_approval_reminder` logs only, matching
 the administrator address and that row's lifetime. Their source is null because
 historical logs do not prove automatic/manual attribution. With #581's schema,
-accepted cadence fields are read directly. Teacher follow-ups aggregate all rows
+reminder history reconciles accepted logs with persisted metadata even while v2
+is off. The count is at least the accepted-log count; logs strictly newer than
+the persisted last acceptance extend its counter. Matching acceptance timestamps
+count once (#581 writes the same timestamp to the counter and its email log).
+This recovers migrated zero defaults and legacy reminders sent during a rollout
+pause without adding overlapping counts. The newest accepted timestamp wins;
+its source is null if only historical email evidence proves that send. Persisted
+source remains available for a matching or newer persisted acceptance. Reads do
+not change cadence, stop state or persisted follow-up filtering.
+Teacher follow-ups aggregate all rows
 and use the latest actual accepted follow-up. Legacy rows fall back to successful
 teacher-follow-up logs.
 
