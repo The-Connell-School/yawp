@@ -16,7 +16,8 @@ async function flag(value: string | null) {
 async function capture(page: Page, name: string) {
   if (!shots) return;
   fs.mkdirSync(shots, { recursive: true });
-  await page.screenshot({ path: path.join(shots, `${name}-impl.png`), fullPage: true });
+  await page.mouse.move(0, 0);
+  await page.screenshot({ path: path.join(shots, `${name}-impl.png`), fullPage: true, animations: 'disabled' });
 }
 async function fill(page: Page, suffix: string, grade = '11') {
   await page.getByLabel('First and last name').fill('Grace Okafor');
