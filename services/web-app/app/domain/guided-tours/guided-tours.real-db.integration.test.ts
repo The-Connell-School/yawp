@@ -25,3 +25,23 @@ const local = process.env.GUIDED_TOURS_LOCAL_TEST === '1';
     await db.query('ROLLBACK');
   } finally { await db.end(); }
 });
+
+(local ? test : test.skip)('concurrent finishes and skips never lose completed progress', async () => {
+  const { prisma } = await import('~/utils/db.server');
+  const { recordTourOutcome } = await import('./guided-tours.server');
+  const user = await prisma.user.create({ data: {} });
+  try {
+    for (let round = 0; round < 12; round++) {
+      await prisma.userTour.deleteMany({ where: { userId: user.id } });
+      const outcomes = round % 2 ? ['dismissed', 'completed'] as const : ['completed', 'dismissed'] as const;
+      await Promise.all(outcomes.map((outcome) => recordTourOutcome(user.id, 'dashboard', outcome)));
+      await recordTourOutcome(user.id, 'dashboard', 'dismissed');
+      const stored = await prisma.userTour.findUniqueOrThrow({
+        where: { userId_tourId: { userId: user.id, tourId: 'dashboard' } },
+      });
+      expect(stored.status).toBe('completed');
+    }
+  } finally {
+    await prisma.user.delete({ where: { id: user.id } });
+  }
+});
