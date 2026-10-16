@@ -51,7 +51,7 @@ export function AssignmentsAtAGlance({
   const hasTiles = assignmentTypes.length > 0 || Boolean(writingPracticeTo);
 
   return (
-    <div data-testid="teacher-assignments-grid">
+    <div data-testid="teacher-assignments-grid" data-tour="dashboard-assignments">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold">Assignments</h2>
         <button

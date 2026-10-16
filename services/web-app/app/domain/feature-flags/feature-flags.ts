@@ -51,6 +51,8 @@ export const CLASS_CODE_UNIQUE_FLAG = 'classcode-unique' as const;
 /** Demo feedback. Default off everywhere; only demo seed code opts in. */
 export const DEMO_FEEDBACK_FLAG = 'demo-feedback-widget' as const;
 
+export const GUIDED_TOURS_FLAG = 'guided-tours' as const;
+
 export const FEATURE_FLAGS = {
   [LESSON_PLANNER_FLAG]: {
     label: 'Lesson Planner',
@@ -89,6 +91,10 @@ export const FEATURE_FLAGS = {
   [DEMO_FEEDBACK_FLAG]: {
     label: 'Demo feedback widget',
     description: 'Shows the feedback note panel for signed-in demo users. Default off; production submissions are always denied.',
+  },
+  [GUIDED_TOURS_FLAG]: {
+    label: 'Free classroom page tours',
+    description: 'Welcome cards, page replay and tour progress for free classroom teachers. Default off on demo and production; free tier must also be enabled.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

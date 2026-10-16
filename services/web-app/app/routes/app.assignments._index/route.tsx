@@ -641,6 +641,7 @@ export default function MyAssignmentsRoute() {
             size="sm"
             className="shrink-0"
             data-testid="my-assignments-new-assignment"
+            data-tour="my-assignments-new"
             disabled={freeUsage?.allAssignmentsUsed}
             onClick={() => setIsCreateSheetOpen(true)}
           >
@@ -656,7 +657,10 @@ export default function MyAssignmentsRoute() {
       </div>
 
       {assignments.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/50 p-12 text-center">
+        <div
+          data-tour="my-assignments-list"
+          className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/50 p-12 text-center"
+        >
           <span className="text-lg font-bold">No assignments yet</span>
           <span className="text-base/7 text-muted-foreground sm:text-sm/6">
             Assignments you create for your classes will show up here.
@@ -670,7 +674,7 @@ export default function MyAssignmentsRoute() {
           </span>
         </div>
       ) : (
-        <div className="rounded-lg bg-muted/50">
+        <div data-tour="my-assignments-list" className="rounded-lg bg-muted/50">
           <Table aria-label="My Assignments">
             <TableHeader className="rounded-t-lg">
               <TableRow className="rounded-t-lg bg-muted/50">

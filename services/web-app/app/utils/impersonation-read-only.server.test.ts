@@ -93,6 +93,11 @@ describe('read-only impersonation auth contract', () => {
     });
   });
 
+  test('blocks forged tour persistence and restart requests', async () => {
+    await expect(auth.requireUserId(request('POST', '/api/guided-tours')))
+      .rejects.toMatchObject({ status: 403 });
+  });
+
   test('allows membership cookie changes during read-only impersonation', async () => {
     const userId = await auth.requireUserId(request('POST', '/api/membership-id'));
 
