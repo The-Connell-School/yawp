@@ -54,6 +54,12 @@ async function resetLounge(e2eContext: {
   }
 }
 
+/** Leave the app first so no in-flight revalidation races the next sign-in. */
+async function logout(page: import('@playwright/test').Page) {
+  await page.goto('about:blank');
+  await page.context().clearCookies();
+}
+
 async function seedWaitingQuestion(teacherUserId: string, organizationId: string) {
   const prisma = createE2EPrismaClient();
   try {
@@ -153,7 +159,7 @@ test.describe.serial("Teacher's Lounge shares and Brian's videos", () => {
     await page.getByRole('button', { name: 'Post reply' }).click();
     await expect(page.getByText('Nothing waiting. Nice.')).toBeVisible();
 
-    await page.context().clearCookies();
+    await logout(page);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto('/app/lounge');
     const row = page.getByRole('article').filter({ hasText: QUESTION_TITLE });
@@ -180,7 +186,7 @@ test.describe.serial("Teacher's Lounge shares and Brian's videos", () => {
     await page.getByRole('button', { name: 'Post', exact: true }).click();
     await expect(page.getByRole('heading', { name: PROMPT_TITLE })).toBeVisible();
 
-    await page.context().clearCookies();
+    await logout(page);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto('/app/lounge');
     const pinned = page.getByRole('region', { name: 'Pinned' });

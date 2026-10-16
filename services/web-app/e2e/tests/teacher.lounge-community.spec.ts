@@ -25,7 +25,9 @@ async function clearLounge() {
   }
 }
 
+/** Leave the app first so no in-flight revalidation races the next sign-in. */
 async function logout(page: import('@playwright/test').Page) {
+  await page.goto('about:blank');
   await page.context().clearCookies();
 }
 
