@@ -1581,7 +1581,7 @@ suite(
     cookie = '';
     flowToken = '';
     await post('resolve', { identifier: prefix });
-    const authorization = new URL((await post('google')).data.redirectTo);
+    let authorization = new URL((await post('google')).data.redirectTo);
     globalThis.fetch = (async (target: any) => {
       if (target === 'https://www.googleapis.com/oauth2/v3/certs')
         return Response.json({
@@ -1662,6 +1662,23 @@ suite(
       expect(user.email).toBeNull();
       expect(user.password).not.toBeNull();
       expect(user.signonIdentities).toHaveLength(1);
+      authorization = new URL((await post('google')).data.redirectTo);
+      const linkedResponse = await googleCallback(
+        new Request(
+          `http://127.0.0.1:5396/auth/unified/google/callback?code=mock&state=${authorization.searchParams.get('state')}`,
+          { headers: { cookie } }
+        )
+      );
+      expect(linkedResponse.status).toBe(302);
+      expect(linkedResponse.headers.get('location')).toBe('/app');
+      const linkedFlow = await prisma.signonFlow.findUniqueOrThrow({
+        where: { id: (await import('./flow.server')).digest(flowToken) },
+      });
+      expect(JSON.stringify(linkedFlow.data)).not.toContain(email);
+      expect(await prisma.session.count({ where: { userId: user.id } })).toBe(
+        1
+      );
+      await prisma.session.deleteMany({ where: { userId: user.id } });
       await prisma.signonIdentity.deleteMany({ where: { userId: user.id } });
       await prisma.password.deleteMany({ where: { userId: user.id } });
       await prisma.orgMembership.deleteMany({ where: { userId: user.id } });

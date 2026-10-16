@@ -163,7 +163,10 @@ export async function googleCallback(request: Request): Promise<Response> {
       if (linked) {
         if (oauth.linkUserId && linked.userId !== oauth.linkUserId)
           throw new FlowError('This Google identity is already linked.', 403);
-        flow.data.identifier = identity.email;
+        flow.data.pendingGoogle = undefined;
+        flow.data.studentGoogle = undefined;
+        flow.data.invitationId = undefined;
+        flow.data.otp = undefined;
         flow.data.proof = 'google';
         const linkedUser = await tx.user.findUniqueOrThrow({
           where: { id: linked.userId },

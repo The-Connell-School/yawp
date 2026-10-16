@@ -348,7 +348,7 @@ suite(
   async () => {
     const userIds = Array.from({ length: 100 }, (_, i) => `${id}-retry-${i}`);
     await prisma.user.createMany({
-      data: userIds.map((userId) => ({ id: userId })),
+      data: userIds.map((userId) => ({ id: userId, username: userId })),
     });
     await prisma.classStudentHandle.createMany({
       data: userIds.map((userId, i) => ({
