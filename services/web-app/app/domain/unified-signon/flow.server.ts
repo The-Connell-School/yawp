@@ -49,6 +49,8 @@ export type FlowData = {
   /** Display context retained after the student flow discards its email. */
   studentEmailOrigin?: boolean;
   studentChoice?: 'new' | 'returning';
+  /** Server-selected school-email signup; does not supply identity proof. */
+  studentEmailSignup?: boolean;
   studentGoogle?: { subject: string };
   completed?: boolean;
 };
