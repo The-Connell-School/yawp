@@ -34,10 +34,19 @@ The driver must obtain green required CI and independent Ship Review approval fo
 
 ## Rebase verification
 
-Rebased the existing PR onto `3574fd55` from current origin/main. Resolved only the
-shared CLI profile/help conflict, retaining both `signon-classcode` and the two
-class-step profiles. The runner isolation correction is unchanged. Local evidence
+Rebased the existing PR onto `0f05b16a` from current origin/main after an initial
+verified rebase onto `3574fd55` was superseded by main advancing. Retained all
+class-code/sign-on CLI profiles alongside the class-step profiles, the self-admin
+email guard and field errors from #583, and transaction-aware class-code generation
+from #576. The runner isolation correction is unchanged. Local evidence
 is refreshed under `shots/fto-create-class-step/rebase/`, including a paid-membership
 control with the rollout flag locally enabled: legacy rendering remains, forged
 preparation leaves application state and class count unchanged. This extends the
 existing dedicated browser test without adding it to standard discovery.
+
+Final-base evidence lives under `shots/fto-create-class-step/rebase/main-0f05b16a/`.
+The focused profile also runs existing administrator-email policy/route and real-DB
+class-code provisioning regressions. Dedicated browser flows assert self-administrator
+POST rejection and associated UI errors before allowing a distinct administrator,
+with no approval/email side effects on rejection. Standard discovery still excludes
+the mutation suite; its dedicated discovery still contains five flows.

@@ -242,7 +242,36 @@ for (const width of [1280, 390]) {
     await page.goto('/app/my-classes');
     await expect(page).toHaveURL(/free-tier\/onboarding/);
     await page.getByLabel('Administrator name').fill('Dr. Patel');
-    await page.getByLabel('Administrator email').fill('patel@example.edu');
+    const selfPost = await page.request.post('/app/free-tier/onboarding', {
+      form: {
+        adminName: 'Self',
+        adminEmail: user.email!.toUpperCase(),
+        adminRole: 'Principal',
+      },
+      maxRedirects: 0,
+    });
+    expect(selfPost.status()).toBe(400);
+    const ownEmail = page.getByLabel('Administrator email');
+    await ownEmail.fill(user.email!);
+    await page.getByLabel('Administrator role').fill('Principal');
+    await page.getByRole('button', { name: 'Send approval request' }).click();
+    await expect(ownEmail).toHaveAttribute('aria-invalid', 'true');
+    await expect(ownEmail).toHaveAttribute('aria-describedby', 'adminEmail-error');
+    await expect(page.locator('#adminEmail-error')).toHaveText(
+      "Use your administrator's email here, not your own."
+    );
+    await capture(page, `${width}-self-administrator-validation`);
+    expect(
+      await prisma.freeTierAdminApproval.count({ where: { applicationId: app.id } })
+    ).toBe(0);
+    expect(
+      await prisma.freeTierEmailLog.count({ where: { applicationId: app.id } })
+    ).toBe(0);
+    expect(
+      (await prisma.freeTierApplication.findUniqueOrThrow({ where: { id: app.id } })).status
+    ).toBe('ACCOUNT_CREATED');
+    await ownEmail.fill('patel@example.edu');
+    await expect(ownEmail).not.toHaveAttribute('aria-invalid', 'true');
     await page.getByLabel('Administrator role').fill('Principal');
     await page.getByRole('button', { name: 'Send approval request' }).click();
     await expect(page).toHaveURL(/free-tier\/pending/);

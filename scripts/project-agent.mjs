@@ -456,7 +456,7 @@ function runTestProfile(profile, { json }) {
       }) });
   }
   else if (chosen === "free-tier-class-step-unit") {
-    for (const file of ["app/domain/feature-flags/feature-flags.test.ts", "app/domain/free-tier/class-preparation.test.ts", "app/domain/free-tier/class-preparation.real-db.integration.test.ts", "app/domain/free-tier/free-tier-gate.server.test.ts", "app/domain/free-tier/provision-free-classroom.server.test.ts", "app/domain/free-tier/approval-flow.integration.test.ts", "app/domain/free-tier/approval.integration.test.ts"]) runWebApp(file, ["test", file]);
+    for (const file of ["app/domain/feature-flags/feature-flags.test.ts", "app/domain/free-tier/class-preparation.test.ts", "app/domain/free-tier/class-preparation.real-db.integration.test.ts", "app/domain/free-tier/admin-email.test.ts", "app/routes/app.free-tier.onboarding/route.self-admin.test.tsx", "app/utils/class-code-provision.real-db.integration.test.ts", "app/domain/free-tier/free-tier-gate.server.test.ts", "app/domain/free-tier/provision-free-classroom.server.test.ts", "app/domain/free-tier/approval-flow.integration.test.ts", "app/domain/free-tier/approval.integration.test.ts"]) runWebApp(file, ["test", file]);
   }
   else if (chosen === "free-tier-class-step-browser") {
     const local = requireConfig();
