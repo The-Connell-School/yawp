@@ -50,3 +50,7 @@ class-code provisioning regressions. Dedicated browser flows assert self-adminis
 POST rejection and associated UI errors before allowing a distinct administrator,
 with no approval/email side effects on rejection. Standard discovery still excludes
 the mutation suite; its dedicated discovery still contains five flows.
+
+A subsequent conflict-free rebase includes main `9b78657e` (#579) without changing
+its sign-in implementation. Final-head checks and captures are repeated after this
+rebase; the evidence manifest records the exact resulting SHA and latest base.
