@@ -21,6 +21,11 @@ async function shot(page: Page, name: string, width: number) {
     await page.screenshot({
       path: path.join(evidence, `${name}-${width}-impl.png`),
       fullPage: true,
+      mask: [
+        page.locator(
+          'input[type="password"], input[name="username"], input[name="identifier"], .signon-identity, .signon-chips, #signon-username-help[role="alert"]'
+        ),
+      ],
     });
   }
 }
@@ -47,6 +52,8 @@ test.beforeAll(async () => {
     )
   )
     throw new Error('Local database required');
+  // No-mail flows run before the mailer has created its capture directory.
+  fs.mkdirSync(capture, { recursive: true, mode: 0o700 });
   await db.organization.create({
     data: { id: prefix, name: 'Lincoln High', plan: 'SCHOOL' },
   });
@@ -89,6 +96,236 @@ test.afterAll(async () => {
   await db.organization.delete({ where: { id: prefix } });
   await db.$disconnect();
 });
+// Real resolver/registration regression for FAILURES.md di-signon-fix-email-handle-notice.
+for (const width of [1280, 390])
+  test(`email-origin free-class notice survives navigation and validation at ${width}`, async ({
+    page,
+  }) => {
+    test.setTimeout(120000);
+    const id = `${prefix}-free-${width}`;
+    const address = `${id}@example.test`;
+    const username = `notice${width}${Date.now()}`;
+    const notice =
+      "We won't save your email. This class uses a handle and password.";
+    await db.setting.upsert({
+      where: { name: flag },
+      update: { value: 'true' },
+      create: { name: flag, value: 'true', valueType: 'boolean' },
+    });
+    await db.organization.create({
+      data: { id, name: 'Lincoln High', plan: 'FREE_CLASSROOM' },
+    });
+    await db.school.create({
+      data: { id, code: id, name: 'Lincoln High', organizationId: id },
+    });
+    await db.class.create({
+      data: {
+        id,
+        code: 'qa-handle',
+        title: 'English 11, Period 2',
+        schoolId: id,
+        studentJoinToken: id,
+      },
+    });
+    const identityCount = await db.signonIdentity.count();
+    const mailBefore = fs.readdirSync(capture).length;
+    const expectForm = async (origin: boolean) => {
+      await expect(
+        page.getByRole('heading', { name: 'Create your account', exact: true })
+      ).toBeVisible();
+      await expect(
+        page.getByText('English 11, Period 2', { exact: true })
+      ).toBeVisible();
+      await expect(
+        page.getByLabel('First name', { exact: true })
+      ).toBeVisible();
+      await expect(page.getByLabel('Last name', { exact: true })).toBeVisible();
+      await expect(page.getByText(notice, { exact: true })).toHaveCount(
+        origin ? 1 : 0
+      );
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth
+        )
+      ).toBe(true);
+    };
+    try {
+      await page.setViewportSize({
+        width,
+        height: width === 1280 ? 1000 : 844,
+      });
+      await page.goto('/auth/login?redirectTo=%2Fapp%2Fmy-classes');
+      await page.waitForFunction(() =>
+        Boolean((window as any).__reactRouterDataRouter)
+      );
+      await page.getByLabel('Email or class code').fill(address);
+      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      await page
+        .getByRole('button', { name: "I'm a student I have a class code" })
+        .click();
+      await page.getByLabel('Class code', { exact: true }).fill('qa-handle');
+      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      await page.getByRole('button', { name: /^New/ }).click();
+      await expect(
+        page.getByRole('heading', { name: 'Create your account', exact: true })
+      ).toBeVisible();
+      await shot(page, 'signon-38-email-origin', width);
+      await expectForm(true);
+      const banner = page.getByText(notice, { exact: true });
+      const card = page.locator('.signon-class');
+      expect((await banner.boundingBox())!.y).toBeGreaterThan(
+        (await card.boundingBox())!.y
+      );
+      expect((await banner.boundingBox())!.y).toBeLessThan(
+        (await page.getByLabel('First name', { exact: true }).boundingBox())!.y
+      );
+      await page
+        .getByRole('button', { name: 'Join class', exact: true })
+        .click();
+      await expect(page.locator('[aria-invalid="true"]').first()).toBeVisible();
+      await expectForm(true);
+      await page.getByRole('button', { name: 'Back', exact: true }).click();
+      await page
+        .getByRole('button', {
+          name: 'Wrong class? Re-enter the code',
+          exact: true,
+        })
+        .click();
+      await page
+        .getByLabel('Class code', { exact: true })
+        .fill('missing-local-class');
+      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      await expect(
+        page
+          .getByText(
+            "We couldn't find a class with that code. Check it with your teacher.",
+            { exact: true }
+          )
+          .first()
+      ).toBeVisible();
+      await page.getByLabel('Class code', { exact: true }).fill('qa-handle');
+      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      await page.getByRole('button', { name: /^New/ }).click();
+      await expectForm(true);
+      await page.getByLabel('First name', { exact: true }).fill('Local');
+      await page.getByLabel('Last name', { exact: true }).fill('Notice');
+      await page.getByLabel('Password', { exact: true }).fill('local-password');
+      await page
+        .getByLabel('Confirm password', { exact: true })
+        .fill('local-password');
+      // Reach real server validation despite the client's valid values.
+      const invalidateOnce = async (route: Route) => {
+        const body = new URLSearchParams(route.request().postData() || '');
+        if (body.get('intent') !== 'register-student') return route.continue();
+        body.set('firstName', '123');
+        await route.continue({ postData: body.toString() });
+        await page.unroute('**/auth/login*', invalidateOnce);
+      };
+      await page.route('**/auth/login*', invalidateOnce);
+      await page
+        .getByRole('button', { name: 'Join class', exact: true })
+        .click();
+      await expect(
+        page.getByLabel('First name', { exact: true })
+      ).toHaveAttribute('aria-invalid', 'true');
+      await expectForm(true);
+      await shot(page, 'signon-38-email-origin-server-validation', width);
+      // Main assigns a suffix for an occupied class handle instead of asking
+      // the student to edit a taken handle. Exercise that real collision path.
+      const taken = await db.user.create({
+        data: {
+          username,
+          name: 'Taken Local Handle',
+          memberships: {
+            create: {
+              role: 'STUDENT',
+              organizationId: id,
+              classesAsStudent: { connect: { id } },
+            },
+          },
+          classStudentHandles: {
+            create: {
+              classId: id,
+              handle: 'LocalNotice',
+              handleKey: 'localnotice',
+            },
+          },
+        },
+      });
+      await page.getByLabel('First name', { exact: true }).fill('Local');
+      await page.getByLabel('Last name', { exact: true }).fill('Notice');
+      await page.getByLabel('Password', { exact: true }).fill('local-password');
+      await page
+        .getByLabel('Confirm password', { exact: true })
+        .fill('local-password');
+      await page
+        .getByRole('button', { name: 'Join class', exact: true })
+        .click();
+      await expect(
+        page.getByRole('heading', { name: "You're in!" })
+      ).toBeVisible();
+      await expect(
+        page.getByText('@LocalNotice1', { exact: true })
+      ).toBeVisible();
+      const alias = await db.classStudentHandle.findUniqueOrThrow({
+        where: {
+          classId_handleKey: { classId: id, handleKey: 'localnotice1' },
+        },
+      });
+      expect(alias.userId).not.toBe(taken.id);
+      await page
+        .getByRole('button', { name: 'Go to my class', exact: true })
+        .click();
+      await expect(page).toHaveURL(/\/app\/my-classes$/);
+      const stored = await db.user.findUniqueOrThrow({
+        where: { id: alias.userId },
+        include: {
+          password: true,
+          memberships: { include: { classesAsStudent: true } },
+          sessions: true,
+        },
+      });
+      expect(stored.email).toBeNull();
+      expect(stored.emailVerifiedAt).toBeNull();
+      expect(stored.password).not.toBeNull();
+      expect(
+        await bcrypt.compare('local-password', stored.password!.hash)
+      ).toBe(true);
+      expect(stored.sessions).toHaveLength(1);
+      expect(stored.memberships).toHaveLength(1);
+      expect(stored.memberships[0].role).toBe('STUDENT');
+      expect(stored.memberships[0].classesAsStudent.map((k) => k.id)).toContain(
+        id
+      );
+      expect(await db.user.count({ where: { email: address } })).toBe(0);
+      expect(await db.signonIdentity.count()).toBe(identityCount);
+      expect(fs.readdirSync(capture)).toHaveLength(mailBefore);
+      await page.context().clearCookies();
+      await page.goto('/auth/login');
+      await page.waitForFunction(() =>
+        Boolean((window as any).__reactRouterDataRouter)
+      );
+      await page.getByLabel('Email or class code').fill('qa-handle');
+      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      await page.getByRole('button', { name: /^New/ }).click();
+      await expectForm(false);
+      await shot(page, 'signon-38-direct-code', width);
+    } finally {
+      const users = await db.user.findMany({
+        where: { memberships: { some: { organizationId: id } } },
+        select: { id: true },
+      });
+      const ids = users.map((u) => u.id);
+      await db.session.deleteMany({ where: { userId: { in: ids } } });
+      await db.password.deleteMany({ where: { userId: { in: ids } } });
+      await db.orgMembership.deleteMany({ where: { userId: { in: ids } } });
+      await db.user.deleteMany({ where: { id: { in: ids } } });
+      await db.class.delete({ where: { id } });
+      await db.school.delete({ where: { id } });
+      await db.organization.delete({ where: { id } });
+    }
+  });
+
 for (const width of [1280, 390])
   test(`existing passwordless teacher activates through the location selector at ${width}`, async ({
     page,

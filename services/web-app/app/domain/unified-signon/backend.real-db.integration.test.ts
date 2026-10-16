@@ -920,9 +920,31 @@ suite(
       data: { studentJoinToken: `token-${prefix}` },
     });
     try {
-      const resolved = await post('resolve', { identifier: prefix });
+      await post('resolve', {
+        identifier: `${prefix}-handle-origin@example.test`,
+      });
+      const resolved = await post('resolve-class', { classCode: prefix });
       expect(resolved.data.state.classInfo.accountMode).toBe('handle');
-      await post('student-choice', { choice: 'new' });
+      const chosen = await post('student-choice', { choice: 'new' });
+      expect(chosen.data.state.emailOrigin).toBe(true);
+      await post('student-choice', { choice: 'returning' });
+      expect(
+        (await post('student-choice', { choice: 'new' })).data.state.emailOrigin
+      ).toBe(true);
+      // Starting again with a direct code must clear the display-only marker;
+      // a posted presentation value cannot manufacture email-origin context.
+      await post('resolve', { identifier: prefix });
+      expect(
+        (await post('student-choice', { choice: 'new', emailOrigin: 'true' }))
+          .data.state.emailOrigin
+      ).toBe(false);
+      await post('resolve', {
+        identifier: `${prefix}-handle-origin@example.test`,
+      });
+      await post('resolve-class', { classCode: prefix });
+      expect(
+        (await post('student-choice', { choice: 'new' })).data.state.emailOrigin
+      ).toBe(true);
       const values = {
         firstName: 'Local',
         lastName: 'Handle',
@@ -948,6 +970,12 @@ suite(
       });
       const full = await post('register-student', values);
       expect(full.response.status).toBe(400);
+      // Main returns errors without a replacement state. Redisplay resumes the
+      // existing server context, which must still carry the notice.
+      const redisplay = await unifiedEntry(
+        new Request(url + '?continue=1', { headers: { cookie } })
+      );
+      expect(redisplay?.initialState?.emailOrigin).toBe(true);
       expect(JSON.stringify(full.data)).toContain('full');
       expect(
         await prisma.classStudentHandle.count({ where: { classId: prefix } })
