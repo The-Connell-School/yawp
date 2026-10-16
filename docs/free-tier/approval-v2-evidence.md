@@ -85,3 +85,27 @@ Driver `state/REVIEW.md` remains untouched; a fresh standalone Ship Review recor
 the resulting head in `state/SHIP_REVIEW.md`. Merge remains held. No hosted
 environment was accessed, and no actual email, remote migration, flag activation,
 preview action or merge was performed.
+
+## Claim-time rollout pause correction
+
+The follow-up rejection in lane `state/REVIEW.md` is reproduced by four real
+Postgres regressions: automatic/manual reminders crossed with flag-off/untargeted
+pauses. A fixture-scoped trigger changes the rollout in the actual claim
+transaction. On the original implementation all four fail with CANCELLED instead
+of QUEUED, after zero provider calls. The trigger/function are removed in finally.
+
+The dispatch transaction now restores a known-unsent delivery to QUEUED, clears
+its claim timestamp and reverses that claim's attempt increment. Concurrent
+resumed drains accept the original slot once; manual replay returns the same
+acceptance and a fresh key works at the cooldown boundary. No migration is added
+by this correction. Abandoned claims and ambiguous provider attempts retain the
+existing uncertainty policy.
+
+At application head `bb7a9a60`, the project CLI reports 72 focused tests passing
+(including 22 durable lifecycle cases), full typecheck passing, and six local
+one-worker Playwright flows passing in 22.6 seconds. Fresh evidence lives in the
+sibling `rollout-pause/` directory: 37 original captures, six canonical v2 artboard
+sets, four flag-off/flag-on compositions, and `checks/` red/green/typecheck/browser
+transcripts. Earlier evidence remains available for comparison. No UI code
+changed in this correction. Independent Ship Review results are recorded in lane
+`state/SHIP_REVIEW.md` for the final reviewed head.
