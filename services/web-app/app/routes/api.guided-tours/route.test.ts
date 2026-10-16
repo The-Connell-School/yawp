@@ -89,22 +89,22 @@ describe('api.guided-tours', () => {
   });
 
   test('overlapping completion and skip preserve completion regardless of stale reads', async () => {
-    let stored: { status: string } | null = null;
+    const progress: { stored: { status: string } | null } = { stored: null };
     let completionWritten!: () => void;
     const completed = new Promise<void>((resolve) => { completionWritten = resolve; });
     // Both requests can read the same absent row before either writes.
-    prisma.userTour.findUnique.mockImplementation(async () => stored ? { ...stored } : null);
+    prisma.userTour.findUnique.mockImplementation(async () => progress.stored ? { ...progress.stored } : null);
     prisma.userTour.upsert.mockImplementation(async ({ create, update }) => {
       // Reproduce a slow Skip request arriving after Finish from another tab.
       if (create.status === 'dismissed') await completed;
-      stored = stored ? { ...stored, ...update } : { status: create.status };
+      progress.stored = progress.stored ? { ...progress.stored, ...update } : { status: create.status };
       if (create.status === 'completed') completionWritten();
-      return stored;
+      return progress.stored;
     });
     prisma.userTour.createMany.mockImplementation(async ({ data }) => {
       await completed;
-      if (stored) return { count: 0 };
-      stored = { status: data[0].status };
+      if (progress.stored) return { count: 0 };
+      progress.stored = { status: data[0].status };
       return { count: 1 };
     });
     const responses = await Promise.all([
@@ -112,7 +112,7 @@ describe('api.guided-tours', () => {
       post({ tourId: 'dashboard', status: 'dismissed' }),
     ]);
     expect(responses.map((response) => response.status)).toEqual([200, 200]);
-    expect(stored).toEqual({ status: 'completed' });
+    expect(progress.stored).toEqual({ status: 'completed' });
   });
 
   test('rejects unknown tours and statuses without writing', async () => {

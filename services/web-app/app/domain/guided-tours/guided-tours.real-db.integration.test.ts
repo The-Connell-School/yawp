@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { Client } from 'pg';
 import { readFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 const local = process.env.GUIDED_TOURS_LOCAL_TEST === '1';
 (local ? test : test.skip)('UserTour has both enabled audit triggers after fresh migrations', async () => {
   const url = new URL(process.env.DATABASE_URL!);
@@ -29,7 +30,7 @@ const local = process.env.GUIDED_TOURS_LOCAL_TEST === '1';
 (local ? test : test.skip)('concurrent finishes and skips never lose completed progress', async () => {
   const { prisma } = await import('~/utils/db.server');
   const { recordTourOutcome } = await import('./guided-tours.server');
-  const user = await prisma.user.create({ data: {} });
+  const user = await prisma.user.create({ data: { username: `tour-concurrency-${randomUUID()}` } });
   try {
     for (let round = 0; round < 12; round++) {
       await prisma.userTour.deleteMany({ where: { userId: user.id } });
