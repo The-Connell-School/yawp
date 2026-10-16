@@ -1,0 +1,191 @@
+{
+  "fixtureOnly": true,
+  "checks": [
+    {
+      "profile": "classcode-unit",
+      "status": "passed",
+      "steps": [
+        {
+          "id": "app/utils/class-code-write.server.test.ts",
+          "exitCode": 0,
+          "counts": [
+            "7 pass",
+            "0 fail"
+          ]
+        },
+        {
+          "id": "app/routes/app.organization.classes/route.test.ts",
+          "exitCode": 0,
+          "counts": [
+            "16 pass",
+            "0 fail"
+          ]
+        },
+        {
+          "id": "app/routes/app.my-classes._index/route.test.ts",
+          "exitCode": 0,
+          "counts": [
+            "5 pass",
+            "0 fail"
+          ]
+        },
+        {
+          "id": "app/domain/free-tier/provision-free-classroom.server.test.ts",
+          "exitCode": 0,
+          "counts": [
+            "2 pass",
+            "0 fail"
+          ]
+        },
+        {
+          "id": "app/domain/free-tier/provision.analytics.server.test.ts",
+          "exitCode": 0,
+          "counts": [
+            "5 pass",
+            "0 fail"
+          ]
+        },
+        {
+          "id": "app/components/class-manage-sheet.test.ts",
+          "exitCode": 0,
+          "counts": [
+            "3 pass",
+            "0 fail"
+          ]
+        },
+        {
+          "id": "app/domain/feature-flags/feature-flags.test.ts",
+          "exitCode": 0,
+          "counts": [
+            "18 pass",
+            "0 fail"
+          ]
+        },
+        {
+          "id": "app/domain/feature-flags/feature-flags.server.test.ts",
+          "exitCode": 0,
+          "counts": [
+            "24 pass",
+            "0 fail"
+          ]
+        },
+        {
+          "id": "app/utils/internal-feature-flags-http.server.test.ts",
+          "exitCode": 0,
+          "counts": [
+            "24 pass",
+            "0 fail"
+          ]
+        }
+      ]
+    },
+    {
+      "profile": "classcode-cli",
+      "status": "passed",
+      "steps": [
+        {
+          "id": "project-cli",
+          "exitCode": 0,
+          "counts": [
+            "103 pass",
+            "0 fail"
+          ]
+        }
+      ]
+    },
+    {
+      "profile": "classcode-db",
+      "status": "passed",
+      "steps": [
+        {
+          "id": "app/utils/class-code-write.real-db.integration.test.ts",
+          "exitCode": 0,
+          "counts": [
+            "4 pass",
+            "0 fail"
+          ]
+        },
+        {
+          "id": "app/utils/free-tier-class-create-route.real-db.integration.test.ts",
+          "exitCode": 0,
+          "counts": [
+            "5 pass",
+            "0 fail"
+          ]
+        },
+        {
+          "id": "app/utils/class-code-provision.real-db.integration.test.ts",
+          "exitCode": 0,
+          "counts": [
+            "3 pass",
+            "0 fail"
+          ]
+        },
+        {
+          "id": "app/domain/free-tier/existing-student-enrollment.integration.test.ts",
+          "exitCode": 0,
+          "counts": [
+            "9 pass",
+            "0 fail"
+          ]
+        },
+        {
+          "id": "app/utils/internal-scenario.integration.test.ts",
+          "exitCode": 0,
+          "counts": [
+            "2 pass",
+            "0 fail"
+          ]
+        }
+      ]
+    },
+    {
+      "profile": "classcode-browser",
+      "status": "passed",
+      "steps": [
+        {
+          "id": "classcode-browser",
+          "exitCode": 0,
+          "counts": [
+            "1 pass"
+          ]
+        }
+      ]
+    },
+    {
+      "profile": "classcode-enter-code",
+      "status": "passed",
+      "steps": [
+        {
+          "id": "classcode-enter-code",
+          "exitCode": 0,
+          "counts": [
+            "1 pass"
+          ]
+        }
+      ]
+    },
+    {
+      "profile": "classcode-typecheck",
+      "status": "passed",
+      "steps": [
+        {
+          "id": "typecheck",
+          "exitCode": 0,
+          "counts": []
+        }
+      ]
+    },
+    {
+      "profile": "classcode-report",
+      "status": "passed",
+      "steps": [
+        {
+          "id": "classcode-report",
+          "exitCode": 0,
+          "counts": []
+        }
+      ]
+    }
+  ]
+}

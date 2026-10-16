@@ -49,7 +49,9 @@ Prefix searches must normalize the prefix with the same function. This change
 does not add an Internal endpoint or register `free-tier-onboarding-v2`.
 The local fixture proof includes same-organization and cross-organization
 legacy duplicates; it compares persisted rows before and after the report.
-No hosted database report has been run.
+No hosted database report has been run. `duplicates.local.json` records the
+read-only command against disposable local scenario fixtures; it is not a
+report of demo or production. `checks.json` records the passing focused runs.
 
 ## Write-path audit and concurrency
 
