@@ -6,7 +6,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
   // These UI-only fixtures use their own loopback Vite server/configuration.
-  testIgnore: ['**/auth.unified-signon.spec.ts'],
+  testIgnore: ['**/auth.unified-signon.spec.ts', '**/auth.unified-backend.spec.ts', '**/auth.unified-google-backend.spec.ts'],
   globalTeardown: './e2e/global-teardown.ts',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,

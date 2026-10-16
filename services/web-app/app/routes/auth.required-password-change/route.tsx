@@ -72,6 +72,23 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   }
 
+  if (await isUnifiedSignOnEnabled()) {
+    const { browserContext, withFlow } =
+      await import('~/domain/unified-signon/flow.server');
+    const context = await browserContext(request);
+    if (context) {
+      try {
+        const resume = await withFlow(
+          request,
+          context.token,
+          async (flow) => flow.data.userId === userId
+        );
+        if (resume) return redirect('/auth/login?continue=1');
+      } catch {
+        /* An expired flow retains the legacy destination. */
+      }
+    }
+  }
   return redirect('/app');
 }
 

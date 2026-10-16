@@ -63,6 +63,8 @@ jobs:
       PREVIEW_UA_STUDENT_BILLING_ENABLED: ${{ vars.DEMO_UA_STUDENT_BILLING_ENABLED || 'false' }}
       PREVIEW_UA_ORGANIZATION_ID: ${{ vars.DEMO_UA_ORGANIZATION_ID }}
       PREVIEW_UA_PARTNER_CODE: ${{ vars.DEMO_UA_PARTNER_CODE }}
+      PREVIEW_GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.DEMO_GOOGLE_OAUTH_CLIENT_ID }}
+      PREVIEW_GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.DEMO_GOOGLE_OAUTH_CLIENT_SECRET }}
       PREVIEW_STRIPE_SECRET_KEY: ${{ secrets.DEMO_STRIPE_SECRET_KEY }}
       PREVIEW_STRIPE_WEBHOOK_SECRET: ${{ secrets.DEMO_STRIPE_WEBHOOK_SECRET }}
       PREVIEW_STRIPE_UA_2026_PRICE_ID: ${{ vars.DEMO_STRIPE_UA_2026_PRICE_ID }}
@@ -83,6 +85,26 @@ jobs:
       DEMO_REQUESTED_REF: ${{ inputs.ref }}
       DEMO_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
     steps:
+      - name: Mask optional Google OAuth credentials
+        run: |
+          set -euo pipefail
+          # Mask both original bytes and Bash transport quoting before host commands.
+          mask_value() {
+            local value="$1"
+            value="${value//'%'/'%25'}"
+            value="${value//$'\r'/'%0D'}"
+            value="${value//$'\n'/'%0A'}"
+            printf '::add-mask::%s\n' "$value"
+          }
+          for name in PREVIEW_GOOGLE_OAUTH_CLIENT_ID PREVIEW_GOOGLE_OAUTH_CLIENT_SECRET; do
+            value="${!name}"
+            if [[ -n "$value" ]]; then
+              mask_value "$value"
+              printf -v quoted '%q' "$value"
+              mask_value "$quoted"
+            fi
+          done
+
       - name: Check demo configuration
         env:
           DEMO_SSH_PRIVATE_KEY: ${{ secrets.DEMO_SSH_PRIVATE_KEY }}
@@ -239,6 +261,8 @@ jobs:
             "PREVIEW_UA_STUDENT_BILLING_ENABLED=$(shell_quote "$PREVIEW_UA_STUDENT_BILLING_ENABLED")"
             "PREVIEW_UA_ORGANIZATION_ID=$(shell_quote "$PREVIEW_UA_ORGANIZATION_ID")"
             "PREVIEW_UA_PARTNER_CODE=$(shell_quote "$PREVIEW_UA_PARTNER_CODE")"
+            "PREVIEW_GOOGLE_OAUTH_CLIENT_ID=$(shell_quote "$PREVIEW_GOOGLE_OAUTH_CLIENT_ID")"
+            "PREVIEW_GOOGLE_OAUTH_CLIENT_SECRET=$(shell_quote "$PREVIEW_GOOGLE_OAUTH_CLIENT_SECRET")"
             "PREVIEW_STRIPE_SECRET_KEY=$(shell_quote "$PREVIEW_STRIPE_SECRET_KEY")"
             "PREVIEW_STRIPE_WEBHOOK_SECRET=$(shell_quote "$PREVIEW_STRIPE_WEBHOOK_SECRET")"
             "PREVIEW_STRIPE_UA_2026_PRICE_ID=$(shell_quote "$PREVIEW_STRIPE_UA_2026_PRICE_ID")"

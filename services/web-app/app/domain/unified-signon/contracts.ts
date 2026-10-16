@@ -38,11 +38,16 @@ export type SignonMembership = {
 export type SignonState = {
   screen: SignonScreen;
   identifier?: string;
+  provider?: 'google';
+  organizationName?: string;
+  adminName?: string;
+  sentDate?: string;
   /** Opaque, expiring server context; never authorization by itself. PR 3. */
   flowToken?: string;
   classInfo?: SignonClass;
   classes?: SignonClass[];
   memberships?: SignonMembership[];
+  handleSuggestions?: string[];
   variant?: string;
   notice?: string;
   error?: string;
@@ -72,6 +77,7 @@ export type SignonOperation =
   | 'resend-approval';
 
 export type SignonResult =
+  | { redirectTo: string }
   | { state: SignonState }
   | {
       error: string;

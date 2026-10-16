@@ -13,27 +13,29 @@ import { Button } from '~/components/ui/button';
 import { UnifiedSignon } from './unified-signon';
 import type {
   SignonResult,
+  SignonState,
   SignonTransport,
 } from '~/domain/unified-signon/contracts';
 
 export function UnifiedLogin({
   entry,
 }: {
-  entry: { redirectTo: string; googleAvailable: boolean };
+  entry: {
+    redirectTo: string;
+    googleAvailable: boolean;
+    initialState?: SignonState;
+  };
 }) {
   const [search] = useSearchParams();
-  const fetcher = useFetcher<{ error?: string }>();
+  const [resetError, setResetError] = useState<string>();
+  const fetcher = useFetcher<SignonResult>();
   const completion = useRef<((result: SignonResult) => void) | null>(null);
   useEffect(() => {
     if (fetcher.state !== 'idle' || !fetcher.data || !completion.current)
       return;
     const resolve = completion.current;
     completion.current = null;
-    resolve({
-      error:
-        fetcher.data.error ??
-        'This sign-in option is not available yet. Please try again later.',
-    });
+    resolve(fetcher.data);
   }, [fetcher.state, fetcher.data]);
   const transport: SignonTransport = async (intent, values, context) => {
     const form = new FormData();
@@ -41,8 +43,7 @@ export function UnifiedLogin({
     form.set('redirectTo', context.redirectTo);
     if (context.state.flowToken) form.set('flowToken', context.state.flowToken);
     for (const [key, value] of Object.entries(values)) form.set(key, value);
-    // Router actions use the router's data protocol. PR 3 will add validated
-    // next-screen responses here; this item exposes only an unavailable result.
+    // Only server responses determine the next step.
     return new Promise<SignonResult>((resolve) => {
       completion.current = resolve;
       void fetcher.submit(form, { method: 'POST', action: '/auth/login' });
@@ -50,13 +51,19 @@ export function UnifiedLogin({
   };
   return (
     <UnifiedSignon
-      initialState={{
-        screen: 'entry',
-        variant:
-          search.get('message') === 'existing_account'
-            ? 'existing-account'
+      key={`${entry.initialState?.flowToken ?? 'entry'}:${entry.initialState?.screen ?? 'entry'}`}
+      initialState={
+        entry.initialState ?? {
+          screen: 'entry',
+          error: search.has('googleError')
+            ? "We couldn't connect to Google. Try again, or use your email below."
             : undefined,
-      }}
+          variant:
+            search.get('message') === 'existing_account'
+              ? 'existing-account'
+              : undefined,
+        }
+      }
       redirectTo={entry.redirectTo}
       googleAvailable={entry.googleAvailable}
       transport={transport}
@@ -64,6 +71,25 @@ export function UnifiedLogin({
         <UnifiedPasswordForm
           identifier={state.identifier ?? ''}
           redirectTo={entry.redirectTo}
+          flowToken={state.flowToken}
+          resetError={resetError}
+          onReset={() =>
+            void transport(
+              'send-code',
+              { purpose: 'reset-password' },
+              { state, redirectTo: entry.redirectTo }
+            ).then((result) => {
+              if ('state' in result)
+                window.location.assign('/auth/login?continue=1');
+              else if ('error' in result)
+                setResetError(
+                  result.error +
+                    (result.retryAfterSeconds
+                      ? ` Try again in ${result.retryAfterSeconds} seconds.`
+                      : '')
+                );
+            })
+          }
         />
       )}
     />
@@ -75,9 +101,15 @@ export function UnifiedLogin({
 export function UnifiedPasswordForm({
   identifier,
   redirectTo,
+  flowToken,
+  onReset,
+  resetError,
 }: {
   identifier: string;
   redirectTo: string;
+  flowToken?: string;
+  onReset?: () => void;
+  resetError?: string;
 }) {
   const navigation = useNavigation();
   const [forgotHandle, setForgotHandle] = useState(false);
@@ -100,6 +132,7 @@ export function UnifiedPasswordForm({
   return (
     <Form {...form.getFormProps()} className="signon-fields">
       <input type="hidden" name="intent" value="password" />
+      {flowToken && <input type="hidden" name="flowToken" value={flowToken} />}
       <input type="hidden" name="email" value={loginIdentifier} />
       <input type="hidden" name="redirectTo" value={redirectTo} />
       <div className="signon-password-row">
@@ -119,11 +152,21 @@ export function UnifiedPasswordForm({
             Forgot password?
           </Button>
         ) : (
-          <Link className="signon-text-button" to="/auth/inv/forgot-password">
+          <Button
+            type="button"
+            variant="link"
+            className="signon-text-button"
+            onClick={onReset}
+          >
             Forgot password?
-          </Link>
+          </Button>
         )}
       </div>
+      {resetError && (
+        <p role="alert" className="signon-field-error">
+          {resetError}
+        </p>
+      )}
       {forgotHandle && (
         <p role="status" className="signon-banner">
           Ask your teacher to reset it.

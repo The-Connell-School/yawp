@@ -136,9 +136,10 @@ export async function enrollExistingStudentByCode(params: {
   sourceOrganizationId: string;
   code: string;
   classId?: string;
+  client?: Prisma.TransactionClient;
 }): Promise<EnrollmentResult> {
   try {
-    return await prisma.$transaction(async (tx) => {
+    const enroll = async (tx: Prisma.TransactionClient): Promise<EnrollmentResult> => {
       // One identity can join through different tabs/classes concurrently. This
       // serializes membership creation across those classes, not only one roster.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-code:${params.userId}`}))`;
@@ -255,7 +256,8 @@ export async function enrollExistingStudentByCode(params: {
           error: enrolled.error,
         });
       return { ok: true, membershipId: member.id };
-    });
+    };
+    return params.client ? await enroll(params.client) : await prisma.$transaction(enroll);
   } catch (error) {
     if (error instanceof EnrollmentDenied) return error.result;
     if (error instanceof FreeTierSpendGuardDeniedError)
@@ -266,4 +268,26 @@ export async function enrollExistingStudentByCode(params: {
       };
     throw error;
   }
+}
+
+/** A proved existing student without an active organization can use the same
+ * public class invitation as a new signup. Never reactivate a disabled membership
+ * or turn a staff account into a student. The caller holds the identity proof. */
+export async function enrollUnassignedStudentByCode(tx: Prisma.TransactionClient, params: { userId: string; code: string; classId: string }): Promise<EnrollmentResult> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-code:${params.userId}`}))`;
+  if (await tx.orgMembership.findFirst({ where: { userId: params.userId, role: 'TEACHER' }, select: { id: true } })) return invalid();
+  const target = await tx.class.findFirst({ where: { id: params.classId, isArchived: false, code: { equals: params.code.trim(), mode: 'insensitive' } }, select: { school: { select: { organizationId: true } } } });
+  if (!target) return invalid();
+  const organizationId = target.school.organizationId;
+  const classes = await resolveStudentClassCode(tx, organizationId, params.code);
+  if (!classes.some(k => k.id === params.classId)) return invalid();
+  const existing = await tx.orgMembership.findUnique({ where: { userId_organizationId: { userId: params.userId, organizationId } } });
+  if (existing && (!existing.isActive || existing.role !== 'STUDENT' || existing.isOrgOwner)) return invalid();
+  const seat = await assertFreeClassSeatAvailableInTx(tx, { classId: params.classId, organizationId });
+  if (!seat.ok) return { ok: false, code: seat.code === 'class_full' ? 'class_full' : 'invalid_code', error: seat.error };
+  if (seat.plan === 'FREE_CLASSROOM') await assertFreeTierSpendAllowed(tx);
+  const member = existing || await tx.orgMembership.create({ data: { userId: params.userId, organizationId, role: 'STUDENT', isOrgOwner: false } });
+  const enrolled = await enrollStudentInClassWithSeatCap({ membershipId: member.id, classId: params.classId, organizationId, client: tx });
+  if (!enrolled.ok) throw new EnrollmentDenied({ ok: false, code: enrolled.code === 'class_full' ? 'class_full' : 'invalid_code', error: enrolled.error });
+  return { ok: true, membershipId: member.id };
 }

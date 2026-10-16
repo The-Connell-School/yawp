@@ -1,0 +1,77 @@
+{
+  "comparisons": [
+    {
+      "state": "signon-23-teacher-activation",
+      "width": 1280,
+      "design": "after/signon-23-teacher-activation-1280-design.png",
+      "implementation": "after/signon-23-teacher-activation-1280-impl.png",
+      "comparison": "after/signon-23-teacher-activation-1280-side-by-side.png",
+      "referenceSource": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/shots/di-signon-ui/signon-23-activation-1280-design.png",
+      "evidence": "actual local handlers, disposable database and captured mail",
+      "deviation": "Existing merged activation UI; real local invitation email and organization."
+    },
+    {
+      "state": "teacher-location-selector",
+      "width": 1280,
+      "design": "after/teacher-location-selector-1280-design.png",
+      "implementation": "after/teacher-location-selector-1280-impl.png",
+      "comparison": "after/teacher-location-selector-1280-side-by-side.png",
+      "referenceSource": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/shots/di-signon-ui/signon-15-name-password-1280-design.png",
+      "evidence": "actual local handlers, disposable database and captured mail",
+      "deviation": "Existing legacy location selector retained; nearest name/password artboard shown for reference only."
+    },
+    {
+      "state": "signon-23-teacher-activation",
+      "width": 390,
+      "design": "after/signon-23-teacher-activation-390-design.png",
+      "implementation": "after/signon-23-teacher-activation-390-impl.png",
+      "comparison": "after/signon-23-teacher-activation-390-side-by-side.png",
+      "referenceSource": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/shots/di-signon-ui/signon-23-activation-390-design.png",
+      "evidence": "actual local handlers, disposable database and captured mail",
+      "deviation": "Existing merged activation UI; real local invitation email and organization."
+    },
+    {
+      "state": "teacher-location-selector",
+      "width": 390,
+      "design": "after/teacher-location-selector-390-design.png",
+      "implementation": "after/teacher-location-selector-390-impl.png",
+      "comparison": "after/teacher-location-selector-390-side-by-side.png",
+      "referenceSource": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/shots/di-signon-ui/signon-15-name-password-390-design.png",
+      "evidence": "actual local handlers, disposable database and captured mail",
+      "deviation": "Existing legacy location selector retained; nearest name/password artboard shown for reference only."
+    }
+  ],
+  "flagOff": [
+    {
+      "state": "login",
+      "width": 1280,
+      "changedPixels": "0 (0)"
+    },
+    {
+      "state": "signup",
+      "width": 1280,
+      "changedPixels": "0 (0)"
+    },
+    {
+      "state": "class-link",
+      "width": 1280,
+      "changedPixels": "0 (0)"
+    },
+    {
+      "state": "login",
+      "width": 390,
+      "changedPixels": "0 (0)"
+    },
+    {
+      "state": "signup",
+      "width": 390,
+      "changedPixels": "0 (0)"
+    },
+    {
+      "state": "class-link",
+      "width": 390,
+      "changedPixels": "0 (0)"
+    }
+  ],
+  "before": "before/ contains actual failing desktop submission; retained selector implementation unchanged."
+}

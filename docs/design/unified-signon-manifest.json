@@ -4762,5 +4762,27 @@
     ],
     "backendDependency": "unchanged; existing mode-aware account transition and sign-in paths, no server operation changes",
     "titleLineHeight": "22px reference text height; regression caught inherited 24px before final spacing correction"
+  },
+  "backend": {
+    "document": "docs/design/unified-signon-backend.md",
+    "decisionRows": "docs/design/unified-signon-backend-decision-rows.json",
+    "evidenceDirectory": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/shots/di-signon-backend",
+    "serverTest": "services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts",
+    "browserTests": [
+      "services/web-app/e2e/tests/auth.unified-backend.spec.ts",
+      "services/web-app/e2e/tests/auth.unified-google-backend.spec.ts",
+      "services/web-app/e2e/tests/auth.unified-compat.spec.ts"
+    ],
+    "rollout": "default off; local isolated test database only",
+    "comparisonCount": 34,
+    "legacyPixelIdenticalPairs": 6,
+    "committedComparisons": "docs/design/evidence/unified-signon-backend/",
+    "validation": {
+      "realDatabaseTests": 32,
+      "serverTestsTotal": 92,
+      "browserChecks": 33,
+      "typecheck": "pass",
+      "migration": "additive; local chain/status/validate pass; 28 unrelated baseline drift statements documented"
+    }
   }
 }

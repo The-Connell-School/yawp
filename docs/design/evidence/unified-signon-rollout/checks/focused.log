@@ -1,0 +1,43 @@
+bun test v1.3.1 (89fa0f34)
+
+services/web-app/app/domain/unified-signon/google.test.ts:
+(pass) Google authorization has state, nonce and S256 PKCE; the server retains their secrets [0.39ms]
+(pass) signed verified Google identity is validated using fixed provider endpoints and verifier [7.18ms]
+(pass) Google rejects {"email_verified":false} [1.65ms]
+(pass) Google rejects {"nonce":"foreign"} [1.43ms]
+(pass) Google rejects {"email":"bad-email"} [1.35ms]
+(pass) Google rejects {"azp":"foreign-client"} [1.31ms]
+(pass) Google rejects {"aud":"foreign-client"} [1.11ms]
+(pass) Google rejects {"aud":["local-client","foreign-client"]} [1.57ms]
+(pass) Google rejects {"iss":"https://evil.example"} [1.35ms]
+(pass) Google rejects {"exp":0} [4.52ms]
+(pass) Google rejects {"iat":0} [1.28ms]
+(pass) provider failure never authenticates [0.90ms]
+(pass) missing or partial configuration disables Google [0.10ms]
+
+services/web-app/app/domain/unified-signon/policy.test.ts:
+(pass) canonical identifiers accept the display prefix and preserve class collisions [0.30ms]
+(pass) routing precedence is password, inactive, trial, picker, safe destination [0.08ms]
+(pass) OTP digest is keyed and bound to the entire server challenge context [0.47ms]
+
+services/web-app/app/routes/auth.login/unified-dispatch.test.ts:
+(pass) flag null keeps legacy loader and POST dispatch [1.19ms]
+(pass) flag  keeps legacy loader and POST dispatch [0.03ms]
+(pass) flag garbage keeps legacy loader and POST dispatch [0.05ms]
+(pass) flag false keeps legacy loader and POST dispatch [0.13ms]
+(pass) flag {"mode":"off"} keeps legacy loader and POST dispatch [0.08ms]
+(pass) flag {"mode":"targeted","orgIds":["demo"]} keeps legacy loader and POST dispatch [0.12ms]
+(pass) flag {"mode":true} keeps legacy loader and POST dispatch [0.02ms]
+(pass) flag {"mode":"everyone","orgIds":false} keeps legacy loader and POST dispatch [0.01ms]
+(pass) flag {"mode":"everyone","orgIds":[1]} keeps legacy loader and POST dispatch [0.08ms]
+(pass) flag read failure retains legacy entry [0.07ms]
+(pass) anonymous guard runs before enabled UI dispatch [0.13ms]
+(pass) enabled entry sanitizes redirect and never exposes fixture selectors or Google [0.28ms]
+(pass) signed-in entry retains the legacy destination off and uses app only on [0.27ms]
+(pass) enabled resolver delegates fields to the authoritative backend [0.32ms]
+(pass) enabled password submission delegates unchanged to existing action [0.09ms]
+
+ 31 pass
+ 0 fail
+ 93 expect() calls
+Ran 31 tests across 3 files. [594.00ms]

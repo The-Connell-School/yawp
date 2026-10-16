@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { demoInternalApiKeys } from './demo-internal-api-config.mjs';
 import {
@@ -43,6 +43,8 @@ export function renderPreviewCompose({
   enableTls = process.env.PREVIEW_TLS !== 'false',
   runtime = process.env.PREVIEW_RUNTIME || 'fast',
   dataMode = process.env.PREVIEW_DATA_MODE || 'seed',
+  unifiedSignOn = process.env.PREVIEW_UNIFIED_SIGN_ON ?? 'false',
+  controlDir = process.env.PREVIEW_CONTROL_DIR || dirname(fileURLToPath(import.meta.url)),
   databaseUser = process.env.PREVIEW_DB_USER,
   databasePassword = process.env.PREVIEW_DB_PASSWORD,
   accessSeats = process.env.PREVIEW_ACCESS_SEATS,
@@ -55,6 +57,9 @@ export function renderPreviewCompose({
   internalApiKeys = process.env.DEMO_INTERNAL_API_KEYS,
   customIngressActive = process.env.PREVIEW_CUSTOM_INGRESS_ACTIVE !== 'false',
 } = {}) {
+  if (!['true', 'false'].includes(unifiedSignOn)) {
+    throw new Error('PREVIEW_UNIFIED_SIGN_ON must be true or false');
+  }
   const previewAccessSeats = requirePreviewAccessSeats(accessSeats);
   const previewMasterAccessCode = masterOrgGateEnabled
     ? requirePreviewMasterAccessCode(masterAccessCode)
@@ -205,6 +210,8 @@ ${uaStudentBillingEnvironment}      INTERNAL_COMMAND_TOKEN: ${q(optionalEnv('PRE
   // it those routes 404, which is the right state for every PR preview.
   // Compose expands dollar signs even in quoted YAML. Preserve literal key bytes.
   const webEnvironment = commonEnvironment
+    + `\n      GOOGLE_OAUTH_CLIENT_ID: ${q(optionalEnv('PREVIEW_GOOGLE_OAUTH_CLIENT_ID').replaceAll('$', '$$$$'))}`
+    + `\n      GOOGLE_OAUTH_CLIENT_SECRET: ${q(optionalEnv('PREVIEW_GOOGLE_OAUTH_CLIENT_SECRET').replaceAll('$', '$$$$'))}`
     + (previewManagementServiceKey
       ? `\n      YAWP_MANAGEMENT_SERVICE_KEY: ${q(previewManagementServiceKey)}` : '')
     + (demoKeys
@@ -213,6 +220,12 @@ ${uaStudentBillingEnvironment}      INTERNAL_COMMAND_TOKEN: ${q(optionalEnv('PRE
       - ${q(`${env.sourceDir}:/app`)}
       - ${env.composeProject}-node-modules:/app/node_modules
       - ${env.composeProject}-web-node-modules:/app/services/web-app/node_modules`;
+  // Mount reviewed default-branch tooling even when the PR source predates it.
+  // This also avoids baking control-plane updates into PR-owned Dockerfiles.
+  const toolboxControlVolume = env.prNumber
+    ? `      - ${q(`${controlDir}:/preview-control:ro`)}` : '';
+  const toolboxFlagEnvironment = env.prNumber
+    ? `      PREVIEW_UNIFIED_SIGN_ON: ${q(unifiedSignOn)}` : '';
   const toolboxService =
     env.runtime === 'fast'
       ? `  toolbox:
@@ -220,8 +233,10 @@ ${uaStudentBillingEnvironment}      INTERNAL_COMMAND_TOKEN: ${q(optionalEnv('PRE
     image: oven/bun:1.3.1
     working_dir: /app
 ${fastVolumes}
+${toolboxControlVolume}
     environment:
 ${commonEnvironment}
+${toolboxFlagEnvironment}
     networks:
       - preview
 `
@@ -233,8 +248,11 @@ ${commonEnvironment}
       target: deps
       args:
         DATABASE_URL: ${q(env.databaseUrl)}
+${toolboxControlVolume ? `    volumes:
+${toolboxControlVolume}` : ''}
     environment:
 ${commonEnvironment}
+${toolboxFlagEnvironment}
     networks:
       - preview
 `;

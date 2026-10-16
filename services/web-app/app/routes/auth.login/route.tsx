@@ -33,3 +33,7 @@ export const meta: MetaFunction = () => [{ title: 'Login to Yawp!' }];
 export function ErrorBoundary() {
   return <GeneralErrorBoundary />;
 }
+
+export function headers() {
+  return { 'Cache-Control': 'private, no-store' };
+}

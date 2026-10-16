@@ -5,7 +5,10 @@ const loginAction = mock(async (_args: unknown) => new Response('legacy'));
 const findUnique = mock(
   async (_args: unknown): Promise<{ value: string } | null> => null
 );
-mock.module('~/utils/auth.server', () => ({ requireAnonymous }));
+mock.module('~/utils/auth.server', () => ({
+  requireAnonymous,
+  requireMutableRequest: async () => {},
+}));
 mock.module('./login.server', () => ({ loginAction }));
 mock.module('~/utils/db.server', () => ({
   prisma: { setting: { findUnique } },
@@ -16,6 +19,12 @@ mock.module('~/components/error-boundary', () => ({
 }));
 mock.module('~/components/unified-signon/unified-login', () => ({
   UnifiedLogin: () => null,
+}));
+const unifiedAction = mock(async (_request: Request, _values: unknown) =>
+  Response.json({ state: { screen: 'account-type', flowToken: 'server-flow' } })
+);
+mock.module('~/domain/unified-signon/backend.server', () => ({
+  unifiedAction,
 }));
 const { loader, action } = await import('./route');
 
@@ -117,7 +126,7 @@ test('signed-in entry retains the legacy destination off and uses app only on', 
   }
 });
 
-test('enabled resolver is an explicit unavailable contract without authentication', async () => {
+test('enabled resolver delegates fields to the authoritative backend', async () => {
   findUnique.mockResolvedValue({ value: 'true' });
   const result = await action(
     args(
@@ -130,7 +139,17 @@ test('enabled resolver is an explicit unavailable contract without authenticatio
       })
     )
   );
-  expect(result).toMatchObject({ status: 503 });
+  expect(result).toMatchObject({ status: 200 });
+  expect(await (result as Response).json()).toEqual({
+    state: { screen: 'account-type', flowToken: 'server-flow' },
+  });
+  expect(unifiedAction).toHaveBeenCalledWith(
+    expect.any(Request),
+    expect.objectContaining({
+      intent: 'resolve',
+      identifier: 'maya@example.com',
+    })
+  );
   expect(loginAction).not.toHaveBeenCalled();
   expect((result as Response).headers.has('set-cookie')).toBe(false);
 });
