@@ -1,13 +1,27 @@
 import { expect, test } from 'bun:test';
-import { studentHandleBase, handleCandidate, HANDLE_ATTEMPTS } from './student-handle';
+import {
+  studentHandleBase,
+  handleCandidate,
+  HANDLE_ATTEMPTS,
+} from './student-handle';
 
 test('handles preserve name casing, fold accents and remove supported separators', () => {
   expect(studentHandleBase(' Brian ', 'Connell')).toBe('BrianConnell');
-  expect(studentHandleBase('Éloïse', "O’Neill-Smith")).toBe('EloiseONeillSmith');
+  expect(studentHandleBase('Éloïse', 'O’Neill-Smith')).toBe(
+    'EloiseONeillSmith'
+  );
   expect(studentHandleBase('李', '明')).toBe('李明');
 });
 test('names reject empty, digits, symbols, unsupported punctuation and overlong inputs', () => {
-  for (const name of ['', ' ', '123', '😀', 'A<script>', 'A'.repeat(81)])
+  for (const name of [
+    '',
+    ' ',
+    '123',
+    '\u0301',
+    '😀',
+    'A<script>',
+    'A'.repeat(81),
+  ])
     expect(() => studentHandleBase(name, 'Connell')).toThrow();
 });
 test('handles have bounded length and numeric collision suffixes with a finite retry budget', () => {

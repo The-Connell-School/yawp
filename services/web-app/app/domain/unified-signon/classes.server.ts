@@ -87,13 +87,6 @@ export async function chooseClass(
       classInfo: info,
       variant: 'full',
     });
-  if (flow.data.identifier && info.accountMode === 'email')
-    return stateFor(flow, {
-      screen: flow.data.proof ? 'name-password' : 'activation',
-      identifier: flow.data.identifier,
-      classInfo: info,
-      variant: flow.data.proof === 'google' ? 'google' : undefined,
-    });
   return stateFor(flow, {
     screen: 'class-found',
     classInfo: info,
