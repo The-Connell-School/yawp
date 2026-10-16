@@ -54,6 +54,54 @@ function listTrackedRepoFiles(): string[] {
     .filter(Boolean);
 }
 
+describe('private preview sign-in code deployment contract', () => {
+  test('rendered PR configurations permit private capture; demo and production return 404 with the same secret', async () => {
+    const { renderPreviewCompose } = await import('./preview/render-compose.mjs');
+    const secret = 'fixture-access-secret-32-characters';
+    const options = {
+      prNumber: '565', domain: 'example.test', sourceDir: repoRoot,
+      accessSeats: JSON.stringify([{ code: 'fixture-otter-4193', organizationId: 'local-dev-org', label: 'Master' }]),
+      sessionSecret: 'fixture-session-secret-32-characters', accessSecret: secret,
+      databasePassword: 'fixture-database-password-00010001',
+    };
+    const program = `
+      const { previewCodeCaptureEnabled } = await import('./app/domain/unified-signon/preview-code.server');
+      const { action, loader } = await import('./app/routes/api.preview.qa.signon-code/route');
+      const request = new Request('https://example.test/api/preview/qa/signon-code', {
+        method: 'POST', headers: {'content-type': 'application/json', authorization: 'Bearer ' + process.env.PREVIEW_ACCESS_SECRET},
+        body: JSON.stringify({email: 'fixture@example.invalid'})
+      });
+      process.stdout.write(JSON.stringify({enabled: previewCodeCaptureEnabled(), status: (await action({request})).status, get: (await loader()).status}));
+    `;
+    for (const runtime of ['fast', 'production']) {
+      const preview = (Bun.YAML.parse(renderPreviewCompose({ ...options, runtime })) as any).services.web.environment;
+      const demo = (Bun.YAML.parse(renderPreviewCompose({ ...options, prNumber: undefined, slug: 'demo', runtime })) as any).services.web.environment;
+      for (const [configuration, expected] of [
+        [preview, { enabled: true, status: 404, get: 404 }], // No challenge yet.
+        [demo, { enabled: false, status: 404, get: 404 }], // Shared renderer says preview; isolated DB gate rejects demo.
+        [{ ...preview, YAWP_ENVIRONMENT: 'demo' }, { enabled: false, status: 404, get: 404 }],
+        [{ ...preview, YAWP_ENVIRONMENT: 'production' }, { enabled: false, status: 404, get: 404 }],
+        [{ ...preview, DATABASE_URL: '' }, { enabled: false, status: 404, get: 404 }],
+        [{ ...preview, PREVIEW_ACCESS_SECRET: '' }, { enabled: false, status: 404, get: 404 }],
+      ] as const) {
+        const child = spawnSync(process.execPath, ['-e', program], {
+          cwd: join(repoRoot, 'services/web-app'), encoding: 'utf8', timeout: 10000,
+          env: { ...process.env, ...configuration },
+        });
+        expect(child.status).toBe(0);
+        expect(JSON.parse(child.stdout)).toEqual(expected);
+      }
+      expect(preview.PREVIEW_ACCESS_SECRET === secret).toBe(true);
+      expect(preview.SIGNON_MAIL_CAPTURE_DIR).toBeUndefined();
+    }
+    // No new provider/capture configuration is introduced to deployed targets.
+    const capture = readRepoFile('services/web-app/app/domain/unified-signon/preview-code.server.ts');
+    expect(capture).not.toMatch(/console\.|writeFile|sendEmail/);
+    const mail = readRepoFile('services/web-app/app/domain/unified-signon/mail.server.ts');
+    expect(mail.indexOf('capturePreviewCode(email, code)')).toBeLessThan(mail.indexOf('const db = new URL'));
+  });
+});
+
 describe('optional Google OAuth deployment credentials', () => {
   test('production adoption is default-off, protected, and uses only existing secret ARNs', () => {
     const variables = readRepoFile('infra/variables.tf');
