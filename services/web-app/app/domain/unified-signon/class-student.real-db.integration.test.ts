@@ -594,7 +594,26 @@ for (const budget of ['target', 'ip-handle'] as const)
         `${id}-b:${legacy}`,
       ];
       // Same handle in another class belongs to somebody else and must stay locked.
-      const unrelated = `${id}-unrelated:${handle.toLowerCase()}`;
+      await prisma.user.create({
+        data: {
+          username: `other${budget}${Date.now()}`,
+          memberships: {
+            create: {
+              organizationId: id,
+              role: 'STUDENT',
+              classesAsStudent: { connect: { id: id + '-b' } },
+            },
+          },
+          classStudentHandles: {
+            create: {
+              classId: id + '-b',
+              handle,
+              handleKey: handle.toLowerCase(),
+            },
+          },
+        },
+      });
+      const unrelated = `${id}-b:${handle.toLowerCase()}`;
       const locked = [...targets, unrelated];
       const cfg = RATE_LIMITS.unauth.login;
       for (const targetKey of locked) {
@@ -605,7 +624,10 @@ for (const budget of ['target', 'ip-handle'] as const)
         for (let attempt = 0; attempt < count; attempt++) {
           const decision = await consumeLoginAttemptRateLimits({
             request: new Request('http://localhost/auth/login', {
-              headers: { 'x-forwarded-for': ip },
+              headers: {
+                'x-forwarded-for':
+                  budget === 'target' ? `198.18.21.${attempt + 10}` : ip,
+              },
             }),
             route: '/auth/login',
             targetKey,
@@ -665,7 +687,7 @@ for (const budget of ['target', 'ip-handle'] as const)
       });
       expect(result.response.status).toBe(302);
       expect(result.response.headers.get('location')).toContain(
-        '/auth/change-password'
+        '/auth/required-password-change'
       );
       expect(
         (await prisma.user.findUniqueOrThrow({ where: { id: alias.userId } }))

@@ -22,7 +22,9 @@ mock.module('~/utils/auth.server', () => ({
   getPasswordHash: async () => 'hash',
   getSessionExpirationDateForUser: () => new Date('2030-01-01'),
 }));
-const clearFailedLoginRateLimitsForTarget = mock(async () => undefined);
+const clearFailedLoginRateLimitsForTarget = mock(
+  async (_params: { route: string; targetKey: string }) => undefined
+);
 mock.module('~/utils/rate-limit.server', () => ({
   clearFailedLoginRateLimitsForTarget,
 }));

@@ -12,6 +12,7 @@ import {
   refundLoginAttemptRateLimits,
 } from '~/utils/rate-limit.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
+import { classStudentLoginRateLimitTarget } from '~/utils/login-rate-limit-target';
 import { assertFreeClassSeatAvailableInTx } from '~/domain/free-tier/class-seat-cap.server';
 import { assertFreeTierSpendAllowed } from '~/domain/free-tier/usage-budget.server';
 import { classSummary, selectedClass } from './classes.server';
@@ -250,7 +251,10 @@ export async function studentPassword(
   const decision = await consumeLoginAttemptRateLimits({
     request,
     route: '/auth/login',
-    targetKey: `${klass.id}:${key((values.username || '').trim().replace(/^@/, '').slice(0, 100))}`,
+    targetKey: classStudentLoginRateLimitTarget(
+      klass.id,
+      values.username || ''
+    ),
     perIpPerMinute: cfg.perIpPerMinute,
     perIpPerHour: cfg.perIpPerHour,
     perTargetPerHour: cfg.perEmailPerHour,
