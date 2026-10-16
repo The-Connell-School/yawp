@@ -85,4 +85,7 @@ Use `./bin/project test --profile guided-tours-unit --json`,
 The browser profile uses its worktree's Postgres host and app port, a disposable
 `yawp_guided_tours_e2e` database, at most two workers, and no hosted resources.
 Set `GUIDED_TOURS_SHOTS` to save welcome, spotlight, replay, restart, mobile,
-and flag-off evidence. Stop all owned processes and remove test resources after QA.
+and flag-off evidence. Desktop and mobile onboarding regressions also verify
+that the class-preparation and administrator steps suppress tours until approval;
+approval is a local fixture transition and sends no email. Stop all owned
+processes and remove test resources after QA.
