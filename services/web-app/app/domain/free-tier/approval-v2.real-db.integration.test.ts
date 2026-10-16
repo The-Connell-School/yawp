@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 const send = mock(
   async (_: any): Promise<any> => ({
     status: 'success',
@@ -18,15 +19,16 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
   let db: typeof import('~/utils/db.server').prisma;
   let api: typeof import('./approval-v2.server');
   const ids: string[] = [];
+  const organizationId = `approval-suite-${crypto.randomUUID()}`;
   const now = new Date('2026-10-14T15:02:00Z');
-  async function flag(mode = 'everyone') {
+  async function flag(mode = 'targeted', orgIds = [organizationId]) {
     await db.setting.upsert({
       where: { name: 'feature_flag.free-tier-onboarding-v2' },
       create: {
         name: 'feature_flag.free-tier-onboarding-v2',
-        value: JSON.stringify({ mode, orgIds: [] }),
+        value: JSON.stringify({ mode, orgIds }),
       },
-      update: { value: JSON.stringify({ mode, orgIds: [] }) },
+      update: { value: JSON.stringify({ mode, orgIds }) },
     });
   }
   async function fixture() {
@@ -38,6 +40,7 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
         location: 'Local',
         gradeLevel: '11',
         userId: 'approval-test-user',
+        organizationId,
         status: 'SENT',
       },
     });
@@ -201,7 +204,7 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
     await flag('off');
     await api.runApprovalJobs(new Date(+now + api.WEEK_MS));
     expect(send).toHaveBeenCalledTimes(0);
-    await flag('targeted');
+    await flag('targeted', []);
     await api.runApprovalJobs(new Date(+now + api.WEEK_MS));
     expect(send).toHaveBeenCalledTimes(0);
     await flag();
@@ -437,6 +440,7 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
       location: 'Local',
       gradeLevel: '11',
       userId: 'approval-test-user',
+      organizationId,
       status: 'MANUAL_REVIEW' as const,
     }));
     await db.freeTierApplication.createMany({ data: paused });
@@ -555,11 +559,21 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
       ).status
     ).toBe('REJECTED');
   });
-  test('existing resend adapter returns actual acceptance and replays without another send',async()=>{
-    const {app}=await fixture();
-    const args={applicationId:app.id,idempotencyKey:'adapter-replay',actorEmail:'staff@example.org',now:new Date(+now+1000)};
-    const first=await api.resendApprovalReminder(args);
-    expect(first).toMatchObject({ok:true,reminderCount:1,toEmail:'patel+approval@example.org',sentAt:args.now});
+  test('existing resend adapter returns actual acceptance and replays without another send', async () => {
+    const { app } = await fixture();
+    const args = {
+      applicationId: app.id,
+      idempotencyKey: 'adapter-replay',
+      actorEmail: 'staff@example.org',
+      now: new Date(+now + 1000),
+    };
+    const first = await api.resendApprovalReminder(args);
+    expect(first).toMatchObject({
+      ok: true,
+      reminderCount: 1,
+      toEmail: 'patel+approval@example.org',
+      sentAt: args.now,
+    });
     expect(await api.resendApprovalReminder(args)).toEqual(first);
     expect(send).toHaveBeenCalledTimes(1);
   });
@@ -567,35 +581,64 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
   test('re-enabling reconciles legacy sends with delivery logs once and enforces the shared cap', async () => {
     const { app, approval } = await fixture();
     for (let i = 1; i <= 3; i++) {
-      expect((await api.resendApprovalReminder({
-        applicationId: app.id,
-        idempotencyKey: `before-pause-${i}`,
-        now: new Date(+now + i * 660000),
-      })).ok).toBe(true);
+      expect(
+        (
+          await api.resendApprovalReminder({
+            applicationId: app.id,
+            idempotencyKey: `before-pause-${i}`,
+            now: new Date(+now + i * 660000),
+          })
+        ).ok
+      ).toBe(true);
     }
     await flag('off');
-    const { resendFreeTierAdminApprovalReminder } = await import('./approval-flow.server');
-    expect((await resendFreeTierAdminApprovalReminder({
-      applicationId: app.id,
-      request: new Request('http://localhost/test'),
-    })).ok).toBe(true);
+    const { resendFreeTierAdminApprovalReminder } =
+      await import('./approval-flow.server');
+    expect(
+      (
+        await resendFreeTierAdminApprovalReminder({
+          applicationId: app.id,
+          request: new Request('http://localhost/test'),
+        })
+      ).ok
+    ).toBe(true);
     const legacy = await db.freeTierEmailLog.findFirstOrThrow({
-      where: { applicationId: app.id, kind: 'admin_approval_reminder', success: true },
+      where: {
+        applicationId: app.id,
+        kind: 'admin_approval_reminder',
+        success: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
     const lastSentAt = new Date(+now + 4 * 660000);
-    await db.freeTierEmailLog.update({ where: { id: legacy.id }, data: { createdAt: lastSentAt } });
+    await db.freeTierEmailLog.update({
+      where: { id: legacy.id },
+      data: { createdAt: lastSentAt },
+    });
     expect(send).toHaveBeenCalledTimes(4);
     await flag();
-    expect(await api.queueManualApprovalReminder({
-      applicationId: app.id, idempotencyKey: 'after-pause', now: new Date(+lastSentAt + 660000),
-    })).toEqual({ ok: false, reason: 'not_allowed' });
+    await api.runApprovalJobs(new Date(+now + api.WEEK_MS));
+    expect(
+      await api.queueManualApprovalReminder({
+        applicationId: app.id,
+        idempotencyKey: 'after-pause',
+        now: new Date(+lastSentAt + 660000),
+      })
+    ).toEqual({ ok: false, reason: 'not_allowed' });
     // Repeated scheduling must not count the three delivery-backed logs twice.
     await api.runApprovalJobs(new Date(+now + api.WEEK_MS));
     await api.runApprovalJobs(new Date(+now + api.WEEK_MS));
-    expect(await db.freeTierAdminApproval.findUniqueOrThrow({ where: { id: approval.id } })).toMatchObject({
-      reminderCount: 4, lastReminderAt: lastSentAt, lastReminderSource: 'manual',
-      autoRemindersStopped: true, stopReason: 'max_reached', needsManualFollowUp: true,
+    expect(
+      await db.freeTierAdminApproval.findUniqueOrThrow({
+        where: { id: approval.id },
+      })
+    ).toMatchObject({
+      reminderCount: 4,
+      lastReminderAt: lastSentAt,
+      lastReminderSource: 'manual',
+      autoRemindersStopped: true,
+      stopReason: 'max_reached',
+      needsManualFollowUp: true,
       nextAutoReminderAt: null,
     });
     expect(send).toHaveBeenCalledTimes(5); // Only the teacher follow-up is additional.
@@ -603,36 +646,188 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
 
   test('legacy accepted-send time enforces the manual cooldown before and at ten minutes', async () => {
     const { app, approval } = await fixture();
-    await db.freeTierAdminApproval.update({ where: { id: approval.id }, data: { firstSentAt: null } });
-    await db.freeTierEmailLog.createMany({ data: [
-      { applicationId: app.id, kind: 'admin_approval', toEmail: approval.adminEmail, success: true, createdAt: now },
-      { applicationId: app.id, kind: 'admin_approval_reminder', toEmail: approval.adminEmail, success: true, createdAt: new Date(+now + 1000) },
-      // Failed attempts must not change the accepted-send cooldown or count.
-      { applicationId: app.id, kind: 'admin_approval_reminder', toEmail: approval.adminEmail, success: false, createdAt: new Date(+now + 599999) },
-    ] });
+    await db.freeTierAdminApproval.update({
+      where: { id: approval.id },
+      data: { firstSentAt: null },
+    });
+    await db.freeTierEmailLog.createMany({
+      data: [
+        {
+          applicationId: app.id,
+          kind: 'admin_approval',
+          toEmail: approval.adminEmail,
+          success: true,
+          createdAt: now,
+        },
+        {
+          applicationId: app.id,
+          kind: 'admin_approval_reminder',
+          toEmail: approval.adminEmail,
+          success: true,
+          createdAt: new Date(+now + 1000),
+        },
+        // Failed attempts must not change the accepted-send cooldown or count.
+        {
+          applicationId: app.id,
+          kind: 'admin_approval_reminder',
+          toEmail: approval.adminEmail,
+          success: false,
+          createdAt: new Date(+now + 599999),
+        },
+      ],
+    });
     for (const elapsed of [60000, 599999]) {
-      expect(await api.queueManualApprovalReminder({
-        applicationId: app.id, idempotencyKey: `too-soon-${elapsed}`, now: new Date(+now + 1000 + elapsed),
-      })).toEqual({ ok: false, reason: 'rate_limited' });
+      expect(
+        await api.queueManualApprovalReminder({
+          applicationId: app.id,
+          idempotencyKey: `too-soon-${elapsed}`,
+          now: new Date(+now + 1000 + elapsed),
+        })
+      ).toEqual({ ok: false, reason: 'rate_limited' });
     }
     const result = await api.resendApprovalReminder({
-      applicationId: app.id, idempotencyKey: 'at-boundary', now: new Date(+now + 601000),
+      applicationId: app.id,
+      idempotencyKey: 'at-boundary',
+      now: new Date(+now + 601000),
     });
-    expect(result).toMatchObject({ ok: true, reminderCount: 2, sentAt: new Date(+now + 601000) });
+    expect(result).toMatchObject({
+      ok: true,
+      reminderCount: 2,
+      sentAt: new Date(+now + 601000),
+    });
     expect(send).toHaveBeenCalledTimes(1);
   });
 
   test('idempotent replay preserves acceptance count and cadence after later manual and automatic sends', async () => {
     const { app } = await fixture();
-    const args = { applicationId: app.id, idempotencyKey: 'immutable-A', now: new Date(+now + 1000) };
+    const args = {
+      applicationId: app.id,
+      idempotencyKey: 'immutable-A',
+      now: new Date(+now + 1000),
+    };
     const first = await api.resendApprovalReminder(args);
-    expect(first).toMatchObject({ ok: true, reminderCount: 1, nextAutoReminderAt: new Date(+now + api.WEEK_MS) });
-    expect((await api.resendApprovalReminder({ ...args, idempotencyKey: 'immutable-B', now: new Date(+now + 661000) })).ok).toBe(true);
+    expect(first).toMatchObject({
+      ok: true,
+      reminderCount: 1,
+      nextAutoReminderAt: new Date(+now + api.WEEK_MS),
+    });
+    expect(
+      (
+        await api.resendApprovalReminder({
+          ...args,
+          idempotencyKey: 'immutable-B',
+          now: new Date(+now + 661000),
+        })
+      ).ok
+    ).toBe(true);
     expect(await api.resendApprovalReminder(args)).toEqual(first);
     await api.runApprovalJobs(new Date(+now + api.WEEK_MS));
     expect(await api.resendApprovalReminder(args)).toEqual(first);
-    expect(await api.queueManualApprovalReminder(args)).toMatchObject({ ok: true, queued: false, reminderCount: 1, nextAutoReminderAt: new Date(+now + api.WEEK_MS) });
+    expect(await api.queueManualApprovalReminder(args)).toMatchObject({
+      ok: true,
+      queued: false,
+      reminderCount: 1,
+      nextAutoReminderAt: new Date(+now + api.WEEK_MS),
+    });
     expect(send).toHaveBeenCalledTimes(4); // Three admin sends and one teacher follow-up.
   });
 
+  test('a queued delivery resumes after the recovered legacy cooldown with its actual acceptance count', async () => {
+    const { app, approval } = await fixture();
+    const args = {
+      applicationId: app.id,
+      idempotencyKey: 'queued-before-pause',
+      now,
+    };
+    expect((await api.queueManualApprovalReminder(args)).ok).toBe(true);
+    await flag('off');
+    const { resendFreeTierAdminApprovalReminder } =
+      await import('./approval-flow.server');
+    expect(
+      (
+        await resendFreeTierAdminApprovalReminder({
+          applicationId: app.id,
+          request: new Request('http://localhost/test'),
+        })
+      ).ok
+    ).toBe(true);
+    await db.freeTierEmailLog.updateMany({
+      where: {
+        applicationId: app.id,
+        success: true,
+        kind: 'admin_approval_reminder',
+      },
+      data: { createdAt: new Date(+now + 1000) },
+    });
+    await flag();
+    await api.runApprovalJobs(new Date(+now + 61000));
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(
+      await db.freeTierApprovalDelivery.findFirstOrThrow({
+        where: { approvalId: approval.id },
+      })
+    ).toMatchObject({ state: 'QUEUED' });
+    const accepted = await api.resendApprovalReminder({
+      ...args,
+      now: new Date(+now + 601000),
+    });
+    expect(accepted).toMatchObject({
+      ok: true,
+      reminderCount: 2,
+      sentAt: new Date(+now + 601000),
+    });
+    await api.runApprovalJobs(new Date(+now + api.WEEK_MS));
+    expect(await api.resendApprovalReminder(args)).toEqual(accepted);
+    expect(send).toHaveBeenCalledTimes(4);
+  });
+
+  test('acceptance migration backfills older manual and automatic results without mutable approval metadata', async () => {
+    const { app, approval } = await fixture();
+    const a = {
+      applicationId: app.id,
+      idempotencyKey: 'backfill-A',
+      now: new Date(+now + 1000),
+    };
+    const original = await api.resendApprovalReminder(a);
+    await api.runApprovalJobs(new Date(+now + api.WEEK_MS));
+    const b = {
+      ...a,
+      idempotencyKey: 'backfill-B',
+      now: new Date(+now + api.WEEK_MS + 660000),
+    };
+    const second = await api.resendApprovalReminder(b);
+    const c = {
+      ...a,
+      idempotencyKey: 'backfill-C',
+      now: new Date(+now + api.WEEK_MS + 1320000),
+    };
+    const fourth = await api.resendApprovalReminder(c);
+    expect(fourth).toMatchObject({
+      ok: true,
+      reminderCount: 4,
+      nextAutoReminderAt: null,
+    });
+    await db.freeTierApprovalDelivery.updateMany({
+      where: { approvalId: approval.id },
+      data: { acceptedReminderCount: null, acceptedNextAutoReminderAt: null },
+    });
+    const migration = readFileSync(
+      new URL(
+        '../../../../../packages/prisma/migrations/20261016221500_approval_delivery_acceptance/migration.sql',
+        import.meta.url
+      ),
+      'utf8'
+    );
+    // Scope the real backfill statement to this fixture in the shared local DB.
+    await db.$executeRawUnsafe(
+      migration
+        .slice(migration.indexOf('UPDATE "FreeTierApprovalDelivery"'))
+        .replace(/;\s*$/, ' AND approval."applicationId" = $1;'),
+      app.id
+    );
+    expect(await api.resendApprovalReminder(a)).toEqual(original);
+    expect(await api.resendApprovalReminder(b)).toEqual(second);
+    expect(await api.resendApprovalReminder(c)).toEqual(fourth);
+    expect(send).toHaveBeenCalledTimes(5);
+  });
 });

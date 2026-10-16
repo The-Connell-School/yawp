@@ -183,24 +183,27 @@ async function queue(
   });
 }
 
-/** Enroll from actual successful original email logs, never from row creation time. */
+/** Recover successful legacy sends on every check, including after rollout pauses.
+ * A delivery and its email log represent one acceptance, never two reminders. */
 async function enroll(
   tx: Tx,
   app: FreeTierApplication,
   approval: FreeTierAdminApproval
 ) {
-  if (approval.firstSentAt) return approval;
-  const log = await tx.freeTierEmailLog.findFirst({
-    where: {
-      applicationId: app.id,
-      kind: 'admin_approval',
-      toEmail: approval.adminEmail,
-      success: true,
-      createdAt: { gte: approval.createdAt },
-    },
-    orderBy: { createdAt: 'asc' },
-  });
-  if (!log) return approval;
+  const log = approval.firstSentAt
+    ? null
+    : await tx.freeTierEmailLog.findFirst({
+        where: {
+          applicationId: app.id,
+          kind: 'admin_approval',
+          toEmail: approval.adminEmail,
+          success: true,
+          createdAt: { gte: approval.createdAt },
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+  const firstSentAt = approval.firstSentAt ?? log?.createdAt;
+  if (!firstSentAt) return approval;
   const reminders = await tx.freeTierEmailLog.findMany({
     where: {
       applicationId: app.id,
@@ -211,20 +214,66 @@ async function enroll(
     },
     orderBy: { createdAt: 'desc' },
   });
-  const last = reminders[0];
-  const stopped = reminders.length >= MAX_REMINDERS;
+  const deliveries = await tx.freeTierApprovalDelivery.findMany({
+    where: { approvalId: approval.id, kind: 'admin_reminder', state: 'SENT' },
+    select: { id: true, sentAt: true, source: true },
+  });
+  const accepted = new Map(
+    deliveries
+      .filter((d) => d.sentAt)
+      .map((d) => [d.id, { at: d.sentAt!, source: d.source ?? 'manual' }])
+  );
+  for (const reminder of reminders) {
+    const payload = reminder.payload;
+    const deliveryId =
+      payload &&
+      typeof payload === 'object' &&
+      !Array.isArray(payload) &&
+      typeof payload.deliveryId === 'string'
+        ? payload.deliveryId
+        : null;
+    const source =
+      payload &&
+      typeof payload === 'object' &&
+      !Array.isArray(payload) &&
+      payload.source === 'auto'
+        ? 'auto'
+        : 'manual';
+    const key = deliveryId ?? `log:${reminder.id}`;
+    if (!accepted.has(key))
+      accepted.set(key, { at: reminder.createdAt, source });
+  }
+  const last = [...accepted.values()].sort((a, b) => +b.at - +a.at)[0];
+  const count = Math.max(approval.reminderCount, accepted.size);
+  const stopped = count >= MAX_REMINDERS;
+  const recoveredLast =
+    last && (!approval.lastReminderAt || +last.at > +approval.lastReminderAt);
+  const enrolling = !approval.firstSentAt;
+  if (!enrolling && count === approval.reminderCount && !recoveredLast)
+    return approval;
   return tx.freeTierAdminApproval.update({
     where: { id: approval.id },
     data: {
-      firstSentAt: log.createdAt,
-      reminderCount: reminders.length,
-      lastReminderAt: last?.createdAt ?? null,
-      lastReminderSource: last ? 'manual' : null,
-      autoRemindersStopped: stopped,
-      stopReason: stopped ? 'max_reached' : null,
-      needsManualFollowUp: stopped,
-      nextAutoReminderAt: stopped ? null : new Date(+log.createdAt + WEEK_MS),
-      nextTeacherFollowUpAt: new Date(+log.createdAt + WEEK_MS),
+      firstSentAt,
+      reminderCount: count,
+      ...(recoveredLast
+        ? { lastReminderAt: last.at, lastReminderSource: last.source }
+        : {}),
+      ...(enrolling
+        ? {
+            nextAutoReminderAt: new Date(+firstSentAt + WEEK_MS),
+            nextTeacherFollowUpAt: new Date(+firstSentAt + WEEK_MS),
+          }
+        : {}),
+      ...(stopped
+        ? {
+            autoRemindersStopped: true,
+            stopReason:
+              approval.stopReason === 'manual' ? 'manual' : 'max_reached',
+            needsManualFollowUp: true,
+            nextAutoReminderAt: null,
+          }
+        : {}),
     },
   });
 }
@@ -434,8 +483,14 @@ export async function queueManualApprovalReminder(args: {
             ok: true as const,
             queued: replay.state !== 'SENT',
             deliveryId: replay.id,
-            reminderCount: approval.reminderCount,
-            nextAutoReminderAt: approval.nextAutoReminderAt,
+            reminderCount:
+              replay.state === 'SENT'
+                ? replay.acceptedReminderCount!
+                : approval.reminderCount,
+            nextAutoReminderAt:
+              replay.state === 'SENT'
+                ? replay.acceptedNextAutoReminderAt
+                : approval.nextAutoReminderAt,
           }
         : fail('invalid');
     if (
@@ -449,10 +504,11 @@ export async function queueManualApprovalReminder(args: {
       orderBy: { createdAt: 'desc' },
     });
     if (
-      previous &&
-      (previous.state === 'QUEUED' ||
-        previous.state === 'DELIVERING' ||
-        +now - +(previous.sentAt ?? previous.createdAt) < 600000)
+      (approval.lastReminderAt && +now - +approval.lastReminderAt < 600000) ||
+      (previous &&
+        (previous.state === 'QUEUED' ||
+          previous.state === 'DELIVERING' ||
+          +now - +(previous.sentAt ?? previous.createdAt) < 600000))
     )
       return fail('rate_limited');
     const message = await adminMessage(tx, app, approval, true);
@@ -502,9 +558,9 @@ export async function resendApprovalReminder(args: {
   return {
     ok: true as const,
     sentAt: delivery.sentAt,
-    reminderCount: delivery.approval.reminderCount,
+    reminderCount: delivery.acceptedReminderCount!,
     toEmail: delivery.approval.adminEmail,
-    nextAutoReminderAt: delivery.approval.nextAutoReminderAt,
+    nextAutoReminderAt: delivery.acceptedNextAutoReminderAt,
   };
 }
 
@@ -591,7 +647,8 @@ async function allowedToDeliver(
   tx: Tx,
   job: { kind: string },
   approval: FreeTierAdminApproval,
-  app: FreeTierApplication
+  app: FreeTierApplication,
+  now: Date
 ) {
   if (!(await isApprovalV2Enabled(app, tx)) || approval.status !== 'PENDING')
     return false;
@@ -607,7 +664,9 @@ async function allowedToDeliver(
     app.status === 'SENT' &&
     (job.kind !== 'admin_reminder' ||
       (!approval.autoRemindersStopped &&
-        approval.reminderCount < MAX_REMINDERS))
+        approval.reminderCount < MAX_REMINDERS &&
+        (!approval.lastReminderAt ||
+          +now - +approval.lastReminderAt >= 600000)))
   );
 }
 async function deliverJob(id: string, now: Date) {
@@ -623,8 +682,17 @@ async function deliverJob(id: string, now: Date) {
       include: { approval: { include: { application: true } } },
     });
     if (job.state !== 'QUEUED' || +job.availableAt > +now) return false;
+    if (!(await isApprovalV2Enabled(job.approval.application, tx)))
+      return false;
+    const approval = await enroll(tx, job.approval.application, job.approval);
     if (
-      !(await allowedToDeliver(tx, job, job.approval, job.approval.application))
+      !(await allowedToDeliver(
+        tx,
+        job,
+        approval,
+        job.approval.application,
+        now
+      ))
     ) {
       // The job query already excludes paused rollout targets. Terminal and
       // replaced approvals cannot remain at the front of the delivery queue.
@@ -705,10 +773,12 @@ async function deliverJob(id: string, now: Date) {
         where: { id },
         include: { approval: { include: { application: true } } },
       });
-      const approval = job.approval,
-        app = approval.application;
+      const app = job.approval.application;
       if (job.state !== 'DELIVERING') return;
-      if (!(await allowedToDeliver(tx, job, approval, app))) {
+      const approval = (await isApprovalV2Enabled(app, tx))
+        ? await enroll(tx, app, job.approval)
+        : job.approval;
+      if (!(await allowedToDeliver(tx, job, approval, app, now))) {
         await tx.freeTierApprovalDelivery.update({
           where: { id },
           data: { state: 'CANCELLED', error: 'not_eligible' },
@@ -840,6 +910,13 @@ async function deliverJob(id: string, now: Date) {
             : new Date(
                 anchor + (Math.floor((+now - anchor) / WEEK_MS) + 1) * WEEK_MS
               );
+        await tx.freeTierApprovalDelivery.update({
+          where: { id },
+          data: {
+            acceptedReminderCount: count,
+            acceptedNextAutoReminderAt: count >= MAX_REMINDERS ? null : next,
+          },
+        });
         await tx.freeTierAdminApproval.update({
           where: { id: approval.id },
           data: {

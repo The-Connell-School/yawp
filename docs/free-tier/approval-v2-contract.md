@@ -15,7 +15,12 @@ new nullable `firstSentAt`, `lastReminderAt`, `lastReminderSource`,
 `firstSentAt` means the first provider-accepted original approval message to that
 administrator, never row creation or a failed attempt. Enrollment recovers actual
 first-send time and successful prior reminders from that administrator's email
-logs since the approval row's creation. Existing rows remain readable with the
+logs since the approval row's creation. Every scheduling, manual acceptance and
+dispatch check reconciles successful legacy reminders, including sends while
+the rollout was paused. A delivery and its matching log (payload `deliveryId`)
+count once; failed logs never count. Recovery preserves the weekly slot and any
+manual stop, updates the last accepted send/source, and stops administrator
+reminders at the shared cap. Existing rows remain readable with the
 flag off. Flags only gate behavior and the new teacher/admin UI.
 
 History follows `redirectedFromId`, oldest first. The replacement row records
@@ -45,11 +50,20 @@ nextAutoReminderAt. Legacy callers need only inspect `ok`. I1 owns its audit
 record and HTTP status mapping. V2 failures are flag_off, not_allowed,
 already_decided, rate_limited, invalid, or email_failed. Failed delivery never
 increments counts. Replaying the same key returns the original acceptance
-without sending again; keys are scoped to one current administrator.
+without sending again; keys are scoped to one current administrator. The
+delivery stores immutable `acceptedReminderCount` and
+`acceptedNextAutoReminderAt` with `sentAt` in the acceptance transaction. Later
+manual/automatic sends and reconciliation do not change that response. The
+additive acceptance migration backfills earlier accepted delivery slots from
+their sequence and preceding automatic cadence, without using today's mutable
+approval counter.
 
 Manual and automatic successful reminders share `reminderCount`, capped at four
 per administrator after the original send. Manual requests have a ten-minute
-cooldown and cannot bypass the cap. A pending manual delivery excludes another
+cooldown against both the last accepted send (including recovered legacy sends)
+and outstanding deliveries, and cannot bypass the cap. Exactly ten minutes is
+eligible. Dispatch also checks the accepted-send cooldown after a rollout pause.
+A pending manual delivery excludes another
 manual or automatic delivery for that same counter slot. Manual delivery does
 not move the next weekly slot; all admin reminders have at least ten minutes
 between accepted sends. Automatic delivery uses the original weekly anchor and

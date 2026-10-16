@@ -133,6 +133,9 @@ model FreeTierApprovalDelivery {
   availableAt   DateTime @db.Timestamptz(6)
   attemptedAt   DateTime? @db.Timestamptz(6)
   sentAt        DateTime? @db.Timestamptz(6)
+  // Immutable acceptance result for I1 idempotency replays.
+  acceptedReminderCount Int?
+  acceptedNextAutoReminderAt DateTime? @db.Timestamptz(6)
   attempts      Int @default(0)
   payload       String
   error         String?
