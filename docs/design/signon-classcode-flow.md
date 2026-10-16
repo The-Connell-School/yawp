@@ -114,3 +114,14 @@ The same class-student database file, login-target tests and student-join unit
 tests now run in the required Prisma migrations CI job. `/join` calls the
 existing mutable-request guard before its anonymous check; the route-contract
 allowlist and the impersonation coverage guard retain their original rules.
+
+The required CI job reached two older fixture expectations after the initial
+review fixes: class-code/handle ambiguity and manual-handle race registration.
+Those tests now assert class-code precedence, Returning authentication of the
+existing legacy handle, explicit New selection, generated-handle confirmation
+and continuation, and rollback for a stale last-seat registration. Fixture data
+and preview access policy are unchanged. The local
+`unified-signon-preview-fixtures` profile passes all 95 checks (31 guards,
+43 dispatch, 9 fixture database and 12 seat-policy database cases) against a
+disposable loopback database with its own fixture-only database role. The
+43 dispatch checks overlap the class-code profile. No hosted preview is used.
