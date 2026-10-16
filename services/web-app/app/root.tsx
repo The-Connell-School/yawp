@@ -1,4 +1,7 @@
 import { TesterFeedbackWidget } from './components/tester-feedback-widget';
+import { DemoFeedbackWidget } from './components/demo-feedback-widget';
+import { sanitizeDemoFeedbackEvent } from './utils/demo-feedback-context';
+import { isDemoFeedbackAvailable } from './utils/demo-feedback-runtime.server';
 import { internalImpersonationMiddleware } from './utils/internal-impersonation-runtime.server';
 import { getImpersonationAttribution } from './utils/internal-impersonation-context.server';
 import {
@@ -109,6 +112,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return data(
       {
         testerFeedbackAvailable: false,
+        demoFeedbackAvailable: false,
         user: null,
         internalImpersonation: null,
         requestInfo: {
@@ -238,6 +242,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         selectedMembership: membership,
       },
       testerFeedbackAvailable: process.env.TESTER_FEEDBACK_ENABLED === 'true' && Boolean(user?.isTester),
+      demoFeedbackAvailable: Boolean(userId) && !internal && await isDemoFeedbackAvailable(),
       lessonPlannerEnabled,
       requestInfo: {
         hints: getHints(request),
@@ -369,6 +374,7 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
   useEffect(() => {
     if (data.ENV.POSTHOG_API_KEY && !data.internalImpersonation) {
       posthog.init(data.ENV.POSTHOG_API_KEY, {
+        before_send: sanitizeDemoFeedbackEvent,
         api_host: data.ENV.POSTHOG_HOST,
         person_profiles: 'identified_only',
         loaded: (posthog) => {
@@ -429,6 +435,7 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
         </div>
       </div>
       {data.testerFeedbackAvailable ? <TesterFeedbackWidget /> : null}
+      {data.demoFeedbackAvailable ? <DemoFeedbackWidget analytics={data.ENV.POSTHOG_API_KEY && !data.internalImpersonation ? posthog : undefined} /> : null}
       <Toaster toast={data.toast} />
     </Document>
   );
@@ -439,6 +446,7 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
       <PostHogProvider
         apiKey={data.ENV.POSTHOG_API_KEY}
         options={{
+          before_send: sanitizeDemoFeedbackEvent,
           api_host: data.ENV.POSTHOG_HOST,
           defaults: '2025-05-24',
         }}
