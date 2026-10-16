@@ -50,3 +50,10 @@ exclusive-output regression initially showed an extra signed-link row, then pass
 with reservation before minting. Final targeted profile, CLI tests and project
 typecheck results are in `validation-summary.json`. Exact-head CI and independent
 Ship Review are recorded in the lane handoff; the driver owns merge.
+
+CI follow-up: existing deployment tests extracted the tooling function without its
+new guard dependency. Updated those recording-only harnesses to include the real
+guard, assert demo excludes the fixtures, and assert the fixture seed precedes
+flag activation. All nine deployment regressions pass; the focused profile now
+contains 83 tests / 296 assertions. Fixture implementation and screenshots are
+unchanged by this test-only correction.

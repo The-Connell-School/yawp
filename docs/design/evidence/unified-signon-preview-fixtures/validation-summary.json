@@ -6,9 +6,9 @@
       "id": "preview-fixture-guards",
       "exitCode": 0,
       "counts": [
-        "22 pass",
+        "31 pass",
         "0 fail",
-        "46 expect() calls"
+        "115 expect() calls"
       ]
     },
     {
@@ -51,5 +51,6 @@
     "UA supported host/code/payment configuration",
     "Human Google login",
     "Hosted private approval-link preparation"
-  ]
+  ],
+  "ciFollowup": "Existing extracted deployment harnesses now load the new guard; verify demo excludes fixtures and sign-on seed precedes activation. 9 additional deployment regressions pass; fixture/auth implementation unchanged."
 }

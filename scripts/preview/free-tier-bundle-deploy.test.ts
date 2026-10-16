@@ -11,14 +11,17 @@ for (const [skip, failSeed] of [[true, false], [false, false], [true, true]] as 
     try {
       mkdirSync(join(root, 'packages/prisma/scripts'), { recursive: true });
       writeFileSync(join(root, 'packages/prisma/scripts/seed-free-tier-bundle-assignment-types.ts'), '');
+      writeFileSync(join(root, 'packages/prisma/scripts/seed-preview-signon-qa.ts'), '');
       writeFileSync(join(root, 'fingerprint'), skip ? 'current\n' : 'previous\n');
       const source = readFileSync(new URL('./deploy.sh', import.meta.url), 'utf8');
+      const qaSeedGuard = source.match(/should_run_signon_qa_seed\(\) \{[\s\S]*?\n\}/)![0];
       const fn = source.slice(source.indexOf('run_tooling_if_needed() {'), source.indexOf('\nprebuild_production_images()'));
       const script = `set -euo pipefail
 SOURCE_DIR="$TEST_ROOT"
 TOOLING_FINGERPRINT_FILE="$TEST_ROOT/fingerprint"
 DATABASE_CREATED=0
 DATABASE_NAME=yawp_demo
+SLUG=demo
 DEMO_RESET_DATA=false
 DATA_MODE=sanitized-production
 RUNTIME=production
@@ -26,6 +29,7 @@ compose=(record_compose)
 compute_tooling_fingerprint() { echo current; }
 preview_missing_tooling_artifacts() { :; }
 record_compose() { printf '%s\\n' "$*"; if [[ ${failSeed} == true && "$*" == *seed-free-tier-bundle-assignment-types* ]]; then return 17; fi; }
+${qaSeedGuard}
 ${fn}
 run_tooling_if_needed
 printf 'SERVING\\n'
@@ -42,6 +46,7 @@ printf 'SERVING\\n'
       expect(output.match(/bun run seed-free-tier-bundle-assignment-types/g)?.length).toBe(1);
       expect(output.indexOf('bun run seed-free-tier-bundle-assignment-types')).toBeLessThan(output.indexOf('SERVING'));
       if (!skip) expect(output.indexOf('bun prisma migrate deploy')).toBeLessThan(output.indexOf('bun run seed-free-tier-bundle-assignment-types'));
+      expect(output).not.toContain('seed-preview-signon-qa');
       expect(output).not.toContain('seed-local-dev');
       expect(output).not.toContain('drop');
     } finally { rmSync(root, { recursive: true, force: true }); }
