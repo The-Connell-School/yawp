@@ -281,6 +281,11 @@ export async function acceptStudentInvitation(
       'Use an active student account for this invitation.',
       403
     );
+  // Convert only this proved invitation's reservation into an enrolled seat.
+  // The caller's transaction restores it on any later capacity/budget failure.
+  // Delete the unique row (not deleteMany) so concurrent redemptions of the
+  // same invitation cannot both proceed to enrollment.
+  await tx.invitation.delete({ where: { id: invitation.invite.id } });
   if (!member?.classesAsStudent.length) {
     const seat = await assertFreeClassSeatAvailableInTx(tx, {
       classId: flow.data.classId,
@@ -307,7 +312,6 @@ export async function acceptStudentInvitation(
     });
     if (!enrolled.ok) throw new FlowError(enrolled.error);
   }
-  await tx.invitation.delete({ where: { id: invitation.invite.id } });
   flow.data.invitationId = undefined;
   flow.data.classId = undefined;
   flow.data.classCode = undefined;

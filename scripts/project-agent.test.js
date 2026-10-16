@@ -28,6 +28,8 @@ describe("Yawp project agent CLI", () => {
   test("advertises isolated fresh impersonation migration verification", () => {
     expect(capabilities().proofProfiles).toContain("internal-fresh-migrations");
     expect(capabilities().proofProfiles).toContain("internal-grade-declines");
+    expect(capabilities().proofProfiles).toContain("internal-free-tier-limits");
+    expect(capabilities().proofProfiles).toContain("internal-free-tier-limits-integration");
     expect(capabilities().proofProfiles).toContain("internal-grade-declines-integration");
   });
   test("sibling worktrees receive distinct database identities and honor reassigned Record ports", () => {
