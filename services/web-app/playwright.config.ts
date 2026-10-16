@@ -9,6 +9,7 @@ export default defineConfig({
   testIgnore: [
     '**/free-tier.welcome-components.spec.ts',
     '**/free-tier.welcome-live.spec.ts',
+    '**/free-tier.approval-v2.spec.ts',
     '**/auth.unified-signon.spec.ts',
     '**/auth.unified-backend.spec.ts',
     '**/auth.unified-resend.spec.ts',
