@@ -5,7 +5,7 @@ on:
   # default branch. A long-lived PR's base SHA can lag behind default-branch repairs.
   # Pull-request code is synced separately and runs only inside the preview containers.
   pull_request_target:
-    types: [opened, synchronize, reopened, ready_for_review, closed]
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled, closed]
   workflow_dispatch:
   schedule:
     - cron: '27 5 * * *'
@@ -24,6 +24,7 @@ jobs:
     runs-on: ubuntu-22.04
     outputs:
       should_deploy: ${{ steps.policy.outputs.should_deploy }}
+      unified_sign_on: ${{ steps.policy.outputs.unified_sign_on }}
     steps:
       - name: Resolve live preview policy
         id: policy
@@ -31,6 +32,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           EVENT_ACTION: ${{ github.event.action }}
+          EVENT_LABEL: ${{ github.event.label.name }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           EVENT_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -41,16 +43,23 @@ jobs:
 
           gh pr view "$PR_NUMBER" \
             --repo "$GITHUB_REPOSITORY" \
-            --json title,body,headRefName,baseRefName \
-            > /tmp/pr.json
+            --json title,body,headRefName,baseRefName,labels \
+            > "$RUNNER_TEMP/pr.json"
 
-          title="$(jq -r '.title // ""' /tmp/pr.json)"
-          body="$(jq -r '.body // ""' /tmp/pr.json)"
-          head_ref="$(jq -r '.headRefName // ""' /tmp/pr.json)"
-          base_ref="$(jq -r '.baseRefName // ""' /tmp/pr.json)"
+          # Use the live label list and jq equality for an exact, case-sensitive
+          # label match, including removal queued behind another deployment.
+          unified_sign_on="$(jq -r '[.labels[]?.name] | index("preview-flag:unified-sign-on") != null' "$RUNNER_TEMP/pr.json")"
+          echo "unified_sign_on=$unified_sign_on" >> "$GITHUB_OUTPUT"
+
+          title="$(jq -r '.title // ""' "$RUNNER_TEMP/pr.json")"
+          body="$(jq -r '.body // ""' "$RUNNER_TEMP/pr.json")"
+          head_ref="$(jq -r '.headRefName // ""' "$RUNNER_TEMP/pr.json")"
+          base_ref="$(jq -r '.baseRefName // ""' "$RUNNER_TEMP/pr.json")"
 
           if [[ "$EVENT_ACTION" == "closed" ]]; then
             reason=closed
+          elif [[ ( "$EVENT_ACTION" == "labeled" || "$EVENT_ACTION" == "unlabeled" ) && "$EVENT_LABEL" != "preview-flag:unified-sign-on" && "$EVENT_LABEL" != "sanitized-production-data" ]]; then
+            reason=unrelated_label
           elif [[ "$base_ref" != "$DEFAULT_BRANCH" ]]; then
             reason=non_default_base
           elif [[ "$EVENT_HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]]; then
@@ -98,6 +107,7 @@ jobs:
       PREVIEW_IDLE_SLEEP_HOURS: ${{ vars.PREVIEW_IDLE_SLEEP_HOURS || '48' }}
       PREVIEW_INFLIGHT_TTL_SECONDS: ${{ vars.PREVIEW_INFLIGHT_TTL_SECONDS || '3600' }}
       PREVIEW_DATA_MODE: ${{ contains(github.event.pull_request.labels.*.name, 'sanitized-production-data') && 'sanitized-production' || vars.PREVIEW_DATA_MODE || 'seed' }}
+      PREVIEW_UNIFIED_SIGN_ON: ${{ needs.preview-policy.outputs.unified_sign_on }}
       PREVIEW_SEAT_COUNT: ${{ vars.PREVIEW_SEAT_COUNT || '1' }}
       PREVIEW_AI_MODEL: ${{ vars.PREVIEW_AI_MODEL || 'claude-sonnet-4-6' }}
       PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
@@ -313,6 +323,7 @@ jobs:
             "PREVIEW_ZEROSSL_EAB_HMAC_KEY=$(shell_quote "$PREVIEW_ZEROSSL_EAB_HMAC_KEY")"
             "PREVIEW_RUNTIME=$(shell_quote "$PREVIEW_RUNTIME")"
             "PREVIEW_DATA_MODE=$(shell_quote "$PREVIEW_DATA_MODE")"
+            "PREVIEW_UNIFIED_SIGN_ON=$(shell_quote "$PREVIEW_UNIFIED_SIGN_ON")"
             "PREVIEW_SEAT_COUNT=$(shell_quote "$PREVIEW_SEAT_COUNT")"
             "PREVIEW_AI_MODEL=$(shell_quote "$PREVIEW_AI_MODEL")"
             "PREVIEW_ANTHROPIC_API_KEY=$(shell_quote "$PREVIEW_ANTHROPIC_API_KEY")"
@@ -340,19 +351,28 @@ jobs:
             "SOURCE_DIR=$(shell_quote "$remote_source")"
             "PREVIEW_CONTROL_SHA=$(shell_quote "$control_sha")"
           )
+          # Admission retains its global host lock; the detached wrapper uses a
+          # separate PR lock so the two locks cannot deadlock each other.
+          lock_file="${PREVIEW_ROOT}/logs/pr-${PR_NUMBER}-detached.lock"
+          deploy_log="${PREVIEW_ROOT}/logs/pr-${PR_NUMBER}-deploy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.log"
+          deploy_command="cd $(shell_quote "$remote_control") && ${remote_env[*]} bash scripts/preview/admit-and-deploy.sh"
           set +e
-          ssh -i ~/.ssh/preview_key "$ssh_target" \
-            "cd $(shell_quote "$remote_control") && ${remote_env[*]} bash scripts/preview/admit-and-deploy.sh" \
-            | tee /tmp/preview-deploy.log
-          remote_status="${PIPESTATUS[0]}"
+          SSH_IDENTITY="$HOME/.ssh/preview_key" \
+          SSH_TARGET="$ssh_target" \
+          LOCK_FILE="$lock_file" \
+          DEPLOY_LOG="$deploy_log" \
+          LOCAL_LOG_COPY="$RUNNER_TEMP/preview-deploy.log" \
+          REMOTE_COMMAND="$deploy_command" \
+            bash preview-control/scripts/preview/run-host-deploy-detached.sh
+          remote_status="$?"
           set -e
 
-          evicted="$(awk -F= '/^CAP_EVICTED=/{print $2}' /tmp/preview-deploy.log | tail -1)"
-          slept="$(awk -F= '/^CAP_SLEPT=/{print $2}' /tmp/preview-deploy.log | tail -1)"
-          result="$(awk -F= '/^CAP_RESULT=/{print $2}' /tmp/preview-deploy.log | tail -1)"
-          reason="$(awk -F= '/^CAP_REASON=/{print $2}' /tmp/preview-deploy.log | tail -1)"
-          resident="$(awk -F= '/^CAP_RESIDENT=/{print $2}' /tmp/preview-deploy.log | tail -1)"
-          running="$(awk -F= '/^CAP_RUNNING=/{print $2}' /tmp/preview-deploy.log | tail -1)"
+          evicted="$(awk -F= '/^CAP_EVICTED=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
+          slept="$(awk -F= '/^CAP_SLEPT=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
+          result="$(awk -F= '/^CAP_RESULT=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
+          reason="$(awk -F= '/^CAP_REASON=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
+          resident="$(awk -F= '/^CAP_RESIDENT=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
+          running="$(awk -F= '/^CAP_RUNNING=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
 
           for pr in $slept; do
             gh pr comment "$pr" --body "Preview slept after its human idle deadline or to free running capacity. State and access code remain intact. Open its plain URL in a browser to wake it; app access and login still apply. The first request can take a minute." || true
@@ -374,12 +394,12 @@ jobs:
             exit "$remote_status"
           fi
 
-          preview_url="$(awk -F= '/^PREVIEW_URL=/{print $2}' /tmp/preview-deploy.log | tail -1)"
-          ua_preview_url="$(awk -F= '/^UA_PREVIEW_URL=/{print $2}' /tmp/preview-deploy.log | tail -1)"
-          blackboard_url="$(awk -F= '/^BLACKBOARD_URL=/{print $2}' /tmp/preview-deploy.log | tail -1)"
-          access_code="$(awk -F= '/^PREVIEW_ACCESS_CODE=/{print $2}' /tmp/preview-deploy.log | tail -1)"
-          elapsed_ms="$(awk -F= '/^PREVIEW_ELAPSED_MS=/{print $2}' /tmp/preview-deploy.log | tail -1)"
-          master_org_gate_enabled="$(awk -F= '/^PREVIEW_MASTER_ORG_GATE_ENABLED=/{print $2}' /tmp/preview-deploy.log | tail -1)"
+          preview_url="$(awk -F= '/^PREVIEW_URL=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
+          ua_preview_url="$(awk -F= '/^UA_PREVIEW_URL=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
+          blackboard_url="$(awk -F= '/^BLACKBOARD_URL=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
+          access_code="$(awk -F= '/^PREVIEW_ACCESS_CODE=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
+          elapsed_ms="$(awk -F= '/^PREVIEW_ELAPSED_MS=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
+          master_org_gate_enabled="$(awk -F= '/^PREVIEW_MASTER_ORG_GATE_ENABLED=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
           test -n "$preview_url" || { echo "Deploy script did not print PREVIEW_URL"; exit 1; }
           test -n "$access_code" || { echo "Deploy script did not print PREVIEW_ACCESS_CODE"; exit 1; }
           echo "Preview capacity OK: ${running}/${PREVIEW_MAX_RUNNING} running before deploy, ${resident}/${PREVIEW_MAX_RESIDENT} resident."
