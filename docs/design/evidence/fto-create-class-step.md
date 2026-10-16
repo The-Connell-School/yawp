@@ -34,29 +34,30 @@ The driver must obtain green required CI and independent Ship Review approval fo
 
 ## Rebase verification
 
-Rebased the existing PR onto `0f05b16a` from current origin/main after an initial
-verified rebase onto `3574fd55` was superseded by main advancing. Retained all
-class-code/sign-on CLI profiles alongside the class-step profiles, the self-admin
-email guard and field errors from #583, and transaction-aware class-code generation
-from #576. The runner isolation correction is unchanged. Local evidence
-is refreshed under `shots/fto-create-class-step/rebase/`, including a paid-membership
-control with the rollout flag locally enabled: legacy rendering remains, forged
-preparation leaves application state and class count unchanged. This extends the
-existing dedicated browser test without adding it to standard discovery.
+Rebased the existing PR onto main `9dfdc1ca`. Preserve main's self-administrator
+email rejection, HTTP 400 and field errors (#583), transaction-aware class-code
+generation (#576), and all sign-on, class-code, grade-decline and demo-feedback
+CLI profiles. No auth or unified-sign-on source changes are part of this PR.
 
-The overlapping-base evidence lives under `shots/fto-create-class-step/rebase/main-0f05b16a/`.
-The focused profile also runs existing administrator-email policy/route and real-DB
-class-code provisioning regressions. Dedicated browser flows assert self-administrator
-POST rejection and associated UI errors before allowing a distinct administrator,
-with no approval/email side effects on rejection. Standard discovery still excludes
-the mutation suite; its dedicated discovery still contains five flows.
+Class-step capability and help advertising is composed after the existing shared
+lists. These additions leave main's shared profile/help lines unchanged, avoiding
+repeat conflicts as other profiles arrive. A regression checks both advertised
+profiles through capabilities and actual CLI help. Standard discovery still excludes
+the dedicated mutation suite; missing CLASS_STEP_PORT still fails before database
+client construction, and explicit E2E_DATABASE_URL remains preserved.
 
-A subsequent conflict-free rebase includes main `9b78657e` (#579) without changing
-its sign-in implementation. Final-head checks and captures are repeated after this
-rebase; the evidence manifest records the exact resulting SHA and latest base.
+Latest exact-head transcripts, manifest and local screenshots are in
+`shots/fto-create-class-step/rebase/main-9dfdc1ca/`; earlier evidence remains in the
+parent rebase directory. The focused profile also includes existing administrator
+email policy/route and real-database class-code provisioning regressions. Its route
+fixture models the default-off setting lookup and expanded select without weakening
+any rejection assertion.
 
-Main advanced again to `2f2fe6cb` (#580/#585) while CI was running. The only
-conflict was the shared CLI profile/help list; retained main's grade-decline
-profiles alongside all existing profiles. No application implementation changed
-in this resolution. Latest exact-head checks/captures and review are under
-`shots/fto-create-class-step/rebase/main-2f2fe6cb/`. Earlier evidence is retained.
+Dedicated browser flows cover desktop/mobile preparation, persistence, validation,
+direct navigation/POST boundaries, administrator progression, single-class provisioning,
+flag-off and paid-member controls. They assert self-administrator POST rejection and
+associated UI errors before accepting a distinct administrator, with no approval/email
+or application-state side effects on rejection. Twelve design/implementation/comparison
+sets preserve the v2 form reference and explicitly label new Brian-call states that
+have no exact artboard. Ship Review must name the exact final head, all required CI
+must pass, and the driver retains the production RDS snapshot and merge gates.
