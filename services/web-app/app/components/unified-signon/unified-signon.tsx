@@ -56,6 +56,7 @@ export function UnifiedSignon({
   const entry = useRef<HTMLInputElement>(null);
   const active = useRef(false);
   const mounted = useRef(false);
+  const invalidFieldToFocus = useRef<string | undefined>(undefined);
   const redirectTo = safeRedirect(rawRedirect, '/app');
   const busy = pending || !!state.pending;
   const blocked = busy || !!state.retryAfterSeconds;
@@ -75,6 +76,14 @@ export function UnifiedSignon({
     }
     mounted.current = true;
   }, [screen]);
+
+  useEffect(() => {
+    if (busy || !invalidFieldToFocus.current) return;
+    // Inputs are disabled during submission. Focus only after the enabled DOM
+    // has committed, and only for a server error (never while clearing errors).
+    document.getElementById(`signon-${invalidFieldToFocus.current}`)?.focus();
+    invalidFieldToFocus.current = undefined;
+  }, [busy, state.fieldErrors]);
 
   useEffect(() => {
     if (!state.retryAfterSeconds) return;
@@ -130,12 +139,10 @@ export function UnifiedSignon({
       if ('redirectTo' in result) window.location.assign(result.redirectTo);
       else if ('state' in result) go(result.state);
       else {
+        invalidFieldToFocus.current = Object.keys(result.fieldErrors || {}).find(
+          (name) => result.fieldErrors?.[name]
+        );
         setState((s) => ({ ...s, ...result }));
-        const invalid = Object.keys(result.fieldErrors || {})[0];
-        if (invalid)
-          requestAnimationFrame(() =>
-            document.getElementById(`signon-${invalid}`)?.focus()
-          );
       }
     } catch {
       setState((s) => ({
