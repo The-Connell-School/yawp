@@ -19,7 +19,7 @@ test('local class forms: flag off, Generate code, field collision, narrow screen
       await page.getByRole('button', { name: 'Create Class', exact: true }).click();
       const dialog = page.getByRole('dialog');
       await expect(dialog.getByRole('button', { name: 'Generate code' })).toHaveCount(0);
-      await page.screenshot({ path: `${shots}/admin-${width}-before.png` });
+      await page.screenshot({ animations: 'disabled', path: `${shots}/admin-${width}-before.png` });
     }
     await page.request.post('/auth/dev-login', { form: { email: 'dev.teacher@yawp.local' } });
     for (const width of [1280, 390]) {
@@ -28,7 +28,7 @@ test('local class forms: flag off, Generate code, field collision, narrow screen
       await page.getByRole('button', { name: 'Create Class', exact: true }).click();
       const dialog = page.getByRole('dialog');
       await expect(dialog.getByRole('button', { name: 'Generate code' })).toHaveCount(0);
-      await page.screenshot({ path: `${shots}/teacher-${width}-before.png` });
+      await page.screenshot({ animations: 'disabled', path: `${shots}/teacher-${width}-before.png` });
     }
     await page.request.post('/auth/dev-login', { form: { email: 'dev.admin@yawp.local' } });
     await setFlag('true');
@@ -42,14 +42,14 @@ test('local class forms: flag off, Generate code, field collision, narrow screen
       await dialog.getByRole('button', { name: 'Generate code', exact: true }).click();
       await expect(input).not.toHaveValue(before);
       await expect(dialog).toBeVisible();
-      await page.screenshot({ path: `${shots}/admin-${width}-generated.png` });
+      await page.screenshot({ animations: 'disabled', path: `${shots}/admin-${width}-generated.png` });
       await dialog.getByRole('combobox').first().click();
       await page.getByRole('option').first().click();
       await input.fill(other.code.toLowerCase());
       await dialog.getByRole('button', { name: 'Create Class', exact: true }).click();
       await expect(input).toHaveAttribute('aria-invalid', 'true');
       await expect(dialog.getByRole('alert')).toContainText('Class code already in use');
-      await page.screenshot({ path: `${shots}/admin-${width}-collision.png` });
+      await page.screenshot({ animations: 'disabled', path: `${shots}/admin-${width}-collision.png` });
     }
     await page.request.post('/auth/dev-login', { form: { email: 'dev.teacher@yawp.local' } });
     for (const width of [1280, 390]) {
@@ -59,12 +59,12 @@ test('local class forms: flag off, Generate code, field collision, narrow screen
       const dialog = page.getByRole('dialog');
       await dialog.getByRole('button', { name: 'Generate code', exact: true }).click();
       await expect(dialog.getByLabel('Class Code', { exact: true })).toHaveValue(/^[A-Z2-9]{6}$/);
-      await page.screenshot({ path: `${shots}/teacher-${width}-generated.png` });
+      await page.screenshot({ animations: 'disabled', path: `${shots}/teacher-${width}-generated.png` });
       await dialog.getByLabel('Class Code', { exact: true }).fill(other.code.toLowerCase());
       await dialog.getByRole('button', { name: 'Create Class', exact: true }).click();
       await expect(dialog.getByLabel('Class Code', { exact: true })).toHaveAttribute('aria-invalid', 'true');
       await expect(dialog.getByRole('alert')).toContainText('Class code already in use');
-      await page.screenshot({ path: `${shots}/teacher-${width}-collision.png` });
+      await page.screenshot({ animations: 'disabled', path: `${shots}/teacher-${width}-collision.png` });
     }
     // A teacher cannot use the owner-only write endpoint directly.
     const unauthorized = await page.request.post('/app/organization/classes', {
@@ -80,7 +80,7 @@ test('local class forms: flag off, Generate code, field collision, narrow screen
         const after = (await readFile(`${shots}/${role}-${width}-generated.png`)).toString('base64');
         await page.setViewportSize({ width: width * 2, height: 990 });
         await page.setContent(`<body style="margin:0;display:flex;font:16px sans-serif"><div>Flag off<img style="display:block" src="data:image/png;base64,${before}"></div><div>Flag on<img style="display:block" src="data:image/png;base64,${after}"></div></body>`);
-        await page.screenshot({ path: `${shots}/${role}-${width}-side-by-side.png` });
+        await page.screenshot({ animations: 'disabled', path: `${shots}/${role}-${width}-side-by-side.png` });
       }
     }
   } finally {

@@ -136,3 +136,38 @@ comparison/report contract and application-level concurrency limitations. No
 migration hold is needed for this implementation; any future index proposal
 requires the separate manager clearance described above. The builder does not
 merge or deploy.
+
+## October 16 rebase verification
+
+Rebased the existing PR #576 branch from published head
+`81425a781155887b6b0ad1649b1f5d0122f86495` onto freshly fetched main
+`d8c1f20bb56f7c83a82d2d111f99388314a2af5c` (includes #574, #575 and #577).
+The flag registry and its expectations retain both new mainline flags and this
+PR's default-off flag. Provisioning, enrollment and sign-in changes from #577
+remain intact. No schema or migration diff is introduced against this base.
+
+Both branches had introduced `playwright.classcode.config.ts` for different
+specs. The merged sign-in config keeps that filename and behavior; uniqueness
+uses `playwright.classcode-unique.config.ts`. A CLI regression failed with the
+wrong config selection before the fix and passes afterward. Both profile sets
+remain advertised and executable. Screenshots disable finite animations so the
+flag-off sheet is fully open when captured; UI behavior is unchanged.
+
+Fresh local results: classcode-unit 117 tests, classcode-db 23 tests,
+project-cli 104 tests, signon-classcode 126 tests (including 52 real-database
+checks), both browser profiles (one case each, one worker), report and 4096MB
+typecheck pass. The read-only report was refreshed against the same disposable
+local fixtures (3 groups, 32 classes); the DB suite proves unchanged persisted
+rows and exact Unicode comparison. `checks.json` contains these new results.
+The only browser setup failure was a terminated server between tool sessions;
+startup, checks and shutdown then ran together successfully.
+
+Refreshed admin/teacher desktop and narrow evidence is in the documented
+lane-local screenshot directory; prior-head images are retained in
+`previous-head-81425a78/`. Enter-code evidence is refreshed in `enter-code/`.
+Reviewed the new pairs against existing evidence and app tokens. There is no
+applicable Generate code artboard. Sign-in UI has no diff against main, so its
+existing artboard comparisons are unaffected. No hosted QA, hosted flag change,
+preview, email, database write or migration was performed. The local dev server
+and owned PostgreSQL container are stopped after verification. Final-head CI
+and independent Ship Review remain required before the driver merges.

@@ -4,7 +4,7 @@
   "items": [
     {
       "code": "KEEP",
-      "count": 2,
+      "count": 4,
       "classes": [
         {
           "classId": "cmvb938xb0002s3x2s26u02fp",
@@ -17,12 +17,24 @@
           "storedCode": "keep",
           "schoolId": "cmvb93s6d0001t3x2p0vn792j",
           "organizationId": "cmvb93s530000t3x24v9nalzj"
+        },
+        {
+          "classId": "cmvb99bwn00025cx2hw6oyw5y",
+          "storedCode": "keep",
+          "schoolId": "cmvb99bw500015cx2imtr9qky",
+          "organizationId": "cmvb99bvc00005cx2qm24x1fg"
+        },
+        {
+          "classId": "cmvbe2sts00026tx2f37w3rqd",
+          "storedCode": "keep",
+          "schoolId": "cmvbe2stb00016tx2tu5l56w0",
+          "organizationId": "cmvbe2ssg00006tx2k8sd8mtl"
         }
       ]
     },
     {
       "code": "SCENARIO-1",
-      "count": 12,
+      "count": 24,
       "classes": [
         {
           "classId": "cmvb9390l0003s3x2ygzz0plx",
@@ -95,12 +107,84 @@
           "storedCode": "scenario-1",
           "schoolId": "02618a82-b8af-4e76-af77-e00eaf118f6d",
           "organizationId": "preview-seat-72787529"
+        },
+        {
+          "classId": "cmvb99bzz00035cx2p7h2h6jd",
+          "storedCode": "scenario-1",
+          "schoolId": "fa7e2023-dd79-44f3-b728-8f8d4cb5b331",
+          "organizationId": "cmvb99bvc00005cx2qm24x1fg"
+        },
+        {
+          "classId": "cmvb99c5500115cx2ypb4yvz9",
+          "storedCode": "scenario-1",
+          "schoolId": "93ae791c-bb36-433c-8493-21b4fbba93fe",
+          "organizationId": "cmvb99bvc00005cx2qm24x1fg"
+        },
+        {
+          "classId": "cmvb99ch600006gx22jxke2q9",
+          "storedCode": "scenario-1",
+          "schoolId": "b634a444-bc0f-4354-b3c5-fc81c53a9c64",
+          "organizationId": "cmvb99c8200165cx25j0j80pf"
+        },
+        {
+          "classId": "cmvb99d7y0000a8x20te3gd4o",
+          "storedCode": "scenario-1",
+          "schoolId": "409338c7-a985-46bd-87cc-c67cfb338259",
+          "organizationId": "preview-seat-95677166"
+        },
+        {
+          "classId": "cmvb99dy80000dlx2hv0hhmxr",
+          "storedCode": "scenario-1",
+          "schoolId": "40ad4d34-19a4-4437-b81b-45244ac5295c",
+          "organizationId": "preview-seat-419339533"
+        },
+        {
+          "classId": "cmvb99e990000ejx2kpp6pp9q",
+          "storedCode": "scenario-1",
+          "schoolId": "e3f00c14-e443-4fe2-8451-140916e5097a",
+          "organizationId": "preview-seat-95677166"
+        },
+        {
+          "classId": "cmvbe2sxc00036tx2l95q2ela",
+          "storedCode": "scenario-1",
+          "schoolId": "164a048f-129d-459d-9790-d348ca5f75be",
+          "organizationId": "cmvbe2ssg00006tx2k8sd8mtl"
+        },
+        {
+          "classId": "cmvbe2t4500116tx2px3croye",
+          "storedCode": "scenario-1",
+          "schoolId": "59814d76-caf9-4a3b-b2be-c5b4a031f359",
+          "organizationId": "cmvbe2ssg00006tx2k8sd8mtl"
+        },
+        {
+          "classId": "cmvbe2tk800007yx22edffjza",
+          "storedCode": "scenario-1",
+          "schoolId": "c1139a0c-21fc-4300-a1c1-95d3d9a97841",
+          "organizationId": "cmvbe2t7c00166tx2ej6kudv6"
+        },
+        {
+          "classId": "cmvbe2ue90000btx27s4n9np5",
+          "storedCode": "scenario-1",
+          "schoolId": "fb0f23c0-e6cf-42b8-b3ad-9c9ffea47bc5",
+          "organizationId": "preview-seat-71092491"
+        },
+        {
+          "classId": "cmvbe2v8r0000f3x2eszo7s0q",
+          "storedCode": "scenario-1",
+          "schoolId": "0badba49-ec8c-4a19-a3f9-c2167309a6a6",
+          "organizationId": "preview-seat-486521730"
+        },
+        {
+          "classId": "cmvbe2vl40000g1x216d0xop2",
+          "storedCode": "scenario-1",
+          "schoolId": "a2984ba8-5198-4c0a-bd6f-a36d92f210c3",
+          "organizationId": "preview-seat-71092491"
         }
       ]
     },
     {
       "code": "SCENARIO-2",
-      "count": 2,
+      "count": 4,
       "classes": [
         {
           "classId": "cmvb9392b000ks3x2yjwwi2k7",
@@ -113,9 +197,20 @@
           "storedCode": "scenario-2",
           "schoolId": "8f127b2a-b4d2-4022-b310-9fafecf86dde",
           "organizationId": "cmvb93s530000t3x24v9nalzj"
+        },
+        {
+          "classId": "cmvb99c1o000k5cx2mfcuhd2y",
+          "storedCode": "scenario-2",
+          "schoolId": "fa7e2023-dd79-44f3-b728-8f8d4cb5b331",
+          "organizationId": "cmvb99bvc00005cx2qm24x1fg"
+        },
+        {
+          "classId": "cmvbe2sze000k6tx2pyebrriu",
+          "storedCode": "scenario-2",
+          "schoolId": "164a048f-129d-459d-9790-d348ca5f75be",
+          "organizationId": "cmvbe2ssg00006tx2k8sd8mtl"
         }
       ]
     }
-  ],
-  "fixtureOnly": true
+  ]
 }

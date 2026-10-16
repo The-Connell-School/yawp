@@ -1,5 +1,7 @@
 {
   "fixtureOnly": true,
+  "verifiedAt": "2026-10-16T20:00:08.562844+00:00",
+  "baseCommit": "d8c1f20bb56f7c83a82d2d111f99388314a2af5c",
   "checks": [
     {
       "profile": "classcode-unit",
@@ -57,7 +59,7 @@
           "id": "app/domain/feature-flags/feature-flags.test.ts",
           "exitCode": 0,
           "counts": [
-            "18 pass",
+            "19 pass",
             "0 fail"
           ]
         },
@@ -73,21 +75,7 @@
           "id": "app/utils/internal-feature-flags-http.server.test.ts",
           "exitCode": 0,
           "counts": [
-            "24 pass",
-            "0 fail"
-          ]
-        }
-      ]
-    },
-    {
-      "profile": "classcode-cli",
-      "status": "passed",
-      "steps": [
-        {
-          "id": "project-cli",
-          "exitCode": 0,
-          "counts": [
-            "103 pass",
+            "36 pass",
             "0 fail"
           ]
         }
@@ -140,6 +128,120 @@
       ]
     },
     {
+      "profile": "classcode-report",
+      "status": "passed",
+      "steps": [
+        {
+          "id": "classcode-report",
+          "exitCode": 0,
+          "counts": []
+        }
+      ]
+    },
+    {
+      "profile": "project-cli",
+      "status": "passed",
+      "steps": [
+        {
+          "id": "project-cli",
+          "exitCode": 0,
+          "counts": [
+            "104 pass",
+            "0 fail"
+          ]
+        }
+      ]
+    },
+    {
+      "profile": "signon-classcode",
+      "status": "passed",
+      "steps": [
+        {
+          "id": "read-only-route-contract",
+          "exitCode": 0,
+          "counts": [
+            "1 pass",
+            "0 fail"
+          ]
+        },
+        {
+          "id": "login-rate-limit-target",
+          "exitCode": 0,
+          "counts": [
+            "3 pass",
+            "0 fail"
+          ]
+        },
+        {
+          "id": "student-join",
+          "exitCode": 0,
+          "counts": [
+            "7 pass",
+            "0 fail"
+          ]
+        },
+        {
+          "id": "student-handle",
+          "exitCode": 0,
+          "counts": [
+            "3 pass",
+            "0 fail"
+          ]
+        },
+        {
+          "id": "signon-policy",
+          "exitCode": 0,
+          "counts": [
+            "3 pass",
+            "0 fail"
+          ]
+        },
+        {
+          "id": "signon-google",
+          "exitCode": 0,
+          "counts": [
+            "14 pass",
+            "0 fail"
+          ]
+        },
+        {
+          "id": "signon-dispatch",
+          "exitCode": 0,
+          "counts": [
+            "43 pass",
+            "0 fail"
+          ]
+        },
+        {
+          "id": "class-student-real-database",
+          "exitCode": 0,
+          "counts": [
+            "14 pass",
+            "0 fail"
+          ]
+        },
+        {
+          "id": "signon-real-database",
+          "exitCode": 0,
+          "counts": [
+            "38 pass",
+            "0 fail"
+          ]
+        }
+      ]
+    },
+    {
+      "profile": "typecheck",
+      "status": "passed",
+      "steps": [
+        {
+          "id": "typecheck",
+          "exitCode": 0,
+          "counts": []
+        }
+      ]
+    },
+    {
       "profile": "classcode-browser",
       "status": "passed",
       "steps": [
@@ -147,7 +249,7 @@
           "id": "classcode-browser",
           "exitCode": 0,
           "counts": [
-            "1 pass"
+            "1 passed"
           ]
         }
       ]
@@ -160,30 +262,8 @@
           "id": "classcode-enter-code",
           "exitCode": 0,
           "counts": [
-            "1 pass"
+            "1 passed"
           ]
-        }
-      ]
-    },
-    {
-      "profile": "classcode-typecheck",
-      "status": "passed",
-      "steps": [
-        {
-          "id": "typecheck",
-          "exitCode": 0,
-          "counts": []
-        }
-      ]
-    },
-    {
-      "profile": "classcode-report",
-      "status": "passed",
-      "steps": [
-        {
-          "id": "classcode-report",
-          "exitCode": 0,
-          "counts": []
         }
       ]
     }
