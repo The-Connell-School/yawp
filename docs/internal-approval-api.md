@@ -61,21 +61,36 @@ nonce and the same idempotency key. The shared helper owns acceptance replay,
 locking, cooldown, shared four-reminder cap, forwarding races and uncertainty.
 Manual acceptance leaves the weekly slot unchanged.
 
-## Dependency and merge gate
+## Landed delivery integration and merge gate
 
-#581 owns delivery, schema and race coverage. This PR adds a `requireV2` guard
-before the legacy helper, leaving teacher callers unchanged. On current main,
-all staff resends return `409 flag_off` without sending. This PR is deliberately
-a draft until #581 lands and integration is verified. It must not merge in its
-current dependency-incomplete state.
+Dependency #581 landed in main as `634687035`. The existing shared helper now
+selects eligible v2 delivery before checking `requireV2`; rejection remains
+immediately before legacy fallback. Flag-off, untargeted and missing-user staff
+writes therefore return `409 flag_off` without any legacy email send. Teacher
+callers retain their existing fallback. No delivery engine or schema is copied.
 
-During integration, preserve #581's eligible-v2 dispatch, then place `requireV2`
-rejection immediately before its legacy fallback. Pass actor/idempotency arguments
-through to the durable helper. Never move the guard after the legacy send or
-allow a disabled/untargeted/site-account request to fall back. Update the real-DB
-fixtures to exercise persisted cadence and run #581's captured-delivery tests for
-same/different keys, immutable replay after later sends, ten-minute boundary,
-automatic/manual cap, forwarding/approval races, rejection and uncertainty.
-Adapter-only tests do not prove these shared delivery guarantees. Final-head green
-CI and independent Ship Review APPROVE are required before the driver merges.
-No migration, flag activation, real email, UI change or screenshots are part of I1.
+The dedicated PostgreSQL profile runs through the actual signed route, capturing
+only the provider and disabling provisioning hooks in local test fixtures. The
+HMAC verifier, durable nonce store, Prisma, advisory locks, shared adapter,
+delivery engine and persisted audit are exercised together. A controlled clock
+covers accepted delivery, immutable acceptance after later manual/automatic
+reminders, concurrent same/different keys, the exact ten-minute boundary,
+recovered legacy evidence, shared four-reminder cap, forwarding/approval races
+in both orderings, provider rejection and transport uncertainty. No actual email
+leaves the test process. A concurrent same-key caller can observe DELIVERING
+before acceptance and receive `502 email_failed`; it never receives invented
+success. Fresh signed same-key retries after acceptance return the original
+immutable response without another provider call.
+
+Teacher follow-up reads also reconcile migrated zero counters against accepted
+logs per administrator lifetime. Matching acceptances count once, failed logs
+never count, and the latest accepted date wins. This changes public read
+projection only; cadence and persisted follow-up filtering remain unchanged.
+
+Run `CI=1 ./bin/project test --profile internal-approvals --json` and
+`CI=1 ./bin/project test --profile internal-approvals-integration --json` against
+an isolated local database with all existing migrations applied. Rerun the
+landed `approval-v2.real-db.integration.test.ts` suite separately. Final-head green
+CI and fresh independent Ship Review APPROVE remain mandatory before the driver
+merges. Keep the PR draft until those gates pass. No new migration, flag
+activation, real email, UI change or screenshots are part of I1.

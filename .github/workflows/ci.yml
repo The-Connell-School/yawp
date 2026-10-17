@@ -468,7 +468,7 @@ jobs:
             bun test --max-concurrency=2 "$file"
           done
 
-      - name: 🧪 Approval history and legacy delivery guard (dedicated PostgreSQL)
+      - name: 🧪 Signed approval delivery and history (dedicated PostgreSQL)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
           PGPASSWORD: postgres
