@@ -167,3 +167,11 @@ describe('validators', () => {
     expect(isTourStatus('started')).toBe(false);
   });
 });
+
+
+test('waiting preview tour only explains read-only content and locked actions', () => {
+  expect(tourForPathname('/app/free-tier/preview')?.id).toBe('waiting-preview');
+  expect(tourForPathname('/app/free-tier/pending')).toBeNull();
+  expect(tourForPathname('/app/free-tier/onboarding')).toBeNull();
+  expect(getTour('waiting-preview').steps.map(step => step.target)).toEqual(['preview-content-nav', 'preview-content', 'preview-locked-actions']);
+});

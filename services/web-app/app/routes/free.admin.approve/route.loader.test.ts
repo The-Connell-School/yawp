@@ -20,6 +20,11 @@ mock.module('~/domain/free-tier/signed-link.server', () => ({
   isFreeTierLinkSigningConfigured: () => true,
 }));
 
+mock.module('~/domain/free-tier/approval-v2.server', () => ({
+  isApprovalV2Enabled: async () => false,
+  forwardApprovalByToken: async () => ({ ok: false }),
+}));
+
 mock.module('~/domain/free-tier/approval-flow.server', () => ({
   completeSchoolAdminApproval: async () => ({ ok: true }),
 }));

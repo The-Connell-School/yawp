@@ -4,6 +4,7 @@ const getSession = mock();
 const destroySession = mock();
 
 const prisma = {
+  freeTierApplication: { findFirst: mock(async () => null) },
   session: {
     findUnique: mock(),
   },

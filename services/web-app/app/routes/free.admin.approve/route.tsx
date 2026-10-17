@@ -4,7 +4,21 @@ import {
   useActionData,
   useLoaderData,
 } from 'react-router';
-import { CircleCheck, CircleAlert, PencilLine, Shield, UserRound } from 'lucide-react';
+import {
+  isApprovalV2Enabled,
+  forwardApprovalByToken,
+} from '~/domain/free-tier/approval-v2.server';
+import {
+  ApprovalForwardForm,
+  approvalForwardError,
+} from '../free-tier/ApprovalForwardForm';
+import {
+  CircleCheck,
+  CircleAlert,
+  PencilLine,
+  Shield,
+  UserRound,
+} from 'lucide-react';
 import { Form } from 'react-router';
 import { Checkbox } from '~/components/ui/checkbox';
 import { peekSignedLink } from '~/domain/free-tier/signed-link.server';
@@ -21,7 +35,14 @@ import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate
 
 type LoaderData =
   | { ok: false; reason?: string }
-  | { ok: true; token: string; schoolName: string; teacherName: string };
+  | {
+      ok: true;
+      token: string;
+      schoolName: string;
+      teacherName: string;
+      teacherEmail?: string;
+      approvalV2?: boolean;
+    };
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireFreeTierEnabled();
@@ -58,7 +79,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
   const app = await prisma.freeTierApplication.findUnique({
     where: { id: peek.applicationId },
-    select: { schoolName: true, name: true, status: true },
+    select: {
+      id: true,
+      userId: true,
+      organizationId: true,
+      schoolName: true,
+      name: true,
+      email: true,
+      status: true,
+    },
   });
   if (app?.status === 'APPROVED') {
     return {
@@ -79,6 +108,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     token,
     schoolName: app?.schoolName ?? 'your school',
     teacherName: app?.name ?? 'A teacher',
+    teacherEmail: app?.email,
+    approvalV2: app ? await isApprovalV2Enabled(app) : false,
   };
 }
 
@@ -88,6 +119,30 @@ export async function action({ request }: ActionFunctionArgs) {
   const token = String(formData.get('token') ?? '');
   const authorized = formData.get('authorized') === 'on';
   const adminRole = String(formData.get('adminRole') ?? '');
+  const peek = await peekSignedLink({
+    token,
+    expectedPurpose: 'ADMIN_APPROVE',
+  });
+  const app = peek.ok
+    ? await prisma.freeTierApplication.findUnique({
+        where: { id: peek.applicationId },
+        select: { id: true, userId: true, organizationId: true },
+      })
+    : null;
+  const v2 = app ? await isApprovalV2Enabled(app) : false;
+  if (formData.get('intent') === 'forward') {
+    if (!v2) return { ok: false as const, reason: 'not_allowed' };
+    const result = await forwardApprovalByToken({
+      token,
+      purpose: 'ADMIN_APPROVE',
+      newAdminName: String(formData.get('adminName') ?? ''),
+      newAdminEmail: String(formData.get('adminEmail') ?? ''),
+      request,
+    });
+    return { ...result, intent: 'forward' as const };
+  }
+  if (v2 && (!adminRole.trim() || adminRole.trim().length > 120 || !authorized))
+    return { ok: false as const, reason: 'validation' };
   const result = await completeSchoolAdminApproval({
     token,
     authorized,
@@ -116,7 +171,17 @@ export default function FreeAdminApproveRoute() {
     );
   }
 
-  if (actionData && actionData.ok && actionData.app) {
+  if (actionData?.ok && 'queued' in actionData && actionData.queued)
+    return (
+      <FreeTierAuthCard title="Request forwarded" icon={<CircleCheck />}>
+        <p className="text-sm text-muted-foreground">
+          Your request is queued for the new administrator. We will let the
+          teacher know.
+        </p>
+      </FreeTierAuthCard>
+    );
+
+  if (actionData && actionData.ok && 'app' in actionData && actionData.app) {
     return (
       <FreeTierAuthCard title="Thank you" icon={<CircleCheck />}>
         <p className="text-sm text-muted-foreground">
@@ -126,9 +191,15 @@ export default function FreeAdminApproveRoute() {
     );
   }
 
-  if (actionData && !actionData.ok) {
+  if (
+    actionData &&
+    !actionData.ok &&
+    actionData.reason !== 'validation' &&
+    !('intent' in actionData && actionData.intent === 'forward')
+  ) {
     const declined =
       actionData.reason === 'illegal_state' &&
+      'status' in actionData &&
       (actionData.status === 'REJECTED' || actionData.status === 'EXPIRED');
     const message = declined
       ? 'YAWP did not approve it. Questions? Email support@yawp.school.'
@@ -143,11 +214,39 @@ export default function FreeAdminApproveRoute() {
               : 'We could not complete this approval. The link may be invalid or expired.';
     return (
       <FreeTierAuthCard
-        title={declined ? 'This request is closed' : actionData.reason === 'email_failed' ? 'Thank you' : actionData.reason === 'superseded' ? 'This link was replaced' : actionData.reason === 'budget_exceeded' ? 'Free classrooms are paused' : 'Unable to approve'}
-        icon={actionData.reason === 'email_failed' ? <CircleCheck /> : <CircleAlert />}
+        title={
+          declined
+            ? 'This request is closed'
+            : actionData.reason === 'email_failed'
+              ? 'Thank you'
+              : actionData.reason === 'superseded'
+                ? 'This link was replaced'
+                : actionData.reason === 'budget_exceeded'
+                  ? 'Free classrooms are paused'
+                  : 'Unable to approve'
+        }
+        icon={
+          actionData.reason === 'email_failed' ? (
+            <CircleCheck />
+          ) : (
+            <CircleAlert />
+          )
+        }
       >
-        {actionData.reason === 'email_failed' ? <p className="text-sm text-muted-foreground">The teacher can start using YAWP.</p> : null}
-        <p className={actionData.reason === 'email_failed' ? 'rounded-lg bg-secondary p-3 text-sm text-muted-foreground' : 'text-sm text-muted-foreground'}>{message}</p>
+        {actionData.reason === 'email_failed' ? (
+          <p className="text-sm text-muted-foreground">
+            The teacher can start using YAWP.
+          </p>
+        ) : null}
+        <p
+          className={
+            actionData.reason === 'email_failed'
+              ? 'rounded-lg bg-secondary p-3 text-sm text-muted-foreground'
+              : 'text-sm text-muted-foreground'
+          }
+        >
+          {message}
+        </p>
       </FreeTierAuthCard>
     );
   }
@@ -182,9 +281,18 @@ export default function FreeAdminApproveRoute() {
       );
     }
     return (
-      <FreeTierAuthCard title={data.reason === 'invalid' || !data.reason ? "We couldn't open this link" : 'This link expired or was used'} icon={<CircleAlert />}>
+      <FreeTierAuthCard
+        title={
+          data.reason === 'invalid' || !data.reason
+            ? "We couldn't open this link"
+            : 'This link expired or was used'
+        }
+        icon={<CircleAlert />}
+      >
         <p className="text-sm text-muted-foreground">
-          {data.reason === 'invalid' || !data.reason ? 'Copy it again from the email.' : 'Ask the teacher to send a reminder.'}
+          {data.reason === 'invalid' || !data.reason
+            ? 'Copy it again from the email.'
+            : 'Ask the teacher to send a reminder.'}
         </p>
       </FreeTierAuthCard>
     );
@@ -193,29 +301,95 @@ export default function FreeAdminApproveRoute() {
   return (
     <FreeTierAuthCard
       title={`Approve YAWP for ${data.schoolName}`}
+      aside={
+        data.approvalV2 ? (
+          <>
+            <h2 className="text-lg font-semibold">About YAWP</h2>
+            <FreeTierPerson name={data.teacherName} email={data.teacherEmail} />
+            <ul className="flex flex-col gap-3 text-sm text-card-foreground">
+              <li>Students draft essays with feedback as they write.</li>
+              <li>Teachers control assignments and grading.</li>
+              <li>Student writing is never used to train outside models.</li>
+            </ul>
+            <section
+              aria-label="Administrator guide"
+              data-guide-slot="administrator"
+            />
+          </>
+        ) : undefined
+      }
     >
-      <FreeTierPerson name={data.teacherName} />
-      <ul className="flex flex-col gap-2.5 text-sm text-card-foreground">
-        <li className="flex items-start gap-2.5"><PencilLine aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />Students draft essays with feedback as they write.</li>
-        <li className="flex items-start gap-2.5"><UserRound aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />Teachers control assignments and grading.</li>
-        <li className="flex items-start gap-2.5"><Shield aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />Student writing is never used to train outside models.</li>
-      </ul>
+      {!data.approvalV2 ? (
+        <>
+          <FreeTierPerson name={data.teacherName} />
+          <ul className="flex flex-col gap-2.5 text-sm text-card-foreground">
+            <li className="flex items-start gap-2.5">
+              <PencilLine
+                aria-hidden="true"
+                className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+              />
+              Students draft essays with feedback as they write.
+            </li>
+            <li className="flex items-start gap-2.5">
+              <UserRound
+                aria-hidden="true"
+                className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+              />
+              Teachers control assignments and grading.
+            </li>
+            <li className="flex items-start gap-2.5">
+              <Shield
+                aria-hidden="true"
+                className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+              />
+              Student writing is never used to train outside models.
+            </li>
+          </ul>
+        </>
+      ) : null}
+      {actionData &&
+      !actionData.ok &&
+      actionData.reason === 'validation' &&
+      !('intent' in actionData) ? (
+        <p role="alert" className="text-sm text-destructive">
+          Enter your role and confirm you can approve classroom software.
+        </p>
+      ) : null}
       <Form method="post" className="flex flex-col gap-4">
         <input type="hidden" name="token" value={data.token} />
-        <FreeTierFieldLabel
-          label="Your role"
-          htmlFor="adminRole"
-        >
-          <FreeTierTextInput id="adminRole" name="adminRole" invalidMessage="Enter your role." placeholder="Principal, Technology Director" required />
+        <FreeTierFieldLabel label="Your role" htmlFor="adminRole">
+          <FreeTierTextInput
+            id="adminRole"
+            name="adminRole"
+            invalidMessage="Enter your role."
+            placeholder="Principal, Technology Director"
+            required
+          />
         </FreeTierFieldLabel>
         <label className="flex gap-2 text-sm items-start text-left">
           <Checkbox name="authorized" required className="mt-1" />
-          <span>
-            I can approve classroom software for {data.schoolName}.
-          </span>
+          <span>I can approve classroom software for {data.schoolName}.</span>
         </label>
         <FreeTierButton type="submit">Approve YAWP</FreeTierButton>
       </Form>
+      {data.approvalV2 ? (
+        <details
+          className="text-sm"
+          open={actionData && 'intent' in actionData ? true : undefined}
+        >
+          <summary className="cursor-pointer py-2 text-primary underline underline-offset-4">
+            Not the right person? Forward this request
+          </summary>
+          <div className="pt-3">
+            {actionData && !actionData.ok && 'intent' in actionData ? (
+              <p role="alert" className="mb-3 text-sm text-destructive">
+                {approvalForwardError(actionData.reason)}
+              </p>
+            ) : null}
+            <ApprovalForwardForm token={data.token} />
+          </div>
+        </details>
+      ) : null}
     </FreeTierAuthCard>
   );
 }

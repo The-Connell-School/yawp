@@ -1,4 +1,5 @@
 import { ensureFreeTierProductionApprovalHooks } from './domain/free-tier/approval-hooks.server';
+import { startApprovalDelivery } from './domain/free-tier/approval-delivery-runtime.server';
 import { startImpersonationEndDelivery } from './utils/internal-impersonation-runtime.server';
 
 void ensureFreeTierProductionApprovalHooks();
@@ -14,6 +15,7 @@ import { getUserId } from './utils/auth.server';
 import { posthog } from './services/posthog.server';
 
 startImpersonationEndDelivery();
+startApprovalDelivery();
 
 export const streamTimeout = 5_000;
 

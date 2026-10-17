@@ -77,3 +77,23 @@ export async function loadGuidedTours(
   const storageScope = createHash('sha256').update(`${userId}:${sessionId}`).digest('hex');
   return { finishedTourIds: await loadFinishedTourIds(userId), storageScope };
 }
+
+
+/** The existing approval gate establishes teacher identity without provisioning a membership. */
+export async function loadWaitingPreviewTours(
+  userId: string,
+  application: { status: string; organizationId: string | null },
+  request: Request
+) {
+  if (!['SENT', 'MANUAL_REVIEW'].includes(application.status) ||
+      !(await isFreeTierEnabled()) ||
+      !(await isFeatureFlagEnabled(GUIDED_TOURS_FLAG, application.organizationId ?? undefined))) return null;
+  const session = await authSessionStorage.getSession(request.headers.get('cookie'));
+  if (session.get('impersonationMode') === 'read-only') return null;
+  const sessionId = session.get('sessionId');
+  if (typeof sessionId !== 'string') return null;
+  return {
+    finishedTourIds: (await loadFinishedTourIds(userId)).filter(id => id === 'waiting-preview'),
+    storageScope: createHash('sha256').update(`${userId}:${sessionId}`).digest('hex'),
+  };
+}

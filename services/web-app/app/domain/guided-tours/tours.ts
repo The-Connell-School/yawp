@@ -13,6 +13,7 @@
  */
 
 export const TOUR_IDS = [
+  'waiting-preview',
   'dashboard',
   'my-classes',
   'class',
@@ -99,6 +100,19 @@ const DOCUMENT_TOUR: PageTour = {
 };
 
 const TOURS: Record<TourId, PageTour> = {
+  'waiting-preview': {
+    id: 'waiting-preview',
+    welcome: {
+      title: 'Welcome to your preview',
+      body: 'Take a quick look at the content you can explore while your administrator reviews your request.',
+      icon: 'home',
+    },
+    steps: [
+      { target: 'preview-content-nav', title: 'Explore the preview', body: 'Browse Class Starter prompts, Pre-writing guidance, Thesis prompts, and the Lesson Planner overview here.' },
+      { target: 'preview-content', title: 'Look around', body: 'Read the prompts and guidance at your own pace. This preview does not create classroom work.' },
+      { target: 'preview-locked-actions', title: 'After approval', body: 'Assignment creation, student invitations, Reporter, and Lesson Planner tools remain locked until your administrator approves your classroom.' },
+    ],
+  },
   dashboard: {
     id: 'dashboard',
     welcome: {
@@ -457,6 +471,7 @@ export function tourForPathname(pathname: string): PageTour | null {
     pathname.length > 1 && pathname.endsWith('/')
       ? pathname.slice(0, -1)
       : pathname;
+  if (path === '/app/free-tier/preview') return TOURS['waiting-preview'];
   if (path === '/app') return TOURS.dashboard;
   if (path === '/app/my-classes') return TOURS['my-classes'];
   if (/^\/app\/my-classes\/[^/]+$/.test(path)) return TOURS.class;

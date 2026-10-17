@@ -33,6 +33,8 @@ type EmailPayload = {
 	text: string
 }
 type SendEmailOptions = {
+	/** Durable outbox owns retries; leave legacy provider behavior unchanged. */
+	singleAttempt?: boolean
 	to: string
 	bcc?: string[]
 	subject: string
@@ -69,7 +71,7 @@ export async function sendEmail(options: SendEmailOptions) {
   }
 
 	if (getEmailProvider() === 'ses') {
-		return sendEmailWithSes(email)
+		return sendEmailWithSes(email, options.singleAttempt)
 	}
 
 	return sendEmailWithResend(email)
@@ -156,9 +158,10 @@ async function sendEmailWithResend(email: EmailPayload) {
 	}
 }
 
-async function sendEmailWithSes(email: EmailPayload) {
+async function sendEmailWithSes(email: EmailPayload, singleAttempt = false) {
 	try {
 		const client = new SESv2Client({
+			...(singleAttempt ? { maxAttempts: 1 } : {}),
 			region:
 				process.env.AWS_SES_REGION ?? process.env.AWS_REGION ?? 'us-east-1',
 		})
