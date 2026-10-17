@@ -159,9 +159,9 @@ export function UnifiedSignon({
         ).find((name) => result.fieldErrors?.[name]);
         setState((s) => ({
           ...s,
-          // A denied class choice has no code field on the picker. Return to
-          // the retryable code form so its server field error stays visible.
-          ...(operation === 'choose-class' && result.fieldErrors?.classCode
+          // Enrollment can fail after a class choice or email verification.
+          // Render its field error on the retryable code form for every caller.
+          ...(result.fieldErrors?.classCode
             ? { screen: 'class-code' as const, variant: undefined }
             : {}),
           ...result,
