@@ -1,3 +1,4 @@
+import { usePlatformEnhancements } from '~/hooks/usePlatformEnhancements';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   type LoaderFunctionArgs,
@@ -42,12 +43,10 @@ import {
   type AssignmentTypeAccessScope,
 } from '~/utils/assignment-type-access.server';
 import { loadAssignmentCreationQuotasForTypes } from '~/utils/assignment-quota.server';
-import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { AboutDailyPages } from './about-daily-pages/about-daily-pages';
-import { ApHistoryLibrary } from './ap-history-library';
 import { ApPromptsLibrary } from './ap-history/ap-prompts-library';
 import { ApHistoryGradingBreakdown } from './ap-history/grading-breakdown';
 import { ApHistoryTeacherDirections } from './ap-history/teacher-directions';
@@ -831,12 +830,13 @@ export default function AppAssignmentTypesIdRoute() {
     ? requestedClassId
     : undefined;
 
+  const platformEnhancementsEnabled = usePlatformEnhancements();
   return (
     <div
       className="no-scrollbar h-full w-full overflow-y-scroll"
       data-tour-variant={data.assignmentType.kind ?? undefined}
     >
-      <div className="mx-auto flex h-full w-full max-w-screen-md flex-col p-3 sm:p-5">
+      <div className={platformEnhancementsEnabled && showThesisLibrary ? "mx-auto flex h-full w-full max-w-screen-xl flex-col p-3 sm:p-5" : "mx-auto flex h-full w-full max-w-screen-md flex-col p-3 sm:p-5"}>
         <div className="mb-4 flex justify-between gap-2">
           {/* Arriving from a lesson, the way back is to that lesson. The
               planner embeds this page's creator inside a plan, so a teacher
@@ -1014,7 +1014,7 @@ export default function AppAssignmentTypesIdRoute() {
         {showDailyPagesAbout ? <AboutDailyPages /> : null}
         {showThesisLibrary ? (
           <div data-tour="type-directions">
-            <ThesisTeacherDirections />
+            <ThesisTeacherDirections enhanced={platformEnhancementsEnabled} />
           </div>
         ) : null}
         {data.apHistoryLibrary?.mode === 'teacher' ? (
