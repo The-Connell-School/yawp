@@ -1,4 +1,5 @@
 import { prisma } from '~/utils/db.server';
+import { assertOrganizationTeachingApproved } from '~/domain/free-tier/locked-preview.server';
 import {
   lockClassCollaborationDeployments,
   lockStudentRosters,
@@ -22,11 +23,13 @@ export async function replaceStudentClassRoster({
     await lockStudentRosters(tx, [membershipId]);
     const membership = await tx.orgMembership.findUnique({
       where: { id: membershipId },
-      select: { classesAsStudent: { select: { id: true } } },
+      select: { organizationId: true, classesAsStudent: { select: { id: true } } },
     });
     if (!membership) throw new Error('Student membership not found.');
 
     const current = new Set(membership.classesAsStudent.map(({ id }) => id));
+    if ([...next].some(classId => !current.has(classId)))
+      await assertOrganizationTeachingApproved(tx, membership.organizationId);
     const affectedClassIds = [...new Set([...current, ...next])].sort();
     const removedClassIds = [...current].filter(
       (classId) => !next.has(classId)

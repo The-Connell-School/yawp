@@ -14,6 +14,7 @@ import {
   sessionKey,
 } from '~/utils/auth.server.ts';
 import { prisma } from '~/utils/db.server.ts';
+import { assertOrganizationTeachingApproved } from '~/domain/free-tier/locked-preview.server';
 import {
   NameSchema,
   PasswordAndConfirmPasswordSchema,
@@ -161,31 +162,43 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const hashedPassword = await getPasswordHash(data.password);
 
-  const membership = await prisma.orgMembership.create({
-    data: {
-      user: {
-        create: {
-          email,
-          name: data.name,
-          password: { create: { hash: hashedPassword } },
+  // The public invitation/class-code path has no authenticated teacher request.
+  // Check its actual destination organization before the nested user/roster
+  // write, and commit the account and session together. Preserve legacy seat
+  // semantics here; the shared approval policy is the admission backstop.
+  const { membership, session } = await prisma.$transaction(async (tx) => {
+    await assertOrganizationTeachingApproved(
+      tx,
+      partner === 'ua' ? organizationId! : klass!.school.organizationId
+    );
+    const membership = await tx.orgMembership.create({
+      data: {
+        user: {
+          create: {
+            email,
+            name: data.name,
+            password: { create: { hash: hashedPassword } },
+          },
         },
-      },
-      organization: {
-        connect: {
-          id: partner === 'ua' ? organizationId! : klass!.school.organizationId,
+        organization: {
+          connect: {
+            id:
+              partner === 'ua' ? organizationId! : klass!.school.organizationId,
+          },
         },
+        role: 'STUDENT',
+        ...(klass ? { classesAsStudent: { connect: { id: klass.id } } } : {}),
       },
-      role: 'STUDENT',
-      ...(klass ? { classesAsStudent: { connect: { id: klass.id } } } : {}),
-    },
-  });
+    });
 
-  const session = await prisma.session.create({
-    data: {
-      expirationDate: getSessionExpirationDate(),
-      user: { connect: { id: membership.userId } },
-    },
-    select: { id: true, expirationDate: true },
+    const session = await tx.session.create({
+      data: {
+        expirationDate: getSessionExpirationDate(),
+        user: { connect: { id: membership.userId } },
+      },
+      select: { id: true, expirationDate: true },
+    });
+    return { membership, session };
   });
 
   const cookies = request.headers.get('cookie');

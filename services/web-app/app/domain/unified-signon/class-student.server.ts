@@ -20,6 +20,10 @@ import { classSummary, selectedClass } from './classes.server';
 import { FlowError, stateFor, type Flow } from './flow.server';
 import { finishAuthentication } from './authentication.server';
 import {
+  rememberClassConfirmation,
+  classConfirmationState,
+} from './class-confirmation.server';
+import {
   StudentNameSchema,
   studentHandleBase,
   handleCandidate,
@@ -222,6 +226,7 @@ export async function registerStudent(
         create: { classId: klass.id, handle, handleKey: key(handle) },
       },
     },
+    include: { memberships: true },
   });
   // Google proves only the provider subject here. Its email never enters a
   // student account, challenge, invitation or login identifier.
@@ -238,16 +243,11 @@ export async function registerStudent(
   flow.data.identifier = '@' + handle;
   flow.data.userId = user.id;
   flow.data.proof = 'password';
-  flow.data.classId = undefined;
-  flow.data.classCode = undefined;
+  rememberClassConfirmation(flow, klass, user.memberships[0].id, false, handle);
   // The generated handle must be shown before navigating away. Session is
   // issued only by the explicit continuation through finishAuthentication.
   flow.data.studentChoice = undefined;
-  return stateFor(flow, {
-    screen: 'joined',
-    identifier: '@' + handle,
-    classInfo: classSummary(klass),
-  });
+  return classConfirmationState(tx, flow);
 }
 export async function studentPassword(
   tx: Prisma.TransactionClient,
@@ -308,7 +308,7 @@ export async function studentPassword(
   flow.data.proof = 'password';
   flow.data.pendingGoogle = undefined;
   flow.data.studentGoogle = undefined;
-  flow.data.classId = undefined; // Already enrolled; never enroll a wrong account.
-  flow.data.classCode = undefined;
+  // Already enrolled; never enroll a different account on a returning path.
+  rememberClassConfirmation(flow, klass, membership.id, true);
   return finishAuthentication(tx, flow, request, user.id, true, membership.id);
 }

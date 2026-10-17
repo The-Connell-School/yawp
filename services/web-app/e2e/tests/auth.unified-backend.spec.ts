@@ -3,6 +3,7 @@ import { createE2EPrismaClient } from '../prisma-client';
 import fs from 'node:fs';
 import path from 'node:path';
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'node:crypto';
 
 test.skip(
   process.env.SIGNON_LOCAL_TEST !== '1',
@@ -15,6 +16,14 @@ const flag = 'feature_flag.unified-sign-on';
 const evidence = process.env.SIGNON_EVIDENCE_DIR;
 const email = `${prefix}@example.test`;
 const capture = process.env.SIGNON_MAIL_CAPTURE_DIR!;
+test.beforeEach(async ({ context }) => {
+  // Separate journeys model separate clients. Keep one address throughout each
+  // case so proof failures, resend cooldowns and retries use the real limiters.
+  const groups = randomBytes(12).toString('hex').match(/.{4}/g)!;
+  await context.setExtraHTTPHeaders({
+    'x-forwarded-for': `2001:db8:${groups.join(':')}`,
+  });
+});
 async function shot(page: Page, name: string, width: number) {
   if (evidence) {
     fs.mkdirSync(evidence, { recursive: true });
@@ -23,7 +32,7 @@ async function shot(page: Page, name: string, width: number) {
       fullPage: true,
       mask: [
         page.locator(
-          'input[type="password"], input[name="username"], input[name="identifier"], input[name="code"], input[name="classCode"], .signon-identity, .signon-chips, #signon-username-help[role="alert"]'
+          'input[type="password"], input[name="username"], input[name="identifier"], input[name="code"], input[name="classCode"], .signon-identity, .signon-chips, .signon-copy strong, #signon-username-help[role="alert"]'
         ),
       ],
     });
@@ -61,7 +70,7 @@ test.beforeAll(async () => {
     data: {
       id: prefix,
       code: prefix,
-      name: 'Lincoln High',
+      name: 'Lincoln High School',
       organizationId: prefix,
     },
   });
@@ -73,13 +82,25 @@ test.beforeAll(async () => {
       schoolId: prefix,
     },
   });
+  await db.user.create({
+    data: {
+      email: `${prefix}-teacher@example.test`,
+      name: 'Ms. Okafor',
+      memberships: {
+        create: {
+          organizationId: prefix,
+          role: 'TEACHER',
+          classesAsTeacher: { connect: { id: prefix } },
+        },
+      },
+    },
+  });
 });
 test.afterAll(async () => {
   await db.setting.deleteMany({ where: { name: flag } });
   const users = await db.user.findMany({
     where: {
       OR: [
-        { email: { in: ['maya1280@yawp.local', 'maya390@yawp.local'] } },
         { email: { contains: prefix } },
         { memberships: { some: { organizationId: prefix } } },
       ],
@@ -97,6 +118,207 @@ test.afterAll(async () => {
   await db.organization.delete({ where: { id: prefix } });
   await db.$disconnect();
 });
+// FAILURES.md: di-signon-fix-join-confirmation. No mocked auth responses.
+for (const width of [1280, 390]) {
+  for (const journey of [
+    'password-new',
+    'password-already',
+    'handle',
+    'email-signup',
+  ]) {
+    test(`class confirmation ${journey} at ${width}`, async ({ page }) => {
+      test.setTimeout(60000);
+      await page.setViewportSize({
+        width,
+        height: width === 1280 ? 1000 : 844,
+      });
+      await db.setting.upsert({
+        where: { name: flag },
+        update: { value: 'true' },
+        create: { name: flag, value: 'true', valueType: 'boolean' },
+      });
+      const address = `${prefix}-${journey}-${width}@example.test`;
+      const username = `joined${width}${journey.replace(/-/g, '')}${Date.now()}`;
+      const password = 'local-password';
+      const already = journey === 'password-already' || journey === 'handle';
+      let userId: string;
+      if (journey !== 'email-signup') {
+        const user = await db.user.create({
+          data: {
+            email: address,
+            username,
+            name: 'Local Student',
+            password: { create: { hash: await bcrypt.hash(password, 10) } },
+            memberships: {
+              create: {
+                organizationId: prefix,
+                role: 'STUDENT',
+                ...(already
+                  ? { classesAsStudent: { connect: { id: prefix } } }
+                  : {}),
+              },
+            },
+          },
+        });
+        userId = user.id;
+      }
+      const next = () =>
+        page.getByRole('button', { name: 'Continue', exact: true });
+      await page.goto('/auth/login?redirectTo=%2Fapp%2Fmy-classes');
+      await page.waitForFunction(() =>
+        Boolean((window as any).__reactRouterDataRouter)
+      );
+      await page.getByLabel('Email or class code').fill(prefix);
+      await next().click();
+      await page
+        .getByRole('button', {
+          name: journey === 'handle' ? /^Returning/ : /^New/,
+        })
+        .click();
+      if (journey === 'handle') {
+        await page.getByLabel('Handle', { exact: true }).fill(username);
+        await page.getByLabel('Password', { exact: true }).fill(password);
+        await page.getByRole('button', { name: 'Log In', exact: true }).click();
+      } else {
+        await page
+          .getByRole('button', { name: 'Use school email', exact: true })
+          .click();
+        await page.getByLabel('School email', { exact: true }).fill(address);
+        await next().click();
+        if (journey === 'email-signup') {
+          await page
+            .getByRole('button', { name: 'Email me a code', exact: true })
+            .click();
+          await expect(page.getByLabel('Code', { exact: true })).toBeVisible();
+          await page
+            .getByLabel('Code', { exact: true })
+            .fill(await codeFor(address));
+          await page
+            .getByRole('button', { name: 'Verify', exact: true })
+            .click();
+          await page
+            .getByLabel('Your name', { exact: true })
+            .fill('Local Student');
+          await page.getByLabel('Password', { exact: true }).fill(password);
+          await page
+            .getByLabel('Confirm password', { exact: true })
+            .fill(password);
+          await page
+            .getByRole('button', { name: 'Create Account', exact: true })
+            .click();
+        } else {
+          await shot(page, `signon-40-${journey}-notice`, width);
+          await page
+            .getByRole('button', { name: 'Sign in instead', exact: true })
+            .click();
+          await page.getByLabel('Password', { exact: true }).fill(password);
+          await page
+            .getByRole('button', { name: 'Log In', exact: true })
+            .click();
+        }
+      }
+      await page.waitForLoadState('networkidle');
+      await shot(page, `signon-${already ? '44' : '43'}-${journey}`, width);
+      test.fail(
+        process.env.SIGNON_EXPECT_FAILURE === '1',
+        'Current main skips the class confirmation'
+      );
+      await expect(
+        page.getByRole('heading', {
+          name: already ? "You're already in this class" : "You're in!",
+          exact: true,
+        })
+      ).toBeVisible({ timeout: 8000 });
+      await expect(page.locator('.signon-class')).toContainText(
+        'English 11, Period 2'
+      );
+      await expect(page.locator('.signon-class')).toContainText('Lincoln High');
+      await expect(page.locator('.signon-class')).toContainText('Ms. Okafor');
+      await expect(
+        page.getByText('Your handle is', { exact: false })
+      ).toHaveCount(0);
+      const user = await db.user.findUniqueOrThrow({
+        where: { email: address },
+      });
+      userId = user.id;
+      const sessionCount = await db.session.count({ where: { userId } });
+      expect(sessionCount).toBe(1);
+      const flowCookies = (await page.context().cookies()).filter(
+        (c) => c.name === 'yawp_signon'
+      );
+      expect(flowCookies).toHaveLength(1);
+      await page.reload();
+      await expect(
+        page.getByRole('button', { name: 'Go to my class', exact: true })
+      ).toBeVisible();
+      expect(await db.session.count({ where: { userId } })).toBe(sessionCount);
+      await page
+        .getByRole('button', { name: 'Go to my class', exact: true })
+        .click();
+      await expect(page).toHaveURL(/\/app\/my-classes$/);
+      await shot(
+        page,
+        `signon-${already ? '44' : '43'}-${journey}-destination`,
+        width
+      );
+      expect(await db.session.count({ where: { userId } })).toBe(sessionCount);
+      expect(
+        await db.orgMembership.count({
+          where: { userId, classesAsStudent: { some: { id: prefix } } },
+        })
+      ).toBe(1);
+      expect(await db.user.count({ where: { email: address } })).toBe(1);
+      await page.goBack();
+      await page.waitForLoadState('networkidle');
+      expect(await db.session.count({ where: { userId } })).toBe(sessionCount);
+      expect(
+        await db.orgMembership.count({
+          where: { userId, classesAsStudent: { some: { id: prefix } } },
+        })
+      ).toBe(1);
+    });
+  }
+}
+for (const width of [1280, 390])
+  test(`confirmation flag-OFF legacy controls at ${width}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: width === 1280 ? 1000 : 844 });
+    await db.setting.deleteMany({ where: { name: flag } });
+    for (const [route, name] of [
+      ['/auth/login?screen=joined&variant=already', 'login'],
+      ['/auth/inv/signup', 'signup'],
+      ['/join?t=invalid-local-token', 'class-link'],
+      ['/free', 'free-trial'],
+    ]) {
+      await page.goto(route);
+      await expect(page.locator('[data-signon-screen]')).toHaveCount(0);
+      await shot(page, `flag-off-${name}`, width);
+    }
+    const address = `${prefix}-legacy-${width}@example.test`;
+    const user = await db.user.create({
+      data: {
+        email: address,
+        password: { create: { hash: await bcrypt.hash('local-password', 10) } },
+        memberships: { create: { organizationId: prefix, role: 'STUDENT' } },
+      },
+    });
+    await page.goto('/auth/login?redirectTo=https%3A%2F%2Fevil.example');
+    await page.getByLabel('Email or handle').fill(address);
+    await page.getByLabel('Password', { exact: true }).fill('wrong-password');
+    await page.getByRole('button', { name: 'Log in', exact: true }).click();
+    await expect(page.getByText('Invalid email or password')).toBeVisible();
+    expect(await db.session.count({ where: { userId: user.id } })).toBe(0);
+    await page.getByLabel('Password', { exact: true }).fill('local-password');
+    await page.getByRole('button', { name: 'Log in', exact: true }).click();
+    await expect(page).toHaveURL(/\/app\/?$/);
+    expect(await db.session.count({ where: { userId: user.id } })).toBe(1);
+    expect(
+      await db.orgMembership.count({
+        where: { userId: user.id, classesAsStudent: { some: { id: prefix } } },
+      })
+    ).toBe(0);
+  });
 // Real resolver/registration regression for FAILURES.md di-signon-fix-email-handle-notice.
 for (const width of [1280, 390])
   test(`email-origin free-class notice survives navigation and validation at ${width}`, async ({
@@ -274,6 +496,17 @@ for (const width of [1280, 390])
         },
       });
       expect(alias.userId).not.toBe(taken.id);
+      expect(await db.session.count({ where: { userId: alias.userId } })).toBe(
+        0
+      );
+      await shot(page, 'signon-43-generated-handle', width);
+      await page.reload();
+      await expect(
+        page.getByText('@LocalNotice1', { exact: true })
+      ).toBeVisible();
+      expect(await db.session.count({ where: { userId: alias.userId } })).toBe(
+        0
+      );
       await page
         .getByRole('button', { name: 'Go to my class', exact: true })
         .click();
@@ -496,6 +729,12 @@ for (const width of [1280, 390])
     ).toBe(0);
     await page.getByLabel('Password', { exact: true }).fill(password);
     await page.getByRole('button', { name: 'Log In', exact: true }).click();
+    await expect(
+      page.getByRole('heading', { name: "You're in!", exact: true })
+    ).toBeVisible();
+    await page
+      .getByRole('button', { name: 'Go to my class', exact: true })
+      .click();
     await page.waitForURL('**/app/my-classes');
     expect(await db.session.count({ where: { userId: user.id } })).toBe(1);
     expect(
@@ -690,7 +929,7 @@ for (const width of [1280, 390])
       update: { value: 'true' },
       create: { name: flag, value: 'true', valueType: 'boolean' },
     });
-    const address = `maya${width}@yawp.local`;
+    const address = `${prefix}-maya${width}@example.test`;
     // Email identity is retained only for the existing invitation path. New
     // class-code registrations use generated handles in auth.unified-classcode.
     await db.invitation.create({
@@ -778,6 +1017,13 @@ for (const width of [1280, 390])
       .fill('local-password');
     await page
       .getByRole('button', { name: 'Create Account', exact: true })
+      .click();
+    await expect(
+      page.getByRole('heading', { name: "You're in!", exact: true })
+    ).toBeVisible();
+    await shot(page, 'signon-43-invited-email', width);
+    await page
+      .getByRole('button', { name: 'Go to my class', exact: true })
       .click();
     await expect(page).toHaveURL(/\/app\/my-classes$/);
     const user = await db.user.findUniqueOrThrow({

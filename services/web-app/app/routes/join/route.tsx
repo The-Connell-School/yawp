@@ -34,6 +34,7 @@ import { combineHeaders } from '~/utils/misc';
 import { UsernameFieldSchema } from '~/utils/schemas/username';
 import { AuthPageShell } from '~/components/auth-brand-lockup';
 import { FREE_CLASS_CLASS_FULL_MESSAGE } from '~/domain/free-tier/class-seat-cap';
+import { UnifiedLogin } from '~/components/unified-signon/unified-login';
 
 const JoinSchema = z
   .object({
@@ -71,29 +72,30 @@ export async function loader({ request }: LoaderFunctionArgs) {
     );
   }
   const klass = await findFreeTierClassByJoinToken(token);
-  if (klass) {
-    const { isUnifiedSignOnEnabled } =
-      await import('~/domain/unified-signon/gate.server');
-    if (await isUnifiedSignOnEnabled()) {
-      const { createFlow, saveNewFlow, flowCookie } =
-        await import('~/domain/unified-signon/flow.server');
-      const { chooseClass } =
-        await import('~/domain/unified-signon/classes.server');
-      const { prisma } = await import('~/utils/db.server');
-      const flow = await createFlow(request, '/app');
-      flow.data.classCode = klass.code;
-      flow.data.classCandidates = [klass.id];
-      await prisma.$transaction((tx) => chooseClass(tx, flow, klass.id));
-      await saveNewFlow(flow);
-      throw redirect('/auth/login?continue=1', {
-        headers: {
-          'set-cookie': await flowCookie.serialize({
-            browser: flow.browser,
-            token: flow.token,
-          }),
-        },
-      });
-    }
+  const { isUnifiedSignOnEnabled } =
+    await import('~/domain/unified-signon/gate.server');
+  if (await isUnifiedSignOnEnabled()) {
+    // A rejected token supplies no trusted class context and must not create a flow.
+    if (!klass) return { joinToken: null, klass: null, invalidLink: true };
+
+    const { createFlow, saveNewFlow, flowCookie } =
+      await import('~/domain/unified-signon/flow.server');
+    const { chooseClass } =
+      await import('~/domain/unified-signon/classes.server');
+    const { prisma } = await import('~/utils/db.server');
+    const flow = await createFlow(request, '/app');
+    flow.data.classCode = klass.code;
+    flow.data.classCandidates = [klass.id];
+    await prisma.$transaction((tx) => chooseClass(tx, flow, klass.id));
+    await saveNewFlow(flow);
+    throw redirect('/auth/login?continue=1', {
+      headers: {
+        'set-cookie': await flowCookie.serialize({
+          browser: flow.browser,
+          token: flow.token,
+        }),
+      },
+    });
   }
   return { joinToken: token, klass };
 }
@@ -192,6 +194,20 @@ export default function JoinRoute() {
 
   const actionData = useActionData<{ fieldErrors?: Record<string, string> }>();
   const formLevelError = actionData?.fieldErrors?._form;
+
+  if ('invalidLink' in data && data.invalidLink) {
+    return (
+      <AuthPageShell>
+        <UnifiedLogin
+          entry={{
+            redirectTo: '/app',
+            googleAvailable: false,
+            initialState: { screen: 'handle-join', variant: 'invalid-link' },
+          }}
+        />
+      </AuthPageShell>
+    );
+  }
 
   if (!data.joinToken || !data.klass) {
     return (

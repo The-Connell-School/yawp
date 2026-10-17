@@ -157,6 +157,16 @@ for (const width of [1280, 390])
     ).toHaveCount(0);
     await shot('signon-41-returning');
     await page.getByRole('button', { name: 'Log In', exact: true }).click();
+    await expect(
+      page.getByRole('heading', {
+        name: "You're already in this class",
+        exact: true,
+      })
+    ).toBeVisible();
+    await shot('signon-44-returning-confirmation');
+    await page
+      .getByRole('button', { name: 'Go to my class', exact: true })
+      .click();
     await expect(page).toHaveURL(/\/app/);
   });
 for (const width of [1280, 390])

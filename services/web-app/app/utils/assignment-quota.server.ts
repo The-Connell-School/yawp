@@ -8,6 +8,7 @@ import {
   getEntitlementsForPlan,
 } from '~/utils/entitlements.server';
 import { prisma } from '~/utils/db.server';
+import { assertOrganizationTeachingApproved } from '~/domain/free-tier/locked-preview.server';
 
 export class FreeClassroomAssignmentQuotaError extends Error {
   readonly code: 'quota_exhausted' | 'kind_not_allowed';
@@ -191,6 +192,7 @@ async function assertCanConsumeAssignmentKindSlot(
   kind: string | null | undefined
 ) {
   if (organization.plan !== 'FREE_CLASSROOM') return;
+  await assertOrganizationTeachingApproved(tx, organization.id);
   if (!isFreeClassroomAssignmentKind(kind)) {
     throw new FreeClassroomAssignmentQuotaError(
       'That assignment type is not included in the free classroom bundle.',

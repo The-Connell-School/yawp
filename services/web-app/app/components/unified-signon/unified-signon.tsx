@@ -642,7 +642,11 @@ export function UnifiedSignon({
           </>
         );
       below =
-        screen === 'class-handle' ? (
+        variant === 'invalid-link' ? (
+          <p>
+            Already have an account? <Link to="/auth/login">Sign in</Link>
+          </p>
+        ) : screen === 'class-handle' ? (
           <>
             {state.classInfo?.accountMode === 'email' &&
               textButton('Use school email', () => void run('student-email'))}
@@ -965,10 +969,12 @@ export function UnifiedSignon({
       body = (
         <>
           {classCard()}
-          <p className="signon-copy">
-            Your handle is <strong>{identifier}</strong>. Write it down to sign
-            in to this class.
-          </p>
+          {identifier?.startsWith('@') && (
+            <p className="signon-copy">
+              Your handle is <strong>{identifier}</strong>. Write it down to
+              sign in to this class.
+            </p>
+          )}
           {primary('Go to my class', 'complete-student')}
         </>
       );
@@ -1080,7 +1086,9 @@ export function UnifiedSignon({
       ? Mail
       : screen === 'joined'
         ? CircleCheck
-        : screen === 'inactive'
+        : screen === 'inactive' ||
+            (['handle-join', 'class-handle'].includes(screen) &&
+              variant === 'invalid-link')
           ? Info
           : screen === 'trial-status'
             ? variant === 'invited'
@@ -1091,12 +1099,15 @@ export function UnifiedSignon({
             : undefined;
   const hasNativeForm =
     (!!passwordForm && ['password', 'required-password'].includes(screen)) ||
-    (screen === 'inactive' && variant === 'staff');
+    (screen === 'inactive' && variant === 'staff') ||
+    (['handle-join', 'class-handle'].includes(screen) &&
+      variant === 'invalid-link');
 
   return (
     <section
       className="unified-signon"
       data-signon-screen={screen}
+      data-signon-variant={variant}
       aria-busy={busy}
     >
       <div className="signon-stack">
