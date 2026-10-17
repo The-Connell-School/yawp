@@ -1408,14 +1408,20 @@ export function AssignmentCreationSheetContent({
       <div
         className={
           platformEnhancementsEnabled
-            ? 'space-y-2 rounded-lg border border-dashed p-3'
+            ? 'grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 rounded-lg border border-dashed p-3'
             : 'space-y-2'
         }
       >
         <Label htmlFor="assignment-create-attachment">
           Attachment (optional)
         </Label>
-        <p className="text-sm text-muted-foreground">
+        <p
+          className={
+            platformEnhancementsEnabled
+              ? 'col-start-1 text-sm text-muted-foreground'
+              : 'text-sm text-muted-foreground'
+          }
+        >
           {platformEnhancementsEnabled ? (
             'Students can open it beside the prompt while they write.'
           ) : (
@@ -1427,7 +1433,13 @@ export function AssignmentCreationSheetContent({
           )}
         </p>
         {editingAssignment?.promptAttachmentName && !removeAttachment ? (
-          <div className="flex items-center justify-between gap-3 rounded-md border p-3 text-sm">
+          <div
+            className={
+              platformEnhancementsEnabled
+                ? 'col-span-full flex min-w-0 items-center justify-between gap-3 rounded-md border p-3 text-sm'
+                : 'flex items-center justify-between gap-3 rounded-md border p-3 text-sm'
+            }
+          >
             <span className="truncate">
               {editingAssignment.promptAttachmentName}
             </span>
@@ -1470,7 +1482,13 @@ export function AssignmentCreationSheetContent({
           </Button>
         ) : null}
         {attachmentFile ? (
-          <div className="flex items-center justify-between gap-3 rounded-md border p-3 text-sm">
+          <div
+            className={
+              platformEnhancementsEnabled
+                ? 'col-span-full flex min-w-0 items-center justify-between gap-3 rounded-md border p-3 text-sm'
+                : 'flex items-center justify-between gap-3 rounded-md border p-3 text-sm'
+            }
+          >
             <span className="truncate">{attachmentFile.name}</span>
             <Button
               type="button"

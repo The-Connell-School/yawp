@@ -1536,6 +1536,20 @@ describe('AssignmentCreationSheetContent without writing conditions', () => {
   });
 });
 
+function postedData(form: HTMLFormElement) {
+  return [...new FormData(form).entries()]
+    .map(
+      ([name, value]) =>
+        [
+          name,
+          typeof value === 'string'
+            ? value
+            : { name: value.name, size: value.size, type: value.type },
+        ] as const
+    )
+    .sort(([a], [b]) => a.localeCompare(b));
+}
+
 // Compare successful controls, including repeated false/true fallbacks, rather
 // than only checking text. Hiding Advanced must never remove posted values.
 describe('platform enhancements form compatibility', () => {
@@ -1588,11 +1602,7 @@ describe('platform enhancements form compatibility', () => {
           platformEnhancementsEnabled: enabled,
         }));
         const form = document.querySelector('form')!;
-        forms.push(
-          [...new FormData(form).entries()]
-            .filter(([name]) => name !== 'promptAttachment')
-            .sort(([a], [b]) => a.localeCompare(b))
-        );
+        forms.push(postedData(form));
         if (enabled) {
           expect(controlById('assignment-create-advanced-content').hidden).toBe(
             true
@@ -1602,15 +1612,9 @@ describe('platform enhancements form compatibility', () => {
               'aria-expanded'
             )
           ).toBe('false');
-          const collapsed = [...new FormData(form).entries()]
-            .filter(([name]) => name !== 'promptAttachment')
-            .sort(([a], [b]) => a.localeCompare(b));
+          const collapsed = postedData(form);
           act(() => controlById('assignment-create-advanced-toggle').click());
-          expect(
-            [...new FormData(form).entries()]
-              .filter(([name]) => name !== 'promptAttachment')
-              .sort(([a], [b]) => a.localeCompare(b))
-          ).toEqual(collapsed);
+          expect(postedData(form)).toEqual(collapsed);
         }
         cleanup(root);
         root = null;
@@ -1711,12 +1715,37 @@ it('posts changed points, reading level, grammar and group settings after collap
     expect(data.get('gradingAssistantStrictnessLevel')).toBe('advanced');
     expect(data.get('collaborationGroupMode')).toBe('random');
     expect(data.get('collaborationGroupSize')).toBe('4');
-    snapshots.push(
-      [...data.entries()]
-        .filter(([name]) => name !== 'promptAttachment')
-        .sort(([a], [b]) => a.localeCompare(b))
-    );
+    snapshots.push(postedData(document.querySelector('form')!));
     cleanup(root);
   }
   expect(snapshots[1]).toEqual(snapshots[0]);
+});
+
+it('keeps attachment removal identical in either editing layout', () => {
+  const forms: unknown[] = [];
+  for (const enabled of [false, true]) {
+    const { root } = renderSheet({
+      platformEnhancementsEnabled: enabled,
+      editingAssignment: { id: 'existing', promptAttachmentName: 'notes.pdf' },
+      initialAssignmentTypeId: 'type-1',
+      initialPrompt: 'Write.',
+    });
+    const input = document.querySelector<HTMLInputElement>(
+      'input[name="promptAttachment"]'
+    )!;
+    expect(input.type).toBe('file');
+    expect(input.accept).toBe('application/pdf,.pdf');
+    const remove = Array.from(document.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Remove'
+    )!;
+    act(() => remove.click());
+    expect(
+      new FormData(document.querySelector('form')!).get(
+        'removePromptAttachment'
+      )
+    ).toBe('true');
+    forms.push(postedData(document.querySelector('form')!));
+    cleanup(root);
+  }
+  expect(forms[1]).toEqual(forms[0]);
 });

@@ -408,7 +408,7 @@ function PromptCard({
       <button
         type="button"
         onClick={onSelect}
-        className={`block w-full min-w-0 cursor-pointer rounded-lg border ${enhanced ? 'bg-popover' : 'bg-card'} p-4 text-left text-card-foreground shadow-sm transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring${enhanced ? ' h-full' : ''}`}
+        className={`block w-full min-w-0 cursor-pointer rounded-lg border ${enhanced ? 'bg-popover' : 'bg-card'} p-4 text-left text-card-foreground shadow-sm transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring${enhanced ? ' flex h-full flex-col justify-start' : ''}`}
       >
         <div className="flex w-full min-w-0 flex-col gap-3">
           <div
@@ -438,28 +438,43 @@ function PromptCard({
             {prompt.prompt}
           </p>
 
-          <div className="flex flex-wrap gap-2">
-            {text ? (
-              <Badge variant="outline" size="sm">
-                {text}
-              </Badge>
-            ) : null}
-            {prompt.subjects[0] ? (
-              <Badge variant="outline" size="sm">
-                {prompt.subjects[0]}
-              </Badge>
-            ) : null}
-            {move ? (
-              <Badge variant="outline" size="sm">
-                {COGNITIVE_MOVE_LABEL[move]}
-              </Badge>
-            ) : null}
-            {prompt.gradeBands.length > 0 ? (
-              <Badge variant="outline" size="sm">
-                Grades {prompt.gradeBands.join(', ')}
-              </Badge>
-            ) : null}
-          </div>
+          {enhanced ? (
+            <p className="text-xs font-normal leading-5 text-muted-foreground">
+              {[
+                text,
+                prompt.subjects[0],
+                move ? COGNITIVE_MOVE_LABEL[move] : null,
+                prompt.gradeBands.length
+                  ? `Grades ${prompt.gradeBands.join(', ')}`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {text ? (
+                <Badge variant="outline" size="sm">
+                  {text}
+                </Badge>
+              ) : null}
+              {prompt.subjects[0] ? (
+                <Badge variant="outline" size="sm">
+                  {prompt.subjects[0]}
+                </Badge>
+              ) : null}
+              {move ? (
+                <Badge variant="outline" size="sm">
+                  {COGNITIVE_MOVE_LABEL[move]}
+                </Badge>
+              ) : null}
+              {prompt.gradeBands.length > 0 ? (
+                <Badge variant="outline" size="sm">
+                  Grades {prompt.gradeBands.join(', ')}
+                </Badge>
+              ) : null}
+            </div>
+          )}
         </div>
       </button>
     </li>
