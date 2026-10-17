@@ -71,6 +71,8 @@ export function aiAdmissionErrorResponse(error: unknown): Response | null {
 export async function assertAiFreeTierSpendAllowed(
   organizationId: string
 ): Promise<void> {
+  const { assertOrganizationTeachingApproved } = await import('~/domain/free-tier/locked-preview.server');
+  await assertOrganizationTeachingApproved(prisma, organizationId);
   const { isFreeTierEnabled } = await import(
     '~/domain/feature-flags/feature-flags.server'
   );

@@ -16,7 +16,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("Yawp project agent CLI", () => {
   test("advertises onboarding profiles in capabilities and CLI help", () => {
-    const profiles = ["free-tier-approval-migration", "free-tier-class-step-unit", "free-tier-class-step-browser", "free-tier-welcome-unit", "free-tier-welcome-browser", "free-tier-welcome-live-browser", "free-tier-welcome-db"];
+    const profiles = ["free-tier-approval-migration", "free-tier-locked-preview-unit", "free-tier-locked-preview-db", "free-tier-locked-preview-browser", "free-tier-class-step-unit", "free-tier-class-step-browser", "free-tier-welcome-unit", "free-tier-welcome-browser", "free-tier-welcome-live-browser", "free-tier-welcome-db"];
     const result = spawnSync(path.join(root, "bin/project"), ["test", "--help"], {
       cwd: root, encoding: "utf8", timeout: 10000, env: { ...process.env, CI: "1" },
     });

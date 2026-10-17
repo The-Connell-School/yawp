@@ -8,6 +8,7 @@ import {
 } from '~/domain/collaboration/class-assignment-lock.server';
 import { prisma } from '~/utils/db.server';
 import { FreeClassSeatError } from './free-class-seat-error';
+import { assertOrganizationTeachingApproved } from './locked-preview.server';
 
 export type FreeClassSeatCheckResult =
   | { ok: true; plan: OrganizationPlan }
@@ -66,6 +67,7 @@ export async function assertFreeClassSeatAvailableInTx(
   tx: Prisma.TransactionClient,
   params: { classId: string; organizationId: string }
 ): Promise<FreeClassSeatCheckResult> {
+  await assertOrganizationTeachingApproved(tx, params.organizationId);
   await lockClassRosterSeatCap(tx, params.classId);
 
   const klass = await tx.class.findFirst({
