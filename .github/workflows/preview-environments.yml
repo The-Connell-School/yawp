@@ -46,9 +46,10 @@ jobs:
             --json title,body,headRefName,baseRefName,labels \
             > "$RUNNER_TEMP/pr.json"
 
-          # Use the live label list and jq equality for an exact, case-sensitive
-          # label match, including removal queued behind another deployment.
-          unified_sign_on="$(jq -r '[.labels[]?.name] | index("preview-flag:unified-sign-on") != null' "$RUNNER_TEMP/pr.json")"
+          # Unified sign-on is ON in every PR preview by default. The exact,
+          # case-sensitive opt-out label turns it OFF for that preview only. Use
+          # the live label list so removal queued behind another deploy counts.
+          unified_sign_on="$(jq -r '[.labels[]?.name] | index("preview-flag:unified-sign-on-off") == null' "$RUNNER_TEMP/pr.json")"
           echo "unified_sign_on=$unified_sign_on" >> "$GITHUB_OUTPUT"
 
           title="$(jq -r '.title // ""' "$RUNNER_TEMP/pr.json")"
@@ -58,7 +59,7 @@ jobs:
 
           if [[ "$EVENT_ACTION" == "closed" ]]; then
             reason=closed
-          elif [[ ( "$EVENT_ACTION" == "labeled" || "$EVENT_ACTION" == "unlabeled" ) && "$EVENT_LABEL" != "preview-flag:unified-sign-on" && "$EVENT_LABEL" != "sanitized-production-data" ]]; then
+          elif [[ ( "$EVENT_ACTION" == "labeled" || "$EVENT_ACTION" == "unlabeled" ) && "$EVENT_LABEL" != "preview-flag:unified-sign-on-off" && "$EVENT_LABEL" != "sanitized-production-data" ]]; then
             reason=unrelated_label
           elif [[ "$base_ref" != "$DEFAULT_BRANCH" ]]; then
             reason=non_default_base

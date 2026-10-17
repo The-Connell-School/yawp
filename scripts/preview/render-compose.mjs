@@ -43,7 +43,7 @@ export function renderPreviewCompose({
   enableTls = process.env.PREVIEW_TLS !== 'false',
   runtime = process.env.PREVIEW_RUNTIME || 'fast',
   dataMode = process.env.PREVIEW_DATA_MODE || 'seed',
-  unifiedSignOn = process.env.PREVIEW_UNIFIED_SIGN_ON ?? 'false',
+  unifiedSignOn = process.env.PREVIEW_UNIFIED_SIGN_ON ?? 'true',
   controlDir = process.env.PREVIEW_CONTROL_DIR || dirname(fileURLToPath(import.meta.url)),
   databaseUser = process.env.PREVIEW_DB_USER,
   databasePassword = process.env.PREVIEW_DB_PASSWORD,

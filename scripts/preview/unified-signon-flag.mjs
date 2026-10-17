@@ -42,13 +42,14 @@ export async function applyPreviewSignonFlag(env = process.env, createClient = c
   if (!isYawpPrPreviewDatabase(env.DATABASE_URL)) {
     throw new Error('Unified sign-on updater requires an isolated PR preview database');
   }
-  const enabled = env.PREVIEW_UNIFIED_SIGN_ON ?? 'false';
+  // PR previews default to ON; only an explicit false (opt-out label) turns it off.
+  const enabled = env.PREVIEW_UNIFIED_SIGN_ON ?? 'true';
   if (!['true', 'false'].includes(enabled)) {
     throw new Error('PREVIEW_UNIFIED_SIGN_ON must be true or false');
   }
   const mode = enabled === 'true' ? 'everyone' : 'off';
   const value = JSON.stringify({ mode, orgIds: [] });
-  const fields = { value, valueType: 'json', description: 'Last changed by preview deployment label' };
+  const fields = { value, valueType: 'json', description: 'Last changed by preview deployment (default on; opt-out label)' };
   // No client construction, connection or write occurs until every guard passes.
   const prisma = await createClient(env.DATABASE_URL);
   try {
