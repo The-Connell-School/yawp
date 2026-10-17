@@ -7,7 +7,8 @@ import {
   OwnerOnboardingMetadataSchema,
 } from '~/utils/schemas/invitation';
 import { FlowError, type Flow } from './flow.server';
-import { classSummary, lookupClasses } from './classes.server';
+import { classSummary, lookupClasses, selectedClass } from './classes.server';
+import { rememberClassConfirmation } from './class-confirmation.server';
 import { requireUaOrganizationId } from '~/utils/ua-partner.server';
 
 /** Resolve the existing invitation contract only after email/provider proof.
@@ -313,7 +314,13 @@ export async function acceptStudentInvitation(
     if (!enrolled.ok) throw new FlowError(enrolled.error);
   }
   flow.data.invitationId = undefined;
-  flow.data.classId = undefined;
-  flow.data.classCode = undefined;
+  const klass = await selectedClass(tx, flow);
+  if (!klass) throw new FlowError('Class not found.');
+  rememberClassConfirmation(
+    flow,
+    klass,
+    target.id,
+    Boolean(member?.classesAsStudent.length)
+  );
   return target.id;
 }

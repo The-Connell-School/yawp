@@ -965,10 +965,12 @@ export function UnifiedSignon({
       body = (
         <>
           {classCard()}
-          <p className="signon-copy">
-            Your handle is <strong>{identifier}</strong>. Write it down to sign
-            in to this class.
-          </p>
+          {identifier?.startsWith('@') && (
+            <p className="signon-copy">
+              Your handle is <strong>{identifier}</strong>. Write it down to
+              sign in to this class.
+            </p>
+          )}
           {primary('Go to my class', 'complete-student')}
         </>
       );

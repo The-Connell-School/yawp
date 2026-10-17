@@ -6,6 +6,7 @@ import { createPreviewAccessMiddleware } from '~/utils/preview-access.server';
 import {
   qaId,
   qaEmail,
+  QA_CODES,
   seedPreviewSignonQa,
 } from '../../../../../packages/prisma/scripts/seed-preview-signon-qa';
 import { LOCAL_DEV_PASSWORD } from '../../../../../packages/prisma/scripts/local-dev/dev-personas';
@@ -605,6 +606,59 @@ suite(
       expect(
         await prisma.session.count({ where: { userId: qaId('orphan') } })
       ).toBe(before);
+    }
+  }
+);
+
+suite(
+  'a trusted class confirmation retains ordinary preview access requirements on explicit continuation',
+  async () => {
+    for (const removeSeat of [false, true]) {
+      fresh();
+      await master();
+      await post('resolve', {
+        identifier: qaEmail('password'),
+        redirectTo: '/app/my-classes',
+      });
+      await post('resolve-class', { classCode: QA_CODES.school });
+      expect(
+        (await post('password', { password: LOCAL_DEV_PASSWORD })).response
+          .status
+      ).toBe(302);
+      const joined = (await (await continuation()).json()).initialState;
+      expect(joined.screen).toBe('joined');
+      expect(joined.variant).toBe('already');
+      const sessions = await prisma.session.count({
+        where: { userId: qaId('password') },
+      });
+      if (removeSeat)
+        cookie = cookie
+          .split('; ')
+          .filter((c) => !c.startsWith('__yawp_preview_access='))
+          .join('; ');
+      let reached = false;
+      const result = await createPreviewAccessMiddleware()(
+        {
+          request: request('/auth/login', {
+            intent: 'complete-student',
+            flowToken: token,
+            screen: 'joined',
+          }),
+        } as any,
+        async () => {
+          reached = true;
+          return (await post('complete-student')).response;
+        }
+      );
+      expect(reached).toBe(!removeSeat);
+      expect((result as Response).status).toBe(removeSeat ? 401 : 302);
+      if (!removeSeat)
+        expect((result as Response).headers.get('location')).toBe(
+          '/app/my-classes'
+        );
+      expect(
+        await prisma.session.count({ where: { userId: qaId('password') } })
+      ).toBe(sessions);
     }
   }
 );

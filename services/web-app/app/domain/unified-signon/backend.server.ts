@@ -47,6 +47,7 @@ import { chooseClass, resolveClasses, selectedClass } from './classes.server';
 import { deliverCode } from './mail.server';
 import { assertResendMailAvailable } from './resend-mail.server';
 import { finishAuthentication } from './authentication.server';
+import { rememberClassConfirmation } from './class-confirmation.server';
 import { readInvitation, prepareInvitation } from './invitations.server';
 import { beginGoogle, googleAvailable } from './google.server';
 
@@ -82,6 +83,7 @@ export async function resolveIdentifier(
       identifier: 'That email looks incomplete. Check it and try again.',
     });
   if (!parsed) throw new FlowError('Enter your email or class code.');
+  flow.data.classConfirmation = undefined;
   flow.data.studentEmailOrigin = undefined;
   if (parsed.kind !== 'email') {
     flow.data.identifier = undefined;
@@ -475,8 +477,16 @@ async function createAccount(
     flow.data.pendingGoogle = undefined;
   }
   // Already connected by the authoritative signup operation in this transaction.
-  flow.data.classId = undefined;
-  flow.data.classCode = undefined;
+  if (klass) {
+    const membership = await tx.orgMembership.findUniqueOrThrow({
+      where: { userId_organizationId: { userId: user.id, organizationId } },
+      select: { id: true },
+    });
+    rememberClassConfirmation(flow, klass, membership.id, false);
+  } else {
+    flow.data.classId = undefined;
+    flow.data.classCode = undefined;
+  }
   if (flow.data.partner) flow.data.destination = '/billing/ua';
   return finishAuthentication(tx, flow, request, user.id);
 }
@@ -542,16 +552,34 @@ async function operate(
     if (
       flow.data.state.screen !== 'joined' ||
       !flow.data.userId ||
-      flow.data.proof !== 'password'
+      (!flow.data.proof && authenticatedUserId !== flow.data.userId) ||
+      !flow.data.classConfirmation
     )
       throw new FlowError();
-    return finishAuthentication(tx, flow, request, flow.data.userId);
+    // Only generated-handle registration defers its first session. Other
+    // journeys must retain their authenticated owner across this continuation.
+    const issueSession =
+      !authenticatedUserId &&
+      flow.data.classConfirmation.issueSessionOnContinue === true &&
+      flow.data.proof === 'password';
+    if (!issueSession && authenticatedUserId !== flow.data.userId)
+      throw new FlowError('Sign in to continue.', 401);
+    return finishAuthentication(
+      tx,
+      flow,
+      request,
+      flow.data.userId,
+      issueSession,
+      undefined,
+      true
+    );
   }
   if (operation === 'resolve')
     return resolveIdentifier(tx, flow, values.identifier || '');
   if (operation === 'resolve-class') {
     if (flow.data.purpose === 'reset')
       throw new FlowError('Finish resetting your password first.');
+    flow.data.classConfirmation = undefined;
     if (flow.data.state.screen === 'ambiguity') {
       flow.data.identifier = undefined;
       flow.data.userId = undefined;
