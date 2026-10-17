@@ -98,7 +98,12 @@ ways (Kevin, 2026-10-17):
 3. **PowerPoint**: the .pptx download, for teachers who edit in PowerPoint.
    Keynote is not a target.
 
-Then the lesson plan, and on Day 1 the two handouts. Teachers only;
+Then the lesson plan, and on Day 1 the two handouts.
+
+The same buttons appear on the Faculty Lounge's Trainings (#484, merged into
+this work): in the Thesis-Driven Essay course, each "Lesson N: …" module
+shows a **Teach this lesson** card with Lesson N's buttons, above the files
+uploaded to that module. Presenting from there closes back to the module. Teachers only;
 downloads come from `/api/thesis-essay-deck/:slug` (`<deck>`,
 `<deck>-lesson-plan`, `student-sign-up`, `sample-essay-bored-in-the-usa`), and
 the presenter's pictures from `/api/thesis-essay-deck-asset/*`. With the flag

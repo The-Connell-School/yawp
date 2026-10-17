@@ -302,6 +302,11 @@ quick once its questions are answered.
    code, rather than converting the file. Google Slides copies are master
    copies checked by hand in Google Slides; the button appears per deck once
    its master copy exists.
+10. **One PR with the Faculty Lounge** (Kevin, 2026-10-17): #452 merged into
+    #484, since the Lounge's Thesis-Driven Essay training is where teachers
+    look for these materials. Each lesson module of that training shows the
+    lesson's deck buttons; the files uploaded to the module stay listed below
+    them.
 
 ## Questions that were settled above
 
