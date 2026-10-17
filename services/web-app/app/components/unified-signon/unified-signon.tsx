@@ -157,7 +157,15 @@ export function UnifiedSignon({
         invalidFieldToFocus.current = Object.keys(
           result.fieldErrors || {}
         ).find((name) => result.fieldErrors?.[name]);
-        setState((s) => ({ ...s, ...result }));
+        setState((s) => ({
+          ...s,
+          // Enrollment can fail after a class choice or email verification.
+          // Render its field error on the retryable code form for every caller.
+          ...(result.fieldErrors?.classCode
+            ? { screen: 'class-code' as const, variant: undefined }
+            : {}),
+          ...result,
+        }));
       }
     } catch {
       setState((s) => ({
