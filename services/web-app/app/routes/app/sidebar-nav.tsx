@@ -2,6 +2,11 @@ import { Link, useRouteLoaderData } from 'react-router';
 import type { Route as RootRoute } from '../../+types/root';
 import {
   BookOpenIcon,
+  Building,
+  Coffee,
+  File,
+  PenLine,
+  ShieldCheck,
   NotebookPen,
   CogIcon,
   FileText,
@@ -12,6 +17,7 @@ import {
   MonitorPlay,
   Users,
 } from 'lucide-react';
+import { usePlatformEnhancements } from '~/hooks/usePlatformEnhancements';
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
 import type { useUser } from '~/hooks/useUser';
@@ -59,6 +65,26 @@ const icons = {
   organization: <CogIcon size={20} className="shrink-0" />,
   admin: <LockIcon size={20} className="shrink-0" />,
 };
+
+const platformIcons = {
+  Dashboard: GaugeIcon,
+  'My Classes': Users,
+  'My Assignments': PenLine,
+  Documents: File,
+  'My Documents': File,
+  Reporter: Microscope,
+  'Writing Practice': NotebookPen,
+  "Teacher's Lounge": Coffee,
+  Organization: Building,
+  Admin: ShieldCheck,
+  'Lesson Planner': Lightbulb,
+};
+
+export function getSidebarIcon(label: string, enabled: boolean, original: React.ReactNode) {
+  if (!enabled) return original;
+  const Icon = platformIcons[label as keyof typeof platformIcons];
+  return Icon ? <Icon size={18} className="shrink-0" /> : original;
+}
 
 export const FLAT_SIDEBAR_SECTIONS: SidebarNavSection[] = [
   {
@@ -181,6 +207,7 @@ export function SidebarNavLinks({
   isAppNavLinkActive,
   forceFullNavigation = false,
 }: SidebarNavLinksProps) {
+  const platformEnhancementsEnabled = usePlatformEnhancements();
   const lessonPlannerFlagOn =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root')
       ?.lessonPlannerEnabled ?? false;
@@ -207,6 +234,9 @@ export function SidebarNavLinks({
           ) : null}
           <div className="grid gap-1">
             {section.links.map((link) => {
+              // The free-account Reporter includes a lock badge; its supplied
+              // icon already uses the new mapping and must retain that badge.
+              const icon = link.to === '/app/reporter' ? link.icon : getSidebarIcon(link.label, platformEnhancementsEnabled, link.icon);
               const isActive = isAppNavLinkActive(link.to, pathname);
               const className = cn(
                 'flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
@@ -226,9 +256,9 @@ export function SidebarNavLinks({
                     reloadDocument
                     to={link.to}
                   >
-                    {link.icon ? (
+                    {icon ? (
                       navExpanded ? (
-                        link.icon
+                        icon
                       ) : (
                         <Tooltip
                           key={link.to}
@@ -236,7 +266,7 @@ export function SidebarNavLinks({
                           open={navExpanded ? false : undefined}
                           contentProps={{ side: 'right' }}
                         >
-                          {link.icon}
+                          {icon}
                         </Tooltip>
                       )
                     ) : null}
@@ -254,9 +284,9 @@ export function SidebarNavLinks({
                   aria-current={isActive ? 'page' : undefined}
                   className={className}
                 >
-                  {link.icon ? (
+                  {icon ? (
                     navExpanded ? (
-                      link.icon
+                      icon
                     ) : (
                       <Tooltip
                         key={link.to}
@@ -264,7 +294,7 @@ export function SidebarNavLinks({
                         open={navExpanded ? false : undefined}
                         contentProps={{ side: 'right' }}
                       >
-                        {link.icon}
+                        {icon}
                       </Tooltip>
                     )
                   ) : null}

@@ -53,6 +53,9 @@ export const DEMO_FEEDBACK_FLAG = 'demo-feedback-widget' as const;
 
 export const GUIDED_TOURS_FLAG = 'guided-tours' as const;
 
+/** Presentation rollout. Missing Setting row stays off everywhere. */
+export const PLATFORM_ENHANCEMENTS_FLAG = 'platform-enhancements' as const;
+
 export const FEATURE_FLAGS = {
   [LESSON_PLANNER_FLAG]: {
     label: 'Lesson Planner',
@@ -95,6 +98,10 @@ export const FEATURE_FLAGS = {
   [GUIDED_TOURS_FLAG]: {
     label: 'Free classroom page tours',
     description: 'Welcome cards, page replay and tour progress for free classroom teachers. Default off on demo and production; free tier must also be enabled.',
+  },
+  [PLATFORM_ENHANCEMENTS_FLAG]: {
+    label: 'Platform enhancements',
+    description: 'New sidebar icons, the regrouped New Assignment sheet and the paged prompt library. Default off on demo and production.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 
