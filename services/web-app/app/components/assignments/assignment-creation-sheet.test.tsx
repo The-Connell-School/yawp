@@ -1539,7 +1539,7 @@ describe('AssignmentCreationSheetContent without writing conditions', () => {
 function postedData(form: HTMLFormElement) {
   return [...new FormData(form).entries()]
     .map(
-      ([name, value]) =>
+      ([name, value]: [string, string | File]) =>
         [
           name,
           typeof value === 'string'
