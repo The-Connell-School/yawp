@@ -172,4 +172,34 @@ test.describe('Platform enhancements', () => {
       ).toBeLessThanOrEqual(0);
     });
   }
+  test('keeps the lock badge and new icons in the free-account sidebar', async ({
+    page,
+    signIn,
+  }) => {
+    await setFeatureFlag(PLATFORM_ENHANCEMENTS_FLAG, true);
+    await setFeatureFlag('free_tier', true);
+    await setFeatureFlag('free-tier-inapp-v2', true);
+    try {
+      await signIn('dev.teacher.free@yawp.local', 'yawp-dev');
+      await page.goto('/app');
+      await expect(page.locator('[data-free-account]')).toHaveCount(1);
+      const reporter = page.locator(
+        '[data-tour="app-nav"] a[href="/app/reporter"]'
+      );
+      await expect(reporter.locator('svg.lucide-microscope')).toHaveAttribute(
+        'width',
+        '18'
+      );
+      await expect(reporter.locator('svg.lucide-lock')).toHaveAttribute(
+        'width',
+        '12'
+      );
+      await expect(
+        page.locator('[data-tour="app-nav"] a[href="/app/assignments"] svg')
+      ).toHaveClass(/lucide-pen-line/);
+    } finally {
+      await setFeatureFlag('free-tier-inapp-v2', false);
+      await setFeatureFlag('free_tier', false);
+    }
+  });
 });

@@ -1581,6 +1581,16 @@ describe('platform enhancements form compatibility', () => {
       fixedAssignmentTypeId: 'exit-1',
     },
     {
+      assignmentTypes: exitTicketAssignmentTypes,
+      fixedAssignmentTypeId: 'exit-1',
+      initialExitTicketGradebook: { submitForGrade: true, pointValue: 5 },
+      initialExitTicketLessonNotes: {
+        mainPoints: 'Two causes of the conflict.',
+        mustMention: 'Trade',
+        watchFor: 'Dates',
+      },
+    },
+    {
       assignmentTypes: [
         {
           ...assignmentTypes[0],
