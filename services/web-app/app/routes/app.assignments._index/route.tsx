@@ -642,13 +642,13 @@ export default function MyAssignmentsRoute() {
             className="shrink-0"
             data-testid="my-assignments-new-assignment"
             data-tour="my-assignments-new"
-            disabled={freeUsage?.allAssignmentsUsed}
+            disabled={!freeUsage?.monthly && freeUsage?.allAssignmentsUsed}
             onClick={() => setIsCreateSheetOpen(true)}
           >
             <Plus className="mr-2 h-4 w-4" />
             New Assignment
           </Button>
-          {freeUsage?.allAssignmentsUsed && (
+          {!freeUsage?.monthly && freeUsage?.allAssignmentsUsed && (
             <span className="text-xs text-amber-800">
               No free assignments left
             </span>

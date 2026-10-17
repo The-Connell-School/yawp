@@ -166,7 +166,7 @@ export function capabilities() {
       qa: "./bin/project qa prepare --json",
     },
     fixtures: ["local-dev"],
-    proofProfiles: ["guided-tours-unit", "guided-tours-browser", "guided-tours-db", "free-tier-approval-migration", "free-tier-approval-unit", "free-tier-approval-browser", "demo-feedback-unit", "demo-feedback-browser", "signon-classcode", "classcode-unit", "classcode-db", "classcode-browser", "classcode-enter-code", "classcode-report", "unified-signon-preview-fixtures", "unified-signon-preview-otp", "free-tier-inapp-unit", "free-tier-inapp-browser", "internal-preview-auth", "internal-grade-declines", "internal-grade-declines-integration", "internal-free-tier-limits", "internal-free-tier-limits-integration", "internal-class-code-duplicates", "internal-class-code-duplicates-integration", "internal-scenario-browser", "internal-scenario-container", "internal-scenario-integration", "internal-fresh-migrations", "internal-content-pair", "internal-rubrics-http", "internal-rubrics-integration", "internal-content-validation", "internal-qa-http", "internal-qa-integration", "internal-audit", "internal-impersonation-browser", "internal-impersonation-http", "internal-impersonation-writes", "internal-impersonation", "internal-impersonation-integration", "internal-management", "internal-directory-integration", "project-cli", "unit", "typecheck", "build", "backend", "qa-smoke", "assignment-create", "grading-queue", "grading-queue-unit", "grading-points", "grading-points-unit", "assignment-rubric-unit", "assignment-prompt-unit", "teacher-paste-unit", "teacher-paste-browser", "private-notes-unit", "private-notes-browser", "daily-pages-scaling-unit", "collaboration-presence", "ua-billing", "ua-billing-e2e", "changed"],
+    proofProfiles: ["guided-tours-unit", "guided-tours-browser", "guided-tours-db", "free-tier-approval-migration", "free-tier-approval-unit", "free-tier-approval-browser", "demo-feedback-unit", "demo-feedback-browser", "signon-classcode", "classcode-unit", "classcode-db", "classcode-browser", "classcode-enter-code", "classcode-report", "unified-signon-preview-fixtures", "unified-signon-preview-otp", "free-tier-monthly-unit", "free-tier-monthly-db", "free-tier-monthly-browser", "free-tier-inapp-unit", "free-tier-inapp-browser", "internal-preview-auth", "internal-grade-declines", "internal-grade-declines-integration", "internal-free-tier-limits", "internal-free-tier-limits-integration", "internal-class-code-duplicates", "internal-class-code-duplicates-integration", "internal-scenario-browser", "internal-scenario-container", "internal-scenario-integration", "internal-fresh-migrations", "internal-content-pair", "internal-rubrics-http", "internal-rubrics-integration", "internal-content-validation", "internal-qa-http", "internal-qa-integration", "internal-audit", "internal-impersonation-browser", "internal-impersonation-http", "internal-impersonation-writes", "internal-impersonation", "internal-impersonation-integration", "internal-management", "internal-directory-integration", "project-cli", "unit", "typecheck", "build", "backend", "qa-smoke", "assignment-create", "grading-queue", "grading-queue-unit", "grading-points", "grading-points-unit", "assignment-rubric-unit", "assignment-prompt-unit", "teacher-paste-unit", "teacher-paste-browser", "private-notes-unit", "private-notes-browser", "daily-pages-scaling-unit", "collaboration-presence", "ua-billing", "ua-billing-e2e", "changed"],
     nextCommands: [
       "./bin/project doctor --json",
       "./bin/project fixture verify local-dev --json",
@@ -616,6 +616,82 @@ function runTestProfile(profile, { json }) {
       devStop();
     }
   }
+  else if (chosen === "free-tier-monthly-unit") {
+    for (const file of [
+      "app/domain/free-tier/monthly-policy.test.ts",
+      "app/utils/assignment-quota.monthly.test.ts",
+      "app/utils/assignment-quota.server.test.ts",
+      "app/utils/reporter/reporter-access.server.test.ts",
+      "app/utils/lesson-planner/lesson-planner-quota.server.test.ts",
+      "app/domain/free-tier/inapp-usage.server.test.ts",
+      "app/routes/api.domain.reporter/route.test.ts",
+      "app/routes/api.domain.lesson-planner/route.test.ts",
+      "app/utils/entitlements.server.test.ts",
+    ])
+      runWebApp(file, ["test", file]);
+  } else if (chosen === "free-tier-monthly-db") {
+    const local = requireConfig();
+    results.push({
+      id: chosen,
+      ...execute(
+        selected.bun,
+        [
+          "test",
+          "app/domain/free-tier/monthly-operations.real-db.integration.test.ts",
+        ],
+        {
+          json,
+          cwd: webAppRoot,
+          env: {
+            ...selected.env,
+            DATABASE_URL: local.DATABASE_URL,
+            E2E_DATABASE_URL: local.DATABASE_URL,
+            FTO_LIMITS_DB_TESTS: "1",
+          },
+          timeout: 120000,
+        }
+      ),
+    });
+  } else if (chosen === "free-tier-monthly-browser") {
+    const local = requireConfig();
+    results.push({
+      id: "monthly-fixture",
+      ...execute(
+        selected.bun,
+        ["run", "packages/prisma/scripts/seed-free-tier-inapp.ts"],
+        {
+          json,
+          env: { ...selected.env, DATABASE_URL: local.DATABASE_URL },
+          timeout: 120000,
+        }
+      ),
+    });
+    results.push({
+      id: chosen,
+      ...execute(
+        selected.bun,
+        [
+          "x",
+          "playwright",
+          "test",
+          "--config=playwright.free-tier-inapp.config.ts",
+          "--workers=1",
+        ],
+        {
+          json,
+          cwd: webAppRoot,
+          timeout: 300000,
+          env: {
+            ...selected.env,
+            CI: "1",
+            E2E_DATABASE_URL: local.DATABASE_URL,
+            FREE_INAPP_BASE_URL: `http://localhost:${local.DEV_PORT}`,
+            FTO_LIMITS_BROWSER: "1",
+          },
+        }
+      ),
+    });
+  }
   else if (chosen === "free-tier-inapp-unit") {
     for (const file of ["app/domain/feature-flags/feature-flags.test.ts", "app/domain/feature-flags/feature-flags.server.test.ts", "app/utils/internal-feature-flags-http.server.test.ts", "app/domain/feature-flags/is-free-tier-enabled.server.test.ts", "app/domain/free-tier/inapp-usage.test.ts", "app/domain/free-tier/inapp-usage.server.test.ts", "app/utils/grading-limit-status.server.test.ts", "app/utils/assignment-quota.server.test.ts", "app/utils/entitlements.server.test.ts", "app/domain/free-tier/class-seat-cap.test.ts", "app/utils/lesson-planner/lesson-planner-quota.server.test.ts", "app/routes/app/route.test.tsx", "app/components/assignments/assignment-creation-sheet.test.tsx"]) runWebApp(file, ["test", file]);
   }
@@ -840,10 +916,10 @@ async function qaPrepare({ json, routes }) {
 
 function help(topic = "root") {
   const pages = {
-    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project internal-integration-config INPUT_JSON --json\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <guided-tours-unit|guided-tours-browser|guided-tours-db|demo-feedback-unit|demo-feedback-browser|signon-classcode|classcode-unit|classcode-db|classcode-browser|classcode-enter-code|classcode-report|unified-signon-preview-fixtures|free-tier-approval-migration|free-tier-approval-unit|free-tier-approval-browser|free-tier-inapp-unit|free-tier-inapp-browser|changed|project-cli|internal-preview-auth|internal-grade-declines|internal-grade-declines-integration|internal-free-tier-limits|internal-free-tier-limits-integration|internal-class-code-duplicates|internal-class-code-duplicates-integration|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
+    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project internal-integration-config INPUT_JSON --json\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <guided-tours-unit|guided-tours-browser|guided-tours-db|demo-feedback-unit|demo-feedback-browser|signon-classcode|classcode-unit|classcode-db|classcode-browser|classcode-enter-code|classcode-report|unified-signon-preview-fixtures|free-tier-approval-migration|free-tier-approval-unit|free-tier-approval-browser|free-tier-monthly-unit|free-tier-monthly-db|free-tier-monthly-browser|free-tier-inapp-unit|free-tier-inapp-browser|changed|project-cli|internal-preview-auth|internal-grade-declines|internal-grade-declines-integration|internal-free-tier-limits|internal-free-tier-limits-integration|internal-class-code-duplicates|internal-class-code-duplicates-integration|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
     fixture: "Usage: ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n",
     dev: "Usage: ./bin/project dev <start|status|stop> [--json]\n",
-    test: "Usage: ./bin/project test --profile <guided-tours-unit|guided-tours-browser|guided-tours-db|demo-feedback-unit|demo-feedback-browser|signon-classcode|classcode-unit|classcode-db|classcode-browser|classcode-enter-code|classcode-report|unified-signon-preview-fixtures|free-tier-approval-migration|free-tier-approval-unit|free-tier-approval-browser|free-tier-inapp-unit|free-tier-inapp-browser|changed|project-cli|internal-preview-auth|internal-grade-declines|internal-grade-declines-integration|internal-free-tier-limits|internal-free-tier-limits-integration|internal-class-code-duplicates|internal-class-code-duplicates-integration|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n",
+    test: "Usage: ./bin/project test --profile <guided-tours-unit|guided-tours-browser|guided-tours-db|demo-feedback-unit|demo-feedback-browser|signon-classcode|classcode-unit|classcode-db|classcode-browser|classcode-enter-code|classcode-report|unified-signon-preview-fixtures|free-tier-approval-migration|free-tier-approval-unit|free-tier-approval-browser|free-tier-monthly-unit|free-tier-monthly-db|free-tier-monthly-browser|free-tier-inapp-unit|free-tier-inapp-browser|changed|project-cli|internal-preview-auth|internal-grade-declines|internal-grade-declines-integration|internal-free-tier-limits|internal-free-tier-limits-integration|internal-class-code-duplicates|internal-class-code-duplicates-integration|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n",
     qa: "Usage: ./bin/project qa prepare [--routes /,/route] [--json]\n",
   };
   const classStepHelp = "\nAdditional test profiles: free-tier-locked-preview-unit|free-tier-locked-preview-db|free-tier-locked-preview-browser|free-tier-class-step-unit|free-tier-class-step-browser|free-tier-welcome-unit|free-tier-welcome-browser|free-tier-welcome-live-browser|free-tier-welcome-db\n";

@@ -2,6 +2,7 @@ import {
   useFreeAccountUsage,
   FreeAssignmentTiles,
   FreeAccountChecklist,
+  AdvocatePackEntry,
 } from '~/components/free-account-usage';
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
 import {
@@ -159,6 +160,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           period: true,
           title: true,
           classArtIndex: true,
+          code: true,
           classArtKey: true,
           school: { select: { id: true, name: true, organizationId: true } },
           _count: {
@@ -229,6 +231,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           const classStats = teacherClassStatsById.get(klass.id);
           return {
             id: klass.id,
+            code: klass.code,
             grade: klass.grade,
             period: klass.period,
             title: klass.title,
@@ -405,7 +408,9 @@ export default function AppRoute() {
               <h2>Welcome, {user.name}!</h2>
               <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
                 {freeUsage
-                  ? 'Your class, assignments and grading in one place.'
+                  ? freeUsage.monthly
+                    ? 'Your class, assignments, and grading in one place.'
+                    : 'Your class, assignments and grading in one place.'
                   : 'Your classes, assignments, and grading in one place.'}
               </p>
             </div>
@@ -515,7 +520,12 @@ export default function AppRoute() {
               />
             )}
           </ContentColumn>
-          {freeUsage && <FreeAccountChecklist usage={freeUsage} />}
+          {freeUsage && (
+            <div className="space-y-5">
+              {freeUsage.monthly && <AdvocatePackEntry />}
+              <FreeAccountChecklist usage={freeUsage} />
+            </div>
+          )}
         </div>
       </section>
     );

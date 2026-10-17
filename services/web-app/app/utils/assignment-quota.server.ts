@@ -1,3 +1,4 @@
+import { monthlyFreeTierPolicy } from '~/domain/free-tier/monthly-policy.server';
 import type { Organization, OrganizationPlan, Prisma } from '@app/prisma';
 import {
   FREE_CLASSROOM_ASSIGNMENT_KINDS,
@@ -45,7 +46,10 @@ export function isFreeClassroomAssignmentKind(
   kind: string | null | undefined
 ): kind is FreeClassroomAssignmentQuotaKind {
   return Boolean(
-    kind && FREE_CLASSROOM_ASSIGNMENT_KINDS.includes(kind as FreeClassroomAssignmentQuotaKind)
+    kind &&
+    FREE_CLASSROOM_ASSIGNMENT_KINDS.includes(
+      kind as FreeClassroomAssignmentQuotaKind
+    )
   );
 }
 
@@ -56,8 +60,9 @@ export function filterAssignmentTypesForOrganizationPlan<
   return types.filter((type) => isFreeClassroomAssignmentKind(type.kind));
 }
 
-const usageClient = (client: Pick<typeof prisma, 'freeClassroomAssignmentKindUsage'>) =>
-  client.freeClassroomAssignmentKindUsage;
+const usageClient = (
+  client: Pick<typeof prisma, 'freeClassroomAssignmentKindUsage'>
+) => client.freeClassroomAssignmentKindUsage;
 
 export async function getLifetimeAssignmentKindCount(
   organizationId: string,
@@ -123,7 +128,20 @@ export async function loadAssignmentCreationQuotasForTypes(
   types: Array<{ id: string; kind: string | null }>
 ) {
   if (organization.plan !== 'FREE_CLASSROOM') {
-    return new Map<string, ReturnType<typeof buildAssignmentCreationQuotaFields>>();
+    return new Map<
+      string,
+      ReturnType<typeof buildAssignmentCreationQuotaFields>
+    >();
+  }
+  if ((await monthlyFreeTierPolicy(organization)).enabled) {
+    return new Map(
+      types.map((type) => [
+        type.id,
+        isFreeClassroomAssignmentKind(type.kind)
+          ? {}
+          : { unavailableReason: 'Available with a paid plan.' },
+      ])
+    );
   }
   const usage = await getFreeClassroomAssignmentQuotaUsage(organization.id);
   const byId = new Map<
@@ -133,7 +151,7 @@ export async function loadAssignmentCreationQuotasForTypes(
   for (const type of types) {
     const created =
       type.kind && isFreeClassroomAssignmentKind(type.kind)
-        ? usage.get(type.kind) ?? 0
+        ? (usage.get(type.kind) ?? 0)
         : 0;
     byId.set(
       type.id,
@@ -153,7 +171,9 @@ export async function resolveOrganizationForClassIds(
     where: { id: { in: unique } },
     select: {
       id: true,
-      school: { select: { organization: { select: { id: true, plan: true } } } },
+      school: {
+        select: { organization: { select: { id: true, plan: true } } },
+      },
     },
   });
   if (rows.length !== unique.length) {
@@ -180,6 +200,7 @@ async function assertCanConsumeAssignmentKindSlot(
       kind ?? null
     );
   }
+  if ((await monthlyFreeTierPolicy(organization, tx)).enabled) return;
   await tx.$executeRawUnsafe(
     `SELECT pg_advisory_xact_lock(hashtext('free_classroom_assignment_quota:' || $1))`,
     organization.id
@@ -190,7 +211,9 @@ async function assertCanConsumeAssignmentKindSlot(
     tx
   );
   const entitlements = getEntitlementsForPlan(organization.plan);
-  if (!entitlements.canCreateAssignmentOfKind({ kind, createdCount: created })) {
+  if (
+    !entitlements.canCreateAssignmentOfKind({ kind, createdCount: created })
+  ) {
     throw new FreeClassroomAssignmentQuotaError(
       freeClassroomQuotaMessage(kind, 0),
       'quota_exhausted',
@@ -205,7 +228,10 @@ export async function assertCanCreateAssignmentOfKindInTransaction(
   kind: string | null | undefined
 ) {
   await assertCanConsumeAssignmentKindSlot(tx, organization, kind);
-  if (organization.plan === 'FREE_CLASSROOM' && isFreeClassroomAssignmentKind(kind)) {
+  if (
+    organization.plan === 'FREE_CLASSROOM' &&
+    isFreeClassroomAssignmentKind(kind)
+  ) {
     await incrementLifetimeAssignmentKindCount(tx, organization.id, kind);
   }
 }
@@ -218,7 +244,11 @@ export async function assertCanRetypeAssignmentOfKindInTransaction(
 ) {
   if (organization.plan !== 'FREE_CLASSROOM') return;
   if (previousKind === nextKind) return;
-  await assertCanCreateAssignmentOfKindInTransaction(tx, organization, nextKind);
+  await assertCanCreateAssignmentOfKindInTransaction(
+    tx,
+    organization,
+    nextKind
+  );
 }
 
 export async function enforceFreeClassroomAssignmentCreateInTransaction(
@@ -228,7 +258,10 @@ export async function enforceFreeClassroomAssignmentCreateInTransaction(
     assignmentTypeId: string;
   }
 ) {
-  const organization = await resolveOrganizationForClassIds(tx, params.classIds);
+  const organization = await resolveOrganizationForClassIds(
+    tx,
+    params.classIds
+  );
   if (!organization || organization.plan !== 'FREE_CLASSROOM') return;
   const assignmentType = await tx.assignmentType.findUnique({
     where: { id: params.assignmentTypeId },
@@ -249,10 +282,17 @@ export async function enforceFreeClassroomAssignmentRetypeInTransaction(
     nextAssignmentTypeId: string;
   }
 ) {
-  const organization = await resolveOrganizationForClassIds(tx, params.classIds);
+  const organization = await resolveOrganizationForClassIds(
+    tx,
+    params.classIds
+  );
   if (!organization || organization.plan !== 'FREE_CLASSROOM') return;
   const types = await tx.assignmentType.findMany({
-    where: { id: { in: [params.previousAssignmentTypeId, params.nextAssignmentTypeId] } },
+    where: {
+      id: {
+        in: [params.previousAssignmentTypeId, params.nextAssignmentTypeId],
+      },
+    },
     select: { id: true, kind: true },
   });
   const byId = new Map(types.map((row) => [row.id, row.kind]));
