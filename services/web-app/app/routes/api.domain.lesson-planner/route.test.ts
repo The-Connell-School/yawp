@@ -1,10 +1,37 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
+let monthlyEnabled = false;
+const beginMonthlyOperation = mock();
+const finishMonthlyOperation = mock();
+const failMonthlyOperation = mock();
+mock.module('~/domain/free-tier/monthly-policy.server', () => ({
+  monthlyFreeTierPolicy: async () => ({
+    enabled: monthlyEnabled,
+    limits: { reporterMonthly: 2, lessonPlannerMonthly: 5 },
+  }),
+}));
+mock.module('~/domain/free-tier/monthly-operations.server', () => ({
+  beginMonthlyOperation,
+  finishMonthlyOperation,
+  failMonthlyOperation,
+  replayMonthlyOperation: async () => null,
+  monthlyOperationResponse: (result: any) =>
+    Response.json(result.payload ?? { error: result.kind }, {
+      status:
+        result.kind === 'replay'
+          ? 200
+          : result.kind === 'exhausted'
+            ? 403
+            : 409,
+    }),
+}));
+
 const getLLMCompletion = mock();
 const requireMutableRequest = mock();
 const requireLessonPlannerAccess = mock();
 const handleLessonPlannerToolCall = mock();
 const reserveAiRequest = mock();
+class AiFreeTierBudgetExceededError extends Error {}
 class AiRateLimitError extends Error {
   constructor(
     readonly retryAfterSeconds: number,
@@ -74,7 +101,16 @@ mock.module('~/utils/getLLMCompletion', () => ({
 }));
 mock.module('~/utils/ai-admission.server', () => ({
   AiRateLimitError,
-  aiAdmissionErrorResponse: () => null,
+  aiAdmissionErrorResponse: (error: unknown) =>
+    error instanceof AiFreeTierBudgetExceededError
+      ? Response.json(
+          {
+            error:
+              'Free-tier AI is paused because the current budget has been reached.',
+          },
+          { status: 402 }
+        )
+      : null,
   reserveAiRequest,
 }));
 
@@ -123,6 +159,12 @@ const access = {
 };
 
 beforeEach(() => {
+  monthlyEnabled = false;
+  beginMonthlyOperation
+    .mockReset()
+    .mockResolvedValue({ kind: 'reserved', name: 'operation', operation: {} });
+  finishMonthlyOperation.mockReset().mockResolvedValue(undefined);
+  failMonthlyOperation.mockReset().mockResolvedValue(undefined);
   getLLMCompletion.mockReset();
   requireMutableRequest.mockReset().mockResolvedValue(undefined);
   requireLessonPlannerAccess.mockReset().mockResolvedValue(access);
@@ -414,6 +456,22 @@ describe('api.domain.lesson-planner action', () => {
 
     expect(jsonResult(response).init?.status).toBe(422);
     expect(getLLMCompletion).not.toHaveBeenCalled();
+  });
+
+  test('free-tier budget denial creates no planner conversation, messages, units or provider output', async () => {
+    reserveAiRequest.mockRejectedValueOnce(new AiFreeTierBudgetExceededError());
+    const result = (await action({
+      request: formRequest({ message: 'plan a lesson' }),
+    } as any)) as Response;
+    expect(result.status).toBe(402);
+    expect(await result.json()).toMatchObject({
+      error: expect.stringContaining('budget'),
+    });
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+    expect(prisma.lessonPlanConversation.create).not.toHaveBeenCalled();
+    expect(prisma.lessonPlanMessage.create).not.toHaveBeenCalled();
+    expect(prisma.lessonPlanUnit.create).not.toHaveBeenCalled();
+    expect(handleLessonPlannerToolCall).not.toHaveBeenCalled();
   });
 
   test('rate-limits rapid planner requests per teacher', async () => {
@@ -1039,4 +1097,94 @@ describe("api.domain.lesson-planner action — the lesson's length (Brian's run 
     const update = prisma.lessonPlanConversation.update.mock.calls[0][0];
     expect(update.data.periodMinutes).toBeUndefined();
   });
+});
+
+describe('monthly direct action admission', () => {
+  test('zero/exhausted cap denies generation and persistence; pending duplicates return 409', async () => {
+    monthlyEnabled = true;
+    for (const kind of ['exhausted', 'pending', 'conflict']) {
+      beginMonthlyOperation.mockResolvedValue({ kind });
+      const result = (await action({
+        request: formRequest({
+          message: 'A counted request',
+          requestId: 'same-request',
+        }),
+      } as any)) as Response;
+      expect(result.status).toBe(kind === 'exhausted' ? 403 : 409);
+    }
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+    expect(reserveAiRequest).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+  test('counted operations require an idempotency key', async () => {
+    monthlyEnabled = true;
+    const result = (await action({
+      request: formRequest({ message: 'A counted request' }),
+    } as any)) as any;
+    expect(result.status).toBe(400);
+    expect(beginMonthlyOperation).not.toHaveBeenCalled();
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+  });
+  test('successful retry returns saved response without provider, spend or persistence', async () => {
+    monthlyEnabled = true;
+    beginMonthlyOperation.mockResolvedValue({
+      kind: 'replay',
+      payload: { reply: 'Saved response', conversationId: 'saved' },
+    });
+    const result = (await action({
+      request: formRequest({
+        message: 'A counted request',
+        requestId: 'same-request',
+      }),
+    } as any)) as Response;
+    expect(await result.json()).toEqual({
+      reply: 'Saved response',
+      conversationId: 'saved',
+    });
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+    expect(reserveAiRequest).not.toHaveBeenCalled();
+  });
+  test('provider failure releases monthly reservation without committing a use', async () => {
+    monthlyEnabled = true;
+    getLLMCompletion.mockRejectedValue(new Error('provider unavailable'));
+    await action({
+      request: formRequest({
+        message: 'A counted request',
+        requestId: 'retry-me',
+      }),
+    } as any);
+    expect(failMonthlyOperation).toHaveBeenCalledTimes(1);
+    expect(finishMonthlyOperation).not.toHaveBeenCalled();
+  });
+});
+
+test('streamed monthly admission and replay use the same terminal-event protocol as generated lessons', async () => {
+  monthlyEnabled = true;
+  for (const kind of ['exhausted', 'pending', 'conflict', 'replay']) {
+    beginMonthlyOperation.mockResolvedValue({
+      kind,
+      ...(kind === 'replay'
+        ? { payload: { reply: 'Saved lesson', conversationId: 'saved' } }
+        : {}),
+    });
+    const response = (await action({
+      request: formRequest({
+        message: 'A counted request',
+        requestId: 'stable-request',
+        stream: '1',
+      }),
+    } as any)) as Response;
+    expect(response.headers.get('content-type')).toContain(
+      'application/x-ndjson'
+    );
+    const text = await response.text();
+    expect(text.endsWith('\n')).toBe(true);
+    expect(JSON.parse(text.trim())).toMatchObject({
+      type: 'done',
+      status: kind === 'replay' ? 200 : kind === 'exhausted' ? 403 : 409,
+      payload: kind === 'replay' ? { reply: 'Saved lesson' } : { error: kind },
+    });
+  }
+  expect(getLLMCompletion).not.toHaveBeenCalled();
+  expect(reserveAiRequest).not.toHaveBeenCalled();
 });

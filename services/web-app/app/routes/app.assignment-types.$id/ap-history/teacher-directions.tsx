@@ -34,7 +34,7 @@ export function ApHistoryTeacherDirections() {
           essay for them.
         </li>
         <li>
-          After students submit, you review the AI&rsquo;s rubric-aligned
+          After students submit, you review YAWP&rsquo;s rubric-aligned
           feedback and can override it before releasing grades.
         </li>
         <li>

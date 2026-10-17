@@ -1,3 +1,14 @@
+import { resolveClassCode } from '~/utils/class-code-write.server';
+import {
+  runFreeTierAnalytics,
+  acquisitionChannel,
+  captureFreeTierAnalyticsEvent,
+  freeTierApplicationDistinctId,
+  freeTierOrganizationDistinctId,
+  FREE_TIER_ANALYTICS_EVENTS,
+} from './posthog-analytics.server';
+import { isClassPreparationEnabled } from './class-preparation.server';
+import { parseClassPreparation } from './class-preparation';
 import { createHash } from 'node:crypto';
 import type { OrganizationPlan } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
@@ -87,7 +98,7 @@ async function linkBundleAssignmentTypes(
 export async function provisionFreeClassroom(
   applicationId: string
 ): Promise<ProvisionFreeClassroomResult> {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx): Promise<ProvisionFreeClassroomResult> => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('free_tier_provision:' || ${applicationId}))`;
 
     const application = await tx.freeTierApplication.findUnique({
@@ -96,6 +107,8 @@ export async function provisionFreeClassroom(
         id: true,
         email: true,
         schoolName: true,
+        starterClassName: true,
+        starterClassGrade: true,
         userId: true,
         organizationId: true,
       },
@@ -171,13 +184,16 @@ export async function provisionFreeClassroom(
       select: { id: true },
     });
 
-    const classCode = generateClassCode();
+    const prepared = parseClassPreparation(application.starterClassName ?? '', application.starterClassGrade ?? '');
+    const usePrepared = prepared.ok && await isClassPreparationEnabled(application.userId, application.organizationId);
+    const classCode = await resolveClassCode(tx, generateClassCode(), { generated: true });
     const classArtKey = await pickClassArtKeyForOrganization(org.id);
     await tx.class.create({
       data: {
         schoolId: school.id,
         schoolYear: currentSchoolYear(),
-        title: 'My Class',
+        title: usePrepared && prepared.ok ? prepared.className : 'My Class',
+        ...(usePrepared && prepared.ok ? { grade: prepared.grade } : {}),
         code: classCode,
         cardGradientKey: generateClassCardGradientKey(classCode),
         classArtKey,
@@ -194,6 +210,56 @@ export async function provisionFreeClassroom(
 
     return { status: 'provisioned', organizationId: org.id };
   });
+  if (result.status === 'provisioned') {
+    await runFreeTierAnalytics(async () => {
+      const application = await prisma.freeTierApplication.findUnique({
+        where: { id: applicationId },
+        select: {
+          id: true,
+          status: true,
+          userId: true,
+          organizationId: true,
+          acquisitionTokenId: true,
+          acquisitionToken: {
+            select: {
+              label: true,
+              sourceName: true,
+              eventLocation: true,
+              eventDate: true,
+              bypassWaitlist: true,
+            },
+          },
+        },
+      });
+      if (application?.organizationId) {
+        captureFreeTierAnalyticsEvent({
+          event: FREE_TIER_ANALYTICS_EVENTS.activation,
+          distinctId: freeTierOrganizationDistinctId(application.organizationId),
+          aliases: [freeTierApplicationDistinctId(application.id)],
+          properties: {
+            application_id: application.id,
+            application_status: application.status,
+            teacher_user_id: application.userId,
+            organization_id: application.organizationId,
+            activation_step: result.status,
+            acquisition_token_id: application.acquisitionTokenId,
+            acquisition_channel: acquisitionChannel({
+              acquisitionTokenId: application.acquisitionTokenId,
+              sourceName: application.acquisitionToken?.sourceName,
+            }),
+            token_label: application.acquisitionToken?.label ?? null,
+            source_name: application.acquisitionToken?.sourceName ?? null,
+            event_location: application.acquisitionToken?.eventLocation ?? null,
+            event_date:
+              application.acquisitionToken?.eventDate?.toISOString() ?? null,
+            bypass_waitlist: application.acquisitionToken?.bypassWaitlist ?? null,
+          },
+        });
+      }
+    });
+  }
+
+  return result;
 }
 
 /** Free Tier C calls this after the teacher account exists. */

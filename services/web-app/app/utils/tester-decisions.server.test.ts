@@ -6,7 +6,7 @@ const rejected = mock(async () => {});
 const findUnique = mock(async () => ({
   id: 'application',
   status: 'SENT',
-  releasedAt: new Date(),
+  releasedAt: null as Date | null,
   email: 'teacher@yawp.local',
   name: 'Teacher',
   schoolName: 'Demo',
@@ -54,7 +54,7 @@ beforeEach(() => {
   findUnique.mockImplementation(async () => ({
     id: 'application',
     status: 'SENT',
-    releasedAt: new Date(),
+    releasedAt: null as Date | null,
     email: 'teacher@yawp.local',
     name: 'Teacher',
     schoolName: 'Demo',
@@ -62,7 +62,47 @@ beforeEach(() => {
     organizationId: null,
   }));
   updateMany.mockResolvedValue({ count: 1 });
+  updateMany.mockClear();
 });
+
+test('reopen cap denial records an audit row without changing state', async () => {
+  findUnique.mockImplementation(async () => ({
+    id: 'application',
+    status: 'REJECTED',
+    releasedAt: null,
+    email: 'teacher@yawp.local',
+    name: 'Teacher',
+    schoolName: 'Demo',
+    userId: null,
+    organizationId: null,
+  }));
+  process.env.FREE_TIER_RELEASE_CAP = '0';
+  try {
+    const result = await reopenApplication({
+      id: 'application',
+      decidedByEmail: actor.actorEmail,
+      audit: { ...actor, action: 'approval.reopen' },
+    });
+    expect(result.status).toBe(409);
+    expect(updateMany).not.toHaveBeenCalled();
+    expect(decisionCreate).not.toHaveBeenCalled();
+    expect(auditCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'approval.reopen',
+        targetId: 'application',
+        result: 'denied',
+        metadata: expect.objectContaining({
+          reason: 'Release cap reached',
+          previousStatus: 'REJECTED',
+          requestedStatus: 'MANUAL_REVIEW',
+        }),
+      }),
+    });
+  } finally {
+    delete process.env.FREE_TIER_RELEASE_CAP;
+  }
+});
+
 test('approval records audit in mutation transaction and runs existing approval hook', async () => {
   await decideApplication({
     id: 'application',
@@ -142,6 +182,67 @@ test('waitlist release audits each changed target', async () => {
     }),
   });
 });
+
+test('waitlist release cap full returns refused without budget denial audit', async () => {
+  process.env.FREE_TIER_RELEASE_CAP = '0';
+  process.env.FREE_TIER_BUDGET_USD = '100';
+  process.env.FREE_TIER_UNIT_COST_USD = '1';
+  try {
+    const result = await releaseBatch(
+      { applicationIds: ['application'] },
+      { ...actor, action: 'waitlist.release' }
+    );
+    expect(result).toMatchObject({
+      released: 0,
+      refused: 1,
+      skipped: 0,
+      cappedAt: 0,
+    });
+    expect(updateMany).not.toHaveBeenCalled();
+    expect(auditCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        result: 'denied',
+        metadata: expect.objectContaining({ reason: 'cap_reached', refused: 1 }),
+      }),
+    });
+  } finally {
+    delete process.env.FREE_TIER_RELEASE_CAP;
+    delete process.env.FREE_TIER_BUDGET_USD;
+    delete process.env.FREE_TIER_UNIT_COST_USD;
+  }
+});
+
+test('waitlist release cap full takes precedence when budget is also exhausted', async () => {
+  process.env.FREE_TIER_RELEASE_CAP = '0';
+  process.env.FREE_TIER_BUDGET_ENVIRONMENT = 'preview';
+  process.env.FREE_TIER_PREVIEW_BUDGET_USD = '0';
+  process.env.FREE_TIER_UNIT_COST_USD = '1';
+  try {
+    const result = await releaseBatch(
+      { applicationIds: ['application'] },
+      { ...actor, action: 'waitlist.release' }
+    );
+    expect(result).toMatchObject({
+      released: 0,
+      refused: 1,
+      skipped: 0,
+      cappedAt: 0,
+    });
+    expect(updateMany).not.toHaveBeenCalled();
+    expect(auditCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        result: 'denied',
+        metadata: expect.objectContaining({ reason: 'cap_reached', refused: 1 }),
+      }),
+    });
+  } finally {
+    delete process.env.FREE_TIER_RELEASE_CAP;
+    delete process.env.FREE_TIER_BUDGET_ENVIRONMENT;
+    delete process.env.FREE_TIER_PREVIEW_BUDGET_USD;
+    delete process.env.FREE_TIER_UNIT_COST_USD;
+  }
+});
+
 test('reopen audits the shared transition', async () => {
   findUnique.mockImplementation(async () => ({
     id: 'application',

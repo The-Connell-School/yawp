@@ -1,3 +1,5 @@
+import { classCodeUniquenessEnabled } from '~/utils/class-code-write.server';
+import { useFreeAccountUsage } from '~/components/free-account-usage';
 import { Prisma } from '@app/prisma';
 import {
   type ActionFunctionArgs,
@@ -38,7 +40,10 @@ import {
   deleteClassAssignmentDeployment,
   updateAssignmentInClassDeployment,
 } from '~/utils/assignment-deployment.server';
-import { FreeClassroomAssignmentQuotaError } from '~/utils/assignment-quota.server';
+import {
+  FreeClassroomAssignmentQuotaError,
+  loadAssignmentCreationQuotasForTypes,
+} from '~/utils/assignment-quota.server';
 import {
   AssignmentPromptAttachmentError,
   assignmentPromptAttachmentRequestTooLarge,
@@ -152,7 +157,10 @@ import {
   lockStudentRosters,
 } from '~/domain/collaboration/class-assignment-lock.server';
 import { filterClassStudentsByQuery } from './class-students-search';
-import { formatUserContactLabel, formatUserDisplayName } from '~/utils/user-display';
+import {
+  formatUserContactLabel,
+  formatUserDisplayName,
+} from '~/utils/user-display';
 import {
   StudentGrowthPlansSheet,
   type StudentGrowthPlan,
@@ -1115,7 +1123,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                     select: {
                       id: true,
                       user: {
-                        select: { id: true, name: true, email: true, username: true },
+                        select: {
+                          id: true,
+                          name: true,
+                          email: true,
+                          username: true,
+                        },
                       },
                     },
                   },
@@ -1377,6 +1390,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     creationTypeRows.map((assignmentType) => assignmentType.id)
   );
 
+  const quotaByTypeId = await loadAssignmentCreationQuotasForTypes(
+    { id: klass.school.organizationId, plan: klass.school.organization.plan },
+    creationTypeRows.map(({ id, kind }) => ({ id, kind }))
+  );
+
   let studentJoinUrl: string | null = null;
   if (klass.school.organization.plan === 'FREE_CLASSROOM') {
     const joinToken = await ensureClassStudentJoinToken(klass.id);
@@ -1389,6 +1407,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return dataResponse({
     role: 'TEACHER' as const,
+    classCodeUniqueEnabled: await classCodeUniquenessEnabled(prisma),
     studentJoinUrl,
     klass,
     submissions,
@@ -1402,6 +1421,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         rubricName: rubric?.name ?? null,
         collaborationSupported,
         gradesGrammar: gradesGrammarIds.has(id),
+        ...quotaByTypeId.get(id),
       })
     ),
     apHistoryAssignmentTypeId:
@@ -1442,7 +1462,11 @@ type ClassDocumentRow = {
   updatedAt: Date;
   membership: {
     id: string;
-    user: { name: string | null; email: string | null; username?: string | null };
+    user: {
+      name: string | null;
+      email: string | null;
+      username?: string | null;
+    };
   };
   group: TeacherDocumentWorkRow['group'];
   assignment: {
@@ -1473,6 +1497,7 @@ export default function ClassDetailRoute() {
 }
 
 function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
+  const freeUsage = useFreeAccountUsage();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -2252,10 +2277,21 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
 
       return (
         <div className="space-y-4">
+          {freeUsage?.classId === data.klass.id &&
+            freeUsage.students.remaining === 0 && (
+              <p
+                className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
+                role="status"
+              >
+                This class is full. Students who try to join see "This class is
+                full." Remove a student to open a seat.
+              </p>
+            )}
           {data.studentJoinUrl ? (
             <FreeClassStudentJoinCard
               joinUrl={data.studentJoinUrl}
               classCode={data.klass.code}
+              compact={Boolean(freeUsage)}
             />
           ) : null}
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2527,14 +2563,20 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
           </Sheet>
 
           {sortedStudents.length === 0 ? (
-            <div className="flex flex-col items-center justify-center border border-dashed bg-muted/50 p-12 rounded-lg">
+            <div
+              data-tour="class-roster"
+              className="flex flex-col items-center justify-center border border-dashed bg-muted/50 p-12 rounded-lg"
+            >
               <span className="text-lg font-bold">No students yet</span>
               <span className="text-sm text-muted-foreground">
                 Add students to this class to get started
               </span>
             </div>
           ) : filteredStudents.length === 0 ? (
-            <div className="flex flex-col items-center justify-center border border-dashed bg-muted/50 p-12 rounded-lg">
+            <div
+              data-tour="class-roster"
+              className="flex flex-col items-center justify-center border border-dashed bg-muted/50 p-12 rounded-lg"
+            >
               <span className="text-lg font-bold">No students found</span>
               <span className="text-sm text-muted-foreground">
                 Try a different search term
@@ -2542,6 +2584,7 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
             </div>
           ) : (
             <div
+              data-tour="class-roster"
               className={cn(
                 'rounded-lg bg-muted/50',
                 studentIsLoading ? 'opacity-50 transition-opacity' : ''
@@ -2785,6 +2828,7 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
       </div>
 
       <ClassManageSheet
+        classCodeUniqueEnabled={data.classCodeUniqueEnabled}
         open={isClassEditSheetOpen}
         onOpenChange={setIsClassEditSheetOpen}
         editingClass={editingClass}

@@ -1013,6 +1013,8 @@ export async function handleReporterToolCall(
   input: Record<string, unknown>,
   ctx: ReporterToolContext
 ): Promise<string> {
+  const { assertOrganizationTeachingApproved } = await import('~/domain/free-tier/locked-preview.server');
+  await assertOrganizationTeachingApproved(prisma, ctx.organizationId);
   try {
     let result: unknown;
     switch (name) {

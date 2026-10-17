@@ -6,7 +6,7 @@ set -euo pipefail
 ROOT="${PREVIEW_ROOT:-/srv/yawp-preview}"
 DOCKER="${PREVIEW_DOCKER:-docker}"
 CURL="${PREVIEW_CURL:-curl}"
-RUNNING_CAP="${PREVIEW_MAX_RUNNING:-4}"
+RUNNING_CAP="${PREVIEW_MAX_RUNNING:-8}"
 SLEEP_ENABLED="${PREVIEW_SLEEP_ENABLED:-true}"
 ALLOW_DISPLACEMENT="${PREVIEW_WAKE_ALLOW_DISPLACEMENT:-true}"
 LOCK_WAIT_SECONDS="${PREVIEW_LOCK_WAIT_SECONDS:-900}"
@@ -21,7 +21,6 @@ AUTHORIZATION_MAX_QUEUE_SECONDS="${PREVIEW_WAKE_AUTHORIZATION_MAX_QUEUE_SECONDS:
 AUTHORIZED_ORGANIZATION_ID="${PREVIEW_WAKE_AUTHORIZED_ORGANIZATION_ID:-}"
 REQUIRE_PREVIEW_SEAT_CODE="${PREVIEW_WAKE_REQUIRE_PREVIEW_SEAT_CODE:-}"
 AUTHORIZED_CODE_SHA256="${PREVIEW_WAKE_AUTHORIZED_CODE_HMAC_SHA256:-}"
-WAKE_LEASE_SECONDS="${PREVIEW_WAKE_LEASE_SECONDS:-120}"
 LEGACY_HEALTH_PORT="${PREVIEW_LEGACY_HEALTH_PORT:-8080}"
 PR_NUMBER="${1:-}"
 
@@ -95,10 +94,6 @@ if [[ -n "$AUTHORIZED_CODE_SHA256" && ! "$AUTHORIZED_CODE_SHA256" =~ ^[a-f0-9]{6
   echo "PREVIEW_WAKE_AUTHORIZED_CODE_HMAC_SHA256 is invalid" >&2
   exit 2
 fi
-is_nonnegative_integer "$WAKE_LEASE_SECONDS" || {
-  echo "PREVIEW_WAKE_LEASE_SECONDS must be a nonnegative integer" >&2
-  exit 2
-}
 if ! is_positive_integer "$LEGACY_HEALTH_PORT" || (( LEGACY_HEALTH_PORT > 65535 )); then
   echo "PREVIEW_LEGACY_HEALTH_PORT must be a valid TCP port" >&2
   exit 2
@@ -252,42 +247,31 @@ target_is_quarantined() {
   [[ -f "$ROOT/quarantine/pr-${PR_NUMBER}" ]]
 }
 
-access_epoch() {
-  local pr="$1"
-  local access_file="$ACCESS_DIR/pr-${pr}"
-  local value=""
-  if [[ -f "$access_file" ]]; then
-    IFS= read -r value < "$access_file" || true
-    if is_nonnegative_integer "$value"; then
-      printf '%s\n' "$value"
-      return 0
-    fi
-  fi
-  marker_mtime "$ROOT/previews/pr-${pr}"
-}
-
 record_access() {
   local pr="$1"
-  local temporary recorded_epoch
+  local temporary recorded_epoch preview_dir
   recorded_epoch="$(current_epoch)"
   is_nonnegative_integer "$recorded_epoch" || return 1
+  preview_dir="$ROOT/previews/pr-${pr}"
+  mkdir -p "$preview_dir"
+  temporary="$preview_dir/last-request.$$.tmp"
+  printf '%s\n' "$recorded_epoch" > "$temporary"
+  mv -f -- "$temporary" "$preview_dir/last-request"
   mkdir -p "$ACCESS_DIR"
   temporary="$ACCESS_DIR/pr-${pr}.$$.tmp"
   printf '%s\n' "$recorded_epoch" > "$temporary"
   mv -f -- "$temporary" "$ACCESS_DIR/pr-${pr}"
 }
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/idle-policy.sh"
+
 sleep_lru_candidate() {
   local candidate oldest_pr="" oldest_epoch="" epoch
   while IFS= read -r candidate; do
     [[ -n "$candidate" && "$candidate" != "$PR_NUMBER" ]] || continue
     [[ -f "$ROOT/previews/pr-${candidate}/docker-compose.yml" ]] || continue
-    [[ -f "$ROOT/previews/pr-${candidate}/keep-awake" ]] && continue
-    epoch="$(access_epoch "$candidate")"
-    is_nonnegative_integer "$epoch" || epoch=0
-    if (( epoch > NOW_EPOCH || NOW_EPOCH - epoch < WAKE_LEASE_SECONDS )); then
-      continue
-    fi
+    epoch="$(preview_activity_epoch "$ROOT" "$candidate")"
     if [[ -z "$oldest_pr" ]] || (( epoch < oldest_epoch )); then
       oldest_pr="$candidate"
       oldest_epoch="$epoch"
@@ -295,14 +279,16 @@ sleep_lru_candidate() {
   done < <(running_env_numbers)
 
   [[ -n "$oldest_pr" ]] || {
-    echo "Preview running capacity is full and every candidate is pinned" >&2
+    echo "Preview running capacity is full and no resident candidate can be stopped" >&2
     return 1
   }
 
   slept="$oldest_pr"
   local candidate_dir="$ROOT/previews/pr-${slept}"
+  local services=()
+  mapfile -t services < <(project_sleep_services "$candidate_dir/docker-compose.yml")
   if ! "$DOCKER" compose -p "yawp-pr-${slept}" \
-    -f "$candidate_dir/docker-compose.yml" stop >&2; then
+    -f "$candidate_dir/docker-compose.yml" stop "${services[@]}" >&2; then
     echo "Preview running capacity stop failed" >&2
     return 1
   fi
@@ -340,18 +326,38 @@ wait_for_project_health() {
   return 1
 }
 
+project_wake_services() {
+  local compose="$1"
+  printf '%s\n' web
+  if grep -qE '^[[:space:]]*blackboard-lti-mock:' "$compose"; then
+    printf '%s\n' blackboard-lti-mock
+  fi
+}
+
+project_sleep_services() {
+  local compose="$1"
+  project_wake_services "$compose"
+  if grep -qE '^[[:space:]]*renderer:' "$compose"; then
+    printf '%s\n' renderer
+  fi
+}
+
 restore_displaced() {
   [[ -n "$slept" ]] || return 0
   local displaced_dir="$ROOT/previews/pr-${slept}"
   local displaced_file="$displaced_dir/docker-compose.yml"
+  local services=()
   [[ -f "$displaced_file" ]] || return 1
-  "$DOCKER" compose -p "yawp-pr-${slept}" -f "$displaced_file" start >&2 || return 1
+  mapfile -t services < <(project_sleep_services "$displaced_file")
+  "$DOCKER" compose -p "yawp-pr-${slept}" -f "$displaced_file" start "${services[@]}" >&2 || return 1
   wait_for_project_health "$slept"
 }
 
 ensure_target_stopped() {
   is_running "$PR_NUMBER" || return 0
-  if ! "$DOCKER" compose -p "$project" -f "$compose_file" stop >/dev/null 2>&1; then
+  local services=()
+  mapfile -t services < <(project_sleep_services "$compose_file")
+  if ! "$DOCKER" compose -p "$project" -f "$compose_file" stop "${services[@]}" >/dev/null 2>&1; then
     is_running "$PR_NUMBER" && return 1
   fi
   ! is_running "$PR_NUMBER"
@@ -405,6 +411,18 @@ if target_deployment_is_inflight; then
   exit 11
 fi
 
+# Recheck live PR state after acquiring the mutation lock. This also protects
+# credentialed lane callers when a resident remains after a PR closes.
+if [[ "${PREVIEW_WAKE_REQUIRE_OPEN_PR:-false}" == "true" ]]; then
+  pr_state="$("$CURL" -fsS --max-time 5 -A yawp-preview-wake \
+    "https://api.github.com/repos/The-Connell-School/yawp/pulls/$PR_NUMBER" \
+    | jq -r '.state // "unknown"')" || pr_state=unknown
+  if [[ "$pr_state" != open ]]; then
+    echo "Preview pr-${PR_NUMBER} is not resident as an open pull request" >&2
+    exit 3
+  fi
+fi
+
 if is_running "$PR_NUMBER"; then
   wait_for_project_health "$PR_NUMBER" || {
     echo "Preview pr-${PR_NUMBER} is running but did not become healthy" >&2
@@ -441,7 +459,8 @@ if (( running_count == RUNNING_CAP )); then
 fi
 
 wake_started=true
-if ! "$DOCKER" compose -p "$project" -f "$compose_file" start; then
+mapfile -t runtime_services < <(project_wake_services "$compose_file")
+if ! "$DOCKER" compose -p "$project" -f "$compose_file" start "${runtime_services[@]}"; then
   fail_wake "Preview pr-${PR_NUMBER} could not start" 7
 fi
 if ! wait_for_project_health "$PR_NUMBER"; then

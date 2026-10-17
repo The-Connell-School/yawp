@@ -1,0 +1,31 @@
+bun test v1.3.1 (89fa0f34)
+
+services/web-app/app/domain/unified-signon/class-student.real-db.integration.test.ts:
+prisma:query - 21.223406000000068ms - INSERT INTO "public"."Setting" ("id","createdAt","updatedAt","name","value","valueType") VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT ("name") DO UPDATE SET "value" = $7 WHERE ("public"."Setting"."name" = $8 AND 1=1) RETURNING "public"."Setting"."id", "public"."Setting"."createdAt", "public"."Setting"."updatedAt", "public"."Setting"."name", "public"."Setting"."description", "public"."Setting"."value", "public"."Setting"."valueType"
+933 |   const before = await counts();
+934 |   const rejected = await post('register-student', {
+935 |     ...details, password: 'short', confirmPassword: 'different',
+936 |   });
+937 |   expect(rejected.response.status).toBe(400);
+938 |   expect(rejected.data.fieldErrors).toEqual({
+                                          ^
+error: expect(received).toEqual(expected)
+
+  {
+-   "confirmPassword": "These passwords don't match.",
+-   "password": "Use at least 6 characters.",
++   "confirmPassword": "The passwords must match",
++   "password": "Password is too short",
+  }
+
+- Expected  - 2
++ Received  + 2
+
+      at <anonymous> (/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/app/domain/unified-signon/class-student.real-db.integration.test.ts:938:37)
+(fail) registration validation copy preserves rejection and actual password boundaries [726.56ms]
+
+ 0 pass
+ 14 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [1.57s]

@@ -1,0 +1,45 @@
+bun test v1.3.1 (89fa0f34)
+
+services/web-app/app/domain/unified-signon/validation-copy.test.ts:
+3 | import { signonValidationMessage } from './validation-copy';
+4 |
+5 | test('gated password copy uses the validator minimum and mismatch text', () => {
+6 |   const result = PasswordAndConfirmPasswordSchema.safeParse({ password: 'short', confirmPassword: 'different' });
+7 |   if (result.success) throw new Error('Expected invalid credentials');
+8 |   expect(Object.fromEntries(result.error.issues.map(i => [String(i.path[0]), signonValidationMessage(i)]))).toEqual({
+                                                                                                                ^
+error: expect(received).toEqual(expected)
+
+  {
+-   "confirmPassword": "These passwords don't match.",
+-   "password": "Use at least 6 characters.",
++   "confirmPassword": "The passwords must match",
++   "password": "Password is too short",
+  }
+
+- Expected  - 2
++ Received  + 2
+
+      at <anonymous> (/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/app/domain/unified-signon/validation-copy.test.ts:8:109)
+(fail) gated password copy uses the validator minimum and mismatch text [2.94ms]
+(pass) required fields, upper bound and unrelated issues keep their messages [0.48ms]
+(pass) shared policy and legacy messages remain unchanged at both password boundaries [0.27ms]
+35 |     { password: '', confirmPassword: '' },
+36 |   ]) {
+37 |     const result = PasswordAndConfirmPasswordSchema.safeParse(values);
+38 |     if (result.success) throw new Error('Expected validation failure');
+39 |     for (const issue of result.error.issues) {
+40 |       if (issue.code === 'too_small') expect(signonValidationMessage(issue)).toBe(`Use at least ${issue.minimum} characters.`);
+                                                                                  ^
+error: expect(received).toBe(expected)
+
+Expected: "Use at least 6 characters."
+Received: "Password is too short"
+
+      at <anonymous> (/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/app/domain/unified-signon/validation-copy.test.ts:40:78)
+(fail) confirmation minimum and empty strings keep existing validation semantics [0.36ms]
+
+ 2 pass
+ 2 fail
+ 12 expect() calls
+Ran 4 tests across 1 file. [569.00ms]

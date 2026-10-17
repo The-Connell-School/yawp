@@ -13,6 +13,7 @@ import { writingPracticeAssignmentTitle } from '~/utils/writing-lessons/assignme
 import {
   getAssignedPracticeForStudentById,
   getOrCreateStudentPracticeSet,
+  type MixedAssignedPracticeItem,
   recordCompositionPracticeAttempt,
   recordWritingPracticeAttempt,
 } from '~/utils/writing-lessons/practice-assignments.server';
@@ -20,9 +21,27 @@ import { generatePracticeFeedback } from '~/utils/writing-lessons/practice-feedb
 import { detectPracticeGuardrail } from '~/utils/writing-lessons/practice-feedback.shared';
 import { getQuickWritingLessonContext, getQuickWritingLessonRecap } from '~/utils/writing-lessons/static-lessons.server';
 import {
+  AiFreeTierBudgetExceededError,
+  AiLockedForFreeTierError,
+  aiLockedForFreeTierMessage,
   AiRateLimitError,
+  aiFreeTierBudgetExceededMessage,
   reserveAiRequest,
 } from '~/utils/ai-admission.server';
+
+function generationDenial(error: unknown) {
+  if (error instanceof AiFreeTierBudgetExceededError) {
+    return {
+      error: 'free_tier_budget_exceeded',
+      message: aiFreeTierBudgetExceededMessage(),
+      status: 402,
+    };
+  }
+  if (error instanceof AiLockedForFreeTierError) {
+    return { error: 'ai_locked', message: aiLockedForFreeTierMessage(), status: 403 };
+  }
+  return null;
+}
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -37,12 +56,25 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   const { assignment } = classAssignment;
-  const sequence = await getOrCreateStudentPracticeSet({
-    classAssignmentId: classAssignment.id,
-    membershipId: profile.id,
-    lessonSlugs: assignment.lessonSlugs,
-    problemCount: assignment.problemCount,
-  });
+  let sequence: MixedAssignedPracticeItem[];
+  try {
+    sequence = await getOrCreateStudentPracticeSet({
+      classAssignmentId: classAssignment.id,
+      membershipId: profile.id,
+      organizationId: profile.organization.id,
+      lessonSlugs: assignment.lessonSlugs,
+      problemCount: assignment.problemCount,
+    });
+  } catch (error) {
+    const denial = generationDenial(error);
+    if (denial) {
+      return dataResponse(
+        { error: denial.error, message: denial.message },
+        { status: denial.status }
+      );
+    }
+    throw error;
+  }
 
   // Collapse the student's attempts (which now include composition revisions)
   // into per-problem state so each item knows whether it is already mastered.
@@ -115,12 +147,28 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const safePosition = Number.isFinite(position) ? position : 0;
 
   // The item must belong to this student's stored set for the assignment.
-  const sequence = await getOrCreateStudentPracticeSet({
-    classAssignmentId: classAssignment.id,
-    membershipId: profile.id,
-    lessonSlugs: classAssignment.assignment.lessonSlugs,
-    problemCount: classAssignment.assignment.problemCount,
-  });
+  let sequence: MixedAssignedPracticeItem[];
+  try {
+    sequence = await getOrCreateStudentPracticeSet({
+      classAssignmentId: classAssignment.id,
+      membershipId: profile.id,
+      organizationId: profile.organization.id,
+      lessonSlugs: classAssignment.assignment.lessonSlugs,
+      problemCount: classAssignment.assignment.problemCount,
+    });
+  } catch (error) {
+    const denial = generationDenial(error);
+    if (denial) {
+      return dataResponse<AssignedActionData>(
+        {
+          kind: 'denied', position: safePosition, recorded: false,
+          error: denial.error, message: denial.message,
+        },
+        { status: denial.status }
+      );
+    }
+    throw error;
+  }
 
   // Constructed-response (composition) problems: the tutor feedback service
   // grades the writing and the attempt is persisted with it. Guardrailed
@@ -167,6 +215,24 @@ export async function action({ request, params }: ActionFunctionArgs) {
         policy: COMPOSITION_ADMISSION_POLICY,
       });
     } catch (error) {
+      if (error instanceof AiFreeTierBudgetExceededError) {
+        return dataResponse<AssignedActionData>(
+          {
+            kind: 'composition',
+            position: safePosition,
+            feedback: {
+              status: 'needs_revision',
+              summary: aiFreeTierBudgetExceededMessage(),
+              degraded: false,
+              strengths: [],
+              focus: [],
+              encouragement: '',
+            } as any,
+            recorded: false,
+          },
+          { status: 402 }
+        );
+      }
       if (error instanceof AiRateLimitError) {
         return dataResponse<AssignedActionData>(
           {
@@ -201,6 +267,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       response: responseText,
     }, {
       organizationId: profile.organization.id,
+      organizationName: profile.organization.name,
       membershipId: profile.id,
       classId: classAssignment.id,
       route: 'routes/app.writing-lessons.assigned.$classAssignmentId',
@@ -261,6 +328,23 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 export default function AssignedPracticeRoute() {
+  const loaderData = useLoaderData<typeof loader>();
+  if ('error' in loaderData) {
+    return (
+      <PracticeRunner
+        eyebrow="Assigned practice"
+        title="Practice paused"
+        instructions={loaderData.message}
+        problemCount={0}
+        items={[]}
+        hasComposition={false}
+        backTo="/app/writing-lessons"
+        backLabel="Back to practice"
+        reviewFrom="/app/writing-lessons"
+        emptyMessage={loaderData.message}
+      />
+    );
+  }
   const {
     classAssignmentId,
     title,
@@ -270,7 +354,7 @@ export default function AssignedPracticeRoute() {
     items,
     hasComposition,
     lessonRecaps,
-  } = useLoaderData<typeof loader>();
+  } = loaderData;
 
   // The same screen a student gets when they start practice on their own —
   // here it records every attempt against the assignment.

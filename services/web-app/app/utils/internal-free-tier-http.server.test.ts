@@ -1,4 +1,4 @@
-import { beforeEach, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const actualFeatureFlags = await import('~/domain/feature-flags/feature-flags.server');
 const isFreeTierEnabled = mock(actualFeatureFlags.isFreeTierEnabled);
@@ -121,4 +121,136 @@ test('every internal endpoint rejects a missing, short or wrong bearer before to
     if (old === undefined) delete process.env.YAWP_MANAGEMENT_SERVICE_KEY;
     else process.env.YAWP_MANAGEMENT_SERVICE_KEY = old;
   }
+});
+
+
+// Use the real signed-read authorization and stub only database reads.
+const db = { ...await import('~/utils/db.server') };
+const auth = await import('./internal-platform-auth.server');
+describe('signed waitlist CSV export', () => {
+  const savedEnv = { ...process.env };
+  const secret = 'local-export-test-secret-32-characters';
+  let reads: ReturnType<typeof mockReads>;
+  const fixture = {
+    id: 'export-1', createdAt: new Date('2026-10-14T00:00:00Z'), status: 'LEAD',
+    name: '=SUM(1,2)', email: 'intern@example.test', schoolName: 'Demo, "Academy"',
+    location: 'Line\nBreak', gradeLevel: '+1', releasedAt: null,
+    acquisitionTokenId: 'event-1', acquisitionToken: { label: '@event' },
+  };
+  const mockReads = () => mock(async (_input: any) => [fixture]);
+
+  function signed(query = '', method = 'GET') {
+    const url = `https://yawp.test/api/internal/v1/free-tier/export${query}`;
+    return new Request(url, { method, headers: auth.signInternalApiRequest({
+      method, url, keyId: 'export-test', secret, actor: 'operator@example.test',
+    }).headers });
+  }
+
+  beforeEach(() => {
+    process.env.YAWP_INTERNAL_API_KEYS = JSON.stringify([
+      { id: 'export-test', secret, scopes: ['management:read', 'management:write'] },
+    ]);
+    process.env.LEGACY_INTERNAL_KEY_ALLOWED = 'false';
+    process.env.INTERNAL_API_NONCE_STORE = 'memory';
+    auth.resetInternalApiMemoryNonceStore();
+    auth.resetInternalApiRateLimitBuckets();
+    reads = mockReads();
+    mock.module('~/utils/db.server', () => ({ ...db, prisma: new Proxy(db.prisma, {
+      get(target, property) {
+        return property === 'freeTierApplication' ? { findMany: reads } : Reflect.get(target, property);
+      },
+    }) }));
+  });
+  afterEach(() => {
+    mock.module('~/utils/db.server', () => db);
+    for (const name of ['YAWP_INTERNAL_API_KEYS', 'LEGACY_INTERNAL_KEY_ALLOWED', 'INTERNAL_API_NONCE_STORE']) {
+      if (savedEnv[name] === undefined) delete process.env[name];
+      else process.env[name] = savedEnv[name];
+    }
+    auth.resetInternalApiMemoryNonceStore();
+    auth.resetInternalApiRateLimitBuckets();
+  });
+
+  test('empty query produces a bounded attachment with formula-safe escaped cells', async () => {
+    const result = await exportCsv(signed());
+    expect(result.status).toBe(200);
+    expect(result.headers.get('content-disposition')).toBe('attachment; filename="free-tier-applications.csv"');
+    expect(result.headers.get('content-type')).toBe('text/csv; charset=utf-8');
+    expect(result.headers.get('cache-control')).toBe('no-store');
+    expect(result.headers.get('x-export-truncated')).toBeNull();
+    expect(reads).toHaveBeenCalledWith({ where: {}, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: 10001, include: { acquisitionToken: { select: { label: true } } } });
+    const content = await result.text();
+    expect(content.startsWith('id,createdAt,status,name,email,schoolName,location,gradeLevel,releasedAt,acquisitionTokenId,acquisitionTokenLabel\n')).toBe(true);
+    expect(content).toContain(`"'=SUM(1,2)"`);
+    expect(content).toContain('"Demo, ""Academy"""');
+    expect(content).toContain('"Line\nBreak"');
+    expect(content).toContain("'+1");
+    expect(content).toContain("'@event");
+  });
+
+  test('valid filters keep search semantics and export ignores valid search pagination', async () => {
+    const result = await exportCsv(signed('?q=%20intern%20&status=LEAD&released=false&acquisitionTokenId=event-1&limit=1&cursor=unused'));
+    expect(result.status).toBe(200);
+    expect(reads.mock.calls[0][0]).toEqual({
+      where: { status: 'LEAD', releasedAt: null, acquisitionTokenId: 'event-1', OR: [
+        { email: { contains: 'intern', mode: 'insensitive' } },
+        { name: { contains: 'intern', mode: 'insensitive' } },
+        { schoolName: { contains: 'intern', mode: 'insensitive' } },
+        { location: { contains: 'intern', mode: 'insensitive' } },
+      ] }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 10001,
+      include: { acquisitionToken: { select: { label: true } } },
+    });
+    reads.mockClear();
+    expect((await exportCsv(signed('?released=true'))).status).toBe(200);
+    expect(reads.mock.calls[0]?.[0]?.where).toEqual({ releasedAt: { not: null } });
+  });
+
+  test('empty results still produce the header and bounded exports report truncation', async () => {
+    reads.mockResolvedValueOnce([]);
+    const empty = await exportCsv(signed());
+    expect(empty.status).toBe(200);
+    expect((await empty.text()).split('\n')).toHaveLength(1);
+    reads.mockResolvedValueOnce(Array.from({ length: 10000 }, (_, i) => ({ ...fixture, location: 'Test', id: `row-${i}` })) as never);
+    const exact = await exportCsv(signed());
+    expect(exact.status).toBe(200);
+    expect(exact.headers.get('x-export-truncated')).toBeNull();
+    expect((await exact.text()).split('\n')).toHaveLength(10001);
+    reads.mockResolvedValueOnce(Array.from({ length: 10001 }, (_, i) => ({ ...fixture, location: 'Test', id: `row-${i}` })) as never);
+    const capped = await exportCsv(signed());
+    expect(capped.status).toBe(200);
+    expect(capped.headers.get('x-export-truncated')).toBe('true');
+    const csv = await capped.text();
+    expect(csv.split('\n')).toHaveLength(10001);
+    expect(csv).toContain('row-9999,');
+    expect(csv).not.toContain('row-10000,');
+  });
+
+  test('invalid filters and pagination are rejected before querying', async () => {
+    for (const query of ['?status=bogus', '?released=1', '?acquisitionTokenId=', '?q=' + 'x'.repeat(201), '?unknown=x', '?limit=101', '?limit=0', '?cursor=' + 'x'.repeat(501)]) {
+      expect((await exportCsv(signed(query))).status).toBe(400);
+    }
+    expect(reads).not.toHaveBeenCalled();
+  });
+
+  test('applications search retains its 100-row maximum', async () => {
+    for (const limit of ['101', '1000']) {
+      const url = `https://yawp.test/api/internal/v1/free-tier/applications?limit=${limit}`;
+      const request = new Request(url, { headers: auth.signInternalApiRequest({
+        method: 'GET', url, keyId: 'export-test', secret, actor: 'operator@example.test',
+      }).headers });
+      expect((await applicationsSearch(request)).status).toBe(400);
+    }
+    expect(reads).not.toHaveBeenCalled();
+  });
+
+  test('wrong method, unsigned, tampered, and insufficient-scope reads are denied', async () => {
+    expect((await exportCsv(signed('', 'POST'))).status).toBe(405);
+    expect((await exportCsv(new Request('https://yawp.test/api/internal/v1/free-tier/export'))).status).toBe(401);
+    const tampered = signed('?status=LEAD');
+    expect((await exportCsv(new Request(tampered.url.replace('LEAD', 'APPROVED'), { headers: tampered.headers }))).status).toBe(401);
+    process.env.YAWP_INTERNAL_API_KEYS = JSON.stringify([{ id: 'export-test', secret, scopes: ['stats:read'] }]);
+    expect((await exportCsv(signed())).status).toBe(403);
+    expect(reads).not.toHaveBeenCalled();
+  });
 });

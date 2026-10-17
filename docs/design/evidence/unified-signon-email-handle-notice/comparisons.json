@@ -1,0 +1,46 @@
+[
+  {
+    "state": "email-origin",
+    "width": 1280,
+    "source": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/design/v2/artboards/signon-38-new-student-free-tier-class-handle-all-states.png",
+    "sourceSha256": "44650b2312fdb2ce0ea3a3c7cef4d8a1b2d4566a04d46a691957f9a617c21e25",
+    "crop": "390x1105+2158+134",
+    "design": "signon-38-email-origin-1280-design.png",
+    "implementation": "signon-38-email-origin-1280-impl.png",
+    "comparison": "signon-38-email-origin-1280-side-by-side.png",
+    "provenance": "Unscaled supplied PNG crop. The exact email-origin state is supplied at 390px only; desktop is compared to the same mobile state, not an invented desktop variant. Reference broken logo and rounded device frame retained only in design pixels."
+  },
+  {
+    "state": "direct-code",
+    "width": 1280,
+    "source": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/design/v2/artboards/signon-38-new-student-free-tier-class-handle-all-states.png",
+    "sourceSha256": "44650b2312fdb2ce0ea3a3c7cef4d8a1b2d4566a04d46a691957f9a617c21e25",
+    "crop": "390x1008+48+134",
+    "design": "signon-38-direct-code-1280-design.png",
+    "implementation": "signon-38-direct-code-1280-impl.png",
+    "comparison": "signon-38-direct-code-1280-side-by-side.png",
+    "provenance": "Unscaled supplied PNG crop. The exact email-origin state is supplied at 390px only; desktop is compared to the same mobile state, not an invented desktop variant. Reference broken logo and rounded device frame retained only in design pixels."
+  },
+  {
+    "state": "email-origin",
+    "width": 390,
+    "source": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/design/v2/artboards/signon-38-new-student-free-tier-class-handle-all-states.png",
+    "sourceSha256": "44650b2312fdb2ce0ea3a3c7cef4d8a1b2d4566a04d46a691957f9a617c21e25",
+    "crop": "390x1105+2158+134",
+    "design": "signon-38-email-origin-390-design.png",
+    "implementation": "signon-38-email-origin-390-impl.png",
+    "comparison": "signon-38-email-origin-390-side-by-side.png",
+    "provenance": "Unscaled supplied PNG crop. The exact email-origin state is supplied at 390px only; desktop is compared to the same mobile state, not an invented desktop variant. Reference broken logo and rounded device frame retained only in design pixels."
+  },
+  {
+    "state": "direct-code",
+    "width": 390,
+    "source": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/design/v2/artboards/signon-38-new-student-free-tier-class-handle-all-states.png",
+    "sourceSha256": "44650b2312fdb2ce0ea3a3c7cef4d8a1b2d4566a04d46a691957f9a617c21e25",
+    "crop": "390x1008+48+134",
+    "design": "signon-38-direct-code-390-design.png",
+    "implementation": "signon-38-direct-code-390-impl.png",
+    "comparison": "signon-38-direct-code-390-side-by-side.png",
+    "provenance": "Unscaled supplied PNG crop. The exact email-origin state is supplied at 390px only; desktop is compared to the same mobile state, not an invented desktop variant. Reference broken logo and rounded device frame retained only in design pixels."
+  }
+]

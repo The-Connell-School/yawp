@@ -1,0 +1,21 @@
+{
+  "serverTests": 92,
+  "realDatabase": {
+    "pass": 32,
+    "assertions": 180
+  },
+  "browser": {
+    "realHandlers": 4,
+    "mockedGoogle": 2,
+    "flagOffCompatibility": 13,
+    "fixtureBehaviorGeometry": 14
+  },
+  "typecheck": "pass",
+  "schemaValidation": "pass",
+  "migrationStatus": "174 migrations; up to date",
+  "migrationDrift": "28 unrelated statements exactly match origin/main",
+  "comparisons": 34,
+  "legacyIdenticalPairs": 6,
+  "network": "No external email, live provider, hosted QA or preview",
+  "flag": "No demo or production change; enabled only in disposable local database"
+}

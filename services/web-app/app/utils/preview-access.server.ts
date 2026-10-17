@@ -22,6 +22,8 @@ const ACCESS_CODE_PATTERN = /^[a-z]+-[a-z]+-[1-9][0-9]{3}$/;
 const MASTER_ACCESS_CODE_PATTERN =
   /^(?=.{8,64}$)[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/;
 const OPEN_PATHS = new Set([
+  // Private QA endpoint performs its own preview/database and Bearer checks.
+  '/api/preview/qa/signon-code',
   '/api/healthcheck',
   '/api/healthcheck/', // be tolerant of a trailing slash from probes
   // Stripe cannot present the human preview-access cookie. The route itself
@@ -38,6 +40,9 @@ const OPEN_PATHS = new Set([
   // environment. These routes require YAWP_MANAGEMENT_SERVICE_KEY themselves.
   '/api/internal/v1/feature-flags',
   '/api/internal/v1/organizations',
+  // Staff feedback review uses signed-only HMAC authorization at the route;
+  // the Internal service cannot present a human access-code cookie.
+  '/api/internal/v1/tester-feedback',
   '/lti/jwks',
   PREVIEW_ACCESS_PATH,
   `${PREVIEW_ACCESS_PATH}.data`,
@@ -48,8 +53,8 @@ const OPEN_PATHS = new Set([
  * deeper path: `/api/internal/v1/feature-flags/<key>` only.
  */
 const OPEN_SINGLE_SEGMENT_PREFIXES = ['/api/internal/v1/feature-flags/'];
-/** Yawp Internal operator API for free-tier event links (HMAC still required on the route). */
-const OPEN_PATH_PREFIXES = ['/api/internal/v1/free-tier/'];
+/** Yawp Internal operator APIs; the routes still require HMAC/service auth. */
+const OPEN_PATH_PREFIXES = ['/api/internal/v1/free-tier/', '/api/internal/v1/admin/organizations'];
 const OPEN_SEGMENT = /^[A-Za-z0-9_-]{1,128}$/;
 
 function isOpenPath(pathname: string) {
@@ -557,7 +562,7 @@ async function consumeCodeQueryParam(
   request: Request,
   repository: PreviewAccessSeatRepository
 ): Promise<Response | null> {
-  if (request.method !== 'GET') return null;
+  if (request.method !== 'GET' || isProviderCallback(request)) return null;
 
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
@@ -577,8 +582,18 @@ async function consumeCodeQueryParam(
   });
 }
 
+/**
+ * OAuth provider callbacks carry their own one-time `code`; it is not a preview
+ * access code and must reach the route untouched. The gate still applies.
+ */
+const PROVIDER_CALLBACK_PATHS = new Set(['/auth/unified/google/callback']);
+
+function isProviderCallback(request: Request) {
+  return PROVIDER_CALLBACK_PATHS.has(new URL(request.url).pathname);
+}
+
 function stripCodeQueryParam(request: Request): Response | null {
-  if (request.method !== 'GET') return null;
+  if (request.method !== 'GET' || isProviderCallback(request)) return null;
 
   const url = new URL(request.url);
   if (!url.searchParams.has('code')) return null;
@@ -606,6 +621,12 @@ export function createPreviewAccessMiddleware(
     if (!isPreviewAccessGateEnabled()) return next();
 
     const pathname = new URL(request.url).pathname;
+    // Legal documents are public reads, including React Router data requests.
+    // Do not grant a seat or extend activity for these anonymous requests.
+    if (
+      ['GET', 'HEAD'].includes(request.method) &&
+      /^\/(privacy|terms)(?:\/|\.data)?$/.test(pathname)
+    ) return next();
     if (isOpenPath(pathname)) return next();
 
     const seat = await getPreviewAccessSeat(request, repository);

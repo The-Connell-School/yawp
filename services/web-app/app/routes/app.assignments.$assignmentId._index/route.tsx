@@ -1,7 +1,6 @@
+import { useFreeAccountUsage } from '~/components/free-account-usage';
 import { ExitTicketClassReadPanel } from '~/components/assignments/exit-ticket-class-read-panel';
-import {
-  buildExitTicketClassRead,
-} from '~/domain/assignment-types/exit-ticket-class-read';
+import { buildExitTicketClassRead } from '~/domain/assignment-types/exit-ticket-class-read';
 import { loadExitTicketResponses } from '~/domain/assignment-types/exit-ticket-class-read.server';
 import { EXIT_TICKET_SEED_STEP } from '~/domain/lesson-planner/lesson-seed';
 import { Prisma } from '@app/prisma';
@@ -260,11 +259,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const exitTicketClassRead = isExitTicketAssignmentType(
     active.assignment.assignmentType
   )
-      ? buildExitTicketClassRead({
-          responses: await loadExitTicketResponses(active.id),
-          config: exitTicketConfig,
-        })
-      : null;
+    ? buildExitTicketClassRead({
+        responses: await loadExitTicketResponses(active.id),
+        config: exitTicketConfig,
+      })
+    : null;
   const insight =
     insightRow && insightRow.status === 'ready' && insightRow.summaryJson
       ? {
@@ -328,7 +327,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       // Only where the planner is on; the step is not an index, so it can
       // never be read as a Class Summary next step.
       exitTicketPlanHref:
-        exitTicketClassRead && (await isLessonPlannerEnabled(profile.organization.id))
+        exitTicketClassRead &&
+        (await isLessonPlannerEnabled(profile.organization.id))
           ? `/app/lesson-planner?from=${active.id}&step=${EXIT_TICKET_SEED_STEP}`
           : null,
     },
@@ -766,6 +766,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
 export default function AssignmentDetailRoute() {
   const data = useLoaderData<typeof loader>();
+  const freeUsage = useFreeAccountUsage();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -937,10 +938,24 @@ export default function AssignmentDetailRoute() {
                       type="button"
                       variant="ghost"
                       onClick={() => setIsDuplicateSheetOpen(true)}
+                      disabled={Boolean(
+                        !freeUsage?.monthly &&
+                        freeUsage?.assignments.find(
+                          (row) => row.kind === assignment.assignmentType.kind
+                        )?.remaining === 0
+                      )}
                     >
                       <Copy className="mr-2 h-4 w-4" />
                       Duplicate
                     </Button>
+                    {!freeUsage?.monthly &&
+                      freeUsage?.assignments.find(
+                        (row) => row.kind === assignment.assignmentType.kind
+                      )?.remaining === 0 && (
+                        <span className="text-xs text-amber-800">
+                          No {assignment.assignmentType.title} left
+                        </span>
+                      )}
                     <Button
                       type="button"
                       variant="outline"

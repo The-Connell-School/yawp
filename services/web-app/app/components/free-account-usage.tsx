@@ -1,0 +1,456 @@
+import { StudentInvitationDialog } from '~/components/student-invitation-dialog';
+import { useRef, useState } from 'react';
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetTrigger,
+} from '~/components/ui/sheet';
+import { Link, useRouteLoaderData } from 'react-router';
+import {
+  ChartNoAxesColumn,
+  Check,
+  ChevronRight,
+  Lock,
+  Plus,
+  Users,
+} from 'lucide-react';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '~/components/ui/popover';
+import type {
+  FreeAccountUsage,
+  UsageCount,
+} from '~/domain/free-tier/inapp-usage';
+import { cn } from '~/utils/misc';
+
+export function useFreeAccountUsage() {
+  return (
+    useRouteLoaderData<{ freeAccountUsage?: FreeAccountUsage | null }>(
+      'routes/app'
+    )?.freeAccountUsage ?? null
+  );
+}
+function Meter({ count }: { count: UsageCount }) {
+  return (
+    <div
+      className="h-1.5 overflow-hidden rounded-full bg-secondary"
+      aria-hidden="true"
+    >
+      <div
+        className={cn(
+          'h-full rounded-full bg-primary',
+          count.remaining === 0 && 'bg-amber-600'
+        )}
+        style={{
+          width: `${count.total === 0 ? 100 : Math.min(100, (count.used / count.total) * 100)}%`,
+        }}
+      />
+    </div>
+  );
+}
+export function FreeAccountUsagePopover({
+  usage,
+  expanded,
+  isMobile,
+  onMobileOpen,
+  onMobileClose,
+}: {
+  usage: FreeAccountUsage;
+  expanded: boolean;
+  isMobile: boolean;
+  onMobileOpen: () => void;
+  onMobileClose: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const trigger = (
+    <button
+      type="button"
+      aria-label="Usage"
+      className={cn(
+        'mx-4 mb-3 flex flex-col gap-2 rounded-lg border bg-popover p-3 text-left text-sm',
+        !expanded && 'mx-1 p-2'
+      )}
+    >
+      <span className="flex items-center justify-between font-semibold">
+        {expanded ? (
+          <>
+            {usage.monthly ? 'Monthly usage' : 'Usage'}{' '}
+            <ChevronRight size={14} />
+          </>
+        ) : (
+          <Users size={18} />
+        )}
+      </span>
+      {expanded && (
+        <>
+          <span className="flex justify-between text-xs">
+            <span>{usage.monthly ? 'Lesson Planner' : 'Students'}</span>
+            <span className="text-muted-foreground">
+              {usage.monthly
+                ? `${usage.lessonPlans.remaining} left`
+                : usage.students.remaining === 0
+                  ? 'Full'
+                  : `${usage.students.remaining} left`}
+            </span>
+          </span>
+          <Meter count={usage.monthly ? usage.lessonPlans : usage.students} />
+          {usage.monthly && usage.reporter && (
+            <>
+              <span className="flex justify-between text-xs">
+                <span>Reporter</span>
+                <span className="text-muted-foreground">
+                  {usage.reporter.remaining} left
+                </span>
+              </span>
+              <Meter count={usage.reporter} />
+            </>
+          )}
+          {!usage.monthly && usage.warning && (
+            <span className="text-xs text-amber-800">{usage.warning}</span>
+          )}
+        </>
+      )}
+    </button>
+  );
+  const details = <FreeAccountUsageDetails usage={usage} />;
+  if (isMobile) {
+    return (
+      <Sheet
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (next) onMobileOpen();
+        }}
+      >
+        <SheetTrigger asChild>{trigger}</SheetTrigger>
+        <SheetContent
+          side="bottom"
+          aria-describedby={undefined}
+          overlayClassName="free-usage-overlay bg-foreground/35"
+          className="h-auto max-h-[90dvh] rounded-t-2xl border-x-0 border-b-0 bg-background px-5 pb-7 pt-5"
+          onCloseAutoFocus={(event) => {
+            // The Usage trigger is now in the closed drawer. Restore focus to
+            // the visible navigation opener instead of the hidden trigger.
+            event.preventDefault();
+            onMobileClose();
+          }}
+        >
+          <SheetTitle className="mb-4 font-bold">Usage</SheetTitle>
+          {details}
+        </SheetContent>
+      </Sheet>
+    );
+  }
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      <PopoverContent
+        side="right"
+        align="end"
+        aria-label="Usage"
+        className="w-[min(340px,calc(100vw-24px))] rounded-xl p-5"
+      >
+        <h2 className="mb-4 text-lg font-bold">Usage</h2>
+        {details}
+      </PopoverContent>
+    </Popover>
+  );
+}
+function FreeAccountUsageDetails({ usage }: { usage: FreeAccountUsage }) {
+  return (
+    <>
+      <div className="space-y-4">
+        {(usage.monthly
+          ? [
+              { label: 'Lesson Planner', ...usage.lessonPlans },
+              { label: 'Reporter', ...usage.reporter! },
+            ]
+          : [
+              { label: 'Students', ...usage.students },
+              ...usage.assignments,
+              { label: 'Lesson plans', ...usage.lessonPlans },
+            ]
+        ).map((row) => (
+          <div key={row.label}>
+            <div className="mb-1.5 flex justify-between gap-2 text-sm">
+              <span>{row.label}</span>
+              <span
+                className={cn(
+                  'text-xs text-muted-foreground',
+                  !usage.monthly && row.remaining === 0 && 'text-amber-800'
+                )}
+              >
+                {row.used} of {row.total} ·{' '}
+                {row.remaining === 0 ? 'none left' : `${row.remaining} left`}
+              </span>
+            </div>
+            <Meter count={row} />
+          </div>
+        ))}
+      </div>
+      <p className="mt-5 text-xs leading-relaxed text-muted-foreground">
+        {usage.monthly ? (
+          'Monthly uses reset on the first day of each month (UTC). Deleting a report or draft does not restore a use.'
+        ) : (
+          <>
+            Assignments count when you create them. Deleting one doesn't give it
+            back.
+          </>
+        )}
+      </p>
+      <Link
+        to={usage.monthly ? FULL_ACCESS_CONTACT : '/app/free-tier/status'}
+        className="mt-4 inline-block text-sm text-primary underline"
+      >
+        Need more? Talk to us
+      </Link>
+    </>
+  );
+}
+export function FreeAssignmentTiles({
+  usage,
+  types,
+  onCreate,
+}: {
+  usage: FreeAccountUsage;
+  types: Array<{ id: string; kind?: string | null }>;
+  onCreate: (id?: string) => void;
+}) {
+  return (
+    <div data-testid="free-assignment-tiles">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-bold">Assignments</h2>
+        <button
+          type="button"
+          disabled={!usage.monthly && usage.allAssignmentsUsed}
+          onClick={() => onCreate()}
+          className="text-sm text-primary underline disabled:text-muted-foreground"
+        >
+          New assignment
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {usage.assignments.map((row) => {
+          const type = types.find((t) => t.kind === row.kind);
+          return (
+            <button
+              key={row.kind}
+              type="button"
+              disabled={!type || (!usage.monthly && row.remaining === 0)}
+              onClick={() => onCreate(type?.id)}
+              aria-label={`New ${row.label} assignment`}
+              className="flex min-h-[92px] flex-col gap-1.5 rounded-xl border bg-popover p-3.5 text-left shadow-sm disabled:bg-muted/30"
+            >
+              <span className="flex w-full items-start justify-between gap-2 text-[15px] font-medium">
+                {row.label}
+                <Plus
+                  size={16}
+                  className="mt-1 shrink-0 text-muted-foreground"
+                />
+              </span>
+              <span
+                className={cn(
+                  'text-[13px] text-muted-foreground',
+                  !usage.monthly && row.remaining === 0 && 'text-amber-800'
+                )}
+              >
+                {usage.monthly
+                  ? 'Unlimited assignments'
+                  : row.remaining
+                    ? `${row.remaining} of ${row.total} left`
+                    : 'None left'}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+export function FreeAccountChecklist({ usage }: { usage: FreeAccountUsage }) {
+  const [invitationOpen, setInvitationOpen] = useState(false);
+  const invitationTriggerRef = useRef<HTMLButtonElement>(null);
+  const steps = [
+    {
+      label: usage.monthly
+        ? 'Add your students to your class'
+        : 'Share your class code',
+      done: usage.monthly
+        ? usage.students.used > 0
+        : usage.checklist.classReady,
+      to: usage.classId
+        ? `/app/my-classes/${usage.classId}?tab=students`
+        : '/app/my-classes',
+    },
+    {
+      label: 'Create your first assignment',
+      done: usage.checklist.assignmentCreated,
+      to: '/app/assignments',
+      hint: 'Class Starter is a good first one.',
+    },
+    {
+      label: 'A student turns in writing',
+      done: usage.checklist.writingSubmitted,
+      to: '/app/documents',
+    },
+    {
+      label: 'Grade it',
+      done: usage.checklist.graded,
+      to: '/app/documents?status=needs-grading&reset=1',
+      hint: 'Using the grading assistant.',
+    },
+  ];
+  return (
+    <>
+      <aside
+        className="rounded-xl border bg-popover p-5 shadow-sm"
+        data-testid="free-account-checklist"
+      >
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-lg font-bold">Get your class going</h2>
+          <span className="text-xs text-muted-foreground">
+            {steps.filter((s) => s.done).length} of 4
+          </span>
+        </div>
+        <ol className="mt-3">
+          {steps.map((step) => (
+            <li key={step.label} className="border-t py-3">
+              {usage.monthly &&
+              step.label === 'Add your students to your class' &&
+              usage.classCode ? (
+                <button
+                  type="button"
+                  ref={invitationTriggerRef}
+                  onClick={() => setInvitationOpen(true)}
+                  className="flex gap-3 text-left text-sm text-primary underline"
+                >
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'flex size-[22px] shrink-0 items-center justify-center rounded-full border-2',
+                      step.done &&
+                        'border-emerald-800 bg-emerald-800 text-white'
+                    )}
+                  >
+                    {step.done && <Check size={14} />}
+                  </span>
+                  Add your students to your class
+                </button>
+              ) : (
+                <Link to={step.to} className="flex gap-3 text-sm">
+                  <span
+                    className={cn(
+                      'flex size-[22px] shrink-0 items-center justify-center rounded-full border-2',
+                      step.done &&
+                        'border-emerald-800 bg-emerald-800 text-white'
+                    )}
+                  >
+                    {step.done && <Check size={14} />}
+                  </span>
+                  <span>
+                    <span
+                      className={cn(
+                        step.done && 'text-muted-foreground line-through'
+                      )}
+                    >
+                      {step.label}
+                    </span>
+                    {step.hint && !step.done && (
+                      <span className="mt-1 block text-[13px] text-muted-foreground">
+                        {step.hint}
+                      </span>
+                    )}
+                  </span>
+                </Link>
+              )}
+            </li>
+          ))}
+        </ol>
+      </aside>
+      {usage.monthly && usage.classCode && (
+        <StudentInvitationDialog
+          returnFocusRef={invitationTriggerRef}
+          code={usage.classCode}
+          open={invitationOpen}
+          onOpenChange={setInvitationOpen}
+        />
+      )}
+    </>
+  );
+}
+export function FreeReporterLocked() {
+  return (
+    <section
+      data-testid="free-reporter-locked"
+      className="flex h-full flex-col overflow-auto"
+    >
+      <header className="bg-secondary px-4 py-6 sm:px-12">
+        <h1 className="text-[28px] font-bold leading-[1.2]">Reporter</h1>
+      </header>
+      <div className="px-4 pb-12 pt-6 sm:px-12">
+        <section
+          data-testid="free-reporter-card"
+          className="flex max-w-[616px] flex-col items-start gap-3.5 rounded-xl border bg-popover p-7 text-left shadow-sm"
+        >
+          <span
+            data-testid="reporter-lock-badge"
+            className="flex size-10 items-center justify-center rounded-full bg-secondary"
+          >
+            <Lock size={20} aria-hidden="true" />
+          </span>
+          <h2 className="text-xl font-bold leading-[1.35]">
+            Reporter comes with a YAWP paid plan
+          </h2>
+          <ul className="flex flex-col gap-2.5 text-[15px]">
+            <li className="flex gap-2.5">
+              <ChartNoAxesColumn
+                size={18}
+                className="mt-0.5 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+              Writing growth across every class
+            </li>
+            <li className="flex gap-2.5">
+              <Users
+                size={18}
+                className="mt-0.5 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+              Reports for departments and families
+            </li>
+          </ul>
+          <Link
+            to="/app/free-tier/status"
+            className="inline-flex h-10 items-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
+          >
+            Talk to us
+          </Link>
+        </section>
+      </div>
+    </section>
+  );
+}
+
+export const FULL_ACCESS_CONTACT =
+  'mailto:hello@yawp.school?subject=More%20access%20to%20YAWP';
+export function AdvocatePackEntry() {
+  return (
+    <section className="rounded-xl border bg-popover p-5 shadow-sm">
+      <Link
+        to="/app/advocate-pack"
+        className="text-lg font-bold text-primary underline"
+      >
+        Ready for full access?
+      </Link>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Unlimited with a site license
+      </p>
+      <p className="mt-2 text-sm">
+        Take the Advocate Pack to your administrator.
+      </p>
+    </section>
+  );
+}

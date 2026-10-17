@@ -1,5 +1,5 @@
 import type { Prisma } from '@app/prisma';
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test, mock } from 'bun:test';
 import {
   buildAssignmentCreationQuotaFields,
   enforceFreeClassroomAssignmentCreateInTransaction,
@@ -8,7 +8,23 @@ import {
   isFreeClassroomAssignmentKind,
 } from './assignment-quota.server';
 
+mock.module('~/domain/free-tier/monthly-policy.server', () => ({
+  monthlyFreeTierPolicy: async () => ({ enabled: false }),
+}));
+
 describe('assignment-quota helpers', () => {
+  test('marks out-of-bundle free choices unavailable while preserving paid behavior', () => {
+    expect(
+      buildAssignmentCreationQuotaFields('FREE_CLASSROOM', null, 0)
+    ).toEqual({ unavailableReason: 'Available with a paid plan.' });
+    expect(
+      buildAssignmentCreationQuotaFields('FREE_CLASSROOM', 'essay', 0)
+    ).toEqual({ unavailableReason: 'Available with a paid plan.' });
+    expect(buildAssignmentCreationQuotaFields('SCHOOL', 'essay', 0)).toEqual(
+      {}
+    );
+  });
+
   test('labels remaining class starters', () => {
     expect(freeClassroomQuotaMessage('class_starter', 8)).toBe(
       '8 of 12 Class Starters left'

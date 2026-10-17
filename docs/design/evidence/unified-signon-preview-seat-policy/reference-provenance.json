@@ -1,0 +1,71 @@
+[
+  {
+    "name": "signon-27-multiple-1280",
+    "source": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/design/v2/artboards/signon-27-school-amp-role-picker-desktop.png",
+    "sha256": "989bb674ee071acd249763508570345bf25e462b254ef03d6a3af106195d81c0",
+    "crop": null,
+    "dom_sha256": "4477164e3919e0967c381d47b5b0a0f6ee6af86c83180552608b16f3c069ec2a",
+    "copy_sha256": "d798af3a12501648b99657c67b6ee881c588bd53f059091b6822efdd68233668",
+    "notes": "LOCAL gated seed-mode real-handler evidence. Left supplied v2 reference; right current implementation. Actual fixture names and two active choices differ from the reference data. Mobile source retains broken-logo/frame artifacts. Sign-on presentation is unchanged by this policy PR."
+  },
+  {
+    "name": "signon-27-multiple-390",
+    "source": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/design/v2/artboards/signon-28-school-amp-role-picker-all-states.png",
+    "sha256": "a1a743179ef3d51d715256a210e36780f45f42dd283c9d24c8828167b22293ad",
+    "crop": [
+      49,
+      183,
+      390,
+      844
+    ],
+    "dom_sha256": "d643cde97570b379e4c4b097316da9bd3d3cf741b275f3a9c0b97d0551d16bb8",
+    "copy_sha256": "e1ec379a9e4c5c44cdbc50bac54dc6fc7314be557240a0f00e1271d663f0f3b1",
+    "notes": "LOCAL gated seed-mode real-handler evidence. Left supplied v2 reference; right current implementation. Actual fixture names and two active choices differ from the reference data. Mobile source retains broken-logo/frame artifacts. Sign-on presentation is unchanged by this policy PR."
+  },
+  {
+    "name": "signon-25-inactive-1280",
+    "source": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/design/v2/artboards/signon-25-inactive-account-desktop.png",
+    "sha256": "88f712c84752d0d01bae74eacc73148712a53d6e044d35ee03c7c46ea5646811",
+    "crop": null,
+    "dom_sha256": "72acc0436b12ae5d14426a04b9491eec20d7a15df8ca4e9d79000370244c3efe",
+    "copy_sha256": "e752e072615d41e0e5303eeb8a8d3820baf8b39be1b2c634f5732dffdcaca382",
+    "notes": "LOCAL gated seed-mode real-handler evidence. Left supplied v2 reference; right current implementation. Actual fixture names and two active choices differ from the reference data. Mobile source retains broken-logo/frame artifacts. Sign-on presentation is unchanged by this policy PR."
+  },
+  {
+    "name": "signon-25-inactive-390",
+    "source": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/design/v2/artboards/signon-26-inactive-account-all-states.png",
+    "sha256": "8fda977282f13f71cb054ee4ad2f4ad0b318158ff2ceecd803bbb55a8089e0b2",
+    "crop": [
+      49,
+      140,
+      390,
+      844
+    ],
+    "dom_sha256": "9d8c8214450179634f37841222f68119354d11d970eaa7504a478514d9ebd9b1",
+    "copy_sha256": "72237dea809beb84ba4b408973f851c4a82a20dd32163f762f6b6d52932dceee",
+    "notes": "LOCAL gated seed-mode real-handler evidence. Left supplied v2 reference; right current implementation. Actual fixture names and two active choices differ from the reference data. Mobile source retains broken-logo/frame artifacts. Sign-on presentation is unchanged by this policy PR."
+  },
+  {
+    "name": "signon-25-orphan-1280",
+    "source": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/design/v2/artboards/signon-25-inactive-account-desktop.png",
+    "sha256": "88f712c84752d0d01bae74eacc73148712a53d6e044d35ee03c7c46ea5646811",
+    "crop": null,
+    "dom_sha256": "72acc0436b12ae5d14426a04b9491eec20d7a15df8ca4e9d79000370244c3efe",
+    "copy_sha256": "e752e072615d41e0e5303eeb8a8d3820baf8b39be1b2c634f5732dffdcaca382",
+    "notes": "LOCAL gated seed-mode real-handler evidence. Left supplied v2 reference; right current implementation. Actual fixture names and two active choices differ from the reference data. Mobile source retains broken-logo/frame artifacts. Sign-on presentation is unchanged by this policy PR."
+  },
+  {
+    "name": "signon-25-orphan-390",
+    "source": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/design/v2/artboards/signon-26-inactive-account-all-states.png",
+    "sha256": "8fda977282f13f71cb054ee4ad2f4ad0b318158ff2ceecd803bbb55a8089e0b2",
+    "crop": [
+      49,
+      140,
+      390,
+      844
+    ],
+    "dom_sha256": "9d8c8214450179634f37841222f68119354d11d970eaa7504a478514d9ebd9b1",
+    "copy_sha256": "72237dea809beb84ba4b408973f851c4a82a20dd32163f762f6b6d52932dceee",
+    "notes": "LOCAL gated seed-mode real-handler evidence. Left supplied v2 reference; right current implementation. Actual fixture names and two active choices differ from the reference data. Mobile source retains broken-logo/frame artifacts. Sign-on presentation is unchanged by this policy PR."
+  }
+]

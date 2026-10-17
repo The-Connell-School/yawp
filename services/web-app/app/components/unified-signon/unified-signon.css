@@ -1,0 +1,447 @@
+/* Scoped to the new, default-off UI. Values come from the existing theme. */
+.auth-page-shell:has(.unified-signon) {
+  min-height: 800px;
+  padding: 32px 16px 24px;
+}
+.auth-page-shell:has(.unified-signon) .auth-page-frame {
+  gap: 24px;
+}
+.auth-page-shell:has(.unified-signon) .auth-page-logo img {
+  width: 208px;
+  height: 208px;
+  object-fit: contain;
+}
+.unified-signon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 512px;
+  font-size: 14px;
+}
+.unified-signon .signon-stack {
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.unified-signon .signon-card {
+  width: 100%;
+  max-width: 320px;
+  padding: 24px;
+}
+.unified-signon .signon-card h1 {
+  color: #0f172a;
+  font-size: 18px;
+  line-height: 1.35;
+  font-weight: 600;
+  outline: none;
+}
+.unified-signon .signon-card > .mt-6 {
+  margin-top: 24px;
+}
+.unified-signon .signon-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.unified-signon .signon-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.unified-signon .signon-field label {
+  font-size: 16px;
+  line-height: 22px;
+  color: hsl(var(--card-foreground));
+}
+.unified-signon .signon-field input {
+  height: 40px;
+  font-size: 16px;
+}
+.unified-signon .signon-primary,
+.unified-signon .signon-google {
+  width: 100%;
+  min-height: 44px;
+  height: auto;
+  white-space: normal;
+  line-height: 20px;
+  padding: 10px 12px;
+}
+.unified-signon .signon-google {
+  gap: 10px;
+  color: hsl(var(--card-foreground));
+}
+.unified-signon .signon-google svg {
+  flex-shrink: 0;
+}
+.unified-signon .signon-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #5e5d5a;
+  font-size: 13px;
+  line-height: 18px;
+}
+.unified-signon .signon-divider span {
+  height: 1px;
+  background: hsl(var(--border));
+  flex: 1;
+}
+.unified-signon .signon-identity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 22px;
+}
+.unified-signon .signon-identity > span {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.unified-signon .signon-text-button {
+  display: inline;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: normal;
+  text-align: inherit;
+  text-decoration: underline;
+  color: hsl(var(--primary));
+}
+.unified-signon .signon-identity .signon-text-button {
+  flex-shrink: 0;
+  font-size: 13px;
+}
+.unified-signon .signon-copy {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #5e5d5a;
+}
+.unified-signon .signon-hint,
+.unified-signon .signon-field-error {
+  font-size: 13px;
+  line-height: 1.4;
+  color: #5e5d5a;
+}
+.unified-signon .signon-field-error {
+  color: hsl(var(--destructive));
+}
+.unified-signon .signon-field input[aria-invalid='true'] {
+  border-color: hsl(var(--destructive));
+}
+.unified-signon .signon-banner {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: hsl(var(--secondary));
+  font-size: 14px;
+  line-height: 1.5;
+}
+.unified-signon .signon-origin-notice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.unified-signon .signon-origin-notice svg {
+  flex-shrink: 0;
+}
+.unified-signon .signon-error {
+  border: 1px solid hsl(var(--destructive));
+  background: hsl(var(--destructive) / 0.05);
+  color: hsl(var(--destructive));
+}
+.unified-signon .signon-below {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+  text-align: center;
+  color: #5e5d5a;
+  line-height: 1.5;
+}
+.unified-signon .signon-below a,
+.unified-signon .signon-card a {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+}
+.unified-signon .signon-card a.signon-primary {
+  color: hsl(var(--primary-foreground));
+  text-decoration: none;
+}
+.unified-signon .signon-footer {
+  display: flex;
+  gap: 12px;
+  color: #5e5d5a;
+  font-size: 13px;
+  line-height: 18px;
+  padding-top: 40px;
+  margin-top: auto;
+}
+.unified-signon .signon-footer a {
+  text-decoration: underline;
+}
+.unified-signon .signon-choice {
+  width: 100%;
+  height: auto;
+  padding: 16px 16px 16px 18px;
+  border-radius: 8px;
+  border: 1px solid hsl(var(--input));
+  background: white;
+  color: hsl(var(--foreground));
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  white-space: normal;
+  text-align: left;
+  line-height: 24px;
+}
+.unified-signon .signon-choice-copy {
+  min-width: 0;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.unified-signon .signon-choice strong {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 22px;
+  color: #1b1b1b;
+}
+.unified-signon .signon-choice-copy > span {
+  font-size: 14px;
+  line-height: 1.45;
+  color: #5e5d5a;
+}
+.unified-signon .signon-choice > svg {
+  flex-shrink: 0;
+}
+.unified-signon .signon-class {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: white;
+  line-height: 1.5;
+}
+.unified-signon .signon-class strong {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+}
+.unified-signon .signon-class span {
+  font-size: 13px;
+  line-height: 18px;
+  color: #5e5d5a;
+}
+.unified-signon .signon-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.unified-signon .signon-chips button {
+  height: 28px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+.unified-signon .signon-handle-input {
+  position: relative;
+}
+.unified-signon .signon-handle-input > span {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  color: #5e5d5a;
+}
+.unified-signon .signon-handle-input input {
+  padding-left: 30px;
+}
+.unified-signon .signon-password-row {
+  position: relative;
+}
+.unified-signon .signon-password-row > .signon-text-button {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: 14px;
+}
+.unified-signon .signon-class-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.unified-signon .signon-class-picker legend {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.unified-signon .signon-class-picker label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+}
+.unified-signon .signon-class-picker input {
+  margin-top: 4px;
+  accent-color: hsl(var(--primary));
+}
+.unified-signon .signon-class-picker span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.unified-signon .signon-class-picker small {
+  font-size: 12px;
+  color: #5e5d5a;
+}
+@media (max-width: 639px) {
+  .unified-signon .signon-card {
+    width: 100%;
+    padding: 24px;
+  }
+}
+
+/* Override shared card responsive utilities only within this screen family. */
+.unified-signon .signon-card {
+  width: 100%;
+  max-width: 320px;
+  padding: 24px;
+}
+.unified-signon .signon-card h1 {
+  font-family: var(--font-sans);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.unified-signon .signon-below .signon-text-button {
+  display: inline;
+}
+
+/* Keep the theme token consistent through the legacy per-element font override. */
+.auth-page-shell:has(.unified-signon),
+.auth-page-shell:has(.unified-signon) * {
+  --font-sans: var(--font-system-sans);
+}
+.auth-page-shell:has(.unified-signon) {
+  background: hsl(var(--background));
+  font-family: var(--font-sans);
+}
+.unified-signon,
+.unified-signon .signon-card h1 {
+  font-family: var(--font-sans);
+}
+
+/* Status headers share the artboards' 40px badge and 8px heading gaps. */
+.unified-signon .signon-status-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 8px;
+  border-radius: 9999px;
+  background: hsl(var(--secondary));
+  color: hsl(var(--card-foreground));
+}
+.unified-signon:is(
+    [data-signon-screen='trial-status'],
+    [data-signon-screen='inactive'],
+    [data-signon-variant='invalid-link']
+  )
+  .signon-card
+  > .mt-6 {
+  margin-top: 8px;
+}
+.unified-signon:is(
+    [data-signon-screen='trial-status'],
+    [data-signon-screen='inactive']
+  )
+  .signon-card
+  > .mt-6
+  > .signon-fields {
+  gap: 24px;
+}
+/* signon-13/14: fields 24px below copy. */
+.unified-signon[data-signon-screen='email-code'] .signon-card > .mt-6 {
+  margin-top: 8px;
+}
+.unified-signon[data-signon-screen='email-code']
+  .signon-card
+  > .mt-6
+  > .signon-fields {
+  gap: 24px;
+}
+.unified-signon[data-signon-screen='email-code'] input[name='code'] {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 18px;
+  letter-spacing: 3.24px;
+}
+/* signon-27/28: outlined horizontal rows with role pills and chevrons. */
+.unified-signon .signon-memberships {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.unified-signon .signon-membership {
+  width: 100%;
+  height: auto;
+  padding: 14px 14px 14px 16px;
+  gap: 12px;
+  border-radius: 8px;
+  background: white;
+  color: hsl(var(--card-foreground));
+  white-space: normal;
+  text-align: left;
+}
+.unified-signon .signon-membership-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+}
+.unified-signon .signon-membership-role {
+  flex-shrink: 0;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  background: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 17px;
+}
+.unified-signon .signon-membership svg {
+  flex-shrink: 0;
+}
+
+/* Private preview access gate (preview environments only). */
+.unified-signon .preview-access-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  background: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+}
+.unified-signon[data-signon-screen='preview-access'] .signon-card > .mt-6 {
+  margin-top: 8px;
+}
+.unified-signon[data-signon-screen='preview-access'] select {
+  font-size: 16px;
+}

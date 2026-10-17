@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import path from 'node:path';
 import { expect, test } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { waitForFreeTierEmailPayload } from '../helpers/free-tier-email';
@@ -27,18 +28,18 @@ test.describe('Free tier public flow', () => {
 
   test('admin approve page rejects missing token', async ({ page }) => {
     await page.goto('/free/admin/approve');
-    await expect(page.getByText(/not valid|expired/i)).toBeVisible();
+    await expect(page.getByRole('heading', { name: "We couldn't open this link" })).toBeVisible();
   });
 
   test('join page does not treat release token as acquisition token', async ({ page }) => {
     await page.goto('/free/join?t=not-a-real-signed-token');
-    await expect(page.getByText(/This link is not valid/i)).toBeVisible();
+    await expect(page.getByText(/This invite link isn't valid/i)).toBeVisible();
     await expect(page.getByText(/no longer valid/i)).not.toBeVisible();
   });
 
   test('join page shows YAWP branding when token is invalid', async ({ page }) => {
     await page.goto('/free/join?t=not-a-real-signed-token');
-    await expect(page.getByRole('link', { name: /YAWP/i })).toBeVisible();
+    await expect(page.getByRole('img', { name: 'Yawp', exact: true })).toBeVisible();
   });
 });
 
@@ -70,7 +71,7 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     });
 
     await page.goto(`/free/join?t=${encodeURIComponent(releaseMint.token)}`);
-    await expect(page.getByRole('link', { name: /YAWP/i })).toBeVisible();
+    await expect(page.getByRole('img', { name: 'Yawp', exact: true })).toBeVisible();
     await page.fill('input[name="name"]', teacherName);
     await page.fill('input[name="password"]', JOIN_PASSWORD);
     await page.fill('input[name="confirmPassword"]', JOIN_PASSWORD);
@@ -94,7 +95,7 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     const adminPage = await browser.newPage();
     await adminPage.goto(approveUrl!);
     await adminPage.fill('input[name="adminRole"]', 'Principal');
-    await adminPage.getByRole('checkbox', { name: /authorized/i }).check();
+    await adminPage.getByRole('checkbox', { name: /I can approve classroom software/i }).check();
     await adminPage.getByRole('button', { name: /Approve YAWP/i }).click();
     await expect(adminPage.getByRole('heading', { name: /Thank you/i })).toBeVisible({
       timeout: 30_000,
@@ -195,7 +196,8 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     expect(pending?.adminEmail).toBe(`principal-${stamp}@${ADMIN_DOMAIN}`);
   });
 
-  test('self-approval alias routes to manual review (no admin email)', async ({ page }) => {
+  test('self administrator is rejected inline and by direct POST before any approval writes', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1000 });
     const prisma = createE2EPrismaClient();
     const stamp = Date.now();
     const teacherEmail = `ft-self-${stamp}@${ADMIN_DOMAIN}`;
@@ -224,19 +226,54 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     expect(page.url()).not.toMatch(/\/auth\/login/);
 
     await page.fill('input[name="adminName"]', 'Same Person');
-    await page.fill('input[name="adminEmail"]', `ft-self-${stamp}+alias@${ADMIN_DOMAIN}`);
     await page.fill('input[name="adminRole"]', 'Principal');
-    await page.getByRole('button', { name: /Send approval request/i }).click();
-    await page.waitForURL('**/app/free-tier/pending**', { timeout: 30_000 });
-    await expect(page.getByText(/reviewing this request manually/i)).toBeVisible();
-
-    const sent = await prisma.freeTierEmailLog.findFirst({
-      where: { applicationId: app.id, kind: 'admin_approval', success: true },
+    const email = page.getByRole('textbox', { name: 'Administrator email' });
+    const message = "Use your administrator's email here, not your own.";
+    const shots = process.env.SELF_ADMIN_SCREENSHOT_DIR;
+    const stage = process.env.SELF_ADMIN_SCREENSHOT_STAGE ?? 'after';
+    let posts = 0;
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().includes('/app/free-tier/onboarding')) posts++;
     });
-    expect(sent).toBeNull();
+    for (const [variant, adminEmail] of [
+      ['exact', teacherEmail],
+      ['case-whitespace', `  ${teacherEmail.toUpperCase()}  `],
+      ['alias', `ft-self-${stamp}+alias@${ADMIN_DOMAIN}`],
+    ]) {
+      await email.fill(adminEmail);
+      await email.blur();
+      await page.evaluate(() => document.fonts.ready);
+      if (shots) await page.screenshot({ path: path.join(shots, `${stage}-self-${variant}.png`), fullPage: true, animations: 'disabled', mask: [email] });
+      await expect(email).toHaveAttribute('aria-invalid', 'true');
+      await expect(email).toHaveAccessibleDescription(message);
+      await page.getByRole('button', { name: /Send approval request/i }).click();
+      await expect(page).toHaveURL(/\/app\/free-tier\/onboarding/);
+      expect(posts).toBe(0);
+    }
 
-    const finalApp = await prisma.freeTierApplication.findUnique({ where: { id: app.id } });
-    expect(finalApp?.status).toBe('MANUAL_REVIEW');
+    const before = await prisma.freeTierApplication.findUnique({ where: { id: app.id } });
+    for (const adminEmail of [teacherEmail, `ft-self-${stamp}+bypass@${ADMIN_DOMAIN}`]) {
+      const response = await page.request.post('/app/free-tier/onboarding', {
+        form: { adminName: 'Same Person', adminEmail, adminRole: 'Principal', teacherEmail: 'spoofed@other.org' },
+      });
+      expect(response.status()).toBe(400);
+      expect(await response.text()).toContain(message.replaceAll("'", '&#x27;'));
+    }
+    expect(await prisma.freeTierApplication.findUnique({ where: { id: app.id } })).toEqual(before);
+    expect(await prisma.freeTierAdminApproval.count({ where: { applicationId: app.id } })).toBe(0);
+    expect(await prisma.freeTierEmailLog.count({ where: { applicationId: app.id, kind: 'admin_approval' } })).toBe(0);
+    expect(await prisma.freeTierSignedLink.count({ where: { applicationId: app.id, purpose: 'ADMIN_APPROVE' } })).toBe(0);
+
+    await email.fill(`principal@${ADMIN_DOMAIN}`);
+    await expect(email).not.toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByText(message, { exact: true })).toHaveCount(0);
+    if (shots) await page.screenshot({ path: path.join(shots, `${stage}-distinct-control.png`), fullPage: true, animations: 'disabled', mask: [email] });
+    await page.getByRole('button', { name: /Send approval request/i }).click();
+    await page.waitForURL('**/app/free-tier/pending**');
+    expect((await prisma.freeTierApplication.findUnique({ where: { id: app.id } }))?.status).toBe('SENT');
+    // E2E delivery is captured locally by the existing mail fixture.
+    expect(await prisma.freeTierEmailLog.count({ where: { applicationId: app.id, kind: 'admin_approval', success: true } })).toBe(1);
+    await prisma.$disconnect();
   });
 
   test('approved teacher with only archived class reaches my-classes without redirect loop', async ({

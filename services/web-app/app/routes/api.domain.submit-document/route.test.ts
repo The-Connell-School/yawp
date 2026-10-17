@@ -11,6 +11,10 @@ const prisma = {
   },
   submission: {
     create: mock(),
+    count: mock(),
+  },
+  freeTierApplication: {
+    findFirst: mock(),
   },
   documentWriteJournal: {
     create: mock(),
@@ -18,15 +22,20 @@ const prisma = {
   },
   submissionActivity: { create: mock() },
   $transaction: mock(),
+  $executeRaw: mock(),
 };
 
 const requireUserId = mock();
 const requireMembership = mock();
+const captureFreeTierAnalyticsEvent = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
   requireMembership,
+}));
+mock.module('~/services/posthog.server', () => ({
+  posthog: { capture: captureFreeTierAnalyticsEvent, alias: mock() },
 }));
 mock.module('~/utils/toast.server', () => ({
   redirectWithToast: (to: string, payload: unknown) =>
@@ -45,12 +54,16 @@ describe('api.domain.submit-document', () => {
     prisma.document.updateMany.mockReset();
     prisma.document.findUniqueOrThrow.mockReset();
     prisma.submission.create.mockReset();
+    prisma.submission.count.mockReset();
+    prisma.freeTierApplication.findFirst.mockReset();
     prisma.documentWriteJournal.create.mockReset();
     prisma.documentWriteJournal.update.mockReset();
     prisma.submissionActivity.create.mockReset();
     prisma.$transaction.mockReset();
+    prisma.$executeRaw.mockReset().mockResolvedValue(1);
     requireUserId.mockReset();
     requireMembership.mockReset();
+    captureFreeTierAnalyticsEvent.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -74,6 +87,8 @@ describe('api.domain.submit-document', () => {
       updatedAt: new Date('2026-08-20T11:59:00.000Z'),
       classAssignment: null,
       membership: {
+        organizationId: 'org-1',
+        organization: { plan: 'SCHOOL' },
         classesAsStudent: [
           {
             id: 'class-1',
@@ -99,10 +114,14 @@ describe('api.domain.submit-document', () => {
       title: 'Essay',
       submittedAt: new Date('2026-08-20T12:00:00.000Z'),
     });
+    prisma.submission.count.mockResolvedValue(2);
+    prisma.freeTierApplication.findFirst.mockResolvedValue(null);
     prisma.$transaction.mockImplementation(async (callback: any) => {
       const tx = {
+        $executeRaw: prisma.$executeRaw,
         user: prisma.user,
         submission: prisma.submission,
+        freeTierApplication: prisma.freeTierApplication,
         document: prisma.document,
         documentWriteJournal: prisma.documentWriteJournal,
         submissionActivity: prisma.submissionActivity,
@@ -342,4 +361,136 @@ describe('api.domain.submit-document', () => {
       updatedAt: new Date('2026-08-20T11:59:00.000Z'),
     });
   });
+
+  test('records first free classroom essay with application acquisition properties', async () => {
+    prisma.document.findFirst.mockResolvedValue({
+      id: 'doc-1',
+      html: '<p>Draft</p>',
+      text: 'Draft',
+      title: 'Essay',
+      submissions: [],
+      revision: 4,
+      updatedAt: new Date('2026-08-20T11:59:00.000Z'),
+      classAssignment: {
+        class: {
+          id: 'class-1',
+          schoolId: 'school-1',
+          school: { organizationId: 'org-free' },
+          teachers: [{ id: 'teacher-1' }],
+        },
+      },
+      membership: {
+        organizationId: 'org-free',
+        organization: { plan: 'FREE_CLASSROOM' },
+        classesAsStudent: [],
+      },
+    });
+    prisma.submission.count.mockResolvedValue(1);
+    prisma.freeTierApplication.findFirst.mockResolvedValue({
+      id: 'app-1',
+      acquisitionTokenId: 'tok-1',
+      acquisitionToken: {
+        label: 'NCTE QR',
+        sourceName: 'NCTE booth',
+        eventLocation: 'Denver',
+        eventDate: new Date('2026-10-01T00:00:00.000Z'),
+        bypassWaitlist: true,
+      },
+    });
+    const form = new FormData();
+    form.append('documentId', 'doc-1');
+
+    await action({
+      request: new Request('https://example.com/api/domain/submit-document', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect(captureFreeTierAnalyticsEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'free_tier.first_essay',
+        distinctId: 'free-tier-organization:org-free',
+        properties: expect.objectContaining({
+          application_id: 'app-1',
+          organization_id: 'org-free',
+          submission_id: 'sub-1',
+          document_id: 'doc-1',
+          class_id: 'class-1',
+          is_first_essay: true,
+          submission_count: 1,
+          acquisition_token_id: 'tok-1',
+          acquisition_channel: 'event_link',
+          token_label: 'NCTE QR',
+          source_name: 'NCTE booth',
+          event_location: 'Denver',
+          event_date: '2026-10-01T00:00:00.000Z',
+          bypass_waitlist: true,
+        }),
+      })
+    );
+  });
+  for (const variant of [
+    'organic',
+    'later',
+    'lookup_failure',
+    'capture_failure',
+    'count_failure',
+    'conflict',
+    'empty',
+  ] as const) {
+    test(`first-essay analytics boundary: ${variant}`, async () => {
+      const doc = await prisma.document.findFirst();
+      doc.membership.organization.plan = 'FREE_CLASSROOM';
+      prisma.document.findFirst.mockResolvedValue(doc);
+      prisma.submission.count.mockResolvedValue(variant === 'later' ? 2 : 1);
+      if (variant === 'lookup_failure')
+        prisma.freeTierApplication.findFirst.mockRejectedValue(
+          new Error('offline')
+        );
+      if (variant === 'count_failure')
+        prisma.submission.count.mockRejectedValue(new Error('optional count'));
+      if (variant === 'capture_failure')
+        captureFreeTierAnalyticsEvent.mockImplementation(() => {
+          throw new Error('offline');
+        });
+      if (variant === 'conflict')
+        prisma.document.updateMany.mockResolvedValue({ count: 0 });
+      if (variant === 'empty') {
+        doc.html = '';
+        doc.text = '';
+      }
+      const form = new FormData();
+      form.set('documentId', 'doc-1');
+      const result = await action({
+        request: new Request('http://localhost/api/domain/submit-document', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+      if (variant === 'empty' || variant === 'conflict') {
+        expect(prisma.submission.create).not.toHaveBeenCalled();
+        expect(captureFreeTierAnalyticsEvent).not.toHaveBeenCalled();
+      } else {
+        expect((result as any).data.success).toBe(true);
+        expect(
+          prisma.documentWriteJournal.update.mock.calls.at(-1)?.[0].data.status
+        ).toBe('accepted');
+        if (variant === 'organic')
+          expect(captureFreeTierAnalyticsEvent).toHaveBeenCalledWith(
+            expect.objectContaining({
+              properties: expect.objectContaining({
+                acquisition_channel: 'organic',
+              }),
+            })
+          );
+        if (
+          variant === 'later' ||
+          variant === 'lookup_failure' ||
+          variant === 'count_failure'
+        )
+          expect(captureFreeTierAnalyticsEvent).not.toHaveBeenCalled();
+      }
+    });
+  }
 });

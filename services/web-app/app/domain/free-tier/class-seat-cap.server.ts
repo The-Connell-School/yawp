@@ -1,5 +1,6 @@
 import type { OrganizationPlan, Prisma } from '@app/prisma';
-import { getEntitlements } from '~/utils/entitlements.server';
+import { getEntitlementsForPlan } from '~/utils/entitlements.server';
+import { effectiveFreeTierLimits } from './limits.server';
 import { FREE_CLASS_CLASS_FULL_MESSAGE } from './class-seat-cap';
 import {
   lockClassCollaborationDeployments,
@@ -7,6 +8,7 @@ import {
 } from '~/domain/collaboration/class-assignment-lock.server';
 import { prisma } from '~/utils/db.server';
 import { FreeClassSeatError } from './free-class-seat-error';
+import { assertOrganizationTeachingApproved } from './locked-preview.server';
 
 export type FreeClassSeatCheckResult =
   | { ok: true; plan: OrganizationPlan }
@@ -33,7 +35,8 @@ export async function lockClassRosterSeatCap(
 
 export async function countFreeClassSeatUsage(
   tx: Prisma.TransactionClient,
-  classId: string
+  classId: string,
+  includeNonExpiringInvites = false
 ) {
   const currentStudents = await tx.orgMembership.count({
     where: {
@@ -47,7 +50,9 @@ export async function countFreeClassSeatUsage(
     where: {
       type: 'onboard-student',
       studentClassId: classId,
-      expiresAt: { gt: new Date() },
+      ...(includeNonExpiringInvites
+        ? { OR: [{ expiresAt: { gt: new Date() } }, { expiresAt: null }] }
+        : { expiresAt: { gt: new Date() } }),
     },
   });
 
@@ -55,13 +60,14 @@ export async function countFreeClassSeatUsage(
 }
 
 /**
- * Locks the class row and enforces the free-tier per-class student cap (35).
+ * Locks the class row and enforces the configured free-tier per-class student cap.
  * No-op for non–FREE_CLASSROOM orgs.
  */
 export async function assertFreeClassSeatAvailableInTx(
   tx: Prisma.TransactionClient,
   params: { classId: string; organizationId: string }
 ): Promise<FreeClassSeatCheckResult> {
+  await assertOrganizationTeachingApproved(tx, params.organizationId);
   await lockClassRosterSeatCap(tx, params.classId);
 
   const klass = await tx.class.findFirst({
@@ -87,8 +93,9 @@ export async function assertFreeClassSeatAvailableInTx(
     return { ok: true, plan };
   }
 
-  const usage = await countFreeClassSeatUsage(tx, params.classId);
-  const entitlements = getEntitlements(plan);
+  const { limits, monthly } = await effectiveFreeTierLimits(params.organizationId, tx);
+  const usage = await countFreeClassSeatUsage(tx, params.classId, monthly);
+  const entitlements = getEntitlementsForPlan(plan, limits);
   if (
     !entitlements.canAddStudent({
       currentStudents: usage.currentStudents,

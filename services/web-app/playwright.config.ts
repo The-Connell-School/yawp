@@ -5,6 +5,21 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './e2e',
+  // These fixtures use their own local server/configuration and database lifecycle.
+  testIgnore: [
+    '**/free-tier.monthly-dashboard.spec.ts',
+    '**/free-tier.welcome-components.spec.ts',
+    '**/free-tier.welcome-live.spec.ts',
+    '**/free-tier.approval-v2.spec.ts',
+    '**/auth.unified-signon.spec.ts',
+    '**/auth.unified-backend.spec.ts',
+    '**/auth.unified-resend.spec.ts',
+    '**/auth.unified-google-backend.spec.ts',
+    '**/auth.unified-origin-backend.spec.ts',
+    '**/auth.unified-join-link.spec.ts',
+    '**/free-tier.create-class.spec.ts',
+    '**/free-tier.locked-preview.spec.ts',
+  ],
   globalTeardown: './e2e/global-teardown.ts',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,

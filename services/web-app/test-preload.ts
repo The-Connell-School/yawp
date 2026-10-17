@@ -42,7 +42,16 @@ async function snapshot(specifier: string) {
 function isWebAppTestFile(): boolean {
   const testFile = Bun.argv[1];
   if (!testFile) return true;
-  return resolve(process.cwd(), testFile).startsWith(`${import.meta.dir}/`);
+  const absoluteTestFile = resolve(process.cwd(), testFile);
+  if (!absoluteTestFile.startsWith(`${import.meta.dir}/`)) return false;
+  if (
+    absoluteTestFile.endsWith('/app/utils/internal-admin-organizations.server.test.ts') ||
+    absoluteTestFile.endsWith('/app/routes/app.admin.organizations._index/route.test.ts') ||
+    absoluteTestFile.endsWith('/app/routes/app.admin.organizations.$id/route.test.ts')
+  ) {
+    return false;
+  }
+  return !absoluteTestFile.startsWith(`${import.meta.dir}/scripts/`);
 }
 
 globalThis.__realModules = {};

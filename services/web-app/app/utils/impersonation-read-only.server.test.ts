@@ -4,6 +4,7 @@ const getSession = mock();
 const destroySession = mock();
 
 const prisma = {
+  freeTierApplication: { findFirst: mock(async () => null) },
   session: {
     findUnique: mock(),
   },
@@ -90,6 +91,11 @@ describe('read-only impersonation auth contract', () => {
       error: 'Read-only impersonation active',
       message: 'This session can view the app but cannot make changes.',
     });
+  });
+
+  test('blocks forged tour persistence and restart requests', async () => {
+    await expect(auth.requireUserId(request('POST', '/api/guided-tours')))
+      .rejects.toMatchObject({ status: 403 });
   });
 
   test('allows membership cookie changes during read-only impersonation', async () => {

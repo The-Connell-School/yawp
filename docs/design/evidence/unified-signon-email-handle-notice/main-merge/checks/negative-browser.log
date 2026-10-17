@@ -1,0 +1,60 @@
+{
+  "schemaVersion": "project.dev/v1",
+  "status": "ready",
+  "reused": false,
+  "pid": 35,
+  "url": "http://localhost:5406/",
+  "log": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-email-handle-notice/.worktree-local/dev.log"
+}
+
+Running 1 test using 1 worker
+
+(node:87) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [chromium] › e2e/tests/auth.unified-backend.spec.ts:101:3 › email-origin free-class notice survives navigation and validation at 1280 (7.4s)
+
+
+  1) [chromium] › e2e/tests/auth.unified-backend.spec.ts:101:3 › email-origin free-class notice survives navigation and validation at 1280
+
+    Error: expect(received).toHaveLength(expected)
+
+    Expected length: 0
+    Received length: 1
+    Received array:  ["negative-control.json"]
+
+      301 |       expect(await db.signonIdentity.count()).toBe(identityCount);
+      302 |       fs.writeFileSync(path.join(capture, 'negative-control.json'), '{}', { mode: 0o600 });
+    > 303 |       expect(fs.readdirSync(capture)).toHaveLength(mailBefore);
+          |                                       ^
+      304 |       await page.context().clearCookies();
+      305 |       await page.goto('/auth/login');
+      306 |       await page.waitForFunction(() =>
+        at /home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-email-handle-notice/services/web-app/e2e/tests/auth.unified-backend.spec.ts:303:39
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../tmp/design-impl/signon-playwright-results/auth.unified-backend-email-79987-tion-and-validation-at-1280-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../tmp/design-impl/signon-playwright-results/auth.unified-backend-email-79987-tion-and-validation-at-1280-chromium/error-context.md
+
+    Error Context: ../../../../../../tmp/design-impl/signon-playwright-results/auth.unified-backend-email-79987-tion-and-validation-at-1280-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../tmp/design-impl/signon-playwright-results/auth.unified-backend-email-79987-tion-and-validation-at-1280-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../tmp/design-impl/signon-playwright-results/auth.unified-backend-email-79987-tion-and-validation-at-1280-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium] › e2e/tests/auth.unified-backend.spec.ts:101:3 › email-origin free-class notice survives navigation and validation at 1280
+{
+  "schemaVersion": "project.dev/v1",
+  "status": "stopped",
+  "pid": 35,
+  "url": "http://localhost:5406/",
+  "log": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-email-handle-notice/.worktree-local/dev.log"
+}

@@ -301,7 +301,7 @@ export default function AdminAiEvaluationsRoute() {
         <div>
           <h2 className="text-2xl font-semibold">Grading Evals</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Run live AI checks against the static {assistant.label} benchmark.
+            Run live grading checks against the static {assistant.label} benchmark.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -380,7 +380,7 @@ export default function AdminAiEvaluationsRoute() {
         <p className="mt-2 text-sm text-muted-foreground">
           {lastRunAt
             ? `Last run ${new Date(lastRunAt).toLocaleString()}.`
-            : 'No runs yet. Hit Run all cases to grade every essay with live AI.'}
+            : 'No runs yet. Hit Run all cases to grade every essay live.'}
         </p>
       </div>
 

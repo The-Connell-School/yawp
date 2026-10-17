@@ -1,3 +1,4 @@
+import type { FeatureFlagKey } from '../app/domain/feature-flags/feature-flags';
 import { createE2EPrismaClient } from './prisma-client';
 
 // Mirrors featureFlagSettingName(LESSON_PLANNER_FLAG) in
@@ -43,35 +44,39 @@ export async function setLessonPlannerFlag(enabled: boolean) {
   }
 }
 
-/**
- * Lesson Planner review flags (intake v2, stack v2, deck v2). Mirrors
- * featureFlagSettingName(...) for each in app/domain/feature-flags.
- */
-export type LessonPlannerReviewFlag =
+/** Local test toggle for registered feature flags. */
+export async function setFeatureFlag(key: FeatureFlagKey, enabled: boolean) {
+  const prisma = createE2EPrismaClient();
+  try {
+    const name = `feature_flag.${key}`;
+    await prisma.setting.upsert({
+      where: { name },
+      create: {
+        name,
+        value: String(enabled),
+        valueType: 'boolean',
+        description: 'Set by e2e',
+      },
+      update: { value: String(enabled), updatedAt: new Date() },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/** Lesson Planner review flags (intake v2, stack v2, deck v2, run 2). */
+export type LessonPlannerReviewFlag = Extract<
+  FeatureFlagKey,
   | 'lesson_planner_intake_v2'
   | 'lesson_planner_stack_v2'
   | 'lesson_planner_deck_v2'
   | 'lesson_planner_stack_panel'
-  | 'lesson_planner_plan_export_v2';
+  | 'lesson_planner_plan_export_v2'
+>;
 
 export async function setLessonPlannerReviewFlag(
   flag: LessonPlannerReviewFlag,
   enabled: boolean
 ) {
-  const prisma = createE2EPrismaClient();
-  const name = `feature_flag.${flag}`;
-  try {
-    await prisma.setting.upsert({
-      where: { name },
-      create: {
-        name,
-        value: enabled ? 'true' : 'false',
-        valueType: 'boolean',
-        description: 'Set by e2e',
-      },
-      update: { value: enabled ? 'true' : 'false', updatedAt: new Date() },
-    });
-  } finally {
-    await prisma.$disconnect();
-  }
+  await setFeatureFlag(flag, enabled);
 }

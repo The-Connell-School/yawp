@@ -1,0 +1,48 @@
+bun test v1.3.1 (89fa0f34)
+
+services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts:
+prisma:query - 31.46515899999997ms - INSERT INTO "public"."Setting" ("id","createdAt","updatedAt","name","value","valueType") VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT ("name") DO UPDATE SET "value" = $7 WHERE ("public"."Setting"."name" = $8 AND 1=1) RETURNING "public"."Setting"."id", "public"."Setting"."createdAt", "public"."Setting"."updatedAt", "public"."Setting"."name", "public"."Setting"."description", "public"."Setting"."value", "public"."Setting"."valueType"
+prisma:query - 26.78803700000003ms - SELECT "id" FROM "SignonFlow" WHERE "id" = $1 FOR UPDATE
+(pass) resolver derives identity and class context; a token alone and posted screens prove nothing [798.01ms]
+(pass) reset responses are uniform; expiry, purpose substitution and resend cooldown fail closed [95.23ms]
+(pass) active membership selection requires the authenticated owner and rejects foreign or inactive IDs [95.30ms]
+(pass) unset and partial Google configuration fail direct requests safely [29.69ms]
+(pass) enabled password POST keeps validators/session handling and ignores substituted identity and redirect [203.90ms]
+(pass) OTP attempts, supersession, context substitution and flow expiry are enforced by the database [214.52ms]
+(pass) invitation email proof supplies student class context without posted roles or class IDs [165.25ms]
+(pass) existing account accepts owner invitation only after real password proof and preserves inactive status [145.83ms]
+(pass) Google callback state is browser-bound, single-use and gated even on cancellation [59.41ms]
+(pass) membership picker validates active ownership and keeps the original destination [231.33ms]
+(pass) required password change outranks membership and continues the safe flow after the existing action [253.60ms]
+(pass) handle/code ambiguity offers both meanings; choosing a class clears the handle identity [128.44ms]
+prisma:query - 29.94673499999999ms - SELECT "id" FROM "SignonFlow" WHERE "id" = $1 FOR UPDATE
+(pass) Google matching email requires account proof and explicit first-time linking; a linked subject can sign in [355.29ms]
+(pass) trial routing uses existing application guards after proof and never reveals status during resolution [1081.25ms]
+(pass) student without membership can recover through a class, but disabled membership and staff accounts stay protected [238.69ms]
+(pass) free-class code uses handle-only registration, validates policy and rechecks capacity at submit [261.41ms]
+(pass) multiple class matches require a current server-issued choice and reject arbitrary/stale selections [89.42ms]
+(pass) partner context uses the existing UA organization/code/cookie guards and requires verified email [174.25ms]
+(pass) local mailer captures existing free-tier helper delivery without network calls or sensitive logs [1.83ms]
+(pass) an address changed after resolution cannot receive an old-account session or invitation grant [120.22ms]
+(pass) student invitations can choose among permitted classes with different codes [203.13ms]
+(pass) teacher invitations with multiple schools retain the existing selector and safe destination [207.04ms]
+(pass) existing passwordless teacher activation retains identity, memberships and destination through the location selector [246.26ms]
+(pass) teacher activation rejects expired authorization without partial writes [101.15ms]
+(pass) teacher activation rejects revoked authorization without partial writes [89.99ms]
+(pass) teacher activation rejects reassigned authorization without partial writes [89.89ms]
+(pass) teacher activation rejects credentialed authorization without partial writes [210.35ms]
+(pass) new Google classroom signup is name-only and links the verified subject atomically [135.44ms]
+(pass) unified teacher handoff cannot fall back to legacy authorization after expiry or flag-off [68.99ms]
+(pass) reset proof cannot change credentials after email reassignment, and substituted class context invalidates a code [127.16ms]
+(pass) Google multi-class invitations keep the exact picker variant and require an authorized class choice [143.50ms]
+(pass) expired invitation status is revealed only after email proof and cannot create an account [155.08ms]
+(pass) anonymous trial status requires email proof and resends only through the existing captured invitation contract [112.32ms]
+(pass) enabled mutations retain the existing read-only impersonation guard [15.67ms]
+(pass) additive flow and identity tables expose the intended unique and foreign-key boundaries [5.05ms]
+(pass) existing passwordless account activates only after email proof and keeps its membership [201.95ms]
+(pass) read-only authenticated GET continuation cannot accept invitations or enroll classes [183.73ms]
+
+ 37 pass
+ 0 fail
+ 223 expect() calls
+Ran 37 tests across 1 file. [7.85s]

@@ -20,7 +20,7 @@ const {
   setFeatureFlag,
   findUnknownOrganizationIds,
 } = await import('./feature-flags.server');
-const { INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG } = await import(
+const { GUIDED_TOURS_FLAG, DEMO_FEEDBACK_FLAG, INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, FREE_TIER_INAPP_V2_FLAG, UNIFIED_SIGN_ON_FLAG, FREE_TIER_ONBOARDING_V2_FLAG } = await import(
   './feature-flags'
 );
 
@@ -36,6 +36,38 @@ describe('feature flags (server)', () => {
     prisma.setting.findMany.mockReset();
     prisma.setting.upsert.mockReset();
     prisma.organization.findMany.mockReset();
+  });
+
+  test('tours stay off without a row on demo and production and support organization targeting', async () => {
+    const previous = process.env.YAWP_ENVIRONMENT;
+    try {
+      for (const environment of ['demo', 'production']) {
+        process.env.YAWP_ENVIRONMENT = environment;
+        prisma.setting.findUnique.mockResolvedValue(null);
+        expect(await isFeatureFlagEnabled(GUIDED_TOURS_FLAG, 'free')).toBe(false);
+        prisma.setting.findUnique.mockResolvedValue({ value: '{"mode":"targeted","orgIds":["free"]}' });
+        expect(await isFeatureFlagEnabled(GUIDED_TOURS_FLAG, 'free')).toBe(true);
+        expect(await isFeatureFlagEnabled(GUIDED_TOURS_FLAG, 'other')).toBe(false);
+      }
+    } finally {
+      if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
+      else process.env.YAWP_ENVIRONMENT = previous;
+    }
+  });
+
+  test('demo feedback has no runtime override and stays off without a row in demo and production', async () => {
+    const previous = process.env.YAWP_ENVIRONMENT;
+    try {
+      for (const environment of ['demo', 'production']) {
+        process.env.YAWP_ENVIRONMENT = environment;
+        prisma.setting.findUnique.mockResolvedValue(null);
+        expect(await isFeatureFlagEnabled(DEMO_FEEDBACK_FLAG)).toBe(false);
+        expect(prisma.setting.findUnique).toHaveBeenCalledWith({ where: { name: 'feature_flag.demo-feedback-widget' }, select: { value: true } });
+      }
+    } finally {
+      if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
+      else process.env.YAWP_ENVIRONMENT = previous;
+    }
   });
 
   test('Rubrics from Yawp Internal is off with no row and follows per-school targeting', async () => {
@@ -132,6 +164,12 @@ describe('feature flags (server)', () => {
       'lesson_planner_deck_v2',
       'lesson_planner_stack_panel',
       'lesson_planner_plan_export_v2',
+      FREE_TIER_INAPP_V2_FLAG,
+      UNIFIED_SIGN_ON_FLAG,
+      FREE_TIER_ONBOARDING_V2_FLAG,
+      'classcode-unique',
+      DEMO_FEEDBACK_FLAG,
+      GUIDED_TOURS_FLAG,
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[2]).toMatchObject({ key: FREE_TIER_FLAG, mode: 'off', enabled: false });
@@ -160,6 +198,12 @@ describe('feature flags (server)', () => {
       'lesson_planner_deck_v2',
       'lesson_planner_stack_panel',
       'lesson_planner_plan_export_v2',
+      FREE_TIER_INAPP_V2_FLAG,
+      UNIFIED_SIGN_ON_FLAG,
+      FREE_TIER_ONBOARDING_V2_FLAG,
+      'classcode-unique',
+      DEMO_FEEDBACK_FLAG,
+      GUIDED_TOURS_FLAG,
     ]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });
     const where = prisma.setting.findMany.mock.calls[0]?.[0].where;
@@ -306,3 +350,29 @@ describe('feature flags (server)', () => {
     expect(prisma.organization.findMany).toHaveBeenCalledTimes(1);
   });
 });
+
+for (const deployment of ['demo', 'production']) {
+  for (const mode of ['off', 'everyone', 'targeted']) {
+    test(`reports persisted and effective free tier separately: ${deployment} / ${mode}`, async () => {
+      const oldEnvironment = process.env.YAWP_ENVIRONMENT;
+      const oldSlug = process.env.PREVIEW_SLUG;
+      process.env.YAWP_ENVIRONMENT = deployment;
+      delete process.env.PREVIEW_SLUG;
+      try {
+        const orgIds = mode === 'targeted' ? ['org-1'] : [];
+        prisma.setting.findMany.mockResolvedValue([{ name: 'feature_flag.free_tier', value: JSON.stringify({ mode, orgIds }), description: null, updatedAt: new Date('2026-10-14T00:00:00Z') }]);
+        const flag = (await listFeatureFlags()).find((f) => f.key === FREE_TIER_FLAG)!;
+        expect(flag).toMatchObject({
+          mode: deployment === 'demo' ? 'everyone' : mode,
+          persisted: { mode, orgIds },
+          effective: deployment === 'demo' ? { mode: 'everyone', orgIds: [] } : { mode, orgIds },
+          runtimeOverride: deployment === 'demo' ? 'demo_free_tier' : null,
+        });
+        expect(prisma.setting.upsert).not.toHaveBeenCalled();
+      } finally {
+        if (oldEnvironment === undefined) delete process.env.YAWP_ENVIRONMENT; else process.env.YAWP_ENVIRONMENT = oldEnvironment;
+        if (oldSlug === undefined) delete process.env.PREVIEW_SLUG; else process.env.PREVIEW_SLUG = oldSlug;
+      }
+    });
+  }
+}

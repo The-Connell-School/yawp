@@ -1,7 +1,11 @@
+import type { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 import { getPasswordHash } from '~/utils/auth.server';
 import { clearFailedLoginRateLimitsForTarget } from '~/utils/rate-limit.server';
-import { normalizeLoginRateLimitTargetKey } from '~/utils/login-rate-limit-target';
+import {
+  classStudentLoginRateLimitTarget,
+  normalizeLoginRateLimitTargetKey,
+} from '~/utils/login-rate-limit-target';
 import {
   suggestAvailableUsernames,
   validateUsername,
@@ -21,6 +25,17 @@ import {
 } from './prisma-username-conflict';
 import { evaluateTeacherResetHandleStudentEligibility } from './teacher-reset-handle-student';
 import { generateStudentJoinToken } from '~/utils/student-join-token';
+import {
+  assertFreeTierSpendAllowed,
+  FreeTierSpendGuardDeniedError,
+} from './usage-budget.server';
+import {
+  runFreeTierAnalytics,
+  acquisitionChannel,
+  captureFreeTierAnalyticsEvent,
+  freeTierOrganizationDistinctId,
+  FREE_TIER_ANALYTICS_EVENTS,
+} from './posthog-analytics.server';
 
 export type FreeTierClassSummary = {
   id: string;
@@ -117,13 +132,16 @@ export async function registerFreeTierStudent({
   password,
   classId,
   joinToken,
+  client,
 }: {
   name: string;
   username: string;
   password: string;
   classId: string;
   joinToken: string;
+  client?: Prisma.TransactionClient;
 }) {
+  const db = client ?? prisma;
   const usernameResult = validateUsername(rawUsername);
   if (!usernameResult.ok) {
     const suggestions = await suggestAvailableUsernames(rawUsername);
@@ -136,7 +154,7 @@ export async function registerFreeTierStudent({
   }
 
   const trimmedToken = joinToken.trim();
-  const klass = await prisma.class.findFirst({
+  const klass = await db.class.findFirst({
     where: {
       id: classId,
       isArchived: false,
@@ -160,7 +178,7 @@ export async function registerFreeTierStudent({
 
   const hashedPassword = await getPasswordHash(password);
   try {
-    const membership = await prisma.$transaction(async (tx) => {
+    const createMembership = async (tx: Prisma.TransactionClient) => {
       // Serialize concurrent sign-ups for the same handle so one succeeds and the
       // other gets a username conflict instead of both racing past a pre-check.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${usernameResult.username}))`;
@@ -170,6 +188,16 @@ export async function registerFreeTierStudent({
         organizationId: klass.school.organizationId,
       });
       throwIfSeatCheckFailed(seat);
+      try {
+        await assertFreeTierSpendAllowed(tx);
+      } catch (error) {
+        if (error instanceof FreeTierSpendGuardDeniedError) {
+          throw Object.assign(new Error('budget_exceeded'), {
+            code: 'FREE_TIER_BUDGET_EXCEEDED',
+          });
+        }
+        throw error;
+      }
 
       const takenInTx = await tx.user.findFirst({
         where: { username: usernameResult.username },
@@ -196,14 +224,45 @@ export async function registerFreeTierStudent({
         },
         select: { id: true, userId: true },
       });
-    });
+    };
+    const membership = client ? await createMembership(client) : await prisma.$transaction(createMembership);
 
-    const session = await prisma.session.create({
+    const session = await db.session.create({
       data: {
         userId: membership.userId,
         expirationDate: getSessionExpirationDateForUser({ email: null }),
       },
       select: { id: true, expirationDate: true },
+    });
+
+    await runFreeTierAnalytics(async () => {
+      const application = await db.freeTierApplication.findFirst({
+        where: { organizationId: klass.school.organizationId },
+        select: {
+          id: true,
+          acquisitionTokenId: true,
+          acquisitionToken: { select: { sourceName: true, label: true } },
+        },
+      });
+      captureFreeTierAnalyticsEvent({
+        event: FREE_TIER_ANALYTICS_EVENTS.studentJoin,
+        distinctId: freeTierOrganizationDistinctId(klass.school.organizationId),
+        properties: {
+          student_user_id: membership.userId,
+          membership_id: membership.id,
+          organization_id: klass.school.organizationId,
+          class_id: klass.id,
+          join_method: 'student_join_link',
+          application_id: application?.id ?? null,
+          acquisition_token_id: application?.acquisitionTokenId ?? null,
+          source_name: application?.acquisitionToken?.sourceName ?? null,
+          token_label: application?.acquisitionToken?.label ?? null,
+          acquisition_channel: acquisitionChannel({
+            acquisitionTokenId: application?.acquisitionTokenId,
+            sourceName: application?.acquisitionToken?.sourceName,
+          }),
+        },
+      });
     });
 
     return {
@@ -222,12 +281,26 @@ export async function registerFreeTierStudent({
       };
     }
     if (
+      error &&
+      typeof error === 'object' &&
+      (error as { code?: string }).code === 'FREE_TIER_BUDGET_EXCEEDED'
+    ) {
+      return {
+        status: 'error' as const,
+        field: 'classId' as const,
+        error: 'This free classroom is not accepting new students right now.',
+        formLevel: true as const,
+      };
+    }
+    if (
       isUsernameUniqueViolation(error) ||
       (error &&
         typeof error === 'object' &&
         (error as { code?: string }).code === 'USERNAME_TAKEN')
     ) {
-      const suggestions = await suggestAvailableUsernames(usernameResult.username);
+      const suggestions = await suggestAvailableUsernames(
+        usernameResult.username
+      );
       return {
         status: 'error' as const,
         field: 'username' as const,
@@ -289,14 +362,22 @@ export async function teacherResetStudentPassword({
           isAdmin: true,
           isSuperAdmin: true,
           memberships: {
-            select: { role: true, isActive: true },
+            select: {
+              role: true,
+              isActive: true,
+              classesAsStudent: { select: { id: true } },
+            },
           },
+          classStudentHandles: { select: { classId: true, handle: true } },
         },
       },
     },
   });
   if (!student) {
-    return { status: 'error' as const, error: 'Student not found in this class.' };
+    return {
+      status: 'error' as const,
+      error: 'Student not found in this class.',
+    };
   }
 
   const eligibility = evaluateTeacherResetHandleStudentEligibility(
@@ -321,10 +402,29 @@ export async function teacherResetStudentPassword({
     prisma.session.deleteMany({ where: { userId: student.userId } }),
   ]);
 
-  if (student.user.username) {
+  // A reset changes this student's password everywhere. Unlock both legacy
+  // login and each active enrolled class's accepted handles, while preserving
+  // other students' limits and shared per-IP abuse controls.
+  const targets = new Set<string>();
+  if (student.user.username)
+    targets.add(normalizeLoginRateLimitTargetKey(student.user.username));
+  for (const membership of student.user.memberships) {
+    if (!membership.isActive || membership.role !== 'STUDENT') continue;
+    for (const klass of membership.classesAsStudent) {
+      if (student.user.username)
+        targets.add(
+          classStudentLoginRateLimitTarget(klass.id, student.user.username)
+        );
+      for (const alias of student.user.classStudentHandles) {
+        if (alias.classId === klass.id)
+          targets.add(classStudentLoginRateLimitTarget(klass.id, alias.handle));
+      }
+    }
+  }
+  for (const targetKey of targets) {
     await clearFailedLoginRateLimitsForTarget({
       route: '/auth/login',
-      targetKey: normalizeLoginRateLimitTargetKey(student.user.username),
+      targetKey,
     });
   }
 

@@ -1,8 +1,14 @@
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import {
+  internalApiRawQueryString,
+  type InternalApiAuthContext,
+} from './internal-platform-auth.server';
+import type { FeedbackAction } from './demo-feedback-context';
 import { readBoundedText } from './bounded-body.server';
 
 export const FEEDBACK_TEXT_LIMIT = 4000;
-const severitySchema = z.enum(['low', 'medium', 'high']);
+export const severitySchema = z.enum(['low', 'medium', 'high']);
 const text = z.string().trim().min(1).max(FEEDBACK_TEXT_LIMIT);
 const submissionSchema = z.object({
   url: z
@@ -71,12 +77,16 @@ export const feedbackQuerySchema = z
   );
 export type FeedbackQuery = z.infer<typeof feedbackQuerySchema>;
 export type FeedbackInput = z.infer<typeof submissionSchema> & {
+  actions?: FeedbackAction[];
   userId: string;
   userAgent: string;
   environment: string;
 };
-export type FeedbackEntry = Omit<FeedbackInput, 'severity'> & {
+export type FeedbackEntry = Omit<FeedbackInput, 'severity' | 'actions'> & {
   severity: string | null;
+  actions?: unknown[] | null;
+  userEmail?: string | null;
+  userName?: string | null;
   id: string;
   createdAt: Date;
 };
@@ -88,7 +98,16 @@ export interface FeedbackDependencies {
   environment(): string;
   save(input: FeedbackInput): Promise<boolean>;
   list(input: FeedbackQuery): Promise<FeedbackEntry[]>;
-  authenticateInternal(request: Request): Promise<Response | null>;
+  authenticateInternal(
+    request: Request
+  ): Promise<Response | InternalApiAuthContext | null>;
+  auditInternalRead?(input: {
+    actorEmail: string;
+    keyId: string;
+    endpoint: string;
+    requestHash: string;
+    result: string;
+  }): Promise<void>;
 }
 const response = (value: unknown, status = 200, headers?: HeadersInit) =>
   Response.json(value, {
@@ -100,6 +119,145 @@ const response = (value: unknown, status = 200, headers?: HeadersInit) =>
     },
   });
 
+function firstHeaderValue(value: string | null) {
+  return value?.split(',')[0]?.trim() || null;
+}
+
+function forwardedOrigin(request: Request) {
+  const proto = firstHeaderValue(request.headers.get('x-forwarded-proto'));
+  const host = firstHeaderValue(request.headers.get('x-forwarded-host'));
+  if (proto !== 'https' && proto !== 'http') return null;
+  if (!host || /[\s/@\\\u0000-\u001f]/.test(host)) return null;
+  try {
+    return new URL(`${proto}://${host}`).origin;
+  } catch {
+    return null;
+  }
+}
+
+function hostedRequestOrigin(request: Request, origin: string) {
+  const host = firstHeaderValue(request.headers.get('host'));
+  if (!host || /[\s/@\\\u0000-\u001f]/.test(host)) return null;
+  try {
+    const parsedOrigin = new URL(origin);
+    if (parsedOrigin.protocol !== 'https:' && parsedOrigin.protocol !== 'http:')
+      return null;
+    return new URL(`${parsedOrigin.protocol}//${host}`).origin;
+  } catch {
+    return null;
+  }
+}
+
+function configuredPublicOrigins() {
+  const origins = new Set<string>();
+  for (const name of [
+    'PRIMARY_APP_URL',
+    'YAWP_APP_ORIGIN',
+    'YAWP_PUBLIC_ORIGIN',
+  ]) {
+    const value = process.env[name]?.trim();
+    if (!value) continue;
+    try {
+      const url = new URL(value);
+      if (url.protocol === 'https:' || url.protocol === 'http:')
+        origins.add(url.origin);
+    } catch {
+      // Invalid deployment configuration should not widen accepted origins.
+    }
+  }
+  return origins;
+}
+
+function headerOrigin(value: string | null) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+function isOpaqueOriginHeader(value: string | null) {
+  return value?.trim().toLowerCase() === 'null';
+}
+
+function headerUrl(value: string | null) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+function isAcceptedSourceOrigin(
+  request: Request,
+  source: string | null,
+  publicOrigins: Set<string>
+) {
+  return (
+    !!source &&
+    (source === new URL(request.url).origin ||
+      source === forwardedOrigin(request) ||
+      source === hostedRequestOrigin(request, source) ||
+      publicOrigins.has(source))
+  );
+}
+
+function isTesterFeedbackEndpoint(request: Request) {
+  const pathname = new URL(request.url).pathname;
+  return (
+    pathname === '/api/tester-feedback' ||
+    pathname === '/api/tester-feedback.data'
+  );
+}
+
+function isDemoAppReferer(value: string | null) {
+  const referer = headerUrl(value);
+  return (
+    referer?.hostname === 'demo.yawp.school' &&
+    (referer.pathname === '/app' || referer.pathname.startsWith('/app/'))
+  );
+}
+
+function isDemoAppOrigin(value: string | null) {
+  return headerOrigin(value) === 'https://demo.yawp.school';
+}
+
+function acceptsFeedbackOrigin(request: Request, environment: string) {
+  const normalizedEnvironment = environment.trim().toLowerCase();
+  const originHeader = request.headers.get('origin');
+  const origin = headerOrigin(originHeader);
+  const opaqueOrigin = isOpaqueOriginHeader(originHeader);
+  if (originHeader && !origin && !opaqueOrigin) return false;
+  if (origin && origin === new URL(request.url).origin) return true;
+  const publicOrigins = configuredPublicOrigins();
+  const isDemo = normalizedEnvironment === 'demo';
+  const isProduction = normalizedEnvironment === 'production';
+  if (!origin) {
+    const refererHeader = request.headers.get('referer');
+    if (
+      isDemo &&
+      isTesterFeedbackEndpoint(request) &&
+      isDemoAppReferer(refererHeader)
+    )
+      return true;
+    if (isProduction) return false;
+    const referer = headerOrigin(refererHeader);
+    return isAcceptedSourceOrigin(request, referer, publicOrigins);
+  }
+  if (isProduction) return false;
+  if (isDemo && isTesterFeedbackEndpoint(request) && isDemoAppOrigin(origin))
+    return true;
+  return (
+    isAcceptedSourceOrigin(request, origin, publicOrigins)
+  );
+}
+
 export async function submitTesterFeedback(
   request: Request,
   deps: FeedbackDependencies
@@ -110,7 +268,8 @@ export async function submitTesterFeedback(
   const user = await deps.getUser(request);
   if (!user) return response({ error: 'Sign in to log feedback' }, 401);
   if (!user.isTester) return response({ error: 'Tester access required' }, 403);
-  if (request.headers.get('origin') !== new URL(request.url).origin)
+  const environment = deps.environment();
+  if (!acceptsFeedbackOrigin(request, environment))
     return response({ error: 'Invalid origin' }, 403);
   if (
     request.headers.get('content-type')?.split(';')[0] !==
@@ -139,7 +298,7 @@ export async function submitTesterFeedback(
     ...parsed.data,
     userId: user.id,
     userAgent: (request.headers.get('user-agent') || '').slice(0, 1000),
-    environment: deps.environment(),
+    environment,
   });
   if (!saved)
     return response(
@@ -161,6 +320,9 @@ const columns = [
   'severity',
   'createdAt',
   'environment',
+  'actions',
+  'userEmail',
+  'userName',
 ] as const;
 function csvCell(value: string) {
   // Excel recognizes formulas even after leading whitespace. Escape all user-controlled cells.
@@ -177,7 +339,9 @@ export function feedbackCsv(entries: FeedbackEntry[]) {
             csvCell(
               column === 'createdAt'
                 ? entry.createdAt.toISOString()
-                : (entry[column] ?? '')
+                : column === 'actions'
+                  ? Array.isArray(entry.actions) ? JSON.stringify(entry.actions) : ''
+                  : (entry[column] ?? '')
             )
           )
           .join(',')
@@ -191,9 +355,13 @@ export async function readTesterFeedback(
   deps: FeedbackDependencies,
   mode: 'admin' | 'internal'
 ) {
+  let internalAuth: InternalApiAuthContext | null = null;
   if (mode === 'internal') {
-    const denied = await deps.authenticateInternal(request);
-    if (denied) return denied;
+    const auth = await deps.authenticateInternal(request);
+    if (auth instanceof Response) return auth;
+    internalAuth = auth;
+    if (internalAuth?.mode !== 'hmac')
+      return response({ error: 'Unauthorized' }, 401);
   } else {
     const user = await deps.getUser(request);
     if (!user) return response({ error: 'Sign in required' }, 401);
@@ -223,6 +391,8 @@ export async function readTesterFeedback(
         },
         413
       );
+    if (internalAuth)
+      await auditInternalFeedbackRead(request, deps, internalAuth, 'export.success');
     return new Response(feedbackCsv(entries), {
       headers: {
         'content-type': 'text/csv; charset=utf-8',
@@ -233,9 +403,42 @@ export async function readTesterFeedback(
       },
     });
   }
-  const page = entries.slice(0, input.limit);
+  const page = entries.slice(0, input.limit).map((entry) => ({
+    ...entry,
+    actions: Array.isArray(entry.actions) ? entry.actions : null,
+    userEmail: entry.userEmail ?? null,
+    userName: entry.userName ?? null,
+  }));
+  if (internalAuth)
+    await auditInternalFeedbackRead(request, deps, internalAuth, 'list.success');
   return response({
     entries: page,
     nextCursor: entries.length > input.limit ? page.at(-1)?.id : null,
+  });
+}
+
+async function auditInternalFeedbackRead(
+  request: Request,
+  deps: FeedbackDependencies,
+  auth: InternalApiAuthContext,
+  result: string
+) {
+  if (!deps.auditInternalRead) return;
+  const url = new URL(request.url);
+  const requestHash = createHash('sha256')
+    .update(
+      [
+        request.method.toUpperCase(),
+        url.pathname,
+        internalApiRawQueryString(url),
+      ].join('\n')
+    )
+    .digest('hex');
+  await deps.auditInternalRead({
+    actorEmail: auth.actorEmail,
+    keyId: auth.keyId,
+    endpoint: `${request.method.toUpperCase()} ${url.pathname}`,
+    requestHash,
+    result,
   });
 }

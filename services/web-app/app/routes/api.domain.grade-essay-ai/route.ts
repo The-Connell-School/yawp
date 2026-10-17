@@ -121,9 +121,13 @@ function isPrismaRecordNotFoundError(error: unknown) {
 
 export function getRubricEvaluationMaxTokens(categoryCount: number) {
   const baseCategoryCount = 5;
-  const baseMaxTokens = 900;
+  // Sized so a full per-category comment set fits. 900 truncated the JSON on
+  // 7-category rubrics with long comments, which made every attempt fail.
+  const baseMaxTokens = 1800;
   const tokensPerAdditionalCategory = 300;
 
+  // Capped at 2400 so one call (~40 tok/s observed) stays near 60s, inside
+  // the 100s grading deadline.
   return Math.min(
     2400,
     baseMaxTokens +
@@ -803,7 +807,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse(
       {
         success: false,
-        message: 'You cannot run AI grading on your own submission.',
+        message: 'You cannot run grading on your own submission.',
       },
       { status: 403 }
     );
@@ -914,6 +918,13 @@ export async function action({ request }: ActionFunctionArgs) {
     studentName: submission.document.membership?.user?.name,
     groupLabel: submission.document.group?.label,
   });
+  const gradingDeidentificationPhrases = [
+    studentFirstName,
+    submission.document.membership?.user?.name,
+    submission.document.group?.label,
+  ].filter(
+    (value): value is string => typeof value === 'string' && value.length > 0
+  );
   // The prompt is derived from the rubric itself: how many judgments it asks
   // for, which words each score carries, and whether it wants per-category
   // feedback or overall feedback alone. No assignment type is named here.
@@ -988,6 +999,10 @@ export async function action({ request }: ActionFunctionArgs) {
         ...params,
         ...llmRetryOptions,
         signal,
+        deidentificationPhrases: [
+          gradingDeidentificationPhrases,
+          params.deidentificationPhrases,
+        ],
         attribution: {
           organizationId,
           membershipId: actor.membershipId,
@@ -1268,7 +1283,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         model,
         system,
         messages: compiledInvocation.messages,
-        maxTokens,
+        maxTokens: Math.max(maxTokens, rubricEvaluationMaxTokens),
         metadata: {
           feature: 'grading',
           kind: 'rubric-evaluation',

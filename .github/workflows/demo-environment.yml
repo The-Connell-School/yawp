@@ -63,6 +63,8 @@ jobs:
       PREVIEW_UA_STUDENT_BILLING_ENABLED: ${{ vars.DEMO_UA_STUDENT_BILLING_ENABLED || 'false' }}
       PREVIEW_UA_ORGANIZATION_ID: ${{ vars.DEMO_UA_ORGANIZATION_ID }}
       PREVIEW_UA_PARTNER_CODE: ${{ vars.DEMO_UA_PARTNER_CODE }}
+      PREVIEW_GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.DEMO_GOOGLE_OAUTH_CLIENT_ID }}
+      PREVIEW_GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.DEMO_GOOGLE_OAUTH_CLIENT_SECRET }}
       PREVIEW_STRIPE_SECRET_KEY: ${{ secrets.DEMO_STRIPE_SECRET_KEY }}
       PREVIEW_STRIPE_WEBHOOK_SECRET: ${{ secrets.DEMO_STRIPE_WEBHOOK_SECRET }}
       PREVIEW_STRIPE_UA_2026_PRICE_ID: ${{ vars.DEMO_STRIPE_UA_2026_PRICE_ID }}
@@ -71,6 +73,8 @@ jobs:
       PREVIEW_RESEND_API_KEY: ${{ secrets.DEMO_RESEND_API_KEY }}
       # Optional. Lets Yawp Internal publish rubrics to demo via the Rubric Catalog API.
       PREVIEW_MANAGEMENT_SERVICE_KEY: ${{ secrets.DEMO_MANAGEMENT_SERVICE_KEY }}
+      # Existing demo-scoped HMAC keys; never fall back to production keys.
+      DEMO_INTERNAL_API_KEYS: ${{ secrets.DEMO_INTERNAL_API_KEYS }}
       PREVIEW_POSTGRES_ADMIN_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
       PREVIEW_LOGIN_EMAIL: ${{ secrets.DEMO_LOGIN_EMAIL || secrets.PREVIEW_LOGIN_EMAIL }}
       PREVIEW_LOGIN_PASSWORD: ${{ secrets.DEMO_LOGIN_PASSWORD || secrets.PREVIEW_LOGIN_PASSWORD }}
@@ -81,6 +85,26 @@ jobs:
       DEMO_REQUESTED_REF: ${{ inputs.ref }}
       DEMO_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
     steps:
+      - name: Mask optional Google OAuth credentials
+        run: |
+          set -euo pipefail
+          # Mask both original bytes and Bash transport quoting before host commands.
+          mask_value() {
+            local value="$1"
+            value="${value//'%'/'%25'}"
+            value="${value//$'\r'/'%0D'}"
+            value="${value//$'\n'/'%0A'}"
+            printf '::add-mask::%s\n' "$value"
+          }
+          for name in PREVIEW_GOOGLE_OAUTH_CLIENT_ID PREVIEW_GOOGLE_OAUTH_CLIENT_SECRET; do
+            value="${!name}"
+            if [[ -n "$value" ]]; then
+              mask_value "$value"
+              printf -v quoted '%q' "$value"
+              mask_value "$quoted"
+            fi
+          done
+
       - name: Check demo configuration
         env:
           DEMO_SSH_PRIVATE_KEY: ${{ secrets.DEMO_SSH_PRIVATE_KEY }}
@@ -125,6 +149,9 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           path: demo-control
           persist-credentials: false
+
+      - name: Validate demo signed-write configuration
+        run: node demo-control/scripts/preview/demo-internal-api-config.mjs
 
       - name: Checkout the requested application ref
         uses: actions/checkout@v4
@@ -210,6 +237,8 @@ jobs:
              HOST_METRICS_SCRIPT=$(printf '%q' "$remote_metrics") \
              HOST_METRICS_SERVICE=yawp-demo-metrics \
              bash $(printf '%q' "${remote_control}/scripts/preview/install-host-metrics.sh")"
+          ssh -i ~/.ssh/demo_key "$ssh_target" \
+            "bash $(printf '%q' "${remote_control}/scripts/preview/reclaim-demo-disk.sh")"
 
       - name: Deploy demo
         id: deploy
@@ -234,6 +263,8 @@ jobs:
             "PREVIEW_UA_STUDENT_BILLING_ENABLED=$(shell_quote "$PREVIEW_UA_STUDENT_BILLING_ENABLED")"
             "PREVIEW_UA_ORGANIZATION_ID=$(shell_quote "$PREVIEW_UA_ORGANIZATION_ID")"
             "PREVIEW_UA_PARTNER_CODE=$(shell_quote "$PREVIEW_UA_PARTNER_CODE")"
+            "PREVIEW_GOOGLE_OAUTH_CLIENT_ID=$(shell_quote "$PREVIEW_GOOGLE_OAUTH_CLIENT_ID")"
+            "PREVIEW_GOOGLE_OAUTH_CLIENT_SECRET=$(shell_quote "$PREVIEW_GOOGLE_OAUTH_CLIENT_SECRET")"
             "PREVIEW_STRIPE_SECRET_KEY=$(shell_quote "$PREVIEW_STRIPE_SECRET_KEY")"
             "PREVIEW_STRIPE_WEBHOOK_SECRET=$(shell_quote "$PREVIEW_STRIPE_WEBHOOK_SECRET")"
             "PREVIEW_STRIPE_UA_2026_PRICE_ID=$(shell_quote "$PREVIEW_STRIPE_UA_2026_PRICE_ID")"
@@ -241,6 +272,7 @@ jobs:
             "PREVIEW_RESEND_FROM_EMAIL=$(shell_quote "$PREVIEW_RESEND_FROM_EMAIL")"
             "PREVIEW_RESEND_API_KEY=$(shell_quote "$PREVIEW_RESEND_API_KEY")"
             "PREVIEW_MANAGEMENT_SERVICE_KEY=$(shell_quote "$PREVIEW_MANAGEMENT_SERVICE_KEY")"
+            "DEMO_INTERNAL_API_KEYS=$(shell_quote "$DEMO_INTERNAL_API_KEYS")"
             "PREVIEW_POSTGRES_ADMIN_PASSWORD=$(shell_quote "$PREVIEW_POSTGRES_ADMIN_PASSWORD")"
             "PREVIEW_LOGIN_EMAIL=$(shell_quote "$PREVIEW_LOGIN_EMAIL")"
             "PREVIEW_LOGIN_PASSWORD=$(shell_quote "$PREVIEW_LOGIN_PASSWORD")"

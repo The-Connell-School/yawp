@@ -77,4 +77,112 @@ describe('TeacherPasteReport', () => {
     );
     expect(document.body.textContent).not.toContain('Lower-bound signal');
   });
+
+  it('shows persisted paste events even when no linked text remains', async () => {
+    globalThis.fetch = mock(
+      async () =>
+        new Response(
+          JSON.stringify({
+            events: [
+              {
+                id: 'paste_12345678-1234-4321-8123-123456789abc',
+                createdAt: '2026-10-13T12:34:56.000Z',
+                textLength: 240,
+                sourceUrl: null,
+              },
+            ],
+            nextCursor: null,
+          }),
+          { status: 200 }
+        )
+    ) as unknown as typeof fetch;
+    const contentRoot = document.createElement('div');
+    contentRoot.textContent =
+      'The pasted passage was later edited until the linked span disappeared.';
+
+    root = renderWithContent(contentRoot);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => {
+      document
+        .querySelector<HTMLButtonElement>('[aria-label="Pasted text report"]')
+        ?.click();
+    });
+
+    expect(
+      document.querySelector('[data-testid="paste-report-empty"]')
+    ).toBeNull();
+    expect(document.body.textContent).toContain('Recorded events');
+    expect(document.body.textContent).toContain('240 chars');
+    expect(document.body.textContent).toContain(
+      'No linked text remains in this version'
+    );
+  });
+
+  it('does not show the empty state before the event query resolves', async () => {
+    let resolveFetch!: (response: Response) => void;
+    globalThis.fetch = mock(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveFetch = resolve;
+        })
+    ) as unknown as typeof fetch;
+    const contentRoot = document.createElement('div');
+    contentRoot.textContent = 'No linked marks are visible yet.';
+
+    root = renderWithContent(contentRoot);
+
+    act(() => {
+      document
+        .querySelector<HTMLButtonElement>('[aria-label="Pasted text report"]')
+        ?.click();
+    });
+
+    expect(
+      document.querySelector('[data-testid="paste-report-empty"]')
+    ).toBeNull();
+    expect(document.body.textContent).not.toContain('No pasted text found');
+
+    await act(async () => {
+      resolveFetch(
+        new Response(JSON.stringify({ events: [], nextCursor: null }), {
+          status: 200,
+        })
+      );
+      await Promise.resolve();
+    });
+
+    expect(
+      document.querySelector('[data-testid="paste-report-empty"]')
+    ).not.toBeNull();
+  });
+
+  it('shows the fetch error instead of an empty state when events are unknown', async () => {
+    globalThis.fetch = mock(
+      async () => new Response('unavailable', { status: 503 })
+    ) as unknown as typeof fetch;
+    const contentRoot = document.createElement('div');
+    contentRoot.textContent = 'No linked marks are visible after the failure.';
+
+    root = renderWithContent(contentRoot);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => {
+      document
+        .querySelector<HTMLButtonElement>('[aria-label="Pasted text report"]')
+        ?.click();
+    });
+
+    expect(
+      document.querySelector('[data-testid="paste-report-empty"]')
+    ).toBeNull();
+    expect(document.body.textContent).not.toContain('No pasted text found');
+    expect(document.body.textContent).toContain(
+      'The event list could not be loaded'
+    );
+  });
 });

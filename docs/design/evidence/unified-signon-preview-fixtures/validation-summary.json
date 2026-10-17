@@ -1,0 +1,56 @@
+{
+  "profile": "unified-signon-preview-fixtures",
+  "status": "passed",
+  "steps": [
+    {
+      "id": "preview-fixture-guards",
+      "exitCode": 0,
+      "counts": [
+        "31 pass",
+        "0 fail",
+        "115 expect() calls"
+      ]
+    },
+    {
+      "id": "signon-dispatch",
+      "exitCode": 0,
+      "counts": [
+        "43 pass",
+        "0 fail",
+        "96 expect() calls"
+      ]
+    },
+    {
+      "id": "preview-fixture-real-database",
+      "exitCode": 0,
+      "counts": [
+        "9 pass",
+        "0 fail",
+        "85 expect() calls"
+      ]
+    }
+  ],
+  "typecheck": "passed",
+  "projectCliTests": {
+    "pass": 12,
+    "fail": 0
+  },
+  "browser": {
+    "beforePass": 10,
+    "afterPass": 10,
+    "workers": 1,
+    "widths": [
+      1280,
+      390
+    ]
+  },
+  "scope": "Local disposable fixtures/handlers only; historical hosted matrix unchanged",
+  "hostedBlockers": [
+    "Row 21 preview seat filtering",
+    "Row 22 inactive/orphan preview sign-in",
+    "UA supported host/code/payment configuration",
+    "Human Google login",
+    "Hosted private approval-link preparation"
+  ],
+  "ciFollowup": "Existing extracted deployment harnesses now load the new guard; verify demo excludes fixtures and sign-on seed precedes activation. 9 additional deployment regressions pass; fixture/auth implementation unchanged."
+}

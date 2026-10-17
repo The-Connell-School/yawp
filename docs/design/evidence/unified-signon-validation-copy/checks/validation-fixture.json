@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "project.fixture-proof/v1",
+  "fixture": "local-dev",
+  "status": "pass",
+  "checks": [
+    {
+      "id": "container-running",
+      "status": "pass"
+    },
+    {
+      "id": "postgres-ready",
+      "status": "pass"
+    },
+    {
+      "id": "seeded-dev-users",
+      "status": "pass",
+      "observed": 3,
+      "expected": 3
+    }
+  ],
+  "ports": {
+    "app": 6278,
+    "database": 55578
+  }
+}
