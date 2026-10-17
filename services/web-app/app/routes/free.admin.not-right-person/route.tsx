@@ -48,7 +48,9 @@ export default function FreeAdminNotRightPersonRoute() {
     return (
       <FreeTierAuthCard title="Request forwarded" icon={<Send />}>
         <p className="text-sm text-muted-foreground">
-          We emailed the administrator you named. You're all set.
+          {'queued' in actionData
+            ? 'Your request is queued. We will email the teacher an update.'
+            : "We emailed the administrator you named. You're all set."}
         </p>
       </FreeTierAuthCard>
     );
@@ -70,7 +72,10 @@ export default function FreeAdminNotRightPersonRoute() {
 
   if (!data.ok) {
     return (
-      <FreeTierAuthCard title="This link expired or was used" icon={<CircleAlert />}>
+      <FreeTierAuthCard
+        title="This link expired or was used"
+        icon={<CircleAlert />}
+      >
         <p className="text-sm text-muted-foreground">
           Ask the teacher to send a reminder.
         </p>

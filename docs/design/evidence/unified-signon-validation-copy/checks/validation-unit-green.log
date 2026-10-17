@@ -1,0 +1,12 @@
+bun test v1.3.1 (89fa0f34)
+
+app/domain/unified-signon/validation-copy.test.ts:
+(pass) gated password copy uses the validator minimum and mismatch text [1.25ms]
+(pass) required fields, upper bound and unrelated issues keep their messages [0.34ms]
+(pass) shared policy and legacy messages remain unchanged at both password boundaries [0.18ms]
+(pass) confirmation minimum and empty strings keep existing validation semantics [0.15ms]
+
+ 4 pass
+ 0 fail
+ 15 expect() calls
+Ran 4 tests across 1 file. [452.00ms]

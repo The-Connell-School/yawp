@@ -13,6 +13,7 @@ import { prisma } from '~/utils/db.server';
 import type { FreeTierApplicationStatus } from '@app/prisma';
 import { assertTransition } from './state';
 import { BELOW_HS_TAG } from './grade-gate';
+import { RELEASE_EMAIL_V2_COPY_VERSION } from './email-copy';
 import { buildFreeTierEventLink } from './free-tier-public-url.server';
 import {
   coarseUserAgent,
@@ -181,7 +182,7 @@ export async function recordAcquisitionTokenScan(input: {
   }
 }
 
-export async function submitWaitlist(input: WaitlistInput) {
+export async function submitWaitlist(input: WaitlistInput, options?: { onboardingV2?: boolean }) {
   const parsed = waitlistInputSchema.parse(input);
   if (parsed.middleName?.trim()) return { ok: true as const }; // honeypot: do nothing
   const email = normalizeEmail(parsed.email);
@@ -197,6 +198,7 @@ export async function submitWaitlist(input: WaitlistInput) {
         schoolName: parsed.schoolName,
         location: parsed.location,
         gradeLevel: parsed.gradeLevel,
+        releaseEmailCopyVersion: options?.onboardingV2 ? RELEASE_EMAIL_V2_COPY_VERSION : null,
         status: 'LEAD',
       },
     ],
@@ -481,7 +483,7 @@ export type RedeemInput = z.infer<typeof redeemInputSchema>;
 
 export async function redeemToken(
   input: RedeemInput,
-  options?: { scanDedupeCookie?: string | null }
+  options?: { scanDedupeCookie?: string | null; onboardingV2?: boolean }
 ) {
   const parsed = redeemInputSchema.parse(input);
   const email = normalizeEmail(parsed.email);
@@ -592,6 +594,7 @@ export async function redeemToken(
             schoolName: parsed.schoolName,
             location: parsed.location,
             gradeLevel: parsed.gradeLevel,
+            releaseEmailCopyVersion: options?.onboardingV2 ? RELEASE_EMAIL_V2_COPY_VERSION : null,
             acquisitionTokenId: token.id,
             status: token.bypassWaitlist ? 'INVITED' : 'LEAD',
             releasedAt: token.bypassWaitlist ? now : null,

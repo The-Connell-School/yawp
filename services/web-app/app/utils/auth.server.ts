@@ -191,6 +191,8 @@ export async function requireUserId(
     await requireUserWithoutPasswordChange(request, userId);
   }
   await requireMutableRequest(request);
+  const { enforceLockedPreviewRequest } = await import('~/domain/free-tier/locked-preview.server');
+  await enforceLockedPreviewRequest(request, userId, await getMembershipId(request));
   return userId;
 }
 

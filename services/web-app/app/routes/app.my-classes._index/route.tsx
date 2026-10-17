@@ -429,7 +429,12 @@ function TeacherMyClassesView({
                   </Button>
                 </>
               ) : null}
-              <Button size="sm" onClick={openCreate} className="shrink-0">
+              <Button
+                size="sm"
+                onClick={openCreate}
+                className="shrink-0"
+                data-tour="my-classes-create"
+              >
                 <Plus className="mr-2 h-4 w-4" />
                 Create Class
               </Button>
@@ -468,7 +473,10 @@ function TeacherMyClassesView({
         ) : null}
 
         {filteredClasses.length ? (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div
+            data-tour="my-classes-grid"
+            className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+          >
             {filteredClasses.map((klass) => (
               <TeacherClassCard
                 key={klass.id}

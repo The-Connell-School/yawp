@@ -1647,3 +1647,37 @@ body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
 .lounge-accent-soft {
   background-color: hsl(var(--lounge-accent-soft));
 }
+
+/* Brian-call approval layout; all selectors require the onboarding rollout. */
+.free-tier-approval-v2 .auth-page-content {
+  width: min(100%, 760px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  align-items: start;
+  gap: 32px;
+}
+.free-tier-approval-v2 .free-tier-approval-info {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px 0;
+}
+.free-tier-approval-v2 .free-tier-legal {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+.free-tier-approval-v2 [data-guide-slot]:empty {
+  display: none;
+}
+@media (max-width: 639px) {
+  .free-tier-approval-v2 .auth-page-content {
+    display: flex;
+    width: 100%;
+    gap: 16px;
+  }
+  .free-tier-approval-v2 .free-tier-approval-info {
+    width: 100%;
+    max-width: 320px;
+    padding: 0 0 8px;
+  }
+}

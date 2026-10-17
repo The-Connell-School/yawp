@@ -1,4 +1,8 @@
-import { FreeReporterLocked } from '~/components/free-account-usage';
+import {
+  FreeReporterLocked,
+  useFreeAccountUsage,
+  FULL_ACCESS_CONTACT,
+} from '~/components/free-account-usage';
 import { isFreeTierInappV2Enabled } from '~/domain/free-tier/inapp-feature-gate.server';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -34,6 +38,7 @@ type ChatMessage = { role: 'user' | 'assistant'; content: string };
 export async function loader({ request }: LoaderFunctionArgs) {
   const access = await getReporterAccess(request);
   if (
+    !access.allowed &&
     access.isTeacher &&
     (await isFreeTierInappV2Enabled(access.membership))
   ) {
@@ -118,6 +123,9 @@ type GrowthPlanProposal = {
 };
 
 export default function ReporterRoute() {
+  const usage = useFreeAccountUsage();
+  const monthlyUsage = usage?.monthly ? usage.reporter : null;
+  const exhausted = monthlyUsage?.remaining === 0;
   const {
     freeLocked,
     conversations,
@@ -231,13 +239,14 @@ export default function ReporterRoute() {
 
   function send(message: string) {
     const trimmed = message.trim();
-    if (!trimmed || isSending) return;
+    if (!trimmed || isSending || exhausted) return;
     setMessages((prev) => [...prev, { role: 'user', content: trimmed }]);
     setPendingSubmission({ message: trimmed, conversationKey });
     setInput('');
     fetcher.submit(
       {
         intent: 'chat',
+        requestId: crypto.randomUUID(),
         message: trimmed,
         ...(conversationId ? { conversationId } : {}),
       },
@@ -376,11 +385,37 @@ export default function ReporterRoute() {
           className="no-scrollbar flex-1 overflow-y-auto px-4 py-6"
         >
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+            {monthlyUsage && (
+              <div
+                data-testid="reporter-monthly-remaining"
+                className="rounded-xl border bg-popover p-4 text-sm"
+              >
+                <p>
+                  {monthlyUsage.remaining} of {monthlyUsage.total} Reporter uses
+                  left this month
+                </p>
+                {exhausted && (
+                  <p className="mt-2">
+                    Come back next month to prepare another report. Your saved
+                    reports are still available.
+                  </p>
+                )}
+                <a
+                  href={FULL_ACCESS_CONTACT}
+                  className="mt-2 inline-block text-primary underline"
+                >
+                  Need more? Talk to us
+                </a>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Unlimited with a site license
+                </p>
+              </div>
+            )}
             {!hasMessages ? (
               <ReporterEmptyState
                 prompts={recommendedPrompts}
                 onPick={send}
-                disabled={isSending}
+                disabled={isSending || exhausted}
               />
             ) : (
               messages.map((message, index) => (
@@ -389,7 +424,7 @@ export default function ReporterRoute() {
                   message={message}
                   isLast={index === messages.length - 1}
                   onSuggestion={send}
-                  disabled={isSending}
+                  disabled={isSending || exhausted}
                 />
               ))
             )}
@@ -451,12 +486,12 @@ export default function ReporterRoute() {
               placeholder="Ask Yawp Reporter…"
               aria-label="Message Yawp Reporter"
               className="max-h-40 min-h-[44px] flex-1 resize-none max-sm:text-base"
-              disabled={isSending}
+              disabled={isSending || exhausted}
             />
             <Button
               type="submit"
               size="icon"
-              disabled={isSending || input.trim().length === 0}
+              disabled={isSending || exhausted || input.trim().length === 0}
               aria-label="Send message"
             >
               <Send size={18} />

@@ -17,6 +17,10 @@ import { readOrMintScanDedupeCookie, readScanDedupeCookie } from '~/domain/free-
 import { RATE_LIMITS } from '~/config/rate-limits';
 import { enforceUnauthByIpAndTarget } from '~/utils/rate-limit.server';
 import { z } from 'zod';
+import { readBoundedText } from '~/utils/bounded-body.server';
+import { isBelowHsGrade } from '~/domain/free-tier/grade-gate';
+import { isPublicOnboardingV2Enabled, isSupportedSignupGrade } from '~/domain/free-tier/public-onboarding.server';
+import { FreeTierWelcomeCard, FreeTierNameField, FreeTierSubmissionCard, FreeTierBelowHighSchoolCard, FreeTierGradeField } from './WelcomePresentation';
 import {
   FreeTierAuthCard,
   FreeTierButton,
@@ -29,10 +33,12 @@ import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireFreeTierEnabled();
+  const onboardingV2 = await isPublicOnboardingV2Enabled();
   const url = new URL(request.url);
   const token = url.searchParams.get('t')?.trim();
   if (!token)
     return {
+      onboardingV2,
       mode: 'waitlist' as const,
       tokenValid: null,
       linkClosed: false as const,
@@ -53,6 +59,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       validity.reason === 'expired' ||
       validity.reason === 'exhausted');
   const payload = {
+    onboardingV2,
     mode: 'token' as const,
     token,
     tokenValid: validity,
@@ -89,7 +96,13 @@ export function freeTierSubmitSuccessCopy(
 
 export async function action({ request }: ActionFunctionArgs) {
   await requireFreeTierEnabled();
-  const formData = await request.formData();
+  const text = await readBoundedText(request, 4096);
+  if (text === null) return { ok: false, error: 'invalid' as const };
+  let formData: FormData;
+  try {
+    formData = await new Request(request.url, { method: 'POST', headers: request.headers, body: text }).formData();
+  } catch { return { ok: false, error: 'invalid' as const }; }
+  const onboardingV2 = await isPublicOnboardingV2Enabled();
   const intent = String(formData.get('intent') ?? 'waitlist');
   const raw = {
     name: String(formData.get('name') ?? ''),
@@ -120,10 +133,26 @@ export async function action({ request }: ActionFunctionArgs) {
 
   if (raw.middleName.trim()) return { ok: true as const };
 
+  if (onboardingV2) {
+    // FormData.get must not silently accept a repeated field or a file value.
+    if (['name', 'email', 'schoolName', 'location', 'gradeLevel', 'token', 'intent'].some(key => formData.getAll(key).length > 1 || formData.get(key) instanceof File)) {
+      return { ok: false, error: 'invalid' as const };
+    }
+    const parsed = formSchema.safeParse({ name: raw.name, email: raw.email, schoolName: raw.schoolName, location: raw.location, gradeLevel: raw.gradeLevel, middleName: raw.middleName });
+    if (!parsed.success) return { ok: false, error: 'invalid' as const };
+    if (!isSupportedSignupGrade(parsed.data.gradeLevel)) return { ok: false, error: 'invalid_grade' as const };
+    Object.assign(raw, parsed.data);
+    if (isBelowHsGrade(parsed.data.gradeLevel)) {
+      if (intent === 'redeem' && !z.string().min(1).max(500).safeParse(raw.token).success) return { ok: false, error: 'invalid' as const };
+      const result = await (await import('~/domain/free-tier/grade-gate.server')).recordBelowHsDecline({ ...parsed.data, ...(intent === 'redeem' ? { token: raw.token } : {}) });
+      return result.ok ? { ok: true as const, declined: true as const } : { ok: false, error: 'invalid' as const };
+    }
+  }
+
   if (intent === 'redeem') {
     const parsed = z
       .object({
-        token: z.string().min(1),
+        token: z.string().min(1).max(500),
         name: z.string().trim().min(1).max(200),
         email: z.string().email(),
         schoolName: z.string().trim().min(1).max(200),
@@ -132,7 +161,7 @@ export async function action({ request }: ActionFunctionArgs) {
       })
       .safeParse(raw);
     if (!parsed.success) return { ok: false, error: 'invalid' as const };
-    const result = await redeemToken(parsed.data, { scanDedupeCookie: await readScanDedupeCookie(request) });
+    const result = await redeemToken(parsed.data, { scanDedupeCookie: await readScanDedupeCookie(request), ...(onboardingV2 ? { onboardingV2: true } : {}) });
     if (!result.ok) return { ok: false, error: result.reason };
     if (result.bypassWaitlist) {
       const { sendReleaseEmailsForApplicationIds } =
@@ -161,7 +190,8 @@ export async function action({ request }: ActionFunctionArgs) {
     middleName: raw.middleName,
   });
   if (!parsed.success) return { ok: false, error: 'invalid' as const };
-  await submitWaitlist(parsed.data);
+  if (onboardingV2) await submitWaitlist(parsed.data, { onboardingV2: true });
+  else await submitWaitlist(parsed.data);
   return { ok: true as const };
 }
 
@@ -174,6 +204,9 @@ export default function FreeTierLandingRoute() {
     ? freeTierSubmitSuccessCopy({ ...fetcher.data, email: submittedEmail })
     : null;
 
+  if (fetcher.data?.ok && 'declined' in fetcher.data && fetcher.data.declined) return <FreeTierBelowHighSchoolCard />;
+  if (data.onboardingV2 && submitted) return <FreeTierSubmissionCard onboardingV2 bypassWaitlist={!!(fetcher.data && 'bypassWaitlist' in fetcher.data && fetcher.data.bypassWaitlist)} email={submittedEmail} />;
+
   const title = data.mode === 'token' && data.linkClosed
     ? 'This link is closed'
     : submitSuccess?.headline ?? 'Try YAWP with your students';
@@ -182,8 +215,9 @@ export default function FreeTierLandingRoute() {
     : data.mode === 'token' ? 'Use your event link to continue.'
     : 'Join the waitlist. We let teachers in a group at a time.';
 
-  return (
-    <FreeTierAuthCard status={submitted || (data.mode === 'token' && data.linkClosed)} title={title} subtitle={subtitle} icon={data.mode === 'token' && data.linkClosed ? <CircleAlert /> : submitted ? (fetcher.data && 'bypassWaitlist' in fetcher.data && fetcher.data.bypassWaitlist ? <Mail /> : <CircleCheck />) : undefined}>
+  const contents = (
+    <>
+
       {data.mode === 'token' && data.linkClosed ? (
         <div className="flex flex-col gap-4">
           <p className="text-sm text-muted-foreground">
@@ -219,9 +253,7 @@ export default function FreeTierLandingRoute() {
             autoComplete="off"
             aria-hidden
           />
-          <FreeTierFieldLabel label="Your name" htmlFor="name">
-            <FreeTierTextInput id="name" name="name" required />
-          </FreeTierFieldLabel>
+          <FreeTierNameField onboardingV2={data.onboardingV2} />
           <FreeTierFieldLabel label="School email" htmlFor="email">
             <FreeTierTextInput id="email" name="email" type="email" placeholder="you@school.edu" required />
           </FreeTierFieldLabel>
@@ -231,9 +263,11 @@ export default function FreeTierLandingRoute() {
           <FreeTierFieldLabel label="Location" htmlFor="location">
             <FreeTierTextInput id="location" name="location" placeholder="City, state" required />
           </FreeTierFieldLabel>
-          <FreeTierFieldLabel label="Grade level" htmlFor="gradeLevel">
-            <FreeTierTextInput id="gradeLevel" name="gradeLevel" required />
-          </FreeTierFieldLabel>
+          {data.onboardingV2 ? <FreeTierGradeField serverError={fetcher.data?.ok === false && fetcher.data.error === 'invalid_grade'} /> : (
+            <FreeTierFieldLabel label="Grade level" htmlFor="gradeLevel">
+              <FreeTierTextInput id="gradeLevel" name="gradeLevel" required />
+            </FreeTierFieldLabel>
+          )}
           {data.mode === 'token' &&
           data.tokenValid &&
           !data.tokenValid.valid ? (
@@ -263,11 +297,20 @@ export default function FreeTierLandingRoute() {
           (fetcher.data.error === 'cap_reached' || fetcher.data.error === 'budget_exceeded') ? (
             <a href="/free" className="text-sm underline">Join the waitlist</a>
           ) : null}
-          <FreeTierButton type="submit">
+          {data.onboardingV2 && fetcher.data?.ok === false && fetcher.data.error === 'invalid' ? <p role="alert" className="text-sm text-destructive">We couldn’t save your details. Check the form and try again.</p> : null}
+          <FreeTierButton type="submit" disabled={data.onboardingV2 && fetcher.state !== 'idle'}>
             {data.mode === 'token' ? 'Continue' : 'Join the waitlist'}
           </FreeTierButton>
         </fetcher.Form>
       )}
+    </>
+  );
+  if (data.onboardingV2 && !submitted && !(data.mode === 'token' && data.linkClosed)) {
+    return <FreeTierWelcomeCard onboardingV2 eventLink={data.mode === 'token'}>{contents}</FreeTierWelcomeCard>;
+  }
+  return (
+    <FreeTierAuthCard status={submitted || (data.mode === 'token' && data.linkClosed)} title={title} subtitle={subtitle} icon={data.mode === 'token' && data.linkClosed ? <CircleAlert /> : submitted ? (fetcher.data && 'bypassWaitlist' in fetcher.data && fetcher.data.bypassWaitlist ? <Mail /> : <CircleCheck />) : undefined}>
+      {contents}
     </FreeTierAuthCard>
   );
 }

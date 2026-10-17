@@ -1,0 +1,58 @@
+{
+  "base": "ff03e2590b6227ff3046f13cf73daf6e831e4194",
+  "tdd": {
+    "unitRed": {
+      "pass": 8,
+      "fail": 37
+    },
+    "realHandlerRed": "expected proof rejection 401; retained guard returned 503",
+    "browserRed": {
+      "fail": 4,
+      "pass": 2,
+      "states": [
+        "proved INVITED resend",
+        "proved anonymous SENT resend"
+      ],
+      "widths": [
+        1280,
+        390
+      ]
+    }
+  },
+  "final": {
+    "focusedUnit": {
+      "tests": 145,
+      "assertions": 465,
+      "failures": 0
+    },
+    "realDatabase": {
+      "tests": 45,
+      "assertions": 379,
+      "failures": 0
+    },
+    "browser": {
+      "tests": 6,
+      "failures": 0,
+      "workers": 1
+    },
+    "typecheck": "PASS (project CLI)"
+  },
+  "privateAssertions": [
+    "Actual accepted mail capture contains the disposable recipient, release subject and rendered invitation URL",
+    "Captured release signature, persisted opaque token hash, expiry, purpose and application match",
+    "Real handler approval reminder captured only for authenticated owner; anonymous, foreign, missing and ineligible applications do not deliver",
+    "Unsupported preview deployment metadata fails before provider fallback in both runtimes",
+    "No external fetch calls; local browser fixture forbids SES and live Resend transports"
+  ],
+  "limitations": [
+    "Local E2E_DATABASE_URL uses the disposable CLI database; only PR deployment metadata is simulated, following the existing OTP regression convention",
+    "SENT browser evidence is anonymous no-delivery; authenticated-owner reminder exercised through real handler/database test",
+    "Local capture observer writes private rendered mail only inside the unchanged accepted preview capture branch; raw payloads are never committed",
+    "Hosted re-QA is a separate task; no hosted requests or preview actions",
+    "Reference logo blob is unavailable; reference frame retains that rendering artifact. Desktop state uses mobile content in the matching fixed-width desktop shell; no dedicated invited desktop artboard",
+    "Reference contains no notice state; the unchanged invited/SENT reference is shown alongside notice states. Disposable address length may add a wrapped masked line. Notice CTA retains the pointer hover state. Local development tool icon is not part of the design"
+  ],
+  "flagOffComparison": "Six login/signup/free-trial desktop/mobile pairs have zero changed pixels",
+  "migration": false,
+  "mailSent": false
+}
