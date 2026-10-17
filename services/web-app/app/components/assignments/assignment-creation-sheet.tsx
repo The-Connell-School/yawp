@@ -1080,7 +1080,9 @@ export function AssignmentCreationSheetContent({
     : 'Create an assignment for one or more of your classes.';
 
   const header = renderSheet ? (
-    <SheetHeader>
+    <SheetHeader
+      className={platformEnhancementsEnabled ? 'text-left' : undefined}
+    >
       <SheetTitle>{headingText}</SheetTitle>
       <SheetDescription>{headingDescription}</SheetDescription>
     </SheetHeader>
@@ -1461,6 +1463,7 @@ export function AssignmentCreationSheetContent({
             variant="outline"
             size="sm"
             onClick={() => attachmentInputRef.current?.click()}
+            className="col-start-2 row-start-1 row-span-2 self-center"
             disabled={isSaving}
           >
             Choose file
@@ -1592,7 +1595,8 @@ export function AssignmentCreationSheetContent({
                 setPrompt(event.target.value);
                 setExtractionTruncated(false);
               }}
-              rows={10}
+              rows={platformEnhancementsEnabled ? 6 : 10}
+              aria-label={platformEnhancementsEnabled ? 'Prompt' : undefined}
               className={
                 platformEnhancementsEnabled
                   ? 'order-2 border-border/60'
@@ -1734,7 +1738,13 @@ export function AssignmentCreationSheetContent({
         )}
 
         {submitForGrade ? (
-          <div className="mt-3 overflow-hidden rounded-lg bg-muted shadow-sm ring-1 ring-black/5">
+          <div
+            className={
+              platformEnhancementsEnabled
+                ? 'mt-3 overflow-hidden rounded-lg bg-background'
+                : 'mt-3 overflow-hidden rounded-lg bg-muted shadow-sm ring-1 ring-black/5'
+            }
+          >
             {platformEnhancementsEnabled ? null : (
               <div className="flex items-start justify-between gap-3 px-4 py-3">
                 <p className="text-sm text-muted-foreground">
@@ -1798,11 +1808,19 @@ export function AssignmentCreationSheetContent({
                           className="tabular-nums"
                         />
                       </div>
-                      <span className="text-sm text-muted-foreground">
-                        points
-                      </span>
+                      {platformEnhancementsEnabled ? null : (
+                        <span className="text-sm text-muted-foreground">
+                          points
+                        </span>
+                      )}
                     </div>
-                    <p className="text-sm text-muted-foreground">
+                    <p
+                      className={
+                        platformEnhancementsEnabled && minimumPointValue === 1
+                          ? 'hidden'
+                          : 'text-sm text-muted-foreground'
+                      }
+                    >
                       What the assignment is worth in the gradebook.
                       {minimumPointValue > 1
                         ? ` Daily Pages engagement assignments need at least ${minimumPointValue} points when graded.`
@@ -2254,13 +2272,13 @@ export function AssignmentCreationSheetContent({
 
         {platformEnhancementsEnabled ? (
           <>
-            <section className="space-y-4 rounded-xl border border-border/60 bg-card p-4 sm:p-5">
+            <section className="space-y-4 rounded-xl border border-border/60 bg-popover p-4 sm:p-5">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Basics
               </h3>
               {basicsFields}
             </section>
-            <section className="space-y-4 rounded-xl border border-border/60 bg-card p-4 sm:p-5">
+            <section className="space-y-4 rounded-xl border border-border/60 bg-popover p-4 sm:p-5">
               {isExitTicket ? (
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Prompt
@@ -2269,7 +2287,7 @@ export function AssignmentCreationSheetContent({
               {promptFields}
               {attachmentFields}
             </section>
-            <section className="rounded-xl border border-border/60 bg-card">
+            <section className="rounded-xl border border-border/60 bg-popover">
               <button
                 id="assignment-create-advanced-toggle"
                 type="button"
@@ -2441,7 +2459,13 @@ export function AssignmentCreationSheetContent({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
+      <SheetContent
+        className={
+          platformEnhancementsEnabled
+            ? 'w-full overflow-y-auto bg-muted/20 p-4 sm:max-w-2xl sm:p-6'
+            : 'w-full overflow-y-auto sm:max-w-2xl'
+        }
+      >
         {form}
       </SheetContent>
     </Sheet>

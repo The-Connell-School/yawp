@@ -40,6 +40,15 @@ test.describe('Platform enhancements', () => {
       await expect(
         page.getByRole('button', { name: 'Prompt Library', exact: true })
       ).toHaveAttribute('aria-expanded', 'false');
+      await page
+        .getByRole('button', { name: 'Prompt Library', exact: true })
+        .click();
+      await expect(
+        page.locator('[data-tour="type-library"] main ul > li')
+      ).toHaveCount(100);
+      await expect(
+        page.getByRole('navigation', { name: 'Prompt library pagination' })
+      ).toHaveCount(0);
       await page.getByRole('button', { name: 'New', exact: true }).click();
       await page.getByRole('menuitem', { name: /assignment/i }).click();
       const sheet = page.getByRole('dialog');
@@ -114,6 +123,8 @@ test.describe('Platform enhancements', () => {
           .getByRole('button', { name: 'Close', exact: true })
           .click();
       await expect(library.getByText(/^Showing 1–/)).toBeVisible();
+      await expect(library.getByText(/^Showing 1–12 of 100$/)).toHaveCount(0);
+      await expect(library.locator('main ul > li')).not.toHaveCount(12);
       await library.locator('main ul > li button').first().click();
       const sheet = page.getByRole('dialog');
       await expect(
@@ -135,6 +146,14 @@ test.describe('Platform enhancements', () => {
         sheet.getByRole('switch', { name: 'Tutor', exact: true })
       ).toBeVisible();
       await advanced.click();
+      expect(
+        await sheet.evaluate(
+          (element) => element.scrollWidth - element.clientWidth
+        )
+      ).toBeLessThanOrEqual(0);
+      await expect(
+        sheet.getByRole('button', { name: 'Create assignment', exact: true })
+      ).toBeInViewport();
       await sheet.locator('[id^="assignment-create-class-"]').first().click();
       const title = `Platform enhancements ${width} ${Date.now()}`;
       await sheet.getByLabel('Title', { exact: true }).fill(title);

@@ -40,7 +40,7 @@ export function ThesisTeacherDirections({
     <section
       className={
         enhanced
-          ? 'mb-4 grid gap-5 rounded-xl border bg-card p-5 md:grid-cols-2'
+          ? 'mb-4 grid gap-5 rounded-xl border bg-popover p-5 md:grid-cols-2'
           : 'mb-6 rounded-lg border bg-muted/40 p-4'
       }
     >
