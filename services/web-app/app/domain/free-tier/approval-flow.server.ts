@@ -440,7 +440,6 @@ export async function resendFreeTierAdminApprovalReminder(args: {
   actorEmail?: string;
   requireV2?: boolean;
 }) {
-  if (args.requireV2) return { ok: false as const, reason: 'flag_off' as const };
   const identity = await prisma.freeTierApplication.findUnique({
     where: { id: args.applicationId },
     select: { id: true, userId: true, organizationId: true },
@@ -451,6 +450,8 @@ export async function resendFreeTierAdminApprovalReminder(args: {
       idempotencyKey: args.idempotencyKey ?? `legacy-manual:${randomUUID()}`,
       actorEmail: args.actorEmail,
     });
+  // Staff writes require durable v2 delivery; teacher callers retain fallback.
+  if (args.requireV2) return { ok: false as const, reason: 'flag_off' as const };
   const app = await prisma.freeTierApplication.findFirst({
     where: { id: args.applicationId, status: 'SENT' },
     select: { id: true, name: true, schoolName: true, email: true },

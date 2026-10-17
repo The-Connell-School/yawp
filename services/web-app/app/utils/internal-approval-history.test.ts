@@ -67,6 +67,13 @@ test('multi-hop history uses previous decision time and replacement role, with t
     { approvalId: 'b', fromAdminName: 'b', fromAdminEmail: 'b@example.test', toAdminName: 'c', toAdminEmail: 'c@example.test', forwardedAt: at(4).toISOString(), byRole: 'teacher' },
   ]);
 });
+test('migrated teacher counters recover accepted history without counting matching acceptances twice', () => {
+  const rows = [row('a', { teacherFollowUpCount: 0, lastTeacherFollowUpAt: null, status: 'REDIRECTED' }),
+    row('b', { createdAt: at(5), teacherFollowUpCount: 1, lastTeacherFollowUpAt: at(6) })];
+  const logs = [log('teacher_followup', 2), log('teacher_followup', 3), log('teacher_followup', 6),
+    log('teacher_followup', 7), log('teacher_followup', 8, false)];
+  expect(approvalHistory(rows, logs).teacherFollowUps).toEqual({ count: 4, lastSentAt: at(7).toISOString() });
+});
 test('legacy evidence is isolated per administrator and bounded by replacement creation', () => {
   const result = approvalHistory([row('a', { status: 'REDIRECTED', decidedAt: at(4) }), row('b', { createdAt: at(5), redirectedFromId: 'a' })],
     [log('admin_approval', 2), log('admin_approval_reminder', 3), log('admin_approval', 6, true, { toEmail: 'b@example.test' })]);

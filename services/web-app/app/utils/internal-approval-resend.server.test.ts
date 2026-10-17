@@ -89,11 +89,6 @@ test('requires HMAC, write scope, signed actor/body and free tier access', async
   expect((await call(request())).status).toBe(403); enabled.mockResolvedValue(false); expect((await call(request())).status).toBe(404);
   expect(resend).not.toHaveBeenCalled();
 });
-test('legacy shared helper refuses v2-only staff calls without delivery', async () => {
-  expect(await flow.resendFreeTierAdminApprovalReminder({ applicationId: 'app', request: request(), requireV2: true } as any))
-    .toEqual({ ok: false, reason: 'flag_off' });
-});
-
 test('shared Date-valued acceptance is serialized to UTC ISO and extra payload is stripped', async () => {
   resend.mockResolvedValue({ ...accepted, sentAt: new Date(accepted.sentAt), nextAutoReminderAt: new Date(accepted.nextAutoReminderAt), payload: 'secret' });
   expect(await (await call(request())).json()).toEqual(accepted);

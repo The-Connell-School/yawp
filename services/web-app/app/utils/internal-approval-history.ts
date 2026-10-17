@@ -35,9 +35,15 @@ export function approvalHistory(approvals: ApprovalHistoryRow[], emails: Approva
   const reminderCount = Math.max(reminders.length, (current?.reminderCount ?? 0)
     + (current?.lastReminderAt ? reminders.filter(log => log.createdAt > current.lastReminderAt!).length : 0));
   const followUps = emails.filter(log => log.success && log.kind === 'teacher_followup').sort(order);
-  const persistedTeacherCounts = rows.some(row => row.teacherFollowUpCount !== undefined);
   const latestTeacher = rows.map(row => row.lastTeacherFollowUpAt).filter((at): at is Date => !!at)
     .sort((a, b) => a.getTime() - b.getTime()).at(-1);
+  const latestTeacherEvidence = followUps.at(-1)?.createdAt;
+  const teacherCount = Math.max(followUps.length, rows.reduce((sum, row, index) => {
+    const next = rows[index + 1];
+    const accepted = followUps.filter(log => log.createdAt >= row.createdAt && (!next || log.createdAt < next.createdAt));
+    return sum + Math.max(accepted.length, (row.teacherFollowUpCount ?? 0)
+      + (row.lastTeacherFollowUpAt ? accepted.filter(log => log.createdAt > row.lastTeacherFollowUpAt!).length : 0));
+  }, 0));
   return {
     adminRequest: current ? {
       currentApprovalId: current.id, adminName: current.adminName, adminEmail: current.adminEmail,
@@ -52,8 +58,8 @@ export function approvalHistory(approvals: ApprovalHistoryRow[], emails: Approva
       autoRemindersStopped: current.autoRemindersStopped ?? false,
       stopReason: stop(current.stopReason), needsManualFollowUp: current.needsManualFollowUp ?? false,
     } : null,
-    teacherFollowUps: { count: persistedTeacherCounts ? rows.reduce((sum, row) => sum + (row.teacherFollowUpCount ?? 0), 0) : followUps.length,
-      lastSentAt: iso(persistedTeacherCounts ? latestTeacher : followUps.at(-1)?.createdAt) },
+    teacherFollowUps: { count: teacherCount,
+      lastSentAt: iso(latestTeacherEvidence && (!latestTeacher || latestTeacherEvidence > latestTeacher) ? latestTeacherEvidence : latestTeacher) },
     forwards: rows.flatMap(replacement => {
       const previous = rows.find(row => row.id === replacement.redirectedFromId);
       return previous ? [{ approvalId: previous.id, fromAdminName: previous.adminName, fromAdminEmail: previous.adminEmail,
