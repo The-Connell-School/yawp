@@ -15,6 +15,19 @@ import {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("Yawp project agent CLI", () => {
+  test("advertises each guided tour profile once in capabilities and both help pages", () => {
+    const profiles = ["guided-tours-unit", "guided-tours-db", "guided-tours-browser"];
+    const advertised = capabilities().proofProfiles;
+    for (const profile of profiles)
+      expect(advertised.filter((value) => value === profile)).toHaveLength(1);
+    for (const args of [["--help"], ["test", "--help"]]) {
+      const result = spawnSync(path.join(root, "bin/project"), args, {
+        cwd: root, encoding: "utf8", timeout: 10000, env: { ...process.env, CI: "1" },
+      });
+      expect(result.status).toBe(0);
+      for (const profile of profiles) expect(result.stdout).toContain(profile);
+    }
+  });
   test("advertises onboarding profiles in capabilities and CLI help", () => {
     const profiles = ["free-tier-approval-migration", "free-tier-locked-preview-unit", "free-tier-locked-preview-db", "free-tier-locked-preview-browser", "free-tier-class-step-unit", "free-tier-class-step-browser", "free-tier-welcome-unit", "free-tier-welcome-browser", "free-tier-welcome-live-browser", "free-tier-welcome-db"];
     const result = spawnSync(path.join(root, "bin/project"), ["test", "--help"], {
@@ -97,6 +110,8 @@ describe("Yawp project agent CLI", () => {
     expect(capabilities().proofProfiles).toContain("internal-grade-declines");
     expect(capabilities().proofProfiles).toContain("internal-free-tier-limits");
     expect(capabilities().proofProfiles).toContain("internal-class-code-duplicates");
+    expect(capabilities().proofProfiles).toContain("internal-approvals");
+    expect(capabilities().proofProfiles).toContain("internal-approvals-integration");
     expect(capabilities().proofProfiles).toContain("internal-class-code-duplicates-integration");
     expect(capabilities().proofProfiles).toContain("internal-free-tier-limits-integration");
     expect(capabilities().proofProfiles).toContain("internal-grade-declines-integration");
