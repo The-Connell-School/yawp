@@ -67,6 +67,39 @@ export function shouldRenameLesson({
   teacherNamedIt: boolean;
 }): string | null {
   if (teacherNamedIt) return null;
-  if (priorReplies.some(looksLikeLessonPlan)) return null;
+  if (priorReplies.some((prior) => looksLikeLessonPlan(prior))) return null;
   return deriveLessonName(reply);
+}
+
+/**
+ * The name a lesson gets the moment it is created: the teacher's first message,
+ * whitespace collapsed, cut at 57 characters. It is a placeholder until the
+ * first plan names the lesson.
+ */
+export function firstMessageTitle(message: string): string {
+  const trimmed = message.trim().replace(/\s+/g, ' ');
+  if (trimmed.length <= 60) return trimmed || 'New lesson';
+  return `${trimmed.slice(0, 57)}…`;
+}
+
+/**
+ * Whether the lesson's name is still that placeholder (Brian's review, B5), so
+ * the stack screen can ask for a name instead of showing the teacher's raw
+ * first message as though it were one.
+ */
+export function nameIsProvisional({
+  title,
+  packetTitle,
+  firstUserMessage,
+  unitDay,
+}: {
+  title: string;
+  packetTitle: string | null;
+  firstUserMessage: string | null;
+  unitDay: number | null;
+}): boolean {
+  if (packetTitle?.trim()) return false;
+  if (unitDay !== null) return false;
+  if (firstUserMessage === null) return title === 'New lesson';
+  return title === firstMessageTitle(firstUserMessage);
 }

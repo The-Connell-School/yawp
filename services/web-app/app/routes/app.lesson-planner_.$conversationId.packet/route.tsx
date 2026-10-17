@@ -3,6 +3,7 @@ import {
   Link,
   useFetcher,
   useLoaderData,
+  useRevalidator,
   type LoaderFunctionArgs,
 } from 'react-router';
 import {
@@ -14,6 +15,7 @@ import {
   Rows,
   BookMarked,
   PenLine,
+  Trash2,
 } from 'lucide-react';
 import {
   KIND_LABEL,
@@ -22,6 +24,15 @@ import {
   type ResourceFilter,
 } from './resource-index';
 import { MaterialRichEditor } from './material-rich-editor';
+import {
+  StackList,
+  type StackListItem,
+} from '~/components/lesson-planner/stack-list';
+import {
+  StackUndoToast,
+  useStackRemoval,
+} from '~/components/lesson-planner/use-stack-removal';
+import { stackEntryKey } from '~/domain/lesson-planner/stack-order';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/utils/misc';
 import { MarkdownContent } from '~/components/ai-chat/assistant-markdown';
@@ -42,9 +53,48 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 
 export default function LessonPacketRoute() {
-  const { conversationId, packet, packetTitleValue, published } =
-    useLoaderData<typeof loader>();
+  const {
+    conversationId,
+    packet,
+    packetTitleValue,
+    published,
+    nameIsProvisional,
+    reviewFlags,
+    stackDetails,
+    periodMinutes,
+  } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
+  const revalidator = useRevalidator();
+  const stackV2 = reviewFlags.stackV2;
+
+  // Removing a piece from the stack, right here (Brian's review, B2), with an
+  // Undo rather than a dialog. Shared with the stack panel beside the chat.
+  const {
+    hiddenIds,
+    undoable,
+    remove: removeSection,
+    undo: undoRemoval,
+  } = useStackRemoval({
+    conversationId,
+    onCommitted: () => revalidator.revalidate(),
+  });
+  // The teacher's order while it is on its way to the server (Brian's run 2,
+  // A1). The loader's own order takes over again once it has caught up.
+  const reorderFetcher = useFetcher();
+  const [localOrder, setLocalOrder] = useState<string[] | null>(null);
+  const loadedOrder = packet.sections
+    .map((section) => stackEntryKey(section))
+    .join('|');
+  useEffect(() => {
+    setLocalOrder(null);
+  }, [loadedOrder]);
+  function reorderStack(keys: string[]) {
+    setLocalOrder(keys);
+    reorderFetcher.submit(
+      { intent: 'reorder', conversationId, order: keys.join(',') },
+      { method: 'post', action: '/api/domain/lesson-planner/packet' }
+    );
+  }
   const [view, setView] = useState<'full' | 'outline' | 'handout'>('full');
   // Pieces the teacher does not want in students' hands this time. Nothing is
   // deleted — the handout is a reading of the packet, so it stays current.
@@ -83,6 +133,11 @@ export default function LessonPacketRoute() {
     return `/app/lesson-planner/${conversationId}/packet.pdf${
       query ? `?${query}` : ''
     }`;
+  }
+
+  /** The concise lesson plan (Brian's run 2, D1, D2). */
+  function lessonPlanHref(extension: 'docx' | 'pdf') {
+    return `/app/lesson-planner/${conversationId}/plan.${extension}`;
   }
 
   /** The stacked lesson packet — every filed resource, not the tab on screen. */
@@ -132,10 +187,33 @@ export default function LessonPacketRoute() {
     );
   }
 
+  const orderedSections = localOrder
+    ? [...packet.sections].sort(
+        (a, b) =>
+          localOrder.indexOf(stackEntryKey(a)) -
+          localOrder.indexOf(stackEntryKey(b))
+      )
+    : packet.sections;
+  const shownSections = orderedSections.filter(
+    (section) => !hiddenIds.includes(section.id)
+  );
+  // Brian's run 2 (A2): no filters under stack v2; the stack is one list.
   const visibleSections =
-    filter === 'all'
-      ? packet.sections
-      : packet.sections.filter((section) => section.kind === filter);
+    stackV2 || filter === 'all'
+      ? shownSections
+      : shownSections.filter((section) => section.kind === filter);
+  const minutesByAnchor = new Map(
+    packet.outline.map((entry) => [entry.anchor, entry.minutes])
+  );
+  const stackItems: StackListItem[] = shownSections.map((section) => ({
+    key: stackEntryKey(section),
+    id: section.id,
+    origin: section.origin,
+    title: section.title,
+    kind: section.kind,
+    label: stackDetails[section.id]?.label,
+    minutes: minutesByAnchor.get(section.anchor) ?? null,
+  }));
 
   // Every student-facing piece, and the subset actually going in the handout.
   const allHandoutParts = buildStudentHandout({ packet }).parts;
@@ -227,25 +305,52 @@ export default function LessonPacketRoute() {
                 )}
               >
                 <FileText size={14} />
-                Student handout
+                {stackV2 ? 'Create handouts' : 'Student handout'}
               </button>
             </div>
-            <Button type="button" size="sm" asChild>
+            {reviewFlags.planExportV2 && view !== 'handout' ? (
+              // Brian's run 2 (D1, D2): the concise plan, for Word and Google
+              // Docs first, so teachers can add their standards.
+              <>
+                <Button type="button" size="sm" asChild>
+                  <a href={lessonPlanHref('docx')} download data-testid="plan-docx">
+                    <FileDown size={15} className="mr-1.5" />
+                    Lesson plan for Word / Google Docs
+                  </a>
+                </Button>
+                <Button type="button" size="sm" variant="outline" asChild>
+                  <a href={lessonPlanHref('pdf')} download data-testid="plan-pdf">
+                    Lesson plan (PDF)
+                  </a>
+                </Button>
+              </>
+            ) : null}
+            <Button
+              type="button"
+              size="sm"
+              variant={reviewFlags.planExportV2 && view !== 'handout' ? 'ghost' : 'default'}
+              asChild
+            >
               <a
                 data-testid="packet-save-pdf"
-                href={
-                  view === 'handout' ? pdfHref() : fullPacketPdfHref()
-                }
+                href={view === 'handout' ? pdfHref() : fullPacketPdfHref()}
                 download
                 aria-disabled={packet.sections.length === 0}
               >
                 <FileDown size={15} className="mr-1.5" />
-                Print / Save as PDF
+                {reviewFlags.planExportV2 && view !== 'handout'
+                  ? 'Full packet (PDF)'
+                  : 'Download PDF'}
               </a>
             </Button>
           </div>
         </div>
 
+        {reviewFlags.planExportV2 ? (
+          <p className="-mt-4 mb-4 text-right text-xs text-muted-foreground print:hidden">
+            In Google Docs: File, then Open, then Upload.
+          </p>
+        ) : null}
         <div className="mb-4 print:hidden">
           <label
             htmlFor="packet-title"
@@ -257,7 +362,12 @@ export default function LessonPacketRoute() {
             id="packet-title"
             name="packetTitle"
             defaultValue={packetTitleValue}
-            placeholder={packet.title}
+            placeholder={
+              stackV2 && nameIsProvisional ? 'Name this lesson' : packet.title
+            }
+            aria-describedby={
+              stackV2 && nameIsProvisional ? 'packet-title-help' : undefined
+            }
             maxLength={120}
             className="w-full rounded-lg border bg-background px-3 py-2 text-base font-medium"
             onBlur={(event) =>
@@ -271,17 +381,58 @@ export default function LessonPacketRoute() {
               )
             }
           />
+          {stackV2 && nameIsProvisional ? (
+            <p
+              id="packet-title-help"
+              className="mt-1 text-xs text-muted-foreground"
+            >
+              We'll name it from your plan, or type one.
+            </p>
+          ) : null}
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] print:block">
           {packet.sections.length > 0 ? (
             <aside className="lg:sticky lg:top-6 lg:self-start print:hidden">
-              <ResourceIndex
-                entries={packet.outline}
-                filter={filter}
-                onFilter={setFilter}
-                onJump={jumpTo}
-              />
+              {stackV2 ? (
+                <nav aria-label="Lesson contents">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Your stack
+                  </p>
+                  <p className="mb-2 text-xs text-muted-foreground">
+                    Drag to put the lesson in order. Changes save themselves.
+                  </p>
+                  <StackList
+                    items={stackItems}
+                    onReorder={reorderStack}
+                    onRemove={removeSection}
+                    onJump={(item) => jumpTo(`resource-${item.id}`)}
+                  />
+                  <BuildFromStack
+                    conversationId={conversationId}
+                    lessonPlanHref={
+                      reviewFlags.planExportV2
+                        ? lessonPlanHref('docx')
+                        : fullPacketPdfHref()
+                    }
+                    lessonPlanLabel={
+                      reviewFlags.planExportV2
+                        ? 'Lesson plan for Word / Google Docs'
+                        : 'Download the lesson plan (PDF)'
+                    }
+                    hasDeck={packet.sections.some(
+                      (section) => section.deck || section.kind === 'slides'
+                    )}
+                  />
+                </nav>
+              ) : (
+                <ResourceIndex
+                  entries={packet.outline}
+                  filter={filter}
+                  onFilter={setFilter}
+                  onJump={jumpTo}
+                />
+              )}
             </aside>
           ) : null}
 
@@ -291,7 +442,9 @@ export default function LessonPacketRoute() {
               <div className="flex items-baseline gap-2">
                 <Lightbulb size={18} className="shrink-0 text-primary" />
                 <h1 className="text-xl font-semibold leading-tight">
-                  {packet.title}
+                  {stackV2 && nameIsProvisional
+                    ? 'Untitled lesson'
+                    : packet.title}
                 </h1>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -303,6 +456,22 @@ export default function LessonPacketRoute() {
                   .filter(Boolean)
                   .join(' · ')}
               </p>
+              {stackV2 && periodMinutes ? (
+                // Brian's run 2 (B2): the stack says when the lesson runs long.
+                <p
+                  data-testid="stack-time"
+                  className={cn(
+                    'mt-1 text-sm print:hidden',
+                    packet.totalMinutes > periodMinutes
+                      ? 'font-medium text-amber-700 dark:text-amber-300'
+                      : 'text-muted-foreground'
+                  )}
+                >
+                  {packet.totalMinutes > periodMinutes
+                    ? `Planned ${packet.totalMinutes} min for a ${periodMinutes}-minute period: ${packet.totalMinutes - periodMinutes} over. Remove or shorten a piece to fit.`
+                    : `Period: ${periodMinutes} min`}
+                </p>
+              ) : null}
             </header>
 
             {packet.sections.length === 0 ? (
@@ -352,6 +521,9 @@ export default function LessonPacketRoute() {
                     Check what belongs in the one combined handout below, or
                     download any piece on its own instead.
                   </p>
+                  {stackV2 ? (
+                    <MakeUpLink conversationId={conversationId} />
+                  ) : null}
                   <div className="flex flex-col gap-1.5">
                     {allHandoutParts.map((part) => {
                       const isIn = !excluded.includes(part.id);
@@ -448,7 +620,9 @@ export default function LessonPacketRoute() {
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <span className="inline-flex items-center gap-1 rounded-full bg-foreground/5 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground print:hidden">
                         <KindIcon kind={section.kind} size={11} />
-                        {KIND_LABEL[section.kind]}
+                        {/* "Class Starter", not "Handout" (Brian's run 2). */}
+                        {stackDetails[section.id]?.label ??
+                          KIND_LABEL[section.kind]}
                       </span>
                       {section.edited ? (
                         <span
@@ -459,7 +633,9 @@ export default function LessonPacketRoute() {
                           Edited
                         </span>
                       ) : null}
-                      <h2 className="min-w-0 flex-1 text-base font-semibold">
+                      {/* A floor on the name's width, so the controls wrap
+                          to their own line instead of squeezing it. */}
+                      <h2 className="min-w-[14rem] flex-1 text-base font-semibold">
                         <input
                           aria-label={`Name for ${section.title}`}
                           defaultValue={section.title}
@@ -473,7 +649,12 @@ export default function LessonPacketRoute() {
                       {/* Only a filed material has its own content to edit — a
                           kept reply is a turn of the conversation, not one
                           artifact with a place to save an edit back to. */}
+                      {/* Never a deck: its slides are not prose, and the text
+                          box saving over them is what wiped one (Brian's run
+                          2). The deck card's own Edit opens the deck editor. */}
                       {section.origin === 'material' &&
+                      section.kind !== 'slides' &&
+                      !section.deck &&
                       editingId !== section.id ? (
                         <button
                           type="button"
@@ -483,6 +664,47 @@ export default function LessonPacketRoute() {
                         >
                           <PenLine size={13} />
                           Edit
+                        </button>
+                      ) : null}
+                      {stackV2 && section.origin === 'reply' ? (
+                        // Brian's run 2 (E3): a lesson kept whole the old
+                        // way becomes its steps and framings, each its own.
+                        <button
+                          type="button"
+                          data-testid="section-split"
+                          onClick={() =>
+                            fetcher.submit(
+                              { intent: 'split-kept', conversationId, messageId: section.id },
+                              { method: 'post', action: '/api/domain/lesson-planner/packet' }
+                            )
+                          }
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground print:hidden"
+                        >
+                          <Rows size={13} />
+                          Split into pieces
+                        </button>
+                      ) : null}
+                      {stackDetails[section.id]?.create ? (
+                        <Link
+                          to={stackDetails[section.id]!.create!.href}
+                          data-testid="stack-create-assignment"
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary transition hover:bg-primary/15 print:hidden"
+                        >
+                          <PenLine size={13} />
+                          {stackDetails[section.id]!.create!.label}
+                        </Link>
+                      ) : null}
+                      {stackV2 ? (
+                        <button
+                          type="button"
+                          onClick={() => removeSection(section)}
+                          data-testid="section-remove"
+                          aria-label={`Remove ${section.title} from the stack`}
+                          title="Remove from stack"
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive print:hidden"
+                        >
+                          <Trash2 size={13} />
+                          Remove
                         </button>
                       ) : null}
                       <a
@@ -506,6 +728,8 @@ export default function LessonPacketRoute() {
                       <SectionContent
                         section={section}
                         conversationId={conversationId}
+                        deckV2={reviewFlags.deckV2}
+                        periodMinutes={periodMinutes}
                       />
                     )}
                   </section>
@@ -515,6 +739,7 @@ export default function LessonPacketRoute() {
           </article>
         </div>
       </div>
+      <StackUndoToast undoable={undoable} onUndo={undoRemoval} />
     </section>
   );
 }
@@ -526,9 +751,12 @@ export default function LessonPacketRoute() {
 function SectionContent({
   section,
   conversationId,
+  deckV2 = false,
+  periodMinutes = null,
 }: {
   section: {
     id: string;
+    edited?: boolean;
     content: string;
     audience: 'teacher' | 'student';
     materials: LessonMaterial[];
@@ -536,6 +764,8 @@ function SectionContent({
     deckFailed: boolean;
   };
   conversationId: string;
+  deckV2?: boolean;
+  periodMinutes?: number | null;
 }) {
   // The packet already took the deck out of the prose and parsed it, so there
   // is nothing left to pull apart here.
@@ -550,10 +780,19 @@ function SectionContent({
       {body ? <MarkdownContent content={body} /> : null}
       {section.deck ? (
         <div className={cn(body && 'mt-3')}>
+          {/* The same controls as the chat's deck card (Brian's run 2,
+              item 25): Edit opens the deck editor and comes back here. */}
           <SlideDeckCard
             deck={section.deck}
             presentHref={`/present/${conversationId}/${section.id}`}
             downloadHref={`/present/${conversationId}/${section.id}.pptx`}
+            editHref={
+              deckV2
+                ? `/app/lesson-planner/${conversationId}/deck/${section.id}?from=stack`
+                : null
+            }
+            edited={Boolean(section.edited)}
+            periodMinutes={deckV2 ? periodMinutes : null}
           />
         </div>
       ) : null}
@@ -590,5 +829,65 @@ function SectionContent({
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * The outputs built from the stack, once the sequence is set (Brian's run 2,
+ * A8, item 7). Building goes back to the chat, where the deck or handout
+ * lands as a card like any other; the slide deck comes last.
+ */
+function BuildFromStack({
+  conversationId,
+  lessonPlanHref,
+  lessonPlanLabel,
+  hasDeck,
+}: {
+  conversationId: string;
+  lessonPlanHref: string;
+  lessonPlanLabel: string;
+  hasDeck: boolean;
+}) {
+  const build = (request: string) =>
+    `/app/lesson-planner?c=${conversationId}&build=${request}`;
+  return (
+    <>
+      <div
+        data-testid="build-from-stack"
+        className="mt-4 flex flex-col gap-1.5 rounded-xl border border-primary/25 bg-primary/[0.04] p-3 print:hidden"
+      >
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          When the sequence is set
+        </p>
+        <Button size="sm" variant="outline" className="h-auto w-full justify-start whitespace-normal py-1.5 text-left" asChild>
+          <Link to={build('handout')}>Create handouts from this stack</Link>
+        </Button>
+        <Button size="sm" variant="outline" className="h-auto w-full justify-start whitespace-normal py-1.5 text-left" asChild>
+          <a href={lessonPlanHref} download>
+            {lessonPlanLabel}
+          </a>
+        </Button>
+        <Button size="sm" className="h-auto w-full justify-start whitespace-normal py-1.5 text-left" asChild>
+          <Link to={build(hasDeck ? 'rebuild-deck' : 'deck')}>
+            {hasDeck
+              ? 'Rebuild the slide deck from this stack'
+              : 'Create a slide deck from this stack'}
+          </Link>
+        </Button>
+      </div>
+      <MakeUpLink conversationId={conversationId} />
+    </>
+  );
+}
+
+/** Brian's run 2 (items 37, 38): the lesson, for a student who missed it. */
+function MakeUpLink({ conversationId }: { conversationId: string }) {
+  return (
+    <Link
+      to={`/app/lesson-planner?c=${conversationId}&build=makeup`}
+      className="mt-2 block text-xs font-medium text-primary hover:underline print:hidden"
+    >
+      Send this lesson to a student who missed class
+    </Link>
   );
 }

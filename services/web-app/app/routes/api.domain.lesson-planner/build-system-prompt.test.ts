@@ -12,6 +12,7 @@ import {
 } from '~/domain/assignment-types/exit-ticket';
 import {
   buildLessonPlannerSystemPrompt,
+  buildLessonPlannerSystemPromptBlocks,
   RECOMMENDED_LESSON_PLANNER_PROMPTS,
 } from './build-system-prompt';
 
@@ -577,7 +578,7 @@ describe('buildLessonPlannerSystemPrompt — bringing material in', () => {
 
   test('warns that an invented address costs them the material', () => {
     expect(prompt.toLowerCase()).toContain(
-      'yawp deletes any block whose address did not come back from a tool'
+      'yawp! deletes any block whose address did not come back from a tool'
     );
   });
 });
@@ -639,7 +640,7 @@ describe('buildLessonPlannerSystemPrompt — when to ask the length', () => {
     );
     // The app strips it either way; the model should know rather than be
     // surprised that its control vanished.
-    expect(lower).toContain('yawp removes the control');
+    expect(lower).toContain('yawp! removes the control');
   });
 });
 
@@ -1035,9 +1036,10 @@ describe('buildLessonPlannerSystemPrompt — no bare prompt ids in a unit overvi
     );
   });
 
-  test('requires the cluster preview to bullet id and real text together', () => {
+  test('requires the cluster preview to bullet the real text, with the ids kept out of sight', () => {
     expect(lower).toContain('bullet the cluster instead, one line per day');
-    expect(lower).toContain("day 1 — fw-001: 'how do people gain power?'");
+    expect(lower).toContain("day 1 — 'how do people gain power?'");
+    expect(lower).toContain('the ids stay in the blocks, out of sight');
   });
 
   test('extends the general no-bare-citation rule to a multi-day overview', () => {
@@ -1354,5 +1356,342 @@ describe('writing fundamentals', () => {
     );
     expect(entry).toBeTruthy();
     expect(entry!.prompt.toLowerCase()).toContain('practice');
+  });
+});
+
+describe("buildLessonPlannerSystemPrompt — Brian's review: who the planner is", () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+  const lower = prompt.toLowerCase();
+
+  test('is a research-grounded pedagogy expert, not a fad follower', () => {
+    expect(lower).toContain('current research on how students actually learn');
+    expect(lower).toContain('not on outdated theories or fads');
+  });
+
+  test('knows real rooms and is on the teacher’s side', () => {
+    expect(lower).toContain('department chair');
+    expect(lower).toContain('phones');
+    expect(lower).toContain('never talk down to the teacher');
+    expect(lower).toContain('never talk down about students');
+  });
+
+  test('teaches new teachers and affirms veterans', () => {
+    expect(lower).toContain('new teacher learns why');
+    expect(lower).toContain('veteran');
+  });
+
+  test('never requires and never tries to convince', () => {
+    expect(lower).toContain('never require anything');
+    expect(lower).toContain('the teacher chooses');
+  });
+
+  test('takes pushback in stride and invites the teacher back in', () => {
+    expect(prompt).toContain(
+      'Tell me about your class or your school. That might help us here.'
+    );
+    expect(lower).toContain('never give the rudeness back');
+  });
+
+  test('knows texts and courses, and treats accuracy as non-negotiable', () => {
+    expect(prompt).toContain('AP Literature');
+    expect(lower).toContain('special education');
+    expect(lower).toContain('names, quotes, and details exactly right');
+  });
+
+  test('answers questions about itself briefly and moves on', () => {
+    expect(prompt).toContain(
+      "I'm really just an expert in pedagogy, methodology, and lesson planning, and that's where my identity ends."
+    );
+    expect(lower).toContain('do not hand the question back');
+  });
+
+  test('takes the high road on students and points personal struggles to a real person', () => {
+    expect(lower).toContain('take the high road');
+    expect(lower).toContain('a real person in their life');
+  });
+
+  test('is a joyful co-producer and celebrates when the work is done', () => {
+    expect(lower).toContain('co-producer');
+    expect(lower).toContain('celebrate');
+    expect(lower).toContain('never probe');
+  });
+});
+
+describe("buildLessonPlannerSystemPrompt — Brian's review: offer, don't prescribe", () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+    exitTicketsAvailable: true,
+  });
+  const lower = prompt.toLowerCase();
+
+  test('qualifies every teaching move as an option', () => {
+    expect(lower).toContain('if your students enjoy');
+    expect(lower).toContain('never present a practice as the one right way');
+    // Brian's own example of a qualified tip.
+    expect(lower).toContain('who is comfortable reading aloud');
+  });
+
+  test('keeps the direct "what to push for" voice about the text', () => {
+    expect(lower).toContain('what to push for');
+  });
+
+  test('leaves Daily Pages timing to the teacher', () => {
+    expect(lower).toContain('assign it as homework');
+  });
+
+  test('offers three exit tickets, one per focus', () => {
+    expect(lower).toContain('offer three exit tickets');
+    expect(prompt).toContain('understand-text');
+    expect(prompt).toContain('explain-concept');
+    expect(prompt).toContain('ask-question');
+  });
+
+  test('ends a plan on one closing question, not a menu of rounds', () => {
+    expect(prompt).toContain('Want to refine or edit any part of this?');
+  });
+
+  test('gives the session a beginning, a middle, and an end', () => {
+    expect(lower).toContain('a beginning, a middle, and an end');
+    expect(lower).toContain('do not keep moving the goalposts');
+  });
+
+  test('offers framings as separate pieces the teacher can stack', () => {
+    expect(lower).toContain('historical context');
+    expect(lower).toContain('literary context');
+    expect(prompt).toContain('frame-hist');
+  });
+});
+
+describe("buildLessonPlannerSystemPromptBlocks — building from the stack (Brian's review, B6)", () => {
+  const stackContents = [
+    { kind: 'class-starter', title: 'Class Starter: Write about something you carry', content: 'Write about something you carry every day.' },
+    { kind: 'notes', title: 'Historical context', content: 'Vietnam, 1969–70. O’Brien was drafted.' },
+    { kind: 'exit-ticket', title: 'Exit ticket', content: 'What is one thing a soldier carried that weighed nothing?' },
+  ];
+
+  test('hands the model the stack itself, with an order to build from exactly that', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'Connell School',
+      stackContents,
+    });
+    const variable = blocks[1].text;
+    expect(variable).toContain('Build from exactly these pieces');
+    expect(variable).toContain('O’Brien was drafted');
+    expect(variable).toContain('What is one thing a soldier carried');
+    // Kept in order.
+    expect(variable.indexOf('carry every day')).toBeLessThan(
+      variable.indexOf('O’Brien was drafted')
+    );
+  });
+
+  test('keeps the stack out of the cached instructions', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'Connell School',
+      stackContents,
+    });
+    expect(blocks[0].text).not.toContain('O’Brien was drafted');
+  });
+
+  test('says nothing when the stack is empty', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'Connell School',
+      stackContents: [],
+    });
+    expect(blocks[1].text).not.toContain('Build from exactly these pieces');
+  });
+
+  test('caps a huge stack rather than blowing the context', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'Connell School',
+      stackContents: Array.from({ length: 40 }, (_, index) => ({
+        kind: 'handout',
+        title: `Handout ${index}`,
+        content: 'x'.repeat(2000),
+      })),
+    });
+    expect(blocks[1].text.length).toBeLessThan(20_000);
+    expect(blocks[1].text).toContain('trimmed');
+  });
+
+  test('makes a deck built from the stack match the stack’s time', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'Connell School',
+      stackContents,
+    });
+    expect(blocks[1].text.toLowerCase()).toContain('minutes');
+  });
+});
+
+describe("buildLessonPlannerSystemPrompt — intake v2 (Brian's review, A4)", () => {
+  const v1 = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+  const v2 = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+    intakeV2: true,
+  });
+
+  test('asks one decision at a time, class and length before content', () => {
+    const lower = v2.toLowerCase();
+    expect(lower).toContain('one decision per question');
+    expect(lower.indexOf('which class')).toBeLessThan(lower.indexOf('how to fill the time'));
+  });
+
+  test('teaches the classes and choose controls', () => {
+    expect(v2).toContain('  classes');
+    expect(v2).toContain('choose: ');
+  });
+
+  test('never guesses a grade, a class, or a length', () => {
+    const lower = v2.toLowerCase();
+    expect(lower).toContain('never guess the grade');
+    expect(lower).toContain('never write a class, a grade, or a period length into suggestions');
+    expect(lower).not.toContain('offer your best guess alongside them');
+  });
+
+  test('a choose option holds one decision, never a class or a length', () => {
+    expect(v2.toLowerCase()).toContain('each `choose:` option answers only how to fill the time');
+  });
+
+  test('leaves the original intake prompt alone when the flag is off', () => {
+    expect(v1).toContain('offer your best guess alongside them');
+    expect(v1).not.toContain('choose: ');
+  });
+
+  test('the cached core follows the flag too', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'Connell School',
+      intakeV2: true,
+    });
+    expect(blocks[0].text).toContain('choose: ');
+  });
+});
+
+describe("buildLessonPlannerSystemPrompt — a deck's minutes match the lesson (Brian's review)", () => {
+  test('tells it to add the slide minutes up to the lesson length before handing over', () => {
+    const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'Connell School' });
+    expect(prompt.toLowerCase()).toContain('a 90-minute lesson gets a deck whose slide minutes total 90');
+  });
+});
+
+describe("buildLessonPlannerSystemPrompt — the app owns every file (Brian's run 2, S2)", () => {
+  test('never offers to print, download or export; points at the stack instead', () => {
+    const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'Connell School' });
+    expect(prompt).toContain(
+      'Never offer to print, download, export, or save anything as a file'
+    );
+    expect(prompt).toContain('the stack page');
+  });
+
+  test('the stack section no longer asks the model to print a lesson plan', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'Connell School',
+      stackContents: [{ kind: 'notes', title: 'Framing', content: 'Vietnam.' }],
+    });
+    expect(blocks[1].text).not.toContain('a printed lesson plan');
+  });
+});
+
+describe("buildLessonPlannerSystemPrompt — prompt ids stay out of sight (Brian's run 2, A6)", () => {
+  const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'Connell School' });
+
+  test('ids go only in the block header, never in prose, slides, handouts or suggestions', () => {
+    expect(prompt).toContain(
+      'Never show a prompt id (FW-021, sf-ev-03) to the teacher'
+    );
+  });
+
+  test('no longer models citing an id inline in a step', () => {
+    expect(prompt).not.toContain('Daily Pages prompt FW-001:');
+    expect(prompt).not.toContain('cite its prompt id');
+    expect(prompt).not.toContain('"Day 1 — FW-001:');
+  });
+});
+
+describe("buildLessonPlannerSystemPromptBlocks — the lesson's length, every turn (Brian's run 2, B1)", () => {
+  test('names the length and the class, outside the cached instructions', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'Connell School',
+      lessonLength: { minutes: 50, classLabel: 'English 11 · Period 5' },
+    });
+    expect(blocks[1].text).toContain('This lesson is 50 minutes (English 11 · Period 5).');
+    expect(blocks[1].text).toContain('Every plan and every slide deck fits 50 minutes');
+    expect(blocks[0].text).not.toContain('This lesson is 50 minutes');
+  });
+
+  test('says nothing when the length is not known yet', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'Connell School',
+    });
+    expect(blocks[1].text).not.toContain('This lesson is');
+  });
+
+  test('a deck built from the stack fits the lesson, not the pieces’ own total', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'Connell School',
+      stackContents: [{ kind: 'notes', title: 'Framing', content: 'Vietnam.' }],
+    });
+    expect(blocks[1].text).not.toContain('not to a period you assumed');
+    expect(blocks[1].text).toContain("slides' minutes total the lesson's length");
+    expect(blocks[1].text).toContain('say which pieces to cut');
+  });
+
+  test('add it up before handing over a plan or a deck, and say what was cut', () => {
+    const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'Connell School' });
+    expect(prompt).toContain(
+      'Before you hand over a plan or a deck, add up its minutes and compare them to the lesson length'
+    );
+  });
+});
+
+describe("buildLessonPlannerSystemPrompt — swapping a class starter (Brian's run 2, E1)", () => {
+  test('alternatives come back as blocks, never as bullets', () => {
+    const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'Connell School' });
+    expect(prompt).toContain(
+      'When the teacher asks to swap the class starter or see other prompts, give each alternative as its own `yawp-daily-pages` block'
+    );
+    expect(prompt).toContain('never as bullets or prose');
+  });
+});
+
+describe("buildLessonPlannerSystemPrompt — the deck stays on today (Brian's run 2, C1, C5)", () => {
+  const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'Connell School' });
+
+  test("covers only this day's reading, never later chapters or other stories", () => {
+    expect(prompt).toContain(
+      "A deck covers only this lesson's reading and material: the pages, chapter or story assigned for this day"
+    );
+    expect(prompt).toContain('Do not bring in later chapters, other stories in the book');
+  });
+
+  test('no two slides in a row share a title', () => {
+    expect(prompt).toContain('No two slides in a row share a title');
+  });
+
+  test('no time instructions on the slide face', () => {
+    expect(prompt).toContain('Slide text never carries a time instruction');
+  });
+});
+
+describe("buildLessonPlannerSystemPrompt — one heading per step (Brian's run 2, A3)", () => {
+  test('each step of a plan is its own timed heading', () => {
+    const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'Connell School' });
+    expect(prompt).toContain('Give every step of a plan its own `##` heading with its minutes');
   });
 });

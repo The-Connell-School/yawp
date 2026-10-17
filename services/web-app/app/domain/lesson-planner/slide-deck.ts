@@ -487,7 +487,7 @@ export function parseSlideDeck(content: string): ParsedSlideDeck | null {
  * on the page.
  */
 export const FAILED_DECK_NOTE =
-  '[The slide deck you wrote here failed validation. Yawp never rendered it and the teacher never saw it. If they ask about the deck, believe them, apologise briefly, and build it again from scratch — shorter and simpler. Do not refer back to this one as if it exists.]';
+  '[The slide deck you wrote here failed validation. YAWP! never rendered it and the teacher never saw it. If they ask about the deck, believe them, apologise briefly, and build it again from scratch — shorter and simpler. Do not refer back to this one as if it exists.]';
 
 export function markFailedDecks(content: string): string {
   const outcome = readSlideDeck(content);

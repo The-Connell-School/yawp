@@ -1,7 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  DONE_FOR_TODAY_SUGGESTION,
   FOLLOW_ON_SUGGESTIONS,
+  FROM_STACK_SUGGESTIONS,
+  asksForDeck,
+  asksToSwapStarter,
+  isFileActionSuggestion,
   looksLikeLessonPlan,
+  SWAP_STARTER_SUGGESTION,
   mentionsRoomPersonality,
   STANDARD_OPENING_SUGGESTION,
   withStandardSuggestions,
@@ -317,5 +323,166 @@ describe('withStandardSuggestions — a plan on the very first reply', () => {
         deliveredPlan: false,
       })[0]
     ).toBe(STANDARD_OPENING_SUGGESTION);
+  });
+});
+
+describe("withStandardSuggestions — a clear end (Brian's review, D2)", () => {
+  test('offers "I\'m done for today" once the lesson has its deck or handout', () => {
+    const chips = withStandardSuggestions(['A version for period 5'], {
+      isOpeningReply: false,
+      deliveredPlan: true,
+      inPacket: { deck: true, handout: true },
+      offerDone: true,
+    });
+    expect(chips.at(-1)).toBe(DONE_FOR_TODAY_SUGGESTION);
+    expect(chips).toContain('A version for period 5');
+  });
+
+  test('also after the reply that built the deck', () => {
+    const chips = withStandardSuggestions([], {
+      isOpeningReply: false,
+      produced: { deck: true },
+      offerDone: true,
+    });
+    expect(chips).toEqual([DONE_FOR_TODAY_SUGGESTION]);
+  });
+
+  test('never before anything has been built', () => {
+    const chips = withStandardSuggestions([], {
+      isOpeningReply: false,
+      deliveredPlan: true,
+      offerDone: true,
+    });
+    expect(chips).not.toContain(DONE_FOR_TODAY_SUGGESTION);
+  });
+
+  test('not without the flag', () => {
+    const chips = withStandardSuggestions([], {
+      isOpeningReply: false,
+      produced: { deck: true },
+    });
+    expect(chips).not.toContain(DONE_FOR_TODAY_SUGGESTION);
+  });
+
+  test('keeps its place even when the model filled every slot', () => {
+    const chips = withStandardSuggestions(['a', 'b', 'c', 'd', 'e', 'f'], {
+      isOpeningReply: false,
+      produced: { deck: true, handout: true },
+      offerDone: true,
+    });
+    expect(chips.length).toBeLessThanOrEqual(5);
+    expect(chips.at(-1)).toBe(DONE_FOR_TODAY_SUGGESTION);
+  });
+});
+
+describe("withStandardSuggestions — building from the stack (Brian's review, B6)", () => {
+  test('says "from the stack" once the teacher has filed pieces', () => {
+    const chips = withStandardSuggestions([], {
+      isOpeningReply: false,
+      deliveredPlan: true,
+      stackHasPieces: true,
+    });
+    expect(chips).toContain(FROM_STACK_SUGGESTIONS.deck);
+    expect(chips).toContain(FROM_STACK_SUGGESTIONS.handout);
+    expect(chips).not.toContain(FOLLOW_ON_SUGGESTIONS.deck);
+  });
+
+  test('keeps the original wording with an empty stack', () => {
+    const chips = withStandardSuggestions([], {
+      isOpeningReply: false,
+      deliveredPlan: true,
+    });
+    expect(chips).toContain(FOLLOW_ON_SUGGESTIONS.deck);
+  });
+});
+
+describe("file actions are the app's, never a chip (Brian's run 2, S2)", () => {
+  test.each([
+    'Create Lesson Plan',
+    'Save Lesson Plan as PDF',
+    'Print Lesson Plan',
+    'Download the handout',
+    'Export this to Google Docs',
+    'Save it as a Word document',
+    'Print the slides',
+  ])('"%s" is a file action', (chip) => {
+    expect(isFileActionSuggestion(chip)).toBe(true);
+  });
+
+  test.each([
+    'Build the slide deck for this lesson',
+    'Build the student handout for this lesson',
+    'Make a shorter version for Period 3',
+    'Create a lesson plan on comma splices',
+    'Swap out the class starter prompt',
+    "I'm done for today",
+  ])('"%s" is not', (chip) => {
+    expect(isFileActionSuggestion(chip)).toBe(false);
+  });
+
+  test('a file-action chip is dropped, after a plan and on any other turn', () => {
+    const afterPlan = withStandardSuggestions(
+      ['Save Lesson Plan as PDF', 'Make a version for Period 3'],
+      { isOpeningReply: false, deliveredPlan: true }
+    );
+    expect(afterPlan).not.toContain('Save Lesson Plan as PDF');
+    expect(afterPlan).toContain('Make a version for Period 3');
+
+    const plain = withStandardSuggestions(['Print Lesson Plan', 'Keep going'], {
+      isOpeningReply: false,
+    });
+    expect(plain).toEqual(['Keep going']);
+  });
+});
+
+describe("looksLikeLessonPlan — a plan written with bold steps (Brian's run 2, E4)", () => {
+  const bold =
+    '**Class starter (5 min)** — write about something you carry.\n\n**Read aloud (15 min)** — the first pages.';
+
+  test('two timed bold steps are a plan, under stack v2', () => {
+    expect(looksLikeLessonPlan(bold, { boldSteps: true })).toBe(true);
+    expect(
+      looksLikeLessonPlan('1. **Read aloud** (15 min): the first pages.\n2. **Pair talk** — 8 minutes.', {
+        boldSteps: true,
+      })
+    ).toBe(true);
+  });
+
+  test('flag off: unchanged, headings only', () => {
+    expect(looksLikeLessonPlan(bold)).toBe(false);
+  });
+
+  test('one bold phrase in an answer is not', () => {
+    expect(
+      looksLikeLessonPlan('That is **really** a fair question about the 50 min period.', { boldSteps: true })
+    ).toBe(false);
+  });
+});
+
+describe("swapping the class starter (Brian's run 2, E1)", () => {
+  test('a reply with a class starter offers the swap, in the app\'s words', () => {
+    const chips = withStandardSuggestions(['Swap the starter for another one', 'Keep going'], {
+      isOpeningReply: false,
+      offerStarterSwap: true,
+    });
+    expect(chips).toEqual(['Keep going', SWAP_STARTER_SUGGESTION]);
+  });
+
+  test('knows a swap request when it sees one', () => {
+    expect(asksToSwapStarter(SWAP_STARTER_SUGGESTION)).toBe(true);
+    expect(asksToSwapStarter('Can you give me a different warm-up?')).toBe(true);
+    expect(asksToSwapStarter('Build the slide deck from my stack')).toBe(false);
+  });
+});
+
+describe('asksForDeck', () => {
+  test('a request to build or rebuild the deck', () => {
+    expect(asksForDeck('Build the slide deck from my stack')).toBe(true);
+    expect(asksForDeck('Rebuild the slide deck from my stack, replacing the one in it')).toBe(true);
+    expect(asksForDeck('make me slides for this')).toBe(true);
+  });
+  test('anything else', () => {
+    expect(asksForDeck('Build the student handout from my stack')).toBe(false);
+    expect(asksForDeck('What does slide 3 say?')).toBe(false);
   });
 });

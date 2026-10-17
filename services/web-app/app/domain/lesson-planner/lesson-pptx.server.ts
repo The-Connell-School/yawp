@@ -1,9 +1,9 @@
 /**
  * A deck as a PowerPoint file.
  *
- * Yawp can already project a deck — full screen, arrow keys, notes on the
- * laptop — so this is not about Yawp being unable to show it. It is about the
- * deck leaving Yawp: the classroom desktop nobody is logged into, the
+ * YAWP! can already project a deck — full screen, arrow keys, notes on the
+ * laptop — so this is not about YAWP! being unable to show it. It is about the
+ * deck leaving YAWP!: the classroom desktop nobody is logged into, the
  * substitute who needs Tuesday's slides, the colleague who wants to borrow the
  * lesson, the teacher who wants to add two slides of their own. School AV is
  * PowerPoint-shaped, and a lesson a teacher cannot take with them is a lesson
@@ -16,7 +16,7 @@
 import PptxGenJS from 'pptxgenjs';
 import type { Slide, SlideDeck } from './slide-deck';
 
-/** Yawp's print colour and ink, matched to the packet and the PDF. */
+/** YAWP!'s print colour and ink, matched to the packet and the PDF. */
 const BRAND = 'C05A3E';
 const INK = '1A1A1A';
 const MUTED = '6B7280';
@@ -298,7 +298,7 @@ export async function renderDeckPptx(deck: SlideDeck): Promise<Uint8Array> {
   // whatever opens it.
   pptx.title = deck.title;
   if (deck.subtitle) pptx.subject = deck.subtitle;
-  pptx.company = 'Yawp!';
+  pptx.company = 'YAWP!';
 
   for (const slide of deck.slides) addSlide(pptx, slide);
 

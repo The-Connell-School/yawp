@@ -1,5 +1,5 @@
 /**
- * Database-backed half of the Yawp teaching catalog: the Teacher's Lounge
+ * Database-backed half of the YAWP! teaching catalog: the Teacher's Lounge
  * material a teacher can reach, and the assignment types they can actually
  * assign. Both are scoped exactly the way the corresponding pages scope them,
  * so the planner never offers a teacher something they cannot open.
@@ -189,7 +189,7 @@ export async function readLoungeMaterial(
   const href = `/api/teacher-training-module-resource/${resourceId}`;
   if (!isReadableMaterial(resource)) {
     return {
-      error: `"${resource.name}" is not a format Yawp can open — only .pptx and .docx can be read. Link it by name and say nothing about what is inside it.`,
+      error: `"${resource.name}" is not a format YAWP! can open — only .pptx and .docx can be read. Link it by name and say nothing about what is inside it.`,
     };
   }
 

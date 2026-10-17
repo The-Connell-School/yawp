@@ -119,6 +119,11 @@ describe('internal feature-flag endpoints', () => {
       FLAG,
       'internal_rubrics',
       'free_tier',
+      'lesson_planner_intake_v2',
+      'lesson_planner_stack_v2',
+      'lesson_planner_deck_v2',
+      'lesson_planner_stack_panel',
+      'lesson_planner_plan_export_v2',
       'free-tier-inapp-v2',
       'unified-sign-on',
       'free-tier-onboarding-v2',
@@ -129,12 +134,12 @@ describe('internal feature-flag endpoints', () => {
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[1]).toMatchObject({ key: 'internal_rubrics', label: 'Rubrics from Yawp Internal', mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[2]).toMatchObject({ key: 'free_tier', label: 'Free tier', mode: 'off', orgIds: [], enabled: false });
-    expect(body.flags[3]).toMatchObject({
+    expect(body.flags[8]).toMatchObject({
       key: 'free-tier-inapp-v2', label: 'Free tier in-app v2', mode: 'off', orgIds: [], enabled: false,
       persisted: { mode: 'off', orgIds: [] },
       effective: { mode: 'off', orgIds: [] }, runtimeOverride: null,
     });
-    expect(body.flags[4]).toMatchObject({
+    expect(body.flags[9]).toMatchObject({
       key: 'unified-sign-on', mode: 'off', orgIds: [], enabled: false,
       persisted: { mode: 'off', orgIds: [] },
       effective: { mode: 'off', orgIds: [] }, runtimeOverride: null,
@@ -238,6 +243,11 @@ describe('internal feature-flag endpoints', () => {
       FLAG,
       'internal_rubrics',
       'free_tier',
+      'lesson_planner_intake_v2',
+      'lesson_planner_stack_v2',
+      'lesson_planner_deck_v2',
+      'lesson_planner_stack_panel',
+      'lesson_planner_plan_export_v2',
       'free-tier-inapp-v2',
       'unified-sign-on',
       'free-tier-onboarding-v2',

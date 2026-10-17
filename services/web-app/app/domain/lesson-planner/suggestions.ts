@@ -32,7 +32,84 @@ export const FOLLOW_ON_SUGGESTIONS = {
   handout: 'Build the student handout for this lesson',
 } as const;
 
+/**
+ * Stack v2 (Brian's review, B6): once the teacher has filed pieces, the deck
+ * and handout are built from the stack, and the chip says so.
+ */
+export const FROM_STACK_SUGGESTIONS = {
+  deck: 'Build the slide deck from my stack',
+  handout: 'Build the student handout from my stack',
+} as const;
+
+/**
+ * What the stack page's build links ask the planner for (Brian's review, B6;
+ * run 2, A8). Each arrives in the chat as `?build=<key>` and is sent once.
+ */
+export const BUILD_FROM_STACK_REQUESTS = {
+  deck: FROM_STACK_SUGGESTIONS.deck,
+  handout: FROM_STACK_SUGGESTIONS.handout,
+  // The stack already has a deck: say so, so the planner replaces it rather
+  // than answering that one already exists.
+  'rebuild-deck':
+    'Rebuild the slide deck from my stack, replacing the one in it',
+  // Brian's run 2 (item 37): the lesson for a student who was not there.
+  makeup:
+    'Make a make-up handout from my stack for a student who was absent today. Tell them to go to their Assignments in YAWP! and complete the class starter and Daily Pages assignments.',
+} as const;
+
+export type BuildFromStackRequest = keyof typeof BUILD_FROM_STACK_REQUESTS;
+
+export function isBuildFromStackRequest(
+  value: string | null
+): value is BuildFromStackRequest {
+  return value !== null && Object.hasOwn(BUILD_FROM_STACK_REQUESTS, value);
+}
+
+/**
+ * Stack v2 (Brian's review, D2): a planning session has an end. Once the
+ * lesson has its deck or handout, the teacher can say so in one tap and the
+ * planner wraps up.
+ */
+export const DONE_FOR_TODAY_SUGGESTION = "I'm done for today";
+
+/**
+ * Stack v2 (Brian's run 2, E1): under a class starter, a one-tap way to see
+ * other prompts. The reply to it shows each one as a card with three choices.
+ */
+export const SWAP_STARTER_SUGGESTION = 'Swap out the class starter prompt';
+
+/** Is this teacher message asking for a slide deck to be built? */
+export function asksForDeck(message: string): boolean {
+  return (
+    /\b(build|rebuild|make|create|redo|remake)\b/i.test(message) &&
+    /\b(slide deck|deck|slides)\b/i.test(message)
+  );
+}
+
+/** Is this teacher message asking to swap the class starter? */
+export function asksToSwapStarter(message: string | null | undefined): boolean {
+  if (!message) return false;
+  return /\b(swap|switch|replace|change|different|other)\b/i.test(message) &&
+    /\bclass[- ]starter\b|\bstarter\b|\bwarm[- ]up\b/i.test(message);
+}
+
 const MAX_SUGGESTIONS = 5;
+
+/**
+ * A chip asking for a file: print, download, export, PDF, Word, Google Docs.
+ *
+ * Tapping a chip only sends its words as the teacher's next message, and the
+ * planner cannot hand back a file. Brian clicked "Save Lesson Plan as PDF" and
+ * got a document with a download button that did nothing (run 2, item 33).
+ * Files come from the stack page's own buttons, so a chip like this is never
+ * shown; the chat offers a link to the stack in its place.
+ */
+const FILE_ACTION =
+  /\b(print|printable|download|export|pdf|docx|word (?:doc|document|file)|google docs?|google drive)\b|^\s*(?:create|make|save)\s+(?:a\s+|the\s+|my\s+|this\s+)?lesson\s+plan\s*(?:as\b.*|file|document)?\s*$|\bsave\b.*\bas\b/i;
+
+export function isFileActionSuggestion(suggestion: string): boolean {
+  return FILE_ACTION.test(suggestion);
+}
 
 function normalize(suggestion: string): string {
   return suggestion
@@ -193,9 +270,29 @@ export function withoutPeriodLength(suggestion: string): string {
  * A reply built out of sections, rather than a question or a single answer —
  * which is when "now build the deck" becomes the useful next thing to offer.
  */
-export function looksLikeLessonPlan(body: string): boolean {
-  return [...body.matchAll(/^\s{0,3}#{1,3}\s+\S/gm)].length >= 2;
+export function looksLikeLessonPlan(
+  body: string,
+  {
+    /**
+     * Stack v2: a plan written as bold, timed steps ("**Read aloud (15 min)**")
+     * is still a plan; missing it hid "You don't have to use all of these"
+     * (Brian's run 2, E4).
+     */
+    boldSteps = false,
+  }: { boldSteps?: boolean } = {}
+): boolean {
+  const headings = [...body.matchAll(/^\s{0,3}#{1,3}\s+\S/gm)].length;
+  const timedSteps = boldSteps ? [...body.matchAll(TIMED_BOLD_STEP)].length : 0;
+  return headings + timedSteps >= 2;
 }
+
+const MINUTES = String.raw`\b\d{1,3}\s*(?:-\s*\d{1,3}\s*)?(?:min|minutes)\b`;
+// A line that opens with a bold label and names its minutes, inside the bold
+// ("**Class starter (5 min)**") or just after it ("**Read aloud** (15 min)").
+const TIMED_BOLD_STEP = new RegExp(
+  String.raw`^\s{0,3}(?:(?:[-*+]|\d+[.)])\s+)?\*\*(?:[^*\n]{0,80}?${MINUTES}[^*\n]*\*\*|[^*\n]{2,80}\*\*[^\n]{0,40}?${MINUTES})`,
+  'gim'
+);
 
 const DECK_INTENT = /\b(slide|deck|slides)\b/i;
 const HANDOUT_INTENT = /\b(handout|worksheet|packet for students)\b/i;
@@ -217,6 +314,12 @@ export function withStandardSuggestions(
     inPacket = {},
     /** This reply drew the minutes slider, so it owns the question of length. */
     asksForMinutes = false,
+    /** Stack v2: offer a one-tap way to end the session once something is built. */
+    offerDone = false,
+    /** Stack v2: the teacher has filed pieces, so outputs come from the stack. */
+    stackHasPieces = false,
+    /** Stack v2: this reply offered a class starter, so offer to swap it. */
+    offerStarterSwap = false,
   }: {
     isOpeningReply: boolean;
     teacherRaisedRoomPersonality?: boolean;
@@ -224,8 +327,61 @@ export function withStandardSuggestions(
     produced?: ArtifactFlags;
     inPacket?: ArtifactFlags;
     asksForMinutes?: boolean;
+    offerDone?: boolean;
+    stackHasPieces?: boolean;
+    offerStarterSwap?: boolean;
   }
 ): string[] {
+  const picked = pickSuggestions(suggestions, {
+    isOpeningReply,
+    teacherRaisedRoomPersonality,
+    deliveredPlan,
+    produced,
+    inPacket,
+    asksForMinutes,
+    stackHasPieces,
+  });
+  const chips =
+    offerStarterSwap
+      ? [
+          ...picked
+            .filter((chip) => !asksToSwapStarter(chip))
+            .slice(0, MAX_SUGGESTIONS - 1),
+          SWAP_STARTER_SUGGESTION,
+        ]
+      : picked;
+  const somethingBuilt =
+    produced.deck || produced.handout || inPacket.deck || inPacket.handout;
+  if (!offerDone || isOpeningReply || !somethingBuilt) return chips;
+  return [
+    ...chips
+      .filter((chip) => normalize(chip) !== normalize(DONE_FOR_TODAY_SUGGESTION))
+      .slice(0, MAX_SUGGESTIONS - 1),
+    DONE_FOR_TODAY_SUGGESTION,
+  ];
+}
+
+function pickSuggestions(
+  suggestions: string[],
+  {
+    isOpeningReply,
+    teacherRaisedRoomPersonality,
+    deliveredPlan,
+    produced,
+    inPacket,
+    asksForMinutes,
+    stackHasPieces,
+  }: {
+    isOpeningReply: boolean;
+    teacherRaisedRoomPersonality: boolean;
+    deliveredPlan: boolean;
+    produced: ArtifactFlags;
+    inPacket: ArtifactFlags;
+    asksForMinutes: boolean;
+    stackHasPieces: boolean;
+  }
+): string[] {
+  const followOn = stackHasPieces ? FROM_STACK_SUGGESTIONS : FOLLOW_ON_SUGGESTIONS;
   const withoutRoom = teacherRaisedRoomPersonality
     ? suggestions
     : suggestions.map(withoutRoomTalk);
@@ -237,7 +393,7 @@ export function withStandardSuggestions(
   const seen = new Set<string>();
   for (const suggestion of offered) {
     const key = normalize(suggestion);
-    if (!key || seen.has(key)) continue;
+    if (!key || seen.has(key) || isFileActionSuggestion(suggestion)) continue;
     seen.add(key);
     deduped.push(suggestion);
   }
@@ -260,9 +416,9 @@ export function withStandardSuggestions(
   if (!deliveredPlan) return deduped.slice(0, MAX_SUGGESTIONS);
 
   const pinned: string[] = [];
-  if (!produced.deck && !inPacket.deck) pinned.push(FOLLOW_ON_SUGGESTIONS.deck);
+  if (!produced.deck && !inPacket.deck) pinned.push(followOn.deck);
   if (!produced.handout && !inPacket.handout) {
-    pinned.push(FOLLOW_ON_SUGGESTIONS.handout);
+    pinned.push(followOn.handout);
   }
   if (!pinned.length) return deduped.slice(0, MAX_SUGGESTIONS);
 
@@ -272,11 +428,11 @@ export function withStandardSuggestions(
     ...deduped.filter(
       (suggestion) =>
         !(
-          pinned.includes(FOLLOW_ON_SUGGESTIONS.deck) &&
+          pinned.includes(followOn.deck) &&
           DECK_INTENT.test(suggestion)
         ) &&
         !(
-          pinned.includes(FOLLOW_ON_SUGGESTIONS.handout) &&
+          pinned.includes(followOn.handout) &&
           HANDOUT_INTENT.test(suggestion)
         )
     ),

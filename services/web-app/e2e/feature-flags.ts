@@ -63,3 +63,20 @@ export async function setFeatureFlag(key: FeatureFlagKey, enabled: boolean) {
     await prisma.$disconnect();
   }
 }
+
+/** Lesson Planner review flags (intake v2, stack v2, deck v2, run 2). */
+export type LessonPlannerReviewFlag = Extract<
+  FeatureFlagKey,
+  | 'lesson_planner_intake_v2'
+  | 'lesson_planner_stack_v2'
+  | 'lesson_planner_deck_v2'
+  | 'lesson_planner_stack_panel'
+  | 'lesson_planner_plan_export_v2'
+>;
+
+export async function setLessonPlannerReviewFlag(
+  flag: LessonPlannerReviewFlag,
+  enabled: boolean
+) {
+  await setFeatureFlag(flag, enabled);
+}

@@ -161,7 +161,7 @@ export function printAssistantMessage(markdown: string, brand: string) {
     // Failing silently here reads as "the print button is broken", which is
     // exactly how it was reported.
     toast.error('Your browser blocked the print window.', {
-      description: 'Allow pop-ups for Yawp, then try Print again.',
+      description: 'Allow pop-ups for YAWP!, then try Print again.',
     });
     return;
   }

@@ -7,6 +7,7 @@
  * they can prop next to a laptop and handouts that print on their own pages
  * with room to write.
  */
+import { hidePromptIds } from './prompt-ids';
 import { parseAssistantMessage } from '~/components/ai-chat/parse-assistant-message';
 import { hasSlideDeck, readSlideDeck, type SlideDeck } from './slide-deck';
 import { readLessonMaterials, type LessonMaterial } from './lesson-material';
@@ -270,11 +271,18 @@ export function buildLessonPacket({
       // Timing lives in the lesson's own heading, so a rename must not lose
       // it — the outline reads minutes from the derived title.
       derivedTitle,
-      content: stripDuplicateTitleHeading(prose.trim(), derivedTitle),
+      // Library prompt ids are the app's, never the teacher's (Brian's run 2,
+      // items 17, 26) — including the footer older filed starters carry.
+      content: hidePromptIds(
+        stripDuplicateTitleHeading(prose.trim(), derivedTitle)
+      ),
       audience,
       kind: section.kind ?? deriveSectionKind(body, audience),
       origin: section.origin ?? 'reply',
-      materials,
+      materials: materials.map((material) => ({
+        ...material,
+        content: hidePromptIds(material.content),
+      })),
       edited: Boolean(section.editedAt),
       deck,
       deckFailed: deckOutcome.kind === 'unreadable',
@@ -284,7 +292,11 @@ export function buildLessonPacket({
 
   const outline = built.map((section) => ({
     title: section.title,
-    minutes: readMinutes(section.derivedTitle),
+    // A filed piece is named for what it is, minutes and all ("Read aloud
+    // (25 min)"); a kept reply's timing lives in its own heading.
+    minutes:
+      readMinutes(section.derivedTitle) ??
+      (section.origin === 'material' ? readMinutes(section.title) : null),
     steps: readSteps(section.content, section.derivedTitle),
     kind: section.kind,
     anchor: section.anchor,

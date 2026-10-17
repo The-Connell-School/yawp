@@ -23,6 +23,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const { packet } = await loadLessonPacket({
     request,
     conversationId: params.conversationId,
+    withStackDetails: false,
   });
 
   const url = new URL(request.url);

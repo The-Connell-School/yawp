@@ -19,21 +19,26 @@ import {
 import {
   readDailyPagesExercises,
   type DailyPagesExercise,
+  dailyPagesBlockKey,
 } from './daily-pages-block';
 import {
   readPlannedExitTickets,
   type PlannedExitTicket,
 } from './exit-ticket-block';
 import { readLessonResources, type LessonResource } from './lesson-resource';
-import { readPlannedPractice, type PlannedPractice } from './practice-block';
+import {
+  practiceBlockKey,
+  readPlannedPractice,
+  type PlannedPractice,
+} from './practice-block';
 
 export type ReplyPart =
   | { kind: 'markdown'; text: string }
   | { kind: 'material'; material: LessonMaterial }
-  | { kind: 'daily-pages'; exercise: DailyPagesExercise }
+  | { kind: 'daily-pages'; exercise: DailyPagesExercise; blockKey: string }
   | { kind: 'exit-ticket'; ticket: PlannedExitTicket; blockKey: string }
   | { kind: 'resource'; resource: LessonResource }
-  | { kind: 'practice'; practice: PlannedPractice };
+  | { kind: 'practice'; practice: PlannedPractice; blockKey: string };
 
 /** Every fence that becomes something to look at, in one pass. */
 const ANY_BLOCK =
@@ -51,6 +56,8 @@ export function splitReplyParts(content: string): ReplyPart[] {
   let cursor = 0;
   let materialCount = 0;
   let exitTicketCount = 0;
+  let exerciseCount = 0;
+  let practiceCount = 0;
 
   const pushText = (text: string) => {
     const trimmed = text.trim();
@@ -75,8 +82,16 @@ export function splitReplyParts(content: string): ReplyPart[] {
         materialCount += 1;
       }
     } else if (match[1] === 'yawp-daily-pages') {
-      const [exercise] = readDailyPagesExercises(block).exercises;
-      if (exercise) parts.push({ kind: 'daily-pages', exercise });
+      // A bundled block is several prompts (Brian's run 2, E2): each gets its
+      // own card, numbered as readDailyPagesExercises numbers them.
+      for (const exercise of readDailyPagesExercises(block).exercises) {
+        parts.push({
+          kind: 'daily-pages',
+          exercise,
+          blockKey: dailyPagesBlockKey(exerciseCount),
+        });
+        exerciseCount += 1;
+      }
     } else if (match[1] === 'yawp-exit-ticket') {
       const [ticket] = readPlannedExitTickets(block).tickets;
       if (ticket) {
@@ -89,7 +104,10 @@ export function splitReplyParts(content: string): ReplyPart[] {
       }
     } else if (match[1] === 'yawp-practice') {
       const [practice] = readPlannedPractice(block).practices;
-      if (practice) parts.push({ kind: 'practice', practice });
+      if (practice) {
+        parts.push({ kind: 'practice', practice, blockKey: practiceBlockKey(practiceCount) });
+        practiceCount += 1;
+      }
     } else {
       const [resource] = readLessonResources(block).resources;
       if (resource) parts.push({ kind: 'resource', resource });
