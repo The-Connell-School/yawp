@@ -238,21 +238,33 @@ describe('AssignmentCreationSheetContent', () => {
     root = null;
   });
 
-  it.each([false, true])('preserves an absent existing type for ordinary edits (locked=%s)', (locked) => {
-    ({ root } = renderSheet({
-      assignmentTypes: [],
-      editingAssignment: { id: 'existing-assignment', assignmentTypeLocked: locked },
-      initialAssignmentTypeId: 'existing-type',
-      fixedClassId: 'class-1',
-      initialTitle: 'Existing essay',
-      initialPrompt: 'Existing prompt',
-    }));
-    expect(inputByName('assignmentTypeId').value).toBe('existing-type');
-    expect((document.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
-    act(() => setTextareaValue(textareaByName('prompt'), 'Updated prompt'));
-    expect(inputByName('assignmentTypeId').value).toBe('existing-type');
-    expect((document.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
-  });
+  it.each([false, true])(
+    'preserves an absent existing type for ordinary edits (locked=%s)',
+    (locked) => {
+      ({ root } = renderSheet({
+        assignmentTypes: [],
+        editingAssignment: {
+          id: 'existing-assignment',
+          assignmentTypeLocked: locked,
+        },
+        initialAssignmentTypeId: 'existing-type',
+        fixedClassId: 'class-1',
+        initialTitle: 'Existing essay',
+        initialPrompt: 'Existing prompt',
+      }));
+      expect(inputByName('assignmentTypeId').value).toBe('existing-type');
+      expect(
+        (document.querySelector('button[type="submit"]') as HTMLButtonElement)
+          .disabled
+      ).toBe(false);
+      act(() => setTextareaValue(textareaByName('prompt'), 'Updated prompt'));
+      expect(inputByName('assignmentTypeId').value).toBe('existing-type');
+      expect(
+        (document.querySelector('button[type="submit"]') as HTMLButtonElement)
+          .disabled
+      ).toBe(false);
+    }
+  );
 
   it('keeps an absent existing type when other creation choices remain', () => {
     ({ root } = renderSheet({
@@ -263,33 +275,51 @@ describe('AssignmentCreationSheetContent', () => {
       initialPrompt: 'Existing prompt',
     }));
     expect(inputByName('assignmentTypeId').value).toBe('existing-type');
-    expect((document.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
+    expect(
+      (document.querySelector('button[type="submit"]') as HTMLButtonElement)
+        .disabled
+    ).toBe(false);
   });
 
   it('allows unchanged-type edits after creation availability is exhausted', () => {
     ({ root } = renderSheet({
-      assignmentTypes: [{ ...assignmentTypes[0], quotaExhausted: true, unavailableReason: 'Available with a paid plan.' }],
+      assignmentTypes: [
+        {
+          ...assignmentTypes[0],
+          quotaExhausted: true,
+          unavailableReason: 'Available with a paid plan.',
+        },
+      ],
       editingAssignment: { id: 'existing-assignment' },
       initialAssignmentTypeId: 'type-1',
       fixedClassId: 'class-1',
       initialPrompt: 'Existing prompt',
     }));
     expect(inputByName('assignmentTypeId').value).toBe('type-1');
-    expect((document.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
+    expect(
+      (document.querySelector('button[type="submit"]') as HTMLButtonElement)
+        .disabled
+    ).toBe(false);
   });
 
-  it.each([undefined, 'existing-type'])('blocks creation with an absent preferred type and empty catalog (fixed=%s)', (fixedType) => {
-    ({ root } = renderSheet({
-      assignmentTypes: [],
-      initialAssignmentTypeId: 'existing-type',
-      fixedAssignmentTypeId: fixedType,
-      fixedClassId: 'class-1',
-      initialTitle: 'New essay',
-      initialPrompt: 'New prompt',
-    }));
-    expect((document.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(true);
-    expectText('No assignment types are available');
-  });
+  it.each([undefined, 'existing-type'])(
+    'blocks creation with an absent preferred type and empty catalog (fixed=%s)',
+    (fixedType) => {
+      ({ root } = renderSheet({
+        assignmentTypes: [],
+        initialAssignmentTypeId: 'existing-type',
+        fixedAssignmentTypeId: fixedType,
+        fixedClassId: 'class-1',
+        initialTitle: 'New essay',
+        initialPrompt: 'New prompt',
+      }));
+      expect(
+        (document.querySelector('button[type="submit"]') as HTMLButtonElement)
+          .disabled
+      ).toBe(true);
+      expectText('No assignment types are available');
+    }
+  );
 
   it('skips paid and exhausted types when choosing the default', () => {
     ({ root } = renderSheet({
@@ -316,11 +346,19 @@ describe('AssignmentCreationSheetContent', () => {
 
   it('clears a fixed paid type instead of submitting its forbidden id', () => {
     ({ root } = renderSheet({
-      assignmentTypes: [{ ...assignmentTypes[0], unavailableReason: 'Available with a paid plan.' }],
+      assignmentTypes: [
+        {
+          ...assignmentTypes[0],
+          unavailableReason: 'Available with a paid plan.',
+        },
+      ],
       fixedAssignmentTypeId: 'type-1',
       fixedClassId: 'class-1',
     }));
-    expect((document.querySelector('[name="assignmentTypeId"]') as HTMLInputElement).value).toBe('');
+    expect(
+      (document.querySelector('[name="assignmentTypeId"]') as HTMLInputElement)
+        .value
+    ).toBe('');
   });
 
   it('leaves no forbidden fallback when every type is unavailable', () => {
@@ -395,9 +433,7 @@ describe('AssignmentCreationSheetContent', () => {
       expectText('Prompt');
       expectText('Extract from PDF');
       expectText('Submit for grade');
-      expectText(
-        'Graded out of 100 points, read at the intermediate level.'
-      );
+      expectText('Graded out of 100 points, read at the intermediate level.');
       expectText('Tutor enabled');
       expectText(
         "The tutor is on by default. Turning it off removes it from students' documents — the digital equivalent of an in-class essay. Assigning one now and then shows what a student can do unaided, and gives the Reporter a baseline to measure independent growth against."
@@ -487,9 +523,7 @@ describe('AssignmentCreationSheetContent', () => {
   it('rests as a plain-language grading summary with nothing to expand past', () => {
     root = renderSheet().root;
 
-    expectText(
-      'Graded out of 100 points, read at the intermediate level.'
-    );
+    expectText('Graded out of 100 points, read at the intermediate level.');
     // The old block stated the same facts four times over three nested boxes.
     expectNoText('Grade Configuration');
     expectNoText('Default point value');
@@ -529,9 +563,7 @@ describe('AssignmentCreationSheetContent', () => {
       initialGradingAssistantStrictnessLevel: 'advanced',
     }).root;
 
-    expectText(
-      'Graded out of 250 points, read at the advanced level.'
-    );
+    expectText('Graded out of 250 points, read at the advanced level.');
     expect(inputByName('pointValue').value).toBe('250');
     expect(inputByName('gradingMode').value).toBe('bands');
   });
@@ -970,7 +1002,9 @@ describe('AssignmentCreationSheetContent', () => {
     expectText('Not Present');
     expectText('Excellent');
     expect(
-      document.querySelector('[data-testid="assignment-create-engagement-bands"]')
+      document.querySelector(
+        '[data-testid="assignment-create-engagement-bands"]'
+      )
     ).not.toBeNull();
   });
 
@@ -1470,9 +1504,13 @@ describe('AssignmentCreationSheetContent without writing conditions', () => {
 
   function expectNeitherField() {
     expect(document.querySelector('[name="writingTimeMinutes"]')).toBeNull();
-    expect(document.querySelector('#assignment-create-writing-time')).toBeNull();
+    expect(
+      document.querySelector('#assignment-create-writing-time')
+    ).toBeNull();
     expect(document.querySelector('[name="paragraphMode"]')).toBeNull();
-    expect(document.querySelector('#assignment-create-paragraph-mode')).toBeNull();
+    expect(
+      document.querySelector('#assignment-create-paragraph-mode')
+    ).toBeNull();
     expectNoText('Time students have to write');
     expectNoText('Paragraph type');
     expectNoText('Any kind of paragraph');
@@ -1502,48 +1540,183 @@ describe('AssignmentCreationSheetContent without writing conditions', () => {
 // than only checking text. Hiding Advanced must never remove posted values.
 describe('platform enhancements form compatibility', () => {
   let root: Root | null = null;
-  afterEach(() => { cleanup(root); root = null; });
+  afterEach(() => {
+    cleanup(root);
+    root = null;
+  });
   const combos = [
     {},
     { initialSubmitForGrade: false },
-    { initialPointValue: 42, initialGradingAssistantStrictnessLevel: 'advanced' as const, initialTutorEnabled: false },
-    { initialCollaborationEnabled: true, initialCollaborationGroupMode: 'random' as const, initialCollaborationGroupSize: 4 },
-    { editingAssignment: { id: 'existing' }, initialAssignmentTypeId: 'type-1', initialTutorEnabled: false },
-    { assignmentTypes: exitTicketAssignmentTypes, fixedAssignmentTypeId: 'exit-1' },
-    { assignmentTypes: [{ ...assignmentTypes[0], kind: 'daily_pages', rubricName: 'SJP Daily Pages' }], initialPointValue: 12 },
+    {
+      initialPointValue: 42,
+      initialGradingAssistantStrictnessLevel: 'advanced' as const,
+      initialTutorEnabled: false,
+    },
+    {
+      initialCollaborationEnabled: true,
+      initialCollaborationGroupMode: 'random' as const,
+      initialCollaborationGroupSize: 4,
+    },
+    {
+      editingAssignment: { id: 'existing' },
+      initialAssignmentTypeId: 'type-1',
+      initialTutorEnabled: false,
+    },
+    {
+      assignmentTypes: exitTicketAssignmentTypes,
+      fixedAssignmentTypeId: 'exit-1',
+    },
+    {
+      assignmentTypes: [
+        {
+          ...assignmentTypes[0],
+          kind: 'daily_pages',
+          rubricName: 'SJP Daily Pages',
+        },
+      ],
+      initialPointValue: 12,
+    },
   ];
   for (const [index, combo] of combos.entries()) {
     it(`posts identical data with the flag off and on (combination ${index})`, () => {
       const forms: unknown[] = [];
       for (const enabled of [false, true]) {
-        ({ root } = renderSheet({ ...combo, fixedClassId: 'class-1', initialPrompt: 'Write about a problem.', platformEnhancementsEnabled: enabled }));
+        ({ root } = renderSheet({
+          ...combo,
+          fixedClassId: 'class-1',
+          initialPrompt: 'Write about a problem.',
+          platformEnhancementsEnabled: enabled,
+        }));
         const form = document.querySelector('form')!;
-        forms.push([...new FormData(form).entries()].filter(([name]) => name !== 'promptAttachment').sort(([a], [b]) => a.localeCompare(b)));
+        forms.push(
+          [...new FormData(form).entries()]
+            .filter(([name]) => name !== 'promptAttachment')
+            .sort(([a], [b]) => a.localeCompare(b))
+        );
         if (enabled) {
-          expect(controlById('assignment-create-advanced-content').hidden).toBe(true);
-          expect(controlById('assignment-create-advanced-toggle').getAttribute('aria-expanded')).toBe('false');
-          const collapsed = [...new FormData(form).entries()].filter(([name]) => name !== 'promptAttachment').sort(([a], [b]) => a.localeCompare(b));
+          expect(controlById('assignment-create-advanced-content').hidden).toBe(
+            true
+          );
+          expect(
+            controlById('assignment-create-advanced-toggle').getAttribute(
+              'aria-expanded'
+            )
+          ).toBe('false');
+          const collapsed = [...new FormData(form).entries()]
+            .filter(([name]) => name !== 'promptAttachment')
+            .sort(([a], [b]) => a.localeCompare(b));
           act(() => controlById('assignment-create-advanced-toggle').click());
-          expect([...new FormData(form).entries()].filter(([name]) => name !== 'promptAttachment').sort(([a], [b]) => a.localeCompare(b))).toEqual(collapsed);
+          expect(
+            [...new FormData(form).entries()]
+              .filter(([name]) => name !== 'promptAttachment')
+              .sort(([a], [b]) => a.localeCompare(b))
+          ).toEqual(collapsed);
         }
-        cleanup(root); root = null;
+        cleanup(root);
+        root = null;
       }
       expect(forms[1]).toEqual(forms[0]);
     });
   }
   it('summarizes live settings and keeps switched-off false fallbacks', () => {
-    ({ root } = renderSheet({ platformEnhancementsEnabled: true, fixedClassId: 'class-1', initialPrompt: 'Write.' }));
-    const summary = () => document.querySelector('[data-testid="advanced-summary"]')!.textContent;
-    expect(summary()).toBe('Graded out of 100 · Intermediate · Grammar graded · Tutor on · Individual');
+    ({ root } = renderSheet({
+      platformEnhancementsEnabled: true,
+      fixedClassId: 'class-1',
+      initialPrompt: 'Write.',
+    }));
+    const summary = () =>
+      document.querySelector('[data-testid="advanced-summary"]')!.textContent;
+    expect(summary()).toBe(
+      'Graded out of 100 · Intermediate · Grammar graded · Tutor on · Individual'
+    );
     act(() => controlById('assignment-create-advanced-toggle').click());
-    for (const id of ['submit-for-grade', 'grammar-grading-enabled', 'tutor-enabled', 'collaboration-enabled']) {
+    for (const id of [
+      'submit-for-grade',
+      'grammar-grading-enabled',
+      'tutor-enabled',
+      'collaboration-enabled',
+    ]) {
       act(() => controlById(`assignment-create-${id}`).click());
     }
-    expect(summary()).toBe('Practice only · Intermediate · Grammar not graded · Tutor off · Collaborative');
+    expect(summary()).toBe(
+      'Practice only · Intermediate · Grammar not graded · Tutor off · Collaborative'
+    );
     const data = new FormData(document.querySelector('form')!);
     expect(data.getAll('submitForGrade')).toEqual(['false']);
     expect(data.getAll('grammarGradingEnabled')).toEqual(['false']);
     expect(data.getAll('tutorEnabled')).toEqual(['false']);
     expect(data.getAll('collaborationEnabled')).toEqual(['false', 'true']);
   });
+});
+
+it('posts changed points, reading level, grammar and group settings after collapsing Advanced', () => {
+  const snapshots: unknown[] = [];
+  for (const enabled of [false, true]) {
+    const { root } = renderSheet({
+      platformEnhancementsEnabled: enabled,
+      fixedClassId: 'class-1',
+      initialPrompt: 'Write.',
+    });
+    if (enabled)
+      act(() => controlById('assignment-create-advanced-toggle').click());
+    else act(() => controlById('assignment-create-change-grading').click());
+    const points = controlById(
+      'assignment-create-point-value'
+    ) as HTMLInputElement;
+    act(() => {
+      points.value = '55';
+      const key = Object.keys(points).find((key) =>
+        key.startsWith('__reactProps$')
+      )!;
+      (points as any)[key].onChange({ target: points });
+    });
+    if (enabled) {
+      const level = controlById(
+        'assignment-create-read-level'
+      ) as HTMLSelectElement;
+      act(() => {
+        level.value = 'advanced';
+        level.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    } else {
+      const advanced = Array.from(document.querySelectorAll('button')).find(
+        (button) => button.textContent === 'Advanced'
+      )!;
+      act(() => advanced.click());
+    }
+    act(() => controlById('assignment-create-grammar-grading-enabled').click());
+    act(() => controlById('assignment-create-tutor-enabled').click());
+    act(() => controlById('assignment-create-collaboration-enabled').click());
+    const random = Array.from(document.querySelectorAll('button')).find(
+      (button) => button.textContent?.includes('Group them for me')
+    )!;
+    act(() => random.click());
+    const size = controlById(
+      'assignment-create-collaboration-group-size'
+    ) as HTMLSelectElement;
+    act(() => {
+      size.value = '4';
+      size.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    if (enabled) {
+      expect(
+        document.querySelector('[data-testid="advanced-summary"]')!.textContent
+      ).toBe(
+        'Graded out of 55 · Advanced · Grammar not graded · Tutor off · Collaborative'
+      );
+      act(() => controlById('assignment-create-advanced-toggle').click());
+    }
+    const data = new FormData(document.querySelector('form')!);
+    expect(data.get('pointValue')).toBe('55');
+    expect(data.get('gradingAssistantStrictnessLevel')).toBe('advanced');
+    expect(data.get('collaborationGroupMode')).toBe('random');
+    expect(data.get('collaborationGroupSize')).toBe('4');
+    snapshots.push(
+      [...data.entries()]
+        .filter(([name]) => name !== 'promptAttachment')
+        .sort(([a], [b]) => a.localeCompare(b))
+    );
+    cleanup(root);
+  }
+  expect(snapshots[1]).toEqual(snapshots[0]);
 });

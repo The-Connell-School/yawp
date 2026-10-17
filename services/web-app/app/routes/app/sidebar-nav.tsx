@@ -33,6 +33,7 @@ export type SidebarNavLink = {
   label: string;
   end?: boolean;
   icon: React.ReactNode;
+  preserveIcon?: boolean;
   requires?: { OR: RequiresFn[] } | { AND: RequiresFn[] } | RequiresFn;
 };
 
@@ -236,7 +237,7 @@ export function SidebarNavLinks({
             {section.links.map((link) => {
               // The free-account Reporter includes a lock badge; its supplied
               // icon already uses the new mapping and must retain that badge.
-              const icon = link.to === '/app/reporter' ? link.icon : getSidebarIcon(link.label, platformEnhancementsEnabled, link.icon);
+              const icon = link.preserveIcon ? link.icon : getSidebarIcon(link.label, platformEnhancementsEnabled, link.icon);
               const isActive = isAppNavLinkActive(link.to, pathname);
               const className = cn(
                 'flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-muted-foreground hover:bg-foreground/5 hover:text-foreground',

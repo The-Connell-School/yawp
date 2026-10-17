@@ -10,7 +10,6 @@ import {
   data,
   useLocation,
   useMatches,
-  type ActionFunctionArgs,
   type LoaderFunctionArgs,
   useLoaderData,
   redirect,
@@ -36,7 +35,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '~/components/ui/popover.js';
-import { Tooltip } from '~/components/ui/tooltip';
 import useBreakpoint from '~/hooks/useBreakpoint';
 import { useOnSwipe } from '~/hooks/useHorizontalSwipe';
 import { useUser } from '~/hooks/useUser';
@@ -406,6 +404,7 @@ export default function Route() {
                         {
                           to: '/app/reporter',
                           label: 'Reporter',
+                          preserveIcon: true,
                           icon: (
                             <>
                               <Microscope size={18} />
