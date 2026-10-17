@@ -39,6 +39,7 @@ import {
   getApprovalHooks,
 } from '~/domain/free-tier/approval-hooks.server';
 import type { FreeTierApplicationStatus } from '@app/prisma';
+import { readApprovalHistories, readApprovalEmailLog, persistedApprovalFollowUpFilter } from './internal-approval-history.server';
 import { BELOW_HS_TAG } from '~/domain/free-tier/grade-gate';
 
 const response = (value: unknown, status = 200, headers?: HeadersInit) =>
@@ -491,6 +492,7 @@ const queueQuery = z
   .object({
     q: z.string().trim().max(200).default(''),
     status: z.enum(QUEUE_STATUSES).optional(),
+    needsFollowUp: z.enum(['true', 'false']).optional(),
     cursor: z.string().max(500).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(50),
   })
@@ -507,7 +509,7 @@ export async function approvalQueue(request: Request) {
   } catch {
     return response({ error: 'Invalid query' }, 400);
   }
-  const binding = digest(JSON.stringify([input.q, input.status ?? null])).toString('base64url');
+  const binding = digest(JSON.stringify(input.needsFollowUp === undefined ? [input.q, input.status ?? null] : [input.q, input.status ?? null, input.needsFollowUp])).toString('base64url');
   let after: string | undefined;
   if (input.cursor) {
     try {
@@ -519,6 +521,7 @@ export async function approvalQueue(request: Request) {
     }
   }
   const where: any = { status: input.status ? input.status : { in: [...QUEUE_STATUSES] } };
+  if (input.needsFollowUp === 'true') Object.assign(where, persistedApprovalFollowUpFilter());
   if (input.q) {
     where.OR = [
       { email: { contains: input.q, mode: 'insensitive' } },
@@ -555,12 +558,13 @@ export async function approvalQueue(request: Request) {
     rows.length > input.limit ? Buffer.from(JSON.stringify({ id: page[page.length - 1]!.id, binding })).toString('base64url') : null;
   const grouped = await prisma.freeTierApplication.groupBy({
     by: ['status'],
-    where: { status: { in: [...QUEUE_STATUSES] } },
+    where: input.needsFollowUp === 'true' ? where : { status: { in: [...QUEUE_STATUSES] } },
     _count: { _all: true },
   });
   const counts: Record<(typeof QUEUE_STATUSES)[number], number> = { ADMIN_SUBMITTED: 0, MANUAL_REVIEW: 0, SENT: 0 };
   for (const g of grouped) counts[g.status as (typeof QUEUE_STATUSES)[number]] = g._count._all;
-  return response({ applications: page, counts, nextCursor });
+  const histories = await readApprovalHistories(page.map(row => row.id));
+  return response({ applications: page.map(row => ({ ...row, ...histories.get(row.id) })), counts, nextCursor });
 }
 
 export async function approvalDetail(request: Request) {
@@ -591,7 +595,9 @@ export async function approvalDetail(request: Request) {
     },
   });
   if (!row) return response({ error: 'Not found' }, 404);
-  return response({ application: row });
+  const histories = await readApprovalHistories([row.id]);
+  const emailLog = await readApprovalEmailLog(row.id);
+  return response({ application: { ...row, ...histories.get(row.id), emailLog } });
 }
 
 function parseOperatorEmail(request: Request, body?: unknown): string | { error: Response } {
