@@ -219,9 +219,9 @@ export function ThesisPromptsLibrary({
 
   return (
     <Accordion type="single" collapsible defaultValue={enabled ? 'library' : undefined}>
-      <AccordionItem value="library">
+      <AccordionItem value="library" id={enabled ? "prompt-library" : undefined}>
         <AccordionTrigger className="py-2 text-base">
-          <span>Prompt Library{enabled ? <span className="ml-2 text-xs font-normal text-muted-foreground">{countLabel}</span> : null}</span>
+          {enabled ? <span>Prompt Library<span className="ml-2 text-xs font-normal text-muted-foreground">{countLabel}</span></span> : 'Prompt Library'}
         </AccordionTrigger>
         <AccordionContent>
           <div className="flex flex-col gap-6 pt-2 lg:flex-row">

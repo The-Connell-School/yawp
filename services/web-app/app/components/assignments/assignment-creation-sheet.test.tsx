@@ -1507,7 +1507,7 @@ describe('platform enhancements form compatibility', () => {
     {},
     { initialSubmitForGrade: false },
     { initialPointValue: 42, initialGradingAssistantStrictnessLevel: 'advanced' as const, initialTutorEnabled: false },
-    { initialCollaborationEnabled: true, initialCollaborationGroupMode: 'automatic' as const, initialCollaborationGroupSize: 4 },
+    { initialCollaborationEnabled: true, initialCollaborationGroupMode: 'random' as const, initialCollaborationGroupSize: 4 },
     { editingAssignment: { id: 'existing' }, initialAssignmentTypeId: 'type-1', initialTutorEnabled: false },
     { assignmentTypes: exitTicketAssignmentTypes, fixedAssignmentTypeId: 'exit-1' },
     { assignmentTypes: [{ ...assignmentTypes[0], kind: 'daily_pages', rubricName: 'SJP Daily Pages' }], initialPointValue: 12 },
@@ -1518,13 +1518,13 @@ describe('platform enhancements form compatibility', () => {
       for (const enabled of [false, true]) {
         ({ root } = renderSheet({ ...combo, fixedClassId: 'class-1', initialPrompt: 'Write about a problem.', platformEnhancementsEnabled: enabled }));
         const form = document.querySelector('form')!;
-        forms.push([...new FormData(form).entries()].filter(([name]) => name !== 'promptAttachment'));
+        forms.push([...new FormData(form).entries()].filter(([name]) => name !== 'promptAttachment').sort(([a], [b]) => a.localeCompare(b)));
         if (enabled) {
           expect(controlById('assignment-create-advanced-content').hidden).toBe(true);
           expect(controlById('assignment-create-advanced-toggle').getAttribute('aria-expanded')).toBe('false');
-          const collapsed = [...new FormData(form).entries()].filter(([name]) => name !== 'promptAttachment');
+          const collapsed = [...new FormData(form).entries()].filter(([name]) => name !== 'promptAttachment').sort(([a], [b]) => a.localeCompare(b));
           act(() => controlById('assignment-create-advanced-toggle').click());
-          expect([...new FormData(form).entries()].filter(([name]) => name !== 'promptAttachment')).toEqual(collapsed);
+          expect([...new FormData(form).entries()].filter(([name]) => name !== 'promptAttachment').sort(([a], [b]) => a.localeCompare(b))).toEqual(collapsed);
         }
         cleanup(root); root = null;
       }
