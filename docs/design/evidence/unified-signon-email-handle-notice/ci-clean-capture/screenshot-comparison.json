@@ -1,0 +1,27 @@
+[
+  {
+    "file": "signon-38-email-origin-1280-impl.png",
+    "changed_pixels": "244 (0.000168844)",
+    "previous_sha256": "edb54905ebb4bdb3df8de829dd3100d443b87218ad05b29c6b1b55127be9bc04",
+    "fresh_sha256": "f3056d1559386169191d3eb0c5c237d200f6fcaa112c720d7dbbb1d8d2c1ad6c",
+    "difference_bounds": "35x11+623+1030 (Back link text hover paint only)"
+  },
+  {
+    "file": "signon-38-email-origin-390-impl.png",
+    "changed_pixels": "0 (0)",
+    "previous_sha256": "c5e22270391fd7583d4d76770edef0c427b59113b0cc983e6e092668898dc40a",
+    "fresh_sha256": "c5e22270391fd7583d4d76770edef0c427b59113b0cc983e6e092668898dc40a"
+  },
+  {
+    "file": "signon-38-direct-code-1280-impl.png",
+    "changed_pixels": "0 (0)",
+    "previous_sha256": "f7aa1e8f876a8837a625ca602a0ceac0d21d172972e9c0698714217368b507f7",
+    "fresh_sha256": "f7aa1e8f876a8837a625ca602a0ceac0d21d172972e9c0698714217368b507f7"
+  },
+  {
+    "file": "signon-38-direct-code-390-impl.png",
+    "changed_pixels": "0 (0)",
+    "previous_sha256": "f914e77b4236b26c6121af671f785db12dd784107434618e37050bcfa6e5f948",
+    "fresh_sha256": "f914e77b4236b26c6121af671f785db12dd784107434618e37050bcfa6e5f948"
+  }
+]

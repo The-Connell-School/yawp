@@ -28,6 +28,7 @@ import {
 import { ensureFreeTierEnabledForPreview } from './local-dev/seed-free-tier-feature-flag';
 import { ensureLoungeCommunityEnabledForPreview } from './local-dev/seed-lounge-community-feature-flag';
 import { ensureLoungeLaunchContentForPreview } from './lounge-launch/preview';
+import { ensureDemoFeedbackEnabled } from './local-dev/seed-demo-feedback';
 import {
   seedPreviewTeacherNotesQa,
   shouldRunPreviewTeacherNotesQaSeed,
@@ -43,6 +44,7 @@ const prisma = createPrismaClient();
 const databaseName = process.env.DATABASE_URL?.split('/').pop()?.split('?')[0] ?? '';
 
 try {
+  await ensureDemoFeedbackEnabled(prisma);
   const freeTierFlag = await ensureFreeTierEnabledForPreview(prisma, databaseName);
   console.log(`Free tier feature flag seed: ${JSON.stringify(freeTierFlag)}`);
   const loungeFlag = await ensureLoungeCommunityEnabledForPreview(prisma, databaseName);

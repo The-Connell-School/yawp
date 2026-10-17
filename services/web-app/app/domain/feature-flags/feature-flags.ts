@@ -57,6 +57,9 @@ export const CLASS_CODE_UNIQUE_FLAG = 'classcode-unique' as const;
  */
 export const LOUNGE_COMMUNITY_FLAG = 'teacher_lounge_community' as const;
 
+/** Demo feedback. Default off everywhere; only demo seed code opts in. */
+export const DEMO_FEEDBACK_FLAG = 'demo-feedback-widget' as const;
+
 export const FEATURE_FLAGS = {
   [LESSON_PLANNER_FLAG]: {
     label: 'Lesson Planner',
@@ -96,6 +99,10 @@ export const FEATURE_FLAGS = {
     label: "Teacher's Lounge community",
     description:
       "Teachers at these schools get the community board in the Teacher's Lounge: posts, replies, helpful votes, and questions for Brian. Off: the Lounge shows only the course grid and community pages return 404; posts are kept.",
+  },
+  [DEMO_FEEDBACK_FLAG]: {
+    label: 'Demo feedback widget',
+    description: 'Shows the feedback note panel for signed-in demo users. Default off; production submissions are always denied.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

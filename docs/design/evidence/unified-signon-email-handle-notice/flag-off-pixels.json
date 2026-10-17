@@ -1,0 +1,38 @@
+[
+  {
+    "page": "login",
+    "width": 1280,
+    "changedPixels": "0 (0)",
+    "exitCode": 0
+  },
+  {
+    "page": "signup",
+    "width": 1280,
+    "changedPixels": "0 (0)",
+    "exitCode": 0
+  },
+  {
+    "page": "class-link",
+    "width": 1280,
+    "changedPixels": "0 (0)",
+    "exitCode": 0
+  },
+  {
+    "page": "login",
+    "width": 390,
+    "changedPixels": "0 (0)",
+    "exitCode": 0
+  },
+  {
+    "page": "signup",
+    "width": 390,
+    "changedPixels": "0 (0)",
+    "exitCode": 0
+  },
+  {
+    "page": "class-link",
+    "width": 390,
+    "changedPixels": "0 (0)",
+    "exitCode": 0
+  }
+]

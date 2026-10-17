@@ -29,6 +29,7 @@ model FreeTierApplication {
   schoolName       String
   location         String
   gradeLevel       String
+  tags             String[]                  @default([])
   acquisitionTokenId String?
   acquisitionToken   AcquisitionToken? @relation(fields: [acquisitionTokenId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   userId           String?

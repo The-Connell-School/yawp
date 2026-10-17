@@ -1,0 +1,36 @@
+{
+  "priorHead": "0b9b44222b3922f645b938b638871166719f918a",
+  "mergedMain": "3574fd55985b3ad9b2490937bec1f126ea940275",
+  "sourceAndTests": "21c481618c0b322825767493e87f7afcc4c1364a",
+  "captureNote": "Final browser process started at 67912f23 with two test-only changes then committed unchanged as 21c48161 while running. Application sources identical. One worker; isolated localhost app5406 DB55548; absent private capture path at start.",
+  "reference": {
+    "source": "design/v2/artboards/signon-38-new-student-free-tier-class-handle-all-states",
+    "sha256": {
+      ".png": "44650b2312fdb2ce0ea3a3c7cef4d8a1b2d4566a04d46a691957f9a617c21e25",
+      ".dom.html": "f287bbbdcd4358f7faec19e362d01051058ac1b052d64cdea93fc040708731e4",
+      ".txt": "da7989a886b848ade34b4fb4be76c282f8cb491b924df1bef03ba64ac6e62250"
+    },
+    "emailOriginCrop": "390x1105+2158+134",
+    "defaultCrop": "390x1008+48+134",
+    "notes": "Supplied PNG pixels, no generated reference. Exact Came from an email state is mobile-only. Desktop comparison uses that same 390px state alongside the full 1280px implementation. Broken logo and rounded frame are reference artifacts. Placeholder teacher/class brackets and Maya Reyes are reference content; disposable runtime uses its own class and empty fields. Taken state captures are observations, not a separate artboard target."
+  },
+  "sources": {
+    "services/web-app/app/domain/unified-signon/authentication.server.ts": "806b7825019a6dab42b5b73c104803b274f3f5c6bbf0f7a748d5b2bcd7721a87",
+    "services/web-app/app/domain/unified-signon/backend.server.ts": "e6abfe4a71c6f2bd13957a35e541e426425e70d5cbc062553060aa8b9b55813a",
+    "services/web-app/app/domain/unified-signon/class-student.server.ts": "2f9f7479bfd49685807e72d42e5293bbfc72c26b6abd0a97a64f73af27c45c4b",
+    "services/web-app/app/domain/unified-signon/classes.server.ts": "21e4f74dd34916bfdd8d76875f6d66b2f39c1b915413cd2ccd42df4ff312a124",
+    "services/web-app/app/domain/unified-signon/contracts.ts": "977812a5a4d6e826249cdc10f69bc188c00e9452f759ba63a16b109341e8ba2b",
+    "services/web-app/app/domain/unified-signon/entry.server.ts": "fe0952f3b639c51f4e1baa12a05c3601d03eb7c7a4535f476e4d2310fcbdb632",
+    "services/web-app/app/domain/unified-signon/flow.server.ts": "68e90c021be248dfcfe5e0efe2d02019b97caf3b6f327152be1532dddcc3cdea",
+    "services/web-app/app/domain/unified-signon/gate.server.ts": "d2f548231491ab0bc51c969be288b56843dd15f7c20f3191379c82ab48a1d0b1",
+    "services/web-app/app/domain/unified-signon/google.server.ts": "9f8405fc4f86d794b5a660e5d5c398fc3d3c7796a8577e831f722977f82654fb",
+    "services/web-app/app/domain/unified-signon/invitations.server.ts": "4013120d53c002075d42caba4c1608752834a79a72ba388e114da9f03cb97489",
+    "services/web-app/app/domain/unified-signon/legacy-continuation.server.ts": "dbfd3533954ed4ef2604125edf430f67243c5e49684b788fdba67441147afa5e",
+    "services/web-app/app/domain/unified-signon/mail.server.ts": "8face58bfe40f4f174a035096292930835b4d27cd7cd41c0eca260e9a254be87",
+    "services/web-app/app/domain/unified-signon/origin.server.ts": "737237deed101a51345a93f4bf0b38a5d7fb9bd1bf2be7e204788dfa3dcf937c",
+    "services/web-app/app/domain/unified-signon/policy.server.ts": "77c95833fe6f9b4118e241444125aa7111c35ee9acba087f16f3c589e95e8281",
+    "services/web-app/app/domain/unified-signon/preview-code.server.ts": "2cc263b9aba1c39906748d420a2edb9a74e806af00e54104588fffed102aa843",
+    "services/web-app/app/domain/unified-signon/student-handle.ts": "dbd18f3aa560e4e24e0eb380d13515d98a0f9d31e9d031c4657b766561c90869",
+    "services/web-app/app/components/unified-signon/unified-signon.tsx": "38e5b9a9efdad4626b15e8d9cfb717700ae5062a8b352db6863eb35808e448ef"
+  }
+}
