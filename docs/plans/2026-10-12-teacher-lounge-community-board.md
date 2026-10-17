@@ -133,6 +133,29 @@ PUT from https://yawp.school and the App Runner URL, which covers the app.
   cannot go live until they are filled in. Replies from Kevin, Bryant, and
   Eric are for them to write in the app.
 
+### Round 4 (2026-10-17): Look A, "the Letter"
+
+Chosen from three mockups (Letter, Bulletin Board, Ask & Answer); the
+plan is `2026-10-17-faculty-lounge-look-a.md`. A restyle only: no schema,
+route, or behavior changes.
+
+- **Masthead** in the content column replaces the page band: "Teachers
+  using YAWP!", a serif Faculty Lounge, Community · Trainings, and the
+  settings, Contact Us, and New post buttons. The Trainings tab shares it.
+- **Featured block** on the unfiltered first page: the oldest pin as a
+  letter (Brian's welcome), the next as a dark panel (House Rules), more
+  pins as small cards, and the YAWP! team's faces (admins who have written
+  here, up to six).
+- **Feed rows**: avatar (initials; the team in ink, everyone else in a
+  stable tone), serif title, one preview line (the YAWP! team's first answer,
+  else the body), and "Brian answered" by first name. Sorts read Latest /
+  Most helpful / Unanswered; topic chips list topics with posts. Query
+  params are unchanged.
+- **Threads**: eyebrow, serif title, avatar byline; each team answer is a
+  card with a "<name>'s answer" badge; replies are avatar rows.
+- **Type**: Cormorant Garamond for titles (already loaded for the public
+  pages), Roboto for everything else.
+
 Not built yet: Discuss tabs on modules and lessons, sharing Lesson Planner
 lessons and rubrics, captions for videos, unread badge, weekly digest,
 search, using the share consent anywhere outside the Lounge.

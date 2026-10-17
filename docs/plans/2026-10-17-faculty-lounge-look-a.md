@@ -1,6 +1,7 @@
 # Faculty Lounge, Look A: "The Letter"
 
 Date: 2026-10-17. Builds on PR #484 (branch `claude/youthful-clarke-htiae9`).
+Status: built, with the three defaults below as written.
 Mockup: the "Faculty Lounge: three looks" canvas, artboards A (feed) and A (thread).
 
 ## What changes, in one paragraph
