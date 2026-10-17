@@ -175,6 +175,7 @@ export function capabilities() {
       "./bin/project qa prepare --json",
     ],
   };
+  result.proofProfiles.unshift("guided-tours-unit", "guided-tours-browser", "guided-tours-db");
   result.proofProfiles.unshift("free-tier-locked-preview-unit", "free-tier-locked-preview-db", "free-tier-locked-preview-browser", "free-tier-class-step-unit", "free-tier-class-step-browser", "free-tier-welcome-unit", "free-tier-welcome-browser", "free-tier-welcome-live-browser", "free-tier-welcome-db");
   return result;
 }
@@ -730,6 +731,25 @@ function runTestProfile(profile, { json }) {
     const local = requireConfig();
     results.push({ id: chosen, ...execute(selected.bun, ["x", "playwright", "test", "--config=playwright.enter-code.config.ts", "--workers=1", "--output", path.join(process.env.TMPDIR || ROOT, "classcode-enter-code-results")], { json, env: { ...selected.env, DATABASE_URL: local.DATABASE_URL, E2E_DATABASE_URL: local.DATABASE_URL, ENTER_CODE_URL: `http://127.0.0.1:${local.DEV_PORT}` }, cwd: webAppRoot, timeout: 240000 }) });
   }
+  else if (chosen === "guided-tours-unit") {
+    run("read-only-route-contract", ["test", "./scripts/read-only-impersonation-contract.test.ts"]);
+    for (const file of ["app/components/guided-tour/skipped-tours.test.ts", "app/domain/guided-tours/tours.test.ts", "app/domain/guided-tours/guided-tours.server.test.ts", "app/routes/api.guided-tours/route.test.ts", "app/utils/internal-feature-flags-http.server.test.ts", "app/utils/impersonation-read-only.server.test.ts", "app/domain/feature-flags/feature-flags.test.ts", "app/domain/feature-flags/feature-flags.server.test.ts", "app/routes/app/route.test.tsx"])
+      runWebApp(file, ["test", file]);
+  }
+  else if (chosen === "guided-tours-db") {
+    const local = requireConfig();
+    results.push({ id: chosen, ...execute(selected.bun, ["test", "app/domain/guided-tours/guided-tours.real-db.integration.test.ts"], { json, cwd: webAppRoot, env: { ...selected.env, DATABASE_URL: local.DATABASE_URL, GUIDED_TOURS_LOCAL_TEST: "1" }, timeout: 120000 }) });
+  }
+  else if (chosen === "guided-tours-browser") {
+    const local = requireConfig();
+    const database = new URL(local.DATABASE_URL);
+    if (!['localhost', '127.0.0.1'].includes(database.hostname)) throw new Error('Tours E2E requires the isolated local database');
+    database.pathname = '/yawp_guided_tours_e2e';
+    results.push({ id: chosen, ...execute(selected.bun, ["x", "playwright", "test", "--config=playwright.guided-tours.config.ts", "--workers=2"], {
+      json, cwd: webAppRoot, timeout: 600000,
+      env: { ...selected.env, CI: "1", E2E_DATABASE_URL: database.toString(), GUIDED_TOURS_PORT: local.DEV_PORT },
+    }) });
+  }
   else if (chosen === "classcode-browser") {
     const local = requireConfig();
     results.push({ id: chosen, ...execute(selected.bun, ["x", "playwright", "test", "--config=playwright.classcode-unique.config.ts", "--workers=1"], { json, env: { ...selected.env, DATABASE_URL: local.DATABASE_URL, E2E_DATABASE_URL: local.DATABASE_URL, CLASSCODE_URL: `http://127.0.0.1:${local.DEV_PORT}` }, cwd: webAppRoot, timeout: 240000 }) });
@@ -916,6 +936,9 @@ function help(topic = "root") {
   const classStepHelp = "\nAdditional test profiles: free-tier-locked-preview-unit|free-tier-locked-preview-db|free-tier-locked-preview-browser|free-tier-class-step-unit|free-tier-class-step-browser|free-tier-welcome-unit|free-tier-welcome-browser|free-tier-welcome-live-browser|free-tier-welcome-db\n";
   pages.root += classStepHelp;
   pages.test += classStepHelp;
+  const tourHelp = "\nGuided tour test profiles: guided-tours-unit|guided-tours-browser|guided-tours-db\n";
+  pages.root += tourHelp;
+  pages.test += tourHelp;
   return pages[topic] || pages.root;
 }
 
