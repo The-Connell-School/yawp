@@ -1930,7 +1930,7 @@ export function AssignmentCreationSheetContent({
                           {strictnessLabel}
                         </span>{' '}
                         — {strictnessDescription}
-                      </p>{' '}
+                      </p>
                     </>
                   )}
                 </div>
