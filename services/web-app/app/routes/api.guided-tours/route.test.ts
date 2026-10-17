@@ -4,6 +4,9 @@ import { redirect } from 'react-router';
 const prisma = {
   userTour: { findUnique: mock(), upsert: mock(), createMany: mock(), deleteMany: mock() },
 };
+const getLockedPreviewApplication = mock();
+mock.module('~/domain/free-tier/locked-preview.server', () => ({ getLockedPreviewApplication }));
+mock.module('~/cookies/membership-id.server', () => ({ getMembershipId: async () => null }));
 const requireUserId = mock();
 const requireMembership = mock();
 const isFreeTierEnabled = mock();
@@ -48,6 +51,8 @@ describe('api.guided-tours', () => {
     ]) {
       fn.mockReset();
     }
+    getLockedPreviewApplication.mockReset();
+    getLockedPreviewApplication.mockResolvedValue(null);
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
       role: 'TEACHER',
@@ -226,5 +231,54 @@ describe('api.guided-tours', () => {
   test('only accepts POST', async () => {
     const response = (await post({}, 'PUT')) as Response;
     expect(response.status).toBe(405);
+  });
+});
+
+
+describe('waiting teacher tour boundary', () => {
+  beforeEach(() => {
+    for (const fn of [prisma.userTour.upsert, prisma.userTour.createMany, prisma.userTour.deleteMany, requireMembership, requireUserId, isFreeTierEnabled, isFeatureFlagEnabled, getLockedPreviewApplication]) fn.mockReset();
+    requireUserId.mockResolvedValue('waiting-user');
+    getLockedPreviewApplication.mockResolvedValue({ status: 'SENT', organizationId: null });
+    isFreeTierEnabled.mockResolvedValue(true);
+    isFeatureFlagEnabled.mockResolvedValue(true);
+  });
+  test('unprovisioned waiting teacher can only record the permitted preview tour', async () => {
+    expect((await post({ tourId: 'waiting-preview', status: 'completed' })).status).toBe(200);
+    expect(requireMembership).not.toHaveBeenCalled();
+    expect(prisma.userTour.upsert).toHaveBeenCalledWith({
+      where: { userId_tourId: { userId: 'waiting-user', tourId: 'waiting-preview' } },
+      create: { userId: 'waiting-user', tourId: 'waiting-preview', status: 'completed' },
+      update: { status: 'completed' },
+    });
+    expect(isFeatureFlagEnabled).toHaveBeenCalledWith('guided-tours', undefined);
+  });
+  test('normal tours, reset and preparation states cannot write via the exception', async () => {
+    for (const fields of [...tourWrites, { tourId: 'waiting-preview', status: 'started' }])
+      expect((await post(fields)).status).toBe(403);
+    for (const status of ['ACCOUNT_CREATED', 'ADMIN_SUBMITTED']) {
+      getLockedPreviewApplication.mockResolvedValue({ status, organizationId: 'pending-org' });
+      expect((await post({ tourId: 'waiting-preview', status: 'completed' })).status).toBe(403);
+    }
+    expect(requireMembership).not.toHaveBeenCalled();
+    expect(prisma.userTour.upsert).not.toHaveBeenCalled();
+    expect(prisma.userTour.createMany).not.toHaveBeenCalled();
+    expect(prisma.userTour.deleteMany).not.toHaveBeenCalled();
+  });
+  test('both flags gate waiting progress and organization targeting is preserved', async () => {
+    getLockedPreviewApplication.mockResolvedValue({ status: 'MANUAL_REVIEW', organizationId: 'pending-org' });
+    isFeatureFlagEnabled.mockResolvedValue(false);
+    expect((await post({ tourId: 'waiting-preview', status: 'completed' })).status).toBe(404);
+    expect(isFeatureFlagEnabled).toHaveBeenCalledWith('guided-tours', 'pending-org');
+    isFeatureFlagEnabled.mockResolvedValue(true);
+    isFreeTierEnabled.mockResolvedValue(false);
+    expect((await post({ tourId: 'waiting-preview', status: 'completed' })).status).toBe(404);
+    expect(prisma.userTour.upsert).not.toHaveBeenCalled();
+  });
+  test('read-only authentication fails before the waiting exception', async () => {
+    requireUserId.mockRejectedValue(new Response(null, { status: 403 }));
+    await expect(post({ tourId: 'waiting-preview', status: 'completed' })).rejects.toMatchObject({ status: 403 });
+    expect(getLockedPreviewApplication).not.toHaveBeenCalled();
+    expect(prisma.userTour.upsert).not.toHaveBeenCalled();
   });
 });

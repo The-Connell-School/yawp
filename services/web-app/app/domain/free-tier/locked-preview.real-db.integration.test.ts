@@ -13,6 +13,7 @@ import { action as createAssignment } from '~/routes/api.assignments.create/rout
 import { action as reporter } from '~/routes/api.domain.reporter/route';
 import { action as planner } from '~/routes/api.domain.lesson-planner/route';
 import { action as packet } from '~/routes/api.domain.lesson-planner.packet/route';
+import { action as tourAction } from '~/routes/api.guided-tours/route';
 import { action as students } from '~/routes/app.organization.students/route';
 import { loader as preview } from '~/routes/app.free-tier.preview/route';
 import { replaceStudentClassRoster } from '~/domain/collaboration/student-roster.server';
@@ -206,6 +207,37 @@ local(
   }
 );
 
+
+local('waiting tour POST persists only its own progress while all teaching routes stay closed', async () => {
+  const names = ['feature_flag.free_tier', 'feature_flag.guided-tours'];
+  const original = await prisma.setting.findMany({ where: { name: { in: names } } });
+  const session = await prisma.session.create({ data: { userId, expirationDate: new Date(Date.now() + 3600000) } });
+  const cookie = await authSessionStorage.getSession(); cookie.set('sessionId', session.id);
+  const headers = { cookie: (await authSessionStorage.commitSession(cookie)).split(';')[0] };
+  const post = (fields: Record<string, string>) => tourAction({ request: new Request('http://localhost/api/guided-tours', { method: 'POST', headers, body: new URLSearchParams(fields) }), params: {} } as any);
+  try {
+    for (const name of names) await prisma.setting.upsert({ where: { name }, create: { name, value: 'true', valueType: 'boolean' }, update: { value: 'true' } });
+    const before = { assignments: await prisma.assignment.count(), members: await prisma.orgMembership.count(), reservations: await prisma.aiRequestReservation.count() };
+    expect((await post({ tourId: 'waiting-preview', status: 'completed' })).status).toBe(200);
+    expect((await post({ tourId: 'waiting-preview', status: 'dismissed' })).status).toBe(200);
+    expect((await prisma.userTour.findUniqueOrThrow({ where: { userId_tourId: { userId, tourId: 'waiting-preview' } } })).status).toBe('completed');
+    for (const fields of [{ tourId: 'dashboard', status: 'completed' }, { intent: 'reset' }] as Record<string, string>[])
+      expect((await post(fields)).status).toBe(403);
+    for (const path of ['/api/assignments/create', '/api/domain/reporter', '/api/domain/lesson-planner', '/app/organization/students'])
+      await expect(enforceLockedPreviewRequest(new Request(`http://localhost${path}`, { method: 'POST' }), userId)).rejects.toMatchObject({ status: 403 });
+    expect(await prisma.assignment.count()).toBe(before.assignments);
+    expect(await prisma.orgMembership.count()).toBe(before.members);
+    expect(await prisma.aiRequestReservation.count()).toBe(before.reservations);
+  } finally {
+    await prisma.session.delete({ where: { id: session.id } });
+    await prisma.userTour.deleteMany({ where: { userId } });
+    for (const name of names) {
+      const row = original.find(row => row.name === name);
+      if (row) await prisma.setting.update({ where: { name }, data: { value: row.value } });
+      else await prisma.setting.deleteMany({ where: { name } });
+    }
+  }
+});
 
 local('approval restores assignment admission and flag OFF preserves request behavior', async () => {
   const request = new Request('http://localhost/api/assignments/create', { method: 'POST' });

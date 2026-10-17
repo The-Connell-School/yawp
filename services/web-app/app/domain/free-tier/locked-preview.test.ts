@@ -30,3 +30,11 @@ test('crafted requests cannot enter teaching routes or resource APIs', () => {
     for (const method of ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'])
       expect(isLockedPreviewRequestAllowed(method, path)).toBe(false);
 });
+
+
+test('only the exact tour POST enters its own eligibility and intent checks', () => {
+  expect(isLockedPreviewRequestAllowed('POST', '/api/guided-tours')).toBe(true);
+  for (const method of ['GET', 'HEAD', 'PUT', 'PATCH', 'DELETE'])
+    expect(isLockedPreviewRequestAllowed(method, '/api/guided-tours')).toBe(false);
+  expect(isLockedPreviewRequestAllowed('POST', '/api/guided-tours/anything')).toBe(false);
+});

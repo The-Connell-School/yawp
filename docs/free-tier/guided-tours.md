@@ -30,6 +30,7 @@ The tours are defined in `services/web-app/app/domain/guided-tours/tours.ts`:
 
 | Tour | Page | Steps point at |
 | --- | --- | --- |
+| `waiting-preview` | `/app/free-tier/preview` | Permitted content, read-only guidance, locked actions |
 | `dashboard` | `/app` | Classes, Assignments, Grading, sidebar |
 | `my-classes` | `/app/my-classes` | Class grid, Create Class (one-class limit) |
 | `class` | `/app/my-classes/:id` | Student join link, roster, tabs |
@@ -89,3 +90,15 @@ and flag-off evidence. Desktop and mobile onboarding regressions also verify
 that the class-preparation and administrator steps suppress tours until approval;
 approval is a local fixture transition and sends no email. Stop all owned
 processes and remove test resources after QA.
+
+
+## Approval waiting integration
+
+The existing approval gate identifies waiting free-classroom teachers before a
+membership is provisioned. With both tour flags enabled locally, the permitted
+read-only preview offers its own tour. It does not grant access to dashboard
+routes, teaching tools, assignments, or student invitations. Only the exact tour
+POST reaches the action; waiting teachers can record only `waiting-preview`
+completion or dismissal. Normal page-tour writes and reset remain forbidden.
+Class preparation and administrator details still have no tours. Read-only
+impersonation hides controls and denies writes. Flags remain default OFF.
