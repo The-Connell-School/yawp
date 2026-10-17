@@ -19,6 +19,8 @@ export function UnifiedLogin({
     redirectTo: string;
     googleAvailable: boolean;
     teacherPromptAccount?: TeacherPromptAccount;
+    /** False on a preview whose origin is not registered with Google. */
+    googleVisible?: boolean;
     initialState?: SignonState;
   };
 }) {
@@ -62,6 +64,7 @@ export function UnifiedLogin({
       }
       redirectTo={entry.redirectTo}
       googleAvailable={entry.googleAvailable}
+      googleVisible={entry.googleVisible ?? true}
       transport={transport}
       teacherPromptAccount={entry.teacherPromptAccount}
       passwordForm={(state) => (
