@@ -197,6 +197,10 @@ jobs:
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         run: bun test ./packages/prisma/scripts/seed-free-tier-bundle-assignment-types.test.ts
 
+      - name: 🧪 Essay demo seed data
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        run: bun test ./packages/prisma/scripts/local-dev/essay-demo-data.test.ts
+
       - name: 🌱 Seed free tier bundle assignment types
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
