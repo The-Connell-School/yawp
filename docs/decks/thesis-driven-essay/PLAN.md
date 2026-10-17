@@ -279,6 +279,22 @@ quick once its questions are answered.
    from the video; a new student sign-up handout; and the Body Paragraphs
    house analogy moved before the writing slide to follow the plan. Teachers
    use PowerPoint and Google Slides.
+8. **Make the slides read from the back row** (Kevin, 2026-10-17):
+   - 18pt minimum for anything students read, enforced by a test; text
+     sized to fit its box; a passage too long for 18pt is split, not
+     shrunk (Lesson 5's "Introduction and body paragraph 1" is now two
+     slides).
+   - Bigger screenshots with numbered markers matching their callouts.
+   - Every deck ends on a closing slide; Lessons 3–6 open their review quiz
+     with an "Optional" divider, like Lesson 7's "Course Review".
+   - Lesson 4's ordering warm-up uses one title for the question and its
+     reveal ("Place the following 7 terms in order:").
+   - Lesson 7 gets a "Write your title" practice slide.
+   - A "Bored in the USA" student handout ships next to the Day 1 deck.
+   - Not changed, still to decide: Brian's example titles in Lesson 7
+     (including "Unlocked and Loaded: How Easy Gun Access Puts Children at
+     Risk"), and whether Consolas (the mono labels) looks right in Google
+     Slides.
 
 ## Questions that were settled above
 
