@@ -977,6 +977,9 @@ for attempt in $(seq 1 90); do
       for (const [index, seat] of JSON.parse(process.env.PREVIEW_ACCESS_SEATS).entries()) {
         console.log(`PREVIEW_SEAT_CODE_${index + 1}=${seat.code}`)
         console.log(`Preview seat ${index + 1} (${seat.label}): ${seat.code}`)
+        if (seat.organizationId === "preview-free-classroom") {
+          console.log(`PREVIEW_FREE_TIER_ACCESS_CODE=${seat.code}`)
+        }
       }
     '
     echo "PREVIEW_ELAPSED_MS=$elapsed_ms"
