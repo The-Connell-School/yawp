@@ -14,6 +14,10 @@ const STEP_MODULES = [
 
 test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
   const createdModuleIds: string[] = [];
+  // The Faculty Lounge's Trainings: the Thesis-Driven Essay course, with one
+  // lesson module that has a deck and one that has none.
+  let trainingId = '';
+  const trainingModuleIds: Record<string, string> = {};
 
   test.beforeAll(async ({ e2eContext }) => {
     const prisma = createE2EPrismaClient();
@@ -25,6 +29,22 @@ test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
         });
         createdModuleIds.push(created.id);
       }
+      const training = await prisma.teacherTraining.create({
+        data: {
+          title: 'The Thesis-Driven Essay',
+          description: 'Brian’s course.',
+          position: 50,
+          teacherTrainingModules: {
+            create: [
+              { title: 'Lesson 2: Pre-writing', position: 7, description: 'Pre-writing.' },
+              { title: 'Lesson 8: Review my Essay (optional)', position: 13, description: 'Review.' },
+            ],
+          },
+        },
+        select: { id: true, teacherTrainingModules: { select: { id: true, title: true } } },
+      });
+      trainingId = training.id;
+      for (const module of training.teacherTrainingModules) trainingModuleIds[module.title] = module.id;
     } finally {
       await prisma.$disconnect();
     }
@@ -35,6 +55,10 @@ test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
     const prisma = createE2EPrismaClient();
     try {
       await prisma.assignmentModule.deleteMany({ where: { id: { in: createdModuleIds } } });
+      if (trainingId) {
+        await prisma.teacherTrainingModule.deleteMany({ where: { teacherTrainingId: trainingId } });
+        await prisma.teacherTraining.delete({ where: { id: trainingId } });
+      }
     } finally {
       await prisma.$disconnect();
     }
@@ -165,6 +189,45 @@ test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
 
     await page.getByRole('link', { name: 'Close' }).click();
     await expect(page).toHaveURL(new RegExp(`${typePage}$`));
+  });
+
+  test('puts each lesson’s deck in its Trainings module too', async ({ page, signIn, e2eContext }) => {
+    await setThesisEssayDecksFlag(true);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    const lesson2 = `/app/teacher-trainings/${trainingId}/modules/${trainingModuleIds['Lesson 2: Pre-writing']}`;
+    await page.goto(lesson2);
+
+    const decks = page.getByTestId('teacher-training-thesis-deck');
+    await expect(decks).toBeVisible();
+    await expect(decks.getByRole('link', { name: /present: lesson 2 · pre-writing/i })).toHaveAttribute(
+      'href',
+      `/present/thesis-essay/lesson-2-pre-writing?from=${encodeURIComponent(lesson2)}`
+    );
+    await expect(decks.getByRole('link', { name: /powerpoint: lesson 2 · pre-writing/i })).toHaveAttribute(
+      'href',
+      '/api/thesis-essay-deck/lesson-2-pre-writing'
+    );
+    await expect(decks.getByRole('link', { name: /lesson plan: lesson 2 · pre-writing/i })).toHaveAttribute(
+      'href',
+      '/api/thesis-essay-deck/lesson-2-pre-writing-lesson-plan'
+    );
+
+    // Presenting from a training comes back to the training.
+    await decks.getByRole('link', { name: /present: lesson 2 · pre-writing/i }).click();
+    await expect(page.getByTestId('slide-counter')).toHaveText('1 / 24');
+    await page.getByRole('link', { name: 'Close' }).click();
+    await expect(page).toHaveURL(new RegExp(`${lesson2}$`));
+
+    // Lesson 8 has no deck.
+    await page.goto(`/app/teacher-trainings/${trainingId}/modules/${trainingModuleIds['Lesson 8: Review my Essay (optional)']}`);
+    await expect(page.getByText('Lesson 8: Review my Essay (optional)').first()).toBeVisible();
+    await expect(page.getByTestId('teacher-training-thesis-deck')).toHaveCount(0);
+
+    // And nothing while the flag is off.
+    await setThesisEssayDecksFlag(false);
+    await page.goto(lesson2);
+    await expect(page.getByText('Lesson 2: Pre-writing').first()).toBeVisible();
+    await expect(page.getByTestId('teacher-training-thesis-deck')).toHaveCount(0);
   });
 
   test('has no decks on other assignment types', async ({ page, signIn, e2eContext }) => {

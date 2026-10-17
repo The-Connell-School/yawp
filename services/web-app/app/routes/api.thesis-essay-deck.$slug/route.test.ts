@@ -13,6 +13,7 @@ mock.module('~/domain/thesis-essay-decks/thesis-essay-decks.server', () => ({
   listAvailableThesisEssayDecks: mock(() => []),
   listAvailableThesisEssayMaterialSlugs: mock(() => new Set()),
   listPresentableThesisEssayDeckSlugs: mock(() => new Set()),
+  availableDeckLinks: mock(() => []),
   readThesisEssayDeckScene: mock(),
   readThesisEssayDeckAsset: mock(),
   readThesisEssayMaterial,

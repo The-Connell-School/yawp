@@ -228,3 +228,57 @@ export function deckAssetContentType(name: string): string {
 export function deckAssetHref(name: string): string {
   return `/api/thesis-essay-deck-asset/${name}`;
 }
+
+/**
+ * The deck for a module of the Faculty Lounge's Trainings: in the
+ * Thesis-Driven Essay course, "Lesson 3: Developing a Thesis Statement" is
+ * Lesson 3's deck. Trainings name their modules by lesson number, not by the
+ * assignment's step titles.
+ */
+export function deckForTrainingModule(courseTitle: string, moduleTitle: string): ThesisEssayDeck | null {
+  if (normalizeTitle(courseTitle).replace(/^the /, '') !== 'thesisdriven essay') return null;
+  const lesson = /^\s*lesson\s+(\d+)\s*:/i.exec(moduleTitle);
+  if (!lesson) return null;
+  return THESIS_ESSAY_DECKS.find((deck) => deck.lesson === Number(lesson[1])) ?? null;
+}
+
+/** One button under a lesson: a way to use its deck, its lesson plan, or a handout. */
+export interface ThesisDeckLink {
+  kind: ThesisEssayMaterial['kind'] | 'present' | 'google-slides';
+  label: string;
+  href: string;
+}
+
+/**
+ * A lesson's buttons, in order: present its deck on YAWP!, copy it into
+ * Google Slides, download it for PowerPoint, its lesson plan, then any
+ * handouts. Only what is there: `available` material slugs on disk,
+ * `presentable` decks with a scene, and a Google master copy. Presenting
+ * returns to `returnTo` when the teacher closes it.
+ */
+export function deckLinks(
+  deck: ThesisEssayDeck,
+  {
+    available,
+    presentable,
+    returnTo,
+    googleIds = GOOGLE_SLIDES_COPY_IDS,
+  }: {
+    available: ReadonlySet<string>;
+    presentable: ReadonlySet<string>;
+    returnTo: string;
+    googleIds?: Readonly<Record<string, string>>;
+  }
+): ThesisDeckLink[] {
+  const label = deckLabel(deck);
+  const google = googleSlidesCopyHref(deck, googleIds);
+  return [
+    ...(presentable.has(deck.slug)
+      ? [{ kind: 'present' as const, label, href: `${presentHref(deck)}?from=${encodeURIComponent(returnTo)}` }]
+      : []),
+    ...(google ? [{ kind: 'google-slides' as const, label, href: google }] : []),
+    ...materialsForDeck(deck)
+      .filter((material) => available.has(material.slug))
+      .map((material) => ({ kind: material.kind, label: material.label ?? label, href: materialHref(material) })),
+  ];
+}

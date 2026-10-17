@@ -48,23 +48,14 @@ import { loadAssignmentCreationQuotasForTypes } from '~/utils/assignment-quota.s
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { THESIS_ESSAY_DECKS_FLAG } from '~/domain/feature-flags/feature-flags';
 import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { ThesisDeckLinks } from '~/components/thesis-essay-decks/thesis-deck-links';
 import {
   DAY_ONE_DECK,
   deckForModuleTitle,
-  deckLabel,
-  googleSlidesCopyHref,
-  materialHref,
-  materialsForDeck,
-  presentHref,
-  type ThesisEssayDeck,
-  type ThesisEssayMaterial,
+  type ThesisDeckLink,
 } from '~/domain/thesis-essay-decks/thesis-essay-decks';
-import {
-  listAvailableThesisEssayMaterialSlugs,
-  listPresentableThesisEssayDeckSlugs,
-} from '~/domain/thesis-essay-decks/thesis-essay-decks.server';
+import { availableDeckLinks } from '~/domain/thesis-essay-decks/thesis-essay-decks.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
-import { cn } from '~/utils/misc';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { AboutDailyPages } from './about-daily-pages/about-daily-pages';
@@ -754,18 +745,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
   );
 }
 
-type ThesisDeckLink = {
-  kind: ThesisEssayMaterial['kind'] | 'present' | 'google-slides';
-  label: string;
-  href: string;
-};
-
 /**
- * The Thesis-Driven Essay's Modules links, by module id: each lesson's three
- * ways to use its deck (present it on YAWP!, copy it into Google Slides,
- * download it for PowerPoint), its lesson plan, and on Day 1 the student
- * handouts. Only what is there is offered. Null when nothing is, so the page
- * keeps its usual wording.
+ * The Thesis-Driven Essay's Modules buttons, by module id: each lesson's deck
+ * three ways, its lesson plan, and on Day 1 the student handouts. Null when
+ * nothing is on disk, so the page keeps its usual wording.
  */
 function buildThesisDecks(
   modules: Array<{ id: string; title: string }>,
@@ -774,33 +757,15 @@ function buildThesisDecks(
   dayOne: ThesisDeckLink[];
   byModuleId: Record<string, ThesisDeckLink[]>;
 } | null {
-  const available = listAvailableThesisEssayMaterialSlugs();
-  if (available.size === 0) return null;
-  const presentable = listPresentableThesisEssayDeckSlugs();
-  const links = (deck: ThesisEssayDeck): ThesisDeckLink[] => {
-    const label = deckLabel(deck);
-    const google = googleSlidesCopyHref(deck);
-    return [
-      ...(presentable.has(deck.slug)
-        ? [{ kind: 'present' as const, label, href: `${presentHref(deck)}?from=${encodeURIComponent(returnTo)}` }]
-        : []),
-      ...(google ? [{ kind: 'google-slides' as const, label, href: google }] : []),
-      ...materialsForDeck(deck)
-        .filter((material) => available.has(material.slug))
-        .map((material) => ({
-          kind: material.kind,
-          label: material.label ?? label,
-          href: materialHref(material),
-        })),
-    ];
-  };
+  const dayOne = availableDeckLinks(DAY_ONE_DECK, returnTo);
+  if (!dayOne.length) return null;
   const byModuleId: Record<string, ThesisDeckLink[]> = {};
   for (const module of modules) {
     const deck = deckForModuleTitle(module.title);
-    const moduleLinks = deck ? links(deck) : [];
+    const moduleLinks = deck ? availableDeckLinks(deck, returnTo) : [];
     if (moduleLinks.length) byModuleId[module.id] = moduleLinks;
   }
-  return { dayOne: links(DAY_ONE_DECK), byModuleId };
+  return { dayOne, byModuleId };
 }
 
 /**
@@ -818,51 +783,6 @@ export function showModulesAccordion(
 ): boolean {
   if (moduleCount === 0) return false;
   return !isExitTicketAssignmentType(assignmentType);
-}
-
-const THESIS_LINK_TEXT: Record<ThesisDeckLink['kind'], { prefix: string; type: string }> = {
-  present: { prefix: 'Present', type: 'on YAWP!' },
-  'google-slides': { prefix: 'Google Slides', type: 'make a copy' },
-  deck: { prefix: 'PowerPoint', type: '.pptx' },
-  'lesson-plan': { prefix: 'Lesson plan', type: '.pdf' },
-  handout: { prefix: 'Handout', type: '.pdf' },
-};
-
-/**
- * A lesson's deck, three ways (present it here, copy it into Google Slides,
- * download it for PowerPoint), then its lesson plan and handouts, as links
- * styled like small buttons. Presenting is the loudest: it always looks
- * exactly as designed.
- */
-function ThesisDeckDownloads({ links }: { links: ThesisDeckLink[] }) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {links.map((link) => {
-        const text = THESIS_LINK_TEXT[link.kind];
-        const isPresent = link.kind === 'present';
-        const isDownload = link.kind !== 'present' && link.kind !== 'google-slides';
-        return (
-          <a
-            key={link.href}
-            href={link.href}
-            {...(isDownload ? { download: true } : {})}
-            {...(link.kind === 'google-slides' ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium',
-              isPresent
-                ? 'bg-primary text-primary-foreground hover:opacity-90'
-                : 'border bg-background text-foreground hover:bg-accent'
-            )}
-          >
-            {link.kind === 'handout' ? link.label : `${text.prefix}: ${link.label}`}
-            <span className={cn('text-xs', isPresent ? 'opacity-80' : 'text-muted-foreground')}>
-              ({text.type})
-            </span>
-          </a>
-        );
-      })}
-    </div>
-  );
 }
 
 export default function AppAssignmentTypesIdRoute() {
@@ -1205,7 +1125,7 @@ export default function AppAssignmentTypesIdRoute() {
                 {data.thesisDecks?.dayOne.length ? (
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
                     <span>Before the first module: introduce YAWP! on Day 1.</span>
-                    <ThesisDeckDownloads links={data.thesisDecks.dayOne} />
+                    <ThesisDeckLinks links={data.thesisDecks.dayOne} />
                   </div>
                 ) : null}
                 <Accordion type="multiple">
@@ -1222,7 +1142,7 @@ export default function AppAssignmentTypesIdRoute() {
                         {cm.description || 'No description.'}
                         {data.thesisDecks?.byModuleId[cm.id] ? (
                           <div className="mt-3">
-                            <ThesisDeckDownloads
+                            <ThesisDeckLinks
                               links={data.thesisDecks.byModuleId[cm.id]}
                             />
                           </div>

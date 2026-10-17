@@ -5,8 +5,10 @@ import type { DeckScene } from './deck-scene';
 import {
   THESIS_ESSAY_DECKS,
   THESIS_ESSAY_MATERIALS,
+  deckLinks,
   deckMaterial,
   isDeckAssetName,
+  type ThesisDeckLink,
   type ThesisEssayDeck,
   type ThesisEssayMaterial,
 } from './thesis-essay-decks';
@@ -78,4 +80,13 @@ export async function readThesisEssayDeckAsset(name: string): Promise<Buffer | n
   const file = dir ? path.join(dir, 'assets', name) : null;
   if (!file || !existsSync(file)) return null;
   return readFile(file);
+}
+
+/** A lesson's buttons (`deckLinks`), for what is on disk. Empty when nothing is. */
+export function availableDeckLinks(deck: ThesisEssayDeck, returnTo: string): ThesisDeckLink[] {
+  return deckLinks(deck, {
+    available: listAvailableThesisEssayMaterialSlugs(),
+    presentable: listPresentableThesisEssayDeckSlugs(),
+    returnTo,
+  });
 }

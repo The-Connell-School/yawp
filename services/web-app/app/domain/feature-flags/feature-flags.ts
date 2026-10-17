@@ -58,11 +58,12 @@ export const CLASS_CODE_UNIQUE_FLAG = 'classcode-unique' as const;
 export const LOUNGE_COMMUNITY_FLAG = 'teacher_lounge_community' as const;
 
 /**
- * Thesis-Driven Essay slide decks and lesson plans on the assignment type's
- * page (#452). On: each step in the Modules list offers its lesson's deck and
- * lesson plan to download, and Day 1's (with the student sign-up handout)
- * sits above them. Off: the Modules list is as before, pointing teachers to
- * the Teachers' Lounge, and the download route returns 404.
+ * Thesis-Driven Essay slide decks and lesson plans (#452). On: each lesson
+ * offers its deck three ways (present on YAWP!, copy to Google Slides,
+ * download for PowerPoint) and its lesson plan, in the assignment type's
+ * Modules and in the Faculty Lounge's Thesis-Driven Essay training; Day 1
+ * adds the student handouts. Off: both pages are as before, and the deck,
+ * presenter and asset routes return 404.
  */
 export const THESIS_ESSAY_DECKS_FLAG = 'thesis_essay_decks' as const;
 
@@ -114,7 +115,7 @@ export const FEATURE_FLAGS = {
   [THESIS_ESSAY_DECKS_FLAG]: {
     label: 'Thesis-Driven Essay slide decks',
     description:
-      "Shows each lesson's slide deck and lesson plan inside the Thesis-Driven Essay's Modules, for teachers to download. Off: the Modules list points to the Teachers' Lounge as before and the downloads return 404.",
+      "Each Thesis-Driven Essay lesson offers its slide deck (present on YAWP!, Google Slides, PowerPoint) and lesson plan, in the assignment's Modules and in the Faculty Lounge's Thesis-Driven Essay training. Off: both pages are as before and the deck pages return 404.",
   },
   [DEMO_FEEDBACK_FLAG]: {
     label: 'Demo feedback widget',

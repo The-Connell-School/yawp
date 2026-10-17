@@ -8,7 +8,9 @@ import {
   deckBySlug,
   deckForModuleTitle,
   deckAssetContentType,
+  deckForTrainingModule,
   deckHref,
+  deckLinks,
   googleSlidesCopyHref,
   isDeckAssetName,
   materialBySlug,
@@ -161,5 +163,57 @@ describe('deck assets', () => {
     for (const name of ['../secret.png', 'icons/../../x.png', '/etc/passwd', 'a/b/c.png', 'icons/eye.svg', 'x.png.exe', '']) {
       expect(isDeckAssetName(name)).toBe(false);
     }
+  });
+});
+
+describe('deckForTrainingModule', () => {
+  const COURSE = 'The Thesis-Driven Essay';
+
+  test('matches each lesson module of the Thesis-Driven Essay training to its deck', () => {
+    expect(deckForTrainingModule(COURSE, 'Lesson 1: Introduce Students to YAWP!')?.slug).toBe('lesson-1-day-1');
+    expect(deckForTrainingModule(COURSE, 'Lesson 2: Pre-writing')?.slug).toBe('lesson-2-pre-writing');
+    expect(deckForTrainingModule(COURSE, 'Lesson 3: Developing a Thesis Statement')?.slug).toBe(
+      'lesson-3-thesis-statement'
+    );
+    expect(deckForTrainingModule(COURSE, 'Lesson 7: Titling Your Essay')?.slug).toBe('lesson-7-titles');
+  });
+
+  test('matches nothing outside the seven lessons, or in another course', () => {
+    expect(deckForTrainingModule(COURSE, 'Lesson 8: Review my Essay (optional)')).toBeNull();
+    expect(deckForTrainingModule(COURSE, 'Meet Your Instructor')).toBeNull();
+    expect(deckForTrainingModule(COURSE, 'Introduction to Lesson Plan Modules')).toBeNull();
+    expect(deckForTrainingModule('Daily Pages', 'Lesson 2: Pre-writing')).toBeNull();
+  });
+});
+
+describe('deckLinks', () => {
+  const day1 = THESIS_ESSAY_DECKS[0];
+  const all = new Set(THESIS_ESSAY_MATERIALS.map((m) => m.slug));
+
+  test('offers present, Google Slides, PowerPoint, the lesson plan, then any handouts', () => {
+    const links = deckLinks(day1, {
+      available: all,
+      presentable: new Set([day1.slug]),
+      returnTo: '/app/teacher-trainings/t1/modules/m1',
+      googleIds: { [day1.slug]: 'abc' },
+    });
+    expect(links.map((link) => link.kind)).toEqual([
+      'present',
+      'google-slides',
+      'deck',
+      'lesson-plan',
+      'handout',
+      'handout',
+    ]);
+    expect(links[0].href).toBe(
+      '/present/thesis-essay/lesson-1-day-1?from=%2Fapp%2Fteacher-trainings%2Ft1%2Fmodules%2Fm1'
+    );
+    expect(links[0].label).toBe('Lesson 1 · Introduce Students to YAWP!');
+    expect(links[4].label).toBe('Student sign-up handout');
+  });
+
+  test('offers only what is there', () => {
+    const links = deckLinks(day1, { available: new Set([day1.slug]), presentable: new Set(), returnTo: '/app' });
+    expect(links.map((link) => link.kind)).toEqual(['deck']);
   });
 });
