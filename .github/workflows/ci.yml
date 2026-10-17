@@ -827,7 +827,7 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       # Fixture steps isolate XDG_CACHE_HOME; keep browser install and lookup shared.
-      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/playwright-browsers
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
     # The browser download hung for five hours on 2026-08-18 and would have run
     # to GitHub's six-hour default before failing. Nothing about this job is
     # worth half a day of a runner: the tests themselves take about seven
