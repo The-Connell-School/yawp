@@ -74,7 +74,7 @@ describe('tester feedback submission', () => {
     expect(
       (
         await submitTesterFeedback(
-          request({ userId: 'other', environment: 'production' }),
+          request({ userId: 'other', environment: 'production', userEmail: 'spoof@example.test', userName: 'Spoof', actions: '[{"type":"route","path":"/app"}]' }),
           deps
         )
       ).status

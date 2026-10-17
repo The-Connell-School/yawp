@@ -43,24 +43,24 @@ export async function listTesterFeedback(
   model = prisma.testerFeedback
 ) {
   const rows = await model.findMany({
-      where: {
-        ...(input.environment ? { environment: input.environment } : {}),
-        ...(input.userId ? { userId: input.userId } : {}),
-        ...(input.severity ? { severity: input.severity } : {}),
-        ...(input.since || input.until
-          ? {
-              createdAt: {
-                ...(input.since ? { gte: new Date(input.since) } : {}),
-                ...(input.until ? { lte: new Date(input.until) } : {}),
-              },
-            }
-          : {}),
-      },
-      include: { user: { select: { email: true, name: true } } },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
-      take: input.limit,
-    });
+    where: {
+      ...(input.environment ? { environment: input.environment } : {}),
+      ...(input.userId ? { userId: input.userId } : {}),
+      ...(input.severity ? { severity: input.severity } : {}),
+      ...(input.since || input.until
+        ? {
+            createdAt: {
+              ...(input.since ? { gte: new Date(input.since) } : {}),
+              ...(input.until ? { lte: new Date(input.until) } : {}),
+            },
+          }
+        : {}),
+    },
+    include: { user: { select: { email: true, name: true } } },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
+    take: input.limit,
+  });
   return rows.map(({ user, ...entry }) => ({
     ...entry,
     actions: Array.isArray(entry.actions) ? entry.actions : null,
@@ -68,7 +68,6 @@ export async function listTesterFeedback(
     userName: user?.name ?? null,
   }));
 }
-
 
 export type FeedbackWriteTransaction = Pick<
   Prisma.TransactionClient,

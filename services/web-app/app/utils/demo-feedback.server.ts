@@ -107,13 +107,19 @@ export async function submitDemoFeedback(
       url: parsed.data.url,
       whatHappened: parsed.data.note,
       // Preserve Internal's string fields while retaining the bounded structured context.
-      whatIDid: parsed.data.actions.map((action) => {
-        switch (action.type) {
-          case 'route': return `Opened ${action.path}`;
-          case 'click': return `Clicked a ${action.target} on ${action.path}`;
-          case 'capture': return `Captured ${action.event} on ${action.path}`;
-        }
-      }).join(' → ').slice(0, 4000),
+      whatIDid: parsed.data.actions
+        .map((action) => {
+          switch (action.type) {
+            case 'route':
+              return `Opened ${action.path}`;
+            case 'click':
+              return `Clicked a ${action.target} on ${action.path}`;
+            case 'capture':
+              return `Captured ${action.event} on ${action.path}`;
+          }
+        })
+        .join(' → ')
+        .slice(0, 4000),
       whatIWish: '',
       severity: parsed.data.severity ?? null,
       actions: parsed.data.actions,
