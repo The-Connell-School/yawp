@@ -21,7 +21,7 @@ assignments, and tool output are never loaded here.
 | `/app/free-tier/preview` GET/HEAD | SENT and MANUAL_REVIEW only; public content | Redirect to waiting flow; existing gate handles status |
 | Assignment pages, `/api/assignments/create`, attachment and prompt APIs | Denied before body parsing, uploads, or writes | Existing authorization and entitlements |
 | Student management, invitation creation, class roster actions | Denied at authentication | Existing authorization |
-| Public token/invitation enrollment | Transaction-aware approval backstop in shared seat admission | Existing enrollment rules |
+| Public token/invitation enrollment | Approval backstop in shared seat admission; legacy `/auth/inv/onboard-student` checks the destination organization in the account/roster/session transaction before any writes | Existing enrollment rules, including legacy seat behavior |
 | Assignment domain admission | Approval backstop before lifetime quota consumption | Existing quota rules |
 | Reporter, Lesson Planner, packets, resource/PDF routes | Denied at authentication | Existing feature/role gates |
 | Reporter and Lesson Planner tool dispatch, generation admission | Organization approval backstop before tool execution or usage reservation | Existing authorization and metering |
@@ -32,6 +32,15 @@ membership or a different selected tenant is outside this rollout. A teacher's
 application scopes flag evaluation to its organization; an unprovisioned teacher
 uses the existing no-organization flag semantics, so a targeted foreign tenant
 cannot enable this preview.
+
+The legacy public onboarding action has no teacher session and does not call
+`requireUserId`. Its valid class-code and invitation cookies therefore require
+the same organization approval policy directly. User/password creation, student
+membership, class connection, and session creation are one transaction after the
+check. Single-class, multi-class and organization invitations are covered by
+direct-action unit and real-database regressions. Pending enrollment returns 403
+without writes; approved, flag-OFF, paid-account and tenant-targeted behavior is
+preserved. Desktop/mobile browser checks also submit the actual public form.
 
 The parent route can replace an action's 403 with a redirect into the locked
 waiting flow. Browser checks accept only those waiting/preview redirects and

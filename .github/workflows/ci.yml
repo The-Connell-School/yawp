@@ -329,6 +329,12 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun test ./services/web-app/app/domain/free-tier/locked-preview.server.test.ts
 
+      - name: Locked preview legacy public enrollment (isolated mocks)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test --max-concurrency=2 ./services/web-app/app/routes/auth.inv.onboard-student/ua-onboarding.test.ts
+
       - name: Locked preview shared writers and tools (real database)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:

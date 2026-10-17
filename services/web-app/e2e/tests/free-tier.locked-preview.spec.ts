@@ -185,7 +185,10 @@ for (const width of [1440, 390]) {
     await page.goto('/app/reporter');
     await expect(page).toHaveURL(/free-tier\/preview/);
     await prisma.freeTierApplication.update({ where: { id: app.id }, data: { status: 'APPROVED' } });
-    // Approval removes the preview lock; keep provisioning outside this test.
+    // Model the organization membership that real approval provisions.
+    const approvedOrg = await prisma.organization.create({ data: { name: 'Local approved classroom', plan: 'FREE_CLASSROOM' } });
+    await prisma.orgMembership.create({ data: { userId: user.id, organizationId: approvedOrg.id, role: 'TEACHER' } });
+    await prisma.freeTierApplication.update({ where: { id: app.id }, data: { organizationId: approvedOrg.id } });
     await page.goto('/app/free-tier/preview');
     await expect(page).not.toHaveURL(/free-tier\/preview/);
     await page.goto('/app/assignments');
@@ -219,3 +222,97 @@ test('flag OFF keeps waiting flow and does not expose the preview', async ({ pag
   await page.goto('/app/free-tier/preview');
   await expect(page).not.toHaveURL(/free-tier\/preview/);
 });
+
+for (const width of [1440, 390]) {
+  test(`legacy public enrollment cannot bypass pending approval at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const { app } = await fixture('11', 'SENT');
+    const org = await prisma.organization.create({
+      data: { name: 'Local pending classroom', plan: 'FREE_CLASSROOM' },
+    });
+    await prisma.freeTierApplication.update({
+      where: { id: app.id },
+      data: { organizationId: org.id },
+    });
+    const school = await prisma.school.create({
+      data: {
+        name: 'Local invitation',
+        code: crypto.randomUUID(),
+        organizationId: org.id,
+      },
+    });
+    const klass = await prisma.class.create({
+      data: { schoolId: school.id, code: crypto.randomUUID() },
+    });
+    const email = `legacy-${crypto.randomUUID()}@example.test`;
+    const storage = createCookieSessionStorage({
+      cookie: {
+        name: 'en_invitation',
+        secrets: process.env.SESSION_SECRET!.split(','),
+        path: '/',
+        httpOnly: true,
+        sameSite: 'lax',
+      },
+    });
+    const invitation = await storage.getSession();
+    invitation.set('email', email);
+    invitation.set('klassId', klass.id);
+    await page
+      .context()
+      .addCookies([
+        {
+          name: 'en_invitation',
+          value: (await storage.commitSession(invitation))
+            .split(';')[0]!
+            .slice('en_invitation='.length),
+          url: `http://localhost:${process.env.CLASS_STEP_PORT}`,
+        },
+      ]);
+    await page.goto('/auth/inv/onboard-student');
+    await expect(
+      page.getByText('Create your account and join your class.')
+    ).toBeVisible();
+    await capture(page, `legacy-enrollment-form-${width}`);
+    const counts = async () =>
+      Promise.all([
+        prisma.user.count(),
+        prisma.orgMembership.count(),
+        prisma.session.count(),
+        prisma.orgMembership.count({
+          where: { classesAsStudent: { some: { id: klass.id } } },
+        }),
+      ]);
+    const before = await counts();
+    const response = await page.request.post('/auth/inv/onboard-student', {
+      form: {
+        name: 'Legacy Student',
+        classId: klass.id,
+        password: 'password1234',
+        confirmPassword: 'password1234',
+      },
+      maxRedirects: 0,
+    });
+    expect(response.status()).toBe(403);
+    expect(await counts()).toEqual(before);
+    expect(await prisma.user.findUnique({ where: { email } })).toBeNull();
+    await page.getByLabel('Name', { exact: true }).fill('Legacy Student');
+    await page.getByLabel('Password', { exact: true }).fill('password1234');
+    await page
+      .getByLabel('Confirm Password', { exact: true })
+      .fill('password1234');
+    const denial = page.waitForResponse(
+      (response) => response.request().method() === 'POST'
+    );
+    await page.getByRole('button', { name: /create account/i }).click();
+    expect((await denial).status()).toBe(403);
+    await expect(
+      page.getByRole('heading', {
+        name: "Oops! Something didn't work quite right.",
+      })
+    ).toBeVisible();
+    await capture(page, `legacy-enrollment-denied-${width}`);
+    expect(await counts()).toEqual(before);
+  });
+}

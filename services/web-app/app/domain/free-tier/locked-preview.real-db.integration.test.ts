@@ -6,6 +6,8 @@ import { reserveAiRequest } from '~/utils/ai-admission.server';
 import { handleReporterToolCall } from '~/domain/reporter/reporter-tools.server';
 import { handleLessonPlannerToolCall } from '~/domain/lesson-planner/lesson-planner-tools.server';
 import { enforceLockedPreviewRequest } from './locked-preview.server';
+import { action as onboardLegacyStudent } from '~/routes/auth.inv.onboard-student/route';
+import { invitationCookieStorage } from '~/cookie-session-storages/invitation.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { action as createAssignment } from '~/routes/api.assignments.create/route';
 import { action as reporter } from '~/routes/api.domain.reporter/route';
@@ -91,6 +93,119 @@ local('the shared roster replacement entry point cannot add students before appr
   await expect(replaceStudentClassRoster({ membershipId, nextClassIds: [classId] })).rejects.toMatchObject({ status: 403 });
   expect(await prisma.orgMembership.count({ where: { classesAsStudent: { some: { id: classId } } } })).toBe(0);
 });
+
+async function legacyStudentRequest(
+  email: string,
+  kind: 'klassId' | 'klassIds' | 'schoolId' = 'klassId'
+) {
+  const invitation = await invitationCookieStorage.getSession();
+  invitation.set('email', email);
+  if (kind === 'schoolId') {
+    const klass = await prisma.class.findUniqueOrThrow({
+      where: { id: classId },
+    });
+    invitation.set('schoolId', klass.schoolId);
+  } else invitation.set(kind, kind === 'klassIds' ? [classId] : classId);
+  const form = new FormData();
+  form.set('name', 'Legacy Student');
+  form.set('classId', classId);
+  form.set('password', 'password1234');
+  form.set('confirmPassword', 'password1234');
+  return {
+    request: new Request('http://localhost/auth/inv/onboard-student', {
+      method: 'POST',
+      body: form,
+      headers: {
+        cookie: (await invitationCookieStorage.commitSession(invitation)).split(
+          ';'
+        )[0]!,
+      },
+    }),
+  } as never;
+}
+
+local(
+  'legacy public invitations reject pending enrollment with no user, membership, roster or session writes',
+  async () => {
+    const counts = async () =>
+      Promise.all([
+        prisma.user.count(),
+        prisma.orgMembership.count(),
+        prisma.session.count(),
+        prisma.orgMembership.count({
+          where: { classesAsStudent: { some: { id: classId } } },
+        }),
+      ]);
+    const before = await counts();
+    for (const kind of ['klassId', 'klassIds', 'schoolId'] as const) {
+      const email = `${prefix}-${kind}@example.test`;
+      await expect(
+        onboardLegacyStudent(await legacyStudentRequest(email, kind))
+      ).rejects.toMatchObject({ status: 403 });
+      expect(await prisma.user.findUnique({ where: { email } })).toBeNull();
+      expect(await counts()).toEqual(before);
+    }
+  }
+);
+
+local(
+  'approved and flag-OFF legacy public invitations still create the account, roster and session',
+  async () => {
+    try {
+      for (const mode of ['approved', 'flag-off']) {
+        await prisma.freeTierApplication.update({
+          where: { id: appId },
+          data: { status: mode === 'approved' ? 'APPROVED' : 'SENT' },
+        });
+        await setFlag(
+          mode === 'flag-off'
+            ? 'false'
+            : JSON.stringify({ mode: 'targeted', orgIds: [orgId] })
+        );
+        const email = `${prefix}-${mode}@example.test`;
+        try {
+          const response = (await onboardLegacyStudent(
+            await legacyStudentRequest(email)
+          )) as Response;
+          expect(response.status).toBe(302);
+          expect(response.headers.get('location')).toBe('/app');
+          const user = await prisma.user.findUniqueOrThrow({
+            where: { email },
+          });
+          expect(
+            await prisma.orgMembership.count({
+              where: {
+                userId: user.id,
+                organizationId: orgId,
+                role: 'STUDENT',
+                classesAsStudent: { some: { id: classId } },
+              },
+            })
+          ).toBe(1);
+          expect(
+            await prisma.session.count({ where: { userId: user.id } })
+          ).toBe(1);
+        } finally {
+          const user = await prisma.user.findUnique({ where: { email } });
+          if (user) {
+            await prisma.session.deleteMany({ where: { userId: user.id } });
+            await prisma.orgMembership.deleteMany({
+              where: { userId: user.id },
+            });
+            await prisma.user.delete({ where: { id: user.id } });
+          }
+        }
+      }
+    } finally {
+      await prisma.freeTierApplication.update({
+        where: { id: appId },
+        data: { status: 'SENT' },
+      });
+      await setFlag(JSON.stringify({ mode: 'targeted', orgIds: [orgId] }));
+    }
+  }
+);
+
 
 local('approval restores assignment admission and flag OFF preserves request behavior', async () => {
   const request = new Request('http://localhost/api/assignments/create', { method: 'POST' });
