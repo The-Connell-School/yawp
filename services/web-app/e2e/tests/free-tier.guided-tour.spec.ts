@@ -309,6 +309,12 @@ test.describe.serial('Free tier guided tour', () => {
       // centered fallback card.
       await expect(page.locator('[data-tour-active="true"]')).toHaveCount(1);
       await expect(page.getByTestId('guided-tour-spotlight')).toBeVisible();
+      if (path === '/app/organization/classes') {
+        await shot(page, 'organization-step-desktop');
+        await page.setViewportSize({ width: 390, height: 844 });
+        await shot(page, 'organization-step-mobile');
+        await expect(step.getByRole('heading', { name: 'Your organization', exact: true })).toBeVisible();
+      }
       await page.keyboard.press('Escape');
       await expect(step).toBeHidden();
     });

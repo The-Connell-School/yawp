@@ -313,7 +313,7 @@ const TOURS: Record<TourId, PageTour> = {
     steps: [
       {
         target: 'organization-tabs',
-        title: 'Classes, schools, teachers, students',
+        title: 'Your organization',
         body: 'Switch tabs to see everyone and everything in your account. Your free classroom has one class with room for students up to your classroom’s current limit.',
       },
       {
