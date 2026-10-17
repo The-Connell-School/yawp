@@ -227,6 +227,26 @@ jobs:
           ./services/web-app/app/domain/free-tier/service.integration.test.ts
           ./services/web-app/app/routes/api.free-tier.waitlist/route.integration.test.ts
 
+      - name: Free tier class preparation (isolated Postgres)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          CLASS_STEP_DB_TESTS: '1'
+        run: >-
+          bun test --max-concurrency=2
+          ./services/web-app/app/domain/free-tier/class-preparation.test.ts
+          ./services/web-app/app/domain/free-tier/class-preparation.real-db.integration.test.ts
+
+      - name: Flagged approval delivery and route regressions
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          APPROVAL_V2_DB_TESTS: '1'
+        run: |
+          bun test --max-concurrency=2 ./services/web-app/app/domain/free-tier/approval-v2.real-db.integration.test.ts
+          bun test --max-concurrency=2 ./services/web-app/app/routes/app.free-tier.pending/route.v2.test.tsx
+          bun test --max-concurrency=2 ./services/web-app/app/routes/free.admin.approve/route.v2.test.tsx
+
       - name: 🧪 Free-tier operator cap denial persistence (isolated)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
@@ -283,7 +303,7 @@ jobs:
           ./services/web-app/app/utils/preview-access-rate-limit.server.test.ts
           ./services/web-app/app/utils/internal-free-tier-http.server.test.ts
           ./services/web-app/app/utils/mock-admin-environment.test.ts
-          $(find ./services/web-app/app/domain/free-tier -type f -name '*.test.ts' ! -name 'student-join.server.test.ts' ! -name 'inapp-usage.server.test.ts' ! -name 'email.server.test.ts' ! -name 'service.create-token-idempotency.test.ts' ! -name 'posthog-*.test.ts' ! -name 'service.analytics.server.test.ts' ! -name 'provision.analytics.server.test.ts' ! -name '*.integration.test.ts')
+          $(find ./services/web-app/app/domain/free-tier -type f -name '*.test.ts' ! -name 'student-join.server.test.ts' ! -name 'inapp-usage.server.test.ts' ! -name 'monthly-policy.test.ts' ! -name 'locked-preview.server.test.ts' ! -name 'email.server.test.ts' ! -name 'service.create-token-idempotency.test.ts' ! -name 'posthog-*.test.ts' ! -name 'service.analytics.server.test.ts' ! -name 'public-onboarding.route.test.ts' ! -name 'provision.analytics.server.test.ts' ! -name '*.integration.test.ts')
           ./services/web-app/app/routes/app/sidebar-nav.reporter.test.ts
           ./packages/prisma/preview-access-code.free-classroom.test.ts
           ./packages/prisma/scripts/preview-seats.test.ts
@@ -297,11 +317,49 @@ jobs:
           ./services/web-app/e2e/decode-router-data.test.ts
           # decode-router-data: turbo .data assertions in student.unreleased-grade-loader-privacy E2E
 
+      - name: Locked preview policy and authentication (isolated mocks)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./services/web-app/app/domain/free-tier/locked-preview.test.ts
+
+      - name: Locked preview request enforcement (isolated mocks)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./services/web-app/app/domain/free-tier/locked-preview.server.test.ts
+
+      - name: Locked preview legacy public enrollment (isolated mocks)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test --max-concurrency=2 ./services/web-app/app/routes/auth.inv.onboard-student/ua-onboarding.test.ts
+
+      - name: Locked preview shared writers and tools (real database)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          LOCKED_PREVIEW_DB_TESTS: '1'
+        run: bun test --max-concurrency=2 ./services/web-app/app/domain/free-tier/locked-preview.real-db.integration.test.ts
+
       - name: 🧪 Free-account in-app usage adapter (isolated; mocks prisma)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun test ./services/web-app/app/domain/free-tier/inapp-usage.server.test.ts
+
+      - name: Monthly free-tier consumer policy (isolated; mocks prisma)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./services/web-app/app/domain/free-tier/monthly-policy.test.ts
+
+      - name: Monthly operations and durable retries (isolated PostgreSQL)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          FTO_LIMITS_DB_TESTS: '1'
+        run: bun test ./services/web-app/app/domain/free-tier/monthly-operations.real-db.integration.test.ts
 
       - name: 🧪 Read-only grading status (isolated; mocks prisma)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -311,6 +369,28 @@ jobs:
 
       # Bun module mocks persist across files. The email recipient tests stub
       # Prisma's email log, so keep them out of the combined real-DB run above.
+      - name: Public grade gate route regressions (isolated)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./services/web-app/app/domain/free-tier/public-onboarding.route.test.ts
+
+      - name: Original admission copy and delayed delivery (isolated)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          FREE_WELCOME_DB_TESTS: '1'
+          FREE_TIER_BUDGET_ENVIRONMENT: preview
+        run: bun test ./services/web-app/app/domain/free-tier/welcome-copy.real-db.integration.test.ts
+
+      - name: Public decline admission exclusions (isolated)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          FREE_WELCOME_DB_TESTS: '1'
+          FREE_TIER_BUDGET_ENVIRONMENT: preview
+        run: bun test ./services/web-app/app/domain/free-tier/public-onboarding.real-db.integration.test.ts
+
       - name: 🧪 Free-tier email recipient tests (isolated; mocks prisma)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
@@ -367,6 +447,78 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun test ./services/web-app/app/domain/free-tier/student-join.server.test.ts
+
+      - name: 🧪 Signed free-tier limits and entitlement tests (isolated processes)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: |
+          set -e
+          bun test app/utils/internal-free-tier-limits.server.test.ts
+          bun test app/domain/free-tier/limits.test.ts
+          bun test app/utils/entitlements.server.test.ts
+          bun test app/utils/lesson-planner/lesson-planner-quota.server.test.ts
+
+      - name: 🧪 Free-tier limits concurrency and enforcement (dedicated PostgreSQL)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          PGPASSWORD: postgres
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_ia-i5-limits
+          E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_ia-i5-limits
+          FREE_TIER_LIMITS_LOCAL_TEST: '1'
+        run: |
+          set -e
+          createdb -h 127.0.0.1 -U postgres 'yawp_ia-i5-limits'
+          bun run --cwd packages/prisma prisma migrate deploy
+          cd services/web-app
+          bun test --max-concurrency=2 app/domain/free-tier/limits.real-db.integration.test.ts
+
+      - name: 🧪 Signed duplicate class-code reads (isolated unit tests)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test app/utils/internal-class-code-duplicates.server.test.ts
+
+      - name: 🧪 Duplicate class-code metadata and read-only queries (dedicated PostgreSQL)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          PGPASSWORD: postgres
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_ia-i3-dupes
+          E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_ia-i3-dupes
+          CLASS_CODE_DUPLICATES_LOCAL_TEST: '1'
+        run: |
+          set -e
+          createdb -h 127.0.0.1 -U postgres 'yawp_ia-i3-dupes'
+          bun run --cwd packages/prisma prisma migrate deploy
+          cd services/web-app
+          bun test --max-concurrency=2 app/utils/internal-class-code-duplicates.real-db.integration.test.ts
+
+      - name: 🧪 Signed approval history and staff resend adapters (isolated processes)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: |
+          set -e
+          for file in app/utils/internal-approval-history.test.ts app/utils/internal-approval-reads.server.test.ts app/utils/internal-approval-resend.server.test.ts; do
+            bun test --max-concurrency=2 "$file"
+          done
+
+      - name: 🧪 Signed approval delivery and history (dedicated PostgreSQL)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          PGPASSWORD: postgres
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_ia-i1-approvals-ci
+          E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_ia-i1-approvals-ci
+          INTERNAL_APPROVALS_LOCAL_TEST: '1'
+        run: |
+          set -e
+          createdb -h 127.0.0.1 -U postgres 'yawp_ia-i1-approvals-ci'
+          bun run --cwd packages/prisma prisma migrate deploy
+          cd services/web-app
+          bun test --max-concurrency=2 app/utils/internal-approvals.real-db.integration.test.ts
 
       - name: 🧪 Existing student code authorization (isolated; mocks prisma)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -473,9 +625,15 @@ jobs:
         run: |
           mkdir -p "$TMPDIR"
           bun test ./services/web-app/app/domain/unified-signon/policy.test.ts
+          bun test ./services/web-app/app/domain/unified-signon/validation-copy.test.ts
+          bun test ./services/web-app/app/domain/unified-signon/resend-mail.server.test.ts
           bun test ./services/web-app/app/domain/unified-signon/google.test.ts
           bun test ./services/web-app/app/routes/auth.login/unified-dispatch.test.ts
+          bun test ./services/web-app/app/utils/login-rate-limit-target.test.ts
+          bun test ./services/web-app/app/domain/free-tier/student-join.server.test.ts
+          bun test ./services/web-app/app/domain/unified-signon/class-student.real-db.integration.test.ts
           bun test ./services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts
+          bun test ./services/web-app/app/routes/join/route.real-db.integration.test.ts
 
       - name: Preview-only sign-on fixture guards and real handlers
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -591,6 +749,7 @@ jobs:
             app/routes/app._index/route.test.ts \
             app/routes/app.my-classes._index/route.test.ts \
             app/utils/assignment-quota.server.test.ts \
+            app/utils/assignment-quota.monthly.test.ts \
             app/domain/free-tier/provision-free-classroom.server.test.ts \
             app/domain/free-tier/posthog-analytics.server.test.ts \
             app/domain/free-tier/posthog-disabled.server.test.ts \
@@ -601,6 +760,9 @@ jobs:
             app/routes/free._index/route.loader.test.ts \
             app/routes/api.preview.qa.free-tier-manifest/route.test.ts \
             app/routes/app.free-tier.onboarding/route.test.tsx \
+            app/routes/app.free-tier.onboarding/route.self-admin.test.tsx \
+            app/domain/free-tier/admin-email.test.ts \
+            app/domain/free-tier/admin-email-rules.server.test.ts \
             app/routes/app.free-tier.pending/route.test.tsx \
             app/routes/free.admin.approve/route.loader.test.ts \
             app/routes/free._index/route.action.test.ts \
@@ -767,6 +929,55 @@ jobs:
           mkdir -p "$TMPDIR"
           trap 'rm -rf "$SIGNON_MAIL_CAPTURE_DIR"' EXIT
           bun x playwright test --config playwright.unified-backend.config.ts --workers=1
+
+      - name: Unified sign-on isolated-preview resend browser flows
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
+        working-directory: services/web-app
+        env:
+          CI: true
+          NODE_ENV: development
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          SESSION_SECRET: ci-local-signon-session-secret
+          SIGNON_LOCAL_TEST: '1'
+          SIGNON_RESEND_CAPTURE_DIR: ${{ runner.temp }}/signon-resend/mail
+          TMPDIR: ${{ runner.temp }}/signon-resend
+          PREVIEW_ACCESS_SECRET: ci-local-preview-resend-private-secret-32bytes
+          FREE_TIER_LINK_HMAC_SECRET: ci-local-free-tier-resend-private-secret-32bytes
+          PRIMARY_APP_URL: http://localhost:5396
+          RESEND_API_KEY: ''
+          EMAIL_PROVIDER: ''
+        run: |
+          mkdir -p "$TMPDIR"
+          trap "python3 -c 'import os, shutil; shutil.rmtree(os.environ[\"SIGNON_RESEND_CAPTURE_DIR\"], ignore_errors=True)'" EXIT
+          bun x playwright test --config playwright.unified-resend.config.ts --workers=1
+
+      - name: Unified sign-on inactive recovery browser flows
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
+        working-directory: services/web-app
+        env:
+          CI: true
+          NODE_ENV: development
+          PGPASSWORD: postgres
+          DATABASE_URL: postgresql://yawp_pr_999565_app:ci-fixture-only@127.0.0.1:5432/yawp_pr_999565
+          E2E_DATABASE_URL: postgresql://yawp_pr_999565_app:ci-fixture-only@127.0.0.1:5432/yawp_pr_999565
+          SESSION_SECRET: ci-local-signon-session-secret
+          SIGNON_PREVIEW_FIXTURE_TEST: '1'
+          PREVIEW_ACCESS_SECRET: ci-local-recovery-private-secret-32bytes
+          YAWP_ENVIRONMENT: preview
+          PREVIEW_SLUG: pr-999565
+          PREVIEW_DATA_MODE: seed
+          TMPDIR: ${{ runner.temp }}/signon-recovery
+          RESEND_API_KEY: ''
+          EMAIL_PROVIDER: ''
+        run: |
+          mkdir -p "$TMPDIR"
+          trap 'psql -h 127.0.0.1 -U postgres -d postgres -c "DROP DATABASE IF EXISTS yawp_pr_999565 WITH (FORCE)" -c "DROP ROLE IF EXISTS yawp_pr_999565_app"' EXIT
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE yawp_pr_999565_app LOGIN PASSWORD 'ci-fixture-only'" -c "CREATE DATABASE yawp_pr_999565 OWNER yawp_pr_999565_app"
+          bun run --cwd ../../packages/prisma prisma migrate deploy
+          bun run ../../packages/prisma/scripts/seed-local-dev.ts
+          bun run ../../packages/prisma/scripts/seed-preview-signon-qa.ts
+          bun x playwright test --config playwright.unified-recovery.config.ts --workers=1
 
       - name: Unified sign-on mocked-provider browser flows
         if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}

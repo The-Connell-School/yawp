@@ -15,8 +15,106 @@ import {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("Yawp project agent CLI", () => {
+  test("advertises each guided tour profile once in capabilities and both help pages", () => {
+    const profiles = ["guided-tours-unit", "guided-tours-db", "guided-tours-browser"];
+    const advertised = capabilities().proofProfiles;
+    for (const profile of profiles)
+      expect(advertised.filter((value) => value === profile)).toHaveLength(1);
+    for (const args of [["--help"], ["test", "--help"]]) {
+      const result = spawnSync(path.join(root, "bin/project"), args, {
+        cwd: root, encoding: "utf8", timeout: 10000, env: { ...process.env, CI: "1" },
+      });
+      expect(result.status).toBe(0);
+      for (const profile of profiles) expect(result.stdout).toContain(profile);
+    }
+  });
+  test("advertises onboarding profiles in capabilities and CLI help", () => {
+    const profiles = ["free-tier-approval-migration", "free-tier-locked-preview-unit", "free-tier-locked-preview-db", "free-tier-locked-preview-browser", "free-tier-class-step-unit", "free-tier-class-step-browser", "free-tier-welcome-unit", "free-tier-welcome-browser", "free-tier-welcome-live-browser", "free-tier-welcome-db"];
+    const result = spawnSync(path.join(root, "bin/project"), ["test", "--help"], {
+      cwd: root, encoding: "utf8", timeout: 10000, env: { ...process.env, CI: "1" },
+    });
+    expect(result.status).toBe(0);
+    for (const profile of profiles) {
+      expect(capabilities().proofProfiles).toContain(profile);
+      expect(result.stdout).toContain(profile);
+    }
+  });
+  test("class-code and sign-on browser profiles select their own specs", () => {
+    const source = fs.readFileSync(path.join(root, "scripts/project-agent.mjs"), "utf8");
+    for (const profile of ["signon-classcode", "classcode-unit", "classcode-db", "classcode-browser", "classcode-enter-code", "classcode-report"])
+      expect(capabilities().proofProfiles).toContain(profile);
+    const profileBody = (profile) => source.split(`else if (chosen === "${profile}") {`)[1].split('\n  else if')[0];
+    expect(profileBody("signon-classcode")).toContain('"playwright.classcode.config.ts"');
+    expect(profileBody("classcode-browser")).toContain('"--config=playwright.classcode-unique.config.ts"');
+    expect(fs.readFileSync(path.join(root, "services/web-app/playwright.classcode.config.ts"), "utf8")).toContain('auth\\.unified-classcode');
+    expect(fs.readFileSync(path.join(root, "services/web-app/playwright.classcode-unique.config.ts"), "utf8")).toContain("classcode-unique.spec.ts");
+  });
+  test("class-step mutation fixtures are discovered only by their dedicated browser runner", () => {
+    const webApp = path.join(root, "services/web-app");
+    const cli = path.join(webApp, "node_modules/@playwright/test/cli.js");
+    for (const [config, count] of [["playwright.config.ts", 0], ["playwright.class-step.config.ts", 5]]) {
+      const result = spawnSync(process.execPath, [cli, "test", "--config", config,
+        "--list", "--pass-with-no-tests", "--reporter=json", "free-tier.create-class.spec.ts"], {
+        cwd: webApp, encoding: "utf8", timeout: 30000,
+        // Listing must never connect or start a server. The dedicated spec must
+        // preserve this explicit E2E connection even without a development URL.
+        env: { ...process.env, CI: "1", CLASS_STEP_PORT: count ? "5204" : undefined,
+          DATABASE_URL: "",
+          E2E_DATABASE_URL: "postgresql://localhost:1/discovery_must_not_connect",
+          PLAYWRIGHT_HTML_OPEN: "never" },
+      });
+      const report = JSON.parse(result.stdout);
+      expect(report.errors).toEqual([]);
+      const specs = report.suites.flatMap((suite) => suite.specs);
+      expect(specs).toHaveLength(count);
+      expect(result.status).toBe(0);
+    }
+  }, 60000);
+  test("welcome mutation fixtures are discovered only by their dedicated browser runner", () => {
+    const webApp = path.join(root, "services/web-app");
+    const cli = path.join(webApp, "node_modules/@playwright/test/cli.js");
+    for (const [config, count] of [["playwright.config.ts", 0], ["playwright.free-tier-welcome-live.config.ts", 2]]) {
+      const result = spawnSync(process.execPath, [cli, "test", "--config", config,
+        "--list", "--pass-with-no-tests", "--reporter=json", "free-tier.welcome-live.spec.ts"], {
+        cwd: webApp, encoding: "utf8", timeout: 30000,
+        // Listing must never connect or start a server. The dedicated spec must
+        // preserve this explicit E2E connection even without a development URL.
+        env: { ...process.env, CI: "1", FREE_WELCOME_PORT: count ? "5204" : undefined,
+          DATABASE_URL: "",
+          E2E_DATABASE_URL: "postgresql://localhost:1/discovery_must_not_connect",
+          PLAYWRIGHT_HTML_OPEN: "never" },
+      });
+      const report = JSON.parse(result.stdout);
+      expect(report.errors).toEqual([]);
+      const specs = report.suites.flatMap((suite) => suite.specs);
+      expect(specs).toHaveLength(count);
+      expect(result.status).toBe(0);
+    }
+  }, 60000);
+
+  test("approval proof profiles isolate mutation fixtures from standard browser discovery", () => {
+    expect(capabilities().proofProfiles).toContain("free-tier-approval-migration");
+    expect(capabilities().proofProfiles).toContain("free-tier-approval-unit");
+    expect(capabilities().proofProfiles).toContain("free-tier-approval-browser");
+    const web = path.join(root, "services", "web-app");
+    const bun = process.execPath;
+    const env = { ...process.env, DATABASE_URL: "", E2E_DATABASE_URL: "postgresql://unused:unused@127.0.0.1:1/unused", APPROVAL_V2_BASE_URL: "http://localhost:5199" };
+    const standard = spawnSync(bun, ["x", "playwright", "test", "--list", "--config=playwright.config.ts", "free-tier.approval-v2.spec.ts"], { cwd:web, env, encoding:"utf8", timeout:30000 });
+    expect(standard.stdout).toContain("Total: 0 tests");
+    const isolated = spawnSync(bun, ["x", "playwright", "test", "--list", "--config=playwright.approval-v2.config.ts"], { cwd:web, env, encoding:"utf8", timeout:30000 });
+    expect(isolated.status).toBe(0);
+    expect(isolated.stdout).toContain("Total: 6 tests");
+  });
   test("advertises isolated fresh impersonation migration verification", () => {
     expect(capabilities().proofProfiles).toContain("internal-fresh-migrations");
+    expect(capabilities().proofProfiles).toContain("internal-grade-declines");
+    expect(capabilities().proofProfiles).toContain("internal-free-tier-limits");
+    expect(capabilities().proofProfiles).toContain("internal-class-code-duplicates");
+    expect(capabilities().proofProfiles).toContain("internal-approvals");
+    expect(capabilities().proofProfiles).toContain("internal-approvals-integration");
+    expect(capabilities().proofProfiles).toContain("internal-class-code-duplicates-integration");
+    expect(capabilities().proofProfiles).toContain("internal-free-tier-limits-integration");
+    expect(capabilities().proofProfiles).toContain("internal-grade-declines-integration");
   });
   test("sibling worktrees receive distinct database identities and honor reassigned Record ports", () => {
     const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "yawp-isolation-"));

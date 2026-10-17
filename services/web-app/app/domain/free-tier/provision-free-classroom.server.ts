@@ -1,3 +1,4 @@
+import { resolveClassCode } from '~/utils/class-code-write.server';
 import {
   runFreeTierAnalytics,
   acquisitionChannel,
@@ -6,6 +7,8 @@ import {
   freeTierOrganizationDistinctId,
   FREE_TIER_ANALYTICS_EVENTS,
 } from './posthog-analytics.server';
+import { isClassPreparationEnabled } from './class-preparation.server';
+import { parseClassPreparation } from './class-preparation';
 import { createHash } from 'node:crypto';
 import type { OrganizationPlan } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
@@ -104,6 +107,8 @@ export async function provisionFreeClassroom(
         id: true,
         email: true,
         schoolName: true,
+        starterClassName: true,
+        starterClassGrade: true,
         userId: true,
         organizationId: true,
       },
@@ -179,13 +184,16 @@ export async function provisionFreeClassroom(
       select: { id: true },
     });
 
-    const classCode = generateClassCode();
+    const prepared = parseClassPreparation(application.starterClassName ?? '', application.starterClassGrade ?? '');
+    const usePrepared = prepared.ok && await isClassPreparationEnabled(application.userId, application.organizationId);
+    const classCode = await resolveClassCode(tx, generateClassCode(), { generated: true });
     const classArtKey = await pickClassArtKeyForOrganization(org.id);
     await tx.class.create({
       data: {
         schoolId: school.id,
         schoolYear: currentSchoolYear(),
-        title: 'My Class',
+        title: usePrepared && prepared.ok ? prepared.className : 'My Class',
+        ...(usePrepared && prepared.ok ? { grade: prepared.grade } : {}),
         code: classCode,
         cardGradientKey: generateClassCardGradientKey(classCode),
         classArtKey,

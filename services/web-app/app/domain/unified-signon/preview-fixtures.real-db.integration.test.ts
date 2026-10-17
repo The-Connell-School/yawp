@@ -218,12 +218,24 @@ suite(
   }
 );
 suite(
-  'real handler ambiguity, multiple choices, full seats and stale choices',
+  'real handler class-code precedence, multiple choices, full seats and stale choices',
   async () => {
     fresh();
+    const found = await post('resolve', { identifier: QA_CODES.free });
+    expect(found.data.state.screen).toBe('class-found');
+    expect(found.data.state.classInfo.id).toBe(qaId('free-class'));
     expect(
-      (await post('resolve', { identifier: QA_CODES.free })).data.state.screen
-    ).toBe('ambiguity');
+      (await post('student-choice', { choice: 'returning' })).data.state.screen
+    ).toBe('class-signin');
+    expect(
+      (
+        await post('student-password', {
+          username: QA_CODES.free,
+          password: LOCAL_DEV_PASSWORD,
+        })
+      ).data.state.variant
+    ).toBe('already');
+    expect((await post('complete-student')).result.status).toBe(302);
     fresh();
     const classes = await post('resolve', { identifier: QA_CODES.multiple });
     expect(classes.data.state.classes).toHaveLength(2);
@@ -312,12 +324,19 @@ suite(
   }
 );
 suite(
-  'two normal handle joins contend for the last seeded race seat',
+  'two generated-handle registrations contend for the last seeded race seat',
   async () => {
     // Only this test's disposable registrations are reset; the seed is create-only.
-    const ids = ['qa-racer-one', 'qa-racer-two'];
+    const handles = ['PreviewRacerone', 'PreviewRacertwo'];
     const racers = await prisma.user.findMany({
-      where: { username: { in: ids } },
+      where: {
+        classStudentHandles: {
+          some: {
+            classId: qaId('race-class'),
+            handleKey: { in: handles.map((h) => h.toLowerCase()) },
+          },
+        },
+      },
       select: { id: true },
     });
     const userIds = racers.map((u) => u.id);
@@ -336,30 +355,46 @@ suite(
     expect(
       (await post('resolve', { identifier: QA_CODES.race })).data.state.variant
     ).not.toBe('full');
+    expect(
+      (await post('student-choice', { choice: 'new' })).data.state.screen
+    ).toBe('class-handle');
     const first = { cookie, token };
     fresh();
     await post('resolve', { identifier: QA_CODES.race });
     expect(
-      (
-        await post('join-handle', {
-          username: ids[0],
-          name: 'Preview racer one',
-          password: LOCAL_DEV_PASSWORD,
-          confirmPassword: LOCAL_DEV_PASSWORD,
-        })
-      ).result.status
-    ).toBe(302);
+      (await post('student-choice', { choice: 'new' })).data.state.screen
+    ).toBe('class-handle');
+    const joined = await post('register-student', {
+      firstName: 'Preview',
+      lastName: 'Racerone',
+      password: LOCAL_DEV_PASSWORD,
+      confirmPassword: LOCAL_DEV_PASSWORD,
+    });
+    expect(joined.result.status).toBe(200);
+    expect(joined.data.state.screen).toBe('joined');
+    expect(joined.data.state.identifier).toBe('@' + handles[0]);
+    expect((await post('complete-student')).result.status).toBe(302);
     cookie = first.cookie;
     token = first.token;
-    const stale = await post('join-handle', {
-      username: ids[1],
-      name: 'Preview racer two',
+    const stale = await post('register-student', {
+      firstName: 'Preview',
+      lastName: 'Racertwo',
       password: LOCAL_DEV_PASSWORD,
       confirmPassword: LOCAL_DEV_PASSWORD,
     });
     expect(stale.result.status).toBe(400);
     expect(JSON.stringify(stale.data)).toContain('full');
-    expect(await prisma.user.count({ where: { username: ids[1] } })).toBe(0);
+    expect(
+      await prisma.classStudentHandle.count({
+        where: {
+          classId: qaId('race-class'),
+          handleKey: handles[1].toLowerCase(),
+        },
+      })
+    ).toBe(0);
+    expect(
+      await prisma.user.count({ where: { name: 'Preview Racertwo' } })
+    ).toBe(0);
   }
 );
 suite(

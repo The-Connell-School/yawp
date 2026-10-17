@@ -11,6 +11,7 @@ mock.module('~/utils/auth.server', () => ({
 }));
 
 const prisma = {
+  setting: { findUnique: mock(async () => null) },
   class: {
     create: mock(),
     findFirst: mock(),

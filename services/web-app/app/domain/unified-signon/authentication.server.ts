@@ -32,7 +32,16 @@ import {
   acceptExistingInvitation,
   acceptStudentInvitation,
 } from './invitations.server';
-import { postAuthenticationDestination } from './policy.server';
+import {
+  postAuthenticationDestination,
+  seatScopedMemberships,
+} from './policy.server';
+import { selectedClass, invalidClassCodeError } from './classes.server';
+import {
+  rememberClassConfirmation,
+  classConfirmationState,
+  readClassConfirmation,
+} from './class-confirmation.server';
 
 async function authenticationHeaders(
   tx: Prisma.TransactionClient,
@@ -68,11 +77,13 @@ export async function finishAuthentication(
   request: Request,
   userId: string,
   issueSession = true,
-  selectedMembershipId?: string
+  selectedMembershipId?: string,
+  continueClass = false
 ): Promise<Response> {
   // This continuation can mutate enrollment even when reached through GET.
   if ((await getImpersonationState(request)).isReadOnly)
     throw new FlowError('Read-only impersonation active.', 403);
+  selectedMembershipId ??= flow.data.classConfirmation?.selectedMembershipId;
   const membershipChosen = Boolean(selectedMembershipId);
   const user = await tx.user.findUniqueOrThrow({
     where: { id: userId },
@@ -88,14 +99,17 @@ export async function finishAuthentication(
       await import('~/utils/preview-signon-qa.server');
     if (!(await hasPreviewSignonQaContext(request, userId, tx))) {
       const seat = await getPreviewAccessSeat(request);
-      memberships = memberships.filter(
+      const inSeat = memberships.some(
         (m) => m.organizationId === seat?.organizationId
       );
-      if (
-        !memberships.length &&
-        !(await previewSessionAllowedWithoutSeatMembership(userId))
-      )
+      const scoped = seatScopedMemberships(
+        memberships,
+        seat?.organizationId,
+        !inSeat && (await previewSessionAllowedWithoutSeatMembership(userId))
+      );
+      if (!scoped)
         throw new FlowError('Sign-in is unavailable for this account.', 403);
+      memberships = scoped;
     }
   }
   if (
@@ -104,6 +118,7 @@ export async function finishAuthentication(
   )
     throw new FlowError('Choose an active membership.', 403);
   flow.data.userId = userId;
+  if (flow.data.classConfirmation) await readClassConfirmation(tx, flow);
   if (flow.data.pendingGoogle && flow.data.proof && !user.mustChangePassword) {
     const headers = await authenticationHeaders(
       tx,
@@ -141,10 +156,21 @@ export async function finishAuthentication(
   }
   // A forced password change must complete before a class is joined.
   if (!user.mustChangePassword && flow.data.classId && flow.data.classCode) {
-    const target = await tx.class.findUnique({
-      where: { id: flow.data.classId },
-      select: { school: { select: { organizationId: true } } },
-    });
+    const target = await selectedClass(tx, flow);
+    if (!target) throw invalidClassCodeError();
+    const already = Boolean(
+      await tx.orgMembership.findFirst({
+        where: {
+          userId,
+          role: 'STUDENT',
+          isActive: true,
+          isOrgOwner: false,
+          organizationId: target.school.organizationId,
+          classesAsStudent: { some: { id: target.id } },
+        },
+        select: { id: true },
+      })
+    );
     const source =
       memberships.find(
         (m) =>
@@ -166,11 +192,12 @@ export async function finishAuthentication(
           code: flow.data.classCode,
           classId: flow.data.classId,
         });
-    if (!enrollment.ok) throw new FlowError(enrollment.error);
+    if (!enrollment.ok) {
+      if (enrollment.code === 'invalid_code') throw invalidClassCodeError();
+      throw new FlowError(enrollment.error);
+    }
     selectedMembershipId = enrollment.membershipId;
-    // Class context is consumed only by the existing enrollment operation.
-    flow.data.classId = undefined;
-    flow.data.classCode = undefined;
+    rememberClassConfirmation(flow, target, enrollment.membershipId, already);
     memberships = await tx.orgMembership.findMany({
       where: { userId, isActive: true },
       include: { organization: { select: { name: true, plan: true } } },
@@ -178,7 +205,7 @@ export async function finishAuthentication(
     });
   }
   let trialDestination: string | null = null;
-  if (!user.mustChangePassword && memberships.length) {
+  if (!user.mustChangePassword) {
     const application = await loadFreeTierGateApplication(userId);
     try {
       await enforceFreeTierTeacherGate({
@@ -199,6 +226,8 @@ export async function finishAuthentication(
     redirectTo: flow.data.destination,
   });
   const headers = await authenticationHeaders(tx, request, user, issueSession);
+  if (issueSession && flow.data.classConfirmation)
+    flow.data.classConfirmation.issueSessionOnContinue = undefined;
   if (destination === 'inactive') {
     const anyStaff = await tx.orgMembership.findFirst({
       where: { userId, role: 'TEACHER' },
@@ -234,6 +263,14 @@ export async function finishAuthentication(
     (memberships.length === 1 ? memberships[0].id : undefined);
   if (membershipId)
     headers.append('set-cookie', await setMembershipId(membershipId));
+  if (
+    !user.mustChangePassword &&
+    flow.data.classConfirmation &&
+    !continueClass
+  ) {
+    flow.data.classConfirmation.selectedMembershipId = membershipId;
+    return Response.json(await classConfirmationState(tx, flow), { headers });
+  }
   if (destination !== '/auth/required-password-change')
     flow.data.completed = true;
   return redirect(destination, { headers });

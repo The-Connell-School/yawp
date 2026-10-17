@@ -1,0 +1,24 @@
+bun test v1.3.1 (89fa0f34)
+
+app/domain/unified-signon/backend.real-db.integration.test.ts:
+prisma:query - 20.87954000000002ms - INSERT INTO "public"."Setting" ("id","createdAt","updatedAt","name","value","valueType") VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT ("name") DO UPDATE SET "value" = $7 WHERE ("public"."Setting"."name" = $8 AND 1=1) RETURNING "public"."Setting"."id", "public"."Setting"."createdAt", "public"."Setting"."updatedAt", "public"."Setting"."name", "public"."Setting"."description", "public"."Setting"."value", "public"."Setting"."valueType"
+955 |         confirmPassword: 'abcdef',
+956 |         classId: 'foreign',
+957 |         joinToken: 'forged',
+958 |       });
+959 |       expect(full.response.status).toBe(400);
+960 |       expect(full.data.state.emailOrigin).toBe(true);
+                                                ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: undefined
+
+      at <anonymous> (/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-email-handle-notice/services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts:960:43)
+(fail) free-class code uses handle-only registration, validates policy and rechecks capacity at submit [943.48ms]
+
+ 0 pass
+ 37 filtered out
+ 1 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [2.01s]

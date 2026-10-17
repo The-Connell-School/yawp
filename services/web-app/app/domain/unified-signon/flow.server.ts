@@ -3,7 +3,7 @@ import { createCookie } from 'react-router';
 import type { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 import { shouldUseSecureCookies } from '~/utils/cookie-security.server';
-import type { SignonState } from './contracts';
+import { identifierKind, type SignonState } from './contracts';
 
 export const digest = (value: string) =>
   createHash('sha256').update(value).digest('hex');
@@ -46,6 +46,22 @@ export type FlowData = {
     linkUserId?: string;
   };
   pendingGoogle?: { subject: string; email: string };
+  /** Display context retained after the student flow discards its email. */
+  studentEmailOrigin?: boolean;
+  studentChoice?: 'new' | 'returning';
+  /** Server-selected school-email signup; does not supply identity proof. */
+  studentEmailSignup?: boolean;
+  studentGoogle?: { subject: string };
+  /** Created only after authoritative enrollment. Presentation is never proof. */
+  classConfirmation?: {
+    classId: string;
+    classCode: string;
+    membershipId: string;
+    already: boolean;
+    generatedHandle?: string;
+    issueSessionOnContinue?: boolean;
+    selectedMembershipId?: string;
+  };
   completed?: boolean;
 };
 export type Flow = {
@@ -139,6 +155,8 @@ export async function saveNewFlow(flow: Flow) {
   });
 }
 export function stateFor(flow: Flow, state: SignonState) {
+  // Leaving school-email signup restores the ordinary email-or-class-code entry.
+  if (state.screen === 'entry') flow.data.studentEmailSignup = undefined;
   const classInfo =
     flow.data.classId && flow.data.state.classInfo?.id === flow.data.classId
       ? flow.data.state.classInfo
@@ -146,6 +164,16 @@ export function stateFor(flow: Flow, state: SignonState) {
   flow.data.state = {
     ...(classInfo ? { classInfo } : {}),
     ...state,
+    ...(state.screen === 'class-handle'
+      ? {
+          emailOrigin:
+            (flow.data.studentEmailOrigin ??
+              identifierKind(flow.data.identifier ?? '') === 'email') &&
+            flow.data.proof !== 'google' &&
+            !flow.data.pendingGoogle &&
+            !flow.data.studentGoogle,
+        }
+      : {}),
     ...(flow.data.proof === 'google' ? { provider: 'google' as const } : {}),
     flowToken: flow.token,
   };

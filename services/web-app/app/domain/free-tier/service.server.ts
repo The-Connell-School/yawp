@@ -12,6 +12,8 @@ import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import type { FreeTierApplicationStatus } from '@app/prisma';
 import { assertTransition } from './state';
+import { BELOW_HS_TAG } from './grade-gate';
+import { RELEASE_EMAIL_V2_COPY_VERSION } from './email-copy';
 import { buildFreeTierEventLink } from './free-tier-public-url.server';
 import {
   coarseUserAgent,
@@ -180,7 +182,7 @@ export async function recordAcquisitionTokenScan(input: {
   }
 }
 
-export async function submitWaitlist(input: WaitlistInput) {
+export async function submitWaitlist(input: WaitlistInput, options?: { onboardingV2?: boolean }) {
   const parsed = waitlistInputSchema.parse(input);
   if (parsed.middleName?.trim()) return { ok: true as const }; // honeypot: do nothing
   const email = normalizeEmail(parsed.email);
@@ -196,6 +198,7 @@ export async function submitWaitlist(input: WaitlistInput) {
         schoolName: parsed.schoolName,
         location: parsed.location,
         gradeLevel: parsed.gradeLevel,
+        releaseEmailCopyVersion: options?.onboardingV2 ? RELEASE_EMAIL_V2_COPY_VERSION : null,
         status: 'LEAD',
       },
     ],
@@ -480,7 +483,7 @@ export type RedeemInput = z.infer<typeof redeemInputSchema>;
 
 export async function redeemToken(
   input: RedeemInput,
-  options?: { scanDedupeCookie?: string | null }
+  options?: { scanDedupeCookie?: string | null; onboardingV2?: boolean }
 ) {
   const parsed = redeemInputSchema.parse(input);
   const email = normalizeEmail(parsed.email);
@@ -492,11 +495,11 @@ export async function redeemToken(
       return { ok: false as const, reason: 'disabled' as const };
     const token = resolved;
 
-    // Read the applicant after admission is serialized. Concurrent scans of the
-    // same email must see the committed invite and reuse its token admission.
-    if (token.bypassWaitlist) {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('free_tier_release'))`;
-    }
+    // Serialize every redemption with decline creation before reading the
+    // applicant or charging a use. Ordinary tokens must also see a committed
+    // decline; a later conflicting insert cannot undo an already charged use.
+    // Concurrent scans reuse the committed application's token admission.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('free_tier_release'))`;
     const existing = await tx.freeTierApplication.findUnique({
       where: { email },
       select: {
@@ -504,8 +507,14 @@ export async function redeemToken(
         status: true,
         releasedAt: true,
         acquisitionTokenId: true,
+        tags: true,
       },
     });
+    // A decline never consumes token uses or admits an account, even after v2
+    // is disabled. Keep the public response indistinguishable from a waitlist.
+    if (existing?.tags?.includes(BELOW_HS_TAG)) {
+      return { ok: true as const, bypassWaitlist: false, created: false, token };
+    }
 
     const now = new Date();
     const bypassActivatesApplication =
@@ -585,6 +594,7 @@ export async function redeemToken(
             schoolName: parsed.schoolName,
             location: parsed.location,
             gradeLevel: parsed.gradeLevel,
+            releaseEmailCopyVersion: options?.onboardingV2 ? RELEASE_EMAIL_V2_COPY_VERSION : null,
             acquisitionTokenId: token.id,
             status: token.bypassWaitlist ? 'INVITED' : 'LEAD',
             releasedAt: token.bypassWaitlist ? now : null,
@@ -695,7 +705,7 @@ export async function releaseBatch(input: ReleaseBatchInput, audit?: TesterAudit
     // Only waitlisted leads can be released; already-released or unknown ids do
     // not use up headroom and are reported separately.
     const leads = await tx.freeTierApplication.findMany({
-      where: { id: { in: ids }, status: 'LEAD' },
+      where: { id: { in: ids }, status: 'LEAD', NOT: { tags: { has: BELOW_HS_TAG } } },
       select: { id: true },
     });
     const leadIds = new Set(leads.map((l) => l.id));
@@ -710,14 +720,14 @@ export async function releaseBatch(input: ReleaseBatchInput, audit?: TesterAudit
       if (audit) {
         for (const id of toRelease) {
           const updated = await tx.freeTierApplication.updateMany({
-            where: { id, status: 'LEAD' }, data: { status: 'INVITED', releasedAt: new Date() },
+            where: { id, status: 'LEAD', NOT: { tags: { has: BELOW_HS_TAG } } }, data: { status: 'INVITED', releasedAt: new Date() },
           });
           released += updated.count;
           if (updated.count) await recordTesterAudit(tx, audit, id, { status: 'INVITED' });
         }
       } else {
         const updated = await tx.freeTierApplication.updateMany({
-          where: { id: { in: toRelease }, status: 'LEAD' },
+          where: { id: { in: toRelease }, status: 'LEAD', NOT: { tags: { has: BELOW_HS_TAG } } },
           data: { status: 'INVITED', releasedAt: new Date() },
         });
         released = updated.count;

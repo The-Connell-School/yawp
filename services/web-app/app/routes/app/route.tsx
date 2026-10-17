@@ -76,6 +76,12 @@ import { FLAT_SIDEBAR_SECTIONS, SidebarNavLinks } from './sidebar-nav';
 import { prisma } from '~/utils/db.server';
 import { shouldRedirectClasslessStudent } from '~/utils/classless-student-gate';
 import { formatUserContactLabel } from '~/utils/user-display';
+import {
+  GuidedTour,
+  RestartToursButton,
+  TourThisPageButton,
+} from '~/components/guided-tour/guided-tour';
+import { loadGuidedTours } from '~/domain/guided-tours/guided-tours.server';
 import { isDemoFreeTierRouteOpen } from '~/utils/free-tier/free-tier-feature-gate.server';
 
 export const NavExpandedContext = createContext({
@@ -100,6 +106,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         options: [] as string[],
         isStudent: false,
       },
+      guidedTours: null,
     });
   }
   const userId = await requireUserId(request);
@@ -134,6 +141,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           options: [],
           isStudent: false,
         },
+        guidedTours: null,
       });
     }
   }
@@ -182,6 +190,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       ? options
       : [selected, ...options].sort((a, b) => b.localeCompare(a));
 
+  // Free classroom teachers get page tours instead of a hands-on orientation.
+  const guidedTours = await loadGuidedTours(userId, profile, request);
+
   return data({
     mockAdminAvailable,
     freeAccountUsage: await readFreeAccountUsage(profile, freeTierRouteOpen),
@@ -190,6 +201,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       options: selectableOptions,
       isStudent: profile.role === 'STUDENT',
     },
+    guidedTours,
   });
 }
 
@@ -218,7 +230,7 @@ export default function Route() {
   const location = useLocation();
   const user = useUser();
   const shellData = useLoaderData<typeof loader>();
-  const { schoolYearScope, mockAdminAvailable } = shellData;
+  const { schoolYearScope, guidedTours, mockAdminAvailable } = shellData;
   const freeAccountUsage =
     'freeAccountUsage' in shellData ? shellData.freeAccountUsage : null;
   const rootData =
@@ -307,6 +319,7 @@ export default function Route() {
     >
       {/* Left navigation panel */}
       <nav
+        data-tour="app-nav"
         className={cn(
           'z-20 flex h-full w-[212px] min-w-[212px] -translate-x-full transform flex-col border-r bg-background transition-all duration-300 ease-in-out sm:translate-x-0',
           {
@@ -393,7 +406,7 @@ export default function Route() {
                           icon: (
                             <>
                               <Microscope size={18} />
-                              <Lock size={12} />
+                              {!freeAccountUsage.monthly && <Lock size={12} />}
                             </>
                           ),
                         },
@@ -419,6 +432,12 @@ export default function Route() {
               onMobileClose={() => mobileNavTrigger.current?.focus()}
             />
           )}
+          {guidedTours && !isReadOnlyImpersonation ? (
+            <TourThisPageButton
+              navExpanded={navExpanded}
+              onClick={() => setIsMobileNavOpen(false)}
+            />
+          ) : null}
           <Popover>
             <PopoverTrigger>
               <div className="flex items-center gap-2 border-t p-4 pb-6 transition hover:bg-foreground/5 sm:pb-3">
@@ -499,6 +518,11 @@ export default function Route() {
                       ? 'Shows the classes and work from this year. Switch back any time — nothing is ever removed.'
                       : 'Scopes your classes and grading queue. Students always keep their earlier work.'}
                   </p>
+                </div>
+              ) : null}
+              {guidedTours && !isReadOnlyImpersonation ? (
+                <div className="border-b p-1">
+                  <RestartToursButton className="w-full justify-start gap-2 rounded-lg" />
                 </div>
               ) : null}
               <Form action="/auth/logout" method="POST" className="p-1">
@@ -594,6 +618,9 @@ export default function Route() {
             <Outlet key={location.pathname} />
           </div>
         </NavExpandedContext.Provider>
+        {guidedTours && !isReadOnlyImpersonation ? (
+          <GuidedTour {...guidedTours} />
+        ) : null}
       </div>
       <UserSettingsDialog
         open={isSettingsOpen}

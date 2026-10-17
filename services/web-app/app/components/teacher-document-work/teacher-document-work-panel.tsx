@@ -882,7 +882,7 @@ export function TeacherDocumentWorkPanel({
   return (
     <div className="space-y-4">
       <DocumentWorkToolbar {...toolbarProps} />
-      {renderMainContent()}
+      <div data-tour="documents-list">{renderMainContent()}</div>
     </div>
   );
 }
@@ -1238,10 +1238,13 @@ function DocumentWorkToolbar(props: DocumentWorkToolbarProps) {
   return (
     <section className="space-y-3">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0 lg:flex-1">
+        <div className="min-w-0 lg:flex-1" data-tour="documents-status">
           <DocumentWorkStatusPills {...props} />
         </div>
-        <div className="flex shrink-0 flex-nowrap items-center gap-2">
+        <div
+          className="flex shrink-0 flex-nowrap items-center gap-2"
+          data-tour="documents-tools"
+        >
           <DocumentWorkActionsMenu actions={props.actions} />
           <Popover>
             <PopoverTrigger asChild>

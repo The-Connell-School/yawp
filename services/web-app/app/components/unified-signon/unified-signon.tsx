@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { ChevronRight, CircleCheck, Clock, Info, Mail } from 'lucide-react';
+import {
+  ChevronRight,
+  CircleCheck,
+  Clock,
+  Info,
+  Mail,
+  Shield,
+} from 'lucide-react';
 import { safeRedirect } from 'remix-utils/safe-redirect';
 import { z } from 'zod';
 import { Button } from '~/components/ui/button';
@@ -11,7 +18,12 @@ import {
   PasswordSchema,
   NameSchema,
 } from '~/utils/schemas/user';
+import {
+  StudentNameSchema,
+  studentHandleBase,
+} from '~/domain/unified-signon/student-handle';
 import { validateUsername } from '~/utils/username';
+import { signonValidationMessage } from '~/domain/unified-signon/validation-copy';
 import {
   identifierKind,
   type SignonClass,
@@ -21,7 +33,6 @@ import {
 } from '~/domain/unified-signon/contracts';
 import './unified-signon.css';
 
-const handleHint = '3–30 letters, numbers, dots, underscores or hyphens.';
 const passwordHint = 'At least 6 characters.'; // Existing account policy; do not silently raise it.
 const unavailable =
   'This sign-in option is not available yet. Please try again later.';
@@ -53,6 +64,7 @@ export function UnifiedSignon({
   const entry = useRef<HTMLInputElement>(null);
   const active = useRef(false);
   const mounted = useRef(false);
+  const invalidFieldToFocus = useRef<string | undefined>(undefined);
   const redirectTo = safeRedirect(rawRedirect, '/app');
   const busy = pending || !!state.pending;
   const blocked = busy || !!state.retryAfterSeconds;
@@ -74,6 +86,14 @@ export function UnifiedSignon({
   }, [screen]);
 
   useEffect(() => {
+    if (busy || !invalidFieldToFocus.current) return;
+    // Inputs are disabled during submission. Focus only after the enabled DOM
+    // has committed, and only for a server error (never while clearing errors).
+    document.getElementById(`signon-${invalidFieldToFocus.current}`)?.focus();
+    invalidFieldToFocus.current = undefined;
+  }, [busy, state.fieldErrors]);
+
+  useEffect(() => {
     if (!state.retryAfterSeconds) return;
     const timer = setTimeout(
       () => setState((s) => ({ ...s, retryAfterSeconds: 0, error: undefined })),
@@ -92,36 +112,25 @@ export function UnifiedSignon({
     });
   };
   const createClassAccount = () =>
-    go({
-      screen:
-        state.classInfo?.accountMode === 'email'
-          ? 'class-email'
-          : 'class-handle',
-      classInfo: state.classInfo,
-    });
+    void run('student-choice', { choice: 'new' });
   const reset = () => {
     setHistory([]);
-    setState(
-      state.classInfo
-        ? {
-            screen: 'class-signin',
-            classInfo: state.classInfo,
-            flowToken: state.flowToken,
-          }
-        : { screen: 'entry' }
-    );
+    setState({ screen: 'entry' });
     setValues({ identifier: '' });
   };
   const back = () => {
     const previous = history.at(-1);
     if (!previous) return reset();
+    if (screen === 'class-email' && previous.screen === 'class-handle')
+      return void run('student-choice', { choice: 'new' }, true);
     setHistory((h) => h.slice(0, -1));
     setState(previous);
     setValues({ identifier: previous.identifier ?? '' });
   };
   const run = async (
     operation: SignonOperation,
-    extra: Record<string, string> = {}
+    extra: Record<string, string> = {},
+    backToPrevious = false
   ) => {
     if (active.current || blocked) return;
     active.current = true;
@@ -139,8 +148,26 @@ export function UnifiedSignon({
         { state, redirectTo }
       );
       if ('redirectTo' in result) window.location.assign(result.redirectTo);
-      else if ('state' in result) go(result.state);
-      else setState((s) => ({ ...s, ...result }));
+      else if ('state' in result) {
+        if (backToPrevious) {
+          setHistory((h) => h.slice(0, -1));
+          setState(result.state);
+          setValues({ identifier: result.state.identifier ?? '' });
+        } else go(result.state);
+      } else {
+        invalidFieldToFocus.current = Object.keys(
+          result.fieldErrors || {}
+        ).find((name) => result.fieldErrors?.[name]);
+        setState((s) => ({
+          ...s,
+          // Enrollment can fail after a class choice or email verification.
+          // Render its field error on the retryable code form for every caller.
+          ...(result.fieldErrors?.classCode
+            ? { screen: 'class-code' as const, variant: undefined }
+            : {}),
+          ...result,
+        }));
+      }
     } catch {
       setState((s) => ({
         ...s,
@@ -178,9 +205,17 @@ export function UnifiedSignon({
             name={name}
             type={options.type ?? 'text'}
             value={values[name] ?? ''}
-            onChange={(event) =>
-              setValues((v) => ({ ...v, [name]: event.target.value }))
-            }
+            onChange={(event) => {
+              setValues((v) => ({ ...v, [name]: event.target.value }));
+              if (
+                ['class-handle', 'handle-join', 'class-signin'].includes(screen)
+              )
+                setState((s) => ({
+                  ...s,
+                  error: undefined,
+                  fieldErrors: { ...s.fieldErrors, [name]: '' },
+                }));
+            }}
             placeholder={options.placeholder}
             autoComplete={options.autoComplete}
             inputMode={name === 'code' ? 'numeric' : undefined}
@@ -371,8 +406,8 @@ export function UnifiedSignon({
         <>
           {google()}
           {divider}
-          {field('identifier', 'Email, handle, or class code', {
-            placeholder: 'Email, @handle, or code',
+          {field('identifier', 'Email or class code', {
+            placeholder: 'Email or class code',
             autoComplete: 'username',
           })}
           {primary(state.pending ? 'Continuing…' : 'Continue')}
@@ -416,6 +451,7 @@ export function UnifiedSignon({
       );
       below = (
         <>
+          {state.classInfo?.accountMode === 'email' && textButton('Back', back)}
           {textButton('Use a different account', reset)}
           {!handleUser &&
             textButton(
@@ -569,36 +605,67 @@ export function UnifiedSignon({
         ) : (
           <>
             {classCard()}
+            {screen === 'class-handle' && state.emailOrigin && (
+              <div role="status" className="signon-banner signon-origin-notice">
+                <Shield aria-hidden="true" width={16} height={16} />
+                <span>
+                  We won't save your email. This class uses a handle and
+                  password.
+                </span>
+              </div>
+            )}
             {variant === 'full' ? (
               <p className="signon-copy">Ask your teacher to make room.</p>
             ) : (
               <>
-                {field(
-                  'name',
-                  screen === 'class-handle' ? 'Display name' : 'Your name',
-                  { autoComplete: 'name' }
-                )}
-                {field('username', 'Handle', {
-                  autoComplete: 'username',
-                  hint:
-                    variant === 'available'
-                      ? `@${screen === 'class-handle' ? 'maya.r' : 'maya_r'} is available`
-                      : screen === 'class-handle'
-                        ? handleHint
-                        : 'You sign in with this.',
+                {field('firstName', 'First name', {
+                  autoComplete: 'given-name',
                 })}
-                {passwords(false, screen === 'class-handle')}
+                {field('lastName', 'Last name', {
+                  autoComplete: 'family-name',
+                })}
+                <p className="signon-copy" aria-live="polite">
+                  Your handle:{' '}
+                  <strong>
+                    {(() => {
+                      try {
+                        return (
+                          '@' +
+                          studentHandleBase(
+                            values.firstName || '',
+                            values.lastName || ''
+                          )
+                        );
+                      } catch {
+                        return 'Created from your name';
+                      }
+                    })()}
+                  </strong>
+                  <br />
+                  We add a number if someone in your class has the same handle.
+                </p>
+                {passwords(false, true)}
                 {primary('Join class', undefined, variant === 'filled')}
               </>
             )}
           </>
         );
       below =
-        screen === 'class-handle'
-          ? textButton('Back', back)
-          : textButton('Already have an account? Sign in', () =>
-              go({ screen: 'class-signin', classInfo: state.classInfo })
-            );
+        variant === 'invalid-link' ? (
+          <p>
+            Already have an account? <Link to="/auth/login">Sign in</Link>
+          </p>
+        ) : screen === 'class-handle' ? (
+          <>
+            {state.classInfo?.accountMode === 'email' &&
+              textButton('Use school email', () => void run('student-email'))}
+            {textButton('Back', back)}
+          </>
+        ) : (
+          textButton('Already have an account? Sign in', () =>
+            go({ screen: 'class-signin', classInfo: state.classInfo })
+          )
+        );
       break;
     case 'teacher':
       title = 'Teachers start with a free trial';
@@ -705,7 +772,12 @@ export function UnifiedSignon({
             {variant !== 'expired' && primary('Email me a code', 'send-code')}
           </>
         );
-      below = textButton('Use a different account', reset);
+      below = (
+        <>
+          {state.classInfo?.accountMode === 'email' && textButton('Back', back)}
+          {textButton('Use a different account', reset)}
+        </>
+      );
       break;
     case 'inactive':
       title = "Your account isn't active";
@@ -821,16 +893,12 @@ export function UnifiedSignon({
             {variant === 'full' ? (
               <p className="signon-copy">Ask your teacher to make room.</p>
             ) : (
-              <>
-                {choice(
-                  "I'm new to YAWP",
-                  'Create an account',
-                  createClassAccount
-                )}
-                {choice('I already have an account', 'Sign in to join', () =>
-                  go({ screen: 'class-signin', classInfo: state.classInfo })
-                )}
-              </>
+              <>{choice('New', 'Create an account', createClassAccount)}</>
+            )}
+            {choice(
+              'Returning',
+              'Sign in with your handle',
+              () => void run('student-choice', { choice: 'returning' })
             )}
           </>
         );
@@ -860,28 +928,49 @@ export function UnifiedSignon({
       );
       break;
     case 'class-email':
-    case 'class-signin':
-      title =
-        screen === 'class-email' ? 'Create your account' : 'Sign in to join';
+      title = 'Create your account';
       body = (
         <>
           {classCard()}
+          {variant === 'existing' && (
+            <div
+              role="status"
+              className="signon-banner signon-origin-notice text-foreground"
+            >
+              <Info aria-hidden="true" width={16} height={16} />
+              <span>
+                You already have an account with this email. Sign in to join
+                this class.
+              </span>
+            </div>
+          )}
           {google()}
           {divider}
-          {field(
-            'identifier',
-            screen === 'class-email' ? 'School email' : 'Email or handle',
-            { autoComplete: 'username' }
-          )}
+          {field('identifier', 'School email', {
+            autoComplete: 'email',
+            type: 'email',
+          })}
           {primary(variant === 'existing' ? 'Sign in instead' : 'Continue')}
         </>
       );
-      below =
-        screen === 'class-email'
-          ? textButton('Back', back)
-          : textButton('New to YAWP? Create an account', () =>
-              createClassAccount()
-            );
+      break;
+    case 'class-signin':
+      title = 'Sign in to your class';
+      body = (
+        <>
+          {classCard()}
+          {field('username', 'Handle', { autoComplete: 'username' })}
+          {field('password', 'Password', {
+            type: 'password',
+            autoComplete: 'current-password',
+          })}
+          <p className="signon-copy">
+            Forgot your password? Ask your teacher to reset it.
+          </p>
+          {primary('Log In')}
+        </>
+      );
+      below = textButton('New to YAWP? Create an account', createClassAccount);
       break;
     case 'joined':
       title =
@@ -889,9 +978,13 @@ export function UnifiedSignon({
       body = (
         <>
           {classCard()}
-          <Button asChild className="signon-primary">
-            <Link to={redirectTo}>Go to my class</Link>
-          </Button>
+          {identifier?.startsWith('@') && (
+            <p className="signon-copy">
+              Your handle is <strong>{identifier}</strong>. Write it down to
+              sign in to this class.
+            </p>
+          )}
+          {primary('Go to my class', 'complete-student')}
         </>
       );
       below = null;
@@ -902,8 +995,8 @@ export function UnifiedSignon({
     if (blocked) return;
     const errors: Record<string, string> = {};
     const id = (values.identifier ?? '').trim();
-    if (['entry', 'class-email', 'class-signin'].includes(screen)) {
-      if (!id) errors.identifier = 'Enter your email or handle.';
+    if (['entry', 'class-email'].includes(screen)) {
+      if (!id) errors.identifier = 'Enter your email or class code.';
       else if (id.length > 100)
         errors.identifier = "That's too long. Check for extra spaces.";
       else if (
@@ -917,6 +1010,10 @@ export function UnifiedSignon({
         if (!result.ok) errors.identifier = result.message;
       }
     }
+    if (screen === 'class-signin') {
+      if (!values.username?.trim()) errors.username = 'Enter your handle.';
+      if (!values.password) errors.password = 'Enter your password.';
+    }
     if (screen === 'password') {
       const result = PasswordSchema.safeParse(values.password ?? '');
       if (!result.success) errors.password = result.error.issues[0].message;
@@ -929,19 +1026,26 @@ export function UnifiedSignon({
         'class-handle',
       ].includes(screen)
     ) {
-      if (screen !== 'required-password' && variant !== 'reset') {
+      if (
+        !['required-password', 'handle-join', 'class-handle'].includes(
+          screen
+        ) &&
+        variant !== 'reset'
+      ) {
         const name = NameSchema.safeParse(values.name ?? '');
         if (!name.success) errors.name = name.error.issues[0].message;
       }
-      if (!googleUser) {
+      if (!googleUser || ['handle-join', 'class-handle'].includes(screen)) {
         const result = PasswordAndConfirmPasswordSchema.safeParse(values);
         if (!result.success)
           for (const issue of result.error.issues)
-            errors[String(issue.path[0])] = issue.message;
+            errors[String(issue.path[0])] = signonValidationMessage(issue);
       }
       if (screen === 'handle-join' || screen === 'class-handle') {
-        const result = validateUsername(values.username ?? '');
-        if (!result.ok) errors.username = result.message;
+        for (const name of ['firstName', 'lastName']) {
+          const result = StudentNameSchema.safeParse(values[name] || '');
+          if (!result.success) errors[name] = result.error.issues[0].message;
+        }
       }
     }
     if (
@@ -971,10 +1075,13 @@ export function UnifiedSignon({
         'class-code': variant === 'multiple' ? 'choose-class' : 'resolve-class',
         'email-code': 'verify-code',
         'name-password': 'create-account',
-        'handle-join': 'join-handle',
-        'class-handle': 'join-handle',
-        'class-email': 'resolve',
-        'class-signin': 'resolve',
+        'handle-join': 'register-student',
+        'class-handle': 'register-student',
+        'class-email':
+          variant === 'existing' && id === identifier
+            ? 'class-email-signin'
+            : 'resolve',
+        'class-signin': 'student-password',
         'partner-code': 'partner-code',
         'class-found': 'choose-class',
       };
@@ -988,7 +1095,9 @@ export function UnifiedSignon({
       ? Mail
       : screen === 'joined'
         ? CircleCheck
-        : screen === 'inactive'
+        : screen === 'inactive' ||
+            (['handle-join', 'class-handle'].includes(screen) &&
+              variant === 'invalid-link')
           ? Info
           : screen === 'trial-status'
             ? variant === 'invited'
@@ -999,12 +1108,15 @@ export function UnifiedSignon({
             : undefined;
   const hasNativeForm =
     (!!passwordForm && ['password', 'required-password'].includes(screen)) ||
-    (screen === 'inactive' && variant === 'staff');
+    (screen === 'inactive' && variant === 'staff') ||
+    (['handle-join', 'class-handle'].includes(screen) &&
+      variant === 'invalid-link');
 
   return (
     <section
       className="unified-signon"
       data-signon-screen={screen}
+      data-signon-variant={variant}
       aria-busy={busy}
     >
       <div className="signon-stack">
@@ -1046,11 +1158,12 @@ export function UnifiedSignon({
                 {state.error}
               </div>
             )}
-            {state.notice && (
-              <div role="status" className="signon-banner">
-                {state.notice}
-              </div>
-            )}
+            {state.notice &&
+              !(screen === 'class-email' && variant === 'existing') && (
+                <div role="status" className="signon-banner">
+                  {state.notice}
+                </div>
+              )}
             {hasNativeForm ? (
               body
             ) : body ? (

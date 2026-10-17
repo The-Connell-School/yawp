@@ -21,6 +21,7 @@ export function FreeTierAuthCard({
   footer,
   icon,
   status,
+  aside,
 }: {
   title: string;
   subtitle?: string;
@@ -28,10 +29,12 @@ export function FreeTierAuthCard({
   footer?: ReactNode;
   icon?: ReactNode;
   status?: boolean;
+  aside?: ReactNode;
 }) {
   return (
-    <div className="free-tier-page">
+    <div className={`free-tier-page${aside ? ' free-tier-approval-v2' : ''}`}>
       <AuthPageShell>
+        {aside ? <div className="free-tier-approval-info">{aside}</div> : null}
         <AuthFormCard
           title={title}
           subtitle={subtitle}

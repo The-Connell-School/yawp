@@ -1,0 +1,67 @@
+{
+  "source": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/design/v2/artboards/signon-40-new-student-school-class-email-all-states.dom.html",
+  "frame": {
+    "x": 892,
+    "y": 127,
+    "width": 392,
+    "height": 882.296875
+  },
+  "metrics": [
+    {
+      "tag": "FORM",
+      "text": "Create your account[English 11, Period 2][Ms. Okafor] · [Lincoln High School]You already have an account with this email. Sign in to join this class.Continue with GoogleorSchool emailSign in instead",
+      "source": "display:flex;width:320px;height:499.297px;padding:24px;gap:24px;flex-direction:column;font-family:ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif;font-size:16px;font-weight:400;color:rgb(60, 56, 40);background-color:rgb(255, 255, 255);border:0px none rgb(60, 56, 40);border-radius:12px;box-shadow:rgba(0, 0, 0, 0.05) 0px 0px 0px 1px, rgba(0, 0, 0, 0.1) 0px 1px 3px 0px, rgba(0, 0, 0, 0.1) 0px 1px 2px -1px",
+      "computed": {
+        "width": "320px",
+        "height": "488.297px",
+        "font": "16px",
+        "padding": "24px",
+        "gap": "24px",
+        "color": "rgb(60, 56, 40)",
+        "background": "rgb(255, 255, 255)"
+      }
+    },
+    {
+      "tag": "DIV",
+      "text": "You already have an account with this email. Sign in to join this class.",
+      "source": "display:flex;width:248px;height:63px;padding:10px 12px;gap:10px;flex-direction:row;align-items:flex-start;font-family:ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif;font-size:14px;font-weight:400;line-height:21px;color:rgb(60, 56, 40);background-color:rgb(230, 226, 214);border:0px none rgb(60, 56, 40);border-radius:6px",
+      "computed": {
+        "width": "248px",
+        "height": "63px",
+        "font": "14px",
+        "padding": "10px 12px",
+        "gap": "10px",
+        "color": "rgb(60, 56, 40)",
+        "background": "rgb(230, 226, 214)"
+      }
+    },
+    {
+      "tag": "LABEL",
+      "text": "School email",
+      "source": "display:block;width:272px;height:22px;flex-direction:row;font-family:ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif;font-size:16px;font-weight:400;color:rgb(27, 27, 27);border:0px none rgb(27, 27, 27)",
+      "computed": {
+        "width": "272px",
+        "height": "19px",
+        "font": "16px",
+        "padding": "0px",
+        "gap": "normal",
+        "color": "rgb(27, 27, 27)",
+        "background": "rgba(0, 0, 0, 0)"
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "text": "Sign in instead",
+      "source": "display:flex;width:272px;height:44px;padding:1px 6px;gap:8px;flex-direction:row;align-items:center;justify-content:center;font-family:ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif;font-size:14px;font-weight:500;color:rgb(255, 254, 250);background-color:rgb(210, 113, 81);border:0px none rgb(255, 254, 250);border-radius:9999px",
+      "computed": {
+        "width": "272px",
+        "height": "44px",
+        "font": "14px",
+        "padding": "1px 6px",
+        "gap": "8px",
+        "color": "rgb(255, 254, 250)",
+        "background": "rgb(210, 113, 81)"
+      }
+    }
+  ]
+}

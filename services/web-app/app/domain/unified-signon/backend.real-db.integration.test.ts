@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, expect, test, spyOn } from 'bun:test';
+import { createHash } from 'node:crypto';
 import { readdir, readFile, rm, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { prisma } from '~/utils/db.server';
@@ -26,11 +27,16 @@ async function post(
     headers: { ...(withCookie ? { cookie } : {}), 'x-forwarded-for': testIp },
     body: new URLSearchParams({ intent, flowToken, ...values }),
   });
-  const response = (await dispatchUnifiedLogin({
+  const result = await dispatchUnifiedLogin({
     request,
     params: {},
     context: {},
-  } as any)) as Response;
+  } as any);
+  // The legacy password validator returns router data for a failed proof.
+  const response =
+    result instanceof Response
+      ? result
+      : Response.json(result, { status: 400 });
   for (const c of response.headers.getSetCookie()) {
     const entry = c.split(';')[0];
     const name = entry.split('=')[0];
@@ -127,56 +133,82 @@ afterAll(async () => {
   await rm(capture, { recursive: true, force: true });
   await prisma.$disconnect();
 });
-suite('private preview capture uses the normal hashed challenge, verifier, cooldown, expiry and single use', async () => {
-  // Prisma is already connected to the CLI's isolated local database. Simulate
-  // preview deployment metadata only for capture/retrieval; never contact a host.
-  const { action: retrieve } = await import('~/routes/api.preview.qa.signon-code/route');
-  const original = {
-    YAWP_ENVIRONMENT: process.env.YAWP_ENVIRONMENT,
-    DATABASE_URL: process.env.DATABASE_URL,
-    PREVIEW_ACCESS_SECRET: process.env.PREVIEW_ACCESS_SECRET,
-  };
-  try {
-    process.env.YAWP_ENVIRONMENT = 'preview';
-    process.env.DATABASE_URL = 'postgresql://fixture@preview-postgres/yawp_pr_565';
-    process.env.PREVIEW_ACCESS_SECRET = 'fixture-private-preview-secret-32-characters';
-    for (const expired of [false, true]) {
+suite(
+  'private preview capture uses the normal hashed challenge, verifier, cooldown, expiry and single use',
+  async () => {
+    // Prisma is already connected to the CLI's isolated local database. Simulate
+    // preview deployment metadata only for capture/retrieval; never contact a host.
+    const { action: retrieve } =
+      await import('~/routes/api.preview.qa.signon-code/route');
+    const original = {
+      YAWP_ENVIRONMENT: process.env.YAWP_ENVIRONMENT,
+      DATABASE_URL: process.env.DATABASE_URL,
+      PREVIEW_ACCESS_SECRET: process.env.PREVIEW_ACCESS_SECRET,
+    };
+    try {
+      process.env.YAWP_ENVIRONMENT = 'preview';
+      process.env.DATABASE_URL =
+        'postgresql://fixture@preview-postgres/yawp_pr_565';
+      process.env.PREVIEW_ACCESS_SECRET =
+        'fixture-private-preview-secret-32-characters';
+      for (const expired of [false, true]) {
+        cookie = '';
+        flowToken = '';
+        const email = `preview-${expired}-${prefix}@example.test`;
+        await post('resolve', { identifier: email });
+        await post('resolve-class', { classCode: prefix });
+        expect((await post('send-code')).data.state.screen).toBe('email-code');
+        expect((await post('resend-code')).response.status).toBe(429);
+        const captured = await retrieve({
+          request: new Request(
+            'https://example.test/api/preview/qa/signon-code',
+            {
+              method: 'POST',
+              headers: {
+                'content-type': 'application/json',
+                authorization: `Bearer ${process.env.PREVIEW_ACCESS_SECRET}`,
+              },
+              body: JSON.stringify({ email }),
+            }
+          ),
+        } as any);
+        expect(captured.status).toBe(200);
+        const otp = (await captured.json()).code as string;
+        expect(/^\d{6}$/.test(otp)).toBe(true);
+        const row = await prisma.signonFlow.findFirstOrThrow({
+          where: { data: { path: ['identifier'], equals: email } },
+        });
+        const data = row.data as any;
+        expect(data.otp.hash).toHaveLength(64);
+        expect(JSON.stringify(row.data).includes(otp)).toBe(false);
+        if (expired) {
+          data.otp.expires = 0;
+          await prisma.signonFlow.update({
+            where: { id: row.id },
+            data: { data },
+          });
+          expect(
+            (await post('verify-code', { code: otp })).response.status
+          ).toBe(400);
+        } else {
+          expect(
+            (await post('verify-code', { code: otp })).data.state.screen
+          ).toBe('name-password');
+          expect(
+            (await post('verify-code', { code: otp })).response.status
+          ).toBe(400);
+        }
+      }
+    } finally {
       cookie = '';
       flowToken = '';
-      const email = `preview-${expired}-${prefix}@example.test`;
-      await post('resolve', { identifier: email });
-      await post('resolve-class', { classCode: prefix });
-      expect((await post('send-code')).data.state.screen).toBe('email-code');
-      expect((await post('resend-code')).response.status).toBe(429);
-      const captured = await retrieve({ request: new Request('https://example.test/api/preview/qa/signon-code', {
-        method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${process.env.PREVIEW_ACCESS_SECRET}` },
-        body: JSON.stringify({ email }),
-      }) } as any);
-      expect(captured.status).toBe(200);
-      const otp = (await captured.json()).code as string;
-      expect(/^\d{6}$/.test(otp)).toBe(true);
-      const row = await prisma.signonFlow.findFirstOrThrow({ where: { data: { path: ['identifier'], equals: email } } });
-      const data = row.data as any;
-      expect(data.otp.hash).toHaveLength(64);
-      expect(JSON.stringify(row.data).includes(otp)).toBe(false);
-      if (expired) {
-        data.otp.expires = 0;
-        await prisma.signonFlow.update({ where: { id: row.id }, data: { data } });
-        expect((await post('verify-code', { code: otp })).response.status).toBe(400);
-      } else {
-        expect((await post('verify-code', { code: otp })).data.state.screen).toBe('name-password');
-        expect((await post('verify-code', { code: otp })).response.status).toBe(400);
+      for (const [key, value] of Object.entries(original)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
       }
     }
-  } finally {
-    cookie = '';
-    flowToken = '';
-    for (const [key, value] of Object.entries(original)) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
   }
-});
+);
 suite(
   'resolver derives identity and class context; a token alone and posted screens prove nothing',
   async () => {
@@ -224,8 +256,10 @@ suite(
       role: 'TEACHER',
       classId: 'foreign',
     });
-    expect(created.response.status).toBe(302);
-    expect(created.response.headers.get('location')).toBe('/app');
+    expect(created.data.state.screen).toBe('joined');
+    expect(
+      (await post('complete-student')).response.headers.get('location')
+    ).toBe('/app');
     const user = await prisma.user.findUniqueOrThrow({
       where: { email },
       include: { memberships: true },
@@ -315,7 +349,7 @@ suite(
       },
     });
     await post('resolve', {
-      identifier: `@USER-${prefix}`,
+      identifier: email,
       redirectTo: '/app/my-classes',
     });
     const result = await post('password', {
@@ -408,8 +442,9 @@ suite(
           role: 'TEACHER',
           classId: 'foreign',
         })
-      ).response.status
-    ).toBe(302);
+      ).data.state.screen
+    ).toBe('joined');
+    expect((await post('complete-student')).response.status).toBe(302);
     expect(await prisma.invitation.count({ where: { target: email } })).toBe(0);
     expect(
       await prisma.orgMembership.count({
@@ -610,7 +645,7 @@ suite(
   }
 );
 suite(
-  'handle/code ambiguity offers both meanings; choosing a class clears the handle identity',
+  'class codes take precedence over legacy handle names; email still works',
   async () => {
     cookie = '';
     flowToken = '';
@@ -627,7 +662,7 @@ suite(
       },
     });
     const ambiguous = await post('resolve', { identifier });
-    expect(ambiguous.data.state.screen).toBe('ambiguity');
+    expect(ambiguous.data.state.screen).toBe('class-found');
     expect(
       (await post('resolve-class', { classCode: identifier })).data.state.screen
     ).toBe('class-found');
@@ -865,8 +900,9 @@ suite(
     );
     expect(entry?.initialState?.screen).toBe('inactive');
     expect(
-      (await post('resolve-class', { classCode: prefix })).response.status
-    ).toBe(302);
+      (await post('resolve-class', { classCode: prefix })).data.state.screen
+    ).toBe('joined');
+    expect((await post('complete-student')).response.status).toBe(302);
     expect(
       await prisma.orgMembership.count({
         where: {
@@ -894,17 +930,40 @@ suite(
       data: { studentJoinToken: `token-${prefix}` },
     });
     try {
-      const resolved = await post('resolve', { identifier: prefix });
+      await post('resolve', {
+        identifier: `${prefix}-handle-origin@example.test`,
+      });
+      const resolved = await post('resolve-class', { classCode: prefix });
       expect(resolved.data.state.classInfo.accountMode).toBe('handle');
+      const chosen = await post('student-choice', { choice: 'new' });
+      expect(chosen.data.state.emailOrigin).toBe(true);
+      await post('student-choice', { choice: 'returning' });
       expect(
-        (
-          await post('join-handle', {
-            name: 'Local Handle',
-            username: 'admin',
-            password: 'abcdef',
-            confirmPassword: 'abcdef',
-          })
-        ).response.status
+        (await post('student-choice', { choice: 'new' })).data.state.emailOrigin
+      ).toBe(true);
+      // Starting again with a direct code must clear the display-only marker;
+      // a posted presentation value cannot manufacture email-origin context.
+      await post('resolve', { identifier: prefix });
+      expect(
+        (await post('student-choice', { choice: 'new', emailOrigin: 'true' }))
+          .data.state.emailOrigin
+      ).toBe(false);
+      await post('resolve', {
+        identifier: `${prefix}-handle-origin@example.test`,
+      });
+      await post('resolve-class', { classCode: prefix });
+      expect(
+        (await post('student-choice', { choice: 'new' })).data.state.emailOrigin
+      ).toBe(true);
+      const values = {
+        firstName: 'Local',
+        lastName: 'Handle',
+        password: 'abcdef',
+        confirmPassword: 'abcdef',
+      };
+      expect(
+        (await post('register-student', { ...values, firstName: '123' }))
+          .response.status
       ).toBe(400);
       await prisma.invitation.createMany({
         data: Array.from({ length: 35 }, (_, i) => ({
@@ -919,31 +978,29 @@ suite(
           expiresAt: new Date(Date.now() + 600000),
         })),
       });
-      const full = await post('join-handle', {
-        name: 'Local Handle',
-        username: `handle-${prefix}`,
-        password: 'abcdef',
-        confirmPassword: 'abcdef',
-        classId: 'foreign',
-        joinToken: 'forged',
-      });
+      const full = await post('register-student', values);
       expect(full.response.status).toBe(400);
+      // Main returns errors without a replacement state. Redisplay resumes the
+      // existing server context, which must still carry the notice.
+      const redisplay = await unifiedEntry(
+        new Request(url + '?continue=1', { headers: { cookie } })
+      );
+      expect(redisplay?.initialState?.emailOrigin).toBe(true);
       expect(JSON.stringify(full.data)).toContain('full');
       expect(
-        await prisma.user.count({ where: { username: `handle-${prefix}` } })
+        await prisma.classStudentHandle.count({ where: { classId: prefix } })
       ).toBe(0);
       await prisma.invitation.deleteMany({ where: { studentClassId: prefix } });
-      const joined = await post('join-handle', {
-        name: 'Local Handle',
-        username: `handle-${prefix}`,
-        password: 'abcdef',
-        confirmPassword: 'abcdef',
-        classId: 'foreign',
-        joinToken: 'forged',
-      });
-      expect(joined.response.status).toBe(302);
-      const handle = await prisma.user.findUniqueOrThrow({
-        where: { username: `handle-${prefix}` },
+      expect((await post('register-student', values)).data.state.screen).toBe(
+        'joined'
+      );
+      expect((await post('complete-student')).response.status).toBe(302);
+      const handle = await prisma.user.findFirstOrThrow({
+        where: {
+          classStudentHandles: {
+            some: { classId: prefix, handle: 'LocalHandle' },
+          },
+        },
         include: { memberships: true, sessions: true },
       });
       expect(handle.email).toBeNull();
@@ -952,6 +1009,10 @@ suite(
       expect(
         handle.sessions[0].expirationDate.getTime() - Date.now()
       ).toBeLessThanOrEqual(12 * 60 * 60 * 1000);
+      await prisma.session.deleteMany({ where: { userId: handle.id } });
+      await prisma.password.deleteMany({ where: { userId: handle.id } });
+      await prisma.orgMembership.deleteMany({ where: { userId: handle.id } });
+      await prisma.user.delete({ where: { id: handle.id } });
     } finally {
       await prisma.organization.update({
         where: { id: prefix },
@@ -1195,8 +1256,9 @@ suite(
             password: 'abcdef',
             confirmPassword: 'abcdef',
           })
-        ).response.status
-      ).toBe(302);
+        ).data.state.screen
+      ).toBe('joined');
+      expect((await post('complete-student')).response.status).toBe(302);
       expect(
         await prisma.orgMembership.count({
           where: {
@@ -1546,7 +1608,7 @@ for (const change of [
     }
   );
 suite(
-  'new Google classroom signup is name-only and links the verified subject atomically',
+  'new Google identity ignores email, requires class selection and creates a password handle atomically',
   async () => {
     const { googleCallback } = await import('./google.server');
     const { generateKeyPair, exportJWK, SignJWT } = await import('jose');
@@ -1558,7 +1620,7 @@ suite(
     cookie = '';
     flowToken = '';
     await post('resolve', { identifier: prefix });
-    const authorization = new URL((await post('google')).data.redirectTo);
+    let authorization = new URL((await post('google')).data.redirectTo);
     globalThis.fetch = (async (target: any) => {
       if (target === 'https://www.googleapis.com/oauth2/v3/certs')
         return Response.json({
@@ -1598,18 +1660,84 @@ suite(
       const entry = await unifiedEntry(
         new Request(url + '?continue=1', { headers: { cookie } })
       );
-      expect(entry?.initialState?.screen).toBe('name-password');
-      expect(entry?.initialState?.variant).toBe('google');
+      expect(entry?.initialState?.screen).toBe('class-code');
+      expect(entry?.initialState?.identifier).toBeUndefined();
+      const row = await prisma.signonFlow.findUniqueOrThrow({
+        where: { id: (await import('./flow.server')).digest(flowToken) },
+      });
+      expect(JSON.stringify(row.data)).not.toContain(email);
       expect(
         (await post('create-account', { name: 'Google Student' })).response
           .status
-      ).toBe(302);
-      const user = await prisma.user.findUniqueOrThrow({
-        where: { email },
+      ).toBe(400);
+      expect(
+        (
+          await post('register-student', {
+            firstName: 'Google',
+            lastName: 'Student',
+            password: 'abcdef',
+            confirmPassword: 'abcdef',
+          })
+        ).response.status
+      ).toBe(400);
+      await post('resolve-class', { classCode: prefix });
+      await post('student-choice', { choice: 'new' });
+      expect(
+        (
+          await post('register-student', {
+            firstName: 'Google',
+            lastName: 'Student',
+            password: 'abcdef',
+            confirmPassword: 'abcdef',
+          })
+        ).data.state.screen
+      ).toBe('joined');
+      const user = await prisma.user.findFirstOrThrow({
+        where: {
+          signonIdentities: { some: { subject: `new-subject-${prefix}` } },
+        },
         include: { signonIdentities: true, password: true },
       });
-      expect(user.password).toBeNull();
+      expect(user.email).toBeNull();
+      expect(user.password).not.toBeNull();
       expect(user.signonIdentities).toHaveLength(1);
+      expect((await post('complete-student')).response.status).toBe(302);
+      cookie = '';
+      flowToken = '';
+      await post('resolve', { identifier: prefix });
+      authorization = new URL((await post('google')).data.redirectTo);
+      const linkedResponse = await googleCallback(
+        new Request(
+          `http://127.0.0.1:5396/auth/unified/google/callback?code=mock&state=${authorization.searchParams.get('state')}`,
+          { headers: { cookie } }
+        )
+      );
+      expect(linkedResponse.status).toBe(302);
+      expect(linkedResponse.headers.get('location')).toBe(
+        '/auth/login?continue=1'
+      );
+      for (const header of linkedResponse.headers.getSetCookie())
+        cookie += '; ' + header.split(';')[0];
+      const joined = await unifiedEntry(
+        new Request(url + '?continue=1', { headers: { cookie } })
+      );
+      expect(joined?.initialState?.screen).toBe('joined');
+      expect(joined?.initialState?.variant).toBe('already');
+      expect(
+        (await post('complete-student')).response.headers.get('location')
+      ).toBe('/app');
+      const linkedFlow = await prisma.signonFlow.findUniqueOrThrow({
+        where: { id: (await import('./flow.server')).digest(flowToken) },
+      });
+      expect(JSON.stringify(linkedFlow.data)).not.toContain(email);
+      expect(await prisma.session.count({ where: { userId: user.id } })).toBe(
+        2
+      );
+      await prisma.session.deleteMany({ where: { userId: user.id } });
+      await prisma.signonIdentity.deleteMany({ where: { userId: user.id } });
+      await prisma.password.deleteMany({ where: { userId: user.id } });
+      await prisma.orgMembership.deleteMany({ where: { userId: user.id } });
+      await prisma.user.delete({ where: { id: user.id } });
     } finally {
       globalThis.fetch = previousFetch;
       delete process.env.GOOGLE_OAUTH_CLIENT_ID;
@@ -1734,7 +1862,7 @@ suite(
   }
 );
 suite(
-  'Google multi-class invitations keep the exact picker variant and require an authorized class choice',
+  'new Google identities cannot use email invitations to skip class-code entry',
   async () => {
     const { googleCallback } = await import('./google.server');
     const { generateKeyPair, exportJWK, SignJWT } = await import('jose');
@@ -1802,16 +1930,19 @@ suite(
         new Request(url + '?continue=1', { headers: { cookie } })
       );
       flowToken = entry!.initialState!.flowToken!;
-      expect(entry?.initialState?.variant).toBe('multiple');
-      expect(entry?.initialState?.provider).toBe('google');
-      expect(entry?.initialState?.classes).toHaveLength(2);
+      expect(entry?.initialState?.screen).toBe('class-code');
+      expect(entry?.initialState?.classes).toBeUndefined();
       expect(
-        (await post('choose-class', { classId: second })).data.state.screen
-      ).toBe('name-password');
+        (await post('choose-class', { classId: second })).response.status
+      ).toBe(400);
       expect(
         (await post('create-account', { name: 'Google Student' })).response
           .status
-      ).toBe(302);
+      ).toBe(400);
+      expect(await prisma.user.count({ where: { email } })).toBe(0);
+      expect(
+        (await post('resolve-class', { classCode: second })).data.state.screen
+      ).toBe('class-found');
     } finally {
       globalThis.fetch = previousFetch;
       delete process.env.GOOGLE_OAUTH_CLIENT_ID;
@@ -1925,6 +2056,334 @@ suite(
       else process.env.FREE_TIER_LINK_HMAC_SECRET = oldKey;
       if (oldOrigin === undefined) delete process.env.PRIMARY_APP_URL;
       else process.env.PRIMARY_APP_URL = oldOrigin;
+    }
+  }
+);
+suite(
+  'isolated preview resends capture real mail while proof, flow, status, ownership, feature gate and rate limits remain enforced',
+  async () => {
+    const original = { ...process.env };
+    const { takePreviewCode } = await import('./preview-code.server');
+    const emailModule = await import('~/utils/email.server');
+    const mail = spyOn(emailModule, 'sendEmail'); // Call through the real mailer.
+    const info = spyOn(console, 'info').mockImplementation(() => {});
+    const originalFetch = globalThis.fetch;
+    let providerCalls = 0;
+    globalThis.fetch = (async () => {
+      providerCalls++;
+      throw new Error('External delivery forbidden');
+    }) as any;
+    const email = `preview-resend-${prefix}@example.test`;
+    const foreign = `foreign-resend-${prefix}@example.test`;
+    const flagName = 'feature_flag.free_tier';
+    const oldFlag = await prisma.setting.findUnique({
+      where: { name: flagName },
+    });
+    const user = await prisma.user.create({
+      data: { email: `owner-resend-${prefix}@example.test` },
+    });
+    const otherUser = await prisma.user.create({
+      data: { email: `other-owner-resend-${prefix}@example.test` },
+    });
+    const application = await prisma.freeTierApplication.create({
+      data: {
+        email,
+        userId: user.id,
+        name: 'Private QA Teacher',
+        schoolName: 'Local',
+        location: 'Local',
+        gradeLevel: '11',
+        status: 'INVITED',
+      },
+    });
+    const foreignApplication = await prisma.freeTierApplication.create({
+      data: {
+        email: foreign,
+        userId: otherUser.id,
+        name: 'Other Teacher',
+        schoolName: 'Local',
+        location: 'Local',
+        gradeLevel: '11',
+        status: 'INVITED',
+      },
+    });
+    try {
+      process.env.YAWP_ENVIRONMENT = 'preview';
+      process.env.PREVIEW_SLUG = 'pr-565';
+      process.env.PREVIEW_DATA_MODE = 'seed';
+      delete process.env.DATABASE_SCHEMA;
+      process.env.DATABASE_URL =
+        'postgresql://yawp_pr_565_app:fixture-password@preview-postgres:5432/yawp_pr_565';
+      process.env.PREVIEW_ACCESS_SECRET =
+        'local-preview-resend-private-secret-32bytes';
+      process.env.FREE_TIER_LINK_HMAC_SECRET =
+        'local-free-tier-resend-private-secret-32bytes';
+      process.env.PRIMARY_APP_URL = 'http://127.0.0.1:5396';
+      delete process.env.SIGNON_MAIL_CAPTURE_DIR;
+      delete process.env.RESEND_API_KEY;
+      delete process.env.EMAIL_PROVIDER;
+      await prisma.setting.upsert({
+        where: { name: flagName },
+        create: { name: flagName, value: 'true', valueType: 'boolean' },
+        update: { value: 'true' },
+      });
+      cookie = '';
+      flowToken = '';
+      await post('resolve', { identifier: email });
+      expect((await post('resend-invite')).response.status).toBe(401);
+      expect((await post('resend-approval')).response.status).toBe(401);
+      await post('trial-status');
+      const request = new Request('http://local/api/preview/qa/signon-code', {
+        headers: {
+          authorization: `Bearer ${process.env.PREVIEW_ACCESS_SECRET}`,
+        },
+      });
+      const otp = takePreviewCode(request, email)!;
+      expect(typeof otp === 'string').toBe(true);
+      expect(
+        (await post('verify-code', { code: otp })).data.state.variant
+      ).toBe('invited');
+      const proofCookie = cookie;
+      expect((await post('resend-invite', {}, false)).response.status).toBe(
+        400
+      );
+      cookie = proofCookie;
+      const token = flowToken;
+      expect(
+        (await post('resend-invite', { flowToken: 'foreign-flow' })).response
+          .status
+      ).toBe(400);
+      flowToken = token;
+      for (const database of [
+        undefined,
+        'invalid/yawp_pr_565',
+        'postgresql://postgres@preview-postgres:5432/yawp_pr_565',
+        'postgresql://yawp_pr_565_app:fixture-password@preview-postgres:5432/yawp_pr_565?host=127.0.0.1',
+      ]) {
+        if (database === undefined)
+          Reflect.deleteProperty(process.env, 'DATABASE_URL');
+        else process.env.DATABASE_URL = database;
+        for (const runtime of ['development', 'production'] as const) {
+          process.env.NODE_ENV = runtime;
+          expect((await post('resend-invite')).response.status).toBe(503);
+          expect((await post('resend-approval')).response.status).toBe(503);
+        }
+      }
+      process.env.NODE_ENV = 'development';
+      process.env.DATABASE_URL =
+        'postgresql://yawp_pr_565_app:fixture-password@preview-postgres:5432/yawp_pr_565';
+      expect(mail.mock.calls.length).toBe(0);
+      testIp = `198.18.2.${Math.floor(Math.random() * 250)}`;
+      const result = await post('resend-invite', {
+        applicationId: foreignApplication.id,
+        identifier: foreign,
+      });
+      expect(result.response.status).toBe(200);
+      expect(result.data.state.notice).toBe(
+        'If available, an email is on its way.'
+      );
+      expect(mail.mock.calls.length).toBe(1);
+      const delivered = mail.mock.calls[0][0] as any;
+      // Never expose recipient/link values through failed assertion diagnostics.
+      expect(delivered.to === email).toBe(true);
+      expect(
+        delivered.subject === "You're in — start your YAWP classroom"
+      ).toBe(true);
+      expect(delivered.text.includes('/free/join?t=')).toBe(true);
+      expect(delivered.html.includes('/free/join?t=')).toBe(true);
+      const { peekSignedLink } =
+        await import('~/domain/free-tier/signed-link.server');
+      const invitationLine = delivered.text
+        .split('\n')
+        .find((line: string) => line.includes('/free/join?t='));
+      const invitation = await peekSignedLink({
+        token: new URL(invitationLine).searchParams.get('t')!,
+        expectedPurpose: 'RELEASE',
+      });
+      expect(invitation.ok && invitation.applicationId === application.id).toBe(
+        true
+      );
+
+      expect(
+        info.mock.calls.some((call) =>
+          String(call[0]).includes('[preview-email-capture]')
+        )
+      ).toBe(true);
+      expect(
+        await prisma.freeTierEmailLog.count({
+          where: {
+            applicationId: application.id,
+            kind: 'release',
+            success: true,
+          },
+        })
+      ).toBe(1);
+      expect(
+        await prisma.freeTierEmailLog.count({
+          where: { applicationId: foreignApplication.id },
+        })
+      ).toBe(0);
+      expect(cookie.includes('en_session=')).toBe(false);
+      // Eligibility still comes from the persisted application, not posted state.
+      for (const status of [
+        'LEAD',
+        'SENT',
+        'REJECTED',
+        'EXPIRED',
+        'APPROVED',
+        'MANUAL_REVIEW',
+        'ACCOUNT_CREATED',
+      ] as const) {
+        testIp = `198.18.1.${Math.floor(Math.random() * 250)}`;
+        // Each target has a six/hour cap; clear only this disposable test's bucket.
+        await prisma.rateLimitBucket.deleteMany({
+          where: {
+            key: {
+              startsWith: `target:${createHash('sha256').update(email).digest('hex').slice(0, 32)}:/auth/unified/forgotPassword`,
+            },
+          },
+        });
+        await prisma.freeTierApplication.update({
+          where: { id: application.id },
+          data: { status },
+        });
+        expect(
+          (await post('resend-invite', { status: 'INVITED' })).response.status
+        ).toBe(200);
+        expect(mail.mock.calls.length).toBe(1);
+      }
+      await prisma.rateLimitBucket.deleteMany({
+        where: {
+          key: {
+            startsWith: `target:${createHash('sha256').update(email).digest('hex').slice(0, 32)}:/auth/unified/forgotPassword`,
+          },
+        },
+      });
+      await prisma.freeTierApplication.update({
+        where: { id: application.id },
+        data: { status: 'SENT' },
+      });
+      await prisma.freeTierAdminApproval.create({
+        data: {
+          applicationId: application.id,
+          adminEmail: `admin-${prefix}@example.test`,
+          adminName: 'QA Admin',
+          adminRole: 'Principal',
+          status: 'PENDING',
+          emailCopyVersionHash: 'local',
+        },
+      });
+      expect((await post('resend-approval')).response.status).toBe(200); // Anonymous proof is insufficient.
+      expect(mail.mock.calls.length).toBe(1);
+      const { authSessionStorage } =
+        await import('~/cookie-session-storages/authentication.server');
+      const { sessionKey } = await import('~/utils/auth.server');
+      const attachUser = async (userId: string) => {
+        const row = await prisma.session.create({
+          data: { userId, expirationDate: new Date(Date.now() + 600000) },
+        });
+        const session = await authSessionStorage.getSession(cookie);
+        session.set(sessionKey, row.id);
+        cookie =
+          proofCookie +
+          '; ' +
+          (await authSessionStorage.commitSession(session)).split(';')[0];
+      };
+      await attachUser(otherUser.id);
+      expect(
+        (await post('resend-approval', { applicationId: application.id }))
+          .response.status
+      ).toBe(200);
+      expect(mail.mock.calls.length).toBe(1);
+      await attachUser(user.id);
+      expect(
+        (
+          await post('resend-approval', {
+            applicationId: foreignApplication.id,
+          })
+        ).response.status
+      ).toBe(200);
+      expect(mail.mock.calls.length).toBe(2);
+      const reminder = mail.mock.calls[1][0] as any;
+      expect(reminder.to === `admin-${prefix}@example.test`).toBe(true);
+      expect(reminder.text.includes('/free/admin/approve?t=')).toBe(true);
+      expect(reminder.text.includes('/free/admin/not-right-person?t=')).toBe(
+        true
+      );
+      await prisma.rateLimitBucket.deleteMany({
+        where: {
+          key: {
+            startsWith: `target:${createHash('sha256').update(email).digest('hex').slice(0, 32)}:/auth/unified/forgotPassword`,
+          },
+        },
+      });
+      await prisma.freeTierApplication.update({
+        where: { id: application.id },
+        data: { status: 'REJECTED' },
+      });
+      expect((await post('resend-approval')).response.status).toBe(200);
+      expect(mail.mock.calls.length).toBe(2);
+      await prisma.freeTierApplication.delete({
+        where: { id: application.id },
+      });
+      expect((await post('resend-invite')).response.status).toBe(200);
+      expect((await post('resend-approval')).response.status).toBe(200);
+      expect(mail.mock.calls.length).toBe(2);
+      await prisma.freeTierApplication.create({
+        data: {
+          id: application.id,
+          email,
+          userId: user.id,
+          name: 'Private QA Teacher',
+          schoolName: 'Local',
+          location: 'Local',
+          gradeLevel: '11',
+          status: 'INVITED',
+        },
+      });
+      await prisma.setting.update({
+        where: { name: flagName },
+        data: { value: 'false' },
+      });
+      // The retained dispatcher maps the free-tier route's thrown data to 503.
+      expect((await post('resend-invite')).response.status).toBe(503);
+      expect(mail.mock.calls.length).toBe(2);
+      await prisma.setting.update({
+        where: { name: flagName },
+        data: { value: 'true' },
+      });
+      await prisma.rateLimitBucket.deleteMany({
+        where: {
+          key: {
+            startsWith: `target:${createHash('sha256').update(email).digest('hex').slice(0, 32)}:/auth/unified/forgotPassword`,
+          },
+        },
+      });
+      await prisma.freeTierApplication.update({
+        where: { id: application.id },
+        data: { status: 'INVITED' },
+      });
+      for (let i = 0; i < 6; i++)
+        expect((await post('resend-invite')).response.status).toBe(200);
+      expect((await post('resend-invite')).response.status).toBe(429);
+      expect(mail.mock.calls.length).toBe(8);
+      expect(providerCalls).toBe(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+      mail.mockRestore();
+      info.mockRestore();
+      await prisma.freeTierApplication.deleteMany({
+        where: { id: { in: [application.id, foreignApplication.id] } },
+      });
+      if (oldFlag)
+        await prisma.setting.update({
+          where: { name: flagName },
+          data: { value: oldFlag.value },
+        });
+      else await prisma.setting.deleteMany({ where: { name: flagName } });
+      for (const key of Object.keys(process.env))
+        if (!(key in original)) delete process.env[key];
+      Object.assign(process.env, original);
     }
   }
 );
@@ -2093,3 +2552,790 @@ suite(
     ).toBe(0);
   }
 );
+
+suite(
+  'school email signup shows an existing-account notice before ordinary proof and keeps the class',
+  async () => {
+    cookie = '';
+    flowToken = '';
+    const email = `${prefix}-class-existing@example.test`;
+    const user = await prisma.user.create({
+      data: {
+        email,
+        name: 'Local Existing',
+        emailVerifiedAt: new Date(),
+        password: { create: { hash: await getPasswordHash('local-password') } },
+        memberships: { create: { organizationId: prefix, role: 'STUDENT' } },
+      },
+    });
+    await post('resolve', { identifier: prefix, redirectTo: '//evil.test' });
+    expect(
+      (await post('student-choice', { choice: 'new' })).data.state.screen
+    ).toBe('class-handle');
+    expect((await post('student-email')).data.state.screen).toBe('class-email');
+    const existing = await post('resolve', {
+      identifier: email,
+      classId: 'foreign',
+    });
+    expect(existing.data.state).toMatchObject({
+      screen: 'class-email',
+      variant: 'existing',
+      identifier: email,
+      classInfo: { id: prefix },
+      notice:
+        'You already have an account with this email. Sign in to join this class.',
+    });
+    expect(await prisma.session.count({ where: { userId: user.id } })).toBe(0);
+    expect(
+      await prisma.orgMembership.count({
+        where: { userId: user.id, classesAsStudent: { some: { id: prefix } } },
+      })
+    ).toBe(0);
+    const signin = await post('class-email-signin', {
+      identifier: email,
+      email: 'forged@example.test',
+      redirectTo: '//evil.test',
+    });
+    expect(signin.data.state).toMatchObject({
+      screen: 'password',
+      identifier: email,
+      classInfo: { id: prefix },
+    });
+    // Client Back does not change the authoritative flow. Resubmitting still
+    // rediscovers the notice; neither a stale UI nor posted identity proves access.
+    expect(
+      (await post('resolve', { identifier: email })).data.state.variant
+    ).toBe('existing');
+    await post('resolve', {
+      identifier: `${prefix}-back-unknown@example.test`,
+    });
+    expect(
+      (await post('class-email-signin', { identifier: email })).data.state
+    ).toMatchObject({ screen: 'password', identifier: email });
+    const wrong = await dispatchUnifiedLogin({
+      request: new Request(url, {
+        method: 'POST',
+        headers: { cookie, 'x-forwarded-for': testIp },
+        body: new URLSearchParams({
+          intent: 'password',
+          flowToken,
+          password: 'wrong-password',
+          email: 'forged@example.test',
+        }),
+      }),
+      params: {},
+      context: {},
+    } as any);
+    expect(JSON.stringify(wrong)).toContain('Invalid email or password');
+    expect(await prisma.session.count({ where: { userId: user.id } })).toBe(0);
+    expect(
+      await prisma.orgMembership.count({
+        where: { userId: user.id, classesAsStudent: { some: { id: prefix } } },
+      })
+    ).toBe(0);
+    const proved = await post('password', {
+      password: 'local-password',
+      redirectTo: '//evil.test',
+    });
+    expect(proved.response.status).toBe(302);
+    expect(proved.response.headers.get('location')).toBe(
+      '/auth/login?continue=1'
+    );
+    let continued: any;
+    try {
+      continued = await unifiedEntry(
+        new Request(url + '?continue=1', { headers: { cookie } })
+      );
+    } catch (response) {
+      continued = response;
+    }
+    expect(continued.initialState.screen).toBe('joined');
+    expect(
+      (await post('complete-student')).response.headers.get('location')
+    ).toBe('/app');
+    expect(
+      await prisma.orgMembership.count({
+        where: {
+          userId: user.id,
+          role: 'STUDENT',
+          classesAsStudent: { some: { id: prefix } },
+        },
+      })
+    ).toBe(1);
+  }
+);
+
+suite(
+  'school email option rejects forged/stale/free contexts and unknown email still requires proof',
+  async () => {
+    cookie = '';
+    flowToken = '';
+    expect(
+      (await post('student-email', { classId: prefix })).response.status
+    ).toBe(400);
+    await post('resolve', { identifier: prefix });
+    expect((await post('student-email')).response.status).toBe(400);
+    await post('student-choice', { choice: 'returning' });
+    expect((await post('student-email')).response.status).toBe(400);
+    await post('student-choice', { choice: 'new' });
+    await prisma.organization.update({
+      where: { id: prefix },
+      data: { plan: 'FREE_CLASSROOM' },
+    });
+    try {
+      expect((await post('student-email')).response.status).toBe(400);
+    } finally {
+      await prisma.organization.update({
+        where: { id: prefix },
+        data: { plan: 'SCHOOL' },
+      });
+    }
+    await prisma.class.update({
+      where: { id: prefix },
+      data: { isArchived: true },
+    });
+    try {
+      expect((await post('student-email')).response.status).toBe(400);
+    } finally {
+      await prisma.class.update({
+        where: { id: prefix },
+        data: { isArchived: false },
+      });
+    }
+    expect((await post('student-email')).data.state.screen).toBe('class-email');
+    expect(
+      (await post('resolve', { identifier: 'bad@' })).response.status
+    ).toBe(400);
+    expect(
+      (await post('resolve', { identifier: '@forged' })).response.status
+    ).toBe(400);
+    const email = `${prefix}-school-new@example.test`;
+    expect(
+      (await post('resolve', { identifier: email })).data.state
+    ).toMatchObject({
+      screen: 'activation',
+      identifier: email,
+      classInfo: { id: prefix },
+    });
+    expect((await post('class-email-signin')).data.state).toMatchObject({
+      screen: 'activation',
+      identifier: email,
+    });
+    expect(await prisma.user.count({ where: { email } })).toBe(0);
+    expect(
+      (
+        await post('create-account', {
+          name: 'Forged',
+          password: 'abcdef',
+          confirmPassword: 'abcdef',
+        })
+      ).response.status
+    ).toBe(400);
+    expect((await post('send-code')).data.state.screen).toBe('email-code');
+    const otp = await code(email);
+    expect((await post('verify-code', { code: otp })).data.state.screen).toBe(
+      'name-password'
+    );
+    expect(
+      (
+        await post('create-account', {
+          name: 'School Student',
+          password: 'abcdef',
+          confirmPassword: 'abcdef',
+        })
+      ).data.state.screen
+    ).toBe('joined');
+    expect((await post('complete-student')).response.status).toBe(302);
+    expect(
+      await prisma.user.count({
+        where: {
+          email,
+          emailVerifiedAt: { not: null },
+          memberships: {
+            some: {
+              role: 'STUDENT',
+              classesAsStudent: { some: { id: prefix } },
+            },
+          },
+        },
+      })
+    ).toBe(1);
+  }
+);
+
+suite(
+  'school email existing passwordless accounts keep ordinary activation and unavailable Google fails closed',
+  async () => {
+    cookie = '';
+    flowToken = '';
+    const email = `${prefix}-school-passwordless@example.test`;
+    const user = await prisma.user.create({
+      data: { email, name: 'Local Passwordless' },
+    });
+    await post('resolve', { identifier: prefix });
+    await post('student-choice', { choice: 'new' });
+    await post('student-email');
+    expect(
+      (await post('resolve', { identifier: email })).data.state
+    ).toMatchObject({
+      screen: 'class-email',
+      variant: 'existing',
+      identifier: email,
+    });
+    expect((await post('class-email-signin')).data.state).toMatchObject({
+      screen: 'activation',
+      identifier: email,
+      classInfo: { id: prefix },
+    });
+    const original = [
+      process.env.GOOGLE_OAUTH_CLIENT_ID,
+      process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+    ];
+    delete process.env.GOOGLE_OAUTH_CLIENT_ID;
+    delete process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+    try {
+      expect((await post('google')).response.status).toBe(503);
+    } finally {
+      for (const [index, name] of [
+        'GOOGLE_OAUTH_CLIENT_ID',
+        'GOOGLE_OAUTH_CLIENT_SECRET',
+      ].entries()) {
+        if (original[index] === undefined) delete process.env[name];
+        else process.env[name] = original[index];
+      }
+    }
+    expect(await prisma.session.count({ where: { userId: user.id } })).toBe(0);
+    expect(
+      await prisma.orgMembership.count({ where: { userId: user.id } })
+    ).toBe(0);
+  }
+);
+
+for (const outcome of ['access_denied', 'server_error', 'invalid_state'])
+  suite(
+    `school email Google ${outcome} returns to ordinary class-code entry without proof`,
+    async () => {
+      cookie = '';
+      flowToken = '';
+      const original = [
+        process.env.GOOGLE_OAUTH_CLIENT_ID,
+        process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+      ];
+      const sessionCount = await prisma.session.count();
+      process.env.GOOGLE_OAUTH_CLIENT_ID = 'local-client';
+      process.env.GOOGLE_OAUTH_CLIENT_SECRET = 'local-secret';
+      try {
+        await post('resolve', { identifier: prefix });
+        await post('student-choice', { choice: 'new' });
+        await post('student-email');
+        const started = await post('google');
+        const target = new URL(started.data.redirectTo);
+        const callback = new URL('/auth/unified/google/callback', url);
+        callback.searchParams.set(
+          'state',
+          outcome === 'invalid_state'
+            ? 'invalid'
+            : target.searchParams.get('state')!
+        );
+        callback.searchParams.set(
+          'error',
+          outcome === 'invalid_state' ? 'access_denied' : outcome
+        );
+        const { googleCallback } = await import('./google.server');
+        const result = await googleCallback(
+          new Request(callback, { headers: { cookie } })
+        );
+        expect(result.headers.get('location')).toBe('/auth/login?continue=1');
+        const entry = await unifiedEntry(
+          new Request(url + '?continue=1', { headers: { cookie } })
+        );
+        expect(entry?.initialState?.screen).toBe('entry');
+        expect(
+          (await post('resolve', { identifier: prefix })).data.state
+        ).toMatchObject({ screen: 'class-found', classInfo: { id: prefix } });
+        expect(
+          (await post('student-choice', { choice: 'returning' })).data.state
+            .screen
+        ).toBe('class-signin');
+        expect(await prisma.session.count()).toBe(sessionCount);
+      } finally {
+        for (const [index, name] of [
+          'GOOGLE_OAUTH_CLIENT_ID',
+          'GOOGLE_OAUTH_CLIENT_SECRET',
+        ].entries()) {
+          if (original[index] === undefined) delete process.env[name];
+          else process.env[name] = original[index];
+        }
+      }
+    }
+  );
+
+// FAILURES.md di-signon-fix-join-confirmation: real proof/enrollment/continuation.
+async function resumeClass() {
+  try {
+    return await unifiedEntry(
+      new Request(url + '?continue=1', { headers: { cookie } })
+    );
+  } catch (response) {
+    if (response instanceof Response) return response;
+    throw response;
+  }
+}
+for (const already of [false, true]) {
+  suite(
+    `class password confirmation derives ${already ? 'already' : 'joined'} before enrollment and consumes once`,
+    async () => {
+      cookie = '';
+      flowToken = '';
+      const email = `joined-${already}-${prefix}@example.test`;
+      const user = await prisma.user.create({
+        data: {
+          email,
+          password: { create: { hash: await getPasswordHash('abcdef') } },
+          memberships: {
+            create: {
+              organizationId: prefix,
+              role: 'STUDENT',
+              ...(already
+                ? { classesAsStudent: { connect: { id: prefix } } }
+                : {}),
+            },
+          },
+        },
+      });
+      await post('resolve', {
+        identifier: email,
+        redirectTo: '/app/my-classes',
+      });
+      await post('resolve-class', { classCode: prefix });
+      expect(
+        (
+          await post('complete-student', {
+            screen: 'joined',
+            variant: 'already',
+            classId: prefix,
+          })
+        ).response.status
+      ).toBe(400);
+      expect(
+        (await post('password', { password: 'wrong-password' })).response.status
+      ).not.toBe(302);
+      expect(await prisma.session.count({ where: { userId: user.id } })).toBe(
+        0
+      );
+      await post('password', { password: 'abcdef' });
+      const entry = await resumeClass();
+      expect(entry).not.toBeInstanceOf(Response);
+      expect((entry as any).initialState).toMatchObject({
+        screen: 'joined',
+        classInfo: {
+          id: prefix,
+          name: 'English 11',
+          organization: 'Local class',
+        },
+      });
+      expect((entry as any).initialState.variant).toBe(
+        already ? 'already' : undefined
+      );
+      expect((entry as any).initialState.identifier).toBeUndefined();
+      expect(((await resumeClass()) as any).initialState).toEqual(
+        (entry as any).initialState
+      );
+      expect(await prisma.session.count({ where: { userId: user.id } })).toBe(
+        1
+      );
+      const flowOnly = cookie
+        .split('; ')
+        .filter((c) => c.startsWith('yawp_signon='))
+        .join('; ');
+      const savedCookie = cookie;
+      cookie = flowOnly;
+      expect((await post('complete-student')).response.status).toBe(401);
+      cookie = savedCookie;
+      const complete = await post('complete-student', {
+        redirectTo: '//evil.test',
+        classId: 'forged',
+        variant: 'already',
+      });
+      expect(complete.response.headers.get('location')).toBe('/app/my-classes');
+      expect(cookie).toContain('membership-id=');
+      expect((await post('complete-student')).response.status).toBe(400);
+      expect(await prisma.user.count({ where: { email } })).toBe(1);
+      expect(await prisma.session.count({ where: { userId: user.id } })).toBe(
+        1
+      );
+      expect(
+        await prisma.orgMembership.count({
+          where: {
+            userId: user.id,
+            classesAsStudent: { some: { id: prefix } },
+          },
+        })
+      ).toBe(1);
+    }
+  );
+}
+suite(
+  'email-code class proof confirms only after verification, retaining email proof for continuation',
+  async () => {
+    cookie = '';
+    flowToken = '';
+    const email = `joined-code-${prefix}@example.test`;
+    const user = await prisma.user.create({
+      data: {
+        email,
+        password: { create: { hash: await getPasswordHash('abcdef') } },
+        memberships: { create: { organizationId: prefix, role: 'STUDENT' } },
+      },
+    });
+    await post('resolve', { identifier: email });
+    await post('resolve-class', { classCode: prefix });
+    await post('send-code');
+    expect((await post('complete-student')).response.status).toBe(400);
+    expect(
+      (await post('verify-code', { code: 'not-proof' })).response.status
+    ).toBe(400);
+    expect(await prisma.session.count({ where: { userId: user.id } })).toBe(0);
+    const verified = await post('verify-code', { code: await code(email) });
+    expect(verified.data?.state.screen).toBe('joined');
+    expect(verified.data.state.variant).not.toBe('already');
+    expect(((await resumeClass()) as any).initialState.screen).toBe('joined');
+    expect(
+      (await post('complete-student')).response.headers.get('location')
+    ).toBe('/app');
+    expect(await prisma.session.count({ where: { userId: user.id } })).toBe(1);
+  }
+);
+for (const invalidation of [
+  'inactive',
+  'archived',
+  'code',
+  'expired',
+] as const) {
+  suite(
+    `pending class confirmation revalidates ${invalidation} before explicit continuation`,
+    async () => {
+      cookie = '';
+      flowToken = '';
+      const email = `joined-invalid-${invalidation}-${prefix}@example.test`;
+      const user = await prisma.user.create({
+        data: {
+          email,
+          password: { create: { hash: await getPasswordHash('abcdef') } },
+          memberships: { create: { organizationId: prefix, role: 'STUDENT' } },
+        },
+        include: { memberships: true },
+      });
+      await post('resolve', { identifier: email });
+      await post('resolve-class', { classCode: prefix });
+      await post('password', { password: 'abcdef' });
+      expect(((await resumeClass()) as any).initialState?.screen).toBe(
+        'joined'
+      );
+      try {
+        if (invalidation === 'inactive')
+          await prisma.orgMembership.update({
+            where: { id: user.memberships[0].id },
+            data: { isActive: false },
+          });
+        if (invalidation === 'archived')
+          await prisma.class.update({
+            where: { id: prefix },
+            data: { isArchived: true },
+          });
+        if (invalidation === 'code')
+          await prisma.class.update({
+            where: { id: prefix },
+            data: { code: prefix + '-changed' },
+          });
+        if (invalidation === 'expired')
+          await prisma.signonFlow.updateMany({
+            where: { data: { path: ['identifier'], equals: email } },
+            data: { expiresAt: new Date(0) },
+          });
+        expect([400, 403]).toContain(
+          (await post('complete-student')).response.status
+        );
+        expect(await prisma.session.count({ where: { userId: user.id } })).toBe(
+          1
+        );
+        if (invalidation === 'inactive')
+          expect(
+            (
+              await prisma.orgMembership.findUniqueOrThrow({
+                where: { id: user.memberships[0].id },
+              })
+            ).isActive
+          ).toBe(false);
+      } finally {
+        await prisma.class.update({
+          where: { id: prefix },
+          data: { code: prefix, isArchived: false },
+        });
+      }
+    }
+  );
+}
+suite(
+  'class confirmation waits for forced password change and the active membership picker',
+  async () => {
+    cookie = '';
+    flowToken = '';
+    const email = `joined-forced-${prefix}@example.test`;
+    const user = await prisma.user.create({
+      data: {
+        email,
+        mustChangePassword: true,
+        password: { create: { hash: await getPasswordHash('abcdef') } },
+        memberships: {
+          create: [
+            { organizationId: prefix, role: 'STUDENT' },
+            { organizationId: prefix + '-b', role: 'STUDENT' },
+          ],
+        },
+      },
+      include: { memberships: true },
+    });
+    await post('resolve', { identifier: email, redirectTo: '/app/my-classes' });
+    await post('resolve-class', { classCode: prefix });
+    expect(
+      (await post('password', { password: 'abcdef' })).response.headers.get(
+        'location'
+      )
+    ).toBe('/auth/required-password-change');
+    expect(
+      await prisma.orgMembership.count({
+        where: { userId: user.id, classesAsStudent: { some: { id: prefix } } },
+      })
+    ).toBe(0);
+    expect((await post('complete-student')).response.status).toBe(400);
+    const { action } =
+      await import('~/routes/auth.required-password-change/route');
+    const changed = await action({
+      request: new Request(
+        'http://127.0.0.1:5396/auth/required-password-change',
+        {
+          method: 'POST',
+          headers: { cookie },
+          body: new URLSearchParams({
+            password: 'new-password',
+            confirmPassword: 'new-password',
+          }),
+        }
+      ),
+      params: {},
+      context: {},
+    } as any);
+    expect((changed as Response).headers.get('location')).toBe(
+      '/auth/login?continue=1'
+    );
+    expect(((await resumeClass()) as any).initialState.screen).toBe(
+      'membership'
+    );
+    expect(
+      (await post('select-membership', { membershipId: 'foreign' })).response
+        .status
+    ).toBe(403);
+    const selected = await post('select-membership', {
+      membershipId: user.memberships.find((m) => m.organizationId === prefix)!
+        .id,
+    });
+    expect(selected.data?.state.screen).toBe('joined');
+    expect(selected.data.state.variant).not.toBe('already');
+    expect(((await resumeClass()) as any).initialState.screen).toBe('joined');
+    expect(
+      (await post('complete-student')).response.headers.get('location')
+    ).toBe('/app/my-classes');
+    expect(await prisma.session.count({ where: { userId: user.id } })).toBe(1);
+  }
+);
+
+suite(
+  'matching Google email keeps class context through password proof and explicit link or skip',
+  async () => {
+    const { googleCallback } = await import('./google.server');
+    const { generateKeyPair, exportJWK, SignJWT } = await import('jose');
+    const pair = await generateKeyPair('RS256');
+    const jwk = {
+      ...(await exportJWK(pair.publicKey)),
+      kid: 'class-confirmation',
+      alg: 'RS256',
+    };
+    const previous = {
+      fetch: globalThis.fetch,
+      id: process.env.GOOGLE_OAUTH_CLIENT_ID,
+      secret: process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+    };
+    process.env.GOOGLE_OAUTH_CLIENT_ID = 'local-client';
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET = 'local-fixture-secret';
+    let email = '',
+      nonce = '',
+      subject = '';
+    globalThis.fetch = (async (target: any) => {
+      if (target === 'https://www.googleapis.com/oauth2/v3/certs')
+        return Response.json({ keys: [jwk] });
+      if (target !== 'https://oauth2.googleapis.com/token')
+        throw new Error('No external requests permitted');
+      return Response.json({
+        id_token: await new SignJWT({ email, email_verified: true, nonce })
+          .setProtectedHeader({ alg: 'RS256', kid: jwk.kid })
+          .setIssuer('https://accounts.google.com')
+          .setAudience('local-client')
+          .setSubject(subject)
+          .setIssuedAt()
+          .setExpirationTime('5m')
+          .sign(pair.privateKey),
+      });
+    }) as typeof fetch;
+    try {
+      for (const intent of ['skip-google', 'link-google']) {
+        cookie = '';
+        flowToken = '';
+        email = `joined-${intent}-${prefix}@example.test`;
+        subject = `joined-${intent}-${prefix}`;
+        const user = await prisma.user.create({
+          data: {
+            email,
+            password: { create: { hash: await getPasswordHash('abcdef') } },
+            memberships: {
+              create: { organizationId: prefix, role: 'STUDENT' },
+            },
+          },
+        });
+        await post('resolve', {
+          identifier: prefix,
+          redirectTo: '/app/my-classes',
+        });
+        const authorization = new URL((await post('google')).data.redirectTo);
+        nonce = authorization.searchParams.get('nonce')!;
+        const callback = new URL('/auth/unified/google/callback', url);
+        callback.searchParams.set('code', 'local-mock');
+        callback.searchParams.set(
+          'state',
+          authorization.searchParams.get('state')!
+        );
+        expect(
+          (
+            await googleCallback(new Request(callback, { headers: { cookie } }))
+          ).headers.get('location')
+        ).toBe('/auth/login?continue=1');
+        expect(await prisma.session.count({ where: { userId: user.id } })).toBe(
+          0
+        );
+        expect(((await resumeClass()) as any).initialState.screen).toBe(
+          'password'
+        );
+        expect((await post(intent)).response.status).toBe(401);
+        await post('password', { password: 'abcdef' });
+        expect(((await resumeClass()) as any).initialState.screen).toBe(
+          'link-google'
+        );
+        expect(
+          await prisma.orgMembership.count({
+            where: {
+              userId: user.id,
+              classesAsStudent: { some: { id: prefix } },
+            },
+          })
+        ).toBe(0);
+        const confirmed = await post(intent);
+        expect(confirmed.data?.state.screen).toBe('joined');
+        expect(confirmed.data.state.variant).not.toBe('already');
+        expect(confirmed.data.state.classInfo.id).toBe(prefix);
+        expect(((await resumeClass()) as any).initialState.screen).toBe(
+          'joined'
+        );
+        expect(
+          (await post('complete-student')).response.headers.get('location')
+        ).toBe('/app/my-classes');
+        expect(await prisma.session.count({ where: { userId: user.id } })).toBe(
+          1
+        );
+        expect(
+          await prisma.signonIdentity.count({ where: { userId: user.id } })
+        ).toBe(intent === 'link-google' ? 1 : 0);
+      }
+    } finally {
+      globalThis.fetch = previous.fetch;
+      if (previous.id === undefined) delete process.env.GOOGLE_OAUTH_CLIENT_ID;
+      else process.env.GOOGLE_OAUTH_CLIENT_ID = previous.id;
+      if (previous.secret === undefined)
+        delete process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+      else process.env.GOOGLE_OAUTH_CLIENT_SECRET = previous.secret;
+    }
+  }
+);
+
+// FAILURES.md: di-signon-fix-recovery-code-copy. Exercise real OTP consumption,
+// identity resolution, selected-class validation and database enrollment denial.
+for (const denial of ['inactive', 'unavailable'] as const) {
+  suite(
+    `email verification returns a retryable class error for ${denial} enrollment without access`,
+    async () => {
+      cookie = '';
+      flowToken = '';
+      const email = `denied-code-${denial}-${prefix}@example.test`;
+      const user = await prisma.user.create({
+        data: {
+          email,
+          password: { create: { hash: await getPasswordHash('abcdef') } },
+          memberships: {
+            create: {
+              organizationId: prefix,
+              role: 'STUDENT',
+              isActive: false,
+            },
+          },
+        },
+      });
+      const snapshot = () =>
+        prisma.orgMembership.findMany({
+          where: { userId: user.id },
+          include: { classesAsStudent: { select: { id: true } } },
+        });
+      const before = await snapshot();
+      await post('resolve', { identifier: prefix });
+      await post('student-choice', { choice: 'new' });
+      await post('student-email');
+      expect(
+        (await post('resolve', { identifier: email })).data.state.variant
+      ).toBe('existing');
+      expect((await post('class-email-signin')).data.state.screen).toBe(
+        'password'
+      );
+      expect((await post('send-code')).data.state.screen).toBe('email-code');
+      if (denial === 'unavailable')
+        await prisma.class.update({
+          where: { id: prefix },
+          data: { isArchived: true },
+        });
+      try {
+        const denied = await post('verify-code', { code: await code(email) });
+        expect(denied.response.status).toBe(400);
+        expect(denied.data).toEqual({
+          error: '',
+          fieldErrors: {
+            classCode:
+              "We couldn't find a class with that code. Check it with your teacher.",
+          },
+        });
+        expect(await snapshot()).toEqual(before);
+        expect(await prisma.session.count({ where: { userId: user.id } })).toBe(
+          0
+        );
+        expect((await post('complete-student')).response.status).toBe(400);
+        expect(
+          (await post('resolve-class', { classCode: 'unknown-local-code' }))
+            .data.fieldErrors.classCode
+        ).toBe(denied.data.fieldErrors.classCode);
+        expect(await snapshot()).toEqual(before);
+      } finally {
+        if (denial === 'unavailable')
+          await prisma.class.update({
+            where: { id: prefix },
+            data: { isArchived: false },
+          });
+      }
+    }
+  );
+}

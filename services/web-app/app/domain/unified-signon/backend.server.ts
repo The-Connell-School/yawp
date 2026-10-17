@@ -1,6 +1,12 @@
+import {
+  chooseStudent,
+  registerStudent,
+  studentPassword,
+} from './class-student.server';
 import { randomInt, timingSafeEqual } from 'node:crypto';
 import type { Prisma } from '@app/prisma';
 import { z } from 'zod';
+import { signonValidationMessage } from './validation-copy';
 import { safeRedirect } from 'remix-utils/safe-redirect';
 import { prisma } from '~/utils/db.server';
 import { getUserId, getPasswordHash } from '~/utils/auth.server';
@@ -8,16 +14,12 @@ import {
   NameSchema,
   PasswordAndConfirmPasswordSchema,
 } from '~/utils/schemas/user';
-import { validateUsername } from '~/utils/username';
-import { UsernameFieldSchema } from '~/utils/schemas/username';
 import {
   enforceUnauthByIpAndTarget,
   enforceUnauthByIpOnly,
 } from '~/utils/rate-limit.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
-import { registerFreeTierStudent } from '~/domain/free-tier/student-join.server';
 import { assertFreeClassSeatAvailableInTx } from '~/domain/free-tier/class-seat-cap.server';
-import { assertFreeTierSpendAllowed } from '~/domain/free-tier/usage-budget.server';
 import {
   getUaPartnerContext,
   isUaPartnerHost,
@@ -42,15 +44,11 @@ import {
   withFlow,
   type Flow,
 } from './flow.server';
-import {
-  classSummary,
-  chooseClass,
-  lookupClasses,
-  resolveClasses,
-  selectedClass,
-} from './classes.server';
+import { chooseClass, resolveClasses, selectedClass } from './classes.server';
 import { deliverCode } from './mail.server';
+import { assertResendMailAvailable } from './resend-mail.server';
 import { finishAuthentication } from './authentication.server';
+import { rememberClassConfirmation } from './class-confirmation.server';
 import { readInvitation, prepareInvitation } from './invitations.server';
 import { beginGoogle, googleAvailable } from './google.server';
 
@@ -81,54 +79,48 @@ export async function resolveIdentifier(
   raw: string
 ) {
   const parsed = normalizeIdentifier(raw);
-  if (!parsed)
-    throw new FlowError('Enter a valid email, handle or class code.');
+  if (flow.data.studentEmailSignup && (!parsed || parsed.kind !== 'email'))
+    throw new FlowError('Enter your school email.', 400, undefined, {
+      identifier: 'That email looks incomplete. Check it and try again.',
+    });
+  if (!parsed) throw new FlowError('Enter your email or class code.');
+  flow.data.classConfirmation = undefined;
+  flow.data.studentEmailOrigin = undefined;
+  if (parsed.kind !== 'email') {
+    flow.data.identifier = undefined;
+    flow.data.userId = undefined;
+    flow.data.proof = undefined;
+    flow.data.purpose = undefined;
+    flow.data.otp = undefined;
+    flow.data.invitationId = undefined;
+    flow.data.studentChoice = undefined;
+    flow.data.studentEmailSignup = undefined;
+    flow.data.classId = undefined;
+    flow.data.classCode = undefined;
+    try {
+      return await resolveClasses(tx, flow, parsed.value);
+    } catch (error) {
+      if (error instanceof FlowError && error.fieldErrors?.classCode)
+        throw new FlowError(
+          error.message,
+          error.status,
+          error.retryAfterSeconds,
+          { identifier: error.fieldErrors.classCode }
+        );
+      throw error;
+    }
+  }
   const user = await tx.user.findFirst({
-    where:
-      parsed.kind === 'email'
-        ? { email: { equals: parsed.value, mode: 'insensitive' } }
-        : { username: parsed.value },
+    where: { email: { equals: parsed.value, mode: 'insensitive' } },
     select: { id: true, password: { select: { userId: true } } },
   });
-  const classes =
-    parsed.kind === 'handle-or-code'
-      ? await lookupClasses(tx, parsed.value)
-      : [];
-  // Resolving an identity discards prior proof and code, but retains a selected
-  // class and destination held by this browser's flow.
-  if (flow.data.pendingGoogle?.email !== parsed.value)
-    flow.data.pendingGoogle = undefined;
-  flow.data.identifier =
-    parsed.kind === 'email' ? parsed.value : '@' + parsed.value;
+  flow.data.pendingGoogle = undefined;
+  flow.data.studentGoogle = undefined;
+  flow.data.identifier = parsed.value;
   flow.data.userId = user?.id;
   flow.data.proof = undefined;
   flow.data.otp = undefined;
   flow.data.purpose = undefined;
-  if (classes.length && parsed.kind !== 'email') {
-    flow.data.classCode = parsed.value;
-    flow.data.classCandidates = classes.map((k) => k.id);
-    if (user)
-      return stateFor(flow, {
-        screen: 'ambiguity',
-        identifier: parsed.value,
-        classInfo: classSummary(classes[0]),
-        classes: classes.map(classSummary),
-      });
-    flow.data.identifier = undefined;
-    return resolveClasses(tx, flow, parsed.value);
-  }
-  if (parsed.kind !== 'email') {
-    const handle = validateUsername(parsed.value);
-    if (!user && !handle.ok)
-      throw new FlowError(handle.message, 400, undefined, {
-        identifier: handle.message,
-      });
-    // Same password surface for unknown handles; no account status is revealed.
-    return stateFor(flow, {
-      screen: 'password',
-      identifier: '@' + parsed.value,
-    });
-  }
   const invitation = await tx.invitation.findFirst({
     where: {
       target: { equals: parsed.value, mode: 'insensitive' },
@@ -140,6 +132,19 @@ export async function resolveIdentifier(
     select: { id: true },
   });
   flow.data.invitationId = invitation?.id;
+  if (flow.data.studentEmailSignup) {
+    const klass = await selectedClass(tx, flow);
+    if (!klass || klass.school.organization.plan === 'FREE_CLASSROOM')
+      throw new FlowError('Class not found. Enter your class code again.');
+    if (user)
+      return stateFor(flow, {
+        screen: 'class-email',
+        variant: 'existing',
+        identifier: parsed.value,
+        notice:
+          'You already have an account with this email. Sign in to join this class.',
+      });
+  }
   if (user)
     return stateFor(flow, {
       screen: user.password ? 'password' : 'activation',
@@ -386,7 +391,10 @@ async function createAccount(
       {
         error: 'Check your details.',
         fieldErrors: Object.fromEntries(
-          parsed.error.issues.map((i) => [String(i.path[0]), i.message])
+          parsed.error.issues.map((i) => [
+            String(i.path[0]),
+            signonValidationMessage(i),
+          ])
         ),
       },
       { status: 400 }
@@ -473,8 +481,16 @@ async function createAccount(
     flow.data.pendingGoogle = undefined;
   }
   // Already connected by the authoritative signup operation in this transaction.
-  flow.data.classId = undefined;
-  flow.data.classCode = undefined;
+  if (klass) {
+    const membership = await tx.orgMembership.findUniqueOrThrow({
+      where: { userId_organizationId: { userId: user.id, organizationId } },
+      select: { id: true },
+    });
+    rememberClassConfirmation(flow, klass, membership.id, false);
+  } else {
+    flow.data.classId = undefined;
+    flow.data.classCode = undefined;
+  }
   if (flow.data.partner) flow.data.destination = '/billing/ua';
   return finishAuthentication(tx, flow, request, user.id);
 }
@@ -486,16 +502,97 @@ async function operate(
   values: Record<string, string>,
   authenticatedUserId: string | null
 ) {
+  if (operation === 'student-email') {
+    if (
+      (flow.data.state.screen !== 'class-handle' &&
+        !flow.data.studentEmailSignup) ||
+      flow.data.studentChoice !== 'new'
+    )
+      throw new FlowError();
+    const klass = await selectedClass(tx, flow);
+    if (!klass || klass.school.organization.plan === 'FREE_CLASSROOM')
+      throw new FlowError();
+    flow.data.studentEmailSignup = true;
+    flow.data.identifier = undefined;
+    flow.data.userId = undefined;
+    flow.data.proof = undefined;
+    flow.data.invitationId = undefined;
+    flow.data.otp = undefined;
+    flow.data.pendingGoogle = undefined;
+    flow.data.studentGoogle = undefined;
+    return stateFor(flow, { screen: 'class-email' });
+  }
+  if (operation === 'class-email-signin') {
+    if (!flow.data.studentEmailSignup || flow.data.studentChoice !== 'new')
+      throw new FlowError();
+    // Back can restore an earlier client screen after a different address was
+    // resolved. Re-resolve the displayed email before ordinary authentication;
+    // a posted user ID, proof or destination never selects the account.
+    const resolved = await resolveIdentifier(
+      tx,
+      flow,
+      values.identifier || flow.data.identifier || ''
+    );
+    if (!flow.data.userId) return resolved;
+    await assertCurrentIdentity(tx, flow);
+    const password = await tx.password.findUnique({
+      where: { userId: flow.data.userId },
+      select: { userId: true },
+    });
+    return stateFor(flow, {
+      screen: password ? 'password' : 'activation',
+      identifier: flow.data.identifier,
+    });
+  }
+  if (operation === 'student-choice')
+    return chooseStudent(tx, flow, values.choice);
+  if (operation === 'register-student') {
+    await limit(request, flow.id);
+    return registerStudent(tx, flow, values);
+  }
+  if (operation === 'student-password')
+    return studentPassword(tx, flow, request, values);
+  if (operation === 'complete-student') {
+    if (
+      flow.data.state.screen !== 'joined' ||
+      !flow.data.userId ||
+      (!flow.data.proof && authenticatedUserId !== flow.data.userId) ||
+      !flow.data.classConfirmation
+    )
+      throw new FlowError();
+    // Only generated-handle registration defers its first session. Other
+    // journeys must retain their authenticated owner across this continuation.
+    const issueSession =
+      !authenticatedUserId &&
+      flow.data.classConfirmation.issueSessionOnContinue === true &&
+      flow.data.proof === 'password';
+    if (!issueSession && authenticatedUserId !== flow.data.userId)
+      throw new FlowError('Sign in to continue.', 401);
+    return finishAuthentication(
+      tx,
+      flow,
+      request,
+      flow.data.userId,
+      issueSession,
+      undefined,
+      true
+    );
+  }
   if (operation === 'resolve')
     return resolveIdentifier(tx, flow, values.identifier || '');
   if (operation === 'resolve-class') {
     if (flow.data.purpose === 'reset')
       throw new FlowError('Finish resetting your password first.');
+    flow.data.classConfirmation = undefined;
     if (flow.data.state.screen === 'ambiguity') {
       flow.data.identifier = undefined;
       flow.data.userId = undefined;
     }
     if (flow.data.proof === 'email') flow.data.proof = undefined;
+    flow.data.classId = undefined;
+    flow.data.classCandidates = undefined;
+    flow.data.studentChoice = undefined;
+    flow.data.studentEmailSignup = undefined;
     const result = await resolveClasses(tx, flow, values.classCode || '');
     flow.data.otp = undefined; // A new class context requires a new challenge.
     if (
@@ -572,82 +669,7 @@ async function operate(
     );
   }
   if (operation === 'join-handle') {
-    const parsed = z
-      .object({ name: NameSchema, username: UsernameFieldSchema })
-      .and(PasswordAndConfirmPasswordSchema)
-      .safeParse(values);
-    if (!parsed.success)
-      return Response.json(
-        {
-          error: 'Check your details.',
-          fieldErrors: Object.fromEntries(
-            parsed.error.issues.map((i) => [String(i.path[0]), i.message])
-          ),
-        },
-        { status: 400 }
-      );
-    await limit(request, parsed.data.username, 'signup');
-    const klass = await selectedClass(tx, flow);
-    if (
-      !klass ||
-      klass.school.organization.plan !== 'FREE_CLASSROOM' ||
-      !flow.data.joinToken
-    )
-      throw new FlowError('Class not found.');
-    const result = await registerFreeTierStudent({
-      ...parsed.data,
-      classId: klass.id,
-      joinToken: flow.data.joinToken,
-      client: tx,
-    });
-    if (result.status === 'error') {
-      if (result.error.includes('full'))
-        return Response.json(
-          stateFor(flow, {
-            screen: 'class-handle',
-            variant: 'full',
-            classInfo: classSummary(klass),
-          }),
-          { status: 400 }
-        );
-      if (result.field === 'username' && result.suggestions?.length)
-        return Response.json(
-          stateFor(flow, {
-            screen: 'class-handle',
-            variant: 'taken',
-            classInfo: classSummary(klass),
-            handleSuggestions: result.suggestions,
-            fieldErrors: {
-              username: `@${parsed.data.username} is taken. Try one of these:`,
-            },
-          }),
-          { status: 400 }
-        );
-      return Response.json(
-        { error: result.error, fieldErrors: { [result.field]: result.error } },
-        { status: 400 }
-      );
-    }
-    // registerFreeTierStudent preserves the legacy handle/session/seat/budget
-    // operation. Reuse its session rather than allocating a second session.
-    const { authSessionStorage } =
-      await import('~/cookie-session-storages/authentication.server');
-    const { sessionKey } = await import('~/utils/auth.server');
-    const { setMembershipId } = await import('~/cookies/membership-id.server');
-    const auth = await authSessionStorage.getSession(
-      request.headers.get('cookie')
-    );
-    auth.set(sessionKey, result.session.id);
-    flow.data.completed = true;
-    const headers = new Headers({ Location: flow.data.destination });
-    headers.append(
-      'set-cookie',
-      await authSessionStorage.commitSession(auth, {
-        expires: result.session.expirationDate,
-      })
-    );
-    headers.append('set-cookie', await setMembershipId(result.membershipId));
-    return new Response(null, { status: 302, headers });
+    throw new FlowError('Choose New or Returning to continue.');
   }
   if (operation === 'select-membership') {
     if (!authenticatedUserId) throw new FlowError('Sign in to continue.', 401);
@@ -708,11 +730,7 @@ async function operate(
   }
   if (operation === 'resend-invite' || operation === 'resend-approval') {
     await requireFreeTierEnabled();
-    if (
-      process.env.NODE_ENV !== 'production' &&
-      !process.env.SIGNON_MAIL_CAPTURE_DIR
-    )
-      throw new FlowError('Email delivery is unavailable.', 503);
+    assertResendMailAvailable();
     if (!flow.data.proof) throw new FlowError('Verify your email first.', 401);
     await limit(request, flow.data.identifier || flow.id, 'forgotPassword');
     const application = await tx.freeTierApplication.findFirst({
