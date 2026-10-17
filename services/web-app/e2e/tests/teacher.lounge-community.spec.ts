@@ -110,7 +110,7 @@ test.describe.serial("Faculty Lounge community board", () => {
 
     await page.goto('/app/lounge');
     const thread = page.getByRole('article').filter({ hasText: QUESTION_TITLE });
-    await expect(thread.getByText('YAWP! team answered')).toBeVisible();
+    await expect(thread.getByText('Admin answered')).toBeVisible();
   });
 
   test('another teacher finds it, marks it helpful, and replies with a mention', async ({

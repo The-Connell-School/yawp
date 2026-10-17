@@ -85,6 +85,13 @@ test.describe.serial('Faculty Lounge launch', () => {
     await expect(page.getByRole('heading', { name: 'Faculty Lounge', level: 1 })).toBeVisible();
     const pinned = page.getByRole('region', { name: 'Pinned' });
     await expect(pinned.getByRole('link')).toHaveText([/Welcome to the Faculty Lounge/, /House Rules for the Lounge/]);
+    // The Letter look: Brian's welcome as a letter, the team's faces beside it.
+    await expect(pinned.getByText(/Every school's faculty lounge has its own personality/)).toBeVisible();
+    await expect(pinned.getByRole('heading', { name: 'The YAWP! team' })).toBeVisible();
+    // A question that is all title previews Brian's answer, and says who answered.
+    const q1 = page.getByRole('article').filter({ hasText: "What's the best way to use YAWP!" });
+    await expect(q1.getByText(/^Use the Class Starter to build reps\./)).toBeVisible();
+    await expect(q1.getByText('Admin answered')).toBeVisible();
     // Drafts in the hopper stay out of the feed.
     await expect(page.getByRole('link', { name: HOPPER_TITLE })).toHaveCount(0);
 
@@ -101,6 +108,7 @@ test.describe.serial('Faculty Lounge launch', () => {
       .click();
     const answers = page.getByRole('region', { name: 'Answers from the YAWP! team' });
     await expect(answers.getByText(/Use the Class Starter to build reps\./)).toBeVisible();
+    await expect(answers.getByText("Admin's answer")).toBeVisible();
     await expect(page.getByTestId('lounge-post-body')).toHaveCount(0);
   });
 

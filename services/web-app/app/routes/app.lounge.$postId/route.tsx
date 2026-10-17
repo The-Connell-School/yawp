@@ -13,11 +13,11 @@ import {
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { HelpfulButton } from '~/components/lounge/helpful-button';
 import { LoungeBody } from '~/components/lounge/lounge-body';
-import { LoungeByline } from '~/components/lounge/lounge-byline';
+import { LoungeAvatar } from '~/components/lounge/lounge-avatar';
 import { MentionTextarea } from '~/components/lounge/mention-textarea';
 import { LoungeVideoPlayer } from '~/components/lounge/lounge-video-player';
 import { LoungeVideoRecorder } from '~/components/lounge/lounge-video-recorder';
-import { FileText } from 'lucide-react';
+import { ChevronLeft, FileText } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { LocalTime } from '~/components/lounge/local-time';
 import { Button } from '~/components/ui/button';
@@ -273,6 +273,39 @@ function FormErrors({ errors }: { errors?: Record<string, string | undefined> })
 }
 
 /** One reply: a YAWP! team answer (accented) or a teacher's reply. Authors can edit their own. */
+const KIND_LABEL = { QUESTION: 'Question', SHARE: 'Share', WIN: 'Win' } as const;
+
+/** Avatar, name, and a quiet second line: school or team, when, edited. */
+function AuthorLine({
+  author,
+  avatar,
+  when,
+  edited,
+}: {
+  author: LoungeReplyView['author'];
+  avatar: LoungeReplyView['avatar'];
+  when: string;
+  edited: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <LoungeAvatar avatar={avatar} />
+      <div className="flex flex-col leading-snug">
+        <span className="font-medium">{author.name}</span>
+        <span className="text-sm text-muted-foreground">
+          {[author.detail, when, edited ? 'edited' : null].filter(Boolean).join(' · ')}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+const QUIET_ACTION = 'inline-flex min-h-11 items-center rounded-md px-2 text-sm text-muted-foreground hover:text-foreground';
+
+/**
+ * One reply. A YAWP! team answer is its own card with a "<name>'s answer"
+ * badge; a teacher's reply is an avatar row. Authors can edit their own.
+ */
 function ReplyItem({
   reply,
   candidates,
@@ -291,16 +324,10 @@ function ReplyItem({
       : undefined;
   const initial = decodeMentions(reply.body);
   const staff = variant === 'staff';
-  return (
-    <article
-      id={`reply-${reply.id}`}
-      className={
-        staff
-          ? 'flex flex-col gap-3 border-l-[3px] border-primary bg-background px-5 py-4'
-          : 'flex flex-col gap-2 border-t py-5'
-      }
-    >
-      <LoungeByline byline={reply.author} when={reply.when} edited={reply.isEdited} />
+  const firstName = reply.author.name.trim().split(/\s+/)[0];
+
+  const content = (
+    <>
       {reply.isHidden ? (
         <p className="text-sm font-medium text-destructive">Hidden by the {LOUNGE_TEAM_NAME}.</p>
       ) : null}
@@ -329,7 +356,7 @@ function ReplyItem({
           </div>
         </Form>
       ) : (
-        <LoungeBody body={reply.body} className={staff ? 'text-base' : undefined} />
+        <LoungeBody body={reply.body} className={staff ? 'text-[17px] leading-[1.65]' : 'text-base'} />
       )}
       <FormErrors errors={errors} />
       {reply.video ? (
@@ -345,16 +372,21 @@ function ReplyItem({
           href={reply.videoUrl}
           target="_blank"
           rel="noreferrer noopener"
-          className="self-start text-sm font-medium text-primary underline"
+          className="lounge-accent self-start text-sm font-medium underline"
         >
           Watch the video
         </a>
       ) : null}
-      <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-        <HelpfulButton count={reply.helpfulCount} voted={reply.viewerVoted} isOwn={reply.isOwn} replyId={reply.id} />
-        <span className="ml-auto flex items-center gap-4">
+      <div className={staff ? '-mx-2 flex flex-wrap items-center gap-2 border-t pt-2' : '-mx-2 flex flex-wrap items-center gap-2'}>
+        <span className="px-2">
+          <HelpfulButton count={reply.helpfulCount} voted={reply.viewerVoted} isOwn={reply.isOwn} replyId={reply.id} />
+        </span>
+        <a href="#reply" className={QUIET_ACTION}>
+          Reply
+        </a>
+        <span className="ml-auto flex items-center gap-1">
           {reply.isOwn && !editing ? (
-            <button type="button" onClick={() => setEditing(true)} className="text-sm hover:text-foreground">
+            <button type="button" onClick={() => setEditing(true)} className={QUIET_ACTION}>
               Edit
             </button>
           ) : null}
@@ -364,6 +396,36 @@ function ReplyItem({
             <ReportForm replyId={reply.id} />
           )}
         </span>
+      </div>
+    </>
+  );
+
+  if (staff) {
+    return (
+      <article id={`reply-${reply.id}`} className="flex flex-col gap-4 rounded-2xl border bg-popover p-6 sm:p-8">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <AuthorLine author={reply.author} avatar={reply.avatar} when={reply.when} edited={reply.isEdited} />
+          <span className="lounge-accent lounge-accent-soft rounded-md px-2.5 py-1 text-xs font-medium uppercase tracking-wide">
+            {firstName}&apos;s answer
+          </span>
+        </div>
+        {content}
+      </article>
+    );
+  }
+
+  return (
+    <article id={`reply-${reply.id}`} className="flex gap-4 border-t py-6">
+      <LoungeAvatar avatar={reply.avatar} size="md" className="mt-0.5" />
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <p className="text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">{reply.author.name}</span>
+          {[reply.author.detail, reply.when, reply.isEdited ? 'edited' : null]
+            .filter(Boolean)
+            .map((part) => ` · ${part}`)
+            .join('')}
+        </p>
+        {content}
       </div>
     </article>
   );
@@ -384,12 +446,16 @@ export default function LoungeThreadRoute() {
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
-      <div className="mx-auto w-full max-w-2xl px-4 py-8">
-        <Link to="/app/lounge" className="inline-flex min-h-11 items-center text-sm text-muted-foreground">
-          ← {LOUNGE_NAME}
+      <div className="mx-auto flex w-full max-w-[760px] flex-col gap-8 px-4 pb-16 pt-6 sm:px-8 sm:pt-8">
+        <Link
+          to="/app/lounge"
+          className="inline-flex min-h-11 items-center gap-1.5 self-start text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ChevronLeft size={16} aria-hidden="true" />
+          {LOUNGE_NAME}
         </Link>
 
-        <article className="mt-3 flex flex-col gap-3">
+        <article className="-mt-4 flex flex-col gap-4">
           {post.isUnpublished ? (
             <p className="rounded-lg bg-secondary px-3 py-2 text-sm font-medium">
               {post.isDraft ? (
@@ -410,20 +476,28 @@ export default function LoungeThreadRoute() {
             />
           ) : (
             <>
-              <h1 className="text-2xl font-bold leading-snug">{post.title}</h1>
-              <p className="text-sm text-muted-foreground">
-                <LoungeByline byline={post.author} when={post.when} edited={post.isEdited} /> ·{' '}
-                <Link to={`/app/lounge?topic=${post.topic}`} className="hover:underline">
-                  {post.topicLabel}
-                </Link>
+              <p className="lounge-accent text-xs font-medium uppercase tracking-[0.08em]">
+                {KIND_LABEL[post.kind]}
+                {post.topic === 'other' ? null : (
+                  <>
+                    {' · '}
+                    <Link to={`/app/lounge?topic=${post.topic}`} className="hover:underline">
+                      {post.topicLabel}
+                    </Link>
+                  </>
+                )}
               </p>
+              <h1 className="lounge-serif text-[34px] leading-[1.1] text-foreground sm:text-[42px]">{post.title}</h1>
+              <AuthorLine author={post.author} avatar={post.avatar} when={post.when} edited={post.isEdited} />
             </>
           )}
           {post.isPrivate ? (
             <p className="text-sm text-muted-foreground">Only you and the {LOUNGE_TEAM_NAME} can see this.</p>
           ) : null}
           {post.isHidden ? <p className="text-sm font-medium text-destructive">Hidden by the {LOUNGE_TEAM_NAME}.</p> : null}
-          {editingPost ? null : <LoungeBody body={post.body} className="text-base" testId="lounge-post-body" />}
+          {editingPost ? null : (
+            <LoungeBody body={post.body} className="text-[17px] leading-[1.65]" testId="lounge-post-body" />
+          )}
           {post.video ? (
             <LoungeVideoPlayer
               url={post.video.url}
@@ -434,49 +508,43 @@ export default function LoungeThreadRoute() {
           ) : null}
           {share ? <ShareCard share={share} isOwn={post.isOwn} /> : null}
           {post.staffStatus === 'OPEN' && staffReplies.length === 0 ? (
-            <p className="text-sm font-medium text-primary">Waiting on the {LOUNGE_TEAM_NAME}</p>
+            <p className="lounge-accent text-sm font-medium">Waiting on the {LOUNGE_TEAM_NAME}</p>
           ) : null}
-          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-            <HelpfulButton count={post.helpfulCount} voted={post.viewerVoted} isOwn={post.isOwn} postId={post.id} />
-            <a href="#reply" className="hover:text-foreground">
+          <div className="-mx-2 flex flex-wrap items-center gap-2 border-b pb-2">
+            <span className="px-2">
+              <HelpfulButton count={post.helpfulCount} voted={post.viewerVoted} isOwn={post.isOwn} postId={post.id} />
+            </span>
+            <a href="#reply" className={QUIET_ACTION}>
               Reply
             </a>
-            <span className="ml-auto flex items-center gap-4">
+            <span className="ml-auto flex items-center gap-1">
               {isStaff ? (
                 <Form method="post">
                   <input type="hidden" name="intent" value={post.isPinned ? 'unpin' : 'pin'} />
-                  <button type="submit" className="text-sm text-muted-foreground hover:text-foreground">
+                  <button type="submit" className={QUIET_ACTION}>
                     {post.isPinned ? 'Unpin' : 'Pin to top'}
                   </button>
                 </Form>
               ) : null}
               {post.isOwn && !editingPost ? (
-                <button
-                  type="button"
-                  onClick={() => setEditingPost(true)}
-                  className="text-sm text-muted-foreground hover:text-foreground"
-                >
+                <button type="button" onClick={() => setEditingPost(true)} className={QUIET_ACTION}>
                   Edit post
                 </button>
               ) : null}
-              {post.isOwn ? (
-                <DeleteButton intent="delete-post" label="Delete post" />
-              ) : (
-                <ReportForm />
-              )}
+              {post.isOwn ? <DeleteButton intent="delete-post" label="Delete post" /> : <ReportForm />}
             </span>
           </div>
         </article>
 
         {staffReplies.length > 0 ? (
-          <section aria-label={`Answers from the ${LOUNGE_TEAM_NAME}`} className="mt-8 flex flex-col gap-4">
+          <section aria-label={`Answers from the ${LOUNGE_TEAM_NAME}`} className="flex flex-col gap-4">
             {staffReplies.map((reply) => (
               <ReplyItem key={reply.id} reply={reply} candidates={candidates} variant="staff" />
             ))}
           </section>
         ) : null}
 
-        <section aria-label="Replies" className="mt-8">
+        <section aria-label="Replies">
           {replies.length > 0 ? (
             <h2 className="mb-1 text-sm font-medium text-muted-foreground">
               {replies.length} {replies.length === 1 ? 'reply' : 'replies'}
@@ -487,47 +555,47 @@ export default function LoungeThreadRoute() {
           ))}
         </section>
 
-        <div id="reply" className="border-t pt-6">
+        <div id="reply" className="-mt-8 border-t pt-6">
           <Form method="post" className="flex flex-col gap-3">
-              <input type="hidden" name="intent" value="reply" />
-              <label htmlFor="lounge-reply" className="text-sm text-muted-foreground">
-                Your reply
-              </label>
-              <MentionTextarea
-                key={replyBoxKey}
-                id="lounge-reply"
-                name="body"
-                rows={3}
-                candidates={candidates}
-                defaultText={retryBody ? decodeMentions(retryBody).text : ''}
-                defaultMentions={retryBody ? decodeMentions(retryBody).mentions : []}
-                placeholder="Type @ to mention Brian or someone in this thread."
-                aria-invalid={Boolean(replyErrors?.body)}
-              />
-              {isStaff ? (
-                <>
-                  <LoungeVideoRecorder key={replyBoxKey} />
-                  <div className="flex flex-col gap-1">
-                    <label htmlFor="lounge-video" className="text-sm text-muted-foreground">
-                      Or a video link (optional)
-                    </label>
-                    <Input id="lounge-video" name="videoUrl" type="url" placeholder="https://www.loom.com/share/…" />
-                  </div>
-                </>
-              ) : null}
-              {replyErrors
-                ? Object.values(replyErrors).map((message) => (
-                    <p key={message} role="alert" className="text-sm text-destructive">
-                      {message}
-                    </p>
-                  ))
-                : null}
-              <div>
-                <Button type="submit" disabled={submitting}>
-                  Post reply
-                </Button>
-              </div>
-            </Form>
+            <input type="hidden" name="intent" value="reply" />
+            <label htmlFor="lounge-reply" className="text-sm text-muted-foreground">
+              Your reply
+            </label>
+            <MentionTextarea
+              key={replyBoxKey}
+              id="lounge-reply"
+              name="body"
+              rows={4}
+              candidates={candidates}
+              defaultText={retryBody ? decodeMentions(retryBody).text : ''}
+              defaultMentions={retryBody ? decodeMentions(retryBody).mentions : []}
+              placeholder="Type @ to mention Brian or someone in this thread."
+              aria-invalid={Boolean(replyErrors?.body)}
+            />
+            {isStaff ? (
+              <>
+                <LoungeVideoRecorder key={replyBoxKey} />
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="lounge-video" className="text-sm text-muted-foreground">
+                    Or a video link (optional)
+                  </label>
+                  <Input id="lounge-video" name="videoUrl" type="url" placeholder="https://www.loom.com/share/…" />
+                </div>
+              </>
+            ) : null}
+            {replyErrors
+              ? Object.values(replyErrors).map((message) => (
+                  <p key={message} role="alert" className="text-sm text-destructive">
+                    {message}
+                  </p>
+                ))
+              : null}
+            <div>
+              <Button type="submit" disabled={submitting}>
+                Post reply
+              </Button>
+            </div>
+          </Form>
         </div>
       </div>
     </section>
@@ -555,7 +623,7 @@ function ShareCard({ share, isOwn }: { share: ShareView; isOwn: boolean }) {
       className="flex flex-col gap-3 rounded-xl border bg-background px-4 py-3.5"
     >
       <div className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg lounge-accent-soft lounge-accent">
           <FileText size={20} aria-hidden="true" />
         </span>
         <span className="flex min-w-0 flex-col">
@@ -607,7 +675,7 @@ function DeleteButton({ intent, replyId, label }: { intent: string; replyId?: st
     >
       <input type="hidden" name="intent" value={intent} />
       {replyId ? <input type="hidden" name="replyId" value={replyId} /> : null}
-      <button type="submit" className="text-sm text-muted-foreground hover:text-foreground">
+      <button type="submit" className={QUIET_ACTION}>
         {label}
       </button>
     </Form>
@@ -621,7 +689,7 @@ function ReportForm({ replyId }: { replyId?: string }) {
   }
   return (
     <details className="text-sm">
-      <summary className="cursor-pointer list-none text-muted-foreground hover:text-foreground">Report</summary>
+      <summary className={`cursor-pointer list-none ${QUIET_ACTION}`}>Report</summary>
       <fetcher.Form method="post" className="mt-2 flex flex-wrap items-end gap-2">
         <input type="hidden" name="intent" value="report" />
         {replyId ? <input type="hidden" name="replyId" value={replyId} /> : null}

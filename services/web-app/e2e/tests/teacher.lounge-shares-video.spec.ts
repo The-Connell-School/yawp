@@ -163,7 +163,7 @@ test.describe.serial("Faculty Lounge shares and Brian's videos", () => {
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto('/app/lounge');
     const row = page.getByRole('article').filter({ hasText: QUESTION_TITLE });
-    await expect(row.getByText('YAWP! team answered on video')).toBeVisible();
+    await expect(row.getByText('Admin answered on video')).toBeVisible();
     await row.getByRole('link', { name: QUESTION_TITLE }).click();
 
     const answers = page.getByRole('region', { name: 'Answers from the YAWP! team' });
@@ -190,7 +190,7 @@ test.describe.serial("Faculty Lounge shares and Brian's videos", () => {
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto('/app/lounge');
     const pinned = page.getByRole('region', { name: 'Pinned' });
-    await expect(pinned.getByText('From Admin')).toBeVisible();
+    await expect(pinned.getByText('Admin E2E')).toBeVisible();
     await expect(pinned.getByRole('link', { name: PROMPT_TITLE })).toBeVisible();
     // Shown once, at the top, not again in the list below.
     await expect(page.getByRole('link', { name: PROMPT_TITLE })).toHaveCount(1);

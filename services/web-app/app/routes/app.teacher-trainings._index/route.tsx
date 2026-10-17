@@ -9,7 +9,7 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { prisma } from '~/utils/db.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { isLoungeCommunityEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { LoungeHeader } from '~/components/lounge/lounge-header';
+import { LoungeMasthead } from '~/components/lounge/lounge-masthead';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -70,7 +70,7 @@ export default function TeacherTrainingsRoute() {
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       {communityEnabled ? (
-        <LoungeHeader active="trainings" description="Enjoy your courses and resources." />
+        <LoungeMasthead active="trainings" />
       ) : (
         <div className="flex w-full justify-between border-b bg-secondary">
           <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
@@ -83,7 +83,13 @@ export default function TeacherTrainingsRoute() {
           </div>
         </div>
       )}
-      <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
+      <div
+        className={
+          communityEnabled
+            ? 'mx-auto w-full max-w-[960px] px-4 pb-14 pt-7 sm:px-8'
+            : 'mx-auto w-full max-w-screen-lg p-3 sm:p-5'
+        }
+      >
         <div className="flex flex-1 flex-col">
           <div className="flex-1 overflow-y-auto">
             {teacherTrainings.length === 0 ? (
