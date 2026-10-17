@@ -15,6 +15,7 @@ const prisma = {
     findMany: mock(),
   },
   session: {
+    deleteMany: mock(async () => ({ count: 1 })),
     findUnique: mock(),
   },
 };
@@ -40,6 +41,7 @@ mock.module('~/domain/student-license/student-license.server', () => ({
 }));
 
 const {
+  logout,
   getPasswordHash,
   resetUserPassword,
   verifyUserPassword,
@@ -415,7 +417,7 @@ describe('membership auth helpers', () => {
       },
     });
 
-    prisma.user.findFirst.mockImplementation(async ({ where }: any) =>
+    prisma.user.findFirst.mockImplementation(async ({ where }: { where: unknown }) =>
       matchesOwnerWhere(where, twoOrgUser) ? twoOrgUser : null
     );
   };
@@ -541,4 +543,30 @@ describe('auth email normalization', () => {
       id: 'user-1',
     });
   });
+});
+
+test('opt-in logout waits for session revocation before redirecting', async () => {
+  getSession.mockResolvedValue({ get: () => 'session-to-revoke' });
+  let revoked = false;
+  prisma.session.deleteMany.mockImplementation(() => ({
+    then(resolve: (value: { count: number }) => void) {
+      revoked = true;
+      resolve({ count: 1 });
+    },
+  }) as unknown as Promise<{ count: number }>);
+  try {
+    await logout({
+      request: new Request('http://localhost/auth/logout'),
+      redirectTo: '/free',
+      awaitSessionDeletion: true,
+    });
+    throw Error('Expected redirect');
+  } catch (response) {
+    expect(response).toBeInstanceOf(Response);
+    expect((response as Response).headers.get('Location')).toBe('/free');
+    expect(revoked).toBe(true);
+    expect(prisma.session.deleteMany).toHaveBeenCalledWith({
+      where: { id: 'session-to-revoke' },
+    });
+  }
 });

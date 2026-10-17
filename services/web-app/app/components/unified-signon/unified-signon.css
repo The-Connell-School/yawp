@@ -445,3 +445,85 @@
 .unified-signon[data-signon-screen='preview-access'] select {
   font-size: 16px;
 }
+
+/* The new flag adds these overrides only to signed-in recovery screens. */
+.signon-teacher-prompts .signon-identity {
+  align-self: flex-start;
+  max-width: 100%;
+  gap: 8px;
+  padding: 4px 4px 4px 14px;
+  line-height: 20px;
+}
+.signon-teacher-prompts .signon-identity > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.signon-teacher-prompts .signon-identity .signon-text-button {
+  padding: 8px 10px;
+  line-height: 18px;
+  font-weight: 600;
+}
+.signon-teacher-prompts .signon-inactive-copy {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+.signon-teacher-prompts .signon-teacher-continuation {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid hsl(var(--border));
+  color: #5e5d5a;
+  line-height: 1.5;
+}
+.signon-teacher-prompts .signon-teacher-explanation {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.signon-teacher-prompts .signon-teacher-explanation svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.signon-teacher-prompts .signon-teacher-signout {
+  width: 100%;
+  height: 44px;
+  background: hsl(var(--background));
+  border-color: hsl(var(--input));
+  font-size: 14px;
+}
+.signon-teacher-prompts input[name='classCode'] {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 18px;
+  letter-spacing: 0.18em;
+}
+
+.auth-page-shell:has(.signon-teacher-prompts),
+.auth-page-shell:has(.signon-teacher-prompts) * {
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+}
+.signon-teacher-prompts[data-signon-screen='inactive']
+  .signon-card
+  > .mt-6
+  > .signon-fields {
+  gap: 16px;
+}
+.signon-teacher-prompts .signon-below button {
+  padding: 0;
+  height: auto;
+  font-size: 14px;
+  text-decoration: underline;
+}
+
+.signon-teacher-prompts .signon-card a,
+.signon-teacher-prompts .signon-below a,
+.signon-teacher-prompts .signon-below button,
+.signon-teacher-prompts .signon-identity .signon-text-button {
+  color: #b75f44;
+}
+.signon-teacher-prompts .signon-teacher-signout {
+  color: #1b1b1b;
+}
