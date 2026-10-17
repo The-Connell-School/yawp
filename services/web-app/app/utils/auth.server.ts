@@ -451,9 +451,11 @@ export async function logout(
   {
     request,
     redirectTo = '/',
+    awaitSessionDeletion = false,
   }: {
     request: Request;
     redirectTo?: string;
+    awaitSessionDeletion?: boolean;
   },
   responseInit?: ResponseInit
 ) {
@@ -463,7 +465,17 @@ export async function logout(
   const sessionId = authSession.get(sessionKey);
   // if this fails, we still need to delete the session from the user's browser
   // and it doesn't do any harm staying in the db anyway.
-  if (sessionId) void prisma.session.deleteMany({ where: { id: sessionId } });
+  if (sessionId) {
+    const deletion = prisma.session.deleteMany({ where: { id: sessionId } });
+    // The new teacher continuation revokes the session before opening /free.
+    if (awaitSessionDeletion) {
+      try {
+        await deletion;
+      } catch {
+        // Still clear the browser cookie if storage is unavailable.
+      }
+    } else void deletion;
+  }
   throw redirect(safeRedirect(redirectTo), {
     ...responseInit,
     headers: combineHeaders(

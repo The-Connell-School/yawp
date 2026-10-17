@@ -23,6 +23,7 @@ import {
   studentHandleBase,
 } from '~/domain/unified-signon/student-handle';
 import { validateUsername } from '~/utils/username';
+import type { TeacherPromptAccount } from '~/domain/unified-signon/teacher-prompts';
 import { signonValidationMessage } from '~/domain/unified-signon/validation-copy';
 import {
   identifierKind,
@@ -44,7 +45,9 @@ export function UnifiedSignon({
   googleAvailable = false,
   transport,
   passwordForm,
+  teacherPromptAccount,
 }: {
+  teacherPromptAccount?: TeacherPromptAccount;
   initialState?: SignonState;
   initialValues?: Record<string, string>;
   redirectTo?: string | null;
@@ -75,6 +78,40 @@ export function UnifiedSignon({
   const googleUser = state.provider === 'google' || variant.includes('google');
   const identifier = state.identifier ?? '';
   const handleUser = identifierKind(identifier) !== 'email';
+  const teacherPrompts =
+    !!teacherPromptAccount &&
+    teacherPromptAccount.kind !== 'staff' &&
+    ['inactive', 'class-code'].includes(screen);
+  const handleOnlyPrompts =
+    teacherPrompts && teacherPromptAccount?.kind === 'handle-only';
+  const teacherContinuation = teacherPrompts ? (
+    <div className="signon-teacher-continuation">
+      {handleOnlyPrompts ? (
+        <>
+          <p className="signon-teacher-explanation">
+            <Info aria-hidden="true" width={14} height={14} />
+            <span>
+              Teacher accounts need a school email. Sign out and start a free
+              classroom with your school email.
+            </span>
+          </p>
+          <form method="post" action="/auth/logout?redirectTo=%2Ffree">
+            <Button
+              type="submit"
+              variant="outline"
+              className="signon-teacher-signout"
+            >
+              Sign out and continue
+            </Button>
+          </form>
+        </>
+      ) : screen === 'inactive' ? (
+        <p>
+          Teaching a class? <Link to="/free">Start a free classroom</Link>
+        </p>
+      ) : null}
+    </div>
+  ) : null;
 
   useEffect(() => {
     if (screen === 'entry' && mounted.current) entry.current?.focus();
@@ -324,10 +361,21 @@ export function UnifiedSignon({
       <span />
     </div>
   );
-  const identity = identifier && (
+  const accountIdentifier = teacherPrompts
+    ? teacherPromptAccount.identifier
+    : identifier;
+  const identity = accountIdentifier && (
     <div className="signon-identity">
-      <span>{identifier}</span>
-      {textButton('Change', reset)}
+      <span>{accountIdentifier}</span>
+      {teacherPrompts ? (
+        <form method="post" action="/auth/logout">
+          <Button type="submit" variant="link" className="signon-text-button">
+            Change
+          </Button>
+        </form>
+      ) : (
+        textButton('Change', reset)
+      )}
     </div>
   );
   const classCard = (info: SignonClass | undefined = state.classInfo) =>
@@ -373,7 +421,7 @@ export function UnifiedSignon({
   const classPicker = (
     <fieldset className="signon-class-picker">
       <legend>Choose your class</legend>
-      {state.classes?.map((info, i) => (
+      {state.classes?.map((info) => (
         <label key={info.id}>
           <input
             type="radio"
@@ -517,8 +565,29 @@ export function UnifiedSignon({
           </>
         ) : (
           <>
-            {field('classCode', 'Class code', { hint: 'From your teacher' })}
-            {primary('Continue')}
+            {field('classCode', 'Class code', {
+              hint: teacherPrompts
+                ? 'Your teacher has it.'
+                : 'From your teacher',
+              ...(teacherPrompts
+                ? { placeholder: 'FREE-CLASS-101', autoComplete: 'off' }
+                : {}),
+            })}
+            {primary(teacherPrompts ? 'Join class' : 'Continue')}
+          </>
+        );
+      if (teacherPrompts)
+        below = handleOnlyPrompts ? null : (
+          <>
+            <p>
+              Not a student?{' '}
+              <Link to="/free">Teachers can start a free classroom</Link>
+            </p>
+            <form method="post" action="/auth/logout">
+              <Button type="submit" variant="link">
+                Sign out
+              </Button>
+            </form>
           </>
         );
       break;
@@ -781,8 +850,10 @@ export function UnifiedSignon({
       break;
     case 'inactive':
       title = "Your account isn't active";
-      subtitle =
-        variant === 'staff'
+      showIdentity = teacherPrompts;
+      subtitle = teacherPrompts
+        ? "You're not in any active classes. Join one with a class code, or ask your teacher to add you back."
+        : variant === 'staff'
           ? 'Ask your school admin to turn it back on.'
           : 'You are not in any active classes.';
       body =
@@ -1114,7 +1185,11 @@ export function UnifiedSignon({
 
   return (
     <section
-      className="unified-signon"
+      className={
+        teacherPrompts
+          ? 'unified-signon signon-teacher-prompts'
+          : 'unified-signon'
+      }
       data-signon-screen={screen}
       data-signon-variant={variant}
       aria-busy={busy}
@@ -1151,8 +1226,13 @@ export function UnifiedSignon({
             hidden
           />
           <div className="signon-fields">
+            {teacherPrompts && screen === 'inactive' && subtitle && (
+              <p className="signon-copy signon-inactive-copy">{subtitle}</p>
+            )}
             {showIdentity && identity}
-            {subtitle && <p className="signon-copy">{subtitle}</p>}
+            {!(teacherPrompts && screen === 'inactive') && subtitle && (
+              <p className="signon-copy">{subtitle}</p>
+            )}
             {state.error && (
               <div role="alert" className="signon-banner signon-error">
                 {state.error}
@@ -1172,6 +1252,9 @@ export function UnifiedSignon({
                 {body}
               </form>
             ) : null}
+            {teacherPrompts &&
+              (screen === 'inactive' || handleOnlyPrompts) &&
+              teacherContinuation}
           </div>
         </AuthFormCard>
         {below && <div className="signon-below">{below}</div>}
