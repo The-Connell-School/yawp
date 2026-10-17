@@ -129,7 +129,7 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'dashboard-assignments',
         title: 'Assignments',
-        body: 'Pick an assignment type to create one for your class. Your free classroom shows how many of each type you have left.',
+        body: 'Pick an assignment type to create one for your class. Your free classroom shows how many of each type you have left. Grayed-out types come with a paid plan; open one to see how it works.',
       },
       {
         target: 'dashboard-grading',

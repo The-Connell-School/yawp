@@ -42,7 +42,7 @@ test.describe('Free classroom bundle quotas', () => {
     await page.keyboard.press('Escape');
     const tileTitles = await page
       .getByTestId('teacher-assignments-grid')
-      .locator('h3')
+      .locator('[data-locked="false"] h3')
       .allTextContents();
     expect(tileTitles.map((title) => title.trim()).sort()).toEqual([
       'Class Starter',

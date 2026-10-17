@@ -116,6 +116,7 @@ import {
 import thesisPromptsRaw from './thesis-prompts-library/prompts.json';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
+import { DAILY_PAGES_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/daily-pages-rubric';
 import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
 
 /** How the Lesson Planner hands a written warm-up to this page. */
@@ -859,7 +860,9 @@ export default function AppAssignmentTypesIdRoute() {
 
           {isTeacher ? (
             <div className="flex items-center gap-2">
-              {isThesisDrivenEssayTitle(data.assignmentType.title) ? (
+              {isThesisDrivenEssayTitle(data.assignmentType.title) ||
+              isApHistoryAssignmentType ||
+              data.assignmentType.kind === DAILY_PAGES_ASSIGNMENT_TYPE_KIND ? (
                 <SeeHowItWorksLink
                   to={`/app/assignment-types/${data.assignmentType.id}/how-it-works`}
                 />
