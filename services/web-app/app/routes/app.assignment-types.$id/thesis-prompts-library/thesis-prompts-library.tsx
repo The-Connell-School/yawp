@@ -1,3 +1,5 @@
+import { usePlatformEnhancements } from '~/hooks/usePlatformEnhancements';
+import { paginatePrompts, paginationItems } from './pagination';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { FilterIcon, XIcon } from 'lucide-react';
@@ -93,7 +95,22 @@ export function ThesisPromptsLibrary({
   totalCount,
   onSelectPrompt,
 }: Props) {
+  const enabled = usePlatformEnhancements();
   const [searchParams, setSearchParams] = useSearchParams();
+  const paging = paginatePrompts(prompts, searchParams.get('promptPage'));
+  // Canonicalize malformed or now-out-of-range URLs after filtering/back navigation.
+  useEffect(() => {
+    if (!enabled || !searchParams.has('promptPage') || searchParams.get('promptPage') === String(paging.page)) return;
+    const next = new URLSearchParams(searchParams);
+    next.set('promptPage', String(paging.page));
+    setSearchParams(next, { preventScrollReset: true, replace: true });
+  }, [enabled, paging.page, searchParams, setSearchParams]);
+
+  function goToPage(page: number) {
+    const next = new URLSearchParams(searchParams);
+    next.set('promptPage', String(page));
+    setSearchParams(next, { preventScrollReset: true });
+  }
   const [searchInput, setSearchInput] = useState(
     searchParams.get(FACET_KEYS.search) ?? ''
   );
@@ -114,6 +131,7 @@ export function ThesisPromptsLibrary({
     else current.add(value);
     if (current.size === 0) next.delete(key);
     else next.set(key, [...current].join(','));
+    if (enabled) next.delete('promptPage');
     setSearchParams(next, { preventScrollReset: true });
   }
 
@@ -122,12 +140,14 @@ export function ThesisPromptsLibrary({
     const trimmed = value.trim();
     if (trimmed) next.set(FACET_KEYS.search, trimmed);
     else next.delete(FACET_KEYS.search);
+    if (enabled) next.delete('promptPage');
     setSearchParams(next, { preventScrollReset: true });
   }
 
   function clearAll() {
     const next = new URLSearchParams(searchParams);
     Object.values(FACET_KEYS).forEach((k) => next.delete(k));
+    if (enabled) next.delete('promptPage');
     setSearchParams(next, { preventScrollReset: true });
     setSearchInput('');
   }
@@ -170,6 +190,7 @@ export function ThesisPromptsLibrary({
       if (current.size === 0) next.delete(chip.paramKey);
       else next.set(chip.paramKey, [...current].join(','));
     }
+    if (enabled) next.delete('promptPage');
     setSearchParams(next, { preventScrollReset: true });
   }
 
@@ -197,10 +218,10 @@ export function ThesisPromptsLibrary({
       : `${prompts.length} of ${totalCount} prompts`;
 
   return (
-    <Accordion type="single" collapsible>
+    <Accordion type="single" collapsible defaultValue={enabled ? 'library' : undefined}>
       <AccordionItem value="library">
         <AccordionTrigger className="py-2 text-base">
-          Prompt Library
+          <span>Prompt Library{enabled ? <span className="ml-2 text-xs font-normal text-muted-foreground">{countLabel}</span> : null}</span>
         </AccordionTrigger>
         <AccordionContent>
           <div className="flex flex-col gap-6 pt-2 lg:flex-row">
@@ -233,9 +254,9 @@ export function ThesisPromptsLibrary({
               </Sheet>
             </div>
 
-            <main className="min-w-0 flex-1 lg:max-w-[720px]">
+            <main className={enabled ? "min-w-0 flex-1" : "min-w-0 flex-1 lg:max-w-[720px]"}>
               <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/40 pb-3 text-xs text-muted-foreground">
-                <span>{countLabel}</span>
+                <span>{enabled ? `Showing ${paging.start}–${paging.end} of ${prompts.length}` : countLabel}</span>
                 {activeChips.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5">
                     {activeChips.map((chip) => (
@@ -260,8 +281,8 @@ export function ThesisPromptsLibrary({
                     : 'No prompts match the current filters.'}
                 </p>
               ) : (
-                <ul className="flex min-w-0 flex-col gap-3">
-                  {prompts.map((p) => (
+                <ul className={enabled ? "grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3" : "flex min-w-0 flex-col gap-3"}>
+                  {(enabled ? paging.items : prompts).map((p) => (
                     <PromptCard
                       key={p.id}
                       prompt={p}
@@ -270,6 +291,20 @@ export function ThesisPromptsLibrary({
                   ))}
                 </ul>
               )}
+              {enabled && prompts.length > 0 ? (
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+                  <span>12 per page</span>
+                  <nav aria-label="Prompt library pagination" className="flex flex-wrap gap-1">
+                    <Button type="button" size="icon-sm" variant="outline" aria-label="Previous page" disabled={paging.page === 1} onClick={() => goToPage(paging.page - 1)}>‹</Button>
+                    {paginationItems(paging.page, paging.pageCount).map((item, index) => item === 'ellipsis' ? (
+                      <span key={`ellipsis-${index}`} className="px-1 py-2" aria-hidden="true">…</span>
+                    ) : (
+                      <Button key={item} type="button" size="icon-sm" variant={item === paging.page ? 'default' : 'ghost'} aria-label={`Page ${item}`} aria-current={item === paging.page ? 'page' : undefined} onClick={() => goToPage(item)}>{item}</Button>
+                    ))}
+                    <Button type="button" size="icon-sm" variant="outline" aria-label="Next page" disabled={paging.page === paging.pageCount} onClick={() => goToPage(paging.page + 1)}>›</Button>
+                  </nav>
+                </div>
+              ) : null}
             </main>
           </div>
         </AccordionContent>
