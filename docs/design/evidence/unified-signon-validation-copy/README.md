@@ -10,7 +10,7 @@ upper-limit errors and legacy messages are unchanged.
 ## Current-main scope
 
 Merged #577 replaced editable handle signup with First name / Last name and
-server-generated class handles. [The merged specification](../../../signon-classcode-flow.md)
+server-generated class handles. [The merged specification](../../signon-classcode-flow.md)
 explicitly overrides the older 37/38 artboards. There is no invalid editable
 signup handle or suggestion-chip selection in current main. Reintroducing those
 would change signup behavior, outside this copy-only task. The generated-handle
