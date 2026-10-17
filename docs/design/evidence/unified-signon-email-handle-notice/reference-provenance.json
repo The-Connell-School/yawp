@@ -1,0 +1,11 @@
+{
+  "source": "design/v2/artboards/signon-38-new-student-free-tier-class-handle-all-states",
+  "sha256": {
+    ".png": "44650b2312fdb2ce0ea3a3c7cef4d8a1b2d4566a04d46a691957f9a617c21e25",
+    ".dom.html": "f287bbbdcd4358f7faec19e362d01051058ac1b052d64cdea93fc040708731e4",
+    ".txt": "da7989a886b848ade34b4fb4be76c282f8cb491b924df1bef03ba64ac6e62250"
+  },
+  "emailOriginCrop": "390x1105+2158+134",
+  "defaultCrop": "390x1008+48+134",
+  "notes": "Supplied PNG pixels, no generated reference. Exact Came from an email state is mobile-only. Desktop comparison uses that same 390px state alongside the full 1280px implementation. Broken logo and rounded frame are reference artifacts. Placeholder teacher/class brackets and Maya Reyes are reference content; disposable runtime uses its own class and empty fields. Taken state captures are observations, not a separate artboard target."
+}

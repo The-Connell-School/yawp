@@ -81,8 +81,7 @@ import {
   RestartToursButton,
   TourThisPageButton,
 } from '~/components/guided-tour/guided-tour';
-import { guidedToursAvailable } from '~/domain/guided-tours/tours';
-import { loadFinishedTourIds } from '~/domain/guided-tours/guided-tours.server';
+import { loadGuidedTours } from '~/domain/guided-tours/guided-tours.server';
 import { isDemoFreeTierRouteOpen } from '~/utils/free-tier/free-tier-feature-gate.server';
 
 export const NavExpandedContext = createContext({
@@ -192,13 +191,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : [selected, ...options].sort((a, b) => b.localeCompare(a));
 
   // Free classroom teachers get page tours instead of a hands-on orientation.
-  const guidedTours = guidedToursAvailable({
-    freeTierEnabled: freeTierFeatureOn,
-    role: profile.role,
-    plan: profile.organization.plan,
-  })
-    ? { finishedTourIds: await loadFinishedTourIds(userId) }
-    : null;
+  const guidedTours = await loadGuidedTours(userId, profile, request);
 
   return data({
     mockAdminAvailable,
@@ -308,7 +301,7 @@ export default function Route() {
 
   if (isFreeTierOnboardingShell) {
     return (
-      <main className="min-h-screen bg-background">
+      <main data-app-shell className="min-h-screen bg-background">
         <Outlet key={location.pathname} />
       </main>
     );
@@ -316,6 +309,7 @@ export default function Route() {
 
   return (
     <main
+      data-app-shell
       data-free-account={freeAccountUsage ? true : undefined}
       className={cn(
         'flex h-screen min-h-screen overflow-hidden bg-background',
@@ -413,7 +407,7 @@ export default function Route() {
                           icon: (
                             <>
                               <Microscope size={18} />
-                              <Lock size={12} />
+                              {!freeAccountUsage.monthly && <Lock size={12} />}
                             </>
                           ),
                         },
@@ -626,7 +620,7 @@ export default function Route() {
           </div>
         </NavExpandedContext.Provider>
         {guidedTours && !isReadOnlyImpersonation ? (
-          <GuidedTour finishedTourIds={guidedTours.finishedTourIds} />
+          <GuidedTour {...guidedTours} />
         ) : null}
       </div>
       <UserSettingsDialog

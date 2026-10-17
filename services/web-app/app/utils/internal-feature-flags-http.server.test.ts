@@ -121,6 +121,10 @@ describe('internal feature-flag endpoints', () => {
       'free_tier',
       'free-tier-inapp-v2',
       'unified-sign-on',
+      'free-tier-onboarding-v2',
+      'classcode-unique',
+      'demo-feedback-widget',
+      'guided-tours',
     ]);
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[1]).toMatchObject({ key: 'internal_rubrics', label: 'Rubrics from Yawp Internal', mode: 'off', orgIds: [], enabled: false });
@@ -136,6 +140,52 @@ describe('internal feature-flag endpoints', () => {
       effective: { mode: 'off', orgIds: [] }, runtimeOverride: null,
     });
   });
+
+  for (const environment of ['development', 'demo', 'production', 'preview']) {
+    test(`guided tours stay off without a setting: ${environment}`, async () => {
+      process.env.YAWP_ENVIRONMENT = environment;
+      const response = await featureFlagsList(
+        new Request(BASE, { headers: { authorization: `Bearer ${key}` } })
+      );
+      expect(response.status).toBe(200);
+      const { flags } = await response.json();
+      expect(flags.find((flag: { key: string }) => flag.key === 'guided-tours')).toMatchObject({
+        key: 'guided-tours', mode: 'off', orgIds: [], enabled: false,
+        persisted: { mode: 'off', orgIds: [] },
+        effective: { mode: 'off', orgIds: [] }, runtimeOverride: null,
+      });
+      expect(prisma.setting.upsert).not.toHaveBeenCalled();
+    });
+  }
+
+  for (const environment of ['development', 'demo', 'production', 'preview']) {
+    for (const value of [undefined, 'invalid', '{"mode":"invalid"}']) {
+      test(`onboarding v2 remains off without a valid setting: ${environment} / ${value}`, async () => {
+        process.env.YAWP_ENVIRONMENT = environment;
+        prisma.setting.findMany.mockResolvedValue(value === undefined ? [] : [{
+          name: 'feature_flag.free-tier-onboarding-v2',
+          value,
+          description: null,
+          updatedAt: new Date('2026-10-16T00:00:00Z'),
+        }]);
+        const response = await featureFlagsList(
+          new Request(BASE, { headers: { authorization: `Bearer ${key}` } })
+        );
+        expect(response.status).toBe(200);
+        const flags = (await response.json()).flags;
+        expect(flags.filter((flag: { key: string }) => flag.key === 'free-tier-onboarding-v2')).toHaveLength(1);
+        expect(flags.find((flag: { key: string }) => flag.key === 'free-tier-onboarding-v2')).toMatchObject({
+          key: 'free-tier-onboarding-v2',
+          label: 'Free tier onboarding v2',
+          description: 'Approval reminders, forward requests, create-your-class step and locked preview for free-tier teachers.',
+          mode: 'off', orgIds: [], enabled: false,
+          persisted: { mode: 'off', orgIds: [] },
+          effective: { mode: 'off', orgIds: [] }, runtimeOverride: null,
+        });
+        expect(prisma.setting.upsert).not.toHaveBeenCalled();
+      });
+    }
+  }
 
   test('lists free tier as open on demo even when the stored flag is off', async () => {
     process.env.YAWP_ENVIRONMENT = 'demo';
@@ -190,6 +240,10 @@ describe('internal feature-flag endpoints', () => {
       'free_tier',
       'free-tier-inapp-v2',
       'unified-sign-on',
+      'free-tier-onboarding-v2',
+      'classcode-unique',
+      'demo-feedback-widget',
+      'guided-tours',
     ]);
   });
 
@@ -413,7 +467,11 @@ describe('internal feature-flag endpoints', () => {
       const signed = signInternalApiRequest({ method: 'GET', url: BASE, body: '', keyId: 'flags-reader', secret: signingFixture, actor: 'reader@example.test' });
       const response = await featureFlagsList(new Request(BASE, { headers: signed.headers }));
       expect(response.status).toBe(200);
-      expect((await response.json()).flags.find((f: { key: string }) => f.key === 'free_tier')).toMatchObject({
+      const flags = (await response.json()).flags;
+      expect(flags.find((f: { key: string }) => f.key === 'free-tier-onboarding-v2')).toMatchObject({
+        mode: 'off', enabled: false, runtimeOverride: null,
+      });
+      expect(flags.find((f: { key: string }) => f.key === 'free_tier')).toMatchObject({
         mode: 'everyone', persisted: { mode: 'off', orgIds: [] },
         effective: { mode: 'everyone', orgIds: [] }, runtimeOverride: 'demo_free_tier',
       });

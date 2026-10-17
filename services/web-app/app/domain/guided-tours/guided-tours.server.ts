@@ -1,9 +1,11 @@
+import { createHash } from 'node:crypto';
+import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
+import { isFeatureFlagEnabled, isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { GUIDED_TOURS_FLAG } from '~/domain/feature-flags/feature-flags';
 import { prisma } from '~/utils/db.server';
 import {
   guidedToursAvailable,
   isTourId,
-  isTourStatus,
-  nextTourStatus,
   type TourId,
   type TourStatus,
 } from './tours';
@@ -26,17 +28,19 @@ export async function recordTourOutcome(
   tourId: TourId,
   outcome: TourStatus
 ) {
-  const existing = await prisma.userTour.findUnique({
-    where: { userId_tourId: { userId, tourId } },
-    select: { status: true },
-  });
-  const previous = isTourStatus(existing?.status) ? existing.status : null;
-  const status = nextTourStatus(previous, outcome);
-  if (!status) return;
+  if (outcome === 'dismissed') {
+    // ON CONFLICT DO NOTHING: a late Skip must never overwrite Finish from
+    // another tab, even when both requests started with no progress row.
+    await prisma.userTour.createMany({
+      data: [{ userId, tourId, status: outcome }],
+      skipDuplicates: true,
+    });
+    return;
+  }
   await prisma.userTour.upsert({
     where: { userId_tourId: { userId, tourId } },
-    create: { userId, tourId, status },
-    update: { status },
+    create: { userId, tourId, status: outcome },
+    update: { status: outcome },
   });
 }
 
@@ -51,8 +55,9 @@ export async function resetTours(userId: string) {
  */
 export async function loadGuidedTours(
   userId: string,
-  membership: { role: string; organization?: { plan?: string | null } | null }
-): Promise<{ finishedTourIds: TourId[] } | null> {
+  membership: { role: string; organization?: { id?: string; plan?: string | null } | null },
+  request: Request
+): Promise<{ finishedTourIds: TourId[]; storageScope: string } | null> {
   const plan = membership.organization?.plan;
   // Only free classroom teachers can see tours; skip the flag read otherwise.
   if (
@@ -64,8 +69,31 @@ export async function loadGuidedTours(
   ) {
     return null;
   }
-  const { isFreeTierEnabled } =
-    await import('~/domain/feature-flags/feature-flags.server');
-  if (!(await isFreeTierEnabled())) return null;
-  return { finishedTourIds: await loadFinishedTourIds(userId) };
+  if (!(await isFreeTierEnabled()) ||
+      !(await isFeatureFlagEnabled(GUIDED_TOURS_FLAG, membership.organization?.id))) return null;
+  const session = await authSessionStorage.getSession(request.headers.get('cookie'));
+  const sessionId = session.get('sessionId');
+  if (typeof sessionId !== 'string') return null;
+  const storageScope = createHash('sha256').update(`${userId}:${sessionId}`).digest('hex');
+  return { finishedTourIds: await loadFinishedTourIds(userId), storageScope };
+}
+
+
+/** The existing approval gate establishes teacher identity without provisioning a membership. */
+export async function loadWaitingPreviewTours(
+  userId: string,
+  application: { status: string; organizationId: string | null },
+  request: Request
+) {
+  if (!['SENT', 'MANUAL_REVIEW'].includes(application.status) ||
+      !(await isFreeTierEnabled()) ||
+      !(await isFeatureFlagEnabled(GUIDED_TOURS_FLAG, application.organizationId ?? undefined))) return null;
+  const session = await authSessionStorage.getSession(request.headers.get('cookie'));
+  if (session.get('impersonationMode') === 'read-only') return null;
+  const sessionId = session.get('sessionId');
+  if (typeof sessionId !== 'string') return null;
+  return {
+    finishedTourIds: (await loadFinishedTourIds(userId)).filter(id => id === 'waiting-preview'),
+    storageScope: createHash('sha256').update(`${userId}:${sessionId}`).digest('hex'),
+  };
 }

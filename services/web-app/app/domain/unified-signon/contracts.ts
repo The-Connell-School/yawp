@@ -39,6 +39,8 @@ export type SignonState = {
   screen: SignonScreen;
   identifier?: string;
   provider?: 'google';
+  /** Display context only; never email proof or an account identity. */
+  emailOrigin?: boolean;
   organizationName?: string;
   adminName?: string;
   sentDate?: string;
@@ -57,6 +59,12 @@ export type SignonState = {
 };
 
 export type SignonOperation =
+  | 'student-email'
+  | 'class-email-signin'
+  | 'student-choice'
+  | 'register-student'
+  | 'student-password'
+  | 'complete-student'
   | 'resolve'
   | 'password'
   | 'required-password'

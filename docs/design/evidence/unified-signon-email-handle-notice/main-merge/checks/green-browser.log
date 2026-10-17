@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "project.dev/v1",
+  "status": "ready",
+  "reused": false,
+  "pid": 67,
+  "url": "http://localhost:5406/",
+  "log": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-email-handle-notice/.worktree-local/dev.log"
+}
+
+Running 3 tests using 1 worker
+
+(node:118) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:118) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › e2e/tests/auth.unified-backend.spec.ts:101:3 › email-origin free-class notice survives navigation and validation at 1280 (8.5s)
+  ✓  2 [chromium] › e2e/tests/auth.unified-backend.spec.ts:101:3 › email-origin free-class notice survives navigation and validation at 390 (3.7s)
+  ✓  3 [chromium] › e2e/tests/auth.unified-backend.spec.ts:586:1 › flag off retains live legacy login, signup, class links, and direct callback gates (3.7s)
+
+  3 passed (18.2s)
+{
+  "schemaVersion": "project.dev/v1",
+  "status": "stopped",
+  "pid": 67,
+  "url": "http://localhost:5406/",
+  "log": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-email-handle-notice/.worktree-local/dev.log"
+}

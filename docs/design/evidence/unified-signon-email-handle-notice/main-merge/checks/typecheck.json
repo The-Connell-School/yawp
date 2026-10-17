@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "project.test/v1",
+  "status": "passed",
+  "requestedProfile": "typecheck",
+  "selectedProfile": "typecheck",
+  "changedPaths": [],
+  "steps": [
+    {
+      "id": "typecheck",
+      "exitCode": 0,
+      "transcriptTail": "\n$ bun run --cwd services/web-app typecheck\n$ react-router typegen && tsc\n⚠️ Route ID Collision: \"routes/lti.jwks\"\n\nThe following routes all define the same Route ID, only the first one will be used\n\n🟢 routes/lti.jwks/route.ts\n⭕️️ routes/lti.jwks.ts\n\n⚠️ Route ID Collision: \"routes/lti.launch\"\n\nThe following routes all define the same Route ID, only the first one will be used\n\n🟢 routes/lti.launch/route.ts\n⭕️️ routes/lti.launch.ts\n\n⚠️ Route ID Collision: \"routes/lti.login\"\n\nThe following routes all define the same Route ID, only the first one will be used\n\n🟢 routes/lti.login/route.ts\n⭕️️ routes/lti.login.ts\n\n⚠️ Route ID Collision: \"routes/lti.jwks\"\n\nThe following routes all define the same Route ID, only the first one will be used\n\n🟢 routes/lti.jwks/route.ts\n⭕️️ routes/lti.jwks.ts\n\n⚠️ Route ID Collision: \"routes/lti.launch\"\n\nThe following routes all define the same Route ID, only the first one will be used\n\n🟢 routes/lti.launch/route.ts\n⭕️️ routes/lti.launch.ts\n\n⚠️ Route ID Collision: \"routes/lti.login\"\n\nThe following routes all define the same Route ID, only the first one will be used\n\n🟢 routes/lti.login/route.ts\n⭕️️ routes/lti.login.ts\n\n"
+    }
+  ]
+}

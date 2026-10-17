@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 const assertCanCreateClassInTransaction = mock(async () => {});
 
 const prisma = {
+  setting: { findUnique: mock(async () => null) },
   class: { findMany: mock(), create: mock(), update: mock(), findFirst: mock() },
   orgMembership: { findUnique: mock() },
   $transaction: mock(async (fn: (tx: typeof prisma) => unknown) => fn(prisma)),

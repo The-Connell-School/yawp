@@ -281,6 +281,7 @@ describe('preview access action', () => {
     expect(await loader({ request } as never)).toEqual({
       configured: true,
       masterSelection: false,
+      signonQaAvailable: false,
       organizations: [],
       returnTo: '/app',
     });
@@ -293,6 +294,7 @@ describe('preview access action', () => {
     expect(await loader({ request } as never)).toEqual({
       configured: true,
       masterSelection: true,
+      signonQaAvailable: false,
       organizations: [
         { id: 'another-org', name: 'Another Organization' },
       ],

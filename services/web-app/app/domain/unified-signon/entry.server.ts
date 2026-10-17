@@ -30,17 +30,27 @@ export async function unifiedEntry(request: Request) {
     new URL(request.url).searchParams.get('redirectTo'),
     '/app'
   );
-  if (
-    context &&
-    (authenticated || new URL(request.url).searchParams.has('continue'))
-  ) {
+  if (context) {
     try {
       const result = await withFlow(
         request,
         context.token,
         async (flow, tx) => {
+          if (
+            !authenticated &&
+            !new URL(request.url).searchParams.has('continue') &&
+            flow.data.state.screen !== 'joined'
+          )
+            return undefined;
           destination = flow.data.destination;
-          if (!authenticated) return flow.data.state;
+          if (!authenticated) {
+            if (flow.data.state.screen === 'joined') {
+              const { classConfirmationState } =
+                await import('./class-confirmation.server');
+              return (await classConfirmationState(tx, flow)).state;
+            }
+            return flow.data.state;
+          }
           const { getUserId } = await import('~/utils/auth.server');
           const userId = await getUserId(request);
           if (!userId || userId !== flow.data.userId) throw redirect('/app');

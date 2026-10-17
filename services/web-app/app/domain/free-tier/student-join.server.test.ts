@@ -5,6 +5,7 @@ mock.module('~/services/posthog.server', () => ({
   posthog: { capture, alias: mock() },
 }));
 const prisma = {
+  setting: { findUnique: mock(async () => null) },
   class: { findMany: mock(), findFirst: mock(), update: mock() },
   freeTierApplication: { count: mock(), findFirst: mock() },
   user: { findFirst: mock(), update: mock() },
@@ -22,7 +23,9 @@ mock.module('~/utils/auth.server', () => ({
   getPasswordHash: async () => 'hash',
   getSessionExpirationDateForUser: () => new Date('2030-01-01'),
 }));
-const clearFailedLoginRateLimitsForTarget = mock(async () => undefined);
+const clearFailedLoginRateLimitsForTarget = mock(
+  async (_params: { route: string; targetKey: string }) => undefined
+);
 mock.module('~/utils/rate-limit.server', () => ({
   clearFailedLoginRateLimitsForTarget,
 }));
@@ -40,6 +43,7 @@ const {
 describe('student-join', () => {
   beforeEach(() => {
     capture.mockReset();
+    clearFailedLoginRateLimitsForTarget.mockClear();
     prisma.freeTierApplication.findFirst.mockResolvedValue(null);
     Object.values(prisma).forEach((v) => {
       if (typeof v === 'object' && v && 'mockReset' in v) {
@@ -192,7 +196,17 @@ describe('student-join', () => {
           username: 'samstudent',
           isAdmin: false,
           isSuperAdmin: false,
-          memberships: [{ role: 'STUDENT', isActive: true }],
+          memberships: [
+            {
+              role: 'STUDENT',
+              isActive: true,
+              classesAsStudent: [{ id: 'c1' }, { id: 'c2' }],
+            },
+          ],
+          classStudentHandles: [
+            { classId: 'c1', handle: 'SamAlias' },
+            { classId: 'c2', handle: 'ＳamOther' },
+          ],
         },
       });
     prisma.$transaction.mockResolvedValue([]);
@@ -211,5 +225,18 @@ describe('student-join', () => {
       route: '/auth/login',
       targetKey: 'samstudent',
     });
+    expect(
+      clearFailedLoginRateLimitsForTarget.mock.calls
+        .map(([target]) => target.targetKey)
+        .sort()
+    ).toEqual(
+      [
+        'samstudent',
+        'c1:samstudent',
+        'c2:samstudent',
+        'c1:samalias',
+        'c2:samother',
+      ].sort()
+    );
   });
 });

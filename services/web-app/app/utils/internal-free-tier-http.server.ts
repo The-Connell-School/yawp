@@ -1,3 +1,4 @@
+import { lockApprovalApplication } from '~/domain/free-tier/approval-lock.server';
 import {
   recordFreeTierCapDenialAudit,
   recordTesterAudit,
@@ -38,6 +39,8 @@ import {
   getApprovalHooks,
 } from '~/domain/free-tier/approval-hooks.server';
 import type { FreeTierApplicationStatus } from '@app/prisma';
+import { readApprovalHistories, readApprovalEmailLog, persistedApprovalFollowUpFilter } from './internal-approval-history.server';
+import { BELOW_HS_TAG } from '~/domain/free-tier/grade-gate';
 
 const response = (value: unknown, status = 200, headers?: HeadersInit) =>
   Response.json(value, { status, headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', ...(headers || {}) } });
@@ -489,6 +492,7 @@ const queueQuery = z
   .object({
     q: z.string().trim().max(200).default(''),
     status: z.enum(QUEUE_STATUSES).optional(),
+    needsFollowUp: z.enum(['true', 'false']).optional(),
     cursor: z.string().max(500).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(50),
   })
@@ -505,7 +509,7 @@ export async function approvalQueue(request: Request) {
   } catch {
     return response({ error: 'Invalid query' }, 400);
   }
-  const binding = digest(JSON.stringify([input.q, input.status ?? null])).toString('base64url');
+  const binding = digest(JSON.stringify(input.needsFollowUp === undefined ? [input.q, input.status ?? null] : [input.q, input.status ?? null, input.needsFollowUp])).toString('base64url');
   let after: string | undefined;
   if (input.cursor) {
     try {
@@ -517,6 +521,7 @@ export async function approvalQueue(request: Request) {
     }
   }
   const where: any = { status: input.status ? input.status : { in: [...QUEUE_STATUSES] } };
+  if (input.needsFollowUp === 'true') Object.assign(where, persistedApprovalFollowUpFilter());
   if (input.q) {
     where.OR = [
       { email: { contains: input.q, mode: 'insensitive' } },
@@ -553,12 +558,13 @@ export async function approvalQueue(request: Request) {
     rows.length > input.limit ? Buffer.from(JSON.stringify({ id: page[page.length - 1]!.id, binding })).toString('base64url') : null;
   const grouped = await prisma.freeTierApplication.groupBy({
     by: ['status'],
-    where: { status: { in: [...QUEUE_STATUSES] } },
+    where: input.needsFollowUp === 'true' ? where : { status: { in: [...QUEUE_STATUSES] } },
     _count: { _all: true },
   });
   const counts: Record<(typeof QUEUE_STATUSES)[number], number> = { ADMIN_SUBMITTED: 0, MANUAL_REVIEW: 0, SENT: 0 };
   for (const g of grouped) counts[g.status as (typeof QUEUE_STATUSES)[number]] = g._count._all;
-  return response({ applications: page, counts, nextCursor });
+  const histories = await readApprovalHistories(page.map(row => row.id));
+  return response({ applications: page.map(row => ({ ...row, ...histories.get(row.id) })), counts, nextCursor });
 }
 
 export async function approvalDetail(request: Request) {
@@ -589,7 +595,9 @@ export async function approvalDetail(request: Request) {
     },
   });
   if (!row) return response({ error: 'Not found' }, 404);
-  return response({ application: row });
+  const histories = await readApprovalHistories([row.id]);
+  const emailLog = await readApprovalEmailLog(row.id);
+  return response({ application: { ...row, ...histories.get(row.id), emailLog } });
 }
 
 function parseOperatorEmail(request: Request, body?: unknown): string | { error: Response } {
@@ -697,6 +705,7 @@ async function transition(args: {
   audit?: TesterAuditActor;
 }): Promise<{ status: 200 | 402 | 404 | 409; payload: Record<string, unknown>; app?: HookApp; changed: boolean }> {
   return prisma.$transaction(async (tx) => {
+    await lockApprovalApplication(tx, args.id);
     const app = await tx.freeTierApplication.findUnique({
       where: { id: args.id },
       select: {
@@ -708,9 +717,11 @@ async function transition(args: {
         userId: true,
         organizationId: true,
         releasedAt: true,
+        tags: true,
       },
     });
     if (!app) return { status: 404 as const, payload: { error: 'Not found' }, changed: false };
+    if (app.tags?.includes(BELOW_HS_TAG)) return { status: 409 as const, payload: { error: 'grade_gate_declined' }, changed: false };
     if (app.status === args.to) return { status: 200 as const, payload: { ok: true, idempotent: true, status: app.status }, changed: false };
     if (!args.from.includes(app.status)) {
       return { status: 409 as const, payload: { error: 'Illegal state', status: app.status }, changed: false };
@@ -896,8 +907,10 @@ export async function decideApplication(args: {
 export async function reopenApplication(args: { id: string; decidedByEmail: string; audit?: TesterAuditActor }) {
   const { id } = args;
   const result = await prisma.$transaction(async (tx) => {
-    const app = await tx.freeTierApplication.findUnique({ where: { id }, select: { id: true, status: true, releasedAt: true } });
+    await lockApprovalApplication(tx, id);
+    const app = await tx.freeTierApplication.findUnique({ where: { id }, select: { id: true, status: true, releasedAt: true, tags: true } });
     if (!app) return { status: 404 as const, payload: { error: 'Not found' } };
+    if (app.tags?.includes(BELOW_HS_TAG)) return { status: 409 as const, payload: { error: 'grade_gate_declined' } };
     if (app.status === 'MANUAL_REVIEW') return { status: 200 as const, payload: { ok: true, idempotent: true, status: app.status } };
     if (app.status !== 'REJECTED') return { status: 409 as const, payload: { error: 'Illegal state', status: app.status } };
     // A released application already holds a slot under the F3 cap (released rows

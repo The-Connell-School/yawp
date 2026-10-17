@@ -7,7 +7,8 @@ import {
   OwnerOnboardingMetadataSchema,
 } from '~/utils/schemas/invitation';
 import { FlowError, type Flow } from './flow.server';
-import { classSummary, lookupClasses } from './classes.server';
+import { classSummary, lookupClasses, selectedClass } from './classes.server';
+import { rememberClassConfirmation } from './class-confirmation.server';
 import { requireUaOrganizationId } from '~/utils/ua-partner.server';
 
 /** Resolve the existing invitation contract only after email/provider proof.
@@ -281,6 +282,11 @@ export async function acceptStudentInvitation(
       'Use an active student account for this invitation.',
       403
     );
+  // Convert only this proved invitation's reservation into an enrolled seat.
+  // The caller's transaction restores it on any later capacity/budget failure.
+  // Delete the unique row (not deleteMany) so concurrent redemptions of the
+  // same invitation cannot both proceed to enrollment.
+  await tx.invitation.delete({ where: { id: invitation.invite.id } });
   if (!member?.classesAsStudent.length) {
     const seat = await assertFreeClassSeatAvailableInTx(tx, {
       classId: flow.data.classId,
@@ -307,9 +313,14 @@ export async function acceptStudentInvitation(
     });
     if (!enrolled.ok) throw new FlowError(enrolled.error);
   }
-  await tx.invitation.delete({ where: { id: invitation.invite.id } });
   flow.data.invitationId = undefined;
-  flow.data.classId = undefined;
-  flow.data.classCode = undefined;
+  const klass = await selectedClass(tx, flow);
+  if (!klass) throw new FlowError('Class not found.');
+  rememberClassConfirmation(
+    flow,
+    klass,
+    target.id,
+    Boolean(member?.classesAsStudent.length)
+  );
   return target.id;
 }

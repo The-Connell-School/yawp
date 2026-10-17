@@ -1,0 +1,99 @@
+{
+  "scope": "LOCAL ONLY. Historical hosted rows remain blocked pending separate #565 execution.",
+  "profile": {
+    "status": "passed",
+    "steps": [
+      {
+        "id": "preview-fixture-guards",
+        "exitCode": 0,
+        "counts": [
+          "31 pass",
+          "0 fail",
+          "115 expect() calls"
+        ]
+      },
+      {
+        "id": "signon-dispatch",
+        "exitCode": 0,
+        "counts": [
+          "43 pass",
+          "0 fail",
+          "96 expect() calls"
+        ]
+      },
+      {
+        "id": "preview-fixture-real-database",
+        "exitCode": 0,
+        "counts": [
+          "9 pass",
+          "0 fail",
+          "85 expect() calls"
+        ]
+      },
+      {
+        "id": "preview-seat-policy-real-database",
+        "exitCode": 0,
+        "counts": [
+          "12 pass",
+          "0 fail",
+          "193 expect() calls"
+        ]
+      }
+    ]
+  },
+  "typecheck": "passed",
+  "additional": {
+    "access-route": [
+      "10 pass",
+      "0 fail",
+      "36 expect() calls"
+    ],
+    "session-guard": [
+      "6 pass",
+      "0 fail",
+      "14 expect() calls"
+    ],
+    "login-regression": [
+      "5 pass",
+      "0 fail",
+      "9 expect() calls"
+    ],
+    "cli": [
+      "12 pass",
+      "0 fail",
+      "42 expect() calls"
+    ],
+    "ordinary-seat-final": [
+      "1 pass",
+      "0 fail",
+      "9 expect() calls"
+    ],
+    "session-expiry": [
+      "1 pass",
+      "0 fail",
+      "24 expect() calls"
+    ]
+  },
+  "browser": {
+    "before": [
+      "6 passed (12.6s)"
+    ],
+    "after": [
+      "6 passed (9.3s)"
+    ],
+    "picker-before": [
+      "2 passed (2.3s)"
+    ],
+    "picker-after": [
+      "2 passed (2.2s)"
+    ],
+    "off-before": [
+      "2 passed (5.6s)"
+    ],
+    "off-after": [
+      "2 passed (6.1s)"
+    ]
+  },
+  "implementation_commit": "b7072dd9",
+  "session_expiry_regression_commit": "6e5c7925"
+}

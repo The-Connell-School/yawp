@@ -513,7 +513,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     : submissions;
 
   // Free classroom teachers get a tour of the writing page.
-  const guidedTours = await loadGuidedTours(userId, profile);
+  const guidedTours = await loadGuidedTours(userId, profile, request);
 
   return dataResponse({
     guidedTours,
@@ -959,7 +959,7 @@ export default function Route() {
     <>
       <main className="flex h-screen w-screen flex-col overflow-hidden bg-white">
         {showGuidedTour ? (
-          <GuidedTour finishedTourIds={data.guidedTours!.finishedTourIds} />
+          <GuidedTour {...data.guidedTours!} />
         ) : null}
         {apHistorySnapshot && !showDbqWorkspace ? (
           <ApHistoryAssignmentPanel snapshot={apHistorySnapshot} />

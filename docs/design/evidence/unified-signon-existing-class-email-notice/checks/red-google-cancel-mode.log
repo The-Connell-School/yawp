@@ -1,0 +1,49 @@
+bun test v1.3.1 (89fa0f34)
+
+services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts:
+prisma:query - 25.46466200000009ms - INSERT INTO "public"."Setting" ("id","createdAt","updatedAt","name","value","valueType") VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT ("name") DO UPDATE SET "value" = $7 WHERE ("public"."Setting"."name" = $8 AND 1=1) RETURNING "public"."Setting"."id", "public"."Setting"."createdAt", "public"."Setting"."updatedAt", "public"."Setting"."name", "public"."Setting"."description", "public"."Setting"."value", "public"."Setting"."valueType"
+2472 |       const { googleCallback } = await import('./google.server');
+2473 |       const result = await googleCallback(new Request(callback, { headers: { cookie } }));
+2474 |       expect(result.headers.get('location')).toBe('/auth/login?continue=1');
+2475 |       const entry = await unifiedEntry(new Request(url + '?continue=1', { headers: { cookie } }));
+2476 |       expect(entry?.initialState?.screen).toBe('entry');
+2477 |       expect((await post('resolve', { identifier: prefix })).data.state).toMatchObject({ screen: 'class-found', classInfo: { id: prefix } });
+                                                                                ^
+error: expect(received).toMatchObject(expected)
+
+Matcher error: received value must be a non-null object
+
+      at <anonymous> (/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-existing-class-email-notice/services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts:2477:74)
+(fail) school email Google access_denied returns to ordinary class-code entry without proof [520.93ms]
+2472 |       const { googleCallback } = await import('./google.server');
+2473 |       const result = await googleCallback(new Request(callback, { headers: { cookie } }));
+2474 |       expect(result.headers.get('location')).toBe('/auth/login?continue=1');
+2475 |       const entry = await unifiedEntry(new Request(url + '?continue=1', { headers: { cookie } }));
+2476 |       expect(entry?.initialState?.screen).toBe('entry');
+2477 |       expect((await post('resolve', { identifier: prefix })).data.state).toMatchObject({ screen: 'class-found', classInfo: { id: prefix } });
+                                                                                ^
+error: expect(received).toMatchObject(expected)
+
+Matcher error: received value must be a non-null object
+
+      at <anonymous> (/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-existing-class-email-notice/services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts:2477:74)
+(fail) school email Google server_error returns to ordinary class-code entry without proof [157.30ms]
+2472 |       const { googleCallback } = await import('./google.server');
+2473 |       const result = await googleCallback(new Request(callback, { headers: { cookie } }));
+2474 |       expect(result.headers.get('location')).toBe('/auth/login?continue=1');
+2475 |       const entry = await unifiedEntry(new Request(url + '?continue=1', { headers: { cookie } }));
+2476 |       expect(entry?.initialState?.screen).toBe('entry');
+2477 |       expect((await post('resolve', { identifier: prefix })).data.state).toMatchObject({ screen: 'class-found', classInfo: { id: prefix } });
+                                                                                ^
+error: expect(received).toMatchObject(expected)
+
+Matcher error: received value must be a non-null object
+
+      at <anonymous> (/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-existing-class-email-notice/services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts:2477:74)
+(fail) school email Google invalid_state returns to ordinary class-code entry without proof [144.16ms]
+
+ 0 pass
+ 41 filtered out
+ 3 fail
+ 9 expect() calls
+Ran 3 tests across 1 file. [1.56s]

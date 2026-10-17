@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e/tests',
-  testMatch: /auth\.unified-(google-|origin-)?backend\.spec\.ts/,
+  testMatch: /auth\.unified-((google-|origin-)?backend|join-link)\.spec\.ts/,
   workers: 1,
   fullyParallel: false,
   retries: 0,

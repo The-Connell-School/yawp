@@ -147,12 +147,13 @@ describe('preview access gate', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  test('keeps only signed-service and access-code routes open', async () => {
+  test('keeps service-authenticated and access-code routes open', async () => {
     const next = mock(async () => new Response('ok'));
 
     for (const path of [
       '/api/healthcheck',
       '/api/stripe/webhook',
+      '/api/preview/qa/signon-code',
       '/auth/preview-access',
       '/auth/preview-access.data',
     ]) {
@@ -166,7 +167,7 @@ describe('preview access gate', () => {
       ).toBeNull();
     }
 
-    expect(next).toHaveBeenCalledTimes(4);
+    expect(next).toHaveBeenCalledTimes(5);
   });
 
   test('public legal reads need no seat and never authorize preview activity', async () => {
@@ -529,43 +530,6 @@ describe('preview access gate', () => {
       });
     });
 
-    test('a one-click link that signs in lands on the login page, not the public landing page', async () => {
-      const next = mock(async () => new Response('private'));
-
-      const response = (await previewAccessMiddleware(
-        middlewareArgs(
-          request('/?code=brave-otter-4193&devLogin=dev.teacher.free%40yawp.local')
-        ),
-        next
-      )) as Response;
-
-      expect(response.status).toBe(303);
-      // The landing page never renders the dev sign-in, so the email would be
-      // dropped there; the login page picks it up and signs in.
-      expect(response.headers.get('location')).toBe(
-        '/auth/login?devLogin=dev.teacher.free%40yawp.local'
-      );
-      expect(response.headers.get('set-cookie')).toContain(
-        `${PREVIEW_ACCESS_COOKIE_NAME}=`
-      );
-      expect(next).not.toHaveBeenCalled();
-    });
-
-    test('a one-click sign-in link to any other page keeps that page', async () => {
-      const next = mock(async () => new Response('private'));
-
-      const response = (await previewAccessMiddleware(
-        middlewareArgs(
-          request('/auth/login?code=brave-otter-4193&devLogin=dev.teacher%40yawp.local')
-        ),
-        next
-      )) as Response;
-
-      expect(response.headers.get('location')).toBe(
-        '/auth/login?devLogin=dev.teacher%40yawp.local'
-      );
-    });
-
     test('an unknown code falls through to the normal access screen', async () => {
       const next = mock(async () => new Response('private'));
 
@@ -631,6 +595,29 @@ describe('preview access gate', () => {
       expect(response?.headers.get('location')).toBe('/app?tab=classes');
       expect(response?.headers.get('set-cookie')).toBeNull();
       expect(next).not.toHaveBeenCalled();
+    });
+
+    test('leaves the Google OAuth callback code for the route', async () => {
+      const cookie = (
+        await grantPreviewAccessCookie({
+          organizationId: 'local-dev-org',
+          label: 'Master',
+        })
+      ).split(';', 1)[0];
+      const next = mock(async () => new Response('callback'));
+      const middleware = createPreviewAccessMiddleware(async () => null);
+
+      const response = await middleware(
+        middlewareArgs(
+          request('/auth/unified/google/callback?state=abc&code=4%2F0Axyz', {
+            headers: { cookie },
+          })
+        ),
+        next
+      );
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(response?.status).toBe(200);
     });
   });
 });

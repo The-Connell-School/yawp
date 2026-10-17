@@ -22,6 +22,8 @@ const ACCESS_CODE_PATTERN = /^[a-z]+-[a-z]+-[1-9][0-9]{3}$/;
 const MASTER_ACCESS_CODE_PATTERN =
   /^(?=.{8,64}$)[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/;
 const OPEN_PATHS = new Set([
+  // Private QA endpoint performs its own preview/database and Bearer checks.
+  '/api/preview/qa/signon-code',
   '/api/healthcheck',
   '/api/healthcheck/', // be tolerant of a trailing slash from probes
   // Stripe cannot present the human preview-access cookie. The route itself
@@ -556,25 +558,11 @@ function blockedResponse(request: Request) {
  * Referer header. An unknown/invalid code falls through to the normal gate below
  * exactly as if the param had never been there.
  */
-/**
- * Where a code-bearing link goes once `code` is stripped. A link that also
- * signs the tester in (`devLogin`, read by the dev-login menu) cannot land on
- * the public landing page, which never renders that menu, so it goes to the
- * login page instead.
- */
-function oneClickLocation(url: URL) {
-  url.searchParams.delete('code');
-  if (url.pathname === '/' && url.searchParams.has('devLogin')) {
-    return `/auth/login${url.search}`;
-  }
-  return `${url.pathname}${url.search}`;
-}
-
 async function consumeCodeQueryParam(
   request: Request,
   repository: PreviewAccessSeatRepository
 ): Promise<Response | null> {
-  if (request.method !== 'GET') return null;
+  if (request.method !== 'GET' || isProviderCallback(request)) return null;
 
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
@@ -583,27 +571,39 @@ async function consumeCodeQueryParam(
   const seat = await findPreviewOrganizationAccessSeatByCode(code, repository);
   if (!seat) return null;
 
+  url.searchParams.delete('code');
   return new Response(null, {
     status: 303,
     headers: {
       'Cache-Control': 'no-store',
       'set-cookie': await grantPreviewAccessCookie(seat),
-      Location: oneClickLocation(url),
+      Location: `${url.pathname}${url.search}`,
     },
   });
 }
 
+/**
+ * OAuth provider callbacks carry their own one-time `code`; it is not a preview
+ * access code and must reach the route untouched. The gate still applies.
+ */
+const PROVIDER_CALLBACK_PATHS = new Set(['/auth/unified/google/callback']);
+
+function isProviderCallback(request: Request) {
+  return PROVIDER_CALLBACK_PATHS.has(new URL(request.url).pathname);
+}
+
 function stripCodeQueryParam(request: Request): Response | null {
-  if (request.method !== 'GET') return null;
+  if (request.method !== 'GET' || isProviderCallback(request)) return null;
 
   const url = new URL(request.url);
   if (!url.searchParams.has('code')) return null;
 
+  url.searchParams.delete('code');
   return new Response(null, {
     status: 303,
     headers: {
       'Cache-Control': 'no-store',
-      Location: oneClickLocation(url),
+      Location: `${url.pathname}${url.search}`,
     },
   });
 }

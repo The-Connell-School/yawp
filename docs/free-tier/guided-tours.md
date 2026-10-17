@@ -14,15 +14,15 @@ gives them a short guided tour instead. The pattern follows The Nest's tour:
    finished or skipped, so each page shows its welcome card again.
 
 Only **Finish** keeps a welcome card away for good. **Skip** (or ✕) hides
-it for the rest of that browser session; at the next login every unfinished
+it for the rest of that authenticated session; at the next login every unfinished
 page greets the teacher again, starting with the dashboard. Closing a tour
 partway through records nothing.
 
 ## Who sees it
 
 Teachers whose organization plan is `FREE_CLASSROOM`, and only while the
-`free_tier` flag is on. Nobody sees it during read-only impersonation. Paid
-schools and students never do.
+`free_tier` flag is on and the separate `guided-tours` flag is enabled for their organization. `guided-tours` defaults OFF on demo and production, with no deployment override. Nobody sees it during read-only impersonation. Paid
+accounts and students never do.
 
 ## Pages and steps
 
@@ -30,6 +30,7 @@ The tours are defined in `services/web-app/app/domain/guided-tours/tours.ts`:
 
 | Tour | Page | Steps point at |
 | --- | --- | --- |
+| `waiting-preview` | `/app/free-tier/preview` | Permitted content, read-only guidance, locked actions |
 | `dashboard` | `/app` | Classes, Assignments, Grading, sidebar |
 | `my-classes` | `/app/my-classes` | Class grid, Create Class (one-class limit) |
 | `class` | `/app/my-classes/:id` | Student join link, roster, tabs |
@@ -62,7 +63,9 @@ To add a tour, add it to `TOURS` and `TOUR_IDS`, match its path in
 or `dismissed`. With no row, the welcome card shows. Once a tour is
 `completed`, closing a replay early never changes it back to `dismissed`.
 `POST /api/guided-tours` records the outcome; it returns 404 for anyone not
-eligible.
+eligible. Read-only impersonation receives 403 before persistence access.
+Browser skips are keyed by a one-way digest of the authenticated session and user,
+so a new login or account does not inherit another session’s skips.
 
 The e2e seed marks every tour finished for `dev.teacher.free@yawp.local`, so
 that other specs never see a welcome card. `free-tier.guided-tour.spec.ts`
@@ -70,5 +73,32 @@ clears those rows before each of its tests.
 
 ## Rollback
 
-Turning `free_tier` off hides everything. To remove the table, use the
-migration's `rollback.sql`.
+Turn `guided-tours` off to hide the tour UI and reject tour persistence without
+changing free-tier access. Keep the additive `UserTour` table and progress.
+The follow-up migration installs both the impersonation mutation audit and
+truncate guard; the existing fail-closed coverage guard is unchanged.
+A production migration requires the driver's RDS snapshot for the final head.
+
+## Local verification
+
+Use `./bin/project test --profile guided-tours-unit --json`,
+`guided-tours-db`, and `guided-tours-browser` after an isolated bootstrap.
+The browser profile uses its worktree's Postgres host and app port, a disposable
+`yawp_guided_tours_e2e` database, at most two workers, and no hosted resources.
+Set `GUIDED_TOURS_SHOTS` to save welcome, spotlight, replay, restart, mobile,
+and flag-off evidence. Desktop and mobile onboarding regressions also verify
+that the class-preparation and administrator steps suppress tours until approval;
+approval is a local fixture transition and sends no email. Stop all owned
+processes and remove test resources after QA.
+
+
+## Approval waiting integration
+
+The existing approval gate identifies waiting free-classroom teachers before a
+membership is provisioned. With both tour flags enabled locally, the permitted
+read-only preview offers its own tour. It does not grant access to dashboard
+routes, teaching tools, assignments, or student invitations. Only the exact tour
+POST reaches the action; waiting teachers can record only `waiting-preview`
+completion or dismissal. Normal page-tour writes and reset remain forbidden.
+Class preparation and administrator details still have no tours. Read-only
+impersonation hides controls and denies writes. Flags remain default OFF.

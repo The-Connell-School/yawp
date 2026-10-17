@@ -3,6 +3,7 @@ import type { OrganizationPlan } from '@app/prisma';
 import { matchesOwnerWhere } from './testing/where-eval.ts';
 
 const prisma = {
+  freeTierApplication: { findFirst: mock(async () => null) },
   user: {
     findFirst: mock(),
     findUnique: mock(),

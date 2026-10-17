@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import {
   normalizeIdentifier,
   postAuthenticationDestination,
+  seatScopedMemberships,
   codeDigest,
 } from './policy.server';
 
@@ -51,7 +52,7 @@ test('routing precedence is password, inactive, trial, picker, safe destination'
       activeMemberships: 0,
       trialDestination: '/app/free-tier/pending',
     })
-  ).toBe('inactive');
+  ).toBe('/app/free-tier/pending');
   expect(
     postAuthenticationDestination({
       ...base,
@@ -83,4 +84,42 @@ test('OTP digest is keyed and bound to the entire server challenge context', () 
       original
     );
   expect(codeDigest(context, '654321')).not.toBe(original);
+});
+
+test('a free-trial destination wins over the inactive screen for accounts with no active roles', () => {
+  expect(
+    postAuthenticationDestination({
+      mustChangePassword: false,
+      activeMemberships: 0,
+      trialDestination: '/app/free-tier/onboarding',
+      redirectTo: '/app',
+    })
+  ).toBe('/app/free-tier/onboarding');
+  expect(
+    postAuthenticationDestination({
+      mustChangePassword: false,
+      activeMemberships: 0,
+      trialDestination: null,
+      redirectTo: '/app',
+    })
+  ).toBe('inactive');
+  expect(
+    postAuthenticationDestination({
+      mustChangePassword: true,
+      activeMemberships: 0,
+      trialDestination: '/app/free-tier/onboarding',
+      redirectTo: '/app',
+    })
+  ).toBe('/auth/required-password-change');
+});
+
+test('seat scoping keeps seat memberships, falls back for seat-free accounts, else blocks', () => {
+  const seatOrg = { id: 'a', organizationId: 'local-dev-org' };
+  const freeOrg = { id: 'b', organizationId: 'free-classroom-1' };
+  expect(seatScopedMemberships([seatOrg, freeOrg], 'local-dev-org', false)).toEqual([seatOrg]);
+  expect(seatScopedMemberships([seatOrg, freeOrg], 'local-dev-org', true)).toEqual([seatOrg]);
+  expect(seatScopedMemberships([freeOrg], 'local-dev-org', true)).toEqual([freeOrg]);
+  expect(seatScopedMemberships([freeOrg], 'local-dev-org', false)).toBeNull();
+  expect(seatScopedMemberships([], 'local-dev-org', true)).toEqual([]);
+  expect(seatScopedMemberships([freeOrg], undefined, false)).toBeNull();
 });

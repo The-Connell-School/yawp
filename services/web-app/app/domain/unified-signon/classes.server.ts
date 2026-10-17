@@ -87,7 +87,12 @@ export async function chooseClass(
       classInfo: info,
       variant: 'full',
     });
-  if (flow.data.identifier && info.accountMode === 'email')
+  // Verified legacy invitations keep their existing email enrollment path.
+  if (
+    flow.data.invitationId &&
+    flow.data.identifier &&
+    info.accountMode === 'email'
+  )
     return stateFor(flow, {
       screen: flow.data.proof ? 'name-password' : 'activation',
       identifier: flow.data.identifier,
@@ -100,22 +105,20 @@ export async function chooseClass(
     identifier: flow.data.identifier,
   });
 }
+/** Unified presentation only; enrollment services retain their legacy contracts. */
+export function invalidClassCodeError() {
+  const message =
+    "We couldn't find a class with that code. Check it with your teacher.";
+  return new FlowError(message, 400, undefined, { classCode: message });
+}
+
 export async function resolveClasses(
   tx: Prisma.TransactionClient,
   flow: Flow,
   code: string
 ) {
   const classes = await lookupClasses(tx, code);
-  if (!classes.length)
-    throw new FlowError(
-      "We couldn't find a class with that code. Check it with your teacher.",
-      400,
-      undefined,
-      {
-        classCode:
-          "We couldn't find a class with that code. Check it with your teacher.",
-      }
-    );
+  if (!classes.length) throw invalidClassCodeError();
   flow.data.classCode = code.trim();
   flow.data.classCandidates = classes.map((k) => k.id);
   if (classes.length === 1) return chooseClass(tx, flow, classes[0].id);

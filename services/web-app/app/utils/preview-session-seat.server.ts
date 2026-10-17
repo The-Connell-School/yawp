@@ -18,6 +18,10 @@ export type PreviewSeatSessionDependencies = {
   clearSelectedMembership(): Promise<string>;
   findSession(sessionId: string): Promise<SessionWithMemberships>;
   deleteSession(sessionId: string): Promise<void>;
+  sessionAllowedForQaContext?: (
+    request: Request,
+    userId: string
+  ) => Promise<boolean>;
   /** Preview FT-C teachers are not members of the paid preview seat org. */
   sessionAllowedWithoutSeatMembership?: (userId: string) => Promise<boolean>;
 };
@@ -97,6 +101,19 @@ export function createPreviewSeatSessionGuard(
 
     if (effectiveMembershipBelongsToSeat) return null;
 
+    // A verified QA context grants only its fixture user's owned active choices,
+    // or no membership while the real picker/recovery handler is running.
+    if (
+      session?.user.id &&
+      (!selectedMembershipId ||
+        memberships.some((m) => m.id === selectedMembershipId)) &&
+      (await dependencies.sessionAllowedForQaContext?.(
+        request,
+        session.user.id
+      ))
+    )
+      return null;
+
     const userId = session?.user.id;
     if (
       userId &&
@@ -147,6 +164,11 @@ export const enforcePreviewSeatSession: PreviewSeatSessionGuard = async (
           },
         },
       }),
+    sessionAllowedForQaContext: async (request, userId) => {
+      const { hasPreviewSignonQaContext } =
+        await import('./preview-signon-qa.server');
+      return hasPreviewSignonQaContext(request, userId);
+    },
     sessionAllowedWithoutSeatMembership: previewSessionAllowedWithoutSeatMembership,
     deleteSession: async (sessionId) => {
       await prisma.session.deleteMany({ where: { id: sessionId } });

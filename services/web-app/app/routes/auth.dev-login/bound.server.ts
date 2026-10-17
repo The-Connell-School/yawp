@@ -7,7 +7,6 @@ import {
   getPreviewAccessSeat,
   isPreviewAccessGateEnabled,
 } from '~/utils/preview-access.server';
-import { resetTours } from '~/domain/guided-tours/guided-tours.server';
 import {
   createDevLoginAction,
   createDevLoginOptionsLoader,
@@ -32,8 +31,6 @@ export const devLoginAction = createDevLoginAction({
   previewGateEnabled: isPreviewAccessGateEnabled,
   previewSeatForRequest: getPreviewAccessSeat,
   redirectResponse: (headers) => new Response(null, { status: 302, headers }),
-  // Dev sign-in only exists locally and on previews: start each one fresh.
-  onSignedIn: resetTours,
 });
 
 export const devLoginOptionsLoader = createDevLoginOptionsLoader({

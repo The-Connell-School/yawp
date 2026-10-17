@@ -170,7 +170,7 @@ function recordOutcome(tourId: TourId, status: TourStatus) {
  * Everything here is position:fixed against the window, so it renders on
  * <body>: inside the app shell, a transformed ancestor would offset it.
  */
-export function GuidedTour(props: { finishedTourIds: readonly string[] }) {
+export function GuidedTour(props: { finishedTourIds: readonly string[]; storageScope: string }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   if (!mounted) return null;
@@ -197,17 +197,17 @@ function usePageTour() {
 
 function PageTourController({
   finishedTourIds,
+  storageScope,
 }: {
   finishedTourIds: readonly string[];
+  storageScope: string;
 }) {
   const tour = usePageTour();
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
-  // Outcomes from this visit, so a card stays closed before the server's
-  // list catches up.
   // Finished or skipped during this session, so a card stays closed before
-  // the server's list catches up, and skips last until the tab is closed.
+  // the server's list catches up, and skips last until the next login.
   const [finishedHere, setFinishedHere] = useState<ReadonlySet<string>>(
-    () => new Set(readSkippedTours())
+    () => new Set(readSkippedTours(storageScope))
   );
   // After "Restart all tours" the server has no rows left, so the list this
   // page loaded with is out of date until the next full load.
@@ -235,7 +235,7 @@ function PageTourController({
       setPhase({ kind: 'idle' });
       setFinishedHere((prev) => new Set(prev).add(tour.id));
       if (status === 'dismissed')
-        writeSkippedTours([...readSkippedTours(), tour.id]);
+        writeSkippedTours(storageScope, [...readSkippedTours(storageScope), tour.id]);
       recordOutcome(tour.id, status);
     },
     [tour]
@@ -255,7 +255,7 @@ function PageTourController({
     const restart = () => {
       setRestarted(true);
       setFinishedHere(new Set());
-      writeSkippedTours([]);
+      writeSkippedTours(storageScope, []);
       if (tourId) setPhase({ kind: 'welcome' });
     };
     window.addEventListener(RESET_EVENT, restart);
@@ -307,6 +307,7 @@ function WelcomeCard({
       role="dialog"
       aria-modal="false"
       aria-labelledby={titleId}
+      onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); onSkip(); } }}
       data-testid="guided-tour-welcome"
       className="fixed inset-x-4 bottom-4 z-50 rounded-xl border bg-popover p-5 text-popover-foreground shadow-lg animate-in fade-in-0 slide-in-from-bottom-4 duration-300 motion-reduce:animate-none print:hidden sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[400px]"
     >
@@ -403,6 +404,8 @@ export function RestartToursButton({ className }: { className?: string }) {
             body,
           });
           if (response.ok) window.dispatchEvent(new Event(RESET_EVENT));
+        } catch {
+          // Keep existing progress if the request fails; the teacher can retry.
         } finally {
           setPending(false);
         }
@@ -431,6 +434,9 @@ function TourSpotlight({
   const isLast = index === steps.length - 1;
   const [rect, setRect] = useState<Rect | null>(null);
   const nextRef = useRef<HTMLButtonElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(
+    document.activeElement instanceof HTMLElement ? document.activeElement : null
+  );
   const titleId = 'guided-tour-step-title';
 
   // Bring the step's element into view and mark it, so it can be styled or
@@ -521,6 +527,11 @@ function TourSpotlight({
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             nextRef.current?.focus();
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            if (returnFocusRef.current?.isConnected) returnFocusRef.current.focus();
+            else document.querySelector<HTMLElement>('[aria-label="Tour this page"], [data-testid="document-actions-menu"]')?.focus();
           }}
           onInteractOutside={(event) => event.preventDefault()}
           className="z-50 w-[min(380px,calc(100vw-32px))] rounded-xl border bg-popover p-5 text-popover-foreground shadow-lg outline-none animate-in fade-in-0 zoom-in-95 motion-reduce:animate-none print:hidden"

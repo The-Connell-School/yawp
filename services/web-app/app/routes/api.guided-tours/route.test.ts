@@ -2,11 +2,15 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { redirect } from 'react-router';
 
 const prisma = {
-  userTour: { findUnique: mock(), upsert: mock(), deleteMany: mock() },
+  userTour: { findUnique: mock(), upsert: mock(), createMany: mock(), deleteMany: mock() },
 };
+const getLockedPreviewApplication = mock();
+mock.module('~/domain/free-tier/locked-preview.server', () => ({ getLockedPreviewApplication }));
+mock.module('~/cookies/membership-id.server', () => ({ getMembershipId: async () => null }));
 const requireUserId = mock();
 const requireMembership = mock();
 const isFreeTierEnabled = mock();
+const isFeatureFlagEnabled = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -15,8 +19,10 @@ mock.module('~/utils/auth.server', () => ({
 }));
 mock.module('~/domain/feature-flags/feature-flags.server', () => ({
   isFreeTierEnabled,
+  isFeatureFlagEnabled,
 }));
 
+const tourWrites: Record<string, string>[] = [{ tourId: 'dashboard', status: 'completed' }, { intent: 'reset' }];
 const { action } = await import('./route');
 
 function post(fields: Record<string, string>, method = 'POST') {
@@ -36,21 +42,27 @@ describe('api.guided-tours', () => {
     for (const fn of [
       prisma.userTour.findUnique,
       prisma.userTour.upsert,
+      prisma.userTour.createMany,
       prisma.userTour.deleteMany,
       requireUserId,
       requireMembership,
       isFreeTierEnabled,
+      isFeatureFlagEnabled,
     ]) {
       fn.mockReset();
     }
+    getLockedPreviewApplication.mockReset();
+    getLockedPreviewApplication.mockResolvedValue(null);
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
       role: 'TEACHER',
-      organization: { plan: 'FREE_CLASSROOM' },
+      organization: { id: 'org-free', plan: 'FREE_CLASSROOM' },
     });
     isFreeTierEnabled.mockResolvedValue(true);
+    isFeatureFlagEnabled.mockResolvedValue(true);
     prisma.userTour.findUnique.mockResolvedValue(null);
     prisma.userTour.upsert.mockResolvedValue({});
+    prisma.userTour.createMany.mockResolvedValue({ count: 1 });
   });
 
   test('records how a free classroom teacher left a tour', async () => {
@@ -67,9 +79,7 @@ describe('api.guided-tours', () => {
     });
   });
 
-  test('never downgrades a finished tour to skipped', async () => {
-    prisma.userTour.findUnique.mockResolvedValue({ status: 'completed' });
-
+  test('skips can only insert missing progress and never update a finished tour', async () => {
     const response = (await post({
       tourId: 'dashboard',
       status: 'dismissed',
@@ -77,6 +87,37 @@ describe('api.guided-tours', () => {
 
     expect(response.status).toBe(200);
     expect(prisma.userTour.upsert).not.toHaveBeenCalled();
+    expect(prisma.userTour.createMany).toHaveBeenCalledWith({
+      data: [{ userId: 'user-1', tourId: 'dashboard', status: 'dismissed' }],
+      skipDuplicates: true,
+    });
+  });
+
+  test('overlapping completion and skip preserve completion regardless of stale reads', async () => {
+    const progress: { stored: { status: string } | null } = { stored: null };
+    let completionWritten!: () => void;
+    const completed = new Promise<void>((resolve) => { completionWritten = resolve; });
+    // Both requests can read the same absent row before either writes.
+    prisma.userTour.findUnique.mockImplementation(async () => progress.stored ? { ...progress.stored } : null);
+    prisma.userTour.upsert.mockImplementation(async ({ create, update }) => {
+      // Reproduce a slow Skip request arriving after Finish from another tab.
+      if (create.status === 'dismissed') await completed;
+      progress.stored = progress.stored ? { ...progress.stored, ...update } : { status: create.status };
+      if (create.status === 'completed') completionWritten();
+      return progress.stored;
+    });
+    prisma.userTour.createMany.mockImplementation(async ({ data }) => {
+      await completed;
+      if (progress.stored) return { count: 0 };
+      progress.stored = { status: data[0].status };
+      return { count: 1 };
+    });
+    const responses = await Promise.all([
+      post({ tourId: 'dashboard', status: 'completed' }),
+      post({ tourId: 'dashboard', status: 'dismissed' }),
+    ]);
+    expect(responses.map((response) => response.status)).toEqual([200, 200]);
+    expect(progress.stored).toEqual({ status: 'completed' });
   });
 
   test('rejects unknown tours and statuses without writing', async () => {
@@ -92,9 +133,10 @@ describe('api.guided-tours', () => {
     expect(badTour.status).toBe(400);
     expect(badStatus.status).toBe(400);
     expect(prisma.userTour.upsert).not.toHaveBeenCalled();
+    expect(prisma.userTour.createMany).not.toHaveBeenCalled();
   });
 
-  test('is not found for paid schools, students, or with the flag off', async () => {
+  test('is not found for paid accounts, students, or with the flag off', async () => {
     requireMembership.mockResolvedValue({
       role: 'TEACHER',
       organization: { plan: 'SCHOOL' },
@@ -106,7 +148,7 @@ describe('api.guided-tours', () => {
 
     requireMembership.mockResolvedValue({
       role: 'STUDENT',
-      organization: { plan: 'FREE_CLASSROOM' },
+      organization: { id: 'org-free', plan: 'FREE_CLASSROOM' },
     });
     expect(
       ((await post({ tourId: 'dashboard', status: 'completed' })) as Response)
@@ -115,7 +157,7 @@ describe('api.guided-tours', () => {
 
     requireMembership.mockResolvedValue({
       role: 'TEACHER',
-      organization: { plan: 'FREE_CLASSROOM' },
+      organization: { id: 'org-free', plan: 'FREE_CLASSROOM' },
     });
     isFreeTierEnabled.mockResolvedValue(false);
     expect(
@@ -124,6 +166,35 @@ describe('api.guided-tours', () => {
     ).toBe(404);
 
     expect(prisma.userTour.upsert).not.toHaveBeenCalled();
+    expect(prisma.userTour.createMany).not.toHaveBeenCalled();
+  });
+
+  test('a forged completion or reset cannot bypass the independent tour flag', async () => {
+    isFeatureFlagEnabled.mockResolvedValue(false);
+    for (const fields of tourWrites) {
+      expect((await post(fields)).status).toBe(404);
+    }
+    expect(prisma.userTour.findUnique).not.toHaveBeenCalled();
+    expect(prisma.userTour.upsert).not.toHaveBeenCalled();
+    expect(prisma.userTour.createMany).not.toHaveBeenCalled();
+    expect(prisma.userTour.deleteMany).not.toHaveBeenCalled();
+  });
+
+  test('uses the authenticated identity and organization, ignoring forged ids', async () => {
+    await post({ tourId: 'dashboard', status: 'completed', userId: 'victim', orgId: 'paid' });
+    expect(isFeatureFlagEnabled).toHaveBeenCalledWith('guided-tours', 'org-free');
+    expect(prisma.userTour.upsert.mock.calls[0][0].create.userId).toBe('user-1');
+  });
+
+  test('read-only auth rejects completion and reset before database access', async () => {
+    requireUserId.mockImplementation(() => { throw new Response('Read-only impersonation active', { status: 403 }); });
+    for (const fields of tourWrites) {
+      try { await post(fields); throw new Error('Expected rejection'); }
+      catch (error) { expect(error).toBeInstanceOf(Response); expect((error as Response).status).toBe(403); }
+    }
+    expect(prisma.userTour.upsert).not.toHaveBeenCalled();
+    expect(prisma.userTour.createMany).not.toHaveBeenCalled();
+    expect(prisma.userTour.deleteMany).not.toHaveBeenCalled();
   });
 
   test('requires a session', async () => {
@@ -134,6 +205,7 @@ describe('api.guided-tours', () => {
       post({ tourId: 'dashboard', status: 'completed' })
     ).rejects.toBeInstanceOf(Response);
     expect(prisma.userTour.upsert).not.toHaveBeenCalled();
+    expect(prisma.userTour.createMany).not.toHaveBeenCalled();
   });
 
   test('restart clears every tour for this user only', async () => {
@@ -146,6 +218,7 @@ describe('api.guided-tours', () => {
       where: { userId: 'user-1' },
     });
     expect(prisma.userTour.upsert).not.toHaveBeenCalled();
+    expect(prisma.userTour.createMany).not.toHaveBeenCalled();
   });
 
   test('restart is not found for anyone the tours are not for', async () => {
@@ -158,5 +231,54 @@ describe('api.guided-tours', () => {
   test('only accepts POST', async () => {
     const response = (await post({}, 'PUT')) as Response;
     expect(response.status).toBe(405);
+  });
+});
+
+
+describe('waiting teacher tour boundary', () => {
+  beforeEach(() => {
+    for (const fn of [prisma.userTour.upsert, prisma.userTour.createMany, prisma.userTour.deleteMany, requireMembership, requireUserId, isFreeTierEnabled, isFeatureFlagEnabled, getLockedPreviewApplication]) fn.mockReset();
+    requireUserId.mockResolvedValue('waiting-user');
+    getLockedPreviewApplication.mockResolvedValue({ status: 'SENT', organizationId: null });
+    isFreeTierEnabled.mockResolvedValue(true);
+    isFeatureFlagEnabled.mockResolvedValue(true);
+  });
+  test('unprovisioned waiting teacher can only record the permitted preview tour', async () => {
+    expect((await post({ tourId: 'waiting-preview', status: 'completed' })).status).toBe(200);
+    expect(requireMembership).not.toHaveBeenCalled();
+    expect(prisma.userTour.upsert).toHaveBeenCalledWith({
+      where: { userId_tourId: { userId: 'waiting-user', tourId: 'waiting-preview' } },
+      create: { userId: 'waiting-user', tourId: 'waiting-preview', status: 'completed' },
+      update: { status: 'completed' },
+    });
+    expect(isFeatureFlagEnabled).toHaveBeenCalledWith('guided-tours', undefined);
+  });
+  test('normal tours, reset and preparation states cannot write via the exception', async () => {
+    for (const fields of [...tourWrites, { tourId: 'waiting-preview', status: 'started' }])
+      expect((await post(fields)).status).toBe(403);
+    for (const status of ['ACCOUNT_CREATED', 'ADMIN_SUBMITTED']) {
+      getLockedPreviewApplication.mockResolvedValue({ status, organizationId: 'pending-org' });
+      expect((await post({ tourId: 'waiting-preview', status: 'completed' })).status).toBe(403);
+    }
+    expect(requireMembership).not.toHaveBeenCalled();
+    expect(prisma.userTour.upsert).not.toHaveBeenCalled();
+    expect(prisma.userTour.createMany).not.toHaveBeenCalled();
+    expect(prisma.userTour.deleteMany).not.toHaveBeenCalled();
+  });
+  test('both flags gate waiting progress and organization targeting is preserved', async () => {
+    getLockedPreviewApplication.mockResolvedValue({ status: 'MANUAL_REVIEW', organizationId: 'pending-org' });
+    isFeatureFlagEnabled.mockResolvedValue(false);
+    expect((await post({ tourId: 'waiting-preview', status: 'completed' })).status).toBe(404);
+    expect(isFeatureFlagEnabled).toHaveBeenCalledWith('guided-tours', 'pending-org');
+    isFeatureFlagEnabled.mockResolvedValue(true);
+    isFreeTierEnabled.mockResolvedValue(false);
+    expect((await post({ tourId: 'waiting-preview', status: 'completed' })).status).toBe(404);
+    expect(prisma.userTour.upsert).not.toHaveBeenCalled();
+  });
+  test('read-only authentication fails before the waiting exception', async () => {
+    requireUserId.mockRejectedValue(new Response(null, { status: 403 }));
+    await expect(post({ tourId: 'waiting-preview', status: 'completed' })).rejects.toMatchObject({ status: 403 });
+    expect(getLockedPreviewApplication).not.toHaveBeenCalled();
+    expect(prisma.userTour.upsert).not.toHaveBeenCalled();
   });
 });

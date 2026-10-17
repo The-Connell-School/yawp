@@ -1,3 +1,4 @@
+import { classCodeUniquenessEnabled } from '~/utils/class-code-write.server';
 import { useFreeAccountUsage } from '~/components/free-account-usage';
 import { Prisma } from '@app/prisma';
 import {
@@ -1406,6 +1407,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return dataResponse({
     role: 'TEACHER' as const,
+    classCodeUniqueEnabled: await classCodeUniquenessEnabled(prisma),
     studentJoinUrl,
     klass,
     submissions,
@@ -2826,6 +2828,7 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
       </div>
 
       <ClassManageSheet
+        classCodeUniqueEnabled={data.classCodeUniqueEnabled}
         open={isClassEditSheetOpen}
         onOpenChange={setIsClassEditSheetOpen}
         editingClass={editingClass}

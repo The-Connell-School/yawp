@@ -13,6 +13,7 @@
  */
 
 export const TOUR_IDS = [
+  'waiting-preview',
   'dashboard',
   'my-classes',
   'class',
@@ -73,7 +74,7 @@ const DOCUMENT_TOUR: PageTour = {
     {
       target: 'doc-tutor',
       title: 'The Tutor',
-      body: 'The assignment and its steps sit here. Students can open Chat to talk an idea through with the Tutor while they write.',
+      body: 'The assignment and its steps sit here. Students can talk an idea through with the Tutor while they write. The thinking and writing stay their own.',
     },
     {
       target: 'doc-toolbar',
@@ -99,6 +100,19 @@ const DOCUMENT_TOUR: PageTour = {
 };
 
 const TOURS: Record<TourId, PageTour> = {
+  'waiting-preview': {
+    id: 'waiting-preview',
+    welcome: {
+      title: 'Welcome to your preview',
+      body: 'Take a quick look at the content you can explore while your administrator reviews your request.',
+      icon: 'home',
+    },
+    steps: [
+      { target: 'preview-content-nav', title: 'Explore the preview', body: 'Browse Class Starter prompts, Pre-writing guidance, Thesis prompts, and the Lesson Planner overview here.' },
+      { target: 'preview-content', title: 'Look around', body: 'Read the prompts and guidance at your own pace. This preview does not create classroom work.' },
+      { target: 'preview-locked-actions', title: 'After approval', body: 'Assignment creation, student invitations, Reporter, and Lesson Planner tools remain locked until your administrator approves your classroom.' },
+    ],
+  },
   dashboard: {
     id: 'dashboard',
     welcome: {
@@ -145,7 +159,7 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'my-classes-create',
         title: 'One class included',
-        body: 'Free classrooms include one class with up to 35 students. To start a new class, archive this one or upgrade.',
+        body: 'Your free classroom includes one class. Check the student limit shown for your classroom. To start a new class, archive this one or upgrade.',
       },
     ],
   },
@@ -215,7 +229,7 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'documents-list',
         title: 'Open a document',
-        body: 'Click any row to read the writing, see the AI feedback, and grade it.',
+        body: 'Click any row to read the writing, read feedback that helps students develop their own ideas, and grade it.',
       },
     ],
   },
@@ -280,7 +294,7 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'planner-rail',
         title: 'Your lessons',
-        body: 'Every lesson you plan is saved here. Your free classroom includes a limited number of lesson plans; deleting a draft frees one up.',
+        body: 'Every lesson you plan is saved here. Your free classroom includes a limited number of lesson plans. Check your usage before planning another lesson.',
       },
       {
         target: 'planner-guide',
@@ -299,8 +313,8 @@ const TOURS: Record<TourId, PageTour> = {
     steps: [
       {
         target: 'organization-tabs',
-        title: 'Classes, schools, teachers, students',
-        body: 'Switch tabs to see everyone and everything in your account. Your free classroom has one class with room for up to 35 students.',
+        title: 'Your organization',
+        body: 'Switch tabs to see everyone and everything in your account. Your free classroom has one class with room for students up to your classroom’s current limit.',
       },
       {
         target: 'organization-content',
@@ -320,7 +334,7 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'type-new',
         title: 'Make one',
-        body: 'New → Assignment gives it to your class. New → Document lets you try it yourself first, the way your students will. Each one you assign uses one from your free classroom.',
+        body: 'New → Assignment gives it to your class. New → Document lets you try it yourself first, the way your students will. Use these assignments to help students practice and develop their own ideas.',
       },
       {
         target: 'type-directions',
@@ -355,7 +369,7 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'type-new',
         title: 'Make one',
-        body: 'New → Assignment gives it to your class. New → Document lets you try it yourself first, the way your students will. Each one you assign uses one from your free classroom.',
+        body: 'New → Assignment gives it to your class. New → Document lets you try it yourself first, the way your students will. Use these assignments to help students practice and develop their own ideas.',
       },
       {
         target: 'type-modules',
@@ -380,7 +394,7 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'type-new',
         title: 'Make one',
-        body: 'New → Assignment gives it to your class. New → Document lets you try it yourself first, the way your students will. Each one you assign uses one from your free classroom.',
+        body: 'New → Assignment gives it to your class. New → Document lets you try it yourself first, the way your students will. Use these assignments to help students practice and develop their own ideas.',
       },
       {
         target: 'type-directions',
@@ -457,6 +471,7 @@ export function tourForPathname(pathname: string): PageTour | null {
     pathname.length > 1 && pathname.endsWith('/')
       ? pathname.slice(0, -1)
       : pathname;
+  if (path === '/app/free-tier/preview') return TOURS['waiting-preview'];
   if (path === '/app') return TOURS.dashboard;
   if (path === '/app/my-classes') return TOURS['my-classes'];
   if (/^\/app\/my-classes\/[^/]+$/.test(path)) return TOURS.class;

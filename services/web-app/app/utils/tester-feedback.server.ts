@@ -4,10 +4,11 @@ import {
   internalApiRawQueryString,
   type InternalApiAuthContext,
 } from './internal-platform-auth.server';
+import type { FeedbackAction } from './demo-feedback-context';
 import { readBoundedText } from './bounded-body.server';
 
 export const FEEDBACK_TEXT_LIMIT = 4000;
-const severitySchema = z.enum(['low', 'medium', 'high']);
+export const severitySchema = z.enum(['low', 'medium', 'high']);
 const text = z.string().trim().min(1).max(FEEDBACK_TEXT_LIMIT);
 const submissionSchema = z.object({
   url: z
@@ -76,12 +77,16 @@ export const feedbackQuerySchema = z
   );
 export type FeedbackQuery = z.infer<typeof feedbackQuerySchema>;
 export type FeedbackInput = z.infer<typeof submissionSchema> & {
+  actions?: FeedbackAction[];
   userId: string;
   userAgent: string;
   environment: string;
 };
-export type FeedbackEntry = Omit<FeedbackInput, 'severity'> & {
+export type FeedbackEntry = Omit<FeedbackInput, 'severity' | 'actions'> & {
   severity: string | null;
+  actions?: unknown[] | null;
+  userEmail?: string | null;
+  userName?: string | null;
   id: string;
   createdAt: Date;
 };
@@ -315,6 +320,9 @@ const columns = [
   'severity',
   'createdAt',
   'environment',
+  'actions',
+  'userEmail',
+  'userName',
 ] as const;
 function csvCell(value: string) {
   // Excel recognizes formulas even after leading whitespace. Escape all user-controlled cells.
@@ -331,7 +339,9 @@ export function feedbackCsv(entries: FeedbackEntry[]) {
             csvCell(
               column === 'createdAt'
                 ? entry.createdAt.toISOString()
-                : (entry[column] ?? '')
+                : column === 'actions'
+                  ? Array.isArray(entry.actions) ? JSON.stringify(entry.actions) : ''
+                  : (entry[column] ?? '')
             )
           )
           .join(',')
@@ -393,7 +403,12 @@ export async function readTesterFeedback(
       },
     });
   }
-  const page = entries.slice(0, input.limit);
+  const page = entries.slice(0, input.limit).map((entry) => ({
+    ...entry,
+    actions: Array.isArray(entry.actions) ? entry.actions : null,
+    userEmail: entry.userEmail ?? null,
+    userName: entry.userName ?? null,
+  }));
   if (internalAuth)
     await auditInternalFeedbackRead(request, deps, internalAuth, 'list.success');
   return response({
