@@ -301,7 +301,7 @@ export default function Route() {
 
   if (isFreeTierOnboardingShell) {
     return (
-      <main className="min-h-screen bg-background">
+      <main data-app-shell className="min-h-screen bg-background">
         <Outlet key={location.pathname} />
       </main>
     );
@@ -309,6 +309,7 @@ export default function Route() {
 
   return (
     <main
+      data-app-shell
       data-free-account={freeAccountUsage ? true : undefined}
       className={cn(
         'flex h-screen min-h-screen overflow-hidden bg-background',
