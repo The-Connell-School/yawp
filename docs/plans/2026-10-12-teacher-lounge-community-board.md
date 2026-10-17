@@ -122,8 +122,8 @@ PUT from https://yawp.school and the App Runner URL, which covers the app.
   who cannot sign in. For a real database:
 
   ```
-  LOUNGE_SEED_BRIAN_EMAIL=… LOUNGE_SEED_KEVIN_EMAIL=… bun run seed-lounge-launch          # dry run
-  LOUNGE_SEED_BRIAN_EMAIL=… LOUNGE_SEED_KEVIN_EMAIL=… bun run seed-lounge-launch --yes    # create
+  LOUNGE_SEED_BRIAN_EMAIL=… bun run seed-lounge-launch          # dry run
+  LOUNGE_SEED_BRIAN_EMAIL=… bun run seed-lounge-launch --yes    # create
   ```
 
   Both accounts must be YAWP! team (admin) accounts. Not seeded, because the
@@ -155,6 +155,22 @@ route, or behavior changes.
   card with a "<name>'s answer" badge; replies are avatar rows.
 - **Type**: Cormorant Garamond for titles (already loaded for the public
   pages), Roboto for everything else.
+
+### Round 5 (2026-10-17): Brian and the YAWP! team
+
+- **Mentions.** The @ picker offers "YAWP! team" and Brian, then teachers
+  in the thread; other staff are not offered by name. "@YAWP! team" is a
+  group mention (token id `yawp-team`) that asks the team like the Ask
+  checkbox: the thread goes to the inbox and `LOUNGE_STAFF_NOTIFY_EMAILS`
+  is emailed.
+- **Brian** is whoever on the team wrote the oldest pinned post (the
+  welcome letter). The team box reads "Ask Brian or the YAWP! team".
+- **Team account.** Q1–Q6 and the hopper questions are posted from a shared
+  "YAWP! team" account (`yawp-team@lounge.invalid`, no password). The seed
+  command needs only `LOUNGE_SEED_BRIAN_EMAIL` and creates the account with
+  `--yes`.
+- **Trainings.** Course cards count module resources too, and a course
+  page's back button returns to the Lounge's Trainings tab.
 
 Not built yet: Discuss tabs on modules and lessons, sharing Lesson Planner
 lessons and rubrics, captions for videos, unread badge, weekly digest,
