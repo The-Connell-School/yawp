@@ -1834,7 +1834,7 @@ export function AssignmentCreationSheetContent({
                     </div>
                     <p
                       className={
-                        platformEnhancementsEnabled && minimumPointValue === 1
+                        platformEnhancementsEnabled
                           ? 'hidden'
                           : 'text-sm text-muted-foreground'
                       }
@@ -1849,7 +1849,11 @@ export function AssignmentCreationSheetContent({
 
                 {engagementBandPreview ? (
                   <div
-                    className="space-y-2"
+                    className={
+                      platformEnhancementsEnabled
+                        ? 'order-4 space-y-2 sm:col-span-2'
+                        : 'space-y-2'
+                    }
                     data-testid="assignment-create-engagement-bands"
                   >
                     <p className="text-sm font-medium">Engagement tiers</p>
@@ -1869,7 +1873,19 @@ export function AssignmentCreationSheetContent({
 
                 {/* Scoring behavior is now fixed to bands; UI selector removed */}
 
-                <div className="space-y-2">
+                {platformEnhancementsEnabled && minimumPointValue > 1 ? (
+                  <p className="order-3 text-sm text-muted-foreground sm:col-span-2">
+                    Daily Pages engagement assignments need at least{' '}
+                    {minimumPointValue} points when graded.
+                  </p>
+                ) : null}
+                <div
+                  className={
+                    platformEnhancementsEnabled
+                      ? 'order-2 space-y-2'
+                      : 'space-y-2'
+                  }
+                >
                   {platformEnhancementsEnabled ? (
                     <>
                       <Label htmlFor="assignment-create-read-level">
