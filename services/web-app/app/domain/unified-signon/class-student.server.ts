@@ -8,6 +8,7 @@ import {
   PasswordSchema,
 } from '~/utils/schemas/user';
 import { validateUsername } from '~/utils/username';
+import { signonValidationMessage } from './validation-copy';
 import {
   consumeLoginAttemptRateLimits,
   refundLoginAttemptRateLimits,
@@ -152,7 +153,10 @@ export async function registerStudent(
       400,
       undefined,
       Object.fromEntries(
-        parsed.error.issues.map((i) => [String(i.path[0]), i.message])
+        parsed.error.issues.map((i) => [
+          String(i.path[0]),
+          signonValidationMessage(i),
+        ])
       )
     );
   const klass = await context(tx, flow);

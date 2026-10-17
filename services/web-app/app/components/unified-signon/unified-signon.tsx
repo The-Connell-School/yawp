@@ -23,6 +23,7 @@ import {
   studentHandleBase,
 } from '~/domain/unified-signon/student-handle';
 import { validateUsername } from '~/utils/username';
+import { signonValidationMessage } from '~/domain/unified-signon/validation-copy';
 import {
   identifierKind,
   type SignonClass,
@@ -1038,7 +1039,7 @@ export function UnifiedSignon({
         const result = PasswordAndConfirmPasswordSchema.safeParse(values);
         if (!result.success)
           for (const issue of result.error.issues)
-            errors[String(issue.path[0])] = issue.message;
+            errors[String(issue.path[0])] = signonValidationMessage(issue);
       }
       if (screen === 'handle-join' || screen === 'class-handle') {
         for (const name of ['firstName', 'lastName']) {

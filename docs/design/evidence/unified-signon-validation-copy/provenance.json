@@ -1,0 +1,31 @@
+{
+  "testedCodeHead": "9f6e166675148eaab7a1c91599f9c3f760b2bc0f",
+  "baseHead": "719a5ee598ab4f1e2849c07eac47a6354604136d",
+  "references": [
+    {
+      "file": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/design/v2/artboards/signon-38-new-student-free-tier-class-handle-all-states.dom.html",
+      "sha256": "f287bbbdcd4358f7faec19e362d01051058ac1b052d64cdea93fc040708731e4"
+    },
+    {
+      "file": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/design/v2/artboards/signon-38-new-student-free-tier-class-handle-all-states.txt",
+      "sha256": "da7989a886b848ade34b4fb4be76c282f8cb491b924df1bef03ba64ac6e62250"
+    },
+    {
+      "file": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/design/v2/artboards/signon-16-set-name-amp-password-all-states.dom.html",
+      "sha256": "64646edc58e05c9de4ce15dfa6d28afddfcc0ec54a0ad96b7e11d9fea7c0fb2e"
+    },
+    {
+      "file": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/design/v2/artboards/signon-16-set-name-amp-password-all-states.txt",
+      "sha256": "10754eac33ad0f1b3559b599ffd9ffb1ba354535443cb08a35c7abf1ee76948d"
+    },
+    {
+      "file": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/design/v2/artboards/signon-02-error-amp-status-copy.dom.html",
+      "sha256": "231b70c56cd4d570de6212d13fb05a5e85f08a25aa2b28aa8c8c34efc467c97d"
+    },
+    {
+      "file": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/design/v2/artboards/signon-02-error-amp-status-copy.txt",
+      "sha256": "7dfdf1af4dbce9fdf53260ef2a4ed0e6619ae7e2e665b1e1e02388b275deb210"
+    }
+  ],
+  "originMainAtEvidence": "f3a0023e0f0dd918d367e0dc4590c9965625509a"
+}

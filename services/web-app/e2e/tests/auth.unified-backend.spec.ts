@@ -38,6 +38,117 @@ async function shot(page: Page, name: string, width: number) {
     });
   }
 }
+// FAILURES.md: di-signon-fix-handle-validation-copy. Real handlers and DB.
+async function passwordErrors(
+  page: Page,
+  width: number,
+  kind: string,
+  reset = false
+) {
+  test.fail(
+    process.env.SIGNON_VALIDATION_PHASE === 'before',
+    'Reproduces legacy validation copy on current main'
+  );
+  const password = page.getByLabel(reset ? 'New password' : 'Password', {
+    exact: true,
+  });
+  const confirm = page.getByLabel(
+    reset ? 'Confirm new password' : 'Confirm password',
+    { exact: true }
+  );
+  const submit = page.getByRole('button', {
+    name: reset
+      ? 'Save password'
+      : kind === 'generated-handle'
+        ? 'Join class'
+        : 'Create Account',
+    exact: true,
+  });
+  const snapshot = () =>
+    Promise.all([
+      db.user.count(),
+      db.session.count(),
+      db.orgMembership.count(),
+      db.classStudentHandle.count(),
+      db.orgMembership.findMany({
+        orderBy: { id: 'asc' },
+        include: {
+          classesAsStudent: { select: { id: true }, orderBy: { id: 'asc' } },
+        },
+      }),
+      db.password.findMany({ orderBy: { userId: 'asc' } }),
+    ]);
+  const before = await snapshot();
+  const check = async (source: string) => {
+    await shot(
+      page,
+      `validation-${kind}-${source}-${process.env.SIGNON_VALIDATION_PHASE || 'after'}`,
+      width
+    );
+    if (evidence)
+      fs.appendFileSync(
+        path.join(evidence, 'validation-copy.jsonl'),
+        JSON.stringify({
+          width,
+          kind,
+          source,
+          phase: process.env.SIGNON_VALIDATION_PHASE || 'after',
+          password: await page.locator('#signon-password-help').textContent(),
+          confirmation: await page
+            .locator('#signon-confirmPassword-help')
+            .textContent(),
+        }) + '\n'
+      );
+    expect.soft(await password.getAttribute('aria-invalid')).toBe('true');
+    await expect
+      .soft(page.locator('#signon-password-help'))
+      .toHaveText('Use at least 6 characters.');
+    await expect
+      .soft(page.locator('#signon-confirmPassword-help'))
+      .toHaveText("These passwords don't match.");
+    expect(await snapshot()).toEqual(before);
+  };
+  await password.fill('short');
+  await confirm.fill('different');
+  await submit.click();
+  await check('client');
+  // Submit valid browser values, changing only the outgoing payload so the
+  // actual server validator rejects it. No response or proof is fabricated.
+  await password.fill('123456');
+  await confirm.fill('123456');
+  const invalidateOnce = async (route: Route) => {
+    const body = new URLSearchParams(route.request().postData() || '');
+    if (
+      !['register-student', 'create-account'].includes(body.get('intent') || '')
+    )
+      return route.continue();
+    body.set('password', 'short');
+    body.set('confirmPassword', 'different');
+    await route.continue({ postData: body.toString() });
+  };
+  await page.route('**/auth/login*', invalidateOnce);
+  const response = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().includes('/auth/login')
+  );
+  await submit.click();
+  expect((await response).status()).toBe(400);
+  await expect(password).toHaveAttribute('aria-invalid', 'true');
+  await page.unroute('**/auth/login*', invalidateOnce);
+  await check('server');
+  await password.fill('x'.repeat(101));
+  await confirm.fill('x'.repeat(101));
+  await submit.click();
+  await expect(page.locator('#signon-password-help')).toHaveText(
+    'Password is too long'
+  );
+  await expect(page.locator('#signon-confirmPassword-help')).toHaveText(
+    'Password is too long'
+  );
+  expect(await snapshot()).toEqual(before);
+  // The actual six-character boundary remains valid in every journey.
+  await password.fill('123456');
+  await confirm.fill('123456');
+}
 async function codeFor(target: string) {
   const files = fs
     .readdirSync(capture)
@@ -432,10 +543,9 @@ for (const width of [1280, 390])
       await expectForm(true);
       await page.getByLabel('First name', { exact: true }).fill('Local');
       await page.getByLabel('Last name', { exact: true }).fill('Notice');
-      await page.getByLabel('Password', { exact: true }).fill('local-password');
-      await page
-        .getByLabel('Confirm password', { exact: true })
-        .fill('local-password');
+      await page.getByLabel('Password', { exact: true }).fill('123456');
+      await page.getByLabel('Confirm password', { exact: true }).fill('123456');
+      await passwordErrors(page, width, 'generated-handle');
       // Reach real server validation despite the client's valid values.
       const invalidateOnce = async (route: Route) => {
         const body = new URLSearchParams(route.request().postData() || '');
@@ -477,10 +587,8 @@ for (const width of [1280, 390])
       });
       await page.getByLabel('First name', { exact: true }).fill('Local');
       await page.getByLabel('Last name', { exact: true }).fill('Notice');
-      await page.getByLabel('Password', { exact: true }).fill('local-password');
-      await page
-        .getByLabel('Confirm password', { exact: true })
-        .fill('local-password');
+      await page.getByLabel('Password', { exact: true }).fill('123456');
+      await page.getByLabel('Confirm password', { exact: true }).fill('123456');
       await page
         .getByRole('button', { name: 'Join class', exact: true })
         .click();
@@ -522,9 +630,7 @@ for (const width of [1280, 390])
       expect(stored.email).toBeNull();
       expect(stored.emailVerifiedAt).toBeNull();
       expect(stored.password).not.toBeNull();
-      expect(
-        await bcrypt.compare('local-password', stored.password!.hash)
-      ).toBe(true);
+      expect(await bcrypt.compare('123456', stored.password!.hash)).toBe(true);
       expect(stored.sessions).toHaveLength(1);
       expect(stored.memberships).toHaveLength(1);
       expect(stored.memberships[0].role).toBe('STUDENT');
@@ -1011,10 +1117,9 @@ for (const width of [1280, 390])
     ).toBeVisible();
     await shot(page, 'signon-15-verified-signup', width);
     await page.getByLabel('Your name').fill('Maya Reynolds');
-    await page.getByLabel('Password', { exact: true }).fill('local-password');
-    await page
-      .getByLabel('Confirm password', { exact: true })
-      .fill('local-password');
+    await passwordErrors(page, width, 'email-signup');
+    await page.getByLabel('Password', { exact: true }).fill('123456');
+    await page.getByLabel('Confirm password', { exact: true }).fill('123456');
     await page
       .getByRole('button', { name: 'Create Account', exact: true })
       .click();
@@ -1068,16 +1173,20 @@ for (const width of [1280, 390])
       page.getByRole('heading', { name: 'Set a new password' })
     ).toBeVisible();
     await shot(page, 'signon-16-reset-password', width);
-    await page
-      .getByLabel('New password', { exact: true })
-      .fill('new-local-password');
+    await passwordErrors(page, width, 'reset', true);
+    await page.getByLabel('New password', { exact: true }).fill('654321');
     await page
       .getByLabel('Confirm new password', { exact: true })
-      .fill('new-local-password');
+      .fill('654321');
     await page
       .getByRole('button', { name: 'Save password', exact: true })
       .click();
     await expect(page).toHaveURL(/\/app\/my-classes$/);
+    const changed = await db.password.findUniqueOrThrow({
+      where: { userId: user.id },
+    });
+    expect(await bcrypt.compare('654321', changed.hash)).toBe(true);
+    expect(await bcrypt.compare('123456', changed.hash)).toBe(false);
   });
 test('flag off retains live legacy login, signup, class links, and direct callback gates', async ({
   page,
@@ -1172,6 +1281,21 @@ test('local rollout rollback restores legacy views and blocks an in-flight reset
       await page.mouse.move(0, 0);
       await shot(page, `flag-off-before-${name}`, width);
     }
+    await page.goto('/auth/login');
+    await page.waitForFunction(() =>
+      Boolean((window as any).__reactRouterDataRouter)
+    );
+    await page.getByLabel('Email or handle', { exact: true }).fill(address);
+    await page.getByLabel('Password', { exact: true }).fill('short');
+    await page.getByRole('button', { name: 'Log in', exact: true }).click();
+    await expect(
+      page.getByText('Password is too short', { exact: true })
+    ).toBeVisible();
+    await shot(
+      page,
+      `flag-off-legacy-password-error-${process.env.SIGNON_VALIDATION_PHASE || 'after'}`,
+      width
+    );
     await db.setting.create({
       data: {
         name: flag,

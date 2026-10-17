@@ -1,0 +1,56 @@
+[
+  {
+    "width": 1280,
+    "state": "generated-handle",
+    "sourceArtboard": "signon-38-new-student-free-tier-class-handle-all-states",
+    "sourceState": "Field errors",
+    "testedHead": "9f6e16667",
+    "implementationState": "short password and mismatch, real client and server",
+    "intendedDifference": "Merged #577 generated handles override old editable handle layout"
+  },
+  {
+    "width": 1280,
+    "state": "email-signup",
+    "sourceArtboard": "signon-16-set-name-amp-password-all-states",
+    "sourceState": "Field errors",
+    "testedHead": "9f6e16667",
+    "implementationState": "short password and mismatch, real client and server",
+    "intendedDifference": "Placeholder [8] resolved to actual minimum 6"
+  },
+  {
+    "width": 1280,
+    "state": "reset",
+    "sourceArtboard": "signon-16-set-name-amp-password-all-states",
+    "sourceState": "After forgot password (raw default)",
+    "testedHead": "9f6e16667",
+    "implementationState": "short password and mismatch, real client and server",
+    "intendedDifference": "No supplied reset-error artboard; compare raw default plus signon-02 copy"
+  },
+  {
+    "width": 390,
+    "state": "generated-handle",
+    "sourceArtboard": "signon-38-new-student-free-tier-class-handle-all-states",
+    "sourceState": "Field errors",
+    "testedHead": "9f6e16667",
+    "implementationState": "short password and mismatch, real client and server",
+    "intendedDifference": "Merged #577 generated handles override old editable handle layout"
+  },
+  {
+    "width": 390,
+    "state": "email-signup",
+    "sourceArtboard": "signon-16-set-name-amp-password-all-states",
+    "sourceState": "Field errors",
+    "testedHead": "9f6e16667",
+    "implementationState": "short password and mismatch, real client and server",
+    "intendedDifference": "Placeholder [8] resolved to actual minimum 6"
+  },
+  {
+    "width": 390,
+    "state": "reset",
+    "sourceArtboard": "signon-16-set-name-amp-password-all-states",
+    "sourceState": "After forgot password (raw default)",
+    "testedHead": "9f6e16667",
+    "implementationState": "short password and mismatch, real client and server",
+    "intendedDifference": "No supplied reset-error artboard; compare raw default plus signon-02 copy"
+  }
+]

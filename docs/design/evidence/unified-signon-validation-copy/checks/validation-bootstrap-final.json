@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "project.bootstrap/v1",
+  "status": "ready",
+  "fresh": false,
+  "ports": {
+    "app": 6278,
+    "database": 55578,
+    "e2e": null
+  },
+  "container": "yawp-di-signon-fix-handle-validation-copy-967072bef9fa-postgres",
+  "nextCommands": [
+    "./bin/project fixture verify local-dev --json",
+    "./bin/project dev start --json"
+  ]
+}
