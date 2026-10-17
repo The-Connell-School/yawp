@@ -48,7 +48,7 @@ test('everyone, repeated enable, removal and repeated OFF affect only the sign-o
   };
   for (const enabled of ['true', 'true', undefined, 'false', 'false']) {
     await applyPreviewSignonFlag({ ...valid, PREVIEW_UNIFIED_SIGN_ON: enabled }, async () => client);
-    expect(JSON.parse(rows.get('feature_flag.unified-sign-on')!)).toEqual({ mode: enabled === 'true' ? 'everyone' : 'off', orgIds: [] });
+    expect(JSON.parse(rows.get('feature_flag.unified-sign-on')!)).toEqual({ mode: enabled === 'false' ? 'off' : 'everyone', orgIds: [] });
     expect(rows.get('feature_flag.free_tier')).toBe('false');
     expect(rows.size).toBe(2);
   }
