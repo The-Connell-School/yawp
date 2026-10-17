@@ -157,6 +157,40 @@ suite('Faculty Lounge launch features against the database', () => {
 
     const lessons = (await lounge.listLoungeUnpublished()).find((p) => p.id === idFor('hopper:lessons-learned'));
     expect(lessons).toMatchObject({ draft: true, hasPlaceholders: true });
+
+    // The Letter look: Brian's answer previews under a question that is all title.
+    const feedRows = (await lounge.listLoungePosts(maria(), { sort: 'new' })).posts;
+    const q1Row = feedRows.find((p) => p.id === idFor('launch:q1-routine'));
+    expect(q1Row?.preview).toStartWith('Use the Class Starter to build reps.');
+    expect(q1Row?.answeredBy).toBe('Brian');
+    expect(q1Row?.avatar).toMatchObject({ initials: 'BC', isStaff: true });
+    const wins = feedRows.find((p) => p.id === idFor('launch:wins'));
+    expect(wins).toMatchObject({ preview: expect.stringContaining('Share a sample of student work'), answeredBy: null });
+
+    const [welcome] = (await lounge.listPinnedLoungePosts(maria())).filter((p) => p.id === idFor('launch:welcome'));
+    expect(welcome.excerpt).toStartWith("Every school's faculty lounge has its own personality");
+    expect(welcome.author).toEqual({ name: 'Brian Connell', detail: 'YAWP! team' });
+    expect(welcome.avatar).toMatchObject({ initials: 'BC', isStaff: true });
+
+    const thread = await lounge.getLoungeThread(maria(), idFor('launch:q1-routine'));
+    expect(thread?.staffReplies[0].avatar).toMatchObject({ initials: 'BC', isStaff: true });
+  });
+
+  test('the team block lists YAWP! team members who have posted, and topic counts match the feed', async () => {
+    const quiet = await makeUser('Quiet Admin', true);
+    const team = await lounge.listLoungeTeam();
+    expect(team.map((m) => m.name)).toContain('Brian Connell');
+    expect(team.map((m) => m.userId)).not.toContain(quiet);
+    expect(team.length).toBeLessThanOrEqual(6);
+    expect(team.find((m) => m.userId === ids.brian)?.avatar).toMatchObject({ initials: 'BC', isStaff: true });
+    await prisma.orgMembership.deleteMany({ where: { userId: quiet } });
+    await prisma.user.delete({ where: { id: quiet } });
+
+    const counts = await lounge.listLoungeTopicCounts(maria());
+    const routines = counts.find((c) => c.topic === 'classroom-routines');
+    expect(routines?.label).toBe('Classroom Routines');
+    expect(routines?.count).toBeGreaterThanOrEqual(2);
+    for (let i = 1; i < counts.length; i++) expect(counts[i].count).toBeLessThanOrEqual(counts[i - 1].count);
   });
 
   test('teachers cannot schedule or draft; their posts go live now', async () => {

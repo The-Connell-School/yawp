@@ -19,6 +19,7 @@ import { loungeTopicLabel, type LoungePostKindKey } from './topics';
 import type { LoungePostInput, LoungeReplyInput } from './validation';
 import { baseVideoContentType, type LoungeVideo } from './video';
 import { hasPlaceholderText, type LoungeSchedule } from './launch';
+import { avatarToneFor, firstNameOf, initialsFor, previewFor } from './avatar';
 
 export type CreateLoungePostInput = LoungePostInput & {
   /** One of the author's own assignments to share, frozen at post time. */
@@ -48,6 +49,19 @@ export class LoungePlaceholderError extends Error {
 export type LoungeViewer = { userId: string; isStaff: boolean };
 export type LoungeSort = 'new' | 'top' | 'unanswered';
 export type LoungeByline = { name: string; detail: string | null };
+
+/** Initials in a circle: the YAWP! team in ink, everyone else in a stable tone. */
+export type LoungeAvatar = { initials: string; tone: string; isStaff: boolean };
+
+const LOUNGE_STAFF_TONE = '#2A2824';
+
+function avatarOf(author: { id: string; name: string | null; isAdmin: boolean }): LoungeAvatar {
+  return {
+    initials: initialsFor(author.name),
+    tone: author.isAdmin ? LOUNGE_STAFF_TONE : avatarToneFor(author.id),
+    isStaff: author.isAdmin,
+  };
+}
 
 export class LoungeNotFoundError extends Error {
   constructor() {
@@ -154,7 +168,13 @@ function summarySelect(viewer: LoungeViewer) {
     authorUserId: true,
     author: { select: authorSelect },
     organization: { select: { name: true } },
-    replies: { where: { ...liveReply, isStaff: true }, select: { id: true, videoKey: true }, take: 5 },
+    body: true,
+    replies: {
+      where: { ...liveReply, isStaff: true },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, videoKey: true, body: true, author: { select: { name: true } } },
+      take: 5,
+    },
     votes: { where: { userId: viewer.userId }, select: { id: true }, take: 1 },
     _count: { select: { replies: { where: liveReply }, votes: true } },
     videoKey: true,
@@ -196,6 +216,11 @@ export type LoungePostSummary = {
   isUnpublished: boolean;
   isDraft: boolean;
   attachment: { id: string; title: string; typeTitle: string; useCount: number } | null;
+  avatar: LoungeAvatar;
+  /** One line for the feed: the YAWP! team's first answer, else the post body. */
+  preview: string | null;
+  /** First name of whoever on the YAWP! team answered first. */
+  answeredBy: string | null;
 };
 
 function toSummary(row: SummaryRow, viewer: LoungeViewer): LoungePostSummary {
@@ -220,6 +245,9 @@ function toSummary(row: SummaryRow, viewer: LoungeViewer): LoungePostSummary {
     isEdited: row.editedAt !== null && row.editedAt > row.createdAt,
     isUnpublished: row.draft || row.createdAt.getTime() > Date.now(),
     isDraft: row.draft,
+    avatar: avatarOf(row.author),
+    preview: previewFor({ body: row.body, staffReplyBody: row.replies[0]?.body ?? null }),
+    answeredBy: row.replies[0] ? firstNameOf(row.replies[0].author.name) : null,
     attachment: row.attachment
       ? {
           id: row.attachment.id,
@@ -330,6 +358,7 @@ export type LoungeReplyView = {
   isOwn: boolean;
   isHidden: boolean;
   isEdited: boolean;
+  avatar: LoungeAvatar;
 };
 
 export type LoungeShareDetail = {
@@ -439,6 +468,7 @@ export async function getLoungeThread(
     isOwn: reply.authorUserId === viewer.userId,
     isHidden: reply.hiddenAt !== null,
     isEdited: reply.editedAt !== null,
+    avatar: avatarOf(reply.author),
   }));
   return {
     post: {
@@ -1235,7 +1265,11 @@ export async function getSharePromptForViewer(
 
 export type LoungePinnedPost = {
   id: string;
+  kind: LoungePostKindKey;
   title: string;
+  excerpt: string;
+  author: LoungeByline;
+  avatar: LoungeAvatar;
   authorFirstName: string;
   authorIsStaff: boolean;
   replyCount: number;
@@ -1256,22 +1290,82 @@ export async function listPinnedLoungePosts(
     take: MAX_PINNED,
     select: {
       id: true,
+      kind: true,
       title: true,
+      body: true,
       videoKey: true,
       videoDurationSeconds: true,
-      author: { select: { name: true, isAdmin: true } },
+      author: { select: authorSelect },
+      organization: { select: { name: true } },
       _count: { select: { replies: { where: liveReply } } },
     },
   });
   return rows.map((row) => ({
     id: row.id,
+    kind: row.kind,
     title: row.title,
-    authorFirstName: (row.author.name ?? '').trim().split(/\s+/)[0] || 'the YAWP! team',
+    excerpt: excerptOf(row.body),
+    author: bylineFor(row.author, row.organization?.name, row.author.isAdmin),
+    avatar: avatarOf(row.author),
+    authorFirstName: firstNameOf(row.author.name) ?? 'the YAWP! team',
     authorIsStaff: row.author.isAdmin,
     replyCount: row._count.replies,
     videoDurationSeconds: row.videoDurationSeconds,
     hasVideo: row.videoKey !== null,
   }));
+}
+
+export type LoungeTeamMember = { userId: string; name: string; avatar: LoungeAvatar };
+
+const MAX_TEAM = 6;
+
+/**
+ * The YAWP! team as teachers see it in the Lounge: admins who have posted or
+ * replied (live, not hidden), most recently active first. Admins who have
+ * never written anything here stay out of the block.
+ */
+export async function listLoungeTeam(): Promise<LoungeTeamMember[]> {
+  const live = { deletedAt: null, hiddenAt: null };
+  const users = await prisma.user.findMany({
+    where: {
+      isAdmin: true,
+      OR: [
+        { loungePosts: { some: { ...live, draft: false, createdAt: { lte: new Date() } } } },
+        { loungeReplies: { some: live } },
+      ],
+    },
+    select: {
+      id: true,
+      name: true,
+      isAdmin: true,
+      loungePosts: { where: live, orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } },
+      loungeReplies: { where: live, orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } },
+    },
+    take: 50,
+  });
+  const lastActive = (user: (typeof users)[number]) =>
+    Math.max(user.loungePosts[0]?.createdAt.getTime() ?? 0, user.loungeReplies[0]?.createdAt.getTime() ?? 0);
+  return users
+    .sort((a, b) => lastActive(b) - lastActive(a))
+    .slice(0, MAX_TEAM)
+    .map((user) => ({ userId: user.id, name: user.name?.trim() || 'YAWP! team', avatar: avatarOf(user) }));
+}
+
+export type LoungeTopicCount = { topic: string; label: string; count: number };
+
+/** Live posts the viewer can see, per topic, busiest first. */
+export async function listLoungeTopicCounts(
+  viewer: LoungeViewer,
+  now: Date = new Date()
+): Promise<LoungeTopicCount[]> {
+  const groups = await prisma.loungePost.groupBy({
+    by: ['topic'],
+    where: feedWhere(viewer, null, now),
+    _count: { _all: true },
+  });
+  return groups
+    .map((group) => ({ topic: group.topic, label: loungeTopicLabel(group.topic), count: group._count._all }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
 export async function setLoungePostPinned(
