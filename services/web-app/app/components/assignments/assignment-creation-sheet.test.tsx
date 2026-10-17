@@ -1640,6 +1640,77 @@ describe('platform enhancements form compatibility', () => {
       expect(forms[1]).toEqual(forms[0]);
     });
   }
+  for (const editing of [false, true]) {
+    it.each([
+      { value: '0', dailyPages: false, minimum: 1 },
+      { value: '1001', dailyPages: false, minimum: 1 },
+      { value: '1.5', dailyPages: false, minimum: 1 },
+      { value: '4', dailyPages: true, minimum: 5 },
+    ])(`reveals invalid Points on ${editing ? 'Save Changes' : 'Create'}: %j`, ({ value, dailyPages, minimum }) => {
+      ({ root } = renderSheet({
+        platformEnhancementsEnabled: true,
+        fixedClassId: 'class-1',
+        fixedAssignmentTypeId: 'type-1',
+        initialAssignmentTypeId: 'type-1',
+        initialPrompt: 'Write about a problem.',
+        initialTitle: 'Assignment',
+        editingAssignment: editing ? { id: 'existing' } : undefined,
+        assignmentTypes: dailyPages ? [{
+          ...assignmentTypes[0],
+          kind: null,
+          rubricName: 'daily-pages-engagement',
+        }] : assignmentTypes,
+      }));
+      const toggle = controlById('assignment-create-advanced-toggle');
+      act(() => toggle.click());
+      const points = inputByName('pointValue');
+      act(() => {
+        points.value = value;
+        const key = Object.keys(points).find((key) => key.startsWith('__reactProps$'))!;
+        (points as any)[key].onChange({ target: points });
+      });
+      act(() => toggle.click());
+      expect(controlById('assignment-create-advanced-content').hidden).toBe(true);
+      expect(points.min).toBe(String(minimum));
+      expect(points.max).toBe('1000');
+      expect(points.step).toBe('1');
+      const form = document.querySelector('form')!;
+      const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+      expect(submit.disabled).toBe(false);
+      let submitted = false;
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        submitted = true;
+      });
+      act(() => submit.click());
+      expect(submitted).toBe(false);
+      expect(controlById('assignment-create-advanced-content').hidden).toBe(false);
+      expect(document.activeElement).toBe(points);
+      const error = document.getElementById(points.getAttribute('aria-describedby')!);
+      expect(error?.getAttribute('role')).toBe('alert');
+      expect(error?.textContent).toBe(`Enter a whole number of points from ${minimum} to 1000.`);
+      expect(points.getAttribute('aria-invalid')).toBe('true');
+      expect(inputByName('pointValue')).toBe(points);
+      act(() => {
+        points.value = '100';
+        const key = Object.keys(points).find((key) => key.startsWith('__reactProps$'))!;
+        (points as any)[key].onChange({ target: points });
+      });
+      expect(document.querySelector('[role="alert"]')).toBeNull();
+      expect(points.hasAttribute('aria-invalid')).toBe(false);
+      act(() => submit.click());
+      expect(submitted).toBe(true);
+      expect(new FormData(form).get('pointValue')).toBe('100');
+    });
+  }
+  it('matches the origin/main expanded legacy grading panel DOM', async () => {
+    // Captured from 718aae289b1887f0246a8443f2a973ca39784f26 with the same
+    // renderSheet props and tooltip mock. Keep whitespace nodes significant.
+    ({ root } = renderSheet({ fixedClassId: 'class-1', initialPrompt: 'Write.' }));
+    act(() => controlById('assignment-create-change-grading').click());
+    const baseline = await Bun.file(new URL('./__fixtures__/legacy-grading-panel.html', import.meta.url)).text();
+    expect(controlById('assignment-create-grading-panel').outerHTML).toBe(baseline);
+  });
   it('summarizes live settings and keeps switched-off false fallbacks', () => {
     ({ root } = renderSheet({
       platformEnhancementsEnabled: true,

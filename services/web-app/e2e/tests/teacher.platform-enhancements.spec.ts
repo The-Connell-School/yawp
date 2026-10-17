@@ -145,6 +145,8 @@ test.describe('Platform enhancements', () => {
       await expect(
         sheet.getByRole('switch', { name: 'Tutor', exact: true })
       ).toBeVisible();
+      const points = sheet.getByRole('spinbutton', { name: 'Points', exact: true });
+      await points.fill('0');
       await advanced.click();
       expect(
         await sheet.evaluate(
@@ -157,6 +159,17 @@ test.describe('Platform enhancements', () => {
       await sheet.locator('[id^="assignment-create-class-"]').first().click();
       const title = `Platform enhancements ${width} ${Date.now()}`;
       await sheet.getByLabel('Title', { exact: true }).fill(title);
+      await sheet
+        .getByRole('button', { name: 'Create assignment', exact: true })
+        .click();
+      await expect(advanced).toHaveAttribute('aria-expanded', 'true');
+      await expect(points).toBeVisible();
+      await expect(points).toBeFocused();
+      await expect(sheet.getByRole('alert')).toHaveText(
+        'Enter a whole number of points from 1 to 1000.'
+      );
+      await points.fill('100');
+      await expect(sheet.getByRole('alert')).toHaveCount(0);
       await sheet
         .getByRole('button', { name: 'Create assignment', exact: true })
         .click();
