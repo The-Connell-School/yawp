@@ -35,6 +35,13 @@ async function shot(page: Page, name: string) {
     animations: 'disabled',
   });
 }
+// Each flow owns its approval precondition, including after an interrupted run.
+test.beforeEach(async () => {
+  await db.freeTierApplication.updateMany({
+    where: { organizationId: org },
+    data: { status: 'APPROVED' },
+  });
+});
 test.afterAll(async () => {
   await flag('free-tier-onboarding-v2', false);
   await db.$disconnect();
@@ -192,7 +199,7 @@ for (const control of ['flag-off', 'untargeted', 'paid', 'pending'] as const)
       });
     try {
       if (control === 'pending') {
-        // The baseline parent gate redirects pending teachers before rendering their dashboard.
+        // Main denies the dashboard and opens the server-enforced locked preview.
         await page.context().clearCookies();
         await page.goto('/auth/login');
         await page.waitForLoadState('networkidle');
@@ -201,7 +208,7 @@ for (const control of ['flag-off', 'untargeted', 'paid', 'pending'] as const)
           .fill('dev.teacher.free@yawp.local');
         await page.locator('input[type="password"]').fill('yawp-dev');
         await page.getByRole('button', { name: /Log in/i }).click();
-        await page.waitForURL(/\/app\/free-tier\/pending/);
+        await page.waitForURL(/\/app\/free-tier\/preview/);
       } else await login(page, control !== 'paid');
       await expect(
         page.getByRole('link', { name: 'Ready for full access?' })
@@ -528,7 +535,38 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
         requestId: crypto.randomUUID(),
       },
     });
-    expect(denied.status()).toBe(404);
+    expect(denied.status()).toBe(403);
+    expect(await denied.json()).toMatchObject({ error: 'approval_required' });
+    // Existing conversations and repeated streamed calls cannot bypass the lock.
+    const usageBefore = await db.setting.findMany({
+      where: { name: { startsWith: 'free_tier.monthly.' } },
+      orderBy: { name: 'asc' },
+    });
+    const messagesBefore = await db.reporterMessage.count({
+      where: { conversationId: saved.id },
+    });
+    const pendingRequestId = crypto.randomUUID();
+    for (let attempt = 0; attempt < 2; attempt++) {
+      for (const route of ['lesson-planner', 'reporter']) {
+        const response = await page.request.post(`/api/domain/${route}`, {
+          form: {
+            message: 'Pending saved conversation retry',
+            conversationId: saved.id,
+            requestId: pendingRequestId,
+            stream: '1',
+          },
+        });
+        expect(response.status()).toBe(403);
+        expect(await response.json()).toMatchObject({ error: 'approval_required' });
+      }
+    }
+    expect(await db.reporterMessage.count({
+      where: { conversationId: saved.id },
+    })).toBe(messagesBefore);
+    expect(await db.setting.findMany({
+      where: { name: { startsWith: 'free_tier.monthly.' } },
+      orderBy: { name: 'asc' },
+    })).toEqual(usageBefore);
   } finally {
     await db.freeTierApplication.updateMany({
       where: { organizationId: org },
