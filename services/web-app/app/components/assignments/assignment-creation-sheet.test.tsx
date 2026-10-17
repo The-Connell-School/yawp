@@ -1016,6 +1016,50 @@ describe('AssignmentCreationSheetContent', () => {
     }
   );
 
+  it.each([false, true])(
+    'pins the header and footer around one scrolling body only when enhanced (enhanced=%s)',
+    (enabled) => {
+      root = renderSheet({
+        entryPoint: 'assignment-type',
+        fixedAssignmentTypeId: 'type-1',
+        platformEnhancementsEnabled: enabled,
+        renderSheet: true,
+      }).root;
+
+      const dialog = document.querySelector('[role="dialog"]') as HTMLElement;
+      const header = document.querySelector(
+        '[data-testid="assignment-sheet-header"]'
+      );
+      const body = document.querySelector(
+        '[data-testid="assignment-sheet-body"]'
+      );
+      const footer = document.querySelector(
+        '[data-testid="assignment-sheet-footer"]'
+      );
+      if (!enabled) {
+        expect(header).toBeNull();
+        expect(body).toBeNull();
+        expect(footer).toBeNull();
+        expect(dialog.className).toContain('overflow-y-auto');
+        expectText('New Assignment');
+        return;
+      }
+      // An opaque cream surface: a translucent tint lets the overlay dim it.
+      expect(dialog.className).toContain('bg-background');
+      expect(dialog.className).not.toMatch(/bg-[a-z-]+\/\d+/);
+      expect(dialog.className).toContain('[--input-background:var(--popover)]');
+      expect(dialog.className).toContain('overflow-hidden');
+      expect(header?.textContent).toContain('New assignment');
+      expect(
+        body?.contains(document.getElementById('assignment-create-title'))
+      ).toBe(true);
+      expect(body?.contains(footer as Node)).toBe(false);
+      expect(footer?.querySelector('button[type="submit"]')?.textContent).toBe(
+        'Create assignment'
+      );
+    }
+  );
+
   it('requires at least five points for SJP Daily Pages (null kind, engagement rubric)', () => {
     root = renderSheet({
       entryPoint: 'assignment-type',

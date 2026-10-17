@@ -61,6 +61,8 @@ test.describe('Platform enhancements', () => {
       await expect(
         sheet.getByRole('button', { name: 'Change', exact: true })
       ).toBeVisible();
+      await expect(sheet.getByTestId('assignment-sheet-body')).toHaveCount(0);
+      await expect(sheet.getByTestId('assignment-sheet-header')).toHaveCount(0);
     });
 
     test(`regroups the sheet, creates work and pages filtered prompts (${width}px)`, async ({
@@ -145,6 +147,47 @@ test.describe('Platform enhancements', () => {
       await expect(
         sheet.getByRole('switch', { name: 'Tutor', exact: true })
       ).toBeVisible();
+      // The panel is an opaque surface the overlay never tints, fields are
+      // white inside white cards, and only the body scrolls.
+      const surface = await sheet.evaluate((element) => {
+        const alpha = (color: string) => {
+          const match = color.match(/rgba?\(([^)]+)\)/);
+          const parts = match ? match[1].split(/[ ,/]+/).filter(Boolean) : [];
+          return parts.length > 3 ? Number(parts[3]) : 1;
+        };
+        const title = element.querySelector<HTMLElement>(
+          '#assignment-create-title, input[name="title"]'
+        );
+        const card = title?.closest('section');
+        return {
+          sheetAlpha: alpha(getComputedStyle(element).backgroundColor),
+          titleBackground: title ? getComputedStyle(title).backgroundColor : '',
+          cardBackground: card ? getComputedStyle(card).backgroundColor : '',
+        };
+      });
+      expect(surface.sheetAlpha).toBe(1);
+      expect(surface.titleBackground).toBe(surface.cardBackground);
+      const body = sheet.getByTestId('assignment-sheet-body');
+      await body.evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+      });
+      expect(
+        await body.evaluate((element) => element.scrollTop)
+      ).toBeGreaterThan(0);
+      await expect(
+        sheet
+          .getByTestId('assignment-sheet-header')
+          .getByRole('heading', { name: 'New assignment', exact: true })
+      ).toBeInViewport({ ratio: 1 });
+      await expect(
+        sheet.getByRole('button', { name: 'Close', exact: true })
+      ).toBeInViewport({ ratio: 1 });
+      await expect(sheet.getByTestId('assignment-sheet-footer')).toBeInViewport(
+        {
+          ratio: 1,
+        }
+      );
+      expect(await sheet.evaluate((element) => element.scrollTop)).toBe(0);
       const points = sheet.getByRole('spinbutton', {
         name: 'Points',
         exact: true,

@@ -479,6 +479,33 @@ export function initialGradingFor({
   };
 }
 
+/**
+ * Flag-on sheet surface: an opaque cream panel (never a translucent tint the
+ * overlay shows through), white fields inside the white cards, and a column
+ * whose header and footer stay put while the body scrolls.
+ */
+export const PLATFORM_SHEET_SURFACE_CLASS_NAME =
+  'flex w-full flex-col gap-0 overflow-hidden bg-background p-0 sm:max-w-2xl [--input-background:var(--popover)]';
+
+/** Scrolling body between the pinned header and footer; a plain fragment otherwise. */
+function PinnedSheetBody({
+  enabled,
+  children,
+}: {
+  enabled: boolean;
+  children: ReactNode;
+}) {
+  if (!enabled) return <>{children}</>;
+  return (
+    <div
+      data-testid="assignment-sheet-body"
+      className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6"
+    >
+      {children}
+    </div>
+  );
+}
+
 export function AssignmentCreationSheet({
   ...props
 }: AssignmentCreationSheetProps) {
@@ -1085,14 +1112,31 @@ export function AssignmentCreationSheetContent({
     (titleRequired && !title.trim()) ||
     (submitForGrade && !pointValue.trim());
 
-  const headingText = isEditing ? 'Edit Assignment' : 'New Assignment';
+  const headingText = platformEnhancementsEnabled
+    ? isEditing
+      ? 'Edit assignment'
+      : 'New assignment'
+    : isEditing
+      ? 'Edit Assignment'
+      : 'New Assignment';
   const headingDescription = isEditing
     ? 'Update this assignment. Students keep the documents they have already started.'
     : 'Create an assignment for one or more of your classes.';
 
+  // Flag on, inside the sheet: header and footer stay pinned and only the
+  // body between them scrolls.
+  const pinnedSheetLayout = platformEnhancementsEnabled && renderSheet;
+
   const header = renderSheet ? (
     <SheetHeader
-      className={platformEnhancementsEnabled ? 'text-left' : undefined}
+      data-testid={pinnedSheetLayout ? 'assignment-sheet-header' : undefined}
+      className={
+        pinnedSheetLayout
+          ? 'shrink-0 space-y-1 border-b bg-background px-4 pb-4 pt-5 pr-12 text-left sm:px-6'
+          : platformEnhancementsEnabled
+            ? 'text-left'
+            : undefined
+      }
     >
       <SheetTitle>{headingText}</SheetTitle>
       <SheetDescription>{headingDescription}</SheetDescription>
@@ -1924,7 +1968,7 @@ export function AssignmentCreationSheetContent({
                       </Label>
                       <select
                         id="assignment-create-read-level"
-                        className="h-10 w-full rounded-md border border-border/60 bg-background px-2 text-sm"
+                        className="h-10 w-full rounded-md border border-border/60 bg-input-background px-2 text-sm"
                         value={gradingAssistantStrictnessLevel}
                         disabled={isSaving}
                         onChange={(event) =>
@@ -2305,7 +2349,9 @@ export function AssignmentCreationSheetContent({
         method="post"
         action={formAction}
         encType="multipart/form-data"
-        className="mt-6 space-y-4"
+        className={
+          pinnedSheetLayout ? 'flex min-h-0 flex-1 flex-col' : 'mt-6 space-y-4'
+        }
         onInvalidCapture={
           platformEnhancementsEnabled
             ? (event: React.FormEvent<HTMLFormElement>) => {
@@ -2330,91 +2376,131 @@ export function AssignmentCreationSheetContent({
           if (isSubmitDisabled) event.preventDefault();
         }}
       >
-        <input
-          type="hidden"
-          name="intent"
-          value={isEditing ? 'update-assignment' : 'create-assignment'}
-        />
-        <input type="hidden" name="assignmentTypeId" value={assignmentTypeId} />
-
-        {editingAssignment ? (
+        <PinnedSheetBody enabled={pinnedSheetLayout}>
           <input
             type="hidden"
-            name="assignmentId"
-            value={editingAssignment.id}
+            name="intent"
+            value={isEditing ? 'update-assignment' : 'create-assignment'}
           />
-        ) : hasFixedClass ? (
           <input
             type="hidden"
-            name={usesBulkCreateApi ? 'classIds' : 'classId'}
-            value={fixedClassId}
+            name="assignmentTypeId"
+            value={assignmentTypeId}
           />
-        ) : (
-          selectedClassIds.map((id) => (
-            <input key={id} type="hidden" name="classIds" value={id} />
-          ))
-        )}
 
-        {platformEnhancementsEnabled ? (
-          <>
-            <section className="space-y-4 rounded-xl border border-border/60 bg-popover p-4 sm:p-5">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Basics
-              </h3>
-              {basicsFields}
-            </section>
-            <section className="space-y-4 rounded-xl border border-border/60 bg-popover p-4 sm:p-5">
-              {isExitTicket ? (
+          {editingAssignment ? (
+            <input
+              type="hidden"
+              name="assignmentId"
+              value={editingAssignment.id}
+            />
+          ) : hasFixedClass ? (
+            <input
+              type="hidden"
+              name={usesBulkCreateApi ? 'classIds' : 'classId'}
+              value={fixedClassId}
+            />
+          ) : (
+            selectedClassIds.map((id) => (
+              <input key={id} type="hidden" name="classIds" value={id} />
+            ))
+          )}
+
+          {platformEnhancementsEnabled ? (
+            <>
+              <section className="space-y-4 rounded-xl border border-border/60 bg-popover p-4 sm:p-5">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Prompt
+                  Basics
                 </h3>
-              ) : null}
-              {promptFields}
-              {attachmentFields}
-            </section>
-            <section className="rounded-xl border border-border/60 bg-popover">
-              <button
-                id="assignment-create-advanced-toggle"
-                type="button"
-                className="flex w-full items-start justify-between gap-3 p-4 text-left sm:p-5"
-                aria-expanded={advancedOpen}
-                aria-controls="assignment-create-advanced-content"
-                onClick={() => setAdvancedOpen((value) => !value)}
-              >
-                <span className="min-w-0">
-                  <span className="font-semibold">Advanced</span>
-                  <span
-                    data-testid="advanced-summary"
-                    className="mt-1 block text-xs text-muted-foreground"
-                  >
-                    {advancedSummary}
-                  </span>
-                </span>
-                <span className="text-sm text-muted-foreground">
-                  {advancedOpen ? 'Hide' : 'Show'}
-                </span>
-              </button>
-              <div
-                id="assignment-create-advanced-content"
-                hidden={!advancedOpen}
-                className="space-y-4 border-t p-4 sm:p-5"
-              >
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Grading
-                </h4>
-                {gradingFields}
-                {grammarFields}
-                <h4 className="border-t pt-5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  While students write
-                </h4>
-                {tutorFields}
-                {collaborationFields}
-                <MoreOptions
-                  enabled={isQuickExitTicket}
-                  open={moreOptionsOpen}
-                  onOpenChange={setMoreOptionsOpen}
+                {basicsFields}
+              </section>
+              <section className="space-y-4 rounded-xl border border-border/60 bg-popover p-4 sm:p-5">
+                {isExitTicket ? (
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Prompt
+                  </h3>
+                ) : null}
+                {promptFields}
+                {attachmentFields}
+              </section>
+              <section className="rounded-xl border border-border/60 bg-popover">
+                <button
+                  id="assignment-create-advanced-toggle"
+                  type="button"
+                  className="flex w-full items-start justify-between gap-3 p-4 text-left sm:p-5"
+                  aria-expanded={advancedOpen}
+                  aria-controls="assignment-create-advanced-content"
+                  onClick={() => setAdvancedOpen((value) => !value)}
                 >
-                  {isQuickExitTicket ? (
+                  <span className="min-w-0">
+                    <span className="font-semibold">Advanced</span>
+                    <span
+                      data-testid="advanced-summary"
+                      className="mt-1 block text-xs text-muted-foreground"
+                    >
+                      {advancedSummary}
+                    </span>
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    {advancedOpen ? 'Hide' : 'Show'}
+                  </span>
+                </button>
+                <div
+                  id="assignment-create-advanced-content"
+                  hidden={!advancedOpen}
+                  className="space-y-4 border-t p-4 sm:p-5"
+                >
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Grading
+                  </h4>
+                  {gradingFields}
+                  {grammarFields}
+                  <h4 className="border-t pt-5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    While students write
+                  </h4>
+                  {tutorFields}
+                  {collaborationFields}
+                  <MoreOptions
+                    enabled={isQuickExitTicket}
+                    open={moreOptionsOpen}
+                    onOpenChange={setMoreOptionsOpen}
+                  >
+                    {isQuickExitTicket ? (
+                      <ExitTicketLessonNotesSection
+                        criteriaKeys={criteriaNoteKeys}
+                        lessonNotes={lessonNotes}
+                        onLessonNoteChange={(key, value) =>
+                          setLessonNotes((current) => ({
+                            ...current,
+                            [key]: value,
+                          }))
+                        }
+                        enabled={lessonNotesEnabled}
+                        onEnabledChange={setLessonNotesEnabled}
+                        disabled={isSaving}
+                      />
+                    ) : null}
+                  </MoreOptions>
+                  {savedFields}
+                </div>
+              </section>
+            </>
+          ) : (
+            <>
+              {basicsFields}
+              {attachmentFields}
+              {promptFields}
+              {gradingFields}
+              {/* The quick builder keeps a default exit ticket to one screen:
+            everything a teacher rarely changes waits in here, still posting
+            its value, until they open it. */}
+              <MoreOptions
+                enabled={isQuickExitTicket}
+                open={moreOptionsOpen}
+                onOpenChange={setMoreOptionsOpen}
+              >
+                {isQuickExitTicket ? (
+                  <div className="pt-4">
                     <ExitTicketLessonNotesSection
                       criteriaKeys={criteriaNoteKeys}
                       lessonNotes={lessonNotes}
@@ -2428,63 +2514,34 @@ export function AssignmentCreationSheetContent({
                       onEnabledChange={setLessonNotesEnabled}
                       disabled={isSaving}
                     />
-                  ) : null}
-                </MoreOptions>
-                {savedFields}
-              </div>
-            </section>
-          </>
-        ) : (
-          <>
-            {basicsFields}
-            {attachmentFields}
-            {promptFields}
-            {gradingFields}
-            {/* The quick builder keeps a default exit ticket to one screen:
-            everything a teacher rarely changes waits in here, still posting
-            its value, until they open it. */}
-            <MoreOptions
-              enabled={isQuickExitTicket}
-              open={moreOptionsOpen}
-              onOpenChange={setMoreOptionsOpen}
-            >
-              {isQuickExitTicket ? (
-                <div className="pt-4">
-                  <ExitTicketLessonNotesSection
-                    criteriaKeys={criteriaNoteKeys}
-                    lessonNotes={lessonNotes}
-                    onLessonNoteChange={(key, value) =>
-                      setLessonNotes((current) => ({
-                        ...current,
-                        [key]: value,
-                      }))
-                    }
-                    enabled={lessonNotesEnabled}
-                    onEnabledChange={setLessonNotesEnabled}
-                    disabled={isSaving}
-                  />
-                </div>
-              ) : null}
-              {tutorFields}
-              {grammarFields}
-              {collaborationFields}
-            </MoreOptions>
-            {savedFields}
-          </>
-        )}
-        {!submitForGrade ? (
-          <input type="hidden" name="pointValue" value="" />
-        ) : null}
+                  </div>
+                ) : null}
+                {tutorFields}
+                {grammarFields}
+                {collaborationFields}
+              </MoreOptions>
+              {savedFields}
+            </>
+          )}
+          {!submitForGrade ? (
+            <input type="hidden" name="pointValue" value="" />
+          ) : null}
 
-        {formError ? (
-          <p className="text-sm text-destructive">{formError}</p>
-        ) : null}
+          {formError ? (
+            <p className="text-sm text-destructive">{formError}</p>
+          ) : null}
+        </PinnedSheetBody>
 
         <div
+          data-testid={
+            pinnedSheetLayout ? 'assignment-sheet-footer' : undefined
+          }
           className={
-            platformEnhancementsEnabled
-              ? 'sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t bg-background px-4 py-3 sm:-mx-6 sm:px-6'
-              : 'flex items-center justify-end gap-2 pt-4'
+            pinnedSheetLayout
+              ? 'flex shrink-0 flex-wrap items-center justify-end gap-2 border-t bg-background px-4 py-3 sm:px-6'
+              : platformEnhancementsEnabled
+                ? 'sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t bg-background px-4 py-3 sm:-mx-6 sm:px-6'
+                : 'flex items-center justify-end gap-2 pt-4'
           }
         >
           {platformEnhancementsEnabled ? (
@@ -2547,7 +2604,7 @@ export function AssignmentCreationSheetContent({
       <SheetContent
         className={
           platformEnhancementsEnabled
-            ? 'w-full overflow-y-auto bg-muted/20 p-4 sm:max-w-2xl sm:p-6'
+            ? PLATFORM_SHEET_SURFACE_CLASS_NAME
             : 'w-full overflow-y-auto sm:max-w-2xl'
         }
       >
