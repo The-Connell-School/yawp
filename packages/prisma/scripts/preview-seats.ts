@@ -8,6 +8,7 @@ import {
   type LocalDevPersona,
 } from './local-dev/dev-personas';
 import { seedCollaborationDemoData } from './local-dev/seed-collaboration';
+import { seedEssayDemoData } from './local-dev/seed-essay-demo';
 import { seedSyntheticLocalDevData } from './local-dev/seed-synthetic-data';
 import { loadProdFidelityBundle } from './local-dev/import-prod-fidelity-fixtures';
 import {
@@ -244,6 +245,29 @@ export async function seedCollaborationDemoForSeat(
   if (seeded) {
     console.log(
       `Collaboration demo seeded for ${seat.label}: ${seeded.groupIds.length} groups, ${seeded.cohort.length} students.`
+    );
+  }
+
+  // The essay demo class: two thesis-driven essays with a graded class set
+  // each, for demoing the class summary away from the QA fixtures. Its own
+  // marker class makes it safe to run on every deploy; a failure here never
+  // blocks the rest of the seat.
+  try {
+    const essays = await seedEssayDemoData(prisma, {
+      organizationId: seat.organizationId,
+      schoolCode: seat.schoolCodes[0],
+      personas: seat.personas,
+      emailSuffix: seat.number === 1 ? '' : `.seat-${seat.number}`,
+    });
+    if (essays) {
+      console.log(
+        `Essay demo for ${seat.label}: ${essays.created ? 'created' : 'already present'}.`
+      );
+    }
+  } catch (error) {
+    console.warn(
+      `Essay demo seed failed for ${seat.label} (non-fatal):`,
+      error instanceof Error ? error.message : error
     );
   }
 
