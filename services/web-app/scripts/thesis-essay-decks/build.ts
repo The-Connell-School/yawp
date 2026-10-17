@@ -3,7 +3,8 @@
  *
  *   bun scripts/thesis-essay-decks/build.ts [outDir] [deck ...]
  *
- * Each deck is written with its lesson plan (`<deck>-lesson-plan.pdf`), plus
+ * Each deck is written as a .pptx and as the scene the on-site presenter
+ * draws (`<deck>.scene.json`), with its lesson plan (`<deck>-lesson-plan.pdf`), plus
  * the two Day 1 student handouts: sign-up and the sample essay. Defaults to
  * services/web-app/resources/thesis-essay-decks, where the app serves them
  * from (the Thesis-Driven Essay page's Modules), and all decks.
@@ -13,7 +14,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { DECKS } from './decks';
 import { LESSON_PLANS } from './lesson-plans';
-import { renderHybridDeck } from './render-hybrid-deck';
+import { renderDeckScene, renderHybridDeck } from './render-hybrid-deck';
 import { renderLessonPlan, renderSampleEssayHandout, renderSignUpHandout } from './render-lesson-plan';
 
 const [outArg, ...only] = process.argv.slice(2);
@@ -25,6 +26,9 @@ for (const { file, deck } of DECKS) {
   const path = join(outDir, `${file}.pptx`);
   writeFileSync(path, await renderHybridDeck(deck));
   console.log(`wrote ${path} (${deck.slides.length} slides)`);
+  const scenePath = join(outDir, `${file}.scene.json`);
+  writeFileSync(scenePath, `${JSON.stringify(renderDeckScene(deck))}\n`);
+  console.log(`wrote ${scenePath}`);
 
   // Its lesson plan, written from the same deck so its slide numbers match.
   const plan = LESSON_PLANS.find((candidate) => candidate.deck === file);

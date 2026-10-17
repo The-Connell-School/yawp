@@ -18,7 +18,8 @@ import type { LessonPlan, PlanStep, SlideSpan } from './lesson-plans';
 import { parseMarks, plain } from './render-hybrid-deck';
 import { SAMPLE_BODY, SAMPLE_CONCLUSION, SAMPLE_INTRODUCTION, SAMPLE_TITLE } from './sample-essay';
 
-const ASSETS = join(import.meta.dir, 'assets');
+/** Images and icons, shipped with the decks so the app can serve them to the presenter. */
+const ASSETS = join(import.meta.dir, '../../resources/thesis-essay-decks/assets');
 
 // ---------------------------------------------------------------------------
 // Slides, by title.

@@ -12,13 +12,21 @@
  * delete and add slides in PowerPoint or Google Slides.
  */
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import JSZip from 'jszip';
 import PptxGenJS from 'pptxgenjs';
+import type {
+  DeckScene,
+  SceneElement,
+  SceneParagraph,
+  SceneRun,
+  SceneSlide,
+} from '../../app/domain/thesis-essay-decks/deck-scene';
 import type { AssetImage, HybridDeck, HybridSlide } from './deck-types';
 import { type AccentColor, accentAt, HYBRID as T, type IconName } from './hybrid-theme';
 
-const ASSETS = join(import.meta.dir, 'assets');
+/** Images and icons, shipped with the decks so the app can serve them to the presenter. */
+const ASSETS = join(import.meta.dir, '../../resources/thesis-essay-decks/assets');
 
 /** Pixel sizes of the bundled images, for aspect ratios. */
 export const ASSET_SIZES: Record<AssetImage, { w: number; h: number }> = {
@@ -68,7 +76,11 @@ const BODY_TOP = 2.15;
 const BODY_BOTTOM = H - 0.85;
 const BODY_HEIGHT = BODY_BOTTOM - BODY_TOP;
 
-type PptxSlide = ReturnType<PptxGenJS['addSlide']>;
+/**
+ * What the layouts draw on: a pptxgenjs slide, or the scene recorder that
+ * writes the same calls down for the web (`renderDeckScene`).
+ */
+type PptxSlide = Pick<ReturnType<PptxGenJS['addSlide']>, 'addText' | 'addShape' | 'addImage' | 'addNotes' | 'background'>;
 type Box = { x: number; y: number; w: number; h: number };
 type TextRun = { text: string; options?: PptxGenJS.TextPropsOptions };
 
@@ -1592,8 +1604,7 @@ function addCloserSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: '
   }
 }
 
-function addSlide(pptx: PptxGenJS, spec: HybridSlide, index: number): void {
-  const slide = pptx.addSlide({ masterName: MASTER });
+function drawSlide(slide: PptxSlide, spec: HybridSlide, index: number): void {
   const accent = spec.accent ?? accentAt(index);
   switch (spec.layout) {
     case 'title':
@@ -1657,6 +1668,31 @@ function addSlide(pptx: PptxGenJS, spec: HybridSlide, index: number): void {
   slide.addNotes(spec.notes);
 }
 
+/** The wordmark at every slide's foot (on the PowerPoint master). */
+const WORDMARK: PptxGenJS.TextPropsOptions = {
+  x: MARGIN,
+  y: H - 0.55,
+  w: 2,
+  h: 0.35,
+  fontFace: T.serif,
+  fontSize: 11,
+  bold: true,
+  color: T.terracotta,
+  margin: 0,
+};
+
+/** The slide number opposite it. */
+const SLIDE_NUMBER = {
+  x: W - MARGIN - 0.6,
+  y: H - 0.55,
+  w: 0.6,
+  h: 0.35,
+  fontFace: T.mono,
+  fontSize: 10,
+  color: T.muted,
+  align: 'right' as const,
+};
+
 export async function renderHybridDeck(deck: HybridDeck): Promise<Uint8Array> {
   const pptx = new PptxGenJS();
   pptx.defineLayout(LAYOUT);
@@ -1668,40 +1704,143 @@ export async function renderHybridDeck(deck: HybridDeck): Promise<Uint8Array> {
   pptx.defineSlideMaster({
     title: MASTER,
     background: { color: T.cream },
-    objects: [
-      {
-        text: {
-          text: 'YAWP!',
-          options: {
-            x: MARGIN,
-            y: H - 0.55,
-            w: 2,
-            h: 0.35,
-            fontFace: T.serif,
-            fontSize: 11,
-            bold: true,
-            color: T.terracotta,
-            margin: 0,
-          },
-        },
-      },
-    ],
-    slideNumber: {
-      x: W - MARGIN - 0.6,
-      y: H - 0.55,
-      w: 0.6,
-      h: 0.35,
-      fontFace: T.mono,
-      fontSize: 10,
-      color: T.muted,
-      align: 'right',
-    },
+    objects: [{ text: { text: 'YAWP!', options: WORDMARK } }],
+    slideNumber: SLIDE_NUMBER,
   });
 
-  deck.slides.forEach((slide, index) => addSlide(pptx, slide, index));
+  deck.slides.forEach((slide, index) => drawSlide(pptx.addSlide({ masterName: MASTER }), slide, index));
 
   const written = await pptx.write({ outputType: 'nodebuffer' });
   return keepOnePPrPerParagraph(new Uint8Array(written as Buffer));
+}
+
+// ---------------------------------------------------------------------------
+// The web scene: the same drawing, written down instead of into a .pptx.
+
+type TextInput = string | TextRun[];
+
+/** Paragraphs the way PowerPoint gets them: a break after a run with `breakLine`, or at a newline. */
+function sceneParagraphs(input: TextInput): SceneParagraph[] {
+  const items: TextRun[] = typeof input === 'string' ? [{ text: input }] : input;
+  const paragraphs: SceneParagraph[] = [{ runs: [] }];
+  for (const item of items) {
+    const options = item.options ?? {};
+    const lines = item.text.split('\n');
+    lines.forEach((line, lineIndex) => {
+      if (lineIndex > 0) paragraphs.push({ runs: [] });
+      const paragraph = paragraphs[paragraphs.length - 1];
+      if (!paragraph.runs.length) {
+        if (options.bullet) paragraph.bullet = true;
+        if (options.paraSpaceAfter) paragraph.spaceAfter = options.paraSpaceAfter;
+      }
+      if (line) paragraph.runs.push(sceneRun(line, options));
+    });
+    if (options.breakLine) paragraphs.push({ runs: [] });
+  }
+  return paragraphs;
+}
+
+function sceneRun(text: string, options: PptxGenJS.TextPropsOptions): SceneRun {
+  const run: SceneRun = { text };
+  if (options.bold) run.bold = true;
+  if (options.italic) run.italic = true;
+  if (typeof options.color === 'string') run.color = options.color;
+  if (typeof options.highlight === 'string') run.highlight = options.highlight;
+  if (options.fontFace) run.fontFace = options.fontFace;
+  if (options.fontSize) run.fontSize = options.fontSize;
+  return run;
+}
+
+function box(options: { x?: unknown; y?: unknown; w?: unknown; h?: unknown }) {
+  return { x: Number(options.x), y: Number(options.y), w: Number(options.w), h: Number(options.h) };
+}
+
+function sceneText(input: TextInput, options: PptxGenJS.TextPropsOptions, master = false): SceneElement {
+  return {
+    kind: 'text',
+    ...box(options),
+    ...(master ? { master } : {}),
+    paragraphs: sceneParagraphs(input),
+    fontFace: options.fontFace,
+    fontSize: options.fontSize,
+    color: typeof options.color === 'string' ? options.color : undefined,
+    bold: options.bold || undefined,
+    italic: options.italic || undefined,
+    align: options.align as 'left' | 'center' | 'right' | undefined,
+    valign: options.valign as 'top' | 'middle' | 'bottom' | undefined,
+    lineSpacingMultiple: options.lineSpacingMultiple,
+    charSpacing: options.charSpacing,
+    rotate: options.rotate,
+  };
+}
+
+/** A stand-in slide that records what the layouts draw. */
+class SceneRecorder {
+  elements: SceneElement[] = [];
+  background: { color?: string } | undefined;
+  notes = '';
+
+  addText(input: TextInput, options: PptxGenJS.TextPropsOptions): this {
+    this.elements.push(sceneText(input, options));
+    return this;
+  }
+
+  addShape(shape: string, options: PptxGenJS.ShapeProps): this {
+    const fill = options.fill && 'color' in options.fill ? String(options.fill.color) : undefined;
+    const line =
+      options.line && options.line.width ? { color: String(options.line.color), width: Number(options.line.width) } : undefined;
+    const shadow = options.shadow
+      ? {
+          color: String(options.shadow.color ?? T.ink),
+          opacity: Number(options.shadow.opacity ?? 0),
+          blur: Number(options.shadow.blur ?? 0),
+          offset: Number(options.shadow.offset ?? 0),
+        }
+      : undefined;
+    this.elements.push({
+      kind: 'shape',
+      shape: shape as 'rect' | 'roundRect' | 'ellipse',
+      ...box(options),
+      ...(fill ? { fill } : {}),
+      ...(line ? { line } : {}),
+      ...(options.rectRadius ? { radius: options.rectRadius } : {}),
+      ...(shadow ? { shadow } : {}),
+    });
+    return this;
+  }
+
+  addImage(options: PptxGenJS.ImageProps): this {
+    this.elements.push({
+      kind: 'image',
+      ...box(options),
+      asset: relative(ASSETS, String(options.path)),
+      alt: options.altText ?? '',
+    });
+    return this;
+  }
+
+  addNotes(notes: string): this {
+    this.notes = notes;
+    return this;
+  }
+}
+
+/** The deck for the web: each slide's drawing, plus the master's wordmark and number. */
+export function renderDeckScene(deck: HybridDeck): DeckScene {
+  const slides: SceneSlide[] = deck.slides.map((spec, index) => {
+    const recorder = new SceneRecorder();
+    drawSlide(recorder as unknown as PptxSlide, spec, index);
+    return {
+      background: recorder.background?.color ?? T.cream,
+      elements: [
+        ...recorder.elements,
+        sceneText('YAWP!', WORDMARK, true),
+        sceneText(String(index + 1), { ...SLIDE_NUMBER, margin: 0 }, true),
+      ],
+      notes: recorder.notes,
+    };
+  });
+  return { title: deck.title, slides };
 }
 
 /**

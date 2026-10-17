@@ -9,7 +9,7 @@
  */
 import type { AccentColor, IconName } from './hybrid-theme';
 
-/** An image in `assets/`, by file name. */
+/** An image in `resources/thesis-essay-decks/assets/`, by file name. */
 export type AssetImage =
   | 'fallen-man.jpg'
   | 'elephant.jpg'
