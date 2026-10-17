@@ -1,0 +1,185 @@
+{
+  "config": {
+    "configFile": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/.validation-playwright.config.ts",
+    "rootDir": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests",
+    "forbidOnly": true,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/bryant/work/yawp/codex-loop/tmp/design-impl/validation-playwright-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "/auth\\.unified-((google-|origin-)?backend|join-link)\\.spec\\.ts/"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.60.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "auth.unified-backend.spec.ts",
+      "file": "auth.unified-backend.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "email-origin free-class notice survives navigation and validation at 1280",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [
+                {
+                  "type": "fail",
+                  "description": "Reproduces legacy validation copy on current main",
+                  "location": {
+                    "file": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests/auth.unified-backend.spec.ts",
+                    "line": 43,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "failed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 28315,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  locator('#signon-password-help')\nExpected: \u001b[32m\"Use at least 6 characters.\"\u001b[39m\nReceived: \u001b[31m\"Password is too short\"\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"soft toHaveText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('#signon-password-help')\u001b[22m\n\u001b[2m    14 × locator resolved to <p role=\"alert\" id=\"signon-password-help\" class=\"signon-field-error\">Password is too short</p>\u001b[22m\n\u001b[2m       - unexpected value \"Password is too short\"\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  locator('#signon-password-help')\nExpected: \u001b[32m\"Use at least 6 characters.\"\u001b[39m\nReceived: \u001b[31m\"Password is too short\"\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"soft toHaveText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('#signon-password-help')\u001b[22m\n\u001b[2m    14 × locator resolved to <p role=\"alert\" id=\"signon-password-help\" class=\"signon-field-error\">Password is too short</p>\u001b[22m\n\u001b[2m       - unexpected value \"Password is too short\"\u001b[22m\n\n    at check (/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests/auth.unified-backend.spec.ts:62:62)\n    at passwordErrors (/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests/auth.unified-backend.spec.ts:69:3)\n    at /home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests/auth.unified-backend.spec.ts:496:7",
+                    "location": {
+                      "file": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests/auth.unified-backend.spec.ts",
+                      "column": 62,
+                      "line": 62
+                    },
+                    "snippet": "  60 |     }) + '\\n');\n  61 |     expect.soft(await password.getAttribute('aria-invalid')).toBe('true');\n> 62 |     await expect.soft(page.locator('#signon-password-help')).toHaveText('Use at least 6 characters.');\n     |                                                              ^\n  63 |     await expect.soft(page.locator('#signon-confirmPassword-help')).toHaveText(\"These passwords don't match.\");\n  64 |     expect(await snapshot()).toEqual(before);\n  65 |   };"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests/auth.unified-backend.spec.ts",
+                        "column": 62,
+                        "line": 62
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  locator('#signon-password-help')\nExpected: \u001b[32m\"Use at least 6 characters.\"\u001b[39m\nReceived: \u001b[31m\"Password is too short\"\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"soft toHaveText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('#signon-password-help')\u001b[22m\n\u001b[2m    14 × locator resolved to <p role=\"alert\" id=\"signon-password-help\" class=\"signon-field-error\">Password is too short</p>\u001b[22m\n\u001b[2m       - unexpected value \"Password is too short\"\u001b[22m\n\n\n  60 |     }) + '\\n');\n  61 |     expect.soft(await password.getAttribute('aria-invalid')).toBe('true');\n> 62 |     await expect.soft(page.locator('#signon-password-help')).toHaveText('Use at least 6 characters.');\n     |                                                              ^\n  63 |     await expect.soft(page.locator('#signon-confirmPassword-help')).toHaveText(\"These passwords don't match.\");\n  64 |     expect(await snapshot()).toEqual(before);\n  65 |   };\n    at check (/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests/auth.unified-backend.spec.ts:62:62)\n    at passwordErrors (/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests/auth.unified-backend.spec.ts:69:3)\n    at /home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests/auth.unified-backend.spec.ts:496:7"
+                    },
+                    {
+                      "location": {
+                        "file": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests/auth.unified-backend.spec.ts",
+                        "column": 69,
+                        "line": 63
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  locator('#signon-confirmPassword-help')\nExpected: \u001b[32m\"The\u001b[7mse\u001b[27m passwords \u001b[7mdon'\u001b[27mt match\u001b[7m.\u001b[27m\"\u001b[39m\nReceived: \u001b[31m\"The passwords \u001b[7mmus\u001b[27mt match\"\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"soft toHaveText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('#signon-confirmPassword-help')\u001b[22m\n\u001b[2m    14 × locator resolved to <p role=\"alert\" class=\"signon-field-error\" id=\"signon-confirmPassword-help\">The passwords must match</p>\u001b[22m\n\u001b[2m       - unexpected value \"The passwords must match\"\u001b[22m\n\n\n  61 |     expect.soft(await password.getAttribute('aria-invalid')).toBe('true');\n  62 |     await expect.soft(page.locator('#signon-password-help')).toHaveText('Use at least 6 characters.');\n> 63 |     await expect.soft(page.locator('#signon-confirmPassword-help')).toHaveText(\"These passwords don't match.\");\n     |                                                                     ^\n  64 |     expect(await snapshot()).toEqual(before);\n  65 |   };\n  66 |   await password.fill('short');\n    at check (/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests/auth.unified-backend.spec.ts:63:69)\n    at passwordErrors (/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests/auth.unified-backend.spec.ts:69:3)\n    at /home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests/auth.unified-backend.spec.ts:496:7"
+                    },
+                    {
+                      "location": {
+                        "file": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests/auth.unified-backend.spec.ts",
+                        "column": 62,
+                        "line": 62
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  locator('#signon-password-help')\nExpected: \u001b[32m\"Use at least 6 characters.\"\u001b[39m\nReceived: \u001b[31m\"Password is too short\"\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"soft toHaveText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('#signon-password-help')\u001b[22m\n\u001b[2m    14 × locator resolved to <p role=\"alert\" id=\"signon-password-help\" class=\"signon-field-error\">Password is too short</p>\u001b[22m\n\u001b[2m       - unexpected value \"Password is too short\"\u001b[22m\n\n\n  60 |     }) + '\\n');\n  61 |     expect.soft(await password.getAttribute('aria-invalid')).toBe('true');\n> 62 |     await expect.soft(page.locator('#signon-password-help')).toHaveText('Use at least 6 characters.');\n     |                                                              ^\n  63 |     await expect.soft(page.locator('#signon-confirmPassword-help')).toHaveText(\"These passwords don't match.\");\n  64 |     expect(await snapshot()).toEqual(before);\n  65 |   };\n    at check (/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests/auth.unified-backend.spec.ts:62:62)\n    at passwordErrors (/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests/auth.unified-backend.spec.ts:87:3)\n    at /home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests/auth.unified-backend.spec.ts:496:7"
+                    },
+                    {
+                      "location": {
+                        "file": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests/auth.unified-backend.spec.ts",
+                        "column": 69,
+                        "line": 63
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  locator('#signon-confirmPassword-help')\nExpected: \u001b[32m\"The\u001b[7mse\u001b[27m passwords \u001b[7mdon'\u001b[27mt match\u001b[7m.\u001b[27m\"\u001b[39m\nReceived: \u001b[31m\"The passwords \u001b[7mmus\u001b[27mt match\"\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"soft toHaveText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('#signon-confirmPassword-help')\u001b[22m\n\u001b[2m    14 × locator resolved to <p role=\"alert\" class=\"signon-field-error\" id=\"signon-confirmPassword-help\">The passwords must match</p>\u001b[22m\n\u001b[2m       - unexpected value \"The passwords must match\"\u001b[22m\n\n\n  61 |     expect.soft(await password.getAttribute('aria-invalid')).toBe('true');\n  62 |     await expect.soft(page.locator('#signon-password-help')).toHaveText('Use at least 6 characters.');\n> 63 |     await expect.soft(page.locator('#signon-confirmPassword-help')).toHaveText(\"These passwords don't match.\");\n     |                                                                     ^\n  64 |     expect(await snapshot()).toEqual(before);\n  65 |   };\n  66 |   await password.fill('short');\n    at check (/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests/auth.unified-backend.spec.ts:63:69)\n    at passwordErrors (/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests/auth.unified-backend.spec.ts:87:3)\n    at /home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests/auth.unified-backend.spec.ts:496:7"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-17T04:25:48.419Z",
+                  "annotations": [
+                    {
+                      "type": "fail",
+                      "description": "Reproduces legacy validation copy on current main",
+                      "location": {
+                        "file": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests/auth.unified-backend.spec.ts",
+                        "line": 43,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/bryant/work/yawp/codex-loop/tmp/design-impl/validation-playwright-results/auth.unified-backend-email-79987-tion-and-validation-at-1280-chromium/error-context.md"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/bryant/work/yawp/codex-loop/tmp/design-impl/validation-playwright-results/auth.unified-backend-email-79987-tion-and-validation-at-1280-chromium/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-handle-validation-copy/services/web-app/e2e/tests/auth.unified-backend.spec.ts",
+                    "column": 62,
+                    "line": 62
+                  }
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "cd55fdc5c331b72f9834-179a31847d692b08aad0",
+          "file": "auth.unified-backend.spec.ts",
+          "line": 381,
+          "column": 3
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-17T04:25:47.559Z",
+    "duration": 29834.594,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}
