@@ -783,8 +783,12 @@ jobs:
             'app/utils/internal-platform-auth.server.test.ts' \
             'app/utils/tester-feedback-gate.server.test.ts' \
             'app/utils/tester-feedback-request.server.test.ts' \
+            'app/utils/demo-feedback.server.test.ts' \
+            'app/utils/demo-feedback-context.test.ts' \
+            'app/utils/demo-feedback-analytics.test.ts' \
             'app/utils/tester-feedback.server.test.ts' \
             'app/utils/tester-feedback-runtime.server.test.ts' \
+            'app/routes/api.admin.tester-feedback/route.test.ts' \
             'app/utils/preview-access.server.test.ts' \
             'app/utils/internal-grading-stats.server.test.ts' \
             'app/routes/api.internal.v1.stats.grading/route.test.ts' \
@@ -910,6 +914,36 @@ jobs:
           RESEND_FROM_EMAIL: ''
           TRIAL_STATUS_SHOTS: test-results/trial-status
         run: bun run test:e2e:smoke
+
+      - name: Demo feedback local fixture browser regression
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
+        env:
+          CI: '1'
+          TMPDIR: ${{ runner.temp }}/demo-feedback
+          BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/demo-feedback/bun-cache
+          XDG_CACHE_HOME: ${{ runner.temp }}/demo-feedback/cache
+          RECORD_PORT_APP: '5489'
+          RECORD_PORT_DATABASE: '54489'
+          RECORD_PORT_LTI_MOCK: '9789'
+          YAWP_ENVIRONMENT: demo
+          TESTER_FEEDBACK_ENABLED: 'true'
+          RESEND_API_KEY: ''
+          RESEND_FROM_EMAIL: ''
+        run: |
+          mkdir -p "$TMPDIR"
+          cleanup() {
+            ./bin/project dev stop --json || true
+            if [ -f .worktree-local/config.env ]; then
+              source .worktree-local/config.env
+              docker rm -f "$CONTAINER_NAME" || true
+              docker volume rm "$VOLUME_NAME" || true
+            fi
+          }
+          trap cleanup EXIT
+          ./bin/project bootstrap --fresh --json
+          ./bin/project fixture verify local-dev --json
+          ./bin/project dev start --json
+          ./bin/project test --profile demo-feedback-browser --json
 
       - name: Unified sign-on local-handler browser flows
         if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
