@@ -6,6 +6,7 @@ import {
 import { randomInt, timingSafeEqual } from 'node:crypto';
 import type { Prisma } from '@app/prisma';
 import { z } from 'zod';
+import { signonValidationMessage } from './validation-copy';
 import { safeRedirect } from 'remix-utils/safe-redirect';
 import { prisma } from '~/utils/db.server';
 import { getUserId, getPasswordHash } from '~/utils/auth.server';
@@ -390,7 +391,10 @@ async function createAccount(
       {
         error: 'Check your details.',
         fieldErrors: Object.fromEntries(
-          parsed.error.issues.map((i) => [String(i.path[0]), i.message])
+          parsed.error.issues.map((i) => [
+            String(i.path[0]),
+            signonValidationMessage(i),
+          ])
         ),
       },
       { status: 400 }
