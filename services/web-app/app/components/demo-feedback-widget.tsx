@@ -32,6 +32,7 @@ export function DemoFeedbackWidget({ analytics }: { analytics?: Analytics }) {
   const context = useRef(createFeedbackContext());
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState('');
+  const [severity, setSeverity] = useState('');
   const [status, setStatus] = useState<
     'idle' | 'submitting' | 'saved' | 'error'
   >('idle');
@@ -86,10 +87,12 @@ export function DemoFeedbackWidget({ analytics }: { analytics?: Analytics }) {
         setOpen(next);
         if (next && status === 'saved') {
           setNote('');
+          setSeverity('');
           setStatus('idle');
         }
       }}
     >
+      <div className="demo-feedback-dock" aria-hidden="true" />
       <DialogTrigger asChild>
         <Button
           data-demo-feedback
@@ -125,7 +128,12 @@ export function DemoFeedbackWidget({ analytics }: { analytics?: Analytics }) {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ note, url, actions }),
+                body: JSON.stringify({
+                  note,
+                  url,
+                  actions,
+                  severity: severity || null,
+                }),
                 signal: abort.signal,
               });
               const result = await response.json().catch(() => null);
@@ -159,6 +167,21 @@ export function DemoFeedbackWidget({ analytics }: { analytics?: Analytics }) {
               disabled={pending || status === 'saved'}
             />
             <p className="text-xs text-slate-500">Up to 4,000 characters.</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="demo-feedback-severity">Severity</Label>
+            <select
+              id="demo-feedback-severity"
+              className="block min-h-11 w-full rounded-md border bg-background px-3 text-base"
+              value={severity}
+              onChange={(event) => setSeverity(event.target.value)}
+              disabled={pending || status === 'saved'}
+            >
+              <option value="">Optional</option>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
           </div>
           <div className="space-y-1 text-sm text-slate-600">
             <p>Page location</p>

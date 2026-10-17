@@ -757,6 +757,7 @@ function runTestProfile(profile, { json }) {
   else if (chosen === "demo-feedback-unit") {
     runWebApp("demo-feedback-analytics", ["test", "app/utils/demo-feedback-analytics.test.ts"]);
     runWebApp("demo-feedback", ["test", "app/utils/demo-feedback-context.test.ts", "app/utils/demo-feedback.server.test.ts"]);
+    runWebApp("tester-feedback-admin-retirement", ["test", "app/routes/api.admin.tester-feedback/route.test.ts"]);
     runWebApp("tester-feedback-compatibility", ["test", "app/utils/tester-feedback.server.test.ts", "app/utils/tester-feedback-runtime.server.test.ts"]);
     runWebApp("feedback-flag-api", ["test", "app/utils/internal-feature-flags-http.server.test.ts"]);
     runWebApp("feedback-flag-defaults", ["test", "app/domain/feature-flags/feature-flags.test.ts", "app/domain/feature-flags/feature-flags.server.test.ts"]);

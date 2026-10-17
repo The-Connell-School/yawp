@@ -784,8 +784,12 @@ jobs:
             'app/utils/internal-platform-auth.server.test.ts' \
             'app/utils/tester-feedback-gate.server.test.ts' \
             'app/utils/tester-feedback-request.server.test.ts' \
+            'app/utils/demo-feedback.server.test.ts' \
+            'app/utils/demo-feedback-context.test.ts' \
+            'app/utils/demo-feedback-analytics.test.ts' \
             'app/utils/tester-feedback.server.test.ts' \
             'app/utils/tester-feedback-runtime.server.test.ts' \
+            'app/routes/api.admin.tester-feedback/route.test.ts' \
             'app/utils/preview-access.server.test.ts' \
             'app/utils/internal-grading-stats.server.test.ts' \
             'app/routes/api.internal.v1.stats.grading/route.test.ts' \
@@ -822,6 +826,9 @@ jobs:
     needs: [typecheck-web-app, validate-prisma-migrations, paths]
     name: 🧪 E2E Tests (Playwright)
     runs-on: ubuntu-22.04
+    env:
+      # Fixture steps isolate XDG_CACHE_HOME; keep browser install and lookup shared.
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
     # The browser download hung for five hours on 2026-08-18 and would have run
     # to GitHub's six-hour default before failing. Nothing about this job is
     # worth half a day of a runner: the tests themselves take about seven
@@ -882,7 +889,7 @@ jobs:
         if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         uses: actions/cache@v4
         with:
-          path: ~/.cache/ms-playwright
+          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
           key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
 
       # Chromium only. On a browser cache hit, install the binary only — apt deps
@@ -911,6 +918,61 @@ jobs:
           RESEND_FROM_EMAIL: ''
           TRIAL_STATUS_SHOTS: test-results/trial-status
         run: bun run test:e2e:smoke
+
+      - name: Verify demo feedback headless browser executable
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
+        working-directory: services/web-app
+        env:
+          TMPDIR: ${{ runner.temp }}/demo-feedback
+          BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/demo-feedback/bun-cache
+          XDG_CACHE_HOME: ${{ runner.temp }}/demo-feedback/cache
+        run: |
+          mkdir -p "$TMPDIR"
+          version=$(node -p "require('@playwright/test/package.json').version")
+          actual_version=$(bun x playwright --version)
+          if [ "$actual_version" != "Version $version" ]; then
+            echo "::error::Fixture runner $actual_version does not match installed Playwright $version"
+            exit 1
+          fi
+          shell_dir=$(bun x playwright install --dry-run --only-shell chromium | sed -n 's/^ *Install location: *\(.*chromium_headless_shell[^ ]*\) *$/\1/p')
+          executable="$shell_dir/chrome-headless-shell-linux64/chrome-headless-shell"
+          if [ -z "$shell_dir" ] || [ ! -x "$executable" ]; then
+            echo "::error::Missing Playwright $version chrome-headless-shell executable: $executable (PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH)"
+            exit 1
+          fi
+
+      - name: Demo feedback local fixture browser regression
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
+        env:
+          CI: '1'
+          # The fixture targets IPv4; Vite's default localhost bind must match it.
+          NODE_OPTIONS: --dns-result-order=ipv4first
+          TMPDIR: ${{ runner.temp }}/demo-feedback
+          BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/demo-feedback/bun-cache
+          XDG_CACHE_HOME: ${{ runner.temp }}/demo-feedback/cache
+          RECORD_PORT_APP: '5489'
+          RECORD_PORT_DATABASE: '54489'
+          RECORD_PORT_LTI_MOCK: '9789'
+          YAWP_ENVIRONMENT: demo
+          TESTER_FEEDBACK_ENABLED: 'true'
+          RESEND_API_KEY: ''
+          RESEND_FROM_EMAIL: ''
+        run: |
+          mkdir -p "$TMPDIR"
+          cleanup() {
+            ./bin/project dev stop --json || true
+            if [ -f .worktree-local/config.env ]; then
+              source .worktree-local/config.env
+              docker rm -f "$CONTAINER_NAME" || true
+              docker volume rm "$VOLUME_NAME" || true
+            fi
+          }
+          trap cleanup EXIT
+          ./bin/project bootstrap --fresh --json
+          ./bin/project fixture verify local-dev --json
+          ./bin/project dev start --json
+          curl --fail --silent --show-error --max-time 10 http://127.0.0.1:5489/ > /dev/null
+          ./bin/project test --profile demo-feedback-browser --json
 
       - name: Unified sign-on local-handler browser flows
         if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}

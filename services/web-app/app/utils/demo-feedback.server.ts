@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { readBoundedText } from './bounded-body.server';
 import { FEEDBACK_CAPTURE_EVENTS, feedbackPath } from './demo-feedback-context';
-import type { FeedbackInput } from './tester-feedback.server';
+import { severitySchema, type FeedbackInput } from './tester-feedback.server';
 
 export interface DemoFeedbackDependencies {
   environment(): string;
@@ -52,6 +52,7 @@ const actionSchema = z.discriminatedUnion('type', [
 ]);
 const submissionSchema = z.object({
   note: z.string().trim().min(1).max(4000),
+  severity: severitySchema.nullable().optional(),
   url: pathSchema,
   actions: z.array(actionSchema).max(5),
 });
@@ -105,10 +106,23 @@ export async function submitDemoFeedback(
       userAgent: (request.headers.get('user-agent') || '').slice(0, 1000),
       url: parsed.data.url,
       whatHappened: parsed.data.note,
-      // These existing fields keep both Internal review and CSV export compatible.
-      whatIDid: JSON.stringify(parsed.data.actions),
-      whatIWish: 'Demo feedback note',
-      severity: null,
+      // Preserve Internal's string fields while retaining the bounded structured context.
+      whatIDid: parsed.data.actions
+        .map((action) => {
+          switch (action.type) {
+            case 'route':
+              return `Opened ${action.path}`;
+            case 'click':
+              return `Clicked a ${action.target} on ${action.path}`;
+            case 'capture':
+              return `Captured ${action.event} on ${action.path}`;
+          }
+        })
+        .join(' → ')
+        .slice(0, 4000),
+      whatIWish: '',
+      severity: parsed.data.severity ?? null,
+      actions: parsed.data.actions,
     });
     if (!saved)
       return json({ error: 'Please wait before sending more feedback.' }, 429);
