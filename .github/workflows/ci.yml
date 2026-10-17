@@ -625,6 +625,7 @@ jobs:
         run: |
           mkdir -p "$TMPDIR"
           bun test ./services/web-app/app/domain/unified-signon/policy.test.ts
+          bun test ./services/web-app/app/domain/unified-signon/validation-copy.test.ts
           bun test ./services/web-app/app/domain/unified-signon/resend-mail.server.test.ts
           bun test ./services/web-app/app/domain/unified-signon/google.test.ts
           bun test ./services/web-app/app/routes/auth.login/unified-dispatch.test.ts

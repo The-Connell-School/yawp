@@ -920,3 +920,34 @@ suite(
     }
   }
 );
+
+// FAILURES.md: di-signon-fix-handle-validation-copy.
+suite('registration validation copy preserves rejection and actual password boundaries', async () => {
+  const post = browser();
+  await post('resolve', { identifier: id });
+  await post('student-choice', { choice: 'new' });
+  const counts = () => Promise.all([
+    prisma.user.count(), prisma.orgMembership.count(), prisma.session.count(),
+    prisma.classStudentHandle.count(),
+  ]);
+  const before = await counts();
+  const rejected = await post('register-student', {
+    ...details, password: 'short', confirmPassword: 'different',
+  });
+  expect(rejected.response.status).toBe(400);
+  expect(rejected.data.fieldErrors).toEqual({
+    password: 'Use at least 6 characters.',
+    confirmPassword: "These passwords don't match.",
+  });
+  expect(await counts()).toEqual(before);
+  const tooLong = await post('register-student', {
+    ...details, password: 'x'.repeat(101), confirmPassword: 'x'.repeat(101),
+  });
+  expect(tooLong.data.fieldErrors).toEqual({ password: 'Password is too long', confirmPassword: 'Password is too long' });
+  expect(await counts()).toEqual(before);
+  const valid = await post('register-student', {
+    ...details, firstName: 'Boundary', lastName: 'Student', password: '123456', confirmPassword: '123456',
+  });
+  expect(valid.data.state.screen).toBe('joined');
+  expect(await prisma.session.count()).toBe(before[2]);
+});
