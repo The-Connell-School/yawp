@@ -13,26 +13,18 @@ This link is for you only and expires in 30 days.
 — The YAWP team"
 `;
 
-exports[`admin approval email includes note and links 1`] = `
-"Hi!
-
----
-
-Hi there,
+exports[`admin approval email ignores a custom note and retains links 1`] = `
+"Hi there,
 
 Ada (ada@example.edu) at Example HS would like to use YAWP in their classroom.
 
-YAWP is a classroom writing platform where students draft essays and receive AI-assisted feedback while teachers stay in control of assignments and grading.
-
-How AI is used: students interact with a writing tutor during drafting. Teachers review student work and grades; AI does not replace teacher judgment.
-
-Privacy: student writing is used to provide feedback in YAWP. It is not used to train public AI models.
-
-Questions? Contact us at support@yawp.school.
+YAWP helps students draft essays with feedback while teachers stay in control of assignments and grading. Student writing is not used to train public language models.
 
 Approve YAWP for this school (link expires in 14 days):
 https://yawp.school/a
 
 I'm not the right person to approve this:
-https://yawp.school/n"
+https://yawp.school/n
+
+Questions? Contact support@yawp.school."
 `;

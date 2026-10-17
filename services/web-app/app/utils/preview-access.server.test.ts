@@ -147,12 +147,13 @@ describe('preview access gate', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  test('keeps only signed-service and access-code routes open', async () => {
+  test('keeps service-authenticated and access-code routes open', async () => {
     const next = mock(async () => new Response('ok'));
 
     for (const path of [
       '/api/healthcheck',
       '/api/stripe/webhook',
+      '/api/preview/qa/signon-code',
       '/auth/preview-access',
       '/auth/preview-access.data',
     ]) {
@@ -166,7 +167,24 @@ describe('preview access gate', () => {
       ).toBeNull();
     }
 
-    expect(next).toHaveBeenCalledTimes(4);
+    expect(next).toHaveBeenCalledTimes(5);
+  });
+
+  test('public legal reads need no seat and never authorize preview activity', async () => {
+    const next = mock(async () => new Response('legal'));
+    for (const path of ['/privacy', '/privacy/', '/privacy.data', '/terms', '/terms/', '/terms.data']) {
+      for (const method of ['GET', 'HEAD']) {
+        const response = await previewAccessMiddleware(middlewareArgs(request(path, { method })), next);
+        expect(response?.status).toBe(200);
+        expect(response?.headers.get(PREVIEW_AUTHORIZED_ACTIVITY_HEADER)).toBeNull();
+      }
+    }
+    expect(next).toHaveBeenCalledTimes(12);
+    for (const [path, method] of [['/privacy', 'POST'], ['/terms', 'POST'], ['/privacy/private', 'GET'], ['/free', 'GET'], ['/app', 'GET']]) {
+      const response = await previewAccessMiddleware(middlewareArgs(request(path!, { method })), next);
+      expect(response?.status).not.toBe(200);
+    }
+    expect(next).toHaveBeenCalledTimes(12);
   });
 
   test('lets Yawp Internal reach the rubric catalog without a preview cookie', async () => {
@@ -214,7 +232,6 @@ describe('preview access gate', () => {
 
     for (const [method, path] of [
       ['GET', '/api/internal/v1/users'],
-      ['POST', '/api/internal/v1/free-tier/release'],
       ['GET', '/api/internal/v1/feature-flags/'],
       ['POST', '/api/internal/v1/feature-flags/a/b'],
       ['POST', '/api/internal/v1/feature-flags/lesson_planner/'],
@@ -230,6 +247,24 @@ describe('preview access gate', () => {
       expect((gated as Response).status).toBe(401);
     }
     expect(next).toHaveBeenCalledTimes(open.length);
+  });
+
+  test('lets Yawp Internal reach operator routes without a preview cookie', async () => {
+    const next = mock(async () => new Response('ok'));
+    for (const [method, path] of [
+      ['GET', '/api/internal/v1/free-tier/tokens'],
+      ['POST', '/api/internal/v1/free-tier/release'],
+      ['GET', '/api/internal/v1/free-tier/applications?q=x'],
+      ['GET', '/api/internal/v1/admin/organizations'],
+      ['GET', '/api/internal/v1/admin/organizations/org-1'],
+    ] as const) {
+      const response = await previewAccessMiddleware(
+        middlewareArgs(request(path, { method })),
+        next
+      );
+      expect(await response?.text()).toBe('ok');
+    }
+    expect(next).toHaveBeenCalledTimes(5);
   });
 
   test('fails closed when no access codes are configured', async () => {
@@ -560,6 +595,29 @@ describe('preview access gate', () => {
       expect(response?.headers.get('location')).toBe('/app?tab=classes');
       expect(response?.headers.get('set-cookie')).toBeNull();
       expect(next).not.toHaveBeenCalled();
+    });
+
+    test('leaves the Google OAuth callback code for the route', async () => {
+      const cookie = (
+        await grantPreviewAccessCookie({
+          organizationId: 'local-dev-org',
+          label: 'Master',
+        })
+      ).split(';', 1)[0];
+      const next = mock(async () => new Response('callback'));
+      const middleware = createPreviewAccessMiddleware(async () => null);
+
+      const response = await middleware(
+        middlewareArgs(
+          request('/auth/unified/google/callback?state=abc&code=4%2F0Axyz', {
+            headers: { cookie },
+          })
+        ),
+        next
+      );
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(response?.status).toBe(200);
     });
   });
 });

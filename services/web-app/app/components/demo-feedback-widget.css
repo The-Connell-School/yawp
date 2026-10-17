@@ -1,0 +1,56 @@
+/* Match the unified sign-in's system sans typography, white card and existing Button tokens. */
+.demo-feedback-trigger,
+.demo-feedback-panel,
+.demo-feedback-panel :is(h2, p, label, textarea, select, button) {
+  font-family: var(--font-system-sans);
+}
+.demo-feedback-panel h2 {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.demo-feedback-panel textarea {
+  font-size: 16px;
+}
+.demo-feedback-panel label {
+  font-size: 16px;
+  line-height: 22px;
+}
+
+.demo-feedback-dock {
+  display: none;
+}
+
+@media (max-width: 639px) {
+  /* A dedicated row keeps both controls outside the app's scrolling/action area.
+     :has ties the reservation to the rendered, app-only, demo-flagged widget. */
+  body:has(.demo-feedback-trigger) {
+    --demo-feedback-space: calc(76px + env(safe-area-inset-bottom, 0px));
+  }
+
+  body:has(.demo-feedback-trigger) [data-feedback-content-frame],
+  body:has(.demo-feedback-trigger) [data-app-shell] {
+    height: calc(100dvh - var(--demo-feedback-space));
+    min-height: calc(100dvh - var(--demo-feedback-space));
+  }
+
+  .demo-feedback-dock {
+    display: block;
+    position: fixed;
+    inset: auto 0 0;
+    height: var(--demo-feedback-space);
+    border-top: 1px solid hsl(var(--border));
+    background: hsl(var(--background));
+    z-index: 20;
+  }
+
+  .demo-feedback-trigger {
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    right: 76px;
+    border-radius: 9999px;
+  }
+
+  body:has(.demo-feedback-trigger) .local-dev-environment-control {
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+}

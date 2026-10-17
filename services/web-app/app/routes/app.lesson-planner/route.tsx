@@ -1,3 +1,4 @@
+import { useFreeAccountUsage } from '~/components/free-account-usage';
 import { useEffect, useRef, useState } from 'react';
 import {
   Link,
@@ -560,6 +561,7 @@ export default function LessonPlannerRoute() {
       intent: 'chat',
       message,
       stream: '1',
+      requestId: crypto.randomUUID(),
       ...(conversationId ? { conversationId } : {}),
       ...(!conversationId && seed
         ? { originClassAssignmentId: seed.classAssignmentId }
@@ -688,6 +690,7 @@ export default function LessonPlannerRoute() {
             <Link
               to="/app/lesson-planner/how-it-works"
               aria-label="See how it works"
+              data-tour="planner-guide"
               className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-primary/40 bg-background px-2.5 text-sm font-medium text-primary transition hover:bg-primary/10 sm:px-3"
             >
               <CirclePlay size={16} />
@@ -870,6 +873,7 @@ function LessonComposer({
 
   return (
     <form
+      data-tour="planner-composer"
       className={cn(
         'flex w-full items-end gap-2',
         hero &&
@@ -930,6 +934,8 @@ function LessonPlannerEmptyState({
   onInput: (value: string) => void;
   onSend: () => void;
 }) {
+  const freeUsage = useFreeAccountUsage();
+  const exhausted = freeUsage?.lessonPlans.remaining === 0;
   return (
     <div className="flex flex-col items-center gap-8">
       <div className="flex w-full max-w-3xl flex-col items-center gap-5 text-center">
@@ -938,16 +944,46 @@ function LessonPlannerEmptyState({
         </h3>
         <p className="max-w-lg text-sm text-muted-foreground">
           Say it the way you'd say it to a colleague in the hallway. The planner
-          builds the lesson — slides, activities, handouts, exit tickets —
-          around the room you actually teach.
+          {freeUsage
+            ? ' builds the lesson around the room you actually teach.'
+            : ' builds the lesson — slides, activities, handouts, exit tickets — around the room you actually teach.'}
         </p>
         <LessonComposer
           hero
           value={input}
           onChange={onInput}
           onSend={onSend}
-          disabled={disabled}
+          disabled={disabled || exhausted}
         />
+        {freeUsage && (
+          <div
+            className="text-sm text-muted-foreground"
+            data-testid="free-lesson-remaining"
+          >
+            {exhausted ? (
+              <>
+                <p>
+                  You have used all {freeUsage.lessonPlans.total} lesson plans
+                  {freeUsage.monthly
+                    ? ' this month. Come back next month to plan another.'
+                    : '. Delete one to plan another.'}
+                </p>
+                <Link
+                  className="mt-2 inline-block text-primary underline"
+                  to={
+                    freeUsage.monthly
+                      ? 'mailto:hello@yawp.school?subject=More%20access%20to%20YAWP'
+                      : '/app/free-tier/status'
+                  }
+                >
+                  Need more? Talk to us
+                </Link>
+              </>
+            ) : (
+              `${freeUsage.lessonPlans.remaining} of ${freeUsage.lessonPlans.total} lesson plans left`
+            )}
+          </div>
+        )}
       </div>
       {seedContext ? (
         <div
@@ -964,11 +1000,15 @@ function LessonPlannerEmptyState({
           </p>
         </div>
       ) : null}
-      <div className="flex w-full flex-col gap-3">
+      <div className="flex w-full flex-col gap-3" data-tour="planner-starters">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Or start from one of these
         </p>
-        <PromptTiles prompts={prompts} onPick={onPick} disabled={disabled} />
+        <PromptTiles
+          prompts={prompts}
+          onPick={onPick}
+          disabled={disabled || exhausted}
+        />
       </div>
     </div>
   );
@@ -1125,8 +1165,7 @@ function MessageBubble({
                   }
                   onToggle={
                     message.id
-                      ? (added) =>
-                          onMaterial(message.id!, part.blockKey, added)
+                      ? (added) => onMaterial(message.id!, part.blockKey, added)
                       : null
                   }
                   disabled={disabled}

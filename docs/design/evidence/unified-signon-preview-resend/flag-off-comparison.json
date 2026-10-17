@@ -1,0 +1,38 @@
+[
+  {
+    "control": "login",
+    "width": 1280,
+    "height": 1000,
+    "changedPixels": 0
+  },
+  {
+    "control": "signup",
+    "width": 1280,
+    "height": 1000,
+    "changedPixels": 0
+  },
+  {
+    "control": "free-trial",
+    "width": 1280,
+    "height": 1000,
+    "changedPixels": 0
+  },
+  {
+    "control": "login",
+    "width": 390,
+    "height": 865,
+    "changedPixels": 0
+  },
+  {
+    "control": "signup",
+    "width": 390,
+    "height": 844,
+    "changedPixels": 0
+  },
+  {
+    "control": "free-trial",
+    "width": 390,
+    "height": 950,
+    "changedPixels": 0
+  }
+]

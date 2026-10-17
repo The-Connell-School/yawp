@@ -160,8 +160,10 @@ test.describe.serial('Writing Fundamentals Practice — Composition', () => {
     ).toBeVisible();
     const studentRow = page
       .getByTestId('student-progress-row')
-      .filter({ hasText: '1/3' });
+      .filter({ hasText: '0/3 mastered' });
     await expect(studentRow).toBeVisible();
+    // One problem answered (two drafts collapse to one), none mastered yet.
+    await expect(studentRow).toContainText(/1 of 3 answered/i);
     await studentRow.click();
 
     const attempts = page.getByTestId('student-attempts');

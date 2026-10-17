@@ -37,6 +37,22 @@ export const INTERNAL_RUBRICS_FLAG = 'internal_rubrics' as const;
  */
 export const FREE_TIER_FLAG = 'free_tier' as const;
 
+/** Free-account v2 presentation only. Missing Setting row stays off in every environment. */
+export const FREE_TIER_INAPP_V2_FLAG = 'free-tier-inapp-v2' as const;
+
+/** Unified sign-on UI. Default off; anonymous entry requires everyone mode. */
+export const UNIFIED_SIGN_ON_FLAG = 'unified-sign-on' as const;
+
+/** Free tier onboarding v2. Missing or invalid Setting values stay off in every environment. */
+export const FREE_TIER_ONBOARDING_V2_FLAG = 'free-tier-onboarding-v2' as const;
+/** Global class-code validation and Generate code controls. Default off. */
+export const CLASS_CODE_UNIQUE_FLAG = 'classcode-unique' as const;
+
+/** Demo feedback. Default off everywhere; only demo seed code opts in. */
+export const DEMO_FEEDBACK_FLAG = 'demo-feedback-widget' as const;
+
+export const GUIDED_TOURS_FLAG = 'guided-tours' as const;
+
 /**
  * "Models to teach from" in the class performance summary. On: teachers can
  * ask the summary for a strong model and an instructive example from the
@@ -50,7 +66,7 @@ export const FEATURE_FLAGS = {
   [LESSON_PLANNER_FLAG]: {
     label: 'Lesson Planner',
     description:
-      'Shows the Lesson Planner in the teacher nav and allows planner pages, exports, and AI generation. Off: entry points are hidden and direct URLs are blocked; saved lessons are not deleted.',
+      'Shows the Lesson Planner in the teacher nav and allows planner pages, exports, and lesson generation. Off: entry points are hidden and direct URLs are blocked; saved lessons are not deleted.',
   },
   [INTERNAL_RUBRICS_FLAG]: {
     label: 'Rubrics from Yawp Internal',
@@ -61,6 +77,33 @@ export const FEATURE_FLAGS = {
     label: 'Free tier',
     description:
       'Enables Free Tier C teacher onboarding, school-admin approval links, operator release tools, and related UI. Off: those routes and release APIs return 404; waitlist/token APIs behave as on main until yawp-internal turns this on for everyone.',
+  },
+  [FREE_TIER_INAPP_V2_FLAG]: {
+    label: 'Free tier in-app v2',
+    description:
+      'Shows the v2 usage and limit presentation for eligible free-account teachers when free tier is available. Default off on demo and production; existing controls and enforcement remain active when off.',
+  },
+  [UNIFIED_SIGN_ON_FLAG]: {
+    label: 'Unified sign-on',
+    description:
+      'Shows the unified sign-on at /auth/login. Default off. Keep disabled on demo and production during October 16 testing. Backend-dependent operations remain unavailable until the backend integration ships.',
+  },
+  [FREE_TIER_ONBOARDING_V2_FLAG]: {
+    label: 'Free tier onboarding v2',
+    description:
+      'Approval reminders, forward requests, create-your-class step and locked preview for free-tier teachers.',
+  },
+  [CLASS_CODE_UNIQUE_FLAG]: {
+    label: 'Unique class codes',
+    description: 'Enforces global class-code availability and shows Generate code. Default off on demo and production. Only everyone mode is supported; targeted mode stays off because uniqueness spans all organizations.',
+  },
+  [DEMO_FEEDBACK_FLAG]: {
+    label: 'Demo feedback widget',
+    description: 'Shows the feedback note panel for signed-in demo users. Default off; production submissions are always denied.',
+  },
+  [GUIDED_TOURS_FLAG]: {
+    label: 'Free classroom page tours',
+    description: 'Welcome cards, page replay and tour progress for free classroom teachers. Default off on demo and production; free tier must also be enabled.',
   },
   [CLASS_SUMMARY_MODELS_FLAG]: {
     label: 'Class summary: models to teach from',

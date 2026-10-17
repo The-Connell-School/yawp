@@ -27,12 +27,16 @@ type EmailProvider = 'resend' | 'ses'
 type EmailPayload = {
 	from: string
 	to: string
+	bcc?: string[]
 	subject: string
 	html: string
 	text: string
 }
 type SendEmailOptions = {
+	/** Durable outbox owns retries; leave legacy provider behavior unchanged. */
+	singleAttempt?: boolean
 	to: string
+	bcc?: string[]
 	subject: string
 } & (
 	| { html: string; text: string; react?: never }
@@ -52,13 +56,22 @@ export async function sendEmail(options: SendEmailOptions) {
 	const email: EmailPayload = {
 		from,
 		to: options.to,
+		...(options.bcc?.length ? { bcc: options.bcc } : {}),
 		subject: options.subject,
 		html: content.html,
 		text: content.text,
 	}
 
+  // Opt-in capture for isolated local authentication QA. Intercept at the
+  // existing abstraction so invitation/approval helpers cannot send externally.
+  if (process.env.SIGNON_MAIL_CAPTURE_DIR) {
+    const { captureLocalEmail } = await import('./local-email-capture.server');
+    await captureLocalEmail(email);
+    return { status: 'success', data: { id: 'local-captured' } } as const;
+  }
+
 	if (getEmailProvider() === 'ses') {
-		return sendEmailWithSes(email)
+		return sendEmailWithSes(email, options.singleAttempt)
 	}
 
 	return sendEmailWithResend(email)
@@ -145,16 +158,20 @@ async function sendEmailWithResend(email: EmailPayload) {
 	}
 }
 
-async function sendEmailWithSes(email: EmailPayload) {
+async function sendEmailWithSes(email: EmailPayload, singleAttempt = false) {
 	try {
 		const client = new SESv2Client({
+			...(singleAttempt ? { maxAttempts: 1 } : {}),
 			region:
 				process.env.AWS_SES_REGION ?? process.env.AWS_REGION ?? 'us-east-1',
 		})
 		const response = await client.send(
 			new SendEmailCommand({
 				FromEmailAddress: email.from,
-				Destination: { ToAddresses: [email.to] },
+				Destination: {
+					ToAddresses: [email.to],
+					...(email.bcc?.length ? { BccAddresses: email.bcc } : {}),
+				},
 				Content: {
 					Simple: {
 						Subject: { Data: email.subject },

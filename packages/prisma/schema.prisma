@@ -28,8 +28,13 @@ model FreeTierApplication {
   email            String                    @unique
   schoolName       String
   location         String
+  starterClassName String? @db.VarChar(100)
+  starterClassGrade String? @db.VarChar(5)
   gradeLevel       String
+  releaseEmailCopyVersion String? @db.VarChar(40)
+  tags             String[]                  @default([])
   acquisitionTokenId String?
+  acquisitionToken   AcquisitionToken? @relation(fields: [acquisitionTokenId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   userId           String?
   organizationId   String?
   releasedAt       DateTime?                 @db.Timestamptz(6)
@@ -93,7 +98,50 @@ model FreeTierAdminApproval {
   redirects            FreeTierAdminApproval[]     @relation("AdminApprovalRedirectChain")
   personalNote         String?
 
+  // Cadence belongs to the current administrator; forwarding starts a new series.
+  firstSentAt          DateTime? @db.Timestamptz(6)
+  reminderCount        Int       @default(0)
+  lastReminderAt       DateTime? @db.Timestamptz(6)
+  lastReminderSource   String?
+  nextAutoReminderAt   DateTime? @db.Timestamptz(6)
+  autoRemindersStopped Boolean   @default(false)
+  stopReason           String?
+  needsManualFollowUp  Boolean   @default(false)
+  teacherFollowUpCount Int       @default(0)
+  lastTeacherFollowUpAt DateTime? @db.Timestamptz(6)
+  nextTeacherFollowUpAt DateTime? @db.Timestamptz(6)
+  forwardedByRole      String?
+  deliveries           FreeTierApprovalDelivery[]
+
   @@index([applicationId, createdAt(sort: Desc)])
+}
+
+// Payload contains signed URLs and is encrypted with the existing link secret.
+// DELIVERING is committed before contacting the provider; uncertain attempts
+// require reconciliation, never an automatic re-send.
+model FreeTierApprovalDelivery {
+  id            String @id @default(cuid())
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+  approvalId    String
+  approval      FreeTierAdminApproval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+  kind          String
+  sequence      Int
+  source        String?
+  actorEmail    String?
+  idempotencyKey String? @unique
+  state         String @default("QUEUED")
+  availableAt   DateTime @db.Timestamptz(6)
+  attemptedAt   DateTime? @db.Timestamptz(6)
+  sentAt        DateTime? @db.Timestamptz(6)
+  // Immutable acceptance result for I1 idempotency replays.
+  acceptedReminderCount Int?
+  acceptedNextAutoReminderAt DateTime? @db.Timestamptz(6)
+  attempts      Int @default(0)
+  payload       String
+  error         String?
+
+  @@unique([approvalId, kind, sequence])
+  @@index([state, availableAt])
 }
 
 model FreeTierEmailLog {
@@ -111,15 +159,42 @@ model FreeTierEmailLog {
 }
 
 model AcquisitionToken {
-  id          String    @id @default(cuid())
-  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
-  tokenHash   String    @unique
-  label       String
-  bypassWaitlist Boolean @default(false)
-  maxUses     Int?
-  uses        Int       @default(0)
-  expiresAt   DateTime? @db.Timestamptz(6)
-  createdBy   String?
+  id             String    @id @default(cuid())
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+  tokenHash      String    @unique
+  /// Short URL-safe code for /free?t=…; legacy rows may be null (lookup by hash only).
+  code           String?   @unique
+  label          String
+  sourceName     String?
+  eventLocation  String?
+  eventDate      DateTime? @db.Timestamptz(6)
+  notes          String?
+  bypassWaitlist Boolean   @default(false)
+  maxUses        Int?
+  uses           Int       @default(0)
+  scanCount      Int       @default(0)
+  expiresAt      DateTime? @db.Timestamptz(6)
+  disabledAt     DateTime? @db.Timestamptz(6)
+  createdBy      String?
+  createIdempotencyKey String? @unique
+  applications   FreeTierApplication[]
+  scans          AcquisitionTokenScan[]
+
+  @@index([expiresAt])
+}
+
+model AcquisitionTokenScan {
+  id              String           @id @default(cuid())
+  createdAt       DateTime         @default(now()) @db.Timestamptz(6)
+  tokenId         String
+  token           AcquisitionToken @relation(fields: [tokenId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  /// Hash of the browser dedupe cookie (no raw cookie stored).
+  dedupeCookieHash String
+  /// Coarse user agent prefix for debugging; not used for identity.
+  userAgentCoarse  String?
+
+  @@index([tokenId, createdAt(sort: Desc)])
+  @@index([tokenId, dedupeCookieHash, createdAt(sort: Desc)])
 }
 
 /// Audit log of operator decisions on free-tier applications.
@@ -183,6 +258,7 @@ enum DocumentArtifactKind {
 }
 
 model Class {
+  studentHandles ClassStudentHandle[]
   id                              String                           @id @default(cuid())
   createdAt                       DateTime                         @default(now()) @db.Timestamptz(6)
   updatedAt                       DateTime                         @default(now()) @db.Timestamptz(6)
@@ -1735,6 +1811,8 @@ model WritingPracticeClassAssignment {
 // Upload table removed. Videos will be stored in S3 and referenced by key.
 
 model User {
+  classStudentHandles ClassStudentHandle[]
+  signonIdentities SignonIdentity[]
   id                 String          @id @default(cuid())
   createdAt          DateTime        @default(now()) @db.Timestamptz(6)
   updatedAt          DateTime        @default(now()) @db.Timestamptz(6)
@@ -1746,8 +1824,26 @@ model User {
   password           Password?
   sessions           Session[]
   memberships        OrgMembership[]
+  isTester           Boolean         @default(false)
+  testerFeedback     TesterFeedback[]
   isAdmin            Boolean         @default(false)
   isSuperAdmin       Boolean         @default(false)
+  mockAdminGranted   Boolean         @default(false)
+  tours              UserTour[]
+}
+
+/// How a user left each in-app page tour (free classroom teachers). One row per
+/// user and tour; no row means the tour has not been seen and its welcome card
+/// shows. Tour ids live in app code (app/domain/guided-tours/tours.ts).
+model UserTour {
+  userId    String
+  tourId    String
+  /// "completed" or "dismissed"
+  status    String
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, tourId])
 }
 
 model Invitation {
@@ -2187,6 +2283,11 @@ model InternalApiRequestNonce {
 
 /// Append-only audit of mutating internal platform API calls authenticated via HMAC keys.
 model InternalPlatformApiAudit {
+  actorUserId String?
+  action      String?
+  targetId    String?
+  environment String?
+  metadata    Json?
   id          String   @id @default(cuid())
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   actorEmail  String
@@ -2197,4 +2298,61 @@ model InternalPlatformApiAudit {
 
   @@index([createdAt(sort: Desc)])
   @@index([keyId, createdAt(sort: Desc)])
+}
+
+model TesterFeedback {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  url          String   @db.VarChar(2048)
+  userAgent    String   @db.VarChar(1000)
+  whatIDid     String   @db.VarChar(4000)
+  whatHappened String   @db.VarChar(4000)
+  whatIWish    String   @db.VarChar(4000)
+  severity     String?  @db.VarChar(20)
+  actions      Json?
+  environment  String   @db.VarChar(100)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([createdAt, id])
+  @@index([userId, createdAt])
+  @@index([environment, createdAt])
+}
+
+/// Browser-bound, expiring unified sign-on context. Contains no plaintext OTP.
+model SignonFlow {
+  id          String   @id
+  browserHash String
+  expiresAt   DateTime @db.Timestamptz(6)
+  data        Json
+
+  @@index([expiresAt])
+}
+
+/// A provider subject is linked only after explicit consent and account proof.
+model SignonIdentity {
+  id        String @id @default(cuid())
+  provider  String
+  subject   String
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([provider, subject])
+  @@unique([provider, userId])
+}
+
+/// Class-context login aliases. Legacy User.username remains globally unique.
+model ClassStudentHandle {
+  id        String @id @default(cuid())
+  classId   String
+  userId    String
+  handle    String @db.VarChar(30)
+  handleKey String @db.VarChar(90)
+  class     Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, handleKey])
+  @@unique([classId, userId])
+  @@index([userId])
 }

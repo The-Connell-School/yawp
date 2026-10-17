@@ -13,3 +13,8 @@ export function generateClassCode(): string {
 
   return code;
 }
+
+/** Canonical class-code comparison, shared by writes, forms, and duplicate reports. */
+export function normalizeClassCode(code: string): string {
+  return code.trim().toUpperCase();
+}

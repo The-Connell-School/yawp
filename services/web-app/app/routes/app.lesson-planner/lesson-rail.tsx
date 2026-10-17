@@ -118,6 +118,7 @@ export function LessonRail({
   if (!expanded) {
     return (
       <aside
+        data-tour="planner-rail"
         data-testid="lesson-rail"
         data-expanded="false"
         className="hidden w-14 shrink-0 flex-col items-center gap-1 border-r bg-secondary/40 py-3 md:flex"
@@ -155,6 +156,7 @@ export function LessonRail({
 
   return (
     <aside
+      data-tour="planner-rail"
       data-testid="lesson-rail"
       data-expanded="true"
       className="hidden w-64 shrink-0 flex-col border-r bg-secondary/40 md:flex"

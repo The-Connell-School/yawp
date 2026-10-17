@@ -435,7 +435,8 @@ test.describe.serial('Writing Fundamentals Practice', () => {
       page.getByRole('heading', { name: /problem 2 of/i })
     ).toBeVisible();
 
-    // Teacher can see that the student has started (1 of 4 problems).
+    // Teacher sees the student's score (correct answers, not just answered)
+    // plus how far through the problems they are.
     await page.request.post('/auth/logout');
     await page.context().clearCookies();
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
@@ -449,8 +450,9 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     ).toBeVisible();
     const studentRow = page
       .getByTestId('student-progress-row')
-      .filter({ hasText: '1/4' });
+      .filter({ hasText: '1/4 correct' });
     await expect(studentRow).toBeVisible();
+    await expect(studentRow).toContainText(/1 of 4 answered/i);
 
     // And can expand that student to read the exact answer and its feedback.
     await studentRow.click();

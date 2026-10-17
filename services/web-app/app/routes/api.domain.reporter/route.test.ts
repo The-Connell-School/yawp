@@ -1,5 +1,31 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
+let monthlyEnabled = false;
+const beginMonthlyOperation = mock();
+const finishMonthlyOperation = mock();
+const failMonthlyOperation = mock();
+mock.module('~/domain/free-tier/monthly-policy.server', () => ({
+  monthlyFreeTierPolicy: async () => ({
+    enabled: monthlyEnabled,
+    limits: { reporterMonthly: 2, lessonPlannerMonthly: 5 },
+  }),
+}));
+mock.module('~/domain/free-tier/monthly-operations.server', () => ({
+  beginMonthlyOperation,
+  finishMonthlyOperation,
+  failMonthlyOperation,
+  replayMonthlyOperation: async () => null,
+  monthlyOperationResponse: (result: any) =>
+    Response.json(result.payload ?? { error: result.kind }, {
+      status:
+        result.kind === 'replay'
+          ? 200
+          : result.kind === 'exhausted'
+            ? 403
+            : 409,
+    }),
+}));
+
 const getLLMCompletion = mock();
 const requireMutableRequest = mock();
 const requireReporterAccess = mock();
@@ -11,6 +37,7 @@ class AiRateLimitError extends Error {
     super('rate limited');
   }
 }
+class AiFreeTierBudgetExceededError extends Error {}
 
 const prisma = {
   reporterConversation: {
@@ -39,9 +66,16 @@ mock.module('~/utils/getLLMCompletion', () => ({
   getLLMCompletion,
 }));
 mock.module('~/utils/ai-admission.server', () => ({
+  AiFreeTierBudgetExceededError,
   AiRateLimitError,
+  aiFreeTierBudgetExceededMessage: () =>
+    'Writing tools are paused because this free-tier environment has reached its current budget.',
   reserveAiRequest,
 }));
+
+function jsonResult(response: unknown) {
+  return response as { data: any; init?: ResponseInit };
+}
 
 const { action } = await import('./route');
 
@@ -72,6 +106,12 @@ const access = {
 };
 
 beforeEach(() => {
+  monthlyEnabled = false;
+  beginMonthlyOperation
+    .mockReset()
+    .mockResolvedValue({ kind: 'reserved', name: 'operation', operation: {} });
+  finishMonthlyOperation.mockReset().mockResolvedValue(undefined);
+  failMonthlyOperation.mockReset().mockResolvedValue(undefined);
   getLLMCompletion.mockReset();
   requireMutableRequest.mockReset().mockResolvedValue(undefined);
   requireReporterAccess.mockReset().mockResolvedValue(access);
@@ -100,7 +140,7 @@ describe('api.domain.reporter action', () => {
     const response = await action({
       request: formRequest({ message: 'How is my class doing?' }),
     } as any);
-    const body = (await response.data) as any;
+    const body = (await jsonResult(response).data) as any;
 
     expect(body.conversationId).toBe('conv-1');
     expect(body.reply).toBe('Here is your report.');
@@ -178,7 +218,7 @@ describe('api.domain.reporter action', () => {
     const response = await action({
       request: formRequest({ message: 'and now?', conversationId: 'conv-9' }),
     } as any);
-    const body = (await response.data) as any;
+    const body = (await jsonResult(response).data) as any;
 
     expect(body.isNewConversation).toBe(false);
     expect(prisma.reporterConversation.create).not.toHaveBeenCalled();
@@ -231,7 +271,7 @@ describe('api.domain.reporter action', () => {
       request: formRequest({ message: 'x'.repeat(4_001) }),
     } as any);
 
-    expect(response.init?.status).toBe(422);
+    expect(jsonResult(response).init?.status).toBe(422);
     expect(getLLMCompletion).not.toHaveBeenCalled();
   });
 
@@ -242,11 +282,28 @@ describe('api.domain.reporter action', () => {
       request: formRequest({ message: 'one more' }),
     } as any);
 
-    expect(response.init?.status).toBe(429);
-    expect(response.data).toMatchObject({
+    expect(jsonResult(response).init?.status).toBe(429);
+    expect(jsonResult(response).data).toMatchObject({
       error: 'Too many reporter requests. Please wait a moment and try again.',
     });
     expect(getLLMCompletion).not.toHaveBeenCalled();
+  });
+
+  test('denies reporter generation when the free-tier AI budget is exhausted', async () => {
+    reserveAiRequest.mockRejectedValueOnce(new AiFreeTierBudgetExceededError());
+
+    const response = await action({
+      request: formRequest({ message: 'one more' }),
+    } as any);
+
+    expect(jsonResult(response).init?.status).toBe(402);
+    expect((response as any).data).toEqual({
+      error: 'free_tier_budget_exceeded',
+      message:
+        'Writing tools are paused because this free-tier environment has reached its current budget.',
+    });
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+    expect(prisma.reporterConversation.create).not.toHaveBeenCalled();
   });
 
   test('does not expose provider errors to the client', async () => {
@@ -257,11 +314,13 @@ describe('api.domain.reporter action', () => {
       request: formRequest({ message: 'hi' }),
     } as any);
 
-    expect(response.init?.status).toBe(500);
-    expect(response.data).toEqual({
+    expect(jsonResult(response).init?.status).toBe(500);
+    expect(jsonResult(response).data).toEqual({
       error: 'The reporter could not put that together. Please try again.',
     });
-    expect(JSON.stringify(response.data)).not.toContain('provider-secret');
+    expect(JSON.stringify(jsonResult(response).data)).not.toContain(
+      'provider-secret'
+    );
     expect(prisma.reporterConversation.create).not.toHaveBeenCalled();
   });
 
@@ -270,7 +329,7 @@ describe('api.domain.reporter action', () => {
       request: formRequest({ message: 'hi', llmRetry: 'fallback' }),
     } as any);
 
-    expect(response.init?.status).toBe(422);
+    expect(jsonResult(response).init?.status).toBe(422);
     expect(getLLMCompletion).not.toHaveBeenCalled();
   });
 
@@ -279,7 +338,7 @@ describe('api.domain.reporter action', () => {
     const response = await action({
       request: formRequest({ message: 'hi', conversationId: 'not-mine' }),
     } as any);
-    expect(response.init?.status).toBe(404);
+    expect(jsonResult(response).init?.status).toBe(404);
     expect(getLLMCompletion).not.toHaveBeenCalled();
     expect(reserveAiRequest).not.toHaveBeenCalled();
   });
@@ -289,7 +348,7 @@ describe('api.domain.reporter action', () => {
     const response = await action({
       request: formRequest({ message: 'hi' }),
     } as any);
-    expect(response.init?.status).toBe(500);
+    expect(jsonResult(response).init?.status).toBe(500);
     expect(prisma.reporterConversation.create).not.toHaveBeenCalled();
   });
 
@@ -311,7 +370,7 @@ describe('api.domain.reporter action', () => {
       request: formRequest({ message: 'Save a plan for Ada' }),
     } as any);
 
-    expect(response.init?.status).toBe(500);
+    expect(jsonResult(response).init?.status).toBe(500);
     expect(commitReporterGrowthPlans).not.toHaveBeenCalled();
     expect(prisma.reporterConversation.create).not.toHaveBeenCalled();
   });
@@ -348,7 +407,7 @@ describe('api.domain.reporter action', () => {
       request: formRequest({ message: 'Save a plan for Ada' }),
     } as any);
 
-    expect(response.data).toMatchObject({
+    expect(jsonResult(response).data).toMatchObject({
       conversationId: 'conv-1',
       growthPlanProposals: [
         {
@@ -401,7 +460,7 @@ describe('api.domain.reporter action', () => {
       }),
     } as any);
 
-    expect(response.data).toMatchObject({
+    expect(jsonResult(response).data).toMatchObject({
       growthPlanProposals: [
         {
           student: 'student-1',
@@ -433,7 +492,7 @@ describe('api.domain.reporter action', () => {
       }),
     } as any);
 
-    expect(response.data).toEqual({
+    expect(jsonResult(response).data).toEqual({
       growthPlanSaved: true,
       studentName: 'Ada',
     });
@@ -447,5 +506,64 @@ describe('api.domain.reporter action', () => {
     );
     expect(reserveAiRequest).not.toHaveBeenCalled();
     expect(getLLMCompletion).not.toHaveBeenCalled();
+  });
+});
+
+describe('monthly direct action admission', () => {
+  test('zero/exhausted cap denies generation and persistence; pending duplicates return 409', async () => {
+    monthlyEnabled = true;
+    for (const kind of ['exhausted', 'pending', 'conflict']) {
+      beginMonthlyOperation.mockResolvedValue({ kind });
+      const result = (await action({
+        request: formRequest({
+          message: 'A counted request',
+          requestId: 'same-request',
+        }),
+      } as any)) as Response;
+      expect(result.status).toBe(kind === 'exhausted' ? 403 : 409);
+    }
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+    expect(reserveAiRequest).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+  test('counted operations require an idempotency key', async () => {
+    monthlyEnabled = true;
+    const result = (await action({
+      request: formRequest({ message: 'A counted request' }),
+    } as any)) as any;
+    expect(result.init.status).toBe(400);
+    expect(beginMonthlyOperation).not.toHaveBeenCalled();
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+  });
+  test('successful retry returns saved response without provider, spend or persistence', async () => {
+    monthlyEnabled = true;
+    beginMonthlyOperation.mockResolvedValue({
+      kind: 'replay',
+      payload: { reply: 'Saved response', conversationId: 'saved' },
+    });
+    const result = (await action({
+      request: formRequest({
+        message: 'A counted request',
+        requestId: 'same-request',
+      }),
+    } as any)) as Response;
+    expect(await result.json()).toEqual({
+      reply: 'Saved response',
+      conversationId: 'saved',
+    });
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+    expect(reserveAiRequest).not.toHaveBeenCalled();
+  });
+  test('provider failure releases monthly reservation without committing a use', async () => {
+    monthlyEnabled = true;
+    getLLMCompletion.mockRejectedValue(new Error('provider unavailable'));
+    await action({
+      request: formRequest({
+        message: 'A counted request',
+        requestId: 'retry-me',
+      }),
+    } as any);
+    expect(failMonthlyOperation).toHaveBeenCalledTimes(1);
+    expect(finishMonthlyOperation).not.toHaveBeenCalled();
   });
 });

@@ -1,0 +1,38 @@
+[
+  {
+    "file": "flag-off-login-1280-impl.png",
+    "changed_pixels": "0 (0)",
+    "prior_sha256": "1067f9a40a95da2453aaaaf0a0f07453354aca972acaee3e4fe39ead0e7a4a9d",
+    "fresh_sha256": "1067f9a40a95da2453aaaaf0a0f07453354aca972acaee3e4fe39ead0e7a4a9d"
+  },
+  {
+    "file": "flag-off-signup-1280-impl.png",
+    "changed_pixels": "0 (0)",
+    "prior_sha256": "fd0089cd149aa525c84302bb32f7cc7fe975d6b1f664d5b94db288334b473fd5",
+    "fresh_sha256": "fd0089cd149aa525c84302bb32f7cc7fe975d6b1f664d5b94db288334b473fd5"
+  },
+  {
+    "file": "flag-off-class-link-1280-impl.png",
+    "changed_pixels": "0 (0)",
+    "prior_sha256": "2a9eec990c1009ad7b724a9927e036da2a91b94143a5bbd17a463b20ca7cc24b",
+    "fresh_sha256": "2a9eec990c1009ad7b724a9927e036da2a91b94143a5bbd17a463b20ca7cc24b"
+  },
+  {
+    "file": "flag-off-login-390-impl.png",
+    "changed_pixels": "0 (0)",
+    "prior_sha256": "15a5bb2b3802e4c7b6f43b57c46a8cf85f65231076c1106fcc83ae56d33abf81",
+    "fresh_sha256": "15a5bb2b3802e4c7b6f43b57c46a8cf85f65231076c1106fcc83ae56d33abf81"
+  },
+  {
+    "file": "flag-off-signup-390-impl.png",
+    "changed_pixels": "0 (0)",
+    "prior_sha256": "a33520a0a094821ed681a89c0c93156cc738ced7e366c07682a1068e34c197c5",
+    "fresh_sha256": "a33520a0a094821ed681a89c0c93156cc738ced7e366c07682a1068e34c197c5"
+  },
+  {
+    "file": "flag-off-class-link-390-impl.png",
+    "changed_pixels": "0 (0)",
+    "prior_sha256": "fcbc4c68adef6df0cf7b9892d48f12c94bb4b33246fe10cfcd81c38edee9d101",
+    "fresh_sha256": "fcbc4c68adef6df0cf7b9892d48f12c94bb4b33246fe10cfcd81c38edee9d101"
+  }
+]

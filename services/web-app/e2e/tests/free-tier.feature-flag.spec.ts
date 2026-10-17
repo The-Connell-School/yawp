@@ -15,13 +15,12 @@ test.describe.serial('Free tier feature flag', () => {
 
   test('form POST to /free returns 404 and does not create a waitlist row when off', async ({
     page,
-    request,
   }) => {
     await setFreeTierFlag(false);
     const email = `e2e-flag-post-off+${Date.now()}@yawp.local`;
     const prisma = createE2EPrismaClient();
     try {
-      const response = await request.post('/free?index', {
+      const response = await page.request.post('/free?index', {
         form: {
           intent: 'waitlist',
           name: 'Flag POST Off',

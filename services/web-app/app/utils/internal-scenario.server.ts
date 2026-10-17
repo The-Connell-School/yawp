@@ -1,3 +1,4 @@
+import { resolveClassCode } from './class-code-write.server';
 import { currentSchoolYear } from './school-year';
 import { createHash, randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@app/prisma';
@@ -71,7 +72,7 @@ export class InternalScenarios {
         }
       }
       for (let c = 0; c < input.recipe.classes; c++) {
-        const classroom = await tx.class.create({ data: { schoolId: resources.schoolId, code: `scenario-${c + 1}`, title: `Scenario Class ${c + 1}`, schoolYear: currentSchoolYear(this.now()),
+        const classroom = await tx.class.create({ data: { schoolId: resources.schoolId, code: await resolveClassCode(tx, `scenario-${c + 1}`, { generated: true }), title: `Scenario Class ${c + 1}`, schoolYear: currentSchoolYear(this.now()),
           teachers: { connect: teachers.map(id => ({ id })) }, students: { connect: students.map(id => ({ id })) } } });
         resources.classes.push(classroom.id);
         for (let a = 0; a < input.recipe.assignmentsPerClass; a++) {

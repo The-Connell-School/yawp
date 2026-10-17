@@ -38,6 +38,34 @@ variable "db_allocated_storage" {
   default     = 20
 }
 
+variable "database_export_retention_days" {
+  type        = number
+  description = "Number of days to retain database export objects in S3."
+  default     = 90
+
+  validation {
+    condition     = var.database_export_retention_days >= 90
+    error_message = "Database export retention must be at least 90 days."
+  }
+}
+
+variable "manual_snapshot_retention_days" {
+  type        = number
+  description = "Number of days to retain manual RDS snapshots before scheduled cleanup deletes eligible snapshots."
+  default     = 90
+
+  validation {
+    condition     = var.manual_snapshot_retention_days >= 90
+    error_message = "Manual RDS snapshot retention must be at least 90 days."
+  }
+}
+
+variable "rds_snapshot_cleanup_schedule_expression" {
+  type        = string
+  description = "EventBridge schedule expression for manual RDS snapshot cleanup."
+  default     = "cron(30 8 * * ? *)"
+}
+
 variable "session_secret" {
   type        = string
   description = "Secret used for session encryption"
@@ -187,7 +215,7 @@ variable "internal_platform_signing_keys_secret_arn" {
     condition = (
       var.internal_platform_integration == null ||
       (var.internal_platform_signing_keys_secret_arn != null &&
-        can(regex("^arn:aws:secretsmanager:", var.internal_platform_signing_keys_secret_arn)))
+      can(regex("^arn:aws:secretsmanager:", var.internal_platform_signing_keys_secret_arn)))
     )
     error_message = "Set internal_platform_signing_keys_secret_arn to the existing secret ARN when internal_platform_integration is configured."
   }
@@ -198,6 +226,36 @@ variable "stripe_secret_key" {
   description = "Stripe API secret key for the target environment."
   sensitive   = true
   default     = ""
+}
+
+variable "google_oauth_credentials_configured" {
+  type        = bool
+  description = "Adopt existing production Google OAuth secret metadata and wire App Runner ARNs. Does not enable unified-sign-on."
+  default     = false
+
+  validation {
+    condition = !var.google_oauth_credentials_configured || (
+      var.env == "production" && var.aws_region == "us-east-1" && var.google_oauth_secret_arns != null
+    )
+    error_message = "Google OAuth adoption requires production in us-east-1 and both existing secret ARNs."
+  }
+}
+
+variable "google_oauth_secret_arns" {
+  type = object({
+    client_id     = string
+    client_secret = string
+  })
+  description = "Existing secret ARNs (including AWS suffixes), never credential values. Used only when google_oauth_credentials_configured is true."
+  default     = null
+
+  validation {
+    condition = var.google_oauth_secret_arns == null ? true : (
+      can(regex("^arn:aws:secretsmanager:us-east-1:422348803522:secret:yawp-production-google-oauth-client-id-[A-Za-z0-9]{6}$", var.google_oauth_secret_arns.client_id)) &&
+      can(regex("^arn:aws:secretsmanager:us-east-1:422348803522:secret:yawp-production-google-oauth-client-secret-[A-Za-z0-9]{6}$", var.google_oauth_secret_arns.client_secret))
+    )
+    error_message = "Google OAuth ARNs must identify the existing production client ID and client secret in account 422348803522, us-east-1."
+  }
 }
 
 variable "stripe_webhook_secret" {
@@ -217,4 +275,65 @@ variable "stripe_ua_existing_subscription_price_ids" {
   type        = list(string)
   description = "Legacy recurring Stripe Price IDs whose subscribers should receive the UA license without paying again."
   default     = []
+}
+
+variable "cloudtrail_enabled" {
+  type        = bool
+  description = "Create the production multi-region CloudTrail and encrypted log bucket. Only takes effect when env is production."
+  default     = true
+}
+
+variable "cloudtrail_name" {
+  type        = string
+  description = "Name for the production multi-region CloudTrail. Leave empty to derive one from app_name and env."
+  default     = ""
+
+  validation {
+    condition     = var.cloudtrail_name == "" || can(regex("^[A-Za-z0-9._-]{3,128}$", var.cloudtrail_name))
+    error_message = "cloudtrail_name must be empty or a 3-128 character CloudTrail name using letters, numbers, dots, underscores, and hyphens."
+  }
+}
+
+variable "cloudtrail_log_bucket_name" {
+  type        = string
+  description = "S3 bucket name for CloudTrail logs. Leave empty to derive yawp-production-cloudtrail-ACCOUNT."
+  default     = ""
+
+  validation {
+    condition     = var.cloudtrail_log_bucket_name == "" || can(regex("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.cloudtrail_log_bucket_name))
+    error_message = "cloudtrail_log_bucket_name must be empty or a valid lowercase S3 bucket name."
+  }
+}
+
+variable "cloudtrail_s3_key_prefix" {
+  type        = string
+  description = "S3 key prefix for CloudTrail log objects inside the log bucket."
+  default     = "cloudtrail"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9!_.*'()/-]+$", var.cloudtrail_s3_key_prefix)) && !startswith(var.cloudtrail_s3_key_prefix, "/") && !endswith(var.cloudtrail_s3_key_prefix, "/")
+    error_message = "cloudtrail_s3_key_prefix must be a non-empty S3 key prefix without leading or trailing slashes."
+  }
+}
+
+variable "cloudtrail_log_retention_days" {
+  type        = number
+  description = "Number of days to retain current CloudTrail log objects before S3 lifecycle expiration."
+  default     = 365
+
+  validation {
+    condition     = var.cloudtrail_log_retention_days >= 90
+    error_message = "cloudtrail_log_retention_days must be at least 90 days."
+  }
+}
+
+variable "cloudtrail_kms_deletion_window_days" {
+  type        = number
+  description = "Waiting period before the CloudTrail KMS key can be deleted."
+  default     = 30
+
+  validation {
+    condition     = var.cloudtrail_kms_deletion_window_days >= 7 && var.cloudtrail_kms_deletion_window_days <= 30
+    error_message = "cloudtrail_kms_deletion_window_days must be between 7 and 30 days."
+  }
 }

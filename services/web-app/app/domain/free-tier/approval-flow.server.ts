@@ -1,10 +1,16 @@
+import { isClassPreparationEnabled } from './class-preparation.server';
+import { needsClassPreparation } from './class-preparation';
+import { lockApprovalApplication } from './approval-lock.server';
+import { isApprovalV2Enabled, resendApprovalReminder, forwardApprovalByToken } from './approval-v2.server';
+import { randomUUID } from 'node:crypto';
 import { createHash } from 'node:crypto';
 import { prisma } from '~/utils/db.server';
 import { assertTransition } from './state';
 import { normalizeEmail } from './service.server';
+import { selfAdminEmailError } from './admin-email';
 import {
   ADMIN_REDIRECT_CHAIN_CAP,
-  evaluateAdminEmail,
+  evaluateAdminEmailForRuntime,
 } from './admin-email-rules.server';
 import { adminApprovalEmailCopyVersionHash } from './email-copy.server';
 import {
@@ -26,11 +32,19 @@ import {
 } from './email.server';
 import { getApprovalHooks } from './approval-hooks.server';
 import { getClientIp } from '~/utils/ip.server';
+import {
+  assertFreeTierBudgetHeadroomForTransition,
+  FreeTierBudgetExceededError,
+  resolveFreeTierRuntimeEnvironment,
+  type FreeTierUsageSummary,
+} from './usage-budget.server';
 
 export type FreeTierTransactionalFailure = {
   ok: false;
   reason: string;
   status?: string;
+  budget?: FreeTierUsageSummary;
+  operatorMessage?: string;
 };
 
 export class FreeTierTransactionalAbortError extends Error {
@@ -45,6 +59,15 @@ export class FreeTierTransactionalAbortError extends Error {
 
 function abortClaimedLinkTransaction(result: FreeTierTransactionalFailure): never {
   throw new FreeTierTransactionalAbortError(result);
+}
+
+function budgetExceededFailure(error: FreeTierBudgetExceededError): FreeTierTransactionalFailure {
+  return {
+    ok: false,
+    reason: 'budget_exceeded',
+    budget: error.summary,
+    operatorMessage: `Free-tier ${error.summary.environment} budget reached: $${error.summary.spendUsd.toFixed(2)} of $${error.summary.budgetUsd.toFixed(2)} used.`,
+  };
 }
 
 function mapTransactionalAbort(error: unknown) {
@@ -103,19 +126,42 @@ export async function submitAdminDetails(args: {
   const adminEmail = normalizeEmail(args.adminEmail);
   const app = await prisma.freeTierApplication.findFirst({
     where: { id: args.applicationId, userId: args.userId },
-    select: { id: true, status: true, email: true, name: true, schoolName: true, teacherPersonalNote: true },
+    select: { id: true, status: true, email: true, name: true, schoolName: true, organizationId: true, starterClassName: true, starterClassGrade: true },
   });
   if (!app) return { ok: false as const, reason: 'not_found' as const };
   if (app.status !== 'ACCOUNT_CREATED' && app.status !== 'ADMIN_SUBMITTED') {
     return { ok: false as const, reason: 'illegal_state' as const, status: app.status };
   }
 
-  const rules = evaluateAdminEmail({ teacherEmail: app.email, adminEmail, schoolName: app.schoolName });
+  // Use the authorized persisted application, before demo's manual-review bypass
+  // and before minting links, writing approval state, or dispatching mail.
+  const adminEmailError = selfAdminEmailError(app.email, adminEmail);
+  if (adminEmailError) {
+    return {
+      ok: false as const,
+      reason: 'same_as_teacher' as const,
+      fieldErrors: { adminEmail: adminEmailError },
+    };
+  }
+
+  const classStepEnabled = await isClassPreparationEnabled(args.userId, app.organizationId);
+  if (needsClassPreparation(app, classStepEnabled)) {
+    return { ok: false as const, reason: 'class_required' as const };
+  }
+
+  const rules = evaluateAdminEmailForRuntime(
+    { teacherEmail: app.email, adminEmail, schoolName: app.schoolName },
+    resolveFreeTierRuntimeEnvironment()
+  );
 
   const copyHash = adminApprovalEmailCopyVersionHash();
-  const note = args.personalNote?.trim() || null;
+  // Kept in the API for older callers; introductions are no longer accepted.
+  const note = null;
 
   const result = await prisma.$transaction(async (tx) => {
+    if (classStepEnabled) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('free_tier_provision:' || ${app.id}))`;
+    }
     const current = await tx.freeTierApplication.findUnique({
       where: { id: app.id },
       select: { status: true },
@@ -197,7 +243,6 @@ export async function submitAdminDetails(args: {
       teacherEmail: app.email,
       teacherName: app.name,
       schoolName: app.schoolName,
-      personalNote: note,
       approveUrl,
       notRightPersonUrl: declineUrl,
     });
@@ -242,6 +287,7 @@ export async function completeSchoolAdminApproval(args: {
   let result;
   try {
     result = await prisma.$transaction(async (tx) => {
+      if (earlyAppId) await lockApprovalApplication(tx, earlyAppId);
       const consumed = await claimSignedLinkInTransaction(tx, {
         token: args.token,
         expectedPurpose: 'ADMIN_APPROVE',
@@ -258,6 +304,7 @@ export async function completeSchoolAdminApproval(args: {
           schoolName: true,
           userId: true,
           organizationId: true,
+          releasedAt: true,
         },
       });
       if (!app) abortClaimedLinkTransaction({ ok: false, reason: 'not_found' });
@@ -288,9 +335,43 @@ export async function completeSchoolAdminApproval(args: {
         abortClaimedLinkTransaction({ ok: false, reason: 'not_found' });
       }
 
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('free_tier_release'))`;
+      try {
+        await assertFreeTierBudgetHeadroomForTransition(tx, {
+          from: { status: app.status, releasedAt: app.releasedAt },
+          to: { status: 'APPROVED', releasedAt: app.releasedAt },
+        });
+      } catch (error) {
+        if (error instanceof FreeTierBudgetExceededError) {
+          abortClaimedLinkTransaction(budgetExceededFailure(error));
+        }
+        throw error;
+      }
+
+      const approvalIdentity = {
+        id: app.id,
+        userId: app.userId,
+        organizationId: app.organizationId,
+      };
+      const v2 = await isApprovalV2Enabled(approvalIdentity, tx);
+      if (v2 && (!args.adminRole.trim() || args.adminRole.trim().length > 120))
+        abortClaimedLinkTransaction({ ok: false, reason: 'validation' });
+      if (v2)
+        await tx.freeTierApprovalDelivery.updateMany({
+          where: { approvalId: pending.id, state: 'QUEUED' },
+          data: { state: 'CANCELLED', error: 'approved' },
+        });
       await tx.freeTierAdminApproval.update({
         where: { id: pending.id },
         data: {
+          ...(v2
+            ? {
+                autoRemindersStopped: true,
+                stopReason: 'approved',
+                nextAutoReminderAt: null,
+                nextTeacherFollowUpAt: null,
+              }
+            : {}),
           status: 'APPROVED',
           adminRole: args.adminRole.trim(),
           decidedAt: new Date(),
@@ -355,7 +436,22 @@ export async function completeSchoolAdminApproval(args: {
 export async function resendFreeTierAdminApprovalReminder(args: {
   applicationId: string;
   request: Request;
+  idempotencyKey?: string;
+  actorEmail?: string;
+  requireV2?: boolean;
 }) {
+  const identity = await prisma.freeTierApplication.findUnique({
+    where: { id: args.applicationId },
+    select: { id: true, userId: true, organizationId: true },
+  });
+  if (identity && (await isApprovalV2Enabled(identity)))
+    return resendApprovalReminder({
+      applicationId: args.applicationId,
+      idempotencyKey: args.idempotencyKey ?? `legacy-manual:${randomUUID()}`,
+      actorEmail: args.actorEmail,
+    });
+  // Staff writes require durable v2 delivery; teacher callers retain fallback.
+  if (args.requireV2) return { ok: false as const, reason: 'flag_off' as const };
   const app = await prisma.freeTierApplication.findFirst({
     where: { id: args.applicationId, status: 'SENT' },
     select: { id: true, name: true, schoolName: true, email: true },
@@ -365,7 +461,7 @@ export async function resendFreeTierAdminApprovalReminder(args: {
   const pendingRow = await prisma.freeTierAdminApproval.findFirst({
     where: { applicationId: app.id, status: 'PENDING' },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, adminEmail: true, personalNote: true },
+    select: { id: true, adminEmail: true },
   });
   if (!pendingRow) return { ok: false as const, reason: 'not_found' as const };
 
@@ -382,7 +478,7 @@ export async function resendFreeTierAdminApprovalReminder(args: {
       ttlMs: FREE_TIER_LINK_TTL_MS,
       tx,
     });
-    return { approveMint, declineMint, personalNote: pendingRow.personalNote };
+    return { approveMint, declineMint };
   });
 
   const base = freeTierPublicAppOrigin();
@@ -395,7 +491,6 @@ export async function resendFreeTierAdminApprovalReminder(args: {
     teacherEmail: app.email,
     teacherName: app.name,
     schoolName: app.schoolName,
-    personalNote: minted.personalNote,
     approveUrl,
     notRightPersonUrl,
   });
@@ -424,6 +519,18 @@ export async function redirectSchoolAdmin(args: {
   newAdminEmail: string;
   request: Request;
 }) {
+  const signed = await peekSignedLink({
+    token: args.token,
+    expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
+  });
+  if (signed.ok) {
+    const identity = await prisma.freeTierApplication.findUnique({
+      where: { id: signed.applicationId },
+      select: { id: true, userId: true, organizationId: true },
+    });
+    if (identity && (await isApprovalV2Enabled(identity)))
+      return forwardApprovalByToken(args);
+  }
   const newEmail = normalizeEmail(args.newAdminEmail);
   const meta = hashRequestMeta(args.request);
   const copyHash = adminApprovalEmailCopyVersionHash();
@@ -452,11 +559,14 @@ export async function redirectSchoolAdmin(args: {
   });
   if (!prePending) return { ok: false as const, reason: 'not_found' as const };
 
-  const rules = evaluateAdminEmail({
+  const rules = evaluateAdminEmailForRuntime(
+    {
     teacherEmail: preApp.email,
     adminEmail: newEmail,
     schoolName: preApp.schoolName,
-  });
+  },
+    resolveFreeTierRuntimeEnvironment()
+  );
 
   const newAdminNameTrim = args.newAdminName.trim();
 
@@ -487,13 +597,6 @@ export async function redirectSchoolAdmin(args: {
       teacherEmail: preApp.email,
       teacherName: preApp.name,
       schoolName: preApp.schoolName,
-      personalNote: (
-        await prisma.freeTierAdminApproval.findFirst({
-          where: { applicationId: preApp.id, status: 'PENDING' },
-          orderBy: { createdAt: 'desc' },
-          select: { personalNote: true },
-        })
-      )?.personalNote,
       approveUrl,
       notRightPersonUrl,
       adminRecipientName: newAdminNameTrim,

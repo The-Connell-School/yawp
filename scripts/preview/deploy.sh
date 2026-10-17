@@ -4,10 +4,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_DIR="${SOURCE_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 export SOURCE_DIR
+export PREVIEW_CONTROL_DIR="$SCRIPT_DIR"
 
 source "$SCRIPT_DIR/tooling-artifacts.sh"
 
 export PREVIEW_DATA_MODE="${PREVIEW_DATA_MODE:-seed}"
+
+should_run_signon_qa_seed() {
+  [[ "$SLUG" =~ ^pr-[0-9]+$ && "$DATA_MODE" == "seed" ]]
+}
 export PREVIEW_DEV_LOGIN_EMAIL="${PREVIEW_DEV_LOGIN_EMAIL:-dev.teacher@yawp.local}"
 # Derive paths and database identity before creating the per-preview credential.
 # The placeholder URL never reaches a container or persistent compose file.
@@ -116,11 +121,6 @@ else
   PREVIEW_MASTER_ORG_GATE_ENABLED=false
 fi
 export PREVIEW_MASTER_ORG_GATE_ENABLED
-case "${PREVIEW_KEEP_AWAKE:-false}" in
-  true) printf 'true\n' > "$PREVIEW_DIR/keep-awake" ;;
-  false) rm -f -- "$PREVIEW_DIR/keep-awake" ;;
-  *) echo "PREVIEW_KEEP_AWAKE must be true or false" >&2; exit 1 ;;
-esac
 ACCESS_CODE_FILE="$PREVIEW_DIR/access-code"
 ACCESS_SEATS_FILE="$PREVIEW_DIR/access-seats.json"
 ACCESS_SECRET_FILE="$PREVIEW_DIR/access-secret"
@@ -563,6 +563,24 @@ install_demo_backup_tooling() {
   install -m 700 "$SCRIPT_DIR/restore-demo-backup.sh" "$ROOT/ops/restore-demo-backup.sh"
 }
 
+write_preview_metadata() {
+  local now temporary
+  now="$(date +%s)"
+  umask 022
+  temporary="$PREVIEW_DIR/last-deploy.$$.tmp"
+  printf '%s\n' "$now" > "$temporary"
+  mv -f -- "$temporary" "$PREVIEW_DIR/last-deploy"
+  if [[ -n "${PREVIEW_HEAD_SHA:-}" && "$PREVIEW_HEAD_SHA" =~ ^[A-Fa-f0-9]{7,40}$ ]]; then
+    printf '%s\n' "$PREVIEW_HEAD_SHA" > "$PREVIEW_DIR/deployed-sha"
+  fi
+  if [[ -n "${PREVIEW_BRANCH:-}" && ! "$PREVIEW_BRANCH" =~ [[:cntrl:]] ]]; then
+    printf '%s\n' "${PREVIEW_BRANCH:0:256}" > "$PREVIEW_DIR/branch"
+  fi
+  if [[ -n "${PREVIEW_AUTHOR:-}" && "$PREVIEW_AUTHOR" =~ ^[A-Za-z0-9_.-]{1,128}$ ]]; then
+    printf '%s\n' "$PREVIEW_AUTHOR" > "$PREVIEW_DIR/author"
+  fi
+}
+
 create_seed_preview_database() {
   validate_database_name "$DATABASE_NAME"
   echo "Creating preview database $DATABASE_NAME for seeded local-dev data..."
@@ -616,6 +634,7 @@ compute_tooling_fingerprint() {
         "$SCRIPT_DIR/deploy.sh" \
         "$SCRIPT_DIR/preview-env.mjs" \
         "$SCRIPT_DIR/render-compose.mjs" \
+        "$SCRIPT_DIR/demo-internal-api-config.mjs" \
         "$SCRIPT_DIR/find-traefik-dynamic-dir.sh" \
         "$SCRIPT_DIR/rollout-web.sh" \
         "$SCRIPT_DIR/tooling-artifacts.sh"
@@ -637,6 +656,8 @@ compute_tooling_fingerprint() {
         packages/prisma/scripts/seed-local-dev.ts \
         packages/prisma/scripts/seed-class-starter-assignment-type.ts \
         packages/prisma/scripts/apply-daily-pages-engagement-v2-seed.ts \
+        packages/prisma/scripts/seed-preview-signon-qa.ts \
+        services/web-app/app/utils/preview-email-capture.server.ts \
         packages/prisma/scripts/seed-preview-teacher-notes-qa.ts \
         packages/prisma/scripts/local-dev/preview-teacher-notes-qa.ts \
         packages/prisma/scripts/assets/class-starter.jpg \
@@ -700,6 +721,11 @@ run_tooling_if_needed() {
     TOOLING_CHANGED=0
     # Even when skipping full tooling, always run idempotent seeds that must
     # keep preview data current with the codebase (e.g., AP History library).
+    # Bundle availability is required before serving code-only demo updates.
+    # Run this separately from optional fixture seeds so failure aborts rollout.
+    if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-free-tier-bundle-assignment-types.ts" ]]; then
+      "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && cd packages/prisma && bun run seed-free-tier-bundle-assignment-types'
+    fi
     local skip_path_seeds='bun prisma generate'
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-ap-history-library.ts" ]]; then
       skip_path_seeds+=' && bun run seed-ap-history-library'
@@ -712,6 +738,9 @@ run_tooling_if_needed() {
       if ! "${compose[@]}" run --rm toolbox bash -lc "$skip_path_seeds"; then
         echo "Warning: idempotent preview seeds failed; continuing deploy (non-fatal)." >&2
       fi
+    fi
+    if should_run_signon_qa_seed && [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-signon-qa.ts" ]]; then
+      "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && cd packages/prisma && bun run seed-preview-signon-qa'
     fi
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-free-tier-ship-review.ts" ]] && should_run_free_tier_ship_review_seed; then
       echo "Running free-tier ship-review fixture seed on existing preview database (skip path)."
@@ -768,6 +797,9 @@ run_tooling_if_needed() {
   fi
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/apply-daily-pages-engagement-v2-seed.ts" ]]; then
     tooling_command+=' && (bun run scripts/apply-daily-pages-engagement-v2-seed.ts || true)'
+  fi
+  if should_run_signon_qa_seed && [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-signon-qa.ts" ]]; then
+    tooling_command+=' && bun run seed-preview-signon-qa'
   fi
   if [[ "$DATA_MODE" == "seed" && -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-teacher-notes-qa.ts" ]]; then
     tooling_command+=' && bun run seed-preview-teacher-notes-qa'
@@ -849,6 +881,13 @@ rollout_demo_web_without_downtime() {
   remove_legacy_project_postgres
 }
 
+apply_preview_signon_flag() {
+  # Named demo/production environments reuse this script but must never run this
+  # updater. The toolbox also enforces environment + strict URL isolation itself.
+  [[ "$SLUG" =~ ^pr-[1-9][0-9]*$ ]] || return 0
+  "${compose[@]}" run --rm toolbox bun /preview-control/unified-signon-flag.mjs
+}
+
 ensure_shared_postgres
 
 assert_no_master_code_collision() {
@@ -880,6 +919,8 @@ ensure_preview_database
 harden_preview_database
 run_tooling_if_needed
 ensure_preview_seats
+# Outside run_tooling_if_needed: also apply OFF after label removal on its early-return path.
+apply_preview_signon_flag
 assert_no_master_code_collision
 install_demo_backup_tooling
 health_url="${PREVIEW_HEALTHCHECK_URL:-${URL}/api/healthcheck}"
@@ -912,18 +953,7 @@ start_or_refresh_web
   PREVIEW_ROOT="$ROOT" \
   PREVIEW_DOMAIN="$PREVIEW_DOMAIN" \
   PREVIEW_ACME_EMAIL="${PREVIEW_ACME_EMAIL:-admin@example.com}" \
-    node "$SCRIPT_DIR/certificate-manager.mjs" "$HOSTNAME"
-  PREVIEW_ROOT="$ROOT" \
-  PREVIEW_DOMAIN="$PREVIEW_DOMAIN" \
-  PREVIEW_ACME_EMAIL="${PREVIEW_ACME_EMAIL:-admin@example.com}" \
-    node "$SCRIPT_DIR/certificate-manager.mjs" "$UA_HOSTNAME"
-  if grep -qE '^[[:space:]]*blackboard-lti-mock:' "$PREVIEW_DIR/docker-compose.yml"; then
-    PREVIEW_ROOT="$ROOT" \
-    PREVIEW_DOMAIN="$PREVIEW_DOMAIN" \
-    PREVIEW_ACME_EMAIL="${PREVIEW_ACME_EMAIL:-admin@example.com}" \
-      node "$SCRIPT_DIR/certificate-manager.mjs" "$BLACKBOARD_HOSTNAME" \
-      || echo "Blackboard hostname certificate not issued yet; host ingress must route ${BLACKBOARD_HOSTNAME}"
-  fi
+    node "$SCRIPT_DIR/certificate-manager.mjs" --wildcard
 fi
 
 for attempt in $(seq 1 90); do
@@ -942,6 +972,7 @@ for attempt in $(seq 1 90); do
     echo "BLACKBOARD_HOSTNAME=$BLACKBOARD_HOSTNAME"
     echo "PREVIEW_ACCESS_CODE=$smoke_access_code"
     echo "PREVIEW_MASTER_ORG_GATE_ENABLED=$PREVIEW_MASTER_ORG_GATE_ENABLED"
+    write_preview_metadata
     PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" node -e '
       for (const [index, seat] of JSON.parse(process.env.PREVIEW_ACCESS_SEATS).entries()) {
         console.log(`PREVIEW_SEAT_CODE_${index + 1}=${seat.code}`)

@@ -113,6 +113,7 @@ export async function action({ request }: ActionFunctionArgs) {
       metadata: {
         turnCount: messages.length,
       },
+      deidentificationPhrases: [profile.organization.name],
       attribution: {
         organizationId: profile.organization.id,
         membershipId: profile.id,

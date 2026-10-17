@@ -1,3 +1,5 @@
+import { classCodeUniquenessEnabled, resolveClassCode, ClassCodeCollisionError } from '~/utils/class-code-write.server';
+import { useFreeAccountUsage } from '~/components/free-account-usage';
 import { Plus, User } from 'lucide-react';
 import {
   type ActionFunctionArgs,
@@ -38,6 +40,8 @@ import { getStudentEnrolledClasses } from '~/utils/student-classes.server';
 import { ALL_SCHOOL_YEARS } from '~/utils/school-year';
 import { resolveTeacherSchoolYearScope } from '~/utils/school-year-scope.server';
 import { resolveStudentSchoolYearScope } from '~/utils/school-year-scope.server';
+import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { isDemoFreeTierRouteOpen } from '~/utils/free-tier/free-tier-feature-gate.server';
 
 async function getTeacherSchoolIds(membershipId: string) {
   const teacher = await prisma.orgMembership.findUnique({
@@ -141,6 +145,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 
   const entitlements = getEntitlements(profile.organization);
+  const canShareClassroomReport = profile.organization.plan === 'FREE_CLASSROOM'
+    && (isDemoFreeTierRouteOpen(process.env) || await isFreeTierEnabled());
   let classCreateBlockedMessage: string | null = null;
   if (entitlements.activeClassCap != null) {
     const activeClassCount = await prisma.class.count({
@@ -157,12 +163,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return dataResponse({
     role: 'TEACHER' as const,
+    classCodeUniqueEnabled: await classCodeUniquenessEnabled(prisma),
     classes: classesWithStats,
     selectedSchoolYear,
     teacherSchoolCount: teacherSchools?.schools.length ?? 0,
     schools,
     manageSchools: teacherSchools?.schools ?? [],
     classCreateBlockedMessage,
+    canShareClassroomReport,
   });
 }
 
@@ -185,6 +193,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const period = (formData.get('period') as string)?.trim() || null;
     const title = (formData.get('title') as string)?.trim() || null;
     let code = (formData.get('code') as string)?.trim().toUpperCase() || '';
+    const codeWasGenerated = formData.get('codeWasGenerated') === 'true' || !code;
 
     if (!schoolId || !schoolYear) {
       return dataResponse({ error: 'All required fields must be filled.' }, { status: 400 });
@@ -206,6 +215,7 @@ export async function action({ request }: ActionFunctionArgs) {
       );
       await prisma.$transaction(async (tx) => {
         await assertCanCreateClassForOrganizationPlan(tx, profile.organization);
+        code = await resolveClassCode(tx, code, { generated: codeWasGenerated });
         await tx.class.create({
           data: {
             schoolId,
@@ -225,12 +235,15 @@ export async function action({ request }: ActionFunctionArgs) {
       });
       return dataResponse({ success: true });
     } catch (error: any) {
+      if (error instanceof ClassCodeCollisionError) {
+        return dataResponse({ error: error.message, field: 'code' }, { status: 400 });
+      }
       if (error instanceof Error && error.message.includes('Free classroom accounts include one class')) {
         return dataResponse({ error: error.message }, { status: 403 });
       }
       if (error.code === 'P2002') {
         return dataResponse(
-          { error: 'Class code already in use. Choose a different code.' },
+          { error: 'Class code already in use. Choose a different code.', field: 'code' },
           { status: 400 }
         );
       }
@@ -274,25 +287,31 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     try {
-      await prisma.class.update({
-        where: { id: classId },
-        data: {
-          schoolId,
-          schoolYear,
-          grade,
-          period,
-          title,
-          code,
-          teachers: {
-            set: existingClass.teachers.map((teacher) => ({ id: teacher.id })),
+      await prisma.$transaction(async tx => {
+        const resolvedCode = await resolveClassCode(tx, code, { classId });
+        await tx.class.update({
+          where: { id: classId },
+          data: {
+            schoolId,
+            schoolYear,
+            grade,
+            period,
+            title,
+            code: resolvedCode,
+            teachers: {
+              set: existingClass.teachers.map((teacher) => ({ id: teacher.id })),
+            },
           },
-        },
+        });
       });
       return dataResponse({ success: true });
     } catch (error: any) {
+      if (error instanceof ClassCodeCollisionError) {
+        return dataResponse({ error: error.message, field: 'code' }, { status: 400 });
+      }
       if (error.code === 'P2002') {
         return dataResponse(
-          { error: 'Class code already in use. Choose a different code.' },
+          { error: 'Class code already in use. Choose a different code.', field: 'code' },
           { status: 400 }
         );
       }
@@ -357,6 +376,7 @@ function TeacherMyClassesView({
     { role: 'TEACHER' }
   >;
 }) {
+  const freeUsage = useFreeAccountUsage();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedSchoolId = searchParams.get('school') ?? 'all';
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -395,10 +415,30 @@ function TeacherMyClassesView({
                 assignments.
               </p>
             </div>
-            <Button size="sm" onClick={openCreate} className="shrink-0">
-              <Plus className="mr-2 h-4 w-4" />
-              Create Class
-            </Button>
+            <div className={data.canShareClassroomReport ? 'flex flex-wrap gap-2' : 'contents'}>
+              {data.canShareClassroomReport && !freeUsage ? (
+                <>
+                  <Button size="sm" variant="outline" asChild>
+                    <Link to="/app/classroom-report">Share this report</Link>
+                  </Button>
+                  <Button size="sm" variant="outline" asChild>
+                    <Link to="/app/pitch-packet">Trial pitch packet</Link>
+                  </Button>
+                  <Button size="sm" variant="outline" asChild>
+                    <Link to="/app/free-tier/status">Free classroom status</Link>
+                  </Button>
+                </>
+              ) : null}
+              <Button
+                size="sm"
+                onClick={openCreate}
+                className="shrink-0"
+                data-tour="my-classes-create"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Create Class
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -433,7 +473,10 @@ function TeacherMyClassesView({
         ) : null}
 
         {filteredClasses.length ? (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div
+            data-tour="my-classes-grid"
+            className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+          >
             {filteredClasses.map((klass) => (
               <TeacherClassCard
                 key={klass.id}
@@ -481,6 +524,7 @@ function TeacherMyClassesView({
       </div>
 
       <ClassManageSheet
+        classCodeUniqueEnabled={data.classCodeUniqueEnabled}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         editingClass={null}

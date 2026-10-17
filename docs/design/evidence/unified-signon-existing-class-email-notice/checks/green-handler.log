@@ -1,0 +1,13 @@
+bun test v1.3.1 (89fa0f34)
+
+services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts:
+prisma:query - 24.529184999999984ms - INSERT INTO "public"."Setting" ("id","createdAt","updatedAt","name","value","valueType") VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT ("name") DO UPDATE SET "value" = $7 WHERE ("public"."Setting"."name" = $8 AND 1=1) RETURNING "public"."Setting"."id", "public"."Setting"."createdAt", "public"."Setting"."updatedAt", "public"."Setting"."name", "public"."Setting"."description", "public"."Setting"."value", "public"."Setting"."valueType"
+(pass) school email signup shows an existing-account notice before ordinary proof and keeps the class [978.20ms]
+(pass) school email option rejects forged/stale/free contexts and unknown email still requires proof [424.27ms]
+(pass) school email existing passwordless accounts keep ordinary activation and unavailable Google fails closed [151.95ms]
+
+ 3 pass
+ 38 filtered out
+ 0 fail
+ 37 expect() calls
+Ran 3 tests across 1 file. [2.31s]

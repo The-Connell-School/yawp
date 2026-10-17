@@ -33,8 +33,12 @@ export default function AssignmentTypesRoute() {
 
   return (
     <div className="p-3 sm:p-5">
-      <div className="mb-4">
-        <Button asChild>
+      <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+        <div className="font-semibold">Assignment Types read-only review moved to Yawp Internal.</div>
+        <p className="mt-1">
+          Use Internal for catalog, image, module, organization assignment, and rubric-reference inspection. Legacy platform edit routes remain available here for write tools that have not moved yet.
+        </p>
+        <Button className="mt-3" variant="outline" asChild>
           <Link to="/app/admin/assignment-types/new">
             <Plus className="mr-2 size-4 shrink-0" />
             Create assignment type

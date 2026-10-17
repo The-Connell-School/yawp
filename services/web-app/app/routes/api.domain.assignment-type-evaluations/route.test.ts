@@ -281,6 +281,7 @@ describe('assignment-type evaluations action', () => {
           feature: 'grading-evaluation-case-generation',
           assignmentTypeId: 'at-1',
         }),
+        deidentificationPhrases: ['Argument Essay'],
       })
     );
     expect((response as { data: any }).data).toMatchObject({
@@ -965,6 +966,24 @@ describe('assignment-type evaluations action', () => {
     expect(runAssignmentTypeEvaluationSuite).toHaveBeenCalledWith(
       expect.objectContaining({
         evaluationCases: assignmentType.evaluationCases,
+      })
+    );
+    getLLMCompletion.mockResolvedValueOnce(
+      JSON.stringify({
+        categories: [{ key: 'claim', score: 4, comment: 'Clear claim.' }],
+        overallComment: 'Jordan, explain the stakes next.',
+      })
+    );
+    const suiteArgs = runAssignmentTypeEvaluationSuite.mock.calls[0][0];
+    await suiteArgs.execute({
+      evaluationCase: assignmentType.evaluationCases[0],
+      purpose: 'grading',
+      system: 'Grade the case.',
+      messages: [{ role: 'user', content: 'Document by Brian Connell.' }],
+    });
+    expect(getLLMCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deidentificationPhrases: ['Argument Essay', 'Clear claim'],
       })
     );
     expect(

@@ -1,0 +1,11 @@
+
+Running 2 tests using 1 worker
+
+(node:88) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:88) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › e2e/tests/auth.unified-google-backend.spec.ts:59:3 › mocked Google provider: real cancellation, account proof, linking and membership handlers at 1280 (21.0s)
+  ✓  2 [chromium] › e2e/tests/auth.unified-google-backend.spec.ts:59:3 › mocked Google provider: real cancellation, account proof, linking and membership handlers at 390 (17.1s)
+
+  2 passed (39.8s)

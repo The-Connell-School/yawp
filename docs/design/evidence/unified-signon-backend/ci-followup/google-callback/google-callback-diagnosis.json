@@ -1,0 +1,8 @@
+{
+  "run": "https://github.com/The-Connell-School/yawp/actions/runs/38819160004/job/116712812324",
+  "head": "94d81a148170ef6d5b1038d6a6dd3bf0195887f5",
+  "resolvedOriginalFailure": "Six real-handler browser cases, including mobile signup/reset, passed in CI.",
+  "newFailure": "Mocked Google cancellation rendered its status before hydration. The retry click caused no request. CI trace ends with callback cancellation and the continuation GET; there is no second Google action POST.",
+  "localRegression": "With 1000ms script latency at callback reloads, unchanged interactions fail the same Enter your password heading assertion.",
+  "fix": "Wait for the new client router after cancellation and success callback reloads. Delay handler uses route.fallback so existing provider interception remains authoritative; no live provider contact."
+}

@@ -1,0 +1,30 @@
+bun test v1.3.1 (89fa0f34)
+
+services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts:
+prisma:query - 22.10518400000001ms - INSERT INTO "public"."Setting" ("id","createdAt","updatedAt","name","value","valueType") VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT ("name") DO UPDATE SET "value" = $7 WHERE ("public"."Setting"."name" = $8 AND 1=1) RETURNING "public"."Setting"."id", "public"."Setting"."createdAt", "public"."Setting"."updatedAt", "public"."Setting"."name", "public"."Setting"."description", "public"."Setting"."value", "public"."Setting"."valueType"
+2206 |     password: { create: { hash: await getPasswordHash('local-password') } },
+2207 |     memberships: { create: { organizationId: prefix, role: 'STUDENT' } },
+2208 |   }});
+2209 |   await post('resolve', { identifier: prefix, redirectTo: '//evil.test' });
+2210 |   expect((await post('student-choice', { choice: 'new' })).data.state.screen).toBe('class-handle');
+2211 |   expect((await post('student-email')).data.state.screen).toBe('class-email');
+                                                   ^
+TypeError: undefined is not an object (evaluating '(await post("student-email")).data.state.screen')
+      at <anonymous> (/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-existing-class-email-notice/services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts:2211:45)
+(fail) school email signup shows an existing-account notice before ordinary proof and keeps the class [715.16ms]
+2250 |   try { expect((await post('student-email')).response.status).toBe(400); }
+2251 |   finally { await prisma.organization.update({ where: { id: prefix }, data: { plan: 'SCHOOL' } }); }
+2252 |   await prisma.class.update({ where: { id: prefix }, data: { isArchived: true } });
+2253 |   try { expect((await post('student-email')).response.status).toBe(400); }
+2254 |   finally { await prisma.class.update({ where: { id: prefix }, data: { isArchived: false } }); }
+2255 |   expect((await post('student-email')).data.state.screen).toBe('class-email');
+                                                   ^
+TypeError: undefined is not an object (evaluating '(await post("student-email")).data.state.screen')
+      at <anonymous> (/home/bryant/work/yawp/codex-loop/lanes/design-impl/worktrees/di-signon-fix-existing-class-email-notice/services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts:2255:45)
+(fail) school email option rejects forged/stale/free contexts and unknown email still requires proof [232.65ms]
+
+ 0 pass
+ 38 filtered out
+ 2 fail
+ 6 expect() calls
+Ran 2 tests across 1 file. [1.84s]

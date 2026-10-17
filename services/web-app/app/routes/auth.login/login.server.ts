@@ -15,6 +15,7 @@ import {
 } from '~/utils/rate-limit.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
 import { parseLoginIdentifier } from '~/utils/login-identifier.server';
+import type { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { posthog } from '~/services/posthog.server';
@@ -26,7 +27,11 @@ import { previewSessionAllowedWithoutSeatMembership } from '~/utils/preview-sess
 import { setMembershipId } from '~/cookies/membership-id.server';
 import { combineHeaders } from '~/utils/misc';
 
-export async function loginAction({ request }: ActionFunctionArgs) {
+export async function loginAction(
+  { request }: ActionFunctionArgs,
+  options: { client?: Prisma.TransactionClient } = {}
+) {
+  const db = options.client ?? prisma;
   await requireAnonymous(request);
   const { error, data } = await parseFormData(request, LoginSchema);
   if (error) return validationError(error);
@@ -66,9 +71,12 @@ export async function loginAction({ request }: ActionFunctionArgs) {
 
     let previewMembershipId: string | null = null;
     if (isIsolatedPreviewSeatMode()) {
+      const { hasPreviewSignonQaContext } =
+        await import('~/utils/preview-signon-qa.server');
+      const signonQa = await hasPreviewSignonQaContext(request, user.id, db);
       const seat = await getPreviewAccessSeat(request);
       const seatMembership = seat
-        ? await prisma.orgMembership.findFirst({
+        ? await db.orgMembership.findFirst({
             where: {
               userId: user.id,
               organizationId: seat.organizationId,
@@ -77,18 +85,22 @@ export async function loginAction({ request }: ActionFunctionArgs) {
             select: { id: true },
           })
         : null;
-      if (!seatMembership && !(await previewSessionAllowedWithoutSeatMembership(user.id))) {
+      if (
+        !signonQa &&
+        !seatMembership &&
+        !(await previewSessionAllowedWithoutSeatMembership(user.id))
+      ) {
         return validationError(
           { fieldErrors: { email: 'Invalid email or password' } },
           data
         );
       }
-      previewMembershipId = seatMembership?.id ?? null;
+      previewMembershipId = signonQa ? null : (seatMembership?.id ?? null);
     }
 
     await refundLoginAttemptRateLimits(charged);
 
-    const session = await prisma.session.create({
+    const session = await db.session.create({
       select: { id: true, expirationDate: true, userId: true },
       data: {
         expirationDate: getSessionExpirationDateForUser({

@@ -1,4 +1,13 @@
-export const ADMIN_APPROVAL_EMAIL_COPY_VERSION = '2026-10-08-v4';
+export const ADMIN_APPROVAL_EMAIL_COPY_VERSION = '2026-10-14-v5';
+// Pass the version stored with the application when admission was requested.
+// Do not derive delayed email wording from the flag at delivery time.
+export const RELEASE_EMAIL_V2_COPY_VERSION = 'free-tier-onboarding-v2';
+
+export function renderReleaseEmailSubject(args: { copyVersion?: string } = {}) {
+  return args.copyVersion === RELEASE_EMAIL_V2_COPY_VERSION
+    ? "You're in!"
+    : "You're in — start your YAWP classroom";
+}
 
 const APPROVAL_LINK_DAYS = 14;
 
@@ -16,6 +25,7 @@ export function renderAdminApprovalEmailBody(args: {
   teacherName: string;
   teacherEmail: string;
   schoolName: string;
+  /** Accepted for older callers, but never included in approval copy. */
   personalNote?: string | null;
   approveUrl: string;
   notRightPersonUrl: string;
@@ -24,35 +34,37 @@ export function renderAdminApprovalEmailBody(args: {
   copyVersion?: string;
 }) {
   const version = args.copyVersion ?? ADMIN_APPROVAL_EMAIL_COPY_VERSION;
-  const note = args.personalNote?.trim()
-    ? `${args.personalNote.trim()}\n\n---\n\n`
+  const reminder = args.reminderLead?.trim()
+    ? `${args.reminderLead.trim()}\n\n`
     : '';
-  const reminder = args.reminderLead?.trim() ? `${args.reminderLead.trim()}\n\n` : '';
   const greeting = adminApprovalGreeting(args.adminRecipientName);
-  return `${note}${reminder}${greeting}
+  return `${reminder}${greeting}
 
 ${args.teacherName} (${args.teacherEmail}) at ${args.schoolName} would like to use YAWP in their classroom.
 
-YAWP is a classroom writing platform where students draft essays and receive AI-assisted feedback while teachers stay in control of assignments and grading.
-
-How AI is used: students interact with a writing tutor during drafting. Teachers review student work and grades; AI does not replace teacher judgment.
-
-Privacy: student writing is used to provide feedback in YAWP. It is not used to train public AI models.
-
-Questions? Contact us at support@yawp.school.
+YAWP helps students draft essays with feedback while teachers stay in control of assignments and grading. Student writing is not used to train public language models.
 
 Approve YAWP for this school (link expires in ${APPROVAL_LINK_DAYS} days):
 ${args.approveUrl}
 
 I'm not the right person to approve this:
-${args.notRightPersonUrl}${copyVersionLine(version)}`;
+${args.notRightPersonUrl}
+
+Questions? Contact support@yawp.school.${copyVersionLine(version)}`;
 }
 
-export function renderReleaseEmailBody(args: { name: string; joinUrl: string; copyVersion?: string }) {
+export function renderReleaseEmailBody(args: {
+  name: string;
+  joinUrl: string;
+  copyVersion?: string;
+}) {
   const version = args.copyVersion ?? ADMIN_APPROVAL_EMAIL_COPY_VERSION;
+  const welcome = version === RELEASE_EMAIL_V2_COPY_VERSION
+    ? "You're in!\n\nWe'd love to have you try YAWP with your students."
+    : "You're in — we'd love to have you try YAWP with your students.";
   return `Hi ${args.name},
 
-You're in — we'd love to have you try YAWP with your students.
+${welcome}
 
 Create your teacher account to get started:
 ${args.joinUrl}

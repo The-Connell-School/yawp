@@ -154,7 +154,7 @@ function commandExists(command, args = ["--version"]) {
 }
 
 export function capabilities() {
-  return {
+  const result = {
     schemaVersion: "project.capabilities/v1",
     project: "yawp",
     commands: {
@@ -166,7 +166,7 @@ export function capabilities() {
       qa: "./bin/project qa prepare --json",
     },
     fixtures: ["local-dev"],
-    proofProfiles: ["internal-preview-auth", "internal-scenario-browser", "internal-scenario-container", "internal-scenario-integration", "internal-fresh-migrations", "internal-content-pair", "internal-rubrics-http", "internal-rubrics-integration", "internal-content-validation", "internal-qa-http", "internal-qa-integration", "internal-audit", "internal-impersonation-browser", "internal-impersonation-http", "internal-impersonation-writes", "internal-impersonation", "internal-impersonation-integration", "internal-management", "internal-directory-integration", "project-cli", "unit", "typecheck", "build", "backend", "qa-smoke", "assignment-create", "grading-queue", "grading-queue-unit", "grading-points", "grading-points-unit", "assignment-rubric-unit", "assignment-prompt-unit", "teacher-paste-unit", "teacher-paste-browser", "private-notes-unit", "private-notes-browser", "daily-pages-scaling-unit", "collaboration-presence", "ua-billing", "ua-billing-e2e", "changed"],
+    proofProfiles: ["free-tier-approval-migration", "free-tier-approval-unit", "free-tier-approval-browser", "demo-feedback-unit", "demo-feedback-browser", "signon-classcode", "classcode-unit", "classcode-db", "classcode-browser", "classcode-enter-code", "classcode-report", "unified-signon-preview-fixtures", "unified-signon-preview-otp", "free-tier-monthly-unit", "free-tier-monthly-db", "free-tier-monthly-browser", "free-tier-inapp-unit", "free-tier-inapp-browser", "internal-preview-auth", "internal-grade-declines", "internal-grade-declines-integration", "internal-free-tier-limits", "internal-free-tier-limits-integration", "internal-class-code-duplicates", "internal-class-code-duplicates-integration", "internal-approvals", "internal-approvals-integration", "internal-scenario-browser", "internal-scenario-container", "internal-scenario-integration", "internal-fresh-migrations", "internal-content-pair", "internal-rubrics-http", "internal-rubrics-integration", "internal-content-validation", "internal-qa-http", "internal-qa-integration", "internal-audit", "internal-impersonation-browser", "internal-impersonation-http", "internal-impersonation-writes", "internal-impersonation", "internal-impersonation-integration", "internal-management", "internal-directory-integration", "project-cli", "unit", "typecheck", "build", "backend", "qa-smoke", "assignment-create", "grading-queue", "grading-queue-unit", "grading-points", "grading-points-unit", "assignment-rubric-unit", "assignment-prompt-unit", "teacher-paste-unit", "teacher-paste-browser", "private-notes-unit", "private-notes-browser", "daily-pages-scaling-unit", "collaboration-presence", "ua-billing", "ua-billing-e2e", "changed"],
     nextCommands: [
       "./bin/project doctor --json",
       "./bin/project fixture verify local-dev --json",
@@ -175,6 +175,9 @@ export function capabilities() {
       "./bin/project qa prepare --json",
     ],
   };
+  result.proofProfiles.unshift("guided-tours-unit", "guided-tours-browser", "guided-tours-db");
+  result.proofProfiles.unshift("free-tier-locked-preview-unit", "free-tier-locked-preview-db", "free-tier-locked-preview-browser", "free-tier-class-step-unit", "free-tier-class-step-browser", "free-tier-welcome-unit", "free-tier-welcome-browser", "free-tier-welcome-live-browser", "free-tier-welcome-db");
+  return result;
 }
 
 function doctor() {
@@ -388,6 +391,75 @@ function runTestProfile(profile, { json }) {
     results.push({id: "internal-integration-infra", ...execute("terraform", ["-chdir=infra/modules/internal-integration", "test", "-no-color"], {json, env: selected.env, timeout: 30000})});
   }
   else if (chosen === "internal-integration-config") run("internal-integration-config", ["test", "./scripts/internal-integration-config.test.ts"]);
+  else if (chosen === "unified-signon-preview-fixtures") {
+    run("preview-fixture-guards", ["test", "./packages/prisma/scripts/seed-preview-signon-qa.test.ts", "./scripts/preview/signon-fixtures-contract.test.ts", "./scripts/preview/free-tier-bundle-deploy.test.ts", "./scripts/preview/unified-signon-deploy.test.ts"]);
+    runWebApp("signon-dispatch", ["test", "app/routes/auth.login/unified-dispatch.test.ts"]);
+    if (process.env.SIGNON_PREVIEW_FIXTURE_TEST === "1") runWebApp("preview-fixture-real-database", ["test", "app/domain/unified-signon/preview-fixtures.real-db.integration.test.ts"]);
+    if (process.env.SIGNON_PREVIEW_FIXTURE_TEST === "1") runWebApp("preview-seat-policy-real-database", ["test", "app/domain/unified-signon/preview-seat-policy.real-db.integration.test.ts"]);
+  }
+  else if (chosen === "signon-classcode") {
+    run("read-only-route-contract", ["test", "./scripts/read-only-impersonation-contract.test.ts"]);
+    runWebApp("login-rate-limit-target", ["test", "app/utils/login-rate-limit-target.test.ts"]);
+    runWebApp("student-join", ["test", "app/domain/free-tier/student-join.server.test.ts"]);
+    runWebApp("student-handle", ["test", "app/domain/unified-signon/student-handle.test.ts"]);
+    runWebApp("signon-policy", ["test", "app/domain/unified-signon/policy.test.ts"]);
+    runWebApp("signon-google", ["test", "app/domain/unified-signon/google.test.ts"]);
+    runWebApp("signon-dispatch", ["test", "app/routes/auth.login/unified-dispatch.test.ts"]);
+    if (process.env.SIGNON_LOCAL_TEST === "1") {
+      runWebApp("class-student-real-database", ["test", "app/domain/unified-signon/class-student.real-db.integration.test.ts"]);
+      runWebApp("signon-real-database", ["test", "app/domain/unified-signon/backend.real-db.integration.test.ts"]);
+      runWebApp("join-link-real-database", ["test", "app/routes/join/route.real-db.integration.test.ts"]);
+    }
+    if (process.env.SIGNON_BROWSER_TEST === "1") runWebApp("class-student-browser", ["x", "playwright", "test", "--config", "playwright.classcode.config.ts", "--workers=1"]);
+    if (process.env.SIGNON_BROWSER_TEST === "1") runWebApp("join-link-browser", ["x", "playwright", "test", "--config", "playwright.join-link.config.ts", "--workers=1"]);
+  }
+  else if (chosen === "unified-signon-preview-otp") {
+    runWebApp("preview-code", ["test", "app/domain/unified-signon/preview-code.server.test.ts"]);
+    run("preview-code-deployment", ["test", "./scripts/deployment-contract.test.ts", "--test-name-pattern", "private preview sign-in code"]);
+    run("preview-compose", ["test", "./scripts/preview/preview-env.test.js", "./scripts/preview/render-compose.test.js"]);
+    runWebApp("preview-email-guards", ["test", "app/utils/preview-email-capture.server.test.ts"]);
+    runWebApp("preview-access", ["test", "app/utils/preview-access.server.test.ts"]);
+    runWebApp("signon-policy", ["test", "app/domain/unified-signon/policy.test.ts"]);
+    runWebApp("signon-dispatch", ["test", "app/routes/auth.login/unified-dispatch.test.ts"]);
+    if (process.env.SIGNON_LOCAL_TEST === "1") runWebApp("signon-real-database", ["test", "app/domain/unified-signon/backend.real-db.integration.test.ts"]);
+  }
+  else if (chosen === "internal-grade-declines") {
+    for (const file of ["app/domain/free-tier/grade-gate.test.ts", "app/utils/internal-grade-gate-declines.server.test.ts", "app/utils/internal-free-tier-http.server.test.ts", "app/utils/internal-platform-auth.server.test.ts", "app/utils/internal-free-tier-token-contract.server.test.ts", "app/utils/internal-free-tier-operator.server.test.ts", "app/domain/free-tier/service.server.test.ts", "app/domain/free-tier/service.analytics.server.test.ts"]) runWebApp(file, ["test", file]);
+  }
+  else if (chosen === "internal-grade-declines-integration") {
+    const local = requireConfig();
+    results.push({ id: chosen, ...execute(selected.bun, ["test", "app/domain/free-tier/grade-gate.real-db.integration.test.ts"], {
+      json, cwd: webAppRoot, env: { ...selected.env, DATABASE_URL: local.DATABASE_URL, GRADE_GATE_LOCAL_TEST: "1" }, timeout: 120000,
+    }) });
+  }
+  else if (chosen === "internal-free-tier-limits") {
+    for (const file of ["app/utils/internal-free-tier-limits.server.test.ts", "app/domain/free-tier/limits.test.ts", "app/utils/entitlements.server.test.ts", "app/utils/lesson-planner/lesson-planner-quota.server.test.ts", "app/domain/free-tier/inapp-usage.server.test.ts", "app/domain/free-tier/class-seat-cap.test.ts", "app/domain/free-tier/student-join.server.test.ts", "app/utils/internal-platform-auth.server.test.ts"]) runWebApp(file, ["test", file]);
+  }
+  else if (chosen === "internal-free-tier-limits-integration") {
+    const local = requireConfig();
+    results.push({ id: chosen, ...execute(selected.bun, ["test", "app/domain/free-tier/limits.real-db.integration.test.ts"], {
+      json, cwd: webAppRoot, env: { ...selected.env, DATABASE_URL: local.DATABASE_URL, E2E_DATABASE_URL: local.DATABASE_URL, FREE_TIER_LIMITS_LOCAL_TEST: "1" }, timeout: 120000,
+    }) });
+  }
+  else if (chosen === "internal-class-code-duplicates") {
+    for (const file of ["app/utils/internal-class-code-duplicates.server.test.ts", "app/utils/class-code-write.server.test.ts", "app/utils/internal-platform-auth.server.test.ts"]) runWebApp(file, ["test", file]);
+  }
+  else if (chosen === "internal-class-code-duplicates-integration") {
+    const local = requireConfig();
+    results.push({ id: chosen, ...execute(selected.bun, ["test", "--max-concurrency=2", "app/utils/internal-class-code-duplicates.real-db.integration.test.ts"], {
+      json, cwd: webAppRoot, env: { ...selected.env, DATABASE_URL: local.DATABASE_URL, E2E_DATABASE_URL: local.DATABASE_URL, CLASS_CODE_DUPLICATES_LOCAL_TEST: "1" }, timeout: 120000,
+    }) });
+  }
+  else if (chosen === "internal-approvals") {
+    for (const file of ["app/utils/internal-approval-history.test.ts", "app/utils/internal-approval-reads.server.test.ts", "app/utils/internal-approval-resend.server.test.ts", "app/utils/internal-free-tier-http.server.test.ts", "app/utils/internal-platform-auth.server.test.ts"])
+      runWebApp(file, ["test", "--max-concurrency=2", file]);
+  }
+  else if (chosen === "internal-approvals-integration") {
+    const local = requireConfig();
+    results.push({ id: chosen, ...execute(selected.bun, ["test", "--max-concurrency=2", "app/utils/internal-approvals.real-db.integration.test.ts"], {
+      json, cwd: webAppRoot, env: { ...selected.env, DATABASE_URL: local.DATABASE_URL, E2E_DATABASE_URL: local.DATABASE_URL, INTERNAL_APPROVALS_LOCAL_TEST: "1" }, timeout: 120000,
+    }) });
+  }
   else if (chosen === "internal-preview-auth") runWebApp("internal-preview-auth", ["test", "app/routes/auth.dev-login/route.test.ts"]);
   else if (chosen === "internal-qa-http") runWebApp("internal-qa-http", ["test", "app/utils/internal-qa-http.server.test.ts"]);
   else if (chosen === "internal-audit") runWebApp("internal-audit", ["test", "app/utils/internal-audit.server.test.ts"]);
@@ -413,6 +485,291 @@ function runTestProfile(profile, { json }) {
         json, cwd: webAppRoot, timeout: chosen === "internal-scenario-container" ? 900000 : 60000,
         env: { ...selected.env, INTERNAL_DIRECTORY_TEST_DATABASE_URL: local.DATABASE_URL, INTERNAL_SCENARIO_TEST_CONTAINER: local.CONTAINER_NAME },
       }) });
+  }
+  else if (chosen === "free-tier-locked-preview-unit") {
+    for (const file of ["app/routes/auth.inv.onboard-student/ua-onboarding.test.ts", "app/domain/free-tier/locked-preview.test.ts", "app/domain/free-tier/locked-preview.server.test.ts", "app/domain/collaboration/student-roster.server.test.ts", "app/domain/lesson-planner/lesson-planner-tools.server.test.ts", "app/domain/reporter/reporter-tools.server.test.ts", "app/utils/assignment-quota.server.test.ts", "app/utils/ai-admission.server.test.ts", "app/utils/impersonation-read-only.server.test.ts", "app/utils/auth.server.test.ts"]) runWebApp(file, ["test", "--max-concurrency=2", file]);
+  }
+  else if (chosen === "free-tier-locked-preview-db") {
+    const local = requireConfig();
+    results.push({ id: chosen, ...execute(selected.bun, ["test", "--max-concurrency=2", "app/domain/free-tier/locked-preview.real-db.integration.test.ts"], {
+      json, cwd: webAppRoot, timeout: 120000,
+      env: { ...selected.env, DATABASE_URL: local.DATABASE_URL, LOCKED_PREVIEW_DB_TESTS: '1' },
+    }) });
+  }
+  else if (chosen === "free-tier-locked-preview-browser") {
+    const local = requireConfig();
+    results.push({ id: chosen, ...execute(selected.bun, ["x", "playwright", "test", "--config=playwright.locked-preview.config.ts", "--workers=1"], {
+      json, cwd: webAppRoot, timeout: 600000,
+      env: { ...selected.env, ...parseEnvFile(fs.readFileSync(path.join(webAppRoot, '.env'), 'utf8')), CI: '1', DATABASE_URL: local.DATABASE_URL, CLASS_STEP_PORT: local.DEV_PORT },
+    }) });
+  }
+  else if (chosen === "free-tier-class-step-unit") {
+    for (const file of ["app/domain/feature-flags/feature-flags.test.ts", "app/domain/free-tier/class-preparation.test.ts", "app/domain/free-tier/class-preparation.real-db.integration.test.ts", "app/domain/free-tier/admin-email.test.ts", "app/routes/app.free-tier.onboarding/route.self-admin.test.tsx", "app/utils/class-code-provision.real-db.integration.test.ts", "app/domain/free-tier/free-tier-gate.server.test.ts", "app/domain/free-tier/provision-free-classroom.server.test.ts", "app/domain/free-tier/approval-flow.integration.test.ts", "app/domain/free-tier/approval.integration.test.ts"]) runWebApp(file, ["test", file]);
+  }
+  else if (chosen === "free-tier-class-step-browser") {
+    const local = requireConfig();
+    results.push({ id: chosen, ...execute(selected.bun, ["x", "playwright", "test", "--config=playwright.class-step.config.ts", "--workers=1"], {
+      json, cwd: webAppRoot, timeout: 600000,
+      env: { ...selected.env, ...parseEnvFile(fs.readFileSync(path.join(webAppRoot, '.env'), 'utf8')), CI: '1', DATABASE_URL: local.DATABASE_URL, CLASS_STEP_PORT: local.DEV_PORT },
+    }) });
+  }
+  else if (chosen === "free-tier-welcome-unit") {
+    for (const file of ["app/domain/free-tier/email-copy.server.test.ts", "app/domain/free-tier/release-email-v2.test.ts", "app/domain/free-tier/public-onboarding.route.test.ts", "app/routes/free._index/route.action.test.ts", "app/routes/free._index/route.loader.test.ts", "app/routes/free._index/route.denial.test.tsx", "app/routes/free._index/route.success-copy.test.ts", "app/routes/api.free-tier.token/route.test.ts"]) runWebApp(file, ["test", file]);
+  }
+  else if (chosen === "free-tier-welcome-db") {
+    const local = requireConfig();
+    for (const file of ["app/domain/free-tier/welcome-copy.real-db.integration.test.ts", "app/domain/free-tier/public-onboarding.real-db.integration.test.ts", "app/routes/api.free-tier.waitlist/route.integration.test.ts"]) results.push({ id: file, ...execute(selected.bun, ["test", file], {
+      json, cwd: webAppRoot, timeout: 120000,
+      env: { ...selected.env, DATABASE_URL: local.DATABASE_URL, PRIMARY_APP_URL: `http://localhost:${local.DEV_PORT}`, FREE_WELCOME_DB_TESTS: "1", FREE_TIER_DB_TESTS: "1", FREE_TIER_BUDGET_ENVIRONMENT: "preview" },
+    }) });
+  }
+  else if (chosen === "free-tier-welcome-live-browser") {
+    const local = requireConfig();
+    results.push({ id: chosen, ...execute(selected.bun, ["x", "playwright", "test", "--config=playwright.free-tier-welcome-live.config.ts", "--workers=1"], {
+      json, cwd: webAppRoot, timeout: 600000,
+      env: { ...selected.env, ...parseEnvFile(fs.readFileSync(path.join(webAppRoot, '.env'), 'utf8')), CI: '1', DATABASE_URL: local.DATABASE_URL, E2E_DATABASE_URL: process.env.E2E_DATABASE_URL || local.DATABASE_URL, FREE_WELCOME_PORT: local.DEV_PORT },
+    }) });
+  }
+  else if (chosen === "free-tier-welcome-browser") {
+    runWebApp(chosen, ["x", "playwright", "test", "--config=playwright.free-tier-welcome.config.ts", "--workers=1"]);
+  }
+  else if (chosen === 'free-tier-approval-migration') {
+    const local = requireConfig();
+    const database = new URL(local.DATABASE_URL);
+    if (!['localhost', '127.0.0.1'].includes(database.hostname))
+      throw new Error('Approval migration proof requires isolated local Postgres');
+    // This historical suite resets this fixed name, inside the worktree's own container.
+    database.pathname = '/yawp_migration_integration';
+    results.push({ id: chosen, ...execute(selected.bun, [
+      'test', '--max-concurrency=2', './packages/prisma/scripts/migration-integration.test.ts',
+      '-t', 'free tier admin approval migration',
+    ], { json, env: { ...selected.env, DATABASE_URL: database.toString() }, timeout: 180000 }) });
+  }
+  else if (chosen === 'free-tier-approval-unit') {
+    const local = requireConfig();
+    results.push({
+      id: 'approval-bundle-fixture',
+      ...execute(
+        selected.bun,
+        [
+          'run',
+          'packages/prisma/scripts/seed-free-tier-bundle-assignment-types.ts',
+        ],
+        {
+          json,
+          env: { ...selected.env, DATABASE_URL: local.DATABASE_URL },
+          timeout: 120000,
+        }
+      ),
+    });
+    for (const file of [
+      'app/utils/email.server.test.ts',
+      'app/domain/free-tier/approval-v2.real-db.integration.test.ts',
+      'app/domain/free-tier/approval-waiting.test.ts',
+      'app/routes/app.free-tier.pending/route.v2.test.tsx',
+      'app/routes/free.admin.approve/route.v2.test.tsx',
+      'app/routes/app.free-tier.pending/route.test.tsx',
+      'app/routes/free.admin.approve/route.loader.test.ts',
+      'app/domain/free-tier/approval-flow.integration.test.ts',
+      'app/domain/free-tier/approval.integration.test.ts',
+      'app/utils/internal-free-tier-operator.server.test.ts',
+    ]) {
+      results.push({
+        id: file,
+        ...execute(selected.bun, ['test', file], {
+          json,
+          cwd: webAppRoot,
+          timeout: 180000,
+          env: {
+            ...selected.env,
+            DATABASE_URL: local.DATABASE_URL,
+            APPROVAL_V2_DB_TESTS: '1',
+            FREE_TIER_DB_TESTS: '1',
+          },
+        }),
+      });
+    }
+  } else if (chosen === 'free-tier-approval-browser') {
+    const local = requireConfig();
+    if (devStatus().status === 'running')
+      throw new Error('Stop the owned dev server before browser acceptance');
+    try {
+      results.push({
+        id: chosen,
+        ...execute(
+          selected.bun,
+          [
+            'x',
+            'playwright',
+            'test',
+            '--config=playwright.approval-v2.config.ts',
+            '--workers=1',
+          ],
+          {
+            json,
+            cwd: webAppRoot,
+            timeout: 600000,
+            env: {
+              ...selected.env,
+              ...parseEnvFile(
+                fs.readFileSync(path.join(webAppRoot, '.env'), 'utf8')
+              ),
+              CI: '1',
+              DATABASE_URL: local.DATABASE_URL,
+              E2E_DATABASE_URL: local.DATABASE_URL,
+              APPROVAL_V2_BASE_URL: `http://localhost:${local.DEV_PORT}`,
+              FREE_TIER_LINK_HMAC_SECRET: 'local-approval-v2-test-secret',
+            },
+          }
+        ),
+      });
+    } finally {
+      devStop();
+    }
+  }
+  else if (chosen === "free-tier-monthly-unit") {
+    for (const file of [
+      "app/domain/free-tier/monthly-policy.test.ts",
+      "app/utils/assignment-quota.monthly.test.ts",
+      "app/utils/assignment-quota.server.test.ts",
+      "app/utils/reporter/reporter-access.server.test.ts",
+      "app/utils/lesson-planner/lesson-planner-quota.server.test.ts",
+      "app/domain/free-tier/inapp-usage.server.test.ts",
+      "app/routes/api.domain.reporter/route.test.ts",
+      "app/routes/api.domain.lesson-planner/route.test.ts",
+      "app/utils/entitlements.server.test.ts",
+    ])
+      runWebApp(file, ["test", file]);
+  } else if (chosen === "free-tier-monthly-db") {
+    const local = requireConfig();
+    results.push({
+      id: chosen,
+      ...execute(
+        selected.bun,
+        [
+          "test",
+          "app/domain/free-tier/monthly-operations.real-db.integration.test.ts",
+        ],
+        {
+          json,
+          cwd: webAppRoot,
+          env: {
+            ...selected.env,
+            DATABASE_URL: local.DATABASE_URL,
+            E2E_DATABASE_URL: local.DATABASE_URL,
+            FTO_LIMITS_DB_TESTS: "1",
+          },
+          timeout: 120000,
+        }
+      ),
+    });
+  } else if (chosen === "free-tier-monthly-browser") {
+    const local = requireConfig();
+    results.push({
+      id: "monthly-fixture",
+      ...execute(
+        selected.bun,
+        ["run", "packages/prisma/scripts/seed-free-tier-inapp.ts"],
+        {
+          json,
+          env: { ...selected.env, DATABASE_URL: local.DATABASE_URL },
+          timeout: 120000,
+        }
+      ),
+    });
+    results.push({
+      id: chosen,
+      ...execute(
+        selected.bun,
+        [
+          "x",
+          "playwright",
+          "test",
+          "--config=playwright.free-tier-inapp.config.ts",
+          "--workers=1",
+        ],
+        {
+          json,
+          cwd: webAppRoot,
+          timeout: 300000,
+          env: {
+            ...selected.env,
+            CI: "1",
+            E2E_DATABASE_URL: local.DATABASE_URL,
+            FREE_INAPP_BASE_URL: `http://localhost:${local.DEV_PORT}`,
+            FTO_LIMITS_BROWSER: "1",
+          },
+        }
+      ),
+    });
+  }
+  else if (chosen === "free-tier-inapp-unit") {
+    for (const file of ["app/domain/feature-flags/feature-flags.test.ts", "app/domain/feature-flags/feature-flags.server.test.ts", "app/utils/internal-feature-flags-http.server.test.ts", "app/domain/feature-flags/is-free-tier-enabled.server.test.ts", "app/domain/free-tier/inapp-usage.test.ts", "app/domain/free-tier/inapp-usage.server.test.ts", "app/utils/grading-limit-status.server.test.ts", "app/utils/assignment-quota.server.test.ts", "app/utils/entitlements.server.test.ts", "app/domain/free-tier/class-seat-cap.test.ts", "app/utils/lesson-planner/lesson-planner-quota.server.test.ts", "app/routes/app/route.test.tsx", "app/components/assignments/assignment-creation-sheet.test.tsx"]) runWebApp(file, ["test", file]);
+  }
+  else if (chosen === "free-tier-inapp-browser") {
+    const local = requireConfig();
+    results.push({ id: 'free-tier-inapp-fixture', ...execute(selected.bun, ['run', 'packages/prisma/scripts/seed-free-tier-inapp.ts'], { json, env: { ...selected.env, DATABASE_URL: local.DATABASE_URL }, timeout: 120000 }) });
+    results.push({ id: chosen, ...execute(selected.bun, ["x", "playwright", "test", "--config=playwright.free-tier-inapp.config.ts", "--workers=1"], {
+      json, cwd: webAppRoot, timeout: 15 * 60 * 1000,
+      env: { ...selected.env, CI: '1', E2E_DATABASE_URL: local.DATABASE_URL, FREE_INAPP_BASE_URL: `http://localhost:${local.DEV_PORT}` },
+    }) });
+  }
+  else if (chosen === "classcode-unit") {
+    for (const file of ["app/utils/class-code-write.server.test.ts", "app/routes/app.organization.classes/route.test.ts", "app/routes/app.my-classes._index/route.test.ts", "app/domain/free-tier/provision-free-classroom.server.test.ts", "app/domain/free-tier/provision.analytics.server.test.ts", "app/components/class-manage-sheet.test.ts", "app/domain/feature-flags/feature-flags.test.ts", "app/domain/feature-flags/feature-flags.server.test.ts", "app/utils/internal-feature-flags-http.server.test.ts"])
+      runWebApp(file, ["test", file]);
+  }
+  else if (chosen === "classcode-report") {
+    const local = requireConfig();
+    results.push({ id: chosen, ...execute(selected.bun, ["run", "scripts/report-class-code-duplicates.ts"], { json, env: { ...selected.env, DATABASE_URL: local.DATABASE_URL }, cwd: webAppRoot, timeout: 120000 }) });
+  }
+  else if (chosen === "classcode-db") {
+    const local = requireConfig();
+    for (const file of ["app/utils/class-code-write.real-db.integration.test.ts", "app/utils/free-tier-class-create-route.real-db.integration.test.ts", "app/utils/class-code-provision.real-db.integration.test.ts", "app/domain/free-tier/existing-student-enrollment.integration.test.ts", "app/utils/internal-scenario.integration.test.ts"])
+      results.push({ id: file, ...execute(selected.bun, ["test", file], { json, env: { ...selected.env, DATABASE_URL: local.DATABASE_URL, FREE_TIER_DB_TESTS: "1", YAWP_ENVIRONMENT: "demo", FREE_TIER_BUDGET_ENVIRONMENT: "preview", INTERNAL_DIRECTORY_TEST_DATABASE_URL: local.DATABASE_URL }, cwd: webAppRoot, timeout: 120000 }) });
+  }
+  else if (chosen === "classcode-enter-code") {
+    const local = requireConfig();
+    results.push({ id: chosen, ...execute(selected.bun, ["x", "playwright", "test", "--config=playwright.enter-code.config.ts", "--workers=1", "--output", path.join(process.env.TMPDIR || ROOT, "classcode-enter-code-results")], { json, env: { ...selected.env, DATABASE_URL: local.DATABASE_URL, E2E_DATABASE_URL: local.DATABASE_URL, ENTER_CODE_URL: `http://127.0.0.1:${local.DEV_PORT}` }, cwd: webAppRoot, timeout: 240000 }) });
+  }
+  else if (chosen === "guided-tours-unit") {
+    run("read-only-route-contract", ["test", "./scripts/read-only-impersonation-contract.test.ts"]);
+    for (const file of ["app/components/guided-tour/skipped-tours.test.ts", "app/domain/guided-tours/tours.test.ts", "app/domain/guided-tours/guided-tours.server.test.ts", "app/routes/api.guided-tours/route.test.ts", "app/utils/internal-feature-flags-http.server.test.ts", "app/utils/impersonation-read-only.server.test.ts", "app/domain/feature-flags/feature-flags.test.ts", "app/domain/feature-flags/feature-flags.server.test.ts", "app/routes/app/route.test.tsx"])
+      runWebApp(file, ["test", file]);
+  }
+  else if (chosen === "guided-tours-db") {
+    const local = requireConfig();
+    results.push({ id: chosen, ...execute(selected.bun, ["test", "app/domain/guided-tours/guided-tours.real-db.integration.test.ts"], { json, cwd: webAppRoot, env: { ...selected.env, DATABASE_URL: local.DATABASE_URL, GUIDED_TOURS_LOCAL_TEST: "1" }, timeout: 120000 }) });
+  }
+  else if (chosen === "guided-tours-browser") {
+    const local = requireConfig();
+    const database = new URL(local.DATABASE_URL);
+    if (!['localhost', '127.0.0.1'].includes(database.hostname)) throw new Error('Tours E2E requires the isolated local database');
+    database.pathname = '/yawp_guided_tours_e2e';
+    results.push({ id: chosen, ...execute(selected.bun, ["x", "playwright", "test", "--config=playwright.guided-tours.config.ts", "--workers=2"], {
+      json, cwd: webAppRoot, timeout: 600000,
+      env: { ...selected.env, CI: "1", E2E_DATABASE_URL: database.toString(), GUIDED_TOURS_PORT: local.DEV_PORT },
+    }) });
+  }
+  else if (chosen === "classcode-browser") {
+    const local = requireConfig();
+    results.push({ id: chosen, ...execute(selected.bun, ["x", "playwright", "test", "--config=playwright.classcode-unique.config.ts", "--workers=1"], { json, env: { ...selected.env, DATABASE_URL: local.DATABASE_URL, E2E_DATABASE_URL: local.DATABASE_URL, CLASSCODE_URL: `http://127.0.0.1:${local.DEV_PORT}` }, cwd: webAppRoot, timeout: 240000 }) });
+  }
+  else if (chosen === "demo-feedback-unit") {
+    runWebApp("demo-feedback-analytics", ["test", "app/utils/demo-feedback-analytics.test.ts"]);
+    runWebApp("demo-feedback", ["test", "app/utils/demo-feedback-context.test.ts", "app/utils/demo-feedback.server.test.ts"]);
+    runWebApp("tester-feedback-admin-retirement", ["test", "app/routes/api.admin.tester-feedback/route.test.ts"]);
+    runWebApp("tester-feedback-compatibility", ["test", "app/utils/tester-feedback.server.test.ts", "app/utils/tester-feedback-runtime.server.test.ts"]);
+    runWebApp("feedback-flag-api", ["test", "app/utils/internal-feature-flags-http.server.test.ts"]);
+    runWebApp("feedback-flag-defaults", ["test", "app/domain/feature-flags/feature-flags.test.ts", "app/domain/feature-flags/feature-flags.server.test.ts"]);
+    results.push({ id: "demo-feedback-seed", ...execute(selected.bun, ["test", "scripts/local-dev/seed-demo-feedback.test.ts"], { json, env: selected.env, cwd: path.join(ROOT, "packages/prisma"), timeout: 120000 }) });
+  }
+  else if (chosen === "demo-feedback-browser") {
+    const local = requireConfig();
+    if (!['localhost', '127.0.0.1'].includes(new URL(local.DATABASE_URL).hostname)) throw new Error('Demo feedback E2E requires the isolated local database');
+    results.push({ id: chosen, ...execute(selected.bun, ["x", "playwright", "test", "--config=playwright.demo-feedback.config.ts", "--workers=1"], {
+      json, cwd: webAppRoot, timeout: 180000,
+      env: { ...selected.env, CI: '1', E2E_DATABASE_URL: local.DATABASE_URL, DEMO_FEEDBACK_BASE_URL: `http://127.0.0.1:${local.DEV_PORT}` },
+    }) });
   }
   else if (chosen === "unit") run("unit", ["run", "--cwd", "services/web-app", "test"]);
   else if (chosen === "typecheck") run("typecheck", ["run", "web-app:typecheck"]);
@@ -571,12 +928,18 @@ async function qaPrepare({ json, routes }) {
 
 function help(topic = "root") {
   const pages = {
-    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project internal-integration-config INPUT_JSON --json\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <changed|project-cli|internal-preview-auth|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
+    root: `Yawp project agent CLI\n\nUsage:\n  ./bin/project internal-integration-config INPUT_JSON --json\n  ./bin/project capabilities [--json]\n  ./bin/project doctor [--json]\n  ./bin/project bootstrap [--fresh] [--json]\n  ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n  ./bin/project dev <start|status|stop> [--json]\n  ./bin/project test --profile <demo-feedback-unit|demo-feedback-browser|signon-classcode|classcode-unit|classcode-db|classcode-browser|classcode-enter-code|classcode-report|unified-signon-preview-fixtures|free-tier-approval-migration|free-tier-approval-unit|free-tier-approval-browser|free-tier-monthly-unit|free-tier-monthly-db|free-tier-monthly-browser|free-tier-inapp-unit|free-tier-inapp-browser|changed|project-cli|internal-preview-auth|internal-grade-declines|internal-grade-declines-integration|internal-free-tier-limits|internal-free-tier-limits-integration|internal-class-code-duplicates|internal-class-code-duplicates-integration|internal-approvals|internal-approvals-integration|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n  ./bin/project qa prepare [--routes /,/route] [--json]\n\nUse ./bin/project <topic> --help for contextual help.\n`,
     fixture: "Usage: ./bin/project fixture <apply|reset|verify|list> [local-dev] [--json]\n",
     dev: "Usage: ./bin/project dev <start|status|stop> [--json]\n",
-    test: "Usage: ./bin/project test --profile <changed|project-cli|internal-preview-auth|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n",
+    test: "Usage: ./bin/project test --profile <demo-feedback-unit|demo-feedback-browser|signon-classcode|classcode-unit|classcode-db|classcode-browser|classcode-enter-code|classcode-report|unified-signon-preview-fixtures|free-tier-approval-migration|free-tier-approval-unit|free-tier-approval-browser|free-tier-monthly-unit|free-tier-monthly-db|free-tier-monthly-browser|free-tier-inapp-unit|free-tier-inapp-browser|changed|project-cli|internal-preview-auth|internal-grade-declines|internal-grade-declines-integration|internal-free-tier-limits|internal-free-tier-limits-integration|internal-class-code-duplicates|internal-class-code-duplicates-integration|internal-approvals|internal-approvals-integration|internal-scenario-browser|internal-scenario-container|internal-scenario-integration|internal-fresh-migrations|internal-content-pair|internal-rubrics-http|internal-rubrics-integration|internal-content-validation|internal-management|internal-audit|internal-qa-integration|internal-qa-http|internal-directory-integration|internal-impersonation|internal-impersonation-integration|internal-impersonation-writes|internal-impersonation-http|internal-impersonation-browser|unit|typecheck|build|backend|qa-smoke|assignment-create|grading-queue|grading-queue-unit|grading-points|grading-points-unit|assignment-rubric-unit|assignment-prompt-unit|teacher-paste-unit|teacher-paste-browser|private-notes-unit|private-notes-browser|daily-pages-scaling-unit|collaboration-presence|ua-billing|ua-billing-e2e> [--json]\n",
     qa: "Usage: ./bin/project qa prepare [--routes /,/route] [--json]\n",
   };
+  const classStepHelp = "\nAdditional test profiles: free-tier-locked-preview-unit|free-tier-locked-preview-db|free-tier-locked-preview-browser|free-tier-class-step-unit|free-tier-class-step-browser|free-tier-welcome-unit|free-tier-welcome-browser|free-tier-welcome-live-browser|free-tier-welcome-db\n";
+  pages.root += classStepHelp;
+  pages.test += classStepHelp;
+  const tourHelp = "\nGuided tour test profiles: guided-tours-unit|guided-tours-browser|guided-tours-db\n";
+  pages.root += tourHelp;
+  pages.test += tourHelp;
   return pages[topic] || pages.root;
 }
 

@@ -40,11 +40,20 @@ describe('bootstrap-host.sh', () => {
     );
   });
 
-  test('records authorized activity directly without a proxy access log', () => {
+  test('passes status secret from GitHub to a protected ingress environment file', () => {
+    expect(workflow).toContain('PREVIEW_STATUS_TOKEN: ${{ secrets.PREVIEW_STATUS_TOKEN }}');
+    expect(workflow).toContain('PREVIEW_STATUS_TOKEN=$(shell_quote "$PREVIEW_STATUS_TOKEN")');
+    expect(script).toContain('EnvironmentFile=-$ROOT/ingress/status.env');
+    expect(script).toContain('install -m 0600 -o root -g root');
+    expect(script).not.toContain('Environment=PREVIEW_STATUS_TOKEN=');
+    expect(ingress).toContain('statusToken: process.env.PREVIEW_STATUS_TOKEN');
+  });
+
+  test('records human activity directly without a proxy access log', () => {
     expect(script).not.toContain('PREVIEW_ACCESS_LOG=');
     expect(script).not.toContain('--accesslog');
-    expect(ingress).toContain("upstreamResponse.headers['x-yawp-preview-authorized']");
-    expect(ingress).toContain('recordAccess(pr)');
+    expect(ingress).toContain('isHumanActivity(request)');
+    expect(ingress).toContain('recordHumanActivity');
   });
 
   test('cuts over to the custom ingress with TLS canary and rollback', () => {
@@ -66,13 +75,20 @@ describe('bootstrap-host.sh', () => {
 
   test('migrates resident certificates and installs automatic renewal', () => {
     expect(script).toContain('node "$certificate_manager" --import-traefik');
+    expect(script).toContain('node "$certificate_manager" --wildcard');
+    expect(script).toContain('Warning: wildcard preview certificate issuance failed; continuing with resident exact certificates');
+    expect(script).toContain('wildcard_available=false');
+    expect(script).toContain('wildcard_hostname="_wildcard.$DOMAIN"');
+    expect(script).toContain('if [[ "$wildcard_available" == "true"');
     expect(script).toContain('yawp-preview-certificate-renewal.timer');
-    expect(script).toContain('$ROOT/ingress/current/certificate-manager.mjs --resident');
+    expect(script).toContain('$ROOT/ingress/current/certificate-manager.mjs --wildcard');
     expect(previewWorkflow).toContain('PREVIEW_ACME_EMAIL');
-    expect(deploy).toContain('node "$SCRIPT_DIR/certificate-manager.mjs" "$HOSTNAME"');
-    expect(deploy.indexOf('certificate-manager.mjs" "$HOSTNAME"')).toBeLessThan(
+    expect(deploy).toContain('node "$SCRIPT_DIR/certificate-manager.mjs" --wildcard');
+    expect(deploy.indexOf('certificate-manager.mjs" --wildcard')).toBeLessThan(
       deploy.indexOf('for attempt in $(seq 1 90)')
     );
+    expect(deploy).not.toContain('certificate-manager.mjs" "$HOSTNAME"');
+    expect(deploy).not.toContain('certificate-manager.mjs" "$UA_HOSTNAME"');
     expect(deploy).toContain('PREVIEW_DOMAIN="$PREVIEW_DOMAIN"');
     expect(deploy).not.toContain('PREVIEW_DOMAIN="$DOMAIN"');
   });
