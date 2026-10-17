@@ -53,6 +53,9 @@ export const DEMO_FEEDBACK_FLAG = 'demo-feedback-widget' as const;
 
 export const GUIDED_TOURS_FLAG = 'guided-tours' as const;
 
+/** Teacher prompts on signed-in recovery screens. Missing Setting stays off. */
+export const SIGNON_TEACHER_PROMPTS_FLAG = 'signon-teacher-prompts' as const;
+
 /** Presentation rollout. Missing Setting row stays off everywhere. */
 export const PLATFORM_ENHANCEMENTS_FLAG = 'platform-enhancements' as const;
 
@@ -98,6 +101,10 @@ export const FEATURE_FLAGS = {
   [GUIDED_TOURS_FLAG]: {
     label: 'Free classroom page tours',
     description: 'Welcome cards, page replay and tour progress for free classroom teachers. Default off on demo and production; free tier must also be enabled.',
+  },
+  [SIGNON_TEACHER_PROMPTS_FLAG]: {
+    label: 'Sign-on teacher prompts',
+    description: 'Shows teacher classroom entry prompts on signed-in inactive and class-code screens, with a sign-out step for handle-only accounts. Default off on demo and production.',
   },
   [PLATFORM_ENHANCEMENTS_FLAG]: {
     label: 'Platform enhancements',

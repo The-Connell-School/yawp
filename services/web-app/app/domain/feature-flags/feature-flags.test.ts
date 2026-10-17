@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   FEATURE_FLAGS,
+  SIGNON_TEACHER_PROMPTS_FLAG,
   GUIDED_TOURS_FLAG,
   PLATFORM_ENHANCEMENTS_FLAG,
   CLASS_CODE_UNIQUE_FLAG,
@@ -90,6 +91,14 @@ describe('feature flag registry', () => {
     }
   });
 
+  test('registers teacher prompts with default-off catalog metadata', () => {
+    expect(SIGNON_TEACHER_PROMPTS_FLAG).toBe('signon-teacher-prompts');
+    expect(FEATURE_FLAGS[SIGNON_TEACHER_PROMPTS_FLAG].label).toBe('Sign-on teacher prompts');
+    expect(FEATURE_FLAGS[SIGNON_TEACHER_PROMPTS_FLAG].description.length).toBeGreaterThan(0);
+    expect(featureFlagSettingName(SIGNON_TEACHER_PROMPTS_FLAG)).toBe('feature_flag.signon-teacher-prompts');
+    expect(evaluateFeatureFlag(parseFeatureFlagValue(null))).toBe(false);
+  });
+
   test('lists every registered flag key', () => {
     expect(FEATURE_FLAG_KEYS).toEqual([
       LESSON_PLANNER_FLAG,
@@ -101,7 +110,8 @@ describe('feature flag registry', () => {
       CLASS_CODE_UNIQUE_FLAG,
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
-  PLATFORM_ENHANCEMENTS_FLAG,
+      SIGNON_TEACHER_PROMPTS_FLAG,
+      PLATFORM_ENHANCEMENTS_FLAG,
     ]);
   });
 
