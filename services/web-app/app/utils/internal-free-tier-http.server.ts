@@ -1,3 +1,4 @@
+import { lockApprovalApplication } from '~/domain/free-tier/approval-lock.server';
 import {
   recordFreeTierCapDenialAudit,
   recordTesterAudit,
@@ -698,6 +699,7 @@ async function transition(args: {
   audit?: TesterAuditActor;
 }): Promise<{ status: 200 | 402 | 404 | 409; payload: Record<string, unknown>; app?: HookApp; changed: boolean }> {
   return prisma.$transaction(async (tx) => {
+    await lockApprovalApplication(tx, args.id);
     const app = await tx.freeTierApplication.findUnique({
       where: { id: args.id },
       select: {
@@ -899,6 +901,7 @@ export async function decideApplication(args: {
 export async function reopenApplication(args: { id: string; decidedByEmail: string; audit?: TesterAuditActor }) {
   const { id } = args;
   const result = await prisma.$transaction(async (tx) => {
+    await lockApprovalApplication(tx, id);
     const app = await tx.freeTierApplication.findUnique({ where: { id }, select: { id: true, status: true, releasedAt: true, tags: true } });
     if (!app) return { status: 404 as const, payload: { error: 'Not found' } };
     if (app.tags?.includes(BELOW_HS_TAG)) return { status: 409 as const, payload: { error: 'grade_gate_declined' } };
