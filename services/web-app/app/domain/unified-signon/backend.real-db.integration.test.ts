@@ -3265,3 +3265,77 @@ suite(
     }
   }
 );
+
+// FAILURES.md: di-signon-fix-recovery-code-copy. Exercise real OTP consumption,
+// identity resolution, selected-class validation and database enrollment denial.
+for (const denial of ['inactive', 'unavailable'] as const) {
+  suite(
+    `email verification returns a retryable class error for ${denial} enrollment without access`,
+    async () => {
+      cookie = '';
+      flowToken = '';
+      const email = `denied-code-${denial}-${prefix}@example.test`;
+      const user = await prisma.user.create({
+        data: {
+          email,
+          password: { create: { hash: await getPasswordHash('abcdef') } },
+          memberships: {
+            create: {
+              organizationId: prefix,
+              role: 'STUDENT',
+              isActive: false,
+            },
+          },
+        },
+      });
+      const snapshot = () =>
+        prisma.orgMembership.findMany({
+          where: { userId: user.id },
+          include: { classesAsStudent: { select: { id: true } } },
+        });
+      const before = await snapshot();
+      await post('resolve', { identifier: prefix });
+      await post('student-choice', { choice: 'new' });
+      await post('student-email');
+      expect(
+        (await post('resolve', { identifier: email })).data.state.variant
+      ).toBe('existing');
+      expect((await post('class-email-signin')).data.state.screen).toBe(
+        'password'
+      );
+      expect((await post('send-code')).data.state.screen).toBe('email-code');
+      if (denial === 'unavailable')
+        await prisma.class.update({
+          where: { id: prefix },
+          data: { isArchived: true },
+        });
+      try {
+        const denied = await post('verify-code', { code: await code(email) });
+        expect(denied.response.status).toBe(400);
+        expect(denied.data).toEqual({
+          error: '',
+          fieldErrors: {
+            classCode:
+              "We couldn't find a class with that code. Check it with your teacher.",
+          },
+        });
+        expect(await snapshot()).toEqual(before);
+        expect(await prisma.session.count({ where: { userId: user.id } })).toBe(
+          0
+        );
+        expect((await post('complete-student')).response.status).toBe(400);
+        expect(
+          (await post('resolve-class', { classCode: 'unknown-local-code' }))
+            .data.fieldErrors.classCode
+        ).toBe(denied.data.fieldErrors.classCode);
+        expect(await snapshot()).toEqual(before);
+      } finally {
+        if (denial === 'unavailable')
+          await prisma.class.update({
+            where: { id: prefix },
+            data: { isArchived: false },
+          });
+      }
+    }
+  );
+}

@@ -926,6 +926,33 @@ jobs:
           trap "python3 -c 'import os, shutil; shutil.rmtree(os.environ[\"SIGNON_RESEND_CAPTURE_DIR\"], ignore_errors=True)'" EXIT
           bun x playwright test --config playwright.unified-resend.config.ts --workers=1
 
+      - name: Unified sign-on inactive recovery browser flows
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
+        working-directory: services/web-app
+        env:
+          CI: true
+          NODE_ENV: development
+          PGPASSWORD: postgres
+          DATABASE_URL: postgresql://yawp_pr_999565_app:ci-fixture-only@127.0.0.1:5432/yawp_pr_999565
+          E2E_DATABASE_URL: postgresql://yawp_pr_999565_app:ci-fixture-only@127.0.0.1:5432/yawp_pr_999565
+          SESSION_SECRET: ci-local-signon-session-secret
+          SIGNON_PREVIEW_FIXTURE_TEST: '1'
+          PREVIEW_ACCESS_SECRET: ci-local-recovery-private-secret-32bytes
+          YAWP_ENVIRONMENT: preview
+          PREVIEW_SLUG: pr-999565
+          PREVIEW_DATA_MODE: seed
+          TMPDIR: ${{ runner.temp }}/signon-recovery
+          RESEND_API_KEY: ''
+          EMAIL_PROVIDER: ''
+        run: |
+          mkdir -p "$TMPDIR"
+          trap 'psql -h 127.0.0.1 -U postgres -d postgres -c "DROP DATABASE IF EXISTS yawp_pr_999565 WITH (FORCE)" -c "DROP ROLE IF EXISTS yawp_pr_999565_app"' EXIT
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE yawp_pr_999565_app LOGIN PASSWORD 'ci-fixture-only'" -c "CREATE DATABASE yawp_pr_999565 OWNER yawp_pr_999565_app"
+          bun run --cwd ../../packages/prisma prisma migrate deploy
+          bun run ../../packages/prisma/scripts/seed-local-dev.ts
+          bun run ../../packages/prisma/scripts/seed-preview-signon-qa.ts
+          bun x playwright test --config playwright.unified-recovery.config.ts --workers=1
+
       - name: Unified sign-on mocked-provider browser flows
         if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         working-directory: services/web-app
