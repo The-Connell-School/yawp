@@ -112,7 +112,26 @@ test('enabled entry sanitizes redirect and never exposes fixture selectors or Go
     unified: true,
     redirectTo: '/app',
     googleAvailable: false,
+    googleVisible: true,
   });
+});
+
+test('a PR preview hides Google on an origin missing from its allowlist', async () => {
+  findUnique.mockResolvedValue({ value: '{"mode":"everyone","orgIds":[]}' });
+  process.env.GOOGLE_OAUTH_REQUIRE_ORIGIN_ALLOWLIST = 'true';
+  process.env.GOOGLE_OAUTH_ORIGIN_ALLOWLIST = '';
+  try {
+    const result = await loader(
+      args(new Request('https://pr-437.preview.yawp.school/auth/login'))
+    );
+    expect(result).toMatchObject({
+      googleAvailable: false,
+      googleVisible: false,
+    });
+  } finally {
+    delete process.env.GOOGLE_OAUTH_REQUIRE_ORIGIN_ALLOWLIST;
+    delete process.env.GOOGLE_OAUTH_ORIGIN_ALLOWLIST;
+  }
 });
 
 test('signed-in entry retains the legacy destination off and uses app only on', async () => {
