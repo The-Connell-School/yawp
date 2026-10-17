@@ -646,7 +646,7 @@ function runTestProfile(profile, { json }) {
   }
   else if (chosen === "guided-tours-unit") {
     run("read-only-route-contract", ["test", "./scripts/read-only-impersonation-contract.test.ts"]);
-    for (const file of ["app/components/guided-tour/skipped-tours.test.ts", "app/domain/guided-tours/tours.test.ts", "app/domain/guided-tours/guided-tours.server.test.ts", "app/routes/api.guided-tours/route.test.ts", "app/utils/impersonation-read-only.server.test.ts", "app/domain/feature-flags/feature-flags.test.ts", "app/domain/feature-flags/feature-flags.server.test.ts", "app/routes/app/route.test.tsx"])
+    for (const file of ["app/components/guided-tour/skipped-tours.test.ts", "app/domain/guided-tours/tours.test.ts", "app/domain/guided-tours/guided-tours.server.test.ts", "app/routes/api.guided-tours/route.test.ts", "app/utils/internal-feature-flags-http.server.test.ts", "app/utils/impersonation-read-only.server.test.ts", "app/domain/feature-flags/feature-flags.test.ts", "app/domain/feature-flags/feature-flags.server.test.ts", "app/routes/app/route.test.tsx"])
       runWebApp(file, ["test", file]);
   }
   else if (chosen === "guided-tours-db") {
