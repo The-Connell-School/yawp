@@ -10,6 +10,7 @@ import { prisma } from '~/utils/db.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { isLoungeCommunityEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { LoungeMasthead } from '~/components/lounge/lounge-masthead';
+import { trainingCardCounts } from '~/utils/teacher-training-counts';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -130,10 +131,8 @@ export default function TeacherTrainingsRoute() {
                         {course.description || 'No description'}
                       </p>
                       <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
-                        <span>
-                          {course.teacherTrainingModules.length} modules
-                        </span>
-                        <span>{course.resources.length} resources</span>
+                        <span>{trainingCardCounts(course).modules}</span>
+                        <span>{trainingCardCounts(course).resources}</span>
                       </div>
                     </CardContent>
                   </Card>
