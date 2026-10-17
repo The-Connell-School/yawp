@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   FEATURE_FLAGS,
+  GUIDED_TOURS_FLAG,
   CLASS_CODE_UNIQUE_FLAG,
   DEMO_FEEDBACK_FLAG,
   INTERNAL_RUBRICS_FLAG,
@@ -93,6 +94,7 @@ describe('feature flag registry', () => {
       CLASS_CODE_UNIQUE_FLAG,
       THESIS_ESSAY_DECKS_FLAG,
       DEMO_FEEDBACK_FLAG,
+      GUIDED_TOURS_FLAG,
     ]);
   });
 

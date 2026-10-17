@@ -1,0 +1,12 @@
+{"width":1280,"kind":"generated-handle","source":"client","phase":"after","password":"Use at least 6 characters.","confirmation":"These passwords don't match."}
+{"width":1280,"kind":"generated-handle","source":"server","phase":"after","password":"Use at least 6 characters.","confirmation":"These passwords don't match."}
+{"width":390,"kind":"generated-handle","source":"client","phase":"after","password":"Use at least 6 characters.","confirmation":"These passwords don't match."}
+{"width":390,"kind":"generated-handle","source":"server","phase":"after","password":"Use at least 6 characters.","confirmation":"These passwords don't match."}
+{"width":1280,"kind":"email-signup","source":"client","phase":"after","password":"Use at least 6 characters.","confirmation":"These passwords don't match."}
+{"width":1280,"kind":"email-signup","source":"server","phase":"after","password":"Use at least 6 characters.","confirmation":"These passwords don't match."}
+{"width":1280,"kind":"reset","source":"client","phase":"after","password":"Use at least 6 characters.","confirmation":"These passwords don't match."}
+{"width":1280,"kind":"reset","source":"server","phase":"after","password":"Use at least 6 characters.","confirmation":"These passwords don't match."}
+{"width":390,"kind":"email-signup","source":"client","phase":"after","password":"Use at least 6 characters.","confirmation":"These passwords don't match."}
+{"width":390,"kind":"email-signup","source":"server","phase":"after","password":"Use at least 6 characters.","confirmation":"These passwords don't match."}
+{"width":390,"kind":"reset","source":"client","phase":"after","password":"Use at least 6 characters.","confirmation":"These passwords don't match."}
+{"width":390,"kind":"reset","source":"server","phase":"after","password":"Use at least 6 characters.","confirmation":"These passwords don't match."}

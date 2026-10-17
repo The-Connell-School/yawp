@@ -1,0 +1,22 @@
+{
+  "base": "9b78657e3",
+  "sources": {
+    "signon-40-new-student-school-class-email-all-states.dom.html": "e55ef2d57df2286856fbe57e7c9f0e312680b31c8671ca8c3a4bccc7b8768980",
+    "signon-40-new-student-school-class-email-all-states.txt": "1f2dffc5122daf688779edf865f4257861588d6422b0670e9d8630d97ce5e45d",
+    "signon-40-new-student-school-class-email-all-states.png": "259bbaacdbd42ef58de1ee317b36e3450368c1a552a5c8ee157bcbda003415c7",
+    "signon-39-new-student-school-class-email-desktop.png": "6f967056fc113517bd33ae1c8ae7ed34f0c8b33ccbaf7b5ab5f4f8aa51226437",
+    "signon-05-password-step-desktop.png": "f1d75891618f0829d2a4cbb026e0d40e0c422b19437d3849657cf63f344df830",
+    "signon-06-password-step-all-states.dom.html": "157ed5ac8520fe0de86c5f8b767fce65ad6f0bdff0826d4a916bbcd9c37c0a05"
+  },
+  "notice_reference": "Playwright render of supplied v2 DOM: Email has an account parent frame, scripts removed; source inline styles unchanged. This exact state exists only as a mobile frame; the same frame is supplied alongside the 1280px implementation. Default desktop PNG recorded separately and not mislabeled as the existing state.",
+  "password_reference": "1280px supplied v2 signon-05 PNG; 390px Playwright render of supplied v2 signon-06 Email user frame.",
+  "differences": "Real logo replaces broken reference logo; supplied rounded frame and placeholder class labels are reference artifacts. Runtime Google is unavailable and disabled. Back action added for pending email class continuation. Main name/handle New remains primary; email option is additional. Validation targets combine existing notice with validation errors; no exact separate source frame exists.",
+  "final_application_source": "20d099fbd3b3befcecd45a0669a5432dec800941",
+  "final_validation": {
+    "profile_tests": 132,
+    "assertions": 694,
+    "browser_backend": 13,
+    "browser_main_new_returning": 2,
+    "typecheck": "passed"
+  }
+}

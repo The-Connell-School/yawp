@@ -1,13 +1,12 @@
 import type { Organization, OrganizationPlan } from '@app/prisma';
+import { DEFAULT_FREE_TIER_LIMITS, type FreeTierLimits } from '~/domain/free-tier/limits';
+export { FREE_CLASSROOM_STUDENT_SEAT_CAP, FREE_CLASSROOM_LESSON_PLAN_QUOTA } from '~/domain/free-tier/limits';
 
 // Spec §5.3: one primitive — Organization.plan — decides entitlements.
 // Default SCHOOL plan must short-circuit every check to preserve current behavior.
 
-/** Single source of truth for free-classroom student seat cap (#413 imports this). */
-export const FREE_CLASSROOM_STUDENT_SEAT_CAP = 35;
 export const FREE_CLASSROOM_TEACHER_SEAT_CAP = 1;
 export const FREE_CLASSROOM_ACTIVE_CLASS_CAP = 1;
-export const FREE_CLASSROOM_LESSON_PLAN_QUOTA = 5;
 
 export const FREE_CLASSROOM_ASSIGNMENT_QUOTAS = {
   class_starter: 12,
@@ -69,20 +68,20 @@ export function canCreateAssignmentOfKindForPlan(
   return params.createdCount < cap;
 }
 
-export function getEntitlementsForPlan(plan: OrganizationPlan): PlanEntitlements {
+export function getEntitlementsForPlan(plan: OrganizationPlan, limits: FreeTierLimits = DEFAULT_FREE_TIER_LIMITS): PlanEntitlements {
   if (plan === 'FREE_CLASSROOM') {
     return {
       plan,
-      studentSeatCap: FREE_CLASSROOM_STUDENT_SEAT_CAP,
+      studentSeatCap: limits.studentSeatCap,
       teacherSeatCap: FREE_CLASSROOM_TEACHER_SEAT_CAP,
       activeClassCap: FREE_CLASSROOM_ACTIVE_CLASS_CAP,
       features: {
         reporter: false, // spec §5.1 Reporter is gated in free tier
         classInsights: true,
-        lessonPlanQuota: FREE_CLASSROOM_LESSON_PLAN_QUOTA,
+        lessonPlanQuota: limits.lessonPlannerMonthly,
       },
       canAddStudent: ({ currentStudents, pendingInvites = 0 }) =>
-        currentStudents + pendingInvites < FREE_CLASSROOM_STUDENT_SEAT_CAP,
+        currentStudents + pendingInvites < limits.studentSeatCap,
       canCreateClass: ({ currentActiveClasses }) =>
         currentActiveClasses < FREE_CLASSROOM_ACTIVE_CLASS_CAP,
       canCreateAssignmentOfKind: ({ kind, createdCount }) =>

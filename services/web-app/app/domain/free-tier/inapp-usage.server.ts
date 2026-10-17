@@ -1,3 +1,5 @@
+import { monthlyFreeTierPolicy } from './monthly-policy.server';
+import { readMonthlyUsage } from './monthly-operations.server';
 import {
   isFreeTierInappV2Enabled,
   type FreeTierInappProfile,
@@ -8,8 +10,9 @@ import { countFreeClassSeatUsage } from './class-seat-cap.server';
 import { countOrganizationLessonPlans } from '~/utils/lesson-planner/lesson-planner-quota.server';
 import {
   FREE_CLASSROOM_ASSIGNMENT_QUOTAS,
-  getEntitlements,
+  getEntitlementsForPlan,
 } from '~/utils/entitlements.server';
+import { effectiveFreeTierLimits } from './limits.server';
 import { buildFreeAccountUsage, type FreeAccountUsage } from './inapp-usage';
 import { readGradingLimitStatus } from '~/utils/rate-limit.server';
 
@@ -18,11 +21,24 @@ export async function readFreeAccountUsage(
   profile: FreeTierInappProfile & { id: string },
   freeTierRouteOpen: boolean
 ): Promise<FreeAccountUsage | null> {
-  if (!(await isFreeTierInappV2Enabled(profile, freeTierRouteOpen)))
+  if (
+    !freeTierRouteOpen ||
+    profile.role !== 'TEACHER' ||
+    profile.organization.plan !== 'FREE_CLASSROOM'
+  )
+    return null;
+  const policy = await monthlyFreeTierPolicy(
+    profile.organization as Parameters<typeof monthlyFreeTierPolicy>[0]
+  );
+  if (
+    !policy.enabled &&
+    !(await isFreeTierInappV2Enabled(profile, freeTierRouteOpen))
+  )
     return null;
   const organizationId = profile.organization.id;
   const membershipId = profile.id;
-  const entitlements = getEntitlements('FREE_CLASSROOM');
+  const { limits, monthly } = await effectiveFreeTierLimits(organizationId);
+  const entitlements = getEntitlementsForPlan('FREE_CLASSROOM', limits);
   const klass = await prisma.class.findFirst({
     where: {
       isArchived: false,
@@ -43,11 +59,12 @@ export async function readFreeAccountUsage(
     klass
       ? countFreeClassSeatUsage(
           prisma as Parameters<typeof countFreeClassSeatUsage>[0],
-          klass.id
+          klass.id,
+          monthly
         )
       : { currentStudents: 0, pendingInvites: 0 },
     getFreeClassroomAssignmentQuotaUsage(organizationId),
-    countOrganizationLessonPlans(organizationId),
+    countOrganizationLessonPlans(organizationId, monthly),
     klass
       ? prisma.document.count({
           where: {
@@ -68,8 +85,12 @@ export async function readFreeAccountUsage(
       : 0,
     readGradingLimitStatus(membershipId),
   ]);
+  const reporter = policy.enabled
+    ? await readMonthlyUsage(organizationId, 'reporter')
+    : 0;
   return {
     ...buildFreeAccountUsage({
+      monthly: policy.enabled,
       seatCap: entitlements.studentSeatCap!,
       lessonPlanCap: entitlements.features.lessonPlanQuota!,
       assignmentCaps: FREE_CLASSROOM_ASSIGNMENT_QUOTAS,
@@ -78,6 +99,17 @@ export async function readFreeAccountUsage(
       lessonPlans,
       assignmentCounts: Object.fromEntries(assignmentCounts),
     }),
+    monthly: policy.enabled,
+    ...(policy.enabled
+      ? {
+          reporter: {
+            used: reporter,
+            total: limits.reporterMonthly,
+            remaining: Math.max(0, limits.reporterMonthly - reporter),
+          },
+        }
+      : {}),
+    classCode: klass?.code ?? null,
     classId: klass?.id ?? null,
     checklist: {
       classReady: Boolean(klass?.code),

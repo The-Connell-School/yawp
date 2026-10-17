@@ -125,6 +125,7 @@ describe('internal feature-flag endpoints', () => {
       'classcode-unique',
       'thesis_essay_decks',
       'demo-feedback-widget',
+      'guided-tours',
     ]);
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[1]).toMatchObject({ key: 'internal_rubrics', label: 'Rubrics from Yawp Internal', mode: 'off', orgIds: [], enabled: false });
@@ -141,6 +142,23 @@ describe('internal feature-flag endpoints', () => {
     });
     expect(body.flags.find((flag: { key: string }) => flag.key === 'thesis_essay_decks')).toMatchObject({ label: 'Thesis-Driven Essay slide decks', mode: 'off', orgIds: [], enabled: false });
   });
+
+  for (const environment of ['development', 'demo', 'production', 'preview']) {
+    test(`guided tours stay off without a setting: ${environment}`, async () => {
+      process.env.YAWP_ENVIRONMENT = environment;
+      const response = await featureFlagsList(
+        new Request(BASE, { headers: { authorization: `Bearer ${key}` } })
+      );
+      expect(response.status).toBe(200);
+      const { flags } = await response.json();
+      expect(flags.find((flag: { key: string }) => flag.key === 'guided-tours')).toMatchObject({
+        key: 'guided-tours', mode: 'off', orgIds: [], enabled: false,
+        persisted: { mode: 'off', orgIds: [] },
+        effective: { mode: 'off', orgIds: [] }, runtimeOverride: null,
+      });
+      expect(prisma.setting.upsert).not.toHaveBeenCalled();
+    });
+  }
 
   for (const environment of ['development', 'demo', 'production', 'preview']) {
     for (const value of [undefined, 'invalid', '{"mode":"invalid"}']) {
@@ -228,6 +246,7 @@ describe('internal feature-flag endpoints', () => {
       'classcode-unique',
       'thesis_essay_decks',
       'demo-feedback-widget',
+      'guided-tours',
     ]);
   });
 

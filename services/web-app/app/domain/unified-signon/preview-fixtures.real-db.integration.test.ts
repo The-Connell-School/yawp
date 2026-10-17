@@ -233,8 +233,9 @@ suite(
           username: QA_CODES.free,
           password: LOCAL_DEV_PASSWORD,
         })
-      ).result.status
-    ).toBe(302);
+      ).data.state.variant
+    ).toBe('already');
+    expect((await post('complete-student')).result.status).toBe(302);
     fresh();
     const classes = await post('resolve', { identifier: QA_CODES.multiple });
     expect(classes.data.state.classes).toHaveLength(2);

@@ -5,6 +5,7 @@ mock.module('~/services/posthog.server', () => ({
   posthog: { capture, alias: mock() },
 }));
 const prisma = {
+  setting: { findUnique: mock(async () => null) },
   class: { findMany: mock(), findFirst: mock(), update: mock() },
   freeTierApplication: { count: mock(), findFirst: mock() },
   user: { findFirst: mock(), update: mock() },

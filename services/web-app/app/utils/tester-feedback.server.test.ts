@@ -74,7 +74,7 @@ describe('tester feedback submission', () => {
     expect(
       (
         await submitTesterFeedback(
-          request({ userId: 'other', environment: 'production' }),
+          request({ userId: 'other', environment: 'production', userEmail: 'spoof@example.test', userName: 'Spoof', actions: '[{"type":"route","path":"/app"}]' }),
           deps
         )
       ).status
@@ -1025,5 +1025,35 @@ describe('signed feedback internal API', () => {
       resetInternalApiMemoryNonceStore();
       resetInternalApiRateLimitBuckets();
     }
+  });
+});
+
+
+describe('additive reviewer contract', () => {
+  test('authorized HMAC and shared admin reader return actions and server metadata; historical rows have nulls', async () => {
+    const reviewed = { ...entry, actions: [{ type: 'route', path: '/app' }], userEmail: 'tester@example.test', userName: 'Test Reviewer' };
+    for (const mode of ['internal', 'admin'] as const) {
+      const { deps } = setup({
+        getUser: async () => ({ id: 'admin', isAdmin: true, isTester: false }),
+        authenticateInternal: async () => hmacAuth,
+        list: async () => [reviewed, { ...entry, id: 'historical' }],
+      });
+      const response = await readTesterFeedback(new Request('https://demo.example/api/internal/v1/tester-feedback'), deps, mode);
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.entries[0]).toMatchObject({ actions: reviewed.actions, userEmail: reviewed.userEmail, userName: reviewed.userName });
+      expect(body.entries[1]).toMatchObject({ actions: null, userEmail: null, userName: null });
+      for (const row of body.entries) {
+        for (const key of ['id', 'userId', 'url', 'userAgent', 'whatIDid', 'whatHappened', 'whatIWish', 'environment', 'createdAt']) expect(typeof row[key]).toBe('string');
+      }
+    }
+  });
+  test('CSV appends actions JSON, email and name after every existing column with escaping and formula protection', () => {
+    const actions = [{ type: 'route', path: '/app' }];
+    const csv = feedbackCsv([{ ...entry, actions, userEmail: '=formula@example.test', userName: ' +SUM(1,2) "name"' }]);
+    expect(csv.split('\r\n')[0]).toBe('id,userId,url,userAgent,whatIDid,whatHappened,whatIWish,severity,createdAt,environment,actions,userEmail,userName');
+    expect(csv).toContain('"[{""type"":""route"",""path"":""/app""}]"');
+    expect(csv).toContain('"\'=formula@example.test","\' +SUM(1,2) ""name"""');
+    expect(feedbackCsv([entry])).toContain('"demo","","",""\r\n');
   });
 });

@@ -1,0 +1,58 @@
+[
+  {
+    "width": 1280,
+    "state": "before-login",
+    "byteIdentical": true,
+    "beforeSha256": "1067f9a40a95da2453aaaaf0a0f07453354aca972acaee3e4fe39ead0e7a4a9d",
+    "afterSha256": "1067f9a40a95da2453aaaaf0a0f07453354aca972acaee3e4fe39ead0e7a4a9d"
+  },
+  {
+    "width": 1280,
+    "state": "before-signup",
+    "byteIdentical": true,
+    "beforeSha256": "e4b795b0182bca283b304cb59c64b0143daddcd5ddc92c3aa548c289f696e4ff",
+    "afterSha256": "e4b795b0182bca283b304cb59c64b0143daddcd5ddc92c3aa548c289f696e4ff"
+  },
+  {
+    "width": 1280,
+    "state": "before-reset",
+    "byteIdentical": true,
+    "beforeSha256": "4af5687d1d60d6c8f5e30193509e56df245eeffd8a16e57d2cd7bb92d0fb72ed",
+    "afterSha256": "4af5687d1d60d6c8f5e30193509e56df245eeffd8a16e57d2cd7bb92d0fb72ed"
+  },
+  {
+    "width": 1280,
+    "state": "legacy-password-error",
+    "byteIdentical": true,
+    "beforeSha256": "be4effb33fea8e756354b4f341235c753ab47cb907657f9e9fbdace6485c1890",
+    "afterSha256": "be4effb33fea8e756354b4f341235c753ab47cb907657f9e9fbdace6485c1890"
+  },
+  {
+    "width": 390,
+    "state": "before-login",
+    "byteIdentical": true,
+    "beforeSha256": "15a5bb2b3802e4c7b6f43b57c46a8cf85f65231076c1106fcc83ae56d33abf81",
+    "afterSha256": "15a5bb2b3802e4c7b6f43b57c46a8cf85f65231076c1106fcc83ae56d33abf81"
+  },
+  {
+    "width": 390,
+    "state": "before-signup",
+    "byteIdentical": true,
+    "beforeSha256": "2970628a9b17f46dd347e3f5bf76f4e4eae1e5a2c971f48e915fe53766b5f3e6",
+    "afterSha256": "2970628a9b17f46dd347e3f5bf76f4e4eae1e5a2c971f48e915fe53766b5f3e6"
+  },
+  {
+    "width": 390,
+    "state": "before-reset",
+    "byteIdentical": true,
+    "beforeSha256": "a93cec0428d934e501c387dd780fbc645e92f5b6783701743b51a97048ef2b88",
+    "afterSha256": "a93cec0428d934e501c387dd780fbc645e92f5b6783701743b51a97048ef2b88"
+  },
+  {
+    "width": 390,
+    "state": "legacy-password-error",
+    "byteIdentical": true,
+    "beforeSha256": "b6b66c25de82211debd44c9ad19eabad5e185c92c03a7a26820746db9b4c917e",
+    "afterSha256": "b6b66c25de82211debd44c9ad19eabad5e185c92c03a7a26820746db9b4c917e"
+  }
+]

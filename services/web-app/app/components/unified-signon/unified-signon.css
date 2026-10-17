@@ -355,7 +355,8 @@
 }
 .unified-signon:is(
     [data-signon-screen='trial-status'],
-    [data-signon-screen='inactive']
+    [data-signon-screen='inactive'],
+    [data-signon-variant='invalid-link']
   )
   .signon-card
   > .mt-6 {

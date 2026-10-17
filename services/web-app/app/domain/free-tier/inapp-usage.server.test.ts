@@ -1,18 +1,36 @@
 import { test, expect, mock, beforeEach } from 'bun:test';
+mock.module('./monthly-operations.server', () => ({
+  readMonthlyUsage: async () => 1,
+}));
 const classRead = mock(async (..._args: any[]) => ({
   id: 'class',
   code: 'CLASS',
 }));
 const count = mock(async () => 0);
 let v2Value: string | null = null;
+let onboarding = false;
 let freeTier = true;
 const settingRead = mock(async ({ where }: any) => {
+  if (where.name === 'free_tier.limits.v1')
+    return {
+      value: JSON.stringify({
+        studentSeatCap: 10,
+        lessonPlannerMonthly: 0,
+        reporterMonthly: 100,
+        version: 1,
+        updatedAt: '2026-10-16T00:00:00.000Z',
+        updatedByEmail: 'staff@example.test',
+      }),
+    };
+  if (where.name === 'feature_flag.free-tier-onboarding-v2')
+    return { value: String(onboarding) };
   const value =
     where.name === 'feature_flag.free_tier' ? String(freeTier) : v2Value;
   return value === null ? null : { value };
 });
 mock.module('~/utils/db.server', () => ({
   prisma: {
+    freeTierApplication: { findFirst: async () => ({ id: 'approved' }) },
     setting: { findUnique: settingRead },
     class: { findFirst: classRead },
     document: { count },
@@ -45,6 +63,7 @@ const profile = {
 };
 beforeEach(() => {
   v2Value = 'true';
+  onboarding = false;
   freeTier = true;
   classRead.mockClear();
   count.mockClear();
@@ -66,6 +85,16 @@ test('adapter reads authoritative usage, including invites and lifetime counts',
     writingSubmitted: false,
     graded: false,
   });
+});
+test('onboarding v2 usage reflects configured caps without hiding excess students', async () => {
+  onboarding = true;
+  const usage = await readFreeAccountUsage(profile, true);
+  expect(usage!.students.total).toBe(10);
+  expect(usage!.students.remaining).toBe(0);
+  expect(usage!.monthly).toBe(true);
+  expect(usage!.reporter).toEqual({ used: 1, total: 100, remaining: 99 });
+  expect(usage!.lessonPlans.total).toBe(0);
+  expect(usage!.lessonPlans.remaining).toBe(0);
 });
 
 for (const value of [null, 'false', '{"mode":"off","orgIds":[]}']) {

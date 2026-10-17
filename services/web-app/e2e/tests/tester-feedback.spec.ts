@@ -29,6 +29,7 @@ test.describe.serial('Tester feedback', () => {
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto('/app/assignments?tab=work&access_token=test-secret');
       const trigger = page.getByRole('button', { name: 'Log feedback' });
+      await expect(page.getByRole('button', { name: 'Give feedback', exact: true })).toHaveCount(0);
       await trigger.click();
       const dialog = page.getByRole('dialog', { name: 'Log feedback' });
       await expect(dialog).toBeVisible();
@@ -50,6 +51,7 @@ test.describe.serial('Tester feedback', () => {
       });
       expect(saved.url).toBe('/app/assignments?tab=work');
       expect(saved.severity).toBe('low');
+      expect(saved.actions).toBeNull();
       await page.keyboard.press('Escape');
       await expect(dialog).toHaveCount(0);
       await expect(trigger).toBeFocused();

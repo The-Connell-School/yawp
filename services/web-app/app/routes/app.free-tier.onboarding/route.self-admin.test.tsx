@@ -24,7 +24,11 @@ const send = mock(async () => {
 });
 mock.module('~/utils/db.server', () => ({
   ...realDb,
-  prisma: { freeTierApplication: { findFirst }, $transaction: transaction },
+  prisma: {
+    freeTierApplication: { findFirst },
+    setting: { findUnique: mock(async () => null) },
+    $transaction: transaction,
+  },
 }));
 mock.module('~/utils/auth.server', () => ({
   ...realAuth,
@@ -105,6 +109,9 @@ for (const environment of ['demo', 'production']) {
             email: true,
             name: true,
             schoolName: true,
+            organizationId: true,
+            starterClassName: true,
+            starterClassGrade: true,
           },
         },
       ]);

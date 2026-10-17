@@ -59,6 +59,8 @@ export type SignonState = {
 };
 
 export type SignonOperation =
+  | 'student-email'
+  | 'class-email-signin'
   | 'student-choice'
   | 'register-student'
   | 'student-password'

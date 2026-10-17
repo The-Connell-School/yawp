@@ -1,0 +1,16 @@
+{
+  "source": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/design/v2/artboards/signon-18-handle-join-join-all-states.dom.html",
+  "sha256": "6c3e4e653da92dfe7fc71e91a6342ae2759ad5b60008659c7cbba9ba40924d2a",
+  "sourceFrame": {
+    "x": 1737,
+    "y": 137,
+    "width": 390,
+    "height": 800
+  },
+  "note": "V2 mobile DOM panel isolated; desktop is centered responsive extrapolation of that panel. Broken exported logo restored with the existing local YAWP brand asset for comparison. Native supplied PNG crop retained separately. System fonts are those available to local Chromium.",
+  "suppliedPng": {
+    "source": "/home/bryant/work/yawp/codex-loop/lanes/design-impl/design/v2/artboards/signon-18-handle-join-join-all-states.png",
+    "sha256": "3a510c8dbe46447da0abee73794c955ad83df90f1c90dd2ba8a8b81885d447f7",
+    "crop": "390x844+1738+138"
+  }
+}

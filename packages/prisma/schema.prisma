@@ -28,7 +28,10 @@ model FreeTierApplication {
   email            String                    @unique
   schoolName       String
   location         String
+  starterClassName String? @db.VarChar(100)
+  starterClassGrade String? @db.VarChar(5)
   gradeLevel       String
+  releaseEmailCopyVersion String? @db.VarChar(40)
   tags             String[]                  @default([])
   acquisitionTokenId String?
   acquisitionToken   AcquisitionToken? @relation(fields: [acquisitionTokenId], references: [id], onDelete: SetNull, onUpdate: Cascade)
@@ -95,7 +98,50 @@ model FreeTierAdminApproval {
   redirects            FreeTierAdminApproval[]     @relation("AdminApprovalRedirectChain")
   personalNote         String?
 
+  // Cadence belongs to the current administrator; forwarding starts a new series.
+  firstSentAt          DateTime? @db.Timestamptz(6)
+  reminderCount        Int       @default(0)
+  lastReminderAt       DateTime? @db.Timestamptz(6)
+  lastReminderSource   String?
+  nextAutoReminderAt   DateTime? @db.Timestamptz(6)
+  autoRemindersStopped Boolean   @default(false)
+  stopReason           String?
+  needsManualFollowUp  Boolean   @default(false)
+  teacherFollowUpCount Int       @default(0)
+  lastTeacherFollowUpAt DateTime? @db.Timestamptz(6)
+  nextTeacherFollowUpAt DateTime? @db.Timestamptz(6)
+  forwardedByRole      String?
+  deliveries           FreeTierApprovalDelivery[]
+
   @@index([applicationId, createdAt(sort: Desc)])
+}
+
+// Payload contains signed URLs and is encrypted with the existing link secret.
+// DELIVERING is committed before contacting the provider; uncertain attempts
+// require reconciliation, never an automatic re-send.
+model FreeTierApprovalDelivery {
+  id            String @id @default(cuid())
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+  approvalId    String
+  approval      FreeTierAdminApproval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+  kind          String
+  sequence      Int
+  source        String?
+  actorEmail    String?
+  idempotencyKey String? @unique
+  state         String @default("QUEUED")
+  availableAt   DateTime @db.Timestamptz(6)
+  attemptedAt   DateTime? @db.Timestamptz(6)
+  sentAt        DateTime? @db.Timestamptz(6)
+  // Immutable acceptance result for I1 idempotency replays.
+  acceptedReminderCount Int?
+  acceptedNextAutoReminderAt DateTime? @db.Timestamptz(6)
+  attempts      Int @default(0)
+  payload       String
+  error         String?
+
+  @@unique([approvalId, kind, sequence])
+  @@index([state, availableAt])
 }
 
 model FreeTierEmailLog {
@@ -1783,6 +1829,21 @@ model User {
   isAdmin            Boolean         @default(false)
   isSuperAdmin       Boolean         @default(false)
   mockAdminGranted   Boolean         @default(false)
+  tours              UserTour[]
+}
+
+/// How a user left each in-app page tour (free classroom teachers). One row per
+/// user and tour; no row means the tour has not been seen and its welcome card
+/// shows. Tour ids live in app code (app/domain/guided-tours/tours.ts).
+model UserTour {
+  userId    String
+  tourId    String
+  /// "completed" or "dismissed"
+  status    String
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, tourId])
 }
 
 model Invitation {
@@ -2249,6 +2310,7 @@ model TesterFeedback {
   whatHappened String   @db.VarChar(4000)
   whatIWish    String   @db.VarChar(4000)
   severity     String?  @db.VarChar(20)
+  actions      Json?
   environment  String   @db.VarChar(100)
   createdAt    DateTime @default(now()) @db.Timestamptz(6)
 

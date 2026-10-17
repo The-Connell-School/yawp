@@ -429,12 +429,12 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
         />
       ) : null}
       <GlobalLoading />
-      <div className="flex h-screen min-h-screen flex-col justify-between">
+      <div data-feedback-content-frame className="flex h-screen min-h-screen flex-col justify-between">
         <div className="flex-1 bg-background">
           <Outlet />
         </div>
       </div>
-      {data.testerFeedbackAvailable ? <TesterFeedbackWidget /> : null}
+      {data.testerFeedbackAvailable && !data.demoFeedbackAvailable ? <TesterFeedbackWidget /> : null}
       {data.demoFeedbackAvailable ? <DemoFeedbackWidget analytics={data.ENV.POSTHOG_API_KEY && !data.internalImpersonation ? posthog : undefined} /> : null}
       <Toaster toast={data.toast} />
     </Document>

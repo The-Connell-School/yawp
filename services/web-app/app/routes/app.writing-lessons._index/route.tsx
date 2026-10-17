@@ -148,6 +148,7 @@ export default function WritingLessonsIndexRoute() {
                 here, a student builds the same thing for themselves. */}
             <Button
               data-testid="writing-practice-create"
+              data-tour="practice-create"
               className="shrink-0 rounded-full"
               onClick={() => setIsCreateOpen(true)}
             >
@@ -186,6 +187,7 @@ export default function WritingLessonsIndexRoute() {
           </h3>
           <div
             data-testid="writing-practice-assignment-list"
+            data-tour="practice-assigned"
             className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2"
           >
             {assignments.map((assignment) => (
@@ -268,7 +270,10 @@ export default function WritingLessonsIndexRoute() {
 
       {/* Lessons, grouped by section. Sections start collapsed so the index
           stays compact as Composition adds more lessons. */}
-      <div className="mx-auto flex w-full min-w-0 max-w-screen-lg flex-col gap-6 px-3 py-8 pb-24 sm:px-5">
+      <div
+        data-tour="practice-library"
+        className="mx-auto flex w-full min-w-0 max-w-screen-lg flex-col gap-6 px-3 py-8 pb-24 sm:px-5"
+      >
         {sections.map((section) => {
           const sectionLessons = section.groups.flatMap(
             (group) => group.lessons
