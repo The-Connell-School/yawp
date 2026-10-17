@@ -15,6 +15,7 @@ export default defineConfig({
     '**/auth.unified-google-backend.spec.ts',
     '**/auth.unified-origin-backend.spec.ts',
     '**/free-tier.create-class.spec.ts',
+    '**/free-tier.locked-preview.spec.ts',
   ],
   globalTeardown: './e2e/global-teardown.ts',
   fullyParallel: false,

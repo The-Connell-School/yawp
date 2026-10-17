@@ -5,7 +5,10 @@ import {
   useActionData,
   useLoaderData,
   useNavigation,
+  Link,
 } from 'react-router';
+import { getLockedPreviewApplication } from '~/domain/free-tier/locked-preview.server';
+import { getMembershipId } from '~/cookies/membership-id.server';
 import { isClassPreparationEnabled } from '~/domain/free-tier/class-preparation.server';
 import { needsClassPreparation } from '~/domain/free-tier/class-preparation';
 import { Clock } from 'lucide-react';
@@ -60,6 +63,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     app,
     pending,
     lastFailedEmail,
+    lockedPreview: Boolean(await getLockedPreviewApplication(userId, await getMembershipId(request))),
   };
 }
 
@@ -117,7 +121,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function FreeTierPendingRoute() {
-  const { app, pending, lastFailedEmail } = useLoaderData<typeof loader>();
+  const { app, pending, lastFailedEmail, lockedPreview } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const resending = navigation.state === 'submitting';
@@ -190,6 +194,11 @@ export default function FreeTierPendingRoute() {
             {resending ? 'Sending…' : 'Resend reminder'}
           </FreeTierButton>
         </Form>
+      ) : null}
+      {lockedPreview ? (
+        <Link to="/app/free-tier/preview" className="text-center text-sm font-medium underline underline-offset-4">
+          Look around while you wait
+        </Link>
       ) : null}
     </FreeTierAuthCard>
   );
