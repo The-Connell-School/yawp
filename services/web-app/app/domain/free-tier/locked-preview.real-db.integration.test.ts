@@ -6,6 +6,14 @@ import { reserveAiRequest } from '~/utils/ai-admission.server';
 import { handleReporterToolCall } from '~/domain/reporter/reporter-tools.server';
 import { handleLessonPlannerToolCall } from '~/domain/lesson-planner/lesson-planner-tools.server';
 import { enforceLockedPreviewRequest } from './locked-preview.server';
+import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
+import { action as createAssignment } from '~/routes/api.assignments.create/route';
+import { action as reporter } from '~/routes/api.domain.reporter/route';
+import { action as planner } from '~/routes/api.domain.lesson-planner/route';
+import { action as packet } from '~/routes/api.domain.lesson-planner.packet/route';
+import { action as students } from '~/routes/app.organization.students/route';
+import { loader as preview } from '~/routes/app.free-tier.preview/route';
+import { replaceStudentClassRoster } from '~/domain/collaboration/student-roster.server';
 
 const enabled = process.env.LOCKED_PREVIEW_DB_TESTS === '1';
 const local = enabled ? test : test.skip;
@@ -54,6 +62,30 @@ local('targeted pending lock rejects shared writers/tools with no writes or usag
   expect(await prisma.assignment.count()).toBe(assignmentCount);
   expect(await prisma.freeClassroomAssignmentKindUsage.count({ where: { organizationId: orgId } })).toBe(0);
   expect(await prisma.aiRequestReservation.count({ where: { organizationId: orgId } })).toBe(0);
+  expect(await prisma.orgMembership.count({ where: { classesAsStudent: { some: { id: classId } } } })).toBe(0);
+});
+
+local('real authenticated route actions reject crafted requests before parsing or executing tools', async () => {
+  const session = await prisma.session.create({ data: { userId, expirationDate: new Date(Date.now() + 3600000) } });
+  const cookie = await authSessionStorage.getSession(); cookie.set('sessionId', session.id);
+  const headers = { cookie: (await authSessionStorage.commitSession(cookie)).split(';')[0] };
+  try {
+    for (const [path, action] of [
+      ['/api/assignments/create', createAssignment], ['/api/domain/reporter', reporter],
+      ['/api/domain/lesson-planner', planner], ['/api/domain/lesson-planner/packet', packet],
+      ['/app/organization/students', students],
+    ] as const) {
+      await expect(action({ request: new Request(`http://localhost${path}`, { method: 'POST', headers, body: 'crafted-invalid-body' }) } as never)).rejects.toMatchObject({ status: 403 });
+    }
+    const result = await preview({ request: new Request('http://localhost/app/free-tier/preview?organizationId=foreign-org', { headers }) } as never);
+    expect(result.entries.length).toBeGreaterThan(0);
+    expect(JSON.stringify(result)).not.toContain(orgId);
+    await expect(createAssignment({ request: new Request('http://localhost/api/assignments/create', { method: 'POST' }) } as never)).rejects.toMatchObject({ status: 302 });
+  } finally { await prisma.session.delete({ where: { id: session.id } }); }
+});
+
+local('the shared roster replacement entry point cannot add students before approval', async () => {
+  await expect(replaceStudentClassRoster({ membershipId, nextClassIds: [classId] })).rejects.toMatchObject({ status: 403 });
   expect(await prisma.orgMembership.count({ where: { classesAsStudent: { some: { id: classId } } } })).toBe(0);
 });
 

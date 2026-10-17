@@ -47,6 +47,10 @@ async function fixture(
     },
   });
   apps.push(app.id);
+  if (status === 'SENT') await prisma.freeTierAdminApproval.create({ data: {
+    applicationId: app.id, adminName: 'Dr. Patel', adminEmail: 'principal@example.test',
+    emailCopyVersionHash: 'local-locked-preview', firstSentAt: new Date('2026-10-14T15:00:00Z'),
+  } });
   return { user, app };
 }
 async function login(page: import('@playwright/test').Page, email: string) {
@@ -146,6 +150,8 @@ for (const width of [1440, 390]) {
     const { user, app } = await fixture('11', 'SENT');
     await login(page, user.email!);
     await expect(page).toHaveURL(/free-tier\/pending/);
+    await expect(page.getByText(/Sent to Dr. Patel on/)).toBeVisible();
+    await expect(page.getByText('Not the right person? Forward this request', { exact: true })).toBeVisible();
     await capture(page, `waiting-${width}`);
     await page.getByRole('link', { name: 'Look around while you wait' }).click();
     await expect(page.getByRole('heading', { name: 'Look around while you wait' })).toBeVisible();
@@ -160,7 +166,14 @@ for (const width of [1440, 390]) {
     const reservations = await prisma.aiRequestReservation.count();
     for (const path of ['/api/assignments/create', '/api/domain/reporter', '/api/domain/lesson-planner', '/api/domain/lesson-planner/packet', '/app/assignments', '/app/organization/students']) {
       const response = await page.request.post(path, { form: { intent: 'create', organizationId: 'foreign-org' }, maxRedirects: 0 });
-      expect(response.status(), path).toBe(403);
+      // A parent route can replace the action denial with its waiting redirect.
+      // Both must stay inside the locked flow; the real action is also tested
+      // independently against authenticated Requests in the DB profile.
+      if (response.status() === 302) {
+        expect(response.headers().location, path).toMatch(/^\/app\/free-tier\/(pending|preview)$/);
+      } else {
+        expect(response.status(), path).toBe(403);
+      }
     }
     expect(await prisma.assignment.count()).toBe(before);
     expect(await prisma.aiRequestReservation.count()).toBe(reservations);
