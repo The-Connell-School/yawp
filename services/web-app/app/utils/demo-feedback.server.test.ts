@@ -117,7 +117,7 @@ describe('demo feedback endpoint', () => {
   test('persists a note and bounded context through the existing feedback service with server attribution', async () => {
     const { deps, save } = setup();
     const response = await submitDemoFeedback(
-      request({ ...input, userId: 'attacker', environment: 'production' }),
+      request({ ...input, userId: 'attacker', environment: 'production', userEmail: 'spoof@example.test', userName: 'Spoof' }),
       deps
     );
     expect(response.status).toBe(201);
@@ -128,10 +128,42 @@ describe('demo feedback endpoint', () => {
       userAgent: '',
       url: '/app/assignments',
       whatHappened: input.note,
-      whatIWish: 'Demo feedback note',
-      whatIDid: JSON.stringify([{ type: 'route', path: '/app' }]),
+      whatIWish: '',
+      whatIDid: 'Opened /app',
+      actions: [{ type: 'route', path: '/app' }],
       severity: null,
     });
+  });
+  test('optional severity uses the existing low/medium/high contract', async () => {
+    for (const severity of [undefined, null, 'low', 'medium', 'high']) {
+      const { deps, save } = setup();
+      expect((await submitDemoFeedback(request({ ...input, severity }), deps)).status).toBe(201);
+      expect(save).toHaveBeenCalledWith(expect.objectContaining({ severity: severity ?? null }));
+    }
+    for (const severity of ['', 'urgent', 1, {}, ['low']]) {
+      const { deps, save } = setup();
+      expect((await submitDemoFeedback(request({ ...input, severity }), deps)).status).toBe(400);
+      expect(save).not.toHaveBeenCalled();
+    }
+  });
+  test('readable action summary preserves sanitized structured actions and stays bounded', async () => {
+    const actions = [
+      { type: 'route', path: '/app/classes?secret=discard' },
+      { type: 'click', path: '/app/classes', target: 'button' },
+      { type: 'capture', path: '/app/classes', event: '$pageview' },
+    ];
+    const { deps, save } = setup();
+    expect((await submitDemoFeedback(request({ ...input, actions }), deps)).status).toBe(201);
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({
+      whatIDid: 'Opened /app/classes → Clicked a button on /app/classes → Captured $pageview on /app/classes',
+      actions: [{ type: 'route', path: '/app/classes' }, ...actions.slice(1)],
+      whatHappened: input.note, whatIWish: '',
+    }));
+    const longest = Array.from({ length: 5 }, () => ({ type: 'route', path: '/app/' + 'x'.repeat(507) }));
+    expect((await submitDemoFeedback(request({ ...input, actions: longest }), deps)).status).toBe(201);
+    expect((save.mock.calls.at(-1) as any)[0].whatIDid.length).toBeLessThanOrEqual(4000);
+    expect((await submitDemoFeedback(request({ ...input, actions: [] }), deps)).status).toBe(201);
+    expect(save).toHaveBeenLastCalledWith(expect.objectContaining({ actions: [], whatIDid: '' }));
   });
   test('rejects malformed, empty, oversized or unsafe payloads without saving', async () => {
     for (const body of [

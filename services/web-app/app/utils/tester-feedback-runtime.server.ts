@@ -8,6 +8,7 @@ import {
 import type {
   FeedbackDependencies,
   FeedbackInput,
+  FeedbackQuery,
 } from './tester-feedback.server';
 
 export const testerFeedbackEnabled = () =>
@@ -34,8 +35,14 @@ export const testerFeedbackDependencies: FeedbackDependencies = {
   authenticateInternal: (request) => authorizeInternalApiRequest(request),
   auditInternalRead: recordInternalPlatformWriteAudit,
   save: saveTesterFeedback,
-  list: (input) =>
-    prisma.testerFeedback.findMany({
+  list: listTesterFeedback,
+};
+
+export async function listTesterFeedback(
+  input: FeedbackQuery,
+  model = prisma.testerFeedback
+) {
+  const rows = await model.findMany({
       where: {
         ...(input.environment ? { environment: input.environment } : {}),
         ...(input.userId ? { userId: input.userId } : {}),
@@ -49,11 +56,19 @@ export const testerFeedbackDependencies: FeedbackDependencies = {
             }
           : {}),
       },
+      include: { user: { select: { email: true, name: true } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
       take: input.limit,
-    }),
-};
+    });
+  return rows.map(({ user, ...entry }) => ({
+    ...entry,
+    actions: Array.isArray(entry.actions) ? entry.actions : null,
+    userEmail: user?.email ?? null,
+    userName: user?.name ?? null,
+  }));
+}
+
 
 export type FeedbackWriteTransaction = Pick<
   Prisma.TransactionClient,

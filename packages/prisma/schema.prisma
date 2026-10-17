@@ -2310,6 +2310,7 @@ model TesterFeedback {
   whatHappened String   @db.VarChar(4000)
   whatIWish    String   @db.VarChar(4000)
   severity     String?  @db.VarChar(20)
+  actions      Json?
   environment  String   @db.VarChar(100)
   createdAt    DateTime @default(now()) @db.Timestamptz(6)
 
