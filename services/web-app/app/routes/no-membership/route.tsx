@@ -1,11 +1,22 @@
+import { AuthPageShell } from '~/components/auth-brand-lockup';
+import { UnifiedLogin } from '~/components/unified-signon/unified-login';
+import { signedInTeacherPromptEntry } from '~/domain/unified-signon/teacher-prompts.server';
 import { Button } from '~/components/ui/button';
 import { setMembershipId } from '~/cookies/membership-id.server';
 import { prisma } from '~/utils/db.server';
 import { requireUserId } from '~/utils/auth.server';
-import { Form, Link, redirect, type LoaderFunctionArgs } from 'react-router';
+import {
+  Form,
+  Link,
+  redirect,
+  useLoaderData,
+  type LoaderFunctionArgs,
+} from 'react-router';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
+  const prompt = await signedInTeacherPromptEntry(request, userId, 'inactive');
+  if (prompt) return prompt;
 
   const membership = await prisma.orgMembership.findFirst({
     where: { userId },
@@ -21,6 +32,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export default function Route() {
+  const result = useLoaderData<typeof loader>();
+  if (result?.teacherPromptEntry)
+    return (
+      <AuthPageShell>
+        <UnifiedLogin entry={result.teacherPromptEntry} />
+      </AuthPageShell>
+    );
   return (
     <div className="flex flex-col items-center justify-center h-screen">
       <h1 className="text-2xl font-bold">No Membership</h1>

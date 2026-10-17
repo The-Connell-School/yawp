@@ -1000,6 +1000,21 @@ jobs:
           trap 'rm -rf "$SIGNON_MAIL_CAPTURE_DIR"' EXIT
           bun x playwright test --config playwright.unified-backend.config.ts --workers=1
 
+      - name: Sign-on teacher prompts browser flows (mocked flag reads)
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
+        env:
+          CI: true
+          NODE_ENV: development
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          SESSION_SECRET: ci-local-signon-session-secret
+          SIGNON_LOCAL_TEST: '1'
+          TMPDIR: ${{ runner.temp }}/teacher-prompts
+        run: |
+          mkdir -p "$TMPDIR"
+          ./bin/project test --profile signon-teacher-prompts-unit --json
+          ./bin/project test --profile signon-teacher-prompts-browser --json
+
       - name: Unified sign-on isolated-preview resend browser flows
         if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         working-directory: services/web-app

@@ -125,6 +125,7 @@ describe('internal feature-flag endpoints', () => {
       'classcode-unique',
       'demo-feedback-widget',
       'guided-tours',
+      'signon-teacher-prompts',
       'class_summary_models',
     ]);
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
@@ -245,6 +246,7 @@ describe('internal feature-flag endpoints', () => {
       'classcode-unique',
       'demo-feedback-widget',
       'guided-tours',
+      'signon-teacher-prompts',
       'class_summary_models',
     ]);
   });

@@ -1,15 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  Form,
-  Link,
-  useFetcher,
-  useNavigation,
-  useSearchParams,
-} from 'react-router';
+import { Form, useFetcher, useNavigation, useSearchParams } from 'react-router';
 import { useField, useForm } from '@rvf/react-router';
 import { LoginSchema } from '~/components/login-form';
 import { FormInput } from '~/components/forms/form-input-2';
 import { Button } from '~/components/ui/button';
+import type { TeacherPromptAccount } from '~/domain/unified-signon/teacher-prompts';
 import { UnifiedSignon } from './unified-signon';
 import type {
   SignonResult,
@@ -23,6 +18,9 @@ export function UnifiedLogin({
   entry: {
     redirectTo: string;
     googleAvailable: boolean;
+    teacherPromptAccount?: TeacherPromptAccount;
+    /** False on a preview whose origin is not registered with Google. */
+    googleVisible?: boolean;
     initialState?: SignonState;
   };
 }) {
@@ -66,7 +64,9 @@ export function UnifiedLogin({
       }
       redirectTo={entry.redirectTo}
       googleAvailable={entry.googleAvailable}
+      googleVisible={entry.googleVisible ?? true}
       transport={transport}
+      teacherPromptAccount={entry.teacherPromptAccount}
       passwordForm={(state) => (
         <UnifiedPasswordForm
           identifier={state.identifier ?? ''}

@@ -1,6 +1,6 @@
 import { signonRequestOrigin } from './origin.server';
 import { safeRedirect } from 'remix-utils/safe-redirect';
-import { requireAnonymous } from '~/utils/auth.server';
+import { getUserId, requireAnonymous } from '~/utils/auth.server';
 import { isUnifiedSignOnEnabled } from './gate.server';
 import type { ActionFunctionArgs } from 'react-router';
 import { redirect } from 'react-router';
@@ -23,7 +23,8 @@ export async function unifiedEntry(request: Request) {
   }
   if (!(await isUnifiedSignOnEnabled())) return null;
   const { browserContext, withFlow } = await import('./flow.server');
-  const { googleAvailable } = await import('./google.server');
+  const { googleAvailableFor, googleVisibleFor } =
+    await import('./google.server');
   const context = await browserContext(request);
   let initialState: SignonState | undefined;
   let destination = safeRedirect(
@@ -74,16 +75,34 @@ export async function unifiedEntry(request: Request) {
       if (authenticated) throw redirect('/app');
     }
   } else if (authenticated) throw redirect('/app');
+  const userId = authenticated ? await getUserId(request) : null;
+  const teacherPromptAccount = userId
+    ? await (
+        await import('./teacher-prompts.server')
+      ).loadTeacherPromptAccount(userId)
+    : undefined;
   return {
+    ...(teacherPromptAccount ? { teacherPromptAccount } : {}),
     unified: true as const,
     redirectTo: destination,
-    googleAvailable: googleAvailable(),
+    googleAvailable: googleAvailableFor(request),
+    googleVisible: googleVisibleFor(request),
     ...(initialState ? { initialState } : {}),
   };
 }
 
 export async function dispatchUnifiedLogin(args: ActionFunctionArgs) {
-  if (!(await isUnifiedSignOnEnabled())) return loginAction(args);
+  if (!(await isUnifiedSignOnEnabled())) {
+    const { isFeatureFlagEnabled } =
+      await import('~/domain/feature-flags/feature-flags.server');
+    const { SIGNON_TEACHER_PROMPTS_FLAG } =
+      await import('~/domain/feature-flags/feature-flags');
+    if (
+      !(await isFeatureFlagEnabled(SIGNON_TEACHER_PROMPTS_FLAG)) ||
+      !(await getUserId(args.request))
+    )
+      return loginAction(args);
+  }
   let form: FormData;
   try {
     form = await args.request.clone().formData();
