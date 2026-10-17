@@ -24,6 +24,8 @@ const storedFlags = async () =>
 
 const email = `maya.${Date.now().toString(36).slice(-3)}@school.test`;
 const handle = `maya_${Date.now().toString(36).slice(-4)}`;
+const singleCode = `${prefix}-single`;
+const ambiguousCode = `${prefix}-shared`;
 const copy =
   "You're not in any active classes. Join one with a class code, or ask your teacher to add you back.";
 const explanation =
@@ -50,8 +52,36 @@ test.beforeAll(async () => {
   await db.organization.create({
     data: { id: prefix, name: 'Prompt fixture', plan: 'SCHOOL' },
   });
+  for (const id of [prefix, `${prefix}-second`]) {
+    await db.school.create({
+      data: { id, code: id, name: 'Prompt school', organizationId: prefix },
+    });
+  }
+  for (const [suffix, code, title] of [
+    ['single', singleCode, 'Prompt English'],
+    ['first', ambiguousCode, 'Prompt History'],
+    ['second', ambiguousCode, 'Prompt Science'],
+  ]) {
+    await db.class.create({
+      data: {
+        id: `${prefix}-${suffix}`,
+        code,
+        title,
+        schoolId: suffix === 'second' ? `${prefix}-second` : prefix,
+      },
+    });
+  }
   const hash = await bcrypt.hash('local-prompt-password', 4);
-  for (const kind of ['email', 'handle', 'neutral', 'staff']) {
+  for (const kind of [
+    'email',
+    'handle',
+    'neutral',
+    'staff',
+    'direct-1280',
+    'direct-390',
+    'ambiguous-1280',
+    'ambiguous-390',
+  ]) {
     await db.user.create({
       data: {
         id: `${prefix}-${kind}`,
@@ -89,6 +119,8 @@ test.afterAll(async () => {
   await db.orgMembership.deleteMany({ where: { organizationId: prefix } });
   await db.password.deleteMany({ where: { userId: { startsWith: prefix } } });
   await db.user.deleteMany({ where: { id: { startsWith: prefix } } });
+  await db.class.deleteMany({ where: { id: { startsWith: prefix } } });
+  await db.school.deleteMany({ where: { organizationId: prefix } });
   await db.organization.deleteMany({ where: { id: prefix } });
   expect(await storedFlags()).toBe(storedFlagsBefore);
   await db.$disconnect();
@@ -161,6 +193,90 @@ async function shot(page: Page, name: string, width: number) {
 }
 
 for (const width of [1280, 390]) {
+  for (const journey of ['direct', 'ambiguous']) {
+    test(`${journey} valid code preserves enrollment and continuation after reload at ${width}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({
+        width,
+        height: width === 1280 ? 1000 : 844,
+      });
+      const kind = `${journey}-${width}`;
+      const userId = `${prefix}-${kind}`;
+      const classId = `${prefix}-${journey === 'direct' ? 'single' : 'second'}`;
+      const className =
+        journey === 'direct' ? 'Prompt English' : 'Prompt Science';
+      await authenticate(page, kind);
+      await page.goto(journey === 'direct' ? '/enter-code' : '/no-membership');
+      if (journey === 'ambiguous') {
+        await page
+          .getByRole('button', { name: 'Enter a class code', exact: true })
+          .click();
+      }
+      const flowCookie = (await page.context().cookies()).find(
+        (c) => c.name === 'yawp_signon'
+      )!;
+      await page
+        .getByLabel('Class code', { exact: true })
+        .fill(journey === 'direct' ? singleCode : ambiguousCode);
+      await page
+        .getByRole('button', { name: 'Join class', exact: true })
+        .click();
+      if (journey === 'ambiguous') {
+        await expect(
+          page.getByRole('heading', { name: 'Which class is yours?' })
+        ).toBeVisible();
+        await expect(page.getByRole('radio')).toHaveCount(2);
+        await page.reload();
+        await expect(
+          page.getByRole('heading', { name: 'Which class is yours?' })
+        ).toBeVisible();
+        await expect(page.getByRole('radio')).toHaveCount(2);
+        await page.getByRole('radio', { name: /Prompt Science/ }).check();
+        await page
+          .getByRole('button', { name: 'Continue', exact: true })
+          .click();
+      }
+      await expect(
+        page.getByRole('heading', { name: "You're in!", exact: true })
+      ).toBeVisible();
+      await expect(page.getByText(className, { exact: true })).toBeVisible();
+      const enrollment = () =>
+        db.orgMembership.findFirst({
+          where: {
+            userId,
+            isActive: true,
+            role: 'STUDENT',
+            classesAsStudent: { some: { id: classId } },
+          },
+          select: { id: true, classesAsStudent: { select: { id: true } } },
+        });
+      await expect
+        .poll(enrollment)
+        .toMatchObject({ classesAsStudent: [{ id: classId }] });
+      await page.reload();
+      await expect(
+        page.getByRole('heading', { name: "You're in!", exact: true })
+      ).toBeVisible();
+      await expect(page.getByText(className, { exact: true })).toBeVisible();
+      expect(
+        (await page.context().cookies()).find((c) => c.name === 'yawp_signon')
+          ?.value
+      ).toBe(flowCookie.value);
+      await page
+        .getByRole('button', { name: 'Go to my class', exact: true })
+        .click();
+      await expect(page).toHaveURL(/\/app\/?$/);
+      await expect(
+        page.getByRole('heading', { name: 'Welcome, Maya!' })
+      ).toBeVisible();
+      await expect(page.getByText(className, { exact: true })).toBeVisible();
+      await page.reload();
+      await expect(page.getByText(className, { exact: true })).toBeVisible();
+      expect(await enrollment()).not.toBeNull();
+    });
+  }
+
   test(`inactive email student and signed-in class code at ${width}`, async ({
     page,
   }) => {

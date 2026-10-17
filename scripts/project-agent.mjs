@@ -398,6 +398,7 @@ function runTestProfile(profile, { json }) {
     if (process.env.SIGNON_PREVIEW_FIXTURE_TEST === "1") runWebApp("preview-seat-policy-real-database", ["test", "app/domain/unified-signon/preview-seat-policy.real-db.integration.test.ts"]);
   }
   else if (chosen === "signon-teacher-prompts-unit") {
+    runWebApp("teacher-prompts-flow", ["test", "--max-concurrency=2", "app/domain/unified-signon/teacher-prompts.server.test.ts"]);
     for (const file of ["app/routes/enter-code/teacher-prompts-compat.test.ts", "app/routes/enter-code/authz.test.ts", "app/routes/enter-code/selection-screen.test.tsx", "app/utils/auth.server.test.ts", "app/domain/unified-signon/teacher-prompts.test.ts", "app/routes/auth.logout/route.test.ts", "app/domain/feature-flags/feature-flags.test.ts", "app/domain/feature-flags/feature-flags.server.test.ts", "app/utils/internal-feature-flags-http.server.test.ts", "app/routes/auth.login/unified-dispatch.test.ts"])
       runWebApp(file, ["test", "--max-concurrency=2", file]);
   }
