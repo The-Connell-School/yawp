@@ -5,13 +5,12 @@ import {
 } from '~/domain/assignment-insights/aggregate-rubric-performance';
 import { readInsightRubric } from '~/domain/assignment-insights/insight-rubric.server';
 import { midpointScore } from '~/domain/assignment-insights/insight-rubric';
+import { toSubmissionSnippet } from '~/domain/assignment-insights/submission-snippet';
 import { prisma } from '~/utils/db.server';
 import { canManageGrades, getGradingActor } from '~/utils/grading-auth.server';
 
 /** How many example snippets to surface per category. */
 const MAX_EXAMPLES = 3;
-/** Trim snippets so the panel stays scannable. */
-const SNIPPET_MAX_CHARS = 240;
 
 type CategoryStatus = 'strength' | 'mixed' | 'gap';
 
@@ -23,17 +22,6 @@ export type ClassInsightExample = {
   studentName: string;
   href: string;
 };
-
-function toSnippet(raw: string): string {
-  const text = raw
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (text.length <= SNIPPET_MAX_CHARS) return text;
-  const truncated = text.slice(0, SNIPPET_MAX_CHARS);
-  const lastSpace = truncated.lastIndexOf(' ');
-  return `${truncated.slice(0, lastSpace > 60 ? lastSpace : SNIPPET_MAX_CHARS).trim()}…`;
-}
 
 /**
  * Rank submissions by how well they exemplify a category's status: strongest
@@ -176,7 +164,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       (typeof submission.text === 'string' && submission.text.trim()) ||
       (typeof submission.html === 'string' && submission.html) ||
       '';
-    const snippet = toSnippet(raw);
+    const snippet = toSubmissionSnippet(raw);
     if (!snippet) continue;
     const studentName =
       doc.group?.label?.trim() ||

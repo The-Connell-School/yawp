@@ -8,6 +8,7 @@ import {
   loadProdFidelityBundle,
 } from './local-dev/import-prod-fidelity-fixtures';
 import { seedCollaborationDemoData } from './local-dev/seed-collaboration';
+import { seedEssayDemoData } from './local-dev/seed-essay-demo';
 import { seedApHistoryLocalDev } from './local-dev/seed-ap-history';
 import { seedSyntheticLocalDevData } from './local-dev/seed-synthetic-data';
 import { seedStarterGradingEvaluations } from './local-dev/starter-grading-evaluations';
@@ -109,6 +110,24 @@ try {
   });
   console.timeEnd('collaboration');
 
+  // The class to demo the class summary from, apart from the QA fixtures in
+  // English 10 - Period 3. Non-fatal, like the AP History seed above.
+  console.time('essay-demo');
+  let essayDemo: Awaited<ReturnType<typeof seedEssayDemoData>> = null;
+  try {
+    essayDemo = await seedEssayDemoData(prisma, {
+      organizationId: context.organizationId,
+      schoolCode: 'DEV-SCH-1',
+      personas: LOCAL_DEV_PERSONAS,
+    });
+  } catch (essayDemoError) {
+    console.warn(
+      '⚠️  Essay demo seed skipped (non-fatal); other seed data is unaffected:',
+      essayDemoError
+    );
+  }
+  console.timeEnd('essay-demo');
+
   const databaseName = process.env.DATABASE_URL?.split('/').pop()?.split('?')[0] ?? '';
   const { shouldRunFreeTierShipReviewSeed } = await import(
     '../../../scripts/preview/free-tier-ship-review-seed-guard.mjs'
@@ -126,6 +145,7 @@ try {
         organizationId: context.organizationId,
         primaryClassId: context.primaryClassId,
         thesisAssignmentTypeId: context.thesisAssignmentTypeId,
+        essayDemoClassId: essayDemo?.classId ?? null,
         evaluationSummary,
         personas: LOCAL_DEV_PERSONAS.map((persona) => ({
           label: persona.label,

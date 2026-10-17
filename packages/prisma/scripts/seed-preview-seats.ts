@@ -27,6 +27,7 @@ import {
 } from './local-dev/seed-lesson-planner-feature-flag';
 import { ensureFreeTierEnabledForPreview } from './local-dev/seed-free-tier-feature-flag';
 import { ensureDemoFeedbackEnabled } from './local-dev/seed-demo-feedback';
+import { ensureClassSummaryModelsOnForPreview } from './local-dev/seed-essay-demo';
 import {
   seedPreviewTeacherNotesQa,
   shouldRunPreviewTeacherNotesQaSeed,
@@ -45,6 +46,7 @@ try {
   await ensureDemoFeedbackEnabled(prisma);
   const freeTierFlag = await ensureFreeTierEnabledForPreview(prisma, databaseName);
   console.log(`Free tier feature flag seed: ${JSON.stringify(freeTierFlag)}`);
+  await ensureClassSummaryModelsOnForPreview(prisma);
   const results = await ensurePreviewSeats(prisma, seats);
   const includeFreeClassroomFixture =
     process.env.PREVIEW_SLUG !== 'demo' &&

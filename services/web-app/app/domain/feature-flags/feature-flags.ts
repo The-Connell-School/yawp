@@ -56,6 +56,15 @@ export const GUIDED_TOURS_FLAG = 'guided-tours' as const;
 /** Teacher prompts on signed-in recovery screens. Missing Setting stays off. */
 export const SIGNON_TEACHER_PROMPTS_FLAG = 'signon-teacher-prompts' as const;
 
+/**
+ * "Models to teach from" in the class performance summary. On: teachers can
+ * ask the summary for a strong model and an instructive example from the
+ * latest graded work, with questions to think through before sharing either
+ * with the class. Off: the section is hidden and its endpoint returns 404.
+ * Nothing is stored, so turning it off leaves no data behind.
+ */
+export const CLASS_SUMMARY_MODELS_FLAG = 'class_summary_models' as const;
+
 export const FEATURE_FLAGS = {
   [LESSON_PLANNER_FLAG]: {
     label: 'Lesson Planner',
@@ -102,6 +111,11 @@ export const FEATURE_FLAGS = {
   [SIGNON_TEACHER_PROMPTS_FLAG]: {
     label: 'Sign-on teacher prompts',
     description: 'Shows teacher classroom entry prompts on signed-in inactive and class-code screens, with a sign-out step for handle-only accounts. Default off on demo and production.',
+  },
+  [CLASS_SUMMARY_MODELS_FLAG]: {
+    label: 'Class summary: models to teach from',
+    description:
+      'Adds a section to the class performance summary that picks a strong model and an instructive example from graded work for the teacher to use with the whole class. Off: the section is hidden and its endpoint returns 404.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

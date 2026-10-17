@@ -197,6 +197,10 @@ jobs:
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         run: bun test ./packages/prisma/scripts/seed-free-tier-bundle-assignment-types.test.ts
 
+      - name: 🧪 Essay demo seed data
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        run: bun test ./packages/prisma/scripts/local-dev/essay-demo-data.test.ts
+
       - name: 🌱 Seed free tier bundle assignment types
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
@@ -776,6 +780,10 @@ jobs:
             app/components/assignments/assignment-creation-sheet.test.tsx \
             app/routes/api.domain.grade-essay-ai/route.test.ts \
             app/domain/assignment-insights/class-insight-generation.server.test.ts \
+            app/domain/assignment-insights/select-class-models.test.ts \
+            app/routes/api.domain.assignment-insights.models/route.test.ts \
+            'app/routes/app.my-classes.$classId_.assignments.$assignmentId/class-models-section.test.tsx' \
+            'app/routes/app.my-classes.$classId_.assignments.$assignmentId/class-insights-panel.test.tsx' \
             'app/routes/app.assignments.$assignmentId._index/route.test.ts' \
             'app/routes/app.my-classes.$classId/route.test.ts' \
             'app/routes/app.my-classes.$classId/class-student-enrollment.server.test.ts' \

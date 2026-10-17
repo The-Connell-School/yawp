@@ -11,6 +11,7 @@ import {
   FREE_TIER_INAPP_V2_FLAG,
   UNIFIED_SIGN_ON_FLAG,
   FREE_TIER_ONBOARDING_V2_FLAG,
+  CLASS_SUMMARY_MODELS_FLAG,
   FEATURE_FLAG_KEYS,
   isFreeTierGloballyEnabled,
   featureFlagSettingName,
@@ -60,6 +61,13 @@ describe('feature flag registry', () => {
     expect(featureFlagSettingName(FREE_TIER_FLAG)).toBe('feature_flag.free_tier');
   });
 
+  test('has the class summary models flag', () => {
+    expect(FEATURE_FLAG_KEYS).toContain(CLASS_SUMMARY_MODELS_FLAG);
+    expect(featureFlagSettingName(CLASS_SUMMARY_MODELS_FLAG)).toBe(
+      'feature_flag.class_summary_models'
+    );
+  });
+
   test('registers the default-off in-app presentation flag', () => {
     expect(FREE_TIER_INAPP_V2_FLAG).toBe('free-tier-inapp-v2');
     expect(FEATURE_FLAG_KEYS).toContain(FREE_TIER_INAPP_V2_FLAG);
@@ -103,6 +111,7 @@ describe('feature flag registry', () => {
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
       SIGNON_TEACHER_PROMPTS_FLAG,
+      CLASS_SUMMARY_MODELS_FLAG,
     ]);
   });
 

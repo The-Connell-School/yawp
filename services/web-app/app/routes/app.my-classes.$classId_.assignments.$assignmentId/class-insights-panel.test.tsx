@@ -27,9 +27,11 @@ const fetcher: {
 };
 
 const actualReactRouter = await import('react-router');
+let rootData: { classSummaryModelsEnabled?: boolean } | undefined;
 mock.module('react-router', () => ({
   ...actualReactRouter,
   useFetcher: () => fetcher,
+  useRouteLoaderData: (id: string) => (id === 'root' ? rootData : undefined),
 }));
 
 import type { ClassInsight } from './class-insights-panel';
@@ -115,6 +117,7 @@ function render(element: ReactElement) {
 }
 
 beforeEach(() => {
+  rootData = undefined;
   submit.mockReset();
   load.mockReset();
   fetcher.state = 'idle';
@@ -129,6 +132,33 @@ afterEach(() => {
 });
 
 describe('ClassInsightsPanel', () => {
+  it('offers models to teach from when the school has the feature on', () => {
+    rootData = { classSummaryModelsEnabled: true };
+    const el = render(
+      <ClassInsightsPanel
+        classAssignmentId="ca-1"
+        initialInsight={READY_INSIGHT}
+        gradedCount={24}
+      />
+    );
+    expect(
+      el.querySelector('[data-testid="class-models-section"]')
+    ).not.toBeNull();
+  });
+
+  it('leaves models to teach from out while the feature is off', () => {
+    rootData = { classSummaryModelsEnabled: false };
+    const el = render(
+      <ClassInsightsPanel
+        classAssignmentId="ca-1"
+        initialInsight={READY_INSIGHT}
+        gradedCount={24}
+      />
+    );
+    expect(el.querySelector('[data-testid="class-models-section"]')).toBeNull();
+    expect(el.textContent).toMatch(/how the class did/i);
+  });
+
   it('shows the generate action when there is no cached insight', () => {
     const el = render(
       <ClassInsightsPanel
