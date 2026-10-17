@@ -20,7 +20,7 @@ const {
   setFeatureFlag,
   findUnknownOrganizationIds,
 } = await import('./feature-flags.server');
-const { GUIDED_TOURS_FLAG, DEMO_FEEDBACK_FLAG, INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, FREE_TIER_INAPP_V2_FLAG, UNIFIED_SIGN_ON_FLAG, FREE_TIER_ONBOARDING_V2_FLAG } = await import(
+const { PLATFORM_ENHANCEMENTS_FLAG, GUIDED_TOURS_FLAG, DEMO_FEEDBACK_FLAG, INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, FREE_TIER_INAPP_V2_FLAG, UNIFIED_SIGN_ON_FLAG, FREE_TIER_ONBOARDING_V2_FLAG } = await import(
   './feature-flags'
 );
 
@@ -36,6 +36,11 @@ describe('feature flags (server)', () => {
     prisma.setting.findMany.mockReset();
     prisma.setting.upsert.mockReset();
     prisma.organization.findMany.mockReset();
+  });
+
+  test('platform enhancements stay off without a setting row', async () => {
+    prisma.setting.findUnique.mockResolvedValue(null);
+    expect(await isFeatureFlagEnabled(PLATFORM_ENHANCEMENTS_FLAG, 'org-1')).toBe(false);
   });
 
   test('tours stay off without a row on demo and production and support organization targeting', async () => {
@@ -165,6 +170,7 @@ describe('feature flags (server)', () => {
       'classcode-unique',
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
+  PLATFORM_ENHANCEMENTS_FLAG,
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[2]).toMatchObject({ key: FREE_TIER_FLAG, mode: 'off', enabled: false });
@@ -194,6 +200,7 @@ describe('feature flags (server)', () => {
       'classcode-unique',
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
+  PLATFORM_ENHANCEMENTS_FLAG,
     ]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });
     const where = prisma.setting.findMany.mock.calls[0]?.[0].where;

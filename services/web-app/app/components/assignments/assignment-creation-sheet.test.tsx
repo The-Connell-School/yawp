@@ -1497,3 +1497,53 @@ describe('AssignmentCreationSheetContent without writing conditions', () => {
     expectNeitherField();
   });
 });
+
+// Compare successful controls, including repeated false/true fallbacks, rather
+// than only checking text. Hiding Advanced must never remove posted values.
+describe('platform enhancements form compatibility', () => {
+  let root: Root | null = null;
+  afterEach(() => { cleanup(root); root = null; });
+  const combos = [
+    {},
+    { initialSubmitForGrade: false },
+    { initialPointValue: 42, initialGradingAssistantStrictnessLevel: 'advanced' as const, initialTutorEnabled: false },
+    { initialCollaborationEnabled: true, initialCollaborationGroupMode: 'automatic' as const, initialCollaborationGroupSize: 4 },
+    { editingAssignment: { id: 'existing' }, initialAssignmentTypeId: 'type-1', initialTutorEnabled: false },
+    { assignmentTypes: exitTicketAssignmentTypes, fixedAssignmentTypeId: 'exit-1' },
+    { assignmentTypes: [{ ...assignmentTypes[0], kind: 'daily_pages', rubricName: 'SJP Daily Pages' }], initialPointValue: 12 },
+  ];
+  for (const [index, combo] of combos.entries()) {
+    it(`posts identical data with the flag off and on (combination ${index})`, () => {
+      const forms: unknown[] = [];
+      for (const enabled of [false, true]) {
+        ({ root } = renderSheet({ ...combo, fixedClassId: 'class-1', initialPrompt: 'Write about a problem.', platformEnhancementsEnabled: enabled }));
+        const form = document.querySelector('form')!;
+        forms.push([...new FormData(form).entries()].filter(([name]) => name !== 'promptAttachment'));
+        if (enabled) {
+          expect(controlById('assignment-create-advanced-content').hidden).toBe(true);
+          expect(controlById('assignment-create-advanced-toggle').getAttribute('aria-expanded')).toBe('false');
+          const collapsed = [...new FormData(form).entries()].filter(([name]) => name !== 'promptAttachment');
+          act(() => controlById('assignment-create-advanced-toggle').click());
+          expect([...new FormData(form).entries()].filter(([name]) => name !== 'promptAttachment')).toEqual(collapsed);
+        }
+        cleanup(root); root = null;
+      }
+      expect(forms[1]).toEqual(forms[0]);
+    });
+  }
+  it('summarizes live settings and keeps switched-off false fallbacks', () => {
+    ({ root } = renderSheet({ platformEnhancementsEnabled: true, fixedClassId: 'class-1', initialPrompt: 'Write.' }));
+    const summary = () => document.querySelector('[data-testid="advanced-summary"]')!.textContent;
+    expect(summary()).toBe('Graded out of 100 · Intermediate · Grammar graded · Tutor on · Individual');
+    act(() => controlById('assignment-create-advanced-toggle').click());
+    for (const id of ['submit-for-grade', 'grammar-grading-enabled', 'tutor-enabled', 'collaboration-enabled']) {
+      act(() => controlById(`assignment-create-${id}`).click());
+    }
+    expect(summary()).toBe('Practice only · Intermediate · Grammar not graded · Tutor off · Collaborative');
+    const data = new FormData(document.querySelector('form')!);
+    expect(data.getAll('submitForGrade')).toEqual(['false']);
+    expect(data.getAll('grammarGradingEnabled')).toEqual(['false']);
+    expect(data.getAll('tutorEnabled')).toEqual(['false']);
+    expect(data.getAll('collaborationEnabled')).toEqual(['false', 'true']);
+  });
+});

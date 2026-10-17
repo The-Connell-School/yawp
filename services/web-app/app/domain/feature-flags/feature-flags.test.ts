@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   FEATURE_FLAGS,
   GUIDED_TOURS_FLAG,
+  PLATFORM_ENHANCEMENTS_FLAG,
   CLASS_CODE_UNIQUE_FLAG,
   DEMO_FEEDBACK_FLAG,
   INTERNAL_RUBRICS_FLAG,
@@ -23,6 +24,13 @@ import {
 } from './feature-flags';
 
 describe('feature flag registry', () => {
+  test('registers platform enhancements once and defaults off', () => {
+    expect(PLATFORM_ENHANCEMENTS_FLAG).toBe('platform-enhancements');
+    expect(FEATURE_FLAG_KEYS.filter(key => key === PLATFORM_ENHANCEMENTS_FLAG)).toHaveLength(1);
+    expect(FEATURE_FLAGS[PLATFORM_ENHANCEMENTS_FLAG].label).toBe('Platform enhancements');
+    expect(evaluateFeatureFlag(parseFeatureFlagValue(null), 'org-1')).toBe(false);
+  });
+
   test('no longer has the removed Daily Pages writing-conditions flag', () => {
     // Paragraph type and writing time were removed with their flag. Its old
     // Setting row may still exist; it is simply no longer a registered flag.
@@ -93,6 +101,7 @@ describe('feature flag registry', () => {
       CLASS_CODE_UNIQUE_FLAG,
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
+  PLATFORM_ENHANCEMENTS_FLAG,
     ]);
   });
 
