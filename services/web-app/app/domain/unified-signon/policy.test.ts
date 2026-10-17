@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import {
   normalizeIdentifier,
   postAuthenticationDestination,
+  seatScopedMemberships,
   codeDigest,
 } from './policy.server';
 
@@ -110,4 +111,15 @@ test('a free-trial destination wins over the inactive screen for accounts with n
       redirectTo: '/app',
     })
   ).toBe('/auth/required-password-change');
+});
+
+test('seat scoping keeps seat memberships, falls back for seat-free accounts, else blocks', () => {
+  const seatOrg = { id: 'a', organizationId: 'local-dev-org' };
+  const freeOrg = { id: 'b', organizationId: 'free-classroom-1' };
+  expect(seatScopedMemberships([seatOrg, freeOrg], 'local-dev-org', false)).toEqual([seatOrg]);
+  expect(seatScopedMemberships([seatOrg, freeOrg], 'local-dev-org', true)).toEqual([seatOrg]);
+  expect(seatScopedMemberships([freeOrg], 'local-dev-org', true)).toEqual([freeOrg]);
+  expect(seatScopedMemberships([freeOrg], 'local-dev-org', false)).toBeNull();
+  expect(seatScopedMemberships([], 'local-dev-org', true)).toEqual([]);
+  expect(seatScopedMemberships([freeOrg], undefined, false)).toBeNull();
 });
