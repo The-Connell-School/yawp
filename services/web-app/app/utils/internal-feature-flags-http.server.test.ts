@@ -124,6 +124,7 @@ describe('internal feature-flag endpoints', () => {
       'free-tier-onboarding-v2',
       'classcode-unique',
       'teacher_lounge_community',
+      'thesis_essay_decks',
       'demo-feedback-widget',
       'guided-tours',
     ]);
@@ -140,6 +141,7 @@ describe('internal feature-flag endpoints', () => {
       persisted: { mode: 'off', orgIds: [] },
       effective: { mode: 'off', orgIds: [] }, runtimeOverride: null,
     });
+    expect(body.flags.find((flag: { key: string }) => flag.key === 'thesis_essay_decks')).toMatchObject({ label: 'Thesis-Driven Essay slide decks', mode: 'off', orgIds: [], enabled: false });
   });
 
   for (const environment of ['development', 'demo', 'production', 'preview']) {
@@ -244,6 +246,7 @@ describe('internal feature-flag endpoints', () => {
       'free-tier-onboarding-v2',
       'classcode-unique',
       'teacher_lounge_community',
+      'thesis_essay_decks',
       'demo-feedback-widget',
       'guided-tours',
     ]);

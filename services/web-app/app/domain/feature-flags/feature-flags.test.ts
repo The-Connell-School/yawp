@@ -11,6 +11,7 @@ import {
   UNIFIED_SIGN_ON_FLAG,
   FREE_TIER_ONBOARDING_V2_FLAG,
   LOUNGE_COMMUNITY_FLAG,
+  THESIS_ESSAY_DECKS_FLAG,
   FEATURE_FLAG_KEYS,
   isFreeTierGloballyEnabled,
   featureFlagSettingName,
@@ -104,9 +105,17 @@ describe('feature flag registry', () => {
       FREE_TIER_ONBOARDING_V2_FLAG,
       CLASS_CODE_UNIQUE_FLAG,
       LOUNGE_COMMUNITY_FLAG,
+      THESIS_ESSAY_DECKS_FLAG,
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
     ]);
+  });
+
+  test('has the Thesis-Driven Essay decks flag', () => {
+    expect(FEATURE_FLAG_KEYS).toContain(THESIS_ESSAY_DECKS_FLAG);
+    expect(featureFlagSettingName(THESIS_ESSAY_DECKS_FLAG)).toBe(
+      'feature_flag.thesis_essay_decks'
+    );
   });
 
   test('rejects anything that is not a registered flag', () => {

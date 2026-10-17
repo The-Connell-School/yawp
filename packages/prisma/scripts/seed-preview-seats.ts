@@ -25,6 +25,7 @@ import {
   ensureInternalRubricsEnabledForDemo,
   ensureLessonPlannerEnabledForDemo,
 } from './local-dev/seed-lesson-planner-feature-flag';
+import { ensureThesisEssayDecksEnabledForPreview } from './local-dev/seed-thesis-essay-decks-feature-flag';
 import { ensureFreeTierEnabledForPreview } from './local-dev/seed-free-tier-feature-flag';
 import { ensureLoungeCommunityEnabledForPreview } from './local-dev/seed-lounge-community-feature-flag';
 import { ensureLoungeLaunchContentForPreview } from './lounge-launch/preview';
@@ -55,6 +56,8 @@ try {
   } catch (error) {
     console.error('Faculty Lounge launch content seed: failed (non-fatal)', error);
   }
+  const thesisEssayDecksFlag = await ensureThesisEssayDecksEnabledForPreview(prisma, databaseName);
+  console.log(`Thesis-Driven Essay decks flag seed: ${JSON.stringify(thesisEssayDecksFlag)}`);
   const results = await ensurePreviewSeats(prisma, seats);
   const includeFreeClassroomFixture =
     process.env.PREVIEW_SLUG !== 'demo' &&

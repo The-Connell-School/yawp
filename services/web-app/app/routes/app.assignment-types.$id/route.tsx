@@ -46,7 +46,25 @@ import {
 } from '~/utils/assignment-type-access.server';
 import { loadAssignmentCreationQuotasForTypes } from '~/utils/assignment-quota.server';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import { THESIS_ESSAY_DECKS_FLAG } from '~/domain/feature-flags/feature-flags';
+import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
+import {
+  DAY_ONE_DECK,
+  deckForModuleTitle,
+  deckLabel,
+  googleSlidesCopyHref,
+  materialHref,
+  materialsForDeck,
+  presentHref,
+  type ThesisEssayDeck,
+  type ThesisEssayMaterial,
+} from '~/domain/thesis-essay-decks/thesis-essay-decks';
+import {
+  listAvailableThesisEssayMaterialSlugs,
+  listPresentableThesisEssayDeckSlugs,
+} from '~/domain/thesis-essay-decks/thesis-essay-decks.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { cn } from '~/utils/misc';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { AboutDailyPages } from './about-daily-pages/about-daily-pages';
@@ -557,6 +575,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           totalCount: thesisLibraryEntries.length,
         }
       : null;
+  // Each lesson's slide deck, hung off the step it teaches (#452). Only the
+  // decks whose files exist, so a lesson whose deck isn't built yet shows none.
+  const thesisDecks =
+    profile.role === 'TEACHER' &&
+    isThesisEssay &&
+    (await isFeatureFlagEnabled(THESIS_ESSAY_DECKS_FLAG, profile.organization.id))
+      ? buildThesisDecks(assignmentType.assignmentModules, `/app/assignment-types/${assignmentType.id}`)
+      : null;
   const enabledTeacherClassIds =
     profile.role === 'TEACHER'
       ? new Set(teacherClasses.map((klass) => klass.id))
@@ -630,6 +656,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     promptLibrary,
     shortFormPromptLibrary,
     thesisPromptLibrary,
+    thesisDecks,
     apHistoryLibrary,
     // Teacher-facing guidance, so it follows the same role gate the other
     // assignment types' directions do.
@@ -727,6 +754,55 @@ export async function action({ request, params }: ActionFunctionArgs) {
   );
 }
 
+type ThesisDeckLink = {
+  kind: ThesisEssayMaterial['kind'] | 'present' | 'google-slides';
+  label: string;
+  href: string;
+};
+
+/**
+ * The Thesis-Driven Essay's Modules links, by module id: each lesson's three
+ * ways to use its deck (present it on YAWP!, copy it into Google Slides,
+ * download it for PowerPoint), its lesson plan, and on Day 1 the student
+ * handouts. Only what is there is offered. Null when nothing is, so the page
+ * keeps its usual wording.
+ */
+function buildThesisDecks(
+  modules: Array<{ id: string; title: string }>,
+  returnTo: string
+): {
+  dayOne: ThesisDeckLink[];
+  byModuleId: Record<string, ThesisDeckLink[]>;
+} | null {
+  const available = listAvailableThesisEssayMaterialSlugs();
+  if (available.size === 0) return null;
+  const presentable = listPresentableThesisEssayDeckSlugs();
+  const links = (deck: ThesisEssayDeck): ThesisDeckLink[] => {
+    const label = deckLabel(deck);
+    const google = googleSlidesCopyHref(deck);
+    return [
+      ...(presentable.has(deck.slug)
+        ? [{ kind: 'present' as const, label, href: `${presentHref(deck)}?from=${encodeURIComponent(returnTo)}` }]
+        : []),
+      ...(google ? [{ kind: 'google-slides' as const, label, href: google }] : []),
+      ...materialsForDeck(deck)
+        .filter((material) => available.has(material.slug))
+        .map((material) => ({
+          kind: material.kind,
+          label: material.label ?? label,
+          href: materialHref(material),
+        })),
+    ];
+  };
+  const byModuleId: Record<string, ThesisDeckLink[]> = {};
+  for (const module of modules) {
+    const deck = deckForModuleTitle(module.title);
+    const moduleLinks = deck ? links(deck) : [];
+    if (moduleLinks.length) byModuleId[module.id] = moduleLinks;
+  }
+  return { dayOne: links(DAY_ONE_DECK), byModuleId };
+}
+
 /**
  * Whether the modules accordion earns its place on this page.
  *
@@ -742,6 +818,51 @@ export function showModulesAccordion(
 ): boolean {
   if (moduleCount === 0) return false;
   return !isExitTicketAssignmentType(assignmentType);
+}
+
+const THESIS_LINK_TEXT: Record<ThesisDeckLink['kind'], { prefix: string; type: string }> = {
+  present: { prefix: 'Present', type: 'on YAWP!' },
+  'google-slides': { prefix: 'Google Slides', type: 'make a copy' },
+  deck: { prefix: 'PowerPoint', type: '.pptx' },
+  'lesson-plan': { prefix: 'Lesson plan', type: '.pdf' },
+  handout: { prefix: 'Handout', type: '.pdf' },
+};
+
+/**
+ * A lesson's deck, three ways (present it here, copy it into Google Slides,
+ * download it for PowerPoint), then its lesson plan and handouts, as links
+ * styled like small buttons. Presenting is the loudest: it always looks
+ * exactly as designed.
+ */
+function ThesisDeckDownloads({ links }: { links: ThesisDeckLink[] }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {links.map((link) => {
+        const text = THESIS_LINK_TEXT[link.kind];
+        const isPresent = link.kind === 'present';
+        const isDownload = link.kind !== 'present' && link.kind !== 'google-slides';
+        return (
+          <a
+            key={link.href}
+            href={link.href}
+            {...(isDownload ? { download: true } : {})}
+            {...(link.kind === 'google-slides' ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium',
+              isPresent
+                ? 'bg-primary text-primary-foreground hover:opacity-90'
+                : 'border bg-background text-foreground hover:bg-accent'
+            )}
+          >
+            {link.kind === 'handout' ? link.label : `${text.prefix}: ${link.label}`}
+            <span className={cn('text-xs', isPresent ? 'opacity-80' : 'text-muted-foreground')}>
+              ({text.type})
+            </span>
+          </a>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function AppAssignmentTypesIdRoute() {
@@ -1065,13 +1186,27 @@ export default function AppAssignmentTypesIdRoute() {
                 Modules
               </AccordionTrigger>
               <AccordionContent>
-                {showThesisLibrary ? (
+                {data.thesisDecks ? (
+                  <p className="mb-3 text-sm text-muted-foreground">
+                    Click on the modules to see the overview of the writing
+                    process that you&rsquo;ll teach your students. Each module
+                    has its slide deck, to present here or to edit in Google
+                    Slides or PowerPoint, and its lesson plan. Training videos
+                    are in the Teachers&rsquo; Lounge.
+                  </p>
+                ) : showThesisLibrary ? (
                   <p className="mb-3 text-sm text-muted-foreground">
                     Click on the modules to see the overview of the writing
                     process that you&rsquo;ll teach your students. Training
                     videos and lesson materials are available in the
                     Teachers&rsquo; Lounge.
                   </p>
+                ) : null}
+                {data.thesisDecks?.dayOne.length ? (
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                    <span>Before the first module: introduce YAWP! on Day 1.</span>
+                    <ThesisDeckDownloads links={data.thesisDecks.dayOne} />
+                  </div>
                 ) : null}
                 <Accordion type="multiple">
                   {data.assignmentType.assignmentModules.map((cm) => (
@@ -1085,6 +1220,13 @@ export default function AppAssignmentTypesIdRoute() {
                       </AccordionTrigger>
                       <AccordionContent className="text-muted-foreground">
                         {cm.description || 'No description.'}
+                        {data.thesisDecks?.byModuleId[cm.id] ? (
+                          <div className="mt-3">
+                            <ThesisDeckDownloads
+                              links={data.thesisDecks.byModuleId[cm.id]}
+                            />
+                          </div>
+                        ) : null}
                       </AccordionContent>
                     </AccordionItem>
                   ))}

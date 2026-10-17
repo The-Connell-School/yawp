@@ -57,6 +57,15 @@ export const CLASS_CODE_UNIQUE_FLAG = 'classcode-unique' as const;
  */
 export const LOUNGE_COMMUNITY_FLAG = 'teacher_lounge_community' as const;
 
+/**
+ * Thesis-Driven Essay slide decks and lesson plans on the assignment type's
+ * page (#452). On: each step in the Modules list offers its lesson's deck and
+ * lesson plan to download, and Day 1's (with the student sign-up handout)
+ * sits above them. Off: the Modules list is as before, pointing teachers to
+ * the Teachers' Lounge, and the download route returns 404.
+ */
+export const THESIS_ESSAY_DECKS_FLAG = 'thesis_essay_decks' as const;
+
 /** Demo feedback. Default off everywhere; only demo seed code opts in. */
 export const DEMO_FEEDBACK_FLAG = 'demo-feedback-widget' as const;
 
@@ -101,6 +110,11 @@ export const FEATURE_FLAGS = {
     label: "Teacher's Lounge community",
     description:
       "Teachers at these schools get the community board in the Teacher's Lounge: posts, replies, helpful votes, and questions for Brian. Off: the Lounge shows only the course grid and community pages return 404; posts are kept.",
+  },
+  [THESIS_ESSAY_DECKS_FLAG]: {
+    label: 'Thesis-Driven Essay slide decks',
+    description:
+      "Shows each lesson's slide deck and lesson plan inside the Thesis-Driven Essay's Modules, for teachers to download. Off: the Modules list points to the Teachers' Lounge as before and the downloads return 404.",
   },
   [DEMO_FEEDBACK_FLAG]: {
     label: 'Demo feedback widget',
