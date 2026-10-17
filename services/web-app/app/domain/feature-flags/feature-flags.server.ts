@@ -1,6 +1,7 @@
 import { prisma } from '~/utils/db.server';
 import {
   LESSON_PLANNER_FLAG,
+  LOUNGE_COMMUNITY_FLAG,
   FREE_TIER_FLAG,
   FEATURE_FLAGS,
   FEATURE_FLAG_KEYS,
@@ -108,6 +109,13 @@ export function isLessonPlannerEnabled(
   orgId: string | null | undefined
 ): Promise<boolean> {
   return isFeatureFlagEnabled(LESSON_PLANNER_FLAG, orgId);
+}
+
+/** Teacher's Lounge community board for teachers at the given school. */
+export function isLoungeCommunityEnabled(
+  orgId: string | null | undefined
+): Promise<boolean> {
+  return isFeatureFlagEnabled(LOUNGE_COMMUNITY_FLAG, orgId);
 }
 
 /**

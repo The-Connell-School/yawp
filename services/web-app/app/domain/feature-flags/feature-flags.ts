@@ -48,6 +48,25 @@ export const FREE_TIER_ONBOARDING_V2_FLAG = 'free-tier-onboarding-v2' as const;
 /** Global class-code validation and Generate code controls. Default off. */
 export const CLASS_CODE_UNIQUE_FLAG = 'classcode-unique' as const;
 
+/**
+ * Teacher's Lounge community board. On for a school: the Teacher's Lounge nav
+ * item opens the community feed (/app/lounge), with the existing course grid
+ * one tab away at its old URL. Off: the nav item opens the course grid as
+ * before and every /app/lounge route returns 404. Posts are never deleted by
+ * turning it off.
+ */
+export const LOUNGE_COMMUNITY_FLAG = 'teacher_lounge_community' as const;
+
+/**
+ * Thesis-Driven Essay slide decks and lesson plans (#452). On: each lesson
+ * offers its deck three ways (present on YAWP!, copy to Google Slides,
+ * download for PowerPoint) and its lesson plan, in the assignment type's
+ * Modules and in the Faculty Lounge's Thesis-Driven Essay training; Day 1
+ * adds the student handouts. Off: both pages are as before, and the deck,
+ * presenter and asset routes return 404.
+ */
+export const THESIS_ESSAY_DECKS_FLAG = 'thesis_essay_decks' as const;
+
 /** Demo feedback. Default off everywhere; only demo seed code opts in. */
 export const DEMO_FEEDBACK_FLAG = 'demo-feedback-widget' as const;
 
@@ -87,6 +106,16 @@ export const FEATURE_FLAGS = {
   [CLASS_CODE_UNIQUE_FLAG]: {
     label: 'Unique class codes',
     description: 'Enforces global class-code availability and shows Generate code. Default off on demo and production. Only everyone mode is supported; targeted mode stays off because uniqueness spans all organizations.',
+  },
+  [LOUNGE_COMMUNITY_FLAG]: {
+    label: "Teacher's Lounge community",
+    description:
+      "Teachers at these schools get the community board in the Teacher's Lounge: posts, replies, helpful votes, and questions for Brian. Off: the Lounge shows only the course grid and community pages return 404; posts are kept.",
+  },
+  [THESIS_ESSAY_DECKS_FLAG]: {
+    label: 'Thesis-Driven Essay slide decks',
+    description:
+      "Each Thesis-Driven Essay lesson offers its slide deck (present on YAWP!, Google Slides, PowerPoint) and lesson plan, in the assignment's Modules and in the Faculty Lounge's Thesis-Driven Essay training. Off: both pages are as before and the deck pages return 404.",
   },
   [DEMO_FEEDBACK_FLAG]: {
     label: 'Demo feedback widget',

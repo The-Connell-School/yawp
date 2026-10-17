@@ -59,7 +59,10 @@ import {
   previewAccessMiddleware,
 } from './utils/preview-access.server.ts';
 import { uaPartnerMiddleware } from './utils/ua-partner.server.ts';
-import { isLessonPlannerEnabled } from './domain/feature-flags/feature-flags.server.ts';
+import {
+  isLessonPlannerEnabled,
+  isLoungeCommunityEnabled,
+} from './domain/feature-flags/feature-flags.server.ts';
 import { getRootMembershipWhere } from './utils/root-membership-filter.server.ts';
 
 export const middleware = [internalImpersonationMiddleware, previewAccessMiddleware, uaPartnerMiddleware];
@@ -131,6 +134,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         previewAccessSeat: null,
         blackboardLtiMockEnabled: false,
         lessonPlannerEnabled: false,
+        loungeCommunityEnabled: false,
         impersonation: { isReadOnly: false, impersonatorUserId: null },
         toast: null,
       },
@@ -230,9 +234,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
     bannerWarning,
     localDevAuthEnabled: isLocalDevAuthEnabled(),
   });
-  const lessonPlannerEnabled = userId
-    ? await isLessonPlannerEnabled(membership?.organizationId ?? null)
-    : false;
+  const [lessonPlannerEnabled, loungeCommunityEnabled] = userId
+    ? await Promise.all([
+        isLessonPlannerEnabled(membership?.organizationId ?? null),
+        // The Yawp team always sees the community, whatever its school's flag.
+        user?.isAdmin
+          ? Promise.resolve(true)
+          : isLoungeCommunityEnabled(membership?.organizationId ?? null),
+      ])
+    : [false, false];
 
   return data(
     {
@@ -244,6 +254,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       testerFeedbackAvailable: process.env.TESTER_FEEDBACK_ENABLED === 'true' && Boolean(user?.isTester),
       demoFeedbackAvailable: Boolean(userId) && !internal && await isDemoFeedbackAvailable(),
       lessonPlannerEnabled,
+      loungeCommunityEnabled,
       requestInfo: {
         hints: getHints(request),
         origin: getDomainUrl(request),

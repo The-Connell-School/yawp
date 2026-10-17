@@ -1622,6 +1622,32 @@ body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
   text-decoration: underline;
 }
 
+/* Faculty Lounge ("the Letter" look). Serif titles use Cormorant Garamond,
+   already loaded above for the public pages; it runs small, so Lounge
+   titles are set a step larger than their sans equivalents. */
+:root {
+  --lounge-accent-text: 15 52% 41%;
+  --lounge-accent-soft: 20 60% 91%;
+}
+:root[data-contrast='high'] {
+  --lounge-accent-text: 15 60% 32%;
+}
+.dark {
+  --lounge-accent-text: 15 70% 68%;
+  --lounge-accent-soft: 15 25% 22%;
+}
+.lounge-serif {
+  font-family: 'Cormorant Garamond', adobe-garamond-pro, Garamond, Georgia, serif;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+.lounge-accent {
+  color: hsl(var(--lounge-accent-text));
+}
+.lounge-accent-soft {
+  background-color: hsl(var(--lounge-accent-soft));
+}
+
 /* Brian-call approval layout; all selectors require the onboarding rollout. */
 .free-tier-approval-v2 .auth-page-content {
   width: min(100%, 760px);

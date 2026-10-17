@@ -44,6 +44,20 @@ export async function getSignedGetUrl(key: string, expiresInSeconds = 3600) {
   return getSignedUrl(s3, command, { expiresIn: expiresInSeconds });
 }
 
+/** A URL the browser can PUT one file to directly. The upload must send the same Content-Type. */
+export async function getSignedPutUrl(
+  key: string,
+  contentType: string,
+  expiresInSeconds = 3600
+) {
+  const command = new PutObjectCommand({
+    Bucket: videoBucket,
+    Key: key,
+    ContentType: contentType,
+  });
+  return getSignedUrl(s3, command, { expiresIn: expiresInSeconds });
+}
+
 export async function deleteSmallObject(key: string) {
   await s3.send(
     new DeleteObjectCommand({

@@ -1,3 +1,6 @@
+import { loungeViewerOrNull } from '~/domain/lounge/access.server';
+import { getSharePromptForViewer } from '~/domain/lounge/lounge.server';
+import { LOUNGE_SHARE_PARAM } from '~/domain/lounge/shares';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   type LoaderFunctionArgs,
@@ -43,6 +46,15 @@ import {
 } from '~/utils/assignment-type-access.server';
 import { loadAssignmentCreationQuotasForTypes } from '~/utils/assignment-quota.server';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import { THESIS_ESSAY_DECKS_FLAG } from '~/domain/feature-flags/feature-flags';
+import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { ThesisDeckLinks } from '~/components/thesis-essay-decks/thesis-deck-links';
+import {
+  DAY_ONE_DECK,
+  deckForModuleTitle,
+  type ThesisDeckLink,
+} from '~/domain/thesis-essay-decks/thesis-essay-decks';
+import { availableDeckLinks } from '~/domain/thesis-essay-decks/thesis-essay-decks.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
@@ -554,6 +566,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           totalCount: thesisLibraryEntries.length,
         }
       : null;
+  // Each lesson's slide deck, hung off the step it teaches (#452). Only the
+  // decks whose files exist, so a lesson whose deck isn't built yet shows none.
+  const thesisDecks =
+    profile.role === 'TEACHER' &&
+    isThesisEssay &&
+    (await isFeatureFlagEnabled(THESIS_ESSAY_DECKS_FLAG, profile.organization.id))
+      ? buildThesisDecks(assignmentType.assignmentModules, `/app/assignment-types/${assignmentType.id}`)
+      : null;
   const enabledTeacherClassIds =
     profile.role === 'TEACHER'
       ? new Set(teacherClasses.map((klass) => klass.id))
@@ -600,7 +620,20 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ])).get(assignmentType.id) ?? {}
     : {};
 
+  // A teacher arriving from "Use in my class" in the Teacher's Lounge: hand
+  // the shared prompt to the creation sheet. Only when they can see the share
+  // and it is for this assignment type; otherwise the link is ignored.
+  const loungeShareId = new URL(request.url).searchParams.get(LOUNGE_SHARE_PARAM);
+  let loungeSharePrompt: string | null = null;
+  if (loungeShareId && isTeacher) {
+    const loungeViewer = await loungeViewerOrNull(userId, profile);
+    loungeSharePrompt = loungeViewer
+      ? await getSharePromptForViewer(loungeViewer, loungeShareId, assignmentType.id)
+      : null;
+  }
+
   return dataResponse({
+    loungeSharePrompt,
     assignmentType,
     assignmentCreationAvailability,
     assignmentTypeGradesGrammar,
@@ -614,6 +647,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     promptLibrary,
     shortFormPromptLibrary,
     thesisPromptLibrary,
+    thesisDecks,
     apHistoryLibrary,
     // Teacher-facing guidance, so it follows the same role gate the other
     // assignment types' directions do.
@@ -712,6 +746,29 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 /**
+ * The Thesis-Driven Essay's Modules buttons, by module id: each lesson's deck
+ * three ways, its lesson plan, and on Day 1 the student handouts. Null when
+ * nothing is on disk, so the page keeps its usual wording.
+ */
+function buildThesisDecks(
+  modules: Array<{ id: string; title: string }>,
+  returnTo: string
+): {
+  dayOne: ThesisDeckLink[];
+  byModuleId: Record<string, ThesisDeckLink[]>;
+} | null {
+  const dayOne = availableDeckLinks(DAY_ONE_DECK, returnTo);
+  if (!dayOne.length) return null;
+  const byModuleId: Record<string, ThesisDeckLink[]> = {};
+  for (const module of modules) {
+    const deck = deckForModuleTitle(module.title);
+    const moduleLinks = deck ? availableDeckLinks(deck, returnTo) : [];
+    if (moduleLinks.length) byModuleId[module.id] = moduleLinks;
+  }
+  return { dayOne, byModuleId };
+}
+
+/**
  * Whether the modules accordion earns its place on this page.
  *
  * Every assignment type carries at least one module — it is what a direct
@@ -782,6 +839,28 @@ export default function AppAssignmentTypesIdRoute() {
       { replace: true, preventScrollReset: true }
     );
   }, [incomingPrompt, setSearchParams]);
+
+  // The Teacher's Lounge sends a teacher here to reuse another teacher's
+  // shared assignment. Same door as the planner's: open the sheet on the
+  // prompt once, then drop the param.
+  const incomingLoungeShare = searchParams.get(LOUNGE_SHARE_PARAM);
+  const loungeSharePrompt = data.loungeSharePrompt;
+  useEffect(() => {
+    if (!incomingLoungeShare) return;
+    if (loungeSharePrompt) {
+      setLibraryPrompt(loungeSharePrompt);
+      setApHistoryEntry(null);
+      setIsAssignmentSheetOpen(true);
+    }
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        next.delete(LOUNGE_SHARE_PARAM);
+        return next;
+      },
+      { replace: true, preventScrollReset: true }
+    );
+  }, [incomingLoungeShare, loungeSharePrompt, setSearchParams]);
 
   const showShortFormLibrary = data.shortFormPromptLibrary != null;
   const showDailyPagesAbout =
@@ -1027,13 +1106,27 @@ export default function AppAssignmentTypesIdRoute() {
                 Modules
               </AccordionTrigger>
               <AccordionContent>
-                {showThesisLibrary ? (
+                {data.thesisDecks ? (
+                  <p className="mb-3 text-sm text-muted-foreground">
+                    Click on the modules to see the overview of the writing
+                    process that you&rsquo;ll teach your students. Each module
+                    has its slide deck, to present here or to edit in Google
+                    Slides or PowerPoint, and its lesson plan. Training videos
+                    are in the Teachers&rsquo; Lounge.
+                  </p>
+                ) : showThesisLibrary ? (
                   <p className="mb-3 text-sm text-muted-foreground">
                     Click on the modules to see the overview of the writing
                     process that you&rsquo;ll teach your students. Training
                     videos and lesson materials are available in the
                     Teachers&rsquo; Lounge.
                   </p>
+                ) : null}
+                {data.thesisDecks?.dayOne.length ? (
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                    <span>Before the first module: introduce YAWP! on Day 1.</span>
+                    <ThesisDeckLinks links={data.thesisDecks.dayOne} />
+                  </div>
                 ) : null}
                 <Accordion type="multiple">
                   {data.assignmentType.assignmentModules.map((cm) => (
@@ -1047,6 +1140,13 @@ export default function AppAssignmentTypesIdRoute() {
                       </AccordionTrigger>
                       <AccordionContent className="text-muted-foreground">
                         {cm.description || 'No description.'}
+                        {data.thesisDecks?.byModuleId[cm.id] ? (
+                          <div className="mt-3">
+                            <ThesisDeckLinks
+                              links={data.thesisDecks.byModuleId[cm.id]}
+                            />
+                          </div>
+                        ) : null}
                       </AccordionContent>
                     </AccordionItem>
                   ))}

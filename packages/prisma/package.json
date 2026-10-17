@@ -13,6 +13,10 @@
       "types": "./preview-access-code.ts",
       "import": "./preview-access-code.ts"
     },
+    "./lounge-launch": {
+      "types": "./scripts/lounge-launch/seed.ts",
+      "import": "./scripts/lounge-launch/seed.ts"
+    },
     "./preview-seats": {
       "types": "./scripts/preview-seats.ts",
       "import": "./scripts/preview-seats.ts"
@@ -36,6 +40,7 @@
     "sync-prod-fidelity-fixtures": "bun run scripts/sync-prod-fidelity-fixtures.ts",
     "seed-preview-signon-qa": "bun run scripts/seed-preview-signon-qa.ts",
     "seed-preview-seats": "bun run scripts/seed-preview-seats.ts",
+    "seed-lounge-launch": "bun run scripts/seed-lounge-launch.ts",
     "seed-preview-teacher-notes-qa": "bun run scripts/seed-preview-teacher-notes-qa.ts",
     "seed-preview-planner-qa": "bun run scripts/seed-preview-planner-qa.ts",
     "ensure-class-insights-local": "bun run scripts/local-dev/ensure-class-insights-enabled.ts",

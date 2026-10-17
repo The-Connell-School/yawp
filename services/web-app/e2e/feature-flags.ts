@@ -7,6 +7,7 @@ import { createE2EPrismaClient } from './prisma-client';
 // worker, so a spec's setting cannot leak into another running at the same time.
 const LESSON_PLANNER_SETTING = 'feature_flag.lesson_planner';
 const FREE_TIER_SETTING = 'feature_flag.free_tier';
+const THESIS_ESSAY_DECKS_SETTING = 'feature_flag.thesis_essay_decks';
 
 export async function setFreeTierFlag(enabled: boolean) {
   const prisma = createE2EPrismaClient();
@@ -44,6 +45,24 @@ export async function setLessonPlannerFlag(enabled: boolean) {
   }
 }
 
+export async function setThesisEssayDecksFlag(enabled: boolean) {
+  const prisma = createE2EPrismaClient();
+  try {
+    await prisma.setting.upsert({
+      where: { name: THESIS_ESSAY_DECKS_SETTING },
+      create: {
+        name: THESIS_ESSAY_DECKS_SETTING,
+        value: enabled ? 'true' : 'false',
+        valueType: 'boolean',
+        description: 'Set by e2e',
+      },
+      update: { value: enabled ? 'true' : 'false', updatedAt: new Date() },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 /** Local test toggle for registered feature flags. */
 export async function setFeatureFlag(key: FeatureFlagKey, enabled: boolean) {
   const prisma = createE2EPrismaClient();
@@ -62,4 +81,9 @@ export async function setFeatureFlag(key: FeatureFlagKey, enabled: boolean) {
   } finally {
     await prisma.$disconnect();
   }
+}
+
+/** Teacher's Lounge community board for everyone (true) or no one (false). */
+export async function setLoungeCommunityFlag(enabled: boolean) {
+  await setFeatureFlag('teacher_lounge_community', enabled);
 }

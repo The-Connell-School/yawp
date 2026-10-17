@@ -18,6 +18,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
+import { ThesisDeckLinks } from '~/components/thesis-essay-decks/thesis-deck-links';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { CircularProgress } from '~/components/ui/circular-progress';
@@ -27,6 +28,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
+import { THESIS_ESSAY_DECKS_FLAG } from '~/domain/feature-flags/feature-flags';
+import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { deckForTrainingModule } from '~/domain/thesis-essay-decks/thesis-essay-decks';
+import { availableDeckLinks } from '~/domain/thesis-essay-decks/thesis-essay-decks.server';
 import { prisma } from '~/utils/db.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import VideoPlayer from './video-player';
@@ -116,6 +121,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     currentModule.videoS3Key
   );
 
+  // A Thesis-Driven Essay lesson carries its deck (present, Google Slides,
+  // PowerPoint) and lesson plan, as the assignment's Modules do (#452).
+  const thesisDeck = deckForTrainingModule(teacherTraining.title, currentModule.title);
+  const thesisDeckLinks =
+    thesisDeck &&
+    (await isFeatureFlagEnabled(THESIS_ESSAY_DECKS_FLAG, profile.organization.id))
+      ? availableDeckLinks(thesisDeck, new URL(request.url).pathname)
+      : [];
+
   return dataResponse({
     teacherTraining,
     currentModule: currentModule
@@ -126,6 +140,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       : currentModule,
     membershipId: profile.id,
     currentSession: currentModule.teacherTrainingModuleSessions[0] || null,
+    thesisDeckLinks,
   });
 }
 
@@ -251,7 +266,7 @@ function formatTime(seconds: number): string {
 }
 
 export default function TeacherTrainingModuleRoute() {
-  const { teacherTraining, currentModule, currentSession } =
+  const { teacherTraining, currentModule, currentSession, thesisDeckLinks } =
     useLoaderData<typeof loader>();
   const fetcher = useFetcher();
 
@@ -383,6 +398,21 @@ export default function TeacherTrainingModuleRoute() {
                 </div>
               </CardContent>
             </Card>
+
+            {thesisDeckLinks.length > 0 && (
+              <Card data-testid="teacher-training-thesis-deck">
+                <CardHeader>
+                  <CardTitle>Teach this lesson</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Present the slides on YAWP!, or make your own copy in Google
+                    Slides or PowerPoint to edit. The lesson plan goes with them.
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <ThesisDeckLinks links={thesisDeckLinks} />
+                </CardContent>
+              </Card>
+            )}
 
             {(primaryResources.length > 0 ||
               captionResource ||

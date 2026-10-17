@@ -87,7 +87,9 @@ export async function mintSignedLink(args: {
   const expiresAt = new Date(Date.now() + (args.ttlMs ?? FREE_TIER_LINK_TTL_MS));
   const opaque = randomBytes(24).toString('base64url');
   const tokenHash = hashToken(opaque);
-  const db = args.tx ?? prisma;
+  // Typed as the transaction client: comparing the full client against it
+  // exceeds TypeScript's depth limit now that the schema is larger.
+  const db = args.tx ?? (prisma as unknown as Prisma.TransactionClient);
   const row = await db.freeTierSignedLink.create({
     data: {
       id: linkId,

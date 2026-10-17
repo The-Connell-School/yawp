@@ -16,11 +16,23 @@ mock.module('~/utils/db.server', () => ({ prisma }));
 const {
   isFeatureFlagEnabled,
   isLessonPlannerEnabled,
+  isLoungeCommunityEnabled,
   listFeatureFlags,
   setFeatureFlag,
   findUnknownOrganizationIds,
 } = await import('./feature-flags.server');
-const { GUIDED_TOURS_FLAG, DEMO_FEEDBACK_FLAG, INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, FREE_TIER_INAPP_V2_FLAG, UNIFIED_SIGN_ON_FLAG, FREE_TIER_ONBOARDING_V2_FLAG } = await import(
+const {
+  GUIDED_TOURS_FLAG,
+  DEMO_FEEDBACK_FLAG,
+  INTERNAL_RUBRICS_FLAG,
+  LESSON_PLANNER_FLAG,
+  FREE_TIER_FLAG,
+  FREE_TIER_INAPP_V2_FLAG,
+  UNIFIED_SIGN_ON_FLAG,
+  FREE_TIER_ONBOARDING_V2_FLAG,
+  LOUNGE_COMMUNITY_FLAG,
+  THESIS_ESSAY_DECKS_FLAG,
+} = await import(
   './feature-flags'
 );
 
@@ -82,6 +94,18 @@ describe('feature flags (server)', () => {
     expect(await isFeatureFlagEnabled(INTERNAL_RUBRICS_FLAG, null)).toBe(false);
     prisma.setting.findUnique.mockResolvedValue({ value: '{"mode":"everyone","orgIds":[]}' });
     expect(await isFeatureFlagEnabled(INTERNAL_RUBRICS_FLAG, 'org-2')).toBe(true);
+  });
+
+  test("Teacher's Lounge community is off with no row and follows per-school targeting", async () => {
+    prisma.setting.findUnique.mockResolvedValue(null);
+    expect(await isLoungeCommunityEnabled('org-1')).toBe(false);
+    expect(prisma.setting.findUnique.mock.calls[0]?.[0]).toMatchObject({
+      where: { name: 'feature_flag.teacher_lounge_community' },
+    });
+    prisma.setting.findUnique.mockResolvedValue({ value: '{"mode":"targeted","orgIds":["org-1"]}' });
+    expect(await isLoungeCommunityEnabled('org-1')).toBe(true);
+    expect(await isLoungeCommunityEnabled('org-2')).toBe(false);
+    expect(await isLoungeCommunityEnabled(null)).toBe(false);
   });
 
   test('defaults off when no row exists', async () => {
@@ -163,11 +187,16 @@ describe('feature flags (server)', () => {
       UNIFIED_SIGN_ON_FLAG,
       FREE_TIER_ONBOARDING_V2_FLAG,
       'classcode-unique',
+      LOUNGE_COMMUNITY_FLAG,
+      THESIS_ESSAY_DECKS_FLAG,
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[2]).toMatchObject({ key: FREE_TIER_FLAG, mode: 'off', enabled: false });
+    expect(flags[3]).toMatchObject({ key: FREE_TIER_INAPP_V2_FLAG, mode: 'off', enabled: false });
+    expect(flags[4]).toMatchObject({ key: UNIFIED_SIGN_ON_FLAG, mode: 'off', enabled: false });
+    expect(flags.find((flag) => flag.key === THESIS_ESSAY_DECKS_FLAG)).toMatchObject({ mode: 'off', enabled: false });
     expect(flags[0]).toMatchObject({
       key: LESSON_PLANNER_FLAG,
       mode: 'off',
@@ -192,6 +221,8 @@ describe('feature flags (server)', () => {
       UNIFIED_SIGN_ON_FLAG,
       FREE_TIER_ONBOARDING_V2_FLAG,
       'classcode-unique',
+      LOUNGE_COMMUNITY_FLAG,
+      THESIS_ESSAY_DECKS_FLAG,
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
     ]);
