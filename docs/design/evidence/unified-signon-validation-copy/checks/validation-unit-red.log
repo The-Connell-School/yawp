@@ -2,7 +2,7 @@ bun test v1.3.1 (89fa0f34)
 
 services/web-app/app/domain/unified-signon/validation-copy.test.ts:
 3 | import { signonValidationMessage } from './validation-copy';
-4 | 
+4 |
 5 | test('gated password copy uses the validator minimum and mismatch text', () => {
 6 |   const result = PasswordAndConfirmPasswordSchema.safeParse({ password: 'short', confirmPassword: 'different' });
 7 |   if (result.success) throw new Error('Expected invalid credentials');
