@@ -23,6 +23,8 @@ export function UnifiedLogin({
   entry: {
     redirectTo: string;
     googleAvailable: boolean;
+    /** False on a preview whose origin is not registered with Google. */
+    googleVisible?: boolean;
     initialState?: SignonState;
   };
 }) {
@@ -66,6 +68,7 @@ export function UnifiedLogin({
       }
       redirectTo={entry.redirectTo}
       googleAvailable={entry.googleAvailable}
+      googleVisible={entry.googleVisible ?? true}
       transport={transport}
       passwordForm={(state) => (
         <UnifiedPasswordForm

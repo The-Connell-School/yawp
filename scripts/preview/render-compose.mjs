@@ -33,6 +33,20 @@ function optionalManagementServiceKey(value) {
   return value;
 }
 
+/** Comma-separated https origins (no paths) for which a PR preview offers
+ * Google sign-in. Anything else fails the render rather than widening it. */
+export function googleOriginAllowlist(raw = '') {
+  const entries = String(raw).split(',').map((entry) => entry.trim()).filter(Boolean);
+  for (const entry of entries) {
+    let url;
+    try { url = new URL(entry); } catch { url = null; }
+    if (!url || url.protocol !== 'https:' || url.origin !== entry) {
+      throw new Error('PREVIEW_GOOGLE_OAUTH_ORIGINS must be comma-separated https origins');
+    }
+  }
+  return entries.join(',');
+}
+
 export function renderPreviewCompose({
   prNumber = process.env.PR_NUMBER,
   slug = process.env.PREVIEW_SLUG,
@@ -212,6 +226,13 @@ ${uaStudentBillingEnvironment}      INTERNAL_COMMAND_TOKEN: ${q(optionalEnv('PRE
   const webEnvironment = commonEnvironment
     + `\n      GOOGLE_OAUTH_CLIENT_ID: ${q(optionalEnv('PREVIEW_GOOGLE_OAUTH_CLIENT_ID').replaceAll('$', '$$$$'))}`
     + `\n      GOOGLE_OAUTH_CLIENT_SECRET: ${q(optionalEnv('PREVIEW_GOOGLE_OAUTH_CLIENT_SECRET').replaceAll('$', '$$$$'))}`
+    // PR previews share the OAuth client but most of their origins are not
+    // registered with Google: offer Google only on allowlisted origins. Demo
+    // (no PR number) keeps its current behavior.
+    + (env.prNumber
+      ? `\n      GOOGLE_OAUTH_REQUIRE_ORIGIN_ALLOWLIST: "true"`
+        + `\n      GOOGLE_OAUTH_ORIGIN_ALLOWLIST: ${q(googleOriginAllowlist(optionalEnv('PREVIEW_GOOGLE_OAUTH_ORIGINS')))}`
+      : '')
     + (previewManagementServiceKey
       ? `\n      YAWP_MANAGEMENT_SERVICE_KEY: ${q(previewManagementServiceKey)}` : '')
     + (demoKeys

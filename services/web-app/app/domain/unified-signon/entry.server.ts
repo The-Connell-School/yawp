@@ -23,7 +23,8 @@ export async function unifiedEntry(request: Request) {
   }
   if (!(await isUnifiedSignOnEnabled())) return null;
   const { browserContext, withFlow } = await import('./flow.server');
-  const { googleAvailable } = await import('./google.server');
+  const { googleAvailableFor, googleVisibleFor } =
+    await import('./google.server');
   const context = await browserContext(request);
   let initialState: SignonState | undefined;
   let destination = safeRedirect(
@@ -77,7 +78,8 @@ export async function unifiedEntry(request: Request) {
   return {
     unified: true as const,
     redirectTo: destination,
-    googleAvailable: googleAvailable(),
+    googleAvailable: googleAvailableFor(request),
+    googleVisible: googleVisibleFor(request),
     ...(initialState ? { initialState } : {}),
   };
 }
