@@ -234,6 +234,88 @@ suite(
     }
   }
 );
+// FAILURES.md: di-signon-fix-recovery-code-copy. Real proof and enrollment denial.
+suite(
+  'inactive recovery maps invalid enrollment to class-code copy without granting access',
+  async () => {
+    const { requireMembership } = await import('~/utils/auth.server');
+    const { enrollUnassignedStudentByCode } =
+      await import('~/domain/free-tier/existing-student-enrollment.server');
+    const snapshot = () =>
+      prisma.orgMembership.findMany({
+        where: { userId: qaId('inactive') },
+        orderBy: { id: 'asc' },
+        include: {
+          classesAsStudent: { select: { id: true }, orderBy: { id: 'asc' } },
+        },
+      });
+    const before = await snapshot();
+    expect(before).toHaveLength(1);
+    expect(before[0].isActive).toBe(false);
+    // Retain the shared legacy service contract; only unified presentation changes.
+    expect(
+      await prisma.$transaction((tx) =>
+        enrollUnassignedStudentByCode(tx, {
+          userId: qaId('inactive'),
+          code: QA_CODES.school,
+          classId: qaId('email'),
+        })
+      )
+    ).toEqual({ ok: false, code: 'invalid_code', error: 'Invalid code.' });
+    fresh();
+    await master('inactive');
+    expect((await login('inactive')).response.status).toBe(302);
+    const entry = await continuation();
+    const state = (await entry.json()).initialState;
+    expect(state.screen).toBe('inactive');
+    token = state.flowToken;
+    const expected =
+      "We couldn't find a class with that code. Check it with your teacher.";
+    for (const classCode of [
+      'unknown-local-code',
+      '???',
+      QA_CODES.school,
+      QA_CODES.school,
+    ]) {
+      const denied = await post('resolve-class', { classCode });
+      expect(denied.response.status).toBe(400);
+      expect(denied.data).toEqual({
+        error: '',
+        fieldErrors: { classCode: expected },
+      });
+      expect(await snapshot()).toEqual(before);
+    }
+    // The same denial after a server-resolved duplicate-code choice.
+    const choices = await post('resolve-class', {
+      classCode: QA_CODES.multiple,
+    });
+    expect(choices.data.state.variant).toBe('multiple');
+    expect(
+      (await post('choose-class', { classId: qaId('email') })).response.status
+    ).toBe(400);
+    const deniedChoice = await post('choose-class', {
+      classId: qaId('multiple-a'),
+    });
+    expect(deniedChoice.data).toEqual({
+      error: '',
+      fieldErrors: { classCode: expected },
+    });
+    const full = await post('resolve-class', { classCode: QA_CODES.full });
+    expect(full.data.state.variant).toBe('full');
+    expect(full.data.state.classInfo.id).toBe(qaId('full-class'));
+    expect(await snapshot()).toEqual(before);
+    try {
+      await requireMembership(request('/app/my-classes'), qaId('inactive'));
+      throw new Error('Inactive recovery granted ordinary class access');
+    } catch (response) {
+      expect(response).toBeInstanceOf(Response);
+      expect((response as Response).headers.get('location')).toBe(
+        '/no-membership'
+      );
+    }
+  }
+);
+
 suite(
   'QA authorization does not authenticate wrong passwords or unrelated fixture accounts',
   async () => {
