@@ -145,7 +145,10 @@ test.describe('Platform enhancements', () => {
       await expect(
         sheet.getByRole('switch', { name: 'Tutor', exact: true })
       ).toBeVisible();
-      const points = sheet.getByRole('spinbutton', { name: 'Points', exact: true });
+      const points = sheet.getByRole('spinbutton', {
+        name: 'Points',
+        exact: true,
+      });
       await points.fill('0');
       await advanced.click();
       expect(

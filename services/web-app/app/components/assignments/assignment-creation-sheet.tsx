@@ -686,6 +686,16 @@ export function AssignmentCreationSheetContent({
       initialGradingAssistantStrictnessLevel
     );
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [pointsError, setPointsError] = useState('');
+  const invalidPointsRef = useRef<HTMLInputElement | null>(null);
+
+  // Native validation runs before onSubmit. Focus only after Advanced is visible.
+  useEffect(() => {
+    if (advancedOpen && invalidPointsRef.current) {
+      invalidPointsRef.current.focus();
+      invalidPointsRef.current = null;
+    }
+  }, [advancedOpen, pointsError]);
   const OptionControl = platformEnhancementsEnabled ? Switch : Checkbox;
   const [gradingPanelOpen, setGradingPanelOpen] = useState(false);
   const [gradingMode, setGradingMode] =
@@ -918,6 +928,7 @@ export function AssignmentCreationSheetContent({
     setSelectedClassId(fixedClassId ?? teacherClasses[0]?.id ?? '');
     setSelectedClassIds(initialClassIds(fixedClassId));
     setAdvancedOpen(false);
+    setPointsError('');
     setTitle(initialTitle);
     setPrompt(initialPrompt);
     const grading = initialGradingFor({
@@ -1818,8 +1829,19 @@ export function AssignmentCreationSheetContent({
                           step={1}
                           inputMode="numeric"
                           value={pointValue}
-                          onChange={(event) =>
-                            setPointValue(event.target.value)
+                          onChange={(event) => {
+                            setPointValue(event.target.value);
+                            setPointsError('');
+                          }}
+                          aria-invalid={
+                            platformEnhancementsEnabled && pointsError
+                              ? true
+                              : undefined
+                          }
+                          aria-describedby={
+                            platformEnhancementsEnabled && pointsError
+                              ? 'assignment-create-points-error'
+                              : undefined
                           }
                           disabled={isSaving}
                           required
@@ -1832,6 +1854,15 @@ export function AssignmentCreationSheetContent({
                         </span>
                       )}
                     </div>
+                    {platformEnhancementsEnabled && pointsError ? (
+                      <p
+                        id="assignment-create-points-error"
+                        role="alert"
+                        className="text-sm text-destructive"
+                      >
+                        {pointsError}
+                      </p>
+                    ) : null}
                     <p
                       className={
                         platformEnhancementsEnabled
@@ -2275,6 +2306,26 @@ export function AssignmentCreationSheetContent({
         action={formAction}
         encType="multipart/form-data"
         className="mt-6 space-y-4"
+        onInvalidCapture={
+          platformEnhancementsEnabled
+            ? (event: React.FormEvent<HTMLFormElement>) => {
+                const field = event.target;
+                if (
+                  !(field instanceof HTMLInputElement) ||
+                  field.id !== 'assignment-create-point-value'
+                )
+                  return;
+                // Suppress the native bubble, which cannot focus a collapsed control.
+                event.preventDefault();
+                setPointsError(
+                  `Enter a whole number of points from ${minimumPointValue} to 1000.`
+                );
+                if (advancedOpen) field.focus();
+                else invalidPointsRef.current = field;
+                setAdvancedOpen(true);
+              }
+            : undefined
+        }
         onSubmit={(event: React.FormEvent<HTMLFormElement>) => {
           if (isSubmitDisabled) event.preventDefault();
         }}
