@@ -50,6 +50,12 @@ linked Google class sign-in and matching-email password proof with explicit
 provider linking or skipping. Google proof uses local signed provider mocks only.
 Real Google and hosted QA are unexecuted and remain separate work.
 
+Each browser case uses a distinct simulated client IP, stable for all requests in
+that case, and run-specific disposable email addresses. This keeps the expanded
+suite from exhausting a shared client's lookup budget or reusing a prior run's
+email counters. Production limiters remain enabled with their existing policy;
+wrong-proof, cooldown and expiry assertions still run through real handlers.
+
 ## Evidence
 
 The driver retains evidence at

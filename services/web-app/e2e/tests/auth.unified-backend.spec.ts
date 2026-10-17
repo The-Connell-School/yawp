@@ -3,6 +3,7 @@ import { createE2EPrismaClient } from '../prisma-client';
 import fs from 'node:fs';
 import path from 'node:path';
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'node:crypto';
 
 test.skip(
   process.env.SIGNON_LOCAL_TEST !== '1',
@@ -15,6 +16,14 @@ const flag = 'feature_flag.unified-sign-on';
 const evidence = process.env.SIGNON_EVIDENCE_DIR;
 const email = `${prefix}@example.test`;
 const capture = process.env.SIGNON_MAIL_CAPTURE_DIR!;
+test.beforeEach(async ({ context }) => {
+  // Separate journeys model separate clients. Keep one address throughout each
+  // case so proof failures, resend cooldowns and retries use the real limiters.
+  const groups = randomBytes(12).toString('hex').match(/.{4}/g)!;
+  await context.setExtraHTTPHeaders({
+    'x-forwarded-for': `2001:db8:${groups.join(':')}`,
+  });
+});
 async function shot(page: Page, name: string, width: number) {
   if (evidence) {
     fs.mkdirSync(evidence, { recursive: true });
@@ -92,7 +101,6 @@ test.afterAll(async () => {
   const users = await db.user.findMany({
     where: {
       OR: [
-        { email: { in: ['maya1280@yawp.local', 'maya390@yawp.local'] } },
         { email: { contains: prefix } },
         { memberships: { some: { organizationId: prefix } } },
       ],
@@ -921,7 +929,7 @@ for (const width of [1280, 390])
       update: { value: 'true' },
       create: { name: flag, value: 'true', valueType: 'boolean' },
     });
-    const address = `maya${width}@yawp.local`;
+    const address = `${prefix}-maya${width}@example.test`;
     // Email identity is retained only for the existing invitation path. New
     // class-code registrations use generated handles in auth.unified-classcode.
     await db.invitation.create({
