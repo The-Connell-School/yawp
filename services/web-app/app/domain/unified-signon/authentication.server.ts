@@ -32,7 +32,10 @@ import {
   acceptExistingInvitation,
   acceptStudentInvitation,
 } from './invitations.server';
-import { postAuthenticationDestination } from './policy.server';
+import {
+  postAuthenticationDestination,
+  seatScopedMemberships,
+} from './policy.server';
 import { selectedClass } from './classes.server';
 import {
   rememberClassConfirmation,
@@ -96,14 +99,17 @@ export async function finishAuthentication(
       await import('~/utils/preview-signon-qa.server');
     if (!(await hasPreviewSignonQaContext(request, userId, tx))) {
       const seat = await getPreviewAccessSeat(request);
-      memberships = memberships.filter(
+      const inSeat = memberships.some(
         (m) => m.organizationId === seat?.organizationId
       );
-      if (
-        !memberships.length &&
-        !(await previewSessionAllowedWithoutSeatMembership(userId))
-      )
+      const scoped = seatScopedMemberships(
+        memberships,
+        seat?.organizationId,
+        !inSeat && (await previewSessionAllowedWithoutSeatMembership(userId))
+      );
+      if (!scoped)
         throw new FlowError('Sign-in is unavailable for this account.', 403);
+      memberships = scoped;
     }
   }
   if (

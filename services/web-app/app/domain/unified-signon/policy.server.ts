@@ -51,3 +51,19 @@ export function codeDigest(context: Record<string, string>, code: string) {
     .update(code)
     .digest('hex');
 }
+
+/** Isolated preview seats normally scope sign-in to the seat organization.
+ * Accounts the seat guard admits without a seat membership (free trial and
+ * free classroom accounts) keep their own active memberships instead of an
+ * empty list. Returns null when the account may not sign in on this seat. */
+export function seatScopedMemberships<T extends { organizationId: string }>(
+  memberships: T[],
+  seatOrganizationId: string | undefined,
+  allowedWithoutSeatMembership: boolean
+): T[] | null {
+  const scoped = memberships.filter(
+    (m) => m.organizationId === seatOrganizationId
+  );
+  if (scoped.length) return scoped;
+  return allowedWithoutSeatMembership ? memberships : null;
+}

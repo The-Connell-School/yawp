@@ -1,3 +1,11 @@
+import { monthlyFreeTierPolicy } from '~/domain/free-tier/monthly-policy.server';
+import {
+  beginMonthlyOperation,
+  finishMonthlyOperation,
+  failMonthlyOperation,
+  monthlyOperationResponse,
+  type Reservation,
+} from '~/domain/free-tier/monthly-operations.server';
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
@@ -17,10 +25,7 @@ import {
   aiFreeTierBudgetExceededMessage,
   reserveAiRequest,
 } from '~/utils/ai-admission.server';
-import {
-  computeIpHash,
-  logDeniedUsage,
-} from '~/utils/ai-usage-log.server';
+import { computeIpHash, logDeniedUsage } from '~/utils/ai-usage-log.server';
 
 const REPORTER_FAILED =
   'The reporter could not put that together. Please try again.';
@@ -47,6 +52,7 @@ const POST = z
       .max(MAX_REPORTER_MESSAGE_CHARS)
       .optional(),
     conversationId: z.string().optional(),
+    requestId: z.string().min(1).max(128).optional(),
     growthPlanProposal: z.string().max(20_000).optional(),
   })
   .strict()
@@ -104,6 +110,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
+  const turn = data;
 
   const ctx = {
     membershipId: access.membership.id,
@@ -112,10 +119,10 @@ export async function action({ request }: ActionFunctionArgs) {
   };
 
   // Load an existing conversation (scoped to this teacher) or start a new one.
-  let conversation = data.conversationId
+  let conversation = turn.conversationId
     ? await prisma.reporterConversation.findFirst({
         where: {
-          id: data.conversationId,
+          id: turn.conversationId,
           membershipId: ctx.membershipId,
           deletedAt: null,
         },
@@ -131,15 +138,15 @@ export async function action({ request }: ActionFunctionArgs) {
       })
     : null;
 
-  if (data.conversationId && !conversation) {
+  if (turn.conversationId && !conversation) {
     return dataResponse({ error: 'Conversation not found.' }, { status: 404 });
   }
 
-  if (data.intent === 'confirm-growth-plan') {
+  if (turn.intent === 'confirm-growth-plan') {
     let proposal: z.infer<typeof growthPlanConfirmationSchema>;
     try {
       proposal = growthPlanConfirmationSchema.parse(
-        JSON.parse(data.growthPlanProposal ?? '')
+        JSON.parse(turn.growthPlanProposal ?? '')
       );
     } catch {
       return dataResponse(
@@ -165,165 +172,224 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   }
 
-  try {
-    await reserveAiRequest({
-      membershipId: ctx.membershipId,
+  const monthlyPolicy = await monthlyFreeTierPolicy(
+    access.membership.organization
+  );
+  let reservation: Reservation | null = null;
+  if (monthlyPolicy.enabled) {
+    if (!turn.requestId)
+      return dataResponse(
+        { error: 'Request ID is required.' },
+        { status: 400 }
+      );
+    const admitted = await beginMonthlyOperation({
       organizationId: ctx.organizationId,
+      membershipId: ctx.membershipId,
       feature: 'reporter',
-      policy: REPORTER_ADMISSION_POLICY,
+      cap: monthlyPolicy.limits.reporterMonthly,
+      requestId: turn.requestId,
+      input: { message: turn.message, conversationId: turn.conversationId },
     });
-  } catch (error) {
-    if (error instanceof AiFreeTierBudgetExceededError) {
+    if (admitted.kind !== 'reserved') return monthlyOperationResponse(admitted);
+    reservation = admitted;
+  }
+  try {
+    return await runReporterTurn();
+  } finally {
+    // CAS only releases an unfinished reservation; a committed outcome stays charged.
+    if (reservation) await failMonthlyOperation(reservation);
+  }
+  async function runReporterTurn() {
+    try {
+      await reserveAiRequest({
+        membershipId: ctx.membershipId,
+        organizationId: ctx.organizationId,
+        feature: 'reporter',
+        policy: REPORTER_ADMISSION_POLICY,
+      });
+    } catch (error) {
+      if (error instanceof AiFreeTierBudgetExceededError) {
+        return dataResponse(
+          {
+            error: 'free_tier_budget_exceeded',
+            message: aiFreeTierBudgetExceededMessage(),
+          },
+          { status: 402 }
+        );
+      }
+      if (!(error instanceof AiRateLimitError)) {
+        // A store failure is not an admission decision, so it is not logged as one.
+        return dataResponse({ error: REPORTER_FAILED }, { status: 503 });
+      }
+      void logDeniedUsage({
+        route: 'routes/api.domain.reporter',
+        feature: 'reporter',
+        membershipId: ctx.membershipId,
+        organizationId: ctx.organizationId,
+        requestId: crypto.randomUUID(),
+        units: 1,
+        decision: 'DENIED_USER',
+        ipHash: computeIpHash(request),
+      });
       return dataResponse(
         {
-          error: 'free_tier_budget_exceeded',
-          message: aiFreeTierBudgetExceededMessage(),
+          error:
+            'Too many reporter requests. Please wait a moment and try again.',
         },
-        { status: 402 }
+        {
+          status: 429,
+          headers: { 'Retry-After': String(error.retryAfterSeconds) },
+        }
       );
     }
-    if (!(error instanceof AiRateLimitError)) {
-      // A store failure is not an admission decision, so it is not logged as one.
-      return dataResponse({ error: REPORTER_FAILED }, { status: 503 });
-    }
-    void logDeniedUsage({
-      route: 'routes/api.domain.reporter',
-      feature: 'reporter',
-      membershipId: ctx.membershipId,
-      organizationId: ctx.organizationId,
-      requestId: crypto.randomUUID(),
-      units: 1,
-      decision: 'DENIED_USER',
-      ipHash: computeIpHash(request),
-    });
-    return dataResponse(
-      {
-        error:
-          'Too many reporter requests. Please wait a moment and try again.',
-      },
-      {
-        status: 429,
-        headers: { 'Retry-After': String(error.retryAfterSeconds) },
-      }
+
+    const priorMessages = boundedHistory(
+      [...(conversation?.messages ?? [])].reverse()
     );
-  }
+    const isNewConversation = !conversation;
 
-  const priorMessages = boundedHistory(
-    [...(conversation?.messages ?? [])].reverse()
-  );
-  const isNewConversation = !conversation;
-
-  const system = buildReporterSystemPromptBlocks({
-    teacherName: null,
-    organizationName: access.membership.organization.name,
-  });
-
-  const messages: { role: AgentType; content: string; name?: string }[] = [
-    ...priorMessages.map((message) => ({
-      role: message.role as AgentType,
-      content: message.content,
-    })),
-    { role: AgentType.User, content: data.message! },
-  ];
-
-  let reply: string;
-  try {
-    reply = await getLLMCompletion({
-      model: (process.env.AI_MODEL as any) ?? 'claude-sonnet-4-6',
-      system,
-      messages,
-      maxTokens: 1500,
-      maxToolRounds: 6,
-      tools: REPORTER_TOOLS,
-      handleToolCall: (name, input) => handleReporterToolCall(name, input, ctx),
-      allowFallbackProvider: false,
-      signal: AbortSignal.timeout(REPORTER_REQUEST_DEADLINE_MS),
-      logPayload: 'metadata-only',
-      metadata: {
-        feature: 'reporter',
-      },
-      attribution: {
-        organizationId: ctx.organizationId,
-        membershipId: ctx.membershipId,
-        route: 'routes/api.domain.reporter',
-        requestId: crypto.randomUUID(),
-        ipHash: computeIpHash(request),
-      },
+    const system = buildReporterSystemPromptBlocks({
+      teacherName: null,
+      organizationName: access.membership.organization.name,
     });
-  } catch (err) {
-    return dataResponse({ error: REPORTER_FAILED }, { status: 500 });
-  }
 
-  // Stamp explicit, strictly-increasing timestamps: both rows land in one
-  // nested create, so the DB default would give them the same createdAt and
-  // leave the question/answer order ambiguous on replay.
-  const askedAt = new Date();
-  const answeredAt = new Date(askedAt.getTime() + 1);
-  try {
-    conversation = await prisma.$transaction(async (transaction) => {
-      const persistedConversation =
-        conversation ??
-        (await transaction.reporterConversation.create({
-          data: {
-            membershipId: ctx.membershipId,
-            organizationId: ctx.organizationId,
-            title: deriveTitle(data.message!),
-          },
-          include: { messages: true },
-        }));
+    const messages: { role: AgentType; content: string; name?: string }[] = [
+      ...priorMessages.map((message) => ({
+        role: message.role as AgentType,
+        content: message.content,
+      })),
+      { role: AgentType.User, content: turn.message! },
+    ];
 
-      await transaction.reporterConversation.update({
-        where: { id: persistedConversation.id },
-        data: {
-          updatedAt: new Date(),
-          messages: {
-            create: [
-              {
-                role: AgentType.User,
-                content: data.message!,
-                createdAt: askedAt,
-              },
-              {
-                role: AgentType.Assistant,
-                content: reply,
-                createdAt: answeredAt,
-              },
-            ],
-          },
+    let reply: string;
+    try {
+      reply = await getLLMCompletion({
+        model: (process.env.AI_MODEL as any) ?? 'claude-sonnet-4-6',
+        system,
+        messages,
+        maxTokens: 1500,
+        maxToolRounds: 6,
+        tools: REPORTER_TOOLS,
+        handleToolCall: (name, input) =>
+          handleReporterToolCall(name, input, ctx),
+        allowFallbackProvider: false,
+        signal: AbortSignal.timeout(REPORTER_REQUEST_DEADLINE_MS),
+        logPayload: 'metadata-only',
+        metadata: {
+          feature: 'reporter',
+        },
+        attribution: {
+          organizationId: ctx.organizationId,
+          membershipId: ctx.membershipId,
+          route: 'routes/api.domain.reporter',
+          requestId: crypto.randomUUID(),
+          ipHash: computeIpHash(request),
         },
       });
-      return persistedConversation;
-    });
-  } catch {
-    return dataResponse({ error: REPORTER_FAILED }, { status: 500 });
-  }
+    } catch (err) {
+      return dataResponse({ error: REPORTER_FAILED }, { status: 500 });
+    }
 
-  return dataResponse({
-    conversationId: conversation.id,
-    reply,
-    isNewConversation,
-    growthPlanProposals: [...ctx.pendingGrowthPlanSaves.values()].map(
-      (plan) => ({
-        student: plan.studentMembershipId,
-        studentName: plan.studentName,
-        focus: plan.focus,
-        targetSkills: plan.targetSkills,
-        body: plan.body,
-        ...(plan.checkInAt
-          ? {
-              checkInInDays: Math.max(
-                1,
-                Math.min(
-                  180,
-                  Math.ceil(
-                    (plan.checkInAt.getTime() - Date.now()) /
-                      (24 * 60 * 60 * 1_000)
+    // Stamp explicit, strictly-increasing timestamps: both rows land in one
+    // nested create, so the DB default would give them the same createdAt and
+    // leave the question/answer order ambiguous on replay.
+    const askedAt = new Date();
+    const answeredAt = new Date(askedAt.getTime() + 1);
+    try {
+      conversation = await prisma.$transaction(async (transaction) => {
+        const persistedConversation =
+          conversation ??
+          (await transaction.reporterConversation.create({
+            data: {
+              membershipId: ctx.membershipId,
+              organizationId: ctx.organizationId,
+              title: deriveTitle(turn.message!),
+            },
+            include: { messages: true },
+          }));
+
+        await transaction.reporterConversation.update({
+          where: { id: persistedConversation.id },
+          data: {
+            updatedAt: new Date(),
+            messages: {
+              create: [
+                {
+                  role: AgentType.User,
+                  content: turn.message!,
+                  createdAt: askedAt,
+                },
+                {
+                  role: AgentType.Assistant,
+                  content: reply,
+                  createdAt: answeredAt,
+                },
+              ],
+            },
+          },
+        });
+        const payload = {
+          conversationId: persistedConversation.id,
+          reply,
+          isNewConversation,
+          growthPlanProposals: [...ctx.pendingGrowthPlanSaves.values()].map(
+            (plan) => ({
+              student: plan.studentMembershipId,
+              studentName: plan.studentName,
+              focus: plan.focus,
+              targetSkills: plan.targetSkills,
+              body: plan.body,
+              ...(plan.checkInAt
+                ? {
+                    checkInInDays: Math.max(
+                      1,
+                      Math.min(
+                        180,
+                        Math.ceil(
+                          (plan.checkInAt.getTime() - Date.now()) / 86400000
+                        )
+                      )
+                    ),
+                  }
+                : {}),
+            })
+          ),
+        };
+        if (reservation)
+          await finishMonthlyOperation(transaction, reservation, payload);
+        return persistedConversation;
+      });
+    } catch {
+      return dataResponse({ error: REPORTER_FAILED }, { status: 500 });
+    }
+
+    return dataResponse({
+      conversationId: conversation.id,
+      reply,
+      isNewConversation,
+      growthPlanProposals: [...ctx.pendingGrowthPlanSaves.values()].map(
+        (plan) => ({
+          student: plan.studentMembershipId,
+          studentName: plan.studentName,
+          focus: plan.focus,
+          targetSkills: plan.targetSkills,
+          body: plan.body,
+          ...(plan.checkInAt
+            ? {
+                checkInInDays: Math.max(
+                  1,
+                  Math.min(
+                    180,
+                    Math.ceil(
+                      (plan.checkInAt.getTime() - Date.now()) /
+                        (24 * 60 * 60 * 1_000)
+                    )
                   )
-                )
-              ),
-            }
-          : {}),
-      })
-    ),
-  });
+                ),
+              }
+            : {}),
+        })
+      ),
+    });
+  }
 }

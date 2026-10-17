@@ -939,6 +939,7 @@ export default function AssignmentDetailRoute() {
                       variant="ghost"
                       onClick={() => setIsDuplicateSheetOpen(true)}
                       disabled={Boolean(
+                        !freeUsage?.monthly &&
                         freeUsage?.assignments.find(
                           (row) => row.kind === assignment.assignmentType.kind
                         )?.remaining === 0
@@ -947,13 +948,14 @@ export default function AssignmentDetailRoute() {
                       <Copy className="mr-2 h-4 w-4" />
                       Duplicate
                     </Button>
-                    {freeUsage?.assignments.find(
-                      (row) => row.kind === assignment.assignmentType.kind
-                    )?.remaining === 0 && (
-                      <span className="text-xs text-amber-800">
-                        No {assignment.assignmentType.title} left
-                      </span>
-                    )}
+                    {!freeUsage?.monthly &&
+                      freeUsage?.assignments.find(
+                        (row) => row.kind === assignment.assignmentType.kind
+                      )?.remaining === 0 && (
+                        <span className="text-xs text-amber-800">
+                          No {assignment.assignmentType.title} left
+                        </span>
+                      )}
                     <Button
                       type="button"
                       variant="outline"
