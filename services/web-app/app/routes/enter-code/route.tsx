@@ -48,15 +48,18 @@ function requireStudentMembership(membership: { role: string }) {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
-  const prompt = await signedInTeacherPromptEntry(
-    request,
-    userId,
-    'class-code'
-  );
-  if (prompt) return prompt;
+  const url = new URL(request.url);
+  // Existing tabs and dashboard forms can already be midway through enrollment.
+  if (!url.searchParams.has('code') && url.searchParams.get('modal') !== '1') {
+    const prompt = await signedInTeacherPromptEntry(
+      request,
+      userId,
+      'class-code'
+    );
+    if (prompt) return prompt;
+  }
   const membership = await requireMembership(request, userId);
   requireStudentMembership(membership);
-  const url = new URL(request.url);
   const code = url.searchParams.get('code');
 
   if (!code) {

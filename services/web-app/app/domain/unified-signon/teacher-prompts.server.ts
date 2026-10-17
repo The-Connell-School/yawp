@@ -3,7 +3,6 @@ import { prisma } from '~/utils/db.server';
 import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { SIGNON_TEACHER_PROMPTS_FLAG } from '~/domain/feature-flags/feature-flags';
 import { teacherPromptAccount } from './teacher-prompts';
-import { createFlow, flowCookie, saveNewFlow, stateFor } from './flow.server';
 
 export async function loadTeacherPromptAccount(userId: string) {
   if (!(await isFeatureFlagEnabled(SIGNON_TEACHER_PROMPTS_FLAG)))
@@ -35,6 +34,8 @@ export async function signedInTeacherPromptEntry(
     (await prisma.orgMembership.count({ where: { userId, isActive: true } }))
   )
     return null;
+  const { createFlow, flowCookie, saveNewFlow, stateFor } =
+    await import('./flow.server');
   const flow = await createFlow(request, '/app');
   flow.data.userId = userId;
   flow.data.identifier = account.identifier;
