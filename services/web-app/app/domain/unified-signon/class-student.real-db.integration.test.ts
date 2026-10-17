@@ -162,8 +162,9 @@ suite(
           password,
           classId: id + '-b',
         })
-      ).response.status
-    ).toBe(302);
+      ).data.state.screen
+    ).toBe('joined');
+    expect((await post('complete-student')).response.status).toBe(302);
     const other = browser();
     await other('resolve', { identifier: id + '-b' });
     await other('student-choice', { choice: 'returning' });
@@ -181,8 +182,9 @@ suite(
           username: 'BrianConnell',
           password: 'other-password',
         })
-      ).response.status
-    ).toBe(302);
+      ).data.state.screen
+    ).toBe('joined');
+    expect((await other('complete-student')).response.status).toBe(302);
     const selected = await prisma.classStudentHandle.findUniqueOrThrow({
       where: {
         classId_handleKey: { classId: id + '-b', handleKey: 'brianconnell' },
@@ -407,8 +409,9 @@ suite(
     await post('student-choice', { choice: 'returning' });
     expect(
       (await post('student-password', { username: user.username!, password }))
-        .response.status
-    ).toBe(302);
+        .data.state.screen
+    ).toBe('joined');
+    expect((await post('complete-student')).response.status).toBe(302);
     const failed = browser();
     await failed('resolve', { identifier: id });
     await failed('student-choice', { choice: 'returning' });
@@ -513,8 +516,9 @@ suite(
             username: 'BrianConnell1',
             password,
           })
-        ).response.status
-      ).toBe(302);
+        ).data.state.screen
+      ).toBe('joined');
+      expect((await post('complete-student')).response.status).toBe(302);
     } finally {
       await prisma.invitation.deleteMany({ where: { studentClassId: id } });
       await prisma.organization.update({

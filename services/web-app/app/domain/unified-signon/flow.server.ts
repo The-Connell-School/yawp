@@ -52,6 +52,16 @@ export type FlowData = {
   /** Server-selected school-email signup; does not supply identity proof. */
   studentEmailSignup?: boolean;
   studentGoogle?: { subject: string };
+  /** Created only after authoritative enrollment. Presentation is never proof. */
+  classConfirmation?: {
+    classId: string;
+    classCode: string;
+    membershipId: string;
+    already: boolean;
+    generatedHandle?: string;
+    issueSessionOnContinue?: boolean;
+    selectedMembershipId?: string;
+  };
   completed?: boolean;
 };
 export type Flow = {
