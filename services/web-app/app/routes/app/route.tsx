@@ -393,7 +393,7 @@ export default function Route() {
                           icon: (
                             <>
                               <Microscope size={18} />
-                              <Lock size={12} />
+                              {!freeAccountUsage.monthly && <Lock size={12} />}
                             </>
                           ),
                         },

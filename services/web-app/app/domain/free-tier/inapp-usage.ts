@@ -6,6 +6,7 @@ export const FREE_ASSIGNMENT_LABELS: Record<string, string> = {
   thesis_statement: 'Thesis Statement',
 };
 export function buildFreeAccountUsage(input: {
+  monthly?: boolean;
   seatCap: number;
   lessonPlanCap: number;
   assignmentCaps: Record<string, number>;
@@ -28,8 +29,10 @@ export function buildFreeAccountUsage(input: {
     })
   );
   const lessonPlans = count(input.lessonPlans, input.lessonPlanCap);
-  const allAssignmentsUsed = assignments.every((a) => a.remaining === 0);
-  const exhausted = assignments.find((a) => a.remaining === 0);
+  const allAssignmentsUsed =
+    !input.monthly && assignments.every((a) => a.remaining === 0);
+  const exhausted =
+    !input.monthly && assignments.find((a) => a.remaining === 0);
   return {
     students,
     assignments,
@@ -48,6 +51,9 @@ export function buildFreeAccountUsage(input: {
   };
 }
 export type FreeAccountUsage = ReturnType<typeof buildFreeAccountUsage> & {
+  monthly?: boolean;
+  reporter?: UsageCount;
+  classCode?: string | null;
   classId: string | null;
   checklist: {
     classReady: boolean;

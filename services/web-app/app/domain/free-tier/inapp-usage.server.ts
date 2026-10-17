@@ -1,3 +1,5 @@
+import { monthlyFreeTierPolicy } from './monthly-policy.server';
+import { readMonthlyUsage } from './monthly-operations.server';
 import {
   isFreeTierInappV2Enabled,
   type FreeTierInappProfile,
@@ -19,7 +21,19 @@ export async function readFreeAccountUsage(
   profile: FreeTierInappProfile & { id: string },
   freeTierRouteOpen: boolean
 ): Promise<FreeAccountUsage | null> {
-  if (!(await isFreeTierInappV2Enabled(profile, freeTierRouteOpen)))
+  if (
+    !freeTierRouteOpen ||
+    profile.role !== 'TEACHER' ||
+    profile.organization.plan !== 'FREE_CLASSROOM'
+  )
+    return null;
+  const policy = await monthlyFreeTierPolicy(
+    profile.organization as Parameters<typeof monthlyFreeTierPolicy>[0]
+  );
+  if (
+    !policy.enabled &&
+    !(await isFreeTierInappV2Enabled(profile, freeTierRouteOpen))
+  )
     return null;
   const organizationId = profile.organization.id;
   const membershipId = profile.id;
@@ -71,8 +85,12 @@ export async function readFreeAccountUsage(
       : 0,
     readGradingLimitStatus(membershipId),
   ]);
+  const reporter = policy.enabled
+    ? await readMonthlyUsage(organizationId, 'reporter')
+    : 0;
   return {
     ...buildFreeAccountUsage({
+      monthly: policy.enabled,
       seatCap: entitlements.studentSeatCap!,
       lessonPlanCap: entitlements.features.lessonPlanQuota!,
       assignmentCaps: FREE_CLASSROOM_ASSIGNMENT_QUOTAS,
@@ -81,6 +99,17 @@ export async function readFreeAccountUsage(
       lessonPlans,
       assignmentCounts: Object.fromEntries(assignmentCounts),
     }),
+    monthly: policy.enabled,
+    ...(policy.enabled
+      ? {
+          reporter: {
+            used: reporter,
+            total: limits.reporterMonthly,
+            remaining: Math.max(0, limits.reporterMonthly - reporter),
+          },
+        }
+      : {}),
+    classCode: klass?.code ?? null,
     classId: klass?.id ?? null,
     checklist: {
       classReady: Boolean(klass?.code),

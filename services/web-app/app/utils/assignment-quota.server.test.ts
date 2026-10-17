@@ -1,5 +1,5 @@
 import type { Prisma } from '@app/prisma';
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test, mock } from 'bun:test';
 import {
   buildAssignmentCreationQuotaFields,
   enforceFreeClassroomAssignmentCreateInTransaction,
@@ -7,6 +7,10 @@ import {
   freeClassroomQuotaMessage,
   isFreeClassroomAssignmentKind,
 } from './assignment-quota.server';
+
+mock.module('~/domain/free-tier/monthly-policy.server', () => ({
+  monthlyFreeTierPolicy: async () => ({ enabled: false }),
+}));
 
 describe('assignment-quota helpers', () => {
   test('marks out-of-bundle free choices unavailable while preserving paid behavior', () => {

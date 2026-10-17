@@ -1,3 +1,4 @@
+import { monthlyFreeTierPolicy } from '~/domain/free-tier/monthly-policy.server';
 /**
  * Access gate for the Yawp Reporter.
  *
@@ -30,7 +31,10 @@ export async function getReporterAccess(
   const isTeacher = membership.role === 'TEACHER';
   // Reporter is allowed for all plans except FREE_CLASSROOM (§5.1).
   const entitlements = getEntitlements(membership.organization);
-  const enabled = entitlements.features.reporter;
+  const enabled =
+    entitlements.features.reporter ||
+    (isTeacher &&
+      (await monthlyFreeTierPolicy(membership.organization)).enabled);
 
   return {
     userId,

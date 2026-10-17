@@ -524,7 +524,7 @@ export function AssignmentCreationSheet({
                   key={row.kind}
                   disabled={
                     !type ||
-                    row.remaining === 0 ||
+                    (!usage.monthly && row.remaining === 0) ||
                     Boolean(type.unavailableReason)
                   }
                   onClick={() => setPickedTypeId(type?.id)}
@@ -544,18 +544,22 @@ export function AssignmentCreationSheet({
                         row.remaining === 0 && 'text-amber-800'
                       )}
                     >
-                      {row.remaining
-                        ? `${row.remaining} of ${row.total} left`
-                        : 'None left'}
+                      {usage.monthly
+                        ? 'Unlimited assignments'
+                        : row.remaining
+                          ? `${row.remaining} of ${row.total} left`
+                          : 'None left'}
                     </span>
                   </span>
-                  {row.remaining === 0 && <Lock size={14} />}
+                  {!usage.monthly && row.remaining === 0 && <Lock size={14} />}
                 </button>
               );
             })}
           </div>
           <p className="mt-5 text-xs text-muted-foreground">
-            Deleting an assignment doesn't give it back.
+            {usage.monthly
+              ? 'Unlimited Class Starter, pre-writing, and thesis assignments.'
+              : "Deleting an assignment doesn't give it back."}
           </p>
         </SheetContent>
       </Sheet>

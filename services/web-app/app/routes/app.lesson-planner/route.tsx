@@ -561,6 +561,7 @@ export default function LessonPlannerRoute() {
       intent: 'chat',
       message,
       stream: '1',
+      requestId: crypto.randomUUID(),
       ...(conversationId ? { conversationId } : {}),
       ...(!conversationId && seed
         ? { originClassAssignmentId: seed.classAssignmentId }
@@ -960,12 +961,18 @@ function LessonPlannerEmptyState({
             {exhausted ? (
               <>
                 <p>
-                  You have used all {freeUsage.lessonPlans.total} lesson plans.
-                  Delete one to plan another.
+                  You have used all {freeUsage.lessonPlans.total} lesson plans
+                  {freeUsage.monthly
+                    ? ' this month. Come back next month to plan another.'
+                    : '. Delete one to plan another.'}
                 </p>
                 <Link
                   className="mt-2 inline-block text-primary underline"
-                  to="/app/free-tier/status"
+                  to={
+                    freeUsage.monthly
+                      ? 'mailto:hello@yawp.school?subject=More%20access%20to%20YAWP'
+                      : '/app/free-tier/status'
+                  }
                 >
                   Need more? Talk to us
                 </Link>
