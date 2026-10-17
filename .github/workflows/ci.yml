@@ -825,6 +825,9 @@ jobs:
     needs: [typecheck-web-app, validate-prisma-migrations, paths]
     name: 🧪 E2E Tests (Playwright)
     runs-on: ubuntu-22.04
+    env:
+      # Fixture steps isolate XDG_CACHE_HOME; keep browser install and lookup shared.
+      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/playwright-browsers
     # The browser download hung for five hours on 2026-08-18 and would have run
     # to GitHub's six-hour default before failing. Nothing about this job is
     # worth half a day of a runner: the tests themselves take about seven
@@ -885,7 +888,7 @@ jobs:
         if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         uses: actions/cache@v4
         with:
-          path: ~/.cache/ms-playwright
+          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
           key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
 
       # Chromium only. On a browser cache hit, install the binary only — apt deps
@@ -914,6 +917,28 @@ jobs:
           RESEND_FROM_EMAIL: ''
           TRIAL_STATUS_SHOTS: test-results/trial-status
         run: bun run test:e2e:smoke
+
+      - name: Verify demo feedback headless browser executable
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
+        working-directory: services/web-app
+        env:
+          TMPDIR: ${{ runner.temp }}/demo-feedback
+          BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/demo-feedback/bun-cache
+          XDG_CACHE_HOME: ${{ runner.temp }}/demo-feedback/cache
+        run: |
+          mkdir -p "$TMPDIR"
+          version=$(node -p "require('@playwright/test/package.json').version")
+          actual_version=$(bun x playwright --version)
+          if [ "$actual_version" != "Version $version" ]; then
+            echo "::error::Fixture runner $actual_version does not match installed Playwright $version"
+            exit 1
+          fi
+          shell_dir=$(bun x playwright install --dry-run --only-shell chromium | sed -n 's/^ *Install location: *\(.*chromium_headless_shell[^ ]*\) *$/\1/p')
+          executable="$shell_dir/chrome-headless-shell-linux64/chrome-headless-shell"
+          if [ -z "$shell_dir" ] || [ ! -x "$executable" ]; then
+            echo "::error::Missing Playwright $version chrome-headless-shell executable: $executable (PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH)"
+            exit 1
+          fi
 
       - name: Demo feedback local fixture browser regression
         if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
