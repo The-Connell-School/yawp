@@ -200,7 +200,7 @@ export default function TeacherTrainingRoute() {
                   <div className="flex items-center gap-2">
                     <Play className="h-4 w-4 min-w-fit opacity-50" />
                     <span className="min-w-fit font-medium">
-                      {totalModules} modules
+                      {totalModules} {totalModules === 1 ? 'module' : 'modules'}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
