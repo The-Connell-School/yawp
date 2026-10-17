@@ -8,7 +8,13 @@ const readThesisEssayMaterial = mock();
 
 mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
 mock.module('~/domain/feature-flags/feature-flags.server', () => ({ isFeatureFlagEnabled }));
+// Every export: bun shares module mocks across the files of one run.
 mock.module('~/domain/thesis-essay-decks/thesis-essay-decks.server', () => ({
+  listAvailableThesisEssayDecks: mock(() => []),
+  listAvailableThesisEssayMaterialSlugs: mock(() => new Set()),
+  listPresentableThesisEssayDeckSlugs: mock(() => new Set()),
+  readThesisEssayDeckScene: mock(),
+  readThesisEssayDeckAsset: mock(),
   readThesisEssayMaterial,
 }));
 

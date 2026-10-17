@@ -187,3 +187,44 @@ export function deckHref(deck: ThesisEssayDeck): string {
 export function deckLabel(deck: ThesisEssayDeck): string {
   return `Lesson ${deck.lesson} · ${deck.title}`;
 }
+
+// ---------------------------------------------------------------------------
+// The three ways to use a deck: present it on YAWP!, copy it into Google
+// Slides, or download it for PowerPoint (`deckHref`).
+
+/** Where a teacher presents a deck on YAWP!, exactly as designed. */
+export function presentHref(deck: ThesisEssayDeck): string {
+  return `/present/thesis-essay/${deck.slug}`;
+}
+
+/**
+ * Each deck's master copy in Google Slides, by slug: checked by hand in
+ * Google Slides and shared "anyone with the link can view". A deck without
+ * one offers no Google Slides button.
+ */
+export const GOOGLE_SLIDES_COPY_IDS: Readonly<Record<string, string>> = {};
+
+/** Google's "Make a copy" page for a deck's master copy, or null when there is none. */
+export function googleSlidesCopyHref(
+  deck: ThesisEssayDeck,
+  ids: Readonly<Record<string, string>> = GOOGLE_SLIDES_COPY_IDS
+): string | null {
+  const id = Object.hasOwn(ids, deck.slug) ? ids[deck.slug] : '';
+  return /^[A-Za-z0-9_-]+$/.test(id) ? `https://docs.google.com/presentation/d/${id}/copy` : null;
+}
+
+const ASSET_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg' };
+
+/** An image or icon the presenter draws: `name.png`, or `icons/name.png`. Nothing else. */
+export function isDeckAssetName(name: string): boolean {
+  return /^(icons\/)?[a-z0-9-]+\.(png|jpe?g)$/.test(name);
+}
+
+export function deckAssetContentType(name: string): string {
+  return ASSET_TYPES[name.split('.').pop() ?? ''] ?? 'application/octet-stream';
+}
+
+/** Where the presenter loads a deck image from. */
+export function deckAssetHref(name: string): string {
+  return `/api/thesis-essay-deck-asset/${name}`;
+}

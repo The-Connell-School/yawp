@@ -49,13 +49,19 @@ import {
   DAY_ONE_DECK,
   deckForModuleTitle,
   deckLabel,
+  googleSlidesCopyHref,
   materialHref,
   materialsForDeck,
+  presentHref,
   type ThesisEssayDeck,
   type ThesisEssayMaterial,
 } from '~/domain/thesis-essay-decks/thesis-essay-decks';
-import { listAvailableThesisEssayMaterialSlugs } from '~/domain/thesis-essay-decks/thesis-essay-decks.server';
+import {
+  listAvailableThesisEssayMaterialSlugs,
+  listPresentableThesisEssayDeckSlugs,
+} from '~/domain/thesis-essay-decks/thesis-essay-decks.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { cn } from '~/utils/misc';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { AboutDailyPages } from './about-daily-pages/about-daily-pages';
@@ -572,7 +578,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     profile.role === 'TEACHER' &&
     isThesisEssay &&
     (await isFeatureFlagEnabled(THESIS_ESSAY_DECKS_FLAG, profile.organization.id))
-      ? buildThesisDecks(assignmentType.assignmentModules)
+      ? buildThesisDecks(assignmentType.assignmentModules, `/app/assignment-types/${assignmentType.id}`)
       : null;
   const enabledTeacherClassIds =
     profile.role === 'TEACHER'
@@ -732,27 +738,46 @@ export async function action({ request, params }: ActionFunctionArgs) {
   );
 }
 
-type ThesisDeckLink = { kind: ThesisEssayMaterial['kind']; label: string; href: string };
+type ThesisDeckLink = {
+  kind: ThesisEssayMaterial['kind'] | 'present' | 'google-slides';
+  label: string;
+  href: string;
+};
 
 /**
- * The deck, lesson plan (and, on Day 1, student handout) links for the
- * Thesis-Driven Essay's Modules, by module id. Only files that are there are
- * offered. Null when none are, so the page keeps its usual wording.
+ * The Thesis-Driven Essay's Modules links, by module id: each lesson's three
+ * ways to use its deck (present it on YAWP!, copy it into Google Slides,
+ * download it for PowerPoint), its lesson plan, and on Day 1 the student
+ * handouts. Only what is there is offered. Null when nothing is, so the page
+ * keeps its usual wording.
  */
-function buildThesisDecks(modules: Array<{ id: string; title: string }>): {
+function buildThesisDecks(
+  modules: Array<{ id: string; title: string }>,
+  returnTo: string
+): {
   dayOne: ThesisDeckLink[];
   byModuleId: Record<string, ThesisDeckLink[]>;
 } | null {
   const available = listAvailableThesisEssayMaterialSlugs();
   if (available.size === 0) return null;
-  const links = (deck: ThesisEssayDeck): ThesisDeckLink[] =>
-    materialsForDeck(deck)
-      .filter((material) => available.has(material.slug))
-      .map((material) => ({
-        kind: material.kind,
-        label: material.label ?? deckLabel(deck),
-        href: materialHref(material),
-      }));
+  const presentable = listPresentableThesisEssayDeckSlugs();
+  const links = (deck: ThesisEssayDeck): ThesisDeckLink[] => {
+    const label = deckLabel(deck);
+    const google = googleSlidesCopyHref(deck);
+    return [
+      ...(presentable.has(deck.slug)
+        ? [{ kind: 'present' as const, label, href: `${presentHref(deck)}?from=${encodeURIComponent(returnTo)}` }]
+        : []),
+      ...(google ? [{ kind: 'google-slides' as const, label, href: google }] : []),
+      ...materialsForDeck(deck)
+        .filter((material) => available.has(material.slug))
+        .map((material) => ({
+          kind: material.kind,
+          label: material.label ?? label,
+          href: materialHref(material),
+        })),
+    ];
+  };
   const byModuleId: Record<string, ThesisDeckLink[]> = {};
   for (const module of modules) {
     const deck = deckForModuleTitle(module.title);
@@ -780,26 +805,43 @@ export function showModulesAccordion(
 }
 
 const THESIS_LINK_TEXT: Record<ThesisDeckLink['kind'], { prefix: string; type: string }> = {
-  deck: { prefix: 'Slide deck', type: '.pptx' },
+  present: { prefix: 'Present', type: 'on YAWP!' },
+  'google-slides': { prefix: 'Google Slides', type: 'make a copy' },
+  deck: { prefix: 'PowerPoint', type: '.pptx' },
   'lesson-plan': { prefix: 'Lesson plan', type: '.pdf' },
   handout: { prefix: 'Handout', type: '.pdf' },
 };
 
-/** A lesson's deck, lesson plan or handout, as download links styled like small buttons. */
+/**
+ * A lesson's deck, three ways (present it here, copy it into Google Slides,
+ * download it for PowerPoint), then its lesson plan and handouts, as links
+ * styled like small buttons. Presenting is the loudest: it always looks
+ * exactly as designed.
+ */
 function ThesisDeckDownloads({ links }: { links: ThesisDeckLink[] }) {
   return (
     <div className="flex flex-wrap gap-2">
       {links.map((link) => {
         const text = THESIS_LINK_TEXT[link.kind];
+        const isPresent = link.kind === 'present';
+        const isDownload = link.kind !== 'present' && link.kind !== 'google-slides';
         return (
           <a
             key={link.href}
             href={link.href}
-            download
-            className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-accent"
+            {...(isDownload ? { download: true } : {})}
+            {...(link.kind === 'google-slides' ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium',
+              isPresent
+                ? 'bg-primary text-primary-foreground hover:opacity-90'
+                : 'border bg-background text-foreground hover:bg-accent'
+            )}
           >
             {link.kind === 'handout' ? link.label : `${text.prefix}: ${link.label}`}
-            <span className="text-xs text-muted-foreground">({text.type})</span>
+            <span className={cn('text-xs', isPresent ? 'opacity-80' : 'text-muted-foreground')}>
+              ({text.type})
+            </span>
           </a>
         );
       })}
@@ -1097,8 +1139,9 @@ export default function AppAssignmentTypesIdRoute() {
                   <p className="mb-3 text-sm text-muted-foreground">
                     Click on the modules to see the overview of the writing
                     process that you&rsquo;ll teach your students. Each module
-                    has its slide deck and lesson plan to download and teach
-                    from. Training videos are in the Teachers&rsquo; Lounge.
+                    has its slide deck, to present here or to edit in Google
+                    Slides or PowerPoint, and its lesson plan. Training videos
+                    are in the Teachers&rsquo; Lounge.
                   </p>
                 ) : showThesisLibrary ? (
                   <p className="mb-3 text-sm text-muted-foreground">

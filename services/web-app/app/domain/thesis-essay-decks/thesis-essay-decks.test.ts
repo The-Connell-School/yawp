@@ -7,10 +7,14 @@ import {
   THESIS_ESSAY_MATERIALS,
   deckBySlug,
   deckForModuleTitle,
+  deckAssetContentType,
   deckHref,
+  googleSlidesCopyHref,
+  isDeckAssetName,
   materialBySlug,
   materialHref,
   materialsForDeck,
+  presentHref,
 } from './thesis-essay-decks';
 
 describe('THESIS_ESSAY_DECKS', () => {
@@ -123,5 +127,39 @@ describe('THESIS_ESSAY_MATERIALS', () => {
     expect(materialBySlug('lesson-2-pre-writing')?.kind).toBe('deck');
     expect(materialBySlug('../student-sign-up')).toBeNull();
     expect(materialBySlug('constructor')).toBeNull();
+  });
+});
+
+describe('the three ways to use a deck', () => {
+  const thesis = THESIS_ESSAY_DECKS[2];
+
+  test('presents on YAWP! at its own address', () => {
+    expect(presentHref(thesis)).toBe('/present/thesis-essay/lesson-3-thesis-statement');
+  });
+
+  test('copies to Google Slides from the deck’s master copy, once there is one', () => {
+    const ids = { 'lesson-3-thesis-statement': '1AbC_d-9' };
+    expect(googleSlidesCopyHref(thesis, ids)).toBe('https://docs.google.com/presentation/d/1AbC_d-9/copy');
+    expect(googleSlidesCopyHref(THESIS_ESSAY_DECKS[1], ids)).toBeNull();
+  });
+
+  test('ignores a master copy id that is not a Drive id', () => {
+    expect(googleSlidesCopyHref(thesis, { 'lesson-3-thesis-statement': 'x/../y' })).toBeNull();
+    expect(googleSlidesCopyHref(thesis, { 'lesson-3-thesis-statement': '' })).toBeNull();
+  });
+});
+
+describe('deck assets', () => {
+  test('accepts the images and icons the presenter draws', () => {
+    expect(isDeckAssetName('fallen-man.jpg')).toBe(true);
+    expect(isDeckAssetName('icons/eye.png')).toBe(true);
+    expect(deckAssetContentType('fallen-man.jpg')).toBe('image/jpeg');
+    expect(deckAssetContentType('icons/eye.png')).toBe('image/png');
+  });
+
+  test('refuses anything that could reach outside the asset folder', () => {
+    for (const name of ['../secret.png', 'icons/../../x.png', '/etc/passwd', 'a/b/c.png', 'icons/eye.svg', 'x.png.exe', '']) {
+      expect(isDeckAssetName(name)).toBe(false);
+    }
   });
 });

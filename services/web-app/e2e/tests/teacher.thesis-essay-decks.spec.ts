@@ -48,7 +48,7 @@ test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
     await page.getByRole('button', { name: 'Modules' }).click();
     await page.getByRole('button', { name: 'Pre-writing' }).click();
     await expect(page.getByText('Find a specific focus for your essay.')).toBeVisible();
-    await expect(page.getByRole('link', { name: /slide deck/i })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /powerpoint:|present:/i })).toHaveCount(0);
     await expect(page.getByRole('link', { name: /lesson plan:/i })).toHaveCount(0);
     // The Teachers' Lounge pointer is unchanged.
     await expect(page.getByText(/lesson materials are available in the teachers/i)).toBeVisible();
@@ -57,6 +57,10 @@ test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
     expect(response.status()).toBe(404);
     const plan = await page.request.get('/api/thesis-essay-deck/lesson-2-pre-writing-lesson-plan');
     expect(plan.status()).toBe(404);
+    await page.goto('/present/thesis-essay/lesson-2-pre-writing');
+    await expect(page.getByTestId('slide-stage')).toHaveCount(0);
+    const image = await page.request.get('/api/thesis-essay-deck-asset/fallen-man.jpg');
+    expect(image.status()).toBe(404);
   });
 
   test('puts each step’s deck and lesson plan in its module, and they download', async ({
@@ -69,12 +73,15 @@ test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
     await page.goto(`/app/assignment-types/${e2eContext.thesisEssayAssignmentTypeId}`);
 
     await page.getByRole('button', { name: 'Modules' }).click();
-    await expect(page.getByText(/each module has its slide deck and lesson plan/i)).toBeVisible();
+    await expect(page.getByText(/each module has its slide deck, to present here/i)).toBeVisible();
     // Day 1 has no step of its own, so its materials sit above the list.
     await expect(page.getByText(/introduce YAWP! on Day 1/i)).toBeVisible();
     await expect(
-      page.getByRole('link', { name: /slide deck: lesson 1 · introduce students to yawp!/i })
+      page.getByRole('link', { name: /powerpoint: lesson 1 · introduce students to yawp!/i })
     ).toHaveAttribute('href', '/api/thesis-essay-deck/lesson-1-day-1');
+    await expect(
+      page.getByRole('link', { name: /present: lesson 1 · introduce students to yawp!/i })
+    ).toHaveAttribute('href', /^\/present\/thesis-essay\/lesson-1-day-1\?from=/);
     await expect(
       page.getByRole('link', { name: /lesson plan: lesson 1 · introduce students to yawp!/i })
     ).toHaveAttribute('href', '/api/thesis-essay-deck/lesson-1-day-1-lesson-plan');
@@ -88,7 +95,7 @@ test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
     );
 
     await page.getByRole('button', { name: 'Pre-writing' }).click();
-    const preWriting = page.getByRole('link', { name: /slide deck: lesson 2 · pre-writing/i });
+    const preWriting = page.getByRole('link', { name: /powerpoint: lesson 2 · pre-writing/i });
     await expect(preWriting).toBeVisible();
     await expect(preWriting).toHaveAttribute('href', '/api/thesis-essay-deck/lesson-2-pre-writing');
     await expect(
@@ -97,13 +104,14 @@ test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
 
     await page.getByRole('button', { name: 'Thesis Statement' }).click();
     await expect(
-      page.getByRole('link', { name: /slide deck: lesson 3 · thesis statement/i })
+      page.getByRole('link', { name: /powerpoint: lesson 3 · thesis statement/i })
     ).toHaveAttribute('href', '/api/thesis-essay-deck/lesson-3-thesis-statement');
 
     // The placeholder module matches no lesson, so it gets no deck: Day 1
     // plus the two steps.
     await page.getByRole('button', { name: 'The Thesis-Driven Essay' }).click();
-    await expect(page.getByRole('link', { name: /slide deck/i })).toHaveCount(3);
+    await expect(page.getByRole('link', { name: /powerpoint:/i })).toHaveCount(3);
+    await expect(page.getByRole('link', { name: /present:/i })).toHaveCount(3);
     await expect(page.getByRole('link', { name: /lesson plan:/i })).toHaveCount(3);
 
     const response = await page.request.get('/api/thesis-essay-deck/lesson-2-pre-writing');
@@ -122,12 +130,49 @@ test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
     expect((await plan.body()).subarray(0, 5).toString()).toBe('%PDF-');
   });
 
+  test('presents a deck on YAWP!, slide by slide with notes, and closes back to the page', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setThesisEssayDecksFlag(true);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    const typePage = `/app/assignment-types/${e2eContext.thesisEssayAssignmentTypeId}`;
+    await page.goto(typePage);
+    await page.getByRole('button', { name: 'Modules' }).click();
+    await page.getByRole('button', { name: 'Pre-writing' }).click();
+    await page.getByRole('link', { name: /present: lesson 2 · pre-writing/i }).click();
+
+    await expect(page).toHaveURL(/\/present\/thesis-essay\/lesson-2-pre-writing/);
+    await expect(page.getByTestId('slide-stage')).toBeVisible();
+    await expect(page.getByTestId('slide-counter')).toHaveText('1 / 24');
+    await expect(page.getByTestId('current-slide').getByText('Pre-Writing', { exact: true })).toBeVisible();
+
+    // Arrow keys are what a presenter remote sends. Wait for hydration
+    // first: a key pressed before React attaches its listener goes nowhere.
+    await page.waitForLoadState('networkidle');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByTestId('slide-counter')).toHaveText('2 / 24');
+    await expect(page.getByTestId('current-slide').getByText(/What are we doing/)).toBeVisible();
+
+    await page.getByRole('button', { name: 'Notes' }).click();
+    await expect(page.getByTestId('speaker-notes')).toContainText('big picture');
+
+    // The deck's pictures come through the gated asset route.
+    const image = await page.request.get('/api/thesis-essay-deck-asset/fallen-man.jpg');
+    expect(image.status()).toBe(200);
+    expect(image.headers()['content-type']).toBe('image/jpeg');
+
+    await page.getByRole('link', { name: 'Close' }).click();
+    await expect(page).toHaveURL(new RegExp(`${typePage}$`));
+  });
+
   test('has no decks on other assignment types', async ({ page, signIn, e2eContext }) => {
     await setThesisEssayDecksFlag(true);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`);
     await expect(page.getByRole('heading', { level: 1, name: 'Daily Pages' })).toBeVisible();
-    await expect(page.getByRole('link', { name: /slide deck/i })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /powerpoint:|present:/i })).toHaveCount(0);
     await expect(page.getByRole('link', { name: /lesson plan:/i })).toHaveCount(0);
   });
 });
