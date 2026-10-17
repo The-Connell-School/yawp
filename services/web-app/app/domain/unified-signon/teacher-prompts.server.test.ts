@@ -1,8 +1,15 @@
 import { beforeEach, expect, mock, test } from 'bun:test';
+import type { Flow } from './flow.server';
 
 let enabled = true;
 let activeMemberships = 0;
-let row: any;
+let row: { browserHash: string; expiresAt: Date; data: Flow['data'] };
+const classInfo = {
+  id: 'second',
+  name: 'Science',
+  teacher: 'Teacher',
+  organization: 'School',
+};
 const create = mock(async () => ({}));
 const findUnique = mock(async () => row);
 const count = mock(async () => activeMemberships);
@@ -25,13 +32,14 @@ mock.module('~/utils/db.server', () => ({
       deleteMany: async () => ({}),
       update: async () => ({}),
     },
-    $transaction: async (operation: any) => operation(tx),
+    $transaction: async (operation: (client: typeof tx) => Promise<unknown>) =>
+      operation(tx),
   },
 }));
 mock.module('~/domain/feature-flags/feature-flags.server', () => ({
   isFeatureFlagEnabled: async () => enabled,
 }));
-const confirmation = mock(async (_tx: unknown, flow: any) => ({
+const confirmation = mock(async (_tx: unknown, flow: Flow) => ({
   state: flow.data.state,
 }));
 mock.module('./class-confirmation.server', () => ({
@@ -58,7 +66,7 @@ beforeEach(() => {
         screen: 'class-found',
         variant: 'multiple',
         flowToken: 'token',
-        classes: [{ id: 'first' }, { id: 'second' }],
+        classes: [{ ...classInfo, id: 'first' }, classInfo],
       },
     },
   };
@@ -93,9 +101,14 @@ test('joined continuation resumes before the inactive membership guard and reval
   row.data.state = {
     screen: 'joined',
     flowToken: 'token',
-    classInfo: { id: 'second' },
+    classInfo,
   };
-  row.data.classConfirmation = { classId: 'second' };
+  row.data.classConfirmation = {
+    classId: 'second',
+    classCode: 'shared',
+    membershipId: 'member',
+    already: false,
+  };
   for (const screen of ['inactive', 'class-code'] as const) {
     expect(
       (await load(screen))?.data.teacherPromptEntry.initialState.screen

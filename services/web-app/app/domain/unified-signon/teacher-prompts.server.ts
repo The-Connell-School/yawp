@@ -29,14 +29,58 @@ export async function signedInTeacherPromptEntry(
 ) {
   const account = await loadTeacherPromptAccount(userId);
   if (!account || account.kind === 'staff') return null;
+  const {
+    browserContext,
+    createFlow,
+    FlowError,
+    flowCookie,
+    saveNewFlow,
+    stateFor,
+    withFlow,
+  } = await import('./flow.server');
+  const entry = (initialState: import('./contracts').SignonState) => ({
+    teacherPromptEntry: {
+      redirectTo: '/app',
+      googleAvailable: false,
+      initialState,
+      teacherPromptAccount: account,
+    },
+  });
+  const context = await browserContext(request);
+  if (context) {
+    try {
+      const initialState = await withFlow(
+        request,
+        context.token,
+        async (flow, tx) => {
+          if (!flow.data.teacherPromptEntry || flow.data.userId !== userId)
+            return undefined;
+          if (flow.data.state.screen === 'joined') {
+            const { classConfirmationState } =
+              await import('./class-confirmation.server');
+            return (await classConfirmationState(tx, flow)).state;
+          }
+          return flow.data.state;
+        }
+      );
+      // Resume before the inactive guard: successful enrollment has made the
+      // account active, but its confirmation must remain usable on reload.
+      if (initialState)
+        return data(entry(initialState), {
+          headers: { 'Cache-Control': 'private, no-store' },
+        });
+    } catch (error) {
+      if (!(error instanceof FlowError)) throw error;
+      // Expired, consumed, or invalid browser flows need a fresh entry.
+    }
+  }
   if (
     screen === 'inactive' &&
     (await prisma.orgMembership.count({ where: { userId, isActive: true } }))
   )
     return null;
-  const { createFlow, flowCookie, saveNewFlow, stateFor } =
-    await import('./flow.server');
   const flow = await createFlow(request, '/app');
+  flow.data.teacherPromptEntry = true;
   flow.data.userId = userId;
   flow.data.identifier = account.identifier;
   const initialState = stateFor(flow, {
@@ -45,23 +89,13 @@ export async function signedInTeacherPromptEntry(
     variant: 'student',
   }).state;
   await saveNewFlow(flow);
-  return data(
-    {
-      teacherPromptEntry: {
-        redirectTo: '/app',
-        googleAvailable: false,
-        initialState,
-        teacherPromptAccount: account,
-      },
+  return data(entry(initialState), {
+    headers: {
+      'Cache-Control': 'private, no-store',
+      'set-cookie': await flowCookie.serialize({
+        browser: flow.browser,
+        token: flow.token,
+      }),
     },
-    {
-      headers: {
-        'Cache-Control': 'private, no-store',
-        'set-cookie': await flowCookie.serialize({
-          browser: flow.browser,
-          token: flow.token,
-        }),
-      },
-    }
-  );
+  });
 }

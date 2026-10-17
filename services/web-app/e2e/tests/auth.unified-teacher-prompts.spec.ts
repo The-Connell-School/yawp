@@ -26,6 +26,7 @@ const email = `maya.${Date.now().toString(36).slice(-3)}@school.test`;
 const handle = `maya_${Date.now().toString(36).slice(-4)}`;
 const singleCode = `${prefix}-single`;
 const ambiguousCode = `${prefix}-shared`;
+const targetOrganizationId = `${prefix}-target`;
 const copy =
   "You're not in any active classes. Join one with a class code, or ask your teacher to add you back.";
 const explanation =
@@ -52,9 +53,21 @@ test.beforeAll(async () => {
   await db.organization.create({
     data: { id: prefix, name: 'Prompt fixture', plan: 'SCHOOL' },
   });
+  await db.organization.create({
+    data: {
+      id: targetOrganizationId,
+      name: 'New prompt classroom',
+      plan: 'SCHOOL',
+    },
+  });
   for (const id of [prefix, `${prefix}-second`]) {
     await db.school.create({
-      data: { id, code: id, name: 'Prompt school', organizationId: prefix },
+      data: {
+        id,
+        code: id,
+        name: 'Prompt school',
+        organizationId: targetOrganizationId,
+      },
     });
   }
   for (const [suffix, code, title] of [
@@ -116,12 +129,18 @@ test.afterAll(async () => {
     where: { data: { path: ['userId'], string_starts_with: prefix } },
   });
   await db.session.deleteMany({ where: { userId: { startsWith: prefix } } });
-  await db.orgMembership.deleteMany({ where: { organizationId: prefix } });
+  await db.orgMembership.deleteMany({
+    where: { organizationId: { in: [prefix, targetOrganizationId] } },
+  });
   await db.password.deleteMany({ where: { userId: { startsWith: prefix } } });
   await db.user.deleteMany({ where: { id: { startsWith: prefix } } });
   await db.class.deleteMany({ where: { id: { startsWith: prefix } } });
-  await db.school.deleteMany({ where: { organizationId: prefix } });
-  await db.organization.deleteMany({ where: { id: prefix } });
+  await db.school.deleteMany({
+    where: { organizationId: targetOrganizationId },
+  });
+  await db.organization.deleteMany({
+    where: { id: { in: [prefix, targetOrganizationId] } },
+  });
   expect(await storedFlags()).toBe(storedFlagsBefore);
   await db.$disconnect();
 });
@@ -274,6 +293,12 @@ for (const width of [1280, 390]) {
       await page.reload();
       await expect(page.getByText(className, { exact: true })).toBeVisible();
       expect(await enrollment()).not.toBeNull();
+      expect(
+        await db.orgMembership.findUnique({
+          where: { id: userId },
+          select: { isActive: true },
+        })
+      ).toEqual({ isActive: false });
     });
   }
 
