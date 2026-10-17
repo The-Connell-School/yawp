@@ -300,6 +300,21 @@ export async function action({ request }: ActionFunctionArgs) {
     unitDayTitle: turn.unitDayTitle,
     originClassAssignmentId: turn.originClassAssignmentId,
   };
+  // The browser sends stream=1 and consumes terminal NDJSON events, including
+  // outcomes decided before generation starts. Keep HTTP status for direct callers.
+  async function monthlyResponse(response: Response) {
+    if (turn.stream !== '1') return response;
+    return new Response(
+      `${JSON.stringify({ type: 'done', status: response.status, payload: await response.json() })}\n`,
+      {
+        status: response.status,
+        headers: {
+          'Content-Type': 'application/x-ndjson; charset=utf-8',
+          'Cache-Control': 'no-store',
+        },
+      }
+    );
+  }
   if (monthlyPolicy.enabled && turn.requestId) {
     const replay = await replayMonthlyOperation({
       organizationId: ctx.organizationId,
@@ -308,13 +323,12 @@ export async function action({ request }: ActionFunctionArgs) {
       requestId: turn.requestId,
       input: operationInput,
     });
-    if (replay) return monthlyOperationResponse(replay);
+    if (replay) return monthlyResponse(monthlyOperationResponse(replay));
   }
   if (monthlyPolicy.enabled && !activeConversationForQuota) {
     if (!turn.requestId)
-      return dataResponse(
-        { error: 'Request ID is required.' },
-        { status: 400 }
+      return monthlyResponse(
+        Response.json({ error: 'Request ID is required.' }, { status: 400 })
       );
     const admitted = await beginMonthlyOperation({
       organizationId: ctx.organizationId,
@@ -324,7 +338,8 @@ export async function action({ request }: ActionFunctionArgs) {
       requestId: turn.requestId,
       input: operationInput,
     });
-    if (admitted.kind !== 'reserved') return monthlyOperationResponse(admitted);
+    if (admitted.kind !== 'reserved')
+      return monthlyResponse(monthlyOperationResponse(admitted));
     reservation = admitted;
   }
   if (!activeConversationForQuota && !monthlyPolicy.enabled) {

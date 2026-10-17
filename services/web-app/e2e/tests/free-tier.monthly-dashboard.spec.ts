@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { test, expect, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -167,7 +168,7 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
     page.getByRole('heading', { name: 'Refer a colleague' })
   ).toBeVisible();
   await expect(
-    page.getByRole('link', { name: 'Need more? Talk to us' })
+    page.getByRole('main').getByRole('link', { name: 'Need more? Talk to us' })
   ).toHaveAttribute('href', /mailto:hello@yawp.school\?subject=/);
   await shot(page, 'advocate-pack');
 });
@@ -268,10 +269,25 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
   let savedReportId: string | undefined;
   let reservationId: string | undefined;
   try {
-    const invitation = await db.invitation.create({ data: { type: 'onboard-student', target: 'monthly-seats@example.test', secret: 'local-only', algorithm: 'SHA256', digits: 6, period: 600, charSet: '0123456789', studentClassId: klass.id, organizationId: org } });
+    const invitation = await db.invitation.create({
+      data: {
+        type: 'onboard-student',
+        target: 'monthly-seats@example.test',
+        secret: 'local-only',
+        algorithm: 'SHA256',
+        digits: 6,
+        period: 600,
+        charSet: '0123456789',
+        studentClassId: klass.id,
+        organizationId: org,
+      },
+    });
     reservationId = invitation.id;
-    await page.goto('/app/my-classes'); await expect(page.getByText('34 seats available')).toBeVisible(); await shot(page, 'seats-reserved');
-    await db.invitation.delete({ where: { id: reservationId } }); reservationId = undefined;
+    await page.goto('/app/my-classes');
+    await expect(page.getByText('34 seats available')).toBeVisible();
+    await shot(page, 'seats-reserved');
+    await db.invitation.delete({ where: { id: reservationId } });
+    reservationId = undefined;
     // Lifetime counts deliberately exceed each legacy cap before hitting real HTTP routes.
     for (const kind of ['class_starter', 'prewriting', 'thesis_statement']) {
       await db.freeClassroomAssignmentKindUsage.upsert({
@@ -317,6 +333,92 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
       .all())
       await expect(button).toBeEnabled();
     await shot(page, 'dashboard-above-old-caps');
+    // The displayed meter can be stale when a competing request consumes the
+    // last use. The actual streamed browser request must show the server refusal.
+    await setLimits(5, 2);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto('/app/lesson-planner');
+    await page.waitForLoadState('networkidle');
+    await page
+      .getByLabel('Message the Lesson Planner')
+      .fill('A lesson after the last use');
+    await setLimits(0, 0);
+    await page.getByRole('button', { name: 'Send message' }).click();
+    await expect(
+      page.getByText('You have used all your monthly uses.', { exact: false })
+    ).toBeVisible();
+    await expect(
+      page.getByText('That lesson did not come back.', { exact: false })
+    ).toHaveCount(0);
+    await shot(page, 'lesson-planner-stream-denied');
+    // Replay a completed request through the real action and streaming UI. No
+    // provider runs; the saved conversation supplies the subsequent loader read.
+    await setLimits(5, 2);
+    const replayText = 'Your original saved lesson.';
+    const replayLesson = await db.lessonPlanConversation.create({
+      data: {
+        organizationId: org,
+        membershipId: klass.teachers[0].id,
+        title: 'Local replay draft',
+        messages: { create: [{ role: 'assistant', content: replayText }] },
+      },
+      include: { messages: true },
+    });
+    seededLessons.push(replayLesson.id);
+    let replayName = '';
+    await page.route(
+      '**/api/domain/lesson-planner',
+      async (route) => {
+        const form = new URLSearchParams(route.request().postData()!);
+        replayName =
+          `free_tier.monthly.v1:${org}:lesson-planner:` +
+          createHash('sha256')
+            .update(`${klass.teachers[0].id}:${form.get('requestId')}`)
+            .digest('hex');
+        seededOperations.push(replayName);
+        const fingerprint = createHash('sha256')
+          .update(JSON.stringify({ message: form.get('message') }))
+          .digest('hex');
+        const now = new Date();
+        await db.setting.create({
+          data: {
+            name: replayName,
+            valueType: 'json',
+            value: JSON.stringify({
+              period: new Date(
+                Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
+              ).toISOString(),
+              fingerprint,
+              token: 'local-replay-fixture',
+              status: 'completed',
+              expiresAt: now.toISOString(),
+              conversationId: replayLesson.id,
+              payload: {
+                conversationId: replayLesson.id,
+                messageId: replayLesson.messages[0].id,
+                reply: replayText,
+                isNewConversation: true,
+              },
+            }),
+          },
+        });
+        await route.continue();
+      },
+      { times: 1 }
+    );
+    await page.goto('/app/lesson-planner');
+    await page.waitForLoadState('networkidle');
+    await page
+      .getByLabel('Message the Lesson Planner')
+      .fill('Replay this saved lesson');
+    await page.getByRole('button', { name: 'Send message' }).click();
+    await expect(page.getByText(replayText, { exact: true })).toBeVisible();
+    await expect(
+      page.getByText('That lesson did not come back.', { exact: false })
+    ).toHaveCount(0);
+    await shot(page, 'lesson-planner-stream-replay');
+    await db.lessonPlanConversation.delete({ where: { id: replayLesson.id } });
+    await db.setting.delete({ where: { name: replayName } });
     await setLimits(0, 0);
     for (const route of [
       '/api/domain/reporter',
@@ -337,7 +439,12 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
         await page.goto(`/app/${route}`);
         await shot(page, `${route}-zero-${width}`);
       }
-      if (width === 390) { await page.getByRole('button', { name: 'Open app navigation' }).click(); await page.getByRole('button', { name: 'Usage', exact: true }).click(); await shot(page, 'monthly-usage-zero-mobile'); await page.keyboard.press('Escape'); }
+      if (width === 390) {
+        await page.getByRole('button', { name: 'Open app navigation' }).click();
+        await page.getByRole('button', { name: 'Usage', exact: true }).click();
+        await shot(page, 'monthly-usage-zero-mobile');
+        await page.keyboard.press('Escape');
+      }
     }
     await setLimits(2, 2);
     const now = new Date();
@@ -427,7 +534,8 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
       where: { organizationId: org },
       data: { status: 'APPROVED' },
     });
-    if (reservationId) await db.invitation.deleteMany({ where: { id: reservationId } });
+    if (reservationId)
+      await db.invitation.deleteMany({ where: { id: reservationId } });
     for (const row of originalUsage)
       await db.freeClassroomAssignmentKindUsage.update({
         where: { organizationId_kind: { organizationId: org, kind: row.kind } },

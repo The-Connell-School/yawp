@@ -1071,7 +1071,7 @@ describe('monthly direct action admission', () => {
     const result = (await action({
       request: formRequest({ message: 'A counted request' }),
     } as any)) as any;
-    expect(result.init.status).toBe(400);
+    expect(result.status).toBe(400);
     expect(beginMonthlyOperation).not.toHaveBeenCalled();
     expect(getLLMCompletion).not.toHaveBeenCalled();
   });
@@ -1106,4 +1106,35 @@ describe('monthly direct action admission', () => {
     expect(failMonthlyOperation).toHaveBeenCalledTimes(1);
     expect(finishMonthlyOperation).not.toHaveBeenCalled();
   });
+});
+
+test('streamed monthly admission and replay use the same terminal-event protocol as generated lessons', async () => {
+  monthlyEnabled = true;
+  for (const kind of ['exhausted', 'pending', 'conflict', 'replay']) {
+    beginMonthlyOperation.mockResolvedValue({
+      kind,
+      ...(kind === 'replay'
+        ? { payload: { reply: 'Saved lesson', conversationId: 'saved' } }
+        : {}),
+    });
+    const response = (await action({
+      request: formRequest({
+        message: 'A counted request',
+        requestId: 'stable-request',
+        stream: '1',
+      }),
+    } as any)) as Response;
+    expect(response.headers.get('content-type')).toContain(
+      'application/x-ndjson'
+    );
+    const text = await response.text();
+    expect(text.endsWith('\n')).toBe(true);
+    expect(JSON.parse(text.trim())).toMatchObject({
+      type: 'done',
+      status: kind === 'replay' ? 200 : kind === 'exhausted' ? 403 : 409,
+      payload: kind === 'replay' ? { reply: 'Saved lesson' } : { error: kind },
+    });
+  }
+  expect(getLLMCompletion).not.toHaveBeenCalled();
+  expect(reserveAiRequest).not.toHaveBeenCalled();
 });

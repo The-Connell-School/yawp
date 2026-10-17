@@ -177,3 +177,10 @@ for at most five minutes (longer than the bounded provider/repair work); an expi
 attempt cannot commit its content. Retries after expiry receive a new ownership
 token. The old owner cannot complete or release the new reservation. An expired
 reservation is ignored by usage reads, without deleting its retry history.
+
+A streamed Lesson Planner retry, pending/conflicting request or quota refusal
+returns the same terminal newline-delimited `done` event as generation, carrying
+its saved result or admission error. The HTTP status remains 200/400/403/409 as
+appropriate. Non-streamed callers retain JSON responses. This keeps the browser's
+progress reader able to present an early refusal or completed replay without
+calling the provider again.
