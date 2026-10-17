@@ -31,7 +31,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const corpus = view === 'class-starter'
     ? starters.map(p => ({ id: p.id, title: p.prompt, prompt: p.prompt }))
     : view === 'thesis' ? thesis : [];
-  const matches = corpus.filter(p => `${p.title} ${p.prompt}`.toLowerCase().includes(query.toLowerCase()));
+  const matches = corpus.filter(p =>
+    !/\bAI\b/i.test(`${p.title} ${p.prompt}`) &&
+    `${p.title} ${p.prompt}`.toLowerCase().includes(query.toLowerCase()));
   const page = Math.max(1, Math.min(Math.ceil(matches.length / 10) || 1, Number(url.searchParams.get('page')) || 1));
   return { view, query, page, total: matches.length, entries: matches.slice((page - 1) * 10, page * 10) };
 }

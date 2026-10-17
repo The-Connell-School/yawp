@@ -26,7 +26,7 @@ async function flag(enabled: boolean) {
 }
 async function fixture(
   gradeLevel = '11',
-  status: 'ACCOUNT_CREATED' | 'SENT' = 'ACCOUNT_CREATED'
+  status: 'ACCOUNT_CREATED' | 'SENT' | 'MANUAL_REVIEW' = 'ACCOUNT_CREATED'
 ) {
   const user = await prisma.user.create({
     data: {
@@ -160,6 +160,10 @@ for (const width of [1440, 390]) {
     for (const section of ['Class Starter', 'Pre-writing', 'Thesis', 'Lesson Planner how-to']) {
       await page.getByRole('link', { name: section, exact: true }).click();
       await expect(page.getByRole('heading', { name: section, exact: true })).toBeVisible();
+      if (section === 'Class Starter' || section === 'Thesis') {
+        await page.locator('details').first().locator('summary').click();
+        await expect(page.locator('details[open] p').first()).toBeVisible();
+      }
       await capture(page, `${section.toLowerCase().replaceAll(' ', '-')}-${width}`);
     }
     const before = await prisma.assignment.count();
@@ -184,8 +188,19 @@ for (const width of [1440, 390]) {
     // Approval removes the preview lock; keep provisioning outside this test.
     await page.goto('/app/free-tier/preview');
     await expect(page).not.toHaveURL(/free-tier\/preview/);
+    await page.goto('/app/assignments');
+    await expect(page.getByRole('heading', { name: 'My Assignments', exact: true })).toBeVisible();
+    await capture(page, `approved-assignments-${width}`);
   });
 }
+test('manual review also offers the same read-only preview', async ({ page }) => {
+  const { user } = await fixture('11', 'MANUAL_REVIEW');
+  await login(page, user.email!);
+  await expect(page.getByRole('heading', { name: "We're reviewing your request" })).toBeVisible();
+  await page.getByRole('link', { name: 'Look around while you wait' }).click();
+  await expect(page.getByRole('heading', { name: 'Look around while you wait' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Use Lesson Planner', exact: true })).toBeDisabled();
+});
 test('anonymous users cannot read preview content', async ({ page }) => {
   await page.goto('/app/free-tier/preview');
   await expect(page).toHaveURL(/auth\/login/);

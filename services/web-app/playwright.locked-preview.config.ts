@@ -11,7 +11,10 @@ export default defineConfig({
   reporter: 'list',
   outputDir: `${process.env.TMPDIR}/locked-preview-playwright`,
   webServer: {
-    command: `bash -c 'trap "../../bin/project dev stop --json" EXIT INT TERM; ../../bin/project dev start --json; node -e "setInterval(() => {}, 1000)"'`,
+    // The project profile supplies the isolated database, port, and pinned
+    // runtime. Keep this process in the foreground so Playwright owns its
+    // entire process group even in a sandbox with a private PID namespace.
+    command: `bun run dev -- --port ${process.env.CLASS_STEP_PORT} --host 127.0.0.1 --strictPort`,
     url: `http://localhost:${process.env.CLASS_STEP_PORT}`,
     reuseExistingServer: false,
     timeout: 120000,

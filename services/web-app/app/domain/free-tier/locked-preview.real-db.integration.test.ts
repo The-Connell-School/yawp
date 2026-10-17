@@ -39,15 +39,16 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   if (!enabled) return;
+  if (!orgId) { await prisma.$disconnect(); return; }
   if (originalFlag === null) await prisma.setting.deleteMany({ where: { name: flag } }); else await setFlag(originalFlag);
-  await prisma.freeTierApplication.deleteMany({ where: { id: appId } });
+  if (appId) await prisma.freeTierApplication.deleteMany({ where: { id: appId } });
   await prisma.aiRequestReservation.deleteMany({ where: { organizationId: orgId } });
   await prisma.freeClassroomAssignmentKindUsage.deleteMany({ where: { organizationId: orgId } });
   await prisma.orgMembership.deleteMany({ where: { organizationId: orgId } });
-  await prisma.class.deleteMany({ where: { id: classId } });
+  if (classId) await prisma.class.deleteMany({ where: { id: classId } });
   await prisma.school.deleteMany({ where: { organizationId: orgId } });
   await prisma.organization.deleteMany({ where: { id: orgId } });
-  await prisma.user.deleteMany({ where: { id: userId } });
+  if (userId) await prisma.user.deleteMany({ where: { id: userId } });
   await prisma.$disconnect();
 });
 
@@ -80,6 +81,8 @@ local('real authenticated route actions reject crafted requests before parsing o
     const result = await preview({ request: new Request('http://localhost/app/free-tier/preview?organizationId=foreign-org', { headers }) } as never);
     expect(result.entries.length).toBeGreaterThan(0);
     expect(JSON.stringify(result)).not.toContain(orgId);
+    const copy = await preview({ request: new Request('http://localhost/app/free-tier/preview?q=AI%20will', { headers }) } as never);
+    expect(copy.total).toBe(0);
     await expect(createAssignment({ request: new Request('http://localhost/api/assignments/create', { method: 'POST' }) } as never)).rejects.toMatchObject({ status: 302 });
   } finally { await prisma.session.delete({ where: { id: session.id } }); }
 });
