@@ -52,8 +52,8 @@ export default function LoungeWelcomeRoute() {
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll bg-secondary">
       <div className="mx-auto w-full max-w-xl px-4 py-10">
-        <div className="rounded-2xl border bg-background p-6 shadow-sm sm:p-8">
-          <h1 className="text-2xl font-bold">{LOUNGE_NAME}</h1>
+        <div className="rounded-2xl border bg-popover p-6 shadow-sm sm:p-8">
+          <h1 className="lounge-serif text-[40px] leading-none text-foreground">{LOUNGE_NAME}</h1>
           <p className="mt-3 leading-relaxed">{LOUNGE_WELCOME_INTRO}</p>
           <ol className="mt-4 flex list-decimal flex-col gap-2 pl-6 leading-relaxed marker:font-bold marker:text-primary">
             {LOUNGE_HOUSE_RULES.map((rule) => (

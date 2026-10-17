@@ -8,6 +8,7 @@ import {
   useLoaderData,
   useNavigation,
 } from 'react-router';
+import { ChevronLeft } from 'lucide-react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { requireLoungeMember } from '~/domain/lounge/access.server';
@@ -56,10 +57,14 @@ export default function LoungeContactRoute() {
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <div className="mx-auto w-full max-w-xl px-4 py-8">
-        <Link to="/app/lounge" className="inline-flex min-h-11 items-center text-sm text-muted-foreground">
-          ← {LOUNGE_NAME}
+        <Link
+          to="/app/lounge"
+          className="inline-flex min-h-11 items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ChevronLeft size={16} aria-hidden="true" />
+          {LOUNGE_NAME}
         </Link>
-        <h1 className="mt-2 text-2xl font-bold">Contact Us</h1>
+        <h1 className="lounge-serif mt-1 text-[38px] leading-tight text-foreground">Contact Us</h1>
         <p className="mt-2 text-muted-foreground">
           Something broken or wrong? This goes straight to the {LOUNGE_TEAM_NAME}, not the Lounge. We&apos;ll
           take care of it faster than a thread will.
