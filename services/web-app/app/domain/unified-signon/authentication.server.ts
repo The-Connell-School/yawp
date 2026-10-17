@@ -33,7 +33,7 @@ import {
   acceptStudentInvitation,
 } from './invitations.server';
 import { postAuthenticationDestination } from './policy.server';
-import { selectedClass } from './classes.server';
+import { selectedClass, invalidClassCodeError } from './classes.server';
 import {
   rememberClassConfirmation,
   classConfirmationState,
@@ -151,7 +151,7 @@ export async function finishAuthentication(
   // A forced password change must complete before a class is joined.
   if (!user.mustChangePassword && flow.data.classId && flow.data.classCode) {
     const target = await selectedClass(tx, flow);
-    if (!target) throw new FlowError('Invalid code.');
+    if (!target) throw invalidClassCodeError();
     const already = Boolean(
       await tx.orgMembership.findFirst({
         where: {
@@ -186,7 +186,10 @@ export async function finishAuthentication(
           code: flow.data.classCode,
           classId: flow.data.classId,
         });
-    if (!enrollment.ok) throw new FlowError(enrollment.error);
+    if (!enrollment.ok) {
+      if (enrollment.code === 'invalid_code') throw invalidClassCodeError();
+      throw new FlowError(enrollment.error);
+    }
     selectedMembershipId = enrollment.membershipId;
     rememberClassConfirmation(flow, target, enrollment.membershipId, already);
     memberships = await tx.orgMembership.findMany({

@@ -157,7 +157,15 @@ export function UnifiedSignon({
         invalidFieldToFocus.current = Object.keys(
           result.fieldErrors || {}
         ).find((name) => result.fieldErrors?.[name]);
-        setState((s) => ({ ...s, ...result }));
+        setState((s) => ({
+          ...s,
+          // A denied class choice has no code field on the picker. Return to
+          // the retryable code form so its server field error stays visible.
+          ...(operation === 'choose-class' && result.fieldErrors?.classCode
+            ? { screen: 'class-code' as const, variant: undefined }
+            : {}),
+          ...result,
+        }));
       }
     } catch {
       setState((s) => ({

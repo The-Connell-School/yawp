@@ -186,7 +186,10 @@ for (const width of [1280, 390]) {
       await page
         .getByRole('button', { name: 'Go to my class', exact: true })
         .click();
-      await expect(page).toHaveURL(/\/app\/my-classes/);
+      await expect(page).toHaveURL(/\/app\/?$/);
+      await expect(
+        page.getByRole('link', { name: /Preview QA school Preview QA email/ })
+      ).toBeVisible();
     } finally {
       await db.orgMembership.deleteMany({ where: { userId: qaId('orphan') } });
       await db.session.deleteMany({ where: { userId: qaId('orphan') } });
