@@ -36,6 +36,11 @@ async function capture(page: import('@playwright/test').Page, name: string) {
 const apps: string[] = [];
 const users: string[] = [];
 async function fixture(page: import('@playwright/test').Page) {
+  // Each local browser fixture gets its own IP budget, like a separate teacher.
+  const octets = crypto.getRandomValues(new Uint8Array(2));
+  await page.context().setExtraHTTPHeaders({
+    'x-forwarded-for': `198.18.${octets[0]}.${octets[1]}`,
+  });
   const user = await db.user.create({
     data: {
       email: `approval-${crypto.randomUUID()}@example.org`,
@@ -81,17 +86,15 @@ async function fixture(page: import('@playwright/test').Page) {
   });
   const cookie = await storage.getSession();
   cookie.set('sessionId', session.id);
-  await page
-    .context()
-    .addCookies([
-      {
-        name: 'en_session',
-        value: (await storage.commitSession(cookie))
-          .split(';')[0]
-          .slice('en_session='.length),
-        url: process.env.APPROVAL_V2_BASE_URL!,
-      },
-    ]);
+  await page.context().addCookies([
+    {
+      name: 'en_session',
+      value: (await storage.commitSession(cookie))
+        .split(';')[0]
+        .slice('en_session='.length),
+      url: process.env.APPROVAL_V2_BASE_URL!,
+    },
+  ]);
   return { app, approval, user };
 }
 test.beforeEach(async () => {
@@ -154,10 +157,24 @@ for (const width of [1280, 390])
     await capture(page, `${width}-forward-validation`);
     await page.getByLabel('Administrator name').fill('Ms. Rivera');
     await page.getByLabel('Administrator email').fill(fixtureData.app.email);
-    await page.getByRole('button', { name: 'Forward request', exact: true }).click();
-    await expect(page.getByText('We could not forward this request. Reload the page or contact support@yawp.school.')).toBeVisible();
-    expect(await db.freeTierAdminApproval.count({ where: { applicationId: fixtureData.app.id } })).toBe(1);
-    expect(await db.freeTierApprovalDelivery.count({ where: { approval: { applicationId: fixtureData.app.id } } })).toBe(0);
+    await page
+      .getByRole('button', { name: 'Forward request', exact: true })
+      .click();
+    await expect(
+      page.getByText(
+        'We could not forward this request. Reload the page or contact support@yawp.school.'
+      )
+    ).toBeVisible();
+    expect(
+      await db.freeTierAdminApproval.count({
+        where: { applicationId: fixtureData.app.id },
+      })
+    ).toBe(1);
+    expect(
+      await db.freeTierApprovalDelivery.count({
+        where: { approval: { applicationId: fixtureData.app.id } },
+      })
+    ).toBe(0);
     await capture(page, `${width}-teacher-self-forward-rejected`);
     await page.getByLabel('Administrator email').fill('rivera@example.org');
     await page
@@ -256,12 +273,24 @@ for (const width of [1280, 390])
     await capture(page, `${width}-admin-forward-validation`);
     await page.getByLabel('Administrator name').fill('Ms. Rivera');
     await page.getByLabel('Administrator email').fill(app.email);
-    await page.getByRole('button', { name: 'Forward request', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Unable to forward' })).toBeVisible();
-    expect(await db.freeTierSignedLink.count({ where: { applicationId: app.id, usedAt: null } })).toBe(2);
-    expect(await db.freeTierAdminApproval.count({ where: { applicationId: app.id } })).toBe(1);
+    await page
+      .getByRole('button', { name: 'Forward request', exact: true })
+      .click();
+    await expect(
+      page.getByRole('heading', { name: 'Unable to forward' })
+    ).toBeVisible();
+    expect(
+      await db.freeTierSignedLink.count({
+        where: { applicationId: app.id, usedAt: null },
+      })
+    ).toBe(2);
+    expect(
+      await db.freeTierAdminApproval.count({ where: { applicationId: app.id } })
+    ).toBe(1);
     await capture(page, `${width}-admin-self-forward-rejected`);
-    await page.goto(`/free/admin/not-right-person?t=${encodeURIComponent(redirect.token)}`);
+    await page.goto(
+      `/free/admin/not-right-person?t=${encodeURIComponent(redirect.token)}`
+    );
     await page.getByLabel('Administrator name').fill('Ms. Rivera');
     await page.getByLabel('Administrator email').fill('rivera@example.org');
     await page

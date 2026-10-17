@@ -175,3 +175,29 @@ the approval fixture database or running unrelated migration cases locally.
 The corrected case passes, as do all 108 CLI/contract checks, including catalog,
 help and browser-discovery coverage. Red/green and CI-failure evidence is in
 `rebase/checks/`. Required full migration CI still owns the broader suite.
+
+## Self-forwarding review correction
+
+The latest driver REJECT for slug `fto-approval-page` reproduced a teacher
+forwarding the request to their own mailbox on demo and then approving it.
+The shared `selfAdminEmailError` guard now runs inside the locked forwarding
+transaction before runtime email evaluation, token consumption or any mutation.
+It applies to authenticated teachers and both signed administrator link purposes;
+demo's manual-review bypass cannot bypass the mailbox check.
+
+Six new real-database cases cross demo/production with teacher, ADMIN_APPROVE
+and ADMIN_NOT_RIGHT_PERSON entry points. Each tries the exact mailbox, case and
+whitespace variants, plus aliases, Gmail dots and googlemail aliases. Rejection
+preserves a complete application snapshot including both valid signed links,
+approval history, existing queued delivery slots, decisions and email logs; no
+email is sent. All six cases fail on the old implementation and pass with the
+shared guard. The focused profile now passes 78 cases (28 durable lifecycle).
+
+The six existing local desktop/mobile browser flows also exercise rejection of
+self-forwarding before a valid forward. Each fixture uses an independent local
+IP budget to avoid sharing the application's three-per-minute forwarding limit.
+Application rate limits remain unchanged. Fresh screenshots, red/green proof,
+CLI/typecheck/browser transcripts and exact-head/hash provenance are in lane
+`shots/fto-approval-page/self-forward/`; prior `rebase/` and `rollout-pause/`
+evidence is preserved. Driver review, final-head CI and snapshot gates are
+recorded in lane state files. No migration SQL or rollout default changes.

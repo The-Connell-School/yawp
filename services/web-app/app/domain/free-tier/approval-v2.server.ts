@@ -36,6 +36,7 @@ import {
 } from './admin-email-rules.server';
 import { resolveFreeTierRuntimeEnvironment } from './usage-budget.server';
 import { forwardApprovalSchema } from './approval-waiting';
+import { selfAdminEmailError } from './admin-email';
 
 export const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const HOUR_MS = 3600000;
@@ -348,6 +349,9 @@ export async function forwardApprovalRequest(args: {
     if (app.adminRedirectCount >= ADMIN_REDIRECT_CHAIN_CAP)
       return fail('chain_cap');
     const { newAdminEmail, newAdminName } = parsed.data;
+    // Reject the teacher mailbox before demo's review bypass or any token claim.
+    if (selfAdminEmailError(app.email, newAdminEmail))
+      return fail('same_as_teacher');
     if (newAdminEmail === pending.adminEmail) return fail('same_administrator');
     const rules = evaluateAdminEmailForRuntime(
       {

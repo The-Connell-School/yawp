@@ -200,14 +200,19 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
     ).toBe(true);
   });
   for (const environment of ['demo', 'production'] as const) {
-    for (const actor of ['teacher', 'ADMIN_APPROVE', 'ADMIN_NOT_RIGHT_PERSON'] as const) {
+    for (const actor of [
+      'teacher',
+      'ADMIN_APPROVE',
+      'ADMIN_NOT_RIGHT_PERSON',
+    ] as const) {
       test(`${environment} ${actor} forwarding rejects the teacher mailbox and aliases without side effects`, async () => {
         const previousEnvironment = process.env.YAWP_ENVIRONMENT;
         const previousSlug = process.env.PREVIEW_SLUG;
         process.env.YAWP_ENVIRONMENT = environment;
         delete process.env.PREVIEW_SLUG;
         try {
-          const { resolveFreeTierRuntimeEnvironment } = await import('./usage-budget.server');
+          const { resolveFreeTierRuntimeEnvironment } =
+            await import('./usage-budget.server');
           expect(resolveFreeTierRuntimeEnvironment()).toBe(environment);
           const { app, approval } = await fixture();
           const local = `teacher.${crypto.randomUUID()}`;
@@ -216,29 +221,44 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
             where: { id: app.id },
             data: { email: teacherEmail },
           });
-          const { mintSignedLink, peekSignedLink } = await import('./signed-link.server');
-          const approve = await mintSignedLink({ applicationId: app.id, purpose: 'ADMIN_APPROVE' });
-          const forward = await mintSignedLink({ applicationId: app.id, purpose: 'ADMIN_NOT_RIGHT_PERSON' });
+          const { mintSignedLink, peekSignedLink } =
+            await import('./signed-link.server');
+          const approve = await mintSignedLink({
+            applicationId: app.id,
+            purpose: 'ADMIN_APPROVE',
+          });
+          const forward = await mintSignedLink({
+            applicationId: app.id,
+            purpose: 'ADMIN_NOT_RIGHT_PERSON',
+          });
           await db.freeTierAdminApproval.update({
             where: { id: approval.id },
             data: { signedLinkId: approve.linkId },
           });
           // Include an existing queued slot so rejection must preserve, rather
           // than cancel or replace, already scheduled delivery work.
-          expect((await api.queueManualApprovalReminder({
-            applicationId: app.id,
-            idempotencyKey: `self-forward-${app.id}`,
-            now: new Date(+now + 1000),
-          })).ok).toBe(true);
-          const snapshot = () => db.freeTierApplication.findUniqueOrThrow({
-            where: { id: app.id },
-            include: {
-              signedLinks: { orderBy: { id: 'asc' } },
-              adminApprovals: { orderBy: { id: 'asc' }, include: { deliveries: { orderBy: { id: 'asc' } } } },
-              approvalDecisions: { orderBy: { id: 'asc' } },
-              emailLogs: { orderBy: { id: 'asc' } },
-            },
-          });
+          expect(
+            (
+              await api.queueManualApprovalReminder({
+                applicationId: app.id,
+                idempotencyKey: `self-forward-${app.id}`,
+                now: new Date(+now + 1000),
+              })
+            ).ok
+          ).toBe(true);
+          const snapshot = () =>
+            db.freeTierApplication.findUniqueOrThrow({
+              where: { id: app.id },
+              include: {
+                signedLinks: { orderBy: { id: 'asc' } },
+                adminApprovals: {
+                  orderBy: { id: 'asc' },
+                  include: { deliveries: { orderBy: { id: 'asc' } } },
+                },
+                approvalDecisions: { orderBy: { id: 'asc' } },
+                emailLogs: { orderBy: { id: 'asc' } },
+              },
+            });
           const before = await snapshot();
           for (const newAdminEmail of [
             teacherEmail,
@@ -248,18 +268,51 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
             `${local.replaceAll('.', '')}+other@gmail.com`,
             `${local.replaceAll('.', '')}@gmail.com`,
           ]) {
-            const input = { newAdminName: 'Teacher as administrator', newAdminEmail, request: new Request('http://localhost/test') };
-            const result = actor === 'teacher'
-              ? await api.forwardApprovalRequest({ ...input, applicationId: app.id, currentApprovalId: approval.id, userId: app.userId! })
-              : await api.forwardApprovalByToken({ ...input, purpose: actor, token: actor === 'ADMIN_APPROVE' ? approve.token : forward.token });
-            expect(result).toMatchObject({ ok: false, reason: 'same_as_teacher' });
+            const input = {
+              newAdminName: 'Teacher as administrator',
+              newAdminEmail,
+              request: new Request('http://localhost/test'),
+            };
+            const result =
+              actor === 'teacher'
+                ? await api.forwardApprovalRequest({
+                    ...input,
+                    applicationId: app.id,
+                    currentApprovalId: approval.id,
+                    userId: app.userId!,
+                  })
+                : await api.forwardApprovalByToken({
+                    ...input,
+                    purpose: actor,
+                    token:
+                      actor === 'ADMIN_APPROVE' ? approve.token : forward.token,
+                  });
+            expect(result).toMatchObject({
+              ok: false,
+              reason: 'same_as_teacher',
+            });
             expect(await snapshot()).toEqual(before);
-            expect((await peekSignedLink({ token: approve.token, expectedPurpose: 'ADMIN_APPROVE' })).ok).toBe(true);
-            expect((await peekSignedLink({ token: forward.token, expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON' })).ok).toBe(true);
+            expect(
+              (
+                await peekSignedLink({
+                  token: approve.token,
+                  expectedPurpose: 'ADMIN_APPROVE',
+                })
+              ).ok
+            ).toBe(true);
+            expect(
+              (
+                await peekSignedLink({
+                  token: forward.token,
+                  expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
+                })
+              ).ok
+            ).toBe(true);
             expect(send).toHaveBeenCalledTimes(0);
           }
         } finally {
-          if (previousEnvironment === undefined) delete process.env.YAWP_ENVIRONMENT;
+          if (previousEnvironment === undefined)
+            delete process.env.YAWP_ENVIRONMENT;
           else process.env.YAWP_ENVIRONMENT = previousEnvironment;
           if (previousSlug === undefined) delete process.env.PREVIEW_SLUG;
           else process.env.PREVIEW_SLUG = previousSlug;
