@@ -33,9 +33,14 @@ function fakePrisma(existingSeedKeys: string[] = []) {
 }
 
 const now = new Date('2026-10-20T12:00:00Z');
-const people = { brianUserId: 'brian', kevinUserId: 'kevin', now };
+const people = { brianUserId: 'brian', teamUserId: 'team', now };
 
 describe('Faculty Lounge launch content', () => {
+  test('nothing is posted under a staff member other than Brian', () => {
+    expect(new Set(LAUNCH_POSTS.map((p) => p.author))).toEqual(new Set(['brian', 'team']));
+    for (const post of HOPPER.filter((p) => p.kind === 'QUESTION')) expect(post.author).toBe('team');
+  });
+
   test('every seed key is unique', () => {
     const keys = LAUNCH_POSTS.flatMap((p) => [p.seedKey, ...(p.answer ? [p.answer.seedKey] : [])]);
     expect(new Set(keys).size).toBe(keys.length);
@@ -49,10 +54,10 @@ describe('Faculty Lounge launch content', () => {
     expect(hasLaunchPlaceholder(HOPPER.find((p) => p.seedKey === 'hopper:lessons-learned')!.body)).toBe(true);
   });
 
-  test('the six launch questions come from Kevin and each has an answer from Brian', () => {
+  test('the six launch questions come from the YAWP! team and each has an answer from Brian', () => {
     expect(LAUNCH_QUESTIONS).toHaveLength(6);
     for (const q of LAUNCH_QUESTIONS) {
-      expect(q).toMatchObject({ author: 'kevin', kind: 'QUESTION' });
+      expect(q).toMatchObject({ author: 'team', kind: 'QUESTION' });
       expect(q.answer?.body.length).toBeGreaterThan(100);
     }
   });
@@ -73,7 +78,7 @@ describe('seedLoungeLaunch', () => {
     expect(posts.filter((p) => p.pinnedAt)).toHaveLength(2);
 
     const q1 = posts.find((p) => p.seedKey === 'launch:q1-routine')!;
-    expect(q1).toMatchObject({ authorUserId: 'kevin', staffStatus: 'ANSWERED', body: '' });
+    expect(q1).toMatchObject({ authorUserId: 'team', staffStatus: 'ANSWERED', body: '' });
     const answer = replies.find((r) => r.postId === q1.id)!;
     expect(answer).toMatchObject({ authorUserId: 'brian', isStaff: true, seedKey: 'launch:q1-routine:brian' });
     expect(answer.createdAt.getTime()).toBeGreaterThan(q1.createdAt.getTime());

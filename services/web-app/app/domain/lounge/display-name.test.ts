@@ -49,4 +49,11 @@ describe('loungeByline', () => {
       loungeByline({ name: 'Brian Connell', style: 'FIRST_NAME_ONLY', schoolName: 'The Connell School', isStaff: true })
     ).toEqual({ name: 'Brian Connell', detail: 'YAWP! team' });
   });
+
+  test('the YAWP! team account reads as just "YAWP! team", with no repeat after it', () => {
+    expect(loungeByline({ name: 'YAWP! team', style: null, schoolName: null, isStaff: true })).toEqual({
+      name: 'YAWP! team',
+      detail: null,
+    });
+  });
 });

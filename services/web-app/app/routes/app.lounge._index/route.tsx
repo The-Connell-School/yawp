@@ -13,9 +13,9 @@ import { requireLoungeMember } from '~/domain/lounge/access.server';
 import {
   LoungeNotFoundError,
   listLoungePosts,
-  listLoungeTeam,
   listLoungeTopicCounts,
   listPinnedLoungePosts,
+  getLoungeHost,
   toggleLoungeVote,
   type LoungeSort,
 } from '~/domain/lounge/lounge.server';
@@ -43,10 +43,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // The letter, the House Rules panel, and the team sit on the unfiltered
   // first page only; anywhere else pinned posts are ordinary rows.
   const showFeatured = !before && !topic;
-  const [{ posts, nextCursor }, pinned, team, topicCounts] = await Promise.all([
+  const [{ posts, nextCursor }, pinned, host, topicCounts] = await Promise.all([
     listLoungePosts(viewer, { sort, topic, before, now }),
     showFeatured ? listPinnedLoungePosts(viewer, now) : Promise.resolve([]),
-    showFeatured ? listLoungeTeam() : Promise.resolve([]),
+    showFeatured ? getLoungeHost() : Promise.resolve(null),
     before ? Promise.resolve([]) : listLoungeTopicCounts(viewer, now),
   ]);
   const pinnedIds = new Set(pinned.map((post) => post.id));
@@ -56,7 +56,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
   return data({
     pinned,
-    team,
+    host,
     chips,
     sort,
     topic,
@@ -90,7 +90,7 @@ function feedHref(params: { sort: LoungeSort; topic: string | null; before?: str
 }
 
 export default function LoungeFeedRoute() {
-  const { posts, sort, topic, chips, nextCursor, pinned, team } = useLoaderData<typeof loader>();
+  const { posts, sort, topic, chips, nextCursor, pinned, host } = useLoaderData<typeof loader>();
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
@@ -106,7 +106,7 @@ export default function LoungeFeedRoute() {
         }
       />
       <div className="mx-auto flex w-full max-w-[960px] flex-col gap-8 px-4 pb-14 pt-7 sm:px-8">
-        <LoungeFeatured pinned={pinned} team={team} />
+        <LoungeFeatured pinned={pinned} host={host} />
 
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b">
           <nav aria-label="Sort posts" className="flex gap-6">

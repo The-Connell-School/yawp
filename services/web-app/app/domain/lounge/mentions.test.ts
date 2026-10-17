@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  LOUNGE_TEAM_MENTION_ID,
   decodeMentions,
   encodeMentions,
   findMentionQuery,
   mentionToken,
   mentionedUserIds,
+  mentionsTeam,
   plainTextWithMentions,
   splitMentions,
 } from './mentions';
@@ -37,6 +39,16 @@ describe('mention tokens', () => {
 
   test('plain text renders mentions as @Name for emails and previews', () => {
     expect(plainTextWithMentions('Ask @[Brian Connell](user:u1) here')).toBe('Ask @Brian Connell here');
+  });
+});
+
+describe('the YAWP! team group mention', () => {
+  test('is a token like any other, and is found without a user lookup', () => {
+    const body = `Can someone help? ${mentionToken('YAWP! team', LOUNGE_TEAM_MENTION_ID)} thanks`;
+    expect(mentionsTeam(body)).toBe(true);
+    expect(plainTextWithMentions(body)).toBe('Can someone help? @YAWP! team thanks');
+    expect(mentionsTeam('Ask the YAWP! team')).toBe(false);
+    expect(mentionsTeam(mentionToken('Brian', 'u1'))).toBe(false);
   });
 });
 

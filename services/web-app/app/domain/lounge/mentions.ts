@@ -6,6 +6,20 @@
  */
 const TOKEN = /@\[([^[\]()\n]{1,80})\]\(user:([A-Za-z0-9_-]{1,64})\)/g;
 
+/**
+ * "@YAWP! team" is a mention of the whole team rather than one person. It
+ * uses the same token with this reserved id (never a real user id), and asks
+ * the team the way "Ask the YAWP! team" does.
+ */
+export const LOUNGE_TEAM_MENTION_ID = 'yawp-team';
+
+export function mentionsTeam(body: string): boolean {
+  for (const match of body.matchAll(TOKEN)) {
+    if (match[2] === LOUNGE_TEAM_MENTION_ID) return true;
+  }
+  return false;
+}
+
 export type MentionPart =
   | { type: 'text'; text: string }
   | { type: 'mention'; userId: string; label: string };

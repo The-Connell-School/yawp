@@ -10,7 +10,7 @@ let prisma: DbPrisma;
 let lounge: typeof import('./lounge.server');
 
 const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-const ids = { org: '', maria: '', devin: '', brian: '' };
+const ids = { org: '', maria: '', devin: '', brian: '', team: '' };
 const maria = () => ({ userId: ids.maria, isStaff: false });
 const devin = () => ({ userId: ids.devin, isStaff: false });
 const brian = () => ({ userId: ids.brian, isStaff: true });
@@ -45,11 +45,12 @@ suite('Faculty Lounge launch features against the database', () => {
     ids.maria = await makeUser('Maria Santos');
     ids.devin = await makeUser('Devin Reyes');
     ids.brian = await makeUser('Brian Connell', true);
+    ids.team = await makeUser('YAWP! team', true);
   });
 
   afterAll(async () => {
     if (!prisma) return;
-    const users = [ids.maria, ids.devin, ids.brian].filter(Boolean);
+    const users = [ids.maria, ids.devin, ids.brian, ids.team].filter(Boolean);
     await prisma.orgMembership.deleteMany({ where: { userId: { in: users } } });
     await prisma.user.deleteMany({ where: { id: { in: users } } });
     await prisma.organization.deleteMany({ where: { id: ids.org } });
@@ -133,9 +134,9 @@ suite('Faculty Lounge launch features against the database', () => {
       seedKey: `${p.seedKey}:${stamp}`,
       answer: p.answer && { ...p.answer, seedKey: `${p.answer.seedKey}:${stamp}` },
     }));
-    const first = await seedLoungeLaunch(prisma, { brianUserId: ids.brian, kevinUserId: ids.brian, posts });
+    const first = await seedLoungeLaunch(prisma, { brianUserId: ids.brian, teamUserId: ids.team, posts });
     expect(first.created).toHaveLength(LAUNCH_POSTS.length);
-    const again = await seedLoungeLaunch(prisma, { brianUserId: ids.brian, kevinUserId: ids.brian, posts });
+    const again = await seedLoungeLaunch(prisma, { brianUserId: ids.brian, teamUserId: ids.team, posts });
     expect(again.created).toHaveLength(0);
 
     const seeded = await prisma.loungePost.findMany({
@@ -163,7 +164,9 @@ suite('Faculty Lounge launch features against the database', () => {
     const q1Row = feedRows.find((p) => p.id === idFor('launch:q1-routine'));
     expect(q1Row?.preview).toStartWith('Use the Class Starter to build reps.');
     expect(q1Row?.answeredBy).toBe('Brian');
-    expect(q1Row?.avatar).toMatchObject({ initials: 'BC', isStaff: true });
+    // The launch questions come from the YAWP! team, not from one person.
+    expect(q1Row?.author).toEqual({ name: 'YAWP! team', detail: null });
+    expect(q1Row?.avatar).toMatchObject({ initials: 'Y!', isStaff: true });
     const wins = feedRows.find((p) => p.id === idFor('launch:wins'));
     expect(wins).toMatchObject({ preview: expect.stringContaining('Share a sample of student work'), answeredBy: null });
 
@@ -176,16 +179,53 @@ suite('Faculty Lounge launch features against the database', () => {
     expect(thread?.staffReplies[0].avatar).toMatchObject({ initials: 'BC', isStaff: true });
   });
 
-  test('the team block lists YAWP! team members who have posted, and topic counts match the feed', async () => {
-    const quiet = await makeUser('Quiet Admin', true);
-    const team = await lounge.listLoungeTeam();
-    expect(team.map((m) => m.name)).toContain('Brian Connell');
-    expect(team.map((m) => m.userId)).not.toContain(quiet);
-    expect(team.length).toBeLessThanOrEqual(6);
-    expect(team.find((m) => m.userId === ids.brian)?.avatar).toMatchObject({ initials: 'BC', isStaff: true });
-    await prisma.orgMembership.deleteMany({ where: { userId: quiet } });
-    await prisma.user.delete({ where: { id: quiet } });
+  test('teachers can @mention Brian or the YAWP! team, not each staff member', async () => {
+    const kevin = await makeUser('Kevin Gregorio', true);
+    const host = await lounge.getLoungeHost();
+    expect(host).toMatchObject({ userId: ids.brian, firstName: 'Brian' });
 
+    const { postId } = await lounge.createLoungePost({
+      viewer: maria(),
+      organizationId: ids.org,
+      membershipId: null,
+      input: { ...base, title: `Pacing ${stamp}` },
+    });
+    await lounge.createLoungeReply({ viewer: { userId: kevin, isStaff: true }, organizationId: ids.org, postId, input: { body: 'Kevin here.', videoUrl: null } });
+    await lounge.createLoungeReply({ viewer: devin(), organizationId: ids.org, postId, input: { body: 'Same question.', videoUrl: null } });
+
+    const candidates = await lounge.listMentionCandidates(maria(), postId);
+    expect(candidates.slice(0, 2)).toEqual([
+      { userId: 'yawp-team', label: 'YAWP! team', detail: 'Brian and the team' },
+      { userId: ids.brian, label: 'Brian', detail: 'YAWP! team' },
+    ]);
+    const offered = candidates.map((c) => c.userId);
+    expect(offered).toContain(ids.devin);
+    expect(offered).not.toContain(kevin);
+    expect(offered).not.toContain(ids.team);
+
+    // "@YAWP! team" asks the team: it lands in the inbox and emails the team.
+    const { notifications } = await lounge.createLoungeReply({
+      viewer: devin(),
+      organizationId: ids.org,
+      postId,
+      input: { body: 'Any ideas @[YAWP! team](user:yawp-team)?', videoUrl: null },
+    });
+    expect(notifications.map((n) => n.kind)).toContain('staff-request');
+    expect((await lounge.listLoungeStaffInbox()).waiting.map((w) => w.id)).toContain(postId);
+
+    const { postId: asked } = await lounge.createLoungePost({
+      viewer: maria(),
+      organizationId: ids.org,
+      membershipId: null,
+      input: { ...base, title: `Team mention ${stamp}`, body: 'Help @[YAWP! team](user:yawp-team)' },
+    });
+    expect((await lounge.getLoungeThread(maria(), asked))?.post.staffStatus).toBe('OPEN');
+
+    await prisma.orgMembership.deleteMany({ where: { userId: kevin } });
+    await prisma.user.delete({ where: { id: kevin } });
+  });
+
+  test('topic counts match the feed, busiest first', async () => {
     const counts = await lounge.listLoungeTopicCounts(maria());
     const routines = counts.find((c) => c.topic === 'classroom-routines');
     expect(routines?.label).toBe('Classroom Routines');

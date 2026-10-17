@@ -1,3 +1,6 @@
+/** The name of the shared, sign-in-less account the team posts launch questions from. */
+export const LOUNGE_TEAM_ACCOUNT_NAME = 'YAWP! team';
+
 export type LoungeDisplayNameStyleKey =
   | 'FULL_NAME'
   | 'FIRST_NAME_LAST_INITIAL'
@@ -32,7 +35,9 @@ export function loungeByline(params: {
   isStaff: boolean;
 }): { name: string; detail: string | null } {
   if (params.isStaff) {
-    return { name: loungeDisplayName(params.name, 'FULL_NAME'), detail: 'YAWP! team' };
+    const name = loungeDisplayName(params.name, 'FULL_NAME');
+    // The shared team account is already called "YAWP! team".
+    return { name, detail: name === LOUNGE_TEAM_ACCOUNT_NAME ? null : 'YAWP! team' };
   }
   return {
     name: loungeDisplayName(params.name, DEFAULT_LOUNGE_DISPLAY_NAME_STYLE),

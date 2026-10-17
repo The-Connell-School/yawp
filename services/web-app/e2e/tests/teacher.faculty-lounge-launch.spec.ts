@@ -32,13 +32,12 @@ async function resetLounge(e2eContext: { adminEmail: string }) {
     await prisma.$disconnect();
   }
   // Brian's launch content through the real seed command, with the e2e admin
-  // standing in for Brian and Kevin.
+  // standing in for Brian.
   execFileSync('bun', ['run', SEED_SCRIPT, '--yes'], {
     env: {
       ...process.env,
       DATABASE_URL: process.env.E2E_DATABASE_URL ?? '',
       LOUNGE_SEED_BRIAN_EMAIL: e2eContext.adminEmail,
-      LOUNGE_SEED_KEVIN_EMAIL: e2eContext.adminEmail,
     },
     stdio: 'pipe',
   });
@@ -87,11 +86,14 @@ test.describe.serial('Faculty Lounge launch', () => {
     await expect(pinned.getByRole('link')).toHaveText([/Welcome to the Faculty Lounge/, /House Rules for the Lounge/]);
     // The Letter look: Brian's welcome as a letter, the team's faces beside it.
     await expect(pinned.getByText(/Every school's faculty lounge has its own personality/)).toBeVisible();
-    await expect(pinned.getByRole('heading', { name: 'The YAWP! team' })).toBeVisible();
+    await expect(pinned.getByRole('heading', { name: 'Ask Admin or the YAWP! team' })).toBeVisible();
+    await expect(pinned.getByText('@YAWP! team')).toBeVisible();
     // A question that is all title previews Brian's answer, and says who answered.
     const q1 = page.getByRole('article').filter({ hasText: "What's the best way to use YAWP!" });
     await expect(q1.getByText(/^Use the Class Starter to build reps\./)).toBeVisible();
     await expect(q1.getByText('Admin answered')).toBeVisible();
+    // The launch questions are asked by the YAWP! team, not by one staff member.
+    await expect(q1.getByText('YAWP! team', { exact: true })).toBeVisible();
     // Drafts in the hopper stay out of the feed.
     await expect(page.getByRole('link', { name: HOPPER_TITLE })).toHaveCount(0);
 

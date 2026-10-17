@@ -11,7 +11,8 @@ export function hasLaunchPlaceholder(body: string): boolean {
 
 export type LoungeLaunchSeedOptions = {
   brianUserId: string;
-  kevinUserId: string;
+  /** The shared YAWP! team account (see team-account.ts). */
+  teamUserId: string;
   now?: Date;
   posts?: LaunchPost[];
 };
@@ -35,7 +36,7 @@ const MINUTE = 60_000;
  */
 export async function seedLoungeLaunch(
   prisma: SeedPrisma,
-  { brianUserId, kevinUserId, now = new Date(), posts = LAUNCH_POSTS }: LoungeLaunchSeedOptions
+  { brianUserId, teamUserId, now = new Date(), posts = LAUNCH_POSTS }: LoungeLaunchSeedOptions
 ): Promise<LoungeLaunchSeedResult> {
   for (const post of posts) {
     if (!post.draft && (hasLaunchPlaceholder(post.body) || hasLaunchPlaceholder(post.answer?.body ?? ''))) {
@@ -43,7 +44,7 @@ export async function seedLoungeLaunch(
     }
   }
 
-  const authorId = (author: LaunchAuthor) => (author === 'brian' ? brianUserId : kevinUserId);
+  const authorId = (author: LaunchAuthor) => (author === 'brian' ? brianUserId : teamUserId);
   const existing = new Set(
     (
       await prisma.loungePost.findMany({

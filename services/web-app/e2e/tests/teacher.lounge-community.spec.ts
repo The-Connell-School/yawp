@@ -140,14 +140,18 @@ test.describe.serial("Faculty Lounge community board", () => {
 
     const reply = page.getByLabel('Your reply');
     await reply.fill('Opener here too. Thanks ');
-    await reply.pressSequentially('@Adm');
-    await page.getByRole('option', { name: /Admin E2E/ }).click();
+    // Teachers reach the staff as "@YAWP! team", not by each person's name.
+    await reply.pressSequentially('@');
+    await expect(page.getByRole('option', { name: /YAWP! team/ })).toBeVisible();
+    await expect(page.getByRole('option', { name: /Admin E2E/ })).toHaveCount(0);
+    await reply.pressSequentially('YAW');
+    await page.getByRole('option', { name: /YAWP! team/ }).click();
     await reply.pressSequentially('for the video.');
     await page.getByRole('button', { name: 'Post reply' }).click();
 
     const replies = page.getByRole('region', { name: 'Replies' });
     await expect(replies.getByText('Opener here too.')).toBeVisible();
-    await expect(replies.getByText('@Admin E2E')).toBeVisible();
+    await expect(replies.getByText('@YAWP! team')).toBeVisible();
     await expect(replies.getByText(/\(user:/)).toHaveCount(0);
   });
 

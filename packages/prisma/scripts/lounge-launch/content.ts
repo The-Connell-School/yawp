@@ -4,10 +4,11 @@
  * plain-text display. Each item has a stable seedKey so seeding twice never
  * duplicates or overwrites anything (edits made in the app are kept).
  *
- * Authors: "brian" and "kevin" are resolved to real YAWP! team accounts by
- * the seed script.
+ * Authors: "brian" is Brian's own account; "team" is the shared "YAWP! team"
+ * account (no password, nobody signs in as it), so the launch questions come
+ * from the team rather than one person.
  */
-export type LaunchAuthor = 'brian' | 'kevin';
+export type LaunchAuthor = 'brian' | 'team';
 export type LaunchKind = 'QUESTION' | 'SHARE' | 'WIN';
 
 export type LaunchPost = {
@@ -70,7 +71,7 @@ export const HOUSE_RULES: LaunchPost = {
 export const LAUNCH_QUESTIONS: LaunchPost[] = [
   {
     seedKey: 'launch:q1-routine',
-    author: 'kevin',
+    author: 'team',
     kind: 'QUESTION',
     topic: 'classroom-routines',
     title: "What's the best way to use YAWP! to make writing a regular part of our class routine?",
@@ -84,7 +85,7 @@ The routine is the key. Writing becomes normal when it happens at the same time 
   },
   {
     seedKey: 'launch:q2-more-writing',
-    author: 'kevin',
+    author: 'team',
     kind: 'QUESTION',
     topic: 'classroom-routines',
     title: 'My students write two sentences in the Class Starter and stop. How do I get them writing more?',
@@ -110,7 +111,7 @@ Don't grade length yet. If two sentences turns into four by the end of the month
   },
   {
     seedKey: 'launch:q3-prewriting-thesis',
-    author: 'kevin',
+    author: 'team',
     kind: 'QUESTION',
     topic: 'thesis-essays',
     title: 'How are people using the pre-writing assignment and the thesis assignment?',
@@ -126,7 +127,7 @@ That works the same way whether it's literary analysis, rhetorical analysis, or 
   },
   {
     seedKey: 'launch:q4-ai-comments',
-    author: 'kevin',
+    author: 'team',
     kind: 'QUESTION',
     topic: 'grading',
     title: 'Do you hand back the AI grading comments as is, or do you edit them? Do your students actually read the comments?',
@@ -140,7 +141,7 @@ As for whether students read them: they read comments when they have to do somet
   },
   {
     seedKey: 'launch:q5-ai-first-day',
-    author: 'kevin',
+    author: 'team',
     kind: 'QUESTION',
     topic: 'classroom-routines',
     title: 'How do you talk to students about AI on the first day? What do you actually tell them?',
@@ -156,7 +157,7 @@ And I tell them most of our writing happens in the room, with me there. I'm not 
   },
   {
     seedKey: 'launch:q6-explaining-yawp',
-    author: 'kevin',
+    author: 'team',
     kind: 'QUESTION',
     topic: 'other',
     title: 'How do you explain YAWP! to other adults: parents, administrators, colleagues?',
@@ -199,7 +200,7 @@ export const COMMUNITY_THREADS: LaunchPost[] = [
 export const HOPPER: LaunchPost[] = [
   {
     seedKey: 'hopper:revision-policy',
-    author: 'kevin',
+    author: 'team',
     kind: 'QUESTION',
     topic: 'grading',
     draft: true,
@@ -208,7 +209,7 @@ export const HOPPER: LaunchPost[] = [
   },
   {
     seedKey: 'hopper:is-it-theirs',
-    author: 'kevin',
+    author: 'team',
     kind: 'QUESTION',
     topic: 'classroom-routines',
     draft: true,
@@ -217,7 +218,7 @@ export const HOPPER: LaunchPost[] = [
   },
   {
     seedKey: 'hopper:tutor-off',
-    author: 'kevin',
+    author: 'team',
     kind: 'QUESTION',
     topic: 'classroom-routines',
     draft: true,
@@ -226,7 +227,7 @@ export const HOPPER: LaunchPost[] = [
   },
   {
     seedKey: 'hopper:essay-stack',
-    author: 'kevin',
+    author: 'team',
     kind: 'QUESTION',
     topic: 'grading',
     draft: true,
