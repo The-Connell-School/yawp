@@ -76,6 +76,20 @@ export const TITLES_DECK: HybridDeck = {
         'Each title has two parts. The left side is a creative or "fun" element; the right side delivers a clear, direct description of the topic. Alone, each would be ordinary at best and confusing at worst: "Beyond the Boys’ Club" could be about single-sex schools, fraternities, men in politics… The right side gives it context; the left side gives the right side flavor. The right side doesn’t have to start with "How" (all three just happen to). The Tutor knows the colon title too and can help students draft and revise theirs.',
     },
     {
+      layout: 'steps',
+      eyebrow: 'Your turn',
+      title: 'Write your title',
+      accent: 'coral',
+      items: [
+        'Reread your ==thesis==: your title is about the same thing',
+        '==Right of the colon:== say clearly what your essay is about',
+        '==Left of the colon:== something creative, like a phrase, a pun or an image',
+        'Ask the ==Tutor== for feedback, then try a second version',
+      ],
+      notes:
+        'Give them about five minutes. On the Title Your Essay! step the Tutor walks them through the colon title and gives feedback on drafts. Have a few students read theirs aloud; vote on favorites if the room is into it. A title without a colon is fine too, as long as it is informative, smart and memorable.',
+    },
+    {
       layout: 'section',
       eyebrow: 'Finish',
       kicker: 'Finish',
@@ -109,8 +123,21 @@ export const TITLES_DECK: HybridDeck = {
         'Paragraphs left-aligned',
         'Then click ==Submit==',
       ],
+      markers: [
+        [0.69, 0.22],
+        [0.74, 0.31],
+        [0.28, 0.53],
+        [0.893, 0.06],
+      ],
       notes:
-        'A finished essay in today’s YAWP! editor, ready to submit. They wrote a critical, thesis-driven essay that could stand up in any high school or college classroom. Good work!',
+        'A finished essay in today’s YAWP! editor, ready to submit.',
+    },
+    {
+      layout: 'closer',
+      eyebrow: 'YAWP!',
+      line: 'You wrote a thesis-driven essay. Celebrate it!',
+      notes:
+        'They wrote a critical, thesis-driven essay that could stand up in any high school or college classroom. Good work! Celebrate it: a reflection on the process, a favorite line read aloud, or sharing the essays beyond the class.',
     },
   ],
 };

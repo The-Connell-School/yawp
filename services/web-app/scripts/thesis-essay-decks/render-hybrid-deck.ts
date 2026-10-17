@@ -105,16 +105,30 @@ export function plain(source: string): string {
     .join('');
 }
 
+/**
+ * Rich text as runs. Line breaks become breaks after a line's last run:
+ * left inside a run, pptxgenjs ends the paragraph there and starts the next
+ * run on a line of its own ("Remember, the" / "final sentence…").
+ */
 function runs(source: string, accent: AccentColor, extra: PptxGenJS.TextPropsOptions = {}): TextRun[] {
-  return parseMarks(source).map((segment) => ({
-    text: segment.text,
-    options: {
-      ...extra,
-      ...(segment.highlight ? { highlight: T.highlighter } : {}),
-      ...(segment.strong ? { bold: true, color: T[accent] } : {}),
-      ...(segment.italic ? { italic: true } : {}),
-    },
-  }));
+  const lines = source.split('\n');
+  return lines.flatMap((line, lineIndex) => {
+    const lineRuns: TextRun[] = parseMarks(line).map((segment) => ({
+      text: segment.text,
+      options: {
+        ...extra,
+        ...(segment.highlight ? { highlight: T.highlighter } : {}),
+        ...(segment.strong ? { bold: true, color: T[accent] } : {}),
+        ...(segment.italic ? { italic: true } : {}),
+      },
+    }));
+    if (!lineRuns.length) lineRuns.push({ text: '', options: { ...extra } });
+    if (lineIndex < lines.length - 1) {
+      const last = lineRuns[lineRuns.length - 1];
+      last.options = { ...last.options, breakLine: true };
+    }
+    return lineRuns;
+  });
 }
 
 /** Paragraphs of rich text, one per line, each optionally bulleted. */
@@ -138,6 +152,75 @@ function paragraphs(
       },
     }));
   });
+}
+
+// ---------------------------------------------------------------------------
+// Fitting text. pptxgenjs can't measure, so this estimates: the average
+// width of a character of English prose (Georgia and Calibri, measured on
+// the sample essay, with a little room to spare) and greedy word wrap.
+
+/** Average character width, in ems (measured: Georgia 0.44, Calibri 0.41). */
+const EM_PER_CHAR = { serif: 0.45, sans: 0.42 } as const;
+/** A line's height, in ems, before `lineSpacingMultiple`: the faces' own. */
+const LINE_EM = { serif: 1.14, sans: 1.22 } as const;
+
+type Face = keyof typeof EM_PER_CHAR;
+
+function wrappedLines(paragraph: string, perLine: number): number {
+  let lines = 1;
+  let used = 0;
+  for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+    const need = used ? used + 1 + word.length : word.length;
+    if (need <= perLine) used = need;
+    else {
+      lines += used ? 1 : 0;
+      used = Math.min(word.length, perLine);
+    }
+  }
+  return lines;
+}
+
+/** Bold runs (`**accent bold**`) set wider than regular ones. */
+const BOLD_WIDTH = 1.12;
+
+/** How tall the text runs at `size`, in inches, wrapped to `width` inches. */
+function textHeight(text: string, width: number, size: number, face: Face, lineSpacing: number): number {
+  const lines = text.split('\n').reduce((sum, paragraph) => {
+    const segments = parseMarks(paragraph);
+    const length = segments.reduce((n, segment) => n + segment.text.length, 0);
+    const weighted = segments.reduce((n, segment) => n + segment.text.length * (segment.strong ? BOLD_WIDTH : 1), 0);
+    const widen = length ? weighted / length : 1;
+    const perLine = Math.max(1, Math.floor((width * 72) / (size * EM_PER_CHAR[face] * widen)));
+    return sum + wrappedLines(plain(paragraph), perLine);
+  }, 0);
+  return (lines * size * LINE_EM[face] * lineSpacing) / 72;
+}
+
+/**
+ * The largest of `sizes` (biggest first) at which the text fits the box.
+ * Text that doesn't fit at the smallest throws: split it across slides
+ * rather than shrink it past what the back row can read.
+ */
+export function fitFontSize(
+  text: string,
+  box: { w: number; h: number },
+  sizes: readonly number[],
+  { face = 'serif', lineSpacing = 1.2 }: { face?: Face; lineSpacing?: number } = {}
+): number {
+  // A little room to spare: the estimate is an average, not a measurement.
+  for (const size of sizes) {
+    if (textHeight(text, box.w, size, face, lineSpacing) <= box.h * 0.95) return size;
+  }
+  throw new Error(
+    `Too long for a slide at ${sizes[sizes.length - 1]}pt; split it across slides: "${plain(text).slice(0, 60)}…"`
+  );
+}
+
+/** Keeps a title's last two words together, so no word wraps alone. */
+function noOrphan(text: string): string {
+  const words = text.split(' ');
+  if (words.length < 4) return text;
+  return `${words.slice(0, -2).join(' ')} ${words.slice(-2).join(' ')}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -214,11 +297,15 @@ function titleSize(title: string): number {
   return 36;
 }
 
-function addHeading(slide: PptxSlide, spec: HybridSlide, accent: AccentColor): void {
+/**
+ * The eyebrow and title. `compact` lifts them and caps the title's size, for
+ * slides whose figure needs the height (screenshots, the essay form).
+ */
+function addHeading(slide: PptxSlide, spec: HybridSlide, accent: AccentColor, compact = false): void {
   const width = CONTENT_WIDTH - 1.6;
   slide.addText(spec.eyebrow.toUpperCase(), {
     x: MARGIN,
-    y: 0.55,
+    y: compact ? 0.3 : 0.55,
     w: width,
     h: 0.35,
     fontFace: T.mono,
@@ -230,13 +317,13 @@ function addHeading(slide: PptxSlide, spec: HybridSlide, accent: AccentColor): v
     margin: 0,
   });
   if ('title' in spec) {
-    slide.addText(runs(spec.title, accent), {
+    slide.addText(runs(noOrphan(spec.title), accent), {
       x: MARGIN,
-      y: 0.95,
+      y: compact ? 0.68 : 0.95,
       w: width,
-      h: 1.05,
+      h: compact ? 0.7 : 1.05,
       fontFace: T.serif,
-      fontSize: titleSize(spec.title),
+      fontSize: compact ? Math.min(titleSize(spec.title), 32) : titleSize(spec.title),
       color: T.ink,
       valign: 'top',
       margin: 0,
@@ -334,7 +421,7 @@ function addTitleSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 't
     color: T.teal,
     margin: 0,
   });
-  slide.addText([{ text: spec.title, options: { highlight: T.highlighter } }], {
+  slide.addText([{ text: noOrphan(spec.title), options: { highlight: T.highlighter } }], {
     x,
     y: 2.7,
     w,
@@ -389,7 +476,7 @@ function addSectionSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 
     align: 'center',
     margin: 0,
   });
-  slide.addText([{ text: spec.title, options: { highlight: T.highlighter } }], {
+  slide.addText([{ text: noOrphan(spec.title), options: { highlight: T.highlighter } }], {
     x: cx,
     y: cy + 1.95,
     w: d,
@@ -439,14 +526,14 @@ function addStatementSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout
     addDot(slide, iconX - 0.15, iconY + d - 0.35, 0.22, T[accentAt(ACCENT_OFFSET[accent] + 4)]);
   }
   const x = spec.icon ? iconX + d + 0.7 : MARGIN + 0.8;
-  const length = plain(spec.body).length;
-  slide.addText(runs(spec.body, accent), {
+  const w = W - MARGIN - x;
+  slide.addText(runs(noOrphan(spec.body), accent), {
     x,
     y: BODY_TOP,
-    w: W - MARGIN - x,
+    w,
     h: BODY_HEIGHT,
     fontFace: T.serif,
-    fontSize: length > 200 ? 26 : length > 90 ? 32 : 40,
+    fontSize: fitFontSize(spec.body, { w, h: BODY_HEIGHT }, [40, 36, 32, 28, 26, 24], { lineSpacing: 1.15 }),
     color: T.ink,
     valign: 'middle',
     lineSpacingMultiple: 1.15,
@@ -483,12 +570,30 @@ function addStepsSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 's
   const perRow = count === 4 && longest > 60 ? 2 : count;
   const rows = Math.ceil(count / perRow);
   const w = (CONTENT_WIDTH - gap * (perRow - 1)) / perRow;
-  const h = rows > 1 ? (BODY_BOTTOM - top - gap * (rows - 1)) / rows : Math.min(BODY_BOTTOM - top, 4.1);
   const grid = rows > 1;
+  const room = BODY_BOTTOM - top;
+  // One row: the words as large as the narrowest tile allows, and tiles
+  // only as tall as their words, centred in the space under the title.
+  const textBox = { w: w - 0.7, h: room - 1.75 };
+  const rowSize = grid
+    ? 0
+    : Math.min(...spec.items.map((item) => fitFontSize(item, textBox, [28, 26, 24, 22, 20], { face: 'sans', lineSpacing: 1 })));
+  const textH = grid
+    ? 0
+    : Math.max(...spec.items.map((item) => textHeight(item, textBox.w, rowSize, 'sans', 1)));
+  const h = grid ? (room - gap * (rows - 1)) / rows : Math.min(room, Math.max(2.6, 1.6 + textH + 0.45));
+  const rowTop = grid ? top : top + (room - h) / 2;
+  const gridSize = grid
+    ? Math.min(
+        ...spec.items.map((item) =>
+          fitFontSize(item, { w: w - 1.45, h: h - 0.45 }, [26, 24, 22, 20, 18], { face: 'sans', lineSpacing: 1 })
+        )
+      )
+    : 0;
   spec.items.forEach((item, index) => {
     const color = accentAt(ACCENT_OFFSET[accent] + index);
     const x = MARGIN + (index % perRow) * (w + gap);
-    const y = top + Math.floor(index / perRow) * (h + gap);
+    const y = rowTop + Math.floor(index / perRow) * (h + gap);
     addCard(slide, { x, y, w, h }, color);
     if (grid) {
       addDot(slide, x + 0.3, y + 0.35, 0.6, T[color]);
@@ -511,17 +616,17 @@ function addStepsSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 's
         w: w - 1.45,
         h: h - 0.45,
         fontFace: T.sans,
-        fontSize: longest > 110 ? 18 : 20,
+        fontSize: gridSize,
         color: T.ink,
         valign: 'top',
         margin: 0,
       });
       return;
     }
-    addDot(slide, x + 0.35, top + 0.4, 0.8, T[color]);
+    addDot(slide, x + 0.35, y + 0.4, 0.8, T[color]);
     slide.addText(String(index + 1), {
       x: x + 0.35,
-      y: top + 0.4,
+      y: y + 0.4,
       w: 0.8,
       h: 0.8,
       fontFace: T.serif,
@@ -534,11 +639,11 @@ function addStepsSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 's
     });
     slide.addText(runs(item, color), {
       x: x + 0.35,
-      y: top + 1.4,
+      y: y + 1.4,
       w: w - 0.7,
       h: h - 1.6,
       fontFace: T.sans,
-      fontSize: count > 3 ? 22 : longest > 90 ? 21 : longest > 60 ? 23 : 26,
+      fontSize: rowSize,
       color: T.ink,
       valign: 'top',
       margin: 0,
@@ -556,7 +661,7 @@ function addStepsWithStrip(
 ): void {
   const colGap = 0.5;
   const colW = (CONTENT_WIDTH - colGap) / 2;
-  const rowH = 0.95;
+  const rowH = 0.8;
   spec.items.forEach((item, index) => {
     const color = accentAt(ACCENT_OFFSET[accent] + index);
     const x = MARGIN + (index % 2) * (colW + colGap);
@@ -587,12 +692,14 @@ function addStepsWithStrip(
       margin: 0,
     });
   });
+  // The screenshot takes all the room left, down to the footer.
   const listBottom = top + Math.ceil(spec.items.length / 2) * rowH;
+  const bottom = H - 0.7;
   const pad = 0.28;
-  const size = imageBox(strip, CONTENT_WIDTH - pad, BODY_BOTTOM - listBottom - 0.25 - pad);
+  const size = imageBox(strip, CONTENT_WIDTH - pad, bottom - listBottom - 0.2 - pad);
   addFramedImage(slide, strip, {
     x: (W - size.w - pad) / 2,
-    y: BODY_BOTTOM - size.h - pad,
+    y: bottom - size.h - pad,
     w: size.w + pad,
     h: size.h + pad,
   });
@@ -658,13 +765,15 @@ function addQuoteSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 'q
     valign: 'top',
     margin: 0,
   });
-  slide.addText(runs(spec.body, accent), {
+  slide.addText(runs(noOrphan(spec.body), accent), {
     x: box.x + 1.25,
     y: box.y + 0.4,
     w: box.w - 1.75,
     h: box.h - 1.45,
     fontFace: T.serif,
-    fontSize: plain(spec.body).length > 300 ? 19 : 26,
+    fontSize: fitFontSize(spec.body, { w: box.w - 1.75, h: box.h - 1.45 }, [30, 28, 26, 24, 22, 20], {
+      lineSpacing: 1.2,
+    }),
     italic: true,
     color: T.ink,
     valign: 'middle',
@@ -692,10 +801,13 @@ function addQuoteSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 'q
   }
 }
 
+/** The tile a reading slide's text sits on, under a compact heading. */
+const READING_BOX = { x: MARGIN, y: 1.55, w: CONTENT_WIDTH, h: H - 0.7 - 1.55 };
+
 function addPromptSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 'prompt' }>, accent: AccentColor): void {
-  addHeading(slide, spec, accent);
+  addHeading(slide, spec, accent, true);
   addCornerCluster(slide, 'puzzle', accent);
-  const box = { x: MARGIN, y: BODY_TOP - 0.05, w: CONTENT_WIDTH, h: BODY_HEIGHT + 0.1 };
+  const box = READING_BOX;
   addCard(slide, box, accent);
   // The option as a pill, the way a class tile carries its label.
   slide.addShape('roundRect', {
@@ -727,7 +839,9 @@ function addPromptSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: '
     w: box.w - 0.9,
     h: box.h - 1.25,
     fontFace: T.serif,
-    fontSize: spec.body.split('\n').length >= 6 || plain(spec.body).length > 560 ? 18 : 22,
+    fontSize: fitFontSize(spec.body, { w: box.w - 0.9, h: box.h - 1.25 }, [26, 24, 22, 20, 18], {
+      lineSpacing: 1.2,
+    }),
     color: T.ink,
     valign: 'top',
     lineSpacingMultiple: 1.2,
@@ -735,29 +849,81 @@ function addPromptSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: '
   });
 }
 
+/** A white-ringed numbered dot: a marker on a screenshot, or its callout's number. */
+function addNumberDot(slide: PptxSlide, n: number, x: number, y: number, d: number, color: AccentColor): void {
+  slide.addShape('ellipse', {
+    x,
+    y,
+    w: d,
+    h: d,
+    fill: { color: T[color] },
+    line: { color: T.paper, width: 2 },
+    shadow: { type: 'outer', color: T.ink, opacity: 0.25, blur: 4, offset: 1.5, angle: 90 },
+  });
+  slide.addText(String(n), {
+    x,
+    y,
+    w: d,
+    h: d,
+    fontFace: T.serif,
+    fontSize: 18,
+    bold: true,
+    color: T.paper,
+    align: 'center',
+    valign: 'middle',
+    margin: 0,
+  });
+}
+
 function addFigureSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 'figure' }>, accent: AccentColor): void {
-  addHeading(slide, spec, accent);
-  const size = imageBox(spec.image, 7.6, BODY_HEIGHT + 0.25);
-  addFramedImage(slide, spec.image, { x: MARGIN, y: BODY_TOP - 0.15, ...size });
-  const x = MARGIN + size.w + 0.6;
+  // A compact heading gives the figure the height: screenshots and the
+  // essay form are what the room is looking at.
+  addHeading(slide, spec, accent, true);
+  const top = 1.55;
+  const bottom = H - 0.7;
+  const calloutsW = 3.2;
+  const size = imageBox(spec.image, CONTENT_WIDTH - calloutsW - 0.5, bottom - top);
+  const frame = { x: MARGIN, y: top + (bottom - top - size.h) / 2, ...size };
+  addFramedImage(slide, spec.image, frame);
+  const x = MARGIN + size.w + 0.5;
   const w = W - MARGIN - x;
-  const rowH = Math.min(BODY_HEIGHT / spec.callouts.length, 1.0);
-  const top = BODY_TOP + (BODY_HEIGHT - rowH * spec.callouts.length) / 2;
+  const numbered = Boolean(spec.markers);
+  const d = numbered ? 0.5 : 0.32;
+  spec.markers?.forEach(([fx, fy], index) => {
+    const color = accentAt(ACCENT_OFFSET[accent] + index);
+    const pad = 0.14;
+    const cx = frame.x + pad + fx * (frame.w - pad * 2);
+    const cy = frame.y + pad + fy * (frame.h - pad * 2);
+    addNumberDot(slide, index + 1, cx - d / 2, cy - d / 2, d, color);
+  });
+  const textW = w - d - 0.2;
+  const fontSize = Math.min(
+    ...spec.callouts.map((callout) =>
+      fitFontSize(callout, { w: textW, h: (bottom - top) / spec.callouts.length - 0.15 }, [24, 22, 20, 18], {
+        face: 'sans',
+        lineSpacing: 1,
+      })
+    )
+  );
+  const heights = spec.callouts.map((callout) => Math.max(d, textHeight(callout, textW, fontSize, 'sans', 1)) + 0.3);
+  let y = top + (bottom - top - heights.reduce((sum, h) => sum + h, 0)) / 2;
   spec.callouts.forEach((callout, index) => {
     const color = accentAt(ACCENT_OFFSET[accent] + index);
-    const y = top + index * rowH;
-    addDot(slide, x, y + (rowH - 0.32) / 2, 0.32, T[color]);
+    const rowH = heights[index];
+    if (numbered) addNumberDot(slide, index + 1, x, y + (rowH - d) / 2, d, color);
+    else addDot(slide, x, y + (rowH - d) / 2, d, T[color]);
     slide.addText(runs(callout, color), {
-      x: x + 0.52,
+      x: x + d + 0.2,
       y,
-      w: w - 0.52,
+      w: textW,
       h: rowH,
       fontFace: T.sans,
-      fontSize: w > 5 ? 24 : 20,
+      fontSize,
       color: T.ink,
       valign: 'middle',
       margin: 0,
     });
+    y += rowH;
   });
 }
 
@@ -834,7 +1000,7 @@ function addCompareSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 
       w: d - 0.4,
       h: d - 0.4,
       fontFace: T.sans,
-      fontSize: 17,
+      fontSize: 18,
       bold: true,
       color: T.ink,
       align: 'center',
@@ -846,9 +1012,9 @@ function addCompareSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 
 }
 
 function addExampleSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 'example' }>, accent: AccentColor): void {
-  addHeading(slide, spec, accent);
+  addHeading(slide, spec, accent, true);
   addCornerCluster(slide, 'question', accent);
-  const box = { x: MARGIN, y: BODY_TOP - 0.05, w: CONTENT_WIDTH, h: BODY_HEIGHT + 0.1 };
+  const box = READING_BOX;
   addCard(slide, box, accent);
   slide.addText(runs(spec.body, accent), {
     x: box.x + 0.5,
@@ -856,10 +1022,12 @@ function addExampleSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 
     w: box.w - 1.0,
     h: box.h - 0.6,
     fontFace: T.serif,
-    fontSize: plain(spec.body).length > 1000 ? 16.5 : plain(spec.body).length < 250 ? 32 : 18,
+    fontSize: fitFontSize(spec.body, { w: box.w - 1.0, h: box.h - 0.6 }, [32, 28, 26, 24, 22, 20, 19, 18], {
+      lineSpacing: 1.15,
+    }),
     color: T.ink,
     valign: 'middle',
-    lineSpacingMultiple: 1.25,
+    lineSpacingMultiple: 1.15,
     margin: 0,
   });
 }
@@ -1117,7 +1285,14 @@ function addOrderingSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout:
   const count = spec.items.length;
   const gap = 0.14;
   const rowH = Math.min((BODY_HEIGHT - gap * (count - 1)) / count, 0.72);
-  const w = Math.min(CONTENT_WIDTH, 9.5);
+  // Long sentences (the Iron Man round) take the full width.
+  const longest = Math.max(...spec.items.map((item) => plain(item).length));
+  const w = longest > 50 ? CONTENT_WIDTH : Math.min(CONTENT_WIDTH, 9.5);
+  const fontSize = Math.min(
+    ...spec.items.map((item) =>
+      fitFontSize(item, { w: w - 1.2, h: rowH }, [24, 22, 20, 18], { face: 'sans', lineSpacing: 1 })
+    )
+  );
   const x = MARGIN + (CONTENT_WIDTH - w) / 2;
   const top = BODY_TOP + (BODY_HEIGHT - (rowH * count + gap * (count - 1))) / 2;
   spec.items.forEach((item, index) => {
@@ -1133,7 +1308,7 @@ function addOrderingSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout:
         w: d,
         h: d,
         fontFace: T.serif,
-        fontSize: 16,
+        fontSize: 18,
         bold: true,
         color: T.paper,
         align: 'center',
@@ -1156,7 +1331,7 @@ function addOrderingSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout:
       w: w - 1.2,
       h: rowH,
       fontFace: T.sans,
-      fontSize: plain(item).length > 70 ? 17 : 22,
+      fontSize,
       color: T.ink,
       valign: 'middle',
       margin: 0,
@@ -1301,7 +1476,7 @@ function addThesisPartsSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layo
       w: d,
       h: d,
       fontFace: T.serif,
-      fontSize: 16,
+      fontSize: 18,
       bold: true,
       color: T.paper,
       align: 'center',
@@ -1319,8 +1494,10 @@ function addThesisPartsSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layo
 }
 
 function addPassageSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 'passage' }>, accent: AccentColor): void {
-  addHeading(slide, spec, accent);
-  const box = { x: MARGIN, y: BODY_TOP - 0.05, w: CONTENT_WIDTH, h: BODY_HEIGHT + 0.1 };
+  // A reading slide: a compact heading leaves the passage the height to stay
+  // large enough to read.
+  addHeading(slide, spec, accent, true);
+  const box = READING_BOX;
   addCard(slide, box, accent);
   let top = box.y + 0.3;
   if (spec.label) {
@@ -1338,17 +1515,16 @@ function addPassageSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 
     });
     top += 0.4;
   }
-  const length = plain(spec.body).length;
+  const textBox = { w: box.w - 1, h: box.y + box.h - 0.3 - top };
   slide.addText(runs(spec.body, accent), {
     x: box.x + 0.5,
     y: top,
-    w: box.w - 1,
-    h: box.y + box.h - 0.3 - top,
+    ...textBox,
     fontFace: T.serif,
-    fontSize: length > 1500 ? 12.5 : length > 1150 ? 13.5 : length > 850 ? 15 : length > 700 ? 17 : length > 450 ? 20 : 24,
+    fontSize: fitFontSize(spec.body, textBox, [26, 24, 22, 20, 19, 18], { lineSpacing: 1.12 }),
     color: T.ink,
     valign: 'top',
-    lineSpacingMultiple: 1.2,
+    lineSpacingMultiple: 1.12,
     margin: 0,
   });
 }

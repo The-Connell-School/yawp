@@ -107,7 +107,7 @@ export const DAY_ONE_DECK: HybridDeck = {
       title: '“Bored in the USA”',
       line: 'Highlight anything you find interesting.',
       notes:
-        'Use "Bored in the USA" from the resources, or your own sample, as long as it follows our form (intro ending in a thesis, body paragraphs, conclusion). Everyone has a copy. Before reading, ask everyone to underline or highlight anything interesting, at least one thing per paragraph. Volunteers read aloud, a paragraph each. Don’t overanalyze.',
+        'Use "Bored in the USA" (the Sample essay handout, next to this deck in the Modules), or your own sample, as long as it follows our form (intro ending in a thesis, body paragraphs, conclusion). Everyone has a copy. Before reading, ask everyone to underline or highlight anything interesting, at least one thing per paragraph. Volunteers read aloud, a paragraph each. Don’t overanalyze.',
     },
     {
       layout: 'steps',
@@ -125,6 +125,12 @@ export const DAY_ONE_DECK: HybridDeck = {
       image: 'critical-essay-form.png',
       accent: 'teal',
       callouts: ['Introduction', '==Thesis statement== ★ the sentence you just underlined', 'Body paragraphs', 'Conclusion'],
+      markers: [
+        [0.27, 0.22],
+        [0.62, 0.37],
+        [0.66, 0.53],
+        [0.73, 0.82],
+      ],
       notes:
         'The shape of the essay they just read and the one they are about to write. Point at the thesis: the most important part, the last sentence of the intro. Don’t spend long here; it’s also a handout, and you’ll come back to it.',
     },
@@ -165,6 +171,12 @@ export const DAY_ONE_DECK: HybridDeck = {
         'A ==handle==: how you log in',
         'A password, twice, then ==Join class==',
       ],
+      markers: [
+        [0.9, 0.335],
+        [0.87, 0.535],
+        [0.87, 0.63],
+        [0.87, 0.94],
+      ],
       notes:
         'Walk the room while students sign up. Handles are 3 to 30 characters: letters, numbers, dots, underscores and hyphens. Already have an account? They can log in from the same page.',
     },
@@ -182,6 +194,13 @@ export const DAY_ONE_DECK: HybridDeck = {
       ],
       notes:
         'Once they’re in, have them open the class and start the first assignment you’ve given them, which creates their document. Next class they open the same document (not a new one) and begin pre-writing.',
+    },
+    {
+      layout: 'closer',
+      eyebrow: 'YAWP!',
+      line: 'Next time: pre-writing.',
+      notes:
+        'Before students leave, make sure everyone has joined your class and started the assignment. Collect any forgotten handles now; it saves time next class.',
     },
   ],
 };

@@ -222,6 +222,13 @@ export const PREWRITING_DECK: HybridDeck = {
         'My comments are on the right',
         'Written a bunch? Click ==Give me feedback!==',
       ],
+      markers: [
+        [0.245, 0.2],
+        [0.145, 0.078],
+        [0.5, 0.55],
+        [0.86, 0.25],
+        [0.16, 0.947],
+      ],
       notes:
         'This is today’s YAWP! editor with a sample pre-write in it. Point to each part of the screen: the Tutor’s pre-writing instructions, the assignment prompt above the page, comments on the right. If you can, project your own screen with a student document open.',
     },
@@ -297,7 +304,13 @@ export const PREWRITING_DECK: HybridDeck = {
       title: 'Generating ideas requires energy. Don’t expect it to be easy.',
       terms: ['Critical thinking', 'Time'],
       result: 'Original ideas',
-      line: 'See you next time: thesis statements.',
+      line: 'Ask why. Then ask again.',
+      notes: 'The takeaway: ideas come from critical thinking plus time. Nobody gets them for free.',
+    },
+    {
+      layout: 'closer',
+      eyebrow: 'YAWP!',
+      line: 'Next time: thesis statements.',
       notes:
         'Leave this up as they pack up. Next lesson they turn today’s diamond into a thesis statement.',
     },

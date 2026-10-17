@@ -88,6 +88,21 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
 const QUIZ_NOTE =
   'Optional review quiz. Brian: "If that’s not your gig, delete the slides." If you keep it, make it a game: read the question, take answers, then click to the reveal. Candy or other small prizes help.';
 
+/**
+ * The divider ahead of the review quiz in Lessons 3 to 6, so a teacher can
+ * see where the optional part starts (Lesson 7 has Brian's own, "Course
+ * Review").
+ */
+export const REVIEW_DIVIDER: HybridSlide = {
+  layout: 'section',
+  eyebrow: 'Review',
+  kicker: 'Optional',
+  title: 'Quick Review',
+  line: 'What we’ve learned so far, one question at a time.',
+  notes:
+    'The review quiz starts here: this divider and the question-and-reveal pairs after it. Brian: "If that’s not your gig, delete the slides." Delete them together, or skip ahead to the lesson.',
+};
+
 /** The quiz that opens a lesson: question and reveal for the first `count` questions. */
 export function reviewQuiz(count: number): HybridSlide[] {
   return REVIEW_QUESTIONS.slice(0, count).flatMap((q, index) => {

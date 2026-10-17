@@ -9,7 +9,7 @@
  */
 import type { HybridDeck } from './deck-types';
 import { SAMPLE_BODY, SAMPLE_INTRODUCTION, SAMPLE_THESIS, SAMPLE_THESIS_PARTS } from './sample-essay';
-import { HOUSE_ANALOGY, reviewQuiz } from './shared-slides';
+import { HOUSE_ANALOGY, REVIEW_DIVIDER, reviewQuiz } from './shared-slides';
 
 const italicThesis = (text: string) => text.replace(SAMPLE_THESIS, `__${SAMPLE_THESIS}__`);
 
@@ -36,6 +36,7 @@ export const BODY_DECK: HybridDeck = {
       notes:
         'A turning point: with a solid intro ending on a strong thesis, students start to realize they’re actually writing a great essay. Before class, read their intros and comment; some will need a transition sentence linking the intro to the thesis. Start class with them opening their YAWP! docs and rereading their intro and thesis. A little show-and-tell helps: have a few students read theirs aloud. Being read gives them a sense of audience, and that lifts them up.',
     },
+    REVIEW_DIVIDER,
     ...reviewQuiz(5),
     {
       layout: 'figure',
@@ -44,6 +45,12 @@ export const BODY_DECK: HybridDeck = {
       image: 'critical-essay-form.png',
       accent: 'teal',
       callouts: ['Introduction', 'Thesis statement ★', '==Body paragraphs== ← today', 'Conclusion'],
+      markers: [
+        [0.27, 0.22],
+        [0.62, 0.37],
+        [0.66, 0.53],
+        [0.73, 0.82],
+      ],
       notes:
         'Keep reinforcing the shape, so later in the year (or in other classes) they already carry the structure of a critical academic essay. Ask where the thesis goes: the last sentence of the intro. Not a hard rule for all writing, but it is for this essay.',
     },
@@ -127,10 +134,20 @@ export const BODY_DECK: HybridDeck = {
     {
       layout: 'passage',
       eyebrow: 'Sample essay',
-      title: 'Introduction and body paragraph 1',
-      label: 'Topic sentences highlighted · thesis in italics',
+      title: 'Introduction',
+      label: 'The thesis is in italics',
       accent: 'teal',
-      body: `${italicThesis(SAMPLE_INTRODUCTION)}\n\n${withTopicSentence(SAMPLE_BODY[0])}`,
+      body: italicThesis(SAMPLE_INTRODUCTION),
+      notes:
+        'Start where the reader does: the introduction, ending on the thesis. Have students point to each of its three parts before you move on; each one gets a body paragraph.',
+    },
+    {
+      layout: 'passage',
+      eyebrow: 'Sample essay',
+      title: 'Body paragraph 1',
+      label: `Thesis part 1 · ${SAMPLE_THESIS_PARTS[0].span}`,
+      accent: 'teal',
+      body: withTopicSentence(SAMPLE_BODY[0]),
       notes:
         'The first body paragraph calls back to the first element: "Visit most schools in America today and you’ll see how much creativity they really lack." Then: what are the priorities instead? Why don’t teachers prioritize creativity (fear of disruption)? Who else is to blame (administrators)? Finally, why it matters.',
     },
@@ -169,8 +186,21 @@ export const BODY_DECK: HybridDeck = {
         'One paragraph per part',
         'Written one? Ask the Tutor for feedback',
       ],
+      markers: [
+        [0.2, 0.078],
+        [0.75, 0.3],
+        [0.41, 0.36],
+        [0.16, 0.947],
+      ],
       notes:
         'Today’s YAWP! editor on the Body Paragraphs step. Students start with the first element of their thesis only. Work the room, read paragraphs, encourage; you’ll see confidence rise as the essays take shape. Celebrate it.',
+    },
+    {
+      layout: 'closer',
+      eyebrow: 'YAWP!',
+      line: 'Next time: conclusions.',
+      notes:
+        'Body paragraphs can take several class periods. Before next class, read what students have and comment; check every paragraph calls back to one part of its thesis.',
     },
   ],
 };

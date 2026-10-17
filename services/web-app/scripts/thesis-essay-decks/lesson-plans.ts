@@ -10,7 +10,7 @@
  * Slides are named by title (marks removed), not number, so moving a slide
  * renumbers the plan instead of breaking it. `see` lists slides: a string is
  * one slide, a pair is a range. A title used twice in a deck takes `#2`.
- * `layout:quiz` is the whole review quiz.
+ * `layout:<name>` is every slide of that layout.
  */
 
 export type SlideSpan = string | readonly [string, string];
@@ -63,7 +63,7 @@ const DAY_ONE: LessonPlan = {
   ],
   materials: [
     'Slide deck',
-    'Sample essay (“Bored in the USA”)',
+    'Sample essay handout (“Bored in the USA”), one per student',
     LAPTOPS,
     'Before class: your class set up in YAWP!, with the Thesis-Driven Essay assigned',
   ],
@@ -95,7 +95,7 @@ const DAY_ONE: LessonPlan = {
           ],
         },
         {
-          text: '**Read Sample Essay.** Don’t overanalyze or get in the weeds here. Let students connect to it and then help them find the thesis statement.',
+          text: '**Read Sample Essay.** Hand out the sample essay (“Bored in the USA,” the Sample essay handout in the Modules). Don’t overanalyze or get in the weeds here. Let students connect to it and then help them find the thesis statement.',
           see: [['“Bored in the USA”', 'Class discussion']],
           steps: [
             {
@@ -248,7 +248,7 @@ const THESIS: LessonPlan = {
       steps: [
         {
           text: 'Review assessment questions about critical essays. Ask the class first, then reveal the answer on the next slide.',
-          see: ['layout:quiz'],
+          see: [['Quick Review', 'Which of the following is MOST TRUE about a good thesis statement?#2']],
         },
       ],
     },
@@ -368,7 +368,7 @@ const INTRODUCTION: LessonPlan = {
       steps: [
         {
           text: 'Review assessment questions about critical essays. Ask the class first, then reveal the answer on the next slide.',
-          see: ['layout:quiz'],
+          see: [['Quick Review', 'Your introduction paragraph’s MAIN function is to:#2']],
         },
       ],
     },
@@ -377,11 +377,11 @@ const INTRODUCTION: LessonPlan = {
       steps: [
         {
           text: 'Using the slides, have students place terms/sentences in order. You can have students work individually or as groups, depending on the class. [Note: the instructions are deliberately vague here. The goal is for students to figure out the order, which is most general to most specific (or vice versa), but don’t tell them this in your directions.]',
-          see: ['Place the following terms in order:', 'Place the following sentences in order:'],
+          see: ['Place the following 7 terms in order:', 'Place the following sentences in order:'],
         },
         {
           text: 'Have students report on the correct answers, and reveal these on the slides. Ask them how they came to their conclusions. What relationship or order is being used here? (Answer: big-to-small; general-to-specific)',
-          see: ['Place the following 7 terms in order:', 'Broad to specific, one thread at a time'],
+          see: ['Place the following 7 terms in order:#2', 'Broad to specific, one thread at a time'],
         },
       ],
     },
@@ -460,7 +460,7 @@ const BODY: LessonPlan = {
         },
         {
           text: 'Optional: open with the review quiz. Ask the class first, then reveal the answer on the next slide.',
-          see: ['layout:quiz'],
+          see: [['Quick Review', 'Which of the following would probably NOT show up in your body paragraphs?#2']],
         },
         {
           text: 'Begin class by asking students to open their YAWP! docs and look at their existing intros/thesis statements.',
@@ -471,7 +471,7 @@ const BODY: LessonPlan = {
             },
             {
               text: 'Optional: Read the Introduction of the Sample Essay together to provide a shared experience/understanding of the Introduction.',
-              see: ['Introduction and body paragraph 1'],
+              see: ['Introduction'],
             },
             {
               text: 'Optional: Spend the first part of class checking in on intro paragraphs with students or having them share with a partner. This kind of review helps students spend time with their essays, which connects them to their writing. As you review each student’s intro/thesis, give appropriate praise and feedback to those students who are doing well; ensure that the intro flows nicely into the thesis statement and offer suggestions for linking sentences if this isn’t the case. If students have not yet written an intro, give them clear, direct advice and instructions for how they might begin their essays. Avoid writing their intros for them or getting bogged down with one particular student.',
@@ -560,7 +560,7 @@ const CONCLUSION: LessonPlan = {
       steps: [
         {
           text: 'Review assessment questions about critical essays. Ask the class first, then reveal the answer on the next slide.',
-          see: ['layout:quiz'],
+          see: [['Quick Review', 'True or False: a good conclusion restates your thesis and main ideas.#2']],
         },
       ],
     },
@@ -666,6 +666,7 @@ const TITLES: LessonPlan = {
       steps: [
         {
           text: 'Students draft and revise their titles. The Tutor knows the colon title and gives students the same instructions, so they can use it to draft and revise.',
+          see: ['Write your title'],
         },
         {
           text: '**Finishing touches.** Have students put it all together:',

@@ -7,7 +7,7 @@
  * Lesson 3 training video.
  */
 import type { HybridDeck, HybridSlide } from './deck-types';
-import { reviewQuiz } from './shared-slides';
+import { REVIEW_DIVIDER, reviewQuiz } from './shared-slides';
 
 const OBSERVATIONS = [
   'Creative thinking is not prioritized in schools.',
@@ -73,6 +73,7 @@ export const THESIS_DECK: HybridDeck = {
       notes:
         'Thesis day. If all goes to plan, by the end of class every student has a strong, complex thesis statement and can begin actually writing. In pre-writing they went down into the mines, digging; today they come up with their treasure. Before you start, check student docs: anyone who still hasn’t found a specific focus may need a few more minutes of pre-writing on their diamond first.',
     },
+    REVIEW_DIVIDER,
     ...reviewQuiz(3),
     {
       layout: 'photo',
@@ -116,6 +117,12 @@ export const THESIS_DECK: HybridDeck = {
         '==Thesis statement== ★ the most important part',
         'Body paragraphs',
         'Conclusion',
+      ],
+      markers: [
+        [0.27, 0.22],
+        [0.62, 0.37],
+        [0.66, 0.53],
+        [0.73, 0.82],
       ],
       notes: 'There it is in our form: starred, the last sentence of the introduction, the most important part of the essay.',
     },
@@ -278,6 +285,12 @@ export const THESIS_DECK: HybridDeck = {
         '2–4 points of analysis',
         'Then combine them into your thesis',
       ],
+      markers: [
+        [0.2, 0.078],
+        [0.72, 0.22],
+        [0.7, 0.3],
+        [0.74, 0.375],
+      ],
       notes:
         'Today’s YAWP! editor on the Thesis Statement step, with a sample observation, analysis and thesis typed in. The Tutor’s instructions are on the left; when students have a draft thesis, they can ask the Tutor for feedback.',
     },
@@ -409,6 +422,13 @@ export const THESIS_DECK: HybridDeck = {
       icon: 'thumbs',
       accent: 'coral',
       notes: 'That is the power of removing "to be": it clears out words that have no power of their own. Officially the end of the lesson.',
+    },
+    {
+      layout: 'closer',
+      eyebrow: 'YAWP!',
+      line: 'Next time: introductions.',
+      notes:
+        'Before next class, read through the theses and comment. Everyone needs a working thesis before they start the introduction; absent students can catch up with the Tutor.',
     },
   ],
 };

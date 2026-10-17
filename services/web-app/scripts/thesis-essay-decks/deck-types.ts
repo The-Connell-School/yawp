@@ -69,6 +69,12 @@ export type HybridSlide =
       image: AssetImage;
       /** Beside the figure: what to point at. */
       callouts: string[];
+      /**
+       * Where each callout is on the image, as fractions of its width and
+       * height from the top left. Numbered dots there match the numbered
+       * callouts, so the room can find each part of a screenshot.
+       */
+      markers?: [number, number][];
     })
   | (BaseSlide & {
       layout: 'compare';

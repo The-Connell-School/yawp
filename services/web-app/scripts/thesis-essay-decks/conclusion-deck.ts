@@ -9,7 +9,7 @@
  */
 import type { HybridDeck } from './deck-types';
 import { SAMPLE_CONCLUSION } from './sample-essay';
-import { CONCLUSION_STRUCTURE, reviewQuiz } from './shared-slides';
+import { CONCLUSION_STRUCTURE, REVIEW_DIVIDER, reviewQuiz } from './shared-slides';
 
 const HALEY_QUESTION =
   'If we assume that teachers don’t like to be boring, then why doesn’t the education system teach them how to prioritize creative thinking in classrooms?';
@@ -34,6 +34,7 @@ export const CONCLUSION_DECK: HybridDeck = {
       notes:
         'Most students should be near or at the end of their body paragraphs; make sure they’ve moved their documents to the "Conclusion Paragraph" step. Some will still be on body paragraphs, and that’s fine: teach this now so they know what to do when they get here. Students move at different paces at this point.',
     },
+    REVIEW_DIVIDER,
     ...reviewQuiz(6),
     {
       layout: 'section',
@@ -175,6 +176,12 @@ export const CONCLUSION_DECK: HybridDeck = {
         'Start with a rhetorical question',
         'Answer it: “Perhaps…”',
         'End on your big, final point',
+      ],
+      markers: [
+        [0.215, 0.078],
+        [0.745, 0.245],
+        [0.745, 0.33],
+        [0.36, 0.415],
       ],
       notes:
         'Today’s YAWP! editor on the Conclusion Paragraph step. This part usually goes fast: once body paragraphs are done they’re in the home stretch. As you work the room, watch the rhetorical questions. Some will be too simple or lead nowhere; help them find a relevant question that springboards their final thoughts. For many students this is the first conclusion like this they have ever built.',

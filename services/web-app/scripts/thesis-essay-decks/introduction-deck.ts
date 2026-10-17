@@ -7,7 +7,7 @@
  */
 import type { HybridDeck, HybridSlide } from './deck-types';
 import { SAMPLE_THESIS } from './sample-essay';
-import { reviewQuiz } from './shared-slides';
+import { REVIEW_DIVIDER, reviewQuiz } from './shared-slides';
 
 const TERMS_SHUFFLED = ['City', 'Continent', 'Neighborhood', 'Country', 'Universe', 'State', 'Planet'];
 const TERMS_ORDERED = ['Universe', 'Planet', 'Continent', 'Country', 'State', 'City', 'Neighborhood'];
@@ -72,11 +72,12 @@ export const INTRODUCTION_DECK: HybridDeck = {
       notes:
         'Today students begin, and some finish, their introductions, which end with their thesis statement. Before you start: everyone who has been in class should have a working thesis (absent students can catch up). The thesis is the first real milestone, and once it works the essay almost writes itself. Celebrate it; have a few students share theirs aloud or with a partner.',
     },
+    REVIEW_DIVIDER,
     ...reviewQuiz(4),
     {
       layout: 'ordering',
       eyebrow: 'Warm-up',
-      title: 'Place the following terms in order:',
+      title: 'Place the following 7 terms in order:',
       items: TERMS_SHUFFLED,
       accent: 'teal',
       notes:
@@ -177,6 +178,12 @@ export const INTRODUCTION_DECK: HybridDeck = {
         'A heading for your introduction',
         'Thesis already at the bottom',
         'Written some? Ask the Tutor for feedback',
+      ],
+      markers: [
+        [0.215, 0.078],
+        [0.4, 0.22],
+        [0.735, 0.44],
+        [0.16, 0.947],
       ],
       notes:
         'Today’s YAWP! editor on the Introduction step with a sample introduction leading into its thesis. Students are always amazed how fast the intro comes once they know their options.',
