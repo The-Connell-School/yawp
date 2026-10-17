@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   DAY_ONE_DECK,
+  SAMPLE_ESSAY_HANDOUT,
   SIGN_UP_HANDOUT,
   THESIS_ESSAY_DECKS,
   THESIS_ESSAY_MATERIALS,
@@ -88,10 +89,25 @@ describe('THESIS_ESSAY_MATERIALS', () => {
     }
   });
 
-  test('adds the student sign-up handout to Day 1 only', () => {
-    expect(materialsForDeck(DAY_ONE_DECK).map((m) => m.kind)).toEqual(['deck', 'lesson-plan', 'handout']);
+  test('adds the student handouts to Day 1 only: sign-up, then the sample essay', () => {
+    expect(materialsForDeck(DAY_ONE_DECK).map((m) => m.slug)).toEqual([
+      'lesson-1-day-1',
+      'lesson-1-day-1-lesson-plan',
+      'student-sign-up',
+      'sample-essay-bored-in-the-usa',
+    ]);
     expect(materialsForDeck(THESIS_ESSAY_DECKS[1]).map((m) => m.kind)).toEqual(['deck', 'lesson-plan']);
     expect(SIGN_UP_HANDOUT.fileName).toBe('student-sign-up.pdf');
+    expect(SAMPLE_ESSAY_HANDOUT).toMatchObject({
+      kind: 'handout',
+      fileName: 'sample-essay-bored-in-the-usa.pdf',
+      contentType: 'application/pdf',
+    });
+  });
+
+  test('names each handout for its link', () => {
+    expect(SIGN_UP_HANDOUT.label).toBe('Student sign-up handout');
+    expect(SAMPLE_ESSAY_HANDOUT.label).toMatch(/^Sample essay handout/);
   });
 
   test('gives every material a unique, URL-safe slug', () => {

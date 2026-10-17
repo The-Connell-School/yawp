@@ -735,7 +735,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 type ThesisDeckLink = { kind: ThesisEssayMaterial['kind']; label: string; href: string };
 
 /**
- * The deck, lesson plan (and, on Day 1, sign-up handout) links for the
+ * The deck, lesson plan (and, on Day 1, student handout) links for the
  * Thesis-Driven Essay's Modules, by module id. Only files that are there are
  * offered. Null when none are, so the page keeps its usual wording.
  */
@@ -748,7 +748,11 @@ function buildThesisDecks(modules: Array<{ id: string; title: string }>): {
   const links = (deck: ThesisEssayDeck): ThesisDeckLink[] =>
     materialsForDeck(deck)
       .filter((material) => available.has(material.slug))
-      .map((material) => ({ kind: material.kind, label: deckLabel(deck), href: materialHref(material) }));
+      .map((material) => ({
+        kind: material.kind,
+        label: material.label ?? deckLabel(deck),
+        href: materialHref(material),
+      }));
   const byModuleId: Record<string, ThesisDeckLink[]> = {};
   for (const module of modules) {
     const deck = deckForModuleTitle(module.title);
@@ -778,7 +782,7 @@ export function showModulesAccordion(
 const THESIS_LINK_TEXT: Record<ThesisDeckLink['kind'], { prefix: string; type: string }> = {
   deck: { prefix: 'Slide deck', type: '.pptx' },
   'lesson-plan': { prefix: 'Lesson plan', type: '.pdf' },
-  handout: { prefix: 'Student sign-up handout', type: '.pdf' },
+  handout: { prefix: 'Handout', type: '.pdf' },
 };
 
 /** A lesson's deck, lesson plan or handout, as download links styled like small buttons. */
@@ -794,7 +798,7 @@ function ThesisDeckDownloads({ links }: { links: ThesisDeckLink[] }) {
             download
             className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-accent"
           >
-            {link.kind === 'handout' ? text.prefix : `${text.prefix}: ${link.label}`}
+            {link.kind === 'handout' ? link.label : `${text.prefix}: ${link.label}`}
             <span className="text-xs text-muted-foreground">({text.type})</span>
           </a>
         );

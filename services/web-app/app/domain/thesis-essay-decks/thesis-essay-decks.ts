@@ -26,7 +26,7 @@ export const PDF_CONTENT_TYPE = 'application/pdf';
 
 /**
  * A file a teacher can download from the Modules: a lesson's deck, its
- * lesson plan, or the Day 1 student sign-up handout. All are generated
+ * lesson plan, or one of the Day 1 student handouts. All are generated
  * together by scripts/thesis-essay-decks, so a plan's slide numbers match
  * its deck.
  */
@@ -38,6 +38,8 @@ export interface ThesisEssayMaterial {
   fileName: string;
   downloadName: string;
   contentType: string;
+  /** A handout's link text in the Modules (decks and plans are named by lesson). */
+  label?: string;
 }
 
 export const THESIS_ESSAY_DECKS: readonly ThesisEssayDeck[] = [
@@ -143,17 +145,30 @@ export const SIGN_UP_HANDOUT: ThesisEssayMaterial = {
   fileName: 'student-sign-up.pdf',
   downloadName: 'YAWP! Day 1 - Student Sign-up.pdf',
   contentType: PDF_CONTENT_TYPE,
+  label: 'Student sign-up handout',
 };
+
+/** Day 1's other handout: the sample essay the class reads and marks up. */
+export const SAMPLE_ESSAY_HANDOUT: ThesisEssayMaterial = {
+  slug: 'sample-essay-bored-in-the-usa',
+  kind: 'handout',
+  fileName: 'sample-essay-bored-in-the-usa.pdf',
+  downloadName: 'YAWP! Day 1 - Sample Essay - Bored in the USA.pdf',
+  contentType: PDF_CONTENT_TYPE,
+  label: 'Sample essay handout (“Bored in the USA”)',
+};
+
+const DAY_ONE_HANDOUTS = [SIGN_UP_HANDOUT, SAMPLE_ESSAY_HANDOUT];
 
 export const THESIS_ESSAY_MATERIALS: readonly ThesisEssayMaterial[] = [
   ...THESIS_ESSAY_DECKS.flatMap((deck) => [deckMaterial(deck), lessonPlanMaterial(deck)]),
-  SIGN_UP_HANDOUT,
+  ...DAY_ONE_HANDOUTS,
 ];
 
-/** What a step offers, in order: its deck, its lesson plan (and Day 1's handout). */
+/** What a step offers, in order: its deck, its lesson plan (and Day 1's handouts). */
 export function materialsForDeck(deck: ThesisEssayDeck): ThesisEssayMaterial[] {
   const materials = [deckMaterial(deck), lessonPlanMaterial(deck)];
-  return deck === DAY_ONE_DECK ? [...materials, SIGN_UP_HANDOUT] : materials;
+  return deck === DAY_ONE_DECK ? [...materials, ...DAY_ONE_HANDOUTS] : materials;
 }
 
 export function materialBySlug(slug: string): ThesisEssayMaterial | null {

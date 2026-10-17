@@ -1,5 +1,5 @@
 /**
- * Renders a lesson plan (and the student sign-up handout) to PDF.
+ * Renders a lesson plan (and the Day 1 student handouts) to PDF.
  *
  * The plans go with the hybrid decks, so they wear the same colours: Brian's
  * teal, sunshine, coral, orange and pink as accents (numerals, bands, slide
@@ -16,6 +16,7 @@ import type { HybridDeck, HybridSlide } from './deck-types';
 import { ACCENT_CYCLE, HYBRID as T, type AccentColor } from './hybrid-theme';
 import type { LessonPlan, PlanStep, SlideSpan } from './lesson-plans';
 import { parseMarks, plain } from './render-hybrid-deck';
+import { SAMPLE_BODY, SAMPLE_CONCLUSION, SAMPLE_INTRODUCTION, SAMPLE_TITLE } from './sample-essay';
 
 const ASSETS = join(import.meta.dir, 'assets');
 
@@ -460,5 +461,42 @@ export function renderSignUpHandout(): Promise<Uint8Array> {
   });
 
   footers(doc, 'Day 1 · Student sign-up handout · yawp.school');
+  return finish(doc);
+}
+
+/**
+ * The sample essay, "Bored in the USA", for students to read and mark up on
+ * Day 1 and come back to in later lessons. The thesis is left unmarked: on
+ * Day 1 the class finds it themselves.
+ */
+export function renderSampleEssayHandout(): Promise<Uint8Array> {
+  const doc = newDoc(`Sample essay: ${SAMPLE_TITLE}`);
+  header(
+    doc,
+    'Thesis-Driven Essay · Day 1 · Student handout',
+    'Sample essay',
+    'By Haley, a student. As you read, **underline or highlight anything you find interesting:** at least one thing in every paragraph.'
+  );
+
+  doc
+    .font(FONT.serifBold)
+    .fontSize(15)
+    .fillColor(hex(T.ink))
+    .text(SAMPLE_TITLE, MARGIN.left + 30, doc.y, { width: WIDTH - 60, align: 'center', lineGap: 2 });
+  doc.moveDown(1);
+
+  for (const paragraph of [SAMPLE_INTRODUCTION, ...SAMPLE_BODY, SAMPLE_CONCLUSION]) {
+    doc.font(FONT.serif).fontSize(12);
+    ensureSpace(doc, 3 * 18);
+    doc.fillColor(hex(T.ink)).text(paragraph, MARGIN.left, doc.y, {
+      width: WIDTH,
+      lineGap: 5,
+      indent: 28,
+      align: 'left',
+    });
+    doc.moveDown(0.8);
+  }
+
+  footers(doc, 'Day 1 · Sample essay · “Bored in the USA”');
   return finish(doc);
 }

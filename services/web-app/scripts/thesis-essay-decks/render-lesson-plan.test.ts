@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 import { DECKS } from './decks';
 import { LESSON_PLANS, type PlanStep } from './lesson-plans';
+import { SAMPLE_BODY, SAMPLE_CONCLUSION, SAMPLE_INTRODUCTION, SAMPLE_TITLE } from './sample-essay';
 import {
   allSpans,
   isWinAnsi,
   renderLessonPlan,
+  renderSampleEssayHandout,
   renderSignUpHandout,
   resolveSpan,
   slideLabel,
@@ -99,5 +101,19 @@ describe('student sign-up handout', () => {
   it('writes a PDF', async () => {
     const bytes = await renderSignUpHandout();
     expect(Buffer.from(bytes.subarray(0, 5)).toString()).toBe('%PDF-');
+  });
+});
+
+describe('sample essay handout', () => {
+  it('writes a PDF, the same bytes every time', async () => {
+    const first = await renderSampleEssayHandout();
+    const second = await renderSampleEssayHandout();
+    expect(Buffer.from(first.subarray(0, 5)).toString()).toBe('%PDF-');
+    expect(Buffer.compare(Buffer.from(first), Buffer.from(second))).toBe(0);
+  });
+
+  it('uses only characters the PDF fonts can draw', () => {
+    const texts = [SAMPLE_TITLE, SAMPLE_INTRODUCTION, ...SAMPLE_BODY, SAMPLE_CONCLUSION];
+    for (const text of texts) expect([...text].filter((char) => !isWinAnsi(char))).toEqual([]);
   });
 });

@@ -82,6 +82,16 @@ describe('api.thesis-essay-deck.$slug', () => {
     expect(response.headers.get('Content-Type')).toBe('application/pdf');
   });
 
+  test('serves the Day 1 sample essay handout', async () => {
+    readThesisEssayMaterial.mockResolvedValue(Buffer.from('%PDF- essay'));
+    const response = await call('sample-essay-bored-in-the-usa');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toBe('application/pdf');
+    expect(readThesisEssayMaterial).toHaveBeenCalledWith(
+      expect.objectContaining({ fileName: 'sample-essay-bored-in-the-usa.pdf' })
+    );
+  });
+
   test('is not there while the flag is off', async () => {
     isFeatureFlagEnabled.mockResolvedValue(false);
     expect(await statusOf(call('lesson-2-pre-writing'))).toBe(404);

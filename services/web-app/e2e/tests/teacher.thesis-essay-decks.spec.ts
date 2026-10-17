@@ -82,6 +82,10 @@ test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
       'href',
       '/api/thesis-essay-deck/student-sign-up'
     );
+    await expect(page.getByRole('link', { name: /sample essay handout/i })).toHaveAttribute(
+      'href',
+      '/api/thesis-essay-deck/sample-essay-bored-in-the-usa'
+    );
 
     await page.getByRole('button', { name: 'Pre-writing' }).click();
     const preWriting = page.getByRole('link', { name: /slide deck: lesson 2 · pre-writing/i });

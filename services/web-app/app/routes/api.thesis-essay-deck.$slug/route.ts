@@ -7,8 +7,8 @@ import { readThesisEssayMaterial } from '~/domain/thesis-essay-decks/thesis-essa
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 
 /**
- * A Thesis-Driven Essay lesson deck, its lesson plan, or the Day 1 student
- * sign-up handout, for a teacher to download from the assignment type's
+ * A Thesis-Driven Essay lesson deck, its lesson plan, or a Day 1 student
+ * handout (sign-up, sample essay), for a teacher to download from the assignment type's
  * Modules. Teachers only, and only while the flag is on;
  * anything else is a 404, as if the route did not exist.
  */
