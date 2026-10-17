@@ -15,6 +15,7 @@ export default defineConfig({
     '**/auth.unified-resend.spec.ts',
     '**/auth.unified-google-backend.spec.ts',
     '**/auth.unified-origin-backend.spec.ts',
+    '**/auth.unified-join-link.spec.ts',
     '**/free-tier.create-class.spec.ts',
   ],
   globalTeardown: './e2e/global-teardown.ts',

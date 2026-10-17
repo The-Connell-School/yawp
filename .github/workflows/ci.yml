@@ -569,6 +569,7 @@ jobs:
           bun test ./services/web-app/app/domain/free-tier/student-join.server.test.ts
           bun test ./services/web-app/app/domain/unified-signon/class-student.real-db.integration.test.ts
           bun test ./services/web-app/app/domain/unified-signon/backend.real-db.integration.test.ts
+          bun test ./services/web-app/app/routes/join/route.real-db.integration.test.ts
 
       - name: Preview-only sign-on fixture guards and real handlers
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}

@@ -407,8 +407,10 @@ function runTestProfile(profile, { json }) {
     if (process.env.SIGNON_LOCAL_TEST === "1") {
       runWebApp("class-student-real-database", ["test", "app/domain/unified-signon/class-student.real-db.integration.test.ts"]);
       runWebApp("signon-real-database", ["test", "app/domain/unified-signon/backend.real-db.integration.test.ts"]);
+      runWebApp("join-link-real-database", ["test", "app/routes/join/route.real-db.integration.test.ts"]);
     }
     if (process.env.SIGNON_BROWSER_TEST === "1") runWebApp("class-student-browser", ["x", "playwright", "test", "--config", "playwright.classcode.config.ts", "--workers=1"]);
+    if (process.env.SIGNON_BROWSER_TEST === "1") runWebApp("join-link-browser", ["x", "playwright", "test", "--config", "playwright.join-link.config.ts", "--workers=1"]);
   }
   else if (chosen === "unified-signon-preview-otp") {
     runWebApp("preview-code", ["test", "app/domain/unified-signon/preview-code.server.test.ts"]);
