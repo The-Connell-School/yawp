@@ -295,6 +295,13 @@ quick once its questions are answered.
      (including "Unlocked and Loaded: How Easy Gun Access Puts Children at
      Risk"), and whether Consolas (the mono labels) looks right in Google
      Slides.
+9. **Three ways to use a deck** (Kevin, 2026-10-17): Present on YAWP!
+   (the main button: exactly as designed, every time), a Google Slides copy,
+   and the PowerPoint download, for teachers who want to edit. Keynote is not
+   a target. The presenter draws the same slides as the .pptx, from the same
+   code, rather than converting the file. Google Slides copies are master
+   copies checked by hand in Google Slides; the button appears per deck once
+   its master copy exists.
 
 ## Questions that were settled above
 

@@ -80,16 +80,43 @@ fails if a plan points at a slide that is not in its deck.
 ## In the app
 
 With the `thesis_essay_decks` flag on, the Thesis-Driven Essay's page offers
-each deck and its lesson plan inside its step in **Modules** (Pre-writing →
-Lesson 2, Thesis Statement → Lesson 3, …), with Day 1's deck, lesson plan and
-two handouts above the list. Teachers only; downloads come from
-`/api/thesis-essay-deck/:slug` (`<deck>`, `<deck>-lesson-plan`,
-`student-sign-up`, `sample-essay-bored-in-the-usa`). With the flag off the
-page is unchanged.
+each lesson inside its step in **Modules** (Pre-writing → Lesson 2, Thesis
+Statement → Lesson 3, …), with Day 1 above the list. Each deck comes three
+ways (Kevin, 2026-10-17):
+
+1. **Present** on YAWP! (`/present/thesis-essay/:slug`), the main button. It
+   always looks exactly as designed: the slides are drawn on the page from
+   `<deck>.scene.json`, which the generator writes from the same drawing as
+   the .pptx (a test checks they hold the same shapes, text and pictures,
+   slide for slide). Arrow keys, full screen, speaker notes, print. Fonts
+   that stand in for Georgia and Calibri (Gelasio, Carlito) ship in
+   `public/fonts/deck`, so Chromebooks match too.
+2. **Google Slides**: "make a copy" of the deck's master copy, for teachers
+   who edit in Google Slides. A deck shows this button once its master copy's
+   id is in `GOOGLE_SLIDES_COPY_IDS` (`app/domain/thesis-essay-decks`); see
+   below.
+3. **PowerPoint**: the .pptx download, for teachers who edit in PowerPoint.
+   Keynote is not a target.
+
+Then the lesson plan, and on Day 1 the two handouts. Teachers only;
+downloads come from `/api/thesis-essay-deck/:slug` (`<deck>`,
+`<deck>-lesson-plan`, `student-sign-up`, `sample-essay-bored-in-the-usa`), and
+the presenter's pictures from `/api/thesis-essay-deck-asset/*`. With the flag
+off the page is unchanged.
+
+### Google Slides master copies
+
+For each deck: upload its .pptx to the YAWP! Google Drive, open it with
+Google Slides (File → Save as Google Slides), check every slide against the
+preview here and fix anything the import changed, then share it as "Anyone
+with the link: Viewer". Put its file id (the part of the link after `/d/`) in
+`GOOGLE_SLIDES_COPY_IDS` under the deck's slug. When a deck changes, redo its
+master copy.
 
 ## Rebuilding
 
-The decks, lesson plans and handouts are generated together, so edit the
+The decks (each as a .pptx and a `.scene.json` for the presenter), lesson
+plans and handouts are generated together, so edit the
 source, not the `.pptx` or `.pdf`:
 
 ```bash
@@ -105,7 +132,9 @@ bun test scripts/thesis-essay-decks
 - Layouts: `render-hybrid-deck.ts`; colours and fonts: `hybrid-theme.ts`
 - Lesson plans: `lesson-plans.ts`; their layout and the handouts:
   `render-lesson-plan.ts`
-- Images and icons: `assets/` (icons have SVG sources next to their PNGs)
+- Images and icons: `services/web-app/resources/thesis-essay-decks/assets/`
+  (icons have SVG sources next to their PNGs); they ship with the app so the
+  presenter can show them
 
 The decks are checked to open cleanly in PowerPoint as well as Google Slides.
 pptxgenjs writes paragraph properties before every run of a paragraph, which
