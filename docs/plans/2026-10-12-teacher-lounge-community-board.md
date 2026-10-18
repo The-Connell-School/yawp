@@ -176,6 +176,29 @@ Not built yet: Discuss tabs on modules and lessons, sharing Lesson Planner
 lessons and rubrics, captions for videos, unread badge, weekly digest,
 search, using the share consent anywhere outside the Lounge.
 
+### Round 6 (2026-10-18): Brian's video notes
+
+Plan: `2026-10-18-faculty-lounge-brian-round-6.md`.
+
+- Header is just "Faculty Lounge": no caps label, no Community/Trainings
+  tabs. Trainings pages stay reachable from old links under a plain header.
+- Topics relabelled in place (keys unchanged): Writing practice, Class
+  starters, Thesis development; AP History retired from the composer;
+  Prewriting and Lessons learned added. Topic is optional (nullable column).
+- Post types: General question, Share an assignment, Win, each with its line
+  above the title. Attach from YAWP! only on Share an assignment (enforced on
+  the server too), labelled "Attach one of your YAWP! lessons", closes on a
+  click anywhere. No more private posts; Contact Us instead. Old private
+  posts stay private.
+- Next and previous post, at the bottom with a look at each post and as a
+  short row at the top, in the Latest feed's order.
+- Lessons Learned draft filed under its new topic (`moveLaunchTopics`).
+- Images on General questions and Wins behind `lounge_post_images` (off):
+  up to three, metadata stripped, served only to readers of the post.
+- Outside the Lounge: Contact Us on the teacher dashboard
+  (`teacher_contact_us`, off); training videos on assignment pages
+  (`assignment_training_videos`, off).
+
 ## Why now
 
 Today "Teacher's Lounge" (`/app/teacher-trainings`, sidebar label in

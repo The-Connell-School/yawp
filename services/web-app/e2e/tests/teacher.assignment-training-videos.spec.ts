@@ -94,7 +94,9 @@ test.describe.serial('Training videos on the assignment page', () => {
     const block = page.getByRole('figure').filter({ hasText: 'How to teach this: Lesson 3: Thesis Statement' });
     await expect(block).toBeVisible();
     // Played here when the video can be signed; either way the lesson is one click away.
-    await block.getByRole('link', { name: /in Trainings/ }).click();
-    await expect(page).toHaveURL(new RegExp(`/app/teacher-trainings/${trainingId}/modules/`));
+    const lesson = block.getByRole('link', { name: /in Trainings/ });
+    await expect(lesson).toHaveAttribute('href', new RegExp(`^/app/teacher-trainings/${trainingId}/modules/[^/]+$`));
+    await page.goto((await lesson.getAttribute('href'))!);
+    await expect(page.getByRole('heading', { name: 'Lesson 3: Thesis Statement' }).first()).toBeVisible();
   });
 });

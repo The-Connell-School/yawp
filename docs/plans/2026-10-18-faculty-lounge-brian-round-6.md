@@ -1,5 +1,23 @@
 # Faculty Lounge, round 6: Brian's video feedback (2026-10-18)
 
+> **Status: built, all on one branch** (`claude/optimistic-hamilton-abub6v`,
+> which carries #484's Lounge work). Where the build differs from the plan
+> below:
+>
+> - Everything ships together on this branch instead of PRs A–F.
+> - 1.8 images: stored in Postgres like document figures (not S3), so they
+>   work in previews and e2e; metadata stripped by a small tested parser, not
+>   `sharp` (not a dependency). Behind `lounge_post_images`, off by default.
+> - 2.1 decks: the Thesis-Driven Essay deck labels are real teaching cues
+>   (Warm-up, Your turn, Step 4), so they stay, drawn in sentence case instead
+>   of caps. Decks and scenes rebuilt; docs preview JPGs not regenerated.
+> - 2.2 placement: each video sits in its step's module on the assignment
+>   page, Day 1's above the list, until Brian's placement video says otherwise.
+> - 2.3: the flag is `teacher_contact_us`; the button sits in the dashboard
+>   header.
+> - 2.4: the only free-tier leak found was the minimum-points hint naming
+>   Daily Pages on a Class Starter; it now names the type picked.
+
 Brian reviewed the Faculty Lounge on video. This plan turns every change he
 asked for into work items, with the files to touch, the tests to write first
 (AGENTS.md: e2e first for UI, unit first for domain code), and the order to
