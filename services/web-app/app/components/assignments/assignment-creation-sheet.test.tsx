@@ -996,7 +996,9 @@ describe('AssignmentCreationSheetContent', () => {
     });
 
     expect(inputByName('pointValue').getAttribute('min')).toBe('5');
-    expectText('need at least 5 points when graded');
+    // Named for the type the teacher picked: a free-tier Class Starter uses
+    // the same rubric, and Daily Pages is not something they have.
+    expectText('SJP Daily Pages assignments need at least 5 points when graded');
   });
 
   // The original builder, kept as the flag-off path. These pin it so

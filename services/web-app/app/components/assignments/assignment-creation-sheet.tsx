@@ -1677,7 +1677,7 @@ export function AssignmentCreationSheetContent({
                       <p className="text-sm text-muted-foreground">
                         What the assignment is worth in the gradebook.
                         {minimumPointValue > 1
-                          ? ` Daily Pages engagement assignments need at least ${minimumPointValue} points when graded.`
+                          ? ` ${selectedAssignmentType?.title ?? 'These'} assignments need at least ${minimumPointValue} points when graded.`
                           : ' The rubric keeps its own scale either way.'}
                       </p>
                     </div>
