@@ -75,6 +75,31 @@ export const GUIDED_TOURS_FLAG = 'guided-tours' as const;
 /** Teacher prompts on signed-in recovery screens. Missing Setting stays off. */
 export const SIGNON_TEACHER_PROMPTS_FLAG = 'signon-teacher-prompts' as const;
 
+/**
+ * Contact Us outside the Faculty Lounge (Brian, round 6). On for a school:
+ * the teacher dashboard has a Contact Us button that opens /app/contact, a
+ * private note to the YAWP! team that lands in the same inbox and email as
+ * the Lounge's Contact Us, without joining the Lounge first. Off: no button,
+ * and /app/contact returns 404.
+ */
+export const TEACHER_CONTACT_US_FLAG = 'teacher_contact_us' as const;
+
+/**
+ * Screenshots and photos on Faculty Lounge posts (Brian, round 6). On for a
+ * school: a General question or a Win can carry up to three images, which are
+ * stored privately and served only to people who can read the post. Off: no
+ * upload control, and image uploads are refused.
+ */
+export const LOUNGE_POST_IMAGES_FLAG = 'lounge_post_images' as const;
+
+/**
+ * Training videos on assignment pages (Brian, round 6). On for a school: an
+ * assignment type whose training has a video shows it on its own page, under
+ * "How to teach this". Off: assignment pages are as before; the Trainings
+ * pages keep working either way.
+ */
+export const ASSIGNMENT_TRAINING_VIDEOS_FLAG = 'assignment_training_videos' as const;
+
 export const FEATURE_FLAGS = {
   [LESSON_PLANNER_FLAG]: {
     label: 'Lesson Planner',
@@ -131,6 +156,21 @@ export const FEATURE_FLAGS = {
   [SIGNON_TEACHER_PROMPTS_FLAG]: {
     label: 'Sign-on teacher prompts',
     description: 'Shows teacher classroom entry prompts on signed-in inactive and class-code screens, with a sign-out step for handle-only accounts. Default off on demo and production.',
+  },
+  [TEACHER_CONTACT_US_FLAG]: {
+    label: 'Contact Us on the teacher dashboard',
+    description:
+      'Teachers at these schools get a Contact Us button on their dashboard: a private note to the YAWP! team, in the same inbox and email as the Lounge’s Contact Us, without joining the Lounge. Off: no button and /app/contact returns 404.',
+  },
+  [LOUNGE_POST_IMAGES_FLAG]: {
+    label: 'Images on Faculty Lounge posts',
+    description:
+      'Teachers at these schools can add up to three screenshots or photos to a General question or a Win. Images are re-encoded without location data and served only to people who can read the post. Off: no upload control; existing images stay on their posts.',
+  },
+  [ASSIGNMENT_TRAINING_VIDEOS_FLAG]: {
+    label: 'Training videos on assignment pages',
+    description:
+      'Assignment types whose training has a video show it on their own page, under How to teach this. Off: assignment pages are as before. The Trainings pages keep working either way.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

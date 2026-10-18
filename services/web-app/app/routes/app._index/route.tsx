@@ -14,8 +14,9 @@ import {
   useRouteLoaderData,
   useNavigate,
 } from 'react-router';
-import { PenLine } from 'lucide-react';
+import { MessageCircle, PenLine } from 'lucide-react';
 import { Fragment, useEffect, useState } from 'react';
+import { isTeacherContactEnabled } from '~/domain/contact/contact-access.server';
 import type { Route as RootRoute } from '../../+types/root';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import { Button } from '~/components/ui/button';
@@ -369,6 +370,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       name: formatClassLabel(klass),
     })),
     assignmentCreationTypes,
+    // Brian, round 6: Contact Us on the teacher dashboard, behind its flag.
+    contactUsEnabled:
+      profile.role === 'TEACHER' && (await isTeacherContactEnabled(profile.organization.id)),
   });
 }
 
@@ -403,7 +407,7 @@ export default function AppRoute() {
         className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll"
       >
         <div className="flex w-full justify-between border-b bg-secondary">
-          <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
+          <div className="mx-auto flex w-full max-w-screen-lg flex-wrap items-start justify-between gap-3 p-3 sm:p-5">
             <div className="flex flex-col">
               <h2>Welcome, {user.name}!</h2>
               <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
@@ -414,6 +418,15 @@ export default function AppRoute() {
                   : 'Your classes, assignments, and grading in one place.'}
               </p>
             </div>
+            {data.contactUsEnabled ? (
+              <Link
+                to="/app/contact"
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg border bg-popover px-4 text-[15px] font-medium hover:border-foreground/40"
+              >
+                <MessageCircle size={16} aria-hidden="true" />
+                Contact Us
+              </Link>
+            ) : null}
           </div>
         </div>
         <div

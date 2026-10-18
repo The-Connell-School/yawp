@@ -23,6 +23,9 @@ const {
 } = await import('./feature-flags.server');
 const {
   SIGNON_TEACHER_PROMPTS_FLAG,
+  TEACHER_CONTACT_US_FLAG,
+  LOUNGE_POST_IMAGES_FLAG,
+  ASSIGNMENT_TRAINING_VIDEOS_FLAG,
   GUIDED_TOURS_FLAG,
   DEMO_FEEDBACK_FLAG,
   INTERNAL_RUBRICS_FLAG,
@@ -207,6 +210,9 @@ describe('feature flags (server)', () => {
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
       SIGNON_TEACHER_PROMPTS_FLAG,
+      TEACHER_CONTACT_US_FLAG,
+      LOUNGE_POST_IMAGES_FLAG,
+      ASSIGNMENT_TRAINING_VIDEOS_FLAG,
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[2]).toMatchObject({ key: FREE_TIER_FLAG, mode: 'off', enabled: false });
@@ -242,6 +248,9 @@ describe('feature flags (server)', () => {
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
       SIGNON_TEACHER_PROMPTS_FLAG,
+      TEACHER_CONTACT_US_FLAG,
+      LOUNGE_POST_IMAGES_FLAG,
+      ASSIGNMENT_TRAINING_VIDEOS_FLAG,
     ]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });
     const where = prisma.setting.findMany.mock.calls[0]?.[0].where;

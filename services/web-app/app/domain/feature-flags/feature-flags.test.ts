@@ -2,6 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import {
   FEATURE_FLAGS,
   SIGNON_TEACHER_PROMPTS_FLAG,
+  TEACHER_CONTACT_US_FLAG,
+  LOUNGE_POST_IMAGES_FLAG,
+  ASSIGNMENT_TRAINING_VIDEOS_FLAG,
   GUIDED_TOURS_FLAG,
   CLASS_CODE_UNIQUE_FLAG,
   DEMO_FEEDBACK_FLAG,
@@ -104,6 +107,17 @@ describe('feature flag registry', () => {
     );
   });
 
+  test("registers round 6's flags, each off until a school is turned on", () => {
+    expect(TEACHER_CONTACT_US_FLAG).toBe('teacher_contact_us');
+    expect(LOUNGE_POST_IMAGES_FLAG).toBe('lounge_post_images');
+    expect(ASSIGNMENT_TRAINING_VIDEOS_FLAG).toBe('assignment_training_videos');
+    for (const key of [TEACHER_CONTACT_US_FLAG, LOUNGE_POST_IMAGES_FLAG, ASSIGNMENT_TRAINING_VIDEOS_FLAG]) {
+      expect(FEATURE_FLAGS[key].label.length).toBeGreaterThan(0);
+      expect(FEATURE_FLAGS[key].description.length).toBeGreaterThan(0);
+    }
+    expect(evaluateFeatureFlag(parseFeatureFlagValue(null))).toBe(false);
+  });
+
   test('lists every registered flag key', () => {
     expect(FEATURE_FLAG_KEYS).toEqual([
       LESSON_PLANNER_FLAG,
@@ -118,6 +132,9 @@ describe('feature flag registry', () => {
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
       SIGNON_TEACHER_PROMPTS_FLAG,
+      TEACHER_CONTACT_US_FLAG,
+      LOUNGE_POST_IMAGES_FLAG,
+      ASSIGNMENT_TRAINING_VIDEOS_FLAG,
     ]);
   });
 

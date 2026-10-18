@@ -2,17 +2,14 @@ import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
   data,
-  Form,
-  Link,
   useActionData,
   useLoaderData,
   useNavigation,
 } from 'react-router';
-import { ChevronLeft } from 'lucide-react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
-import { Button } from '~/components/ui/button';
+import { ContactUsForm } from '~/components/contact-us-form';
 import { requireLoungeMember } from '~/domain/lounge/access.server';
-import { LOUNGE_CONTACT_MAX, LOUNGE_NAME, LOUNGE_TEAM_NAME, parseContactMessage } from '~/domain/lounge/launch';
+import { LOUNGE_NAME, LOUNGE_TEAM_NAME, parseContactMessage } from '~/domain/lounge/launch';
 import { createLoungeContactMessage } from '~/domain/lounge/lounge.server';
 import { sendLoungeNotifications } from '~/domain/lounge/notifications.server';
 import { getDomainUrl } from '~/utils/misc';
@@ -55,53 +52,14 @@ export default function LoungeContactRoute() {
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   return (
-    <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
-      <div className="mx-auto w-full max-w-xl px-4 py-8">
-        <Link
-          to="/app/lounge"
-          className="inline-flex min-h-11 items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ChevronLeft size={16} aria-hidden="true" />
-          {LOUNGE_NAME}
-        </Link>
-        <h1 className="lounge-serif mt-1 text-[38px] leading-tight text-foreground">Contact Us</h1>
-        <p className="mt-2 text-muted-foreground">
-          Something broken or wrong? This goes straight to the {LOUNGE_TEAM_NAME}, not the Lounge. We&apos;ll
-          take care of it faster than a thread will.
-        </p>
-        {actionData?.sent ? (
-          <p role="status" className="mt-6 rounded-lg bg-secondary px-4 py-3">
-            Thanks. The {LOUNGE_TEAM_NAME} will get back to you by email.
-          </p>
-        ) : (
-          <Form method="post" className="mt-6 flex flex-col gap-3">
-            <input type="hidden" name="pageUrl" value={from} />
-            <label htmlFor="contact-message" className="text-sm text-muted-foreground">
-              Message
-            </label>
-            <textarea
-              id="contact-message"
-              name="message"
-              rows={6}
-              maxLength={LOUNGE_CONTACT_MAX}
-              required
-              placeholder="What happened, and where? Leave out student names."
-              className="rounded-md border border-input bg-input-background px-3 py-2 text-[15px]"
-            />
-            {actionData?.error ? (
-              <p role="alert" className="text-sm text-destructive">
-                {actionData.error}
-              </p>
-            ) : null}
-            <div>
-              <Button type="submit" disabled={navigation.state === 'submitting'}>
-                Send
-              </Button>
-            </div>
-          </Form>
-        )}
-      </div>
-    </section>
+    <ContactUsForm
+      from={from}
+      back={{ to: '/app/lounge', label: LOUNGE_NAME }}
+      intro={`Something broken or wrong? This goes straight to the ${LOUNGE_TEAM_NAME}, not the Lounge. We'll take care of it faster than a thread will.`}
+      sent={Boolean(actionData?.sent)}
+      error={actionData?.error ?? null}
+      submitting={navigation.state === 'submitting'}
+    />
   );
 }
 
