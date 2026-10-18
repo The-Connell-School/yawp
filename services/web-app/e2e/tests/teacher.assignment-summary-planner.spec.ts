@@ -74,8 +74,7 @@ async function seedSummary(e2eContext: E2EContext) {
 }
 
 /**
- * A strong thesis that names its writer, so the hand-off has to scrub it,
- * scored as the mirror image of the seeded graded paper.
+ * A strong paper that names its writer, so the hand-off has to scrub it.
  */
 async function seedNamedModel(e2eContext: E2EContext): Promise<string> {
   const prisma = createE2EPrismaClient();
@@ -109,12 +108,14 @@ async function seedNamedModel(e2eContext: E2EContext): Promise<string> {
         submittedAt: new Date(),
         gradedByMembershipId: e2eContext.teacherMembershipId,
         gradedAt: new Date(),
+        // Strong everywhere, so whichever skill the class is weakest in, this
+        // paper is its model.
         rubricScores: {
           thesis_and_content: 5,
-          organization_and_structure: 1,
+          organization_and_structure: 5,
           evidence_and_support: 5,
-          voice_and_style: 1,
-          grammar_and_mechanics: 1,
+          voice_and_style: 5,
+          grammar_and_mechanics: 5,
         },
       },
     });
