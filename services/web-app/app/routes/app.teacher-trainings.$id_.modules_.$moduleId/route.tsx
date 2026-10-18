@@ -291,11 +291,17 @@ export default function TeacherTrainingModuleRoute() {
   );
   const { captionResource, transcriptResource } =
     getTeacherTrainingMediaAccessibilityResources(currentModule.resources);
-  const primaryResources = currentModule.resources.filter(
-    (resource) =>
-      resource.id !== captionResource?.id &&
-      resource.id !== transcriptResource?.id
-  );
+  // A lesson with its "Teach this lesson" card has a YAWP! version of every
+  // file Brian uploaded to it, so the uploads are not listed a second time.
+  // The video's captions and transcript stay.
+  const primaryResources =
+    thesisDeckLinks.length > 0
+      ? []
+      : currentModule.resources.filter(
+          (resource) =>
+            resource.id !== captionResource?.id &&
+            resource.id !== transcriptResource?.id
+        );
   const captionTrack = captionResource
     ? {
         src: `/api/teacher-training-module-resource/${captionResource.id}`,
@@ -405,7 +411,8 @@ export default function TeacherTrainingModuleRoute() {
                   <CardTitle>Teach this lesson</CardTitle>
                   <p className="text-sm text-muted-foreground">
                     Present the slides on YAWP!, or make your own copy in Google
-                    Slides or PowerPoint to edit. The lesson plan goes with them.
+                    Slides or PowerPoint to edit. The lesson plan and handouts go
+                    with them.
                   </p>
                 </CardHeader>
                 <CardContent>

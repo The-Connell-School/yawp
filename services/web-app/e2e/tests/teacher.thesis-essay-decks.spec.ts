@@ -36,7 +36,26 @@ test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
           position: 50,
           teacherTrainingModules: {
             create: [
-              { title: 'Lesson 2: Pre-writing', position: 7, description: 'Pre-writing.' },
+              {
+                title: 'Lesson 2: Pre-writing',
+                position: 7,
+                description: 'Pre-writing.',
+                // Brian's original uploads, and the video's captions.
+                resources: {
+                  create: [
+                    {
+                      name: 'Pre-Writing Slide Deck.pptx',
+                      contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                      blob: Buffer.from('PK old deck'),
+                    },
+                    {
+                      name: '08-lesson-2-pre-writing-captions.vtt',
+                      contentType: 'text/vtt',
+                      blob: Buffer.from('WEBVTT\n'),
+                    },
+                  ],
+                },
+              },
               { title: 'Lesson 8: Review my Essay (optional)', position: 13, description: 'Review.' },
             ],
           },
@@ -116,6 +135,14 @@ test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
     await expect(page.getByRole('link', { name: /sample essay handout/i })).toHaveAttribute(
       'href',
       '/api/thesis-essay-deck/sample-essay-bored-in-the-usa'
+    );
+    await expect(page.getByRole('link', { name: /exemplar essay handout \(animal farm\)/i })).toHaveAttribute(
+      'href',
+      '/api/thesis-essay-deck/sample-essay-animal-farm'
+    );
+    await expect(page.getByRole('link', { name: /critical essay form handout/i })).toHaveAttribute(
+      'href',
+      '/api/thesis-essay-deck/critical-essay-form'
     );
 
     await page.getByRole('button', { name: 'Pre-writing' }).click();
@@ -211,6 +238,21 @@ test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
       'href',
       '/api/thesis-essay-deck/lesson-2-pre-writing-lesson-plan'
     );
+    await expect(decks.getByRole('link', { name: /sample essay prompts handout/i })).toHaveAttribute(
+      'href',
+      '/api/thesis-essay-deck/essay-prompts'
+    );
+    const prompts = await page.request.get('/api/thesis-essay-deck/essay-prompts');
+    expect(prompts.status()).toBe(200);
+    expect((await prompts.body()).subarray(0, 5).toString()).toBe('%PDF-');
+
+    // The card replaces Brian's uploads, so they are not listed twice. The
+    // video's captions stay.
+    await expect(page.getByTestId('teacher-training-primary-resources')).toHaveCount(0);
+    await expect(page.getByText('Pre-Writing Slide Deck.pptx')).toHaveCount(0);
+    await expect(
+      page.getByTestId('teacher-training-media-accessibility').getByRole('link', { name: 'Captions' })
+    ).toBeVisible();
 
     // Presenting from a training comes back to the training.
     await decks.getByRole('link', { name: /present: lesson 2 · pre-writing/i }).click();
@@ -228,6 +270,10 @@ test.describe.serial('Thesis-Driven Essay: slide decks in the Modules', () => {
     await page.goto(lesson2);
     await expect(page.getByText('Lesson 2: Pre-writing').first()).toBeVisible();
     await expect(page.getByTestId('teacher-training-thesis-deck')).toHaveCount(0);
+    // Brian's uploads are listed as before.
+    await expect(page.getByTestId('teacher-training-primary-resources')).toContainText(
+      'Pre-Writing Slide Deck.pptx'
+    );
   });
 
   test('has no decks on other assignment types', async ({ page, signIn, e2eContext }) => {
