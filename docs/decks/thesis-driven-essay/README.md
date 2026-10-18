@@ -65,7 +65,11 @@ did:
 - **Lesson 7:** new. Brian wrote none, so it is written from his Lesson 7
   video.
 
-Two handouts go with Day 1:
+Handouts go with the lessons: a YAWP! version of every file Brian uploaded
+to a lesson in the Trainings (the text is in
+`scripts/thesis-essay-decks/handouts.ts` and `sample-essay.ts`).
+
+Day 1:
 
 - [`student-sign-up.pdf`](../../../services/web-app/resources/thesis-essay-decks/student-sign-up.pdf): one page for
   students, replacing the old "Student Sign-up Process" PDF, which showed the
@@ -73,6 +77,19 @@ Two handouts go with Day 1:
 - [`sample-essay-bored-in-the-usa.pdf`](../../../services/web-app/resources/thesis-essay-decks/sample-essay-bored-in-the-usa.pdf):
   the sample essay students read, mark up and come back to in later
   lessons. Its thesis is left unmarked; on Day 1 the class finds it.
+- [`sample-essay-animal-farm.pdf`](../../../services/web-app/resources/thesis-essay-decks/sample-essay-animal-farm.pdf):
+  Brian's exemplar literary essay on __Animal Farm__, replacing "Sample Essay
+  (Animal Farm)".
+- [`critical-essay-form.pdf`](../../../services/web-app/resources/thesis-essay-decks/critical-essay-form.pdf): the essay as an
+  hourglass, replacing the "Critical Essay Form" image. Lessons 2 and 3
+  offer it too, since their plans hand it out.
+
+Lesson 2: [`essay-prompts.pdf`](../../../services/web-app/resources/thesis-essay-decks/essay-prompts.pdf), Brian's sample
+prompts, replacing "Sample Thesis-Driven Essay Prompts.docx".
+
+Lesson 5: [`quoting-and-citing.pdf`](../../../services/web-app/resources/thesis-essay-decks/quoting-and-citing.pdf), replacing
+"HANDOUT: Citing/Integrating Quotations.docx" (Purdue OWL's "Quoting Others",
+then citing and works cited).
 
 Plans name slides by title, so moving a slide renumbers the plan, and a test
 fails if a plan points at a slide that is not in its deck.
@@ -98,14 +115,17 @@ ways (Kevin, 2026-10-17):
 3. **PowerPoint**: the .pptx download, for teachers who edit in PowerPoint.
    Keynote is not a target.
 
-Then the lesson plan, and on Day 1 the two handouts.
+Then the lesson plan, and the lesson's handouts.
 
 The same buttons appear on the Faculty Lounge's Trainings (#484, merged into
 this work): in the Thesis-Driven Essay course, each "Lesson N: …" module
-shows a **Teach this lesson** card with Lesson N's buttons, above the files
-uploaded to that module. Presenting from there closes back to the module. Teachers only;
+shows a **Teach this lesson** card with Lesson N's buttons. The card stands
+in for the files uploaded to that module, so they are no longer listed below
+it (Kevin, 2026-10-18); the video's captions and transcript still are, and
+a module without a card (Lesson 8, the intro modules) lists its uploads as
+before. Presenting from there closes back to the module. Teachers only;
 downloads come from `/api/thesis-essay-deck/:slug` (`<deck>`,
-`<deck>-lesson-plan`, `student-sign-up`, `sample-essay-bored-in-the-usa`), and
+`<deck>-lesson-plan`, and the handouts by file name), and
 the presenter's pictures from `/api/thesis-essay-deck-asset/*`. With the flag
 off the page is unchanged.
 
