@@ -13,7 +13,7 @@
  */
 import { createPrismaClient } from './local-dev/connection';
 import { LAUNCH_POSTS } from './lounge-launch/content';
-import { seedLoungeLaunch } from './lounge-launch/seed';
+import { moveLaunchTopics, seedLoungeLaunch } from './lounge-launch/seed';
 import { LOUNGE_TEAM_ACCOUNT, ensureLoungeTeamAccount, findLoungeTeamAccount } from './lounge-launch/team-account';
 
 const brianEmail = process.env.LOUNGE_SEED_BRIAN_EMAIL?.trim().toLowerCase();
@@ -58,6 +58,8 @@ try {
     const { id: teamUserId } = await ensureLoungeTeamAccount(prisma);
     const result = await seedLoungeLaunch(prisma, { brianUserId: brian.id, teamUserId });
     console.log(`\nCreated ${result.created.length} (${result.drafts.length} drafts); left ${result.skipped.length} alone.`);
+    const moved = await moveLaunchTopics(prisma);
+    if (moved.length > 0) console.log(`Moved to their new topic: ${moved.join(', ')}.`);
   }
 } finally {
   await prisma.$disconnect();

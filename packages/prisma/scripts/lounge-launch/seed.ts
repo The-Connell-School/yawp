@@ -110,3 +110,22 @@ export async function seedLoungeLaunch(
 
   return result;
 }
+
+/**
+ * Launch posts whose topic changed after they were first seeded. Seeding is
+ * create-only, so a database seeded earlier keeps the old topic until this
+ * moves it; a post someone re-filed in the meantime is left alone.
+ */
+const TOPIC_MOVES = [{ seedKey: 'hopper:lessons-learned', from: 'other', to: 'lessons-learned' }] as const;
+
+export async function moveLaunchTopics(prisma: Pick<PrismaClient, 'loungePost'>): Promise<string[]> {
+  const moved: string[] = [];
+  for (const move of TOPIC_MOVES) {
+    const { count } = await prisma.loungePost.updateMany({
+      where: { seedKey: move.seedKey, topic: move.from },
+      data: { topic: move.to },
+    });
+    if (count > 0) moved.push(move.seedKey);
+  }
+  return moved;
+}

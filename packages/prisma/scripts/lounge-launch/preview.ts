@@ -2,7 +2,7 @@
 import type { PrismaClient } from '../../generated/prisma';
 import { shouldRunFreeTierShipReviewSeed as isPrPreviewDatabase } from '../../../../scripts/preview/free-tier-ship-review-seed-guard.mjs';
 import { LAUNCH_POSTS } from './content';
-import { seedLoungeLaunch } from './seed';
+import { moveLaunchTopics, seedLoungeLaunch } from './seed';
 import { ensureLoungeTeamAccount } from './team-account';
 
 /**
@@ -38,6 +38,7 @@ export async function ensureLoungeLaunchContentForPreview(
       ).count
     : 0;
   const result = await seedLoungeLaunch(prisma, { brianUserId: brian.id, teamUserId: team.id });
+  await moveLaunchTopics(prisma);
   console.log(
     `Faculty Lounge launch content: ${result.created.length} created, ${result.skipped.length} already there, ${moved} moved to the team account`
   );

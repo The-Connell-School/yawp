@@ -238,7 +238,7 @@ export const HOPPER: LaunchPost[] = [
     seedKey: 'hopper:lessons-learned',
     author: 'brian',
     kind: 'SHARE',
-    topic: 'other',
+    topic: 'lessons-learned',
     draft: true,
     title: 'Lessons Learned',
     body: `A space to share the best things you've figured out along the way.

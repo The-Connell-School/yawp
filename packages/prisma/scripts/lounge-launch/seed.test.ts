@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { HOPPER, HOUSE_RULES, LAUNCH_POSTS, LAUNCH_QUESTIONS, WELCOME, type LaunchPost } from './content';
-import { hasLaunchPlaceholder, seedLoungeLaunch } from './seed';
+import { hasLaunchPlaceholder, moveLaunchTopics, seedLoungeLaunch } from './seed';
 
 type Row = Record<string, any>;
 
@@ -108,5 +108,35 @@ describe('seedLoungeLaunch', () => {
       'still has placeholder text'
     );
     expect(posts).toHaveLength(0);
+  });
+});
+
+describe('Lessons Learned moves to its own topic', () => {
+  test('the hopper post is filed under Lessons learned', () => {
+    expect(HOPPER.find((p) => p.seedKey === 'hopper:lessons-learned')?.topic).toBe('lessons-learned');
+  });
+
+  test('a copy seeded before the topic existed moves over, and only if nobody re-filed it', async () => {
+    const calls: Row[] = [];
+    const prisma = {
+      loungePost: {
+        updateMany: async (args: Row) => {
+          calls.push(args);
+          return { count: 1 };
+        },
+      },
+    } as any;
+    expect(await moveLaunchTopics(prisma)).toEqual(['hopper:lessons-learned']);
+    expect(calls).toEqual([
+      {
+        where: { seedKey: 'hopper:lessons-learned', topic: 'other' },
+        data: { topic: 'lessons-learned' },
+      },
+    ]);
+  });
+
+  test('running it again changes nothing', async () => {
+    const prisma = { loungePost: { updateMany: async () => ({ count: 0 }) } } as any;
+    expect(await moveLaunchTopics(prisma)).toEqual([]);
   });
 });
