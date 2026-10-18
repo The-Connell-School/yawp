@@ -95,7 +95,6 @@ export default function LoungeFeedRoute() {
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <LoungeMasthead
-        active="community"
         action={
           <Link
             to="/app/lounge/new"
@@ -155,7 +154,7 @@ export default function LoungeFeedRoute() {
           <ul className="-mt-6 flex flex-col">
             {posts.map((post) => (
               <li key={post.id}>
-                <LoungePostRow post={post} when={post.when} topicHref={feedHref({ sort, topic: post.topic })} />
+                <LoungePostRow post={post} when={post.when} topicHref={post.topic ? feedHref({ sort, topic: post.topic }) : null} />
               </li>
             ))}
           </ul>

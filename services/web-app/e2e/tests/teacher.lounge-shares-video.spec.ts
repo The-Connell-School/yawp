@@ -93,11 +93,12 @@ test.describe.serial("Faculty Lounge shares and Brian's videos", () => {
     await resetLounge(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto('/app/lounge/new');
-    await page.getByLabel('Share').check();
+    await page.getByLabel('Share an assignment', { exact: true }).check();
     await page.getByLabel('Title').fill(SHARE_TITLE);
     await page.getByLabel('Details').fill('I give it the day before the essay is due.');
-    await page.getByLabel('Topic').selectOption({ label: 'Writing Lessons' });
+    await page.getByLabel('Topic').selectOption({ label: 'Writing practice' });
 
+    await expect(page.getByText('Attach one of your YAWP! lessons')).toBeVisible();
     await page.getByRole('button', { name: 'Attach from YAWP!' }).click();
     const picker = page.getByRole('dialog', { name: 'Attach from YAWP!' });
     await picker.getByRole('button', { name: /Conclusion checklist/ }).click();
@@ -178,10 +179,10 @@ test.describe.serial("Faculty Lounge shares and Brian's videos", () => {
   test('Brian pins a weekly prompt to the top of the feed', async ({ page, signIn, e2eContext }) => {
     await signIn(e2eContext.adminEmail, ADMIN_PASSWORD);
     await page.goto('/app/lounge/new');
-    await page.getByLabel('Question').check();
+    await page.getByLabel('General question', { exact: true }).check();
     await page.getByLabel('Title').fill(PROMPT_TITLE);
     await page.getByLabel('Details').fill('Reply with yours. I will share mine on Friday.');
-    await page.getByLabel('Topic').selectOption({ label: 'Writing Lessons' });
+    await page.getByLabel('Topic').selectOption({ label: 'Writing practice' });
     await page.getByLabel('Pin to the top of the Lounge').check();
     await page.getByRole('button', { name: 'Post', exact: true }).click();
     await expect(page.getByRole('heading', { name: PROMPT_TITLE })).toBeVisible();

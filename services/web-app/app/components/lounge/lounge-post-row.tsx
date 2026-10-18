@@ -4,16 +4,17 @@ import { HelpfulButton } from '~/components/lounge/helpful-button';
 import { LoungeAvatar } from '~/components/lounge/lounge-avatar';
 import { LOUNGE_TEAM_NAME } from '~/domain/lounge/launch';
 import type { LoungePostSummary } from '~/domain/lounge/lounge.server';
+import { loungeKindLabel } from '~/domain/lounge/topics';
 
 const KIND_PILL = {
-  WIN: { label: 'Win', className: 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200' },
-  SHARE: { label: 'Share', className: 'lounge-accent-soft lounge-accent' },
+  WIN: { label: loungeKindLabel('WIN'), className: 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200' },
+  SHARE: { label: loungeKindLabel('SHARE'), className: 'lounge-accent-soft lounge-accent' },
 } as const;
 
 /**
  * One post in the feed: avatar, a serif title, one preview line (the YAWP!
  * team's answer when there is one), and a quiet meta line. Questions carry
- * no pill; Wins and Shares do.
+ * no pill; Wins and shared assignments do. A post with no topic shows none.
  */
 export function LoungePostRow({
   post,
@@ -22,7 +23,8 @@ export function LoungePostRow({
 }: {
   post: LoungePostSummary;
   when: string;
-  topicHref: string;
+  /** Null when the post has no topic. */
+  topicHref: string | null;
 }) {
   const answeredBy = post.answeredBy ?? LOUNGE_TEAM_NAME;
   const pill = post.kind === 'QUESTION' ? null : KIND_PILL[post.kind];
@@ -54,13 +56,15 @@ export function LoungePostRow({
           <span aria-hidden="true">·</span>
           <span>{when}</span>
           {pill ? (
-            <span className={`rounded-md px-2 py-0.5 text-xs font-medium uppercase tracking-wide ${pill.className}`}>
+            <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${pill.className}`}>
               {pill.label}
             </span>
           ) : null}
-          <Link to={topicHref} className="hover:underline">
-            {post.topicLabel}
-          </Link>
+          {topicHref && post.topicLabel ? (
+            <Link to={topicHref} className="hover:underline">
+              {post.topicLabel}
+            </Link>
+          ) : null}
           {post.isEdited ? <span>edited</span> : null}
           {post.isPrivate ? <span>Private to the {LOUNGE_TEAM_NAME}</span> : null}
           {post.staffAnsweredOnVideo ? (

@@ -74,21 +74,20 @@ test.describe.serial("Faculty Lounge community board", () => {
     await expect(page.getByRole('heading', { name: 'Faculty Lounge' })).toBeVisible();
     await expect(page.getByText('No posts yet')).toBeVisible();
 
-    // The course grid is one tab away, and the nav still reads as the Lounge there.
-    await page.getByRole('link', { name: 'Trainings' }).click();
-    await expect(page).toHaveURL(/\/app\/teacher-trainings$/);
-    await expect(page.getByRole('link', { name: 'Community' })).toBeVisible();
-    await page.getByRole('link', { name: 'Community' }).click();
+    // Just the Faculty Lounge and its posts: no label above the title, no tabs.
+    await expect(page.getByText('Teachers using YAWP!')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Community', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Trainings', exact: true })).toHaveCount(0);
 
     await page.getByRole('link', { name: 'New post' }).click();
     await expect(page).toHaveURL(/\/app\/lounge\/new/);
-    await page.getByLabel('Question').check();
+    await page.getByLabel('General question', { exact: true }).check();
     await page.getByLabel('Title').fill(QUESTION_TITLE);
     await page.getByLabel('Details').fill('My student Jake rushes it.');
     await expect(page.getByText(/may include a student's name/)).toBeVisible();
     await page.getByLabel('Details').fill(QUESTION_BODY);
     await expect(page.getByText(/may include a student's name/)).toHaveCount(0);
-    await page.getByLabel('Topic').selectOption({ label: 'Daily Pages' });
+    await page.getByLabel('Topic').selectOption({ label: 'Class starters' });
     await page.getByLabel('Ask the YAWP! team to answer this').check();
     await page.getByRole('button', { name: 'Post', exact: true }).click();
 

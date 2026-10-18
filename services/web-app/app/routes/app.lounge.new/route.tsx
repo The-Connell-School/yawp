@@ -31,7 +31,7 @@ import { parseLoungeVideoInput } from '~/domain/lounge/video';
 import { decodeMentions } from '~/domain/lounge/mentions';
 import { sendLoungeNotifications } from '~/domain/lounge/notifications.server';
 import { findPrivacyConcerns, privacyConcernMessage } from '~/domain/lounge/privacy-nudge';
-import { LOUNGE_POST_KINDS, LOUNGE_TOPICS, type LoungePostKindKey } from '~/domain/lounge/topics';
+import { COMPOSER_TOPICS, LOUNGE_POST_KINDS, kindAttachesLesson, type LoungePostKindKey } from '~/domain/lounge/topics';
 import { LOUNGE_TITLE_MAX, parseLoungePostInput } from '~/domain/lounge/validation';
 import { prisma } from '~/utils/db.server';
 import { getDomainUrl } from '~/utils/misc';
@@ -68,7 +68,6 @@ export async function action({ request }: ActionFunctionArgs) {
     title: String(form.title ?? ''),
     body: String(form.body ?? ''),
     askStaff: form.askStaff === 'on',
-    askPrivately: form.askPrivately === 'on',
     attachAssignmentId: String(form.attachAssignmentId ?? ''),
     pin: form.pin === 'on',
     publishMode: String(form.publishMode ?? 'now'),
@@ -138,12 +137,13 @@ export default function LoungeNewPostRoute() {
     (values?.kind as LoungePostKindKey) ?? 'QUESTION'
   );
   const [bodyText, setBodyText] = useState(initialBody.text);
-  const [askPrivately, setAskPrivately] = useState(values?.askPrivately ?? false);
+  const [topic, setTopic] = useState(values?.topic ?? '');
   const [publishMode, setPublishMode] = useState<PublishMode>(
     (PUBLISH_MODES.find((option) => option.key === values?.publishMode)?.key ?? 'now') as PublishMode
   );
   const nudge = privacyConcernMessage(findPrivacyConcerns(bodyText));
-  const titleLabel = LOUNGE_POST_KINDS.find((k) => k.key === kind)?.titleLabel ?? 'Title';
+  const kindInfo = LOUNGE_POST_KINDS.find((k) => k.key === kind) ?? LOUNGE_POST_KINDS[0];
+  const topicHint = COMPOSER_TOPICS.find((option) => option.key === topic)?.hint;
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
@@ -183,6 +183,10 @@ export default function LoungeNewPostRoute() {
             ))}
           </fieldset>
 
+          <p id="lounge-kind-prompt" data-testid="lounge-kind-prompt" className="-mt-2 text-[15px] text-foreground">
+            {kindInfo.prompt}
+          </p>
+
           <div className="flex flex-col gap-2">
             <label htmlFor="lounge-title" className="text-sm text-muted-foreground">
               Title
@@ -191,10 +195,10 @@ export default function LoungeNewPostRoute() {
               id="lounge-title"
               name="title"
               defaultValue={values?.title}
-              placeholder={titleLabel}
+              placeholder={kindInfo.titleLabel}
               maxLength={LOUNGE_TITLE_MAX}
               aria-invalid={Boolean(errors.title)}
-              aria-describedby={errors.title ? 'lounge-title-error' : undefined}
+              aria-describedby={errors.title ? 'lounge-kind-prompt lounge-title-error' : 'lounge-kind-prompt'}
               className="h-12 text-lg"
             />
             {errors.title ? (
@@ -231,12 +235,12 @@ export default function LoungeNewPostRoute() {
               </p>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Sharing student writing is welcome. Take the student&apos;s name off first.
+                Sharing student writing is welcome, but be sure to take the student’s name off first.
               </p>
             )}
           </div>
 
-          {shareable.length > 0 ? (
+          {kindAttachesLesson(kind) && shareable.length > 0 ? (
             <AttachFromYawp
               assignments={shareable}
               defaultId={values?.attachAssignmentId || null}
@@ -259,19 +263,24 @@ export default function LoungeNewPostRoute() {
             <select
               id="lounge-topic"
               name="topic"
-              defaultValue={values?.topic ?? ''}
+              value={topic}
+              onChange={(event) => setTopic(event.target.value)}
               aria-invalid={Boolean(errors.topic)}
+              aria-describedby={topicHint ? 'lounge-topic-hint' : undefined}
               className="h-11 rounded-md border border-input bg-input-background px-3 text-[15px]"
             >
-              <option value="" disabled>
-                Choose a topic
-              </option>
-              {LOUNGE_TOPICS.map((topic) => (
-                <option key={topic.key} value={topic.key}>
-                  {topic.label}
+              <option value="">No topic</option>
+              {COMPOSER_TOPICS.map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.label}
                 </option>
               ))}
             </select>
+            {topicHint ? (
+              <p id="lounge-topic-hint" className="text-sm text-muted-foreground">
+                {topicHint}
+              </p>
+            ) : null}
             {errors.topic ? <p className="text-sm text-destructive">{errors.topic}</p> : null}
           </div>
 
@@ -290,21 +299,15 @@ export default function LoungeNewPostRoute() {
                 </span>
               </span>
             </label>
-            <label className="flex cursor-pointer items-start gap-3">
-              <input
-                type="checkbox"
-                name="askPrivately"
-                checked={askPrivately}
-                onChange={(event) => setAskPrivately(event.target.checked)}
-                className="mt-1 h-4 w-4 accent-[hsl(var(--primary))]"
-              />
-              <span className="flex flex-col">
-                <span>Keep it private between me and the {LOUNGE_TEAM_NAME}</span>
-                <span className="text-sm text-muted-foreground">
-                  Other teachers won&apos;t see it. Use this for anything about a specific student.
-                </span>
-              </span>
-            </label>
+            <p className="text-sm text-muted-foreground">
+              Something just for the {LOUNGE_TEAM_NAME}?{' '}
+              <Link
+                to={`/app/lounge/contact?from=${encodeURIComponent('/app/lounge/new')}`}
+                className="font-medium text-foreground underline underline-offset-4"
+              >
+                Contact Us
+              </Link>
+            </p>
           </div>
 
           {isStaff ? (
@@ -394,20 +397,34 @@ function AttachFromYawp({
   );
   const selected = assignments.find((a) => a.id === selectedId) ?? null;
   const panelRef = useRef<HTMLDivElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
+    function close() {
+      setOpen(false);
+      toggleRef.current?.focus();
+    }
     function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key === 'Escape') close();
+    }
+    // A click anywhere outside the list closes it, not only the button.
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target as Node | null;
+      if (target && !panelRef.current?.contains(target) && !toggleRef.current?.contains(target)) close();
     }
     document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPointerDown);
     panelRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
-    return () => document.removeEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointerDown);
+    };
   }, [open]);
 
   return (
     <div className="relative flex flex-col gap-2">
-      <span className="text-sm text-muted-foreground">Attached from YAWP!</span>
+      <span className="text-sm text-muted-foreground">Attach one of your YAWP! lessons</span>
       <input type="hidden" name="attachAssignmentId" value={selectedId ?? ''} />
       {selected ? (
         <div className="flex items-center gap-3 rounded-xl border bg-background px-3 py-2.5">
@@ -431,6 +448,7 @@ function AttachFromYawp({
         </div>
       ) : (
         <button
+          ref={toggleRef}
           type="button"
           aria-expanded={open}
           onClick={() => setOpen((value) => !value)}
@@ -446,9 +464,7 @@ function AttachFromYawp({
           aria-label="Attach from YAWP!"
           className="absolute left-0 top-full z-20 mt-1 w-full max-w-md overflow-hidden rounded-xl border bg-background shadow-lg"
         >
-          <p className="border-b px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Your assignments
-          </p>
+          <p className="border-b px-4 py-2 text-sm text-muted-foreground">Your assignments</p>
           <ul className="max-h-72 overflow-y-auto py-1">
             {assignments.map((assignment) => (
               <li key={assignment.id}>

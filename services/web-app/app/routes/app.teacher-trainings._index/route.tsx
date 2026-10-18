@@ -1,15 +1,17 @@
 import {
   type LoaderFunctionArgs,
   data as dataResponse,
+  Link,
   useLoaderData,
   useNavigate,
 } from 'react-router';
+import { ChevronLeft } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { prisma } from '~/utils/db.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { isLoungeCommunityEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { LoungeMasthead } from '~/components/lounge/lounge-masthead';
+import { LOUNGE_NAME } from '~/domain/lounge/launch';
 import { trainingCardCounts } from '~/utils/teacher-training-counts';
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -71,7 +73,18 @@ export default function TeacherTrainingsRoute() {
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       {communityEnabled ? (
-        <LoungeMasthead active="trainings" />
+        // Trainings are leaving the Lounge for the assignment pages; until
+        // then this page stays reachable from old links, under its own name.
+        <header className="mx-auto w-full max-w-[960px] px-4 pt-8 sm:px-8 sm:pt-10">
+          <Link
+            to="/app/lounge"
+            className="inline-flex min-h-11 items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ChevronLeft size={16} aria-hidden="true" />
+            {LOUNGE_NAME}
+          </Link>
+          <h1 className="lounge-serif mt-1 text-[38px] leading-tight text-foreground">Trainings</h1>
+        </header>
       ) : (
         <div className="flex w-full justify-between border-b bg-secondary">
           <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">

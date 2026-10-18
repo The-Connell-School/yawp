@@ -17,6 +17,7 @@ import { LoungeAvatar } from '~/components/lounge/lounge-avatar';
 import { MentionTextarea } from '~/components/lounge/mention-textarea';
 import { LoungeVideoPlayer } from '~/components/lounge/lounge-video-player';
 import { LoungeVideoRecorder } from '~/components/lounge/lounge-video-recorder';
+import { LoungePostNav, LoungePostNavCompact } from '~/components/lounge/lounge-post-nav';
 import { ChevronLeft, FileText } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { LocalTime } from '~/components/lounge/local-time';
@@ -31,6 +32,7 @@ import {
   deleteOwnLoungeReply,
   editOwnLoungePost,
   editOwnLoungeReply,
+  getAdjacentLoungePosts,
   getLoungeThread,
   listMentionCandidates,
   recordShareUse,
@@ -46,6 +48,7 @@ import { loungeVideoPlaybackUrl } from '~/domain/lounge/video-storage.server';
 import { decodeMentions } from '~/domain/lounge/mentions';
 import { sendLoungeNotifications } from '~/domain/lounge/notifications.server';
 import { formatLoungeTime } from '~/domain/lounge/time';
+import { loungeKindLabel } from '~/domain/lounge/topics';
 import { parseLoungePostEdit, parseLoungeReplyEdit, parseLoungeReplyInput } from '~/domain/lounge/validation';
 import { getDomainUrl } from '~/utils/misc';
 import { enforceAuthenticatedUserAndIp } from '~/utils/rate-limit.server';
@@ -63,8 +66,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const postId = params.postId ?? '';
   const thread = await getLoungeThread(viewer, postId);
   if (!thread) throw notFound();
-  const candidates = await listMentionCandidates(viewer, postId);
   const now = new Date();
+  // Drafts and scheduled posts are not in the feed, so they have no neighbours.
+  const [candidates, adjacent] = await Promise.all([
+    listMentionCandidates(viewer, postId),
+    thread.post.isUnpublished
+      ? Promise.resolve({ previous: null, next: null })
+      : getAdjacentLoungePosts(viewer, thread.post, now),
+  ]);
   const withWhen = async (reply: LoungeReplyView) => ({
     ...reply,
     when: formatLoungeTime(reply.createdAt, now),
@@ -90,6 +99,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     staffReplies: await Promise.all(thread.staffReplies.map(withWhen)),
     replies: await Promise.all(thread.replies.map(withWhen)),
     candidates,
+    adjacent,
     isStaff: viewer.isStaff,
   });
 }
@@ -273,7 +283,6 @@ function FormErrors({ errors }: { errors?: Record<string, string | undefined> })
 }
 
 /** One reply: a YAWP! team answer (accented) or a teacher's reply. Authors can edit their own. */
-const KIND_LABEL = { QUESTION: 'Question', SHARE: 'Share', WIN: 'Win' } as const;
 
 /** Avatar, name, and a quiet second line: school or team, when, edited. */
 function AuthorLine({
@@ -405,7 +414,7 @@ function ReplyItem({
       <article id={`reply-${reply.id}`} className="flex flex-col gap-4 rounded-2xl border bg-popover p-6 sm:p-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <AuthorLine author={reply.author} avatar={reply.avatar} when={reply.when} edited={reply.isEdited} />
-          <span className="lounge-accent lounge-accent-soft rounded-md px-2.5 py-1 text-xs font-medium uppercase tracking-wide">
+          <span className="lounge-accent lounge-accent-soft rounded-md px-2.5 py-1 text-xs font-medium">
             {firstName}&apos;s answer
           </span>
         </div>
@@ -432,7 +441,7 @@ function ReplyItem({
 }
 
 export default function LoungeThreadRoute() {
-  const { post, share, staffReplies, replies, candidates, isStaff } = useLoaderData<typeof loader>();
+  const { post, share, staffReplies, replies, candidates, adjacent, isStaff } = useLoaderData<typeof loader>();
   const [editingPost, setEditingPost] = useState(false);
   useCloseAfterSave('edit-post', null, () => setEditingPost(false));
   const actionData = useActionData<typeof action>();
@@ -447,13 +456,16 @@ export default function LoungeThreadRoute() {
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <div className="mx-auto flex w-full max-w-[760px] flex-col gap-8 px-4 pb-16 pt-6 sm:px-8 sm:pt-8">
-        <Link
-          to="/app/lounge"
-          className="inline-flex min-h-11 items-center gap-1.5 self-start text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ChevronLeft size={16} aria-hidden="true" />
-          {LOUNGE_NAME}
-        </Link>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Link
+            to="/app/lounge"
+            className="inline-flex min-h-11 items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ChevronLeft size={16} aria-hidden="true" />
+            {LOUNGE_NAME}
+          </Link>
+          <LoungePostNavCompact previous={adjacent.previous} next={adjacent.next} />
+        </div>
 
         <article className="-mt-4 flex flex-col gap-4">
           {post.isUnpublished ? (
@@ -476,19 +488,19 @@ export default function LoungeThreadRoute() {
             />
           ) : (
             <>
-              <p className="lounge-accent text-xs font-medium uppercase tracking-[0.08em]">
-                {KIND_LABEL[post.kind]}
-                {post.topic === 'other' ? null : (
+              <h1 className="lounge-serif text-[34px] leading-[1.1] text-foreground sm:text-[42px]">{post.title}</h1>
+              <AuthorLine author={post.author} avatar={post.avatar} when={post.when} edited={post.isEdited} />
+              <p className="text-sm text-muted-foreground">
+                {loungeKindLabel(post.kind)}
+                {post.topic && post.topic !== 'other' ? (
                   <>
                     {' · '}
                     <Link to={`/app/lounge?topic=${post.topic}`} className="hover:underline">
                       {post.topicLabel}
                     </Link>
                   </>
-                )}
+                ) : null}
               </p>
-              <h1 className="lounge-serif text-[34px] leading-[1.1] text-foreground sm:text-[42px]">{post.title}</h1>
-              <AuthorLine author={post.author} avatar={post.avatar} when={post.when} edited={post.isEdited} />
             </>
           )}
           {post.isPrivate ? (
@@ -597,6 +609,8 @@ export default function LoungeThreadRoute() {
             </div>
           </Form>
         </div>
+
+        <LoungePostNav previous={adjacent.previous} next={adjacent.next} />
       </div>
     </section>
   );

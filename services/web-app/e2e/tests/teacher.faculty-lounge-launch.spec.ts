@@ -82,6 +82,7 @@ test.describe.serial('Faculty Lounge launch', () => {
 
     await expect(page).toHaveURL(/\/app\/lounge$/);
     await expect(page.getByRole('heading', { name: 'Faculty Lounge', level: 1 })).toBeVisible();
+    await expect(page.getByText('Teachers using YAWP!')).toHaveCount(0);
     const pinned = page.getByRole('region', { name: 'Pinned' });
     await expect(pinned.getByRole('link')).toHaveText([/Welcome to the Faculty Lounge/, /House Rules for the Lounge/]);
     // The Letter look: Brian's welcome as a letter, the team's faces beside it.
@@ -190,10 +191,10 @@ test.describe.serial('Faculty Lounge launch', () => {
   test('the YAWP! team schedules a post for later from the composer', async ({ page, signIn, e2eContext }) => {
     await signIn(e2eContext.adminEmail, ADMIN_PASSWORD);
     await page.goto('/app/lounge/new');
-    await page.getByLabel('Question').check();
+    await page.getByLabel('General question', { exact: true }).check();
     await page.getByLabel('Title').fill('How do you get through a stack of essays?');
     await page.getByLabel('Details').fill('Asking for everyone.');
-    await page.getByLabel('Topic').selectOption({ label: 'Grading & Rubrics' });
+    await page.getByLabel('Topic').selectOption({ label: 'Grading & rubrics' });
     await page.getByLabel('Schedule').check();
     await page.getByLabel('Post on').fill('2099-01-05T07:30');
     await page.getByRole('button', { name: 'Schedule post' }).click();
@@ -221,19 +222,25 @@ test.describe.serial('Faculty Lounge launch', () => {
     await expect(edited.getByText('edited')).toBeVisible();
   });
 
-  test('a training opens from the Trainings tab and leads back to the Faculty Lounge', async ({
+  test('the Trainings pages still open from old links and lead back to the Faculty Lounge', async ({
     page,
     signIn,
     e2eContext,
   }) => {
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    // No Trainings tab in the Lounge any more; the videos move to assignment pages.
     await page.goto('/app/lounge');
-    await page.getByRole('link', { name: 'Trainings' }).click();
+    await expect(page.getByRole('link', { name: 'Trainings', exact: true })).toHaveCount(0);
+
+    await page.goto('/app/teacher-trainings');
+    await expect(page.getByRole('heading', { name: 'Trainings', level: 1 })).toBeVisible();
     await page.getByText('E2E Teacher Lounge', { exact: true }).click();
     await expect(page).toHaveURL(/\/app\/teacher-trainings\/[^/]+$/);
     await expect(page.getByRole('link', { name: 'Back to Dashboard' })).toHaveCount(0);
-    await page.getByRole('link', { name: 'Back to the Faculty Lounge' }).click();
+    await page.getByRole('link', { name: 'Back to Trainings' }).click();
     await expect(page).toHaveURL(/\/app\/teacher-trainings$/);
+    await page.getByRole('link', { name: 'Faculty Lounge', exact: true }).first().click();
+    await expect(page).toHaveURL(/\/app\/lounge$/);
     await expect(page.getByRole('heading', { name: 'Faculty Lounge', level: 1 })).toBeVisible();
   });
 });

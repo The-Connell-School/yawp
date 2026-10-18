@@ -12,7 +12,6 @@ import { prisma } from '~/utils/db.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { cn } from '~/utils/misc';
 import { isLoungeCommunityEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { LOUNGE_NAME } from '~/domain/lounge/launch';
 import {
   getTeacherTrainingProgressPercent,
   isTeacherTrainingModuleComplete,
@@ -71,8 +70,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Teacher training not found', { status: 404 });
   }
 
-  // Trainings live in the Lounge: with the community on it is the Faculty
-  // Lounge's Trainings tab, otherwise the Teacher's Lounge page itself.
+  // With the community on, the course grid is its own Trainings page (the
+  // Lounge no longer has a Trainings tab); otherwise it is the Teacher's Lounge.
   const viewer = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } });
   const communityEnabled =
     Boolean(viewer?.isAdmin) || (await isLoungeCommunityEnabled(profile.organization.id));
@@ -159,7 +158,7 @@ export default function TeacherTrainingRoute() {
             <Button variant="outline" asChild>
               <Link to="/app/teacher-trainings">
                 <ChevronLeft className="mr-2 h-4 w-4" />
-                {communityEnabled ? `Back to the ${LOUNGE_NAME}` : "Back to Teacher's Lounge"}
+                {communityEnabled ? 'Back to Trainings' : "Back to Teacher's Lounge"}
               </Link>
             </Button>
           </div>
