@@ -2,6 +2,7 @@ import { Link, useFetcher } from 'react-router';
 import { ArrowUpRight, BookOpen, Sparkles, Wrench } from 'lucide-react';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
+import { PlanLink } from './plan-link';
 import type {
   ClassModelExample,
   ClassModelFocus,
@@ -67,7 +68,15 @@ function ModelCard({
   );
 }
 
-function FocusRow({ focus }: { focus: ClassModelFocus }) {
+function FocusRow({
+  focus,
+  classAssignmentId,
+  planHandoff,
+}: {
+  focus: ClassModelFocus;
+  classAssignmentId: string;
+  planHandoff: boolean;
+}) {
   return (
     <li className="flex flex-col gap-2" data-testid="class-models-focus">
       <div>
@@ -93,6 +102,14 @@ function FocusRow({ focus }: { focus: ClassModelFocus }) {
           />
         ) : null}
       </div>
+      {planHandoff && focus.exemplar ? (
+        <PlanLink
+          classAssignmentId={classAssignmentId}
+          handoff={{ kind: 'models', category: focus.category }}
+        >
+          Plan a lesson from these
+        </PlanLink>
+      ) : null}
     </li>
   );
 }
@@ -104,8 +121,11 @@ function FocusRow({ focus }: { focus: ClassModelFocus }) {
  */
 export function ClassModelsSection({
   classAssignmentId,
+  planHandoff = false,
 }: {
   classAssignmentId: string;
+  /** Each focus can open the Lesson Planner with its models. */
+  planHandoff?: boolean;
 }) {
   const fetcher = useFetcher<ModelsData>();
   const isLoading = fetcher.state !== 'idle';
@@ -157,7 +177,12 @@ export function ClassModelsSection({
       {data?.models && (
         <ul className="flex flex-col gap-4">
           {data.models.focuses.map((focus) => (
-            <FocusRow key={focus.category} focus={focus} />
+            <FocusRow
+              key={focus.category}
+              focus={focus}
+              classAssignmentId={classAssignmentId}
+              planHandoff={planHandoff}
+            />
           ))}
         </ul>
       )}

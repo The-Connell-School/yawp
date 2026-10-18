@@ -1695,3 +1695,40 @@ describe("buildLessonPlannerSystemPrompt — one heading per step (Brian's run 2
     expect(prompt).toContain('Give every step of a plan its own `##` heading with its minutes');
   });
 });
+
+describe('buildLessonPlannerSystemPromptBlocks — class context from the assignment summary', () => {
+  const base = { teacherName: null, organizationName: 'Connell' };
+
+  test('restates the class context on every turn, after the cached core', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      ...base,
+      classContext:
+        'This lesson was opened from the teacher’s YAWP! assignment summary.\nThesis came out as an area to grow.',
+    });
+    expect(blocks[0].text).not.toContain('Thesis came out as an area to grow.');
+    expect(blocks[1].text).toContain('Thesis came out as an area to grow.');
+  });
+
+  test('says nothing when the lesson did not come from a summary', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks(base);
+    expect(blocks[1].text).not.toContain('assignment summary');
+  });
+});
+
+describe('buildLessonPlannerSystemPrompt — from the assignment summary', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell',
+  });
+
+  test('calls it the assignment summary and treats its part as the assignment', () => {
+    expect(prompt).toContain('Assignment Summary');
+    expect(prompt).not.toContain('from a Class Summary');
+  });
+
+  test("uses the teacher's own students' strong examples word for word, never with names", () => {
+    expect(prompt).toMatch(/strong examples from their own students/i);
+    expect(prompt).toMatch(/word for word in a `sample` block/i);
+    expect(prompt).toMatch(/student-inspired/i);
+  });
+});

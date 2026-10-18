@@ -61,6 +61,7 @@ import {
 import { uaPartnerMiddleware } from './utils/ua-partner.server.ts';
 import {
   isAssignmentSummaryModelsEnabled,
+  isAssignmentSummaryPlannerEnabled,
   isLessonPlannerEnabled,
 } from './domain/feature-flags/feature-flags.server.ts';
 import { getRootMembershipWhere } from './utils/root-membership-filter.server.ts';
@@ -135,6 +136,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         blackboardLtiMockEnabled: false,
         lessonPlannerEnabled: false,
         assignmentSummaryModelsEnabled: false,
+        assignmentSummaryPlannerEnabled: false,
         impersonation: { isReadOnly: false, impersonatorUserId: null },
         toast: null,
       },
@@ -234,12 +236,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
     bannerWarning,
     localDevAuthEnabled: isLocalDevAuthEnabled(),
   });
-  const [lessonPlannerEnabled, assignmentSummaryModelsEnabled] = userId
+  const [
+    lessonPlannerEnabled,
+    assignmentSummaryModelsEnabled,
+    assignmentSummaryPlannerEnabled,
+  ] = userId
     ? await Promise.all([
         isLessonPlannerEnabled(membership?.organizationId ?? null),
         isAssignmentSummaryModelsEnabled(membership?.organizationId ?? null),
+        isAssignmentSummaryPlannerEnabled(membership?.organizationId ?? null),
       ])
-    : [false, false];
+    : [false, false, false];
 
   return data(
     {
@@ -252,6 +259,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       demoFeedbackAvailable: Boolean(userId) && !internal && await isDemoFeedbackAvailable(),
       lessonPlannerEnabled,
       assignmentSummaryModelsEnabled,
+      assignmentSummaryPlannerEnabled,
       requestInfo: {
         hints: getHints(request),
         origin: getDomainUrl(request),

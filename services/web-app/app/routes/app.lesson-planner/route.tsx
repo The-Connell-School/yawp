@@ -88,6 +88,8 @@ import {
   withStandardSuggestions,
 } from '~/domain/lesson-planner/suggestions';
 import { loadLessonSeed } from '~/domain/lesson-planner/lesson-seed.server';
+import { loadSummaryHandoffSeed } from '~/domain/lesson-planner/summary-handoff.server';
+import { SUMMARY_HANDOFF_PARAM } from '~/domain/lesson-planner/summary-handoff';
 import { LessonRail } from './lesson-rail';
 import { PromptTiles } from './prompt-tiles';
 import { useRotatingPlaceholder } from './rotating-placeholder';
@@ -184,16 +186,31 @@ export async function loader({ request }: LoaderFunctionArgs) {
         })
       : null;
 
-  // Opened from a Class Summary next step: rebuild the opening ask on the
-  // server from the stored insight, so the URL carries ids rather than text a
-  // client could rewrite.
-  const seed = selected
+  // Opened from the assignment summary: rebuild the opening ask on the server
+  // from the stored insight, so the URL carries ids rather than text a client
+  // could rewrite. `seed` names any part of the summary (behind its flag);
+  // the original `step` link keeps working exactly as before.
+  const handoffParam = url.searchParams.get(SUMMARY_HANDOFF_PARAM);
+  const seed: {
+    classAssignmentId: string;
+    prompt: string;
+    context: string;
+    chips?: string[];
+    originSeed?: string;
+  } | null = selected
     ? null
-    : await loadLessonSeed({
-        membershipId: access.membership.id,
-        classAssignmentId: url.searchParams.get('from'),
-        stepIndex: url.searchParams.get('step'),
-      });
+    : handoffParam
+      ? await loadSummaryHandoffSeed({
+          membershipId: access.membership.id,
+          organizationId: access.membership.organization.id,
+          classAssignmentId: url.searchParams.get('from') ?? '',
+          handoffParam,
+        })
+      : await loadLessonSeed({
+          membershipId: access.membership.id,
+          classAssignmentId: url.searchParams.get('from'),
+          stepIndex: url.searchParams.get('step'),
+        });
 
   // Which days of this unit already have a lesson, so the board offers a way
   // back into a built day rather than building it a second time — and where
@@ -466,6 +483,7 @@ export default function LessonPlannerRoute() {
         // a refresh doesn't re-prefill the composer.
         next.delete('from');
         next.delete('step');
+        next.delete(SUMMARY_HANDOFF_PARAM);
         // Replace so the browser back button doesn't bounce between states.
         setSearchParams(next, { replace: true });
       }
@@ -493,6 +511,7 @@ export default function LessonPlannerRoute() {
     next.delete('c');
     next.delete('from');
     next.delete('step');
+    next.delete(SUMMARY_HANDOFF_PARAM);
     setSearchParams(next);
   }
 
@@ -754,7 +773,10 @@ export default function LessonPlannerRoute() {
       requestId: crypto.randomUUID(),
       ...(conversationId ? { conversationId } : {}),
       ...(!conversationId && seed
-        ? { originClassAssignmentId: seed.classAssignmentId }
+        ? {
+            originClassAssignmentId: seed.classAssignmentId,
+            ...(seed.originSeed ? { originSeed: seed.originSeed } : {}),
+          }
         : {}),
       ...(unitDay
         ? { unitDay: String(unitDay.day), unitDayTitle: unitDay.title }
@@ -834,6 +856,7 @@ export default function LessonPlannerRoute() {
           next.set('c', id);
           next.delete('from');
           next.delete('step');
+          next.delete(SUMMARY_HANDOFF_PARAM);
           setSearchParams(next);
         }}
       />
@@ -908,6 +931,7 @@ export default function LessonPlannerRoute() {
                   next.set('c', event.target.value);
                   next.delete('from');
                   next.delete('step');
+                  next.delete(SUMMARY_HANDOFF_PARAM);
                   setSearchParams(next);
                 }}
                 className="h-9 max-w-32 rounded-md border bg-background px-2 text-sm"
@@ -951,6 +975,7 @@ export default function LessonPlannerRoute() {
               <LessonPlannerEmptyState
                 prompts={recommendedPrompts}
                 seedContext={seed?.context ?? null}
+                seedChips={seed?.chips ?? []}
                 onPick={send}
                 disabled={isSending}
                 input={input}
@@ -1151,6 +1176,7 @@ function LessonComposer({
 function LessonPlannerEmptyState({
   prompts,
   seedContext,
+  seedChips,
   onPick,
   disabled,
   input,
@@ -1159,6 +1185,8 @@ function LessonPlannerEmptyState({
 }: {
   prompts: Array<{ id: string; label: string; prompt: string }>;
   seedContext: string | null;
+  /** What came over from the summary, when a hand-off brought it. */
+  seedChips: string[];
   onPick: (prompt: string) => void;
   disabled: boolean;
   input: string;
@@ -1225,6 +1253,22 @@ function LessonPlannerEmptyState({
             From your assignment summary
           </p>
           <p className="mt-1 text-sm text-muted-foreground">{seedContext}</p>
+          {seedChips.length > 0 ? (
+            <ul
+              className="mt-2 flex flex-wrap gap-1.5"
+              aria-label="What came over from your assignment summary"
+              data-testid="lesson-planner-seed-chips"
+            >
+              {seedChips.map((chip) => (
+                <li
+                  key={chip}
+                  className="rounded-full border border-primary/25 bg-background px-2.5 py-0.5 text-xs font-medium text-foreground"
+                >
+                  {chip}
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <p className="mt-2 text-sm text-muted-foreground">
             We started the message for you above — add anything about this class
             before you send it.

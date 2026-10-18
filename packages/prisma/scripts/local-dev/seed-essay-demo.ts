@@ -392,25 +392,32 @@ async function seedEssayDemoDataIn(
   return { classId: essayClass.id, created: true, classAssignmentIds };
 }
 
-// Mirrors featureFlagSettingName(ASSIGNMENT_SUMMARY_MODELS_FLAG).
-const ASSIGNMENT_SUMMARY_MODELS_SETTING = 'feature_flag.assignment_summary_models';
+// Mirror featureFlagSettingName(ASSIGNMENT_SUMMARY_MODELS_FLAG) and
+// featureFlagSettingName(ASSIGNMENT_SUMMARY_PLANNER_FLAG).
+const ASSIGNMENT_SUMMARY_PREVIEW_SETTINGS = [
+  'feature_flag.assignment_summary_models',
+  'feature_flag.assignment_summary_planner',
+];
 
 /**
- * Previews and demo start "models to teach from" on, so the essay demo shows
- * the whole class summary. Create-only: a later change made from
- * yawp-internal is never overwritten by a reseed. Production never runs this.
+ * Previews and demo start "models to teach from" and the Lesson Planner
+ * hand-offs on, so the essay demo shows the whole assignment summary.
+ * Create-only: a later change made from yawp-internal is never overwritten by
+ * a reseed. Production never runs this.
  */
 export async function ensureAssignmentSummaryModelsOnForPreview(
   prisma: Pick<PrismaClient, 'setting'>
 ) {
-  await prisma.setting.upsert({
-    where: { name: ASSIGNMENT_SUMMARY_MODELS_SETTING },
-    create: {
-      name: ASSIGNMENT_SUMMARY_MODELS_SETTING,
-      value: JSON.stringify({ mode: 'everyone', orgIds: [] }),
-      valueType: 'json',
-      description: 'Started on for previews and demo (essay demo)',
-    },
-    update: {},
-  });
+  for (const name of ASSIGNMENT_SUMMARY_PREVIEW_SETTINGS) {
+    await prisma.setting.upsert({
+      where: { name },
+      create: {
+        name,
+        value: JSON.stringify({ mode: 'everyone', orgIds: [] }),
+        valueType: 'json',
+        description: 'Started on for previews and demo (essay demo)',
+      },
+      update: {},
+    });
+  }
 }

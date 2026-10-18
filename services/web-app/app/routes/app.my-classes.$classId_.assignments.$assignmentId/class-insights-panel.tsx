@@ -18,6 +18,7 @@ import { timeAgo } from '~/utils/timeAgo';
 import type { ClassInsightGenerateAvailability } from '~/domain/assignment-insights/class-insight-generate-availability';
 import { useClassInsightGenerateAvailability } from './use-class-insight-generate-availability';
 import { ClassModelsSection } from './class-models-section';
+import { PlanLink } from './plan-link';
 
 type CategoryStatus = 'strength' | 'mixed' | 'gap';
 
@@ -188,12 +189,21 @@ export function resolveClassInsightPanelPresentation({
   };
 }
 
+/** What a lesson built from each kind of category is for. */
+const CATEGORY_PLAN_LABEL: Record<CategoryStatus, string> = {
+  gap: 'Teach this skill',
+  strength: 'Build on this',
+  mixed: 'Plan for the spread',
+};
+
 function CategoryCard({
   category,
   classAssignmentId,
+  planHandoff,
 }: {
   category: CategoryInsight;
   classAssignmentId: string;
+  planHandoff: boolean;
 }) {
   const meta = STATUS_META[category.status] ?? STATUS_META.mixed;
   const { Icon } = meta;
@@ -254,6 +264,17 @@ function CategoryCard({
           </span>
         </div>
       </button>
+
+      {planHandoff ? (
+        <div className="ml-11 mt-2">
+          <PlanLink
+            classAssignmentId={classAssignmentId}
+            handoff={{ kind: 'category', category: category.key }}
+          >
+            {CATEGORY_PLAN_LABEL[category.status] ?? CATEGORY_PLAN_LABEL.mixed}
+          </PlanLink>
+        </div>
+      ) : null}
 
       {expanded && (
         <div className="ml-11 mt-3 border-t pt-3">
@@ -317,11 +338,16 @@ function StudentLink({ student }: { student: DifferentiationStudent }) {
 
 function DifferentiationSection({
   differentiation,
+  classAssignmentId,
+  planHandoff,
 }: {
   differentiation: DifferentiationSummary;
+  classAssignmentId: string;
+  planHandoff: boolean;
 }) {
   const { focusGroups, individuals } = differentiation;
   if (focusGroups.length === 0 && individuals.length === 0) return null;
+  const hasExtension = individuals.some((flag) => flag.kind === 'extension');
 
   return (
     <div>
@@ -353,6 +379,16 @@ function DifferentiationSection({
                 </li>
               ))}
             </ul>
+            {planHandoff ? (
+              <div className="mt-2 pl-9">
+                <PlanLink
+                  classAssignmentId={classAssignmentId}
+                  handoff={{ kind: 'group', category: group.category }}
+                >
+                  Plan a pull-aside
+                </PlanLink>
+              </div>
+            ) : null}
           </div>
         ))}
 
@@ -379,6 +415,27 @@ function DifferentiationSection({
             ))}
           </ul>
         )}
+
+        {planHandoff && (focusGroups.length > 0 || hasExtension) ? (
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {hasExtension ? (
+              <PlanLink
+                classAssignmentId={classAssignmentId}
+                handoff={{ kind: 'extension' }}
+              >
+                Plan an extension
+              </PlanLink>
+            ) : null}
+            {focusGroups.length > 0 ? (
+              <PlanLink
+                classAssignmentId={classAssignmentId}
+                handoff={{ kind: 'tracks' }}
+              >
+                One lesson, three tracks
+              </PlanLink>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -408,11 +465,14 @@ function InsightBody({
   classAssignmentId,
   lessonPlannerEnabled,
   assignmentSummaryModelsEnabled,
+  planHandoff,
 }: {
   insight: ClassInsight;
   classAssignmentId: string;
   lessonPlannerEnabled: boolean;
   assignmentSummaryModelsEnabled: boolean;
+  /** Every part of the summary links into the Lesson Planner. */
+  planHandoff: boolean;
 }) {
   const summary = insight.summary;
   if (!summary) return null;
@@ -450,6 +510,16 @@ function InsightBody({
         <p className="text-base/7 text-foreground [overflow-wrap:anywhere] @sm:text-sm/6">
           {summary.overview}
         </p>
+        {planHandoff ? (
+          <div className="mt-2">
+            <PlanLink
+              classAssignmentId={classAssignmentId}
+              handoff={{ kind: 'summary' }}
+            >
+              Plan from this summary
+            </PlanLink>
+          </div>
+        ) : null}
       </div>
 
       {summary.categories.length > 0 && (
@@ -463,6 +533,7 @@ function InsightBody({
                 key={category.key}
                 category={category}
                 classAssignmentId={classAssignmentId}
+                planHandoff={planHandoff}
               />
             ))}
           </ul>
@@ -506,7 +577,16 @@ function InsightBody({
                     <p className="text-base/7 text-muted-foreground [overflow-wrap:anywhere] @sm:text-sm/6">
                       {step.detail}
                     </p>
-                    {lessonPlannerEnabled ? (
+                    {planHandoff ? (
+                      <div className="mt-1">
+                        <PlanLink
+                          classAssignmentId={classAssignmentId}
+                          handoff={{ kind: 'step', index }}
+                        >
+                          Plan this lesson
+                        </PlanLink>
+                      </div>
+                    ) : lessonPlannerEnabled ? (
                       <Link
                         // Ids only: the planner rebuilds the ask from the
                         // stored insight rather than trusting URL text.
@@ -526,11 +606,18 @@ function InsightBody({
       )}
 
       {assignmentSummaryModelsEnabled ? (
-        <ClassModelsSection classAssignmentId={classAssignmentId} />
+        <ClassModelsSection
+          classAssignmentId={classAssignmentId}
+          planHandoff={planHandoff}
+        />
       ) : null}
 
       {summary.differentiation && (
-        <DifferentiationSection differentiation={summary.differentiation} />
+        <DifferentiationSection
+          differentiation={summary.differentiation}
+          classAssignmentId={classAssignmentId}
+          planHandoff={planHandoff}
+        />
       )}
     </div>
   );
@@ -550,6 +637,9 @@ export function ClassInsightsPanel({
   const lessonPlannerEnabled = rootData?.lessonPlannerEnabled ?? false;
   const assignmentSummaryModelsEnabled =
     rootData?.assignmentSummaryModelsEnabled ?? false;
+  const planHandoff =
+    lessonPlannerEnabled &&
+    (rootData?.assignmentSummaryPlannerEnabled ?? false);
   const fetcher = useFetcher<InsightActionData>();
   const isWorking = fetcher.state !== 'idle';
 
@@ -657,6 +747,7 @@ export function ClassInsightsPanel({
             classAssignmentId={classAssignmentId}
             lessonPlannerEnabled={lessonPlannerEnabled}
             assignmentSummaryModelsEnabled={assignmentSummaryModelsEnabled}
+            planHandoff={planHandoff}
           />
         )}
       </div>

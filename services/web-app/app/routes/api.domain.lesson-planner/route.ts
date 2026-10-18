@@ -50,6 +50,11 @@ import {
 } from '~/domain/lesson-planner/lesson-name';
 import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
 import { buildLessonPlannerSystemPromptBlocks } from './build-system-prompt';
+import { loadSummaryClassContext } from '~/domain/lesson-planner/summary-handoff.server';
+import {
+  formatSummaryHandoff,
+  parseSummaryHandoff,
+} from '~/domain/lesson-planner/summary-handoff';
 import {
   buildLessonPlannerAdmissionPolicy,
   lessonPlannerRateLimitMessage,
@@ -110,8 +115,10 @@ const POST = z
     message: z.string().trim().min(1).max(MAX_PLANNER_MESSAGE_CHARS),
     conversationId: z.string().optional(),
     requestId: z.string().min(1).max(128).optional(),
-    /** The Class Summary next step this session was opened from, if any. */
+    /** The assignment summary this session was opened from, if any. */
     originClassAssignmentId: z.string().optional(),
+    /** Which part of the assignment summary it came from ("category:…"). */
+    originSeed: z.string().max(100).optional(),
     /**
      * Set by "Build this day": which day of the unit the teacher asked for.
      * The lesson is written into that day's own conversation, not the map's.
@@ -262,6 +269,13 @@ export async function action({ request }: ActionFunctionArgs) {
     });
     originClassAssignmentId = owned?.id ?? null;
   }
+  // Only a well-formed hand-off, and only alongside an origin that passed.
+  const parsedOriginSeed = originClassAssignmentId
+    ? parseSummaryHandoff(turn.originSeed ?? null)
+    : null;
+  const originSeed = parsedOriginSeed
+    ? formatSummaryHandoff(parsedOriginSeed)
+    : null;
 
   const dayTarget =
     turn.unitDay !== undefined && conversation
@@ -302,6 +316,7 @@ export async function action({ request }: ActionFunctionArgs) {
     unitDay: turn.unitDay,
     unitDayTitle: turn.unitDayTitle,
     originClassAssignmentId: turn.originClassAssignmentId,
+    originSeed: turn.originSeed,
   };
   // The browser sends stream=1 and consumes terminal NDJSON events, including
   // outcomes decided before generation starts. Keep HTTP status for direct callers.
@@ -451,9 +466,23 @@ export async function action({ request }: ActionFunctionArgs) {
           }
         : null);
 
+    // Opened from the assignment summary: what it said about this class,
+    // rebuilt from the stored summary so it holds on every turn.
+    const classContext = await loadSummaryClassContext({
+      membershipId: ctx.membershipId,
+      organizationId: ctx.organizationId,
+      classAssignmentId: activeConversation
+        ? (activeConversation.originClassAssignmentId ?? null)
+        : originClassAssignmentId,
+      originSeed: activeConversation
+        ? (activeConversation.originSeed ?? null)
+        : originSeed,
+    });
+
     const system = buildLessonPlannerSystemPromptBlocks({
       teacherName: null,
       lessonLength,
+      classContext,
       organizationName: access.membership.organization.name,
       lessonInventory: conversation?.materials ?? [],
       stackContents,
@@ -634,6 +663,7 @@ export async function action({ request }: ActionFunctionArgs) {
                     organizationId: ctx.organizationId,
                     title: deriveTitle(turn.message),
                     originClassAssignmentId,
+                    originSeed,
                   },
                   select: { id: true },
                 }));

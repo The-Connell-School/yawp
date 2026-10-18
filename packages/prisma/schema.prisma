@@ -1554,6 +1554,10 @@ model LessonPlanConversation {
   organization            Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   originClassAssignmentId String?
   originClassAssignment   ClassAssignment?    @relation(fields: [originClassAssignmentId], references: [id], onDelete: SetNull)
+  /// Which part of the assignment summary this session was opened from
+  /// ("summary", "category:thesis", "models:evidence", …). The planner
+  /// rebuilds that class context from the stored summary on every turn.
+  originSeed              String?
   /// The unit this session belongs to, if any. Deleting a unit leaves its
   /// lessons standing on their own rather than destroying a teacher's work.
   unitId                  String?

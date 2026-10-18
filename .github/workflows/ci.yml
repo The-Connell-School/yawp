@@ -199,7 +199,7 @@ jobs:
 
       - name: 🧪 Essay demo seed data
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        run: bun test ./packages/prisma/scripts/local-dev/essay-demo-data.test.ts
+        run: bun test ./packages/prisma/scripts/local-dev/essay-demo-data.test.ts ./packages/prisma/scripts/local-dev/seed-essay-demo-flags.test.ts
 
       - name: 🌱 Seed free tier bundle assignment types
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -781,6 +781,7 @@ jobs:
             app/routes/api.domain.grade-essay-ai/route.test.ts \
             app/domain/assignment-insights/class-insight-generation.server.test.ts \
             app/domain/assignment-insights/select-class-models.test.ts \
+            app/domain/assignment-insights/scrub-student-names.test.ts \
             app/routes/api.domain.assignment-insights.models/route.test.ts \
             'app/routes/app.my-classes.$classId_.assignments.$assignmentId/class-models-section.test.tsx' \
             'app/routes/app.my-classes.$classId_.assignments.$assignmentId/class-insights-panel.test.tsx' \
@@ -826,6 +827,8 @@ jobs:
             ../../packages/prisma/scripts/exit-ticket-migration-image.test.ts \
             ../../packages/prisma/scripts/preview-seats.test.ts \
             app/domain/lesson-planner/lesson-seed.test.ts \
+            app/domain/lesson-planner/summary-handoff.test.ts \
+            app/domain/lesson-planner/summary-handoff.server.test.ts \
             app/routes/api.domain.lesson-planner/build-system-prompt.test.ts \
             app/domain/lesson-planner/suggestions.test.ts \
             app/domain/lesson-planner/daily-pages-block.test.ts \

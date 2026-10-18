@@ -14,6 +14,13 @@ import { toSubmissionSnippet } from './submission-snippet';
 
 /** A short list the teacher can actually plan around, not a report. */
 const MAX_FOCUSES = 2;
+/** A lesson set: enough to rank or compare, few enough to read in class. */
+const MAX_HANDOFF_EXEMPLARS = 3;
+const MAX_HANDOFF_NEAR_MISSES = 3;
+/** Long enough to hold an opening paragraph, where a thesis usually sits. */
+const HANDOFF_EXCERPT_MAX_CHARS = 600;
+/** A feedback note is a pattern, not an essay. */
+const HANDOFF_NOTE_MAX_CHARS = 300;
 
 export type ClassModelInput = GradedSubmissionInput & {
   href: string;
@@ -237,4 +244,86 @@ export function selectClassModels(
   }
 
   return focuses.length ? { focuses } : null;
+}
+
+/** Models for one skill, sized for a lesson rather than for the panel. */
+export type HandoffModelSet = {
+  category: string;
+  label: string;
+  skill: string;
+  exemplars: Array<{ submissionId: string; studentName: string; excerpt: string }>;
+  /** Grading feedback on the near misses: the pattern, not the paper. */
+  nearMissNotes: string[];
+};
+
+function rubricComment(input: ClassModelInput, key: string): string | null {
+  const entry = input.rubricScores?.[key];
+  if (!entry || typeof entry !== 'object') return null;
+  const comment = (entry as { comment?: unknown }).comment;
+  return typeof comment === 'string' && comment.trim()
+    ? toSubmissionSnippet(comment, HANDOFF_NOTE_MAX_CHARS)
+    : null;
+}
+
+/**
+ * The lesson-sized version of a focus, for the Lesson Planner hand-off: the
+ * strongest few papers on one skill, with longer excerpts, and what the
+ * grading feedback said about the near misses. The near misses' own words are
+ * deliberately left behind — the planner writes student-inspired versions.
+ */
+export function selectHandoffModels(
+  inputs: ClassModelInput[],
+  categoryKey: string,
+  rubric: InsightRubric = DEFAULT_INSIGHT_RUBRIC
+): HandoffModelSet | null {
+  const category = rubric.categories.find((entry) => entry.key === categoryKey);
+  if (!category) return null;
+  const scored = buildCandidates(inputs, rubric).filter((candidate) =>
+    candidate.scores.has(category.key)
+  );
+  const scoreOf = (candidate: Candidate) =>
+    candidate.scores.get(category.key) as number;
+  const textOf = (candidate: Candidate) =>
+    (typeof candidate.input.text === 'string' && candidate.input.text.trim()) ||
+    (typeof candidate.input.html === 'string' && candidate.input.html) ||
+    '';
+
+  const exemplars = scored
+    .filter(
+      (candidate) =>
+        candidate.snippet.length > 0 &&
+        isHighScore(category, scoreOf(candidate))
+    )
+    .sort(
+      (a, b) =>
+        scoreOf(b) - scoreOf(a) ||
+        b.overall - a.overall ||
+        a.name.localeCompare(b.name)
+    )
+    .slice(0, MAX_HANDOFF_EXEMPLARS)
+    .map((candidate) => ({
+      submissionId: candidate.input.submissionId,
+      studentName: candidate.name,
+      excerpt: toSubmissionSnippet(textOf(candidate), HANDOFF_EXCERPT_MAX_CHARS),
+    }));
+
+  const nearMissNotes = scored
+    .filter((candidate) => isLowScore(category, scoreOf(candidate)))
+    .sort(
+      (a, b) =>
+        b.overall - a.overall ||
+        scoreOf(b) - scoreOf(a) ||
+        a.name.localeCompare(b.name)
+    )
+    .map((candidate) => rubricComment(candidate.input, category.key))
+    .filter((comment): comment is string => comment !== null)
+    .slice(0, MAX_HANDOFF_NEAR_MISSES);
+
+  return {
+    category: category.key,
+    label: category.label,
+    skill: skillName(category),
+    exemplars,
+    nearMissNotes,
+  };
 }

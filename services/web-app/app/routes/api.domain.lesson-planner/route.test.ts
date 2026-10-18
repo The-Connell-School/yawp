@@ -114,6 +114,11 @@ mock.module('~/utils/ai-admission.server', () => ({
   reserveAiRequest,
 }));
 
+const loadSummaryClassContext = mock();
+mock.module('~/domain/lesson-planner/summary-handoff.server', () => ({
+  loadSummaryClassContext,
+}));
+
 const { action } = await import('./route');
 
 afterAll(() => {
@@ -160,6 +165,7 @@ const access = {
 
 beforeEach(() => {
   monthlyEnabled = false;
+  loadSummaryClassContext.mockReset().mockResolvedValue(null);
   beginMonthlyOperation
     .mockReset()
     .mockResolvedValue({ kind: 'reserved', name: 'operation', operation: {} });
@@ -1187,4 +1193,97 @@ test('streamed monthly admission and replay use the same terminal-event protocol
   }
   expect(getLLMCompletion).not.toHaveBeenCalled();
   expect(reserveAiRequest).not.toHaveBeenCalled();
+});
+
+describe('api.domain.lesson-planner action — class context from the assignment summary', () => {
+  test('stores which part of the summary a new session came from and plans from it', async () => {
+    prisma.classAssignment.findFirst.mockResolvedValue({ id: 'ca-1' });
+    loadSummaryClassContext.mockResolvedValue(
+      'This lesson was opened from the teacher’s YAWP! assignment summary.\nThesis is an area to grow.'
+    );
+    getLLMCompletion.mockResolvedValue('ok');
+    prisma.lessonPlanConversation.create.mockResolvedValue({ id: 'plan-1' });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    await action({
+      request: formRequest({
+        message: 'Build me a mini-lesson on thesis.',
+        originClassAssignmentId: 'ca-1',
+        originSeed: 'category:thesis_and_content',
+      }),
+    } as any);
+
+    expect(
+      prisma.lessonPlanConversation.create.mock.calls[0][0].data
+    ).toMatchObject({
+      originClassAssignmentId: 'ca-1',
+      originSeed: 'category:thesis_and_content',
+    });
+    expect(loadSummaryClassContext).toHaveBeenCalledWith({
+      membershipId: 'teacher-1',
+      organizationId: 'org-1',
+      classAssignmentId: 'ca-1',
+      originSeed: 'category:thesis_and_content',
+    });
+    expect(systemText(getLLMCompletion.mock.calls[0][0].system)).toContain(
+      'Thesis is an area to grow.'
+    );
+  });
+
+  test('keeps the context on a later turn, from what the session stored', async () => {
+    prisma.lessonPlanConversation.findFirst.mockResolvedValue({
+      id: 'plan-1',
+      messages: [{ role: 'assistant', content: 'Here is the plan.' }],
+      originClassAssignmentId: 'ca-1',
+      originSeed: 'group:thesis_and_content',
+    });
+    loadSummaryClassContext.mockResolvedValue('Five students scored low on thesis.');
+    getLLMCompletion.mockResolvedValue('ok');
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    await action({
+      request: formRequest({ message: 'Make it shorter', conversationId: 'plan-1' }),
+    } as any);
+
+    expect(loadSummaryClassContext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classAssignmentId: 'ca-1',
+        originSeed: 'group:thesis_and_content',
+      })
+    );
+    expect(systemText(getLLMCompletion.mock.calls[0][0].system)).toContain(
+      'Five students scored low on thesis.'
+    );
+  });
+
+  test('drops a malformed origin, and any origin without a trusted assignment', async () => {
+    prisma.classAssignment.findFirst.mockResolvedValue(null);
+    getLLMCompletion.mockResolvedValue('ok');
+    prisma.lessonPlanConversation.create.mockResolvedValue({ id: 'plan-1' });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    await action({
+      request: formRequest({
+        message: 'hi',
+        originClassAssignmentId: 'someone-elses',
+        originSeed: 'summary',
+      }),
+    } as any);
+    expect(
+      prisma.lessonPlanConversation.create.mock.calls[0][0].data.originSeed
+    ).toBeNull();
+
+    prisma.classAssignment.findFirst.mockResolvedValue({ id: 'ca-1' });
+    prisma.lessonPlanConversation.create.mockClear();
+    await action({
+      request: formRequest({
+        message: 'hi',
+        originClassAssignmentId: 'ca-1',
+        originSeed: 'category:Robert); DROP TABLE',
+      }),
+    } as any);
+    expect(
+      prisma.lessonPlanConversation.create.mock.calls[0][0].data.originSeed
+    ).toBeNull();
+  });
 });

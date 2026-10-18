@@ -1,9 +1,8 @@
 import { data as dataResponse, type LoaderFunctionArgs } from 'react-router';
-import type { SubmissionRubricEntry } from '~/domain/assignment-insights/aggregate-rubric-performance';
 import { readInsightRubric } from '~/domain/assignment-insights/insight-rubric.server';
+import { loadClassModelInputs } from '~/domain/assignment-insights/class-model-inputs.server';
 import {
   selectClassModels,
-  type ClassModelInput,
   type ClassModelsSummary,
 } from '~/domain/assignment-insights/select-class-models';
 import { isAssignmentSummaryModelsEnabled } from '~/domain/feature-flags/feature-flags.server';
@@ -76,44 +75,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     classAssignmentId: classAssignment.id,
   });
 
-  const documents = await prisma.document.findMany({
-    where: { classAssignmentId: classAssignment.id, deletedAt: null },
-    select: {
-      id: true,
-      membership: {
-        select: { user: { select: { name: true, email: true } } },
-      },
-      group: { select: { label: true } },
-      submissions: {
-        where: { gradedAt: { not: null } },
-        orderBy: { submittedAt: 'desc' },
-        take: 1,
-        select: { id: true, text: true, html: true, rubricScores: true },
-      },
-    },
-  });
-
-  const inputs: ClassModelInput[] = documents.flatMap((doc) => {
-    const submission = doc.submissions[0];
-    if (!submission) return [];
-    return [
-      {
-        submissionId: submission.id,
-        studentName:
-          doc.group?.label?.trim() ||
-          doc.membership?.user?.name?.trim() ||
-          doc.membership?.user?.email?.trim() ||
-          null,
-        href: `/app/submissions/${submission.id}`,
-        text: submission.text,
-        html: submission.html,
-        rubricScores: submission.rubricScores as Record<
-          string,
-          SubmissionRubricEntry
-        > | null,
-      },
-    ];
-  });
+  const inputs = await loadClassModelInputs(classAssignment.id);
 
   return dataResponse<ModelsData>({
     models: selectClassModels(inputs, rubric),

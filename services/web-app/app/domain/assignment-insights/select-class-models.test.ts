@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   selectClassModels,
+  selectHandoffModels,
   skillName,
   type ClassModelInput,
 } from './select-class-models';
@@ -232,5 +233,99 @@ describe('selectClassModels', () => {
     );
     const result = selectClassModels(inputs, DEFAULT_INSIGHT_RUBRIC);
     expect(result!.focuses.length).toBeLessThanOrEqual(2);
+  });
+});
+
+describe('selectHandoffModels', () => {
+  function withComment(
+    input: ClassModelInput,
+    key: string,
+    comment: string
+  ): ClassModelInput {
+    const scores = input.rubricScores as Record<
+      string,
+      { score: number; comment: string }
+    >;
+    return {
+      ...input,
+      rubricScores: { ...scores, [key]: { ...scores[key], comment } },
+    };
+  }
+
+  test('a ranked set of strong papers and the feedback on the near misses, for one skill', () => {
+    const result = selectHandoffModels(
+      [
+        student('Ava', { thesis: 5, evidence: 5 }, 'Ava argues haste kills.'),
+        student('Ben', { thesis: 4, evidence: 2 }, 'Ben argues the feud.'),
+        student('Cy', { thesis: 5, evidence: 3 }, 'Cy argues fate is an excuse.'),
+        withComment(
+          student('Di', { thesis: 1, evidence: 5 }),
+          'thesis',
+          'Restates the plot.'
+        ),
+        withComment(
+          student('Eli', { thesis: 2, evidence: 3 }),
+          'thesis',
+          'Names a topic, not a claim.'
+        ),
+        student('Fay', { thesis: 3, evidence: 3 }),
+      ],
+      'thesis',
+      TWO_CATEGORY_RUBRIC
+    )!;
+    expect(result.category).toBe('thesis');
+    expect(result.label).toBe('Thesis');
+    expect(result.skill).toBe('thesis');
+    expect(result.exemplars.map((e) => e.submissionId)).toEqual([
+      'sub-Ava',
+      'sub-Cy',
+      'sub-Ben',
+    ]);
+    expect(result.exemplars[0].excerpt).toBe('Ava argues haste kills.');
+    // Strongest elsewhere first: the near miss shows one fixable problem.
+    expect(result.nearMissNotes).toEqual([
+      'Restates the plot.',
+      'Names a topic, not a claim.',
+    ]);
+  });
+
+  test('keeps a longer excerpt than the panel snippet', () => {
+    const long = 'word '.repeat(200).trim();
+    const result = selectHandoffModels(
+      [
+        student('Ava', { thesis: 5, evidence: 5 }, long),
+        student('Ben', { thesis: 1, evidence: 1 }),
+      ],
+      'thesis',
+      TWO_CATEGORY_RUBRIC
+    )!;
+    expect(result.exemplars[0].excerpt.length).toBeGreaterThan(240);
+    expect(result.exemplars[0].excerpt.length).toBeLessThanOrEqual(601);
+  });
+
+  test('trims a long feedback note so the planner ask stays short', () => {
+    const result = selectHandoffModels(
+      [
+        student('Ava', { thesis: 5, evidence: 5 }),
+        withComment(
+          student('Ben', { thesis: 1, evidence: 4 }),
+          'thesis',
+          'This restates the plot. '.repeat(40)
+        ),
+      ],
+      'thesis',
+      TWO_CATEGORY_RUBRIC
+    )!;
+    expect(result.nearMissNotes[0].length).toBeLessThanOrEqual(301);
+  });
+
+  test('null for a category the rubric does not have', () => {
+    expect(
+      selectHandoffModels(
+        [student('Ava', { thesis: 5, evidence: 5 })],
+        'grammar',
+        TWO_CATEGORY_RUBRIC
+      )
+    ).toBeNull();
   });
 });

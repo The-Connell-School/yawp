@@ -370,7 +370,8 @@ export function buildLessonPlannerSystemPrompt({
         ]),
     "- Do NOT ask how talkative, quiet, shy, or outgoing the class is, and do not offer it as an option to choose between. It is one axis out of many and it is the teacher's to raise. If they describe the room, use it well (see below). If they do not, plan a lesson that works in an ordinary room and stop there — silence on the subject is not missing information.",
     "- You can look up how a class actually performed. Call list_classes to see the teacher's classes, get_class_grade_report for a class's averages and per-skill rubric summary, and find_students_needing_attention when the teacher wants the lesson to reach specific strugglers. Use real data when it is available rather than assuming a weakness.",
-    '- When the teacher opens you from a Class Summary next step, that step and its rubric skill are the assignment: build the lesson that closes that specific gap for that specific class.',
+    '- When the teacher opens you from their Assignment Summary (it used to be called the Class Summary) — a next step, a rubric skill, a small group, models, or the whole summary — that part of the summary is the assignment: build the lesson that answers it for that specific class.',
+    "- When the teacher brings strong examples from their own students (names removed), use them word for word in a `sample` block, labeled Student A, Student B, and so on. Never attach a name, guess who wrote one, or rewrite their words. When they ask for student-inspired weaker versions, write new ones that show the pattern they describe — never reuse a student's words for the weak side.",
     '',
     'Teach out of YAWP! (this is what makes you useful — do it every time):',
     'The teacher is already inside YAWP!, and YAWP! already contains material for most of a class period. Build the lesson out of it before you invent anything, and hand back real links so the teacher can act on the plan instead of retyping it.',
@@ -671,7 +672,7 @@ export function buildLessonPlannerSystemPrompt({
 }
 
 /** Bump when the cacheable instruction body changes materially. */
-export const LESSON_PLANNER_PROMPT_VERSION = '2026-10-12-run-2-v1';
+export const LESSON_PLANNER_PROMPT_VERSION = '2026-10-18-summary-handoff-v1';
 
 /**
  * The fixed instruction body — identical for every turn except inventory and
@@ -718,6 +719,7 @@ export function buildLessonPlannerSystemPromptBlocks({
   writingPracticeAvailable = false,
   intakeV2 = false,
   lessonLength = null,
+  classContext = null,
 }: {
   teacherName: string | null;
   organizationName: string;
@@ -731,6 +733,8 @@ export function buildLessonPlannerSystemPromptBlocks({
   intakeV2?: boolean;
   /** How long this lesson is, once the teacher has said (Brian's run 2, B1). */
   lessonLength?: { minutes: number; classLabel: string | null } | null;
+  /** What the assignment summary said, when the lesson was opened from it. */
+  classContext?: string | null;
 }): CacheableSystemBlock[] {
   const who = teacherName ? `${teacherName}, a teacher` : 'a teacher';
   const intro = `You are the YAWP! Lesson Planner, an instructional design partner for ${who} at ${organizationName}.`;
@@ -739,6 +743,7 @@ export function buildLessonPlannerSystemPromptBlocks({
     ...buildInventorySection(lessonInventory),
     ...buildStackContentsSection(stackContents),
     ...buildUnitContextSection(unitContext),
+    ...(classContext ? ['', classContext] : []),
   ].join('\n');
   const variable = tail ? `${intro}\n${tail}` : intro;
 

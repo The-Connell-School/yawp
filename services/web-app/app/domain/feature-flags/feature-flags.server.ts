@@ -2,6 +2,7 @@ import { prisma } from '~/utils/db.server';
 import {
   LESSON_PLANNER_FLAG,
   ASSIGNMENT_SUMMARY_MODELS_FLAG,
+  ASSIGNMENT_SUMMARY_PLANNER_FLAG,
   LESSON_PLANNER_INTAKE_V2_FLAG,
   LESSON_PLANNER_STACK_V2_FLAG,
   LESSON_PLANNER_DECK_V2_FLAG,
@@ -146,6 +147,13 @@ export function isAssignmentSummaryModelsEnabled(
   orgId: string | null | undefined
 ): Promise<boolean> {
   return isFeatureFlagEnabled(ASSIGNMENT_SUMMARY_MODELS_FLAG, orgId);
+}
+
+/** Assignment summary → Lesson Planner hand-offs, per school. */
+export function isAssignmentSummaryPlannerEnabled(
+  orgId: string | null | undefined
+): Promise<boolean> {
+  return isFeatureFlagEnabled(ASSIGNMENT_SUMMARY_PLANNER_FLAG, orgId);
 }
 
 /**

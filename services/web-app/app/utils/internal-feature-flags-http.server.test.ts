@@ -132,6 +132,7 @@ describe('internal feature-flag endpoints', () => {
       'guided-tours',
       'signon-teacher-prompts',
       'assignment_summary_models',
+      'assignment_summary_planner',
     ]);
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[1]).toMatchObject({ key: 'internal_rubrics', label: 'Rubrics from Yawp Internal', mode: 'off', orgIds: [], enabled: false });
@@ -258,6 +259,7 @@ describe('internal feature-flag endpoints', () => {
       'guided-tours',
       'signon-teacher-prompts',
       'assignment_summary_models',
+      'assignment_summary_planner',
     ]);
   });
 

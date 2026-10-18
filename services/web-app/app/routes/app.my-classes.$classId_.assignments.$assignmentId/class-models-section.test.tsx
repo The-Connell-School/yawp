@@ -129,4 +129,24 @@ describe('ClassModelsSection', () => {
     const el = render(<ClassModelsSection classAssignmentId="ca-1" />);
     expect(el.textContent).toMatch(/grade a few more/i);
   });
+
+  it('turns each focus into a lesson when the planner hand-offs are on', () => {
+    fetcher.data = { models: MODELS };
+    const el = render(
+      <ClassModelsSection classAssignmentId="ca-1" planHandoff />
+    );
+    const link = el.querySelector('a[data-handoff^="models:"]');
+    expect(link?.textContent).toMatch(/plan a lesson from these/i);
+    expect(link?.getAttribute('href')).toBe(
+      `/app/lesson-planner?from=ca-1&seed=${encodeURIComponent(
+        `models:${MODELS.focuses[0].category}`
+      )}`
+    );
+  });
+
+  it('no planner link while the hand-offs are off', () => {
+    fetcher.data = { models: MODELS };
+    const el = render(<ClassModelsSection classAssignmentId="ca-1" />);
+    expect(el.querySelector('a[data-handoff]')).toBeNull();
+  });
 });

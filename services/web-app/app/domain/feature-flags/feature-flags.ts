@@ -99,6 +99,17 @@ export const SIGNON_TEACHER_PROMPTS_FLAG = 'signon-teacher-prompts' as const;
  */
 export const ASSIGNMENT_SUMMARY_MODELS_FLAG = 'assignment_summary_models' as const;
 
+/**
+ * Assignment summary → Lesson Planner hand-offs. On: every part of the
+ * assignment summary (the whole summary, each rubric category, next steps,
+ * models, small groups, extension, three tracks) opens the planner with the
+ * class context already written, and the planner keeps that context on every
+ * turn. Needs the lesson planner. Off: only the original "Plan this lesson"
+ * link on next steps, unchanged. Turning it off leaves saved lessons as they
+ * are; a session's stored origin is simply no longer read.
+ */
+export const ASSIGNMENT_SUMMARY_PLANNER_FLAG = 'assignment_summary_planner' as const;
+
 export const FEATURE_FLAGS = {
   [LESSON_PLANNER_FLAG]: {
     label: 'Lesson Planner',
@@ -175,6 +186,11 @@ export const FEATURE_FLAGS = {
     label: 'Assignment summary: models to teach from',
     description:
       'Adds a section to the assignment summary that picks a strong model and an instructive example from graded work for the teacher to use with the whole class. Off: the section is hidden and its endpoint returns 404.',
+  },
+  [ASSIGNMENT_SUMMARY_PLANNER_FLAG]: {
+    label: 'Assignment summary: plan a lesson from any part',
+    description:
+      'Every part of the assignment summary — the whole summary, each rubric category, next steps, models, small groups, extension and three tracks — opens the Lesson Planner with the class context written, and the planner keeps it on every turn. Needs the lesson planner. Off: only the original "Plan this lesson" link.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 

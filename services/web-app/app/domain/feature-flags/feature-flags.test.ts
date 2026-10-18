@@ -12,6 +12,7 @@ import {
   UNIFIED_SIGN_ON_FLAG,
   FREE_TIER_ONBOARDING_V2_FLAG,
   ASSIGNMENT_SUMMARY_MODELS_FLAG,
+  ASSIGNMENT_SUMMARY_PLANNER_FLAG,
   FEATURE_FLAG_KEYS,
   LESSON_PLANNER_INTAKE_V2_FLAG,
   LESSON_PLANNER_STACK_V2_FLAG,
@@ -73,6 +74,13 @@ describe('feature flag registry', () => {
     );
   });
 
+  test('has the assignment summary → lesson planner hand-off flag', () => {
+    expect(FEATURE_FLAG_KEYS).toContain(ASSIGNMENT_SUMMARY_PLANNER_FLAG);
+    expect(featureFlagSettingName(ASSIGNMENT_SUMMARY_PLANNER_FLAG)).toBe(
+      'feature_flag.assignment_summary_planner'
+    );
+  });
+
   test('registers the default-off in-app presentation flag', () => {
     expect(FREE_TIER_INAPP_V2_FLAG).toBe('free-tier-inapp-v2');
     expect(FEATURE_FLAG_KEYS).toContain(FREE_TIER_INAPP_V2_FLAG);
@@ -122,6 +130,7 @@ describe('feature flag registry', () => {
       GUIDED_TOURS_FLAG,
       SIGNON_TEACHER_PROMPTS_FLAG,
       ASSIGNMENT_SUMMARY_MODELS_FLAG,
+  ASSIGNMENT_SUMMARY_PLANNER_FLAG,
     ]);
   });
 

@@ -44,6 +44,28 @@ export async function setLessonPlannerFlag(enabled: boolean) {
   }
 }
 
+// Mirrors featureFlagSettingName(ASSIGNMENT_SUMMARY_PLANNER_FLAG).
+const ASSIGNMENT_SUMMARY_PLANNER_SETTING =
+  'feature_flag.assignment_summary_planner';
+
+export async function setAssignmentSummaryPlannerFlag(enabled: boolean) {
+  const prisma = createE2EPrismaClient();
+  try {
+    await prisma.setting.upsert({
+      where: { name: ASSIGNMENT_SUMMARY_PLANNER_SETTING },
+      create: {
+        name: ASSIGNMENT_SUMMARY_PLANNER_SETTING,
+        value: enabled ? 'true' : 'false',
+        valueType: 'boolean',
+        description: 'Set by e2e',
+      },
+      update: { value: enabled ? 'true' : 'false', updatedAt: new Date() },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 // Mirrors featureFlagSettingName(ASSIGNMENT_SUMMARY_MODELS_FLAG).
 const ASSIGNMENT_SUMMARY_MODELS_SETTING = 'feature_flag.assignment_summary_models';
 

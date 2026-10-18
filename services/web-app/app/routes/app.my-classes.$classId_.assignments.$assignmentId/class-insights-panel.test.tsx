@@ -27,7 +27,13 @@ const fetcher: {
 };
 
 const actualReactRouter = await import('react-router');
-let rootData: { assignmentSummaryModelsEnabled?: boolean } | undefined;
+let rootData:
+  | {
+      assignmentSummaryModelsEnabled?: boolean;
+      lessonPlannerEnabled?: boolean;
+      assignmentSummaryPlannerEnabled?: boolean;
+    }
+  | undefined;
 mock.module('react-router', () => ({
   ...actualReactRouter,
   useFetcher: () => fetcher,
@@ -444,6 +450,83 @@ describe('ClassInsightsPanel', () => {
     expect(url).toContain('category=evidence_and_support');
     expect(url).toContain('status=gap');
     expect(categoryButton.getAttribute('aria-expanded')).toBe('true');
+  });
+});
+
+describe('ClassInsightsPanel — planning a lesson from any part of the summary', () => {
+  function hrefs(el: HTMLElement): Record<string, string> {
+    return Object.fromEntries(
+      Array.from(el.querySelectorAll('a[data-handoff]')).map((a) => [
+        a.getAttribute('data-handoff') as string,
+        a.getAttribute('href') as string,
+      ])
+    );
+  }
+
+  it('links every part of the summary into the planner when the hand-offs are on', () => {
+    rootData = {
+      lessonPlannerEnabled: true,
+      assignmentSummaryPlannerEnabled: true,
+    };
+    const el = render(
+      <ClassInsightsPanel
+        classAssignmentId="ca-1"
+        initialInsight={INSIGHT_WITH_DIFFERENTIATION}
+        gradedCount={30}
+      />
+    );
+    const links = hrefs(el);
+    const href = (seed: string) =>
+      `/app/lesson-planner?from=ca-1&seed=${encodeURIComponent(seed)}`;
+    expect(links['summary']).toBe(href('summary'));
+    expect(links['category:thesis_and_content']).toBe(
+      href('category:thesis_and_content')
+    );
+    expect(links['category:evidence_and_support']).toBe(
+      href('category:evidence_and_support')
+    );
+    expect(links['step:0']).toBe(href('step:0'));
+    expect(links['group:evidence_and_support']).toBe(
+      href('group:evidence_and_support')
+    );
+    expect(links['extension']).toBe(href('extension'));
+    expect(links['tracks']).toBe(href('tracks'));
+    // The label says what kind of lesson each status leads to.
+    expect(el.textContent).toContain('Build on this');
+    expect(el.textContent).toContain('Teach this skill');
+    expect(el.textContent).toContain('Plan a pull-aside');
+    expect(el.textContent).toContain('Plan from this summary');
+  });
+
+  it('keeps only the original next-step link while the hand-offs are off', () => {
+    rootData = { lessonPlannerEnabled: true };
+    const el = render(
+      <ClassInsightsPanel
+        classAssignmentId="ca-1"
+        initialInsight={INSIGHT_WITH_DIFFERENTIATION}
+        gradedCount={30}
+      />
+    );
+    expect(el.querySelectorAll('a[data-handoff]')).toHaveLength(0);
+    const plan = Array.from(el.querySelectorAll('a')).find((a) =>
+      a.textContent?.includes('Plan this lesson')
+    );
+    expect(plan?.getAttribute('href')).toBe(
+      '/app/lesson-planner?from=ca-1&step=0'
+    );
+  });
+
+  it('offers nothing without the lesson planner, even with the hand-offs on', () => {
+    rootData = { assignmentSummaryPlannerEnabled: true };
+    const el = render(
+      <ClassInsightsPanel
+        classAssignmentId="ca-1"
+        initialInsight={INSIGHT_WITH_DIFFERENTIATION}
+        gradedCount={30}
+      />
+    );
+    expect(el.querySelectorAll('a[data-handoff]')).toHaveLength(0);
+    expect(el.textContent).not.toContain('Plan this lesson');
   });
 });
 
