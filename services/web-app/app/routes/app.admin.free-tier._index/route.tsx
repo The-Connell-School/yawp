@@ -30,9 +30,6 @@ export default function AdminFreeTierRoute() {
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
       <div className="rounded-lg border bg-card p-5 shadow-sm">
-        <p className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Moved to Yawp Internal
-        </p>
         <h2 className="text-2xl font-semibold">Free tier controls are no longer operated here.</h2>
         <p className="mt-3 text-sm text-muted-foreground">
           Token creation, waitlist release, review queue decisions, approvals, rejections, manual review,

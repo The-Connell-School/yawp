@@ -16,7 +16,6 @@ import { Link, redirect, type LoaderFunctionArgs } from 'react-router';
 import { useLoaderData } from 'react-router';
 import { FileText, Presentation } from 'lucide-react';
 import {
-  Eyebrow,
   GuideClip,
   GuideCopy,
   GuideFooter,
@@ -197,7 +196,6 @@ export default function ThesisEssayHowItWorksRoute() {
 
       <GuideSection
         id="guide-what"
-        eyebrow="The assignment"
         title="Essays that stand up in any high school or college classroom"
       >
         <GuideCopy>
@@ -211,7 +209,6 @@ export default function ThesisEssayHowItWorksRoute() {
 
       <GuideSection
         id="guide-how"
-        eyebrow="How it works"
         title="Teach it, step by step"
       >
         <GuideCopy>
@@ -276,7 +273,6 @@ export default function ThesisEssayHowItWorksRoute() {
         className="flex flex-col gap-10 rounded-2xl bg-secondary p-6 md:p-10"
       >
         <div className="flex flex-col gap-3">
-          <Eyebrow>The YAWP! Tutor</Eyebrow>
           <h2
             id="guide-tutor"
             className="text-2xl font-semibold leading-tight md:text-3xl"
@@ -340,7 +336,6 @@ export default function ThesisEssayHowItWorksRoute() {
         className="flex flex-col gap-10 rounded-2xl bg-secondary p-6 md:p-10"
       >
         <div className="flex flex-col gap-3">
-          <Eyebrow>Grade and release</Eyebrow>
           <h2
             id="guide-grading"
             className="text-2xl font-semibold leading-tight md:text-3xl"
@@ -387,7 +382,6 @@ export default function ThesisEssayHowItWorksRoute() {
 
       <GuideSection
         id="guide-cold"
-        eyebrow="Bonus tip"
         title="Use the thesis-driven essay to track student progress"
       >
         <GuideRow

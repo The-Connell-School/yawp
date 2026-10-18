@@ -26,7 +26,6 @@ export default function TermsRoute() {
   return (
     <PublicLegalPage
       title="Terms of Service"
-      eyebrow="Terms"
       updated="October 14, 2026"
     >
       <p className="text-lg leading-8 text-muted-foreground">

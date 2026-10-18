@@ -55,6 +55,16 @@ Use `/auth/dev-login` in development.
     - Dual-write to old and new data models during transitions. Do not stop writing to old tables until the new flow is fully verified.
     - No bypass. Every feature follows this pattern.
 
+## Design rules
+
+- No decorative uppercase labels above headings (the small, letter-spaced,
+  often orange "TEACHERS USING YAWP!" line over a title). Brian flagged it as
+  a tell of AI-generated design that rarely says anything. A small label above
+  a title is allowed only when it carries information that is nowhere else on
+  the screen, such as a status; never to restate the page or section name.
+  This applies to pages and to slide decks. Table headers, form labels, and
+  status pills are not this pattern.
+
 ## Central Station PM Source Of Truth
 
 Central Station is the live Yawp product-management command center. When a

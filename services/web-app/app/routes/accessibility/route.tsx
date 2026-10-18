@@ -81,10 +81,7 @@ export default function AccessibilityRoute() {
       <Header />
       <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:py-14">
         <div className="max-w-3xl">
-          <p className="text-sm font-semibold uppercase tracking-wide text-primary">
-            Accessibility
-          </p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-normal text-foreground sm:text-5xl">
+          <h1 className="text-4xl font-semibold tracking-normal text-foreground sm:text-5xl">
             Accessibility at YAWP!
           </h1>
           <p className="mt-5 text-lg leading-8 text-muted-foreground">

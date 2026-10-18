@@ -77,7 +77,6 @@ export function GuideHero({
   return (
     <header className="grid items-center gap-8 md:grid-cols-2 md:gap-12">
       <div className="flex flex-col gap-4">
-        <Eyebrow>See how it works</Eyebrow>
         <h1 className="text-3xl font-bold leading-tight md:text-5xl">
           {title} <span className="text-primary">{highlight}</span>
         </h1>
@@ -213,14 +212,6 @@ export function GuideList({
   );
 }
 
-export function Eyebrow({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
-      {children}
-    </p>
-  );
-}
-
 export function GuideStep({
   n,
   children,
@@ -263,19 +254,16 @@ export function GuideRow({
 
 export function GuideSection({
   id,
-  eyebrow,
   title,
   children,
 }: {
   id: string;
-  eyebrow: string;
   title: string;
   children?: React.ReactNode;
 }) {
   return (
     <section aria-labelledby={id} className="flex flex-col gap-10">
       <div className="flex flex-col gap-3">
-        <Eyebrow>{eyebrow}</Eyebrow>
         <h2
           id={id}
           className="text-2xl font-semibold leading-tight md:text-3xl"
@@ -311,7 +299,6 @@ export function WillWont({ will, wont }: { will: string[]; wont: string[] }) {
       className="flex flex-col gap-8 rounded-2xl bg-secondary p-6 md:p-10"
     >
       <div className="flex flex-col gap-3">
-        <Eyebrow>At a glance</Eyebrow>
         <h2
           id="guide-will"
           className="text-2xl font-semibold leading-tight md:text-3xl"

@@ -26,7 +26,6 @@ export default function PrivacyRoute() {
   return (
     <PublicLegalPage
       title="Privacy Policy"
-      eyebrow="Privacy"
       updated="October 14, 2026"
     >
       <p className="text-lg leading-8 text-muted-foreground">

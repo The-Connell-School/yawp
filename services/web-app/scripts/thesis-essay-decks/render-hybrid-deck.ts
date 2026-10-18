@@ -3,7 +3,7 @@
  *
  * Built the way the lesson planner's tile renderer is (PR #437,
  * `lesson-pptx-tile.server.ts`): one 16:9 master with the YAWP! wordmark and
- * slide number, a mono eyebrow over a serif title, content on raised paper
+ * slide number, a small mono label (in sentence case, never caps) over a serif title, content on raised paper
  * tiles. Brian's decks add the colour: accent bands and numerals cycle his
  * teal, sunshine, coral, orange and pink; his icon bubbles and confetti dots
  * sit at the edges; key words wear his yellow highlighter.
@@ -315,7 +315,7 @@ function titleSize(title: string): number {
  */
 function addHeading(slide: PptxSlide, spec: HybridSlide, accent: AccentColor, compact = false): void {
   const width = CONTENT_WIDTH - 1.6;
-  slide.addText(spec.eyebrow.toUpperCase(), {
+  slide.addText(spec.eyebrow, {
     x: MARGIN,
     y: compact ? 0.3 : 0.55,
     w: width,
@@ -324,7 +324,6 @@ function addHeading(slide: PptxSlide, spec: HybridSlide, accent: AccentColor, co
     fontSize: 12,
     bold: true,
     color: T[accent],
-    charSpacing: 2,
     valign: 'bottom',
     margin: 0,
   });
@@ -421,7 +420,7 @@ function addTitleSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 't
 
   const x = panel + 0.8;
   const w = W - x - MARGIN;
-  slide.addText(spec.eyebrow.toUpperCase(), {
+  slide.addText(spec.eyebrow, {
     x,
     y: 2.25,
     w,
@@ -429,7 +428,6 @@ function addTitleSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 't
     fontFace: T.mono,
     fontSize: 13,
     bold: true,
-    charSpacing: 2,
     color: T.teal,
     margin: 0,
   });
@@ -1076,7 +1074,7 @@ function addGridSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 'gr
 }
 
 function addTimerSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 'timer' }>, accent: AccentColor): void {
-  slide.addText(spec.eyebrow.toUpperCase(), {
+  slide.addText(spec.eyebrow, {
     x: MARGIN + 0.4,
     y: 2.3,
     w: 6,
@@ -1084,7 +1082,6 @@ function addTimerSlide(slide: PptxSlide, spec: Extract<HybridSlide, { layout: 't
     fontFace: T.mono,
     fontSize: 14,
     bold: true,
-    charSpacing: 2,
     color: T[accent],
     margin: 0,
   });

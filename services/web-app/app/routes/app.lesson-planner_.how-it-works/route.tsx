@@ -83,14 +83,6 @@ function Clip({ name, label }: { name: string; label: string }) {
   );
 }
 
-function Eyebrow({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
-      {children}
-    </p>
-  );
-}
-
 function Step({ n, children }: { n: number; children: React.ReactNode }) {
   return (
     <span className="inline-flex items-center gap-2 text-xs font-medium text-primary">
@@ -266,7 +258,6 @@ export default function LessonPlannerHowItWorksRoute() {
 
         <header className="grid items-center gap-8 md:grid-cols-2 md:gap-12">
           <div className="flex flex-col gap-4">
-            <Eyebrow>See how it works</Eyebrow>
             <h1 className="text-3xl font-bold leading-tight md:text-5xl">
               Tomorrow’s lesson, planned for{' '}
               <span className="text-primary">each class you teach.</span>
@@ -288,7 +279,6 @@ export default function LessonPlannerHowItWorksRoute() {
 
         <section aria-labelledby="guide-start" className="flex flex-col gap-8">
           <div className="flex flex-col gap-3">
-            <Eyebrow>Easy to start</Eyebrow>
             <H2 id="guide-start">Start with what you’re teaching</H2>
             <Copy>
               Open <strong className="text-foreground">Lesson Planner</strong>{' '}
@@ -310,7 +300,6 @@ export default function LessonPlannerHowItWorksRoute() {
               />
             }
           >
-            <Eyebrow>Or start from your data</Eyebrow>
             <H3>“Plan this lesson,” from any Class Summary</H3>
             <Copy>
               When YAWP! summarizes how a class did on an assignment, each
@@ -324,7 +313,6 @@ export default function LessonPlannerHowItWorksRoute() {
 
         <section aria-labelledby="guide-plan" className="flex flex-col gap-10">
           <div className="flex flex-col gap-3">
-            <Eyebrow>The plan</Eyebrow>
             <H2 id="guide-plan">
               Tailor the lesson plan to your specific class
             </H2>
@@ -449,7 +437,6 @@ export default function LessonPlannerHowItWorksRoute() {
           className="flex flex-col gap-10"
         >
           <div className="flex flex-col gap-3">
-            <Eyebrow>Slides</Eyebrow>
             <H2 id="guide-slides">A deck you can put on the wall</H2>
             <Copy>
               Once the plan is in, one tap on{' '}
@@ -482,7 +469,6 @@ export default function LessonPlannerHowItWorksRoute() {
 
         <section aria-labelledby="guide-stack" className="flex flex-col gap-8">
           <div className="flex flex-col gap-3">
-            <Eyebrow>The stack</Eyebrow>
             <H2 id="guide-stack">
               Everything for the lesson, in one place to print
             </H2>
@@ -525,7 +511,6 @@ export default function LessonPlannerHowItWorksRoute() {
 
         <section aria-labelledby="guide-units" className="flex flex-col gap-8">
           <div className="flex flex-col gap-3">
-            <Eyebrow>Units</Eyebrow>
             <H2 id="guide-units">Create a full unit of study</H2>
             <Copy>
               Ask for a unit and you get the map before any lessons: one row per
@@ -559,7 +544,6 @@ export default function LessonPlannerHowItWorksRoute() {
           className="flex flex-col gap-8 rounded-2xl bg-secondary p-6 md:p-10"
         >
           <div className="flex flex-col gap-3">
-            <Eyebrow>At a glance</Eyebrow>
             <H2 id="guide-will">What it will do, and what it won’t</H2>
           </div>
           <div className="grid gap-4 md:grid-cols-2">

@@ -58,7 +58,6 @@ export function PublicLegalSection(props: {
 
 export function PublicLegalPage(props: {
   title: string;
-  eyebrow: string;
   updated: string;
   children: ReactNode;
 }) {
@@ -67,10 +66,7 @@ export function PublicLegalPage(props: {
       <PublicLegalHeader />
       <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:py-14">
         <div className="max-w-3xl">
-          <p className="text-sm font-semibold uppercase tracking-wide text-primary">
-            {props.eyebrow}
-          </p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-normal text-foreground sm:text-5xl">
+          <h1 className="text-4xl font-semibold tracking-normal text-foreground sm:text-5xl">
             {props.title}
           </h1>
           <p className="mt-4 text-sm text-muted-foreground">

@@ -83,7 +83,6 @@ export default function ReporterHowItWorksRoute() {
 
       <GuideSection
         id="guide-reports"
-        eyebrow="What it can do"
         title="Reports you can run on any of your classes"
       >
         <GuideRow
@@ -130,7 +129,6 @@ export default function ReporterHowItWorksRoute() {
 
       <GuideSection
         id="guide-growth"
-        eyebrow="Growth reports"
         title="Track student growth over time"
       >
         <GuideRow
