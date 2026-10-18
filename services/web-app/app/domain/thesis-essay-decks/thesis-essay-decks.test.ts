@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  ANIMAL_FARM_ESSAY_HANDOUT,
   DAY_ONE_DECK,
+  ESSAY_FORM_HANDOUT,
+  ESSAY_PROMPTS_HANDOUT,
+  QUOTING_HANDOUT,
   SAMPLE_ESSAY_HANDOUT,
   SIGN_UP_HANDOUT,
   THESIS_ESSAY_DECKS,
@@ -95,14 +99,15 @@ describe('THESIS_ESSAY_MATERIALS', () => {
     }
   });
 
-  test('adds the student handouts to Day 1 only: sign-up, then the sample essay', () => {
+  test('adds the student handouts to Day 1: sign-up, the two sample essays, the essay form', () => {
     expect(materialsForDeck(DAY_ONE_DECK).map((m) => m.slug)).toEqual([
       'lesson-1-day-1',
       'lesson-1-day-1-lesson-plan',
       'student-sign-up',
       'sample-essay-bored-in-the-usa',
+      'sample-essay-animal-farm',
+      'critical-essay-form',
     ]);
-    expect(materialsForDeck(THESIS_ESSAY_DECKS[1]).map((m) => m.kind)).toEqual(['deck', 'lesson-plan']);
     expect(SIGN_UP_HANDOUT.fileName).toBe('student-sign-up.pdf');
     expect(SAMPLE_ESSAY_HANDOUT).toMatchObject({
       kind: 'handout',
@@ -111,9 +116,47 @@ describe('THESIS_ESSAY_MATERIALS', () => {
     });
   });
 
+  // Everything Brian uploaded to a lesson in the Trainings has a YAWP!
+  // version here, so the lesson's buttons can stand in for that list.
+  test('gives the other lessons the handouts their plans use', () => {
+    const slugsFor = (lesson: number) =>
+      materialsForDeck(THESIS_ESSAY_DECKS[lesson - 1]).map((m) => m.slug);
+    expect(slugsFor(2)).toEqual([
+      'lesson-2-pre-writing',
+      'lesson-2-pre-writing-lesson-plan',
+      'essay-prompts',
+      'critical-essay-form',
+    ]);
+    expect(slugsFor(3)).toEqual([
+      'lesson-3-thesis-statement',
+      'lesson-3-thesis-statement-lesson-plan',
+      'critical-essay-form',
+    ]);
+    expect(slugsFor(5)).toEqual([
+      'lesson-5-body-paragraphs',
+      'lesson-5-body-paragraphs-lesson-plan',
+      'quoting-and-citing',
+    ]);
+    for (const lesson of [4, 6, 7]) {
+      expect(materialsForDeck(THESIS_ESSAY_DECKS[lesson - 1]).map((m) => m.kind)).toEqual([
+        'deck',
+        'lesson-plan',
+      ]);
+    }
+  });
+
   test('names each handout for its link', () => {
     expect(SIGN_UP_HANDOUT.label).toBe('Student sign-up handout');
     expect(SAMPLE_ESSAY_HANDOUT.label).toMatch(/^Sample essay handout/);
+    expect(ANIMAL_FARM_ESSAY_HANDOUT.label).toBe('Exemplar essay handout (Animal Farm)');
+    expect(ESSAY_FORM_HANDOUT.label).toBe('Critical Essay Form handout');
+    expect(ESSAY_PROMPTS_HANDOUT.label).toBe('Sample essay prompts handout');
+    expect(QUOTING_HANDOUT.label).toBe('Quoting and citing handout');
+    for (const handout of [ANIMAL_FARM_ESSAY_HANDOUT, ESSAY_FORM_HANDOUT, ESSAY_PROMPTS_HANDOUT, QUOTING_HANDOUT]) {
+      expect(handout).toMatchObject({ kind: 'handout', contentType: 'application/pdf' });
+      expect(handout.fileName).toBe(`${handout.slug}.pdf`);
+      expect(handout.downloadName).toMatch(/^YAWP! .*\.pdf$/);
+    }
   });
 
   test('gives every material a unique, URL-safe slug', () => {
@@ -202,6 +245,8 @@ describe('deckLinks', () => {
       'google-slides',
       'deck',
       'lesson-plan',
+      'handout',
+      'handout',
       'handout',
       'handout',
     ]);

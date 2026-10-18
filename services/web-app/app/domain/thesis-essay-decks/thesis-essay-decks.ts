@@ -26,7 +26,7 @@ export const PDF_CONTENT_TYPE = 'application/pdf';
 
 /**
  * A file a teacher can download from the Modules: a lesson's deck, its
- * lesson plan, or one of the Day 1 student handouts. All are generated
+ * lesson plan, or one of its handouts. All are generated
  * together by scripts/thesis-essay-decks, so a plan's slide numbers match
  * its deck.
  */
@@ -158,17 +158,70 @@ export const SAMPLE_ESSAY_HANDOUT: ThesisEssayMaterial = {
   label: 'Sample essay handout (“Bored in the USA”)',
 };
 
-const DAY_ONE_HANDOUTS = [SIGN_UP_HANDOUT, SAMPLE_ESSAY_HANDOUT];
+/** Day 1's model literary essay, Brian's, on Animal Farm. */
+export const ANIMAL_FARM_ESSAY_HANDOUT: ThesisEssayMaterial = {
+  slug: 'sample-essay-animal-farm',
+  kind: 'handout',
+  fileName: 'sample-essay-animal-farm.pdf',
+  downloadName: 'YAWP! Day 1 - Exemplar Essay - Animal Farm.pdf',
+  contentType: PDF_CONTENT_TYPE,
+  label: 'Exemplar essay handout (Animal Farm)',
+};
+
+/** The essay's shape on one page: introduction, thesis, body, conclusion. */
+export const ESSAY_FORM_HANDOUT: ThesisEssayMaterial = {
+  slug: 'critical-essay-form',
+  kind: 'handout',
+  fileName: 'critical-essay-form.pdf',
+  downloadName: 'YAWP! Critical Essay Form.pdf',
+  contentType: PDF_CONTENT_TYPE,
+  label: 'Critical Essay Form handout',
+};
+
+/** Brian's essay prompts, for the teacher to use or adapt. */
+export const ESSAY_PROMPTS_HANDOUT: ThesisEssayMaterial = {
+  slug: 'essay-prompts',
+  kind: 'handout',
+  fileName: 'essay-prompts.pdf',
+  downloadName: 'YAWP! Lesson 2 - Sample Essay Prompts.pdf',
+  contentType: PDF_CONTENT_TYPE,
+  label: 'Sample essay prompts handout',
+};
+
+/** Lesson 5's handout on bringing in quotations and citing them. */
+export const QUOTING_HANDOUT: ThesisEssayMaterial = {
+  slug: 'quoting-and-citing',
+  kind: 'handout',
+  fileName: 'quoting-and-citing.pdf',
+  downloadName: 'YAWP! Lesson 5 - Quoting and Citing Sources.pdf',
+  contentType: PDF_CONTENT_TYPE,
+  label: 'Quoting and citing handout',
+};
+
+/**
+ * Each lesson's handouts, by deck slug: YAWP! versions of everything Brian
+ * uploaded to the lesson in the Trainings, plus the Critical Essay Form
+ * wherever a lesson plan hands it out.
+ */
+const HANDOUTS_BY_DECK: Readonly<Record<string, readonly ThesisEssayMaterial[]>> = {
+  'lesson-1-day-1': [SIGN_UP_HANDOUT, SAMPLE_ESSAY_HANDOUT, ANIMAL_FARM_ESSAY_HANDOUT, ESSAY_FORM_HANDOUT],
+  'lesson-2-pre-writing': [ESSAY_PROMPTS_HANDOUT, ESSAY_FORM_HANDOUT],
+  'lesson-3-thesis-statement': [ESSAY_FORM_HANDOUT],
+  'lesson-5-body-paragraphs': [QUOTING_HANDOUT],
+};
+
+function handoutsForDeck(deck: ThesisEssayDeck): readonly ThesisEssayMaterial[] {
+  return Object.hasOwn(HANDOUTS_BY_DECK, deck.slug) ? HANDOUTS_BY_DECK[deck.slug] : [];
+}
 
 export const THESIS_ESSAY_MATERIALS: readonly ThesisEssayMaterial[] = [
   ...THESIS_ESSAY_DECKS.flatMap((deck) => [deckMaterial(deck), lessonPlanMaterial(deck)]),
-  ...DAY_ONE_HANDOUTS,
+  ...new Set(Object.values(HANDOUTS_BY_DECK).flat()),
 ];
 
-/** What a step offers, in order: its deck, its lesson plan (and Day 1's handouts). */
+/** What a step offers, in order: its deck, its lesson plan, then its handouts. */
 export function materialsForDeck(deck: ThesisEssayDeck): ThesisEssayMaterial[] {
-  const materials = [deckMaterial(deck), lessonPlanMaterial(deck)];
-  return deck === DAY_ONE_DECK ? [...materials, ...DAY_ONE_HANDOUTS] : materials;
+  return [deckMaterial(deck), lessonPlanMaterial(deck), ...handoutsForDeck(deck)];
 }
 
 export function materialBySlug(slug: string): ThesisEssayMaterial | null {
