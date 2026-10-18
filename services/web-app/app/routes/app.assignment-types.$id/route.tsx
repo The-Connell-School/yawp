@@ -46,7 +46,9 @@ import {
 } from '~/utils/assignment-type-access.server';
 import { loadAssignmentCreationQuotasForTypes } from '~/utils/assignment-quota.server';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
-import { THESIS_ESSAY_DECKS_FLAG } from '~/domain/feature-flags/feature-flags';
+import { ASSIGNMENT_TRAINING_VIDEOS_FLAG, THESIS_ESSAY_DECKS_FLAG } from '~/domain/feature-flags/feature-flags';
+import { loadAssignmentTrainingVideos } from '~/domain/teacher-trainings/assignment-videos.server';
+import { AssignmentTrainingVideo } from '~/components/teacher-trainings/assignment-training-video';
 import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { ThesisDeckLinks } from '~/components/thesis-essay-decks/thesis-deck-links';
 import {
@@ -574,6 +576,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     (await isFeatureFlagEnabled(THESIS_ESSAY_DECKS_FLAG, profile.organization.id))
       ? buildThesisDecks(assignmentType.assignmentModules, `/app/assignment-types/${assignmentType.id}`)
       : null;
+  // Brian, round 6: each step's training video moves here from the Lounge's
+  // Trainings, behind its flag. Only steps that have one show anything.
+  const trainingVideos =
+    profile.role === 'TEACHER' &&
+    (await isFeatureFlagEnabled(ASSIGNMENT_TRAINING_VIDEOS_FLAG, profile.organization.id))
+      ? await loadAssignmentTrainingVideos({ membershipId: profile.id, steps: assignmentType.assignmentModules })
+      : null;
   const enabledTeacherClassIds =
     profile.role === 'TEACHER'
       ? new Set(teacherClasses.map((klass) => klass.id))
@@ -648,6 +657,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     shortFormPromptLibrary,
     thesisPromptLibrary,
     thesisDecks,
+    trainingVideos,
     apHistoryLibrary,
     // Teacher-facing guidance, so it follows the same role gate the other
     // assignment types' directions do.
@@ -1111,16 +1121,24 @@ export default function AppAssignmentTypesIdRoute() {
                     Click on the modules to see the overview of the writing
                     process that you&rsquo;ll teach your students. Each module
                     has its slide deck, to present here or to edit in Google
-                    Slides or PowerPoint, and its lesson plan. Training videos
-                    are in the Teachers&rsquo; Lounge.
+                    Slides or PowerPoint, and its lesson plan.{' '}
+                    {data.trainingVideos
+                      ? 'A module with a training video has it here too.'
+                      : 'Training videos are in the Teachers’ Lounge.'}
                   </p>
                 ) : showThesisLibrary ? (
                   <p className="mb-3 text-sm text-muted-foreground">
                     Click on the modules to see the overview of the writing
-                    process that you&rsquo;ll teach your students. Training
-                    videos and lesson materials are available in the
-                    Teachers&rsquo; Lounge.
+                    process that you&rsquo;ll teach your students.{' '}
+                    {data.trainingVideos
+                      ? 'A module with a training video has it here; lesson materials are in the Teachers’ Lounge.'
+                      : 'Training videos and lesson materials are available in the Teachers’ Lounge.'}
                   </p>
+                ) : null}
+                {data.trainingVideos?.dayOne ? (
+                  <div className="mb-2">
+                    <AssignmentTrainingVideo video={data.trainingVideos.dayOne} />
+                  </div>
                 ) : null}
                 {data.thesisDecks?.dayOne.length ? (
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
@@ -1145,6 +1163,11 @@ export default function AppAssignmentTypesIdRoute() {
                             <ThesisDeckLinks
                               links={data.thesisDecks.byModuleId[cm.id]}
                             />
+                          </div>
+                        ) : null}
+                        {data.trainingVideos?.byStepId[cm.id] ? (
+                          <div className="mt-3">
+                            <AssignmentTrainingVideo video={data.trainingVideos.byStepId[cm.id]} />
                           </div>
                         ) : null}
                       </AccordionContent>
