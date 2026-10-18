@@ -61,6 +61,8 @@ export const PLANNING_PROGRESS_LABELS: Record<string, string> = {
   get_writing_lesson: 'Reading a Quick Writing Lesson',
   list_lounge_materials: "Looking through the Teacher's Lounge",
   read_lounge_material: 'Reading a Lounge deck',
+  search_my_lessons: 'Looking through your saved lessons',
+  read_my_lesson: 'Opening one of your lessons',
   list_assignment_types: 'Checking what you can assign',
 };
 
@@ -69,7 +71,7 @@ export const PLANNING_PROGRESS_LABELS: Record<string, string> = {
  * something true and general rather than the function's name — `list_classes`
  * is not a sentence, and a teacher should never be shown one.
  */
-const FALLBACK_LABEL = 'Looking things up in Yawp';
+const FALLBACK_LABEL = 'Looking things up in YAWP!';
 
 /**
  * The lookup stretch approaches its ceiling without arriving: the model can

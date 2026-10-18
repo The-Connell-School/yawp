@@ -18,7 +18,7 @@ import type { LessonPacket } from './lesson-packet';
 import { buildStudentHandout } from './student-handout';
 import { deckDurationMinutes, type Slide, type SlideDeck } from './slide-deck';
 
-/** Yawp's print colour, matched to the packet page's header rule. */
+/** YAWP!'s print colour, matched to the packet page's header rule. */
 const BRAND = '#c05a3e';
 const INK = '#1a1a1a';
 const MUTED = '#6b7280';
@@ -419,7 +419,7 @@ function newDocument(title: string): Doc {
     size: 'LETTER',
     margin: PAGE_MARGIN,
     // Readers show these in the tab and the file properties.
-    info: { Title: title, Creator: 'Yawp! Lesson Planner' },
+    info: { Title: title, Creator: 'YAWP! Lesson Planner' },
     autoFirstPage: true,
   });
   doc.fillColor(INK).font(FONTS.body).fontSize(BODY_SIZE);

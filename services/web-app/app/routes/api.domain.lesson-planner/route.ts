@@ -40,7 +40,14 @@ import {
   verifyLessonLinks,
 } from '~/domain/lesson-planner/lesson-links';
 import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
-import { shouldRenameLesson } from '~/domain/lesson-planner/lesson-name';
+import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
+import { readLessonLength } from '~/domain/lesson-planner/lesson-length';
+import { asksForDeck } from '~/domain/lesson-planner/suggestions';
+import { loadStackContents } from '~/domain/lesson-planner/stack-contents.server';
+import {
+  firstMessageTitle,
+  shouldRenameLesson,
+} from '~/domain/lesson-planner/lesson-name';
 import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
 import { buildLessonPlannerSystemPromptBlocks } from './build-system-prompt';
 import {
@@ -175,11 +182,7 @@ function progressStream(
   });
 }
 
-function deriveTitle(message: string): string {
-  const trimmed = message.trim().replace(/\s+/g, ' ');
-  if (trimmed.length <= 60) return trimmed || 'New lesson';
-  return `${trimmed.slice(0, 57)}…`;
-}
+const deriveTitle = firstMessageTitle;
 
 function boundedHistory(
   messages: Array<{ role: string; content: string }>
@@ -423,10 +426,38 @@ export async function action({ request }: ActionFunctionArgs) {
       (await findWritingExerciseTypeIds(ctx)).exitTicket
     );
 
+    // Brian's review (B6): with stack v2 on, outputs are built from what the
+    // teacher kept, so the planner sees the stack itself, not just its titles.
+    const { stackV2, intakeV2 } = await getLessonPlannerReviewFlags(
+      ctx.organizationId
+    );
+    const stackContents =
+      stackV2 && activeConversation
+        ? await loadStackContents(activeConversation.id, {
+            // A deck is built from the pieces, not from the last deck (C1).
+            leaveOutDeck: asksForDeck(turn.message),
+          })
+        : [];
+
+    // How long this lesson is (Brian's run 2, B1): from this very message when
+    // the teacher just said, otherwise what they said earlier in the lesson.
+    const heardLength = readLessonLength(turn.message);
+    const lessonLength =
+      heardLength ??
+      (activeConversation?.periodMinutes
+        ? {
+            minutes: activeConversation.periodMinutes,
+            classLabel: activeConversation.lessonClassLabel ?? null,
+          }
+        : null);
+
     const system = buildLessonPlannerSystemPromptBlocks({
       teacherName: null,
+      lessonLength,
       organizationName: access.membership.organization.name,
       lessonInventory: conversation?.materials ?? [],
+      stackContents,
+      intakeV2,
       unitContext,
       exitTicketsAvailable,
       writingPracticeAvailable: ctx.writingPracticeEnabled,
@@ -637,6 +668,12 @@ export async function action({ request }: ActionFunctionArgs) {
               // would break the one-to-one with the board.
               ...(lessonName && dayTarget === null
                 ? { title: lessonName }
+                : {}),
+              ...(heardLength
+                ? {
+                    periodMinutes: heardLength.minutes,
+                    lessonClassLabel: heardLength.classLabel,
+                  }
                 : {}),
             },
           });

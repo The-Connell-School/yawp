@@ -18,6 +18,9 @@ import { deckDurationMinutes } from '~/domain/lesson-planner/slide-deck';
 import { loadLessonDeck } from '~/domain/lesson-planner/load-deck.server';
 import { cn } from '~/utils/misc';
 import { SlideCanvas } from './slide-canvas';
+import { TileSlideCanvas } from './tile-slide-canvas';
+import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
+import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   // The same lookup the PowerPoint download uses: a deck a teacher can project
@@ -28,16 +31,23 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     deckId: params.messageId,
   });
 
+  const access = await getLessonPlannerAccess(request);
+  const { deckV2 } = access.allowed
+    ? await getLessonPlannerReviewFlags(access.membership.organization.id)
+    : { deckV2: false };
+
   return {
     conversationId,
     lessonTitle,
     deck,
     durationMinutes: deckDurationMinutes(deck),
+    // Brian's review (E1): the YAWP! tile template, behind its flag.
+    tileTemplate: deckV2,
   };
 }
 
 export default function PresentRoute() {
-  const { conversationId, lessonTitle, deck, durationMinutes } =
+  const { conversationId, lessonTitle, deck, durationMinutes, tileTemplate } =
     useLoaderData<typeof loader>();
   const [index, setIndex] = useState(0);
   const [showNotes, setShowNotes] = useState(false);
@@ -172,7 +182,11 @@ export default function PresentRoute() {
             data-testid="slide-stage"
             className="aspect-[16/9] w-full max-w-[min(100%,calc((100vh-8rem)*16/9))] overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200 print:hidden"
           >
-            <SlideCanvas slide={slide} />
+            {tileTemplate ? (
+              <TileSlideCanvas slide={slide} number={index + 1} />
+            ) : (
+              <SlideCanvas slide={slide} />
+            )}
           </div>
 
           {/* Printing gives every slide its own landscape page. */}
@@ -182,7 +196,11 @@ export default function PresentRoute() {
                 key={printIndex}
                 className="flex aspect-[16/9] w-full items-center justify-center break-after-page border border-slate-200"
               >
-                <SlideCanvas slide={printed} />
+                {tileTemplate ? (
+                  <TileSlideCanvas slide={printed} number={printIndex + 1} />
+                ) : (
+                  <SlideCanvas slide={printed} />
+                )}
               </div>
             ))}
           </div>

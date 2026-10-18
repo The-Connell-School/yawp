@@ -273,6 +273,10 @@ model Class {
   classArtIndex                   Int?
   classArtKey                     String?
   isArchived                      Boolean                          @default(false)
+  /// How long this class usually meets, in minutes, as the teacher last set it
+  /// in the Lesson Planner intake (Brian's review, A2). Null until then; the
+  /// planner never guesses it.
+  periodMinutes                   Int?
   students                        OrgMembership[]                  @relation("ClassStudents")
   teachers                        OrgMembership[]                  @relation("ClassTeachers")
   schoolId                        String
@@ -1557,6 +1561,15 @@ model LessonPlanConversation {
   /// Which day of the unit this is. Null on a unit-linked session means the
   /// map; a number means that day's lesson.
   unitDay                 Int?
+  /// How long this lesson is and which class it is for, from the teacher's
+  /// own answer (Brian's run 2, B1), so the planner keeps every plan and
+  /// deck inside the period on every turn. Null until the teacher says.
+  periodMinutes    Int?
+  lessonClassLabel String?
+  /// The concise lesson plan's summaries (Brian's run 2, D1), written once
+  /// per stack and reused until the stack changes (planSummaryKey).
+  planSummary      Json?
+  planSummaryKey   String?
   messages                LessonPlanMessage[]
   materials               LessonPlanMaterial[]
 
@@ -1584,6 +1597,9 @@ model LessonPlanMessage {
   keptAudience   String?
   /// Teacher-supplied name for this resource; falls back to a derived title.
   keptTitle      String?
+  /// Where this kept reply sits in the teacher's stack once they have
+  /// reordered it (Brian's run 2, A1). Null: ordered by when it was written.
+  position       Int?
   conversationId String
   conversation   LessonPlanConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
@@ -1623,6 +1639,13 @@ model LessonPlanMaterial {
   /// model's control, because a hand-edited handout is a decision, not a
   /// draft to be clobbered by the next thing the model happens to write.
   editedAt        DateTime?              @db.Timestamptz(6)
+  /// Where this piece sits in the teacher's stack once they have reordered it
+  /// (Brian's run 2, A1). Null: ordered by the reply it came from.
+  position        Int?
+  /// The library prompt a class starter or Daily Pages piece came from
+  /// (FW-021, sf-ev-03), kept as data for its assignment sheet and never
+  /// shown to the teacher (Brian's run 2, A6).
+  promptId        String?
 
   @@unique([conversationId, slot])
   @@index([conversationId, sourceMessageId, blockKey])

@@ -9,6 +9,54 @@ import {
   readPlannedExitTickets,
   type PlannedExitTicket,
 } from './exit-ticket-block';
+import {
+  DAILY_PAGES_BLOCK_KEY,
+  dailyPagesBlockKey,
+  dailyPagesIndexForKey,
+  readDailyPagesExercises,
+  WRITING_EXERCISE_LABELS,
+  type DailyPagesExercise,
+} from './daily-pages-block';
+import { slugify, LESSON_STEP_KIND, PRACTICE_KIND } from './lesson-material';
+import {
+  describePlannedPractice,
+  practicedLessons,
+  practiceIndexForKey,
+  readPlannedPractice,
+  type PlannedPractice,
+} from './practice-block';
+import { planStepIndexForKey, readPlanSteps, type PlanStep } from './plan-steps';
+
+export { DAILY_PAGES_BLOCK_KEY, dailyPagesBlockKey };
+
+const EXERCISE_TITLE_CHARS = 60;
+
+/**
+ * A class starter or Daily Pages prompt, filed on its own (Brian's review,
+ * B1). Each prompt gets its own slot, so three options are three pieces the
+ * teacher can take or leave. The library id rides along as data, never in the
+ * text a teacher reads (Brian's run 2, item 17).
+ */
+export function exerciseAsMaterial(
+  exercise: DailyPagesExercise,
+  key: string
+): LessonMaterial {
+  const label = WRITING_EXERCISE_LABELS[exercise.kind];
+  const firstLine = exercise.prompt.split('\n')[0].trim();
+  const short =
+    firstLine.length > EXERCISE_TITLE_CHARS
+      ? `${firstLine.slice(0, EXERCISE_TITLE_CHARS - 1).trimEnd()}…`
+      : firstLine;
+  return {
+    key,
+    slot: `${exercise.kind}:${slugify(exercise.prompt).slice(0, 48)}`,
+    kind: exercise.kind,
+    title: `${label}: ${short}`,
+    audience: 'student',
+    content: exercise.prompt,
+    promptId: exercise.promptId ?? null,
+  };
+}
 
 export function exitTicketAsMaterial(
   ticket: PlannedExitTicket,
@@ -25,6 +73,30 @@ export function exitTicketAsMaterial(
     title,
     audience: 'student',
     content: ticket.prompt,
+  };
+}
+
+/** A step of a plan, filed on its own (Brian's run 2, A3). */
+export function stepAsMaterial(step: PlanStep): LessonMaterial {
+  return {
+    key: step.key,
+    slot: `${LESSON_STEP_KIND}:${slugify(step.title)}`,
+    kind: LESSON_STEP_KIND,
+    title: step.minutes !== null ? `${step.title} (${step.minutes} min)` : step.title,
+    audience: 'teacher',
+    content: step.content,
+  };
+}
+
+/** Writing practice, filed on its own (Brian's run 2, A3). */
+export function practiceAsMaterial(practice: PlannedPractice, key: string): LessonMaterial {
+  return {
+    key,
+    slot: `${PRACTICE_KIND}:${practice.lessonSlugs.join('-')}`,
+    kind: PRACTICE_KIND,
+    title: `Writing practice: ${practice.title ?? practicedLessons(practice)}`,
+    audience: 'teacher',
+    content: describePlannedPractice(practice),
   };
 }
 
@@ -47,6 +119,21 @@ export function artifactFromAssistantReply(
     const { tickets } = readPlannedExitTickets(content);
     const ticket = tickets[index];
     return ticket ? exitTicketAsMaterial(ticket, materialKey) : null;
+  }
+  const practiceIndex = practiceIndexForKey(materialKey);
+  if (practiceIndex !== null) {
+    const practice = readPlannedPractice(content).practices[practiceIndex];
+    return practice ? practiceAsMaterial(practice, materialKey) : null;
+  }
+  const stepIndex = planStepIndexForKey(materialKey);
+  if (stepIndex !== null) {
+    const step = readPlanSteps(content)[stepIndex];
+    return step ? stepAsMaterial(step) : null;
+  }
+  const exerciseIndex = dailyPagesIndexForKey(materialKey);
+  if (exerciseIndex !== null) {
+    const exercise = readDailyPagesExercises(content).exercises[exerciseIndex];
+    return exercise ? exerciseAsMaterial(exercise, materialKey) : null;
   }
   const { materials } = readLessonMaterials(content);
   return materials.find((item) => item.key === materialKey) ?? null;

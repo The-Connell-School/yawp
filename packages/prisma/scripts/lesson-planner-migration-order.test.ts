@@ -17,6 +17,11 @@ const LESSON_PLANNER_MIGRATIONS = [
   '20261008000900_add_lesson_material_edited_at',
   '20261008001000_add_exit_ticket_config',
   '20261008001100_bootstrap_exit_ticket_assignment_type',
+  '20261011120000_class_period_minutes',
+  '20261012100000_lesson_stack_position',
+  '20261012100100_lesson_material_prompt_id',
+  '20261012100200_lesson_plan_period_minutes',
+  '20261012100300_lesson_plan_summary_cache',
 ];
 
 describe('lesson planner migration order', () => {

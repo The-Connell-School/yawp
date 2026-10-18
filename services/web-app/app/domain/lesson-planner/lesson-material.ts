@@ -43,7 +43,32 @@ export const DECK_KIND = 'slides';
  * Everything the packet can hold. A deck is not a material a teacher hands
  * out, but it is filed, replaced, and printed exactly like one.
  */
-export type ArtifactKind = MaterialKind | typeof DECK_KIND;
+export type ArtifactKind =
+  | MaterialKind
+  | typeof DECK_KIND
+  | typeof LESSON_STEP_KIND
+  | typeof PRACTICE_KIND
+  | (typeof WRITING_EXERCISE_ARTIFACT_KINDS)[number];
+
+/**
+ * One step of a plan — a reading, a pair talk, a quick write — filed on its
+ * own (Brian's run 2, A3), so the stack is an outline of everything that
+ * happens in the lesson, not only its handouts.
+ */
+export const LESSON_STEP_KIND = 'step';
+
+/** Writing practice students work in YAWP!, filed as a piece of the lesson. */
+export const PRACTICE_KIND = 'practice';
+
+/**
+ * A class starter or Daily Pages prompt filed on its own (Brian's review, B1).
+ * Not a `yawp-material` kind: the planner hands these over in their own fence,
+ * so the material parser never sees them.
+ */
+export const WRITING_EXERCISE_ARTIFACT_KINDS = [
+  'class-starter',
+  'daily-pages',
+] as const;
 
 /** What each kind is called on its card and in the packet's contents. */
 export const MATERIAL_KIND_LABELS: Record<ArtifactKind, string> = {
@@ -54,6 +79,10 @@ export const MATERIAL_KIND_LABELS: Record<ArtifactKind, string> = {
   rubric: 'Rubric',
   notes: 'Notes',
   slides: 'Slides',
+  'class-starter': 'Class Starter',
+  'daily-pages': 'Daily Pages',
+  step: 'Lesson step',
+  practice: 'Writing practice',
 };
 
 /**
@@ -103,6 +132,12 @@ export type LessonMaterial = {
   audience: PacketAudience;
   /** Markdown, ready to render or print. */
   content: string;
+  /**
+   * The library prompt this came from (FW-021, sf-ev-03), kept as data so the
+   * stack can send it to the right assignment sheet. Never shown (Brian's
+   * run 2, item 17).
+   */
+  promptId?: string | null;
 };
 
 const MATERIAL_BLOCK = new RegExp(
@@ -164,7 +199,7 @@ function readTitle(
 
 const MAX_SLOT_CHARS = 80;
 
-function slugify(text: string): string {
+export function slugify(text: string): string {
   return (
     text
       .toLowerCase()
@@ -236,7 +271,11 @@ export function readLessonMaterials(content: string): {
  */
 export function packetKindForMaterial(kind: string): PacketSectionKind {
   if (kind === DECK_KIND) return 'slides';
-  return kind === 'handout' || kind === 'sample' || kind === 'exit-ticket'
+  return kind === 'handout' ||
+    kind === 'sample' ||
+    kind === 'exit-ticket' ||
+    kind === 'class-starter' ||
+    kind === 'daily-pages'
     ? 'handout'
     : 'plan';
 }

@@ -13,6 +13,11 @@ import {
   FREE_TIER_ONBOARDING_V2_FLAG,
   ASSIGNMENT_SUMMARY_MODELS_FLAG,
   FEATURE_FLAG_KEYS,
+  LESSON_PLANNER_INTAKE_V2_FLAG,
+  LESSON_PLANNER_STACK_V2_FLAG,
+  LESSON_PLANNER_DECK_V2_FLAG,
+  LESSON_PLANNER_PLAN_EXPORT_V2_FLAG,
+  LESSON_PLANNER_STACK_PANEL_FLAG,
   isFreeTierGloballyEnabled,
   featureFlagSettingName,
   MAX_FEATURE_FLAG_ORG_IDS,
@@ -104,6 +109,11 @@ describe('feature flag registry', () => {
       LESSON_PLANNER_FLAG,
       INTERNAL_RUBRICS_FLAG,
       FREE_TIER_FLAG,
+      LESSON_PLANNER_INTAKE_V2_FLAG,
+      LESSON_PLANNER_STACK_V2_FLAG,
+      LESSON_PLANNER_DECK_V2_FLAG,
+      LESSON_PLANNER_STACK_PANEL_FLAG,
+      LESSON_PLANNER_PLAN_EXPORT_V2_FLAG,
       FREE_TIER_INAPP_V2_FLAG,
       UNIFIED_SIGN_ON_FLAG,
       FREE_TIER_ONBOARDING_V2_FLAG,
@@ -113,6 +123,24 @@ describe('feature flag registry', () => {
       SIGNON_TEACHER_PROMPTS_FLAG,
       ASSIGNMENT_SUMMARY_MODELS_FLAG,
     ]);
+  });
+
+  test('has the lesson planner review flags, each with a setting name', () => {
+    expect(featureFlagSettingName(LESSON_PLANNER_INTAKE_V2_FLAG)).toBe(
+      'feature_flag.lesson_planner_intake_v2'
+    );
+    expect(featureFlagSettingName(LESSON_PLANNER_STACK_V2_FLAG)).toBe(
+      'feature_flag.lesson_planner_stack_v2'
+    );
+    expect(featureFlagSettingName(LESSON_PLANNER_DECK_V2_FLAG)).toBe(
+      'feature_flag.lesson_planner_deck_v2'
+    );
+    expect(featureFlagSettingName(LESSON_PLANNER_STACK_PANEL_FLAG)).toBe(
+      'feature_flag.lesson_planner_stack_panel'
+    );
+    expect(featureFlagSettingName(LESSON_PLANNER_PLAN_EXPORT_V2_FLAG)).toBe(
+      'feature_flag.lesson_planner_plan_export_v2'
+    );
   });
 
   test('rejects anything that is not a registered flag', () => {

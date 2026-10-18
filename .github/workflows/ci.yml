@@ -825,7 +825,29 @@ jobs:
             ../../packages/prisma/scripts/seed-preview-planner-qa.test.ts \
             ../../packages/prisma/scripts/exit-ticket-migration-image.test.ts \
             ../../packages/prisma/scripts/preview-seats.test.ts \
-            app/domain/lesson-planner/lesson-seed.test.ts
+            app/domain/lesson-planner/lesson-seed.test.ts \
+            app/routes/api.domain.lesson-planner/build-system-prompt.test.ts \
+            app/domain/lesson-planner/suggestions.test.ts \
+            app/domain/lesson-planner/daily-pages-block.test.ts \
+            app/domain/lesson-planner/reply-parts.test.ts \
+            app/domain/lesson-planner/stack-contents.server.test.ts \
+            app/domain/lesson-planner/deck-edit.server.test.ts \
+            app/domain/lesson-planner/lesson-pptx-tile.server.test.ts \
+            app/domain/lesson-planner/stack-order.test.ts \
+            app/domain/lesson-planner/stack-order.server.test.ts \
+            app/domain/lesson-planner/stack-items.test.ts \
+            app/domain/lesson-planner/stack-create-link.test.ts \
+            app/domain/lesson-planner/prompt-ids.test.ts \
+            app/domain/lesson-planner/lesson-length.test.ts \
+            app/domain/lesson-planner/plan-timing.test.ts \
+            app/domain/lesson-planner/plan-steps.test.ts \
+            app/domain/lesson-planner/reply-pieces.test.ts \
+            app/domain/lesson-planner/file-reply-pieces.server.test.ts \
+            app/domain/lesson-planner/lesson-plan-doc.test.ts \
+            app/domain/lesson-planner/plan-summary.server.test.ts \
+            app/domain/lesson-planner/lesson-plan-render.server.test.ts \
+            app/domain/lesson-planner/branding.test.ts \
+            app/components/lesson-planner/stack-list.test.ts
           do
             bun test "$f"
           done

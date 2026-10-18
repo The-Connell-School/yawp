@@ -84,8 +84,27 @@ const ACTIVITY_BY_ID = new Map(
 );
 
 export type LessonAsk =
-  | { kind: 'minutes'; defaultMinutes: number }
-  | { kind: 'activities' };
+  | {
+      kind: 'minutes';
+      defaultMinutes: number;
+      /**
+       * Whether the planner actually named a length. Intake v2 never starts a
+       * slider on a guess (Brian's review, A2), so it needs to know.
+       */
+      hinted?: boolean;
+    }
+  | { kind: 'activities' }
+  /** Intake v2 (A1): which of the teacher's real classes, as checkboxes. */
+  | { kind: 'classes' }
+  /**
+   * Intake v2 (A3): how to fill the time, as one single choice whose options
+   * are the planner's own, written for this lesson's content.
+   */
+  | { kind: 'choose'; options: string[] };
+
+/** Long enough for a real option, short enough to read on a radio row. */
+const MAX_CHOOSE_OPTION_CHARS = 140;
+const MAX_CHOOSE_OPTIONS = 5;
 
 const ASK_BLOCK = new RegExp(
   '```+' + ASK_FENCE + '[^\\n]*\\n([\\s\\S]*?)```+',
@@ -114,6 +133,29 @@ export function readLessonAsks(content: string): {
     for (const line of (match[1] ?? '').split('\n')) {
       const [rawKind, rawValue] = line.split(':');
       const kind = rawKind?.trim().toLowerCase();
+      if (kind === 'choose') {
+        // Many lines, one question: every option joins the same ask.
+        const option = line
+          .slice(line.indexOf(':') + 1)
+          .trim()
+          .slice(0, MAX_CHOOSE_OPTION_CHARS);
+        if (!option) continue;
+        let choose = asks.find(
+          (ask): ask is Extract<LessonAsk, { kind: 'choose' }> =>
+            ask.kind === 'choose'
+        );
+        if (!choose) {
+          choose = { kind: 'choose', options: [] };
+          asks.push(choose);
+        }
+        if (
+          choose.options.length < MAX_CHOOSE_OPTIONS &&
+          !choose.options.includes(option)
+        ) {
+          choose.options.push(option);
+        }
+        continue;
+      }
       if (!kind || seen.has(kind)) continue;
 
       if (kind === 'minutes') {
@@ -123,7 +165,11 @@ export function readLessonAsks(content: string): {
           defaultMinutes: Number.isFinite(guess)
             ? clampMinutes(guess)
             : DEFAULT_MINUTES,
+          hinted: Number.isFinite(guess),
         });
+        seen.add(kind);
+      } else if (kind === 'classes') {
+        asks.push({ kind: 'classes' });
         seen.add(kind);
       } else if (kind === 'activities') {
         asks.push({ kind: 'activities' });
@@ -172,7 +218,15 @@ export function asksWorthShowing(
   }: { topicSettled: boolean; planAlreadyWritten?: boolean }
 ): LessonAsk[] {
   if (topicSettled && !planAlreadyWritten) return asks;
-  return asks.filter((ask) => ask.kind !== 'minutes');
+  // How to fill the time is as tied to the moment as the clock is: it needs a
+  // subject, and a written plan has already answered it. Which class it is for
+  // can be asked on the opening turn, but never under a plan.
+  return asks.filter(
+    (ask) =>
+      ask.kind !== 'minutes' &&
+      ask.kind !== 'choose' &&
+      !(ask.kind === 'classes' && planAlreadyWritten)
+  );
 }
 
 /** Already ends in something that finishes a sentence. */
@@ -218,5 +272,32 @@ export function composeAskReply({
     .filter((label): label is string => Boolean(label));
   if (labels.length) parts.push(`I want to use: ${labels.join(', ')}.`);
 
+  return parts.join(' ');
+}
+
+/**
+ * The teacher's answer to the intake v2 card (Brian's review, A1–A3), in their
+ * voice: the classes it is for with each one's length, then how to fill the
+ * time, then any activities. One message, as before.
+ */
+export function composeIntakeReply({
+  classes,
+  choice,
+  activityIds,
+}: {
+  /** Checked classes, or the one typed by hand; minutes null when not asked. */
+  classes: Array<{ title: string; minutes: number | null }>;
+  choice: string | null;
+  activityIds: string[];
+}): string {
+  const parts: string[] = classes.map((klass) =>
+    klass.minutes === null
+      ? `For ${klass.title}.`
+      : `For ${klass.title}, ${klass.minutes} minutes.`
+  );
+  const chosen = choice?.trim();
+  if (chosen) parts.push(isFinished(chosen) ? chosen : `${chosen}.`);
+  const activities = composeAskReply({ minutes: null, activityIds });
+  if (activities) parts.push(activities);
   return parts.join(' ');
 }

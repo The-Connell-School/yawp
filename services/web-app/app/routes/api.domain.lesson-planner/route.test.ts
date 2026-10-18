@@ -1049,6 +1049,56 @@ describe('api.domain.lesson-planner action — the progress stream', () => {
   });
 });
 
+describe("api.domain.lesson-planner action — the lesson's length (Brian's run 2, B1)", () => {
+  test('keeps the length the teacher gave and tells the planner this turn', async () => {
+    prisma.lessonPlanConversation.findFirst.mockResolvedValue({
+      id: 'plan-9',
+      messages: [{ role: 'assistant', content: 'Which class, and how long?' }],
+      periodMinutes: null,
+      lessonClassLabel: null,
+    });
+    getLLMCompletion.mockResolvedValue('Here is the plan.');
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    await action({
+      request: formRequest({
+        message: 'For English 11 · Period 5, 50 minutes. Plan the whole period.',
+        conversationId: 'plan-9',
+      }),
+    } as any);
+
+    expect(systemText(getLLMCompletion.mock.calls[0][0].system)).toContain(
+      'This lesson is 50 minutes (English 11 · Period 5).'
+    );
+    const update = prisma.lessonPlanConversation.update.mock.calls[0][0];
+    expect(update.data).toMatchObject({
+      periodMinutes: 50,
+      lessonClassLabel: 'English 11 · Period 5',
+    });
+  });
+
+  test('remembers it on later turns, after the answer has scrolled away', async () => {
+    prisma.lessonPlanConversation.findFirst.mockResolvedValue({
+      id: 'plan-9',
+      messages: [{ role: 'assistant', content: 'Here is the plan.' }],
+      periodMinutes: 50,
+      lessonClassLabel: 'English 11 · Period 5',
+    });
+    getLLMCompletion.mockResolvedValue('Here is the deck.');
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    await action({
+      request: formRequest({ message: 'Build the slide deck from my stack', conversationId: 'plan-9' }),
+    } as any);
+
+    expect(systemText(getLLMCompletion.mock.calls[0][0].system)).toContain(
+      'This lesson is 50 minutes (English 11 · Period 5).'
+    );
+    const update = prisma.lessonPlanConversation.update.mock.calls[0][0];
+    expect(update.data.periodMinutes).toBeUndefined();
+  });
+});
+
 describe('monthly direct action admission', () => {
   test('zero/exhausted cap denies generation and persistence; pending duplicates return 409', async () => {
     monthlyEnabled = true;
