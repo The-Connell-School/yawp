@@ -1,11 +1,19 @@
 import { describe, expect, it } from 'bun:test';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { THESIS_ESSAY_MATERIALS } from '../../app/domain/thesis-essay-decks/thesis-essay-decks';
 import { DECKS } from './decks';
+import { ANIMAL_FARM_ESSAY, ESSAY_FORM, ESSAY_PROMPTS, QUOTING_HANDOUT } from './handouts';
 import { LESSON_PLANS, type PlanStep } from './lesson-plans';
 import { SAMPLE_BODY, SAMPLE_CONCLUSION, SAMPLE_INTRODUCTION, SAMPLE_TITLE } from './sample-essay';
 import {
   allSpans,
   isWinAnsi,
+  renderAnimalFarmEssayHandout,
+  renderEssayFormHandout,
+  renderEssayPromptsHandout,
   renderLessonPlan,
+  renderQuotingHandout,
   renderSampleEssayHandout,
   renderSignUpHandout,
   resolveSpan,
@@ -115,5 +123,51 @@ describe('sample essay handout', () => {
   it('uses only characters the PDF fonts can draw', () => {
     const texts = [SAMPLE_TITLE, SAMPLE_INTRODUCTION, ...SAMPLE_BODY, SAMPLE_CONCLUSION];
     for (const text of texts) expect([...text].filter((char) => !isWinAnsi(char))).toEqual([]);
+  });
+});
+
+/** Every string a handout prints, however deeply it is nested. */
+function stringsIn(value: unknown): string[] {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.flatMap(stringsIn);
+  if (value && typeof value === 'object') return Object.values(value).flatMap(stringsIn);
+  return [];
+}
+
+// The handouts that replace the rest of Brian's uploads to the Trainings:
+// the Animal Farm exemplar essay, the Critical Essay Form, the sample
+// prompts, and the quoting and citing handout.
+describe.each([
+  ['Animal Farm exemplar essay', renderAnimalFarmEssayHandout, ANIMAL_FARM_ESSAY],
+  ['Critical Essay Form', renderEssayFormHandout, ESSAY_FORM],
+  ['sample essay prompts', renderEssayPromptsHandout, ESSAY_PROMPTS],
+  ['quoting and citing handout', renderQuotingHandout, QUOTING_HANDOUT],
+] as const)('%s', (_name, render, content) => {
+  it('writes a PDF, the same bytes every time', async () => {
+    const first = await render();
+    const second = await render();
+    expect(Buffer.from(first.subarray(0, 5)).toString()).toBe('%PDF-');
+    expect(Buffer.compare(Buffer.from(first), Buffer.from(second))).toBe(0);
+  });
+
+  it('uses only characters the PDF fonts can draw', () => {
+    for (const text of stringsIn(content)) {
+      expect({ text, bad: [...text].filter((char) => !isWinAnsi(char)) }).toEqual({ text, bad: [] });
+    }
+  });
+});
+
+describe('the Animal Farm exemplar essay', () => {
+  it('keeps Brian’s thesis as the last sentence of the introduction', () => {
+    expect(ANIMAL_FARM_ESSAY.paragraphs[0].endsWith(ANIMAL_FARM_ESSAY.thesis)).toBe(true);
+    expect(ANIMAL_FARM_ESSAY.paragraphs).toHaveLength(6);
+  });
+});
+
+describe('the built files', () => {
+  it('has every deck, lesson plan and handout the app offers', () => {
+    const dir = join(import.meta.dir, '../../resources/thesis-essay-decks');
+    const missing = THESIS_ESSAY_MATERIALS.filter((material) => !existsSync(join(dir, material.fileName)));
+    expect(missing.map((material) => material.fileName)).toEqual([]);
   });
 });

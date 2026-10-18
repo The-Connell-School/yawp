@@ -1,5 +1,5 @@
 /**
- * Renders a lesson plan (and the Day 1 student handouts) to PDF.
+ * Renders a lesson plan (and the lessons' handouts) to PDF.
  *
  * The plans go with the hybrid decks, so they wear the same colours: Brian's
  * teal, sunshine, coral, orange and pink as accents (numerals, bands, slide
@@ -16,6 +16,7 @@ import type { HybridDeck, HybridSlide } from './deck-types';
 import { ACCENT_CYCLE, HYBRID as T, type AccentColor } from './hybrid-theme';
 import type { LessonPlan, PlanStep, SlideSpan } from './lesson-plans';
 import { parseMarks, plain } from './render-hybrid-deck';
+import { ANIMAL_FARM_ESSAY, ESSAY_FORM, ESSAY_PROMPTS, QUOTING_HANDOUT } from './handouts';
 import { SAMPLE_BODY, SAMPLE_CONCLUSION, SAMPLE_INTRODUCTION, SAMPLE_TITLE } from './sample-essay';
 
 /** Images and icons, shipped with the decks so the app can serve them to the presenter. */
@@ -479,14 +480,21 @@ export function renderSampleEssayHandout(): Promise<Uint8Array> {
     'By Haley, a student. As you read, **underline or highlight anything you find interesting:** at least one thing in every paragraph.'
   );
 
+  essay(doc, SAMPLE_TITLE, [SAMPLE_INTRODUCTION, ...SAMPLE_BODY, SAMPLE_CONCLUSION]);
+  footers(doc, 'Day 1 · Sample essay · “Bored in the USA”');
+  return finish(doc);
+}
+
+/** An essay as students read it: a centred serif title, then indented paragraphs. */
+function essay(doc: Doc, title: string, paragraphs: readonly string[]): void {
   doc
     .font(FONT.serifBold)
     .fontSize(15)
     .fillColor(hex(T.ink))
-    .text(SAMPLE_TITLE, MARGIN.left + 30, doc.y, { width: WIDTH - 60, align: 'center', lineGap: 2 });
+    .text(title, MARGIN.left + 30, doc.y, { width: WIDTH - 60, align: 'center', lineGap: 2 });
   doc.moveDown(1);
 
-  for (const paragraph of [SAMPLE_INTRODUCTION, ...SAMPLE_BODY, SAMPLE_CONCLUSION]) {
+  for (const paragraph of paragraphs) {
     doc.font(FONT.serif).fontSize(12);
     ensureSpace(doc, 3 * 18);
     doc.fillColor(hex(T.ink)).text(paragraph, MARGIN.left, doc.y, {
@@ -497,7 +505,307 @@ export function renderSampleEssayHandout(): Promise<Uint8Array> {
     });
     doc.moveDown(0.8);
   }
+}
 
-  footers(doc, 'Day 1 · Sample essay · “Bored in the USA”');
+/**
+ * Brian's model literary essay on Animal Farm, for Day 1 next to "Bored in
+ * the USA": what the same form looks like when the essay is about a book.
+ */
+export function renderAnimalFarmEssayHandout(): Promise<Uint8Array> {
+  const doc = newDoc(`Exemplar essay: ${ANIMAL_FARM_ESSAY.title}`);
+  header(
+    doc,
+    'Thesis-Driven Essay · Day 1 · Student handout',
+    'Exemplar essay',
+    'A literary essay on George Orwell’s __Animal Farm__, by Brian Connell. As you read, **find the thesis statement**, then notice how each body paragraph proves one part of it.'
+  );
+  doc.font(FONT.serif).fontSize(12).fillColor(hex(T.ink));
+  for (const line of ANIMAL_FARM_ESSAY.heading) doc.text(line, MARGIN.left, doc.y, { width: WIDTH, lineGap: 2 });
+  doc.moveDown(1);
+  essay(doc, ANIMAL_FARM_ESSAY.title, ANIMAL_FARM_ESSAY.paragraphs);
+  footers(doc, 'Day 1 · Exemplar essay · Animal Farm');
+  return finish(doc);
+}
+
+// ---------------------------------------------------------------------------
+// The Critical Essay Form: the essay as an hourglass.
+
+/** A five-pointed star, for the thesis at the point of the introduction. */
+function star(doc: Doc, cx: number, cy: number, outer: number, fill: string, stroke: string): void {
+  const points: [number, number][] = [];
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 === 0 ? outer : outer * 0.45;
+    const angle = -Math.PI / 2 + (i * Math.PI) / 5;
+    points.push([cx + r * Math.cos(angle), cy + r * Math.sin(angle)]);
+  }
+  doc.save().polygon(...points).lineWidth(1.25).fillAndStroke(hex(fill), hex(stroke)).restore();
+}
+
+/** Centred lines inside a shape, one under the other. */
+function centredLines(doc: Doc, lines: readonly string[], cx: number, y: number, lineH: number, size: number): void {
+  doc.font(FONT.body).fontSize(size).fillColor('#FFFFFF');
+  lines.forEach((line, i) => {
+    doc.text(line, cx - 100, y + i * lineH, { width: 200, align: 'center', lineBreak: false });
+  });
+}
+
+function sideNote(doc: Doc, text: string, x: number, y: number, width: number, align: 'left' | 'right'): void {
+  doc.font(FONT.body).fontSize(10).fillColor(hex(T.ink));
+  const segments = parseMarks(text);
+  segments.forEach((segment, index) => {
+    doc.font(segment.strong ? FONT.bold : FONT.body);
+    const options = { width, align, lineGap: 1.5, continued: index < segments.length - 1 };
+    if (index === 0) doc.text(segment.text, x, y, options);
+    else doc.text(segment.text, options);
+  });
+}
+
+/**
+ * The Critical Essay Form on one page: the introduction narrows to the
+ * thesis (the star), the body paragraphs stack under it, and the conclusion
+ * widens back out. The notes sit beside the part they explain.
+ */
+export function renderEssayFormHandout(): Promise<Uint8Array> {
+  const form = ESSAY_FORM;
+  const doc = newDoc('Critical Essay Form');
+  header(doc, 'Thesis-Driven Essay · Student handout', 'Critical Essay Form', form.overview);
+
+  const noteW = 128;
+  const shapeW = 210;
+  const cx = PAGE.width / 2;
+  const left = cx - shapeW / 2;
+  const right = cx + shapeW / 2;
+  const leftNoteX = MARGIN.left;
+  const rightNoteX = MARGIN.left + WIDTH - noteW;
+
+  // Introduction: an upside-down triangle, general at the top, narrowing.
+  const introTop = doc.y + 4;
+  const introH = 172;
+  doc.save().polygon([left, introTop], [right, introTop], [cx, introTop + introH]).fill(hex(T.teal)).restore();
+  doc
+    .font(FONT.bold)
+    .fontSize(12)
+    .fillColor('#FFFFFF')
+    .text(form.introduction.label.toUpperCase(), cx - 100, introTop + 12, {
+      width: 200,
+      align: 'center',
+      characterSpacing: 1,
+      lineBreak: false,
+    });
+  centredLines(doc, form.introduction.openings, cx, introTop + 32, 13, 9.5);
+  sideNote(doc, form.introduction.note, rightNoteX, introTop + 22, noteW, 'left');
+
+  // The thesis: the star at the point, the last sentence of the introduction.
+  const starY = introTop + introH + 2;
+  star(doc, cx, starY, 13, T.sunshine, T.ink);
+  eyebrow(doc, form.thesis.label, leftNoteX, starY - 4, T.ink, noteW);
+  doc
+    .save()
+    .moveTo(leftNoteX + noteW - 4, starY)
+    .lineTo(cx - 18, starY)
+    .lineWidth(1.25)
+    .stroke(hex(T.ink))
+    .restore();
+  doc
+    .save()
+    .polygon([cx - 16, starY], [cx - 23, starY - 3.5], [cx - 23, starY + 3.5])
+    .fill(hex(T.ink))
+    .restore();
+  sideNote(doc, form.thesis.note, leftNoteX, starY + 12, noteW, 'left');
+
+  // Body paragraphs: one pill each, in Brian's colours.
+  const pillW = 160;
+  const pillH = 30;
+  const pillGap = 8;
+  const bodyTop = starY + 22;
+  form.body.paragraphs.forEach((label, i) => {
+    const y = bodyTop + i * (pillH + pillGap);
+    const color = (['sunshine', 'coral', 'orange', 'pink'] as const)[i % 4];
+    doc.save().roundedRect(cx - pillW / 2, y, pillW, pillH, pillH / 2).fill(hex(T[color])).restore();
+    doc
+      .font(FONT.bold)
+      .fontSize(11)
+      .fillColor(color === 'sunshine' ? hex(T.ink) : '#FFFFFF')
+      .text(label, cx - pillW / 2, y + 9.5, { width: pillW, align: 'center', lineBreak: false });
+  });
+  const bodyBottom = bodyTop + form.body.paragraphs.length * (pillH + pillGap) - pillGap;
+  const bracketX = cx + pillW / 2 + 12;
+  doc
+    .save()
+    .moveTo(bracketX - 6, bodyTop)
+    .lineTo(bracketX, bodyTop)
+    .lineTo(bracketX, bodyBottom)
+    .lineTo(bracketX - 6, bodyBottom)
+    .lineWidth(1.25)
+    .stroke(hex(T.ink))
+    .restore();
+  sideNote(doc, form.body.note, rightNoteX, bodyTop + 2, noteW, 'left');
+
+  // Conclusion: a triangle the right way up, widening back out.
+  const conTop = bodyBottom + 14;
+  const conH = 172;
+  doc
+    .save()
+    .polygon([cx, conTop], [right, conTop + conH], [left, conTop + conH])
+    .fill(hex(T.teal))
+    .restore();
+  doc
+    .font(FONT.bold)
+    .fontSize(12)
+    .fillColor('#FFFFFF')
+    .text(form.conclusion.label.toUpperCase(), cx - 100, conTop + 86, {
+      width: 200,
+      align: 'center',
+      characterSpacing: 1,
+      lineBreak: false,
+    });
+  centredLines(doc, form.conclusion.moves, cx, conTop + 106, 13, 9.5);
+  sideNote(doc, form.conclusion.note, leftNoteX, conTop + 70, noteW, 'right');
+
+  footers(doc, 'Critical Essay Form · goes with Lessons 1 to 3');
+  return finish(doc);
+}
+
+// ---------------------------------------------------------------------------
+// Prompts and quotations.
+
+function paragraph(doc: Doc, text: string, { x = MARGIN.left, size = BODY_SIZE, color = T.ink as string } = {}): void {
+  const width = MARGIN.left + WIDTH - x;
+  ensureSpace(doc, Math.min(richHeight(doc, text, width, size), 60));
+  writeRich(doc, text, { x, width, size, color });
+  doc.moveDown(0.6);
+}
+
+/** Brian's essay prompts, for the teacher to use or adapt in Lesson 2. */
+export function renderEssayPromptsHandout(): Promise<Uint8Array> {
+  const doc = newDoc('Sample essay prompts');
+  header(doc, 'Thesis-Driven Essay · Lesson 2 · For teachers', 'Sample essay prompts', ESSAY_PROMPTS.intro);
+
+  ESSAY_PROMPTS.prompts.forEach((prompt, index) => {
+    const color = accent(index);
+    const textX = MARGIN.left + 32;
+    const width = MARGIN.left + WIDTH - textX;
+    const height =
+      26 + prompt.paragraphs.reduce((sum, text) => sum + richHeight(doc, text, width, 11) + 8, 0);
+    ensureSpace(doc, height + 30);
+
+    const y = doc.y;
+    doc.circle(MARGIN.left + 11, y + 9, 11).fill(hex(T[color]));
+    doc
+      .font(FONT.bold)
+      .fontSize(10.5)
+      .fillColor('#FFFFFF')
+      .text(String(index + 1), MARGIN.left, y + 4, { width: 22, align: 'center', lineBreak: false });
+    doc
+      .font(FONT.serifBold)
+      .fontSize(15)
+      .fillColor(hex(T.ink))
+      .text(prompt.heading, textX, y + 1, { width });
+    doc.moveDown(0.4);
+    for (const text of prompt.paragraphs) paragraph(doc, text, { x: textX, size: 11 });
+    paragraph(doc, `__${ESSAY_PROMPTS.organized}__`, { x: textX, size: 10, color: T.muted });
+    doc.moveDown(0.6);
+  });
+
+  footers(doc, 'Lesson 2 · Sample essay prompts');
+  return finish(doc);
+}
+
+/** Fill-in-the-blank sentence templates on a raised tile. */
+function templates(doc: Doc, label: string, lines: readonly string[], color: AccentColor): void {
+  const lineH = 19;
+  const tileH = 34 + lines.length * lineH;
+  ensureSpace(doc, tileH + 12);
+  const top = doc.y;
+  doc.save().roundedRect(MARGIN.left, top, WIDTH, tileH, 8).fill(hex(T.paper)).restore();
+  doc.save().roundedRect(MARGIN.left, top, WIDTH, tileH, 8).lineWidth(0.75).stroke(hex(T.rule)).restore();
+  doc.save().roundedRect(MARGIN.left, top, 5, tileH, 2.5).fill(hex(T[color])).restore();
+  eyebrow(doc, label, MARGIN.left + 18, top + 13, T[color], WIDTH - 36);
+  lines.forEach((line, i) => {
+    doc
+      .font(FONT.serif)
+      .fontSize(12)
+      .fillColor(hex(T.ink))
+      .text(line, MARGIN.left + 18, top + 30 + i * lineH, { width: WIDTH - 36, lineBreak: false });
+  });
+  doc.x = MARGIN.left;
+  doc.y = top + tileH + 12;
+}
+
+/** A worked example: serif, set in from the margin behind a coloured rule. */
+function example(doc: Doc, text: string, color: AccentColor): void {
+  const x = MARGIN.left + 18;
+  const width = WIDTH - 18;
+  doc.font(FONT.serif).fontSize(12);
+  const height = doc.heightOfString(text, { width, lineGap: 3 });
+  ensureSpace(doc, height + 10);
+  const top = doc.y;
+  doc.save().rect(MARGIN.left + 4, top, 3, height).fill(hex(T[color])).restore();
+  doc.fillColor(hex(T.ink)).text(text, x, top, { width, lineGap: 3 });
+  doc.moveDown(0.6);
+}
+
+/**
+ * Lesson 5's handout: bringing in quotations and explaining them (Purdue
+ * OWL's "Quoting Others"), then citing them and the works cited page.
+ */
+export function renderQuotingHandout(): Promise<Uint8Array> {
+  const { owl, citing, worksCited } = QUOTING_HANDOUT;
+  const doc = newDoc('Quoting and citing sources');
+  header(doc, 'Thesis-Driven Essay · Lesson 5 · Student handout', 'Quoting and citing sources', QUOTING_HANDOUT.overview);
+
+  sectionHeading(doc, `1  ${owl.heading}`, 'teal');
+  paragraph(doc, `__${owl.source}__`, { size: 9.5, color: T.muted });
+  paragraph(doc, owl.intro);
+  owl.situations.forEach((situation, i) => {
+    const y = doc.y;
+    doc
+      .font(FONT.bold)
+      .fontSize(BODY_SIZE)
+      .fillColor(hex(T.muted))
+      .text(`${LETTERS[i]}.`, MARGIN.left + 10, y, { width: 16, lineBreak: false });
+    doc.y = y;
+    writeRich(doc, situation, { x: MARGIN.left + 28, width: WIDTH - 28 });
+    doc.y += 4;
+  });
+  doc.moveDown(0.6);
+  paragraph(doc, owl.problem);
+  templates(doc, owl.introducing.label, owl.introducing.templates, 'teal');
+  paragraph(doc, owl.that);
+  paragraph(doc, owl.explainIntro);
+  templates(doc, owl.explaining.label, owl.explaining.templates, 'orange');
+
+  sectionHeading(doc, `2  ${citing.heading}`, 'coral');
+  paragraph(doc, citing.intro);
+  paragraph(doc, citing.ways);
+  for (const [way, color] of [
+    [citing.parentheses, 'coral'],
+    [citing.direct, 'pink'],
+  ] as const) {
+    ensureSpace(doc, 80);
+    eyebrow(doc, way.label, MARGIN.left, doc.y, T[color]);
+    doc.y += 14;
+    example(doc, way.example, color);
+    paragraph(doc, way.note);
+    if ('questionExample' in way) {
+      example(doc, way.questionExample, color);
+      paragraph(doc, way.questionNote, { size: 10, color: T.muted });
+    } else {
+      example(doc, way.thatExample, color);
+      paragraph(doc, way.thatNote);
+    }
+    doc.moveDown(0.4);
+  }
+
+  sectionHeading(doc, `3  ${worksCited.heading}`, 'sunshine');
+  paragraph(doc, worksCited.text);
+  ensureSpace(doc, 30);
+  doc
+    .font(FONT.body)
+    .fontSize(9)
+    .fillColor(hex(T.teal))
+    .text(worksCited.link, MARGIN.left, doc.y, { width: WIDTH, link: worksCited.link, underline: true });
+
+  footers(doc, 'Lesson 5 · Quoting and citing sources');
   return finish(doc);
 }
