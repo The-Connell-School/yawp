@@ -1,6 +1,6 @@
 import {
+  isComposerTopic,
   isLoungePostKind,
-  isLoungeTopic,
   type LoungePostKindKey,
   type LoungeTopicKey,
 } from './topics';
@@ -15,10 +15,12 @@ type Result<T> = { ok: true; value: T } | { ok: false; errors: Errors };
 
 export type LoungePostInput = {
   kind: LoungePostKindKey;
-  topic: LoungeTopicKey;
+  /** Null when the teacher picked no topic. */
+  topic: LoungeTopicKey | null;
   title: string;
   body: string;
   askStaff: boolean;
+  /** Always false for new posts: anything private goes through Contact Us. */
   askPrivately: boolean;
 };
 
@@ -43,21 +45,20 @@ export function parseLoungePostInput(input: Input): Result<LoungePostInput> {
   const topic = text(input.topic);
   const title = text(input.title);
   const body = text(input.body);
-  if (!isLoungePostKind(kind)) errors.kind = 'Choose Question, Share, or Win.';
-  if (!isLoungeTopic(topic)) errors.topic = 'Choose a topic.';
+  if (!isLoungePostKind(kind)) errors.kind = 'Choose General question, Share an assignment, or Win.';
+  if (topic && !isComposerTopic(topic)) errors.topic = 'Choose a topic from the list, or none.';
   checkTitle(title, errors);
   checkBody(body, errors);
   if (Object.keys(errors).length > 0) return { ok: false, errors };
-  const askPrivately = checked(input.askPrivately);
   return {
     ok: true,
     value: {
       kind: kind as LoungePostKindKey,
-      topic: topic as LoungeTopicKey,
+      topic: topic ? (topic as LoungeTopicKey) : null,
       title,
       body,
-      askStaff: askPrivately || checked(input.askStaff),
-      askPrivately,
+      askStaff: checked(input.askStaff),
+      askPrivately: false,
     },
   };
 }

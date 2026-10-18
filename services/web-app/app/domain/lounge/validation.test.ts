@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { parseLoungePostEdit, parseLoungePostInput, parseLoungeReplyEdit, parseLoungeReplyInput } from './validation';
-import { LOUNGE_TOPICS } from './topics';
+import { COMPOSER_TOPICS } from './topics';
 
 const goodPost = {
   kind: 'QUESTION',
@@ -27,9 +27,27 @@ describe('parseLoungePostInput', () => {
     });
   });
 
-  test('asking privately implies asking the Yawp team', () => {
+  test('new posts are never private: private notes go through Contact Us', () => {
     const result = parseLoungePostInput({ ...goodPost, askStaff: '', askPrivately: 'on' });
-    expect(result.ok && result.value).toMatchObject({ askStaff: true, askPrivately: true });
+    expect(result.ok && result.value).toMatchObject({ askStaff: false, askPrivately: false });
+  });
+
+  test('the topic is optional: no topic is stored as null', () => {
+    const result = parseLoungePostInput({ ...goodPost, topic: '' });
+    expect(result.ok && result.value.topic).toBeNull();
+  });
+
+  test('takes the new topics and refuses the retired one on a new post', () => {
+    expect(parseLoungePostInput({ ...goodPost, topic: 'prewriting' }).ok).toBe(true);
+    expect(parseLoungePostInput({ ...goodPost, topic: 'lessons-learned' }).ok).toBe(true);
+    const retired = parseLoungePostInput({ ...goodPost, topic: 'ap-history' });
+    expect(retired.ok).toBe(false);
+    if (!retired.ok) expect(retired.errors.topic).toBeDefined();
+  });
+
+  test('names the three post types when the type is missing', () => {
+    const result = parseLoungePostInput({ ...goodPost, kind: '' });
+    expect(!result.ok && result.errors.kind).toBe('Choose General question, Share an assignment, or Win.');
   });
 
   test('rejects an unknown kind or topic', () => {
@@ -58,8 +76,8 @@ describe('parseLoungePostInput', () => {
     }
   });
 
-  test('every topic key is accepted', () => {
-    for (const topic of LOUNGE_TOPICS) {
+  test('every composer topic key is accepted', () => {
+    for (const topic of COMPOSER_TOPICS) {
       expect(parseLoungePostInput({ ...goodPost, topic: topic.key }).ok).toBe(true);
     }
   });

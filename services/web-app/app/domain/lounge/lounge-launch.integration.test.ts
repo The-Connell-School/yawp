@@ -228,7 +228,7 @@ suite('Faculty Lounge launch features against the database', () => {
   test('topic counts match the feed, busiest first', async () => {
     const counts = await lounge.listLoungeTopicCounts(maria());
     const routines = counts.find((c) => c.topic === 'classroom-routines');
-    expect(routines?.label).toBe('Classroom Routines');
+    expect(routines?.label).toBe('Classroom routines');
     expect(routines?.count).toBeGreaterThanOrEqual(2);
     for (let i = 1; i < counts.length; i++) expect(counts[i].count).toBeLessThanOrEqual(counts[i - 1].count);
   });

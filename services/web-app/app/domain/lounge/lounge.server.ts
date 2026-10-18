@@ -15,14 +15,17 @@ import { LOUNGE_TEAM_ACCOUNT_NAME, loungeByline, type LoungeDisplayNameStyleKey 
 import { LOUNGE_TEAM_MENTION_ID, mentionedUserIds, mentionsTeam, plainTextWithMentions } from './mentions';
 import { sortByTop } from './ranking';
 import { assignmentShareSnapshot } from './shares';
-import { loungeTopicLabel, type LoungePostKindKey } from './topics';
+import { kindAttachesLesson, loungeKindLabel, loungeTopicLabel, type LoungePostKindKey } from './topics';
 import type { LoungePostInput, LoungeReplyInput } from './validation';
 import { baseVideoContentType, type LoungeVideo } from './video';
 import { hasPlaceholderText, type LoungeSchedule } from './launch';
 import { avatarToneFor, firstNameOf, initialsFor, previewFor } from './avatar';
 
 export type CreateLoungePostInput = LoungePostInput & {
-  /** One of the author's own assignments to share, frozen at post time. */
+  /**
+   * One of the author's own assignments to share, frozen at post time. Only
+   * a shared assignment carries one; on any other kind it is ignored.
+   */
   attachAssignmentId?: string | null;
   /** Yawp team only; ignored for teachers. */
   video?: LoungeVideo | null;
@@ -205,8 +208,9 @@ type SummaryRow = Prisma.LoungePostGetPayload<{ select: ReturnType<typeof summar
 export type LoungePostSummary = {
   id: string;
   kind: LoungePostKindKey;
-  topic: string;
-  topicLabel: string;
+  /** Null when the post has no topic. */
+  topic: string | null;
+  topicLabel: string | null;
   title: string;
   createdAt: string;
   author: LoungeByline;
@@ -236,7 +240,7 @@ function toSummary(row: SummaryRow, viewer: LoungeViewer): LoungePostSummary {
     id: row.id,
     kind: row.kind,
     topic: row.topic,
-    topicLabel: loungeTopicLabel(row.topic),
+    topicLabel: row.topic ? loungeTopicLabel(row.topic) : null,
     title: row.title,
     createdAt: row.createdAt.toISOString(),
     author: bylineFor(row.author, row.organization?.name, row.author.isAdmin),
@@ -379,6 +383,72 @@ export type LoungeShareDetail = {
   useCount: number;
   viewerUsed: boolean;
 };
+
+/** The post either side of one in the Latest feed, for reading straight through. */
+export type LoungeAdjacentPost = {
+  id: string;
+  title: string;
+  kindLabel: string;
+  authorName: string;
+  excerpt: string;
+};
+
+const adjacentSelect = {
+  id: true,
+  title: true,
+  kind: true,
+  body: true,
+  organization: { select: { name: true } },
+  author: { select: authorSelect },
+} satisfies Prisma.LoungePostSelect;
+
+function toAdjacent(row: Prisma.LoungePostGetPayload<{ select: typeof adjacentSelect }> | null): LoungeAdjacentPost | null {
+  if (!row) return null;
+  return {
+    id: row.id,
+    title: row.title,
+    kindLabel: loungeKindLabel(row.kind),
+    authorName: bylineFor(row.author, row.organization?.name, row.author.isAdmin).name,
+    excerpt: excerptOf(row.body, 140),
+  };
+}
+
+/**
+ * Next is the next older post and previous the next newer one, in the
+ * Latest feed's order (createdAt, then id), among the posts the viewer sees
+ * in the feed. Pinned posts are ordinary posts here.
+ */
+export async function getAdjacentLoungePosts(
+  viewer: LoungeViewer,
+  post: { id: string; createdAt: Date | string },
+  now: Date = new Date()
+): Promise<{ previous: LoungeAdjacentPost | null; next: LoungeAdjacentPost | null }> {
+  const createdAt = new Date(post.createdAt);
+  const base = feedWhere(viewer, null, now);
+  const [older, newer] = await Promise.all([
+    prisma.loungePost.findFirst({
+      where: {
+        AND: [
+          base,
+          { OR: [{ createdAt: { lt: createdAt } }, { createdAt, id: { lt: post.id } }] },
+        ],
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: adjacentSelect,
+    }),
+    prisma.loungePost.findFirst({
+      where: {
+        AND: [
+          base,
+          { OR: [{ createdAt: { gt: createdAt } }, { createdAt, id: { gt: post.id } }] },
+        ],
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: adjacentSelect,
+    }),
+  ]);
+  return { previous: toAdjacent(newer), next: toAdjacent(older) };
+}
 
 export type LoungeThread = {
   post: Omit<LoungePostSummary, 'attachment'> & {
@@ -562,7 +632,7 @@ export async function createLoungePost(params: {
 }): Promise<{ postId: string; notifications: LoungeNotification[] }> {
   const { viewer, input } = params;
   let snapshot: ReturnType<typeof assignmentShareSnapshot> | null = null;
-  if (input.attachAssignmentId) {
+  if (input.attachAssignmentId && kindAttachesLesson(input.kind)) {
     const source = params.membershipId
       ? await prisma.assignment.findFirst({
           where: { id: input.attachAssignmentId, ...ownAssignmentWhere(params.membershipId) },
@@ -1385,7 +1455,9 @@ export async function listLoungeTopicCounts(
     _count: { _all: true },
   });
   return groups
-    .map((group) => ({ topic: group.topic, label: loungeTopicLabel(group.topic), count: group._count._all }))
+    .flatMap((group) =>
+      group.topic ? [{ topic: group.topic, label: loungeTopicLabel(group.topic), count: group._count._all }] : []
+    )
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 

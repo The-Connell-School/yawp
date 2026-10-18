@@ -2371,8 +2371,8 @@ model LoungePost {
   organizationId   String?
   organization     Organization?        @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   kind             LoungePostKind
-  /// One of LOUNGE_TOPICS in app/domain/lounge/topics.ts.
-  topic            String
+  /// One of LOUNGE_TOPICS in app/domain/lounge/topics.ts, or null for no topic.
+  topic            String?
   title            String
   body             String
   visibility       LoungePostVisibility @default(COMMUNITY)

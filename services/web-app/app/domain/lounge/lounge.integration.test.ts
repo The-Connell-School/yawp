@@ -83,7 +83,7 @@ suite('Teacher Lounge against the database', () => {
     const summary = feed.posts.find((post) => post.id === postId);
     expect(summary).toMatchObject({
       kind: 'QUESTION',
-      topicLabel: 'Daily Pages',
+      topicLabel: 'Class starters',
       author: { name: 'Maria S.', detail: `Cristo Rey ${stamp}` },
       replyCount: 0,
       helpfulCount: 0,

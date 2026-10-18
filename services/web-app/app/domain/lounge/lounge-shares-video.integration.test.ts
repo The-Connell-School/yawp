@@ -153,12 +153,14 @@ suite('Lounge shares, video, and pinning against the database', () => {
     expect(await lounge.getSharePromptForViewer(maria(), attachment!.id, 'some-other-type')).toBeNull();
   });
 
-  test('a share inside a private question cannot be used by other teachers', async () => {
+  // New posts can no longer be private (round 6), but private posts made
+  // before then keep their privacy, attachments included.
+  test('a share inside a private post cannot be used by other teachers', async () => {
     const { postId } = await lounge.createLoungePost({
       viewer: devin(),
       organizationId: ids.orgA,
       membershipId: ids.devinMembership,
-      input: { ...basePost, kind: 'QUESTION', askStaff: true, askPrivately: true, attachAssignmentId: ids.assignment },
+      input: { ...basePost, askStaff: true, askPrivately: true, attachAssignmentId: ids.assignment },
     });
     const own = await lounge.getLoungeThread(devin(), postId);
     const attachmentId = own!.post.attachment!.id;
