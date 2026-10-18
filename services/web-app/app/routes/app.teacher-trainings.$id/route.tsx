@@ -11,6 +11,8 @@ import { CircularProgress } from '~/components/ui/circular-progress';
 import { prisma } from '~/utils/db.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { cn } from '~/utils/misc';
+import { isLoungeCommunityEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { LOUNGE_NAME } from '~/domain/lounge/launch';
 import {
   getTeacherTrainingProgressPercent,
   isTeacherTrainingModuleComplete,
@@ -69,7 +71,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Teacher training not found', { status: 404 });
   }
 
-  return dataResponse({ teacherTraining });
+  // Trainings live in the Lounge: with the community on it is the Faculty
+  // Lounge's Trainings tab, otherwise the Teacher's Lounge page itself.
+  const viewer = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } });
+  const communityEnabled =
+    Boolean(viewer?.isAdmin) || (await isLoungeCommunityEnabled(profile.organization.id));
+
+  return dataResponse({ teacherTraining, communityEnabled });
 }
 
 function formatDuration(seconds: number | null): string {
@@ -87,7 +95,7 @@ function formatDuration(seconds: number | null): string {
 }
 
 export default function TeacherTrainingRoute() {
-  const { teacherTraining } = useLoaderData<typeof loader>();
+  const { teacherTraining, communityEnabled } = useLoaderData<typeof loader>();
 
   const totalModules = teacherTraining.teacherTrainingModules.length;
   const completedModules = teacherTraining.teacherTrainingModules.filter(
@@ -149,9 +157,9 @@ export default function TeacherTrainingRoute() {
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             <Button variant="outline" asChild>
-              <Link to="/app">
+              <Link to="/app/teacher-trainings">
                 <ChevronLeft className="mr-2 h-4 w-4" />
-                Back to Dashboard
+                {communityEnabled ? `Back to the ${LOUNGE_NAME}` : "Back to Teacher's Lounge"}
               </Link>
             </Button>
           </div>
@@ -192,7 +200,7 @@ export default function TeacherTrainingRoute() {
                   <div className="flex items-center gap-2">
                     <Play className="h-4 w-4 min-w-fit opacity-50" />
                     <span className="min-w-fit font-medium">
-                      {totalModules} modules
+                      {totalModules} {totalModules === 1 ? 'module' : 'modules'}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">

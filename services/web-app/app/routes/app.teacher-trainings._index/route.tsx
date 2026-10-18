@@ -8,6 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { prisma } from '~/utils/db.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { isLoungeCommunityEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { LoungeMasthead } from '~/components/lounge/lounge-masthead';
+import { trainingCardCounts } from '~/utils/teacher-training-counts';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -50,26 +53,44 @@ export async function loader({ request }: LoaderFunctionArgs) {
     orderBy: { createdAt: 'desc' },
   });
 
-  return dataResponse({ teacherTrainings });
+  const viewer = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isAdmin: true },
+  });
+  const communityEnabled =
+    Boolean(viewer?.isAdmin) ||
+    (await isLoungeCommunityEnabled(profile.organization.id));
+
+  return dataResponse({ teacherTrainings, communityEnabled });
 }
 
 export default function TeacherTrainingsRoute() {
-  const { teacherTrainings } = useLoaderData<typeof loader>();
+  const { teacherTrainings, communityEnabled } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
-      <div className="flex w-full justify-between border-b bg-secondary">
-        <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
-          <div className="flex flex-col">
-            <h2>Teacher's Lounge</h2>
-            <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
-              Enjoy your courses and resources.
-            </p>
+      {communityEnabled ? (
+        <LoungeMasthead active="trainings" />
+      ) : (
+        <div className="flex w-full justify-between border-b bg-secondary">
+          <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
+            <div className="flex flex-col">
+              <h2>Teacher's Lounge</h2>
+              <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
+                Enjoy your courses and resources.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
-      <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
+      )}
+      <div
+        className={
+          communityEnabled
+            ? 'mx-auto w-full max-w-[960px] px-4 pb-14 pt-7 sm:px-8'
+            : 'mx-auto w-full max-w-screen-lg p-3 sm:p-5'
+        }
+      >
         <div className="flex flex-1 flex-col">
           <div className="flex-1 overflow-y-auto">
             {teacherTrainings.length === 0 ? (
@@ -116,10 +137,8 @@ export default function TeacherTrainingsRoute() {
                         {course.description || 'No description'}
                       </p>
                       <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
-                        <span>
-                          {course.teacherTrainingModules.length} modules
-                        </span>
-                        <span>{course.resources.length} resources</span>
+                        <span>{trainingCardCounts(course).modules}</span>
+                        <span>{trainingCardCounts(course).resources}</span>
                       </div>
                     </CardContent>
                   </Card>

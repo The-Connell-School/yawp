@@ -11,6 +11,8 @@ import {
   FREE_TIER_INAPP_V2_FLAG,
   UNIFIED_SIGN_ON_FLAG,
   FREE_TIER_ONBOARDING_V2_FLAG,
+  LOUNGE_COMMUNITY_FLAG,
+  THESIS_ESSAY_DECKS_FLAG,
   FEATURE_FLAG_KEYS,
   isFreeTierGloballyEnabled,
   featureFlagSettingName,
@@ -91,6 +93,17 @@ describe('feature flag registry', () => {
     expect(evaluateFeatureFlag(parseFeatureFlagValue(null))).toBe(false);
   });
 
+  test('has the Teacher\'s Lounge community flag, stored under its own row', () => {
+    expect(LOUNGE_COMMUNITY_FLAG).toBe('teacher_lounge_community');
+    expect(isFeatureFlagKey(LOUNGE_COMMUNITY_FLAG)).toBe(true);
+    expect(featureFlagSettingName(LOUNGE_COMMUNITY_FLAG)).toBe(
+      'feature_flag.teacher_lounge_community'
+    );
+    expect(FEATURE_FLAGS[LOUNGE_COMMUNITY_FLAG].label).toBe(
+      "Teacher's Lounge community"
+    );
+  });
+
   test('lists every registered flag key', () => {
     expect(FEATURE_FLAG_KEYS).toEqual([
       LESSON_PLANNER_FLAG,
@@ -100,10 +113,19 @@ describe('feature flag registry', () => {
       UNIFIED_SIGN_ON_FLAG,
       FREE_TIER_ONBOARDING_V2_FLAG,
       CLASS_CODE_UNIQUE_FLAG,
+      LOUNGE_COMMUNITY_FLAG,
+      THESIS_ESSAY_DECKS_FLAG,
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
       SIGNON_TEACHER_PROMPTS_FLAG,
     ]);
+  });
+
+  test('has the Thesis-Driven Essay decks flag', () => {
+    expect(FEATURE_FLAG_KEYS).toContain(THESIS_ESSAY_DECKS_FLAG);
+    expect(featureFlagSettingName(THESIS_ESSAY_DECKS_FLAG)).toBe(
+      'feature_flag.thesis_essay_decks'
+    );
   });
 
   test('rejects anything that is not a registered flag', () => {

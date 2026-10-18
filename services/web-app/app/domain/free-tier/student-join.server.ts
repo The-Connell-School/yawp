@@ -141,7 +141,9 @@ export async function registerFreeTierStudent({
   joinToken: string;
   client?: Prisma.TransactionClient;
 }) {
-  const db = client ?? prisma;
+  // Typed as the transaction client: comparing the full client against it
+  // exceeds TypeScript's depth limit now that the schema is larger.
+  const db = client ?? (prisma as unknown as Prisma.TransactionClient);
   const usernameResult = validateUsername(rawUsername);
   if (!usernameResult.ok) {
     const suggestions = await suggestAvailableUsernames(rawUsername);

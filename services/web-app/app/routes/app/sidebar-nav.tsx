@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
+import { LOUNGE_NAME } from '~/domain/lounge/launch';
 import type { useUser } from '~/hooks/useUser';
 
 type User = ReturnType<typeof useUser>;
@@ -28,6 +29,8 @@ export type SidebarNavLink = {
   end?: boolean;
   icon: React.ReactNode;
   requires?: { OR: RequiresFn[] } | { AND: RequiresFn[] } | RequiresFn;
+  /** Other paths that should also highlight this item. */
+  alsoActiveFor?: string[];
 };
 
 export type SidebarNavSection = {
@@ -133,6 +136,40 @@ export const FLAT_SIDEBAR_SECTIONS: SidebarNavSection[] = [
   },
 ];
 
+const LOUNGE_TRAININGS_PATH = '/app/teacher-trainings';
+const LOUNGE_COMMUNITY_PATH = '/app/lounge';
+
+/**
+ * With the Lounge community flag on, the existing Lounge item becomes the
+ * Faculty Lounge: it opens the community feed and stays highlighted on the course grid, which
+ * keeps its URL one tab away. Off: the item is untouched.
+ */
+export function applyLoungeCommunityLink(
+  sections: SidebarNavSection[],
+  enabled: boolean,
+): SidebarNavSection[] {
+  if (!enabled) return sections;
+  return sections.map((section) => ({
+    ...section,
+    links: section.links.map((link) =>
+      link.to === LOUNGE_TRAININGS_PATH
+        ? { ...link, label: LOUNGE_NAME, to: LOUNGE_COMMUNITY_PATH, alsoActiveFor: [LOUNGE_TRAININGS_PATH] }
+        : link,
+    ),
+  }));
+}
+
+export function isSidebarLinkActive(
+  link: Pick<SidebarNavLink, 'to' | 'alsoActiveFor'>,
+  pathname: string,
+  isAppNavLinkActive: (linkTo: string, pathname: string) => boolean,
+) {
+  return (
+    isAppNavLinkActive(link.to, pathname) ||
+    (link.alsoActiveFor ?? []).some((path) => isAppNavLinkActive(path, pathname))
+  );
+}
+
 function linkIsVisible(
   link: SidebarNavLink,
   user: User,
@@ -181,10 +218,14 @@ export function SidebarNavLinks({
   isAppNavLinkActive,
   forceFullNavigation = false,
 }: SidebarNavLinksProps) {
-  const lessonPlannerFlagOn =
-    useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root')
-      ?.lessonPlannerEnabled ?? false;
-  const visibleSections = getVisibleSidebarSections(sections, user)
+  const rootData =
+    useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
+  const lessonPlannerFlagOn = rootData?.lessonPlannerEnabled ?? false;
+  const loungeCommunityOn = rootData?.loungeCommunityEnabled ?? false;
+  const visibleSections = getVisibleSidebarSections(
+    applyLoungeCommunityLink(sections, loungeCommunityOn),
+    user,
+  )
     .map((section) => ({
       ...section,
       links: section.links.filter(
@@ -207,7 +248,7 @@ export function SidebarNavLinks({
           ) : null}
           <div className="grid gap-1">
             {section.links.map((link) => {
-              const isActive = isAppNavLinkActive(link.to, pathname);
+              const isActive = isSidebarLinkActive(link, pathname, isAppNavLinkActive);
               const className = cn(
                 'flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
                 {

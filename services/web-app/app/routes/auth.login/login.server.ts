@@ -31,7 +31,9 @@ export async function loginAction(
   { request }: ActionFunctionArgs,
   options: { client?: Prisma.TransactionClient } = {}
 ) {
-  const db = options.client ?? prisma;
+  // Typed as the transaction client: comparing the full client against it
+  // exceeds TypeScript's depth limit now that the schema is larger.
+  const db = options.client ?? (prisma as unknown as Prisma.TransactionClient);
   await requireAnonymous(request);
   const { error, data } = await parseFormData(request, LoginSchema);
   if (error) return validationError(error);
