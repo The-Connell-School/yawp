@@ -27,7 +27,7 @@ const fetcher: {
 };
 
 const actualReactRouter = await import('react-router');
-let rootData: { classSummaryModelsEnabled?: boolean } | undefined;
+let rootData: { assignmentSummaryModelsEnabled?: boolean } | undefined;
 mock.module('react-router', () => ({
   ...actualReactRouter,
   useFetcher: () => fetcher,
@@ -133,7 +133,7 @@ afterEach(() => {
 
 describe('ClassInsightsPanel', () => {
   it('offers models to teach from when the school has the feature on', () => {
-    rootData = { classSummaryModelsEnabled: true };
+    rootData = { assignmentSummaryModelsEnabled: true };
     const el = render(
       <ClassInsightsPanel
         classAssignmentId="ca-1"
@@ -147,7 +147,7 @@ describe('ClassInsightsPanel', () => {
   });
 
   it('leaves models to teach from out while the feature is off', () => {
-    rootData = { classSummaryModelsEnabled: false };
+    rootData = { assignmentSummaryModelsEnabled: false };
     const el = render(
       <ClassInsightsPanel
         classAssignmentId="ca-1"
@@ -390,7 +390,7 @@ describe('ClassInsightsPanel', () => {
     );
 
     const panelHeading = Array.from(el.querySelectorAll('h3')).find((heading) =>
-      heading.textContent?.includes('Class performance summary')
+      heading.textContent?.includes('Assignment summary')
     )!;
     const categoryHeading = Array.from(el.querySelectorAll('span')).find(
       (span) => span.textContent === 'Thesis/Content'

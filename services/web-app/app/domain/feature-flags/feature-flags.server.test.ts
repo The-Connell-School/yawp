@@ -20,7 +20,7 @@ const {
   setFeatureFlag,
   findUnknownOrganizationIds,
 } = await import('./feature-flags.server');
-const { SIGNON_TEACHER_PROMPTS_FLAG, GUIDED_TOURS_FLAG, DEMO_FEEDBACK_FLAG, INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, FREE_TIER_INAPP_V2_FLAG, UNIFIED_SIGN_ON_FLAG, FREE_TIER_ONBOARDING_V2_FLAG, CLASS_SUMMARY_MODELS_FLAG } = await import(
+const { SIGNON_TEACHER_PROMPTS_FLAG, GUIDED_TOURS_FLAG, DEMO_FEEDBACK_FLAG, INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, FREE_TIER_INAPP_V2_FLAG, UNIFIED_SIGN_ON_FLAG, FREE_TIER_ONBOARDING_V2_FLAG, ASSIGNMENT_SUMMARY_MODELS_FLAG } = await import(
   './feature-flags'
 );
 
@@ -180,11 +180,11 @@ describe('feature flags (server)', () => {
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
       SIGNON_TEACHER_PROMPTS_FLAG,
-      CLASS_SUMMARY_MODELS_FLAG,
+      ASSIGNMENT_SUMMARY_MODELS_FLAG,
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[2]).toMatchObject({ key: FREE_TIER_FLAG, mode: 'off', enabled: false });
-    expect(flags.find((flag) => flag.key === CLASS_SUMMARY_MODELS_FLAG)).toMatchObject({ mode: 'off', enabled: false });
+    expect(flags.find((flag) => flag.key === ASSIGNMENT_SUMMARY_MODELS_FLAG)).toMatchObject({ mode: 'off', enabled: false });
     expect(flags[0]).toMatchObject({
       key: LESSON_PLANNER_FLAG,
       mode: 'off',
@@ -212,7 +212,7 @@ describe('feature flags (server)', () => {
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
       SIGNON_TEACHER_PROMPTS_FLAG,
-      CLASS_SUMMARY_MODELS_FLAG,
+      ASSIGNMENT_SUMMARY_MODELS_FLAG,
     ]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });
     const where = prisma.setting.findMany.mock.calls[0]?.[0].where;

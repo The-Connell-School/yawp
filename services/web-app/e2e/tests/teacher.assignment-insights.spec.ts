@@ -33,7 +33,7 @@ test.describe('teacher assignment-level class insights', () => {
       `/app/my-classes/${e2eContext.classId}?tab=documents&classAssignmentId=${e2eContext.classAssignmentId}`
     );
     await page
-      .getByRole('link', { name: /class performance summary/i })
+      .getByRole('link', { name: /assignment summary/i })
       .click();
     await expect(page).toHaveURL(
       new RegExp(`/summary/${e2eContext.assignmentId}`)
@@ -41,7 +41,7 @@ test.describe('teacher assignment-level class insights', () => {
 
     // The panel is present but empty until the teacher asks for a summary.
     const panel = page.getByRole('heading', {
-      name: /class performance summary/i,
+      name: /assignment summary/i,
     });
     await expect(panel).toBeVisible();
 

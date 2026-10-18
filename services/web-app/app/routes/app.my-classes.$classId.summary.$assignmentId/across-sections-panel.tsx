@@ -130,7 +130,7 @@ export function AcrossSectionsPanel({
       <div className="flex flex-col items-stretch gap-3 border-b bg-gradient-to-r from-primary/[0.07] to-transparent p-4 @xl:flex-row @xl:items-start @xl:justify-between">
         <div className="min-w-0">
           <h3 className="text-base font-semibold leading-tight text-foreground">
-            Class performance summary
+            Assignment summary
           </h3>
           <p
             className="mt-0.5 text-base/7 text-muted-foreground [overflow-wrap:anywhere] @sm:text-sm/6"
@@ -181,7 +181,7 @@ export function AcrossSectionsPanel({
             className="text-sm text-muted-foreground"
             data-testid="across-sections-empty"
           >
-            None of these sections has a class performance summary yet.
+            None of these sections has an assignment summary yet.
             Generate one from a section to start comparing them.
           </p>
         ) : (

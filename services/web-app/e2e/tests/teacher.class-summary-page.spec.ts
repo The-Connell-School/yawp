@@ -109,7 +109,7 @@ test.describe('teacher class summary full page', () => {
     await page.waitForLoadState('networkidle');
 
     await page
-      .getByRole('link', { name: /class performance summary/i })
+      .getByRole('link', { name: /assignment summary/i })
       .click();
 
     // Forward navigation changes the URL — deep-linkable, not a sheet toggle.
@@ -174,7 +174,7 @@ test.describe('teacher class summary full page', () => {
     await page.waitForLoadState('networkidle');
 
     await page
-      .getByRole('link', { name: /class performance summary/i })
+      .getByRole('link', { name: /assignment summary/i })
       .click();
     await page.waitForURL(
       `/app/my-classes/${e2eContext.classId}/summary/${e2eContext.assignmentId}?tab=documents&classAssignmentId=${e2eContext.classAssignmentId}`
@@ -231,7 +231,7 @@ test.describe('teacher class summary full page', () => {
     await page.waitForLoadState('networkidle');
 
     await page
-      .getByRole('link', { name: /class performance summary/i })
+      .getByRole('link', { name: /assignment summary/i })
       .click();
     await page.waitForURL(
       `/app/my-classes/${e2eContext.classId}/summary/${e2eContext.assignmentId}?tab=documents&classAssignmentId=${e2eContext.classAssignmentId}`
@@ -257,7 +257,7 @@ test.describe('teacher class summary full page', () => {
     );
     await page.waitForLoadState('networkidle');
     await expect(
-      page.getByRole('link', { name: /class performance summary/i })
+      page.getByRole('link', { name: /assignment summary/i })
     ).toHaveCount(0);
 
     await page.goto(

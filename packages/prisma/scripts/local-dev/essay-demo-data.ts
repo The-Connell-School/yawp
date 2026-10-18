@@ -1,7 +1,7 @@
 /**
  * The essay demo: one English 10 class, two thesis-driven essay assignments,
  * and a full class set of real-length essays on each — graded, with the spread
- * of strengths and misses a class summary is built to read.
+ * of strengths and misses an assignment summary is built to read.
  *
  * The rest of the local-dev seed is a QA bench: one of every exit ticket, a
  * Daily Pages set, a class starter, four personas in four lifecycle states on
@@ -13,7 +13,7 @@
  * weakest in two categories, and so that in each of those there is a paper
  * strong enough to hold up as a model and a "near miss" — solid everywhere
  * but that one category — for the class to learn from. That is the shape the
- * class summary's models picker looks for.
+ * assignment summary's models picker looks for.
  */
 
 export const ESSAY_DEMO_CLASS_CODE = 'DEV-CLASS-ESSAYS';

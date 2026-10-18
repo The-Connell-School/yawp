@@ -306,12 +306,12 @@ export default function LessonPlannerHowItWorksRoute() {
             media={
               <Clip
                 name="summary"
-                label="On a Class Summary, the Plan this lesson link opens the planner with the message already written."
+                label="On an Assignment Summary, the Plan this lesson link opens the planner with the message already written."
               />
             }
           >
             <Eyebrow>Or start from your data</Eyebrow>
-            <H3>“Plan this lesson,” from any Class Summary</H3>
+            <H3>“Plan this lesson,” from any Assignment Summary</H3>
             <Copy>
               When YAWP! summarizes how a class did on an assignment, each
               suggested next step gets a{' '}

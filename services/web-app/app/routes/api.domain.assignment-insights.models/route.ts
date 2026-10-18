@@ -6,7 +6,7 @@ import {
   type ClassModelInput,
   type ClassModelsSummary,
 } from '~/domain/assignment-insights/select-class-models';
-import { isClassSummaryModelsEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { isAssignmentSummaryModelsEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { prisma } from '~/utils/db.server';
 import { canManageGrades, getGradingActor } from '~/utils/grading-auth.server';
 
@@ -29,7 +29,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return fail(403, 'Only teachers can view class insights.');
   }
 
-  if (!(await isClassSummaryModelsEnabled(actor.organizationId))) {
+  if (!(await isAssignmentSummaryModelsEnabled(actor.organizationId))) {
     return fail(404, 'Not found.');
   }
 

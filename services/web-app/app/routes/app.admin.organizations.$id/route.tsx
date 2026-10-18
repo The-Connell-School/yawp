@@ -254,7 +254,7 @@ export default function OrganizationRoute() {
                         className="mt-1 h-4 w-4"
                       />
                       <span className="min-w-0">
-                        <span className="block font-medium">Class Summary</span>
+                        <span className="block font-medium">Assignment Summary</span>
                         <span className="block text-xs text-muted-foreground">
                           Enables assignment-level class summaries.
                         </span>

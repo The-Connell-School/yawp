@@ -147,7 +147,7 @@ describe('ClassSummaryRoute', () => {
     expect(
       el.querySelector('[data-testid="class-summary-page-title"]')?.textContent
     ).toBe('The Gilded Age DBQ');
-    expect(el.textContent).toContain('Class performance summary');
+    expect(el.textContent).toContain('Assignment summary');
     expect(
       el.querySelector('[data-testid="class-summary-insights-disabled"]')
     ).toBeFalsy();
@@ -218,7 +218,7 @@ describe('ClassSummaryRoute', () => {
     expect(
       el.querySelector('[data-testid="across-sections-panel"]')
     ).toBeFalsy();
-    expect(el.textContent).toContain('Class performance summary');
+    expect(el.textContent).toContain('Assignment summary');
 
     const toggle = el.querySelector(
       '[data-testid="class-summary-scope-toggle"]'

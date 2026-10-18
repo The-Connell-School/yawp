@@ -2807,7 +2807,7 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                   <Link
                     to={`/app/my-classes/${data.klass.id}/summary/${selectedClassAssignment.id}?${searchParams.toString()}`}
                   >
-                    Class performance summary
+                    Assignment summary
                   </Link>
                 </Button>
               </div>

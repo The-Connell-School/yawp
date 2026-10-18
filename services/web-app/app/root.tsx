@@ -60,7 +60,7 @@ import {
 } from './utils/preview-access.server.ts';
 import { uaPartnerMiddleware } from './utils/ua-partner.server.ts';
 import {
-  isClassSummaryModelsEnabled,
+  isAssignmentSummaryModelsEnabled,
   isLessonPlannerEnabled,
 } from './domain/feature-flags/feature-flags.server.ts';
 import { getRootMembershipWhere } from './utils/root-membership-filter.server.ts';
@@ -134,7 +134,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         previewAccessSeat: null,
         blackboardLtiMockEnabled: false,
         lessonPlannerEnabled: false,
-        classSummaryModelsEnabled: false,
+        assignmentSummaryModelsEnabled: false,
         impersonation: { isReadOnly: false, impersonatorUserId: null },
         toast: null,
       },
@@ -234,10 +234,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     bannerWarning,
     localDevAuthEnabled: isLocalDevAuthEnabled(),
   });
-  const [lessonPlannerEnabled, classSummaryModelsEnabled] = userId
+  const [lessonPlannerEnabled, assignmentSummaryModelsEnabled] = userId
     ? await Promise.all([
         isLessonPlannerEnabled(membership?.organizationId ?? null),
-        isClassSummaryModelsEnabled(membership?.organizationId ?? null),
+        isAssignmentSummaryModelsEnabled(membership?.organizationId ?? null),
       ])
     : [false, false];
 
@@ -251,7 +251,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       testerFeedbackAvailable: process.env.TESTER_FEEDBACK_ENABLED === 'true' && Boolean(user?.isTester),
       demoFeedbackAvailable: Boolean(userId) && !internal && await isDemoFeedbackAvailable(),
       lessonPlannerEnabled,
-      classSummaryModelsEnabled,
+      assignmentSummaryModelsEnabled,
       requestInfo: {
         hints: getHints(request),
         origin: getDomainUrl(request),

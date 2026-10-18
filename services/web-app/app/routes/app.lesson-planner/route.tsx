@@ -991,7 +991,7 @@ function LessonPlannerEmptyState({
           data-testid="lesson-planner-seed"
         >
           <p className="text-xs font-semibold uppercase tracking-wide text-primary">
-            From your class summary
+            From your assignment summary
           </p>
           <p className="mt-1 text-sm text-muted-foreground">{seedContext}</p>
           <p className="mt-2 text-sm text-muted-foreground">

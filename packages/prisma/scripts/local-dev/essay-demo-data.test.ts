@@ -20,7 +20,7 @@ import { ROMEO_AND_JULIET_ESSAY } from './essay-demo-romeo-juliet.ts';
 import { SCHOOL_START_ESSAY } from './essay-demo-school-start.ts';
 
 /**
- * The essay demo is there to show the class summary — and its models to teach
+ * The essay demo is there to show the assignment summary — and its models to teach
  * from — on work that looks like a real class handed it in. Both halves are
  * easy to lose in an edit: a shortened essay, or a score nudged so the class
  * is no longer weakest where the essays were written to be weak. So they are

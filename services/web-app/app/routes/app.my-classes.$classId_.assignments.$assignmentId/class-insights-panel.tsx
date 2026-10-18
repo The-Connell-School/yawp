@@ -145,7 +145,7 @@ export function resolveClassInsightPanelPresentation({
   if (isWorking) {
     return {
       subtitle: hasInsight
-        ? 'Updating the class performance summary…'
+        ? 'Updating the assignment summary…'
         : 'Analyzing graded submissions…',
       showGenerateButton: true,
       generateButtonLabel: 'Analyzing…',
@@ -407,12 +407,12 @@ function InsightBody({
   insight,
   classAssignmentId,
   lessonPlannerEnabled,
-  classSummaryModelsEnabled,
+  assignmentSummaryModelsEnabled,
 }: {
   insight: ClassInsight;
   classAssignmentId: string;
   lessonPlannerEnabled: boolean;
-  classSummaryModelsEnabled: boolean;
+  assignmentSummaryModelsEnabled: boolean;
 }) {
   const summary = insight.summary;
   if (!summary) return null;
@@ -525,7 +525,7 @@ function InsightBody({
         </div>
       )}
 
-      {classSummaryModelsEnabled ? (
+      {assignmentSummaryModelsEnabled ? (
         <ClassModelsSection classAssignmentId={classAssignmentId} />
       ) : null}
 
@@ -548,8 +548,8 @@ export function ClassInsightsPanel({
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
   const lessonPlannerEnabled = rootData?.lessonPlannerEnabled ?? false;
-  const classSummaryModelsEnabled =
-    rootData?.classSummaryModelsEnabled ?? false;
+  const assignmentSummaryModelsEnabled =
+    rootData?.assignmentSummaryModelsEnabled ?? false;
   const fetcher = useFetcher<InsightActionData>();
   const isWorking = fetcher.state !== 'idle';
 
@@ -592,7 +592,7 @@ export function ClassInsightsPanel({
         <div className="flex min-w-0 gap-3">
           <div className="min-w-0">
             <h3 className="text-base font-semibold leading-tight text-foreground">
-              Class performance summary
+              Assignment summary
             </h3>
             <p
               className="mt-0.5 text-base/7 text-muted-foreground [overflow-wrap:anywhere] @sm:text-sm/6"
@@ -656,7 +656,7 @@ export function ClassInsightsPanel({
             insight={insight!}
             classAssignmentId={classAssignmentId}
             lessonPlannerEnabled={lessonPlannerEnabled}
-            classSummaryModelsEnabled={classSummaryModelsEnabled}
+            assignmentSummaryModelsEnabled={assignmentSummaryModelsEnabled}
           />
         )}
       </div>

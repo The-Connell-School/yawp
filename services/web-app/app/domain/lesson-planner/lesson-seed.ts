@@ -1,7 +1,7 @@
 /**
- * The seam between the Class Summary and the Lesson Planner.
+ * The seam between the Assignment Summary (formerly "Class Summary") and the Lesson Planner.
  *
- * A Class Summary next step already names a concrete teaching move and the
+ * An Assignment Summary next step already names a concrete teaching move and the
  * rubric skill it targets. Rather than making the teacher retype it, the
  * "Plan this lesson" link carries ids and this module rebuilds the opening ask
  * from the stored summary — so the text handed to the model is always the text
@@ -15,14 +15,14 @@ import type {
 
 /**
  * The `step` an exit ticket's class read sends. Not an index, so it can
- * never be mistaken for a Class Summary next step.
+ * never be mistaken for an Assignment Summary next step.
  */
 export const EXIT_TICKET_SEED_STEP = 'exit-ticket';
 
 export type LessonSeed = {
   /** The pre-filled opening message for the composer. */
   prompt: string;
-  /** One line of provenance for the "from your class summary" banner. */
+  /** One line of provenance for the "from your assignment summary" banner. */
   context: string;
 };
 
@@ -70,7 +70,7 @@ export function buildLessonSeed({
     : '';
 
   const prompt = [
-    `YAWP!'s class summary${forClass} recommended this next teaching move: "${step.title}" — ${step.detail}`,
+    `YAWP!'s assignment summary${forClass} recommended this next teaching move: "${step.title}" — ${step.detail}`,
     `It targets the ${skill} rubric skill.${afterAssignment}`,
     '',
     'Build me a lesson that does it. Ask me anything you need to know about this class first.',

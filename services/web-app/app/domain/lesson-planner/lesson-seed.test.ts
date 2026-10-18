@@ -57,8 +57,8 @@ describe('buildLessonSeed', () => {
   });
 
   test('uses the YAWP! brand in the prefilled planner ask', () => {
-    expect(seed.prompt).toContain("YAWP!'s class summary");
-    expect(seed.prompt).not.toContain("Yawp's class summary");
+    expect(seed.prompt).toContain("YAWP!'s assignment summary");
+    expect(seed.prompt).not.toContain("Yawp's assignment summary");
   });
 
   test('opens with the teaching move the summary recommended', () => {

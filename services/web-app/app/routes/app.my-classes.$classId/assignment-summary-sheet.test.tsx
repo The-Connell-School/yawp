@@ -212,7 +212,7 @@ describe('AssignmentSummarySheetContent', () => {
     expect(
       el.querySelector('[data-testid="class-insight-generate-button"]')
     ).toBeFalsy();
-    expect(el.textContent).not.toContain('Class performance summary');
+    expect(el.textContent).not.toContain('Assignment summary');
     expect(el.textContent).not.toMatch(/aren't enabled for your organization/i);
   });
 
@@ -244,7 +244,7 @@ describe('AssignmentSummarySheetContent', () => {
       />
     );
     expect(el.querySelector('[data-testid="class-summary-placeholder"]')).toBeTruthy();
-    expect(el.textContent).toContain('Class performance summary');
+    expect(el.textContent).toContain('Assignment summary');
     expect(el.textContent).toMatch(/summarize class performance/i);
     expect(
       el.querySelector('[data-testid="class-insight-generate-button"]')

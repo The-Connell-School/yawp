@@ -44,16 +44,16 @@ export async function setLessonPlannerFlag(enabled: boolean) {
   }
 }
 
-// Mirrors featureFlagSettingName(CLASS_SUMMARY_MODELS_FLAG).
-const CLASS_SUMMARY_MODELS_SETTING = 'feature_flag.class_summary_models';
+// Mirrors featureFlagSettingName(ASSIGNMENT_SUMMARY_MODELS_FLAG).
+const ASSIGNMENT_SUMMARY_MODELS_SETTING = 'feature_flag.assignment_summary_models';
 
-export async function setClassSummaryModelsFlag(enabled: boolean) {
+export async function setAssignmentSummaryModelsFlag(enabled: boolean) {
   const prisma = createE2EPrismaClient();
   try {
     await prisma.setting.upsert({
-      where: { name: CLASS_SUMMARY_MODELS_SETTING },
+      where: { name: ASSIGNMENT_SUMMARY_MODELS_SETTING },
       create: {
-        name: CLASS_SUMMARY_MODELS_SETTING,
+        name: ASSIGNMENT_SUMMARY_MODELS_SETTING,
         value: enabled ? 'true' : 'false',
         valueType: 'boolean',
         description: 'Set by e2e',

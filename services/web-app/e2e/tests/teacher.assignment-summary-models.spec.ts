@@ -1,7 +1,7 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import type { E2EContext } from '../seed-e2e';
-import { setClassSummaryModelsFlag } from '../feature-flags';
+import { setAssignmentSummaryModelsFlag } from '../feature-flags';
 
 const MODEL_DOC_TITLE = 'E2E class models contrast doc';
 const MODEL_DOC_TEXT =
@@ -94,10 +94,10 @@ async function cleanup(e2eContext: E2EContext) {
   }
 }
 
-test.describe('teacher class summary: models to teach from', () => {
+test.describe('teacher assignment summary: models to teach from', () => {
   test.afterEach(async ({ e2eContext }) => {
     await cleanup(e2eContext);
-    await setClassSummaryModelsFlag(false);
+    await setAssignmentSummaryModelsFlag(false);
   });
 
   test('pairs a strong model with an instructive example and questions to think through', async ({
@@ -105,7 +105,7 @@ test.describe('teacher class summary: models to teach from', () => {
     e2eContext,
     signIn,
   }) => {
-    await setClassSummaryModelsFlag(true);
+    await setAssignmentSummaryModelsFlag(true);
     await seed(e2eContext);
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
 
@@ -144,7 +144,7 @@ test.describe('teacher class summary: models to teach from', () => {
     e2eContext,
     signIn,
   }) => {
-    await setClassSummaryModelsFlag(false);
+    await setAssignmentSummaryModelsFlag(false);
     await seed(e2eContext);
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
 
