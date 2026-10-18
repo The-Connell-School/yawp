@@ -510,6 +510,26 @@ export default function LoungeThreadRoute() {
           {editingPost ? null : (
             <LoungeBody body={post.body} className="text-[17px] leading-[1.65]" testId="lounge-post-body" />
           )}
+          {post.images.length > 0 ? (
+            <div className={post.images.length > 1 ? 'grid gap-3 sm:grid-cols-2' : 'flex'}>
+              {post.images.map((image) => (
+                <a
+                  key={image.id}
+                  href={`/api/image/lounge/${image.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block overflow-hidden rounded-xl border bg-secondary"
+                >
+                  <img
+                    src={`/api/image/lounge/${image.id}`}
+                    alt={image.altText}
+                    loading="lazy"
+                    className="max-h-[480px] w-full object-contain"
+                  />
+                </a>
+              ))}
+            </div>
+          ) : null}
           {post.video ? (
             <LoungeVideoPlayer
               url={post.video.url}

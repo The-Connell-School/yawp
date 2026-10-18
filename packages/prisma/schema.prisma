@@ -2392,6 +2392,7 @@ model LoungePost {
   /// Pinned to the top of the feed by the Yawp team ("This week from Brian").
   pinnedAt         DateTime?            @db.Timestamptz(6)
   pinnedByUserId   String?
+  images           LoungePostImage[]
   /// A video the Yawp team recorded or uploaded for this post. Storage key,
   /// never a URL: playback URLs are signed per request.
   videoKey         String?
@@ -2409,6 +2410,24 @@ model LoungePost {
   @@index([authorUserId])
   @@index([topic, createdAt(sort: Desc)])
   @@index([pinnedAt])
+}
+
+/// A screenshot or photo on a Faculty Lounge post (General question or Win),
+/// behind the lounge_post_images flag. Stored with its metadata stripped
+/// (no location); served only to people who can read the post.
+model LoungePostImage {
+  id          String     @id @default(cuid())
+  createdAt   DateTime   @default(now()) @db.Timestamptz(6)
+  postId      String
+  post        LoungePost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  /// Order on the post, from 0.
+  position    Int
+  altText     String
+  contentType String
+  byteSize    Int
+  blob        Bytes
+
+  @@index([postId, position])
 }
 
 model LoungeReply {

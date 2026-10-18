@@ -1,5 +1,6 @@
 import { expect, test } from '../test-setup';
-import { setLoungeCommunityFlag } from '../feature-flags';
+import { setFeatureFlag, setLoungeCommunityFlag } from '../feature-flags';
+import { LOUNGE_POST_IMAGES_FLAG } from '../../app/domain/feature-flags/feature-flags';
 import { createE2EPrismaClient } from '../prisma-client';
 
 /**
@@ -15,6 +16,9 @@ const OLDEST = 'Round six oldest: my thesis warm-up';
 const MIDDLE = 'Round six middle: grading in twenty minutes';
 const NEWEST = 'Round six newest: a win from fourth period';
 const NO_TOPIC_TITLE = 'Round six: anyone else teaching in a portable?';
+const IMAGE_TITLE = 'Round six: is my grading screen supposed to look like this?';
+const ONE_PIXEL_PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 async function resetLounge(e2eContext: {
   teacherUserId: string;
@@ -73,6 +77,7 @@ test.describe.serial('Faculty Lounge, round 6', () => {
 
   test.afterAll(async () => {
     await setLoungeCommunityFlag(false);
+    await setFeatureFlag(LOUNGE_POST_IMAGES_FLAG, false);
   });
 
   test('the new post form: three types that say what they are for, and the new topics', async ({
@@ -190,5 +195,41 @@ test.describe.serial('Faculty Lounge, round 6', () => {
     await expect(page.getByRole('heading', { name: OLDEST, level: 1 })).toBeVisible();
     await page.getByRole('navigation', { name: 'More posts' }).getByRole('link', { name: /Previous post/ }).click();
     await expect(page.getByRole('heading', { name: MIDDLE, level: 1 })).toBeVisible();
+  });
+
+  test('with images on: a screenshot goes up with a question, described, and opens for readers', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await setFeatureFlag(LOUNGE_POST_IMAGES_FLAG, false);
+    await page.goto('/app/lounge/new');
+    await expect(page.getByLabel(/Screenshots or photos/)).toHaveCount(0);
+
+    await setFeatureFlag(LOUNGE_POST_IMAGES_FLAG, true);
+    await page.goto('/app/lounge/new');
+    await page.getByLabel('Share an assignment', { exact: true }).check();
+    await expect(page.getByLabel(/Screenshots or photos/)).toHaveCount(0);
+    await page.getByLabel('General question', { exact: true }).check();
+    await expect(page.getByText('Crop out student names and faces first.', { exact: false })).toBeVisible();
+    await page.getByLabel('Title').fill(IMAGE_TITLE);
+    await page.getByLabel('Details').fill('Is this what yours looks like?');
+    await page.getByLabel(/Screenshots or photos/).setInputFiles({
+      name: 'screenshot.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(ONE_PIXEL_PNG, 'base64'),
+    });
+    await page.getByLabel('Describe the image').fill('The grading screen with an empty rubric');
+    await page.getByRole('button', { name: 'Post', exact: true }).click();
+
+    await expect(page.getByRole('heading', { name: IMAGE_TITLE, level: 1 })).toBeVisible();
+    const image = page.getByRole('img', { name: 'The grading screen with an empty rubric' });
+    await expect(image).toBeVisible();
+    const src = await image.getAttribute('src');
+    const response = await page.request.get(src!);
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-type']).toBe('image/png');
+    expect(response.headers()['x-content-type-options']).toBe('nosniff');
   });
 });

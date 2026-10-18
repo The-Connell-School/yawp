@@ -32,6 +32,15 @@ import { decodeMentions } from '~/domain/lounge/mentions';
 import { sendLoungeNotifications } from '~/domain/lounge/notifications.server';
 import { findPrivacyConcerns, privacyConcernMessage } from '~/domain/lounge/privacy-nudge';
 import { COMPOSER_TOPICS, LOUNGE_POST_KINDS, kindAttachesLesson, type LoungePostKindKey } from '~/domain/lounge/topics';
+import {
+  LOUNGE_IMAGE_MAX_BYTES,
+  LOUNGE_IMAGE_MAX_COUNT,
+  LOUNGE_IMAGE_TYPES,
+  kindAllowsImages,
+  prepareLoungeImages,
+} from '~/domain/lounge/images';
+import { LOUNGE_POST_IMAGES_FLAG } from '~/domain/feature-flags/feature-flags';
+import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { LOUNGE_TITLE_MAX, parseLoungePostInput } from '~/domain/lounge/validation';
 import { prisma } from '~/utils/db.server';
 import { getDomainUrl } from '~/utils/misc';
@@ -40,14 +49,16 @@ import { enforceAuthenticatedUserAndIp } from '~/utils/rate-limit.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { viewer, membership } = await requireLoungeMember(request);
-  const [candidates, user, shareable] = await Promise.all([
+  const [candidates, user, shareable, imagesEnabled] = await Promise.all([
     listMentionCandidates(viewer, null),
     prisma.user.findUnique({ where: { id: viewer.userId }, select: { name: true } }),
     membership.role === 'TEACHER' ? listShareableAssignments(membership.id) : Promise.resolve([]),
+    imagesAllowed(viewer.isStaff, membership.organization.id),
   ]);
   return data({
     candidates,
     shareable,
+    imagesEnabled,
     isStaff: viewer.isStaff,
     postingAs: loungeByline({
       name: user?.name,
@@ -58,10 +69,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 }
 
+/** Screenshots and photos on posts: the YAWP! team always, schools with the flag on. */
+async function imagesAllowed(isStaff: boolean, organizationId: string): Promise<boolean> {
+  return isStaff || isFeatureFlagEnabled(LOUNGE_POST_IMAGES_FLAG, organizationId);
+}
+
+// Three images at the cap, plus room for the rest of the form.
+const MAX_POST_REQUEST_BYTES = LOUNGE_IMAGE_MAX_COUNT * LOUNGE_IMAGE_MAX_BYTES + 1024 * 1024;
+
 export async function action({ request }: ActionFunctionArgs) {
   const access = await requireLoungeMember(request);
   const { viewer } = access;
-  const form = Object.fromEntries(await request.formData());
+  // Before parsing: formData() buffers the whole body.
+  const declaredLength = Number(request.headers.get('Content-Length') ?? '');
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_POST_REQUEST_BYTES) {
+    throw data({ error: 'Too large' }, { status: 413 });
+  }
+  const formData = await request.formData();
+  const form = Object.fromEntries(formData);
   const values = {
     kind: String(form.kind ?? 'QUESTION'),
     topic: String(form.topic ?? ''),
@@ -76,6 +101,21 @@ export async function action({ request }: ActionFunctionArgs) {
   if (!parsed.ok) return data({ errors: parsed.errors, values }, { status: 400 });
   const video = parseLoungeVideoInput(form, { userId: viewer.userId, isStaff: viewer.isStaff });
   if (!video.ok) return data({ errors: video.errors, values }, { status: 400 });
+  const files = formData.getAll('images').filter((value): value is File => value instanceof File && value.size > 0);
+  let images: Extract<ReturnType<typeof prepareLoungeImages>, { ok: true }>['images'] = [];
+  if (files.length > 0 && kindAllowsImages(parsed.value.kind)) {
+    if (!(await imagesAllowed(viewer.isStaff, access.organizationId))) {
+      return data({ errors: { images: 'Images are not turned on for your school yet.' }, values }, { status: 400 });
+    }
+    const prepared = prepareLoungeImages(
+      await Promise.all(
+        files.map(async (file) => ({ type: file.type, size: file.size, bytes: new Uint8Array(await file.arrayBuffer()) }))
+      ),
+      String(form.imageAlt ?? '')
+    );
+    if (!prepared.ok) return data({ errors: { images: prepared.error }, values }, { status: 400 });
+    images = prepared.images;
+  }
   const schedule = viewer.isStaff ? parseLoungeSchedule(form, new Date()) : null;
   if (schedule && !schedule.ok) return data({ errors: { publishAt: schedule.error }, values }, { status: 400 });
 
@@ -106,6 +146,7 @@ export async function action({ request }: ActionFunctionArgs) {
         video: video.value,
         pin: viewer.isStaff && values.pin,
         schedule: schedule?.ok ? schedule.value : null,
+        images,
       },
     });
   } catch (error) {
@@ -127,7 +168,7 @@ const PUBLISH_MODES = [
 type PublishMode = (typeof PUBLISH_MODES)[number]['key'];
 
 export default function LoungeNewPostRoute() {
-  const { candidates, postingAs, shareable, isStaff } = useLoaderData<typeof loader>();
+  const { candidates, postingAs, shareable, imagesEnabled, isStaff } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const values = actionData?.values;
@@ -157,7 +198,11 @@ export default function LoungeNewPostRoute() {
         </Link>
         <h1 className="lounge-serif mt-1 text-[38px] leading-tight text-foreground">New post</h1>
 
-        <Form method="post" className="mt-6 flex flex-col gap-6">
+        <Form
+          method="post"
+          encType={imagesEnabled ? 'multipart/form-data' : undefined}
+          className="mt-6 flex flex-col gap-6"
+        >
           <fieldset className="flex gap-6 border-b">
             <legend className="sr-only">Post type</legend>
             {LOUNGE_POST_KINDS.map((option) => (
@@ -239,6 +284,8 @@ export default function LoungeNewPostRoute() {
               </p>
             )}
           </div>
+
+          {imagesEnabled && kindAllowsImages(kind) ? <AddImages error={errors.images} /> : null}
 
           {kindAttachesLesson(kind) && shareable.length > 0 ? (
             <AttachFromYawp
@@ -375,6 +422,47 @@ export default function LoungeNewPostRoute() {
         </Form>
       </div>
     </section>
+  );
+}
+
+/**
+ * Up to three screenshots or photos on a General question or a Win, with one
+ * description for screen readers. Behind lounge_post_images.
+ */
+function AddImages({ error }: { error?: string }) {
+  const [count, setCount] = useState(0);
+  return (
+    <div className="flex flex-col gap-2">
+      <label htmlFor="lounge-images" className="text-sm text-muted-foreground">
+        Screenshots or photos (optional, up to {LOUNGE_IMAGE_MAX_COUNT})
+      </label>
+      <input
+        id="lounge-images"
+        name="images"
+        type="file"
+        multiple
+        accept={LOUNGE_IMAGE_TYPES.join(',')}
+        onChange={(event) => setCount(event.target.files?.length ?? 0)}
+        aria-describedby="lounge-images-note"
+        className="text-[15px] file:mr-3 file:min-h-11 file:rounded-lg file:border file:border-dashed file:border-muted-foreground/50 file:bg-transparent file:px-4 file:text-[15px]"
+      />
+      <p id="lounge-images-note" className="text-sm text-muted-foreground">
+        Crop out student names and faces first. We remove a photo&apos;s location before it&apos;s posted.
+      </p>
+      {count > 0 ? (
+        <div className="flex flex-col gap-1">
+          <label htmlFor="lounge-image-alt" className="text-sm text-muted-foreground">
+            Describe {count === 1 ? 'the image' : 'the images'}
+          </label>
+          <Input id="lounge-image-alt" name="imageAlt" required maxLength={300} placeholder="What it shows, in a few words" />
+        </div>
+      ) : null}
+      {error ? (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

@@ -20,6 +20,7 @@ import type { LoungePostInput, LoungeReplyInput } from './validation';
 import { baseVideoContentType, type LoungeVideo } from './video';
 import { hasPlaceholderText, type LoungeSchedule } from './launch';
 import { avatarToneFor, firstNameOf, initialsFor, previewFor } from './avatar';
+import { kindAllowsImages, stripImageMetadata, type LoungeImageType } from './images';
 
 export type CreateLoungePostInput = LoungePostInput & {
   /**
@@ -33,6 +34,12 @@ export type CreateLoungePostInput = LoungePostInput & {
   pin?: boolean;
   /** Yawp team only; ignored for teachers. Draft, or a time to go live. */
   schedule?: LoungeSchedule | null;
+  /**
+   * Screenshots or photos (General question and Win only; ignored on a shared
+   * assignment). The caller checks the flag, the count, and the real format;
+   * metadata is stripped here, so nothing is ever stored with a location.
+   */
+  images?: Array<{ contentType: LoungeImageType; bytes: Uint8Array; altText: string }> | null;
 };
 
 export type CreateLoungeReplyInput = LoungeReplyInput & {
@@ -457,6 +464,7 @@ export type LoungeThread = {
     isHidden: boolean;
     video: LoungeVideo | null;
     attachment: LoungeShareDetail | null;
+    images: Array<{ id: string; altText: string }>;
   };
   staffReplies: LoungeReplyView[];
   replies: LoungeReplyView[];
@@ -499,6 +507,7 @@ export async function getLoungeThread(
       body: true,
       staffStatus: true,
       hiddenAt: true,
+      images: { orderBy: { position: 'asc' }, select: { id: true, altText: true } },
       attachment: {
         select: {
           id: true,
@@ -567,10 +576,28 @@ export async function getLoungeThread(
             viewerUsed: row.attachment.uses.length > 0,
           }
         : null,
+      images: row.images,
     },
     staffReplies: views.filter((reply) => reply.isStaff),
     replies: views.filter((reply) => !reply.isStaff),
   };
+}
+
+/**
+ * One image from a post, for the image route: only if the viewer can read the
+ * post (the same rule as the thread, so the YAWP! team still sees images on
+ * a post it hid).
+ */
+export async function getVisibleLoungeImage(
+  viewer: LoungeViewer,
+  imageId: string
+): Promise<{ contentType: string; byteSize: number; blob: Uint8Array } | null> {
+  const image = await prisma.loungePostImage.findUnique({
+    where: { id: imageId },
+    select: { postId: true, contentType: true, byteSize: true, blob: true },
+  });
+  if (!image || !(await findVisiblePost(viewer, image.postId))) return null;
+  return { contentType: image.contentType, byteSize: image.byteSize, blob: image.blob };
 }
 
 /** Users a viewer may @mention: staff anywhere; teachers only once they are in the thread. */
@@ -683,6 +710,22 @@ export async function createLoungePost(params: {
       },
       select: { id: true, title: true },
     });
+    const images = kindAllowsImages(input.kind) ? input.images ?? [] : [];
+    if (images.length > 0) {
+      await tx.loungePostImage.createMany({
+        data: images.map((image, position) => {
+          const bytes = stripImageMetadata(image.bytes, image.contentType);
+          return {
+            postId: created.id,
+            position,
+            altText: image.altText,
+            contentType: image.contentType,
+            byteSize: bytes.byteLength,
+            blob: Buffer.from(bytes),
+          };
+        }),
+      });
+    }
     if (mentioned.size > 0) {
       await tx.loungeMention.createMany({
         data: [...mentioned].map((mentionedUserId) => ({

@@ -157,3 +157,85 @@ suite('Faculty Lounge round 6 against the database', () => {
     expect((await lounge.getAdjacentLoungePosts(devin(), lower)).previous?.id).toBe(higher.id);
   });
 });
+
+suite('Faculty Lounge images against the database', () => {
+  let prisma: DbPrisma;
+  let lounge: typeof import('./lounge.server');
+  const local = { org: '', maria: '', devin: '' };
+  // PNG signature and an IEND chunk: the smallest PNG the metadata stripper keeps whole.
+  const png = new Uint8Array([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+  ]);
+
+  beforeAll(async () => {
+    ({ prisma } = await import('~/utils/db.server'));
+    lounge = await import('./lounge.server');
+    local.org = (await prisma.organization.create({ data: { name: `Images ${stamp}` } })).id;
+    for (const name of ['maria', 'devin'] as const) {
+      local[name] = (
+        await prisma.user.create({
+          data: {
+            name: `${name} Images`,
+            email: `lounge-img-${name}-${stamp}@yawp.test`,
+            memberships: { create: { organizationId: local.org, role: 'TEACHER' } },
+          },
+          select: { id: true },
+        })
+      ).id;
+    }
+  });
+
+  afterAll(async () => {
+    if (!prisma) return;
+    const users = [local.maria, local.devin].filter(Boolean);
+    await prisma.loungePost.deleteMany({ where: { authorUserId: { in: users } } });
+    await prisma.orgMembership.deleteMany({ where: { userId: { in: users } } });
+    await prisma.user.deleteMany({ where: { id: { in: users } } });
+    await prisma.organization.deleteMany({ where: { id: local.org } });
+  });
+
+  const post = (kind: 'QUESTION' | 'SHARE' | 'WIN') =>
+    lounge.createLoungePost({
+      viewer: { userId: local.maria, isStaff: false },
+      organizationId: local.org,
+      membershipId: null,
+      input: {
+        kind,
+        topic: null,
+        title: `${kind} with a screenshot ${stamp}`,
+        body: 'See the picture.',
+        askStaff: false,
+        askPrivately: false,
+        images: [
+          { contentType: 'image/png', bytes: png, altText: 'The grading screen' },
+          { contentType: 'image/png', bytes: png, altText: 'The grading screen, scrolled' },
+        ],
+      },
+    });
+
+  test('a question keeps its images in order, and readers of the post can open them', async () => {
+    const { postId } = await post('QUESTION');
+    const thread = await lounge.getLoungeThread({ userId: local.devin, isStaff: false }, postId);
+    expect(thread?.post.images.map((image) => image.altText)).toEqual([
+      'The grading screen',
+      'The grading screen, scrolled',
+    ]);
+    const image = await lounge.getVisibleLoungeImage({ userId: local.devin, isStaff: false }, thread!.post.images[0]!.id);
+    expect(image).toMatchObject({ contentType: 'image/png', byteSize: png.length });
+  });
+
+  test('a shared assignment takes no images', async () => {
+    const { postId } = await post('SHARE');
+    const thread = await lounge.getLoungeThread({ userId: local.maria, isStaff: false }, postId);
+    expect(thread?.post.images).toEqual([]);
+  });
+
+  test('once the team hides the post, teachers cannot open its images', async () => {
+    const { postId } = await post('WIN');
+    const thread = await lounge.getLoungeThread({ userId: local.devin, isStaff: false }, postId);
+    const imageId = thread!.post.images[0]!.id;
+    await prisma.loungePost.update({ where: { id: postId }, data: { hiddenAt: new Date() } });
+    expect(await lounge.getVisibleLoungeImage({ userId: local.devin, isStaff: false }, imageId)).toBeNull();
+    expect(await lounge.getVisibleLoungeImage({ userId: local.devin, isStaff: true }, imageId)).not.toBeNull();
+  });
+});
