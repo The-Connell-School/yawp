@@ -96,6 +96,7 @@ function fixture() {
 }
 beforeEach(() => {
   process.env.YAWP_INTERNAL_API_KEYS = JSON.stringify([{ id: 'tt-key', secret, scopes: ['management:read', 'management:write'] }]);
+  process.env.YAWP_MANAGEMENT_SERVICE_KEY = 'x'.repeat(43);
   process.env.INTERNAL_API_NONCE_STORE = 'memory';
   resetInternalApiMemoryNonceStore(); resetInternalApiRateLimitBuckets();
 });
@@ -106,7 +107,7 @@ for (const [op, method, path, value] of cases) {
     test('HMAC-only, scoped, strict, bounded, method-checked and parent-owned', async () => {
       const f = fixture();
       expect((await f.invoke(op, request(method, path, value, { unsigned: true }))).status).toBe(401);
-      process.env.YAWP_INTERNAL_API_KEYS = JSON.stringify([{ id: 'tt-key', secret, scopes: ['content:read'] }]);
+      process.env.YAWP_INTERNAL_API_KEYS = JSON.stringify([{ id: 'tt-key', secret, scopes: ['management:read'] }]);
       expect((await f.invoke(op, request(method, path, value))).status).toBe(403);
       process.env.YAWP_INTERNAL_API_KEYS = JSON.stringify([{ id: 'tt-key', secret, scopes: ['management:write'] }]);
       expect((await f.invoke(op, request('OPTIONS', path, value))).status).toBe(405);
