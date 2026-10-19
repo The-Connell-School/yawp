@@ -1,10 +1,17 @@
 import { describe, expect, test } from 'bun:test';
 import { validateRubricPromotion } from './rubric-promotion';
 import { STARTER_RUBRICS } from './starter-rubrics';
+import { parseRubricSchema } from './rubric-schema';
+import { DEFAULT_SCORING_SCALE, parseScoringScale } from '../assignment-types/assignment-type-rubric.shared';
+import { legacyRubricDisplayConfig } from '../grading/rubric-display';
 const valid = () => ({ name: 'qa-rubric', title: 'QA rubric', scoringScale: { type: 'rubric_points', minScore: 0, maxScore: 4, step: 1 }, rubric: { categories: [{ key: 'claim', label: 'Claim', description: 'A supported claim.', weight: 1 }] } });
+const scoringTypeIssue = {
+  path: '/scoringScale/type',
+  message: 'Scoring type must be one of weighted_1_5, act_writing_2_12, rubric_points, points_scale.',
+};
 describe('promotion rubric validation', () => {
-  test('valid portable rubrics and all current starter definitions retain category content', () => {
-    for (const raw of [valid(), ...STARTER_RUBRICS]) {
+  test('valid portable rubrics and starter definitions with known scale types retain category content', () => {
+    for (const raw of [valid(), ...STARTER_RUBRICS.filter(raw => raw.scoringScale.type !== 'weighted_percent')]) {
       const result = validateRubricPromotion(raw);
       expect({ name: raw.name, ...result }).toMatchObject({ ok: true });
       if (result.ok) {
@@ -12,6 +19,56 @@ describe('promotion rubric validation', () => {
         expect(result.schema.rubric.categories).toEqual(raw.rubric.categories);
       }
     }
+  });
+  test.each([
+    { type: 'weighted_1_5', minScore: 1, maxScore: 5 },
+    { type: 'act_writing_2_12', minScore: 1, maxScore: 6, compositeMin: 2, compositeMax: 12 },
+    { type: 'rubric_points', minScore: 0, maxScore: 100 },
+    { type: 'points_scale', minScore: 0, maxScore: 3 },
+  ])('accepts a valid $type scale', scoringScale => {
+    const result = validateRubricPromotion({ ...valid(), scoringScale });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.schema.scoringScale).toMatchObject(scoringScale);
+  });
+  test.each(['weighted_percent', 'foo', ''])('rejects scoring type %j at its field path', type => {
+    expect(validateRubricPromotion({ ...valid(), scoringScale: { ...valid().scoringScale, type } }))
+      .toEqual({ ok: false, issues: [scoringTypeIssue] });
+  });
+  test('omitting the scale preserves the weighted_1_5 default, but an explicit scale requires a type', () => {
+    const { scoringScale, ...raw } = valid();
+    const result = validateRubricPromotion(raw);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.schema.scoringScale).toEqual({ type: 'weighted_1_5', minScore: 1, maxScore: 5, step: 1 });
+    const { type, ...withoutType } = scoringScale;
+    expect(validateRubricPromotion({ ...raw, scoringScale: withoutType }))
+      .toEqual({ ok: false, issues: [scoringTypeIssue] });
+  });
+  test('legacy starter content remains readable but cannot be newly published with weighted_percent', () => {
+    const legacy = STARTER_RUBRICS.filter(raw => raw.scoringScale.type === 'weighted_percent');
+    expect(legacy.length).toBeGreaterThan(0);
+    for (const raw of legacy) {
+      expect(parseRubricSchema(raw)).toMatchObject({ ok: true, schema: raw });
+      expect(validateRubricPromotion(raw)).toEqual({ ok: false, issues: [scoringTypeIssue] });
+    }
+    expect(parseScoringScale({ type: 'foo', minScore: 0, maxScore: 4 }).type).toBe('foo');
+  });
+  test('every built-in assignment rubric and fallback scale uses a known scoring type', async () => {
+    const allowed = ['weighted_1_5', 'act_writing_2_12', 'rubric_points', 'points_scale'];
+    expect(allowed).toContain(DEFAULT_SCORING_SCALE.type);
+    expect(allowed).toContain(legacyRubricDisplayConfig.scoringType);
+    const directory = new URL('../assignment-types/', import.meta.url).pathname;
+    let count = 0;
+    for (const file of new Bun.Glob('*{-rubric,-assignment-type}.ts').scanSync(directory)) {
+      const exports = await import(`${directory}${file}`);
+      for (const [name, value] of Object.entries(exports)) {
+        if (!name.endsWith('_SCORING_SCALE')) continue;
+        expect({ file, name, type: (value as { type: string }).type }).toMatchObject({
+          type: expect.stringMatching(/^(weighted_1_5|act_writing_2_12|rubric_points|points_scale)$/),
+        });
+        count++;
+      }
+    }
+    expect(count).toBeGreaterThanOrEqual(7);
   });
   test('rejects null categories, malformed types, empty categories and blank descriptions without throwing', () => {
     for (const categories of [[null], [{ ...valid().rubric.categories[0], key: 123 }], [], [{ ...valid().rubric.categories[0], description: ' ' }]]) {

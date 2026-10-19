@@ -45,3 +45,22 @@ test('rubric inspection rejects ambiguous query and suppresses infrastructure de
   const response = await http.inspect(new Request('https://yawp.test/api/internal/v1/rubrics?name=qa-rubric', { headers: { authorization: `Bearer ${key}` } }));
   expect(response.status).toBe(503); expect(await response.text()).not.toContain('private');
 });
+test('publication rejects an unknown scoring type with 422 and validation reports the same field issue', async () => {
+  let calls = 0;
+  const http = createRubricHttp({ inspect: async () => null, publish: async () => { calls++; return {}; } } as any, () => key, () => true);
+  const invalid = { ...schema, scoringScale: { type: 'foo', minScore: 0, maxScore: 4 } };
+  const expected = {
+    ok: false,
+    issues: [{
+      path: '/scoringScale/type',
+      message: 'Scoring type must be one of weighted_1_5, act_writing_2_12, rubric_points, points_scale.',
+    }],
+  };
+  const published = await http.publish(request({ ...payload, schema: invalid }));
+  expect(published.status).toBe(422);
+  expect(await published.json()).toEqual(expected);
+  const validated = await http.validate(request({ schema: invalid }, key, '/api/internal/v1/rubrics/validate'));
+  expect(validated.status).toBe(200);
+  expect(await validated.json()).toEqual(expected);
+  expect(calls).toBe(0);
+});
