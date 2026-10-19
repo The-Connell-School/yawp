@@ -55,9 +55,10 @@ describe('promotion rubric validation', () => {
     expect(parseScoringScale({ type: 'foo', minScore: 0, maxScore: 4 }).type).toBe('foo');
   });
   test('every built-in assignment rubric and fallback scale uses a known scoring type', async () => {
+    const allowed: readonly string[] = RUBRIC_SCORING_SCALE_TYPES;
     for (const type of [DEFAULT_SCORING_SCALE.type, legacyRubricDisplayConfig.scoringType,
       ACT_WRITING_SCORING_TYPE, POINTS_SCALE_SCORING_TYPE, RUBRIC_POINTS_SCORING_TYPE]) {
-      expect(RUBRIC_SCORING_SCALE_TYPES).toContain(type);
+      expect(allowed).toContain(type);
     }
     const directory = new URL('../assignment-types/', import.meta.url).pathname;
     let count = 0;
@@ -65,7 +66,7 @@ describe('promotion rubric validation', () => {
       const exports = await import(`${directory}${file}`);
       for (const [name, value] of Object.entries(exports)) {
         if (!name.endsWith('_SCORING_SCALE')) continue;
-        expect(RUBRIC_SCORING_SCALE_TYPES, `${file}: ${name}`).toContain((value as { type: string }).type);
+        expect(allowed, `${file}: ${name}`).toContain((value as { type: string }).type);
         count++;
       }
     }

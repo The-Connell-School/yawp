@@ -56,7 +56,7 @@ describe('rubric catalog with production rubric content', () => {
   test('the validator still rejects broken edits with a field path', () => {
     const rubric = fixture.libraryRubrics.find((r) => r.name === 'gba300-nonverbal-rubric-STUDENT')!;
     const document = toEditable(rubric.schemaJson as any, rubric.name).editable;
-    const editable = { ...document, scoringScale: { ...(document.scoringScale as object), type: 'rubric_points' } };
+    const editable: Record<string, unknown> = { ...document, scoringScale: { ...(document.scoringScale as object), type: 'rubric_points' } };
     const categories = (editable.rubric as any).categories;
     const blank = validateEditable({ ...editable, rubric: { categories: [{ ...categories[0], label: '' }] } }, rubric.name);
     expect(blank.ok).toBe(false);
