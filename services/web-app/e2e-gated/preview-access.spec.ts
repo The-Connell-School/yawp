@@ -33,6 +33,12 @@ test.describe('in-app preview access gate', () => {
       schoolName: 'Demo', location: 'Demo', gradeLevel: '10', status: 'INVITED',
       acquisitionTokenId: token.id,
     } });
+    const previousFlag = await prisma.setting.findUnique({ where: { name: 'feature_flag.free_tier' } });
+    await prisma.setting.upsert({
+      where: { name: 'feature_flag.free_tier' },
+      create: { name: 'feature_flag.free_tier', value: 'true', valueType: 'boolean' },
+      update: { value: 'true' },
+    });
     try {
       const landing = await request.get(`/free?t=${code}`, { maxRedirects: 0 });
       expect(landing.status()).toBe(200);
@@ -67,6 +73,11 @@ test.describe('in-app preview access gate', () => {
         expect(response.headers().location).toContain('/auth/preview-access');
       } finally { await anonymous.dispose(); }
     } finally {
+      if (previousFlag) {
+        await prisma.setting.update({ where: { name: previousFlag.name }, data: { value: previousFlag.value } });
+      } else {
+        await prisma.setting.delete({ where: { name: 'feature_flag.free_tier' } });
+      }
       await prisma.freeTierApplication.delete({ where: { id: application.id } });
       await prisma.acquisitionToken.delete({ where: { id: token.id } });
       await prisma.$disconnect();
