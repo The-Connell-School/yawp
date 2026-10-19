@@ -117,8 +117,8 @@ function fixture() {
         async ({ where }: any) =>
           audits.find(
             (a) =>
-              a.endpoint === where.endpoint &&
-              a.action === where.action &&
+              (!where.endpoint || a.endpoint === where.endpoint) &&
+              (typeof where.action === 'string' ? a.action === where.action : where.action.in.includes(a.action)) &&
               a.actorEmail === where.actorEmail &&
               a.keyId === where.keyId &&
               (a.result === 'after' || a.result === 'noop') &&
@@ -650,7 +650,7 @@ test('revoke affects only the requested id in a resend chain', async () => {
   expect(mail).not.toHaveBeenCalled();
 });
 
-test('revoke idempotency replays exact bytes, rejects mismatches and separates invitation endpoints', async () => {
+test('revoke idempotency replays exact bytes and scopes the key to action and organization', async () => {
   const f = fixture(); f.seed();
   const options = { path: '/legacy/revoke', idempotency: 'revoke-once' };
   const first = await f.handlers.revoke(request('POST', { reason: 'Stop' }, options), 'org-1', 'legacy');
@@ -665,7 +665,8 @@ test('revoke idempotency replays exact bytes, rejects mismatches and separates i
   expect(f.audits).toHaveLength(2);
   f.seed({ id: 'second' });
   expect((await f.handlers.revoke(request('POST', { reason: 'Stop' }, { ...options, path: '/second/revoke' }), 'org-1', 'second')).status).toBe(200);
-  expect(f.db.invitation.delete).toHaveBeenCalledTimes(2);
+  expect(f.rows.map((r) => r.id)).toEqual(['second']);
+  expect(f.db.invitation.delete).toHaveBeenCalledTimes(1);
   expect(mail).not.toHaveBeenCalled();
   expect((await fixture().handlers.revoke(request('POST', {}, { idempotency: 'x'.repeat(201) }), 'org-1', 'legacy')).status).toBe(400);
 });
