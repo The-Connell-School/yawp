@@ -12,6 +12,27 @@ const errorNames = new Set([
 ]);
 const errorCodes = new Set(['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN']);
 
+type ValidationReason =
+  | 'recipient_domain_reserved'
+  | 'recipient_invalid'
+  | 'sender_domain_unverified'
+  | 'testing_recipient_restricted'
+  | 'other';
+
+function resendValidationReason(message: string): ValidationReason {
+  // Resend's testing restriction also tells callers to verify a domain.
+  // Match its specific rejection before any sender-verification wording.
+  if (/^You can only send testing emails to your own email address(?: \(|\.)/i.test(message))
+    return 'testing_recipient_restricted';
+  if (/^Invalid `to` field\. Please use our testing email address instead of domains like `[^`\s]+`\./i.test(message))
+    return 'recipient_domain_reserved';
+  if (message.startsWith('Invalid `to` field. The email address needs to follow the `email@example.com` or `Name <email@example.com>` format'))
+    return 'recipient_invalid';
+  if (/^(?:The `?[a-z0-9][a-z0-9.-]*`?|Sender) domain is not verified(?:[.:]|$)/i.test(message))
+    return 'sender_domain_unverified';
+  return 'other';
+}
+
 export function emailDeliveryDiagnostic(error: unknown, recipient: string) {
   const provider = ['ses', 'aws-ses'].includes(process.env.EMAIL_PROVIDER?.toLowerCase() ?? '')
     ? 'ses' : 'resend';
@@ -30,14 +51,15 @@ export function emailDeliveryDiagnostic(error: unknown, recipient: string) {
     ? domain[1]!.toLowerCase() : null;
   return {
     provider, recipientDomain, name, code,
+    validationReason: provider === 'resend' ? resendValidationReason(message) : 'other',
     statusCode: typeof detail.statusCode === 'number' && Number.isInteger(detail.statusCode)
       && detail.statusCode >= 100 && detail.statusCode <= 599 ? detail.statusCode : null,
-    message: /domain.*not verified|verify.*domain/i.test(message)
-      ? 'Sender domain is not verified'
-      : /api key.*invalid|invalid.*api key/i.test(message)
-        ? 'Provider rejected API credentials'
-        : /only send.*testing|testing.*own email/i.test(message)
-          ? 'Provider restricts test recipients'
+    message: /only send.*testing|testing.*own email/i.test(message)
+      ? 'Provider restricts test recipients'
+      : /domain.*not verified|verify.*domain/i.test(message)
+        ? 'Sender domain is not verified'
+        : /api key.*invalid|invalid.*api key/i.test(message)
+          ? 'Provider rejected API credentials'
           : /too many requests|rate limit/i.test(message)
             ? 'Provider rate limit exceeded'
             : 'Provider error details redacted',
