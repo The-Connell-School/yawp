@@ -6,6 +6,8 @@ import {
   response,
   requestHash,
   writeAuditRows,
+  readBoundedBody,
+  reasonSchema,
 } from './internal-admin-write.server';
 import {
   detailSelect,
@@ -25,8 +27,6 @@ import {
   removeAssignmentTypeImage,
 } from '~/domain/assignment-types/assignment-type-admin-writes.server';
 
-// Blank reasons are rejected after trimming; omission remains optional.
-const reasonSchema = z.string().trim().min(1).max(500).optional();
 const fields = {
   reason: reasonSchema,
   title: z.string().trim().min(1).max(200),
@@ -59,34 +59,6 @@ const imageSchema = z
   .strict();
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
-/** Bound allocation before authentication; Content-Length is only an early hint. */
-async function readBoundedBody(request: Request, limit: number) {
-  const tooLarge = () => response({ error: 'Request body too large' }, 413);
-  const declared = request.headers.get('content-length');
-  if (declared && /^\d+$/.test(declared.trim()) && Number(declared) > limit) {
-    void request.body?.cancel().catch(() => {});
-    throw tooLarge();
-  }
-  if (!request.body) return new Uint8Array(0);
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > limit) {
-        void reader.cancel().catch(() => {});
-        throw tooLarge();
-      }
-      chunks.push(value);
-    }
-    return Buffer.concat(chunks, size);
-  } finally {
-    reader.releaseLock();
-  }
-}
 
 type Operation =
   | 'create'

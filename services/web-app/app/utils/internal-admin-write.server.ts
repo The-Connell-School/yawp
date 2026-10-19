@@ -1,4 +1,8 @@
 import { createHash } from 'node:crypto';
+import { z } from 'zod';
+
+// Blank reasons are rejected after trimming; omission remains optional.
+export const reasonSchema = z.string().trim().min(1).max(500).optional();
 
 export const response = (value: unknown, status = 200) =>
   Response.json(value, {
@@ -59,4 +63,33 @@ export async function writeAuditRows(
       },
     ],
   });
+}
+
+/** Bound allocation before authentication; Content-Length is only an early hint. */
+export async function readBoundedBody(request: Request, limit: number) {
+  const tooLarge = () => response({ error: 'Request body too large' }, 413);
+  const declared = request.headers.get('content-length');
+  if (declared && /^\d+$/.test(declared.trim()) && Number(declared) > limit) {
+    void request.body?.cancel().catch(() => {});
+    throw tooLarge();
+  }
+  if (!request.body) return new Uint8Array(0);
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > limit) {
+        void reader.cancel().catch(() => {});
+        throw tooLarge();
+      }
+      chunks.push(value);
+    }
+    return Buffer.concat(chunks, size);
+  } finally {
+    reader.releaseLock();
+  }
 }
