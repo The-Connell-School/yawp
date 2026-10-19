@@ -137,7 +137,7 @@ function request(
   options: {
     keyId?: string;
     unsigned?: boolean;
-    raw?: string | Uint8Array;
+    raw?: string | Uint8Array<ArrayBuffer>;
     signedBody?: string | Uint8Array;
     idempotency?: string;
     legacy?: boolean;
@@ -224,7 +224,10 @@ describe('signed assignment type writes', () => {
     expect(db.$transaction).not.toHaveBeenCalled();
   });
 
-  test.each([[0xff], [0xc3, 0x28]])('rejects correctly signed invalid UTF-8 bytes %j before mutation', async (...bytes) => {
+  test.each([
+    ['invalid leading byte', [0xff]],
+    ['invalid continuation', [0xc3, 0x28]],
+  ] as const)('rejects correctly signed UTF-8 with %s before mutation', async (_label, bytes) => {
     const { handlers, db } = fixture();
     const raw = Buffer.concat([Buffer.from('{"title":"'), Buffer.from(bytes), Buffer.from('"}')]);
     const result = await handlers.update(request('PATCH', '/at-1', undefined, { raw }), 'at-1');
