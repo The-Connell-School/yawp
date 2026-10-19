@@ -2,8 +2,10 @@ import { describe, expect, test } from 'bun:test';
 import { validateRubricPromotion } from './rubric-promotion';
 import { STARTER_RUBRICS } from './starter-rubrics';
 import { parseRubricSchema } from './rubric-schema';
-import { DEFAULT_SCORING_SCALE, parseScoringScale } from '../assignment-types/assignment-type-rubric.shared';
+import { DEFAULT_SCORING_SCALE, RUBRIC_SCORING_SCALE_TYPES, parseScoringScale } from '../assignment-types/assignment-type-rubric.shared';
 import { legacyRubricDisplayConfig } from '../grading/rubric-display';
+import { ACT_WRITING_SCORING_TYPE } from '../grading/recorded-grade';
+import { POINTS_SCALE_SCORING_TYPE, RUBRIC_POINTS_SCORING_TYPE } from '../grading/gradeMath';
 const valid = () => ({ name: 'qa-rubric', title: 'QA rubric', scoringScale: { type: 'rubric_points', minScore: 0, maxScore: 4, step: 1 }, rubric: { categories: [{ key: 'claim', label: 'Claim', description: 'A supported claim.', weight: 1 }] } });
 const scoringTypeIssue = {
   path: '/scoringScale/type',
@@ -53,18 +55,17 @@ describe('promotion rubric validation', () => {
     expect(parseScoringScale({ type: 'foo', minScore: 0, maxScore: 4 }).type).toBe('foo');
   });
   test('every built-in assignment rubric and fallback scale uses a known scoring type', async () => {
-    const allowed = ['weighted_1_5', 'act_writing_2_12', 'rubric_points', 'points_scale'];
-    expect(allowed).toContain(DEFAULT_SCORING_SCALE.type);
-    expect(allowed).toContain(legacyRubricDisplayConfig.scoringType);
+    for (const type of [DEFAULT_SCORING_SCALE.type, legacyRubricDisplayConfig.scoringType,
+      ACT_WRITING_SCORING_TYPE, POINTS_SCALE_SCORING_TYPE, RUBRIC_POINTS_SCORING_TYPE]) {
+      expect(RUBRIC_SCORING_SCALE_TYPES).toContain(type);
+    }
     const directory = new URL('../assignment-types/', import.meta.url).pathname;
     let count = 0;
     for (const file of new Bun.Glob('*{-rubric,-assignment-type}.ts').scanSync(directory)) {
       const exports = await import(`${directory}${file}`);
       for (const [name, value] of Object.entries(exports)) {
         if (!name.endsWith('_SCORING_SCALE')) continue;
-        expect({ file, name, type: (value as { type: string }).type }).toMatchObject({
-          type: expect.stringMatching(/^(weighted_1_5|act_writing_2_12|rubric_points|points_scale)$/),
-        });
+        expect(RUBRIC_SCORING_SCALE_TYPES, `${file}: ${name}`).toContain((value as { type: string }).type);
         count++;
       }
     }
