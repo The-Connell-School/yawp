@@ -20,13 +20,17 @@ test.describe.serial('Thesis-Driven Essay prompt library', () => {
       })
     ).toBeVisible();
     await expect(
-      page.getByText(/open-ended prompts that\s+let them write about what interests them/i)
+      page.getByText(
+        /open-ended prompts that\s+let them write about what interests them/i
+      )
     ).toBeVisible();
 
     // Modules and Prompt Library are both collapsible and start closed.
     await page.getByRole('button', { name: 'Modules' }).click();
     await expect(
-      page.getByText(/Click on the modules to see the overview of the writing process/i)
+      page.getByText(
+        /Click on the modules to see the overview of the writing process/i
+      )
     ).toBeVisible();
 
     await expect(
@@ -52,6 +56,10 @@ test.describe.serial('Thesis-Driven Essay prompt library', () => {
 
     // Title is required on the thesis flow: Create is blocked until it's filled.
     const dialog = page.getByRole('dialog');
+    await dialog
+      .getByRole('checkbox', { name: /Grade 9th/ })
+      .first()
+      .check();
     await expect(dialog.getByLabel('Title')).toBeVisible();
     await expect(
       dialog.getByRole('button', { name: 'Create Assignment' })
