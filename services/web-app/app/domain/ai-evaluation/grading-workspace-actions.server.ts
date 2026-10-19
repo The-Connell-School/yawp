@@ -5,6 +5,7 @@ import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/as
 import { parseRubric } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import {
   type AssignmentTypeEvaluationExecution,
+  type AssignmentTypeEvaluationSuiteResult,
   runAssignmentTypeEvaluationSuite,
 } from '~/domain/ai-evaluation/assignment-type-evaluation-suite.server';
 import {
@@ -203,7 +204,7 @@ export function updateWorkspaceEvaluationCase(
   });
 }
 
-/** Shared admin operation. The internal API supplies its already locked transaction. */
+/** Shared admin operation; run providers execute between database writes. */
 export async function executeGradingWorkspaceAction(
   input: z.infer<typeof WorkspaceActionSchema>,
   request: Request,
@@ -214,42 +215,37 @@ export async function executeGradingWorkspaceAction(
     maxCases?: number;
   } = {}
 ) {
-  const assignmentType = await db.assignmentType.findUnique({
-    where: { id: input.assignmentTypeId },
-    select: {
-      id: true,
-      title: true,
-      kind: true,
-      systemKey: true,
-      scoringScaleJson: true,
-      rubricJson: true,
-      gradingPromptConfigJson: true,
-      gradingOutputSchemaJson: true,
-      gradingCalibrationNotes: true,
-      gradingAssistantVersion: true,
-      gradingAssistantSourceTemplateId: true,
-      gradingAssistantSourceTemplateSlug: true,
-      evaluations: {
-        where: { archivedAt: null },
-        select: { id: true },
-      },
-      evaluationCases: {
-        where: { archivedAt: null },
-        orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
-        select: {
-          id: true,
-          evaluationId: true,
-          title: true,
-          rubricCategoryKey: true,
-          documentText: true,
-          criterion: true,
-          expectedOutputJson: true,
-        },
-      },
-    },
-  });
+  if (input.intent === 'runSuite') {
+    const prepared = await prepareWorkspaceEvaluationRun(
+      input,
+      request,
+      db,
+      runOptions
+    );
+    if (!('execute' in prepared)) return prepared;
+    try {
+      const result = await prepared.execute();
+      await db.$transaction((tx) => prepared.complete(tx, result));
+      return dataResponse({
+        success: true,
+        runId: prepared.run.id,
+        summary: result.summary,
+      });
+    } catch (error) {
+      await prepared.fail(db);
+      return errorResponse(
+        error instanceof Error
+          ? error.message
+          : 'The evaluation suite could not run.',
+        500
+      );
+    }
+  }
+  const assignmentType = await loadWorkspaceAssignmentType(
+    db,
+    input.assignmentTypeId
+  );
   if (!assignmentType) return errorResponse('Assignment type not found.', 404);
-
   const resolvedGradingConfig = await resolveAssignmentTypeGradingConfig({
     assignmentTypeId: assignmentType.id,
     assignmentTypeKind: assignmentType.kind,
@@ -909,7 +905,73 @@ export async function executeGradingWorkspaceAction(
       return errorResponse('Evaluation case not found.', 404);
     return dataResponse({ success: true });
   }
+}
 
+function loadWorkspaceAssignmentType(
+  db: Prisma.TransactionClient,
+  assignmentTypeId: string
+) {
+  return db.assignmentType.findUnique({
+    where: { id: assignmentTypeId },
+    select: {
+      id: true,
+      title: true,
+      kind: true,
+      systemKey: true,
+      scoringScaleJson: true,
+      rubricJson: true,
+      gradingPromptConfigJson: true,
+      gradingOutputSchemaJson: true,
+      gradingCalibrationNotes: true,
+      gradingAssistantVersion: true,
+      gradingAssistantSourceTemplateId: true,
+      gradingAssistantSourceTemplateSlug: true,
+      evaluations: {
+        where: { archivedAt: null },
+        select: { id: true },
+      },
+      evaluationCases: {
+        where: { archivedAt: null },
+        orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+        select: {
+          id: true,
+          evaluationId: true,
+          title: true,
+          rubricCategoryKey: true,
+          documentText: true,
+          criterion: true,
+          expectedOutputJson: true,
+        },
+      },
+    },
+  });
+}
+
+type WorkspaceRunOptions = {
+  execute?: (input: AssignmentTypeEvaluationExecution) => Promise<string>;
+  signal?: AbortSignal;
+  maxCases?: number;
+};
+
+/** Capture immutable inputs and create the running artifact; never calls a provider.
+ * The caller owns the short preparation/finalization transactions.
+ */
+export async function prepareWorkspaceEvaluationRun(
+  input: z.infer<typeof RunSuiteSchema>,
+  request: Request,
+  db: Prisma.TransactionClient,
+  runOptions: WorkspaceRunOptions = {}
+) {
+  const assignmentType = await loadWorkspaceAssignmentType(
+    db,
+    input.assignmentTypeId
+  );
+  if (!assignmentType) return errorResponse('Assignment type not found.', 404);
+  const resolvedGradingConfig = await resolveAssignmentTypeGradingConfig({
+    assignmentTypeId: assignmentType.id,
+    assignmentTypeKind: assignmentType.kind,
+    assignmentTypeTitle: assignmentType.title,
+  });
   if (assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
     return errorResponse(
       'AP History suite runs require an assignment snapshot.'
@@ -1031,7 +1093,7 @@ export async function executeGradingWorkspaceAction(
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
   const useE2EFixture = process.env.E2E === 'true';
 
-  try {
+  const execute = async () => {
     const suiteResult = await runAssignmentTypeEvaluationSuite({
       gradingConfig,
       evaluationCases,
@@ -1094,50 +1156,46 @@ export async function executeGradingWorkspaceAction(
     // Case execution records provider failures as results; an expired request must
     // never leave a completed artifact that could satisfy promotion.
     runOptions.signal?.throwIfAborted();
-    await db.$transaction(async (tx) => {
-      await tx.assignmentTypeEvaluationResult.createMany({
-        data: suiteResult.results.map((result) => ({
-          runId: run.id,
-          caseId: result.caseId,
-          caseTitle: result.caseTitle,
-          rubricCategoryKey: result.rubricCategoryKey,
-          criterion: result.criterion,
-          status: result.status,
-          evidence: result.evidence,
-          ...(result.gradingOutput
-            ? { gradingOutputJson: inputJson(result.gradingOutput) }
-            : {}),
-          ...(result.expectedOutput
-            ? { expectedOutputJson: inputJson(result.expectedOutput) }
-            : {}),
-          responseContractJson: inputJson(result.responseContract),
-          ...(result.requestSnapshot
-            ? { requestSnapshotJson: inputJson(result.requestSnapshot) }
-            : {}),
-        })),
-      });
-      await tx.assignmentTypeEvaluationRun.update({
-        where: { id: run.id },
-        data: {
-          status: 'completed',
-          passedCases: suiteResult.summary.passed,
-          failedCases: suiteResult.summary.failed,
-          needsReviewCases: suiteResult.summary.needsReview,
-          completedAt: new Date(),
-        },
-      });
+    return suiteResult;
+  };
+  const complete = async (
+    tx: Prisma.TransactionClient,
+    suiteResult: AssignmentTypeEvaluationSuiteResult
+  ) => {
+    await tx.assignmentTypeEvaluationResult.createMany({
+      data: suiteResult.results.map((result) => ({
+        runId: run.id,
+        caseId: result.caseId,
+        caseTitle: result.caseTitle,
+        rubricCategoryKey: result.rubricCategoryKey,
+        criterion: result.criterion,
+        status: result.status,
+        evidence: result.evidence,
+        ...(result.gradingOutput
+          ? { gradingOutputJson: inputJson(result.gradingOutput) }
+          : {}),
+        ...(result.expectedOutput
+          ? { expectedOutputJson: inputJson(result.expectedOutput) }
+          : {}),
+        responseContractJson: inputJson(result.responseContract),
+        ...(result.requestSnapshot
+          ? { requestSnapshotJson: inputJson(result.requestSnapshot) }
+          : {}),
+      })),
     });
-
-    return dataResponse({
-      success: true,
-      runId: run.id,
-      summary: suiteResult.summary,
+    await tx.assignmentTypeEvaluationRun.update({
+      where: { id: run.id },
+      data: {
+        status: 'completed',
+        passedCases: suiteResult.summary.passed,
+        failedCases: suiteResult.summary.failed,
+        needsReviewCases: suiteResult.summary.needsReview,
+        completedAt: new Date(),
+      },
     });
-  } catch (error) {
-    // The internal API owns atomic rollback. Preserve the original database
-    // error instead of trying another statement in an aborted transaction.
-    if (runOptions.signal) throw error;
-    await db.assignmentTypeEvaluationRun.update({
+  };
+  const fail = (tx: Prisma.TransactionClient) =>
+    tx.assignmentTypeEvaluationRun.update({
       where: { id: run.id },
       data: {
         status: 'failed',
@@ -1145,11 +1203,5 @@ export async function executeGradingWorkspaceAction(
         completedAt: new Date(),
       },
     });
-    return errorResponse(
-      error instanceof Error
-        ? error.message
-        : 'The evaluation suite could not run.',
-      500
-    );
-  }
+  return { run, execute, complete, fail };
 }

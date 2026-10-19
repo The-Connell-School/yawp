@@ -13,15 +13,12 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       throw new Error('Requires an isolated local Yawp database');
     process.env.DATABASE_URL = connection;
     const { prisma } = await import('./db.server');
-    const { signInternalApiRequest } = await import(
-      './internal-platform-signing.server'
-    );
-    const { recordInternalPlatformWriteAudit } = await import(
-      './internal-platform-auth.server'
-    );
-    const { createInternalGradingWorkspaceHandlers } = await import(
-      './internal-grading-workspace.server'
-    );
+    const { signInternalApiRequest } =
+      await import('./internal-platform-signing.server');
+    const { recordInternalPlatformWriteAudit } =
+      await import('./internal-platform-auth.server');
+    const { createInternalGradingWorkspaceHandlers } =
+      await import('./internal-grading-workspace.server');
     const keyId = `grading-${randomBytes(8).toString('hex')}`;
     const secret = randomBytes(32).toString('base64url');
     const saved = {
@@ -461,44 +458,98 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
           where: { assignmentTypeId: id },
         })
       ).toBe(1);
-      const failedRun = await prisma.assignmentTypeEvaluationRun.findFirstOrThrow({where:{assignmentTypeId:id}});
+      const failedRun =
+        await prisma.assignmentTypeEvaluationRun.findFirstOrThrow({
+          where: { assignmentTypeId: id },
+        });
       expect(failedRun.status).toBe('failed');
       expect(failedRun.completedAt).not.toBeNull();
-      expect(await prisma.assignmentTypeEvaluationResult.count({where:{runId:failedRun.id}})).toBe(0);
+      expect(
+        await prisma.assignmentTypeEvaluationResult.count({
+          where: { runId: failedRun.id },
+        })
+      ).toBe(0);
       expect(
         await prisma.internalPlatformApiAudit.count({ where: { keyId } })
       ).toBe(beforeTimeout + 2);
-      const overlapDraftResponse = await handlers.handle('promptVersions',request('POST','/prompt-versions',{},'overlap-draft'),id);
+      const overlapDraftResponse = await handlers.handle(
+        'promptVersions',
+        request('POST', '/prompt-versions', {}, 'overlap-draft'),
+        id
+      );
       expect(overlapDraftResponse.status).toBe(201);
       const overlapDraft = (await overlapDraftResponse.json()).promptVersion;
       let providerReady!: () => void;
       let releaseProvider!: () => void;
-      const providerWaiting = new Promise<void>((resolve) => {providerReady = resolve;});
-      const providerGate = new Promise<void>((resolve) => {releaseProvider = resolve;});
-      const slow = createInternalGradingWorkspaceHandlers({db:prisma, execute: async ({purpose}) => {
-        calls++;
-        providerReady();
-        await providerGate;
-        return JSON.stringify(purpose === 'criterion' ? {passed:true,evidence:'Grounded in the sample'} : expectedOutput);
-      }});
-      const inFlight = slow.handle('runs',request('POST','/evaluation-runs',runBody,'run'),id);
+      const providerWaiting = new Promise<void>((resolve) => {
+        providerReady = resolve;
+      });
+      const providerGate = new Promise<void>((resolve) => {
+        releaseProvider = resolve;
+      });
+      const slow = createInternalGradingWorkspaceHandlers({
+        db: prisma,
+        execute: async ({ purpose }) => {
+          calls++;
+          providerReady();
+          await providerGate;
+          return JSON.stringify(
+            purpose === 'criterion'
+              ? { passed: true, evidence: 'Grounded in the sample' }
+              : expectedOutput
+          );
+        },
+      });
+      const inFlight = slow.handle(
+        'runs',
+        request('POST', '/evaluation-runs', runBody, 'run'),
+        id
+      );
       await providerWaiting;
       try {
         // A different connection performs the same parent UPDATE as the admin editor.
         // Its server-side deadline proves completion while the provider is paused.
-        await prisma.$transaction(async (tx) => {
-          await tx.$executeRaw`SET LOCAL lock_timeout = '500ms'`;
-          await tx.assignmentType.update({where:{id},data:{title:'Edited while provider waits'}});
-        }, {timeout:2000});
-        const overlapping = await handlers.handle('promptVersion',request('DELETE',`/prompt-versions/${overlapDraft.id}`),id,overlapDraft.id);
+        await prisma.$transaction(
+          async (tx) => {
+            await tx.$executeRaw`SET LOCAL lock_timeout = '500ms'`;
+            await tx.assignmentType.update({
+              where: { id },
+              data: { title: 'Edited while provider waits' },
+            });
+          },
+          { timeout: 2000 }
+        );
+        const overlapping = await handlers.handle(
+          'promptVersion',
+          request('DELETE', `/prompt-versions/${overlapDraft.id}`),
+          id,
+          overlapDraft.id
+        );
         expect(overlapping.status).toBe(200);
-        const pending = await handlers.handle('runs',request('POST','/evaluation-runs',runBody,'run'),id);
+        const pending = await handlers.handle(
+          'runs',
+          request('POST', '/evaluation-runs', runBody, 'run'),
+          id
+        );
         expect(pending.status).toBe(409);
-        expect((await pending.json()).error).toContain('waiting for another write');
-        const mismatch = await handlers.handle('runs',request('POST','/evaluation-runs',{...runBody,promptVersion:'1'},'run'),id);
+        expect((await pending.json()).error).toContain(
+          'waiting for another write'
+        );
+        const mismatch = await handlers.handle(
+          'runs',
+          request(
+            'POST',
+            '/evaluation-runs',
+            { ...runBody, promptVersion: '1' },
+            'run'
+          ),
+          id
+        );
         expect(mismatch.status).toBe(409);
         expect((await mismatch.json()).error).toContain('different request');
-      } finally {releaseProvider();}
+      } finally {
+        releaseProvider();
+      }
       const started = await inFlight;
       expect(started.status).toBe(201);
       const run = (await started.json()).run;
@@ -754,9 +805,8 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
         audits: await auditCount(),
       }).toEqual(fullState);
 
-      const { executeGradingWorkspaceAction } = await import(
-        '~/domain/ai-evaluation/grading-workspace-actions.server'
-      );
+      const { executeGradingWorkspaceAction } =
+        await import('~/domain/ai-evaluation/grading-workspace-actions.server');
       const adminSave = await executeGradingWorkspaceAction(
         {
           intent: 'updateEvaluation',

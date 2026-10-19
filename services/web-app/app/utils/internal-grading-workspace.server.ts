@@ -36,6 +36,12 @@ import { computeIpHash } from './ai-usage-log.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { randomUUID } from 'node:crypto';
 
+import { startInternalEvaluationRun } from './internal-evaluation-run.server';
+export {
+  INTERNAL_EVALUATION_RUN_BUDGET_MS,
+  INTERNAL_EVALUATION_RUN_MAX_CASES,
+} from './internal-evaluation-run.server';
+
 const text = (max: number) => z.string().trim().min(1).max(max);
 const ref = z.string().regex(identifier);
 const promptRef = ref.refine(
@@ -159,10 +165,6 @@ const allowed: Record<GradingWorkspaceResource, string[]> = {
   benchmarkCases: ['GET'],
   benchmarkRun: ['POST'],
 };
-// Production App Runner and CloudFront allow 120s (infra/main.tf). Reserve
-// ample time for body/auth, lock acquisition, rollback, audits, and the response.
-export const INTERNAL_EVALUATION_RUN_BUDGET_MS = 45_000;
-export const INTERNAL_EVALUATION_RUN_MAX_CASES = 8;
 const json = (v: unknown) => JSON.parse(JSON.stringify(v));
 
 export function createInternalGradingWorkspaceHandlers(input: {
@@ -284,25 +286,6 @@ export function createInternalGradingWorkspaceHandlers(input: {
         (key.length > 200 || !/^[\x21-\x7e]+$/.test(key))
       )
         return response({ error: 'Invalid Idempotency-Key' }, 400);
-      const runController =
-        resource === 'runs' && create ? new AbortController() : null;
-      const runTimer = runController
-        ? setTimeout(
-            () => runController.abort(),
-            Math.min(
-              input.runBudgetMs ?? INTERNAL_EVALUATION_RUN_BUDGET_MS,
-              INTERNAL_EVALUATION_RUN_BUDGET_MS
-            )
-          )
-        : null;
-      const budgetError = () =>
-        response(
-          {
-            error:
-              'Evaluation run exceeded its 45-second time budget; reduce the case count or input size and retry.',
-          },
-          422
-        );
       const action = `grading-workspace.${resource}.${request.method.toLowerCase()}`;
       const execute =
         input.execute ??
@@ -324,13 +307,22 @@ export function createInternalGradingWorkspaceHandlers(input: {
               ipHash: computeIpHash(request),
             },
           }));
+      if (resource === 'runs' && create)
+        return startInternalEvaluationRun({
+          db: input.db,
+          request,
+          assignmentTypeId: id!,
+          value,
+          auth,
+          endpoint,
+          hash,
+          key: key!,
+          execute,
+          budgetMs: input.runBudgetMs,
+        });
       try {
         return await input.db.$transaction(
           async (tx) => {
-            // Driver transaction deadlines alone need not interrupt a blocked
-            // Postgres statement. Bound lock/query waits on the server too.
-            if (runController)
-              await tx.$queryRaw`SELECT set_config('lock_timeout', '5s', true), set_config('statement_timeout', '10s', true)`;
             if (!read) {
               if (benchmark)
                 await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${`grading-benchmark:${child}`},0))`;
@@ -381,41 +373,8 @@ export function createInternalGradingWorkspaceHandlers(input: {
               const result = await executeGradingWorkspaceAction(
                 WorkspaceActionSchema.parse(fields),
                 request,
-                db,
-                resource === 'runs'
-                  ? {
-                      maxCases: INTERNAL_EVALUATION_RUN_MAX_CASES,
-                      signal: runController!.signal,
-                      execute: async ({
-                        evaluationCase: _evaluationCase,
-                        ...completion
-                      }) => {
-                        const signal = runController!.signal;
-                        signal.throwIfAborted();
-                        // Race also bounds injected providers that ignore AbortSignal.
-                        let onAbort: () => void;
-                        const aborted = new Promise<never>((_, reject) => {
-                          onAbort = () =>
-                            reject(
-                              new Error('Evaluation run time budget exceeded')
-                            );
-                          signal.addEventListener('abort', onAbort, {
-                            once: true,
-                          });
-                        });
-                        try {
-                          return await Promise.race([
-                            execute({ ...completion, signal }),
-                            aborted,
-                          ]);
-                        } finally {
-                          signal.removeEventListener('abort', onAbort!);
-                        }
-                      },
-                    }
-                  : undefined
+                db
               );
-              if (runController?.signal.aborted) throw budgetError();
               if (!result.data.success)
                 throw response(
                   {
@@ -551,27 +510,7 @@ export function createInternalGradingWorkspaceHandlers(input: {
               after: unknown = null,
               result: unknown,
               targetId = child ?? id!;
-            if (resource === 'runs') {
-              const owner = await suite(value.suiteId);
-              if (!owner)
-                return response({ error: 'Evaluation suite not found' }, 404);
-              const row = await prompt(value.promptVersion);
-              if (!row)
-                return response({ error: 'Prompt version not found' }, 404);
-              // Admin promotion requires the full current assignment type snapshot,
-              // including other active groups and legacy cases, never a partial run.
-              const started = await invoke({
-                intent: 'runSuite',
-                assignmentTypeId: id,
-                promptVersionId: row.id,
-              });
-              targetId = 'runId' in started ? String(started.runId) : '';
-              after = await runDetail(targetId);
-              result = { run: after };
-            } else if (
-              resource === 'promptVersion' &&
-              request.method === 'DELETE'
-            ) {
+            if (resource === 'promptVersion' && request.method === 'DELETE') {
               const row = await prompt(child!);
               if (!row)
                 return response({ error: 'Prompt version not found' }, 404);
@@ -866,7 +805,6 @@ export function createInternalGradingWorkspaceHandlers(input: {
               after = { status: caseResult.status };
               targetId = child!;
             }
-            if (runController?.signal.aborted) throw budgetError();
             await writeAuditRows(tx, {
               auth,
               endpoint,
@@ -882,30 +820,11 @@ export function createInternalGradingWorkspaceHandlers(input: {
           },
           {
             isolationLevel: 'ReadCommitted',
-            timeout: runController ? 55000 : 120000,
+            timeout: 120000,
             maxWait: 2000,
           }
         );
       } catch (error) {
-        if (runController?.signal.aborted) return budgetError();
-        if (runController && error instanceof Error) {
-          if (/lock timeout/i.test(error.message))
-            return response(
-              {
-                error:
-                  'An evaluation run request is waiting for another write; retry after it completes.',
-              },
-              409
-            );
-          if (/statement timeout/i.test(error.message))
-            return response(
-              {
-                error:
-                  'Evaluation run database time budget exceeded; retry the request.',
-              },
-              422
-            );
-        }
         if (error instanceof Response)
           return response(
             {
@@ -921,8 +840,6 @@ export function createInternalGradingWorkspaceHandlers(input: {
           { error: 'The grading workspace request could not complete' },
           500
         );
-      } finally {
-        if (runTimer !== null) clearTimeout(runTimer);
       }
     },
   };
