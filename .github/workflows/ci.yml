@@ -667,6 +667,14 @@ jobs:
           CI=1 bun test --max-concurrency=2 app/utils/internal-assignment-type-writes.integration.test.ts app/utils/internal-assignment-type-module-writes.integration.test.ts app/utils/internal-grading-workspace.integration.test.ts
           CI=1 bun test --max-concurrency=2 app/utils/internal-owner-invitations.integration.test.ts
 
+      - name: Teacher training API database lifecycle
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          INTERNAL_DIRECTORY_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: CI=1 bun test --max-concurrency=2 app/utils/internal-teacher-trainings.integration.test.ts
+
   typecheck-web-app:
     needs: [paths]
     name: ʦ TypeScript
@@ -708,6 +716,10 @@ jobs:
         if: ${{ needs.paths.outputs.code == 'true' }}
         working-directory: services/web-app
         run: bun test app/utils/ai-usage-log.server.test.ts app/utils/getLLMCompletion/getLLMCompletion.test.ts
+
+      - name: Teacher training API contracts
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        run: CI=1 ./bin/project test --profile internal-teacher-trainings --json
 
       - name: Assignment type write API contracts
         if: ${{ needs.paths.outputs.code == 'true' }}
