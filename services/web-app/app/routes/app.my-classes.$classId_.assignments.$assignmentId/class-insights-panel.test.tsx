@@ -30,6 +30,7 @@ const actualReactRouter = await import('react-router');
 mock.module('react-router', () => ({
   ...actualReactRouter,
   useFetcher: () => fetcher,
+  useRouteLoaderData: () => ({}),
 }));
 
 import type { ClassInsight } from './class-insights-panel';
@@ -42,7 +43,8 @@ const READY_INSIGHT: ClassInsight = {
   submissionCount: 24,
   generatedAt: '2026-07-08T00:00:00.000Z',
   summary: {
-    overview: 'The class writes strong theses but struggles to analyze evidence.',
+    overview:
+      'The class writes strong theses but struggles to analyze evidence.',
     categories: [
       {
         key: 'thesis_and_content',
@@ -139,7 +141,9 @@ describe('ClassInsightsPanel', () => {
     );
     expect(el.textContent).toMatch(/summarize class performance/i);
     expect(el.textContent).not.toContain('strong theses');
-    expect(el.querySelector('[data-testid="class-summary-placeholder"]')).toBeTruthy();
+    expect(
+      el.querySelector('[data-testid="class-summary-placeholder"]')
+    ).toBeTruthy();
     expect(
       el.querySelector('[data-testid="class-insight-generate-button"]')
     ).toBeTruthy();
@@ -178,7 +182,9 @@ describe('ClassInsightsPanel', () => {
     expect(el.textContent).toContain('Evidence/Support');
     expect(el.textContent).toContain('Model quote analysis');
     expect(el.textContent).toMatch(/24 submissions/i);
-    expect(el.querySelector('[data-testid="class-summary-placeholder"]')).toBeFalsy();
+    expect(
+      el.querySelector('[data-testid="class-summary-placeholder"]')
+    ).toBeFalsy();
     // regenerate affordance is available once an insight exists
     expect(el.textContent).toMatch(/regenerate|update/i);
 
@@ -444,7 +450,8 @@ describe('resolveClassInsightPanelPresentation', () => {
         generatedAt: null,
         generateAvailability: {
           canGenerate: false,
-          reason: 'Grade a few submissions first, then generate class insights.',
+          reason:
+            'Grade a few submissions first, then generate class insights.',
         },
       }).subtitle
     ).toBe('Grade a few submissions first, then generate class insights.');
@@ -469,3 +476,26 @@ describe('resolveClassInsightPanelPresentation', () => {
     expect(presentation.showGenerateButton).toBe(false);
   });
 });
+
+it.each([0, 1, 11, 12])(
+  'shows a scored chip only for a partial count (%s of 12)',
+  (scoredCount) => {
+    const el = render(
+      <ClassInsightsPanel
+        classAssignmentId="ca-1"
+        gradedCount={12}
+        initialInsight={{
+          ...READY_INSIGHT,
+          submissionCount: 12,
+          summary: { ...READY_INSIGHT.summary!, scoredCount },
+        }}
+      />
+    );
+    const chip = Array.from(el.querySelectorAll('span')).find(
+      (span) => span.textContent === 'scored'
+    );
+    expect(Boolean(chip)).toBe(scoredCount < 12);
+    if (chip)
+      expect(chip.parentElement?.textContent).toBe(`${scoredCount}scored`);
+  }
+);
