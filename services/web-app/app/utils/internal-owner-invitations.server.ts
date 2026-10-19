@@ -120,7 +120,7 @@ export function createInternalOwnerInvitationHandlers(input: {
     if (!parsed.success)
       return response({ error: 'Invalid invitation request' }, 400);
     const hash = requestHash(body);
-    const endpoint = `POST ${new URL(request.url).pathname}`;
+    const endpoint = `POST ${new URL(request.url).pathname.replace(/\/$/, '')}`;
     const action = `organization.invitation.${operation}`;
     const idempotencyKey =
       operation === 'create'

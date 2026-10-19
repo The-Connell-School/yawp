@@ -74,10 +74,10 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
         expiresInDays: 30,
         reason: '  Integration owner onboarding  ',
       };
-      // Fresh signatures and nonces, one idempotency key: concurrent creates serialize.
+      // Fresh signatures and nonces, one key across both URL forms: creates serialize.
       const creates = await Promise.all(
-        [1, 2].map(() =>
-          handlers.create(request('POST', '', value, keyId), organization.id)
+        ['', '/'].map((path) =>
+          handlers.create(request('POST', path, value, keyId), organization.id)
         )
       );
       expect(creates.map((r) => r.status).sort()).toEqual([200, 201]);
