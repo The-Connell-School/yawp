@@ -83,6 +83,13 @@ run('editing an already-versioned rubric leaves pinned assignments and every old
   // Baseline the way production did on 2026-09-30: a write of schemaJson creates v1 via the trigger.
   const first = await catalog.get(name);
   const doc1 = structuredClone(first.live.editable) as any; doc1.calibrationNotes = 'Baseline notes';
+  // Historical content still opens, but staging a new revision requires a known type.
+  expect(doc1.scoringScale.type).toBe('weighted_percent');
+  await expect(catalog.stage({ key: name, requestId: randomUUID(), actorEmail: actor, reason: 'Validate legacy scale', document: doc1, source: source() })).rejects.toMatchObject({
+    statusCode: 422,
+    issues: [{ path: '/scoringScale/type', message: 'Scoring type must be one of weighted_1_5, act_writing_2_12, rubric_points, points_scale.' }],
+  });
+  doc1.scoringScale.type = 'rubric_points';
   const v1 = await catalog.save({ key: name, requestId: randomUUID(), actorEmail: actor, reason: 'Baseline', expectedFingerprint: first.live.fingerprint, document: doc1 });
   const existing = await db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'Pinned to current' } });
   expect(existing.rubricRevisionId).toBe(v1.revision.id);
