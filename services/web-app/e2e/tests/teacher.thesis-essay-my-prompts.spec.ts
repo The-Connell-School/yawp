@@ -57,7 +57,9 @@ async function openGenerator(page: import('@playwright/test').Page) {
 }
 
 async function openMyPrompts(page: import('@playwright/test').Page) {
-  await page.getByRole('button', { name: /Prompt Library/i }).click();
+  await page
+    .getByRole('button', { name: 'Prompt Library', exact: true })
+    .click();
   await expect(page.getByPlaceholder('Search prompts')).toBeVisible();
   const myPrompts = page.getByRole('checkbox', { name: 'My prompts' }).first();
   await expect(myPrompts).toBeVisible();
@@ -163,13 +165,20 @@ test.describe.serial('Thesis-Driven Essay — My prompts', () => {
     await page.goto(
       `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
     );
-    await page.getByRole('button', { name: /Prompt Library/i }).click();
+    await page
+      .getByRole('button', { name: 'Prompt Library', exact: true })
+      .click();
     await expect(page.getByPlaceholder('Search prompts')).toBeVisible();
 
-    // Saved prompts are scoped to the assignment type they were saved from.
+    // Each type has its own My prompts collection; thesis saves do not enter Daily Pages.
+    const dailyMine = page
+      .getByRole('checkbox', { name: 'My prompts' })
+      .first();
+    await dailyMine.click();
+    await expect(dailyMine).toBeChecked();
     await expect(
-      page.getByRole('checkbox', { name: 'My prompts' })
-    ).toHaveCount(0);
+      page.getByText(/^You haven’t saved any prompts yet/)
+    ).toBeVisible();
     await expect(
       page.getByRole('heading', { name: SAVED_OPTION.title, level: 3 })
     ).toHaveCount(0);
