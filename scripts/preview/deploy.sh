@@ -888,6 +888,10 @@ apply_preview_signon_flag() {
   "${compose[@]}" run --rm toolbox bun /preview-control/unified-signon-flag.mjs
 }
 
+if [[ "${DEMO_TRAINING_MEDIA_ENABLED:-false}" == "true" ]]; then
+  bash "$SCRIPT_DIR/install-demo-training-media.sh"
+fi
+
 ensure_shared_postgres
 
 assert_no_master_code_collision() {
