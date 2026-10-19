@@ -171,6 +171,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
         body,
       }),
     } as any);
+    expect(prisma.assignmentModuleSession.findUnique.mock.calls.at(-1)![0].include.assignmentModule.include.instructions.omit).toEqual({ answerKey: true });
     const completionArgs = getLLMCompletion.mock.calls.at(-1)?.[0] as any;
     return completionArgs.system[0].text as string;
   }

@@ -151,6 +151,7 @@ describe('api.model.assignment-module-session.$id', () => {
 
     const updateCall = prisma.assignmentModuleSession.update.mock.calls[0];
     expect(updateCall[0].data.updatedAt).toBeInstanceOf(Date);
+    expect(prisma.assignmentModuleSession.findUnique.mock.calls.at(-1)![0].include.assignmentModule.include.instructions.omit).toEqual({ answerKey: true });
     expect(updateCall[0].data.messages).toBeDefined();
     expect(updateCall[0].data.messages.createMany.data).toHaveLength(2);
     expect(updateCall[0].data.messages.createMany.data[0].instructionId).toBe(
