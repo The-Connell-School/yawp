@@ -22,6 +22,7 @@ export const meta: MetaFunction = () => [
 const demoUrl = 'https://app.usemotion.com/meet/brian-connell/ryxkqvr';
 const loginUrl = '/auth/login';
 const accessibilityUrl = '/accessibility';
+const privacyUrl = '/privacy';
 const contactUrl =
   'mailto:yawp@theconnellschool.com?subject=YAWP!%20Writing%20Program';
 const connellUrl = 'https://www.theconnellschool.com/';
@@ -327,6 +328,7 @@ export default function IndexRoute() {
         <p>
           <a href={contactUrl}>Contact</a>
           <a href="/accessibility">Accessibility</a>
+          <a href={privacyUrl}>Privacy</a>
           <a href={connellUrl} target="_blank" rel="noreferrer">
             The Connell School of Writing
           </a>
@@ -346,6 +348,10 @@ export default function IndexRoute() {
           <span className="yawp-footer-divider" aria-hidden="true" />
           <a className="yawp-footer-meta-link" href={accessibilityUrl}>
             Accessibility
+          </a>
+          <span className="yawp-footer-divider" aria-hidden="true" />
+          <a className="yawp-footer-meta-link" href={privacyUrl}>
+            Privacy
           </a>
         </p>
       </footer>
