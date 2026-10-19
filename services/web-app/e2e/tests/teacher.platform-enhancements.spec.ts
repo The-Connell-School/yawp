@@ -603,6 +603,65 @@ test.describe('Platform enhancements', () => {
     }
   });
 
+  test('lesson links keep their prefilled assignment and way back in v2', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setFeatureFlag(PLATFORM_ENHANCEMENTS_FLAG, true);
+    try {
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      const prompt =
+        'Which idea from today would you take a different angle on?';
+      const warmup = new URLSearchParams({
+        newPrompt: prompt,
+        fromLesson: 'v2-planned-lesson',
+      });
+      await page.goto(
+        `/app/assignment-types/${e2eContext.classStarterAssignmentTypeId}?${warmup}`
+      );
+      await expect(
+        page.getByRole('dialog').locator('textarea[name="prompt"]')
+      ).toHaveValue(prompt);
+      await expect(page).not.toHaveURL(/newPrompt=/);
+      await page
+        .getByRole('dialog')
+        .getByRole('button', { name: 'Close', exact: true })
+        .click();
+      await expect(page.getByTestId('back-to-lesson')).toHaveAttribute(
+        'href',
+        '/app/lesson-planner?c=v2-planned-lesson'
+      );
+      const question = 'What would you tell a friend who missed this lesson?';
+      const ticket = new URLSearchParams({
+        exitTicketMode: 'basic',
+        exitTicketReflectionPrompt: 'custom',
+        exitTicketReflectionPromptText: question,
+        fromLesson: 'v2-planned-lesson',
+      });
+      await page.goto(
+        `/app/assignment-types/${e2eContext.exitTicketAssignmentTypeId}?${ticket}`
+      );
+      await expect(
+        page.getByRole('dialog').getByLabel('Your question')
+      ).toHaveValue(question);
+      await expect(
+        page.locator('#assignment-create-exit-ticket-preview')
+      ).toContainText(question);
+      await expect(page).not.toHaveURL(/exitTicketMode=/);
+      await page
+        .getByRole('dialog')
+        .getByRole('button', { name: 'Close', exact: true })
+        .click();
+      await expect(page.getByTestId('back-to-lesson')).toHaveAttribute(
+        'href',
+        '/app/lesson-planner?c=v2-planned-lesson'
+      );
+    } finally {
+      await setFeatureFlag(PLATFORM_ENHANCEMENTS_FLAG, false);
+    }
+  });
+
   test('keeps the lock badge and new icons in the free-account sidebar', async ({
     page,
     signIn,
