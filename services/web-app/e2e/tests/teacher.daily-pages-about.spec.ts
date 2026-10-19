@@ -24,7 +24,7 @@ test.describe.serial('Daily Pages about section', () => {
       page.getByRole('heading', { name: 'About Daily Pages' })
     ).toBeVisible();
     await expect(
-      page.getByText('Daily Pages is short academic paragraph practice.')
+      page.getByText(/^Daily Pages is low-stakes writing practice:/)
     ).toBeVisible();
 
     for (const section of [
@@ -33,19 +33,18 @@ test.describe.serial('Daily Pages about section', () => {
       'How it is graded',
       'Using it with a class',
       'Writing your own prompt',
-      'How the Daily Pages library works',
+      'Prompt library',
     ]) {
-      await expect(page.getByRole('button', { name: section })).toHaveAttribute(
-        'aria-expanded',
-        'false'
-      );
+      await expect(
+        page.getByRole('button', { name: section, exact: true })
+      ).toHaveAttribute('aria-expanded', 'false');
     }
 
     // Collapsed means collapsed: the copy inside is not on screen yet.
-    await expect(
-      page.getByText('Not a warm-up, and not an exploration.')
-    ).toHaveCount(0);
-    await expect(page.getByText('Ask for the backing')).toHaveCount(0);
+    await expect(page.getByText('Not a formal essay paragraph.')).toHaveCount(
+      0
+    );
+    await expect(page.getByText('Name the prompt clearly.')).toHaveCount(0);
     // Not "Claim and defend" — the kind labels also live in the prompt grid's
     // filters below, so the directions' own opening line is what to check.
     await expect(page.getByText('Browse the prompts below')).toHaveCount(0);
@@ -65,24 +64,18 @@ test.describe.serial('Daily Pages about section', () => {
       `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
     );
 
-    // The line that separates it from a Class Starter, which is the single
-    // thing teachers get wrong.
+    // Daily Pages is engagement practice, with no grammar scoring.
     await page.getByRole('button', { name: 'What it is not' }).click();
-    await expect(
-      page.getByText('Not a warm-up, and not an exploration.')
-    ).toBeVisible();
+    await expect(page.getByText('Not a formal essay paragraph.')).toBeVisible();
 
-    // The weights come from the rubric itself, so a teacher reading this is
-    // reading what the assistant actually does.
+    // The current engagement rubric uses tiers rather than category weights.
     await page.getByRole('button', { name: 'How it is graded' }).click();
-    const grading = page.getByRole('row', { name: /Depth of Thought/ });
+    const grading = page.getByRole('row', { name: /Excellent/ });
     await expect(grading).toBeVisible();
-    await expect(grading).toContainText('30%');
+    await expect(grading).toContainText('100% — the full total');
 
     // Sections open independently — the first one stays open.
-    await expect(
-      page.getByText('Not a warm-up, and not an exploration.')
-    ).toBeVisible();
+    await expect(page.getByText('Not a formal essay paragraph.')).toBeVisible();
   });
 
   test('the prompt-writing section carries the recipe and a rewrite', async ({
@@ -97,10 +90,8 @@ test.describe.serial('Daily Pages about section', () => {
 
     await page.getByRole('button', { name: 'Writing your own prompt' }).click();
 
-    await expect(page.getByText('Ask for the backing')).toBeVisible();
-    await expect(
-      page.getByText('What did you think of Chapter 4?')
-    ).toBeVisible();
+    await expect(page.getByText('Name the prompt clearly.')).toBeVisible();
+    await expect(page.getByText('Write about chapter 4.')).toBeVisible();
     await expect(
       page.getByText('Signs a prompt will not grade well')
     ).toBeVisible();
@@ -117,12 +108,14 @@ test.describe.serial('Daily Pages about section', () => {
     );
 
     await page
-      .getByRole('button', { name: 'How the Daily Pages library works' })
+      .getByRole('button', { name: 'Prompt library', exact: true })
       .click();
 
-    await expect(page.getByText('Browse the prompts below')).toBeVisible();
     await expect(
-      page.getByText('The kinds', { exact: true })
+      page.getByRole('button', { name: 'Prompt library', exact: true })
+    ).toHaveAttribute('aria-expanded', 'true');
+    await expect(
+      page.getByText('For inspiration', { exact: true })
     ).toBeVisible();
   });
 
