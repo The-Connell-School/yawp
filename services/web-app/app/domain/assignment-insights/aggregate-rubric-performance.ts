@@ -1,4 +1,8 @@
 import {
+  hasRecordedGrade,
+  type RecordedGradeSignals,
+} from '~/domain/grading/recorded-grade';
+import {
   DEFAULT_INSIGHT_RUBRIC,
   isHighScore,
   isLowScore,
@@ -24,6 +28,11 @@ export type GradedSubmissionInput = {
   studentName?: string | null;
   rubricScores?: Record<string, SubmissionRubricEntry> | null;
   overallComment?: string | null;
+  score?: string | null;
+  overallScore?: number | null;
+  numericPercentage?: number | null;
+  gradedAt?: string | null;
+  releasedAt?: string | null;
 };
 
 export type ScoreBand = 1 | 2 | 3 | 4 | 5;
@@ -43,6 +52,8 @@ export type CategoryAggregate = {
 
 export type ClassRubricAggregate = {
   submissionCount: number;
+  scoredCount?: number;
+  finalGrades?: RecordedGradeSignals[];
   categories: CategoryAggregate[];
   strongest: string | null;
   weakest: string | null;
@@ -163,6 +174,14 @@ export function aggregateRubricPerformance(
 
   return {
     submissionCount: submissions.length,
+    scoredCount: submissions.filter(hasRecordedGrade).length,
+    finalGrades: submissions
+      .filter(hasRecordedGrade)
+      .map(({ score, overallScore, numericPercentage }) => ({
+        score,
+        overallScore,
+        numericPercentage,
+      })),
     categories,
     strongest,
     weakest,

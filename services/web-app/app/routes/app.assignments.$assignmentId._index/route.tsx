@@ -1,3 +1,4 @@
+import { currentClassInsightRows } from '~/domain/assignment-insights/class-insight-inputs.server';
 import { useFreeAccountUsage } from '~/components/free-account-usage';
 import { ExitTicketClassReadPanel } from '~/components/assignments/exit-ticket-class-read-panel';
 import { buildExitTicketClassRead } from '~/domain/assignment-types/exit-ticket-class-read';
@@ -265,7 +266,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       })
     : null;
   const insight =
-    insightRow && insightRow.status === 'ready' && insightRow.summaryJson
+    insightRow &&
+    insightRow.status === 'ready' &&
+    insightRow.summaryJson &&
+    (
+      await currentClassInsightRows([
+        { ...insightRow, classAssignmentId: active.id },
+      ])
+    ).length > 0
       ? {
           status: 'ready' as const,
           submissionCount: insightRow.submissionCount,

@@ -846,6 +846,10 @@ jobs:
             app/components/assignments/assignment-creation-sheet.test.tsx \
             app/routes/api.domain.grade-essay-ai/route.test.ts \
             app/domain/assignment-insights/class-insight-generation.server.test.ts \
+            app/domain/assignment-insights/class-insight-cache.test.ts \
+            app/domain/assignment-insights/aggregate-rubric-performance.test.ts \
+            app/domain/assignment-insights/class-insight-synthesis.test.ts \
+            'app/routes/app.my-classes.$classId_.assignments.$assignmentId/class-insights-panel.test.tsx' \
             'app/routes/app.assignments.$assignmentId._index/route.test.ts' \
             'app/routes/app.my-classes.$classId/route.test.ts' \
             'app/routes/app.my-classes.$classId/class-student-enrollment.server.test.ts' \

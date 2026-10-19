@@ -1,3 +1,4 @@
+import { classInsightFingerprint } from '~/domain/assignment-insights/class-insight-cache';
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const updateAssignmentInClassDeployment = mock();
@@ -8,6 +9,7 @@ const prisma = {
   assignment: { findFirst: mock(), update: mock() },
   assignmentType: { findFirst: mock(), findMany: mock() },
   documentGroup: { findFirst: mock() },
+  document: { findMany: mock() },
   classAssignment: { findMany: mock() },
   classAssignmentInsight: { findUnique: mock() },
   submission: { count: mock() },
@@ -101,13 +103,11 @@ const get = () =>
 describe('app.assignments.$assignmentId loader', () => {
   beforeEach(() => {
     requireUserId.mockReset().mockResolvedValue('user-1');
-    requireMembership
-      .mockReset()
-      .mockResolvedValue({
-        id: 'teacher-1',
-        role: 'TEACHER',
-        organization: { plan: 'SCHOOL' },
-      });
+    requireMembership.mockReset().mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: { plan: 'SCHOOL' },
+    });
     prisma.classAssignment.findMany
       .mockReset()
       .mockResolvedValue([deployment()]);
@@ -126,6 +126,44 @@ describe('app.assignments.$assignmentId loader', () => {
     prisma.documentGroup.findFirst.mockReset();
     prisma.setting.findUnique.mockReset().mockResolvedValue(null);
     updateAssignmentInClassDeployment.mockReset().mockResolvedValue(undefined);
+  });
+
+  test('hides legacy and changed-grade summaries on the main assignment detail page', async () => {
+    const active = deployment();
+    active.class.school.organization.classInsightsEnabled = true;
+    prisma.classAssignment.findMany.mockResolvedValue([active]);
+    const grade = { id: 'sub-1', score: '30/30', overallScore: 30 };
+    prisma.document.findMany.mockResolvedValue([
+      {
+        classAssignmentId: active.id,
+        submissions: [grade],
+      },
+    ]);
+    const row = {
+      status: 'ready',
+      submissionCount: 1,
+      generatedAt: new Date(),
+      summaryJson: { overview: 'Legacy summary' } as Record<string, unknown>,
+    };
+    prisma.classAssignmentInsight.findUnique.mockResolvedValue(row);
+    expect(((await get()) as any).assignment.insight).toBeNull();
+    row.summaryJson = {
+      overview: 'Current summary',
+      inputVersion: 2,
+      gradeFingerprint: classInsightFingerprint([
+        {
+          submissionId: grade.id,
+          score: grade.score,
+          overallScore: grade.overallScore,
+        },
+      ]),
+    };
+    expect(((await get()) as any).assignment.insight?.summary.overview).toBe(
+      'Current summary'
+    );
+    grade.score = '0/30';
+    grade.overallScore = 0;
+    expect(((await get()) as any).assignment.insight).toBeNull();
   });
 
   test('scopes deployments to classes this teacher actually teaches', async () => {
@@ -257,7 +295,9 @@ describe('app.assignments.$assignmentId loader', () => {
       params: { assignmentId: 'assignment-1' },
     } as any);
 
-    expect((response as any)?.status ?? (response as any)?.init?.status).not.toBe(400);
+    expect(
+      (response as any)?.status ?? (response as any)?.init?.status
+    ).not.toBe(400);
     expect(updateAssignmentInClassDeployment).toHaveBeenCalled();
     const data = updateAssignmentInClassDeployment.mock.calls.at(-1)?.[0].data;
     expect(data).not.toHaveProperty('writingTimeMinutes');

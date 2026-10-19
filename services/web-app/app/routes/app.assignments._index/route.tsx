@@ -549,7 +549,7 @@ export default function MyAssignmentsRoute() {
   const hasSelection = selectedAssignmentIds.length > 0;
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
+    <div className="mx-auto h-full min-h-0 w-full max-w-5xl overflow-y-auto px-4 py-8">
       <h1 className="mb-6 text-2xl font-semibold">My Assignments</h1>
 
       {SAVED_ASSIGNMENTS_ENABLED ? (
