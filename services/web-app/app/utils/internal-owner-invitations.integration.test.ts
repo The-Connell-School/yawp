@@ -43,13 +43,16 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
     });
     const email = `${keyId}@example.test`;
     let userId: string | undefined;
+    let foreignOrgId: string | undefined;
+    const revokeEmail = `revoke-${email}`;
     function request(
       method: string,
       path = '',
       value?: unknown,
-      idempotency?: string
+      idempotency?: string,
+      organizationId = organization.id
     ) {
-      const url = `https://yawp.test/api/internal/v1/admin/organizations/${organization.id}/invitations${path}`;
+      const url = `https://yawp.test/api/internal/v1/admin/organizations/${organizationId}/invitations${path}`;
       const body = value === undefined ? '' : JSON.stringify(value);
       const headers = new Headers(
         signInternalApiRequest({
@@ -190,12 +193,50 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       ).toBe(true);
       expect(JSON.stringify(audits)).not.toContain(newRow.secret);
       expect(JSON.stringify(audits)).not.toContain(oldRow.secret);
+      // Accepted is a no-op even though acceptance has removed the live row.
+      const acceptedRevoke = await handlers.revoke(request('POST', `/${replacement.id}/revoke`, {}), organization.id, replacement.id);
+      expect(acceptedRevoke.status).toBe(200);
+      expect((await acceptedRevoke.json()).invitation.status).toBe('accepted');
+      expect(await prisma.orgMembership.count({ where: { organizationId: organization.id, isOrgOwner: true } })).toBe(1);
+
+      const created = await handlers.create(request('POST', '', { emails: [revokeEmail], expiresInDays: 7 }), organization.id);
+      const revocable = (await created.json()).results[0].invitation;
+      const persisted = await prisma.invitation.findUniqueOrThrow({ where: { id: revocable.id } });
+      const foreign = await prisma.organization.create({ data: { name: 'Foreign invitation integration' } });
+      foreignOrgId = foreign.id;
+      const notOwned = await handlers.revoke(request('POST', `/${revocable.id}/revoke`, {}, undefined, foreign.id), foreign.id, revocable.id);
+      expect(notOwned.status).toBe(404);
+      expect(await notOwned.json()).toEqual({ error: 'Invitation not found' });
+      const valueRevoke = { reason: '  Integration revoke  ' };
+      const sentBeforeRevoke = mail.mock.calls.length;
+      const revokedResponses = await Promise.all(['', '///'].map((alias) => handlers.revoke(request('POST', `/${revocable.id}/revoke${alias}`, valueRevoke, 'revoke-key'), organization.id, revocable.id)));
+      expect(revokedResponses.map((r) => r.status)).toEqual([200, 200]);
+      const revoked = await revokedResponses[0].json();
+      expect(await revokedResponses[1].json()).toEqual(revoked);
+      expect(revoked.invitation).toEqual({ ...revocable, status: 'revoked' });
+      expect(await prisma.invitation.findUnique({ where: { id: revocable.id } })).toBeNull();
+      const again = await handlers.revoke(request('POST', `/${revocable.id}/revoke`), organization.id, revocable.id);
+      expect(await again.json()).toEqual(revoked);
+      const conflict = await handlers.revoke(request('POST', `/${revocable.id}/revoke`, { reason: 'Different bytes' }, 'revoke-key'), organization.id, revocable.id);
+      expect(conflict.status).toBe(409);
+      expect(await conflict.json()).toEqual({ error: 'Idempotency-Key was already used with a different request' });
+      const unknown = await handlers.revoke(request('POST', '/unknown/revoke', {}), organization.id, 'unknown');
+      expect(unknown.status).toBe(404);
+      expect(mail.mock.calls.length).toBe(sentBeforeRevoke);
+      const revokeAudits = await prisma.internalPlatformApiAudit.findMany({ where: { keyId, action: { startsWith: 'organization.invitation.revoke.' } }, orderBy: { createdAt: 'asc' } });
+      expect(revokeAudits.map((a) => a.result)).toEqual(['before', 'after']);
+      expect(revokeAudits.every((a) => a.targetId === organization.id && a.actorEmail === 'operator@example.test' && (a.metadata as any).reason === 'Integration revoke')).toBe(true);
+      expect(JSON.stringify(revokeAudits)).not.toContain(persisted.secret);
+      const finalList = await handlers.list(request('GET'), organization.id);
+      expect((await finalList.json()).invitations.find((i: any) => i.id === revocable.id)).toEqual(revoked.invitation);
+
     } finally {
-      await prisma.invitation.deleteMany({ where: { target: email } });
+      await prisma.invitation.deleteMany({ where: { target: { in: [email, revokeEmail] } } });
       await prisma.orgMembership.deleteMany({
         where: { organizationId: organization.id },
       });
       await prisma.organization.delete({ where: { id: organization.id } });
+      if (foreignOrgId) await prisma.organization.delete({ where: { id: foreignOrgId } });
       if (userId) await prisma.user.delete({ where: { id: userId } });
       await prisma.internalPlatformApiAudit.deleteMany({ where: { keyId } });
       await prisma.internalApiRequestNonce.deleteMany({ where: { keyId } });

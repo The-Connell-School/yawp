@@ -121,7 +121,7 @@ function fixture() {
               a.action === where.action &&
               a.actorEmail === where.actorEmail &&
               a.keyId === where.keyId &&
-              a.result === 'after' &&
+              (a.result === 'after' || a.result === 'noop') &&
               a.metadata.idempotencyKey === where.metadata.equals
           ) ?? null
       ),
@@ -161,14 +161,14 @@ function fixture() {
     },
   };
 }
-for (const op of ['list', 'create', 'resend'] as const) {
+for (const op of ['list', 'create', 'resend', 'revoke'] as const) {
   const invoke = (f: ReturnType<typeof fixture>, req: Request) =>
-    op === 'resend'
-      ? f.handlers.resend(req, 'org-1', 'legacy')
+    op === 'resend' || op === 'revoke'
+      ? f.handlers[op](req, 'org-1', 'legacy')
       : f.handlers[op](req, 'org-1');
   const method = op === 'list' ? 'GET' : 'POST';
   const body =
-    op === 'resend' ? {} : { emails: ['new@example.test'], expiresInDays: 7 };
+    op === 'resend' || op === 'revoke' ? {} : { emails: ['new@example.test'], expiresInDays: 7 };
   test(`${op}: authentication, scope, method and missing organization`, async () => {
     const f = fixture();
     expect(
@@ -572,4 +572,126 @@ test('invitation links retain the admin flow public origin behind the proxy', as
     (child: any) => child?.props?.href
   );
   expect(new URL(link.props.href).origin).toBe('https://public.yawp.test');
+});
+
+
+test.each([false, true])('revoke invalidates a pending/expired link and retains a safe snapshot (expired=%s)', async (expired) => {
+  const f = fixture();
+  f.seed(expired ? { expiresAt: new Date(0) } : {});
+  const value = { reason: '  Owner changed  ' };
+  const res = await f.handlers.revoke(request('POST', value, { path: '/legacy/revoke' }), 'org-1', 'legacy');
+  expect(res.status).toBe(200);
+  expect(res.headers.get('cache-control')).toBe('no-store');
+  const payload = await res.json();
+  expect(payload.invitation).toMatchObject({ id: 'legacy', status: 'revoked', email: 'legacy@example.test' });
+  expect(f.rows).toHaveLength(0);
+  expect(f.audits.map((a) => a.action)).toEqual(['organization.invitation.revoke.before', 'organization.invitation.revoke.after']);
+  expect(f.audits[0].metadata.before.invitations[0].status).toBe(expired ? 'expired' : 'pending');
+  expect(f.audits[1].metadata.after.invitation).toEqual(payload.invitation);
+  expect(f.audits.every((a) => a.targetId === 'org-1' && a.actorEmail === 'operator@example.test' && a.keyId === 'writer' && a.metadata.reason === 'Owner changed' && a.requestHash === createHash('sha256').update(JSON.stringify(value)).digest('hex'))).toBe(true);
+  expect(f.db.$transaction.mock.calls[0][1].isolationLevel).toBe('ReadCommitted');
+  const locks = f.db.$queryRaw.mock.calls.map((call: any) => call[0].join('?'));
+  expect(locks.some((sql: string) => sql.includes('"Organization"') && sql.includes('FOR UPDATE'))).toBe(true);
+  expect(locks.some((sql: string) => sql.includes('"Invitation"') && sql.includes('FOR UPDATE'))).toBe(true);
+  const again = await f.handlers.revoke(request('POST', {}, { raw: '' }), 'org-1', 'legacy');
+  expect(await again.json()).toEqual(payload);
+  expect(f.audits).toHaveLength(2);
+  expect(f.db.invitation.delete).toHaveBeenCalledTimes(1);
+  const listed = await f.handlers.list(request('GET'), 'org-1');
+  expect((await listed.json()).invitations).toEqual([payload.invitation]);
+  expect(JSON.stringify(f.audits)).not.toContain('DO-NOT-EXPOSE');
+  expect(mail).not.toHaveBeenCalled();
+});
+
+test('revoke leaves accepted invitations and owner memberships unchanged without a write audit pair', async () => {
+  const f = fixture();
+  f.seed();
+  f.members.push({ isOrgOwner: true, isActive: true, user: { email: 'legacy@example.test' } });
+  const res = await f.handlers.revoke(request('POST', {}), 'org-1', 'legacy');
+  expect(res.status).toBe(200);
+  expect((await res.json()).invitation.status).toBe('accepted');
+  expect(f.rows).toHaveLength(1);
+  expect(f.audits).toHaveLength(0);
+  expect(f.db.invitation.delete).not.toHaveBeenCalled();
+  expect(mail).not.toHaveBeenCalled();
+});
+
+test('revoke hides foreign and contradictory ownership, unknown ids and invalid ids', async () => {
+  for (const overrides of [
+    { organizationId: 'org-2', metadata: JSON.stringify({ organizationId: 'org-2' }) },
+    { organizationId: 'org-1', metadata: JSON.stringify({ organizationId: 'org-2' }) },
+    { id: 'other' },
+  ]) {
+    const f = fixture(); f.seed(overrides);
+    const res = await f.handlers.revoke(request('POST', {}), 'org-1', 'legacy');
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'Invitation not found' });
+    expect(f.audits).toHaveLength(0);
+    expect(f.db.invitation.delete).not.toHaveBeenCalled();
+  }
+  for (const id of [undefined, 'bad/id', 'x'.repeat(129)]) {
+    expect((await fixture().handlers.revoke(request('POST', {}), 'org-1', id)).status).toBe(400);
+  }
+});
+
+test('revoke affects only the requested id in a resend chain', async () => {
+  const f = fixture(); f.seed();
+  const resent = await f.handlers.resend(request('POST', {}), 'org-1', 'legacy');
+  const current = (await resent.json()).invitation;
+  mail.mockClear();
+  const old = await f.handlers.revoke(request('POST', {}), 'org-1', 'legacy');
+  expect((await old.json()).invitation.status).toBe('revoked');
+  expect(f.rows[0].id).toBe(current.id);
+  expect(f.audits).toHaveLength(2);
+  const res = await f.handlers.revoke(request('POST', {}), 'org-1', current.id);
+  expect((await res.json()).invitation).toEqual({ ...current, status: 'revoked' });
+  expect(f.rows).toHaveLength(0);
+  expect(f.audits).toHaveLength(4);
+  expect(mail).not.toHaveBeenCalled();
+});
+
+test('revoke idempotency replays exact bytes, rejects mismatches and separates invitation endpoints', async () => {
+  const f = fixture(); f.seed();
+  const options = { path: '/legacy/revoke', idempotency: 'revoke-once' };
+  const first = await f.handlers.revoke(request('POST', { reason: 'Stop' }, options), 'org-1', 'legacy');
+  const payload = await first.json();
+  expect(first.status).toBe(200);
+  const replay = await f.handlers.revoke(request('POST', {}, { ...options, raw: '{"reason":"Stop"}', url: `${base}/legacy/revoke///` }), 'org-1', 'legacy');
+  expect(replay.status).toBe(200);
+  expect(await replay.json()).toEqual(payload);
+  const mismatch = await f.handlers.revoke(request('POST', {}, { ...options, raw: '{ "reason":"Stop"}' }), 'org-1', 'legacy');
+  expect(mismatch.status).toBe(409);
+  expect(await mismatch.json()).toEqual({ error: 'Idempotency-Key was already used with a different request' });
+  expect(f.audits).toHaveLength(2);
+  f.seed({ id: 'second' });
+  expect((await f.handlers.revoke(request('POST', { reason: 'Stop' }, { ...options, path: '/second/revoke' }), 'org-1', 'second')).status).toBe(200);
+  expect(f.db.invitation.delete).toHaveBeenCalledTimes(2);
+  expect(mail).not.toHaveBeenCalled();
+  expect((await fixture().handlers.revoke(request('POST', {}, { idempotency: 'x'.repeat(201) }), 'org-1', 'legacy')).status).toBe(400);
+});
+
+test('revoke idempotency also records no-op responses without a before/after write pair', async () => {
+  const f = fixture(); f.seed();
+  f.members.push({ isOrgOwner: true, isActive: true, user: { email: 'legacy@example.test' } });
+  const options = { path: '/legacy/revoke', idempotency: 'accepted-once' };
+  const original = await f.handlers.revoke(request('POST', {}, options), 'org-1', 'legacy');
+  const payload = await original.json();
+  expect(payload.invitation.status).toBe('accepted');
+  f.members.length = 0;
+  const replay = await f.handlers.revoke(request('POST', {}, options), 'org-1', 'legacy');
+  expect(await replay.json()).toEqual(payload);
+  expect((await f.handlers.revoke(request('POST', { reason: 'Changed' }, options), 'org-1', 'legacy')).status).toBe(409);
+  expect(f.audits.filter((a) => ['before', 'after'].includes(a.result))).toHaveLength(0);
+  expect(f.db.invitation.delete).not.toHaveBeenCalled();
+});
+
+test('revoke authenticates raw bytes and rejects legacy bearer keys', async () => {
+  const f = fixture(); f.seed();
+  const signed = request('POST', {}, { path: '/legacy/revoke' });
+  const tampered = new Request(signed.url, { method: 'POST', headers: signed.headers, body: '{"reason":"changed"}' });
+  expect((await f.handlers.revoke(tampered, 'org-1', 'legacy')).status).toBe(401);
+  process.env.YAWP_MANAGEMENT_SERVICE_KEY = 'x'.repeat(43);
+  const legacy = new Request(signed.url, { method: 'POST', headers: { authorization: `Bearer ${'x'.repeat(43)}` }, body: '{}' });
+  expect((await f.handlers.revoke(legacy, 'org-1', 'legacy')).status).toBe(401);
+  expect(f.db.$transaction).not.toHaveBeenCalled();
 });
