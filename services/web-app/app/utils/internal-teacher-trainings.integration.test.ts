@@ -72,7 +72,7 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       },
     });
     const handlers = createInternalTeacherTrainingHandlers({
-      db: metadataDb,
+      db: metadataDb as unknown as typeof prisma,
       media,
       auditRead: async (data) => {
         await prisma.internalPlatformApiAudit.create({ data });

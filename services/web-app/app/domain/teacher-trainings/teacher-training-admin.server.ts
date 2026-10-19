@@ -71,22 +71,30 @@ export async function replaceImage(
     blob: Buffer<ArrayBuffer>;
     contentType: string;
     altText?: string | null;
-  }
+  },
+  selection: { select?: Prisma.TeacherTrainingImageSelect } = {}
 ) {
   await removeImage(db, teacherTrainingId);
   return db.teacherTrainingImage.create({
     data: { ...image, teacherTrainingId },
+    ...selection,
   });
 }
 export function createResource(
   db: Db,
   teacherTrainingModuleId: string,
-  fields: { name: string; contentType: string; blob: Buffer<ArrayBuffer> }
+  fields: { name: string; contentType: string; blob: Buffer<ArrayBuffer> },
+  selection: { select?: Prisma.TeacherTrainingModuleResourceSelect } = {}
 ) {
   return db.teacherTrainingModuleResource.create({
     data: { ...fields, teacherTrainingModuleId },
+    ...selection,
   });
 }
-export function deleteResource(db: Db, id: string) {
-  return db.teacherTrainingModuleResource.delete({ where: { id } });
+export function deleteResource(
+  db: Db,
+  id: string,
+  selection: { select?: Prisma.TeacherTrainingModuleResourceSelect } = {}
+) {
+  return db.teacherTrainingModuleResource.delete({ where: { id }, ...selection });
 }

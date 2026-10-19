@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import type { Prisma, PrismaClient } from '@app/prisma';
 import { z } from 'zod';
 import { authorizeInternalApiRequest } from './internal-platform-auth.server';
@@ -150,22 +149,45 @@ const actions: Record<keyof typeof schemas, string> = {
   completeResource: 'teacher-training.resource.complete',
   deleteResource: 'teacher-training.resource.delete',
 };
-const include = {
-  image: true,
-  resources: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
+const select = {
+  id: true,
+  title: true,
+  description: true,
+  position: true,
+  createdAt: true,
+  updatedAt: true,
+  image: { select: { id: true, contentType: true, altText: true } },
+  resources: {
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    select: { id: true, title: true, description: true, url: true },
+  },
   teacherTrainingModules: {
     orderBy: [{ position: 'asc' }, { id: 'asc' }],
-    include: { resources: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] } },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      position: true,
+      videoS3Key: true,
+      videoDuration: true,
+      deletedAt: true,
+      createdAt: true,
+      updatedAt: true,
+      resources: {
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        select: {
+          id: true,
+          name: true,
+          contentType: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
+    },
   },
-} satisfies Prisma.TeacherTrainingInclude;
-type TrainingRow = Prisma.TeacherTrainingGetPayload<{
-  include: typeof include;
-}>;
+} satisfies Prisma.TeacherTrainingSelect;
+type TrainingRow = NonNullable<Awaited<ReturnType<typeof detail>>>;
 const iso = (v: Date) => v.toISOString();
-const binary = (v: Uint8Array) => ({
-  size: v.byteLength,
-  sha256: createHash('sha256').update(v).digest('hex'),
-});
 function mapTraining(row: TrainingRow, audit = false) {
   return {
     id: row.id,
@@ -184,7 +206,7 @@ function mapTraining(row: TrainingRow, audit = false) {
           id: row.image.id,
           contentType: row.image.contentType,
           altText: row.image.altText,
-          ...(audit ? binary(row.image.blob) : {}),
+          ...(audit ? { size: row.image.size } : {}),
         }
       : null,
     modules: row.teacherTrainingModules.map((m) => ({
@@ -201,10 +223,9 @@ function mapTraining(row: TrainingRow, audit = false) {
         id: r.id,
         name: r.name,
         contentType: r.contentType,
-        byteLength: r.blob.byteLength,
+        byteLength: r.byteLength,
         createdAt: iso(r.createdAt),
         updatedAt: iso(r.updatedAt),
-        ...(audit ? { sha256: binary(r.blob).sha256 } : {}),
       })),
     })),
     resources: row.resources.map((r) => ({
@@ -215,8 +236,41 @@ function mapTraining(row: TrainingRow, audit = false) {
     })),
   };
 }
-function detail(db: Prisma.TransactionClient | PrismaClient, id: string) {
-  return db.teacherTraining.findUnique({ where: { id }, include });
+async function detail(db: Prisma.TransactionClient | PrismaClient, id: string) {
+  const row = await db.teacherTraining.findUnique({ where: { id }, select });
+  if (!row) return null;
+  // Compute byte lengths in Postgres. Never transport stored binary columns to
+  // the worker, including for locked before/after snapshots and deletion.
+  // No hashes are stored in this schema; audits describe metadata only.
+  const sizes = await db.$queryRaw<
+    { kind: string; id: string; byteLength: number }[]
+  >`
+    SELECT 'resource' AS kind, r.id, octet_length(r.blob) AS "byteLength"
+    FROM "TeacherTrainingModuleResource" r
+    JOIN "TeacherTrainingModule" m ON m.id = r."teacherTrainingModuleId"
+    WHERE m."teacherTrainingId" = ${id}
+    UNION ALL
+    SELECT 'image' AS kind, i.id, octet_length(i.blob) AS "byteLength"
+    FROM "TeacherTrainingImage" i WHERE i."teacherTrainingId" = ${id}`;
+  const lengths = new Map(sizes.map((r) => [`${r.kind}:${r.id}`, r.byteLength]));
+  const length = (kind: string, id: string) => {
+    const value = lengths.get(`${kind}:${id}`);
+    if (value === undefined) throw new Error('Missing binary metadata');
+    return value;
+  };
+  return {
+    ...row,
+    image: row.image
+      ? { ...row.image, size: length('image', row.image.id) }
+      : null,
+    teacherTrainingModules: row.teacherTrainingModules.map((m) => ({
+      ...m,
+      resources: m.resources.map((r) => ({
+        ...r,
+        byteLength: length('resource', r.id),
+      })),
+    })),
+  };
 }
 function decodeImage(value: z.infer<typeof schemas.replaceImage>) {
   if (value.dataBase64.length > 4 * Math.ceil(MAX_IMAGE_BYTES / 3))
@@ -255,7 +309,7 @@ const conflict = () =>
   response({ error: 'Idempotency-Key could not be replayed safely' }, 409);
 
 export function createInternalTeacherTrainingHandlers(input: {
-  db: Pick<PrismaClient, '$transaction' | 'teacherTraining'>;
+  db: Pick<PrismaClient, '$transaction' | '$queryRaw' | 'teacherTraining'>;
   authenticate?: typeof authorizeInternalApiRequest;
   auditRead?: AssignmentTypeReadAudit;
   media?: TeacherTrainingMedia;
@@ -535,7 +589,9 @@ export function createInternalTeacherTrainingHandlers(input: {
                   deleted = { id: ids.id! };
                   break;
                 case 'replaceImage':
-                  await domain.replaceImage(tx, ids.id!, image!);
+                  await domain.replaceImage(tx, ids.id!, image!, {
+                    select: { id: true },
+                  });
                   break;
                 case 'removeImage':
                   await domain.removeImage(tx, ids.id!);
@@ -674,11 +730,16 @@ export function createInternalTeacherTrainingHandlers(input: {
                       throw new Error(
                         'Resource completion did not return bytes'
                       );
-                    const row = await domain.createResource(tx, ids.moduleId!, {
-                      name: session.name,
-                      contentType: session.contentType,
-                      blob,
-                    });
+                    const row = await domain.createResource(
+                      tx,
+                      ids.moduleId!,
+                      {
+                        name: session.name,
+                        contentType: session.contentType,
+                        blob,
+                      },
+                      { select: { id: true } }
+                    );
                     targetId = row.id;
                   }
                   completedUploadId = uploadId;
@@ -692,7 +753,9 @@ export function createInternalTeacherTrainingHandlers(input: {
                   });
                   break;
                 case 'deleteResource':
-                  await domain.deleteResource(tx, ids.resourceId!);
+                  await domain.deleteResource(tx, ids.resourceId!, {
+                    select: { id: true },
+                  });
                   targetId = ids.resourceId!;
                   deleted = { id: ids.resourceId! };
                   break;
