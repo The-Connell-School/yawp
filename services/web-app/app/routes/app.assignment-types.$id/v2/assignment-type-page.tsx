@@ -209,7 +209,7 @@ export function AssignmentTypePageV2() {
             <img
               src={`/api/image/course/${type.image.id}`}
               alt={type.title}
-              className="h-[168px] w-full rounded-lg object-cover lg:h-[88px] lg:w-[150px] lg:shrink-0"
+              className="h-[150px] w-full rounded-lg object-cover lg:h-[88px] lg:w-[150px] lg:shrink-0"
             />
           )}
           <div className="min-w-0">
