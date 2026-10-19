@@ -50,6 +50,7 @@ test.describe('Platform enhancements', () => {
         page.getByRole('navigation', { name: 'Prompt library pagination' })
       ).toHaveCount(0);
       await page.getByRole('button', { name: 'New', exact: true }).click();
+      await expect(page.getByRole('menuitem', { name: 'Document', exact: true })).toBeVisible();
       await page.getByRole('menuitem', { name: /assignment/i }).click();
       const sheet = page.getByRole('dialog');
       await expect(sheet.getByRole('button', { name: /Advanced/ })).toHaveCount(
@@ -71,6 +72,7 @@ test.describe('Platform enhancements', () => {
       e2eContext,
     }) => {
       await setFeatureFlag(PLATFORM_ENHANCEMENTS_FLAG, true);
+      try {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.goto(
@@ -98,36 +100,34 @@ test.describe('Platform enhancements', () => {
         await page
           .getByRole('button', { name: 'Close app navigation', exact: true })
           .click();
-      const library = page.locator('[data-tour="type-library"]');
-      await expect(
-        library.getByRole('button', { name: /Prompt Library/ })
-      ).toHaveAttribute('aria-expanded', 'true');
-      await expect(library.getByText(/^Showing 1–12 of/)).toBeVisible();
-      await expect(library.locator('main ul > li')).toHaveCount(12);
-      await library
-        .getByRole('button', { name: 'Page 2', exact: true })
-        .click();
+      await expect(page.getByTestId('type-meta')).toContainText('7 modules');
+      await expect(page.getByTestId('type-meta')).toContainText('100 prompts');
+      await expect(page.getByTestId('type-meta')).toContainText('Tutor on');
+      const newAssignment = page.locator('[data-tour="type-new"]:visible');
+      await newAssignment.click();
+      await expect(page.getByRole('menuitem', { name: /Write a prompt/ })).toBeVisible();
+      await expect(page.getByRole('menuitem', { name: /Generate a prompt/ })).toBeVisible();
+      await expect(page.getByRole('menuitem', { name: 'Document', exact: true })).toHaveCount(0);
+      await page.getByRole('menuitem', { name: /Choose from the library/ }).click();
+      const library = page.locator('#prompt-library');
+      await expect(library.getByPlaceholder('Search prompts')).toBeFocused();
+      await expect(library.locator('article')).toHaveCount(12);
+      await library.getByRole('button', { name: width === 390 ? 'Next' : 'Page 2', exact: true }).click();
       await expect(page).toHaveURL(/promptPage=2/);
-      await expect(library.getByText(/^Showing 13–24 of/)).toBeVisible();
-      if (width === 390)
-        await library
-          .getByRole('button', { name: 'Filter', exact: true })
-          .click();
-      const search = page.locator(
-        'input[placeholder="Search prompts…"]:visible'
-      );
-      await search.fill('community');
-      await search.press('Enter');
+      await expect(library.getByText('Showing 13–24 of 100', { exact: true })).toBeAttached();
+      if (width === 390) await library.getByRole('button', { name: 'Filter', exact: true }).click();
+      else await library.getByRole('button', { name: 'Category', exact: true }).click();
+      await page.getByRole('checkbox', { name: /A specific text/ }).click();
       await expect(page).not.toHaveURL(/promptPage=2/);
-      if (width === 390)
-        await page
-          .getByRole('dialog')
-          .getByRole('button', { name: 'Close', exact: true })
-          .click();
-      await expect(library.getByText(/^Showing 1–/)).toBeVisible();
-      await expect(library.getByText(/^Showing 1–12 of 100$/)).toHaveCount(0);
-      await expect(library.locator('main ul > li')).not.toHaveCount(12);
-      await library.locator('main ul > li button').first().click();
+      if (width === 390) await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+      else await page.keyboard.press('Escape');
+      await expect(library.getByText('Showing 1–12 of 26', { exact: true })).toBeAttached();
+      await library.getByRole('button', { name: 'Clear all', exact: true }).click();
+      await library.getByRole('tab', { name: /My prompts/ }).click();
+      await expect(page).toHaveURL(/tp_coll=mine/);
+      await library.getByRole('tab', { name: /^Library/ }).click();
+      const prompt = await library.locator('article').first().locator('[data-prompt]').getAttribute('data-prompt');
+      await library.locator('article').first().getByRole('button', { name: 'Assign', exact: true }).click();
       const sheet = page.getByRole('dialog');
       await expect(
         sheet.getByRole('heading', { name: 'Basics', exact: true })
@@ -135,6 +135,7 @@ test.describe('Platform enhancements', () => {
       await expect(
         sheet.getByRole('heading', { name: 'Prompt', exact: true })
       ).toBeVisible();
+      await expect(sheet.locator('textarea[name="prompt"]')).toHaveValue(prompt!);
       const advanced = sheet.getByRole('button', { name: /Advanced/ });
       await expect(advanced).toHaveAttribute('aria-expanded', 'false');
       await expect(sheet.getByTestId('advanced-summary')).toContainText(
@@ -229,6 +230,15 @@ test.describe('Platform enhancements', () => {
           () => document.documentElement.scrollWidth - innerWidth
         )
       ).toBeLessThanOrEqual(0);
+      await page.goto(`/app/assignment-types/${e2eContext.classStarterAssignmentTypeId}`);
+      await expect(page.locator('#prompt-library article')).toHaveCount(12);
+      await expect(page.getByText('Showing 1–12 of 200', { exact: true })).toBeAttached();
+      await page.goto(`/app/assignment-types/${e2eContext.assignmentTypeId}`);
+      await expect(page.getByRole('heading', { name: 'You write the prompt for this type' })).toBeVisible();
+      await expect(page.locator('[data-tour="type-modules"]')).toContainText('How students move through it');
+      await expect(page.locator('[data-tour="type-new"]:visible')).toHaveText('+ New assignment');
+      if (width === 390) await expect(page.getByTestId('type-bottom-bar')).toBeVisible();
+      } finally { await setFeatureFlag(PLATFORM_ENHANCEMENTS_FLAG, false); }
     });
   }
   test('keeps the lock badge and new icons in the free-account sidebar', async ({

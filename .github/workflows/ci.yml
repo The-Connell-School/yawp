@@ -844,6 +844,9 @@ jobs:
             app/routes/auth.login/route.test.tsx \
             app/routes/app/sidebar-nav.platform.test.tsx \
             'app/routes/app.assignment-types.$id/thesis-prompts-library/pagination.test.ts' \
+            'app/routes/app.assignment-types.$id/v2/type-guide-content.test.ts' \
+            'app/routes/app.assignment-types.$id/v2/library-adapter.test.ts' \
+            'app/routes/app.assignment-types.$id/v2/page-helpers.test.ts' \
             app/components/assignments/assignment-creation-sheet.test.tsx \
             app/routes/api.domain.grade-essay-ai/route.test.ts \
             app/domain/assignment-insights/class-insight-generation.server.test.ts \

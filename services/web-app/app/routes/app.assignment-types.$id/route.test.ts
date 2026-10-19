@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
+  assignment: { findMany: mock(), count: mock() },
   assignmentType: {
     findFirst: mock(),
     findMany: mock(),
@@ -35,6 +36,8 @@ const prisma = {
   },
 };
 
+const isFeatureFlagEnabled = mock(async () => false);
+mock.module('~/domain/feature-flags/feature-flags.server', () => ({ isFeatureFlagEnabled }));
 const requireUserId = mock();
 const requireMembership = mock();
 const createDocumentForAssignmentType = mock();
@@ -273,6 +276,12 @@ describe('app.assignment-types.$id action', () => {
 
 describe('app.assignment-types.$id loader Class Starter prompt library', () => {
   beforeEach(() => {
+    isFeatureFlagEnabled.mockReset();
+    isFeatureFlagEnabled.mockResolvedValue(false);
+    prisma.assignment.findMany.mockReset();
+    prisma.assignment.findMany.mockResolvedValue([]);
+    prisma.assignment.count.mockReset();
+    prisma.assignment.count.mockResolvedValue(0);
     prisma.assignmentType.findFirst.mockReset();
     prisma.assignmentType.findMany.mockReset();
     prisma.assignmentType.findUnique.mockReset();
@@ -322,6 +331,28 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
     prisma.apHistoryPromptLibraryEntry.findMany.mockResolvedValue([]);
     prisma.savedDailyPagesPrompt.findMany.mockReset();
     prisma.savedDailyPagesPrompt.findMany.mockResolvedValue([]);
+  });
+
+  test('v2 loads only this teacher’s assignments and count when enabled for the org', async () => {
+    isFeatureFlagEnabled.mockResolvedValue(true);
+    prisma.assignment.findMany.mockResolvedValue([{ id: 'assignment-1', title: 'A question', prompt: 'Why?', classAssignments: [] }]);
+    prisma.assignment.count.mockResolvedValue(5);
+    const response = await loader({ request: new Request('https://yawp.test/app/assignment-types/at-1'), params: { id: 'at-1' } } as any);
+    expect((response as any).data.yourAssignments.count).toBe(5);
+    expect((response as any).data.yourAssignments.items[0].id).toBe('assignment-1');
+    expect(isFeatureFlagEnabled).toHaveBeenCalledWith('platform-enhancements', 'org-1');
+    expect(prisma.assignment.findMany).toHaveBeenCalledWith({
+      where: { assignmentTypeId: 'at-1', classAssignments: { some: { class: { isArchived: false, teachers: { some: { id: 'teacher-1' } } } } } },
+      take: 4, orderBy: { createdAt: 'desc' },
+      select: { id: true, title: true, prompt: true, classAssignments: { where: { class: { isArchived: false, teachers: { some: { id: 'teacher-1' } } } }, select: { dueAt: true, class: { select: { title: true, grade: true, period: true } } } } },
+    });
+  });
+
+  test('flag off adds no assignments field or assignments query', async () => {
+    const response = await loader({ request: new Request('https://yawp.test/app/assignment-types/at-1'), params: { id: 'at-1' } } as any);
+    expect((response as any).data).not.toHaveProperty('yourAssignments');
+    expect(prisma.assignment.findMany).not.toHaveBeenCalled();
+    expect(prisma.assignment.count).not.toHaveBeenCalled();
   });
 
   test('hides the modules list on an exit ticket', () => {
