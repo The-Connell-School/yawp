@@ -1049,6 +1049,7 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
       now: new Date(+now + api.WEEK_MS + 660000),
     };
     const second = await api.resendApprovalReminder(b);
+    if (!second.ok) throw new Error('Expected reminder acceptance');
     expect(second).toMatchObject({
       ok: true,
       reminderCount: 3,
