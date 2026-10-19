@@ -848,6 +848,7 @@ jobs:
             'app/routes/app.assignment-types.$id/v2/library-adapter.test.ts' \
             'app/routes/app.assignment-types.$id/v2/page-helpers.test.ts' \
             app/utils/date-only.test.ts \
+            e2e/router-action-stub.test.ts \
             app/components/assignments/assignment-creation-sheet.test.tsx \
             app/routes/api.domain.grade-essay-ai/route.test.ts \
             app/domain/assignment-insights/class-insight-generation.server.test.ts \
