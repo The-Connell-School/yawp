@@ -27,7 +27,7 @@ function request(
       : signInternalApiRequest({
           method,
           url: base + path,
-          body,
+          body: options.signedBody ?? body,
           keyId: options.keyId ?? 'writer',
           secret,
           actor: 'Operator@Yawp.test',
@@ -235,6 +235,79 @@ function invoke(
     moduleId,
     stepId
   ) as Promise<Response>;
+}
+for (const [name, method, path, value] of cases) {
+  const signed = JSON.stringify({ ...value, reason: 'Signed \uFFFD' });
+  const malformedBodies = [
+    [
+      'BOM',
+      Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(signed)]),
+    ],
+    ['invalid UTF-8', Buffer.from(signed.replace('\uFFFD', '\xff'), 'binary')],
+  ] as const;
+  for (const [encoding, wire] of malformedBodies) {
+    test(`${name}: ${encoding} wire changes cannot reuse the original signature`, async () => {
+      const f = fixture();
+      const res = await invoke(
+        f,
+        name,
+        request(method, path, undefined, {
+          raw: wire,
+          signedBody: signed,
+        })
+      );
+      expect(res.status).toBe(401);
+      expect(await res.json()).toEqual({ error: 'Unauthorized' });
+      expect(f.db.$transaction).not.toHaveBeenCalled();
+      expect(f.audits).toHaveLength(0);
+    });
+    test(`${name}: correctly signed ${encoding} is invalid JSON`, async () => {
+      const f = fixture();
+      const res = await invoke(
+        f,
+        name,
+        request(method, path, undefined, { raw: wire })
+      );
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: 'Invalid JSON' });
+      expect(f.db.$transaction).not.toHaveBeenCalled();
+      expect(f.audits).toHaveLength(0);
+    });
+  }
+}
+for (const [name, path, value] of [
+  ['createModule', '', { title: 'Caf\u00e9 \ud83d\ude80' }],
+  [
+    'createStep',
+    '/m-1/steps',
+    {
+      title: 'Caf\u00e9 \ud83d\ude80',
+      prompt: 'R\u00e9pondez \ud83d\ude80',
+      answerKey: '\u00e9',
+    },
+  ],
+] as const) {
+  test(`${name}: valid multibyte UTF-8 persists with exact wire audit hashes`, async () => {
+    const f = fixture();
+    const body = Buffer.from(
+      JSON.stringify({ ...value, reason: 'V\u00e9rifi\u00e9 \ud83d\ude80' })
+    );
+    const res = await invoke(
+      f,
+      name,
+      request('POST', path, undefined, { raw: body })
+    );
+    expect(res.status).toBe(201);
+    const stored = name === 'createModule' ? f.modules.at(-1) : f.steps.at(-1);
+    expect(stored).toMatchObject(value);
+    expect(f.audits).toHaveLength(2);
+    for (const audit of f.audits) {
+      expect(audit.requestHash).toBe(
+        createHash('sha256').update(body).digest('hex')
+      );
+      expect(audit.metadata.reason).toBe('V\u00e9rifi\u00e9 \ud83d\ude80');
+    }
+  });
 }
 for (const [name, method, path, body] of cases) {
   test(`${name}: auth and method guards`, async () => {
