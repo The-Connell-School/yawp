@@ -1,6 +1,8 @@
-import { expect, test } from 'bun:test';
+import { expect, mock, test } from 'bun:test';
+import { authSessionStorage } from '../cookie-session-storages/authentication.server';
 import {
   classifyFreeTierPreviewSession,
+  freeTierPreviewDependencies,
   type FreeTierPreviewSession,
 } from './preview-free-tier-access.server';
 
@@ -28,6 +30,53 @@ const teacher: FreeTierPreviewSession = {
     organizationId: 'free-org',
   },
 };
+
+test('legacy impersonation markers cannot use a grant even for its matching teacher', async () => {
+  const realDb = { ...(await import('./db.server')) };
+  const findSession = mock(async () => ({
+    ...teacher,
+    userId: 'teacher-1',
+  }));
+  const findApplication = mock(async () => teacher.application);
+  mock.module('./db.server', () => ({
+    ...realDb,
+    prisma: {
+      session: { findUnique: findSession },
+      freeTierApplication: { findFirst: findApplication },
+    },
+  }));
+  async function requestWith(markers: Record<string, string>) {
+    const auth = await authSessionStorage.getSession();
+    auth.set('sessionId', 'teacher-session');
+    for (const [key, value] of Object.entries(markers)) auth.set(key, value);
+    return new Request('https://demo.example/app/free-tier/onboarding', {
+      headers: {
+        cookie: (await authSessionStorage.commitSession(auth)).split(';', 1)[0],
+      },
+    });
+  }
+  try {
+    expect(
+      await freeTierPreviewDependencies.session(await requestWith({}), grant)
+    ).toBe('teacher');
+    findSession.mockClear();
+    findApplication.mockClear();
+    const impersonationMarkers: Record<string, string>[] = [
+      { impersonationMode: 'read-only' },
+      { impersonatorUserId: 'operator-1' },
+      { impersonationMode: 'read-only', impersonatorUserId: 'operator-1' },
+    ];
+    for (const markers of impersonationMarkers) {
+      expect(
+        await freeTierPreviewDependencies.session(await requestWith(markers), grant)
+      ).toBe('denied');
+    }
+    expect(findSession).not.toHaveBeenCalled();
+    expect(findApplication).not.toHaveBeenCalled();
+  } finally {
+    mock.module('./db.server', () => realDb);
+  }
+});
 
 test('only a grant-matching free-tier teacher can continue with a session', () => {
   expect(classifyFreeTierPreviewSession(null, null, grant)).toBe('denied');

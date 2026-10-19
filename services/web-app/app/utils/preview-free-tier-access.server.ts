@@ -141,6 +141,10 @@ export const freeTierPreviewDependencies: FreeTierPreviewDependencies = {
     const auth = await authSessionStorage.getSession(
       request.headers.get('cookie')
     );
+    // The legacy impersonation route stores its context in en_session rather
+    // than the separate internal cookie. Neither context may use this grant.
+    if (auth.has('impersonationMode') || auth.has('impersonatorUserId'))
+      return 'denied';
     const sessionId = auth.get('sessionId');
     if (typeof sessionId !== 'string' || !sessionId) return 'anonymous';
     const [{ prisma }, { getMembershipId }] = await Promise.all([
