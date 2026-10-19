@@ -1,4 +1,4 @@
-import { beforeEach, afterEach, expect, mock, test } from 'bun:test';
+import { beforeEach, afterEach, expect, mock, spyOn, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 
 mock.module('~/utils/db.server', () => ({ prisma: {} }));
@@ -342,6 +342,30 @@ test('resend rotates the row and secret, revokes the old link and preserves hist
   expect(f.auditRead).toHaveBeenCalledTimes(1);
   expect(JSON.stringify(payload)).not.toContain('DO-NOT-EXPOSE');
 });
+test.each(['returned', 'thrown'] as const)('create logs a redacted %s delivery failure and keeps its 502 body', async (mode) => {
+  const log = spyOn(console, 'error').mockImplementation(() => {});
+  process.env.EMAIL_PROVIDER = 'resend';
+  const failure = { name: 'validation_error', statusCode: 403, message: 'Sender domain is not verified: private@example.test https://secret.test/?code=private-token' };
+  mail.mockImplementationOnce(async () => {
+    if (mode === 'thrown') throw failure;
+    return { status: 'error', error: failure } as any;
+  });
+  try {
+    const f = fixture();
+    const result = await f.handlers.create(request(), 'org-1');
+    expect(result.status).toBe(502);
+    expect(await result.json()).toEqual({ error: 'Invitation delivery failed' });
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(log.mock.calls[0]).toEqual(['owner_invitation_delivery_failed', {
+      provider: 'resend', recipientDomain: 'example.test', name: 'validation_error',
+      code: null, statusCode: 403, message: 'Sender domain is not verified',
+    }]);
+    expect(JSON.stringify(log.mock.calls)).not.toMatch(/private|https:|new@/);
+  } finally {
+    log.mockRestore();
+  }
+});
+
 test('resend rejects foreign, consumed and revoked invitations without delivery', async () => {
   const f = fixture();
   f.seed({
