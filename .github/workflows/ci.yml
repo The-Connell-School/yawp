@@ -663,7 +663,9 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
           INTERNAL_DIRECTORY_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
-        run: CI=1 bun test --max-concurrency=2 app/utils/internal-assignment-type-writes.integration.test.ts app/utils/internal-assignment-type-module-writes.integration.test.ts
+        run: |
+          CI=1 bun test --max-concurrency=2 app/utils/internal-assignment-type-writes.integration.test.ts app/utils/internal-assignment-type-module-writes.integration.test.ts
+          CI=1 bun test --max-concurrency=2 app/utils/internal-owner-invitations.integration.test.ts
 
   typecheck-web-app:
     needs: [paths]
