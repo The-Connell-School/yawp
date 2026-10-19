@@ -1,0 +1,128 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`thesis-driven-essay retains its main scoring and normalized display output 1`] = `
+{
+  "assignmentPointsDisplay": "16 / 25",
+  "categoryDisplay": [
+    {
+      "key": "thesis_and_content",
+      "option": undefined,
+    },
+    {
+      "key": "organization_and_structure",
+      "option": undefined,
+    },
+    {
+      "key": "evidence_and_support",
+      "option": undefined,
+    },
+    {
+      "key": "voice_and_style",
+      "option": undefined,
+    },
+    {
+      "key": "grammar_and_mechanics",
+      "option": undefined,
+    },
+  ],
+  "letterGrade": "D",
+  "normalized": {
+    "evidence_and_support": {
+      "comment": "Category 3",
+      "isAi": false,
+      "score": 0,
+    },
+    "grammar_and_mechanics": {
+      "comment": "Category 5",
+      "isAi": false,
+      "score": 95,
+    },
+    "organization_and_structure": {
+      "comment": "Category 2",
+      "isAi": false,
+      "score": 100,
+    },
+    "thesis_and_content": {
+      "comment": "Category 1",
+      "isAi": false,
+      "score": 85,
+    },
+    "voice_and_style": {
+      "comment": "Category 4",
+      "isAi": false,
+      "score": 37,
+    },
+  },
+  "numericPercentage": 63,
+  "percentageDisplay": "63% (D)",
+  "rawPointsGrade": null,
+  "score": "63% (D)",
+  "scoringScale": {
+    "compositeMax": undefined,
+    "compositeMin": undefined,
+    "maxScore": 100,
+    "minScore": 0,
+    "step": 1,
+    "type": "weighted_percent",
+  },
+}
+`;
+
+exports[`gba300-international-etiquette retains its main scoring and normalized display output 1`] = `
+{
+  "assignmentPointsDisplay": "13 / 25",
+  "categoryDisplay": [
+    {
+      "key": "introduction",
+      "option": undefined,
+    },
+    {
+      "key": "country_1_its_two_topics",
+      "option": undefined,
+    },
+    {
+      "key": "country_2_its_two_topics",
+      "option": undefined,
+    },
+    {
+      "key": "conclusion",
+      "option": undefined,
+    },
+  ],
+  "letterGrade": "F",
+  "normalized": {
+    "conclusion": {
+      "comment": "Category 4",
+      "isAi": false,
+      "score": 2,
+    },
+    "country_1_its_two_topics": {
+      "comment": "Category 2",
+      "isAi": false,
+      "score": 20,
+    },
+    "country_2_its_two_topics": {
+      "comment": "Category 3",
+      "isAi": false,
+      "score": 0,
+    },
+    "introduction": {
+      "comment": "Category 1",
+      "isAi": false,
+      "score": 4,
+    },
+  },
+  "numericPercentage": 52,
+  "percentageDisplay": "52% (F)",
+  "rawPointsGrade": null,
+  "score": "52% (F)",
+  "scoringScale": {
+    "compositeMax": 50,
+    "compositeMin": 0,
+    "maxScore": 20,
+    "minScore": 0,
+    "step": 1,
+    "type": "weighted_percent",
+  },
+}
+`;

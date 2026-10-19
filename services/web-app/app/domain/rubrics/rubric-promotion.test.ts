@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { validateRubricPromotion } from './rubric-promotion';
+import thesisDrivenEssay from './library/thesis-driven-essay.json';
 import { STARTER_RUBRICS } from './starter-rubrics';
 import { parseRubricSchema } from './rubric-schema';
 import { DEFAULT_SCORING_SCALE, RUBRIC_SCORING_SCALE_TYPES, parseScoringScale } from '../assignment-types/assignment-type-rubric.shared';
@@ -9,11 +10,11 @@ import { POINTS_SCALE_SCORING_TYPE, RUBRIC_POINTS_SCORING_TYPE } from '../gradin
 const valid = () => ({ name: 'qa-rubric', title: 'QA rubric', scoringScale: { type: 'rubric_points', minScore: 0, maxScore: 4, step: 1 }, rubric: { categories: [{ key: 'claim', label: 'Claim', description: 'A supported claim.', weight: 1 }] } });
 const scoringTypeIssue = {
   path: '/scoringScale/type',
-  message: 'Scoring type must be one of weighted_1_5, act_writing_2_12, rubric_points, points_scale.',
+  message: 'Scoring type must be one of weighted_1_5, weighted_percent, act_writing_2_12, rubric_points, points_scale.',
 };
 describe('promotion rubric validation', () => {
   test('valid portable rubrics and starter definitions with known scale types retain category content', () => {
-    for (const raw of [valid(), ...STARTER_RUBRICS.filter(raw => raw.scoringScale.type !== 'weighted_percent')]) {
+    for (const raw of [valid(), ...STARTER_RUBRICS]) {
       const result = validateRubricPromotion(raw);
       expect({ name: raw.name, ...result }).toMatchObject({ ok: true });
       if (result.ok) {
@@ -24,6 +25,7 @@ describe('promotion rubric validation', () => {
   });
   test.each([
     { type: 'weighted_1_5', minScore: 1, maxScore: 5 },
+    { type: 'weighted_percent', minScore: 0, maxScore: 100 },
     { type: 'act_writing_2_12', minScore: 1, maxScore: 6, compositeMin: 2, compositeMax: 12 },
     { type: 'rubric_points', minScore: 0, maxScore: 100 },
     { type: 'points_scale', minScore: 0, maxScore: 3 },
@@ -32,27 +34,32 @@ describe('promotion rubric validation', () => {
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.schema.scoringScale).toMatchObject(scoringScale);
   });
-  test.each(['weighted_percent', 'foo', ''])('rejects scoring type %j at its field path', type => {
+  test.each(['foo', ''])('rejects scoring type %j at its field path', type => {
     expect(validateRubricPromotion({ ...valid(), scoringScale: { ...valid().scoringScale, type } }))
       .toEqual({ ok: false, issues: [scoringTypeIssue] });
   });
-  test('omitting the scale preserves the weighted_1_5 default, but an explicit scale requires a type', () => {
+  test('omitting the scale or type preserves the weighted_1_5 default', () => {
     const { scoringScale, ...raw } = valid();
     const result = validateRubricPromotion(raw);
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.schema.scoringScale).toEqual({ type: 'weighted_1_5', minScore: 1, maxScore: 5, step: 1 });
     const { type, ...withoutType } = scoringScale;
     expect(validateRubricPromotion({ ...raw, scoringScale: withoutType }))
-      .toEqual({ ok: false, issues: [scoringTypeIssue] });
+      .toMatchObject({ ok: true, schema: { scoringScale: { ...withoutType, type: 'weighted_1_5' } } });
   });
-  test('legacy starter content remains readable but cannot be newly published with weighted_percent', () => {
+  test('weighted_percent starter content remains readable and publishable', () => {
     const legacy = STARTER_RUBRICS.filter(raw => raw.scoringScale.type === 'weighted_percent');
     expect(legacy.length).toBeGreaterThan(0);
     for (const raw of legacy) {
       expect(parseRubricSchema(raw)).toMatchObject({ ok: true, schema: raw });
-      expect(validateRubricPromotion(raw)).toEqual({ ok: false, issues: [scoringTypeIssue] });
+      expect(validateRubricPromotion(raw)).toMatchObject({ ok: true });
     }
     expect(parseScoringScale({ type: 'foo', minScore: 0, maxScore: 4 }).type).toBe('foo');
+  });
+  test('the real thesis-driven-essay library document validates without changing its scoring scale', () => {
+    expect(validateRubricPromotion(thesisDrivenEssay)).toMatchObject({
+      ok: true, schema: { scoringScale: thesisDrivenEssay.scoringScale, rubric: thesisDrivenEssay.rubric },
+    });
   });
   test('every built-in assignment rubric and fallback scale uses a known scoring type', async () => {
     const allowed: readonly string[] = RUBRIC_SCORING_SCALE_TYPES;

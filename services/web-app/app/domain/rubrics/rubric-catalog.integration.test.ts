@@ -83,13 +83,8 @@ run('editing an already-versioned rubric leaves pinned assignments and every old
   // Baseline the way production did on 2026-09-30: a write of schemaJson creates v1 via the trigger.
   const first = await catalog.get(name);
   const doc1 = structuredClone(first.live.editable) as any; doc1.calibrationNotes = 'Baseline notes';
-  // Historical content still opens, but staging a new revision requires a known type.
+  // New revisions retain the scale used by existing weighted_percent content.
   expect(doc1.scoringScale.type).toBe('weighted_percent');
-  await expect(catalog.stage({ key: name, requestId: randomUUID(), actorEmail: actor, reason: 'Validate legacy scale', document: doc1, source: source() })).rejects.toMatchObject({
-    statusCode: 422,
-    issues: [{ path: '/scoringScale/type', message: 'Scoring type must be one of weighted_1_5, act_writing_2_12, rubric_points, points_scale.' }],
-  });
-  doc1.scoringScale.type = 'rubric_points';
   const v1 = await catalog.save({ key: name, requestId: randomUUID(), actorEmail: actor, reason: 'Baseline', expectedFingerprint: first.live.fingerprint, document: doc1 });
   const existing = await db.assignment.create({ data: { assignmentTypeId: type.id, prompt: 'Pinned to current' } });
   expect(existing.rubricRevisionId).toBe(v1.revision.id);
@@ -100,6 +95,7 @@ run('editing an already-versioned rubric leaves pinned assignments and every old
   doc2.rubric.categories[0].weight = doc2.rubric.categories[0].weight + 1;
   const v2 = await catalog.save({ key: name, requestId: randomUUID(), actorEmail: 'bryant@brock.software', reason: 'Reweight', expectedFingerprint: second.live.fingerprint, document: doc2 });
   expect(v2.captured).toBeNull();
+  expect((v2.revision.schemaJson as any).scoringScale.type).toBe('weighted_percent');
   expect(v2.revision.version).toBe(v1.revision.version + 1);
   expect((await db.assignment.findUniqueOrThrow({ where: { id: existing.id } })).rubricRevisionId).toBe(v1.revision.id);
   const afterRows = await db.rubricRevision.findMany({ where: { rubricName: name }, orderBy: { version: 'asc' } });

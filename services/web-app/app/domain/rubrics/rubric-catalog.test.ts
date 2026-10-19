@@ -20,14 +20,7 @@ describe('rubric catalog with production rubric content', () => {
         rubric.name === 'daily-pages-engagement' ? ['scoringMode'] : []
       );
       const result = validateEditable(editable, rubric.name);
-      if (rubric.schemaJson.scoringScale.type === 'weighted_percent') {
-        expect(result).toEqual({ ok: false, issues: [{
-          path: '/scoringScale/type',
-          message: 'Scoring type must be one of weighted_1_5, act_writing_2_12, rubric_points, points_scale.',
-        }] });
-      } else {
-        if (!result.ok) throw new Error(`${rubric.name}: ${JSON.stringify(result.issues)}`);
-      }
+      if (!result.ok) throw new Error(`${rubric.name}: ${JSON.stringify(result.issues)}`);
       // Nothing an operator did not touch is lost when the document round-trips.
       expect((editable.rubric as any).categories).toEqual((rubric.schemaJson as any).rubric.categories);
       expect(editable.title).toBe((rubric.schemaJson as any).title);
@@ -47,16 +40,15 @@ describe('rubric catalog with production rubric content', () => {
     expect(validateEditable(toEditable(perTypeContent(daily as any), 'x').editable, 'assignment-type-rubric').ok).toBe(true);
   });
 
-  test('Strode blank band descriptions remain valid with a supported scoring type', () => {
+  test('Strode blank band descriptions remain valid with weighted_percent', () => {
     const strode = fixture.libraryRubrics.find((rubric) => rubric.name === 'strode-eng101-essay-1-description')!;
     const { editable } = toEditable(strode.schemaJson as any, strode.name);
-    expect(validateEditable({ ...editable, scoringScale: { ...(editable.scoringScale as object), type: 'rubric_points' } }, strode.name).ok).toBe(true);
+    expect(validateEditable(editable, strode.name).ok).toBe(true);
   });
 
   test('the validator still rejects broken edits with a field path', () => {
     const rubric = fixture.libraryRubrics.find((r) => r.name === 'gba300-nonverbal-rubric-STUDENT')!;
-    const document = toEditable(rubric.schemaJson as any, rubric.name).editable;
-    const editable: Record<string, unknown> = { ...document, scoringScale: { ...(document.scoringScale as object), type: 'rubric_points' } };
+    const editable = toEditable(rubric.schemaJson as any, rubric.name).editable;
     const categories = (editable.rubric as any).categories;
     const blank = validateEditable({ ...editable, rubric: { categories: [{ ...categories[0], label: '' }] } }, rubric.name);
     expect(blank.ok).toBe(false);
