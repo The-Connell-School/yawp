@@ -94,6 +94,7 @@ test.each([
   'Invalid `to` field.',
   'Invalid `from` field. The email address needs to follow the `email@example.com` or `Name <email@example.com>` format.',
   'Invalid `to` field. Unknown validation error for example.com.',
+  'Invalid `to` field. The email address needs to follow the `email@example.com` or `Name <email@example.com>` formatting policy.',
   'The `example.com` domain has been registered already.',
   'Please verify your domain before sending.',
   'Recipient domain is not verified.',

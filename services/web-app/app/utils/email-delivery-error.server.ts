@@ -26,7 +26,7 @@ function resendValidationReason(message: string): ValidationReason {
     return 'testing_recipient_restricted';
   if (/^Invalid `to` field\. Please use our testing email address instead of domains like `[^`\s]+`\./i.test(message))
     return 'recipient_domain_reserved';
-  if (message.startsWith('Invalid `to` field. The email address needs to follow the `email@example.com` or `Name <email@example.com>` format'))
+  if (/^Invalid `to` field\. The email address needs to follow the `email@example\.com` or `Name <email@example\.com>` format(?:\.|$)/.test(message))
     return 'recipient_invalid';
   if (/^(?:The `?[a-z0-9][a-z0-9.-]*`?|Sender) domain is not verified(?:[.:]|$)/i.test(message))
     return 'sender_domain_unverified';
