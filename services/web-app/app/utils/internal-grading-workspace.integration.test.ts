@@ -460,21 +460,47 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
         await prisma.assignmentTypeEvaluationRun.count({
           where: { assignmentTypeId: id },
         })
-      ).toBe(0);
+      ).toBe(1);
+      const failedRun = await prisma.assignmentTypeEvaluationRun.findFirstOrThrow({where:{assignmentTypeId:id}});
+      expect(failedRun.status).toBe('failed');
+      expect(failedRun.completedAt).not.toBeNull();
+      expect(await prisma.assignmentTypeEvaluationResult.count({where:{runId:failedRun.id}})).toBe(0);
       expect(
         await prisma.internalPlatformApiAudit.count({ where: { keyId } })
-      ).toBe(beforeTimeout);
-      const starts = await Promise.all(
-        [1, 2].map(() =>
-          handlers.handle(
-            'runs',
-            request('POST', '/evaluation-runs', runBody, 'run'),
-            id
-          )
-        )
-      );
-      expect(starts.map((r) => r.status).sort()).toEqual([200, 201]);
-      const started = starts.find((r) => r.status === 201)!;
+      ).toBe(beforeTimeout + 2);
+      const overlapDraftResponse = await handlers.handle('promptVersions',request('POST','/prompt-versions',{},'overlap-draft'),id);
+      expect(overlapDraftResponse.status).toBe(201);
+      const overlapDraft = (await overlapDraftResponse.json()).promptVersion;
+      let providerReady!: () => void;
+      let releaseProvider!: () => void;
+      const providerWaiting = new Promise<void>((resolve) => {providerReady = resolve;});
+      const providerGate = new Promise<void>((resolve) => {releaseProvider = resolve;});
+      const slow = createInternalGradingWorkspaceHandlers({db:prisma, execute: async ({purpose}) => {
+        calls++;
+        providerReady();
+        await providerGate;
+        return JSON.stringify(purpose === 'criterion' ? {passed:true,evidence:'Grounded in the sample'} : expectedOutput);
+      }});
+      const inFlight = slow.handle('runs',request('POST','/evaluation-runs',runBody,'run'),id);
+      await providerWaiting;
+      try {
+        // A different connection performs the same parent UPDATE as the admin editor.
+        // Its server-side deadline proves completion while the provider is paused.
+        await prisma.$transaction(async (tx) => {
+          await tx.$executeRaw`SET LOCAL lock_timeout = '500ms'`;
+          await tx.assignmentType.update({where:{id},data:{title:'Edited while provider waits'}});
+        }, {timeout:2000});
+        const overlapping = await handlers.handle('promptVersion',request('DELETE',`/prompt-versions/${overlapDraft.id}`),id,overlapDraft.id);
+        expect(overlapping.status).toBe(200);
+        const pending = await handlers.handle('runs',request('POST','/evaluation-runs',runBody,'run'),id);
+        expect(pending.status).toBe(409);
+        expect((await pending.json()).error).toContain('waiting for another write');
+        const mismatch = await handlers.handle('runs',request('POST','/evaluation-runs',{...runBody,promptVersion:'1'},'run'),id);
+        expect(mismatch.status).toBe(409);
+        expect((await mismatch.json()).error).toContain('different request');
+      } finally {releaseProvider();}
+      const started = await inFlight;
+      expect(started.status).toBe(201);
       const run = (await started.json()).run;
       expect(run.status).toBe('completed');
       expect(run.results).toHaveLength(1);
@@ -607,8 +633,8 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       const writes = audits.filter(
         (a) => a.result === 'before' || a.result === 'after'
       );
-      expect(writes.filter((a) => a.result === 'before')).toHaveLength(13);
-      expect(writes.filter((a) => a.result === 'after')).toHaveLength(13);
+      expect(writes.filter((a) => a.result === 'before')).toHaveLength(16);
+      expect(writes.filter((a) => a.result === 'after')).toHaveLength(16);
       for (const row of writes) {
         expect(row.actorEmail).toBe('operator@example.test');
         expect((row.metadata as any).reason).toBe('Lifecycle review');

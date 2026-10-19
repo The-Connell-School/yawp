@@ -142,6 +142,7 @@ function fixture() {
     audits,
     events,
     auditRead,
+    parent,
     handlers: createInternalGradingWorkspaceHandlers({ db, auditRead }),
   };
 }
@@ -965,7 +966,12 @@ test('run budget aborts provider and returns a clear error without a publishable
   expect((await res.json()).error).toContain('time budget');
   expect(signal?.aborted).toBe(true);
   expect(f.runs.some((r) => r.status === 'completed')).toBe(false);
-  expect(f.audits).toHaveLength(0);
+  expect(f.runs[0].status).toBe('failed');
+  expect(f.runs[0].completedAt).toBeInstanceOf(Date);
+  expect(f.results).toHaveLength(0);
+  expect(f.audits.map((a) => a.result)).toEqual(['before', 'after']);
+  const replay = await handlers.handle('runs', req('POST', '/evaluation-runs', runBody, { key: 'timeout' }), 'at-1');
+  expect(replay.status).toBe(422);
 });
 
 test('run covers other active groups in the current snapshot for promotion', async () => {
@@ -1032,5 +1038,109 @@ test('database statement timeout during result persistence returns a bounded err
     error: 'Evaluation run database time budget exceeded; retry the request.',
   });
   expect(f.runs.some((r) => r.status === 'completed')).toBe(false);
+  expect(f.runs[0].status).toBe('failed');
+  expect(f.audits.map((a) => a.result)).toEqual(['before', 'after']);
+});
+
+
+test('provider execution observes no open transaction in either call', async () => {
+  const f = runFixture();
+  let open = false;
+  const observations: boolean[] = [];
+  f.db.$transaction = mock(async (fn: any) => {
+    expect(open).toBe(false);
+    open = true;
+    try { return await fn(f.db); } finally { open = false; }
+  });
+  const handlers = createInternalGradingWorkspaceHandlers({ db: f.db, execute: async (args) => {
+    observations.push(open);
+    return f.execute(args);
+  }});
+  const res = await handlers.handle('runs', req('POST', '/evaluation-runs', runBody, {key: 'probe'}), 'at-1');
+  expect(res.status).toBe(201);
+  expect(observations).toEqual([false, false]);
+});
+
+test('durable pending key rejects overlap and changed bytes, then replays completion', async () => {
+  const f = runFixture();
+  let release!: () => void;
+  let ready!: () => void;
+  const waiting = new Promise<void>((resolve) => { ready = resolve; });
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const handlers = createInternalGradingWorkspaceHandlers({ db: f.db, execute: async (args) => {
+    ready(); await gate; return f.execute(args);
+  }});
+  const start = () => handlers.handle('runs', req('POST', '/evaluation-runs', runBody, {key:'pending'}), 'at-1');
+  const running = start();
+  await waiting;
+  try {
+    expect(f.audits.map((a) => a.result)).toEqual(['before']);
+    expect(f.runs[0].status).toBe('running');
+    const pending = await start();
+    expect(pending.status).toBe(409);
+    expect(await pending.json()).toEqual({error:'An evaluation run request is waiting for another write; retry after it completes.'});
+    const conflict = await handlers.handle('runs', req('POST','/evaluation-runs',{...runBody, reason:'Changed'},{key:'pending'}),'at-1');
+    expect(conflict.status).toBe(409);
+    expect((await conflict.json()).error).toContain('different request');
+  } finally { release(); }
+  const completed = await running;
+  expect(completed.status).toBe(201);
+  const replay = await start();
+  expect(replay.status).toBe(200);
+  expect(await replay.json()).toEqual(await completed.json());
+  expect(f.execute).toHaveBeenCalledTimes(2);
+});
+
+test('expired pending reservation recovers a crashed run without calling provider again', async () => {
+  const f = runFixture();
+  f.runs.push({id:'crashed', status:'running', assignmentTypeId:'at-1', totalCases:1});
+  f.audits.push({action:'grading-workspace.runs.post.before', result:'before', targetId:'crashed', requestHash:createHash('sha256').update(JSON.stringify(runBody)).digest('hex'), metadata:{idempotencyKey:'expired', expiresAt:new Date(Date.now()-1).toISOString()}});
+  const res = await f.handlers.handle('runs',req('POST','/evaluation-runs',runBody,{key:'expired'}),'at-1');
+  expect(res.status).toBe(422);
+  expect(f.runs[0].status).toBe('failed');
+  expect(f.execute).not.toHaveBeenCalled();
+  expect(f.audits.at(-1).result).toBe('after');
+});
+
+test('discard protects active draft and retired previous version', async () => {
+  const f = fixture();
+  f.versions[0].status = 'draft';
+  f.versions.push({...f.versions[0], id:'retired', version:2, status:'retired'});
+  for (const id of ['pv-1','retired']) {
+    const res = await f.handlers.handle('promptVersion',req('DELETE',`/prompt-versions/${id}`,{}),'at-1',id);
+    expect(res.status).toBe(409);
+  }
   expect(f.audits).toHaveLength(0);
+});
+
+test('already archived suite returns 404 without writes', async () => {
+  const f = fixture();
+  f.db.assignmentTypeEvaluation.findFirst = mock(async () => null);
+  const res = await f.handlers.handle('suite',req('DELETE','/evaluation-suites/archived',{}),'at-1','archived');
+  expect(res.status).toBe(404);
+  expect(f.audits).toHaveLength(0);
+});
+
+test('run supports archived parent, legacy-only snapshot and built-in kind', async () => {
+  const f = runFixture();
+  f.parent.archivedAt = new Date();
+  f.parent.kind = 'thesis';
+  f.snapshot.snapshotJson.legacyCases = f.snapshot.snapshotJson.evaluations[0].cases as any;
+  f.snapshot.snapshotJson.evaluations = [];
+  const res = await f.handlers.handle('runs',req('POST','/evaluation-runs',runBody,{key:'legacy'}),'at-1');
+  expect(res.status).toBe(201);
+  expect((await res.json()).run.totalCases).toBe(1);
+});
+
+test('run rejects empty snapshot and AP History assignment context without provider calls', async () => {
+  for (const apHistory of [false,true]) {
+    const f = runFixture();
+    if (apHistory) f.parent.systemKey = 'ap_history_essay';
+    else f.snapshot.snapshotJson.evaluations = [];
+    const res = await f.handlers.handle('runs',req('POST','/evaluation-runs',runBody,{key:'guard'}),'at-1');
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain(apHistory ? 'assignment snapshot' : 'at least one');
+    expect(f.execute).not.toHaveBeenCalled();
+    expect(f.runs).toHaveLength(0);
+  }
 });
