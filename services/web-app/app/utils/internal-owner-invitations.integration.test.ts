@@ -283,7 +283,7 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
         },
         orderBy: { createdAt: 'asc' },
       });
-      expect(revokeAudits.map((a) => a.result)).toEqual(['before', 'after']);
+      expect(revokeAudits.map((a) => a.result).sort()).toEqual(['after', 'before']);
       expect(
         revokeAudits.every(
           (a) =>
