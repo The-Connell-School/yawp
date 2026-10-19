@@ -290,7 +290,7 @@ export function PromptLibraryV2({
       {paging.total === 0 ? (
         <div className="rounded-lg border bg-popover p-8 text-center text-sm text-muted-foreground">
           {collection === 'mine' && !filtered ? (
-            'Saved and used prompts show up here. Save a library prompt or keep one from the generator to get started.'
+            'Saved and used prompts show up here. Save a prompt from the library to get started.'
           ) : (
             <>
               <p>No prompts match these filters.</p>

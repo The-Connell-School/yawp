@@ -450,6 +450,14 @@ test.describe('Platform enhancements', () => {
         `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
       );
       await expect(page.locator('#prompt-library article')).toHaveCount(12);
+      await page.getByRole('tab', { name: /My prompts/ }).click();
+      await expect(
+        page.getByText(
+          'Saved and used prompts show up here. Save a prompt from the library to get started.',
+          { exact: true }
+        )
+      ).toBeVisible();
+      await page.getByRole('tab', { name: /^Library/ }).click();
       await page.locator('[data-tour="type-new"]:visible').click();
       await expect(
         page.getByRole('menuitem', { name: /Write a prompt/ })
