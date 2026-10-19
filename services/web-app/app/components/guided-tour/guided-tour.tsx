@@ -7,6 +7,7 @@
  * mark what a step points at with `data-tour="..."`. What each tour says lives
  * in app/domain/guided-tours/tours.ts.
  */
+import { usePlatformEnhancements } from '~/hooks/usePlatformEnhancements';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import {
   BookOpen,
@@ -183,6 +184,7 @@ export function GuidedTour(props: { finishedTourIds: readonly string[]; storageS
  * `data-tour-variant`, read once the page has rendered.
  */
 function usePageTour() {
+  const platformEnhancementsEnabled = usePlatformEnhancements();
   const location = useLocation();
   const [variant, setVariant] = useState<string | null>(null);
   useEffect(() => {
@@ -192,7 +194,7 @@ function usePageTour() {
         ?.getAttribute('data-tour-variant') ?? null
     );
   }, [location.pathname, location.key]);
-  return tourForPage(location.pathname, variant);
+  return tourForPage(location.pathname, variant, platformEnhancementsEnabled);
 }
 
 function PageTourController({
