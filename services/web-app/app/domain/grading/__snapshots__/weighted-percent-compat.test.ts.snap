@@ -6,23 +6,38 @@ exports[`thesis-driven-essay retains its main scoring and normalized display out
   "categoryDisplay": [
     {
       "key": "thesis_and_content",
-      "option": undefined,
+      "option": {
+        "label": "Proficient",
+        "value": "85",
+      },
     },
     {
       "key": "organization_and_structure",
-      "option": undefined,
+      "option": {
+        "label": "Exemplary",
+        "value": "100",
+      },
     },
     {
       "key": "evidence_and_support",
-      "option": undefined,
+      "option": {
+        "label": "Struggling",
+        "value": "0",
+      },
     },
     {
       "key": "voice_and_style",
-      "option": undefined,
+      "option": {
+        "label": "Struggling",
+        "value": "37",
+      },
     },
     {
       "key": "grammar_and_mechanics",
-      "option": undefined,
+      "option": {
+        "label": "Exemplary",
+        "value": "95",
+      },
     },
   ],
   "letterGrade": "D",
@@ -74,19 +89,31 @@ exports[`gba300-international-etiquette retains its main scoring and normalized 
   "categoryDisplay": [
     {
       "key": "introduction",
-      "option": undefined,
+      "option": {
+        "label": "Proficient",
+        "value": "4",
+      },
     },
     {
       "key": "country_1_its_two_topics",
-      "option": undefined,
+      "option": {
+        "label": "Exemplary",
+        "value": "20",
+      },
     },
     {
       "key": "country_2_its_two_topics",
-      "option": undefined,
+      "option": {
+        "label": "Absent",
+        "value": "0",
+      },
     },
     {
       "key": "conclusion",
-      "option": undefined,
+      "option": {
+        "label": "Struggling",
+        "value": "2",
+      },
     },
   ],
   "letterGrade": "F",

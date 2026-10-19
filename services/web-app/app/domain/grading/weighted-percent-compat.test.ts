@@ -35,7 +35,7 @@ test.each([thesis, mixedPoints])('$name retains its main scoring and normalized 
     categoryDisplay: categories.map(category => ({
       key: category.key,
       option: buildScoreOptions(minScore, maxScore, category.scoreLabels, scoringScale.step, category.bands)
-        .find(option => option.value === normalized[category.key].score),
+        .find(option => option.value === String(normalized[category.key].score)),
     })),
   }).toMatchSnapshot();
 });

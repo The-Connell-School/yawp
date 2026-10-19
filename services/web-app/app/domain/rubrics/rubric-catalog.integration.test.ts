@@ -95,11 +95,11 @@ run('editing an already-versioned rubric leaves pinned assignments and every old
   doc2.rubric.categories[0].weight = doc2.rubric.categories[0].weight + 1;
   const v2 = await catalog.save({ key: name, requestId: randomUUID(), actorEmail: 'bryant@brock.software', reason: 'Reweight', expectedFingerprint: second.live.fingerprint, document: doc2 });
   expect(v2.captured).toBeNull();
-  expect((v2.revision.schemaJson as any).scoringScale.type).toBe('weighted_percent');
   expect(v2.revision.version).toBe(v1.revision.version + 1);
   expect((await db.assignment.findUniqueOrThrow({ where: { id: existing.id } })).rubricRevisionId).toBe(v1.revision.id);
   const afterRows = await db.rubricRevision.findMany({ where: { rubricName: name }, orderBy: { version: 'asc' } });
   expect(afterRows.slice(0, snapshot.length)).toEqual(snapshot);
+  expect((afterRows.at(-1)!.schemaJson as any).scoringScale.type).toBe('weighted_percent');
   await expect((async () => db.rubricRevision.update({ where: { id: v1.revision.id }, data: { reason: 'tamper' } }))()).rejects.toBeTruthy();
   cleanup.push(() => db.assignment.deleteMany({ where: { assignmentTypeId: type.id } }));
 });
