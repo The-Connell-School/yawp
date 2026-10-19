@@ -48,7 +48,7 @@ test.describe('in-app preview access gate', () => {
       expect(cookies.some(c => c.name === '__yawp_preview_access')).toBe(false);
       expect((await request.get(`/api/free-tier/token?token=${code}`)).status()).toBe(200);
       expect((await request.post('/api/free-tier/token', { data: {} })).status()).toBe(400);
-      expect((await request.post('/free', { form: {} })).status()).toBe(200);
+      expect((await request.post('/free?index', { form: {} })).status()).toBe(200);
       expect((await request.get('/free.data')).status()).toBe(200);
       expect((await request.post('/auth/dev-login', { form: {} })).status()).toBe(401);
       const admin = await request.get('/app/admin', { maxRedirects: 0 });
