@@ -9,7 +9,11 @@ import {
 
 function expectSubmissionPrivacy(
   submission: Record<string, unknown>,
-  options: { released: boolean; overallScore: number; numericPercentage: number }
+  options: {
+    released: boolean;
+    overallScore: number;
+    numericPercentage: number;
+  }
 ) {
   if (options.released) {
     expect(submission.overallScore).toBe(options.overallScore);
@@ -35,7 +39,8 @@ function submissionFromRouteData(
   return matches[0]!;
 }
 
-test.describe.serial('Unreleased grade privacy in student loader responses', () => {
+test.describe
+  .serial('Unreleased grade privacy in student loader responses', () => {
   test('student submission, document, and assignment-type data omit unreleased scores', async ({
     page,
     signIn,
@@ -188,4 +193,83 @@ test.describe.serial('Unreleased grade privacy in student loader responses', () 
     );
     expect(submissionHtml).toContain(gradePrivacy.releaseComment);
   });
+});
+
+test('answer keys stay private in solo/shared document loaders and session APIs', async ({
+  page,
+  signIn,
+  e2eContext,
+}) => {
+  const prisma = createE2EPrismaClient();
+  const probe = `private-instruction-key-${Date.now()}`;
+  const createdIds: string[] = [];
+  try {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    for (const [documentId, assignmentTypeId, route] of [
+      [e2eContext.editedDocumentId, e2eContext.assignmentTypeId, 'documents'],
+      [
+        e2eContext.collabDocumentId,
+        e2eContext.collabAssignmentTypeId,
+        'collab-documents',
+      ],
+    ]) {
+      const module = await prisma.assignmentModule.findFirstOrThrow({
+        where: { assignmentTypeId, deletedAt: null },
+        orderBy: { position: 'asc' },
+      });
+      const instruction = await prisma.assignmentModuleInstruction.create({
+        data: {
+          assignmentModuleId: module.id,
+          title: 'Privacy probe',
+          prompt: 'Public instruction',
+          position: 999,
+          answerKey: probe,
+          nextButtonLabel: 'Continue',
+        },
+      });
+      createdIds.push(instruction.id);
+      const loader = await page.request.get(`/app/${route}/${documentId}.data`);
+      expect(loader.ok()).toBe(true);
+      const text = await loader.text();
+      expect(text).not.toContain(probe);
+      expect(text).not.toContain('answerKey');
+      expect(
+        findObjectsWithId(decodeRouterDataResponse(text), instruction.id).length
+      ).toBeGreaterThan(0);
+      const opened = await page.request.post(
+        '/api/model/assignment-module-session',
+        {
+          multipart: { documentId, assignmentModuleId: module.id },
+        }
+      );
+      expect(opened.ok()).toBe(true);
+      const openText = await opened.text();
+      expect(openText).not.toContain(probe);
+      expect(openText).not.toContain('answerKey');
+      const { cms } = JSON.parse(openText);
+      expect(
+        cms.assignmentModule.instructions.some(
+          (s: { id: string }) => s.id === instruction.id
+        )
+      ).toBe(true);
+      const advanced = await page.request.post(
+        `/api/model/assignment-module-session/${cms.id}`,
+        {
+          multipart: {
+            instructionsCompleted: String(cms.instructionsCompleted),
+          },
+        }
+      );
+      expect(advanced.ok()).toBe(true);
+      const advanceText = await advanced.text();
+      expect(advanceText).toContain(instruction.id);
+      expect(advanceText).not.toContain(probe);
+      expect(advanceText).not.toContain('answerKey');
+    }
+  } finally {
+    await prisma.assignmentModuleInstruction.deleteMany({
+      where: { id: { in: createdIds } },
+    });
+    await prisma.$disconnect();
+  }
 });

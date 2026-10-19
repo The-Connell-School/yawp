@@ -41,7 +41,13 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       idempotency?: string
     ) {
       const url = `https://yawp.test/api/internal/v1/admin/assignment-types/${id}/modules${path}`;
-      const body = value === undefined ? '' : JSON.stringify(value);
+      const body =
+        method === 'GET'
+          ? ''
+          : JSON.stringify({
+              ...(value as object),
+              reason: '  Lifecycle review  ',
+            });
       return new Request(url, {
         method,
         ...(method !== 'GET' ? { body } : {}),
@@ -103,6 +109,8 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
           request('POST', `/${mid}/steps`, {
             title,
             prompt: 'Write',
+            answerKey: 'Original key',
+            nextButtonLabel: '  Continue  ',
             buttons: [{ label: 'Go', action: 'advance' }],
           }),
           id,
@@ -110,6 +118,10 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
         );
         expect(res.status).toBe(201);
         const current = (await res.json()).module;
+        expect(current.instructions.at(-1)).toMatchObject({
+          answerKey: 'Original key',
+          nextButtonLabel: 'Continue',
+        });
         stepIds.push(current.instructions.at(-1).id);
       }
       const order = await handlers.reorderSteps(
@@ -125,6 +137,8 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       const patch = await handlers.updateStep(
         request('PATCH', `/${mid}/steps/${stepIds[0]}`, {
           prompt: 'Revised prompt',
+          answerKey: 'Revised key',
+          nextButtonLabel: null,
           tutorInstructionsVariantsJson: { leq: 'Guide' },
           buttons: [{ label: 'Respond', action: 'response' }],
         }),
@@ -143,6 +157,32 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
         tutorInstructionsVariantsJson: { leq: 'Guide' },
         buttons: [{ label: 'Respond', action: 'response', position: 0 }],
       });
+      const persistedStep =
+        await prisma.assignmentModuleInstruction.findUniqueOrThrow({
+          where: { id: stepIds[0] },
+        });
+      expect(persistedStep).toMatchObject({
+        answerKey: 'Revised key',
+        nextButtonLabel: null,
+      });
+      const studentModule = await prisma.assignmentModule.findUniqueOrThrow({
+        where: { id: mid },
+        include: {
+          instructions: {
+            omit: { answerKey: true },
+            include: { buttons: true },
+          },
+        },
+      });
+      expect(studentModule.instructions).toHaveLength(2);
+      expect(JSON.stringify(studentModule)).not.toContain('answerKey');
+      expect(JSON.stringify(studentModule)).not.toContain('Revised key');
+      const read = await handlers.detail(request('GET', `/${mid}`), id, mid);
+      expect(
+        (await read.json()).module.instructions.find(
+          (s: any) => s.id === stepIds[0]
+        )
+      ).toMatchObject({ answerKey: 'Revised key', nextButtonLabel: null });
       expect(
         (
           await handlers.deleteStep(
@@ -191,7 +231,10 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       expect(audits).toHaveLength(18);
       expect(
         audits.every(
-          (a) => a.actorEmail === 'operator@example.test' && a.keyId === keyId
+          (a) =>
+            a.actorEmail === 'operator@example.test' &&
+            a.keyId === keyId &&
+            (a.metadata as any).reason === 'Lifecycle review'
         )
       ).toBe(true);
       expect(audits.filter((a) => a.result === 'before')).toHaveLength(9);
@@ -203,6 +246,8 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       )!;
       expect(JSON.stringify(patchBefore.metadata)).toContain('Write');
       expect(JSON.stringify(patchAfter.metadata)).toContain('Revised prompt');
+      expect(JSON.stringify(patchBefore.metadata)).toContain('Original key');
+      expect(JSON.stringify(patchAfter.metadata)).toContain('Revised key');
     } finally {
       await prisma.assignmentType.delete({ where: { id } });
       await prisma.internalPlatformApiAudit.deleteMany({ where: { keyId } });
