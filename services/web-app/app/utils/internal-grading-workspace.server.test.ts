@@ -301,6 +301,34 @@ test('draft create locks parent, audits signed actor/reason/raw hash, replays an
   ).toBe(409);
   expect(completion).not.toHaveBeenCalled();
 });
+test('a full group rejects a new case after locking and before any writes', async () => {
+  const f = fixture();
+  f.db.assignmentTypeEvaluation.findFirst = mock(async () => {
+    expect(f.events).toContain('lock');
+    return {
+      id: 'suite-1',
+      description: 'Identify the claim',
+      cases: Array.from({ length: 20 }, (_, i) => ({ id: `case-${i}` })),
+    };
+  });
+  const result = await f.handlers.handle(
+    'cases',
+    req('POST', '/evaluation-suites/suite-1/cases', {
+      name: 'One too many',
+      sample: 'An argument',
+      rubricCategoryKey: 'claim',
+    }),
+    'at-1',
+    'suite-1'
+  );
+  expect(result.status).toBe(409);
+  expect(await result.json()).toEqual({
+    error: 'Evaluation groups support at most 20 active cases.',
+  });
+  expect(f.db.assignmentType.findUnique).toHaveBeenCalledTimes(1);
+  expect(f.events).toEqual(['lock']);
+  expect(f.audits).toHaveLength(0);
+});
 test('unsupported async run creation returns 405 without model calls', async () => {
   const f = fixture();
   expect(

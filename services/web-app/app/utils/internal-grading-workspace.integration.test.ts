@@ -404,6 +404,143 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
           (v: any) => v.id === draft.id
         ).status
       ).toBe('draft');
+
+      // Exercise the admin editor boundary using cases created through signed API calls.
+      const boundaryResponse = await handlers.handle(
+        'suites',
+        request('POST', '/evaluation-suites', {
+          name: 'Case limit',
+          check: 'Identify the claim',
+          cases: [sample],
+        }),
+        id
+      );
+      expect(boundaryResponse.status).toBe(201);
+      const boundary = (await boundaryResponse.json()).suite;
+      const casePath = `/evaluation-suites/${boundary.id}/cases`;
+      for (let count = 1; count < 19; count++) {
+        const added = await handlers.handle(
+          'cases',
+          request('POST', casePath, caseBody),
+          id,
+          boundary.id
+        );
+        expect(added.status).toBe(201);
+      }
+      const caseWhere = {
+        assignmentTypeId: id,
+        evaluationId: boundary.id,
+        archivedAt: null,
+      };
+      expect(
+        await prisma.assignmentTypeEvaluationCase.count({ where: caseWhere })
+      ).toBe(19);
+      const snapshotCount = () =>
+        prisma.assignmentTypeEvaluationSuiteVersion.count({
+          where: { assignmentTypeId: id },
+        });
+      const auditCount = () =>
+        prisma.internalPlatformApiAudit.count({ where: { keyId } });
+      const beforeBoundary = {
+        snapshots: await snapshotCount(),
+        audits: await auditCount(),
+      };
+      const attempts = await Promise.all(
+        ['twentieth-a', 'twentieth-b'].map(async (key) => ({
+          key,
+          response: await handlers.handle(
+            'cases',
+            request('POST', casePath, caseBody, key),
+            id,
+            boundary.id
+          ),
+        }))
+      );
+      expect(attempts.map(({ response }) => response.status).sort()).toEqual([
+        201, 409,
+      ]);
+      const winner = attempts.find(({ response }) => response.status === 201)!;
+      const twentieth = (await winner.response.json()).case;
+      expect(
+        await attempts
+          .find(({ response }) => response.status === 409)!
+          .response.json()
+      ).toEqual({
+        error: 'Evaluation groups support at most 20 active cases.',
+      });
+      expect(
+        await prisma.assignmentTypeEvaluationCase.count({ where: caseWhere })
+      ).toBe(20);
+      expect(await snapshotCount()).toBe(beforeBoundary.snapshots + 1);
+      expect(await auditCount()).toBe(beforeBoundary.audits + 2);
+
+      const fullState = {
+        cases: await prisma.assignmentTypeEvaluationCase.findMany({
+          where: caseWhere,
+          orderBy: { id: 'asc' },
+        }),
+        snapshots: await snapshotCount(),
+        audits: await auditCount(),
+      };
+      const rejected = await handlers.handle(
+        'cases',
+        request('POST', casePath, caseBody),
+        id,
+        boundary.id
+      );
+      expect(rejected.status).toBe(409);
+      expect(await rejected.json()).toEqual({
+        error: 'Evaluation groups support at most 20 active cases.',
+      });
+      const replay = await handlers.handle(
+        'cases',
+        request('POST', casePath, caseBody, winner.key),
+        id,
+        boundary.id
+      );
+      expect(replay.status).toBe(200);
+      expect((await replay.json()).case).toEqual(twentieth);
+      expect({
+        cases: await prisma.assignmentTypeEvaluationCase.findMany({
+          where: caseWhere,
+          orderBy: { id: 'asc' },
+        }),
+        snapshots: await snapshotCount(),
+        audits: await auditCount(),
+      }).toEqual(fullState);
+
+      const { executeGradingWorkspaceAction } =
+        await import('~/domain/ai-evaluation/grading-workspace-actions.server');
+      const adminSave = await executeGradingWorkspaceAction(
+        {
+          intent: 'updateEvaluation',
+          assignmentTypeId: id,
+          evaluationId: boundary.id,
+          title: 'Saved from the admin editor',
+          description: boundary.description,
+          casesJson: JSON.stringify(
+            fullState.cases.map((c) => ({
+              id: c.id,
+              title: c.title,
+              documentText: c.documentText,
+              expectedOutput: c.expectedOutputJson,
+            }))
+          ),
+        },
+        new Request(
+          'https://yawp.test/api/domain/assignment-type-evaluations',
+          { method: 'POST' }
+        ),
+        prisma
+      );
+      expect(adminSave.data).toMatchObject({ success: true });
+      expect(
+        (
+          await prisma.assignmentTypeEvaluation.findUniqueOrThrow({
+            where: { id: boundary.id },
+          })
+        ).title
+      ).toBe('Saved from the admin editor');
     } finally {
       await prisma.assignmentType.delete({ where: { id } });
       await prisma.internalPlatformApiAudit.deleteMany({ where: { keyId } });
