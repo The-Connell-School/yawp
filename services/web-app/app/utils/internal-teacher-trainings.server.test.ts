@@ -90,6 +90,28 @@ function request(
     headers,
   });
 }
+// Model Prisma's explicit projections so tests fail if mapping depends on bytes.
+function project(row: any, args: any): any {
+  if (row == null || !args?.select) return row;
+  return Object.fromEntries(
+    Object.entries(args.select).filter(([, value]) => value).map(([key, value]) => [
+      key,
+      value === true ? row[key] : Array.isArray(row[key])
+        ? row[key].map((child: any) => project(child, value))
+        : project(row[key], value),
+    ])
+  );
+}
+function expectMetadataSelect(args: any) {
+  expect(args.include).toBeUndefined();
+  expect(args.select.image.select).toEqual({ id: true, contentType: true, altText: true });
+  const modules = args.select.teacherTrainingModules;
+  expect(modules.include).toBeUndefined();
+  expect(modules.select.resources.select).toEqual({
+    id: true, name: true, contentType: true, createdAt: true, updatedAt: true,
+  });
+  expect(JSON.stringify(args.select)).not.toContain('blob');
+}
 function fixture() {
   const now = new Date('2026-10-01T00:00:00Z');
   let current: any = {
@@ -142,15 +164,24 @@ function fixture() {
   const modules = () => current?.teacherTrainingModules ?? [];
   const db: any = {
     $queryRaw: mock(async (query: any) => {
+      if (String(query).includes('octet_length')) {
+        return [
+          ...modules().flatMap((m: any) => m.resources.map((r: any) => ({
+            kind: 'resource', id: r.id, byteLength: r.byteLength ?? r.blob.byteLength,
+          }))),
+          ...(current?.image ? [{ kind: 'image', id: current.image.id,
+            byteLength: current.image.size ?? current.image.blob.byteLength }] : []),
+        ];
+      }
       events.push(String(query).includes('FOR UPDATE') ? 'lock' : 'advisory');
       return [];
     }),
     $transaction: mock(async (fn: any) => fn(db)),
     teacherTraining: {
       count: mock(async () => 1),
-      findUnique: mock(async ({ where }: any) => {
+      findUnique: mock(async (args: any) => {
         events.push('read');
-        return current?.id === where.id ? current : null;
+        return current?.id === args.where.id ? project(current, args) : null;
       }),
       findMany: mock(async () => (current ? [current] : [])),
       create: mock(async ({ data }: any) => {
@@ -392,11 +423,16 @@ for (const [op, method, path, value] of cases) {
         expect(f.events.indexOf('lock')).toBeLessThan(f.events.indexOf('read'));
       expect(JSON.stringify(pair)).not.toContain('"blob"');
       expect(JSON.stringify(pair)).not.toContain('https://s3.');
+      for (const [args] of f.db.teacherTraining.findUnique.mock.calls) expectMetadataSelect(args);
       if (op === 'replaceImage')
         expect(pair[1].metadata.after.teacherTraining.image).toMatchObject({
           size: png.length,
-          sha256: createHash('sha256').update(png).digest('hex'),
         });
+      for (const delegate of [f.db.teacherTrainingImage, f.db.teacherTrainingModuleResource]) {
+        for (const method of ['create', 'delete']) {
+          for (const [args] of delegate[method]?.mock.calls ?? []) expect(args.select).toEqual({ id: true });
+        }
+      }
       if (op === 'delete')
         expect(await result.json()).toEqual({ deleted: { id: 'tt-1' } });
       if (op === 'deleteModule')
@@ -424,6 +460,53 @@ for (const [op, method, path, value] of cases) {
       });
   });
 }
+test('detail, title PATCH and deletes return metadata without reading existing large bytes', async () => {
+  const f = fixture();
+  const row = f.current();
+  const size = 25 * 1024 * 1024; // Legacy resources may exceed today's upload cap.
+  const unreadable = () => { throw new Error('Existing bytes must never reach the API'); };
+  row.image = { id: 'img-1', contentType: 'image/png', altText: null, size };
+  Object.defineProperty(row.image, 'blob', { get: unreadable });
+  row.teacherTrainingModules[0].resources = Array.from({ length: 25 }, (_, i) => {
+    const resource = {
+      id: `large-${i}`, name: `Legacy ${i}`, contentType: 'application/pdf',
+      byteLength: size, createdAt: row.createdAt, updatedAt: row.updatedAt,
+    };
+    Object.defineProperty(resource, 'blob', { get: unreadable });
+    return resource;
+  });
+  for (const [op, method, body] of [
+    ['detail', 'GET', undefined], ['update', 'PATCH', { title: 'Small edit' }],
+  ] as const) {
+    const response = await f.invoke(op, request(method, '/tt-1', body));
+    expect(response.status).toBe(200);
+    const training = (await response.json()).teacherTraining;
+    expect(training.modules[0].resources).toHaveLength(25);
+    expect(training.modules[0].resources.every((r: any) => r.byteLength === size)).toBe(true);
+    expect(training.image).toEqual({ id: 'img-1', contentType: 'image/png', altText: null });
+  }
+  for (const snapshot of [f.audits[0].metadata.before, f.audits[1].metadata.after]) {
+    expect(snapshot.teacherTraining.image.size).toBe(size);
+    expect(snapshot.teacherTraining.image.sha256).toBeUndefined();
+    expect(snapshot.teacherTraining.modules[0].resources[0]).toMatchObject({ byteLength: size });
+    expect(snapshot.teacherTraining.modules[0].resources[0].sha256).toBeUndefined();
+  }
+  expect((await f.invoke('deleteResource', request('DELETE', '/tt-1/modules/m-1/resources/large-0', {}), {
+    id: 'tt-1', moduleId: 'm-1', resourceId: 'large-0',
+  })).status).toBe(200);
+  expect(f.db.teacherTrainingModuleResource.delete.mock.calls[0][0].select).toEqual({ id: true });
+  expect((await f.invoke('delete', request('DELETE', '/tt-1', {}))).status).toBe(200);
+  for (const [args] of f.db.teacherTraining.findUnique.mock.calls) expectMetadataSelect(args);
+  const sizes = f.db.$queryRaw.mock.calls.filter(([query]: any) => String(query).includes('octet_length'));
+  expect(sizes.length).toBeGreaterThan(0);
+  for (const [query, ...values] of sizes) {
+    const sql = String(query);
+    expect(sql).toContain('octet_length');
+    expect(sql).not.toMatch(/SELECT\s+\*/i);
+    expect(sql).not.toMatch(/(?:digest|sha256)/i);
+    expect(values).toContain('tt-1');
+  }
+});
 test('signed read list and detail are scoped and audited with ordered modules/resources', async () => {
   const f = fixture();
   for (const op of ['list', 'detail']) {

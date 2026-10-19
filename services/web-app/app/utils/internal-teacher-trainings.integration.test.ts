@@ -53,8 +53,26 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
         return upload.kind === 'resource' ? Buffer.from('%PDF-1.7') : undefined;
       },
     };
+    // Enforce that all API ORM reads and mutation return values contain metadata only.
+    // Seed/check queries below deliberately use the unwrapped client.
+    const assertNoBytes = (value: unknown): void => {
+      expect(value instanceof Uint8Array).toBe(false);
+      if (value && typeof value === 'object')
+        for (const child of Object.values(value)) assertNoBytes(child);
+    };
+    const metadataDb = prisma.$extends({
+      query: {
+        $allModels: {
+          async $allOperations({ args, query }) {
+            const result = await query(args);
+            assertNoBytes(result);
+            return result;
+          },
+        },
+      },
+    });
     const handlers = createInternalTeacherTrainingHandlers({
-      db: prisma,
+      db: metadataDb,
       media,
       auditRead: async (data) => {
         await prisma.internalPlatformApiAudit.create({ data });
@@ -285,11 +303,48 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
           ).toBe(200);
         }
       }
+      // Generate legacy-sized bytes inside Postgres; the API must only receive lengths.
+      const legacySize = 25 * 1024 * 1024;
+      const legacyIds = [randomUUID(), randomUUID(), randomUUID()];
+      for (let i = 0; i < legacyIds.length; i++) {
+        await prisma.$executeRaw`
+          INSERT INTO "TeacherTrainingModuleResource"
+            (id, name, "contentType", blob, "teacherTrainingModuleId")
+          VALUES (${legacyIds[i]}, 'Legacy large PDF', 'application/pdf',
+            decode(repeat('ab', ${legacySize}), 'hex'), ${i === 0 ? first.id : second.id})`;
+      }
+      await prisma.$executeRaw`
+        INSERT INTO "TeacherTrainingImage" (id, "contentType", blob, "teacherTrainingId")
+        VALUES (${randomUUID()}, 'image/png', decode(repeat('cd', ${6 * 1024 * 1024}), 'hex'), ${id})`;
       const detail = await call('detail', 'GET', path);
       expect(detail.status).toBe(200);
-      expect(
-        (await detail.json()).teacherTraining.modules.map((m: any) => m.id)
-      ).toEqual([second.id, first.id]);
+      const metadata = (await detail.json()).teacherTraining;
+      expect(metadata.modules.map((m: any) => m.id)).toEqual([second.id, first.id]);
+      expect(metadata.modules.flatMap((m: any) => m.resources).map((r: any) => r.byteLength))
+        .toEqual([legacySize, legacySize, legacySize]);
+      const patched = await call('update', 'PATCH', path, {
+        title: 'Small metadata edit', reason: 'Edit title with legacy resources',
+      });
+      expect(patched.status).toBe(200);
+      expect((await patched.json()).teacherTraining.modules.flatMap((m: any) => m.resources)
+        .map((r: any) => r.byteLength)).toEqual([legacySize, legacySize, legacySize]);
+      const titleAudits = await prisma.internalPlatformApiAudit.findMany({
+        where: { keyId, action: { startsWith: 'teacher-training.update.' } },
+        orderBy: { createdAt: 'desc' }, take: 2,
+      });
+      expect(titleAudits.map((a) => a.result).sort()).toEqual(['after', 'before']);
+      for (const audit of titleAudits) {
+        const snapshot = (audit.metadata as any)[audit.result].teacherTraining;
+        expect(snapshot.image.size).toBe(6 * 1024 * 1024);
+        expect(snapshot.image.sha256).toBeUndefined();
+        expect(snapshot.modules.flatMap((m: any) => m.resources).map((r: any) => r.byteLength))
+          .toEqual([legacySize, legacySize, legacySize]);
+        expect(JSON.stringify(snapshot)).not.toContain('sha256');
+        expect(audit.requestHash).toMatch(/^[a-f0-9]{64}$/);
+      }
+      expect((await call('deleteResource', 'DELETE',
+        `${path}/modules/${second.id}/resources/${legacyIds[1]}`,
+        { reason: 'Remove large legacy resource' }, second.id, legacyIds[1])).status).toBe(200);
       expect((await call('list', 'GET', '')).status).toBe(200);
       expect(
         (
@@ -339,7 +394,7 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       expect(
         (await prisma.teacherTraining.findUniqueOrThrow({ where: { id } }))
           .title
-      ).toBe('Integration training');
+      ).toBe('Small metadata edit');
       expect(
         (await call('delete', 'DELETE', path, { reason: 'Remove training' }))
           .status
