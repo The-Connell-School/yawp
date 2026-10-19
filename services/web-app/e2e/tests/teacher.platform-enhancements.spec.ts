@@ -603,6 +603,67 @@ test.describe('Platform enhancements', () => {
     }
   });
 
+  test('earlier active and archived documents remain reachable from their sheet', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    const db = createE2EPrismaClient();
+    const ids: string[] = [];
+    await setFeatureFlag(PLATFORM_ENHANCEMENTS_FLAG, true);
+    try {
+      for (const archived of [false, true]) {
+        const doc = await db.document.create({
+          data: {
+            assignmentTypeId: e2eContext.thesisEssayAssignmentTypeId,
+            membershipId: e2eContext.teacherMembershipId,
+            title: archived ? 'V2 archived draft' : 'V2 earlier draft',
+            archivedAt: archived ? new Date() : null,
+            assignmentModuleSessions: {
+              create: {
+                assignmentModuleId: originalModule.id,
+                instructionsCompleted: 0,
+              },
+            },
+          },
+          select: { id: true },
+        });
+        ids.push(doc.id);
+      }
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto(
+        `/app/assignment-types/${e2eContext.thesisEssayAssignmentTypeId}`
+      );
+      const earlier = page.locator('[data-tour="type-documents"]:visible');
+      await expect(earlier).toContainText(
+        '2 documents you made with this type before assignments.'
+      );
+      await earlier
+        .getByRole('button', { name: 'View documents ›', exact: true })
+        .click();
+      const sheet = page.getByRole('dialog', {
+        name: 'Earlier documents',
+        exact: true,
+      });
+      await expect(
+        sheet.getByRole('link', { name: /V2 earlier draft/ })
+      ).toHaveAttribute(
+        'href',
+        `/app/documents/${ids[0]}?exitTo=${encodeURIComponent(`/app/assignment-types/${e2eContext.thesisEssayAssignmentTypeId}`)}`
+      );
+      await sheet
+        .getByRole('tab', { name: 'Archived (1)', exact: true })
+        .click();
+      await expect(
+        sheet.getByRole('link', { name: /V2 archived draft/ })
+      ).toBeVisible();
+    } finally {
+      await db.document.deleteMany({ where: { id: { in: ids } } });
+      await db.$disconnect();
+      await setFeatureFlag(PLATFORM_ENHANCEMENTS_FLAG, false);
+    }
+  });
+
   test('lesson links keep their prefilled assignment and way back in v2', async ({
     page,
     signIn,
