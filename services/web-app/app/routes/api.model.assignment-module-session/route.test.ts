@@ -121,6 +121,7 @@ describe('api.model.assignment-module-session', () => {
 
     const body = await readBody(response);
     expect(body.cms.id).toBe('cms-existing');
+    expect(prisma.assignmentModuleSession.findUnique.mock.calls.at(-1)![0].include.assignmentModule.include.instructions.omit).toEqual({ answerKey: true });
     expect(body.created.id).toBe('cms-existing');
     expect(prisma.assignmentModuleSession.create).not.toHaveBeenCalled();
     expect(prisma.assignmentModuleSession.findFirst).toHaveBeenCalledWith(
@@ -157,6 +158,7 @@ describe('api.model.assignment-module-session', () => {
 
     const body = await readBody(response);
     expect(body.cms.id).toBe('cms-existing');
+    expect(prisma.assignmentModuleSession.findUnique.mock.calls.at(-1)![0].include.assignmentModule.include.instructions.omit).toEqual({ answerKey: true });
     expect(prisma.assignmentModuleSession.update).toHaveBeenCalledWith({
       where: { id: 'cms-existing' },
       data: { updatedAt: expect.any(Date) },
@@ -374,6 +376,7 @@ describe('api.model.assignment-module-session', () => {
 
       const body = await readBody(response);
       expect(body.cms.id).toBe('cms-existing');
+    expect(prisma.assignmentModuleSession.findUnique.mock.calls.at(-1)![0].include.assignmentModule.include.instructions.omit).toEqual({ answerKey: true });
       expect(prisma.assignmentModuleSession.create).not.toHaveBeenCalled();
     });
 

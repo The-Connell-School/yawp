@@ -64,6 +64,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       assignmentModule: {
         include: {
           instructions: {
+            omit: { answerKey: true },
             orderBy: { position: 'asc' },
             include: { buttons: { orderBy: { position: 'asc' } } },
           },
@@ -165,6 +166,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       assignmentModule: {
         include: {
           instructions: {
+            omit: { answerKey: true },
             orderBy: { position: 'asc' },
             include: { buttons: { orderBy: { position: 'asc' } } },
           },

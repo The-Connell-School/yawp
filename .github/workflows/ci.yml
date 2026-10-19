@@ -76,6 +76,14 @@ jobs:
         if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
         uses: oven-sh/setup-bun@v1
 
+      - name: 💾 Cache bun install
+        if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
+          restore-keys: ${{ runner.os }}-bun-
+
       - name: 📦 Install dependencies
         if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
         run: bun install --frozen-lockfile
@@ -124,6 +132,14 @@ jobs:
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         uses: oven-sh/setup-bun@v1
 
+      - name: 💾 Cache bun install
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
+          restore-keys: ${{ runner.os }}-bun-
+
       - name: 📦 Install dependencies
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         run: bun install --frozen-lockfile
@@ -141,7 +157,7 @@ jobs:
 
       - name: 🧪 Validate deployment contract
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        run: bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js
+        run: bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js ./scripts/preview/demo-mail-config.test.ts --max-concurrency=2
 
       - name: 🧪 Validate Blackboard LTI mock
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -582,13 +598,30 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun run --cwd packages/prisma seed-local-dev
 
+      - name: 🐳 Set up Docker Buildx
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        uses: docker/setup-buildx-action@v3
+
+      # Layer cache in the GitHub Actions cache, so unchanged layers are not rebuilt.
+      - name: 🐳 Build production image (cached layers)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/web-app/Dockerfile
+          platforms: linux/amd64
+          tags: yawp-web-app:ci
+          load: true
+          push: false
+          cache-from: type=gha,scope=ci-web-app
+          cache-to: type=gha,scope=ci-web-app,mode=max
+
       - name: 🐳 Verify production image resolves preview seed imports
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: |
           set -euo pipefail
-          docker build --platform linux/amd64 -t yawp-web-app:ci -f services/web-app/Dockerfile .
           docker run --rm yawp-web-app:ci bun -e "
             await import('./packages/prisma/scripts/local-dev/seed-free-tier-feature-flag.ts');
             await import('./scripts/preview/free-tier-ship-review-seed-guard.mjs');
@@ -657,6 +690,24 @@ jobs:
         working-directory: services/web-app
         run: bun test app/utils/login-rate-limit.fail-closed.test.ts
 
+      - name: Assignment type write API database lifecycle
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          INTERNAL_DIRECTORY_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: |
+          CI=1 bun test --max-concurrency=2 app/utils/internal-assignment-type-writes.integration.test.ts app/utils/internal-assignment-type-module-writes.integration.test.ts app/utils/internal-grading-workspace.integration.test.ts
+          CI=1 bun test --max-concurrency=2 app/utils/internal-owner-invitations.integration.test.ts
+
+      - name: Teacher training API database lifecycle
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          INTERNAL_DIRECTORY_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: CI=1 bun test --max-concurrency=2 app/utils/internal-teacher-trainings.integration.test.ts
+
   typecheck-web-app:
     needs: [paths]
     name: ʦ TypeScript
@@ -678,6 +729,14 @@ jobs:
         if: ${{ needs.paths.outputs.code == 'true' }}
         uses: oven-sh/setup-bun@v1
 
+      - name: 💾 Cache bun install
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
+          restore-keys: ${{ runner.os }}-bun-
+
       - name: 📦 Install dependencies
         if: ${{ needs.paths.outputs.code == 'true' }}
         run: bun install --frozen-lockfile
@@ -698,6 +757,14 @@ jobs:
         if: ${{ needs.paths.outputs.code == 'true' }}
         working-directory: services/web-app
         run: bun test app/utils/ai-usage-log.server.test.ts app/utils/getLLMCompletion/getLLMCompletion.test.ts
+
+      - name: Teacher training API contracts
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        run: CI=1 ./bin/project test --profile internal-teacher-trainings --json
+
+      - name: Assignment type write API contracts
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        run: CI=1 ./bin/project test --profile internal-assignment-type-writes --json
 
       - name: 🧪 Free-tier spend admission and caller denials (isolated)
         if: ${{ needs.paths.outputs.code == 'true' }}
@@ -736,6 +803,8 @@ jobs:
             app/domain/feature-flags/feature-flags.server.test.ts \
             app/utils/internal-feature-flags-http.server.test.ts \
             app/domain/rubrics/rubric-promotion.test.ts \
+            app/utils/internal-rubrics-http.server.test.ts \
+            app/utils/internal-rubrics-body.server.test.ts \
             app/domain/assignment-types/assignment-type-grading-config.server.test.ts \
             app/domain/assignment-types/assignment-type-grading-config.qa431-legacy.server.test.ts \
             app/domain/assignment-types/assignment-type-grading-config.qa431-probe.server.test.ts \
@@ -824,17 +893,141 @@ jobs:
             bun test "$f"
           done
 
-  e2e-web-app:
-    needs: [typecheck-web-app, validate-prisma-migrations, paths]
-    name: 🧪 E2E Tests (Playwright)
+  # The smoke specs run serially (workers: 1) and share one database, so they are
+  # split across runners instead: each shard gets its own Postgres service.
+  e2e-smoke:
+    needs: [paths]
+    if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    name: 🧪 E2E smoke (shard ${{ matrix.shard }})
     runs-on: ubuntu-22.04
     env:
       # Fixture steps isolate XDG_CACHE_HOME; keep browser install and lookup shared.
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
-    # The browser download hung for five hours on 2026-08-18 and would have run
-    # to GitHub's six-hour default before failing. Nothing about this job is
-    # worth half a day of a runner: the tests themselves take about seven
-    # minutes, so anything past half an hour is wedged, not slow.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v3
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 22
+
+      - name: 📥 Setup Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: 💾 Cache bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: 📦 Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: ⚙️ Generate Prisma Client
+        run: bun prisma generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+
+      # Keyed on the resolved version rather than a hardcoded one, so a bump in
+      # package.json invalidates the cache instead of restoring browsers that no
+      # longer match the runner.
+
+      - name: 🔖 Resolve Playwright version
+        id: playwright-version
+        working-directory: services/web-app
+        run: |
+          echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: 💾 Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
+          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+
+      # Chromium only. On a browser cache hit, install the binary only — apt deps
+      # are already on the runner and `install-deps` has timed out on cache hits.
+
+      - name: Install Playwright chromium
+        working-directory: services/web-app
+        timeout-minutes: 15
+        run: |
+          version=$(node -p "require('@playwright/test/package.json').version")
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            bunx --package "@playwright/test@${version}" playwright install chromium
+          else
+            bunx --package "@playwright/test@${version}" playwright install --with-deps chromium
+          fi
+
+      - name: 🧪 Run Playwright tests
+        working-directory: services/web-app
+        env:
+          CI: true
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          FREE_TIER_LINK_HMAC_SECRET: ci-free-tier-link-hmac-secret-key-32b
+          PRIMARY_APP_URL: http://127.0.0.1:5173
+          RESEND_API_KEY: ''
+          RESEND_FROM_EMAIL: ''
+          TRIAL_STATUS_SHOTS: test-results/trial-status
+          PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report
+        run: bun run test:e2e:smoke --shard=${{ matrix.shard }}/${{ strategy.job-total }} --reporter=blob,list
+
+      - name: Upload blob report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: blob-report-${{ matrix.shard }}
+          path: services/web-app/blob-report/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload free classroom status evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: free-classroom-status-evidence-${{ matrix.shard }}
+          path: services/web-app/test-results/trial-status/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # HTML report + traces for smoke failures (see playwright.config.ts).
+
+      - name: Upload test results on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results-${{ github.run_id }}-${{ matrix.shard }}
+          path: services/web-app/test-results/
+          retention-days: 7
+
+  e2e-signon:
+    needs: [paths]
+    if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    name: 🔐 Sign-on browser flows
+    runs-on: ubuntu-22.04
+    env:
+      # Fixture steps isolate XDG_CACHE_HOME; keep browser install and lookup shared.
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
     timeout-minutes: 30
     services:
       postgres:
@@ -852,26 +1045,26 @@ jobs:
     steps:
       - name: ⬇️ Checkout repo
         uses: actions/checkout@v3
-      - name: ⏭️ Skip (draft PR or no code changes)
-        if: ${{ github.event_name == 'pull_request' && (github.event.pull_request.draft || needs.paths.outputs.code != 'true') }}
-        run: echo "Draft PR or no code changes; skipping heavy steps."
 
       - name: ⎔ Setup node
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         uses: actions/setup-node@v3
         with:
           node-version: 22
 
       - name: 📥 Setup Bun
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         uses: oven-sh/setup-bun@v1
 
+      - name: 💾 Cache bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
+          restore-keys: ${{ runner.os }}-bun-
+
       - name: 📦 Install dependencies
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         run: bun install --frozen-lockfile
 
       - name: ⚙️ Generate Prisma Client
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         run: bun prisma generate
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
@@ -879,8 +1072,8 @@ jobs:
       # Keyed on the resolved version rather than a hardcoded one, so a bump in
       # package.json invalidates the cache instead of restoring browsers that no
       # longer match the runner.
+
       - name: 🔖 Resolve Playwright version
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         id: playwright-version
         working-directory: services/web-app
         run: |
@@ -888,7 +1081,6 @@ jobs:
 
       - name: 💾 Cache Playwright browsers
         id: playwright-cache
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         uses: actions/cache@v4
         with:
           path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
@@ -896,8 +1088,8 @@ jobs:
 
       # Chromium only. On a browser cache hit, install the binary only — apt deps
       # are already on the runner and `install-deps` has timed out on cache hits.
+
       - name: Install Playwright chromium
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         working-directory: services/web-app
         timeout-minutes: 15
         run: |
@@ -908,8 +1100,9 @@ jobs:
             bunx --package "@playwright/test@${version}" playwright install --with-deps chromium
           fi
 
-      - name: 🧪 Run Playwright tests
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
+      # The sign-on flows used to run after the smoke suite, which migrated and
+      # seeded yop_e2e on startup. Prepare it the same way here.
+      - name: 🛠️ Prepare E2E database
         working-directory: services/web-app
         env:
           CI: true
@@ -918,11 +1111,196 @@ jobs:
           PRIMARY_APP_URL: http://127.0.0.1:5173
           RESEND_API_KEY: ''
           RESEND_FROM_EMAIL: ''
-          TRIAL_STATUS_SHOTS: test-results/trial-status
-        run: bun run test:e2e:smoke
+        run: bun ./e2e/ensure-e2e-env.ts
+
+      - name: Unified sign-on local-handler browser flows
+        working-directory: services/web-app
+        env:
+          CI: true
+          NODE_ENV: development
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          SESSION_SECRET: ci-local-signon-session-secret
+          SIGNON_LOCAL_TEST: '1'
+          SIGNON_START_SERVER: '1'
+          SIGNON_MAIL_CAPTURE_DIR: ${{ runner.temp }}/signon/mail
+          TMPDIR: ${{ runner.temp }}/signon
+        run: |
+          mkdir -p "$TMPDIR"
+          trap 'rm -rf "$SIGNON_MAIL_CAPTURE_DIR"' EXIT
+          bun x playwright test --config playwright.unified-backend.config.ts --workers=1
+
+      - name: Sign-on teacher prompts browser flows (mocked flag reads)
+        env:
+          CI: true
+          NODE_ENV: development
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          SESSION_SECRET: ci-local-signon-session-secret
+          SIGNON_LOCAL_TEST: '1'
+          TMPDIR: ${{ runner.temp }}/teacher-prompts
+        run: |
+          mkdir -p "$TMPDIR"
+          ./bin/project test --profile signon-teacher-prompts-unit --json
+          ./bin/project test --profile signon-teacher-prompts-browser --json
+
+      - name: Unified sign-on isolated-preview resend browser flows
+        working-directory: services/web-app
+        env:
+          CI: true
+          NODE_ENV: development
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          SESSION_SECRET: ci-local-signon-session-secret
+          SIGNON_LOCAL_TEST: '1'
+          SIGNON_RESEND_CAPTURE_DIR: ${{ runner.temp }}/signon-resend/mail
+          TMPDIR: ${{ runner.temp }}/signon-resend
+          PREVIEW_ACCESS_SECRET: ci-local-preview-resend-private-secret-32bytes
+          FREE_TIER_LINK_HMAC_SECRET: ci-local-free-tier-resend-private-secret-32bytes
+          PRIMARY_APP_URL: http://localhost:5396
+          RESEND_API_KEY: ''
+          EMAIL_PROVIDER: ''
+        run: |
+          mkdir -p "$TMPDIR"
+          trap "python3 -c 'import os, shutil; shutil.rmtree(os.environ[\"SIGNON_RESEND_CAPTURE_DIR\"], ignore_errors=True)'" EXIT
+          bun x playwright test --config playwright.unified-resend.config.ts --workers=1
+
+      - name: Unified sign-on inactive recovery browser flows
+        working-directory: services/web-app
+        env:
+          CI: true
+          NODE_ENV: development
+          PGPASSWORD: postgres
+          DATABASE_URL: postgresql://yawp_pr_999565_app:ci-fixture-only@127.0.0.1:5432/yawp_pr_999565
+          E2E_DATABASE_URL: postgresql://yawp_pr_999565_app:ci-fixture-only@127.0.0.1:5432/yawp_pr_999565
+          SESSION_SECRET: ci-local-signon-session-secret
+          SIGNON_PREVIEW_FIXTURE_TEST: '1'
+          PREVIEW_ACCESS_SECRET: ci-local-recovery-private-secret-32bytes
+          YAWP_ENVIRONMENT: preview
+          PREVIEW_SLUG: pr-999565
+          PREVIEW_DATA_MODE: seed
+          TMPDIR: ${{ runner.temp }}/signon-recovery
+          RESEND_API_KEY: ''
+          EMAIL_PROVIDER: ''
+        run: |
+          mkdir -p "$TMPDIR"
+          trap 'psql -h 127.0.0.1 -U postgres -d postgres -c "DROP DATABASE IF EXISTS yawp_pr_999565 WITH (FORCE)" -c "DROP ROLE IF EXISTS yawp_pr_999565_app"' EXIT
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE yawp_pr_999565_app LOGIN PASSWORD 'ci-fixture-only'" -c "CREATE DATABASE yawp_pr_999565 OWNER yawp_pr_999565_app"
+          bun run --cwd ../../packages/prisma prisma migrate deploy
+          bun run ../../packages/prisma/scripts/seed-local-dev.ts
+          bun run ../../packages/prisma/scripts/seed-preview-signon-qa.ts
+          bun x playwright test --config playwright.unified-recovery.config.ts --workers=1
+
+      - name: Unified sign-on mocked-provider browser flows
+        working-directory: services/web-app
+        env:
+          CI: true
+          NODE_ENV: development
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          SESSION_SECRET: ci-local-signon-session-secret
+          SIGNON_LOCAL_TEST: '1'
+          SIGNON_START_SERVER: '1'
+          SIGNON_MOCK_GOOGLE: '1'
+          GOOGLE_OAUTH_CLIENT_ID: local-client
+          GOOGLE_OAUTH_CLIENT_SECRET: local-secret
+          TMPDIR: ${{ runner.temp }}/signon
+        run: |
+          mkdir -p "$TMPDIR"
+          export NODE_OPTIONS="--import=$PWD/e2e/unified-google-provider.mjs"
+          bun x playwright test --config playwright.unified-backend.config.ts --workers=1 --grep 'mocked Google'
+
+      - name: Upload Playwright results on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-signon-results-${{ github.run_id }}
+          path: |
+            services/web-app/test-results/
+            ${{ runner.temp }}/signon/signon-playwright-results/
+          retention-days: 7
+
+  e2e-browser-checks:
+    needs: [paths]
+    if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    name: 🧪 Demo feedback + preview access browser checks
+    runs-on: ubuntu-22.04
+    env:
+      # Fixture steps isolate XDG_CACHE_HOME; keep browser install and lookup shared.
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v3
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 22
+
+      - name: 📥 Setup Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: 💾 Cache bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: 📦 Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: ⚙️ Generate Prisma Client
+        run: bun prisma generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+
+      # Keyed on the resolved version rather than a hardcoded one, so a bump in
+      # package.json invalidates the cache instead of restoring browsers that no
+      # longer match the runner.
+
+      - name: 🔖 Resolve Playwright version
+        id: playwright-version
+        working-directory: services/web-app
+        run: |
+          echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: 💾 Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
+          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+
+      # Chromium only. On a browser cache hit, install the binary only — apt deps
+      # are already on the runner and `install-deps` has timed out on cache hits.
+
+      - name: Install Playwright chromium
+        working-directory: services/web-app
+        timeout-minutes: 15
+        run: |
+          version=$(node -p "require('@playwright/test/package.json').version")
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            bunx --package "@playwright/test@${version}" playwright install chromium
+          else
+            bunx --package "@playwright/test@${version}" playwright install --with-deps chromium
+          fi
 
       - name: Verify demo feedback headless browser executable
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         working-directory: services/web-app
         env:
           TMPDIR: ${{ runner.temp }}/demo-feedback
@@ -944,7 +1322,6 @@ jobs:
           fi
 
       - name: Demo feedback local fixture browser regression
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         env:
           CI: '1'
           # The fixture targets IPv4; Vite's default localhost bind must match it.
@@ -976,133 +1353,86 @@ jobs:
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:5489/ > /dev/null
           ./bin/project test --profile demo-feedback-browser --json
 
-      - name: Unified sign-on local-handler browser flows
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
-        working-directory: services/web-app
-        env:
-          CI: true
-          NODE_ENV: development
-          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
-          E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
-          SESSION_SECRET: ci-local-signon-session-secret
-          SIGNON_LOCAL_TEST: '1'
-          SIGNON_START_SERVER: '1'
-          SIGNON_MAIL_CAPTURE_DIR: ${{ runner.temp }}/signon/mail
-          TMPDIR: ${{ runner.temp }}/signon
-        run: |
-          mkdir -p "$TMPDIR"
-          trap 'rm -rf "$SIGNON_MAIL_CAPTURE_DIR"' EXIT
-          bun x playwright test --config playwright.unified-backend.config.ts --workers=1
-
-      - name: Sign-on teacher prompts browser flows (mocked flag reads)
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
-        env:
-          CI: true
-          NODE_ENV: development
-          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
-          E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
-          SESSION_SECRET: ci-local-signon-session-secret
-          SIGNON_LOCAL_TEST: '1'
-          TMPDIR: ${{ runner.temp }}/teacher-prompts
-        run: |
-          mkdir -p "$TMPDIR"
-          ./bin/project test --profile signon-teacher-prompts-unit --json
-          ./bin/project test --profile signon-teacher-prompts-browser --json
-
-      - name: Unified sign-on isolated-preview resend browser flows
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
-        working-directory: services/web-app
-        env:
-          CI: true
-          NODE_ENV: development
-          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
-          E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
-          SESSION_SECRET: ci-local-signon-session-secret
-          SIGNON_LOCAL_TEST: '1'
-          SIGNON_RESEND_CAPTURE_DIR: ${{ runner.temp }}/signon-resend/mail
-          TMPDIR: ${{ runner.temp }}/signon-resend
-          PREVIEW_ACCESS_SECRET: ci-local-preview-resend-private-secret-32bytes
-          FREE_TIER_LINK_HMAC_SECRET: ci-local-free-tier-resend-private-secret-32bytes
-          PRIMARY_APP_URL: http://localhost:5396
-          RESEND_API_KEY: ''
-          EMAIL_PROVIDER: ''
-        run: |
-          mkdir -p "$TMPDIR"
-          trap "python3 -c 'import os, shutil; shutil.rmtree(os.environ[\"SIGNON_RESEND_CAPTURE_DIR\"], ignore_errors=True)'" EXIT
-          bun x playwright test --config playwright.unified-resend.config.ts --workers=1
-
-      - name: Unified sign-on inactive recovery browser flows
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
-        working-directory: services/web-app
-        env:
-          CI: true
-          NODE_ENV: development
-          PGPASSWORD: postgres
-          DATABASE_URL: postgresql://yawp_pr_999565_app:ci-fixture-only@127.0.0.1:5432/yawp_pr_999565
-          E2E_DATABASE_URL: postgresql://yawp_pr_999565_app:ci-fixture-only@127.0.0.1:5432/yawp_pr_999565
-          SESSION_SECRET: ci-local-signon-session-secret
-          SIGNON_PREVIEW_FIXTURE_TEST: '1'
-          PREVIEW_ACCESS_SECRET: ci-local-recovery-private-secret-32bytes
-          YAWP_ENVIRONMENT: preview
-          PREVIEW_SLUG: pr-999565
-          PREVIEW_DATA_MODE: seed
-          TMPDIR: ${{ runner.temp }}/signon-recovery
-          RESEND_API_KEY: ''
-          EMAIL_PROVIDER: ''
-        run: |
-          mkdir -p "$TMPDIR"
-          trap 'psql -h 127.0.0.1 -U postgres -d postgres -c "DROP DATABASE IF EXISTS yawp_pr_999565 WITH (FORCE)" -c "DROP ROLE IF EXISTS yawp_pr_999565_app"' EXIT
-          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE yawp_pr_999565_app LOGIN PASSWORD 'ci-fixture-only'" -c "CREATE DATABASE yawp_pr_999565 OWNER yawp_pr_999565_app"
-          bun run --cwd ../../packages/prisma prisma migrate deploy
-          bun run ../../packages/prisma/scripts/seed-local-dev.ts
-          bun run ../../packages/prisma/scripts/seed-preview-signon-qa.ts
-          bun x playwright test --config playwright.unified-recovery.config.ts --workers=1
-
-      - name: Unified sign-on mocked-provider browser flows
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
-        working-directory: services/web-app
-        env:
-          CI: true
-          NODE_ENV: development
-          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
-          E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
-          SESSION_SECRET: ci-local-signon-session-secret
-          SIGNON_LOCAL_TEST: '1'
-          SIGNON_START_SERVER: '1'
-          SIGNON_MOCK_GOOGLE: '1'
-          GOOGLE_OAUTH_CLIENT_ID: local-client
-          GOOGLE_OAUTH_CLIENT_SECRET: local-secret
-          TMPDIR: ${{ runner.temp }}/signon
-        run: |
-          mkdir -p "$TMPDIR"
-          export NODE_OPTIONS="--import=$PWD/e2e/unified-google-provider.mjs"
-          bun x playwright test --config playwright.unified-backend.config.ts --workers=1 --grep 'mocked Google'
-
-      - name: Upload free classroom status evidence
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: free-classroom-status-evidence
-          path: services/web-app/test-results/trial-status/
-          if-no-files-found: ignore
-          retention-days: 7
-
-      # HTML report + traces for smoke failures (see playwright.config.ts).
-      - name: Upload Playwright report on failure
-        if: failure() && (github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true'))
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report-${{ github.run_id }}
-          path: |
-            services/web-app/playwright-report/
-            services/web-app/test-results/
-            ${{ runner.temp }}/signon/signon-playwright-results/
-          retention-days: 7
-
       - name: 🔐 Run preview access gate tests
-        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
         working-directory: services/web-app
         env:
           CI: true
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
         run: bun run test:e2e:preview-access
+
+      - name: Upload Playwright results on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-browser-checks-results-${{ github.run_id }}
+          path: |
+            services/web-app/test-results/
+            services/web-app/playwright-report/
+          retention-days: 7
+
+  # One HTML report for all smoke shards (non-gating; download the artifact on failure).
+  e2e-report:
+    needs: [e2e-smoke]
+    if: ${{ !cancelled() && needs.e2e-smoke.result != 'skipped' }}
+    name: 📊 Merge E2E smoke reports
+    runs-on: ubuntu-22.04
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v4
+
+      - name: 📥 Setup Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: 💾 Cache bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: 📦 Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: 📥 Download blob reports
+        uses: actions/download-artifact@v4
+        with:
+          path: services/web-app/all-blob-reports
+          pattern: blob-report-*
+          merge-multiple: true
+
+      - name: 🧩 Merge into one HTML report
+        working-directory: services/web-app
+        run: |
+          if ls all-blob-reports/*.zip >/dev/null 2>&1; then
+            bun x playwright merge-reports --reporter html ./all-blob-reports
+          else
+            echo "No blob reports to merge."
+          fi
+
+      - name: Upload merged Playwright report
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: services/web-app/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Keeps the original check name. Passes when every E2E job passed, or when
+  # they were skipped on purpose (draft PR or no code changes).
+  e2e-web-app:
+    needs: [paths, e2e-smoke, e2e-signon, e2e-browser-checks]
+    if: ${{ always() }}
+    name: 🧪 E2E Tests (Playwright)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: ✅ Check E2E results
+        env:
+          RESULTS: ${{ needs.paths.result }} ${{ needs.e2e-smoke.result }} ${{ needs.e2e-signon.result }} ${{ needs.e2e-browser-checks.result }}
+        run: |
+          echo "paths, smoke, sign-on, browser checks: $RESULTS"
+          for r in $RESULTS; do
+            case "$r" in
+              success|skipped) ;;
+              *) echo "::error::An E2E job ended with: $r"; exit 1 ;;
+            esac
+          done

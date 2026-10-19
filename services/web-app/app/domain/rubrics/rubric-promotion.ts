@@ -2,13 +2,17 @@ import { z } from 'zod';
 import { parseRubricSchema, type RubricSchema } from './rubric-schema';
 import { validateOutputSchemaDisplay } from './output-schema-display';
 import { validateScoreScale } from '../assignment-types/score-scale-steps';
+import { RUBRIC_SCORING_SCALE_TYPES } from '../assignment-types/assignment-type-rubric.shared';
 
 type Json = null | string | number | boolean | Json[] | { [key: string]: Json };
 const json: z.ZodType<Json> = z.lazy(() => z.union([z.null(), z.string(), z.number().finite(), z.boolean(), z.array(json), z.record(json)]));
 const text = z.string().trim().min(1);
 const number = z.number().finite();
 const scale = z.object({
-  type: text, minScore: number, maxScore: number, step: number.int().min(1).optional(),
+  type: z.enum(RUBRIC_SCORING_SCALE_TYPES, {
+    errorMap: () => ({ message: `Scoring type must be one of ${RUBRIC_SCORING_SCALE_TYPES.join(', ')}.` }),
+  }).default('weighted_1_5'),
+  minScore: number, maxScore: number, step: number.int().min(1).optional(),
   compositeMin: number.optional(), compositeMax: number.optional(),
 }).strict();
 const category = z.object({

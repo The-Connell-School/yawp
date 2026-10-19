@@ -1,3 +1,4 @@
+import { updateModule, deleteModule, createStep, updateStep, deleteStep, reorderSteps } from '~/domain/assignment-types/assignment-type-module-writes.server';
 import {
   type ActionFunctionArgs,
   data as dataResponse,
@@ -209,26 +210,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     const variantsJson = parseTutorInstructionVariantsJson(formData);
 
-    await prisma.assignmentModule.update({
-      where: { id: params.moduleId },
-      data: {
-        title: data.title,
-        description: data.description || null,
-        isSelfGuided: data.isSelfGuided === 'on',
-        tutorInstructions: data.tutorInstructions || null,
-        ...(variantsJson ? { tutorInstructionsVariantsJson: variantsJson } : {}),
-        rubricAlignmentJson: parseRubricAlignmentJson(formData),
-      },
+    await updateModule(prisma, params.moduleId!, {
+      title: data.title,
+      description: data.description || null,
+      isSelfGuided: data.isSelfGuided === 'on',
+      tutorInstructions: data.tutorInstructions || null,
+      ...(variantsJson ? { tutorInstructionsVariantsJson: variantsJson } : {}),
+      rubricAlignmentJson: parseRubricAlignmentJson(formData),
     });
 
     return dataResponse({ status: 'success' });
   }
 
   if (intent === 'deleteModule') {
-    await prisma.assignmentModule.update({
-      where: { id: params.moduleId },
-      data: { deletedAt: new Date() },
-    });
+    await deleteModule(prisma, params.moduleId!);
 
     return redirect(`/app/admin/assignment-types/${params.id}`);
   }
@@ -237,27 +232,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const { error, data } = await parseFormData(formData, instructionSchema);
     if (error) return validationError(error);
 
-    const instructionCount = await prisma.assignmentModuleInstruction.count({
-      where: { assignmentModuleId: params.moduleId },
-    });
-
-    await prisma.assignmentModuleInstruction.create({
-      data: {
-        title: data.title,
-        prompt: data.prompt,
-        tutorInstructions: data.tutorInstructions || null,
-        showChatButton: data.showChatButton === 'on',
-        showNextButton: data.showNextButton === 'on',
-        position: instructionCount,
-        assignmentModuleId: params.moduleId!,
-        buttons: {
-          create: data.buttons.map((button, index) => ({
-            label: button.label,
-            action: button.action,
-            position: index,
-          })),
-        },
-      },
+    await createStep(prisma, params.moduleId!, {
+      title: data.title,
+      prompt: data.prompt,
+      answerKey: data.answerKey,
+      // The form keeps its legacy name; storage/API use nextButtonLabel.
+      nextButtonLabel: data.nextInstructionBtnLabel,
+      tutorInstructions: data.tutorInstructions || null,
+      showChatButton: data.showChatButton === 'on',
+      showNextButton: data.showNextButton === 'on',
+      buttons: data.buttons,
     });
 
     return dataResponse({ status: 'success' });
@@ -274,26 +258,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     const variantsJson = parseTutorInstructionVariantsJson(formData);
 
-    await prisma.assignmentModuleInstruction.update({
-      where: { id: instructionId },
-      data: {
-        title: data.title,
-        prompt: data.prompt,
-        tutorInstructions: data.tutorInstructions || null,
-        ...(variantsJson ? { tutorInstructionsVariantsJson: variantsJson } : {}),
-        showChatButton: data.showChatButton === 'on',
-        showNextButton: data.showNextButton === 'on',
-        buttons: {
-          deleteMany: {
-            assignmentModuleInstructionId: instructionId,
-          },
-          create: data.buttons.map((button, index) => ({
-            label: button.label,
-            action: button.action,
-            position: index,
-          })),
-        },
-      },
+    await updateStep(prisma, instructionId, {
+      title: data.title,
+      prompt: data.prompt,
+      answerKey: data.answerKey,
+      // The form keeps its legacy name; storage/API use nextButtonLabel.
+      nextButtonLabel: data.nextInstructionBtnLabel,
+      tutorInstructions: data.tutorInstructions || null,
+      ...(variantsJson ? { tutorInstructionsVariantsJson: variantsJson } : {}),
+      showChatButton: data.showChatButton === 'on',
+      showNextButton: data.showNextButton === 'on',
+      buttons: data.buttons,
     });
 
     return dataResponse({ status: 'success' });
@@ -306,9 +281,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       throw new Response('Instruction ID is required', { status: 400 });
     }
 
-    await prisma.assignmentModuleInstruction.delete({
-      where: { id: instructionId },
-    });
+    await deleteStep(prisma, instructionId);
 
     return dataResponse({ status: 'success' });
   }
@@ -318,14 +291,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       formData.get('instructionIds')?.toString() || '[]'
     );
 
-    await Promise.all(
-      instructionIds.map((instructionId: string, index: number) =>
-        prisma.assignmentModuleInstruction.update({
-          where: { id: instructionId },
-          data: { position: index },
-        })
-      )
-    );
+    await reorderSteps(prisma, instructionIds);
 
     return dataResponse({ status: 'success' });
   }
@@ -390,6 +356,8 @@ export default function AssignmentModuleRoute() {
     defaultValues: {
       title: editingInstruction?.title || '',
       prompt: editingInstruction?.prompt || '',
+      answerKey: editingInstruction?.answerKey || '',
+      nextInstructionBtnLabel: editingInstruction?.nextButtonLabel || '',
       tutorInstructions: editingInstruction?.tutorInstructions || '',
       showChatButton: editingInstruction?.showChatButton || false,
       showNextButton: editingInstruction?.showNextButton || false,
@@ -411,6 +379,8 @@ export default function AssignmentModuleRoute() {
       instructionForm.resetForm({
         title: editingInstruction?.title || '',
         prompt: editingInstruction?.prompt || '',
+        answerKey: editingInstruction?.answerKey || '',
+        nextInstructionBtnLabel: editingInstruction?.nextButtonLabel || '',
         tutorInstructions: editingInstruction?.tutorInstructions || '',
         showChatButton: editingInstruction?.showChatButton || false,
         showNextButton: editingInstruction?.showNextButton || false,

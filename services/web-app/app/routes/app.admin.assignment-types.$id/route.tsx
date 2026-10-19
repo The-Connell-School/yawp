@@ -1,19 +1,16 @@
+import { createModule, reorderModules } from '~/domain/assignment-types/assignment-type-module-writes.server';
+import { readGradingInstructionsOverride } from '~/domain/assignment-types/assignment-type-admin-writes.shared';
 import {
   listLiveRubricsForAdminPicker,
   resolveAdminRubricPickerSelection,
 } from '~/domain/rubrics/admin-rubric-picker.server';
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router';
 import { data as dataResponse, redirect, useLoaderData } from 'react-router';
-import type { Prisma } from '@app/prisma';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { AssignmentTypeEditorForm } from '~/components/admin/assignment-type-editor-form';
 import { requireAdmin, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import {
-  DEFAULT_OUTPUT_SCHEMA_JSON,
-  parseRubric,
-} from '~/domain/assignment-types/assignment-type-rubric.shared';
-import { isRubricFullyPopulated } from '~/domain/assignment-types/assignment-type-rubric-config';
+import { archiveAssignmentType, restoreAssignmentType, updateAssignmentType, replaceAssignmentTypeImage, removeAssignmentTypeImage, parseAdminUpdateGradingConfig, withGradingInstructionsOverride } from '~/domain/assignment-types/assignment-type-admin-writes.server';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
@@ -25,52 +22,6 @@ const PROMPT_PREVIEW_INPUTS = {
   strictnessLevel: 'intermediate',
   documentText: '[CASE DOCUMENT CONTENT]',
 } as const;
-
-function parseJsonFormField(formData: FormData, name: string) {
-  const value = formData.get(name);
-  if (typeof value !== 'string' || !value.trim()) return null;
-  try {
-    return JSON.parse(value);
-  } catch {
-    throw new Response(`${name} must be valid JSON`, { status: 400 });
-  }
-}
-
-function withGradingInstructionsOverride(
-  rawPromptConfig: unknown,
-  rawOverride: FormDataEntryValue | null
-) {
-  const promptConfig =
-    rawPromptConfig &&
-    typeof rawPromptConfig === 'object' &&
-    !Array.isArray(rawPromptConfig)
-      ? { ...(rawPromptConfig as Record<string, unknown>) }
-      : {};
-  const gradingInstructionsOverride =
-    typeof rawOverride === 'string' ? rawOverride.trim() : '';
-
-  if (gradingInstructionsOverride) {
-    promptConfig.gradingInstructionsOverride = gradingInstructionsOverride;
-  } else {
-    delete promptConfig.gradingInstructionsOverride;
-  }
-
-  return promptConfig as Prisma.InputJsonObject;
-}
-
-function readGradingInstructionsOverride(rawPromptConfig: unknown) {
-  if (
-    !rawPromptConfig ||
-    typeof rawPromptConfig !== 'object' ||
-    Array.isArray(rawPromptConfig)
-  ) {
-    return '';
-  }
-
-  const value = (rawPromptConfig as Record<string, unknown>)
-    .gradingInstructionsOverride;
-  return typeof value === 'string' ? value.trim() : '';
-}
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireAdmin(request);
@@ -173,19 +124,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const assignmentTypeId = params.id;
 
   if (intent === 'deleteCourse') {
-    await prisma.assignmentType.update({
-      where: { id: params.id },
-      data: { archivedAt: new Date() },
-    });
+    await archiveAssignmentType(prisma, params.id!);
 
     return redirect('/app/admin/assignments');
   }
 
   if (intent === 'unarchiveCourse') {
-    await prisma.assignmentType.update({
-      where: { id: params.id },
-      data: { archivedAt: null },
-    });
+    await restoreAssignmentType(prisma, params.id!);
 
     return dataResponse({ status: 'success' });
   }
@@ -203,14 +148,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
       .trim();
     const imageFile = formData.get('image') as File | null;
     const deleteImage = formData.get('deleteImage') === 'true';
-    const hasGradingConfigFields =
-      formData.has('scoringScale') ||
-      formData.has('rubricJson') ||
-      formData.has('promptConfigJson') ||
-      formData.has('outputSchemaJson');
-    const hasGradingInstructionsOverrideField = formData.has(
-      'gradingInstructionsOverride'
-    );
     const hasRubricIdField = formData.has('rubricId');
     const rawRubricId = formData.get('rubricId')?.toString() ?? '';
 
@@ -250,104 +187,33 @@ export async function action({ request, params }: ActionFunctionArgs) {
       }
     }
 
-    const gradingInstructionsOverrideChanged =
-      hasGradingInstructionsOverrideField &&
+    const overrideChanged =
+      formData.has('gradingInstructionsOverride') &&
       (formData.get('gradingInstructionsOverride')?.toString().trim() ?? '') !==
         readGradingInstructionsOverride(existing.gradingPromptConfigJson);
-
-    const hasOutputSchemaField = formData.has('outputSchemaJson');
-    const gradingConfigData = hasGradingConfigFields
-      ? {
-          scoringScaleJson: parseJsonFormField(formData, 'scoringScale'),
-          rubricJson: parseJsonFormField(formData, 'rubricJson'),
-          gradingPromptConfigJson: hasGradingInstructionsOverrideField
-            ? withGradingInstructionsOverride(
-                parseJsonFormField(formData, 'promptConfigJson'),
-                formData.get('gradingInstructionsOverride')
-              )
-            : parseJsonFormField(formData, 'promptConfigJson'),
-          ...(hasOutputSchemaField
-            ? {
-                gradingOutputSchemaJson: (parseJsonFormField(
-                  formData,
-                  'outputSchemaJson'
-                ) ?? DEFAULT_OUTPUT_SCHEMA_JSON) as Prisma.InputJsonValue,
-              }
-            : {}),
-          gradingAssistantVersion: { increment: 1 },
-        }
-      : gradingInstructionsOverrideChanged
-        ? {
-            gradingPromptConfigJson: withGradingInstructionsOverride(
-              existing.gradingPromptConfigJson,
-              formData.get('gradingInstructionsOverride')
-            ),
-            gradingAssistantVersion: { increment: 1 },
-          }
-        : {};
-
-    if (hasGradingConfigFields) {
-      const nextRubric = parseRubric(
-        parseJsonFormField(formData, 'rubricJson')
-      );
-      const nextRubricComplete = isRubricFullyPopulated(nextRubric);
-      if (!nextRubricComplete) {
-        // Grandfather assignment types whose rubric was already incomplete
-        // before this edit — don't force an unrelated save (e.g. a title
-        // change) to be blocked on fixing a pre-existing gap. Only block edits
-        // that would newly break a rubric that was whole.
-        const previouslyComplete = isRubricFullyPopulated(
-          parseRubric((existing as { rubricJson?: unknown }).rubricJson)
-        );
-        if (previouslyComplete) {
-          throw new Response(
-            'Every rubric category needs a key, label, description, and weight before saving. Finish the categories you started, or remove them.',
-            { status: 400 }
-          );
-        }
-      }
-    }
-
+    // Legacy forms overlay the stored config only when the textarea changed.
+    // An explicit config (including {}) also retains the form's versioning rules.
+    const gradingConfig = parseAdminUpdateGradingConfig(formData, existing) ??
+      (overrideChanged ? {
+        gradingPromptConfigJson: withGradingInstructionsOverride(
+          existing.gradingPromptConfigJson,
+          formData.get('gradingInstructionsOverride')
+        ),
+        gradingAssistantVersion: { increment: 1 },
+      } : {});
     await prisma.$transaction(async (tx) => {
       if (deleteImage) {
-        await tx.assignmentTypeImage.deleteMany({
-          where: { assignmentTypeId },
-        });
+        await removeAssignmentTypeImage(tx, assignmentTypeId);
       } else if (imageFile && imageFile.size > 0) {
-        const arrayBuffer = await imageFile.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-
-        await tx.assignmentTypeImage.deleteMany({
-          where: { assignmentTypeId },
-        });
-        await tx.assignmentTypeImage.create({
-          data: {
-            contentType: imageFile.type,
-            blob: buffer,
-            assignmentTypeId,
-          },
+        await replaceAssignmentTypeImage(tx, assignmentTypeId, {
+          contentType: imageFile.type, blob: Buffer.from(await imageFile.arrayBuffer()),
         });
       }
-
-      await tx.assignmentType.update({
-        where: { id: assignmentTypeId },
-        data: {
-          title,
-          description: description || null,
-          ...(hasRubricIdField && rubricSelection?.kind === 'library'
-            ? { rubricId: rubricSelection.rubricId }
-            : {}),
-          ...(hasRubricIdField && rubricSelection?.kind === 'per-type'
-            ? rubricSelection.assignmentTypeData
-            : {}),
-          ...(hasRubricIdField && rubricSelection?.kind === 'none'
-            ? { rubricId: null }
-            : {}),
-          ...(hasTutorInstructions
-            ? { tutorInstructions: tutorInstructions || null }
-            : {}),
-          ...gradingConfigData,
-        },
+      await updateAssignmentType(tx, assignmentTypeId, existing, {
+        title, description: description || null,
+        ...(rubricSelection ? { rubricSelection } : {}),
+        ...(hasTutorInstructions ? { tutorInstructions: tutorInstructions || null } : {}),
+        gradingConfig,
       });
     });
 
@@ -364,19 +230,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
       throw new Response('Title is required', { status: 400 });
     }
 
-    const moduleCount = await prisma.assignmentModule.count({
-      where: { assignmentTypeId: params.id, deletedAt: null },
-    });
-
-    await prisma.assignmentModule.create({
-      data: {
-        title,
-        description: description || null,
-        isSelfGuided,
-        tutorInstructions: tutorInstructions || null,
-        position: moduleCount,
-        assignmentTypeId: params.id!,
-      },
+    await createModule(prisma, params.id!, {
+      title,
+      description: description || null,
+      isSelfGuided,
+      tutorInstructions: tutorInstructions || null,
     });
 
     return dataResponse({ status: 'success' });
@@ -385,14 +243,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   if (intent === 'reorderModules') {
     const moduleIds = JSON.parse(formData.get('moduleIds')?.toString() || '[]');
 
-    await Promise.all(
-      moduleIds.map((moduleId: string, index: number) =>
-        prisma.assignmentModule.update({
-          where: { id: moduleId },
-          data: { position: index },
-        })
-      )
-    );
+    await reorderModules(prisma, moduleIds);
 
     return dataResponse({ status: 'success' });
   }

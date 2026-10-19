@@ -69,6 +69,7 @@ export function renderPreviewCompose({
   aiMode = process.env.PREVIEW_AI_MODE || 'live',
   managementServiceKey = process.env.PREVIEW_MANAGEMENT_SERVICE_KEY,
   internalApiKeys = process.env.DEMO_INTERNAL_API_KEYS,
+  demoTrainingMediaEnabled = process.env.DEMO_TRAINING_MEDIA_ENABLED || 'false',
   customIngressActive = process.env.PREVIEW_CUSTOM_INGRESS_ACTIVE !== 'false',
 } = {}) {
   if (!['true', 'false'].includes(unifiedSignOn)) {
@@ -101,6 +102,17 @@ export function renderPreviewCompose({
     databasePassword,
   });
   const demoKeys = demoInternalApiKeys(internalApiKeys);
+  if (!['true', 'false'].includes(demoTrainingMediaEnabled)) {
+    throw new Error('DEMO_TRAINING_MEDIA_ENABLED must be true or false');
+  }
+  const demoMedia = demoTrainingMediaEnabled === 'true';
+  if (demoMedia && (env.slug !== 'demo' || String(prNumber ?? '').trim())) {
+    throw new Error('Demo training media requires the demo target');
+  }
+  // Only web receives the scoped, expiring credentials. Never expose host IMDS.
+  const demoMediaVolume = demoMedia
+    ? `\n      - ${q(`${env.root}/training-media-credentials:/run/demo-training-media:ro`)}`
+    : '';
   if (demoKeys && (env.slug !== 'demo' || String(prNumber ?? '').trim())) {
     throw new Error('Demo Internal API keys require the demo target');
   }
@@ -208,9 +220,9 @@ ${masterAccessEnvironment}      PREVIEW_ACCESS_SECRET: ${q(previewAccessSecret)}
       SESSION_SECRET: ${q(previewSessionSecret)}
 ${uaStudentBillingEnvironment}      INTERNAL_COMMAND_TOKEN: ${q(optionalEnv('PREVIEW_INTERNAL_COMMAND_TOKEN', 'preview-internal-token'))}
       HONEYPOT_SECRET: ${q(optionalEnv('PREVIEW_HONEYPOT_SECRET', 'preview-honeypot-secret'))}
-      AWS_S3_BUCKET_FOR_VIDEOS: ${q(optionalEnv('PREVIEW_AWS_S3_BUCKET_FOR_VIDEOS', 'preview-videos'))}
-      AWS_S3_REGION_FOR_VIDEOS: ${q(optionalEnv('PREVIEW_AWS_S3_REGION_FOR_VIDEOS', 'us-east-1'))}
-      RESEND_FROM_EMAIL: ${q(optionalEnv('PREVIEW_RESEND_FROM_EMAIL', 'preview@yawp.local'))}
+      AWS_S3_BUCKET_FOR_VIDEOS: ${q(demoMedia ? 'yawp-demo-training-media-422348803522' : optionalEnv('PREVIEW_AWS_S3_BUCKET_FOR_VIDEOS', 'preview-videos'))}
+      AWS_S3_REGION_FOR_VIDEOS: ${q(demoMedia ? 'us-east-1' : optionalEnv('PREVIEW_AWS_S3_REGION_FOR_VIDEOS', 'us-east-1'))}
+${env.slug === 'demo' ? '      EMAIL_PROVIDER: "resend"\n' : ''}      RESEND_FROM_EMAIL: ${q(optionalEnv('PREVIEW_RESEND_FROM_EMAIL', 'preview@yawp.local'))}
       RESEND_API_KEY: ${q(optionalEnv('PREVIEW_RESEND_API_KEY', ''))}
       OPENAI_ORGANIZATION_ID: ${q(optionalEnv('PREVIEW_OPENAI_ORGANIZATION_ID'))}
       OPENAI_API_KEY: ${q(optionalEnv('PREVIEW_OPENAI_API_KEY'))}
@@ -224,6 +236,10 @@ ${uaStudentBillingEnvironment}      INTERNAL_COMMAND_TOKEN: ${q(optionalEnv('PRE
   // it those routes 404, which is the right state for every PR preview.
   // Compose expands dollar signs even in quoted YAML. Preserve literal key bytes.
   const webEnvironment = commonEnvironment
+    + (demoMedia ? `
+      AWS_REGION: "us-east-1"
+      AWS_PROFILE: "demo-training-media"
+      AWS_CONFIG_FILE: "/run/demo-training-media/config"` : '')
     + `\n      GOOGLE_OAUTH_CLIENT_ID: ${q(optionalEnv('PREVIEW_GOOGLE_OAUTH_CLIENT_ID').replaceAll('$', '$$$$'))}`
     + `\n      GOOGLE_OAUTH_CLIENT_SECRET: ${q(optionalEnv('PREVIEW_GOOGLE_OAUTH_CLIENT_SECRET').replaceAll('$', '$$$$'))}`
     // PR previews share the OAuth client but most of their origins are not
@@ -284,7 +300,7 @@ ${toolboxFlagEnvironment}
     restart: unless-stopped
     working_dir: /app
     command: bash -lc "cd services/web-app && bun run dev -- --host 0.0.0.0 --port 8080"
-${fastVolumes}${mediaVolumeMount}
+${fastVolumes}${mediaVolumeMount}${demoMediaVolume}
     environment:
 ${webEnvironment}
 `
@@ -296,7 +312,7 @@ ${webEnvironment}
       target: production
       args:
         DATABASE_URL: ${q(env.databaseUrl)}
-    environment:
+${demoMedia ? `    volumes:${demoMediaVolume}\n` : ''}    environment:
 ${webEnvironment}
     restart: unless-stopped
 `;

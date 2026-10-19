@@ -40,9 +40,10 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_integration
       - name: Run migration integration test
         run: >-
-          bun test
+          bun test --max-concurrency=2
           ./packages/prisma/scripts/free-tier-real-db.integration.test.ts
           ./packages/prisma/scripts/migration-integration.test.ts
+          ./packages/prisma/scripts/instruction-fields-migration.integration.test.ts
           ./packages/prisma/scripts/holistic-migration-label.integration.test.ts
           ./packages/prisma/scripts/daily-pages-engagement-migration.integration.test.ts
         env:

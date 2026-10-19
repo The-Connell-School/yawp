@@ -13,58 +13,8 @@ import {
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { AssignmentTypeEditorForm } from '~/components/admin/assignment-type-editor-form';
 import { requireAdmin } from '~/utils/auth.server';
-import type { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
-import {
-  DEFAULT_OUTPUT_SCHEMA_JSON,
-  parseRubric,
-} from '~/domain/assignment-types/assignment-type-rubric.shared';
-import { isRubricFullyPopulated } from '~/domain/assignment-types/assignment-type-rubric-config';
-
-function parseJsonFormField(formData: FormData, name: string) {
-  const value = formData.get(name);
-  if (typeof value !== 'string' || !value.trim()) return null;
-  try {
-    return JSON.parse(value);
-  } catch {
-    throw new Response(`${name} must be valid JSON`, { status: 400 });
-  }
-}
-
-function parseGradingConfig(formData: FormData) {
-  const hasGradingConfigFields =
-    formData.has('scoringScale') ||
-    formData.has('rubricJson') ||
-    formData.has('promptConfigJson') ||
-    formData.has('outputSchemaJson');
-  const rubricJson = hasGradingConfigFields
-    ? parseJsonFormField(formData, 'rubricJson')
-    : null;
-  if (
-    hasGradingConfigFields &&
-    !isRubricFullyPopulated(parseRubric(rubricJson))
-  ) {
-    throw new Response(
-      'Every rubric category needs a key, label, description, and weight before you can create this assignment type. Add at least one, and finish the ones you started.',
-      { status: 400 }
-    );
-  }
-
-  return hasGradingConfigFields
-    ? {
-        scoringScaleJson: parseJsonFormField(formData, 'scoringScale'),
-        rubricJson,
-        gradingPromptConfigJson: parseJsonFormField(
-          formData,
-          'promptConfigJson'
-        ),
-        gradingOutputSchemaJson: (parseJsonFormField(
-          formData,
-          'outputSchemaJson'
-        ) ?? DEFAULT_OUTPUT_SCHEMA_JSON) as Prisma.InputJsonValue,
-      }
-    : {};
-}
+import { createAssignmentType, parseAdminCreateGradingConfig } from '~/domain/assignment-types/assignment-type-admin-writes.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
@@ -101,9 +51,9 @@ export async function action({ request }: ActionFunctionArgs) {
     }
   }
 
-  let gradingConfigData: ReturnType<typeof parseGradingConfig>;
+  let gradingConfigData: ReturnType<typeof parseAdminCreateGradingConfig>;
   try {
-    gradingConfigData = parseGradingConfig(formData);
+    gradingConfigData = parseAdminCreateGradingConfig(formData);
   } catch (error) {
     if (error instanceof Response && error.status === 400) {
       return dataResponse({ error: await error.text() }, { status: 400 });
@@ -111,25 +61,21 @@ export async function action({ request }: ActionFunctionArgs) {
     throw error;
   }
 
+  // A blank legacy form field leaves the copied per-type configuration intact.
   const override = formData.get('gradingInstructionsOverride')?.toString().trim();
   if (override) {
-    gradingConfigData = { ...gradingConfigData, gradingPromptConfigJson: {
-      ...(gradingConfigData.gradingPromptConfigJson ?? {}), gradingInstructionsOverride: override,
-    } };
-  }
-  const count = await prisma.assignmentType.count();
-  const assignmentType = await prisma.assignmentType.create({
-    data: {
-      title,
-      kind: null,
-      description,
-      tutorInstructions,
-      position: count,
-      ...(rubricSelection?.kind === 'library' ? { rubricId: rubricSelection.rubricId } : {}),
-      ...(rubricSelection?.kind === 'per-type' ? rubricSelection.assignmentTypeData : {}),
-      ...(rubricSelection?.kind === 'none' && formData.has('rubricId') ? { rubricId: null } : {}),
+    gradingConfigData = {
       ...gradingConfigData,
-    },
+      gradingPromptConfigJson: {
+        ...(gradingConfigData.gradingPromptConfigJson ?? {}),
+        gradingInstructionsOverride: override,
+      },
+    };
+  }
+  const assignmentType = await createAssignmentType(prisma, {
+    title, description, tutorInstructions,
+    ...(rubricSelection ? { rubricSelection } : {}),
+    gradingConfig: gradingConfigData,
   });
 
   return redirect(`/app/admin/assignment-types/${assignmentType.id}`);

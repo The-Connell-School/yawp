@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { CatalogError, type RubricCatalog } from '~/domain/rubrics/rubric-catalog.server';
+import { readBoundedBody } from '~/utils/internal-admin-write.server';
 import {
   authorizeInternalApiRequest,
   internalApiKeysConfigured,
@@ -40,21 +41,11 @@ export const clearReleaseInput = z.object({
   reason: saveInput.shape.reason,
 }).strict();
 
-async function readJson(request: Request) {
+async function readBody(request: Request) {
   if (request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() !== 'application/json') throw new Error('content-type');
   const length = request.headers.get('content-length');
-  if (length !== null && (!/^\d+$/.test(length) || Number(length) > LIMIT)) throw new Error('too large');
-  const reader = request.body?.getReader(); if (!reader) throw new Error('empty');
-  const chunks: Uint8Array[] = []; let size = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read(); if (done) break;
-      size += value.byteLength;
-      if (size > LIMIT) { await reader.cancel(); throw new Error('too large'); }
-      chunks.push(value);
-    }
-  } finally { reader.releaseLock(); }
-  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  if (length !== null && !/^\d+$/.test(length)) throw new Error('content-length');
+  return readBoundedBody(request, LIMIT);
 }
 
 /**
@@ -83,18 +74,21 @@ export function createRubricCatalogHttp(service: Pick<RubricCatalog, 'list' | 'g
   async function write<T extends z.ZodTypeAny>(request: Request, schema: T, label: string, handler: (input: z.infer<T>) => Promise<unknown>) {
     if (request.method !== 'POST') return reply({ error: 'Method not allowed' }, 405);
     if (new URL(request.url).search) return reply({ error: 'Invalid query' }, 400);
-    let raw: unknown;
-    let bodyText = '';
+    let body: Uint8Array;
     try {
-      raw = await readJson(request);
-      bodyText = JSON.stringify(raw);
-    } catch {
+      body = await readBody(request);
+    } catch (error) {
+      if (error instanceof Response) return error;
       return reply({ error: `Invalid ${label} request` }, 400);
     }
-    const authResult = await auth(request, 'POST', bodyText);
+    const authResult = await auth(request, 'POST', body);
     if (authResult instanceof Response) return authResult;
     let input: z.infer<T>;
-    try { input = schema.parse(raw); }
+    try {
+      // Verify wire bytes before fatal UTF-8 decoding; retain BOM for JSON rejection.
+      const raw = JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(body));
+      input = schema.parse(raw);
+    }
     catch { return reply({ error: `Invalid ${label} request` }, 400); }
     try {
       const result = await handler(input);
@@ -103,7 +97,7 @@ export function createRubricCatalogHttp(service: Pick<RubricCatalog, 'list' | 'g
           actorEmail: authResult.actorEmail,
           keyId: authResult.keyId,
           endpoint: `POST ${new URL(request.url).pathname}`,
-          requestHash: createHash('sha256').update(bodyText).digest('hex'),
+          requestHash: createHash('sha256').update(body).digest('hex'),
           result: 'success',
         });
       }
