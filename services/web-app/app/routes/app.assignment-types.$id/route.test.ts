@@ -350,7 +350,10 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
     const response = await loader({
       request: new Request('https://yawp.test/app/assignment-types/at-1'),
       params: { id: 'at-1' },
-    } as Parameters<typeof loader>[0]);
+      url: new URL('https://yawp.test/app/assignment-types/at-1'),
+      pattern: '/app/assignment-types/:id',
+      context: {},
+    });
     if (!('data' in response)) throw new Error('Expected loader data');
     expect(response.data.yourAssignments?.count).toBe(5);
     expect(response.data.yourAssignments?.items[0].id).toBe('assignment-1');
@@ -396,7 +399,10 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
     const response = await loader({
       request: new Request('https://yawp.test/app/assignment-types/at-1'),
       params: { id: 'at-1' },
-    } as Parameters<typeof loader>[0]);
+      url: new URL('https://yawp.test/app/assignment-types/at-1'),
+      pattern: '/app/assignment-types/:id',
+      context: {},
+    });
     if (!('data' in response)) throw new Error('Expected loader data');
     expect(response.data).not.toHaveProperty('yourAssignments');
     expect(prisma.assignment.findMany).not.toHaveBeenCalled();
@@ -410,7 +416,10 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
     const response = await loader({
       request: new Request('https://yawp.test/app/assignment-types/at-1'),
       params: { id: 'at-1' },
-    } as Parameters<typeof loader>[0]);
+      url: new URL('https://yawp.test/app/assignment-types/at-1'),
+      pattern: '/app/assignment-types/:id',
+      context: {},
+    });
     if (!('data' in response)) throw new Error('Expected loader data');
     expect(response.data).not.toHaveProperty('yourAssignments');
     expect(prisma.assignment.findMany).not.toHaveBeenCalled();
