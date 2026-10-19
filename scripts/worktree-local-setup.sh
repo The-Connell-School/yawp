@@ -113,7 +113,9 @@ ensure_postgres() {
   fi
 
   for _ in $(seq 1 60); do
-    if docker exec "$CONTAINER_NAME" pg_isready -U "$PG_USER" >/dev/null 2>&1; then
+    # The image's temporary init server accepts Unix-socket connections while
+    # creating POSTGRES_DB, then shuts down. Only the final server listens on TCP.
+    if docker exec "$CONTAINER_NAME" pg_isready -h 127.0.0.1 -U "$PG_USER" >/dev/null 2>&1; then
       return
     fi
     sleep 1
