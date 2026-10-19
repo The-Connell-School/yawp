@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import {
   PREVIEW_ACCESS_COOKIE_NAME,
+  FREE_TIER_ACCESS_COOKIE_NAME,
+  FREE_TIER_ACCESS_MAX_AGE,
+  createFreeTierAccessCookie,
+  type FreeTierPreviewDependencies,
   PREVIEW_MASTER_SELECTION_COOKIE_NAME,
   PREVIEW_AUTHORIZED_ACTIVITY_HEADER,
   clearPreviewMasterSelectionCookie,
@@ -98,6 +102,136 @@ describe('preview access gate', () => {
     restore('PREVIEW_ACCESS_SEATS');
     restore('PREVIEW_ACCESS_SECRET');
     restore('SESSION_SECRET');
+  });
+
+  describe('scoped free-tier access', () => {
+    function dependencies(session: 'anonymous' | 'teacher' | 'denied' = 'anonymous'): FreeTierPreviewDependencies {
+      return {
+        acquisition: mock(async (token) => token === 'valid-event' ? { tokenId: 'event-1' } : null),
+        signed: mock(async (token, purpose) => token === `valid-${purpose}` ? { tokenId: 'link-1', applicationId: 'application-1' } : null),
+        session: mock(async () => session),
+      };
+    }
+    async function enter(path = '/free?t=valid-event', deps = dependencies()) {
+      const guard = mock(async () => null);
+      const next = mock(async () => new Response('flow', { headers: { 'Set-Cookie': 'route-cookie=kept' } }));
+      const middleware = createPreviewAccessMiddleware(guard, repository(), deps);
+      const response = (await middleware(middlewareArgs(request(path)), next))!;
+      return { response, middleware, deps, guard, next, cookie: response.headers.getSetCookie().find(c => c.startsWith(FREE_TIER_ACCESS_COOKIE_NAME + '='))?.split(';', 1)[0] };
+    }
+
+    test('valid acquisition token grants a separate signed cookie without a seat or activity', async () => {
+      const { response, cookie, guard, deps } = await enter();
+      expect(response.status).toBe(200);
+      expect(cookie).toBeDefined();
+      expect(response.headers.getSetCookie()).toContain('route-cookie=kept');
+      const serialized = response.headers.getSetCookie().find(c => c.startsWith(FREE_TIER_ACCESS_COOKIE_NAME + '='))!;
+      for (const flag of ['HttpOnly', 'Secure', 'SameSite=Lax', 'Path=/', `Max-Age=${FREE_TIER_ACCESS_MAX_AGE}`]) expect(serialized).toContain(flag);
+      expect(response.headers.get(PREVIEW_AUTHORIZED_ACTIVITY_HEADER)).toBeNull();
+      expect(response.headers.get('set-cookie')).not.toContain(PREVIEW_ACCESS_COOKIE_NAME + '=');
+      expect(await getPreviewAccessSeat(request('/free', { headers: { cookie: cookie! } }), repository())).toBeNull();
+      expect(guard).not.toHaveBeenCalled();
+      expect(deps.acquisition).toHaveBeenCalledWith('valid-event');
+    });
+
+    test('signed join and both admin links validate the route purpose without consuming', async () => {
+      for (const [path, purpose] of [['/free/join', 'RELEASE'], ['/free/admin/approve', 'ADMIN_APPROVE'], ['/free/admin/not-right-person', 'ADMIN_NOT_RIGHT_PERSON']] as const) {
+        const { response, deps } = await enter(`${path}.data?t=valid-${purpose}`);
+        expect(response.status).toBe(200);
+        expect(deps.signed).toHaveBeenCalledWith(`valid-${purpose}`, purpose);
+        expect(deps.acquisition).not.toHaveBeenCalled();
+      }
+    });
+
+    test('invalid, expired, disabled, exhausted, garbage and missing tokens retain normal rejection', async () => {
+      for (const token of ['invalid', 'expired', 'disabled', 'exhausted', 'garbage', '']) {
+        const { response, next } = await enter('/free?t=' + token);
+        expect(response.status).toBe(302);
+        expect(response.headers.get('location')).toBe('/auth/preview-access?' + new URLSearchParams({ returnTo: '/free?t=' + token }));
+        expect(response.headers.get('set-cookie')).toBeNull();
+        expect(next).not.toHaveBeenCalled();
+      }
+      for (const path of ['/free/join?t=invalid', '/free/admin/approve?t=valid-RELEASE', '/app/admin?t=valid-event', '/free/unknown?t=valid-event']) expect((await enter(path)).response.status).toBe(302);
+    });
+
+    test('cookie covers exact flow paths, data, actions, APIs and manifest reads', async () => {
+      const { middleware, cookie, guard } = await enter();
+      for (const path of ['/free', '/free/', '/free.data', '/free?_data=routes/free._index', '/free/join', '/free/admin/approve', '/free/admin/not-right-person', '/join', '/auth/login', '/auth/logout', '/app/free-tier/onboarding?step=administrator', '/app/free-tier/onboarding.data', '/app/free-tier/pending', '/app/free-tier/preview', '/app/free-tier/status', '/app/free-tier/setup', '/api/free-tier/token', '/api/free-tier/waitlist']) {
+        for (const method of ['GET', 'POST']) {
+          const response = await middleware(middlewareArgs(request(path, { method, headers: { cookie: cookie! } })), async () => new Response('flow'));
+          expect(response?.status).toBe(200);
+          expect(response?.headers.get(PREVIEW_AUTHORIZED_ACTIVITY_HEADER)).toBeNull();
+        }
+      }
+      expect((await middleware(middlewareArgs(request('/__manifest?paths=%2Fapp%2Fadmin', { headers: { cookie: cookie! } })), async () => new Response('manifest')))?.status).toBe(200);
+      expect(guard).not.toHaveBeenCalled();
+    });
+
+    test('grant cannot unlock privileged paths, unknown descendants, or arbitrary app routes', async () => {
+      const { middleware, cookie } = await enter('/free?t=valid-event', dependencies('teacher'));
+      for (const path of ['/auth/dev-login', '/auth/dev-login/options', '/auth/dev-login.data', '/auth/preview-access/choose', '/app/admin', '/app/tester/feedback', '/api/internal/private', '/api/impersonate', '/app/classes', '/app/free-tier/unknown', '/free/join/unknown', '/app/my-classes/other']) {
+        const next = mock(async () => new Response('private'));
+        const response = await middleware(middlewareArgs(request(path, { headers: { cookie: cookie! } })), next);
+        expect(response?.status).toBe(path.startsWith('/api/') ? 401 : 302);
+        expect(next).not.toHaveBeenCalled();
+      }
+    });
+
+    test('only the matching teacher session may use minimal first-login landing routes', async () => {
+      for (const session of ['anonymous', 'teacher', 'denied'] as const) {
+        const { middleware, cookie } = await enter('/free?t=valid-event');
+        const scoped = createPreviewAccessMiddleware(async () => null, repository(), dependencies(session));
+        for (const path of ['/app', '/app.data', '/app/my-classes', '/app/my-classes.data']) {
+          const response = await scoped(middlewareArgs(request(path, { headers: { cookie: cookie! } })), async () => new Response('own classes'));
+          expect(response?.status).toBe(session === 'teacher' ? 200 : 302);
+        }
+        if (session === 'denied') {
+          for (const [path, method] of [['/free', 'GET'], ['/app/free-tier/onboarding', 'POST'], ['/api/free-tier/token', 'GET']] as const) {
+            const response = await scoped(middlewareArgs(request(path, { method, headers: { cookie: cookie! } })), async () => new Response('private'));
+            expect(response?.status).toBe(method === 'POST' || path.startsWith('/api/') ? 401 : 302);
+          }
+          expect((await enter('/free?t=valid-event', dependencies('denied'))).response.status).toBe(302);
+        }
+        expect(middleware).toBeDefined();
+      }
+    });
+
+    test('a free-tier grant cannot help an impersonation context', async () => {
+      const { middleware, cookie } = await enter();
+      const next = mock(async () => new Response('private'));
+      const response = await middleware(middlewareArgs(request('/free', { headers: { cookie: cookie + '; yawp_internal_impersonation=present' } })), next);
+      expect(response?.status).toBe(302);
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    test('forged, expired, future, malformed and tampered cookies fail closed', async () => {
+      const { middleware, cookie } = await enter();
+      const base = { kind: 'acquisition', tokenId: 'event-1', issuedAt: Math.floor(Date.now() / 1000) };
+      for (const invalid of ['forged', { ...base, issuedAt: base.issuedAt - FREE_TIER_ACCESS_MAX_AGE - 1 }, { ...base, issuedAt: base.issuedAt + 3600 }, { ...base, kind: 'master' }, { ...base, tokenId: '' }]) {
+        const signed = (await createFreeTierAccessCookie().serialize(invalid)).split(';', 1)[0];
+        const response = await middleware(middlewareArgs(request('/free', { headers: { cookie: signed } })), async () => new Response('private'));
+        expect(response?.status).toBe(302);
+      }
+      for (const bad of [FREE_TIER_ACCESS_COOKIE_NAME + '=forged', cookie!.slice(0, -5) + 'wrong']) {
+        expect((await middleware(middlewareArgs(request('/free', { headers: { cookie: bad } })), async () => new Response('private')))?.status).toBe(302);
+      }
+    });
+
+    test('gate off performs no validation and adds no cookie with tokens or a forged grant', async () => {
+      delete process.env.PREVIEW_ACCESS_GATE;
+      const deps = dependencies();
+      const middleware = createPreviewAccessMiddleware(async () => null, repository(), deps);
+      for (const path of ['/free', '/free?t=valid-event', '/free/join?t=valid-RELEASE', '/app/admin']) {
+        const next = mock(async () => new Response('production'));
+        const response = await middleware(middlewareArgs(request(path, { headers: { cookie: FREE_TIER_ACCESS_COOKIE_NAME + '=forged' } })), next);
+        expect(await response?.text()).toBe('production');
+        expect(response?.headers.get('set-cookie')).toBeNull();
+        expect(next).toHaveBeenCalledTimes(1);
+      }
+      expect(deps.acquisition).not.toHaveBeenCalled();
+      expect(deps.signed).not.toHaveBeenCalled();
+      expect(deps.session).not.toHaveBeenCalled();
+    });
   });
 
   test('blocks an unauthenticated loader before it runs', async () => {
