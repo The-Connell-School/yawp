@@ -335,6 +335,7 @@ describe('app_.documents_.$id loader', () => {
         }),
       })
     );
+    expect(prisma.document.findFirst.mock.calls.at(-1)![0].select.assignmentModuleSessions.include.assignmentModule.include.instructions.omit).toEqual({ answerKey: true });
     expect(response.data.doc.assignment.apHistorySnapshot).toEqual(
       apHistorySnapshot
     );

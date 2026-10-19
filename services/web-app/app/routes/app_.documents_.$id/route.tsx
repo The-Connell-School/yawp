@@ -194,6 +194,7 @@ const assignmentModuleSessionsInclude = {
   assignmentModule: {
     include: {
       instructions: {
+        omit: { answerKey: true },
         orderBy: { position: 'asc' as const },
         include: {
           buttons: {

@@ -444,6 +444,7 @@ export async function action({ request }: ActionFunctionArgs) {
         assignmentModule: {
           include: {
             instructions: {
+              omit: { answerKey: true },
               orderBy: { position: 'asc' },
               include: { buttons: { orderBy: { position: 'asc' } } },
             },

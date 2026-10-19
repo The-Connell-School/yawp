@@ -281,7 +281,7 @@ async function authenticateSigned(request: Request, authenticate: Authenticate) 
   return auth;
 }
 
-async function auditRead(request: Request, auth: InternalApiAuthContext, audit: AssignmentTypeReadAudit | undefined, result: string) {
+export async function auditRead(request: Request, auth: InternalApiAuthContext, audit: AssignmentTypeReadAudit | undefined, result: string) {
   if (!audit) return;
   const url = new URL(request.url);
   const requestHash = createHash('sha256')

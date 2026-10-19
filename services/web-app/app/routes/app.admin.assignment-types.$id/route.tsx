@@ -1,3 +1,4 @@
+import { createModule, reorderModules } from '~/domain/assignment-types/assignment-type-module-writes.server';
 import { readGradingInstructionsOverride } from '~/domain/assignment-types/assignment-type-admin-writes.shared';
 import {
   listLiveRubricsForAdminPicker,
@@ -229,19 +230,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
       throw new Response('Title is required', { status: 400 });
     }
 
-    const moduleCount = await prisma.assignmentModule.count({
-      where: { assignmentTypeId: params.id, deletedAt: null },
-    });
-
-    await prisma.assignmentModule.create({
-      data: {
-        title,
-        description: description || null,
-        isSelfGuided,
-        tutorInstructions: tutorInstructions || null,
-        position: moduleCount,
-        assignmentTypeId: params.id!,
-      },
+    await createModule(prisma, params.id!, {
+      title,
+      description: description || null,
+      isSelfGuided,
+      tutorInstructions: tutorInstructions || null,
     });
 
     return dataResponse({ status: 'success' });
@@ -250,14 +243,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   if (intent === 'reorderModules') {
     const moduleIds = JSON.parse(formData.get('moduleIds')?.toString() || '[]');
 
-    await Promise.all(
-      moduleIds.map((moduleId: string, index: number) =>
-        prisma.assignmentModule.update({
-          where: { id: moduleId },
-          data: { position: index },
-        })
-      )
-    );
+    await reorderModules(prisma, moduleIds);
 
     return dataResponse({ status: 'success' });
   }
