@@ -45,16 +45,28 @@ function row() {
     _count: { organizationAssignments: 0 },
   };
 }
-function fixture() {
-  let current: any = row();
+const source = {
+  ...row(),
+  id: 'source',
+  rubricId: null,
+  rubricJson: { categories: [{ key: 'quality', label: 'Quality', description: 'Clear', weight: 1 }] },
+  scoringScaleJson: { min: 1, max: 4 },
+  gradingPromptConfigJson: {
+    systemInstructions: 'Selected system',
+    gradingInstructions: 'Selected grading',
+    gradingInstructionsOverride: 'Source override',
+  },
+};
+function fixture(initial = row()) {
+  let current: any = initial;
   const events: string[] = [];
   const audits: any[] = [];
   const db = {
     assignmentType: {
       count: mock(async () => 4),
-      findUnique: mock(async () => {
+      findUnique: mock(async ({ where }: any) => {
         events.push('read');
-        return current;
+        return where.id === 'source' ? source : current;
       }),
       create: mock(async ({ data }: any) => {
         events.push('create');
@@ -565,5 +577,54 @@ describe('signed assignment type writes', () => {
         .status
     ).toBe(200);
     expect(db.assignmentTypeImage.deleteMany).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('per-type selection and explicit override composition', () => {
+  for (const name of ['create', 'update'] as const) {
+    test(`${name}: applies override to the selected prompt config`, async () => {
+      const { handlers, db } = fixture();
+      const result = await invoke(handlers, name, request(
+        name === 'create' ? 'POST' : 'PATCH', name === 'create' ? '' : '/at-1',
+        { title: 'New', rubricSelection: 'assignment-type:source', gradingInstructionsOverride: ' Custom ' }
+      ));
+      expect(result.status).toBe(name === 'create' ? 201 : 200);
+      expect(db.assignmentType[name === 'create' ? 'create' : 'update'].mock.calls[0]?.[0].data.gradingPromptConfigJson).toEqual({
+        ...source.gradingPromptConfigJson, gradingInstructionsOverride: 'Custom',
+      });
+      if (name === 'update') expect((await result.json()).assignmentType.gradingAssistantVersion).toBe(4);
+    });
+  }
+  test.each([null, ''])('explicit %s clears a copied override even if target has none', async (override) => {
+    const initial = { ...row(), gradingPromptConfigJson: { keep: true } };
+    const { handlers, db } = fixture(initial as ReturnType<typeof row>);
+    const result = await handlers.update(request('PATCH', '/at-1', {
+      rubricSelection: 'assignment-type:source', gradingInstructionsOverride: override,
+    }), 'at-1');
+    expect(result.status).toBe(200);
+    expect(db.assignmentType.update.mock.calls[0]?.[0].data.gradingPromptConfigJson).toEqual({
+      systemInstructions: 'Selected system', gradingInstructions: 'Selected grading',
+    });
+    expect((await result.json()).assignmentType.gradingAssistantVersion).toBe(3);
+  });
+  test('unchanged normalized override replaces source override without bumping', async () => {
+    const { handlers, db } = fixture();
+    const result = await handlers.update(request('PATCH', '/at-1', {
+      rubricSelection: 'assignment-type:source', gradingInstructionsOverride: ' Old ',
+    }), 'at-1');
+    expect(result.status).toBe(200);
+    expect(db.assignmentType.update.mock.calls[0]?.[0].data.gradingPromptConfigJson).toEqual({
+      ...source.gradingPromptConfigJson, gradingInstructionsOverride: 'Old',
+    });
+    expect((await result.json()).assignmentType.gradingAssistantVersion).toBe(3);
+  });
+  test('omission keeps the copied override and bumps when the final override changes', async () => {
+    const { handlers, db } = fixture();
+    const result = await handlers.update(request('PATCH', '/at-1', {
+      rubricSelection: 'assignment-type:source',
+    }), 'at-1');
+    expect(result.status).toBe(200);
+    expect(db.assignmentType.update.mock.calls[0]?.[0].data.gradingPromptConfigJson).toEqual(source.gradingPromptConfigJson);
+    expect((await result.json()).assignmentType.gradingAssistantVersion).toBe(4);
   });
 });

@@ -11,4 +11,3 @@ export function readGradingInstructionsOverride(rawPromptConfig: unknown) {
     .gradingInstructionsOverride;
   return typeof value === 'string' ? value.trim() : '';
 }
-

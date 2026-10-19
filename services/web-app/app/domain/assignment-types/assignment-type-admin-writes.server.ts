@@ -122,19 +122,23 @@ export async function createAssignmentType(
     throw new Response('Title is required', { status: 400 });
   const count = await client.assignmentType.count();
   const gradingConfig = input.gradingConfig ?? {};
-  const override = input.gradingInstructionsOverride?.trim();
+  const selected = baseData(input);
+  const promptConfig = {
+    ...selected,
+    ...gradingConfig,
+  }.gradingPromptConfigJson;
   return client.assignmentType.create({
     data: {
-      ...baseData(input),
+      ...selected,
       title: input.title,
       kind: null,
       position: count,
       ...gradingConfig,
-      ...(override
+      ...(input.gradingInstructionsOverride !== undefined
         ? {
             gradingPromptConfigJson: withGradingInstructionsOverride(
-              gradingConfig.gradingPromptConfigJson,
-              override
+              promptConfig,
+              input.gradingInstructionsOverride
             ),
           }
         : {}),
@@ -150,24 +154,33 @@ export async function updateAssignmentType(
 ) {
   if (input.title !== undefined && !input.title.trim())
     throw new Response('Title is required', { status: 400 });
+  const selected = baseData(input);
+  // The form's raw-config path retains its established precedence and versioning.
+  const effectivePromptConfig =
+    input.rubricSelection?.kind === 'per-type'
+      ? input.rubricSelection.assignmentTypeData.gradingPromptConfigJson
+      : before.gradingPromptConfigJson;
+  const finalPromptConfig =
+    input.gradingInstructionsOverride !== undefined
+      ? withGradingInstructionsOverride(
+          effectivePromptConfig,
+          input.gradingInstructionsOverride
+        )
+      : effectivePromptConfig;
   const changed =
-    input.gradingInstructionsOverride !== undefined &&
-    (input.gradingInstructionsOverride?.trim() ?? '') !==
-      readGradingInstructionsOverride(before.gradingPromptConfigJson);
+    readGradingInstructionsOverride(finalPromptConfig) !==
+    readGradingInstructionsOverride(before.gradingPromptConfigJson);
   return client.assignmentType.update({
     where: { id },
     data: {
-      ...baseData(input),
-      ...(input.gradingConfig ??
-        (changed
-          ? {
-              gradingPromptConfigJson: withGradingInstructionsOverride(
-                before.gradingPromptConfigJson,
-                input.gradingInstructionsOverride ?? null
-              ),
-              gradingAssistantVersion: { increment: 1 },
-            }
-          : {})),
+      ...selected,
+      ...(input.gradingConfig ?? {
+        ...(input.gradingInstructionsOverride !== undefined &&
+        (changed || input.rubricSelection?.kind === 'per-type')
+          ? { gradingPromptConfigJson: finalPromptConfig as Prisma.InputJsonValue }
+          : {}),
+        ...(changed ? { gradingAssistantVersion: { increment: 1 } } : {}),
+      }),
     },
   });
 }
