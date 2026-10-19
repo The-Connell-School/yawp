@@ -90,7 +90,8 @@ export function AtAGlance({
   const library = Boolean(
     data.thesisPromptLibrary ||
     data.promptLibrary ||
-    data.shortFormPromptLibrary
+    data.shortFormPromptLibrary ||
+    type.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY
   );
   const block = 'space-y-2 border-b p-5 last:border-b-0';
   return (
