@@ -471,6 +471,10 @@ function runTestProfile(profile, { json }) {
   else if (chosen === "internal-audit") runWebApp("internal-audit", ["test", "app/utils/internal-audit.server.test.ts"]);
   else if (chosen === "internal-rubrics-http") runWebApp("internal-rubrics-http", ["test", "app/utils/internal-rubrics-http.server.test.ts"]);
   else if (chosen === "internal-content-validation") runWebApp("internal-content-validation", ["test", "app/domain/rubrics/rubric-promotion.test.ts"]);
+  else if (chosen === "internal-assignment-type-writes") {
+    for (const file of ["app/utils/internal-assignment-type-writes.server.test.ts", "app/utils/internal-assignment-types.server.test.ts", "app/utils/internal-admin-organizations.server.test.ts", "app/routes/app.admin.assignment-types.new/route.test.ts", "app/routes/app.admin.assignment-types.$id/route.test.ts"])
+      runWebApp(file, ["test", "--max-concurrency=2", file]);
+  }
   else if (chosen === "internal-management") runWebApp("internal-management", ["test", "app/utils/internal-management.server.test.ts"]);
   else if (chosen === "internal-impersonation") runWebApp("internal-impersonation", ["test", "app/utils/internal-impersonation-client.server.test.ts"]);
   else if (["internal-impersonation-browser", "internal-scenario-browser"].includes(chosen)) {
