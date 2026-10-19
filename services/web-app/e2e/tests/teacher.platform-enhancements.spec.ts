@@ -464,6 +464,7 @@ test.describe('Platform enhancements', () => {
       await page.goto(
         `/app/assignment-types/${e2eContext.apHistoryAssignmentTypeId}`
       );
+      await expect(page.getByTestId('type-meta')).not.toContainText('Tutor on');
       await expect(
         page.getByRole('button', { name: 'Module details ›', exact: true })
       ).toBeVisible();

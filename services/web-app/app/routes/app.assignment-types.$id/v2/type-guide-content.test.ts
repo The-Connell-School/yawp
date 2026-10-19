@@ -36,12 +36,12 @@ test('type variants and grammar-only rubric sentence', () => {
   expect(
     typeGuideContent({ title: 'Other', kind: 'exit_ticket' }, true).tutorOn
   ).toBe(false);
-  expect(
-    typeGuideContent(
-      { title: 'History', systemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY },
-      true
-    ).howItsGraded
-  ).toContain('all-or-nothing');
+  const ap = typeGuideContent(
+    { title: 'History', systemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY },
+    true
+  );
+  expect(ap.howItsGraded).toContain('all-or-nothing');
+  expect(ap.tutorOn).toBe(false);
   expect(
     typeGuideContent({ title: 'Custom', description: 'A paper' }, false)
       .whatStudentsWrite

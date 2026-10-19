@@ -74,7 +74,7 @@ export function typeGuideContent(type: TypeIdentity, gradesGrammar: boolean) {
     sparsePromptCopy: five
       ? "There's no prompt library here. Any question that calls for a clear claim and three supporting points works."
       : "There's no prompt library for this type. Write the prompt in New assignment.",
-    tutorOn: !exit,
+    tutorOn: !exit && !ap,
   };
 }
 
