@@ -53,57 +53,42 @@ export async function deleteSmallObject(key: string) {
   );
 }
 
-export async function startMultipartUpload(key: string, contentType: string) {
-  const res = await s3.send(
-    new CreateMultipartUploadCommand({
-      Bucket: videoBucket,
-      Key: key,
-      ContentType: contentType,
-    })
-  );
-  return { uploadId: res.UploadId!, key };
+/** Same client/bucket as the admin uploads; injection keeps multipart checks offline in tests. */
+export function createMultipartUploadHelpers(input: {
+  client: S3Client;
+  bucket: string;
+  sign?: typeof getSignedUrl;
+}) {
+  const sign = input.sign ?? getSignedUrl;
+  return {
+    async start(key: string, contentType: string) {
+      const result = await input.client.send(new CreateMultipartUploadCommand({
+        Bucket: input.bucket, Key: key, ContentType: contentType,
+      }));
+      if (!result.UploadId) throw new Error('Multipart upload did not return an ID');
+      return { key, uploadId: result.UploadId };
+    },
+    async signPart(key: string, uploadId: string, partNumber: number, contentLength?: number) {
+      return sign(input.client, new UploadPartCommand({
+        Bucket: input.bucket, Key: key, UploadId: uploadId, PartNumber: partNumber,
+        ...(contentLength !== undefined ? { ContentLength: contentLength } : {}),
+      }), { expiresIn: 3600 });
+    },
+    async complete(key: string, uploadId: string, parts: { ETag: string; PartNumber: number }[]) {
+      await input.client.send(new CompleteMultipartUploadCommand({
+        Bucket: input.bucket, Key: key, UploadId: uploadId,
+        MultipartUpload: { Parts: [...parts].sort((a, b) => a.PartNumber - b.PartNumber) },
+      }));
+    },
+    async abort(key: string, uploadId: string) {
+      await input.client.send(new AbortMultipartUploadCommand({ Bucket: input.bucket, Key: key, UploadId: uploadId }));
+    },
+  };
 }
-
-export async function signPartUpload(
-  key: string,
-  uploadId: string,
-  partNumber: number
-) {
-  const command = new UploadPartCommand({
-    Bucket: videoBucket,
-    Key: key,
-    UploadId: uploadId,
-    PartNumber: partNumber,
-  });
-  const url = await getSignedUrl(s3, command, { expiresIn: 3600 });
-  return url;
-}
-
-export async function completeMultipartUpload(
-  key: string,
-  uploadId: string,
-  parts: { ETag: string; PartNumber: number }[]
-) {
-  await s3.send(
-    new CompleteMultipartUploadCommand({
-      Bucket: videoBucket,
-      Key: key,
-      UploadId: uploadId,
-      MultipartUpload: {
-        Parts: parts.sort((a, b) => a.PartNumber - b.PartNumber),
-      },
-    })
-  );
-}
-
-export async function abortMultipartUpload(key: string, uploadId: string) {
-  await s3.send(
-    new AbortMultipartUploadCommand({
-      Bucket: videoBucket,
-      Key: key,
-      UploadId: uploadId,
-    })
-  );
-}
+const multipart = createMultipartUploadHelpers({ client: s3, bucket: videoBucket });
+export const startMultipartUpload = multipart.start;
+export const signPartUpload = multipart.signPart;
+export const completeMultipartUpload = multipart.complete;
+export const abortMultipartUpload = multipart.abort;
 
 // Document snapshot S3 archival removed; DB snapshots are sufficient
