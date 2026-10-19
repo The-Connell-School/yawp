@@ -16,15 +16,17 @@ const COPY: Record<
 
 export function TeacherDirections({
   variant = 'class-starter',
+  platformEnhancements = false,
 }: {
   variant?: OpenEndedPromptLibraryVariant;
+  platformEnhancements?: boolean;
 }) {
   const copy = COPY[variant];
 
   return (
     <section className="mb-6 rounded-lg border bg-muted/40 p-4">
       <h3 className="mb-2 text-base font-semibold">{copy.heading}</h3>
-      <p className="mb-3 text-sm text-muted-foreground">{copy.body}</p>
+      <p className="mb-3 text-sm text-muted-foreground">{platformEnhancements ? copy.body.replace('New → Assignment', 'New assignment') : copy.body}</p>
       <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {copy.examplesLabel}
       </p>

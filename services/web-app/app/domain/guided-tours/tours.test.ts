@@ -175,3 +175,15 @@ test('waiting preview tour only explains read-only content and locked actions', 
   expect(tourForPathname('/app/free-tier/onboarding')).toBeNull();
   expect(getTour('waiting-preview').steps.map(step => step.target)).toEqual(['preview-content-nav', 'preview-content', 'preview-locked-actions']);
 });
+
+ test('v2 type tours remove direct-document steps while legacy tours stay unchanged', () => {
+  for (const kind of ['class_starter', 'prewriting', 'thesis_statement']) {
+    const legacy = tourForPage('/app/assignment-types/type-1', kind)!;
+    const v2 = tourForPage('/app/assignment-types/type-1', kind, true)!;
+    expect(v2.steps.some(step => step.target === 'type-documents')).toBe(false);
+    expect(JSON.stringify(v2)).not.toContain('New → Document');
+    expect(JSON.stringify(v2)).not.toContain('New → Assignment');
+    expect(legacy.steps.some(step => step.target === 'type-documents')).toBe(true);
+    expect(tourForPage('/app/assignment-types/type-1', kind)).toBe(legacy);
+  }
+});

@@ -452,7 +452,8 @@ export function isTourStatus(value: unknown): value is TourStatus {
  */
 export function tourForPage(
   pathname: string,
-  variant: string | null | undefined
+  variant: string | null | undefined,
+  platformEnhancementsEnabled = false
 ): PageTour | null {
   const path =
     pathname.length > 1 && pathname.endsWith('/')
@@ -460,7 +461,17 @@ export function tourForPage(
       : pathname;
   if (/^\/app\/assignment-types\/[^/]+$/.test(path)) {
     const id = variant ? ASSIGNMENT_TYPE_TOURS[variant] : undefined;
-    return id ? TOURS[id] : null;
+    const tour = id ? TOURS[id] : null;
+    if (!tour || !platformEnhancementsEnabled) return tour;
+    return {
+      ...tour,
+      steps: tour.steps.filter(step => step.target !== 'type-documents').map(step => ({
+        ...step,
+        body: step.target === 'type-new'
+          ? 'New assignment gives this type of writing to your class. Use these assignments to help students practice and develop their own ideas.'
+          : step.body.replaceAll('New → Assignment', 'New assignment').replaceAll('New → Generate a prompt', 'Generate a prompt'),
+      })),
+    };
   }
   return tourForPathname(path);
 }

@@ -7,6 +7,7 @@
  * mark what a step points at with `data-tour="..."`. What each tour says lives
  * in app/domain/guided-tours/tours.ts.
  */
+import { usePlatformEnhancements } from '~/hooks/usePlatformEnhancements';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import {
   BookOpen,
@@ -75,7 +76,10 @@ type Phase =
 
 function findTarget(target: string | null) {
   if (!target || typeof document === 'undefined') return null;
-  return document.querySelector<HTMLElement>(`[data-tour="${target}"]`);
+  // Responsive pages can mount desktop and mobile controls together.
+  // Pick the visible target so the pinned mobile action is included in the tour.
+  return [...document.querySelectorAll<HTMLElement>(`[data-tour="${target}"]`)]
+    .find(isShown) ?? null;
 }
 
 /** On screen at all: not display:none, not slid off the side like the phone nav. */
@@ -183,6 +187,7 @@ export function GuidedTour(props: { finishedTourIds: readonly string[]; storageS
  * `data-tour-variant`, read once the page has rendered.
  */
 function usePageTour() {
+  const platformEnhancementsEnabled = usePlatformEnhancements();
   const location = useLocation();
   const [variant, setVariant] = useState<string | null>(null);
   useEffect(() => {
@@ -192,7 +197,7 @@ function usePageTour() {
         ?.getAttribute('data-tour-variant') ?? null
     );
   }, [location.pathname, location.key]);
-  return tourForPage(location.pathname, variant);
+  return tourForPage(location.pathname, variant, platformEnhancementsEnabled);
 }
 
 function PageTourController({

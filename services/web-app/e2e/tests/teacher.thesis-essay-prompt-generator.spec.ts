@@ -1,3 +1,4 @@
+import { routerActionStub } from '../router-action-stub';
 import { test, expect } from '../test-setup';
 
 function optionBody(topic: string) {
@@ -11,8 +12,14 @@ function optionBody(topic: string) {
 }
 
 const GENERATED_OPTIONS = [
-  { title: 'Ambition and Its Costs', body: optionBody('ambition and its costs') },
-  { title: 'The Price of Power', body: optionBody('the price of unchecked power') },
+  {
+    title: 'Ambition and Its Costs',
+    body: optionBody('ambition and its costs'),
+  },
+  {
+    title: 'The Price of Power',
+    body: optionBody('the price of unchecked power'),
+  },
   {
     title: 'Who Pays for Ambition',
     body: optionBody('who pays the price for another person’s ambition'),
@@ -23,21 +30,20 @@ const GENERATED_OPTIONS = [
 // model. Mirrors the structured contract the real route returns.
 async function stubGenerator(page: import('@playwright/test').Page) {
   await page.route(
-    '**/api/domain/thesis-prompt-generator',
+    '**/api/domain/thesis-prompt-generator{,.data}',
     async (route) => {
       if (route.request().method() !== 'POST') {
         await route.continue();
         return;
       }
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
+      await route.fulfill(
+        await routerActionStub(route.request().url(), {
           success: true,
-          reply: 'Here are three drafts about ambition — tweak anything you like.',
+          reply:
+            'Here are three drafts about ambition — tweak anything you like.',
           options: GENERATED_OPTIONS,
-        }),
-      });
+        })
+      );
     }
   );
 }
@@ -114,11 +120,10 @@ test.describe.serial('Thesis-Driven Essay prompt generator', () => {
     await expect(
       page.getByRole('heading', { name: 'The Thesis-Driven Essay', level: 1 })
     ).toBeVisible();
-    await expect(
-      page.getByRole('button', { name: /^New/ })
-    ).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^New/ })).toHaveCount(0);
 
     // Teachers on a different assignment type do not get the generator option.
+    await page.request.post('/auth/logout');
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(
       `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`

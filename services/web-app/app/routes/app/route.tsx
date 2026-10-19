@@ -1,3 +1,4 @@
+import { usePlatformEnhancements } from '~/hooks/usePlatformEnhancements';
 import './free-account.css';
 import { readFreeAccountUsage } from '~/domain/free-tier/inapp-usage.server';
 import { FreeAccountUsagePopover } from '~/components/free-account-usage';
@@ -9,7 +10,6 @@ import {
   data,
   useLocation,
   useMatches,
-  type ActionFunctionArgs,
   type LoaderFunctionArgs,
   useLoaderData,
   redirect,
@@ -17,7 +17,7 @@ import {
   useRevalidator,
   useRouteLoaderData,
 } from 'react-router';
-import { Settings2, Cog, Microscope, Lock } from 'lucide-react';
+import { Settings, Settings2, Cog, Microscope, Lock } from 'lucide-react';
 import { useCallback, useEffect, useState, useRef, createContext } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import {
@@ -35,7 +35,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '~/components/ui/popover.js';
-import { Tooltip } from '~/components/ui/tooltip';
 import useBreakpoint from '~/hooks/useBreakpoint';
 import { useOnSwipe } from '~/hooks/useHorizontalSwipe';
 import { useUser } from '~/hooks/useUser';
@@ -238,6 +237,7 @@ export default function Route() {
   const isReadOnlyImpersonation = rootData?.impersonation?.isReadOnly ?? false;
   const mobileNavTrigger = useRef<HTMLButtonElement>(null);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const platformEnhancementsEnabled = usePlatformEnhancements();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const matches = useMatches();
@@ -404,6 +404,7 @@ export default function Route() {
                         {
                           to: '/app/reporter',
                           label: 'Reporter',
+                          preserveIcon: true,
                           icon: (
                             <>
                               <Microscope size={18} />
@@ -442,7 +443,7 @@ export default function Route() {
           <Popover>
             <PopoverTrigger>
               <div className="flex items-center gap-2 border-t p-4 pb-6 transition hover:bg-foreground/5 sm:pb-3">
-                <Settings2 size={18} />
+                {platformEnhancementsEnabled ? <Settings size={18} /> : <Settings2 size={18} />}
                 {navExpanded ? <p className="">Settings</p> : null}
               </div>
             </PopoverTrigger>

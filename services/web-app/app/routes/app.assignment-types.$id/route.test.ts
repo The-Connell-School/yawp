@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
+  setting: { findUnique: mock() },
+  assignment: { findMany: mock(), count: mock() },
   assignmentType: {
     findFirst: mock(),
     findMany: mock(),
@@ -273,6 +275,12 @@ describe('app.assignment-types.$id action', () => {
 
 describe('app.assignment-types.$id loader Class Starter prompt library', () => {
   beforeEach(() => {
+    prisma.setting.findUnique.mockReset();
+    prisma.setting.findUnique.mockResolvedValue({ value: 'false' });
+    prisma.assignment.findMany.mockReset();
+    prisma.assignment.findMany.mockResolvedValue([]);
+    prisma.assignment.count.mockReset();
+    prisma.assignment.count.mockResolvedValue(0);
     prisma.assignmentType.findFirst.mockReset();
     prisma.assignmentType.findMany.mockReset();
     prisma.assignmentType.findUnique.mockReset();
@@ -301,7 +309,9 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
       organization: { id: 'org-1', name: 'Org' },
     });
     getAvailableAssignmentTypesForScopes.mockResolvedValue([
-      withOrganizationAssignment(makeAssignmentType({ title: 'Class Starter' })),
+      withOrganizationAssignment(
+        makeAssignmentType({ title: 'Class Starter' })
+      ),
     ]);
     prisma.document.findMany.mockResolvedValue([]);
     prisma.class.findMany.mockResolvedValue([
@@ -322,6 +332,98 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
     prisma.apHistoryPromptLibraryEntry.findMany.mockResolvedValue([]);
     prisma.savedDailyPagesPrompt.findMany.mockReset();
     prisma.savedDailyPagesPrompt.findMany.mockResolvedValue([]);
+  });
+
+  test('v2 loads only this teacher’s assignments and count when enabled for the org', async () => {
+    prisma.setting.findUnique.mockResolvedValue({
+      value: JSON.stringify({ mode: 'targeted', orgIds: ['org-1'] }),
+    });
+    prisma.assignment.findMany.mockResolvedValue([
+      {
+        id: 'assignment-1',
+        title: 'A question',
+        prompt: 'Why?',
+        classAssignments: [],
+      },
+    ]);
+    prisma.assignment.count.mockResolvedValue(5);
+    const response = await loader({
+      request: new Request('https://yawp.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+      url: new URL('https://yawp.test/app/assignment-types/at-1'),
+      pattern: '/app/assignment-types/:id',
+      context: {},
+    });
+    if (!('data' in response)) throw new Error('Expected loader data');
+    expect(response.data.yourAssignments?.count).toBe(5);
+    expect(response.data.yourAssignments?.items[0].id).toBe('assignment-1');
+    expect(prisma.setting.findUnique).toHaveBeenCalledWith({
+      where: { name: 'feature_flag.platform-enhancements' },
+      select: { value: true },
+    });
+    expect(prisma.assignment.findMany).toHaveBeenCalledWith({
+      where: {
+        assignmentTypeId: 'at-1',
+        classAssignments: {
+          some: {
+            class: {
+              isArchived: false,
+              teachers: { some: { id: 'teacher-1' } },
+            },
+          },
+        },
+      },
+      take: 4,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        prompt: true,
+        classAssignments: {
+          where: {
+            class: {
+              isArchived: false,
+              teachers: { some: { id: 'teacher-1' } },
+            },
+          },
+          select: {
+            dueAt: true,
+            class: { select: { title: true, grade: true, period: true } },
+          },
+        },
+      },
+    });
+  });
+
+  test('flag off adds no assignments field or assignments query', async () => {
+    const response = await loader({
+      request: new Request('https://yawp.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+      url: new URL('https://yawp.test/app/assignment-types/at-1'),
+      pattern: '/app/assignment-types/:id',
+      context: {},
+    });
+    if (!('data' in response)) throw new Error('Expected loader data');
+    expect(response.data).not.toHaveProperty('yourAssignments');
+    expect(prisma.assignment.findMany).not.toHaveBeenCalled();
+    expect(prisma.assignment.count).not.toHaveBeenCalled();
+  });
+
+  test('an org outside the flag target gets the unchanged loader payload', async () => {
+    prisma.setting.findUnique.mockResolvedValue({
+      value: JSON.stringify({ mode: 'targeted', orgIds: ['another-org'] }),
+    });
+    const response = await loader({
+      request: new Request('https://yawp.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+      url: new URL('https://yawp.test/app/assignment-types/at-1'),
+      pattern: '/app/assignment-types/:id',
+      context: {},
+    });
+    if (!('data' in response)) throw new Error('Expected loader data');
+    expect(response.data).not.toHaveProperty('yourAssignments');
+    expect(prisma.assignment.findMany).not.toHaveBeenCalled();
+    expect(prisma.assignment.count).not.toHaveBeenCalled();
   });
 
   test('hides the modules list on an exit ticket', () => {
@@ -549,14 +651,18 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
       params: { id: 'at-1' },
     } as never)) as any;
 
-    expect(dailyPages.data.shortFormPromptLibrary.totalCount).toBeGreaterThan(0);
-    expect(
-      dailyPages.data.shortFormPromptLibrary.facets.sourceNeeds
-    ).toContain('required');
+    expect(dailyPages.data.shortFormPromptLibrary.totalCount).toBeGreaterThan(
+      0
+    );
+    expect(dailyPages.data.shortFormPromptLibrary.facets.sourceNeeds).toContain(
+      'required'
+    );
     expect(dailyPages.data.promptLibrary).toBeNull();
 
     getAvailableAssignmentTypesForScopes.mockResolvedValueOnce([
-      withOrganizationAssignment(makeAssignmentType({ title: 'Class Starter' })),
+      withOrganizationAssignment(
+        makeAssignmentType({ title: 'Class Starter' })
+      ),
     ]);
     const classStarter = (await loader({
       request: new Request('https://example.test/app/assignment-types/at-1'),
@@ -879,6 +985,8 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
     expect(submissions[1].numericPercentage).toBe(90);
     expect(submissions[1].overallScore).toBe(20);
     expect(JSON.stringify(response.data)).not.toContain('80% (B)');
-    expect(JSON.stringify(response.data)).not.toMatch(/overallScore["\\]*,85\b/);
+    expect(JSON.stringify(response.data)).not.toMatch(
+      /overallScore["\\]*,85\b/
+    );
   });
 });

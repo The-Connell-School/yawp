@@ -1,13 +1,16 @@
+import { routerActionStub } from '../router-action-stub';
 import { test, expect } from '../test-setup';
 
 const SAVED_OPTION = {
-  prompt: 'Nobody tells the truth about being bored. What does boredom feel like?',
+  prompt:
+    'Nobody tells the truth about being bored. What does boredom feel like?',
   type: 'open-reflection',
   seriousness: 'light',
   cognitiveMoves: ['introspect'],
 };
 const USED_OPTION = {
-  prompt: 'The hardest person to be honest with is yourself. Agree or disagree.',
+  prompt:
+    'The hardest person to be honest with is yourself. Agree or disagree.',
   type: 'agree-disagree',
   seriousness: 'serious',
   cognitiveMoves: ['take-a-stance'],
@@ -17,21 +20,19 @@ const USED_OPTION = {
 // model. Mirrors the structured contract the real route returns.
 async function stubGenerator(page: import('@playwright/test').Page) {
   await page.route(
-    '**/api/domain/daily-pages-prompt-generator',
+    '**/api/domain/daily-pages-prompt-generator{,.data}',
     async (route) => {
       if (route.request().method() !== 'POST') {
         await route.continue();
         return;
       }
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
+      await route.fulfill(
+        await routerActionStub(route.request().url(), {
           success: true,
           reply: 'Here are two drafts — tweak anything you like.',
           options: [SAVED_OPTION, USED_OPTION],
-        }),
-      });
+        })
+      );
     }
   );
 }
@@ -56,7 +57,8 @@ async function openMyPrompts(page: import('@playwright/test').Page) {
   await expect(page.getByPlaceholder('Search prompts')).toBeVisible();
   const myPrompts = page.getByRole('checkbox', { name: 'My prompts' }).first();
   await expect(myPrompts).toBeVisible();
-  if (!(await myPrompts.isChecked())) await myPrompts.check();
+  if (!(await myPrompts.isChecked())) await myPrompts.click();
+  await expect(myPrompts).toBeChecked();
 }
 
 test.describe.serial('Class Starter — My prompts', () => {
@@ -151,11 +153,15 @@ test.describe.serial('Class Starter — My prompts', () => {
 
     // The generator's tags survive the round trip, so a saved prompt still
     // answers the corpus facet filters.
-    await page.getByRole('button', { name: 'Type', exact: true }).first().click();
     await page
-      .getByRole('checkbox', { name: 'Agree / disagree' })
+      .getByRole('button', { name: 'Type', exact: true })
       .first()
-      .check();
+      .click();
+    const typeFilter = page
+      .getByRole('checkbox', { name: 'Agree / disagree' })
+      .first();
+    await typeFilter.click();
+    await expect(typeFilter).toBeChecked();
     await expect(page.getByText(USED_OPTION.prompt)).toBeVisible();
     await expect(page.getByText(SAVED_OPTION.prompt)).toHaveCount(0);
 

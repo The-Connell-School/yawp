@@ -59,7 +59,8 @@ import {
   previewAccessMiddleware,
 } from './utils/preview-access.server.ts';
 import { uaPartnerMiddleware } from './utils/ua-partner.server.ts';
-import { isLessonPlannerEnabled } from './domain/feature-flags/feature-flags.server.ts';
+import { PLATFORM_ENHANCEMENTS_FLAG } from './domain/feature-flags/feature-flags.ts';
+import { isFeatureFlagEnabled, isLessonPlannerEnabled } from './domain/feature-flags/feature-flags.server.ts';
 import { getRootMembershipWhere } from './utils/root-membership-filter.server.ts';
 
 export const middleware = [internalImpersonationMiddleware, previewAccessMiddleware, uaPartnerMiddleware];
@@ -131,6 +132,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         previewAccessSeat: null,
         blackboardLtiMockEnabled: false,
         lessonPlannerEnabled: false,
+        platformEnhancementsEnabled: false,
         impersonation: { isReadOnly: false, impersonatorUserId: null },
         toast: null,
       },
@@ -230,6 +232,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     bannerWarning,
     localDevAuthEnabled: isLocalDevAuthEnabled(),
   });
+  const platformEnhancementsEnabled = userId
+    ? await isFeatureFlagEnabled(PLATFORM_ENHANCEMENTS_FLAG, membership?.organizationId ?? null)
+    : false;
   const lessonPlannerEnabled = userId
     ? await isLessonPlannerEnabled(membership?.organizationId ?? null)
     : false;
@@ -244,6 +249,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       testerFeedbackAvailable: process.env.TESTER_FEEDBACK_ENABLED === 'true' && Boolean(user?.isTester),
       demoFeedbackAvailable: Boolean(userId) && !internal && await isDemoFeedbackAvailable(),
       lessonPlannerEnabled,
+      platformEnhancementsEnabled,
       requestInfo: {
         hints: getHints(request),
         origin: getDomainUrl(request),

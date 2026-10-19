@@ -1,3 +1,4 @@
+import { routerActionStub } from '../router-action-stub';
 import { test, expect } from '../test-setup';
 
 function optionBody(topic: string) {
@@ -22,21 +23,22 @@ const USED_OPTION = {
 // Deterministic stand-in for the LLM so the flow is testable without a live
 // model. Mirrors the structured contract the real route returns.
 async function stubGenerator(page: import('@playwright/test').Page) {
-  await page.route('**/api/domain/thesis-prompt-generator', async (route) => {
-    if (route.request().method() !== 'POST') {
-      await route.continue();
-      return;
+  await page.route(
+    '**/api/domain/thesis-prompt-generator{,.data}',
+    async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
+      await route.fulfill(
+        await routerActionStub(route.request().url(), {
+          success: true,
+          reply: 'Here are two drafts — tweak anything you like.',
+          options: [SAVED_OPTION, USED_OPTION],
+        })
+      );
     }
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        success: true,
-        reply: 'Here are two drafts — tweak anything you like.',
-        options: [SAVED_OPTION, USED_OPTION],
-      }),
-    });
-  });
+  );
 }
 
 async function openGenerator(page: import('@playwright/test').Page) {
@@ -55,11 +57,14 @@ async function openGenerator(page: import('@playwright/test').Page) {
 }
 
 async function openMyPrompts(page: import('@playwright/test').Page) {
-  await page.getByRole('button', { name: /Prompt Library/i }).click();
+  await page
+    .getByRole('button', { name: 'Prompt Library', exact: true })
+    .click();
   await expect(page.getByPlaceholder('Search prompts')).toBeVisible();
   const myPrompts = page.getByRole('checkbox', { name: 'My prompts' }).first();
   await expect(myPrompts).toBeVisible();
-  if (!(await myPrompts.isChecked())) await myPrompts.check();
+  if (!(await myPrompts.isChecked())) await myPrompts.click();
+  await expect(myPrompts).toBeChecked();
 }
 
 test.describe.serial('Thesis-Driven Essay — My prompts', () => {
@@ -83,7 +88,9 @@ test.describe.serial('Thesis-Driven Essay — My prompts', () => {
     await expect(
       page.getByRole('heading', { name: SAVED_OPTION.title })
     ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Use this prompt' })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Use this prompt' })
+    ).toBeVisible();
     await page.getByRole('button', { name: 'Save prompt' }).click();
     await expect(page.getByRole('button', { name: 'Saved' })).toBeVisible();
 
@@ -158,13 +165,20 @@ test.describe.serial('Thesis-Driven Essay — My prompts', () => {
     await page.goto(
       `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
     );
-    await page.getByRole('button', { name: /Prompt Library/i }).click();
+    await page
+      .getByRole('button', { name: 'Prompt Library', exact: true })
+      .click();
     await expect(page.getByPlaceholder('Search prompts')).toBeVisible();
 
-    // Saved prompts are scoped to the assignment type they were saved from.
+    // Each type has its own My prompts collection; thesis saves do not enter Daily Pages.
+    const dailyMine = page
+      .getByRole('checkbox', { name: 'My prompts' })
+      .first();
+    await dailyMine.click();
+    await expect(dailyMine).toBeChecked();
     await expect(
-      page.getByRole('checkbox', { name: 'My prompts' })
-    ).toHaveCount(0);
+      page.getByText(/^You haven’t saved any prompts yet/)
+    ).toBeVisible();
     await expect(
       page.getByRole('heading', { name: SAVED_OPTION.title, level: 3 })
     ).toHaveCount(0);

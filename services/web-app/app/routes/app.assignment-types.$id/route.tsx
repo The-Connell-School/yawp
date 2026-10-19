@@ -1,3 +1,7 @@
+import { PLATFORM_ENHANCEMENTS_FLAG } from '~/domain/feature-flags/feature-flags';
+import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { AssignmentTypePageV2 } from './v2/assignment-type-page';
+import { usePlatformEnhancements } from '~/hooks/usePlatformEnhancements';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   type LoaderFunctionArgs,
@@ -5,7 +9,12 @@ import {
   type ActionFunctionArgs,
   Form,
 } from 'react-router';
-import { Link, useLoaderData, useNavigation, useSearchParams } from 'react-router';
+import {
+  Link,
+  useLoaderData,
+  useNavigation,
+  useSearchParams,
+} from 'react-router';
 import { ChevronDownIcon } from 'lucide-react';
 import { DocumentLink } from '~/components/document-link.js';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
@@ -42,12 +51,10 @@ import {
   type AssignmentTypeAccessScope,
 } from '~/utils/assignment-type-access.server';
 import { loadAssignmentCreationQuotasForTypes } from '~/utils/assignment-quota.server';
-import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { AboutDailyPages } from './about-daily-pages/about-daily-pages';
-import { ApHistoryLibrary } from './ap-history-library';
 import { ApPromptsLibrary } from './ap-history/ap-prompts-library';
 import { ApHistoryGradingBreakdown } from './ap-history/grading-breakdown';
 import { ApHistoryTeacherDirections } from './ap-history/teacher-directions';
@@ -142,7 +149,7 @@ type AssignmentTypeDetailRow = {
   title: string;
   description: string | null;
   kind: string | null;
-  rubric: { name: string } | null;
+  rubric: { name: string; title?: string | null } | null;
   systemKey: string | null;
   collaborationSupported: boolean;
   image: { id: string } | null;
@@ -332,6 +339,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 
+  const v2Enabled =
+    profile.role === 'TEACHER' &&
+    (await isFeatureFlagEnabled(
+      PLATFORM_ENHANCEMENTS_FLAG,
+      profile.organization.id
+    ));
+
   const [documents, archivedDocuments, teacherClasses] = await Promise.all([
     prisma.document.findMany({
       orderBy: { createdAt: 'desc' },
@@ -426,7 +440,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         title: true,
         description: true,
         kind: true,
-        rubric: { select: { name: true } },
+        rubric: {
+          select: { name: true, ...(v2Enabled ? { title: true } : {}) },
+        },
         systemKey: true,
         collaborationSupported: true,
         image: { select: { id: true } },
@@ -457,7 +473,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const promptLibraryVariant = resolvePromptLibraryVariant({
     title: assignmentType.title,
   });
-  const isTeacher = profile.role === "TEACHER";
+  const isTeacher = profile.role === 'TEACHER';
   // Class Starter reads the freewrite corpus; Daily Pages reads the short-form
   // one, whose prompts always ask for the backing its rubric grades.
   const showsOpenEndedLibrary =
@@ -562,7 +578,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     profile.role === 'TEACHER' ? teacherClasses : [];
   let apHistoryLibrary = null;
   if (isApHistory) {
-    if (profile.role === 'TEACHER' && assignmentEnabledTeacherClasses.length > 0) {
+    if (
+      profile.role === 'TEACHER' &&
+      assignmentEnabledTeacherClasses.length > 0
+    ) {
       apHistoryLibrary = {
         mode: 'teacher' as const,
         entries: await listApHistoryLibraryEntries(assignmentType.id),
@@ -595,12 +614,55 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const isStudent = profile.role === 'STUDENT';
   const assignmentCreationAvailability = isTeacher
-    ? (await loadAssignmentCreationQuotasForTypes(profile.organization, [
-        assignmentType,
-      ])).get(assignmentType.id) ?? {}
+    ? ((
+        await loadAssignmentCreationQuotasForTypes(profile.organization, [
+          assignmentType,
+        ])
+      ).get(assignmentType.id) ?? {})
     : {};
 
+  const teacherClassWhere = {
+    isArchived: false,
+    teachers: { some: { id: profile.id } },
+  };
+  const assignmentWhere = {
+    assignmentTypeId: assignmentType.id,
+    classAssignments: { some: { class: teacherClassWhere } },
+  };
+  const yourAssignments = v2Enabled
+    ? {
+        items: await prisma.assignment.findMany({
+          where: assignmentWhere,
+          take: 4,
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            title: true,
+            prompt: true,
+            classAssignments: {
+              where: { class: teacherClassWhere },
+              select: {
+                dueAt: true,
+                class: { select: { title: true, grade: true, period: true } },
+              },
+            },
+          },
+        }),
+        count: await prisma.assignment.count({ where: assignmentWhere }),
+      }
+    : undefined;
+
   return dataResponse({
+    ...(v2Enabled
+      ? {
+          yourAssignments,
+          savedPromptTexts: [
+            ...savedPrompts,
+            ...savedShortFormPrompts,
+            ...savedThesisPrompts,
+          ].map((p) => p.prompt),
+        }
+      : {}),
     assignmentType,
     assignmentCreationAvailability,
     assignmentTypeGradesGrammar,
@@ -618,8 +680,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     // Teacher-facing guidance, so it follows the same role gate the other
     // assignment types' directions do.
     showAboutExitTicket:
-      profile.role === 'TEACHER' &&
-      isExitTicketAssignmentType(assignmentType),
+      profile.role === 'TEACHER' && isExitTicketAssignmentType(assignmentType),
   });
 }
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -718,7 +779,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
  * document is created from — but an exit ticket's is a single row whose
  * description restates the prompt, sitting directly under directions that
  * already explain the whole thing. Hidden there rather than deleted, because
- * the module itself is still what New -> Document builds from.
+ * the module itself still creates assignment documents.
  */
 export function showModulesAccordion(
   assignmentType: { kind?: string | null },
@@ -729,6 +790,16 @@ export function showModulesAccordion(
 }
 
 export default function AppAssignmentTypesIdRoute() {
+  const user = useUser();
+  const enabled = usePlatformEnhancements();
+  return enabled && user.selectedMembership?.role === 'TEACHER' ? (
+    <AssignmentTypePageV2 />
+  ) : (
+    <LegacyAssignmentTypePage />
+  );
+}
+
+function LegacyAssignmentTypePage() {
   const user = useUser();
   const lessonPlannerEnabled =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root')
@@ -789,7 +860,7 @@ export default function AppAssignmentTypesIdRoute() {
   // Daily Pages carries one module, whose blurb is freewrite-era copy telling
   // students to throw ideas around — which the about section directly above it
   // now contradicts. The module row itself stays: documents are created inside
-  // it, and `hasModules` still gates New → Document.
+  // it so existing documents and assignments continue to work.
   const showModules = modulesVisible && !showShortFormLibrary;
   // The same door, for the other end of the lesson: the planner sends a
   // teacher here with the exit ticket its plan ended on, already answered.
@@ -825,11 +896,11 @@ export default function AppAssignmentTypesIdRoute() {
     ? (data.apHistoryLibrary?.teacherClasses ?? [])
     : data.teacherClasses;
   const requestedClassId = searchParams.get('classId');
-  const initialApHistoryClassId = requestedClassId && assignmentSheetClasses.some(
-    (klass) => klass.id === requestedClassId
-  )
-    ? requestedClassId
-    : undefined;
+  const initialApHistoryClassId =
+    requestedClassId &&
+    assignmentSheetClasses.some((klass) => klass.id === requestedClassId)
+      ? requestedClassId
+      : undefined;
 
   return (
     <div
@@ -937,7 +1008,9 @@ export default function AppAssignmentTypesIdRoute() {
                 assignmentTypeId={data.assignmentType.id}
                 assignmentTypeTitle={data.assignmentType.title}
                 assignmentTypeKind={data.assignmentType.kind}
-                assignmentTypeRubricName={data.assignmentType.rubric?.name ?? null}
+                assignmentTypeRubricName={
+                  data.assignmentType.rubric?.name ?? null
+                }
                 assignmentTypeCollaborationSupported={
                   data.assignmentType.collaborationSupported
                 }
@@ -1102,9 +1175,7 @@ export default function AppAssignmentTypesIdRoute() {
         ) : null}
         {data.apHistoryLibrary ? (
           <>
-            <ApHistoryGradingBreakdown
-              audience="teacher"
-            />
+            <ApHistoryGradingBreakdown audience="teacher" />
             <div className="pb-6">
               <ApPromptsLibrary
                 entries={data.apHistoryLibrary.entries}
@@ -1135,7 +1206,8 @@ export default function AppAssignmentTypesIdRoute() {
                   <Accordion type="single" collapsible>
                     <AccordionItem value="archived" className="border-none">
                       <AccordionTrigger className="text-sm text-muted-foreground hover:no-underline py-2">
-                        View archived documents ({data.archivedDocuments.length})
+                        View archived documents ({data.archivedDocuments.length}
+                        )
                       </AccordionTrigger>
                       <AccordionContent>
                         <div className="grid grid-cols-2 gap-3 pt-2 sm:grid-cols-2 md:grid-cols-3">
