@@ -22,6 +22,7 @@ const ACCESS_CODE_PATTERN = /^[a-z]+-[a-z]+-[1-9][0-9]{3}$/;
 const MASTER_ACCESS_CODE_PATTERN =
   /^(?=.{8,64}$)[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/;
 const OPEN_PATHS = new Set([
+  '/api/internal/v1/admin/teacher-trainings',
   // Private QA endpoint performs its own preview/database and Bearer checks.
   '/api/preview/qa/signon-code',
   '/api/healthcheck',
@@ -59,6 +60,7 @@ const OPEN_PATH_PREFIXES = [
   '/api/internal/v1/admin/organizations',
   '/api/internal/v1/admin/assignment-types',
   '/api/internal/v1/admin/grading-benchmark',
+  '/api/internal/v1/admin/teacher-trainings/',
 ];
 const OPEN_SEGMENT = /^[A-Za-z0-9_-]{1,128}$/;
 

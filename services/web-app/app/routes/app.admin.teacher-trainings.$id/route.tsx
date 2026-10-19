@@ -9,6 +9,7 @@ import { TrashIcon, ImageIcon, VideoIcon, FileIcon } from 'lucide-react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { prisma } from '~/utils/db.server';
+import * as trainingAdmin from '~/domain/teacher-trainings/teacher-training-admin.server';
 import { buildModuleVideoKey, getSignedGetUrl } from '~/services/s3.server';
 import { useFetcher } from 'react-router';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
@@ -108,9 +109,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const intent = formData.get('intent');
 
   if (intent === 'deleteCourse') {
-    await prisma.teacherTraining.delete({
-      where: { id: params.id },
-    });
+    await trainingAdmin.deleteTraining(prisma, params.id!);
 
     return redirect('/app/admin/teacher-trainings');
   }
@@ -127,31 +126,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     await prisma.$transaction(async (tx) => {
       if (deleteImage) {
-        await tx.teacherTrainingImage.deleteMany({
-          where: { teacherTrainingId: params.id },
-        });
+        await trainingAdmin.removeImage(tx, params.id!);
       } else if (imageFile && imageFile.size > 0) {
         const arrayBuffer = await imageFile.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
-        await tx.teacherTrainingImage.deleteMany({
-          where: { teacherTrainingId: params.id },
-        });
-        await tx.teacherTrainingImage.create({
-          data: {
-            contentType: imageFile.type,
-            blob: buffer,
-            teacherTrainingId: params.id!,
-          },
+        await trainingAdmin.replaceImage(tx, params.id!, {
+          contentType: imageFile.type,
+          blob: buffer,
         });
       }
 
-      await tx.teacherTraining.update({
-        where: { id: params.id },
-        data: {
-          title,
-          description: description || null,
-        },
+      await trainingAdmin.updateTraining(tx, params.id!, {
+        title,
+        description: description || null,
       });
     });
 
@@ -172,10 +160,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
       throw new Response('Video file is required', { status: 400 });
     }
 
-    const moduleCount = await prisma.teacherTrainingModule.count({
-      where: { teacherTrainingId: params.id },
-    });
-
     let finalVideoLink = null;
     let videoDuration = videoDurationStr
       ? Math.floor(Number(videoDurationStr))
@@ -188,15 +172,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
       throw new Response('Missing videoS3Key', { status: 400 });
     }
 
-    await prisma.teacherTrainingModule.create({
-      data: {
-        title,
-        description: description || null,
-        videoS3Key,
-        videoDuration,
-        position: moduleCount,
-        teacherTrainingId: params.id!,
-      },
+    await trainingAdmin.createModule(prisma, params.id!, {
+      title,
+      description: description || null,
+      videoS3Key,
+      videoDuration,
     });
 
     return dataResponse({ status: 'success' });
@@ -205,14 +185,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   if (intent === 'reorderModules') {
     const moduleIds = JSON.parse(formData.get('moduleIds')?.toString() || '[]');
 
-    await Promise.all(
-      moduleIds.map((moduleId: string, index: number) =>
-        prisma.teacherTrainingModule.update({
-          where: { id: moduleId },
-          data: { position: index },
-        })
-      )
-    );
+    await trainingAdmin.reorderModules(prisma, moduleIds);
 
     return dataResponse({ status: 'success' });
   }
@@ -231,13 +204,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
           const arrayBuffer = await file.arrayBuffer();
           const buffer = Buffer.from(arrayBuffer);
 
-          await prisma.teacherTrainingModuleResource.create({
-            data: {
-              name: file.name,
-              contentType: file.type,
-              blob: buffer,
-              teacherTrainingModuleId: moduleId,
-            },
+          await trainingAdmin.createResource(prisma, moduleId, {
+            name: file.name,
+            contentType: file.type,
+            blob: buffer,
           });
         }
       })

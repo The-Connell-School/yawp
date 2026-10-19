@@ -262,6 +262,7 @@ describe('preview access gate', () => {
       ['POST', '/api/internal/v1/organizations/search'],
       ['GET', '/api/internal/v1/admin/users'],
       ['GET', '/api/internal/v1/admin/organizations-other'],
+      ['GET', '/api/internal/v1/admin/teacher-trainings-other'],
       ['GET', '/api/internal/v1/users'],
     ] as const) {
       const gated = await previewAccessMiddleware(
@@ -279,6 +280,19 @@ describe('preview access gate', () => {
       ['GET', '/api/internal/v1/free-tier/tokens'],
       ['POST', '/api/internal/v1/free-tier/release'],
       ['GET', '/api/internal/v1/free-tier/applications?q=x'],
+      ['GET', '/api/internal/v1/admin/teacher-trainings'],
+      ['POST', '/api/internal/v1/admin/teacher-trainings'],
+      ['PATCH', '/api/internal/v1/admin/teacher-trainings/tt-1'],
+      ['DELETE', '/api/internal/v1/admin/teacher-trainings/tt-1'],
+      ['PUT', '/api/internal/v1/admin/teacher-trainings/tt-1/image'],
+      ['POST', '/api/internal/v1/admin/teacher-trainings/tt-1/modules'],
+      ['PUT', '/api/internal/v1/admin/teacher-trainings/tt-1/modules/order'],
+      ['POST', '/api/internal/v1/admin/teacher-trainings/tt-1/modules/m-1/video/upload-url'],
+      ['POST', '/api/internal/v1/admin/teacher-trainings/tt-1/modules/m-1/video/complete'],
+      ['DELETE', '/api/internal/v1/admin/teacher-trainings/tt-1/modules/m-1/video'],
+      ['POST', '/api/internal/v1/admin/teacher-trainings/tt-1/modules/m-1/resources/upload-url'],
+      ['POST', '/api/internal/v1/admin/teacher-trainings/tt-1/modules/m-1/resources/complete'],
+      ['DELETE', '/api/internal/v1/admin/teacher-trainings/tt-1/modules/m-1/resources/r-1'],
       ['GET', '/api/internal/v1/admin/organizations'],
       ['GET', '/api/internal/v1/admin/organizations/org-1'],
       ['GET', '/api/internal/v1/admin/organizations/org-1/invitations'],
@@ -320,7 +334,7 @@ describe('preview access gate', () => {
       );
       expect(await response?.text()).toBe('ok');
     }
-    expect(next).toHaveBeenCalledTimes(28);
+    expect(next).toHaveBeenCalledTimes(41);
   });
 
   test('fails closed when no access codes are configured', async () => {
