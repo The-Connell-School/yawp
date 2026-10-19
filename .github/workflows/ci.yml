@@ -657,6 +657,14 @@ jobs:
         working-directory: services/web-app
         run: bun test app/utils/login-rate-limit.fail-closed.test.ts
 
+      - name: Assignment type write API database lifecycle
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          INTERNAL_DIRECTORY_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: CI=1 bun test --max-concurrency=2 app/utils/internal-assignment-type-writes.integration.test.ts
+
   typecheck-web-app:
     needs: [paths]
     name: ʦ TypeScript
@@ -698,6 +706,10 @@ jobs:
         if: ${{ needs.paths.outputs.code == 'true' }}
         working-directory: services/web-app
         run: bun test app/utils/ai-usage-log.server.test.ts app/utils/getLLMCompletion/getLLMCompletion.test.ts
+
+      - name: Assignment type write API contracts
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        run: CI=1 ./bin/project test --profile internal-assignment-type-writes --json
 
       - name: 🧪 Free-tier spend admission and caller denials (isolated)
         if: ${{ needs.paths.outputs.code == 'true' }}

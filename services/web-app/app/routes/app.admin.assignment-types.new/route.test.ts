@@ -4,6 +4,7 @@ const prisma = {
   assignmentType: {
     count: mock(),
     create: mock(),
+    findUnique: mock(),
     findMany: mock(() => Promise.resolve([])),
   },
   rubric: {
@@ -35,6 +36,7 @@ describe('admin assignment type new action', () => {
     prisma.user.findFirst.mockReset();
     prisma.assignmentType.count.mockReset();
     prisma.assignmentType.create.mockReset();
+    prisma.assignmentType.findUnique.mockReset();
     prisma.rubric.findUnique.mockReset();
     prisma.rubric.findFirst.mockReset();
     prisma.rubricRelease.findUnique.mockReset();
@@ -65,6 +67,26 @@ describe('admin assignment type new action', () => {
         outputSchema: { schemaVersion: 1, responseShape: 'categories_overall_comment' },
         calibrationNotes: null,
       },
+    });
+  });
+
+  test.each(['', '   '])('keeps the selected per-type override when the create textarea is %j', async (override) => {
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'source', archivedAt: null, rubricId: null,
+      scoringScaleJson: { type: 'weighted_1_5', minScore: 1, maxScore: 5 },
+      rubricJson: { categories: [{ key: 'quality', label: 'Quality', description: 'Clear', weight: 1 }] },
+      gradingPromptConfigJson: { systemInstructions: 'Source system', gradingInstructionsOverride: 'Source override' },
+      gradingOutputSchemaJson: { schemaVersion: 1 },
+    });
+    const form = new FormData();
+    form.set('title', 'Copied rubric');
+    form.set('rubricId', 'assignment-type:source');
+    form.set('gradingInstructionsOverride', override);
+    const response = await action({ request: new Request('https://example.test/new', { method: 'POST', body: form }), params: {}, context: {} } as never);
+    expect((response as Response).status).toBe(302);
+    expect(prisma.assignmentType.create.mock.calls.at(-1)?.[0].data).toMatchObject({
+      rubricId: null,
+      gradingPromptConfigJson: { systemInstructions: 'Source system', gradingInstructionsOverride: 'Source override' },
     });
   });
 
