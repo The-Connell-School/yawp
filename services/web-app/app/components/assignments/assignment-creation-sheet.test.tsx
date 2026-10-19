@@ -268,7 +268,7 @@ describe('AssignmentCreationSheetContent', () => {
 
   it('allows unchanged-type edits after creation availability is exhausted', () => {
     ({ root } = renderSheet({
-      assignmentTypes: [{ ...assignmentTypes[0], quotaExhausted: true, unavailableReason: 'Available with a paid plan.' }],
+      assignmentTypes: [{ ...assignmentTypes[0], quotaExhausted: true, unavailableReason: 'Available with a site license.' }],
       editingAssignment: { id: 'existing-assignment' },
       initialAssignmentTypeId: 'type-1',
       fixedClassId: 'class-1',
@@ -296,7 +296,7 @@ describe('AssignmentCreationSheetContent', () => {
       assignmentTypes: [
         {
           ...assignmentTypes[0],
-          unavailableReason: 'Available with a paid plan.',
+          unavailableReason: 'Available with a site license.',
         },
         { ...assignmentTypes[1], quotaExhausted: true },
         {
@@ -316,7 +316,7 @@ describe('AssignmentCreationSheetContent', () => {
 
   it('clears a fixed paid type instead of submitting its forbidden id', () => {
     ({ root } = renderSheet({
-      assignmentTypes: [{ ...assignmentTypes[0], unavailableReason: 'Available with a paid plan.' }],
+      assignmentTypes: [{ ...assignmentTypes[0], unavailableReason: 'Available with a site license.' }],
       fixedAssignmentTypeId: 'type-1',
       fixedClassId: 'class-1',
     }));
@@ -328,7 +328,7 @@ describe('AssignmentCreationSheetContent', () => {
       assignmentTypes: [
         {
           ...assignmentTypes[0],
-          unavailableReason: 'Available with a paid plan.',
+          unavailableReason: 'Available with a site license.',
         },
       ],
       initialAssignmentTypeId: 'type-1',

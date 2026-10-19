@@ -237,8 +237,8 @@ export default function FreeTierPendingRoute() {
                 </a>
                 <p className="text-xs text-muted-foreground">
                   {current.autoRemindersStopped
-                    ? 'Our team will follow up on your request.'
-                    : 'We will remind your administrator weekly, up to four times, and keep you posted.'}
+                    ? 'Weekly reminders have stopped. You can pick a different administrator below or contact support@yawp.school for help.'
+                    : 'We will remind your administrator weekly, up to three times, and keep you posted.'}
                 </p>
               </>
             ) : null}

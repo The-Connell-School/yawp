@@ -1,3 +1,4 @@
+import { canSendApprovalReminder } from './approval-reminders';
 import { lockApprovalApplication } from './approval-lock.server';
 import {
   createCipheriv,
@@ -40,7 +41,6 @@ import { selfAdminEmailError } from './admin-email';
 
 export const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const HOUR_MS = 3600000;
-const MAX_REMINDERS = 4;
 type Tx = Prisma.TransactionClient;
 type AppIdentity = Pick<
   FreeTierApplication,
@@ -246,11 +246,16 @@ async function enroll(
   }
   const last = [...accepted.values()].sort((a, b) => +b.at - +a.at)[0];
   const count = Math.max(approval.reminderCount, accepted.size);
-  const stopped = count >= MAX_REMINDERS;
+  const stopped = !canSendApprovalReminder(count);
   const recoveredLast =
     last && (!approval.lastReminderAt || +last.at > +approval.lastReminderAt);
   const enrolling = !approval.firstSentAt;
-  if (!enrolling && count === approval.reminderCount && !recoveredLast)
+  if (
+    !enrolling &&
+    count === approval.reminderCount &&
+    !recoveredLast &&
+    !(stopped && !approval.autoRemindersStopped)
+  )
     return approval;
   return tx.freeTierAdminApproval.update({
     where: { id: approval.id },
@@ -500,7 +505,7 @@ export async function queueManualApprovalReminder(args: {
     if (
       !approval.firstSentAt ||
       approval.needsManualFollowUp ||
-      approval.reminderCount >= MAX_REMINDERS
+      !canSendApprovalReminder(approval.reminderCount)
     )
       return fail('not_allowed');
     const previous = await tx.freeTierApprovalDelivery.findFirst({
@@ -602,7 +607,7 @@ async function scheduleApplication(applicationId: string, now: Date) {
     if (!approval.firstSentAt) return;
     if (
       !approval.autoRemindersStopped &&
-      approval.reminderCount < MAX_REMINDERS &&
+      canSendApprovalReminder(approval.reminderCount) &&
       approval.nextAutoReminderAt &&
       +approval.nextAutoReminderAt <= +now &&
       (!approval.lastReminderAt || +now - +approval.lastReminderAt >= 600000)
@@ -668,7 +673,7 @@ async function allowedToDeliver(
     app.status === 'SENT' &&
     (job.kind !== 'admin_reminder' ||
       (!approval.autoRemindersStopped &&
-        approval.reminderCount < MAX_REMINDERS &&
+        canSendApprovalReminder(approval.reminderCount) &&
         (!approval.lastReminderAt ||
           +now - +approval.lastReminderAt >= 600000)))
   );
@@ -934,7 +939,9 @@ async function deliverJob(id: string, now: Date) {
           where: { id },
           data: {
             acceptedReminderCount: count,
-            acceptedNextAutoReminderAt: count >= MAX_REMINDERS ? null : next,
+            acceptedNextAutoReminderAt: !canSendApprovalReminder(count)
+              ? null
+              : next,
           },
         });
         await tx.freeTierAdminApproval.update({
@@ -943,10 +950,10 @@ async function deliverJob(id: string, now: Date) {
             reminderCount: count,
             lastReminderAt: now,
             lastReminderSource: job.source,
-            nextAutoReminderAt: count >= MAX_REMINDERS ? null : next,
-            autoRemindersStopped: count >= MAX_REMINDERS,
-            needsManualFollowUp: count >= MAX_REMINDERS,
-            stopReason: count >= MAX_REMINDERS ? 'max_reached' : null,
+            nextAutoReminderAt: !canSendApprovalReminder(count) ? null : next,
+            autoRemindersStopped: !canSendApprovalReminder(count),
+            needsManualFollowUp: !canSendApprovalReminder(count),
+            stopReason: !canSendApprovalReminder(count) ? 'max_reached' : null,
           },
         });
       }

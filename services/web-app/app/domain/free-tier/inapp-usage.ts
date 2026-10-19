@@ -52,6 +52,7 @@ export function buildFreeAccountUsage(input: {
 }
 export type FreeAccountUsage = ReturnType<typeof buildFreeAccountUsage> & {
   monthly?: boolean;
+  renewsAt?: string;
   reporter?: UsageCount;
   classCode?: string | null;
   classId: string | null;

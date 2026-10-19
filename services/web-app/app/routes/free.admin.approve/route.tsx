@@ -373,6 +373,31 @@ export default function FreeAdminApproveRoute() {
         <FreeTierButton type="submit">Approve YAWP</FreeTierButton>
       </Form>
       {data.approvalV2 ? (
+        <details className="text-sm">
+          <summary className="cursor-pointer py-2 text-primary underline underline-offset-4">
+            I'd like to learn more first
+          </summary>
+          <div className="space-y-3 pt-3">
+            <p>{data.teacherName}'s request will stay open.</p>
+            <iframe
+              src="https://app.usemotion.com/meet/brian-connell/ryxkqvr"
+              loading="lazy"
+              height="700"
+              title="Book a time with Brian"
+              className="w-full rounded-lg border"
+            />
+            <a
+              href="https://app.usemotion.com/meet/brian-connell/ryxkqvr"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block text-primary underline"
+            >
+              Open the calendar in a new tab
+            </a>
+          </div>
+        </details>
+      ) : null}
+      {data.approvalV2 ? (
         <details
           className="text-sm"
           open={actionData && 'intent' in actionData ? true : undefined}

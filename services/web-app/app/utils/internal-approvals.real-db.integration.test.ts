@@ -245,11 +245,11 @@ local('signed resend recovers migrated legacy acceptance and its cooldown withou
   expect(delivery).toHaveBeenCalledTimes(1);
 });
 
-local('automatic and signed manual reminders share the four-reminder cap and persisted follow-up paging', async () => {
+local('automatic and signed manual reminders share the three-reminder cap and persisted follow-up paging', async () => {
   const { app, approval } = await fixture();
   clock(cadence.WEEK_MS);
   await cadence.runApprovalJobs(new Date());
-  for (let index = 1; index <= 3; index++) {
+  for (let index = 1; index <= 2; index++) {
     clock(cadence.WEEK_MS + index * 600000);
     expect((await outcome(await resend(app.id, app.id + '-manual-' + index), 200)).reminderCount).toBe(index + 1);
   }
@@ -257,10 +257,10 @@ local('automatic and signed manual reminders share the four-reminder cap and per
   expect(await outcome(await resend(app.id, app.id + '-fifth'), 409)).toEqual({ error: 'not_allowed' });
   clock(2 * cadence.WEEK_MS);
   await cadence.runApprovalJobs(new Date());
-  expect((await detail(app.id)).adminRequest).toMatchObject({ reminderCount: 4, autoRemindersStopped: true,
+  expect((await detail(app.id)).adminRequest).toMatchObject({ reminderCount: 3, autoRemindersStopped: true,
     nextAutoReminderAt: null, needsManualFollowUp: true, stopReason: 'max_reached' });
-  expect(await prisma.freeTierApprovalDelivery.count({ where: { approvalId: approval.id, kind: 'admin_reminder', state: 'SENT' } })).toBe(4);
-  expect(delivery).toHaveBeenCalledTimes(6); // Four reminders, two teacher follow-ups.
+  expect(await prisma.freeTierApprovalDelivery.count({ where: { approvalId: approval.id, kind: 'admin_reminder', state: 'SENT' } })).toBe(3);
+  expect(delivery).toHaveBeenCalledTimes(5); // Three reminders, two teacher follow-ups.
   await flag('off');
   const filtered = await (await approvalQueue(request('queue?q=' + prefix + '&needsFollowUp=true&limit=1'))).json();
   expect(filtered.applications.map((row: any) => row.id)).toEqual([app.id]);

@@ -109,7 +109,7 @@ export function buildAssignmentCreationQuotaFields(
 ) {
   if (plan !== 'FREE_CLASSROOM') return {};
   if (!isFreeClassroomAssignmentKind(kind)) {
-    return { unavailableReason: 'Available with a paid plan.' };
+    return { unavailableReason: 'Available with a site license.' };
   }
   const cap = FREE_CLASSROOM_ASSIGNMENT_QUOTAS[kind];
   const remaining = Math.max(0, cap - createdCount);
@@ -139,7 +139,7 @@ export async function loadAssignmentCreationQuotasForTypes(
         type.id,
         isFreeClassroomAssignmentKind(type.kind)
           ? {}
-          : { unavailableReason: 'Available with a paid plan.' },
+          : { unavailableReason: 'Available with a site license.' },
       ])
     );
   }
