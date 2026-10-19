@@ -45,3 +45,41 @@ test('rubric inspection rejects ambiguous query and suppresses infrastructure de
   const response = await http.inspect(new Request('https://yawp.test/api/internal/v1/rubrics?name=qa-rubric', { headers: { authorization: `Bearer ${key}` } }));
   expect(response.status).toBe(503); expect(await response.text()).not.toContain('private');
 });
+test('publication rejects an unknown scoring type with 422 and validation reports the same field issue', async () => {
+  let calls = 0;
+  const http = createRubricHttp({ inspect: async () => null, publish: async () => { calls++; return {}; } } as any, () => key, () => true);
+  const invalid = { ...schema, scoringScale: { type: 'foo', minScore: 0, maxScore: 4 } };
+  const expected = {
+    ok: false,
+    issues: [{
+      path: '/scoringScale/type',
+      message: 'Scoring type must be one of weighted_1_5, weighted_percent, act_writing_2_12, rubric_points, points_scale.',
+    }],
+  };
+  const published = await http.publish(request({ ...payload, schema: invalid }));
+  expect(published.status).toBe(422);
+  expect(await published.json()).toEqual(expected);
+  const validated = await http.validate(request({ schema: invalid }, key, '/api/internal/v1/rubrics/validate'));
+  expect(validated.status).toBe(200);
+  expect(await validated.json()).toEqual(expected);
+  expect(calls).toBe(0);
+});
+
+test.each([
+  { type: 'weighted_percent', minScore: 0, maxScore: 100, step: 1 },
+  { minScore: 0, maxScore: 100, step: 1 },
+  undefined,
+])('publication and validation accept scale %j and preserve the omitted-scale default', async scoringScale => {
+  const received: unknown[] = [];
+  const http = createRubricHttp({ inspect: async () => null, publish: async (input: unknown) => { received.push(input); return { id: 'revision' }; } } as any, () => key, () => true);
+  const document = { ...schema, ...(scoringScale ? { scoringScale } : {}) };
+  const publication = { ...payload, schema: document };
+  const published = await http.publish(request(publication));
+  expect(published.status).toBe(200);
+  expect(await published.json()).toEqual({ id: 'revision' });
+  expect(received).toEqual([publication]);
+  const validated = await http.validate(request({ schema: document }, key, '/api/internal/v1/rubrics/validate'));
+  expect(validated.status).toBe(200);
+  expect(await validated.json()).toMatchObject({ ok: true, schema: { scoringScale: scoringScale ? { ...scoringScale, type: 'type' in scoringScale ? scoringScale.type : 'weighted_1_5' } : { type: 'weighted_1_5', minScore: 1, maxScore: 5, step: 1 } } });
+  expect(received).toHaveLength(1);
+});
