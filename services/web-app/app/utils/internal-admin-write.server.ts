@@ -24,6 +24,7 @@ export async function writeAuditRows(
     before: unknown;
     after: unknown;
     idempotencyKey?: string | null;
+    reason?: string | null;
   }
 ) {
   await tx.internalPlatformApiAudit.createMany({
@@ -39,6 +40,7 @@ export async function writeAuditRows(
         metadata: {
           before: args.before,
           idempotencyKey: args.idempotencyKey ?? null,
+          ...(args.reason !== undefined ? { reason: args.reason } : {}),
         },
       },
       {
@@ -52,6 +54,7 @@ export async function writeAuditRows(
         metadata: {
           after: args.after,
           idempotencyKey: args.idempotencyKey ?? null,
+          ...(args.reason !== undefined ? { reason: args.reason } : {}),
         },
       },
     ],

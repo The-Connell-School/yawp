@@ -25,13 +25,21 @@ import {
   removeAssignmentTypeImage,
 } from '~/domain/assignment-types/assignment-type-admin-writes.server';
 
+// Blank reasons are rejected after trimming; omission remains optional.
+const reasonSchema = z.string().trim().min(1).max(500).optional();
 const fields = {
+  reason: reasonSchema,
   title: z.string().trim().min(1).max(200),
-  description: z.string().nullable().optional(),
-  tutorInstructions: z.string().trim().nullable().optional(),
+  description: z.string().max(5000).nullable().optional(),
+  tutorInstructions: z.string().trim().max(50000).nullable().optional(),
   // Exactly the admin rubric picker's string value; omission preserves the selection.
   rubricSelection: z.string().optional(),
-  gradingInstructionsOverride: z.string().trim().nullable().optional(),
+  gradingInstructionsOverride: z
+    .string()
+    .trim()
+    .max(20000)
+    .nullable()
+    .optional(),
   allowsImageUploads: z.boolean().optional(),
   collaborationSupported: z.boolean().optional(),
 };
@@ -39,16 +47,46 @@ const createSchema = z.object(fields).strict();
 const patchSchema = createSchema
   .partial()
   .strict()
-  .refine((value) => Object.keys(value).length > 0);
-const emptySchema = z.object({}).strict();
+  .refine((value) => Object.keys(value).some((key) => key !== 'reason'));
+const emptySchema = z.object({ reason: reasonSchema }).strict();
 const imageSchema = z
   .object({
+    reason: reasonSchema,
     contentType: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
     dataBase64: z.string().min(1),
-    altText: z.string().optional(),
+    altText: z.string().max(300).optional(),
   })
   .strict();
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+/** Bound allocation before authentication; Content-Length is only an early hint. */
+async function readBoundedBody(request: Request, limit: number) {
+  const tooLarge = () => response({ error: 'Request body too large' }, 413);
+  const declared = request.headers.get('content-length');
+  if (declared && /^\d+$/.test(declared.trim()) && Number(declared) > limit) {
+    void request.body?.cancel().catch(() => {});
+    throw tooLarge();
+  }
+  if (!request.body) return '';
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > limit) {
+        void reader.cancel().catch(() => {});
+        throw tooLarge();
+      }
+      chunks.push(value);
+    }
+    return new TextDecoder().decode(Buffer.concat(chunks, size));
+  } finally {
+    reader.releaseLock();
+  }
+}
 
 type Operation =
   | 'create'
@@ -174,7 +212,16 @@ export function createInternalAssignmentTypeWriteHandlers(input: {
   async function handle(operation: Operation, request: Request, id?: string) {
     if (request.method !== methods[operation])
       return response({ error: 'Method not allowed' }, 405);
-    const body = await request.text();
+    let body: string;
+    try {
+      body = await readBoundedBody(
+        request,
+        operation === 'replaceImage' ? 8 * 1024 * 1024 : 256 * 1024
+      );
+    } catch (error) {
+      if (error instanceof Response) return error;
+      throw error;
+    }
     const auth = await authenticate(request, {
       body,
       requiredScope: 'management:write',
@@ -197,8 +244,10 @@ export function createInternalAssignmentTypeWriteHandlers(input: {
           : operation === 'replaceImage'
             ? imageSchema
             : emptySchema;
-    if (!schema.safeParse(raw).success)
+    const validated = schema.safeParse(raw);
+    if (!validated.success)
       return response({ error: 'Invalid assignment type request' }, 400);
+    const reason = validated.data.reason ?? null;
     const hash = requestHash(body);
     const idempotencyKey =
       operation === 'create'
@@ -266,7 +315,11 @@ export function createInternalAssignmentTypeWriteHandlers(input: {
               operation === 'create'
                 ? createSchema.parse(raw)
                 : patchSchema.parse(raw);
-            const { rubricSelection: pickerValue, ...fields } = parsed;
+            const {
+              rubricSelection: pickerValue,
+              reason: _reason,
+              ...fields
+            } = parsed;
             const rubricSelection =
               pickerValue === undefined
                 ? undefined
@@ -311,6 +364,7 @@ export function createInternalAssignmentTypeWriteHandlers(input: {
             before: beforeSnapshot,
             after: await snapshot(tx, after),
             idempotencyKey,
+            reason,
           });
           return response(
             await payload(tx, after),

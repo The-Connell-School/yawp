@@ -49,7 +49,11 @@ const source = {
   ...row(),
   id: 'source',
   rubricId: null,
-  rubricJson: { categories: [{ key: 'quality', label: 'Quality', description: 'Clear', weight: 1 }] },
+  rubricJson: {
+    categories: [
+      { key: 'quality', label: 'Quality', description: 'Clear', weight: 1 },
+    ],
+  },
   scoringScaleJson: { min: 1, max: 4 },
   gradingPromptConfigJson: {
     systemInstructions: 'Selected system',
@@ -584,47 +588,291 @@ describe('per-type selection and explicit override composition', () => {
   for (const name of ['create', 'update'] as const) {
     test(`${name}: applies override to the selected prompt config`, async () => {
       const { handlers, db } = fixture();
-      const result = await invoke(handlers, name, request(
-        name === 'create' ? 'POST' : 'PATCH', name === 'create' ? '' : '/at-1',
-        { title: 'New', rubricSelection: 'assignment-type:source', gradingInstructionsOverride: ' Custom ' }
-      ));
+      const result = await invoke(
+        handlers,
+        name,
+        request(
+          name === 'create' ? 'POST' : 'PATCH',
+          name === 'create' ? '' : '/at-1',
+          {
+            title: 'New',
+            rubricSelection: 'assignment-type:source',
+            gradingInstructionsOverride: ' Custom ',
+          }
+        )
+      );
       expect(result.status).toBe(name === 'create' ? 201 : 200);
-      expect(db.assignmentType[name === 'create' ? 'create' : 'update'].mock.calls[0]?.[0].data.gradingPromptConfigJson).toEqual({
-        ...source.gradingPromptConfigJson, gradingInstructionsOverride: 'Custom',
+      expect(
+        db.assignmentType[name === 'create' ? 'create' : 'update'].mock
+          .calls[0]?.[0].data.gradingPromptConfigJson
+      ).toEqual({
+        ...source.gradingPromptConfigJson,
+        gradingInstructionsOverride: 'Custom',
       });
-      if (name === 'update') expect((await result.json()).assignmentType.gradingAssistantVersion).toBe(4);
+      if (name === 'update')
+        expect(
+          (await result.json()).assignmentType.gradingAssistantVersion
+        ).toBe(4);
     });
   }
-  test.each([null, ''])('explicit %s clears a copied override even if target has none', async (override) => {
-    const initial = { ...row(), gradingPromptConfigJson: { keep: true } };
-    const { handlers, db } = fixture(initial as ReturnType<typeof row>);
-    const result = await handlers.update(request('PATCH', '/at-1', {
-      rubricSelection: 'assignment-type:source', gradingInstructionsOverride: override,
-    }), 'at-1');
-    expect(result.status).toBe(200);
-    expect(db.assignmentType.update.mock.calls[0]?.[0].data.gradingPromptConfigJson).toEqual({
-      systemInstructions: 'Selected system', gradingInstructions: 'Selected grading',
-    });
-    expect((await result.json()).assignmentType.gradingAssistantVersion).toBe(3);
-  });
+  test.each([null, ''])(
+    'explicit %s clears a copied override even if target has none',
+    async (override) => {
+      const initial = { ...row(), gradingPromptConfigJson: { keep: true } };
+      const { handlers, db } = fixture(initial as ReturnType<typeof row>);
+      const result = await handlers.update(
+        request('PATCH', '/at-1', {
+          rubricSelection: 'assignment-type:source',
+          gradingInstructionsOverride: override,
+        }),
+        'at-1'
+      );
+      expect(result.status).toBe(200);
+      expect(
+        db.assignmentType.update.mock.calls[0]?.[0].data.gradingPromptConfigJson
+      ).toEqual({
+        systemInstructions: 'Selected system',
+        gradingInstructions: 'Selected grading',
+      });
+      expect((await result.json()).assignmentType.gradingAssistantVersion).toBe(
+        3
+      );
+    }
+  );
   test('unchanged normalized override replaces source override without bumping', async () => {
     const { handlers, db } = fixture();
-    const result = await handlers.update(request('PATCH', '/at-1', {
-      rubricSelection: 'assignment-type:source', gradingInstructionsOverride: ' Old ',
-    }), 'at-1');
+    const result = await handlers.update(
+      request('PATCH', '/at-1', {
+        rubricSelection: 'assignment-type:source',
+        gradingInstructionsOverride: ' Old ',
+      }),
+      'at-1'
+    );
     expect(result.status).toBe(200);
-    expect(db.assignmentType.update.mock.calls[0]?.[0].data.gradingPromptConfigJson).toEqual({
-      ...source.gradingPromptConfigJson, gradingInstructionsOverride: 'Old',
+    expect(
+      db.assignmentType.update.mock.calls[0]?.[0].data.gradingPromptConfigJson
+    ).toEqual({
+      ...source.gradingPromptConfigJson,
+      gradingInstructionsOverride: 'Old',
     });
-    expect((await result.json()).assignmentType.gradingAssistantVersion).toBe(3);
+    expect((await result.json()).assignmentType.gradingAssistantVersion).toBe(
+      3
+    );
   });
   test('omission keeps the copied override and bumps when the final override changes', async () => {
     const { handlers, db } = fixture();
-    const result = await handlers.update(request('PATCH', '/at-1', {
-      rubricSelection: 'assignment-type:source',
-    }), 'at-1');
+    const result = await handlers.update(
+      request('PATCH', '/at-1', {
+        rubricSelection: 'assignment-type:source',
+      }),
+      'at-1'
+    );
     expect(result.status).toBe(200);
-    expect(db.assignmentType.update.mock.calls[0]?.[0].data.gradingPromptConfigJson).toEqual(source.gradingPromptConfigJson);
-    expect((await result.json()).assignmentType.gradingAssistantVersion).toBe(4);
+    expect(
+      db.assignmentType.update.mock.calls[0]?.[0].data.gradingPromptConfigJson
+    ).toEqual(source.gradingPromptConfigJson);
+    expect((await result.json()).assignmentType.gradingAssistantVersion).toBe(
+      4
+    );
   });
+});
+
+describe('write reasons and bounded bodies', () => {
+  for (const [name, method, path, body] of cases) {
+    test(`${name}: trimmed reason in both audits, excluded from mutation and response`, async () => {
+      const { handlers, db, audits } = fixture();
+      const value = { ...body, reason: '  Correct catalog entry  ' };
+      const result = await invoke(handlers, name, request(method, path, value));
+      expect(result.status).toBe(name === 'create' ? 201 : 200);
+      expect(audits).toHaveLength(2);
+      for (const audit of audits) {
+        expect(audit.metadata.reason).toBe('Correct catalog entry');
+        expect(audit.requestHash).toBe(
+          createHash('sha256').update(JSON.stringify(value)).digest('hex')
+        );
+      }
+      for (const mutation of [
+        db.assignmentType.create,
+        db.assignmentType.update,
+        db.assignmentTypeImage.create,
+      ]) {
+        for (const [args] of mutation.mock.calls)
+          expect(args.data).not.toHaveProperty('reason');
+      }
+      expect((await result.json()).assignmentType).not.toHaveProperty('reason');
+    });
+    test(`${name}: absent reason is audited as null`, async () => {
+      const { handlers, audits } = fixture();
+      await invoke(handlers, name, request(method, path, body));
+      expect(audits.map((audit) => audit.metadata.reason)).toEqual([
+        null,
+        null,
+      ]);
+    });
+    test(`${name}: validates reason type and trimmed 1..500 length`, async () => {
+      for (const reason of ['', '   ', 'r'.repeat(501), null, 1]) {
+        const { handlers, db } = fixture();
+        expect(
+          (
+            await invoke(
+              handlers,
+              name,
+              request(method, path, { ...body, reason })
+            )
+          ).status
+        ).toBe(400);
+        expect(db.$transaction).not.toHaveBeenCalled();
+      }
+      const { handlers } = fixture();
+      expect(
+        (
+          await invoke(
+            handlers,
+            name,
+            request(method, path, { ...body, reason: ` ${'r'.repeat(500)} ` })
+          )
+        ).status
+      ).toBe(name === 'create' ? 201 : 200);
+    });
+    test(`${name}: rejects declared and actual oversized bytes before authorization`, async () => {
+      const limit = name === 'replaceImage' ? 8 * 1024 * 1024 : 256 * 1024;
+      const authenticate = mock(async () => {
+        throw new Error('must reject before authorization');
+      });
+      const { db } = fixture();
+      const handlers = createInternalAssignmentTypeWriteHandlers({
+        db: db as never,
+        authenticate,
+      });
+      for (const unsigned of [true, false]) {
+        for (const header of ['declared', 'understated', 'absent']) {
+          const declared = header === 'declared';
+          const req = request(method, path, undefined, {
+            raw: declared ? '{}' : 'é'.repeat(limit / 2 + 1),
+            unsigned,
+          });
+          if (declared) req.headers.set('content-length', String(limit + 1));
+          // A lying Content-Length cannot bypass the actual streamed byte limit.
+          else if (header === 'understated')
+            req.headers.set('content-length', '2');
+          const result = await invoke(handlers, name, req);
+          expect(result.status).toBe(413);
+          expect(await result.json()).toEqual({
+            error: 'Request body too large',
+          });
+          expect(result.headers.get('cache-control')).toBe('no-store');
+        }
+      }
+      expect(authenticate).not.toHaveBeenCalled();
+      expect(db.$transaction).not.toHaveBeenCalled();
+    });
+    test(`${name}: accepts exactly the raw byte limit`, async () => {
+      const limit = name === 'replaceImage' ? 8 * 1024 * 1024 : 256 * 1024;
+      const json = JSON.stringify(body ?? {});
+      const raw = json + ' '.repeat(limit - Buffer.byteLength(json));
+      const req = request(method, path, undefined, { raw });
+      req.headers.set('content-length', String(limit));
+      const { handlers } = fixture();
+      expect((await invoke(handlers, name, req)).status).toBe(
+        name === 'create' ? 201 : 200
+      );
+    });
+  }
+  test('PATCH reason alone is still an invalid no-op', async () => {
+    const { handlers, db } = fixture();
+    expect(
+      (
+        await handlers.update(
+          request('PATCH', '/at-1', { reason: 'Explain only' }),
+          'at-1'
+        )
+      ).status
+    ).toBe(400);
+    expect(db.$transaction).not.toHaveBeenCalled();
+  });
+  test('reason is bound to the signature', async () => {
+    const signed = request('POST', '', { title: 'New', reason: 'Original' });
+    const tampered = new Request(base, {
+      method: 'POST',
+      headers: signed.headers,
+      body: JSON.stringify({ title: 'New', reason: 'Altered' }),
+    });
+    expect((await fixture().handlers.create(tampered)).status).toBe(401);
+  });
+  for (const [field, limit] of [
+    ['description', 5000],
+    ['tutorInstructions', 50000],
+    ['gradingInstructionsOverride', 20000],
+  ] as const) {
+    for (const name of ['create', 'update'] as const) {
+      test(`${name}: ${field} accepts ${limit} and rejects ${limit + 1} characters`, async () => {
+        for (const size of [limit, limit + 1]) {
+          const { handlers } = fixture();
+          const result = await invoke(
+            handlers,
+            name,
+            request(
+              name === 'create' ? 'POST' : 'PATCH',
+              name === 'create' ? '' : '/at-1',
+              { title: 'New', [field]: 'x'.repeat(size) }
+            )
+          );
+          expect(result.status).toBe(
+            size > limit ? 400 : name === 'create' ? 201 : 200
+          );
+        }
+      });
+    }
+  }
+  test('image altText accepts 300 and rejects 301 characters', async () => {
+    for (const size of [300, 301]) {
+      const { handlers } = fixture();
+      expect(
+        (
+          await handlers.replaceImage(
+            request('PUT', '/at-1/image', {
+              ...image,
+              altText: 'x'.repeat(size),
+            }),
+            'at-1'
+          )
+        ).status
+      ).toBe(size > 300 ? 400 : 200);
+    }
+  });
+});
+
+test('streamed bodies count every chunk and cancel before reading the remainder', async () => {
+  const { db } = fixture();
+  const authenticate = mock(async () => {
+    throw new Error('must reject before authorization');
+  });
+  const handlers = createInternalAssignmentTypeWriteHandlers({
+    db: db as never,
+    authenticate,
+  });
+  let pulls = 0;
+  const cancel = mock(() => {});
+  const body = new ReadableStream<Uint8Array>(
+    {
+      pull(controller) {
+        pulls++;
+        controller.enqueue(new Uint8Array(128 * 1024));
+      },
+      cancel,
+    },
+    { highWaterMark: 0 }
+  );
+  const result = await handlers.create(
+    new Request(base, {
+      method: 'POST',
+      body,
+      duplex: 'half',
+    } as RequestInit)
+  );
+  expect(result.status).toBe(413);
+  expect(await result.json()).toEqual({ error: 'Request body too large' });
+  expect(pulls).toBe(3);
+  expect(cancel).toHaveBeenCalledTimes(1);
+  expect(authenticate).not.toHaveBeenCalled();
 });

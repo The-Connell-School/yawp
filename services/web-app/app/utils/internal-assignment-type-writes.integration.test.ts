@@ -52,6 +52,7 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       const created = await handlers.create(
         request('POST', '', {
           title: 'Lifecycle integration',
+          reason: '  Create integration entry  ',
           gradingInstructionsOverride: 'Initial',
           allowsImageUploads: true,
         })
@@ -62,6 +63,7 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       const edited = await handlers.update(
         request('PATCH', `/${id}`, {
           title: 'Edited integration',
+          reason: 'Revise integration entry',
           gradingInstructionsOverride: 'Revised',
           collaborationSupported: true,
         }),
@@ -75,7 +77,9 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
         gradingAssistantVersion: initial.gradingAssistantVersion + 1,
       });
       const archived = await handlers.archive(
-        request('POST', `/${id}/archive`),
+        request('POST', `/${id}/archive`, {
+          reason: 'Retire integration entry',
+        }),
         id
       );
       expect(archived.status).toBe(200);
@@ -91,6 +95,18 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
         orderBy: { createdAt: 'asc' },
       });
       expect(audits).toHaveLength(8);
+      const reasons: Record<string, string | null> = {
+        'assignment-type.create': 'Create integration entry',
+        'assignment-type.update': 'Revise integration entry',
+        'assignment-type.archive': 'Retire integration entry',
+        'assignment-type.restore': null,
+      };
+      for (const audit of audits) {
+        const action = audit.action!.replace(/\.(before|after)$/, '');
+        expect((audit.metadata as { reason: string | null }).reason).toBe(
+          reasons[action]
+        );
+      }
       expect(
         audits.every(
           (a) => a.actorEmail === 'operator@example.test' && a.targetId === id

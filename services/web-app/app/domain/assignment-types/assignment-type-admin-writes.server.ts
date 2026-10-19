@@ -177,7 +177,10 @@ export async function updateAssignmentType(
       ...(input.gradingConfig ?? {
         ...(input.gradingInstructionsOverride !== undefined &&
         (changed || input.rubricSelection?.kind === 'per-type')
-          ? { gradingPromptConfigJson: finalPromptConfig as Prisma.InputJsonValue }
+          ? {
+              gradingPromptConfigJson:
+                finalPromptConfig as Prisma.InputJsonValue,
+            }
           : {}),
         ...(changed ? { gradingAssistantVersion: { increment: 1 } } : {}),
       }),
