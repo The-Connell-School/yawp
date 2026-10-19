@@ -8,8 +8,9 @@ const completion = mock(async (_input: any): Promise<string> => {
 mock.module('~/utils/getLLMCompletion', () => ({
   getLLMCompletion: completion,
 }));
-const { createInternalGradingWorkspaceHandlers } =
-  await import('./internal-grading-workspace.server');
+const { createInternalGradingWorkspaceHandlers } = await import(
+  './internal-grading-workspace.server'
+);
 const {
   signInternalApiRequest,
   resetInternalApiMemoryNonceStore,
@@ -356,7 +357,7 @@ test('a full group rejects a new case after locking and before any writes', asyn
   expect(f.events).toEqual(['lock']);
   expect(f.audits).toHaveLength(0);
 });
-test('unsupported async run creation returns 405 without model calls', async () => {
+test('run creation without an idempotency key returns 400 without model calls', async () => {
   const f = fixture();
   expect(
     (
@@ -369,7 +370,7 @@ test('unsupported async run creation returns 405 without model calls', async () 
         'at-1'
       )
     ).status
-  ).toBe(405);
+  ).toBe(400);
   expect(completion).not.toHaveBeenCalled();
 });
 test('suite ownership protects case creation and editing', async () => {
@@ -678,4 +679,291 @@ test('scratch default provider adapter requests audit-only persistence', async (
       },
     });
   expect(f.audits).toHaveLength(2);
+});
+
+const runBody = {
+  promptVersion: 'pv-1',
+  suiteId: 'suite-1',
+  reason: 'Reviewed',
+};
+test('new writes require HMAC, write scope, strict bodies and bounded bytes', async () => {
+  for (const [resource, method, path, body, child] of [
+    ['runs', 'POST', '/evaluation-runs', runBody, undefined],
+    ['suite', 'DELETE', '/evaluation-suites/suite-1', {}, 'suite-1'],
+    ['promptVersion', 'DELETE', '/prompt-versions/pv-1', {}, 'pv-1'],
+  ] as const) {
+    const f = fixture();
+    for (const [opts, value, status] of [
+      [{ unsigned: true }, body, 401],
+      [{ keyId: 'reader' }, body, 403],
+      [{}, { ...body, unknown: true }, 400],
+      [{}, { ...body, reason: ' ' }, 400],
+      [{ raw: 'x'.repeat(256 * 1024 + 1) }, body, 413],
+      [{ raw: new Uint8Array([0xff]) }, body, 400],
+    ] as const) {
+      const res = await f.handlers.handle(
+        resource,
+        req(method, path, value, opts),
+        'at-1',
+        child
+      );
+      expect(res.status).toBe(status);
+      expect(Object.keys(await res.json())).toEqual(['error']);
+      expect(res.headers.get('cache-control')).toBe('no-store');
+    }
+    expect(f.db.$transaction).not.toHaveBeenCalled();
+  }
+});
+test('discard refuses production and foreign versions; draft deletion is audited', async () => {
+  const f = fixture();
+  f.db.assignmentTypePromptVersion.delete = mock(async ({ where }: any) => {
+    f.versions.splice(
+      f.versions.findIndex((v) => v.id === where.id),
+      1
+    );
+  });
+  for (const [version, status] of [
+    ['pv-1', 409],
+    ['foreign', 404],
+  ] as const) {
+    const res = await f.handlers.handle(
+      'promptVersion',
+      req('DELETE', `/prompt-versions/${version}`, {}),
+      'at-1',
+      version
+    );
+    expect(res.status).toBe(status);
+    expect(Object.keys(await res.json())).toEqual(['error']);
+  }
+  f.versions.push({
+    ...f.versions[0],
+    id: 'draft-2',
+    version: 2,
+    status: 'draft',
+  });
+  const res = await f.handlers.handle(
+    'promptVersion',
+    req('DELETE', '/prompt-versions/2', {
+      reason: '  Discard reviewed draft  ',
+    }),
+    'at-1',
+    '2'
+  );
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ deleted: { id: 'draft-2' } });
+  expect(f.versions).toHaveLength(1);
+  expect(f.audits.map((a) => a.result)).toEqual(['before', 'after']);
+  expect(f.audits[0].metadata.before.status).toBe('draft');
+  expect(f.audits[1].metadata.after).toBeNull();
+  expect(f.audits[1].metadata.reason).toBe('Discard reviewed draft');
+});
+test('new writes scope suites and prompt ownership; run requires an idempotency key', async () => {
+  const f = fixture();
+  f.db.assignmentTypeEvaluation.findFirst = mock(async () => null);
+  for (const [resource, path, value, child] of [
+    ['suite', '/evaluation-suites/foreign', {}, 'foreign'],
+    ['runs', '/evaluation-runs', { ...runBody, suiteId: 'foreign' }, undefined],
+  ] as const) {
+    const res = await f.handlers.handle(
+      resource,
+      req(resource === 'runs' ? 'POST' : 'DELETE', path, value, {
+        key: 'owned-run',
+      }),
+      'at-1',
+      child
+    );
+    expect(res.status).toBe(404);
+  }
+  const missing = await f.handlers.handle(
+    'runs',
+    req('POST', '/evaluation-runs', runBody),
+    'at-1'
+  );
+  expect(missing.status).toBe(400);
+  expect(completion).not.toHaveBeenCalled();
+});
+
+test('suite delete archives cases, refreshes snapshot, and audits both states', async () => {
+  const f = fixture();
+  const row: any = {
+    id: 'suite-1',
+    assignmentTypeId: 'at-1',
+    archivedAt: null,
+    cases: [{ id: 'case-1', archivedAt: null }],
+  };
+  f.db.assignmentTypeEvaluation.findFirst = mock(async ({ where }: any) =>
+    where.id === row.id && !row.archivedAt ? structuredClone(row) : null
+  );
+  f.db.assignmentTypeEvaluation.updateMany = mock(async ({ data }: any) => {
+    Object.assign(row, data);
+    return { count: 1 };
+  });
+  f.db.assignmentTypeEvaluationCase = {
+    updateMany: mock(async ({ data }: any) => {
+      row.cases.forEach((c: any) => Object.assign(c, data));
+      return { count: 1 };
+    }),
+  };
+  f.db.assignmentTypeEvaluationSuiteVersion = {
+    findFirst: mock(async () => null),
+    create: mock(async ({ data }: any) => ({ id: 'snapshot', ...data })),
+  };
+  const res = await f.handlers.handle(
+    'suite',
+    req('DELETE', '/evaluation-suites/suite-1', { reason: ' Retired ' }),
+    'at-1',
+    'suite-1'
+  );
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ deleted: { id: 'suite-1' } });
+  expect(row.archivedAt).toBeInstanceOf(Date);
+  expect(row.cases[0].archivedAt).toEqual(row.archivedAt);
+  expect(f.db.assignmentTypeEvaluationSuiteVersion.create).toHaveBeenCalled();
+  expect(f.audits[0].metadata.before.archivedAt).toBeNull();
+  expect(f.audits[1].metadata.after.archivedAt).toBeTruthy();
+  expect(f.audits[1].metadata.reason).toBe('Retired');
+});
+
+function runFixture() {
+  const f = fixture();
+  const cases = [
+    {
+      id: 'case-1',
+      title: 'Claim',
+      documentText: 'A defensible claim.',
+      rubricCategoryKey: 'claim',
+      criterion: 'A clear claim',
+    },
+  ];
+  const snapshot = {
+    id: 'snapshot-1',
+    assignmentTypeId: 'at-1',
+    version: 1,
+    contentHash: 'snapshot-hash',
+    snapshotJson: { evaluations: [{ id: 'suite-1', cases }], legacyCases: [] },
+  };
+  const runs: any[] = [];
+  const results: any[] = [];
+  f.db.assignmentTypeEvaluation.findFirst = mock(async ({ where }: any) =>
+    where.id === 'suite-1' ? { id: 'suite-1', cases } : null
+  );
+  f.db.assignmentTypeEvaluationSuiteVersion = {
+    findFirst: mock(async () => snapshot),
+    findUnique: mock(async () => snapshot),
+  };
+  f.db.assignmentTypeEvaluationRun = {
+    findFirst: mock(
+      async ({ where }: any) =>
+        runs.find((r) => Object.entries(where).every(([k, v]) => r[k] === v)) ??
+        null
+    ),
+    create: mock(async ({ data }: any) => {
+      const run = { id: 'run-1', results, ...data };
+      runs.push(run);
+      return run;
+    }),
+    update: mock(async ({ data }: any) => Object.assign(runs[0], data)),
+  };
+  f.db.assignmentTypeEvaluationResult = {
+    createMany: mock(async ({ data }: any) => {
+      results.push(...data);
+    }),
+  };
+  f.db.internalPlatformApiAudit.findFirst = mock(
+    async ({ where }: any) =>
+      f.audits.find(
+        (a) =>
+          a.action === where.action &&
+          a.metadata.idempotencyKey === where.metadata.equals
+      ) ?? null
+  );
+  const execute = mock(async ({ purpose }: any) =>
+    JSON.stringify(
+      purpose === 'criterion'
+        ? { passed: true, evidence: 'Grounded' }
+        : {
+            categories: [{ key: 'claim', score: 3, comment: 'Clear claim' }],
+            overallComment: 'Jordan, explain the evidence.',
+          }
+    )
+  );
+  return {
+    ...f,
+    snapshot,
+    runs,
+    results,
+    execute,
+    handlers: createInternalGradingWorkspaceHandlers({ db: f.db, execute }),
+  };
+}
+test('run start executes shared admin logic, returns results, replays once and conflicts', async () => {
+  const f = runFixture();
+  const start = () =>
+    f.handlers.handle(
+      'runs',
+      req('POST', '/evaluation-runs', runBody, { key: 'run-1' }),
+      'at-1'
+    );
+  const first = await start();
+  expect(first.status).toBe(201);
+  const result = await first.json();
+  expect(result.run.status).toBe('completed');
+  expect(result.run.results).toHaveLength(1);
+  expect(result.run.promptRevision).toBe(1);
+  expect(result.run.evaluationSuiteVersionId).toBe('snapshot-1');
+  expect(f.execute).toHaveBeenCalledTimes(2);
+  const replay = await start();
+  expect(replay.status).toBe(200);
+  expect(await replay.json()).toEqual(result);
+  expect(f.execute).toHaveBeenCalledTimes(2);
+  const conflict = await f.handlers.handle(
+    'runs',
+    req(
+      'POST',
+      '/evaluation-runs',
+      { ...runBody, reason: 'Different' },
+      { key: 'run-1' }
+    ),
+    'at-1'
+  );
+  expect(conflict.status).toBe(409);
+  expect(f.audits).toHaveLength(2);
+  expect(f.audits[1].metadata.reason).toBe('Reviewed');
+});
+test('run rejects oversized snapshots before calling provider', async () => {
+  const f = runFixture();
+  f.snapshot.snapshotJson.legacyCases = Array.from({ length: 9 }, (_, i) => ({
+    id: `c-${i}`,
+  })) as any;
+  const res = await f.handlers.handle(
+    'runs',
+    req('POST', '/evaluation-runs', runBody, { key: 'large' }),
+    'at-1'
+  );
+  expect(res.status).toBe(422);
+  expect((await res.json()).error).toContain('8');
+  expect(f.execute).not.toHaveBeenCalled();
+  expect(f.runs).toHaveLength(0);
+});
+test('run budget aborts provider and returns a clear error without a publishable run', async () => {
+  const f = runFixture();
+  let signal: AbortSignal | undefined;
+  const handlers = createInternalGradingWorkspaceHandlers({
+    db: f.db,
+    runBudgetMs: 20,
+    execute: async (input) => {
+      signal = input.signal;
+      return new Promise(() => {});
+    },
+  });
+  const res = await handlers.handle(
+    'runs',
+    req('POST', '/evaluation-runs', runBody, { key: 'timeout' }),
+    'at-1'
+  );
+  expect(res.status).toBe(422);
+  expect((await res.json()).error).toContain('time budget');
+  expect(signal?.aborted).toBe(true);
+  expect(f.runs.some((r) => r.status === 'completed')).toBe(false);
+  expect(f.audits).toHaveLength(0);
 });

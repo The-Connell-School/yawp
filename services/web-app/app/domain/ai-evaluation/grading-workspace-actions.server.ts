@@ -3,7 +3,10 @@ import type { Prisma, PrismaClient } from '@app/prisma';
 import { z } from 'zod';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { parseRubric } from '~/domain/assignment-types/assignment-type-rubric.shared';
-import { runAssignmentTypeEvaluationSuite } from '~/domain/ai-evaluation/assignment-type-evaluation-suite.server';
+import {
+  type AssignmentTypeEvaluationExecution,
+  runAssignmentTypeEvaluationSuite,
+} from '~/domain/ai-evaluation/assignment-type-evaluation-suite.server';
 import {
   createEvaluationSuiteVersion,
   ensureEvaluationSuiteVersion,
@@ -204,7 +207,12 @@ export function updateWorkspaceEvaluationCase(
 export async function executeGradingWorkspaceAction(
   input: z.infer<typeof WorkspaceActionSchema>,
   request: Request,
-  db: PrismaClient = prisma
+  db: PrismaClient = prisma,
+  runOptions: {
+    execute?: (input: AssignmentTypeEvaluationExecution) => Promise<string>;
+    signal?: AbortSignal;
+    maxCases?: number;
+  } = {}
 ) {
   const assignmentType = await db.assignmentType.findUnique({
     where: { id: input.assignmentTypeId },
@@ -952,6 +960,16 @@ export async function executeGradingWorkspaceAction(
   if (evaluationCases.length === 0) {
     return errorResponse('Add at least one evaluation case before running.');
   }
+  if (
+    runOptions.maxCases !== undefined &&
+    evaluationCases.length > runOptions.maxCases
+  ) {
+    return errorResponse(
+      `Evaluation runs support at most ${runOptions.maxCases} active cases across the current assignment type snapshot.`,
+      422
+    );
+  }
+  runOptions.signal?.throwIfAborted();
   const gradingConfig = gradingConfigWithPromptVersion(
     baseGradingConfig,
     promptVersion
@@ -1018,6 +1036,8 @@ export async function executeGradingWorkspaceAction(
       gradingConfig,
       evaluationCases,
       execute: async ({ evaluationCase, purpose, ...completion }) => {
+        if (runOptions.execute)
+          return runOptions.execute({ evaluationCase, purpose, ...completion });
         if (useE2EFixture) {
           if (purpose === 'criterion') {
             const improvesAfterVersionOne = evaluationCase.criterion.includes(
@@ -1071,6 +1091,9 @@ export async function executeGradingWorkspaceAction(
       },
     });
 
+    // Case execution records provider failures as results; an expired request must
+    // never leave a completed artifact that could satisfy promotion.
+    runOptions.signal?.throwIfAborted();
     await db.$transaction(async (tx) => {
       await tx.assignmentTypeEvaluationResult.createMany({
         data: suiteResult.results.map((result) => ({

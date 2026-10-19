@@ -38,6 +38,13 @@ import { randomUUID } from 'node:crypto';
 
 const text = (max: number) => z.string().trim().min(1).max(max);
 const ref = z.string().regex(identifier);
+const promptRef = ref.refine(
+  (v) =>
+    !/^\d+$/.test(v) ||
+    (Number.isSafeInteger(Number(v)) &&
+      Number(v) >= 1 &&
+      Number(v) <= 2147483647)
+);
 const expectedOutput = z
   .object({
     categories: z
@@ -129,34 +136,43 @@ const schemas = {
       reason: reasonSchema,
     })
     .strict(),
+  runs: z
+    .object({ promptVersion: promptRef, suiteId: ref, reason: reasonSchema })
+    .strict(),
   benchmarkRun: z.object({ reason: reasonSchema }).strict(),
 };
 export type GradingWorkspaceResource =
   | keyof typeof schemas
-  | 'runs'
   | 'run'
   | 'benchmarkCases';
 const allowed: Record<GradingWorkspaceResource, string[]> = {
   promptVersions: ['GET', 'POST'],
-  promptVersion: ['GET', 'PATCH'],
+  promptVersion: ['GET', 'PATCH', 'DELETE'],
   publish: ['POST'],
   suites: ['GET', 'POST'],
-  suite: ['PATCH'],
+  suite: ['PATCH', 'DELETE'],
   cases: ['POST'],
   case: ['PATCH', 'DELETE'],
   scratch: ['POST'],
-  runs: ['GET'],
+  runs: ['GET', 'POST'],
   run: ['GET'],
   benchmarkCases: ['GET'],
   benchmarkRun: ['POST'],
 };
+// Production App Runner and CloudFront allow 120s (infra/main.tf). Reserve
+// ample time for body/auth, lock acquisition, rollback, audits, and the response.
+export const INTERNAL_EVALUATION_RUN_BUDGET_MS = 45_000;
+export const INTERNAL_EVALUATION_RUN_MAX_CASES = 8;
 const json = (v: unknown) => JSON.parse(JSON.stringify(v));
 
 export function createInternalGradingWorkspaceHandlers(input: {
   db: Pick<PrismaClient, '$transaction'>;
   authenticate?: typeof authorizeInternalApiRequest;
   auditRead?: AssignmentTypeReadAudit;
+  /** May shorten the fixed production budget for deterministic timeout tests. */
+  runBudgetMs?: number;
   execute?: (input: {
+    signal?: AbortSignal;
     purpose: string;
     system: string;
     messages: Array<{ role: 'user'; content: string }>;
@@ -218,7 +234,7 @@ export function createInternalGradingWorkspaceHandlers(input: {
       }
       if (!read) {
         const schema =
-          resource === 'case' && request.method === 'DELETE'
+          request.method === 'DELETE'
             ? z.object({ reason: reasonSchema }).strict()
             : schemas[resource as keyof typeof schemas];
         const parsed = schema?.safeParse(value);
@@ -255,10 +271,38 @@ export function createInternalGradingWorkspaceHandlers(input: {
       const endpoint = `${request.method} ${new URL(request.url).pathname.replace(/\/$/, '')}`;
       const hash = requestHash(body);
       const create =
-        !read && ['promptVersions', 'suites', 'cases'].includes(resource);
+        !read &&
+        ['promptVersions', 'suites', 'cases', 'runs'].includes(resource);
       const key = create
         ? request.headers.get('idempotency-key')?.trim() || null
         : null;
+      if (resource === 'runs' && create && !key)
+        return response({ error: 'Idempotency-Key is required' }, 400);
+      if (
+        resource === 'runs' &&
+        key &&
+        (key.length > 200 || !/^[\x21-\x7e]+$/.test(key))
+      )
+        return response({ error: 'Invalid Idempotency-Key' }, 400);
+      const runController =
+        resource === 'runs' && create ? new AbortController() : null;
+      const runTimer = runController
+        ? setTimeout(
+            () => runController.abort(),
+            Math.min(
+              input.runBudgetMs ?? INTERNAL_EVALUATION_RUN_BUDGET_MS,
+              INTERNAL_EVALUATION_RUN_BUDGET_MS
+            )
+          )
+        : null;
+      const budgetError = () =>
+        response(
+          {
+            error:
+              'Evaluation run exceeded its 45-second time budget; reduce the case count or input size and retry.',
+          },
+          422
+        );
       const action = `grading-workspace.${resource}.${request.method.toLowerCase()}`;
       const execute =
         input.execute ??
@@ -313,6 +357,13 @@ export function createInternalGradingWorkspaceHandlers(input: {
                   },
                 },
               });
+            const runDetail = (runId: string) =>
+              tx.assignmentTypeEvaluationRun.findFirst({
+                where: { id: runId, assignmentTypeId: id! },
+                include: {
+                  results: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
+                },
+              });
             async function invoke(fields: unknown) {
               // Reuse admin validation and behavior inside the API's transaction; nested
               // domain transactions join it, so domain changes and audits roll back together.
@@ -326,8 +377,41 @@ export function createInternalGradingWorkspaceHandlers(input: {
               const result = await executeGradingWorkspaceAction(
                 WorkspaceActionSchema.parse(fields),
                 request,
-                db
+                db,
+                resource === 'runs'
+                  ? {
+                      maxCases: INTERNAL_EVALUATION_RUN_MAX_CASES,
+                      signal: runController!.signal,
+                      execute: async ({
+                        evaluationCase: _evaluationCase,
+                        ...completion
+                      }) => {
+                        const signal = runController!.signal;
+                        signal.throwIfAborted();
+                        // Race also bounds injected providers that ignore AbortSignal.
+                        let onAbort: () => void;
+                        const aborted = new Promise<never>((_, reject) => {
+                          onAbort = () =>
+                            reject(
+                              new Error('Evaluation run time budget exceeded')
+                            );
+                          signal.addEventListener('abort', onAbort, {
+                            once: true,
+                          });
+                        });
+                        try {
+                          return await Promise.race([
+                            execute({ ...completion, signal }),
+                            aborted,
+                          ]);
+                        } finally {
+                          signal.removeEventListener('abort', onAbort!);
+                        }
+                      },
+                    }
+                  : undefined
               );
+              if (runController?.signal.aborted) throw budgetError();
               if (!result.data.success)
                 throw response(
                   {
@@ -436,22 +520,26 @@ export function createInternalGradingWorkspaceHandlers(input: {
                   );
                 const owner = resource === 'cases' ? await suite(child!) : null;
                 const existing =
-                  resource === 'promptVersions'
-                    ? await prompt(previous.targetId!)
-                    : resource === 'cases'
-                      ? owner?.cases.find((c) => c.id === previous.targetId)
-                      : await suite(previous.targetId!);
+                  resource === 'runs'
+                    ? await runDetail(previous.targetId!)
+                    : resource === 'promptVersions'
+                      ? await prompt(previous.targetId!)
+                      : resource === 'cases'
+                        ? owner?.cases.find((c) => c.id === previous.targetId)
+                        : await suite(previous.targetId!);
                 if (!existing)
                   return response(
                     { error: 'Idempotency-Key could not be replayed safely' },
                     409
                   );
                 return response(
-                  resource === 'promptVersions'
-                    ? { promptVersion: existing }
-                    : resource === 'cases'
-                      ? { case: existing }
-                      : { suite: existing }
+                  resource === 'runs'
+                    ? { run: existing }
+                    : resource === 'promptVersions'
+                      ? { promptVersion: existing }
+                      : resource === 'cases'
+                        ? { case: existing }
+                        : { suite: existing }
                 );
               }
             }
@@ -459,7 +547,74 @@ export function createInternalGradingWorkspaceHandlers(input: {
               after: unknown = null,
               result: unknown,
               targetId = child ?? id!;
-            if (resource === 'promptVersions') {
+            if (resource === 'runs') {
+              const owner = await suite(value.suiteId);
+              if (!owner)
+                return response({ error: 'Evaluation suite not found' }, 404);
+              const row = await prompt(value.promptVersion);
+              if (!row)
+                return response({ error: 'Prompt version not found' }, 404);
+              // Admin promotion requires the full current assignment type snapshot,
+              // including other active groups and legacy cases, never a partial run.
+              const started = await invoke({
+                intent: 'runSuite',
+                assignmentTypeId: id,
+                promptVersionId: row.id,
+              });
+              targetId = 'runId' in started ? String(started.runId) : '';
+              after = await runDetail(targetId);
+              result = { run: after };
+            } else if (
+              resource === 'promptVersion' &&
+              request.method === 'DELETE'
+            ) {
+              const row = await prompt(child!);
+              if (!row)
+                return response({ error: 'Prompt version not found' }, 404);
+              if (
+                row.status !== 'draft' ||
+                row.version === parent!.gradingAssistantVersion
+              )
+                return response(
+                  {
+                    error:
+                      'Only inactive draft prompt versions can be discarded',
+                  },
+                  409
+                );
+              before = row;
+              targetId = row.id;
+              // No admin discard action exists. FK SetNull retains historical runs.
+              await tx.assignmentTypePromptVersion.delete({
+                where: { id: row.id },
+              });
+              result = { deleted: { id: row.id } };
+            } else if (resource === 'suite' && request.method === 'DELETE') {
+              const row = await suite(child!);
+              if (!row)
+                return response({ error: 'Evaluation suite not found' }, 404);
+              before = row;
+              const archivedAt = new Date();
+              await tx.assignmentTypeEvaluation.updateMany({
+                where: { id: row.id, assignmentTypeId: id!, archivedAt: null },
+                data: { archivedAt },
+              });
+              await tx.assignmentTypeEvaluationCase.updateMany({
+                where: {
+                  evaluationId: row.id,
+                  assignmentTypeId: id!,
+                  archivedAt: null,
+                },
+                data: { archivedAt },
+              });
+              await createEvaluationSuiteVersion(tx, id!);
+              after = {
+                ...row,
+                archivedAt,
+                cases: row.cases.map((c) => ({ ...c, archivedAt })),
+              };
+              result = { deleted: { id: row.id } };
+            } else if (resource === 'promptVersions') {
               const source = value.sourcePromptVersion
                 ? await prompt(value.sourcePromptVersion)
                 : null;
@@ -707,6 +862,7 @@ export function createInternalGradingWorkspaceHandlers(input: {
               after = { status: caseResult.status };
               targetId = child!;
             }
+            if (runController?.signal.aborted) throw budgetError();
             await writeAuditRows(tx, {
               auth,
               endpoint,
@@ -720,9 +876,14 @@ export function createInternalGradingWorkspaceHandlers(input: {
             });
             return response(result, create ? 201 : 200);
           },
-          { isolationLevel: 'ReadCommitted', timeout: 120000 }
+          {
+            isolationLevel: 'ReadCommitted',
+            timeout: runController ? 55000 : 120000,
+            maxWait: 2000,
+          }
         );
       } catch (error) {
+        if (runController?.signal.aborted) return budgetError();
         if (error instanceof Response)
           return response(
             {
@@ -738,6 +899,8 @@ export function createInternalGradingWorkspaceHandlers(input: {
           { error: 'The grading workspace request could not complete' },
           500
         );
+      } finally {
+        if (runTimer !== null) clearTimeout(runTimer);
       }
     },
   };

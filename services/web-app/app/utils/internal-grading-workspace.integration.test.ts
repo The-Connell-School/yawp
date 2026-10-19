@@ -13,12 +13,15 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       throw new Error('Requires an isolated local Yawp database');
     process.env.DATABASE_URL = connection;
     const { prisma } = await import('./db.server');
-    const { signInternalApiRequest } =
-      await import('./internal-platform-signing.server');
-    const { recordInternalPlatformWriteAudit } =
-      await import('./internal-platform-auth.server');
-    const { createInternalGradingWorkspaceHandlers } =
-      await import('./internal-grading-workspace.server');
+    const { signInternalApiRequest } = await import(
+      './internal-platform-signing.server'
+    );
+    const { recordInternalPlatformWriteAudit } = await import(
+      './internal-platform-auth.server'
+    );
+    const { createInternalGradingWorkspaceHandlers } = await import(
+      './internal-grading-workspace.server'
+    );
     const keyId = `grading-${randomBytes(8).toString('hex')}`;
     const secret = randomBytes(32).toString('base64url');
     const saved = {
@@ -197,7 +200,9 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
           where: { assignmentTypeId: id },
           orderBy: { version: 'asc' },
         }),
-        audits: await prisma.internalPlatformApiAudit.count({ where: { keyId } }),
+        audits: await prisma.internalPlatformApiAudit.count({
+          where: { keyId },
+        }),
       };
       for (const invalidOutput of [undefined, null]) {
         const invalidCase = await handlers.handle(
@@ -225,7 +230,9 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
           where: { assignmentTypeId: id },
           orderBy: { version: 'asc' },
         }),
-        audits: await prisma.internalPlatformApiAudit.count({ where: { keyId } }),
+        audits: await prisma.internalPlatformApiAudit.count({
+          where: { keyId },
+        }),
       }).toEqual(stateBeforeInvalidCase);
       const caseRes = await handlers.handle(
         'cases',
@@ -348,44 +355,43 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
           )
         ).status
       ).toBe(409);
-      const latest =
-        await prisma.assignmentTypeEvaluationSuiteVersion.findFirstOrThrow({
-          where: { assignmentTypeId: id },
-          orderBy: { version: 'desc' },
-        });
+      const runBody = { promptVersion: draft.id, suiteId: suite.id };
+      const started = await handlers.handle(
+        'runs',
+        request('POST', '/evaluation-runs', runBody, 'run'),
+        id
+      );
+      expect(started.status).toBe(201);
+      const run = (await started.json()).run;
+      expect(run.status).toBe('completed');
+      expect(run.results).toHaveLength(1);
+      expect(calls).toBe(4);
+      const replayed = await handlers.handle(
+        'runs',
+        request('POST', '/evaluation-runs', runBody, 'run'),
+        id
+      );
+      expect(replayed.status).toBe(200);
+      expect((await replayed.json()).run).toEqual(run);
+      expect(calls).toBe(4);
+      expect(
+        (
+          await handlers.handle(
+            'runs',
+            request(
+              'POST',
+              '/evaluation-runs',
+              { ...runBody, promptVersion: '1' },
+              'run'
+            ),
+            id
+          )
+        ).status
+      ).toBe(409);
       const current =
         await prisma.assignmentTypePromptVersion.findUniqueOrThrow({
           where: { id: draft.id },
         });
-      // Existing synchronous admin execution owns run creation. Seed its completed
-      // artifact here; the API deliberately does not invent an async job queue.
-      const run = await prisma.assignmentTypeEvaluationRun.create({
-        data: {
-          assignmentTypeId: id,
-          promptVersion: current.version,
-          promptVersionId: current.id,
-          promptRevision: current.revision,
-          evaluationSuiteVersionId: latest.id,
-          evaluationSuiteContentHash: latest.contentHash,
-          promptSnapshotJson: {},
-          status: 'completed',
-          totalCases: 1,
-          passedCases: 1,
-          completedAt: new Date(),
-        },
-      });
-      await prisma.assignmentTypeEvaluationResult.create({
-        data: {
-          runId: run.id,
-          caseId: suite.cases[0].id,
-          caseTitle: sample.name,
-          rubricCategoryKey: 'claim',
-          criterion: 'Identify the claim',
-          status: 'pass',
-          evidence: 'Grounded',
-          gradingOutputJson: expectedOutput,
-        },
-      });
       const published = await handlers.handle(
         'publish',
         request('POST', `/prompt-versions/${draft.id}/publish`, publishBody),
@@ -422,14 +428,74 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
           )
         ).status
       ).toBe(404);
+      expect(
+        (
+          await handlers.handle(
+            'promptVersion',
+            request('DELETE', `/prompt-versions/${draft.id}`),
+            id,
+            draft.id
+          )
+        ).status
+      ).toBe(409);
+      const spare = await handlers.handle(
+        'promptVersions',
+        request('POST', '/prompt-versions', {}, 'spare-draft'),
+        id
+      );
+      expect(spare.status).toBe(201);
+      const spareDraft = (await spare.json()).promptVersion;
+      const discarded = await handlers.handle(
+        'promptVersion',
+        request('DELETE', `/prompt-versions/${spareDraft.id}`),
+        id,
+        spareDraft.id
+      );
+      expect(discarded.status).toBe(200);
+      expect(
+        await prisma.assignmentTypePromptVersion.findUnique({
+          where: { id: spareDraft.id },
+        })
+      ).toBeNull();
+      expect(
+        (
+          await handlers.handle(
+            'suite',
+            request('DELETE', `/evaluation-suites/${suite.id}`),
+            id,
+            'foreign'
+          )
+        ).status
+      ).toBe(404);
+      const deletedSuite = await handlers.handle(
+        'suite',
+        request('DELETE', `/evaluation-suites/${suite.id}`),
+        id,
+        suite.id
+      );
+      expect(deletedSuite.status).toBe(200);
+      expect(await deletedSuite.json()).toEqual({ deleted: { id: suite.id } });
+      const archived = await prisma.assignmentTypeEvaluation.findUniqueOrThrow({
+        where: { id: suite.id },
+        include: { cases: true },
+      });
+      expect(archived.archivedAt).not.toBeNull();
+      expect(archived.cases.every((c) => c.archivedAt !== null)).toBe(true);
+      const retained = await handlers.handle(
+        'run',
+        request('GET', `/evaluation-runs/${run.id}`),
+        id,
+        run.id
+      );
+      expect((await retained.json()).run).toEqual(run);
       const audits = await prisma.internalPlatformApiAudit.findMany({
         where: { keyId },
       });
       const writes = audits.filter(
         (a) => a.result === 'before' || a.result === 'after'
       );
-      expect(writes.filter((a) => a.result === 'before')).toHaveLength(9);
-      expect(writes.filter((a) => a.result === 'after')).toHaveLength(9);
+      expect(writes.filter((a) => a.result === 'before')).toHaveLength(13);
+      expect(writes.filter((a) => a.result === 'after')).toHaveLength(13);
       for (const row of writes) {
         expect(row.actorEmail).toBe('operator@example.test');
         expect((row.metadata as any).reason).toBe('Lifecycle review');
@@ -549,8 +615,9 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
         audits: await auditCount(),
       }).toEqual(fullState);
 
-      const { executeGradingWorkspaceAction } =
-        await import('~/domain/ai-evaluation/grading-workspace-actions.server');
+      const { executeGradingWorkspaceAction } = await import(
+        '~/domain/ai-evaluation/grading-workspace-actions.server'
+      );
       const adminSave = await executeGradingWorkspaceAction(
         {
           intent: 'updateEvaluation',
