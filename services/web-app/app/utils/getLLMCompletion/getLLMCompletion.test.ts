@@ -787,4 +787,78 @@ describe('getLLMCompletion', () => {
     });
     expect(response).toBe('Logged response');
   });
+  test('audit-only internal scratch completion persists no provider or usage rows on either provider', async () => {
+    const attribution = {
+      organizationId: null,
+      membershipId: null,
+      route: 'api/internal/v1/admin/grading-workspace',
+      requestId: 'scratch-test',
+    };
+    const request = {
+      model: 'claude-sonnet-4-6',
+      messages: [
+        { role: 'user' as const, content: 'Synthetic scratch sample' },
+      ],
+      attribution,
+      logPayload: 'audit-only' as const,
+    };
+    expect(await getLLMCompletion(request)).toBe('Logged response');
+    openAiCreate.mockResolvedValue(openAiTextResponse('Fallback response'));
+    expect(await getLLMCompletion({ ...request, forceFallback: true })).toBe(
+      'Fallback response'
+    );
+    expect(llmLogCreate).not.toHaveBeenCalled();
+    expect(usageLogCreate).not.toHaveBeenCalled();
+  });
+
+  test('audit-only internal scratch failures persist no provider payload', async () => {
+    anthropicCreate.mockRejectedValue(new Error('Provider failed'));
+    await expect(
+      getLLMCompletion({
+        model: 'claude-sonnet-4-6',
+        messages: [{ role: 'user', content: 'Scratch sample' }],
+        attribution: {
+          organizationId: null,
+          membershipId: null,
+          route: 'api/internal/v1/admin/grading-workspace',
+          requestId: 'scratch-failure',
+        },
+        logPayload: 'audit-only',
+        allowFallbackProvider: false,
+      })
+    ).rejects.toThrow('Provider failed');
+    expect(llmLogCreate).not.toHaveBeenCalled();
+    expect(usageLogCreate).not.toHaveBeenCalled();
+  });
+
+  test('audit-only persistence cannot suppress tenant or unrelated-route logging', async () => {
+    for (const attribution of [
+      { ...testAttribution, route: 'api/internal/v1/admin/grading-workspace' },
+      {
+        ...testAttribution,
+        organizationId: null,
+        route: 'api/internal/v1/admin/grading-workspace',
+      },
+      {
+        ...testAttribution,
+        organizationId: null,
+        membershipId: null,
+        classId: 'class-1',
+        route: 'api/internal/v1/admin/grading-workspace',
+      },
+      { ...testAttribution, organizationId: null, membershipId: null },
+    ]) {
+      await expect(
+        getLLMCompletion({
+          model: 'claude-sonnet-4-6',
+          messages: [{ role: 'user', content: 'Hello' }],
+          attribution,
+          logPayload: 'audit-only',
+        })
+      ).rejects.toThrow(
+        'Audit-only persistence requires internal grading workspace attribution'
+      );
+    }
+    expect(anthropicCreate).not.toHaveBeenCalled();
+  });
 });

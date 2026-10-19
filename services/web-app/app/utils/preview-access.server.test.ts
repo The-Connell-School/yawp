@@ -172,16 +172,37 @@ describe('preview access gate', () => {
 
   test('public legal reads need no seat and never authorize preview activity', async () => {
     const next = mock(async () => new Response('legal'));
-    for (const path of ['/privacy', '/privacy/', '/privacy.data', '/terms', '/terms/', '/terms.data']) {
+    for (const path of [
+      '/privacy',
+      '/privacy/',
+      '/privacy.data',
+      '/terms',
+      '/terms/',
+      '/terms.data',
+    ]) {
       for (const method of ['GET', 'HEAD']) {
-        const response = await previewAccessMiddleware(middlewareArgs(request(path, { method })), next);
+        const response = await previewAccessMiddleware(
+          middlewareArgs(request(path, { method })),
+          next
+        );
         expect(response?.status).toBe(200);
-        expect(response?.headers.get(PREVIEW_AUTHORIZED_ACTIVITY_HEADER)).toBeNull();
+        expect(
+          response?.headers.get(PREVIEW_AUTHORIZED_ACTIVITY_HEADER)
+        ).toBeNull();
       }
     }
     expect(next).toHaveBeenCalledTimes(12);
-    for (const [path, method] of [['/privacy', 'POST'], ['/terms', 'POST'], ['/privacy/private', 'GET'], ['/free', 'GET'], ['/app', 'GET']]) {
-      const response = await previewAccessMiddleware(middlewareArgs(request(path!, { method })), next);
+    for (const [path, method] of [
+      ['/privacy', 'POST'],
+      ['/terms', 'POST'],
+      ['/privacy/private', 'GET'],
+      ['/free', 'GET'],
+      ['/app', 'GET'],
+    ]) {
+      const response = await previewAccessMiddleware(
+        middlewareArgs(request(path!, { method })),
+        next
+      );
       expect(response?.status).not.toBe(200);
     }
     expect(next).toHaveBeenCalledTimes(12);
@@ -263,6 +284,12 @@ describe('preview access gate', () => {
       ['GET', '/api/internal/v1/admin/organizations/org-1/invitations'],
       ['POST', '/api/internal/v1/admin/organizations/org-1/invitations'],
       ['POST', '/api/internal/v1/admin/organizations/org-1/invitations/inv-1/resend'],
+      ['GET', '/api/internal/v1/admin/grading-benchmark/cases'],
+      ['POST', '/api/internal/v1/admin/grading-benchmark/cases/c-1/run'],
+      ['GET', '/api/internal/v1/admin/assignment-types/at-1/prompt-versions'],
+      ['POST', '/api/internal/v1/admin/assignment-types/at-1/scratch-check'],
+      ['GET', '/api/internal/v1/admin/assignment-types/at-1/evaluation-suites'],
+      ['GET', '/api/internal/v1/admin/assignment-types/at-1/evaluation-runs'],
       ['GET', '/api/internal/v1/admin/assignment-types'],
       ['POST', '/api/internal/v1/admin/assignment-types'],
       ['GET', '/api/internal/v1/admin/assignment-types/at-1'],
@@ -274,9 +301,18 @@ describe('preview access gate', () => {
       ['POST', '/api/internal/v1/admin/assignment-types/at-1/modules'],
       ['GET', '/api/internal/v1/admin/assignment-types/at-1/modules/m-1'],
       ['PUT', '/api/internal/v1/admin/assignment-types/at-1/modules/order'],
-      ['POST', '/api/internal/v1/admin/assignment-types/at-1/modules/m-1/steps'],
-      ['PATCH', '/api/internal/v1/admin/assignment-types/at-1/modules/m-1/steps/s-1'],
-      ['PUT', '/api/internal/v1/admin/assignment-types/at-1/modules/m-1/steps/order'],
+      [
+        'POST',
+        '/api/internal/v1/admin/assignment-types/at-1/modules/m-1/steps',
+      ],
+      [
+        'PATCH',
+        '/api/internal/v1/admin/assignment-types/at-1/modules/m-1/steps/s-1',
+      ],
+      [
+        'PUT',
+        '/api/internal/v1/admin/assignment-types/at-1/modules/m-1/steps/order',
+      ],
     ] as const) {
       const response = await previewAccessMiddleware(
         middlewareArgs(request(path, { method })),
@@ -284,7 +320,7 @@ describe('preview access gate', () => {
       );
       expect(await response?.text()).toBe('ok');
     }
-    expect(next).toHaveBeenCalledTimes(22);
+    expect(next).toHaveBeenCalledTimes(28);
   });
 
   test('fails closed when no access codes are configured', async () => {
