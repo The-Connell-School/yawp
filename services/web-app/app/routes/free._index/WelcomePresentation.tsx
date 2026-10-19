@@ -21,7 +21,7 @@ export function FreeTierWelcomeCard({
       subtitle={onboardingV2
         ? "We're so glad you're here and we can't wait for you to Yawp! with your students"
         : eventLink
-          ? 'Use your event link to continue.'
+          ? 'Sign up below to start your free YAWP! classroom.'
           : 'Join the waitlist. We let teachers in a group at a time.'}
     >
       {children}

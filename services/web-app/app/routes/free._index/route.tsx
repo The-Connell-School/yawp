@@ -212,7 +212,7 @@ export default function FreeTierLandingRoute() {
     : submitSuccess?.headline ?? 'Try Yawp! with your students';
   const subtitle = submitted || (data.mode === 'token' && data.linkClosed)
     ? undefined
-    : data.mode === 'token' ? 'Use your event link to continue.'
+    : data.mode === 'token' ? 'Sign up below to start your free YAWP! classroom.'
     : 'Join the waitlist. We let teachers in a group at a time.';
 
   const contents = (
