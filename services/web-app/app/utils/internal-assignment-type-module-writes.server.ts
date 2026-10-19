@@ -45,7 +45,13 @@ const stepSchema = z
     title: z.string().min(1),
     prompt: z.string().min(1),
     answerKey: z.string().max(20000).nullable().optional(),
-    nextButtonLabel: z.string().trim().max(80).transform(v => v || null).nullable().optional(),
+    nextButtonLabel: z
+      .string()
+      .trim()
+      .max(80)
+      .transform((v) => v || null)
+      .nullable()
+      .optional(),
     tutorInstructions: z.string().nullable().optional(),
     tutorInstructionsVariantsJson: variants.optional(),
     showChatButton: z.boolean().optional(),
@@ -64,20 +70,24 @@ const stepSchema = z
   .strict();
 const patchModuleSchema = moduleSchema
   .partial()
-  .refine((v) => Object.keys(v).some(key => key !== 'reason'));
+  .refine((v) => Object.keys(v).some((key) => key !== 'reason'));
 const patchStepSchema = stepSchema
   .partial()
-  .refine((v) => Object.keys(v).some(key => key !== 'reason'));
+  .refine((v) => Object.keys(v).some((key) => key !== 'reason'));
 const idSchema = z.string().regex(identifier);
 const schemas = {
   createModule: moduleSchema,
   updateModule: patchModuleSchema,
   deleteModule: z.object({ reason: reasonSchema }).strict(),
-  reorderModules: z.object({ reason: reasonSchema, moduleIds: z.array(idSchema) }).strict(),
+  reorderModules: z
+    .object({ reason: reasonSchema, moduleIds: z.array(idSchema) })
+    .strict(),
   createStep: stepSchema,
   updateStep: patchStepSchema,
   deleteStep: z.object({ reason: reasonSchema }).strict(),
-  reorderSteps: z.object({ reason: reasonSchema, stepIds: z.array(idSchema) }).strict(),
+  reorderSteps: z
+    .object({ reason: reasonSchema, stepIds: z.array(idSchema) })
+    .strict(),
 };
 type Operation = keyof typeof schemas;
 const methods: Record<Operation, string> = {
@@ -242,7 +252,7 @@ export function createInternalAssignmentTypeModuleHandlers(input: {
     const validated = read ? null : schemas[operation].safeParse(raw);
     if (validated && !validated.success)
       return response({ error: 'Invalid assignment type module request' }, 400);
-    const reason = validated?.success ? validated.data.reason ?? null : null;
+    const reason = validated?.success ? (validated.data.reason ?? null) : null;
     const create = operation === 'createModule' || operation === 'createStep';
     const idempotencyKey = create
       ? request.headers.get('idempotency-key')?.trim() || null
@@ -356,7 +366,8 @@ export function createInternalAssignmentTypeModuleHandlers(input: {
             result = { deleted: { id: moduleId } };
           } else {
             if (operation === 'createModule') {
-              const { reason: _reason, ...fields } = schemas.createModule.parse(raw);
+              const { reason: _reason, ...fields } =
+                schemas.createModule.parse(raw);
               const created = await domain.createModule(
                 tx,
                 id,
@@ -370,7 +381,8 @@ export function createInternalAssignmentTypeModuleHandlers(input: {
               targetId = created.id;
               moduleId = created.id;
             } else if (operation === 'updateModule') {
-              const { reason: _reason, ...fields } = schemas.updateModule.parse(raw);
+              const { reason: _reason, ...fields } =
+                schemas.updateModule.parse(raw);
               await domain.updateModule(tx, moduleId!, {
                 ...fields,
                 ...(fields.description !== undefined
@@ -381,7 +393,8 @@ export function createInternalAssignmentTypeModuleHandlers(input: {
                   : {}),
               });
             } else if (operation === 'createStep') {
-              const { reason: _reason, ...fields } = schemas.createStep.parse(raw);
+              const { reason: _reason, ...fields } =
+                schemas.createStep.parse(raw);
               const created = await domain.createStep(
                 tx,
                 moduleId!,
@@ -396,7 +409,8 @@ export function createInternalAssignmentTypeModuleHandlers(input: {
               );
               targetId = created.id;
             } else if (operation === 'updateStep') {
-              const { reason: _reason, ...fields } = schemas.updateStep.parse(raw);
+              const { reason: _reason, ...fields } =
+                schemas.updateStep.parse(raw);
               await domain.updateStep(tx, stepId!, {
                 ...fields,
                 ...(fields.tutorInstructions !== undefined
