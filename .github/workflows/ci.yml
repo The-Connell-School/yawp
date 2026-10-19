@@ -750,6 +750,8 @@ jobs:
             app/domain/feature-flags/feature-flags.server.test.ts \
             app/utils/internal-feature-flags-http.server.test.ts \
             app/domain/rubrics/rubric-promotion.test.ts \
+            app/utils/internal-rubrics-http.server.test.ts \
+            app/utils/internal-rubrics-body.server.test.ts \
             app/domain/assignment-types/assignment-type-grading-config.server.test.ts \
             app/domain/assignment-types/assignment-type-grading-config.qa431-legacy.server.test.ts \
             app/domain/assignment-types/assignment-type-grading-config.qa431-probe.server.test.ts \

@@ -54,7 +54,7 @@ test('reads accept exactly one key and writes accept exactly the documented body
     expect((await http.save(post(body))).status).toBe(400);
   }
   expect((await http.save(new Request(`${base}/versions`, { method: 'POST', headers: { authorization: `Bearer ${key}`, 'content-type': 'text/plain' }, body: '{}' }))).status).toBe(400);
-  expect((await http.save(post({ ...valid, document: { notes: 'x'.repeat(310000) } }))).status).toBe(400);
+  expect((await http.save(post({ ...valid, document: { notes: 'x'.repeat(310000) } }))).status).toBe(413);
   expect(calls).toHaveLength(0);
   expect((await http.get(get('/item?key=assignment-type%3Aabc'))).status).toBe(200);
   expect(calls[0]).toEqual({ method: 'get', args: ['assignment-type:abc'] });
@@ -101,7 +101,7 @@ test('stage requires the management key, POST and exactly the documented body', 
     { ...validStage, source: { ...validStage.source, fingerprint: 'B'.repeat(64) } },
     { ...validStage, source: { ...validStage.source, extra: true } },
   ]) expect((await http.stage(post(body, key, '/stage'))).status).toBe(400);
-  expect((await http.stage(post({ ...validStage, document: { notes: 'x'.repeat(310000) } }, key, '/stage'))).status).toBe(400);
+  expect((await http.stage(post({ ...validStage, document: { notes: 'x'.repeat(310000) } }, key, '/stage'))).status).toBe(413);
   expect(calls).toHaveLength(0);
   const ok = await http.stage(post(validStage, key, '/stage'));
   expect(ok.status).toBe(200); expect(ok.headers.get('cache-control')).toBe('no-store');

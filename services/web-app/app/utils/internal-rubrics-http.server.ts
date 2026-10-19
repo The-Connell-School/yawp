@@ -3,6 +3,7 @@ import { rubricPublicationInput, type InternalRubrics } from './internal-rubrics
 import { validateRubricPromotion } from '~/domain/rubrics/rubric-promotion';
 import { authenticate } from '~/utils/internal-free-tier-http.server';
 import { internalApiKeysConfigured } from '~/utils/internal-platform-auth.server';
+import { readBoundedBody } from '~/utils/internal-admin-write.server';
 const reply = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } });
 const nameInput = z.string().regex(/^[A-Za-z0-9]+(?:(?:-|_)[A-Za-z0-9]+)*$/).max(120);
 const limit = 300 * 1024;
@@ -10,21 +11,11 @@ async function readBody(request: Request) {
   if (request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() !== 'application/json') throw new Error();
   if (new URL(request.url).search) throw new Error();
   const length = request.headers.get('content-length');
-  if (length !== null && (!/^\d+$/.test(length) || Number(length) > limit)) throw new Error();
-  const reader = request.body?.getReader(); if (!reader) throw new Error();
-  const chunks: Uint8Array[] = []; let size = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read(); if (done) break;
-      size += value.byteLength;
-      if (size > limit) { await reader.cancel(); throw new Error(); }
-      chunks.push(value);
-    }
-  } finally { reader.releaseLock(); }
-  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  if (length !== null && !/^\d+$/.test(length)) throw new Error();
+  return readBoundedBody(request, limit);
 }
 export function createRubricHttp(service: Pick<InternalRubrics, 'inspect' | 'publish'>, _credential: () => string | undefined, enabled: () => boolean) {
-  async function auth(request: Request, method: string, body?: string) {
+  async function auth(request: Request, method: string, body?: Uint8Array | string) {
     if (!enabled() || !internalApiKeysConfigured()) return reply({ error: 'Not found' }, 404);
     const denied = await authenticate(request, { body });
     if (denied) return denied;
@@ -54,28 +45,33 @@ export function createRubricHttp(service: Pick<InternalRubrics, 'inspect' | 'pub
     },
     async validate(request: Request) {
       let schema: unknown;
-      let bodyText = '';
       try {
-        const parsed = await readBody(request);
-        bodyText = JSON.stringify(parsed);
-        const denied = await auth(request, 'POST', bodyText);
+        const body = await readBody(request);
+        const denied = await auth(request, 'POST', body);
         if (denied) return denied;
+        // Preserve a leading BOM so JSON.parse rejects it; never decode lossily.
+        const parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(body));
         schema = z.object({ schema: z.unknown() }).strict().parse(parsed).schema;
       }
-      catch { return reply({ error: 'Invalid validation request' }, 400); }
+      catch (error) {
+        if (error instanceof Response) return error;
+        return reply({ error: 'Invalid validation request' }, 400);
+      }
       return reply(validateRubricPromotion(schema));
     },
     async publish(request: Request) {
       let input: z.infer<typeof rubricPublicationInput>;
-      let bodyText = '';
       try {
-        const parsed = await readBody(request);
-        bodyText = JSON.stringify(parsed);
-        const denied = await auth(request, 'POST', bodyText);
+        const body = await readBody(request);
+        const denied = await auth(request, 'POST', body);
         if (denied) return denied;
+        const parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(body));
         input = rubricPublicationInput.parse(parsed);
       }
-      catch { return reply({ error: 'Invalid rubric publication' }, 400); }
+      catch (error) {
+        if (error instanceof Response) return error;
+        return reply({ error: 'Invalid rubric publication' }, 400);
+      }
       const validation = validateRubricPromotion(input.schema);
       if (!validation.ok) return reply(validation, 422);
       return invoke(() => service.publish(input));

@@ -469,7 +469,10 @@ function runTestProfile(profile, { json }) {
   else if (chosen === "internal-preview-auth") runWebApp("internal-preview-auth", ["test", "app/routes/auth.dev-login/route.test.ts"]);
   else if (chosen === "internal-qa-http") runWebApp("internal-qa-http", ["test", "app/utils/internal-qa-http.server.test.ts"]);
   else if (chosen === "internal-audit") runWebApp("internal-audit", ["test", "app/utils/internal-audit.server.test.ts"]);
-  else if (chosen === "internal-rubrics-http") runWebApp("internal-rubrics-http", ["test", "app/utils/internal-rubrics-http.server.test.ts"]);
+  else if (chosen === "internal-rubrics-http") {
+    for (const file of ["internal-rubrics-http.server.test.ts", "internal-rubric-catalog-http.server.test.ts", "internal-rubrics-body.server.test.ts"])
+      runWebApp(file, ["test", "--max-concurrency=2", `app/utils/${file}`]);
+  }
   else if (chosen === "internal-content-validation") runWebApp("internal-content-validation", ["test", "app/domain/rubrics/rubric-promotion.test.ts"]);
   else if (chosen === "internal-assignment-type-writes") {
     for (const file of ["app/utils/internal-owner-invitations.server.test.ts", "app/utils/preview-access.server.test.ts", "app/routes/app.admin.organizations.$id/route.test.ts", "app/utils/internal-assignment-type-module-writes.server.test.ts", "app/routes/api.model.assignment-module-session/route.test.ts", "app/routes/api.model.assignment-module-session.$id/route.test.ts", "app/routes/api.domain.tutor-response/route.test.ts", "app/routes/app_.documents_.$id/route.test.ts", "app/utils/internal-assignment-type-writes.server.test.ts", "app/utils/internal-assignment-types.server.test.ts", "app/utils/internal-admin-organizations.server.test.ts", "app/routes/app.admin.assignment-types.new/route.test.ts", "app/routes/app.admin.assignment-types.$id/route.test.ts", "app/routes/app.admin.assignment-types.$id_.modules_.$moduleId/route.test.ts"])
