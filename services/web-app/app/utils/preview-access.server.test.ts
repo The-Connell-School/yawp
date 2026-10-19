@@ -262,6 +262,7 @@ describe('preview access gate', () => {
       ['POST', '/api/internal/v1/organizations/search'],
       ['GET', '/api/internal/v1/admin/users'],
       ['GET', '/api/internal/v1/admin/organizations-other'],
+      ['GET', '/api/internal/v1/admin/teacher-trainings-other'],
       ['GET', '/api/internal/v1/users'],
     ] as const) {
       const gated = await previewAccessMiddleware(
@@ -333,7 +334,7 @@ describe('preview access gate', () => {
       );
       expect(await response?.text()).toBe('ok');
     }
-    expect(next).toHaveBeenCalledTimes(28);
+    expect(next).toHaveBeenCalledTimes(41);
   });
 
   test('fails closed when no access codes are configured', async () => {
