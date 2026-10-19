@@ -33,6 +33,7 @@ function request(
   method = 'POST',
   value: unknown = { emails: ['New@Example.test'], expiresInDays: 14 },
   options: {
+    url?: string;
     path?: string;
     raw?: string | Uint8Array<ArrayBuffer>;
     keyId?: string;
@@ -40,7 +41,7 @@ function request(
     idempotency?: string;
   } = {}
 ) {
-  const url = base + (options.path ?? '');
+  const url = options.url ?? base + (options.path ?? '');
   const body = options.raw ?? (method === 'GET' ? '' : JSON.stringify(value));
   const headers = new Headers(
     options.unsigned
@@ -396,13 +397,18 @@ test('create replays the stored results, rejects changed raw bytes, never redeli
   ).toBe(409);
 });
 
-test('create shares idempotency replay and conflicts across a trailing slash', async () => {
+test.each([
+  `${base}/`,
+  `${base}///`,
+  base.replace('/admin/', '/ADMIN/'),
+  base.replace('org-1', '%6frg-1'),
+])('create shares idempotency replay and conflicts across route alias %s', async (url) => {
   const f = fixture();
   const options = { idempotency: 'canonical-batch' };
   const first = await f.handlers.create(request('POST', undefined, options), 'org-1');
   const original = await first.json();
   const replay = await f.handlers.create(
-    request('POST', undefined, { ...options, path: '/' }),
+    request('POST', undefined, { ...options, url }),
     'org-1'
   );
   expect(replay.status).toBe(200);
@@ -410,7 +416,7 @@ test('create shares idempotency replay and conflicts across a trailing slash', a
   const conflict = await f.handlers.create(
     request('POST', { emails: ['different@example.test'], expiresInDays: 7 }, {
       ...options,
-      path: '/',
+      url,
     }),
     'org-1'
   );
