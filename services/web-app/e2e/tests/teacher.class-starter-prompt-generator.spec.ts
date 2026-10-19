@@ -1,3 +1,4 @@
+import { routerActionStub } from '../router-action-stub';
 import { test, expect } from '../test-setup';
 
 const GENERATED_OPTIONS = [
@@ -28,21 +29,19 @@ const GENERATED_OPTIONS = [
 // model. Mirrors the structured contract the real route returns.
 async function stubGenerator(page: import('@playwright/test').Page) {
   await page.route(
-    '**/api/domain/daily-pages-prompt-generator',
+    '**/api/domain/daily-pages-prompt-generator{,.data}',
     async (route) => {
       if (route.request().method() !== 'POST') {
         await route.continue();
         return;
       }
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
+      await route.fulfill(
+        await routerActionStub(route.request().url(), {
           success: true,
           reply: 'Here are three angles on identity — tweak anything you like.',
           options: GENERATED_OPTIONS,
-        }),
-      });
+        })
+      );
     }
   );
 }
