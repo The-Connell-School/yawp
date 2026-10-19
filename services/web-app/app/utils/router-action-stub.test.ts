@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { routerActionStub } from './router-action-stub';
-import { decodeRouterDataResponse } from './decode-router-data';
+import { routerActionStub } from '../../e2e/router-action-stub';
+import { decodeRouterDataResponse } from '../../e2e/decode-router-data';
 
 test('resource route mocks return JSON at the original endpoint', async () => {
   const payload = {
