@@ -401,6 +401,41 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       ).toBeNull();
 
       const runBody = { promptVersion: draft.id, suiteId: suite.id };
+      let releaseLock!: () => void;
+      let lockReady!: () => void;
+      const locked = new Promise<void>((resolve) => {
+        lockReady = resolve;
+      });
+      const held = new Promise<void>((resolve) => {
+        releaseLock = resolve;
+      });
+      const blocker = prisma.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT id FROM "AssignmentType" WHERE id = ${id} FOR UPDATE`;
+          lockReady();
+          await held;
+        },
+        { timeout: 15000 }
+      );
+      await locked;
+      const unlockTimer = setTimeout(() => releaseLock(), 8000);
+      try {
+        const busy = await handlers.handle(
+          'runs',
+          request('POST', '/evaluation-runs', runBody, 'blocked-run'),
+          id
+        );
+        expect(busy.status).toBe(409);
+        expect(await busy.json()).toEqual({
+          error:
+            'An evaluation run request is waiting for another write; retry after it completes.',
+        });
+        expect(calls).toBe(2);
+      } finally {
+        clearTimeout(unlockTimer);
+        releaseLock();
+        await blocker;
+      }
       const beforeTimeout = await prisma.internalPlatformApiAudit.count({
         where: { keyId },
       });

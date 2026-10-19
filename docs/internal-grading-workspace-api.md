@@ -103,7 +103,11 @@ The API caps the complete snapshot at **eight active cases** and uses a **45-sec
 budget**, starting before transaction acquisition. Provider calls receive an
 AbortSignal and are raced against its deadline, so a stalled provider cannot
 hold the request indefinitely. The transaction has a 55-second timeout and
-2-second pool acquisition limit, leaving headroom for database rollback and
+2-second pool acquisition limit. Transaction-local Postgres lock and statement
+timeouts are five and ten seconds, respectively, including the parent lock and idempotency lock;
+lock contention returns 409 with `{"error":"An evaluation run request is waiting for another write; retry after it completes."}`.
+A statement timeout returns 422 with `{"error":"Evaluation run database time budget exceeded; retry the request."}`.
+These limits leave headroom for database rollback and
 response delivery below the platform's 120-second ceiling. No queue is created.
 The existing admin route retains its execution behavior and limits.
 
@@ -160,9 +164,9 @@ All errors have **only** `{error: string}`; no success flag or validation detail
 | 403 | Valid HMAC without `management:write` (`Forbidden`). |
 | 404 | Missing assignment type (`Assignment type not found`); foreign/missing/archived suite (`Evaluation suite not found`); foreign/missing prompt (`Prompt version not found`); unavailable signing-key configuration (`Not found`). |
 | 405 | Unsupported method (`Method not allowed`). |
-| 409 | Non-draft/active discard; existing running evaluation (`An evaluation suite run is already in progress.`); invalid evaluation snapshot; replay conflict (`Idempotency-Key was already used with a different request`) or unsafe replay (`Idempotency-Key could not be replayed safely`). |
+| 409 | Five-second lock contention (message above); non-draft/active discard; existing running evaluation (`An evaluation suite run is already in progress.`); invalid evaluation snapshot; replay conflict (`Idempotency-Key was already used with a different request`) or unsafe replay (`Idempotency-Key could not be replayed safely`). |
 | 413 | More than 256 KiB of raw body bytes (`Request body too large`). |
-| 422 | Eight-case cap or 45-second run budget exceeded, as above. |
+| 422 | Eight-case cap, ten-second database statement timeout, or 45-second run budget exceeded, as above. |
 | 429 | Authentication rate limit (`Too many requests`). |
 | 500 | Unexpected database/domain failure (`The grading workspace request could not complete`), or the existing domain run failure message. |
 

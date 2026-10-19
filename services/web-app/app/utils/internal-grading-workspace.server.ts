@@ -327,6 +327,10 @@ export function createInternalGradingWorkspaceHandlers(input: {
       try {
         return await input.db.$transaction(
           async (tx) => {
+            // Driver transaction deadlines alone need not interrupt a blocked
+            // Postgres statement. Bound lock/query waits on the server too.
+            if (runController)
+              await tx.$queryRaw`SELECT set_config('lock_timeout', '5s', true), set_config('statement_timeout', '10s', true)`;
             if (!read) {
               if (benchmark)
                 await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${`grading-benchmark:${child}`},0))`;
@@ -884,6 +888,24 @@ export function createInternalGradingWorkspaceHandlers(input: {
         );
       } catch (error) {
         if (runController?.signal.aborted) return budgetError();
+        if (runController && error instanceof Error) {
+          if (/lock timeout/i.test(error.message))
+            return response(
+              {
+                error:
+                  'An evaluation run request is waiting for another write; retry after it completes.',
+              },
+              409
+            );
+          if (/statement timeout/i.test(error.message))
+            return response(
+              {
+                error:
+                  'Evaluation run database time budget exceeded; retry the request.',
+              },
+              422
+            );
+        }
         if (error instanceof Response)
           return response(
             {
