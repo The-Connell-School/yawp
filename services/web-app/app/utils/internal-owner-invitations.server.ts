@@ -156,10 +156,12 @@ export function createInternalOwnerInvitationHandlers(input: {
             const previous = await tx.internalPlatformApiAudit.findFirst({
               where: {
                 ...(operation === 'revoke' ? {} : { endpoint }),
-                action: operation === 'revoke'
-                  ? { in: [`${action}.after`, `${action}.noop`] }
-                  : `${action}.after`,
-                result: operation === 'revoke' ? { in: ['after', 'noop'] } : 'after',
+                action:
+                  operation === 'revoke'
+                    ? { in: [`${action}.after`, `${action}.noop`] }
+                    : `${action}.after`,
+                result:
+                  operation === 'revoke' ? { in: ['after', 'noop'] } : 'after',
                 actorEmail: auth.actorEmail,
                 keyId: auth.keyId,
                 targetId: id,
@@ -199,31 +201,43 @@ export function createInternalOwnerInvitationHandlers(input: {
           let resent: OwnerInvitation | undefined;
           if (operation === 'revoke') {
             const invitation = invitations.find((i) => i.id === invitationId);
-            if (!invitation) return response({ error: 'Invitation not found' }, 404);
-            if (invitation.status === 'accepted' || invitation.status === 'revoked') {
+            if (!invitation)
+              return response({ error: 'Invitation not found' }, 404);
+            if (
+              invitation.status === 'accepted' ||
+              invitation.status === 'revoked'
+            ) {
               // No state change and no write-audit pair. A keyed no-op still needs
               // a durable replay receipt to bind its exact bytes and response.
               if (idempotencyKey)
-                await tx.internalPlatformApiAudit.createMany({ data: [{
-                  actorEmail: auth.actorEmail,
-                  keyId: auth.keyId,
-                  endpoint,
-                  requestHash: hash,
-                  result: 'noop',
-                  action: `${action}.noop`,
-                  targetId: id,
-                  metadata: {
-                    after: { invitation },
-                    idempotencyKey,
-                    reason: parsed.data.reason ?? null,
-                  },
-                }] });
+                await tx.internalPlatformApiAudit.createMany({
+                  data: [
+                    {
+                      actorEmail: auth.actorEmail,
+                      keyId: auth.keyId,
+                      endpoint,
+                      requestHash: hash,
+                      result: 'noop',
+                      action: `${action}.noop`,
+                      targetId: id,
+                      metadata: {
+                        after: { invitation },
+                        idempotencyKey,
+                        reason: parsed.data.reason ?? null,
+                      },
+                    },
+                  ],
+                });
               return response({ invitation });
             }
             await invalidateOwnerInvitation(tx, invitation.id);
             invitation.status = 'revoked';
             await writeAuditRows(tx, {
-              auth, endpoint, hash, action, targetId: id,
+              auth,
+              endpoint,
+              hash,
+              action,
+              targetId: id,
               before: { invitations: before },
               after: { invitations, invitation },
               reason: parsed.data.reason ?? null,

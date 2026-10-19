@@ -345,7 +345,7 @@ describe('preview access gate', () => {
       );
       expect(await response?.text()).toBe('ok');
     }
-    expect(next).toHaveBeenCalledTimes(44);
+    expect(next).toHaveBeenCalledTimes(46);
   });
 
   test('fails closed when no access codes are configured', async () => {
