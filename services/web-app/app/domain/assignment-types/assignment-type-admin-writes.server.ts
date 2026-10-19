@@ -203,7 +203,11 @@ export async function removeAssignmentTypeImage(client: Client, id: string) {
 export async function replaceAssignmentTypeImage(
   client: Client,
   id: string,
-  image: { contentType: string; blob: Buffer; altText?: string }
+  image: {
+    contentType: string;
+    blob: Uint8Array<ArrayBuffer>;
+    altText?: string;
+  }
 ) {
   await removeAssignmentTypeImage(client, id);
   return client.assignmentTypeImage.create({

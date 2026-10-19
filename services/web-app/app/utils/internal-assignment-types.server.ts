@@ -15,7 +15,7 @@ const response = (value: unknown, status = 200) =>
     },
   });
 
-const identifier = /^[a-zA-Z0-9_-]{1,128}$/;
+export const identifier = /^[a-zA-Z0-9_-]{1,128}$/;
 const MAX_LIMIT = 100;
 
 const listSelect = {
@@ -52,9 +52,11 @@ const listSelect = {
   _count: { select: { organizationAssignments: true } },
 } satisfies Prisma.AssignmentTypeSelect;
 
-const detailSelect = {
+export const detailSelect = {
   ...listSelect,
   tutorInstructions: true,
+  allowsImageUploads: true,
+  collaborationSupported: true,
   scoringScaleJson: true,
   rubricJson: true,
   gradingPromptConfigJson: true,
@@ -167,7 +169,7 @@ function nextCursor(page: { id: string; createdAt: Date | string }[], hasMore: b
   return last ? Buffer.from(JSON.stringify({ id: last.id, createdAt: iso(last.createdAt), binding })).toString('base64url') : null;
 }
 
-function releaseKey(row: { id: string; rubric: { name: string } | null; rubricBaseline: unknown | null }) {
+export function releaseKey(row: { id: string; rubric: { name: string } | null; rubricBaseline: unknown | null }) {
   if (row.rubric?.name) return row.rubric.name;
   return row.rubricBaseline ? `assignment-type:${row.id}` : null;
 }
@@ -234,10 +236,12 @@ function mapRow(row: AssignmentTypeListRow, releases: Map<string, AssignmentType
   };
 }
 
-function mapDetail(row: AssignmentTypeDetailRow, releases: Map<string, AssignmentTypeReleaseRow>) {
+export function mapDetail(row: AssignmentTypeDetailRow, releases: Map<string, AssignmentTypeReleaseRow>) {
   return {
     ...mapRow(row, releases),
     tutorInstructions: row.tutorInstructions,
+    allowsImageUploads: row.allowsImageUploads,
+    collaborationSupported: row.collaborationSupported,
     gradingAssistantVersion: row.gradingAssistantVersion,
     grading: {
       hasScoringScale: row.scoringScaleJson !== null,
@@ -292,7 +296,7 @@ async function auditRead(request: Request, auth: InternalApiAuthContext, audit: 
   });
 }
 
-async function releasesFor(db: AssignmentTypeDb, keys: (string | null)[]) {
+export async function releasesFor(db: AssignmentTypeDb, keys: (string | null)[]) {
   const catalogKeys = [...new Set(keys.filter((key): key is string => Boolean(key)))];
   if (!catalogKeys.length) return new Map<string, AssignmentTypeReleaseRow>();
   const releases = await db.rubricRelease.findMany({
