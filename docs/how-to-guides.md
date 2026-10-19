@@ -48,3 +48,4 @@ Skip a "Where it lives" section. A teacher reads the guide after opening the fea
 - Media: `public/img/<feature>-guide/`.
 - Button: **See how it works**, in the feature's page header. Icon only on a phone, with an `aria-label`.
 - Test: an E2E test that opens the guide from the button, checks the "won't" section and checks phone width.
+- Free-tier teaser: a guide can also be shown to free classroom teachers as the teaser for a type their plan doesn't include. Write it as a component taking `GuideFrameProps` so the teaser can swap the back link, add its banner, and replace the start button. See `docs/free-tier/locked-assignment-types.md`.
