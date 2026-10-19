@@ -477,7 +477,7 @@ test.describe('Platform enhancements', () => {
     }
   });
 
-  test('no classes explains the next step; students retain the legacy page', async ({
+  test('no classes explains the next step', async ({
     page,
     signIn,
     e2eContext,
@@ -502,7 +502,8 @@ test.describe('Platform enhancements', () => {
       );
       const trigger = page.locator('[data-tour="type-new"]:visible');
       await expect(trigger).toHaveAttribute('aria-disabled', 'true');
-      await trigger.click();
+      // aria-disabled communicates the unavailable assignment action; Enter still opens its explanation.
+      await trigger.press('Enter');
       await expect(
         page.getByText('Add a class before you assign this.', { exact: true })
       ).toBeVisible();
@@ -518,6 +519,25 @@ test.describe('Platform enhancements', () => {
           },
         });
       await db.$disconnect();
+      await setFeatureFlag(PLATFORM_ENHANCEMENTS_FLAG, false);
+    }
+  });
+
+  test('students keep the original page even with the flag on', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setFeatureFlag(PLATFORM_ENHANCEMENTS_FLAG, true);
+    try {
+      await signIn(e2eContext.userEmail, 'johndoe');
+      await page.goto(`/app/assignment-types/${e2eContext.assignmentTypeId}`);
+      await expect(
+        page.getByRole('button', { name: 'Modules', exact: true })
+      ).toBeVisible();
+      await expect(page.getByTestId('type-meta')).toHaveCount(0);
+      await expect(page.locator('[data-tour="type-new"]')).toHaveCount(0);
+    } finally {
       await setFeatureFlag(PLATFORM_ENHANCEMENTS_FLAG, false);
     }
   });
@@ -548,6 +568,7 @@ test.describe('Platform enhancements', () => {
         page.locator('[data-tour="app-nav"] a[href="/app/assignments"] svg')
       ).toHaveClass(/lucide-pen-line/);
     } finally {
+      await setFeatureFlag(PLATFORM_ENHANCEMENTS_FLAG, false);
       await setFeatureFlag('free-tier-inapp-v2', false);
       await setFeatureFlag('free_tier', false);
     }
