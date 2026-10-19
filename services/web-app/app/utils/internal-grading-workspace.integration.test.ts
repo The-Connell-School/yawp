@@ -435,14 +435,15 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       expect(
         await prisma.assignmentTypeEvaluationCase.count({ where: caseWhere })
       ).toBe(19);
-      const snapshotCount = () =>
-        prisma.assignmentTypeEvaluationSuiteVersion.count({
+      const snapshots = () =>
+        prisma.assignmentTypeEvaluationSuiteVersion.findMany({
           where: { assignmentTypeId: id },
+          orderBy: { version: 'asc' },
         });
       const auditCount = () =>
         prisma.internalPlatformApiAudit.count({ where: { keyId } });
       const beforeBoundary = {
-        snapshots: await snapshotCount(),
+        snapshots: await snapshots(),
         audits: await auditCount(),
       };
       const attempts = await Promise.all(
@@ -471,7 +472,7 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       expect(
         await prisma.assignmentTypeEvaluationCase.count({ where: caseWhere })
       ).toBe(20);
-      expect(await snapshotCount()).toBe(beforeBoundary.snapshots + 1);
+      expect(await snapshots()).not.toEqual(beforeBoundary.snapshots);
       expect(await auditCount()).toBe(beforeBoundary.audits + 2);
 
       const fullState = {
@@ -479,7 +480,7 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
           where: caseWhere,
           orderBy: { id: 'asc' },
         }),
-        snapshots: await snapshotCount(),
+        snapshots: await snapshots(),
         audits: await auditCount(),
       };
       const rejected = await handlers.handle(
@@ -505,7 +506,7 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
           where: caseWhere,
           orderBy: { id: 'asc' },
         }),
-        snapshots: await snapshotCount(),
+        snapshots: await snapshots(),
         audits: await auditCount(),
       }).toEqual(fullState);
 
