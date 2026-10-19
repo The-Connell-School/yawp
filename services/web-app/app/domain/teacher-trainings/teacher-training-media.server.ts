@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import {
   GetObjectCommand,
   HeadObjectCommand,
-  ListPartsCommand,
   type S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -134,30 +133,15 @@ export function createTeacherTrainingMedia(
       parts: CompletedPart[]
     ): Promise<Buffer<ArrayBuffer> | undefined> {
       try {
-        const actual = await client.send(
-          new ListPartsCommand({
-            Bucket: bucket,
-            Key: upload.key,
-            UploadId: upload.uploadId,
-          })
-        );
-        if (actual.IsTruncated || actual.Parts?.length !== upload.partCount)
-          throw invalid('Uploaded parts do not match the upload session');
         const expected = [...parts].sort((a, b) => a.partNumber - b.partNumber);
-        for (let i = 0; i < upload.partCount; i++) {
-          const p = actual.Parts[i];
-          const length = Math.min(
-            upload.partSize,
-            upload.size - i * upload.partSize
-          );
-          if (
-            p.PartNumber !== i + 1 ||
-            expected[i]?.partNumber !== i + 1 ||
-            p.Size !== length ||
-            p.ETag !== expected[i]?.etag
-          )
-            throw invalid('Uploaded parts do not match the upload session');
-        }
+        if (
+          expected.length !== upload.partCount ||
+          expected.some((part, i) => part.partNumber !== i + 1)
+        )
+          throw invalid('Uploaded parts do not match the upload session');
+        // UploadPart signatures bind each Content-Length. CompleteMultipartUpload
+        // validates the supplied ETags, and HeadObject below verifies total size.
+        // The existing bucket role intentionally does not grant ListParts access.
         await multipart.complete(
           upload.key,
           upload.uploadId,
@@ -166,6 +150,13 @@ export function createTeacherTrainingMedia(
       } catch (error) {
         // S3 completion can succeed before a DB rollback. A retry uses the unique,
         // server-issued key and still verifies the completed object's metadata.
+        if (
+          error instanceof Error &&
+          ['InvalidPart', 'InvalidPartOrder', 'EntityTooSmall'].includes(
+            error.name
+          )
+        )
+          throw invalid('Uploaded parts do not match the upload session');
         if (!(error instanceof Error) || error.name !== 'NoSuchUpload')
           throw error;
       }
