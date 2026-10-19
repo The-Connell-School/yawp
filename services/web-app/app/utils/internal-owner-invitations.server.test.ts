@@ -396,6 +396,29 @@ test('create replays the stored results, rejects changed raw bytes, never redeli
   ).toBe(409);
 });
 
+test('create shares idempotency replay and conflicts across a trailing slash', async () => {
+  const f = fixture();
+  const options = { idempotency: 'canonical-batch' };
+  const first = await f.handlers.create(request('POST', undefined, options), 'org-1');
+  const original = await first.json();
+  const replay = await f.handlers.create(
+    request('POST', undefined, { ...options, path: '/' }),
+    'org-1'
+  );
+  expect(replay.status).toBe(200);
+  expect(await replay.json()).toEqual(original);
+  const conflict = await f.handlers.create(
+    request('POST', { emails: ['different@example.test'], expiresInDays: 7 }, {
+      ...options,
+      path: '/',
+    }),
+    'org-1'
+  );
+  expect(conflict.status).toBe(409);
+  expect(mail).toHaveBeenCalledTimes(1);
+  expect(f.audits).toHaveLength(2);
+});
+
 test('rejects legacy service credentials for reads and writes', async () => {
   process.env.YAWP_MANAGEMENT_SERVICE_KEY = 'x'.repeat(43);
   const f = fixture();
