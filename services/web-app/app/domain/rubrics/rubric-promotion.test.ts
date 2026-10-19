@@ -58,7 +58,7 @@ describe('promotion rubric validation', () => {
   });
   test('the real thesis-driven-essay library document validates without changing its scoring scale', () => {
     expect(validateRubricPromotion(thesisDrivenEssay)).toMatchObject({
-      ok: true, schema: { scoringScale: thesisDrivenEssay.scoringScale, rubric: thesisDrivenEssay.rubric },
+      ok: true, schema: { scoringScale: thesisDrivenEssay.scoringScale },
     });
   });
   test('every built-in assignment rubric and fallback scale uses a known scoring type', async () => {

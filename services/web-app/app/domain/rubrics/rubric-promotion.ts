@@ -11,7 +11,7 @@ const number = z.number().finite();
 const scale = z.object({
   type: z.enum(RUBRIC_SCORING_SCALE_TYPES, {
     errorMap: () => ({ message: `Scoring type must be one of ${RUBRIC_SCORING_SCALE_TYPES.join(', ')}.` }),
-  }),
+  }).default('weighted_1_5'),
   minScore: number, maxScore: number, step: number.int().min(1).optional(),
   compositeMin: number.optional(), compositeMax: number.optional(),
 }).strict();
