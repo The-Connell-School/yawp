@@ -61,6 +61,8 @@ function fixture() {
       assignmentModuleId: 'm-1',
       title: 'First step',
       prompt: 'Prompt',
+      answerKey: null,
+      nextButtonLabel: null,
       tutorInstructions: null,
       tutorInstructionsVariantsJson: null,
       showChatButton: false,
@@ -111,6 +113,8 @@ function fixture() {
           tutorInstructions: null,
           tutorInstructionsVariantsJson: null,
           rubricAlignmentJson: null,
+          answerKey: null,
+          nextButtonLabel: null,
           showChatButton: false,
           showNextButton: true,
           ...fields,
@@ -444,8 +448,8 @@ for (const [name, path, value] of [
     '/m-1/steps/s-1',
     { buttons: [{ label: 'Go', action: 'invalid' }] },
   ],
-  ['updateStep', '/m-1/steps/s-1', { answerKey: 'unsupported' }],
-  ['updateStep', '/m-1/steps/s-1', { nextButtonLabel: 'unsupported' }],
+  ['updateStep', '/m-1/steps/s-1', { answerKey: 'x'.repeat(20001) }],
+  ['updateStep', '/m-1/steps/s-1', { nextButtonLabel: 'x'.repeat(81) }],
 ] as const)
   test(`${name}: rejects invalid fields ${JSON.stringify(value)}`, async () => {
     const f = fixture();
@@ -607,4 +611,77 @@ test('audits capture the actual overwritten module and step values', async () =>
   );
   expect(f.steps).toHaveLength(1);
   expect(f.modules[0].position).toBe(4);
+});
+
+for (const [name, method, path, value] of cases) {
+  test(`${name}: trims reason into both audit rows without persisting it on content`, async () => {
+    const f = fixture();
+    const res = await invoke(f, name, request(method, path, { ...value, reason: '  Reviewed by operator  ' }));
+    expect(res.status).toBe(name.startsWith('create') ? 201 : 200);
+    expect(f.audits).toHaveLength(2);
+    expect(f.audits.every(a => a.metadata.reason === 'Reviewed by operator')).toBe(true);
+    expect(f.modules.every(m => !('reason' in m))).toBe(true);
+    expect(f.steps.every(s => !('reason' in s))).toBe(true);
+  });
+  for (const reason of ['', '  ', null, 12, 'x'.repeat(501)])
+    test(`${name}: rejects invalid reason ${JSON.stringify(reason).slice(0, 30)}`, async () => {
+      const f = fixture();
+      expect((await invoke(f, name, request(method, path, { ...value, reason }))).status).toBe(400);
+      expect(f.audits).toHaveLength(0);
+      expect(f.events).not.toContain('write');
+    });
+  test(`${name}: accepts a 500 character reason`, async () => {
+    const f = fixture();
+    expect((await invoke(f, name, request(method, path, { ...value, reason: 'x'.repeat(500) }))).status).toBe(name.startsWith('create') ? 201 : 200);
+  });
+  test(`${name}: rejects bodies exceeding 256 KiB before authentication`, async () => {
+    const f = fixture();
+    const res = await invoke(f, name, request(method, path, undefined, { unsigned: true, raw: 'x'.repeat(256 * 1024 + 1) }));
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ error: 'Request body too large' });
+    expect(f.events).toEqual([]);
+  });
+}
+for (const [name, path] of [['updateModule', '/m-1'], ['updateStep', '/m-1/steps/s-1']])
+  test(`${name}: reason alone is not a content patch`, async () => {
+    const f = fixture();
+    expect((await invoke(f, name, request('PATCH', path, { reason: 'Reviewed' }))).status).toBe(400);
+    expect(f.audits).toHaveLength(0);
+  });
+for (const [name, method, path, value] of cases.filter(c => c[0].startsWith('delete')))
+  for (const body of [undefined, {}, { reason: 'Reviewed' }])
+    test(`${name}: accepts delete body ${JSON.stringify(body)}`, async () => {
+      const f = fixture();
+      expect((await invoke(f, name, request(method, path, body))).status).toBe(200);
+    });
+test('step fields survive create, partial patch, read and explicit clearing', async () => {
+  const f = fixture();
+  const created = await f.handlers.createStep(request('POST', '/m-1/steps', {
+    title: 'Step', prompt: 'Write', answerKey: '  Key  ', nextButtonLabel: '  Continue  '
+  }), 'at-1', 'm-1');
+  expect(created.status).toBe(201);
+  const step = (await created.json()).module.instructions.at(-1);
+  expect(step).toMatchObject({ answerKey: '  Key  ', nextButtonLabel: 'Continue' });
+  await f.handlers.updateStep(request('PATCH', `/m-1/steps/${step.id}`, { title: 'Edited' }), 'at-1', 'm-1', step.id);
+  const detail = await f.handlers.detail(request('GET', '/m-1'), 'at-1', 'm-1');
+  expect((await detail.json()).module.instructions.at(-1)).toMatchObject({ answerKey: '  Key  ', nextButtonLabel: 'Continue' });
+  const cleared = await f.handlers.updateStep(request('PATCH', `/m-1/steps/${step.id}`, { answerKey: null, nextButtonLabel: '   ' }), 'at-1', 'm-1', step.id);
+  expect((await cleared.json()).module.instructions.at(-1)).toMatchObject({ answerKey: null, nextButtonLabel: null });
+});
+test('step fields accept their exact limits and reject wrong types', async () => {
+  for (const fields of [{ answerKey: 'x'.repeat(20000), nextButtonLabel: 'x'.repeat(80) }, { answerKey: null, nextButtonLabel: null }]) {
+    const f = fixture();
+    const res = await f.handlers.updateStep(request('PATCH', '/m-1/steps/s-1', fields), 'at-1', 'm-1', 's-1');
+    expect(res.status).toBe(200);
+    expect((await res.json()).module.instructions[0]).toMatchObject(fields);
+  }
+  for (const fields of [{ answerKey: 12 }, { nextButtonLabel: false }]) {
+    const f = fixture();
+    expect((await f.handlers.updateStep(request('PATCH', '/m-1/steps/s-1', fields), 'at-1', 'm-1', 's-1')).status).toBe(400);
+  }
+});
+test('unset step fields are explicit nulls in the read response', async () => {
+  const f = fixture();
+  const res = await f.handlers.detail(request('GET', '/m-1'), 'at-1', 'm-1');
+  expect((await res.json()).module.instructions[0]).toMatchObject({ answerKey: null, nextButtonLabel: null });
 });

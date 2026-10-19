@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
+  assignmentModuleInstruction: { count: mock(async () => 0), create: mock(), update: mock() },
   assignmentType: {
     findUnique: mock(),
   },
@@ -274,4 +275,21 @@ describe('admin assignment module action', () => {
     const updateData = prisma.assignmentModule.update.mock.calls[0][0].data;
     expect('tutorInstructionsVariantsJson' in updateData).toBe(false);
   });
+});
+
+for (const intent of ['createInstruction', 'updateInstruction']) {
+  test(`${intent} persists the answer key and maps the legacy next-button field`, async () => {
+    const form = new FormData();
+    for (const [key, value] of Object.entries({ intent, instructionId: 'step-1', title: 'Step', prompt: 'Write', answerKey: 'Model answer', nextInstructionBtnLabel: '  Continue  ' })) form.set(key, value);
+    await action({ request: new Request('https://example.test/admin', { method: 'POST', body: form }), params: { id: 'at-1', moduleId: 'mod-1' }, context: {} } as never);
+    const mutation = intent === 'createInstruction' ? prisma.assignmentModuleInstruction.create : prisma.assignmentModuleInstruction.update;
+    expect(mutation).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({ answerKey: 'Model answer', nextButtonLabel: 'Continue' }) }));
+  });
+}
+test('admin loader returns saved step editor fields', async () => {
+  requireAdmin.mockResolvedValue(undefined);
+  prisma.assignmentType.findUnique.mockResolvedValue({ id: 'at-1', title: 'Essay', rubric: null });
+  prisma.assignmentModule.findFirst.mockResolvedValue({ id: 'mod-1', instructions: [{ id: 'step-1', answerKey: 'Saved key', nextButtonLabel: 'Saved label' }] });
+  const res = await loader({ request: new Request('https://example.test/admin'), params: { id: 'at-1', moduleId: 'mod-1' }, context: {} } as never);
+  expect(res.data.module.instructions[0]).toMatchObject({ answerKey: 'Saved key', nextButtonLabel: 'Saved label' });
 });
