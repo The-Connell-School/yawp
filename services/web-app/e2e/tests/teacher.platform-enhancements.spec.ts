@@ -657,7 +657,7 @@ test.describe('Platform enhancements', () => {
         sheet.getByRole('link', { name: /V2 earlier draft/ })
       ).toHaveAttribute(
         'href',
-        `/app/documents/${ids[0]}?exitTo=${encodeURIComponent(`/app/assignment-types/${e2eContext.thesisEssayAssignmentTypeId}`)}`
+        `/app/documents/${ids[0]}?ssv=1&exitTo=${encodeURIComponent(`/app/assignment-types/${e2eContext.thesisEssayAssignmentTypeId}`)}`
       );
       await sheet
         .getByRole('tab', { name: 'Archived (1)', exact: true })
