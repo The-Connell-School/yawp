@@ -47,6 +47,7 @@ test.describe('Platform enhancements', () => {
       const five = await db.assignmentType.create({
         data: {
           title: '5-Paragraph Essay',
+          position: 99,
           description:
             'A clear claim, three supporting points, and a conclusion.',
           ownerOrgId: context.organizationId,
