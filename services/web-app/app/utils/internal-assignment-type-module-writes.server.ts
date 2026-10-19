@@ -220,7 +220,7 @@ export function createInternalAssignmentTypeModuleHandlers(input: {
     const read = operation === 'detail';
     if (request.method !== (read ? 'GET' : methods[operation]))
       return response({ error: 'Method not allowed' }, 405);
-    let body: string;
+    let body: Uint8Array;
     try {
       body = await readBoundedBody(request, 256 * 1024);
     } catch (error) {
@@ -245,7 +245,9 @@ export function createInternalAssignmentTypeModuleHandlers(input: {
       return response({ error: 'Invalid step' }, 400);
     let raw: unknown;
     try {
-      raw = JSON.parse(body || '{}');
+      // Authorization and audit hashes bind the wire bytes before strict decoding.
+      const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(body);
+      raw = JSON.parse(text || '{}');
     } catch {
       return response({ error: 'Invalid JSON' }, 400);
     }
