@@ -92,6 +92,8 @@ test('onboarding v2 usage reflects configured caps without hiding excess student
   expect(usage!.students.total).toBe(10);
   expect(usage!.students.remaining).toBe(0);
   expect(usage!.monthly).toBe(true);
+  const now = new Date();
+  expect(usage!.renewsAt).toBe(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString());
   expect(usage!.reporter).toEqual({ used: 1, total: 100, remaining: 99 });
   expect(usage!.lessonPlans.total).toBe(0);
   expect(usage!.lessonPlans.remaining).toBe(0);

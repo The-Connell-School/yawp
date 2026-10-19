@@ -1,4 +1,7 @@
-import { useFreeAccountUsage } from '~/components/free-account-usage';
+import {
+  MonthlyUsageNotice,
+  useFreeAccountUsage,
+} from '~/components/free-account-usage';
 import { useEffect, useRef, useState } from 'react';
 import {
   Link,
@@ -258,6 +261,7 @@ type LessonPlannerActionData = {
 };
 
 export default function LessonPlannerRoute() {
+  const freeUsage = useFreeAccountUsage();
   const {
     conversations,
     selectedConversation,
@@ -757,6 +761,9 @@ export default function LessonPlannerRoute() {
               hasMessages ? 'max-w-3xl' : 'max-w-4xl py-6 sm:py-10'
             )}
           >
+            {freeUsage?.monthly && (
+              <MonthlyUsageNotice usage={freeUsage} feature="lesson-planner" />
+            )}
             {!hasMessages ? (
               <LessonPlannerEmptyState
                 prompts={recommendedPrompts}
@@ -955,7 +962,7 @@ function LessonPlannerEmptyState({
           onSend={onSend}
           disabled={disabled || exhausted}
         />
-        {freeUsage && (
+        {freeUsage && !freeUsage.monthly && (
           <div
             className="text-sm text-muted-foreground"
             data-testid="free-lesson-remaining"

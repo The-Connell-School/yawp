@@ -1,3 +1,4 @@
+import { lessonPlanMonthWindow } from '~/utils/lesson-planner/month-window';
 import { monthlyFreeTierPolicy } from './monthly-policy.server';
 import { readMonthlyUsage } from './monthly-operations.server';
 import {
@@ -102,6 +103,7 @@ export async function readFreeAccountUsage(
     monthly: policy.enabled,
     ...(policy.enabled
       ? {
+          renewsAt: lessonPlanMonthWindow(new Date()).lt.toISOString(),
           reporter: {
             used: reporter,
             total: limits.reporterMonthly,

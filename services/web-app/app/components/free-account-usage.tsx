@@ -24,6 +24,7 @@ import type {
   FreeAccountUsage,
   UsageCount,
 } from '~/domain/free-tier/inapp-usage';
+import { lessonPlanMonthWindow } from '~/utils/lesson-planner/month-window';
 import { cn } from '~/utils/misc';
 
 export function useFreeAccountUsage() {
@@ -402,7 +403,7 @@ export function FreeReporterLocked() {
             <Lock size={20} aria-hidden="true" />
           </span>
           <h2 className="text-xl font-bold leading-[1.35]">
-            Reporter comes with a YAWP paid plan
+            Reporter comes with a YAWP! site license
           </h2>
           <ul className="flex flex-col gap-2.5 text-[15px]">
             <li className="flex gap-2.5">
@@ -439,18 +440,84 @@ export const FULL_ACCESS_CONTACT =
 export function AdvocatePackEntry() {
   return (
     <section className="rounded-xl border bg-popover p-5 shadow-sm">
+      <h2 className="text-lg font-bold">
+        Loving what YAWP! is doing for your students' writing?
+      </h2>
+      <p className="mt-2 text-sm">
+        A site license opens the full platform to you and your colleagues. Our
+        Advocate Pack makes it easy to share what you're seeing with your
+        administrator.
+      </p>
       <Link
         to="/app/advocate-pack"
-        className="text-lg font-bold text-primary underline"
+        className="mt-3 inline-block text-sm font-medium text-primary underline"
       >
-        Ready for full access?
+        Get the Advocate Pack
       </Link>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Unlimited with a site license
-      </p>
-      <p className="mt-2 text-sm">
-        Take the Advocate Pack to your administrator.
-      </p>
     </section>
+  );
+}
+
+export function FreeAccountRail({ usage }: { usage: FreeAccountUsage }) {
+  const complete =
+    (usage.monthly ? usage.students.used > 0 : usage.checklist.classReady) &&
+    usage.checklist.assignmentCreated &&
+    usage.checklist.writingSubmitted &&
+    usage.checklist.graded;
+  return (
+    <div className="space-y-5" data-testid="free-account-rail">
+      {usage.monthly && complete && <AdvocatePackEntry />}
+      <FreeAccountChecklist usage={usage} />
+      {usage.monthly && !complete && <AdvocatePackEntry />}
+    </div>
+  );
+}
+
+export function MonthlyUsageNotice({
+  usage,
+  feature,
+}: {
+  usage: FreeAccountUsage;
+  feature: 'lesson-planner' | 'reporter';
+}) {
+  if (!usage.monthly || !usage.reporter) return null;
+  const count = feature === 'reporter' ? usage.reporter : usage.lessonPlans;
+  const singular = feature === 'reporter' ? 'report' : 'lesson plan';
+  const plural = feature === 'reporter' ? 'reports' : 'lesson plans';
+  const date = new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(usage.renewsAt ?? lessonPlanMonthWindow(new Date()).lt));
+  return (
+    <div
+      className="rounded-xl border bg-popover p-4 text-sm"
+      data-testid={
+        feature === 'reporter'
+          ? 'reporter-monthly-remaining'
+          : 'free-lesson-remaining'
+      }
+    >
+      <p>{`Your free classroom includes ${usage.lessonPlans.total} lesson plans and ${usage.reporter.total} reports each month. Renews ${date}.`}</p>
+      {count.remaining === 1 && (
+        <p className="mt-2">{`You have one ${singular} left this month. It renews ${date}.`}</p>
+      )}
+      {count.remaining === 0 && (
+        <p className="mt-2">{`You've used this month's free ${plural}. They renew ${date}, and everything you've already made is still here.`}</p>
+      )}
+      <p className="mt-1 text-xs text-muted-foreground">
+        Unlimited with a site license{count.remaining === 0 ? '.' : ''}
+      </p>
+      {count.remaining === 0 && (
+        <div className="mt-3 flex flex-wrap gap-3">
+          <Link to="/app/advocate-pack" className="text-primary underline">
+            Share YAWP! with my administrator
+          </Link>
+          <a href={FULL_ACCESS_CONTACT} className="text-primary underline">
+            Learn about site licenses
+          </a>
+        </div>
+      )}
+    </div>
   );
 }

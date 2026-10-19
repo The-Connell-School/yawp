@@ -1,8 +1,7 @@
 import {
   useFreeAccountUsage,
   FreeAssignmentTiles,
-  FreeAccountChecklist,
-  AdvocatePackEntry,
+  FreeAccountRail,
 } from '~/components/free-account-usage';
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
 import {
@@ -520,12 +519,7 @@ export default function AppRoute() {
               />
             )}
           </ContentColumn>
-          {freeUsage && (
-            <div className="space-y-5">
-              {freeUsage.monthly && <AdvocatePackEntry />}
-              <FreeAccountChecklist usage={freeUsage} />
-            </div>
-          )}
+          {freeUsage && <FreeAccountRail usage={freeUsage} />}
         </div>
       </section>
     );

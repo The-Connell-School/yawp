@@ -1,7 +1,7 @@
 import {
   FreeReporterLocked,
   useFreeAccountUsage,
-  FULL_ACCESS_CONTACT,
+  MonthlyUsageNotice,
 } from '~/components/free-account-usage';
 import { isFreeTierInappV2Enabled } from '~/domain/free-tier/inapp-feature-gate.server';
 import { useEffect, useRef, useState } from 'react';
@@ -385,31 +385,8 @@ export default function ReporterRoute() {
           className="no-scrollbar flex-1 overflow-y-auto px-4 py-6"
         >
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
-            {monthlyUsage && (
-              <div
-                data-testid="reporter-monthly-remaining"
-                className="rounded-xl border bg-popover p-4 text-sm"
-              >
-                <p>
-                  {monthlyUsage.remaining} of {monthlyUsage.total} Reporter uses
-                  left this month
-                </p>
-                {exhausted && (
-                  <p className="mt-2">
-                    Come back next month to prepare another report. Your saved
-                    reports are still available.
-                  </p>
-                )}
-                <a
-                  href={FULL_ACCESS_CONTACT}
-                  className="mt-2 inline-block text-primary underline"
-                >
-                  Need more? Talk to us
-                </a>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Unlimited with a site license
-                </p>
-              </div>
+            {monthlyUsage && usage && (
+              <MonthlyUsageNotice usage={usage} feature="reporter" />
             )}
             {!hasMessages ? (
               <ReporterEmptyState
