@@ -319,32 +319,47 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       const detail = await call('detail', 'GET', path);
       expect(detail.status).toBe(200);
       const metadata = (await detail.json()).teacherTraining;
-      expect(metadata.modules.map((m: any) => m.id)).toEqual([second.id, first.id]);
-      expect(metadata.modules.flatMap((m: any) => m.resources).map((r: any) => r.byteLength))
-        .toEqual([legacySize, legacySize, legacySize]);
+      expect(metadata.modules.map((m: any) => m.id)).toEqual([
+        second.id, first.id,
+      ]);
+      const resourceLengths = (training: any) =>
+        training.modules.flatMap((m: any) => m.resources)
+          .map((r: any) => r.byteLength);
+      expect(resourceLengths(metadata)).toEqual([
+        legacySize, legacySize, legacySize,
+      ]);
       const patched = await call('update', 'PATCH', path, {
-        title: 'Small metadata edit', reason: 'Edit title with legacy resources',
+        title: 'Small metadata edit',
+        reason: 'Edit title with legacy resources',
       });
       expect(patched.status).toBe(200);
-      expect((await patched.json()).teacherTraining.modules.flatMap((m: any) => m.resources)
-        .map((r: any) => r.byteLength)).toEqual([legacySize, legacySize, legacySize]);
+      expect(resourceLengths((await patched.json()).teacherTraining)).toEqual([
+        legacySize, legacySize, legacySize,
+      ]);
       const titleAudits = await prisma.internalPlatformApiAudit.findMany({
         where: { keyId, action: { startsWith: 'teacher-training.update.' } },
-        orderBy: { createdAt: 'desc' }, take: 2,
+        orderBy: { createdAt: 'desc' },
+        take: 2,
       });
       expect(titleAudits.map((a) => a.result).sort()).toEqual(['after', 'before']);
       for (const audit of titleAudits) {
         const snapshot = (audit.metadata as any)[audit.result].teacherTraining;
         expect(snapshot.image.size).toBe(6 * 1024 * 1024);
         expect(snapshot.image.sha256).toBeUndefined();
-        expect(snapshot.modules.flatMap((m: any) => m.resources).map((r: any) => r.byteLength))
-          .toEqual([legacySize, legacySize, legacySize]);
+        expect(resourceLengths(snapshot)).toEqual([
+          legacySize, legacySize, legacySize,
+        ]);
         expect(JSON.stringify(snapshot)).not.toContain('sha256');
         expect(audit.requestHash).toMatch(/^[a-f0-9]{64}$/);
       }
-      expect((await call('deleteResource', 'DELETE',
-        `${path}/modules/${second.id}/resources/${legacyIds[1]}`,
-        { reason: 'Remove large legacy resource' }, second.id, legacyIds[1])).status).toBe(200);
+      expect(
+        (await call(
+          'deleteResource', 'DELETE',
+          `${path}/modules/${second.id}/resources/${legacyIds[1]}`,
+          { reason: 'Remove large legacy resource' },
+          second.id, legacyIds[1]
+        )).status
+      ).toBe(200);
       expect((await call('list', 'GET', '')).status).toBe(200);
       expect(
         (
