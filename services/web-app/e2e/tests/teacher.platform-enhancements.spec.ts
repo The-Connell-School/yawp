@@ -542,6 +542,63 @@ test.describe('Platform enhancements', () => {
     }
   });
 
+  test('mobile type tours point to the visible New assignment button', async ({
+    page,
+    signIn,
+  }) => {
+    const db = createE2EPrismaClient();
+    const user = await db.user.findUniqueOrThrow({
+      where: { email: 'dev.teacher.free@yawp.local' },
+      select: { id: true },
+    });
+    const tourKey = { userId: user.id, tourId: 'type-class-starter' };
+    const previous = await db.userTour.findUnique({
+      where: { userId_tourId: tourKey },
+    });
+    try {
+      await setFeatureFlag(PLATFORM_ENHANCEMENTS_FLAG, true);
+      await setFeatureFlag('free_tier', true);
+      await setFeatureFlag('guided-tours', true);
+      await db.userTour.deleteMany({ where: tourKey });
+      await page.setViewportSize({ width: 390, height: 844 });
+      await signIn('dev.teacher.free@yawp.local', 'yawp-dev');
+      await page.goto('/app');
+      await page
+        .getByTestId('teacher-assignments-grid')
+        .getByText('Class Starter', { exact: true })
+        .first()
+        .click();
+      const welcome = page.getByRole('dialog', {
+        name: 'Welcome to Class Starter',
+        exact: true,
+      });
+      await expect(welcome).toBeVisible();
+      await welcome
+        .getByRole('button', { name: 'Take a tour', exact: true })
+        .click();
+      await expect(
+        page.locator('[data-tour="type-new"]:visible')
+      ).toHaveAttribute('data-tour-active', 'true');
+      await expect(page.getByTestId('guided-tour-step')).toContainText(
+        'New assignment gives'
+      );
+      await expect(page.getByTestId('guided-tour-step')).not.toContainText(
+        'Document'
+      );
+    } finally {
+      if (previous)
+        await db.userTour.upsert({
+          where: { userId_tourId: tourKey },
+          create: { ...tourKey, status: previous.status },
+          update: { status: previous.status },
+        });
+      await setFeatureFlag('guided-tours', false);
+      await setFeatureFlag('free_tier', false);
+      await setFeatureFlag(PLATFORM_ENHANCEMENTS_FLAG, false);
+      await db.$disconnect();
+    }
+  });
+
   test('keeps the lock badge and new icons in the free-account sidebar', async ({
     page,
     signIn,
