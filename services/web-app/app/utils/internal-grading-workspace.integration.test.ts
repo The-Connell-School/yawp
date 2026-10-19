@@ -108,6 +108,7 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       sample: 'An argument with evidence',
       expectedOutput,
     };
+    let foreignTypeId: string | undefined;
     try {
       const concurrent = await Promise.all(
         [1, 2].map(() =>
@@ -355,13 +356,90 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
           )
         ).status
       ).toBe(409);
+      const foreignType = await prisma.assignmentType.create({
+        data: {
+          title: 'Foreign ownership fixture',
+          position: 999,
+          evaluations: {
+            create: { title: 'Foreign suite', description: 'Owned elsewhere' },
+          },
+        },
+        include: { evaluations: true },
+      });
+      foreignTypeId = foreignType.id;
+      const foreignSuiteId = foreignType.evaluations[0].id;
+      expect(
+        (
+          await handlers.handle(
+            'suite',
+            request('DELETE', `/evaluation-suites/${foreignSuiteId}`),
+            id,
+            foreignSuiteId
+          )
+        ).status
+      ).toBe(404);
+      expect(
+        (
+          await handlers.handle(
+            'runs',
+            request(
+              'POST',
+              '/evaluation-runs',
+              { promptVersion: draft.id, suiteId: foreignSuiteId },
+              'foreign-run'
+            ),
+            id
+          )
+        ).status
+      ).toBe(404);
+      expect(
+        (
+          await prisma.assignmentTypeEvaluation.findUniqueOrThrow({
+            where: { id: foreignSuiteId },
+          })
+        ).archivedAt
+      ).toBeNull();
+
       const runBody = { promptVersion: draft.id, suiteId: suite.id };
-      const started = await handlers.handle(
+      const beforeTimeout = await prisma.internalPlatformApiAudit.count({
+        where: { keyId },
+      });
+      let providerSignal: AbortSignal | undefined;
+      const bounded = createInternalGradingWorkspaceHandlers({
+        db: prisma,
+        runBudgetMs: 1000,
+        execute: async ({ signal }) => {
+          providerSignal = signal;
+          return new Promise(() => {});
+        },
+      });
+      const timedOut = await bounded.handle(
         'runs',
-        request('POST', '/evaluation-runs', runBody, 'run'),
+        request('POST', '/evaluation-runs', runBody, 'timeout-run'),
         id
       );
-      expect(started.status).toBe(201);
+      expect(timedOut.status).toBe(422);
+      expect((await timedOut.json()).error).toContain('time budget');
+      expect(providerSignal?.aborted).toBe(true);
+      expect(
+        await prisma.assignmentTypeEvaluationRun.count({
+          where: { assignmentTypeId: id },
+        })
+      ).toBe(0);
+      expect(
+        await prisma.internalPlatformApiAudit.count({ where: { keyId } })
+      ).toBe(beforeTimeout);
+      const starts = await Promise.all(
+        [1, 2].map(() =>
+          handlers.handle(
+            'runs',
+            request('POST', '/evaluation-runs', runBody, 'run'),
+            id
+          )
+        )
+      );
+      expect(starts.map((r) => r.status).sort()).toEqual([200, 201]);
+      const started = starts.find((r) => r.status === 201)!;
       const run = (await started.json()).run;
       expect(run.status).toBe('completed');
       expect(run.results).toHaveLength(1);
@@ -649,6 +727,8 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
         ).title
       ).toBe('Saved from the admin editor');
     } finally {
+      if (foreignTypeId)
+        await prisma.assignmentType.delete({ where: { id: foreignTypeId } });
       await prisma.assignmentType.delete({ where: { id } });
       await prisma.internalPlatformApiAudit.deleteMany({ where: { keyId } });
       await prisma.internalApiRequestNonce.deleteMany({ where: { keyId } });

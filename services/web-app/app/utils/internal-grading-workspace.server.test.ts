@@ -967,3 +967,52 @@ test('run budget aborts provider and returns a clear error without a publishable
   expect(f.runs.some((r) => r.status === 'completed')).toBe(false);
   expect(f.audits).toHaveLength(0);
 });
+
+test('run covers other active groups in the current snapshot for promotion', async () => {
+  const f = runFixture();
+  const other = {
+    ...f.snapshot.snapshotJson.evaluations[0].cases[0],
+    id: 'case-2',
+  };
+  f.snapshot.snapshotJson.evaluations.push({ id: 'suite-2', cases: [other] });
+  const res = await f.handlers.handle(
+    'runs',
+    req('POST', '/evaluation-runs', runBody, { key: 'full-snapshot' }),
+    'at-1'
+  );
+  expect(res.status).toBe(201);
+  const run = (await res.json()).run;
+  expect(run.totalCases).toBe(2);
+  expect(run.results.map((r: any) => r.caseId)).toEqual(['case-1', 'case-2']);
+});
+test('run rejects invalid numeric versions and unsupported methods before domain access', async () => {
+  const f = fixture();
+  for (const version of ['0', '2147483648', '9007199254740993']) {
+    const res = await f.handlers.handle(
+      'runs',
+      req(
+        'POST',
+        '/evaluation-runs',
+        { ...runBody, promptVersion: version },
+        { key: 'version' }
+      ),
+      'at-1'
+    );
+    expect(res.status).toBe(400);
+  }
+  for (const [resource, method, path, child] of [
+    ['runs', 'DELETE', '/evaluation-runs', undefined],
+    ['suite', 'GET', '/evaluation-suites/suite-1', 'suite-1'],
+    ['promptVersion', 'POST', '/prompt-versions/2', '2'],
+  ] as const) {
+    const res = await f.handlers.handle(
+      resource,
+      req(method, path, {}),
+      'at-1',
+      child
+    );
+    expect(res.status).toBe(405);
+    expect(await res.json()).toEqual({ error: 'Method not allowed' });
+  }
+  expect(f.db.$transaction).not.toHaveBeenCalled();
+});
