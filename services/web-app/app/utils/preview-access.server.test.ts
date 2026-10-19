@@ -239,6 +239,8 @@ describe('preview access gate', () => {
       ['GET', '/api/internal/v1/feature-flags-x'],
       ['GET', '/api/internal/v1/organizations/other'],
       ['POST', '/api/internal/v1/organizations/search'],
+      ['GET', '/api/internal/v1/admin/users'],
+      ['GET', '/api/internal/v1/users'],
     ] as const) {
       const gated = await previewAccessMiddleware(
         middlewareArgs(request(path, { method })),
@@ -257,6 +259,20 @@ describe('preview access gate', () => {
       ['GET', '/api/internal/v1/free-tier/applications?q=x'],
       ['GET', '/api/internal/v1/admin/organizations'],
       ['GET', '/api/internal/v1/admin/organizations/org-1'],
+      ['GET', '/api/internal/v1/admin/assignment-types'],
+      ['POST', '/api/internal/v1/admin/assignment-types'],
+      ['GET', '/api/internal/v1/admin/assignment-types/at-1'],
+      ['PATCH', '/api/internal/v1/admin/assignment-types/at-1'],
+      ['POST', '/api/internal/v1/admin/assignment-types/at-1/archive'],
+      ['POST', '/api/internal/v1/admin/assignment-types/at-1/restore'],
+      ['PUT', '/api/internal/v1/admin/assignment-types/at-1/image'],
+      ['DELETE', '/api/internal/v1/admin/assignment-types/at-1/image'],
+      ['POST', '/api/internal/v1/admin/assignment-types/at-1/modules'],
+      ['GET', '/api/internal/v1/admin/assignment-types/at-1/modules/m-1'],
+      ['PUT', '/api/internal/v1/admin/assignment-types/at-1/modules/order'],
+      ['POST', '/api/internal/v1/admin/assignment-types/at-1/modules/m-1/steps'],
+      ['PATCH', '/api/internal/v1/admin/assignment-types/at-1/modules/m-1/steps/s-1'],
+      ['PUT', '/api/internal/v1/admin/assignment-types/at-1/modules/m-1/steps/order'],
     ] as const) {
       const response = await previewAccessMiddleware(
         middlewareArgs(request(path, { method })),
@@ -264,7 +280,7 @@ describe('preview access gate', () => {
       );
       expect(await response?.text()).toBe('ok');
     }
-    expect(next).toHaveBeenCalledTimes(5);
+    expect(next).toHaveBeenCalledTimes(19);
   });
 
   test('fails closed when no access codes are configured', async () => {

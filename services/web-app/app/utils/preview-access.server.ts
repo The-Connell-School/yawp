@@ -54,7 +54,11 @@ const OPEN_PATHS = new Set([
  */
 const OPEN_SINGLE_SEGMENT_PREFIXES = ['/api/internal/v1/feature-flags/'];
 /** Yawp Internal operator APIs; the routes still require HMAC/service auth. */
-const OPEN_PATH_PREFIXES = ['/api/internal/v1/free-tier/', '/api/internal/v1/admin/organizations'];
+const OPEN_PATH_PREFIXES = [
+  '/api/internal/v1/free-tier/',
+  '/api/internal/v1/admin/organizations',
+  '/api/internal/v1/admin/assignment-types',
+];
 const OPEN_SEGMENT = /^[A-Za-z0-9_-]{1,128}$/;
 
 function isOpenPath(pathname: string) {
