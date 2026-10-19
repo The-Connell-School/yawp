@@ -559,3 +559,31 @@ test('draft PATCH changes one template while preserving the other and validates 
     'Revised system'
   );
 });
+
+test('suite PATCH rejects duplicate case IDs', async () => {
+  const f = fixture();
+  const item = {
+    id: 'c-1',
+    name: 'Case',
+    sample: 'Sample',
+    expectedOutput: {
+      categories: [{ key: 'claim', score: 3, comment: 'Clear claim' }],
+      overallComment: 'Revise',
+    },
+  };
+  expect(
+    (
+      await f.handlers.handle(
+        'suite',
+        req('PATCH', '/evaluation-suites/s-1', {
+          name: 'Suite',
+          check: 'Check',
+          cases: [item, item],
+        }),
+        'at-1',
+        's-1'
+      )
+    ).status
+  ).toBe(400);
+  expect(f.db.$transaction).not.toHaveBeenCalled();
+});

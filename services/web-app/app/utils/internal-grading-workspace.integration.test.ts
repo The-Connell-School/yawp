@@ -216,6 +216,7 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
             'case',
             request('PATCH', `${casesPath}/${added.id}`, {
               name: 'Updated sample',
+              check: 'Check only this sample',
             }),
             id,
             suite.id,
@@ -223,6 +224,13 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
           )
         ).status
       ).toBe(200);
+      expect(
+        (
+          await prisma.assignmentTypeEvaluationCase.findUniqueOrThrow({
+            where: { id: added.id },
+          })
+        ).criterion
+      ).toBe('Check only this sample');
       expect(
         (
           await prisma.assignmentTypeEvaluationCase.findUniqueOrThrow({

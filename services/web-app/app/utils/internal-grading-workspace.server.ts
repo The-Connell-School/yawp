@@ -98,12 +98,14 @@ const schemas = {
         .max(20),
       reason: reasonSchema,
     })
-    .strict(),
+    .strict()
+    .refine((v) => new Set(v.cases.map((c) => c.id)).size === v.cases.length),
   cases: z
     .object({
       name: text(160),
       sample: text(50000),
       rubricCategoryKey: text(120),
+      check: text(4000).optional(),
       expectedOutput: expectedOutput.optional(),
       reason: reasonSchema,
     })
@@ -112,6 +114,7 @@ const schemas = {
     .object({
       name: text(160).optional(),
       sample: text(50000).optional(),
+      check: text(4000).optional(),
       expectedOutput: expectedOutput.optional(),
       reason: reasonSchema,
     })
@@ -559,7 +562,7 @@ export function createInternalGradingWorkspaceHandlers(input: {
                 evaluationId: child,
                 title: value.name,
                 documentText: value.sample,
-                criterion: owner.description,
+                criterion: value.check ?? owner.description,
                 rubricCategoryKey: value.rubricCategoryKey,
                 expectedOutput: value.expectedOutput,
               });
@@ -577,7 +580,7 @@ export function createInternalGradingWorkspaceHandlers(input: {
               targetId = row.id;
               if (request.method === 'PATCH') {
                 if (
-                  !['name', 'sample', 'expectedOutput'].some(
+                  !['name', 'sample', 'check', 'expectedOutput'].some(
                     (k) => value[k] !== undefined
                   )
                 )
@@ -615,6 +618,7 @@ export function createInternalGradingWorkspaceHandlers(input: {
                   {
                     title: value.name,
                     documentText: value.sample,
+                    criterion: value.check,
                     ...(value.expectedOutput
                       ? { expectedOutputJson: value.expectedOutput }
                       : {}),
