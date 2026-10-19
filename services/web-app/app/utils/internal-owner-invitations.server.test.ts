@@ -507,3 +507,15 @@ test('owner accounts without email do not prevent listing or inviting', async ()
   expect((await f.handlers.list(request('GET'), 'org-1')).status).toBe(200);
   expect((await f.handlers.create(request(), 'org-1')).status).toBe(201);
 });
+
+test('invitation links retain the admin flow public origin behind the proxy', async () => {
+  const f = fixture();
+  const req = request();
+  req.headers.set('X-Forwarded-Host', 'public.yawp.test');
+  expect((await f.handlers.create(req, 'org-1')).status).toBe(201);
+  const element = mail.mock.calls[0][0].react;
+  const link = element.props.children.props.children.find(
+    (child: any) => child?.props?.href
+  );
+  expect(new URL(link.props.href).origin).toBe('https://public.yawp.test');
+});

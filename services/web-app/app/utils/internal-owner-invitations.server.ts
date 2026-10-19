@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@app/prisma';
 import { z } from 'zod';
+import { getDomainUrl } from './misc';
 import { authorizeInternalApiRequest } from './internal-platform-auth.server';
 import { auditRead, identifier } from './internal-assignment-types.server';
 import {
@@ -199,7 +200,7 @@ export function createInternalOwnerInvitationHandlers(input: {
               organization,
               email: old.email,
               expiresInDays: 7,
-              origin: new URL(request.url).origin,
+              origin: getDomainUrl(request),
             });
             resent.resendHistory = [
               ...old.resendHistory,
@@ -252,7 +253,7 @@ export function createInternalOwnerInvitationHandlers(input: {
                 email,
                 expiresInDays: data.expiresInDays,
                 note: data.note,
-                origin: new URL(request.url).origin,
+                origin: getDomainUrl(request),
               });
               invitations.push(invitation);
               results.push({ email, outcome: 'invited', invitation });
