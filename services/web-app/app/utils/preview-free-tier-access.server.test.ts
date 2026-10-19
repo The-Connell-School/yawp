@@ -15,6 +15,7 @@ const grant = {
 const teacher: FreeTierPreviewSession = {
   user: {
     isAdmin: false,
+    isSuperAdmin: false,
     memberships: [
       {
         id: 'membership-1',
@@ -59,6 +60,15 @@ test('legacy impersonation markers cannot use a grant even for its matching teac
     expect(
       await freeTierPreviewDependencies.session(await requestWith({}), grant)
     ).toBe('teacher');
+    expect(findSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          user: expect.objectContaining({
+            select: expect.objectContaining({ isAdmin: true, isSuperAdmin: true }),
+          }),
+        }),
+      })
+    );
     findSession.mockClear();
     findApplication.mockClear();
     const impersonationMarkers: Record<string, string>[] = [
@@ -76,6 +86,16 @@ test('legacy impersonation markers cannot use a grant even for its matching teac
   } finally {
     mock.module('./db.server', () => realDb);
   }
+});
+
+test('independent super-admin authority cannot use a matching teacher grant', () => {
+  expect(
+    classifyFreeTierPreviewSession(
+      { ...teacher, user: { ...teacher.user, isSuperAdmin: true } },
+      null,
+      grant
+    )
+  ).toBe('denied');
 });
 
 test('only a grant-matching free-tier teacher can continue with a session', () => {

@@ -71,6 +71,7 @@ export function createFreeTierAccessCookie() {
 export type FreeTierPreviewSession = {
   user: {
     isAdmin: boolean;
+    isSuperAdmin: boolean;
     memberships: Array<{
       id: string;
       role: string;
@@ -91,7 +92,8 @@ export function classifyFreeTierPreviewSession(
   grant: FreeTierPreviewGrant
 ): SessionAccess {
   const app = session?.application;
-  if (!session || !app || session.user.isAdmin) return 'denied';
+  if (!session || !app || session.user.isAdmin || session.user.isSuperAdmin)
+    return 'denied';
   if (
     grant.kind === 'acquisition'
       ? app.acquisitionTokenId !== grant.tokenId
@@ -158,6 +160,7 @@ export const freeTierPreviewDependencies: FreeTierPreviewDependencies = {
         user: {
           select: {
             isAdmin: true,
+            isSuperAdmin: true,
             memberships: {
               where: { isActive: true },
               select: {
