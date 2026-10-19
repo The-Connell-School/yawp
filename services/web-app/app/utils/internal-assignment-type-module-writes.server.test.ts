@@ -303,6 +303,8 @@ for (const [name, method, path, body] of cases) {
       });
     else if (name === 'reorderModules')
       expect(json.modules.map((m: any) => m.id)).toEqual(['m-1']);
+    else if (name === 'reorderSteps')
+      expect(json.steps.map((s: any) => s.id)).toEqual(['s-1']);
     else expect(json.module).toHaveProperty('instructions');
   });
   if (!['createModule', 'reorderModules'].includes(name))
@@ -573,3 +575,36 @@ for (const name of ['updateStep', 'deleteStep'])
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: 'Step not found' });
   });
+
+test('audits capture the actual overwritten module and step values', async () => {
+  const f = fixture();
+  await f.handlers.updateModule(
+    request('PATCH', '/m-1', { title: 'Edited module' }),
+    'at-1',
+    'm-1'
+  );
+  expect(f.audits[0].metadata.before).toMatchObject({
+    title: 'First',
+    instructions: [{ prompt: 'Prompt' }],
+  });
+  expect(f.audits[1].metadata.after).toMatchObject({
+    title: 'Edited module',
+    instructions: [{ prompt: 'Prompt' }],
+  });
+  await f.handlers.updateStep(
+    request('PATCH', '/m-1/steps/s-1', { prompt: 'Edited prompt' }),
+    'at-1',
+    'm-1',
+    's-1'
+  );
+  expect(f.audits[2].metadata.before.instructions[0].prompt).toBe('Prompt');
+  expect(f.audits[3].metadata.after.instructions[0].prompt).toBe(
+    'Edited prompt'
+  );
+  await f.handlers.deleteModule(request('DELETE', '/m-1'), 'at-1', 'm-1');
+  expect(f.audits[5].metadata.after.deletedAt).toBe(
+    f.modules[0].deletedAt.toISOString()
+  );
+  expect(f.steps).toHaveLength(1);
+  expect(f.modules[0].position).toBe(4);
+});

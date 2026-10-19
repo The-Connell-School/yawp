@@ -403,7 +403,9 @@ export function createInternalAssignmentTypeModuleHandlers(input: {
             result =
               operation === 'deleteStep'
                 ? { deleted: { id: stepId } }
-                : { module: afterSnapshot };
+                : operation === 'reorderSteps'
+                  ? { steps: mapModule(after).instructions }
+                  : { module: afterSnapshot };
           }
           await writeAuditRows(tx, {
             auth,

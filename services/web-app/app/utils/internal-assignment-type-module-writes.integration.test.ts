@@ -119,9 +119,9 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
         id,
         mid
       );
-      expect(
-        (await order.json()).module.instructions.map((s: any) => s.id)
-      ).toEqual([...stepIds].reverse());
+      expect((await order.json()).steps.map((s: any) => s.id)).toEqual(
+        [...stepIds].reverse()
+      );
       const patch = await handlers.updateStep(
         request('PATCH', `/${mid}/steps/${stepIds[0]}`, {
           prompt: 'Revised prompt',
