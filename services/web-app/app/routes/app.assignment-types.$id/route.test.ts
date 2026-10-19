@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
+  setting: { findUnique: mock() },
   assignment: { findMany: mock(), count: mock() },
   assignmentType: {
     findFirst: mock(),
@@ -36,10 +37,6 @@ const prisma = {
   },
 };
 
-const isFeatureFlagEnabled = mock(async () => false);
-mock.module('~/domain/feature-flags/feature-flags.server', () => ({
-  isFeatureFlagEnabled,
-}));
 const requireUserId = mock();
 const requireMembership = mock();
 const createDocumentForAssignmentType = mock();
@@ -278,8 +275,8 @@ describe('app.assignment-types.$id action', () => {
 
 describe('app.assignment-types.$id loader Class Starter prompt library', () => {
   beforeEach(() => {
-    isFeatureFlagEnabled.mockReset();
-    isFeatureFlagEnabled.mockResolvedValue(false);
+    prisma.setting.findUnique.mockReset();
+    prisma.setting.findUnique.mockResolvedValue({ value: 'false' });
     prisma.assignment.findMany.mockReset();
     prisma.assignment.findMany.mockResolvedValue([]);
     prisma.assignment.count.mockReset();
@@ -338,7 +335,9 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
   });
 
   test('v2 loads only this teacher’s assignments and count when enabled for the org', async () => {
-    isFeatureFlagEnabled.mockResolvedValue(true);
+    prisma.setting.findUnique.mockResolvedValue({
+      value: JSON.stringify({ mode: 'targeted', orgIds: ['org-1'] }),
+    });
     prisma.assignment.findMany.mockResolvedValue([
       {
         id: 'assignment-1',
@@ -355,10 +354,10 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
     if (!('data' in response)) throw new Error('Expected loader data');
     expect(response.data.yourAssignments?.count).toBe(5);
     expect(response.data.yourAssignments?.items[0].id).toBe('assignment-1');
-    expect(isFeatureFlagEnabled).toHaveBeenCalledWith(
-      'platform-enhancements',
-      'org-1'
-    );
+    expect(prisma.setting.findUnique).toHaveBeenCalledWith({
+      where: { name: 'feature_flag.platform-enhancements' },
+      select: { value: true },
+    });
     expect(prisma.assignment.findMany).toHaveBeenCalledWith({
       where: {
         assignmentTypeId: 'at-1',
@@ -394,6 +393,20 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
   });
 
   test('flag off adds no assignments field or assignments query', async () => {
+    const response = await loader({
+      request: new Request('https://yawp.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as Parameters<typeof loader>[0]);
+    if (!('data' in response)) throw new Error('Expected loader data');
+    expect(response.data).not.toHaveProperty('yourAssignments');
+    expect(prisma.assignment.findMany).not.toHaveBeenCalled();
+    expect(prisma.assignment.count).not.toHaveBeenCalled();
+  });
+
+  test('an org outside the flag target gets the unchanged loader payload', async () => {
+    prisma.setting.findUnique.mockResolvedValue({
+      value: JSON.stringify({ mode: 'targeted', orgIds: ['another-org'] }),
+    });
     const response = await loader({
       request: new Request('https://yawp.test/app/assignment-types/at-1'),
       params: { id: 'at-1' },
