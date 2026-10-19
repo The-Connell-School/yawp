@@ -1134,6 +1134,9 @@ export async function executeGradingWorkspaceAction(
       summary: suiteResult.summary,
     });
   } catch (error) {
+    // The internal API owns atomic rollback. Preserve the original database
+    // error instead of trying another statement in an aborted transaction.
+    if (runOptions.signal) throw error;
     await db.assignmentTypeEvaluationRun.update({
       where: { id: run.id },
       data: {

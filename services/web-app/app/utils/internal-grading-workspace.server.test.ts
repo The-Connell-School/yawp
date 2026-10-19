@@ -1016,3 +1016,21 @@ test('run rejects invalid numeric versions and unsupported methods before domain
   }
   expect(f.db.$transaction).not.toHaveBeenCalled();
 });
+
+test('database statement timeout during result persistence returns a bounded error', async () => {
+  const f = runFixture();
+  f.db.assignmentTypeEvaluationResult.createMany = mock(async () => {
+    throw new Error('canceling statement due to statement timeout');
+  });
+  const res = await f.handlers.handle(
+    'runs',
+    req('POST', '/evaluation-runs', runBody, { key: 'statement-timeout' }),
+    'at-1'
+  );
+  expect(res.status).toBe(422);
+  expect(await res.json()).toEqual({
+    error: 'Evaluation run database time budget exceeded; retry the request.',
+  });
+  expect(f.runs.some((r) => r.status === 'completed')).toBe(false);
+  expect(f.audits).toHaveLength(0);
+});
