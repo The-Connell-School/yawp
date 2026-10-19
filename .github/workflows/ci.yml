@@ -157,7 +157,7 @@ jobs:
 
       - name: 🧪 Validate deployment contract
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        run: bun test ./scripts/deployment-contract.test.ts ./scripts/worktree-local-setup.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js ./scripts/preview/demo-mail-config.test.ts --max-concurrency=2
+        run: bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js ./scripts/preview/demo-mail-config.test.ts ./scripts/worktree-local-setup.test.ts --max-concurrency=2
 
       - name: 🧪 Validate Blackboard LTI mock
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
