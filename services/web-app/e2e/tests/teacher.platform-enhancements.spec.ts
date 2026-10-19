@@ -1,10 +1,91 @@
+import { readFileSync } from 'node:fs';
+import { createE2EPrismaClient } from '../prisma-client';
+import type { E2EContext } from '../seed-e2e';
 import { test, expect } from '../test-setup';
 import { setFeatureFlag } from '../feature-flags';
 import { PLATFORM_ENHANCEMENTS_FLAG } from '../../app/domain/feature-flags/feature-flags';
 
 // This suite changes only the isolated E2E database. One worker prevents flag races.
 test.describe('Platform enhancements', () => {
-  test.afterAll(async () => setFeatureFlag(PLATFORM_ENHANCEMENTS_FLAG, false));
+  let fiveParagraphId: string;
+  let originalModule: { id: string; title: string };
+  let addedModuleIds: string[] = [];
+  const moduleTitles = [
+    'Pre-Writing',
+    'Writing your Thesis Statement',
+    'Introduction Paragraph',
+    'Body Paragraphs',
+    'Conclusion Paragraph',
+    'Title Your Essay!',
+    'Review My Essay!',
+  ];
+  test.beforeAll(async () => {
+    const context = JSON.parse(
+      readFileSync(new URL('../.e2e-context.json', import.meta.url), 'utf8')
+    ) as E2EContext;
+    const db = createE2EPrismaClient();
+    try {
+      originalModule = await db.assignmentModule.findFirstOrThrow({
+        where: { assignmentTypeId: context.thesisEssayAssignmentTypeId },
+        select: { id: true, title: true },
+      });
+      await db.assignmentModule.update({
+        where: { id: originalModule.id },
+        data: { title: moduleTitles[0] },
+      });
+      for (const [i, title] of moduleTitles.slice(1).entries()) {
+        const module = await db.assignmentModule.create({
+          data: {
+            assignmentTypeId: context.thesisEssayAssignmentTypeId,
+            title,
+            position: i + 2,
+            description: `Student directions for ${title}.`,
+          },
+        });
+        addedModuleIds.push(module.id);
+      }
+      const five = await db.assignmentType.create({
+        data: {
+          title: '5-Paragraph Essay',
+          description:
+            'A clear claim, three supporting points, and a conclusion.',
+          ownerOrgId: context.organizationId,
+          organizationAssignments: {
+            create: { organizationId: context.organizationId },
+          },
+          assignmentModules: {
+            create: moduleTitles.map((title, i) => ({
+              title,
+              position: i + 1,
+              description: `Student directions for ${title}.`,
+            })),
+          },
+        },
+        select: { id: true },
+      });
+      fiveParagraphId = five.id;
+    } finally {
+      await db.$disconnect();
+    }
+  });
+  test.afterAll(async () => {
+    await setFeatureFlag(PLATFORM_ENHANCEMENTS_FLAG, false);
+    const db = createE2EPrismaClient();
+    try {
+      await db.assignmentModule.deleteMany({
+        where: { id: { in: addedModuleIds } },
+      });
+      if (originalModule)
+        await db.assignmentModule.update({
+          where: { id: originalModule.id },
+          data: { title: originalModule.title },
+        });
+      if (fiveParagraphId)
+        await db.assignmentType.delete({ where: { id: fiveParagraphId } });
+    } finally {
+      await db.$disconnect();
+    }
+  });
 
   for (const width of [1280, 390]) {
     test(`keeps the old presentation when off (${width}px)`, async ({
@@ -285,7 +366,7 @@ test.describe('Platform enhancements', () => {
         await expect(
           page.getByText('Showing 1–12 of 200', { exact: true })
         ).toBeAttached();
-        await page.goto(`/app/assignment-types/${e2eContext.assignmentTypeId}`);
+        await page.goto(`/app/assignment-types/${fiveParagraphId}`);
         await expect(
           page.getByRole('heading', {
             name: 'You write the prompt for this type',
@@ -304,6 +385,142 @@ test.describe('Platform enhancements', () => {
       }
     });
   }
+  test('saves a corpus prompt once and retains it in My prompts', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setFeatureFlag(PLATFORM_ENHANCEMENTS_FLAG, true);
+    const db = createE2EPrismaClient();
+    let savedId: string | undefined;
+    try {
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto(
+        `/app/assignment-types/${e2eContext.thesisEssayAssignmentTypeId}`
+      );
+      const library = page.locator('#prompt-library');
+      await library
+        .locator('article')
+        .first()
+        .getByRole('button', { name: 'Save to My prompts', exact: true })
+        .click();
+      await expect(
+        library
+          .locator('article')
+          .first()
+          .getByRole('button', { name: 'Saved to My prompts', exact: true })
+      ).toBeVisible();
+      await expect(
+        library.getByRole('tab', { name: 'My prompts 1', exact: true })
+      ).toBeVisible();
+      await library.getByRole('tab', { name: /My prompts/ }).click();
+      await expect(library.locator('article')).toHaveCount(1);
+      await expect(
+        library.getByRole('button', {
+          name: 'Saved to My prompts',
+          exact: true,
+        })
+      ).toBeDisabled();
+      savedId = (
+        await db.savedThesisPrompt.findFirstOrThrow({
+          where: {
+            membershipId: e2eContext.teacherMembershipId,
+            assignmentTypeId: e2eContext.thesisEssayAssignmentTypeId,
+          },
+        })
+      ).id;
+    } finally {
+      if (savedId)
+        await db.savedThesisPrompt.delete({ where: { id: savedId } });
+      await db.$disconnect();
+      await setFeatureFlag(PLATFORM_ENHANCEMENTS_FLAG, false);
+    }
+  });
+
+  test('Daily Pages has paged prompts without generation; AP keeps DBQ and LEQ', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setFeatureFlag(PLATFORM_ENHANCEMENTS_FLAG, true);
+    try {
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto(
+        `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
+      );
+      await expect(page.locator('#prompt-library article')).toHaveCount(12);
+      await page.locator('[data-tour="type-new"]:visible').click();
+      await expect(
+        page.getByRole('menuitem', { name: /Write a prompt/ })
+      ).toBeVisible();
+      await expect(
+        page.getByRole('menuitem', { name: /Choose from the library/ })
+      ).toBeVisible();
+      await expect(
+        page.getByRole('menuitem', { name: /Generate a prompt/ })
+      ).toHaveCount(0);
+      await page.keyboard.press('Escape');
+      await page.goto(
+        `/app/assignment-types/${e2eContext.apHistoryAssignmentTypeId}`
+      );
+      await page
+        .getByRole('button', { name: 'Create assignment', exact: true })
+        .click();
+      await expect(
+        page.getByRole('menuitem', { name: /New DBQ/ })
+      ).toBeVisible();
+      await page.getByRole('menuitem', { name: /New LEQ/ }).click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+    } finally {
+      await setFeatureFlag(PLATFORM_ENHANCEMENTS_FLAG, false);
+    }
+  });
+
+  test('no classes explains the next step; students retain the legacy page', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setFeatureFlag(PLATFORM_ENHANCEMENTS_FLAG, true);
+    const db = createE2EPrismaClient();
+    const classes = await db.class.findMany({
+      where: { teachers: { some: { id: e2eContext.teacherMembershipId } } },
+      select: { id: true },
+    });
+    try {
+      for (const c of classes)
+        await db.class.update({
+          where: { id: c.id },
+          data: {
+            teachers: { disconnect: { id: e2eContext.teacherMembershipId } },
+          },
+        });
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto(
+        `/app/assignment-types/${e2eContext.thesisEssayAssignmentTypeId}`
+      );
+      const trigger = page.locator('[data-tour="type-new"]:visible');
+      await expect(trigger).toHaveAttribute('aria-disabled', 'true');
+      await trigger.click();
+      await expect(
+        page.getByText('Add a class before you assign this.', { exact: true })
+      ).toBeVisible();
+      await expect(
+        page.getByRole('link', { name: /Go to My Classes/ })
+      ).toHaveAttribute('href', '/app/my-classes');
+    } finally {
+      for (const c of classes)
+        await db.class.update({
+          where: { id: c.id },
+          data: {
+            teachers: { connect: { id: e2eContext.teacherMembershipId } },
+          },
+        });
+      await db.$disconnect();
+      await setFeatureFlag(PLATFORM_ENHANCEMENTS_FLAG, false);
+    }
+  });
+
   test('keeps the lock badge and new icons in the free-account sidebar', async ({
     page,
     signIn,
