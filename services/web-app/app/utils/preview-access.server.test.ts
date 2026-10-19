@@ -298,6 +298,8 @@ describe('preview access gate', () => {
       ['GET', '/api/internal/v1/admin/organizations/org-1/invitations'],
       ['POST', '/api/internal/v1/admin/organizations/org-1/invitations'],
       ['POST', '/api/internal/v1/admin/organizations/org-1/invitations/inv-1/resend'],
+      ['POST', '/api/internal/v1/admin/organizations/org-1/invitations/inv-1/revoke'],
+      ['GET', '/api/internal/v1/admin/organizations/org-1/invitations/inv-1/revoke'],
       ['GET', '/api/internal/v1/admin/grading-benchmark/cases'],
       ['POST', '/api/internal/v1/admin/grading-benchmark/cases/c-1/run'],
       ['GET', '/api/internal/v1/admin/assignment-types/at-1/prompt-versions'],
@@ -343,7 +345,7 @@ describe('preview access gate', () => {
       );
       expect(await response?.text()).toBe('ok');
     }
-    expect(next).toHaveBeenCalledTimes(44);
+    expect(next).toHaveBeenCalledTimes(46);
   });
 
   test('fails closed when no access codes are configured', async () => {
