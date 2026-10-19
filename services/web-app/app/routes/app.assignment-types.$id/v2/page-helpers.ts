@@ -1,3 +1,4 @@
+import { formatDateOnly } from '~/utils/date-only';
 import {
   formatClassCardTitle,
   type ClassDisplayFields,
@@ -39,5 +40,10 @@ export function assignmentDueLabel(
     .map((d) => new Date(d).getTime())
     .filter(Number.isFinite);
   if (!times.length) return '';
-  return `Due ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone }).format(new Date(Math.min(...times)))}`;
+  return `Due ${formatDateOnly(new Date(Math.min(...times)), 'en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: undefined,
+    timeZone,
+  })}`;
 }
