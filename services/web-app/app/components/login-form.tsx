@@ -7,6 +7,7 @@ import { FormInput } from '~/components/forms/form-input-2';
 import { Button, button } from '~/components/ui/button';
 import { PasswordSchema } from '~/utils/schemas/user';
 import { LoginEmailOrHandleSchema } from '~/utils/login-identifier';
+import { useHydrated } from 'remix-utils/use-hydrated';
 
 export const LoginSchema = z.object({
   email: LoginEmailOrHandleSchema,
@@ -21,6 +22,9 @@ export function LoginForm({
   redirectTo: string | null;
   signupHref?: string;
 }) {
+  // RVF initializes its field state during hydration. Accepting input before
+  // that point can discard credentials entered into the server-rendered form.
+  const hydrated = useHydrated();
   const form = useForm({
     schema: LoginSchema,
     method: 'POST',
@@ -41,12 +45,14 @@ export function LoginForm({
           type="text"
           label="Email or handle"
           autoComplete="username"
+          disabled={!hydrated}
         />
         <FormInput
           scope={form.scope('password')}
           type="password"
           label="Password"
           autoComplete="current-password"
+          disabled={!hydrated}
         />
         <div className="flex items-center justify-end">
           <Link
@@ -59,6 +65,7 @@ export function LoginForm({
         <Button
           className="h-11 w-full text-base sm:h-10 sm:text-sm"
           type="submit"
+          disabled={!hydrated}
         >
           Log in
         </Button>

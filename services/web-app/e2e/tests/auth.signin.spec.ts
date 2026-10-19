@@ -8,6 +8,44 @@ const TEST_USER = {
 };
 
 test.describe('Authentication - real sign in', () => {
+  for (const origin of ['http://127.0.0.1:5173', 'http://ua.localhost:5173']) {
+    test(`waits for login hydration before accepting credentials on ${origin}`, async ({
+      page,
+      e2eContext,
+    }) => {
+      let releaseHydration!: () => void;
+      const hydration = new Promise<void>((resolve) => {
+        releaseHydration = resolve;
+      });
+      await page.route('**/*entry.client.tsx*', async (route) => {
+        await hydration;
+        await route.continue();
+      });
+      try {
+        await page.goto(`${origin}/auth/login`, { waitUntil: 'commit' });
+        const email = page.getByLabel('Email or handle');
+        const password = page.getByLabel('Password');
+        const submit = page.getByRole('button', { name: 'Log in', exact: true });
+        await expect(email).toBeVisible();
+        await expect(email).toBeDisabled();
+        await expect(password).toBeDisabled();
+        await expect(submit).toBeDisabled();
+
+        releaseHydration();
+        const account = origin.includes('ua.localhost')
+          ? e2eContext.ua.teacher
+          : TEST_USER;
+        await email.fill(account.email);
+        await password.fill(account.password);
+        await submit.click();
+        await expect(page).toHaveURL(`${origin}/app`);
+        await expect(page.getByTestId('app._index')).toBeVisible();
+      } finally {
+        releaseHydration();
+      }
+    });
+  }
+
   test('signs in via login form and reaches /app', async ({ page, signIn }) => {
     await signIn(TEST_USER.email, TEST_USER.password);
     await expect(page.getByTestId('app._index')).toBeVisible();
