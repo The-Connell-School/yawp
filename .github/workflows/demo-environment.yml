@@ -115,13 +115,14 @@ jobs:
           test -n "$PREVIEW_ANTHROPIC_API_KEY" || { echo "Missing an Anthropic API key secret"; exit 1; }
           test -n "$PREVIEW_POSTGRES_ADMIN_PASSWORD" || { echo "Missing demo secret PREVIEW_DB_PASSWORD"; exit 1; }
           test -n "$PREVIEW_MASTER_ACCESS_CODE" || { echo "Missing repository secret PREVIEW_MASTER_ACCESS_CODE"; exit 1; }
+          # Owner invitations also use Resend when billing is disabled.
+          test -n "$PREVIEW_RESEND_API_KEY" || { echo "Missing demo secret DEMO_RESEND_API_KEY"; exit 1; }
           if [[ "$PREVIEW_UA_STUDENT_BILLING_ENABLED" == "true" ]]; then
             test -n "$PREVIEW_UA_ORGANIZATION_ID" || { echo "Missing demo variable DEMO_UA_ORGANIZATION_ID"; exit 1; }
             test -n "$PREVIEW_UA_PARTNER_CODE" || { echo "Missing demo variable DEMO_UA_PARTNER_CODE"; exit 1; }
             test -n "$PREVIEW_STRIPE_SECRET_KEY" || { echo "Missing demo secret DEMO_STRIPE_SECRET_KEY"; exit 1; }
             test -n "$PREVIEW_STRIPE_WEBHOOK_SECRET" || { echo "Missing demo secret DEMO_STRIPE_WEBHOOK_SECRET"; exit 1; }
             test -n "$PREVIEW_STRIPE_UA_2026_PRICE_ID" || { echo "Missing demo variable DEMO_STRIPE_UA_2026_PRICE_ID"; exit 1; }
-            test -n "$PREVIEW_RESEND_API_KEY" || { echo "Missing demo secret DEMO_RESEND_API_KEY"; exit 1; }
           fi
           if [[ ! "$DEMO_BACKUP_RETENTION" =~ ^[1-9][0-9]{0,2}$ ]] \
             || (( DEMO_BACKUP_RETENTION < 1 || DEMO_BACKUP_RETENTION > 365 )); then
