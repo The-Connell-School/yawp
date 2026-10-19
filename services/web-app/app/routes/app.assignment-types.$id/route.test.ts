@@ -351,11 +351,10 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
     const response = await loader({
       request: new Request('https://yawp.test/app/assignment-types/at-1'),
       params: { id: 'at-1' },
-    } as any);
-    expect((response as any).data.yourAssignments.count).toBe(5);
-    expect((response as any).data.yourAssignments.items[0].id).toBe(
-      'assignment-1'
-    );
+    } as Parameters<typeof loader>[0]);
+    if (!('data' in response)) throw new Error('Expected loader data');
+    expect(response.data.yourAssignments?.count).toBe(5);
+    expect(response.data.yourAssignments?.items[0].id).toBe('assignment-1');
     expect(isFeatureFlagEnabled).toHaveBeenCalledWith(
       'platform-enhancements',
       'org-1'
@@ -398,8 +397,9 @@ describe('app.assignment-types.$id loader Class Starter prompt library', () => {
     const response = await loader({
       request: new Request('https://yawp.test/app/assignment-types/at-1'),
       params: { id: 'at-1' },
-    } as any);
-    expect((response as any).data).not.toHaveProperty('yourAssignments');
+    } as Parameters<typeof loader>[0]);
+    if (!('data' in response)) throw new Error('Expected loader data');
+    expect(response.data).not.toHaveProperty('yourAssignments');
     expect(prisma.assignment.findMany).not.toHaveBeenCalled();
     expect(prisma.assignment.count).not.toHaveBeenCalled();
   });
