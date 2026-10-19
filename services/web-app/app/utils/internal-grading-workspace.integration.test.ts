@@ -472,6 +472,11 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       expect(
         await prisma.internalPlatformApiAudit.count({ where: { keyId } })
       ).toBe(beforeTimeout + 2);
+      const runningRevision = (
+        await prisma.assignmentTypePromptVersion.findUniqueOrThrow({
+          where: { id: draft.id },
+        })
+      ).revision;
       const overlapDraftResponse = await handlers.handle(
         'promptVersions',
         request('POST', '/prompt-versions', {}, 'overlap-draft'),
@@ -526,6 +531,19 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
           overlapDraft.id
         );
         expect(overlapping.status).toBe(200);
+        const edited = await handlers.handle(
+          'promptVersion',
+          request('PATCH', `/prompt-versions/${draft.id}`, {
+            systemMessageTemplate: draft.systemMessageTemplate,
+          }),
+          id,
+          draft.id
+        );
+        expect(edited.status).toBe(200);
+        expect((await edited.json()).promptVersion.revision).toBe(
+          runningRevision + 1
+        );
+
         const pending = await handlers.handle(
           'runs',
           request('POST', '/evaluation-runs', runBody, 'run'),
@@ -554,6 +572,15 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       expect(started.status).toBe(201);
       const run = (await started.json()).run;
       expect(run.status).toBe('completed');
+      expect(run.promptRevision).toBe(runningRevision);
+      const stalePublish = await handlers.handle(
+        'publish',
+        request('POST', `/prompt-versions/${draft.id}/publish`, publishBody),
+        id,
+        draft.id
+      );
+      expect(stalePublish.status).toBe(409);
+
       expect(run.results).toHaveLength(1);
       expect(calls).toBe(4);
       const replayed = await handlers.handle(
@@ -578,6 +605,78 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
           )
         ).status
       ).toBe(409);
+      // Simulate a process dying after reservation, then advance the durable
+      // expiry. A different key recovers the guard; late completion is fenced.
+      let crashedReady!: () => void;
+      let releaseCrashed!: () => void;
+      const crashedWaiting = new Promise<void>((resolve) => {
+        crashedReady = resolve;
+      });
+      const crashedGate = new Promise<void>((resolve) => {
+        releaseCrashed = resolve;
+      });
+      const crashedHandlers = createInternalGradingWorkspaceHandlers({
+        db: prisma,
+        execute: async ({ purpose }) => {
+          crashedReady();
+          await crashedGate;
+          return JSON.stringify(
+            purpose === 'criterion'
+              ? { passed: true, evidence: 'Grounded' }
+              : expectedOutput
+          );
+        },
+      });
+      const crashed = crashedHandlers.handle(
+        'runs',
+        request('POST', '/evaluation-runs', runBody, 'crashed-run'),
+        id
+      );
+      await crashedWaiting;
+      try {
+        const reservation =
+          await prisma.internalPlatformApiAudit.findFirstOrThrow({
+            where: {
+              keyId,
+              action: 'grading-workspace.runs.post.before',
+              metadata: { path: ['idempotencyKey'], equals: 'crashed-run' },
+            },
+          });
+        expect((reservation.metadata as any).state).toBe('pending');
+        const expiry = Date.parse((reservation.metadata as any).expiresAt);
+        expect(expiry - Date.now()).toBeGreaterThan(110_000);
+        expect(expiry - Date.now()).toBeLessThanOrEqual(120_000);
+        await prisma.internalPlatformApiAudit.update({
+          where: { id: reservation.id },
+          data: {
+            metadata: {
+              ...(reservation.metadata as any),
+              expiresAt: new Date(Date.now() - 1).toISOString(),
+            },
+          },
+        });
+        const recovered = await handlers.handle(
+          'runs',
+          request('POST', '/evaluation-runs', runBody, 'recovered-run'),
+          id
+        );
+        expect(recovered.status).toBe(201);
+        const failed =
+          await prisma.assignmentTypeEvaluationRun.findUniqueOrThrow({
+            where: { id: reservation.targetId! },
+          });
+        expect(failed.status).toBe('failed');
+        expect(failed.completedAt).not.toBeNull();
+        const expiredReplay = await handlers.handle(
+          'runs',
+          request('POST', '/evaluation-runs', runBody, 'crashed-run'),
+          id
+        );
+        expect(expiredReplay.status).toBe(422);
+      } finally {
+        releaseCrashed();
+      }
+      expect((await crashed).status).toBe(422);
       const current =
         await prisma.assignmentTypePromptVersion.findUniqueOrThrow({
           where: { id: draft.id },
@@ -684,8 +783,8 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       const writes = audits.filter(
         (a) => a.result === 'before' || a.result === 'after'
       );
-      expect(writes.filter((a) => a.result === 'before')).toHaveLength(16);
-      expect(writes.filter((a) => a.result === 'after')).toHaveLength(16);
+      expect(writes.filter((a) => a.result === 'before')).toHaveLength(19);
+      expect(writes.filter((a) => a.result === 'after')).toHaveLength(19);
       for (const row of writes) {
         expect(row.actorEmail).toBe('operator@example.test');
         expect((row.metadata as any).reason).toBe('Lifecycle review');

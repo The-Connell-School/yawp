@@ -11,9 +11,10 @@ Bodies are strict JSON objects, limited to 256 KiB of raw bytes. Unknown fields,
 invalid UTF-8, invalid identifiers and malformed JSON return 400. `reason` is
 optional on every write; when supplied it is trimmed and must contain 1–500
 characters. It is recorded in both before/after audit rows with the signed actor,
-key ID and SHA256 of the original body. Writes use a ReadCommitted transaction
-and lock the assignment type with `FOR UPDATE`; mutations and audits commit or
-roll back together.
+key ID and SHA256 of the original body. Writes use short ReadCommitted transactions and lock the assignment type with
+`FOR UPDATE`. Run creation commits its running artifact and before audit before
+provider execution, then commits its final state and after audit together. Other
+writes keep mutations and paired audits in one transaction.
 
 ## Start a run
 
@@ -29,11 +30,15 @@ type RequestBody = {
 
 `Idempotency-Key` is required: 1–200 visible ASCII characters after trimming.
 Identical raw bytes, actor, key ID, endpoint and key replay the existing run with
-200 and no provider call or additional write audits. Changing the bytes under
-the same key returns 409. A new run returns 201. Re-sign every replay with a new
+200 and no provider call or additional write audits. The completed response is
+recorded durably; later domain edits do not change that replay. Changing the
+bytes under the same key returns 409, including while pending. An identical key
+while pending returns 409: `{"error":"An evaluation run request is waiting for another write; retry after it completes."}`.
+A new run returns 201. Re-sign every replay with a new
 nonce. Missing keys return 400.
 
-Execution reuses the admin `runSuite` domain action. `suiteId` establishes active
+Execution shares the admin `runSuite` preparation, provider execution, and result
+persistence functions. `suiteId` establishes active
 ownership; execution covers the **full current assignment type snapshot**,
 including every other active evaluation group and legacy case. The admin publish
 prerequisite requires this complete snapshot, prompt version and prompt revision.
@@ -101,23 +106,56 @@ uses `react-router-serve` without a shorter application response timeout.
 
 The API caps the complete snapshot at **eight active cases** and uses a **45-second
 budget**, starting before transaction acquisition. Provider calls receive an
-AbortSignal and are raced against its deadline, so a stalled provider cannot
-hold the request indefinitely. The transaction has a 55-second timeout and
-2-second pool acquisition limit. Transaction-local Postgres lock and statement
-timeouts are five and ten seconds, respectively, including the parent lock and idempotency lock;
-lock contention returns 409 with `{"error":"An evaluation run request is waiting for another write; retry after it completes."}`.
-A statement timeout returns 422 with `{"error":"Evaluation run database time budget exceeded; retry the request."}`.
-These limits leave headroom for database rollback and
-response delivery below the platform's 120-second ceiling. No queue is created.
+AbortSignal and are raced against its deadline. **No database transaction, parent
+row lock, or idempotency advisory lock remains open while awaiting a provider.**
+
+- Tx1 locks the parent and scoped idempotency key, validates ownership and the
+  complete immutable snapshot/cap, creates the running artifact, and writes the
+  before audit as the durable pending reservation; then commits.
+- Providers run outside transactions using those captured inputs. Admin and
+  internal edits on the same assignment type can complete during this wait.
+- Tx2 reacquires short locks, saves results and completion (or failed-run state),
+  writes the after audit with the finalized response, and commits. Changes to
+  prompt revision or evaluation snapshot during the wait retain the existing
+  publish prerequisite: an older run cannot validate newer content.
+
+Each database transaction has a 20-second ceiling and two-second pool acquisition
+limit. Transaction-local Postgres lock/statement timeouts are five/ten seconds,
+including the parent and idempotency locks. Lock contention returns 409 with
+`{"error":"An evaluation run request is waiting for another write; retry after it completes."}`.
+A statement timeout returns 422 with
+`{"error":"Evaluation run database time budget exceeded; retry the request."}`.
+A failed persistence transaction is rolled back before a fresh short transaction
+records failed state and the error response. If the database remains unavailable,
+the pending reservation is recovered as described below.
+
+Pending reservations expire **120 seconds after Tx1 reserves the request**, the
+platform request ceiling. On a later run request, the expired run is marked
+failed and its original key is finalized with the 422 time-budget error. This
+works for both the same key and a new key on the same assignment type. The
+original key replays that error; a fresh key can start a new run. Late completion
+of an expired request cannot overwrite the recovered result. Recovery is lazy,
+requires no queue or schema migration, and retains the original actor, signing
+key, endpoint, raw-body hash, reason, and audit pair.
+
+These limits leave headroom below the platform's 120-second ceiling. No queue is created.
 The existing admin route retains its execution behavior and limits.
 
 Exceeding the case cap returns 422 before provider execution:
 `{"error":"Evaluation runs support at most 8 active cases across the current assignment type snapshot."}`.
 Exceeding the budget returns 422:
 `{"error":"Evaluation run exceeded its 45-second time budget; reduce the case count or input size and retry."}`.
-A timed-out run and its result/audit writes roll back; it cannot satisfy publish.
-Use a fresh key or retry the same request after reducing the workload (a changed
-body requires a new key after a successful run).
+A timed-out run remains `failed`, with `completedAt` set, `failedCases` equal to
+`totalCases`, no partial results, and paired before/after audits. It cannot satisfy
+publish. The original key replays the same 422 error without another provider
+call. Use a fresh key for a retry, including a changed body. Request-level errors
+retain their existing status and `{error}`-only envelope.
+
+Provider errors caught by the shared per-case evaluator retain admin behavior:
+they become failed case results in a completed run (201; replay 200). An uncaught
+execution error marks the run failed and returns the generic 500 error. A database
+statement failure during finalization marks it failed and returns 422. These
+finalized failures replay their original error status/body, with no provider call.
 
 ## Delete an evaluation suite
 

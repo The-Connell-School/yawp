@@ -32,7 +32,7 @@ function req(method: string, path: string, value?: unknown, opts: any = {}) {
             body,
             keyId: opts.keyId ?? 'writer',
             secret,
-            actor: 'Operator@example.test',
+            actor: opts.actor ?? 'Operator@example.test',
           }).headers),
       ...(opts.key ? { 'Idempotency-Key': opts.key } : {}),
     },
@@ -149,6 +149,11 @@ beforeEach(() => {
   process.env.YAWP_INTERNAL_API_KEYS = JSON.stringify([
     { id: 'writer', secret, scopes: ['management:write', 'management:read'] },
     { id: 'reader', secret, scopes: ['management:read'] },
+    {
+      id: 'writer-two',
+      secret,
+      scopes: ['management:write', 'management:read'],
+    },
   ]);
   process.env.YAWP_MANAGEMENT_SERVICE_KEY = 'x'.repeat(43);
   process.env.INTERNAL_API_NONCE_STORE = 'memory';
@@ -858,11 +863,16 @@ function runFixture() {
         null
     ),
     create: mock(async ({ data }: any) => {
-      const run = { id: 'run-1', results, ...data };
+      const run = { id: `run-${runs.length + 1}`, results, ...data };
       runs.push(run);
       return run;
     }),
-    update: mock(async ({ data }: any) => Object.assign(runs[0], data)),
+    update: mock(async ({ where, data }: any) =>
+      Object.assign(
+        runs.find((r) => r.id === where.id),
+        data
+      )
+    ),
   };
   f.db.assignmentTypeEvaluationResult = {
     createMany: mock(async ({ data }: any) => {
@@ -871,11 +881,15 @@ function runFixture() {
   };
   f.db.internalPlatformApiAudit.findFirst = mock(
     async ({ where }: any) =>
-      f.audits.find(
-        (a) =>
-          a.action === where.action &&
-          a.metadata.idempotencyKey === where.metadata.equals
-      ) ?? null
+      [...f.audits]
+        .reverse()
+        .find((a) =>
+          Object.entries(where).every(([field, value]) =>
+            field === 'metadata'
+              ? a.metadata.idempotencyKey === (value as any).equals
+              : a[field] === value
+          )
+        ) ?? null
   );
   const execute = mock(async ({ purpose }: any) =>
     JSON.stringify(
@@ -1142,6 +1156,10 @@ test('expired pending reservation recovers a crashed run without calling provide
   });
   f.audits.push({
     action: 'grading-workspace.runs.post.before',
+    endpoint:
+      'POST /api/internal/v1/admin/assignment-types/at-1/evaluation-runs',
+    actorEmail: 'operator@example.test',
+    keyId: 'writer',
     result: 'before',
     targetId: 'crashed',
     requestHash: createHash('sha256')
@@ -1200,7 +1218,7 @@ test('already archived suite returns 404 without writes', async () => {
 test('run supports archived parent, legacy-only snapshot and built-in kind', async () => {
   const f = runFixture();
   f.parent.archivedAt = new Date();
-  f.parent.kind = 'thesis';
+  f.parent.kind = 'thesis_statement';
   f.snapshot.snapshotJson.legacyCases = f.snapshot.snapshotJson.evaluations[0]
     .cases as any;
   f.snapshot.snapshotJson.evaluations = [];
@@ -1230,4 +1248,70 @@ test('run rejects empty snapshot and AP History assignment context without provi
     expect(f.execute).not.toHaveBeenCalled();
     expect(f.runs).toHaveLength(0);
   }
+});
+
+test('run idempotency is scoped to the signed actor and signing key', async () => {
+  for (const changed of [
+    { actor: 'Other@example.test' },
+    { keyId: 'writer-two' },
+  ]) {
+    const f = runFixture();
+    const first = await f.handlers.handle(
+      'runs',
+      req('POST', '/evaluation-runs', runBody, { key: 'scoped' }),
+      'at-1'
+    );
+    expect(first.status).toBe(201);
+    const other = await f.handlers.handle(
+      'runs',
+      req('POST', '/evaluation-runs', runBody, { key: 'scoped', ...changed }),
+      'at-1'
+    );
+    expect(other.status).toBe(201);
+    expect(f.execute).toHaveBeenCalledTimes(4);
+    expect(f.audits).toHaveLength(4);
+  }
+});
+
+test('provider case errors retain admin failed-case semantics and completed replay', async () => {
+  const f = runFixture();
+  let calls = 0;
+  const handlers = createInternalGradingWorkspaceHandlers({
+    db: f.db,
+    execute: async () => {
+      calls++;
+      throw new Error('Provider unavailable');
+    },
+  });
+  const start = () =>
+    handlers.handle(
+      'runs',
+      req('POST', '/evaluation-runs', runBody, { key: 'provider-error' }),
+      'at-1'
+    );
+  const res = await start();
+  expect(res.status).toBe(201);
+  const run = (await res.json()).run;
+  expect(run.status).toBe('completed');
+  expect(run.failedCases).toBe(1);
+  expect(run.results[0].status).toBe('fail');
+  expect((await start()).status).toBe(200);
+  expect(calls).toBe(1);
+});
+
+test('pre-reservation completed audit records remain replayable', async () => {
+  const f = runFixture();
+  const start = () =>
+    f.handlers.handle(
+      'runs',
+      req('POST', '/evaluation-runs', runBody, { key: 'legacy-replay' }),
+      'at-1'
+    );
+  const res = await start();
+  const expected = await res.json();
+  delete f.audits[1].metadata.response;
+  const replay = await start();
+  expect(replay.status).toBe(200);
+  expect(await replay.json()).toEqual(expected);
+  expect(f.execute).toHaveBeenCalledTimes(2);
 });

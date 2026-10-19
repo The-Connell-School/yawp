@@ -905,6 +905,7 @@ export async function executeGradingWorkspaceAction(
       return errorResponse('Evaluation case not found.', 404);
     return dataResponse({ success: true });
   }
+  throw new Error('Unsupported grading workspace action');
 }
 
 function loadWorkspaceAssignmentType(
