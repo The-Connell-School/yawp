@@ -359,6 +359,7 @@ test.each(['returned', 'thrown'] as const)('create logs a redacted %s delivery f
     expect(log.mock.calls[0]).toEqual(['owner_invitation_delivery_failed', {
       provider: 'resend', recipientDomain: 'example.test', name: 'validation_error',
       code: null, statusCode: 403, message: 'Sender domain is not verified',
+      validationReason: 'sender_domain_unverified',
     }]);
     expect(JSON.stringify(log.mock.calls)).not.toMatch(/private|https:|new@/);
   } finally {
