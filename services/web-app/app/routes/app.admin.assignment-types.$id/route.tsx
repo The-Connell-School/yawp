@@ -9,7 +9,7 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { AssignmentTypeEditorForm } from '~/components/admin/assignment-type-editor-form';
 import { requireAdmin, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { archiveAssignmentType, restoreAssignmentType, updateAssignmentType, replaceAssignmentTypeImage, removeAssignmentTypeImage, parseAdminUpdateGradingConfig } from '~/domain/assignment-types/assignment-type-admin-writes.server';
+import { archiveAssignmentType, restoreAssignmentType, updateAssignmentType, replaceAssignmentTypeImage, removeAssignmentTypeImage, parseAdminUpdateGradingConfig, withGradingInstructionsOverride } from '~/domain/assignment-types/assignment-type-admin-writes.server';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
@@ -186,7 +186,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
       }
     }
 
-    const gradingConfig = parseAdminUpdateGradingConfig(formData, existing);
+    const overrideChanged =
+      formData.has('gradingInstructionsOverride') &&
+      (formData.get('gradingInstructionsOverride')?.toString().trim() ?? '') !==
+        readGradingInstructionsOverride(existing.gradingPromptConfigJson);
+    // Legacy forms overlay the stored config only when the textarea changed.
+    // An explicit config (including {}) also retains the form's versioning rules.
+    const gradingConfig = parseAdminUpdateGradingConfig(formData, existing) ??
+      (overrideChanged ? {
+        gradingPromptConfigJson: withGradingInstructionsOverride(
+          existing.gradingPromptConfigJson,
+          formData.get('gradingInstructionsOverride')
+        ),
+        gradingAssistantVersion: { increment: 1 },
+      } : {});
     await prisma.$transaction(async (tx) => {
       if (deleteImage) {
         await removeAssignmentTypeImage(tx, assignmentTypeId);
@@ -199,7 +212,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
         title, description: description || null,
         ...(rubricSelection ? { rubricSelection } : {}),
         ...(hasTutorInstructions ? { tutorInstructions: tutorInstructions || null } : {}),
-        ...(formData.has('gradingInstructionsOverride') ? { gradingInstructionsOverride: formData.get('gradingInstructionsOverride')?.toString() ?? '' } : {}),
         gradingConfig,
       });
     });

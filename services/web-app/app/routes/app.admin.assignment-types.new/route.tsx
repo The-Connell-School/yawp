@@ -61,11 +61,21 @@ export async function action({ request }: ActionFunctionArgs) {
     throw error;
   }
 
+  // A blank legacy form field leaves the copied per-type configuration intact.
+  const override = formData.get('gradingInstructionsOverride')?.toString().trim();
+  if (override) {
+    gradingConfigData = {
+      ...gradingConfigData,
+      gradingPromptConfigJson: {
+        ...(gradingConfigData.gradingPromptConfigJson ?? {}),
+        gradingInstructionsOverride: override,
+      },
+    };
+  }
   const assignmentType = await createAssignmentType(prisma, {
     title, description, tutorInstructions,
     ...(rubricSelection ? { rubricSelection } : {}),
     gradingConfig: gradingConfigData,
-    gradingInstructionsOverride: formData.get('gradingInstructionsOverride')?.toString(),
   });
 
   return redirect(`/app/admin/assignment-types/${assignmentType.id}`);
