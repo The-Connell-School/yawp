@@ -57,7 +57,8 @@ async function openMyPrompts(page: import('@playwright/test').Page) {
   await expect(page.getByPlaceholder('Search prompts')).toBeVisible();
   const myPrompts = page.getByRole('checkbox', { name: 'My prompts' }).first();
   await expect(myPrompts).toBeVisible();
-  if (!(await myPrompts.isChecked())) await myPrompts.check();
+  if (!(await myPrompts.isChecked())) await myPrompts.click();
+  await expect(myPrompts).toBeChecked();
 }
 
 test.describe.serial('Class Starter — My prompts', () => {

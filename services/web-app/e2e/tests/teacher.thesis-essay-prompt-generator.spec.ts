@@ -123,6 +123,7 @@ test.describe.serial('Thesis-Driven Essay prompt generator', () => {
     await expect(page.getByRole('button', { name: /^New/ })).toHaveCount(0);
 
     // Teachers on a different assignment type do not get the generator option.
+    await page.request.post('/auth/logout');
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(
       `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`

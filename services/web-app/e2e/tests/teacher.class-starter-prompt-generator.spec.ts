@@ -149,6 +149,7 @@ test.describe.serial('Class Starter prompt generator', () => {
     ).toHaveCount(0);
 
     // Teachers on a different assignment type do not get the generator option.
+    await page.request.post('/auth/logout');
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(`/app/assignment-types/${e2eContext.assignmentTypeId}`);
     await page.getByRole('button', { name: /^New/ }).click();
