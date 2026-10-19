@@ -23,6 +23,10 @@ const prisma = {
     delete: mock(async (_args: any) => ({})),
   },
 };
+const sendEmail = mock(async () => {
+  throw new Error('Training tests must not send email');
+});
+mock.module('~/utils/email.server', () => ({ sendEmail }));
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
   requireAdmin,
@@ -136,4 +140,8 @@ test('existing admin forms preserve redirects, validation, video keys and blob w
     call(index, { intent: 'create', title: 'Blocked' })
   ).rejects.toBeInstanceOf(Response);
   expect(prisma.teacherTraining.create).toHaveBeenCalledTimes(1);
+});
+
+test('training writes never send email', () => {
+  expect(sendEmail).not.toHaveBeenCalled();
 });

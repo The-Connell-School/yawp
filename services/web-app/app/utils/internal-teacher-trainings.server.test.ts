@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { createHash, randomUUID } from 'node:crypto';
+const sendEmail = mock(async () => {
+  throw new Error('Training tests must not send email');
+});
+mock.module('~/utils/email.server', () => ({ sendEmail }));
 mock.module('~/utils/db.server', () => ({ prisma: {} }));
 const { createInternalTeacherTrainingHandlers } =
   await import('./internal-teacher-trainings.server');
@@ -769,4 +773,34 @@ test('upload ownership binds signed operator and errors never expose SDK details
     error: 'Teacher training operation failed',
   });
   expect(f.db.teacherTrainingModule.update).not.toHaveBeenCalled();
+});
+
+test('training writes never send email', () => {
+  expect(sendEmail).not.toHaveBeenCalled();
+});
+
+test('read and auth infrastructure failures retain the JSON-only error contract', async () => {
+  const f = fixture();
+  f.db.teacherTraining.findMany.mockRejectedValueOnce(
+    new Error('private database details')
+  );
+  const read = await f.invoke('list', request('GET', ''));
+  expect(read.status).toBe(502);
+  expect(await read.json()).toEqual({
+    error: 'Teacher training operation failed',
+  });
+  const handler = createInternalTeacherTrainingHandlers({
+    db: f.db,
+    authenticate: async () => {
+      throw new Error('private auth storage details');
+    },
+  });
+  const auth = await handler.handle(
+    'create',
+    request('POST', '', { title: 'New' })
+  );
+  expect(auth.status).toBe(502);
+  expect(await auth.json()).toEqual({
+    error: 'Teacher training operation failed',
+  });
 });

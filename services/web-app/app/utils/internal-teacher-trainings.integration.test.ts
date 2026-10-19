@@ -1,5 +1,9 @@
-import { expect, test } from 'bun:test';
+import { expect, mock, test } from 'bun:test';
 import { randomBytes, randomUUID } from 'node:crypto';
+const sendEmail = mock(async () => {
+  throw new Error('Training integration must not send email');
+});
+mock.module('~/utils/email.server', () => ({ sendEmail }));
 
 test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
   'signed teacher training lifecycle, concurrent replay and ownership use real Postgres',
@@ -370,6 +374,7 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       );
       expect(JSON.stringify(audits)).not.toContain('"blob"');
       expect(JSON.stringify(audits)).not.toContain('https://s3.');
+      expect(sendEmail).not.toHaveBeenCalled();
     } finally {
       if (id) await prisma.teacherTraining.deleteMany({ where: { id } });
       await prisma.internalPlatformApiAudit.deleteMany({ where: { keyId } });
