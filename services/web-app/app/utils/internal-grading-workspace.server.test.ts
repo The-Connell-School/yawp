@@ -2,7 +2,7 @@ import { beforeEach, afterEach, expect, mock, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 const prisma: any = {};
 mock.module('~/utils/db.server', () => ({ prisma }));
-const completion = mock(async () => {
+const completion = mock(async (_input: any): Promise<string> => {
   throw new Error('Provider must be explicitly mocked');
 });
 mock.module('~/utils/getLLMCompletion', () => ({
@@ -586,4 +586,37 @@ test('suite PATCH rejects duplicate case IDs', async () => {
     ).status
   ).toBe(400);
   expect(f.db.$transaction).not.toHaveBeenCalled();
+});
+
+test('scratch default provider adapter requests audit-only persistence', async () => {
+  const f = fixture();
+  completion.mockImplementation(async ({ metadata }: any) =>
+    metadata.kind === 'criterion'
+      ? JSON.stringify({ passed: true, evidence: 'Grounded' })
+      : JSON.stringify({
+          categories: [{ key: 'claim', score: 3, comment: 'Grounded' }],
+          overallComment: 'Jordan, explain the claim.',
+        })
+  );
+  const res = await f.handlers.handle(
+    'scratch',
+    req('POST', '/scratch-check', {
+      promptVersion: 'pv-1',
+      sampleSubmission: 'Scratch sample',
+      check: 'Grounded',
+    }),
+    'at-1'
+  );
+  expect(res.status).toBe(200);
+  expect(completion).toHaveBeenCalledTimes(2);
+  for (const [call] of completion.mock.calls as any)
+    expect(call).toMatchObject({
+      logPayload: 'audit-only',
+      attribution: {
+        organizationId: null,
+        membershipId: null,
+        route: 'api/internal/v1/admin/grading-workspace',
+      },
+    });
+  expect(f.audits).toHaveLength(2);
 });

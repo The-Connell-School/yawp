@@ -263,7 +263,7 @@ export function createInternalGradingWorkspaceHandlers(input: {
         (async ({ purpose, ...completion }) =>
           getLLMCompletion({
             ...completion,
-            logPayload: 'metadata-only',
+            logPayload: resource === 'scratch' ? 'audit-only' : 'metadata-only',
             model: process.env.AI_MODEL ?? 'claude-sonnet-4-6',
             metadata: {
               feature: 'grading-evaluation',
