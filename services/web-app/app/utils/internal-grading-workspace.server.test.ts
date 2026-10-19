@@ -301,6 +301,29 @@ test('draft create locks parent, audits signed actor/reason/raw hash, replays an
   ).toBe(409);
   expect(completion).not.toHaveBeenCalled();
 });
+test('grouped case creation requires full expected output before domain access', async () => {
+  const f = fixture();
+  for (const expectedOutput of [undefined, null]) {
+    const result = await f.handlers.handle(
+      'cases',
+      req('POST', '/evaluation-suites/suite-1/cases', {
+        name: 'Case',
+        sample: 'An argument',
+        rubricCategoryKey: 'claim',
+        expectedOutput,
+      }),
+      'at-1',
+      'suite-1'
+    );
+    expect(result.status).toBe(400);
+    expect(await result.json()).toEqual({
+      error: 'Invalid grading workspace request',
+    });
+  }
+  expect(f.db.$transaction).not.toHaveBeenCalled();
+  expect(f.events).toEqual([]);
+  expect(f.audits).toHaveLength(0);
+});
 test('a full group rejects a new case after locking and before any writes', async () => {
   const f = fixture();
   f.db.assignmentTypeEvaluation.findFirst = mock(async () => {
@@ -317,6 +340,10 @@ test('a full group rejects a new case after locking and before any writes', asyn
       name: 'One too many',
       sample: 'An argument',
       rubricCategoryKey: 'claim',
+      expectedOutput: {
+        categories: [{ key: 'claim', score: 3, comment: 'Clear claim' }],
+        overallComment: 'Explain the evidence.',
+      },
     }),
     'at-1',
     'suite-1'
@@ -356,6 +383,10 @@ test('suite ownership protects case creation and editing', async () => {
           name: 'Case',
           sample: 'Essay',
           rubricCategoryKey: 'claim',
+          expectedOutput: {
+            categories: [{ key: 'claim', score: 3, comment: 'Clear claim' }],
+            overallComment: 'Explain the evidence.',
+          },
         }),
         'at-1',
         'foreign'

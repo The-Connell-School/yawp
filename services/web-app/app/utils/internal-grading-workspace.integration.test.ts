@@ -188,6 +188,45 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       ).toBe(200);
       const casesPath = `/evaluation-suites/${suite.id}/cases`;
       const caseBody = { ...sample, rubricCategoryKey: 'claim' };
+      const stateBeforeInvalidCase = {
+        cases: await prisma.assignmentTypeEvaluationCase.findMany({
+          where: { assignmentTypeId: id },
+          orderBy: { id: 'asc' },
+        }),
+        snapshots: await prisma.assignmentTypeEvaluationSuiteVersion.findMany({
+          where: { assignmentTypeId: id },
+          orderBy: { version: 'asc' },
+        }),
+        audits: await prisma.internalPlatformApiAudit.count({ where: { keyId } }),
+      };
+      for (const invalidOutput of [undefined, null]) {
+        const invalidCase = await handlers.handle(
+          'cases',
+          request('POST', casesPath, {
+            name: 'Missing expected output',
+            sample: sample.sample,
+            rubricCategoryKey: 'claim',
+            expectedOutput: invalidOutput,
+          }),
+          id,
+          suite.id
+        );
+        expect(invalidCase.status).toBe(400);
+        expect(await invalidCase.json()).toEqual({
+          error: 'Invalid grading workspace request',
+        });
+      }
+      expect({
+        cases: await prisma.assignmentTypeEvaluationCase.findMany({
+          where: { assignmentTypeId: id },
+          orderBy: { id: 'asc' },
+        }),
+        snapshots: await prisma.assignmentTypeEvaluationSuiteVersion.findMany({
+          where: { assignmentTypeId: id },
+          orderBy: { version: 'asc' },
+        }),
+        audits: await prisma.internalPlatformApiAudit.count({ where: { keyId } }),
+      }).toEqual(stateBeforeInvalidCase);
       const caseRes = await handlers.handle(
         'cases',
         request('POST', casesPath, caseBody, 'case'),
