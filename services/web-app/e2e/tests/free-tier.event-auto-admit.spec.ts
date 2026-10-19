@@ -126,7 +126,7 @@ test.describe('Free-tier event auto-admit QA', () => {
       });
 
       await page.goto(`/free/join?t=${encodeURIComponent(release.token)}`);
-      await expect(page.getByRole('heading', { name: 'Create your free classroom' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: /^(Welcome to YAWP!|Create your free classroom)$/ })).toBeVisible();
       await shot(page, '03-release-join-account-form.png');
 
       await page.getByLabel('Your name').fill(teacherName);

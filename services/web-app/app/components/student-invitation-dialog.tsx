@@ -15,11 +15,14 @@ export function StudentInvitationDialog({
   open,
   onOpenChange,
   returnFocusRef,
+  freeTierCopy = false,
 }: {
   code: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
+  /** Onboarding v2 free classrooms: Brian's 10/18 student join copy. */
+  freeTierCopy?: boolean;
 }) {
   const previousFocus = useRef<HTMLElement | null>(null);
   const [present, setPresent] = useState(false);
@@ -56,10 +59,14 @@ export function StudentInvitationDialog({
       >
         <DialogHeader>
           <DialogTitle className="pr-6 text-2xl">
-            Add your students to your class
+            {freeTierCopy && present ? 'Welcome to YAWP!' : 'Add your students to your class'}
           </DialogTitle>
           <DialogDescription>
-            Show these steps to your students to help them join your class.
+            {freeTierCopy
+              ? present
+                ? 'Follow these steps to join your class.'
+                : 'Adding students is easy. Put these steps up on the board and walk your class through them together. It takes about five minutes.'
+              : 'Show these steps to your students to help them join your class.'}
           </DialogDescription>
         </DialogHeader>
         <ol
@@ -84,11 +91,31 @@ export function StudentInvitationDialog({
               {code}
             </div>
           </li>
-          <li>
-            Follow the steps to create your account or sign in, then open your
-            class.
-          </li>
+          {freeTierCopy ? (
+            <>
+              <li>Type your first and last name.</li>
+              <li>
+                Create a password. Pick one you won’t forget; many students use
+                the same password they use for their school laptop.
+              </li>
+              <li>
+                YAWP! will create your username for you. Write it down; you’ll
+                use it with your password every time you sign in.
+              </li>
+            </>
+          ) : (
+            <li>
+              Follow the steps to create your account or sign in, then open your
+              class.
+            </li>
+          )}
         </ol>
+        {freeTierCopy ? (
+          <p className={cn('text-base', present && 'mx-auto max-w-3xl text-xl')}>
+            You’re in! Next time, just sign in at yawp.school with your
+            username and password.
+          </p>
+        ) : null}
         <div className="flex flex-wrap items-center gap-3">
           <Button
             variant="outline"

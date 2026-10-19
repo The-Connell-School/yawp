@@ -19,7 +19,9 @@ export function FreeTierWelcomeCard({
     <FreeTierAuthCard
       title={onboardingV2 ? 'Welcome to Yawp!' : 'Try Yawp! with your students'}
       subtitle={onboardingV2
-        ? "We're so glad you're here and we can't wait for you to Yawp! with your students"
+        ? eventLink
+          ? "We're so glad you're here, and we can't wait for you to use Yawp! with your students. Enter your details below to get started."
+          : "We're so glad you're here, and we can't wait for you to use Yawp! with your students. Enter your details below to join the waitlist. We're releasing free classroom licenses to teachers in small groups, so spots open up regularly."
         : eventLink
           ? 'Use your event link to continue.'
           : 'Join the waitlist. We let teachers in a group at a time.'}
@@ -51,7 +53,9 @@ export function FreeTierSubmissionCard({
     : onboardingV2 ? "You're on the list!" : "You're on the list";
   const detail = bypassWaitlist
     ? email ? `Your join link is on its way to ${email}.` : 'Your join link is on its way.'
-    : email ? `We will email ${email} when your classroom is ready.` : 'We will email you when your classroom is ready.';
+    : onboardingV2
+      ? `We'll email you${email ? ` at ${email}` : ''} as soon as your spot opens up. In the meantime, keep an eye on your inbox (and your spam folder, just in case). Thanks for wanting to make writing a bigger part of your classroom.`
+      : email ? `We will email ${email} when your classroom is ready.` : 'We will email you when your classroom is ready.';
   return (
     <FreeTierAuthCard
       status
@@ -66,14 +70,16 @@ export function FreeTierSubmissionCard({
 /** Render only after the server has durably recorded a below-9 submission. */
 export function FreeTierBelowHighSchoolCard() {
   return (
-    <FreeTierAuthCard status title="Free classrooms are for high school for now">
+    <FreeTierAuthCard status title="Thanks for your interest in Yawp!">
       <p className="text-sm text-muted-foreground">
-        Thank you for your interest! Free Yawp! classrooms are currently available for grades 9–12. We’ve saved your email.
+        Right now, we’re releasing free classroom licenses to high school teachers only. But Yawp! already works with middle schools and colleges through school and department partnerships, and we’d love to talk about how it could work for your students.
       </p>
       <p className="text-sm text-muted-foreground">
-        Yawp! is available for younger grades through a site license.
-        {' '}Contact <a className="underline" href="mailto:hello@yawp.school">hello@yawp.school</a> to learn more.
+        We’ve saved your email, and we’ll let you know if free access opens up for your grade level.
       </p>
+      <a className="inline-flex h-11 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground" href="mailto:hello@yawp.school">
+        Talk with our team
+      </a>
     </FreeTierAuthCard>
   );
 }

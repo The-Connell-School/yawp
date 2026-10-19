@@ -251,7 +251,7 @@ test.describe('Free-tier event waitlist QA', () => {
       const releaseToken = releaseTokenFromJoinUrl(releasePayload.joinUrl);
 
       await page.goto(`/free/join?t=${encodeURIComponent(releaseToken)}`);
-      await expect(page.getByRole('heading', { name: 'Create your free classroom' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: /^(Welcome to YAWP!|Create your free classroom)$/ })).toBeVisible();
       await shot(page, '04-release-youre-in-join-form.png');
 
       await page.getByLabel('Your name').fill(teacherName);
