@@ -860,6 +860,7 @@ jobs:
             'app/utils/tester-feedback-runtime.server.test.ts' \
             'app/routes/api.admin.tester-feedback/route.test.ts' \
             'app/utils/preview-access.server.test.ts' \
+            'app/utils/preview-free-tier-access.server.test.ts' \
             'app/utils/internal-grading-stats.server.test.ts' \
             'app/routes/api.internal.v1.stats.grading/route.test.ts' \
             'app/routes/api.internal.v1.audit/route.test.ts' \

@@ -6,6 +6,18 @@ import {
   type PreviewSeatSessionGuard,
 } from './preview-session-seat.server';
 
+import {
+  freeTierPreviewAccess,
+  freeTierPreviewDependencies,
+  type FreeTierPreviewDependencies,
+} from './preview-free-tier-access.server';
+export {
+  FREE_TIER_ACCESS_COOKIE_NAME,
+  FREE_TIER_ACCESS_MAX_AGE,
+  createFreeTierAccessCookie,
+  type FreeTierPreviewDependencies,
+} from './preview-free-tier-access.server';
+
 export const PREVIEW_ACCESS_COOKIE_NAME = '__yawp_preview_access';
 export const PREVIEW_MASTER_SELECTION_COOKIE_NAME = '__yawp_preview_master';
 export const PREVIEW_ACCESS_PATH = '/auth/preview-access';
@@ -624,7 +636,8 @@ function stripCodeQueryParam(request: Request): Response | null {
  */
 export function createPreviewAccessMiddleware(
   sessionGuard: PreviewSeatSessionGuard = enforcePreviewSeatSession,
-  repository: PreviewAccessSeatRepository = databasePreviewSeatRepository
+  repository: PreviewAccessSeatRepository = databasePreviewSeatRepository,
+  freeTierDependencies: FreeTierPreviewDependencies = freeTierPreviewDependencies
 ): MiddlewareFunction<Response> {
   return async ({ request }, next) => {
     if (!isPreviewAccessGateEnabled()) return next();
@@ -650,7 +663,19 @@ export function createPreviewAccessMiddleware(
       const cleanedEntry = stripCodeQueryParam(request);
       if (cleanedEntry) return cleanedEntry;
     }
-    if (!seat) return blockedResponse(request);
+    if (!seat) {
+      const freeTierAccess = await freeTierPreviewAccess(
+        request,
+        freeTierDependencies
+      );
+      if (!freeTierAccess) return blockedResponse(request);
+      const response = await next();
+      if (freeTierAccess.setCookie) {
+        response?.headers.append('Set-Cookie', freeTierAccess.setCookie);
+      }
+      if (response) response.headers.set('Cache-Control', 'no-store');
+      return response;
+    }
 
     if (isIsolatedPreviewSeatMode()) {
       const sessionBlock = await sessionGuard(request, seat);
