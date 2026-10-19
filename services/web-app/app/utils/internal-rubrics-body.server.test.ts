@@ -65,7 +65,7 @@ for (const route of routes) describe(`POST /api/internal/v1${route.path}`, () =>
       for (const [name, value] of Object.entries(signed.headers)) headers.set(name, value);
     }
     if (mode === 'bearer' || mode === 'both') headers.set('authorization', `Bearer ${bearer}`);
-    return new Request(url, { method: 'POST', headers, body });
+    return new Request(url, { method: 'POST', headers, body: typeof body === 'string' ? body : new Uint8Array(body) });
   }
 
   test.each(['hmac', 'bearer', 'both'] as const)('accepts exact compact and formatted JSON with %s auth', async mode => {
