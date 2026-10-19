@@ -101,13 +101,13 @@ function decodeImage(data: z.infer<typeof imageSchema>) {
       .subarray(0, 8)
       .equals(Buffer.from('89504e470d0a1a0a', 'hex')),
     'image/jpeg': blob.subarray(0, 3).equals(Buffer.from('ffd8ff', 'hex')),
-    'image/gif': ['GIF87a', 'GIF89a'].includes(
-      blob.subarray(0, 6).toString('ascii')
+    'image/gif': ['GIF87a', 'GIF89a'].some((magic) =>
+      blob.subarray(0, 6).equals(Buffer.from(magic))
     ),
     'image/webp':
       blob.length >= 12 &&
-      blob.subarray(0, 4).toString('ascii') === 'RIFF' &&
-      blob.subarray(8, 12).toString('ascii') === 'WEBP',
+      blob.subarray(0, 4).equals(Buffer.from('RIFF')) &&
+      blob.subarray(8, 12).equals(Buffer.from('WEBP')),
   };
   if (!matches[data.contentType])
     throw response(

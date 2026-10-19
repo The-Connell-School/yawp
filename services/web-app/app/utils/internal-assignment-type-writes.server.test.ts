@@ -429,6 +429,16 @@ describe('signed assignment type writes', () => {
     { ...image, dataBase64: '!!!' },
     { ...image, dataBase64: '' },
     { ...image, extra: true },
+    {
+      contentType: 'image/gif',
+      dataBase64: Buffer.from('c7c9c6b8b9e1', 'hex').toString('base64'),
+    },
+    {
+      contentType: 'image/webp',
+      dataBase64: Buffer.from('d2c9c6c604000000d7c5c2d0', 'hex').toString(
+        'base64'
+      ),
+    },
   ])('invalid image', async (body) => {
     const { handlers, db } = fixture();
     expect(
