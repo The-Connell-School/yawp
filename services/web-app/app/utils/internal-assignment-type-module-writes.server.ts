@@ -5,6 +5,8 @@ import {
   response,
   requestHash,
   writeAuditRows,
+  readBoundedBody,
+  reasonSchema,
 } from './internal-admin-write.server';
 import {
   identifier,
@@ -23,6 +25,7 @@ const variants = z.record(z.string(), z.string()).transform((value) =>
 );
 const moduleSchema = z
   .object({
+    reason: reasonSchema,
     title: z.string().min(1),
     description: z.string().nullable().optional(),
     isSelfGuided: z.boolean().optional(),
@@ -38,8 +41,11 @@ const moduleSchema = z
   .strict();
 const stepSchema = z
   .object({
+    reason: reasonSchema,
     title: z.string().min(1),
     prompt: z.string().min(1),
+    answerKey: z.string().max(20000).nullable().optional(),
+    nextButtonLabel: z.string().trim().max(80).transform(v => v || null).nullable().optional(),
     tutorInstructions: z.string().nullable().optional(),
     tutorInstructionsVariantsJson: variants.optional(),
     showChatButton: z.boolean().optional(),
@@ -58,20 +64,20 @@ const stepSchema = z
   .strict();
 const patchModuleSchema = moduleSchema
   .partial()
-  .refine((v) => Object.keys(v).length > 0);
+  .refine((v) => Object.keys(v).some(key => key !== 'reason'));
 const patchStepSchema = stepSchema
   .partial()
-  .refine((v) => Object.keys(v).length > 0);
+  .refine((v) => Object.keys(v).some(key => key !== 'reason'));
 const idSchema = z.string().regex(identifier);
 const schemas = {
   createModule: moduleSchema,
   updateModule: patchModuleSchema,
-  deleteModule: z.object({}).strict(),
-  reorderModules: z.object({ moduleIds: z.array(idSchema) }).strict(),
+  deleteModule: z.object({ reason: reasonSchema }).strict(),
+  reorderModules: z.object({ reason: reasonSchema, moduleIds: z.array(idSchema) }).strict(),
   createStep: stepSchema,
   updateStep: patchStepSchema,
-  deleteStep: z.object({}).strict(),
-  reorderSteps: z.object({ stepIds: z.array(idSchema) }).strict(),
+  deleteStep: z.object({ reason: reasonSchema }).strict(),
+  reorderSteps: z.object({ reason: reasonSchema, stepIds: z.array(idSchema) }).strict(),
 };
 type Operation = keyof typeof schemas;
 const methods: Record<Operation, string> = {
@@ -109,6 +115,8 @@ const fullModuleSelect = {
       id: true,
       title: true,
       prompt: true,
+      answerKey: true,
+      nextButtonLabel: true,
       position: true,
       tutorInstructions: true,
       tutorInstructionsVariantsJson: true,
@@ -139,6 +147,8 @@ function mapModule(row: Module) {
       id: s.id,
       title: s.title,
       prompt: s.prompt,
+      answerKey: s.answerKey,
+      nextButtonLabel: s.nextButtonLabel,
       position: s.position,
       tutorInstructions: s.tutorInstructions,
       tutorInstructionsVariantsJson: s.tutorInstructionsVariantsJson,
@@ -200,7 +210,13 @@ export function createInternalAssignmentTypeModuleHandlers(input: {
     const read = operation === 'detail';
     if (request.method !== (read ? 'GET' : methods[operation]))
       return response({ error: 'Method not allowed' }, 405);
-    const body = await request.text();
+    let body: string;
+    try {
+      body = await readBoundedBody(request, 256 * 1024);
+    } catch (error) {
+      if (error instanceof Response) return error;
+      throw error;
+    }
     const auth = await authenticate(request, {
       body,
       requiredScope: read ? 'management:read' : 'management:write',
@@ -223,8 +239,10 @@ export function createInternalAssignmentTypeModuleHandlers(input: {
     } catch {
       return response({ error: 'Invalid JSON' }, 400);
     }
-    if (!read && !schemas[operation].safeParse(raw).success)
+    const validated = read ? null : schemas[operation].safeParse(raw);
+    if (validated && !validated.success)
       return response({ error: 'Invalid assignment type module request' }, 400);
+    const reason = validated?.success ? validated.data.reason ?? null : null;
     const create = operation === 'createModule' || operation === 'createStep';
     const idempotencyKey = create
       ? request.headers.get('idempotency-key')?.trim() || null
@@ -338,7 +356,7 @@ export function createInternalAssignmentTypeModuleHandlers(input: {
             result = { deleted: { id: moduleId } };
           } else {
             if (operation === 'createModule') {
-              const fields = schemas.createModule.parse(raw);
+              const { reason: _reason, ...fields } = schemas.createModule.parse(raw);
               const created = await domain.createModule(
                 tx,
                 id,
@@ -352,7 +370,7 @@ export function createInternalAssignmentTypeModuleHandlers(input: {
               targetId = created.id;
               moduleId = created.id;
             } else if (operation === 'updateModule') {
-              const fields = schemas.updateModule.parse(raw);
+              const { reason: _reason, ...fields } = schemas.updateModule.parse(raw);
               await domain.updateModule(tx, moduleId!, {
                 ...fields,
                 ...(fields.description !== undefined
@@ -363,7 +381,7 @@ export function createInternalAssignmentTypeModuleHandlers(input: {
                   : {}),
               });
             } else if (operation === 'createStep') {
-              const fields = schemas.createStep.parse(raw);
+              const { reason: _reason, ...fields } = schemas.createStep.parse(raw);
               const created = await domain.createStep(
                 tx,
                 moduleId!,
@@ -378,7 +396,7 @@ export function createInternalAssignmentTypeModuleHandlers(input: {
               );
               targetId = created.id;
             } else if (operation === 'updateStep') {
-              const fields = schemas.updateStep.parse(raw);
+              const { reason: _reason, ...fields } = schemas.updateStep.parse(raw);
               await domain.updateStep(tx, stepId!, {
                 ...fields,
                 ...(fields.tutorInstructions !== undefined
@@ -416,6 +434,7 @@ export function createInternalAssignmentTypeModuleHandlers(input: {
             before: beforeSnapshot,
             after: afterSnapshot,
             idempotencyKey,
+            reason,
           });
           return response(result, create ? 201 : 200);
         },

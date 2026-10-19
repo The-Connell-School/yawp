@@ -973,6 +973,8 @@ model AssignmentModuleInstruction {
   position                      Int
   title                         String
   prompt                        String
+  answerKey                     String?                             @db.Text
+  nextButtonLabel               String?                             @db.Text
   tutorInstructions             String?
   tutorInstructionsVariantsJson Json?
   showChatButton                Boolean?                            @default(false)

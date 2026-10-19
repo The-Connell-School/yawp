@@ -18,6 +18,8 @@ export type ModuleWriteInput = {
 export type StepWriteInput = {
   title?: string;
   prompt?: string;
+  answerKey?: string | null;
+  nextButtonLabel?: string | null;
   tutorInstructions?: string | null;
   tutorInstructionsVariantsJson?: Record<string, string>;
   showChatButton?: boolean;
@@ -69,6 +71,9 @@ function stepData(input: StepWriteInput, id?: string) {
   const { buttons, ...fields } = input;
   return {
     ...fields,
+    ...(fields.nextButtonLabel !== undefined
+      ? { nextButtonLabel: fields.nextButtonLabel?.trim() || null }
+      : {}),
     ...(buttons !== undefined
       ? {
           buttons: {

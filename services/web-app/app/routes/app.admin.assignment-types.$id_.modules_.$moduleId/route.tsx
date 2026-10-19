@@ -235,6 +235,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     await createStep(prisma, params.moduleId!, {
       title: data.title,
       prompt: data.prompt,
+      answerKey: data.answerKey,
+      // The form keeps its legacy name; storage/API use nextButtonLabel.
+      nextButtonLabel: data.nextInstructionBtnLabel,
       tutorInstructions: data.tutorInstructions || null,
       showChatButton: data.showChatButton === 'on',
       showNextButton: data.showNextButton === 'on',
@@ -258,6 +261,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     await updateStep(prisma, instructionId, {
       title: data.title,
       prompt: data.prompt,
+      answerKey: data.answerKey,
+      // The form keeps its legacy name; storage/API use nextButtonLabel.
+      nextButtonLabel: data.nextInstructionBtnLabel,
       tutorInstructions: data.tutorInstructions || null,
       ...(variantsJson ? { tutorInstructionsVariantsJson: variantsJson } : {}),
       showChatButton: data.showChatButton === 'on',
@@ -350,6 +356,8 @@ export default function AssignmentModuleRoute() {
     defaultValues: {
       title: editingInstruction?.title || '',
       prompt: editingInstruction?.prompt || '',
+      answerKey: editingInstruction?.answerKey || '',
+      nextInstructionBtnLabel: editingInstruction?.nextButtonLabel || '',
       tutorInstructions: editingInstruction?.tutorInstructions || '',
       showChatButton: editingInstruction?.showChatButton || false,
       showNextButton: editingInstruction?.showNextButton || false,
@@ -371,6 +379,8 @@ export default function AssignmentModuleRoute() {
       instructionForm.resetForm({
         title: editingInstruction?.title || '',
         prompt: editingInstruction?.prompt || '',
+        answerKey: editingInstruction?.answerKey || '',
+        nextInstructionBtnLabel: editingInstruction?.nextButtonLabel || '',
         tutorInstructions: editingInstruction?.tutorInstructions || '',
         showChatButton: editingInstruction?.showChatButton || false,
         showNextButton: editingInstruction?.showNextButton || false,
