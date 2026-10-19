@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { createHash } from 'node:crypto';
 import * as platformAuth from './internal-platform-auth.server';
 import { createRubricHttp } from './internal-rubrics-http.server';
 import { createRubricCatalogHttp } from './internal-rubric-catalog-http.server';
@@ -73,6 +74,12 @@ for (const route of routes) describe(`POST /api/internal/v1${route.path}`, () =>
       const response = await invoke(request(body, mode));
       expect(response.status).toBe(200);
       expect(response.headers.get('cache-control')).toBe('no-store');
+      if (route.path.startsWith('/rubric-catalog') && mode !== 'bearer') {
+        expect(recordAudit).toHaveBeenLastCalledWith(expect.objectContaining({
+          requestHash: createHash('sha256').update(body).digest('hex'),
+          endpoint: `POST /api/internal/v1${route.path}`,
+        }));
+      }
     }
     if (route.method !== 'validate') expect(calls).toEqual([route.input, route.input]);
   });
