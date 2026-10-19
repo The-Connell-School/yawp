@@ -157,10 +157,11 @@ test.describe.serial('Class Starter — My prompts', () => {
       .getByRole('button', { name: 'Type', exact: true })
       .first()
       .click();
-    await page
+    const typeFilter = page
       .getByRole('checkbox', { name: 'Agree / disagree' })
-      .first()
-      .check();
+      .first();
+    await typeFilter.click();
+    await expect(typeFilter).toBeChecked();
     await expect(page.getByText(USED_OPTION.prompt)).toBeVisible();
     await expect(page.getByText(SAVED_OPTION.prompt)).toHaveCount(0);
 
