@@ -9,3 +9,5 @@
 - `📊 Merge E2E smoke reports` uploads one HTML report (`playwright-report-<run id>`).
 
 Reproduce one shard locally: `bun run test:e2e:smoke --shard=2/6` in `services/web-app`.
+
+Shard balance: Playwright splits by test count, keeping each spec file together, so shards are uneven (one large lesson-planner spec). Rebalancing is a possible follow-up.
