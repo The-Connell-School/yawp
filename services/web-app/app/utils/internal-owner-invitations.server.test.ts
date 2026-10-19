@@ -24,6 +24,7 @@ beforeEach(() => {
   resetInternalApiMemoryNonceStore();
   resetInternalApiRateLimitBuckets();
   mail.mockClear();
+  mail.mockImplementation(async () => ({ status: 'success' }));
 });
 afterEach(() => {
   process.env = { ...env };
@@ -33,7 +34,7 @@ function request(
   value: unknown = { emails: ['New@Example.test'], expiresInDays: 14 },
   options: {
     path?: string;
-    raw?: string | Uint8Array;
+    raw?: string | Uint8Array<ArrayBuffer>;
     keyId?: string;
     unsigned?: boolean;
     idempotency?: string;
@@ -393,4 +394,116 @@ test('create replays the stored results, rejects changed raw bytes, never redeli
       )
     ).status
   ).toBe(409);
+});
+
+test('rejects legacy service credentials for reads and writes', async () => {
+  process.env.YAWP_MANAGEMENT_SERVICE_KEY = 'x'.repeat(43);
+  const f = fixture();
+  for (const method of ['GET', 'POST']) {
+    const req = request(method);
+    for (const name of [...req.headers.keys()]) req.headers.delete(name);
+    req.headers.set('authorization', `Bearer ${'x'.repeat(43)}`);
+    const result =
+      method === 'GET'
+        ? await f.handlers.list(req, 'org-1')
+        : await f.handlers.create(req, 'org-1');
+    expect(result.status).toBe(401);
+  }
+  expect(f.db.$transaction).not.toHaveBeenCalled();
+});
+
+test('reason is signed, bounded and optional; exact byte limit succeeds', async () => {
+  const f = fixture();
+  const value = {
+    emails: ['new@example.test'],
+    expiresInDays: 7,
+    reason: 'r'.repeat(500),
+  };
+  const json = JSON.stringify(value);
+  const raw = json + ' '.repeat(256 * 1024 - Buffer.byteLength(json));
+  expect(
+    (await f.handlers.create(request('POST', {}, { raw }), 'org-1')).status
+  ).toBe(201);
+  expect(f.audits.every((a) => a.metadata.reason === value.reason)).toBe(true);
+  const signed = request('POST', value);
+  const tampered = new Request(base, {
+    method: 'POST',
+    headers: signed.headers,
+    body: JSON.stringify({ ...value, reason: 'Changed' }),
+  });
+  expect((await fixture().handlers.create(tampered, 'org-1')).status).toBe(401);
+  const absent = fixture();
+  await absent.handlers.create(request(), 'org-1');
+  expect(absent.audits.every((a) => a.metadata.reason === null)).toBe(true);
+});
+
+test('validates note length and rejects missing or invalid ids after auth', async () => {
+  for (const note of ['', ' ', 42, 'n'.repeat(2001)]) {
+    const f = fixture();
+    expect(
+      (
+        await f.handlers.create(
+          request('POST', {
+            emails: ['new@example.test'],
+            expiresInDays: 7,
+            note,
+          }),
+          'org-1'
+        )
+      ).status
+    ).toBe(400);
+    expect(f.db.$transaction).not.toHaveBeenCalled();
+  }
+  for (const id of [undefined, 'bad/id', 'x'.repeat(129)])
+    expect((await fixture().handlers.create(request(), id)).status).toBe(400);
+});
+
+test('expired invites can be replaced, accepted and revoked invites cannot be resent', async () => {
+  const f = fixture();
+  f.seed({ target: 'new@example.test', expiresAt: new Date(0) });
+  const res = await f.handlers.create(request(), 'org-1');
+  expect((await res.json()).results[0].outcome).toBe('invited');
+  expect(
+    f.audits[1].metadata.after.invitations.find((r: any) => r.id === 'legacy')
+      .status
+  ).toBe('revoked');
+  expect(
+    (await f.handlers.resend(request('POST', {}), 'org-1', 'legacy')).status
+  ).toBe(409);
+  const accepted = fixture();
+  accepted.seed();
+  accepted.members.push({
+    isOrgOwner: true,
+    isActive: true,
+    user: { email: 'legacy@example.test' },
+  });
+  expect(
+    (await accepted.handlers.resend(request('POST', {}), 'org-1', 'legacy'))
+      .status
+  ).toBe(409);
+});
+
+test('second resend retains the complete chain and expired resends get seven days', async () => {
+  const f = fixture();
+  f.seed({ expiresAt: new Date(0) });
+  const first = await f.handlers.resend(request('POST', {}), 'org-1', 'legacy');
+  const one = (await first.json()).invitation;
+  const second = await f.handlers.resend(
+    request('POST', {}, { path: `/${one.id}/resend` }),
+    'org-1',
+    one.id
+  );
+  const two = (await second.json()).invitation;
+  expect(two.resendHistory).toEqual([
+    ...one.resendHistory,
+    { invitationId: one.id, resentAt: two.sentAt },
+  ]);
+  expect(mail).toHaveBeenCalledTimes(2);
+});
+
+test('owner accounts without email do not prevent listing or inviting', async () => {
+  const f = fixture();
+  f.members.push({ isOrgOwner: true, isActive: true, user: { email: null } });
+  expect((await f.handlers.list(request('GET'), 'org-1')).status).toBe(200);
+  expect((await f.handlers.create(request(), 'org-1')).status).toBe(201);
 });

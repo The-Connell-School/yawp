@@ -126,6 +126,28 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       const code = new URL(link.props.href).searchParams.get('code')!;
       expect(await verifyTOTP({ otp: code, ...newRow })).toBeTruthy();
       expect(await verifyTOTP({ otp: code, ...oldRow })).toBeNull();
+      mail.mockImplementationOnce(async () => {
+        throw new Error('Mock delivery failure');
+      });
+      const failedResend = await handlers.resend(
+        request('POST', `/${replacement.id}/resend`, {
+          reason: 'Delivery failure rollback',
+        }),
+        organization.id,
+        replacement.id
+      );
+      expect(failedResend.status).toBe(502);
+      expect(await failedResend.json()).toEqual({
+        error: 'Invitation delivery failed',
+      });
+      expect(
+        await prisma.invitation.findUnique({ where: { id: replacement.id } })
+      ).not.toBeNull();
+      expect(
+        await prisma.internalPlatformApiAudit.count({
+          where: { keyId, result: 'after' },
+        })
+      ).toBe(2);
       // Simulate the existing acceptance transaction: owner grant + invitation removal.
       const user = await prisma.user.create({
         data: { email, name: 'Owner integration' },
@@ -170,7 +192,9 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       expect(JSON.stringify(audits)).not.toContain(oldRow.secret);
     } finally {
       await prisma.invitation.deleteMany({ where: { target: email } });
-      await prisma.orgMembership.deleteMany({ where: { organizationId: organization.id } });
+      await prisma.orgMembership.deleteMany({
+        where: { organizationId: organization.id },
+      });
       await prisma.organization.delete({ where: { id: organization.id } });
       if (userId) await prisma.user.delete({ where: { id: userId } });
       await prisma.internalPlatformApiAudit.deleteMany({ where: { keyId } });

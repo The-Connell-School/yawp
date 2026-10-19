@@ -73,7 +73,7 @@ export async function ownerEmails(db: Db, organizationId: string) {
   return new Set(
     members
       .filter((m) => m.isOrgOwner && m.isActive)
-      .map((m) => m.user.email.toLowerCase())
+      .flatMap((m) => (m.user.email ? [m.user.email.toLowerCase()] : []))
   );
 }
 
