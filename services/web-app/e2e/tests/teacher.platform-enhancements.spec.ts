@@ -9,7 +9,7 @@ import { PLATFORM_ENHANCEMENTS_FLAG } from '../../app/domain/feature-flags/featu
 test.describe('Platform enhancements', () => {
   let fiveParagraphId: string;
   let originalModule: { id: string; title: string };
-  let addedModuleIds: string[] = [];
+  const addedModuleIds: string[] = [];
   const moduleTitles = [
     'Pre-Writing',
     'Writing your Thesis Statement',
