@@ -304,6 +304,15 @@ describe('preview access gate', () => {
       ['POST', '/api/internal/v1/admin/assignment-types/at-1/scratch-check'],
       ['GET', '/api/internal/v1/admin/assignment-types/at-1/evaluation-suites'],
       ['GET', '/api/internal/v1/admin/assignment-types/at-1/evaluation-runs'],
+      ['POST', '/api/internal/v1/admin/assignment-types/at-1/evaluation-runs'],
+      [
+        'DELETE',
+        '/api/internal/v1/admin/assignment-types/at-1/evaluation-suites/suite-1',
+      ],
+      [
+        'DELETE',
+        '/api/internal/v1/admin/assignment-types/at-1/prompt-versions/2',
+      ],
       ['GET', '/api/internal/v1/admin/assignment-types'],
       ['POST', '/api/internal/v1/admin/assignment-types'],
       ['GET', '/api/internal/v1/admin/assignment-types/at-1'],
@@ -334,7 +343,7 @@ describe('preview access gate', () => {
       );
       expect(await response?.text()).toBe('ok');
     }
-    expect(next).toHaveBeenCalledTimes(41);
+    expect(next).toHaveBeenCalledTimes(44);
   });
 
   test('fails closed when no access codes are configured', async () => {

@@ -36,8 +36,21 @@ import { computeIpHash } from './ai-usage-log.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { randomUUID } from 'node:crypto';
 
+import { startInternalEvaluationRun } from './internal-evaluation-run.server';
+export {
+  INTERNAL_EVALUATION_RUN_BUDGET_MS,
+  INTERNAL_EVALUATION_RUN_MAX_CASES,
+} from './internal-evaluation-run.server';
+
 const text = (max: number) => z.string().trim().min(1).max(max);
 const ref = z.string().regex(identifier);
+const promptRef = ref.refine(
+  (v) =>
+    !/^\d+$/.test(v) ||
+    (Number.isSafeInteger(Number(v)) &&
+      Number(v) >= 1 &&
+      Number(v) <= 2147483647)
+);
 const expectedOutput = z
   .object({
     categories: z
@@ -129,23 +142,25 @@ const schemas = {
       reason: reasonSchema,
     })
     .strict(),
+  runs: z
+    .object({ promptVersion: promptRef, suiteId: ref, reason: reasonSchema })
+    .strict(),
   benchmarkRun: z.object({ reason: reasonSchema }).strict(),
 };
 export type GradingWorkspaceResource =
   | keyof typeof schemas
-  | 'runs'
   | 'run'
   | 'benchmarkCases';
 const allowed: Record<GradingWorkspaceResource, string[]> = {
   promptVersions: ['GET', 'POST'],
-  promptVersion: ['GET', 'PATCH'],
+  promptVersion: ['GET', 'PATCH', 'DELETE'],
   publish: ['POST'],
   suites: ['GET', 'POST'],
-  suite: ['PATCH'],
+  suite: ['PATCH', 'DELETE'],
   cases: ['POST'],
   case: ['PATCH', 'DELETE'],
   scratch: ['POST'],
-  runs: ['GET'],
+  runs: ['GET', 'POST'],
   run: ['GET'],
   benchmarkCases: ['GET'],
   benchmarkRun: ['POST'],
@@ -156,7 +171,10 @@ export function createInternalGradingWorkspaceHandlers(input: {
   db: Pick<PrismaClient, '$transaction'>;
   authenticate?: typeof authorizeInternalApiRequest;
   auditRead?: AssignmentTypeReadAudit;
+  /** May shorten the fixed production budget for deterministic timeout tests. */
+  runBudgetMs?: number;
   execute?: (input: {
+    signal?: AbortSignal;
     purpose: string;
     system: string;
     messages: Array<{ role: 'user'; content: string }>;
@@ -218,7 +236,7 @@ export function createInternalGradingWorkspaceHandlers(input: {
       }
       if (!read) {
         const schema =
-          resource === 'case' && request.method === 'DELETE'
+          request.method === 'DELETE'
             ? z.object({ reason: reasonSchema }).strict()
             : schemas[resource as keyof typeof schemas];
         const parsed = schema?.safeParse(value);
@@ -255,10 +273,19 @@ export function createInternalGradingWorkspaceHandlers(input: {
       const endpoint = `${request.method} ${new URL(request.url).pathname.replace(/\/$/, '')}`;
       const hash = requestHash(body);
       const create =
-        !read && ['promptVersions', 'suites', 'cases'].includes(resource);
+        !read &&
+        ['promptVersions', 'suites', 'cases', 'runs'].includes(resource);
       const key = create
         ? request.headers.get('idempotency-key')?.trim() || null
         : null;
+      if (resource === 'runs' && create && !key)
+        return response({ error: 'Idempotency-Key is required' }, 400);
+      if (
+        resource === 'runs' &&
+        key &&
+        (key.length > 200 || !/^[\x21-\x7e]+$/.test(key))
+      )
+        return response({ error: 'Invalid Idempotency-Key' }, 400);
       const action = `grading-workspace.${resource}.${request.method.toLowerCase()}`;
       const execute =
         input.execute ??
@@ -280,6 +307,19 @@ export function createInternalGradingWorkspaceHandlers(input: {
               ipHash: computeIpHash(request),
             },
           }));
+      if (resource === 'runs' && create)
+        return startInternalEvaluationRun({
+          db: input.db,
+          request,
+          assignmentTypeId: id!,
+          value,
+          auth,
+          endpoint,
+          hash,
+          key: key!,
+          execute,
+          budgetMs: input.runBudgetMs,
+        });
       try {
         return await input.db.$transaction(
           async (tx) => {
@@ -311,6 +351,13 @@ export function createInternalGradingWorkspaceHandlers(input: {
                     where: { archivedAt: null },
                     orderBy: [{ position: 'asc' }, { id: 'asc' }],
                   },
+                },
+              });
+            const runDetail = (runId: string) =>
+              tx.assignmentTypeEvaluationRun.findFirst({
+                where: { id: runId, assignmentTypeId: id! },
+                include: {
+                  results: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
                 },
               });
             async function invoke(fields: unknown) {
@@ -436,22 +483,26 @@ export function createInternalGradingWorkspaceHandlers(input: {
                   );
                 const owner = resource === 'cases' ? await suite(child!) : null;
                 const existing =
-                  resource === 'promptVersions'
-                    ? await prompt(previous.targetId!)
-                    : resource === 'cases'
-                      ? owner?.cases.find((c) => c.id === previous.targetId)
-                      : await suite(previous.targetId!);
+                  resource === 'runs'
+                    ? await runDetail(previous.targetId!)
+                    : resource === 'promptVersions'
+                      ? await prompt(previous.targetId!)
+                      : resource === 'cases'
+                        ? owner?.cases.find((c) => c.id === previous.targetId)
+                        : await suite(previous.targetId!);
                 if (!existing)
                   return response(
                     { error: 'Idempotency-Key could not be replayed safely' },
                     409
                   );
                 return response(
-                  resource === 'promptVersions'
-                    ? { promptVersion: existing }
-                    : resource === 'cases'
-                      ? { case: existing }
-                      : { suite: existing }
+                  resource === 'runs'
+                    ? { run: existing }
+                    : resource === 'promptVersions'
+                      ? { promptVersion: existing }
+                      : resource === 'cases'
+                        ? { case: existing }
+                        : { suite: existing }
                 );
               }
             }
@@ -459,7 +510,54 @@ export function createInternalGradingWorkspaceHandlers(input: {
               after: unknown = null,
               result: unknown,
               targetId = child ?? id!;
-            if (resource === 'promptVersions') {
+            if (resource === 'promptVersion' && request.method === 'DELETE') {
+              const row = await prompt(child!);
+              if (!row)
+                return response({ error: 'Prompt version not found' }, 404);
+              if (
+                row.status !== 'draft' ||
+                row.version === parent!.gradingAssistantVersion
+              )
+                return response(
+                  {
+                    error:
+                      'Only inactive draft prompt versions can be discarded',
+                  },
+                  409
+                );
+              before = row;
+              targetId = row.id;
+              // No admin discard action exists. FK SetNull retains historical runs.
+              await tx.assignmentTypePromptVersion.delete({
+                where: { id: row.id },
+              });
+              result = { deleted: { id: row.id } };
+            } else if (resource === 'suite' && request.method === 'DELETE') {
+              const row = await suite(child!);
+              if (!row)
+                return response({ error: 'Evaluation suite not found' }, 404);
+              before = row;
+              const archivedAt = new Date();
+              await tx.assignmentTypeEvaluation.updateMany({
+                where: { id: row.id, assignmentTypeId: id!, archivedAt: null },
+                data: { archivedAt },
+              });
+              await tx.assignmentTypeEvaluationCase.updateMany({
+                where: {
+                  evaluationId: row.id,
+                  assignmentTypeId: id!,
+                  archivedAt: null,
+                },
+                data: { archivedAt },
+              });
+              await createEvaluationSuiteVersion(tx, id!);
+              after = {
+                ...row,
+                archivedAt,
+                cases: row.cases.map((c) => ({ ...c, archivedAt })),
+              };
+              result = { deleted: { id: row.id } };
+            } else if (resource === 'promptVersions') {
               const source = value.sourcePromptVersion
                 ? await prompt(value.sourcePromptVersion)
                 : null;
@@ -720,7 +818,11 @@ export function createInternalGradingWorkspaceHandlers(input: {
             });
             return response(result, create ? 201 : 200);
           },
-          { isolationLevel: 'ReadCommitted', timeout: 120000 }
+          {
+            isolationLevel: 'ReadCommitted',
+            timeout: 120000,
+            maxWait: 2000,
+          }
         );
       } catch (error) {
         if (error instanceof Response)
