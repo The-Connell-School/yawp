@@ -905,7 +905,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5]
+        shard: [1, 2, 3, 4, 5, 6]
     services:
       postgres:
         image: postgres:16
@@ -1097,6 +1097,19 @@ jobs:
           else
             bunx --package "@playwright/test@${version}" playwright install --with-deps chromium
           fi
+
+      # The sign-on flows used to run after the smoke suite, which migrated and
+      # seeded yop_e2e on startup. Prepare it the same way here.
+      - name: 🛠️ Prepare E2E database
+        working-directory: services/web-app
+        env:
+          CI: true
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          FREE_TIER_LINK_HMAC_SECRET: ci-free-tier-link-hmac-secret-key-32b
+          PRIMARY_APP_URL: http://127.0.0.1:5173
+          RESEND_API_KEY: ''
+          RESEND_FROM_EMAIL: ''
+        run: bun ./e2e/ensure-e2e-env.ts
 
       - name: Unified sign-on local-handler browser flows
         working-directory: services/web-app
