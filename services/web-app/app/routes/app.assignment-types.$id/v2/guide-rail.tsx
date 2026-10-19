@@ -1,3 +1,4 @@
+import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { useState, type ReactNode } from 'react';
 import { Link, useRouteLoaderData } from 'react-router';
 import { ChevronDown } from 'lucide-react';
@@ -136,7 +137,8 @@ export function AtAGlance({
               </>
             ) : (
               <p className="text-sm leading-6 text-muted-foreground">
-                {numberWord(modules.length)} modules, from{' '}
+                {numberWord(modules.length)}{' '}
+                {modules.length === 1 ? 'module' : 'modules'}, from{' '}
                 {modules[0]?.label.toLowerCase()} to{' '}
                 {modules.at(-1)?.label.toLowerCase()}. They’re listed on the
                 left.

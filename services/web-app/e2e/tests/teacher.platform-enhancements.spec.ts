@@ -464,6 +464,9 @@ test.describe('Platform enhancements', () => {
       await page.goto(
         `/app/assignment-types/${e2eContext.apHistoryAssignmentTypeId}`
       );
+      await expect(
+        page.getByRole('button', { name: 'Module details ›', exact: true })
+      ).toBeVisible();
       await page
         .getByRole('button', { name: 'Create assignment', exact: true })
         .click();

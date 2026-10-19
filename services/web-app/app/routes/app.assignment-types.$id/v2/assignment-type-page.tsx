@@ -78,7 +78,10 @@ export function AssignmentTypePageV2() {
   const ap = type.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   const exit = isExitTicketAssignmentType(type);
   const showModules =
-    type.assignmentModules.length > 0 && !exit && !data.shortFormPromptLibrary;
+    type.assignmentModules.length > 0 &&
+    !exit &&
+    type.kind !== 'daily_pages' &&
+    !data.shortFormPromptLibrary;
   const fromLesson = params.get(FROM_LESSON_PARAM);
   const incomingPrompt = params.get('newPrompt');
   const incomingExitMode = params.get(EXIT_TICKET_PARAMS.mode);
@@ -144,7 +147,9 @@ export function AssignmentTypePageV2() {
     onCustom: setCustom,
   };
   const meta = [
-    showModules ? `${type.assignmentModules.length} modules` : null,
+    showModules
+      ? `${type.assignmentModules.length} ${type.assignmentModules.length === 1 ? 'module' : 'modules'}`
+      : null,
     library ? `${library.totalCount} prompts` : null,
     content.gradingLabel,
     content.tutorOn ? 'Tutor on' : null,
@@ -220,9 +225,11 @@ export function AssignmentTypePageV2() {
                   key={item}
                   className="lg:border-r lg:px-3 lg:first:pl-0 lg:last:border-r-0"
                 >
-                  <span className="mr-2 lg:hidden" aria-hidden="true">
-                    {index > 0 ? '·' : ''}
-                  </span>
+                  {index > 0 && (
+                    <span className="mr-2 lg:hidden" aria-hidden="true">
+                      ·
+                    </span>
+                  )}
                   {item}
                 </span>
               ))}
@@ -282,8 +289,9 @@ export function AssignmentTypePageV2() {
                       How students move through it
                     </h2>
                     <p className="mb-4 mt-1 text-sm leading-6 text-muted-foreground">
-                      {numberWord(modules.length)} modules, in order. Each
-                      student works through them in their own document.
+                      {numberWord(modules.length)}{' '}
+                      {modules.length === 1 ? 'module' : 'modules'}, in order.
+                      Each student works through them in their own document.
                     </p>
                     <ol className="divide-y">
                       {modules.map((m, index) => (
