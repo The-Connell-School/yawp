@@ -428,7 +428,9 @@ function PromptCard({
     <article className="flex min-w-0 flex-col rounded-xl border border-border bg-popover p-4">
       <div className="mb-2 flex items-start justify-between gap-2">
         <h3 className="min-w-0 text-sm font-semibold leading-5">
-          {card.title}
+          {normalizePromptText(card.title) === normalizePromptText(entry.prompt)
+            ? null
+            : card.title}
         </h3>
         <Badge
           variant="secondary"
@@ -486,4 +488,14 @@ function PromptCard({
       )}
     </article>
   );
+}
+
+// Class Starter and Daily Pages entries have no title, so the derived title can
+// repeat the prompt. Show the text once.
+function normalizePromptText(value: string): string {
+  return value
+    .replace(/[\s.!?…]+$/u, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
 }
