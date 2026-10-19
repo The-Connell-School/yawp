@@ -107,7 +107,8 @@ const schemas = {
       sample: text(50000),
       rubricCategoryKey: text(120),
       check: text(4000).optional(),
-      expectedOutput: expectedOutput.optional(),
+      // Grouped cases must remain saveable by the admin group editor.
+      expectedOutput,
       reason: reasonSchema,
     })
     .strict(),
