@@ -76,7 +76,7 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       };
       // Fresh signatures and nonces, one key across both URL forms: creates serialize.
       const creates = await Promise.all(
-        ['', '/'].map((path) =>
+        ['', '///'].map((path) =>
           handlers.create(request('POST', path, value, keyId), organization.id)
         )
       );
