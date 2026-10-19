@@ -1,3 +1,4 @@
+import { readGradingInstructionsOverride } from '~/domain/assignment-types/assignment-type-admin-writes.shared';
 import {
   listLiveRubricsForAdminPicker,
   resolveAdminRubricPickerSelection,
@@ -8,7 +9,7 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { AssignmentTypeEditorForm } from '~/components/admin/assignment-type-editor-form';
 import { requireAdmin, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { archiveAssignmentType, restoreAssignmentType, updateAssignmentType, replaceAssignmentTypeImage, removeAssignmentTypeImage, parseAdminUpdateGradingConfig, readGradingInstructionsOverride } from '~/domain/assignment-types/assignment-type-admin-writes.server';
+import { archiveAssignmentType, restoreAssignmentType, updateAssignmentType, replaceAssignmentTypeImage, removeAssignmentTypeImage, parseAdminUpdateGradingConfig } from '~/domain/assignment-types/assignment-type-admin-writes.server';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';

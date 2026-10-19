@@ -1,3 +1,4 @@
+import { readGradingInstructionsOverride } from './assignment-type-admin-writes.shared';
 import type { Prisma } from '@app/prisma';
 import type { ResolvedAdminRubricPickerSelection } from '~/domain/rubrics/admin-rubric-picker.server';
 import {
@@ -59,20 +60,6 @@ export function withGradingInstructionsOverride(
   }
 
   return promptConfig as Prisma.InputJsonObject;
-}
-
-export function readGradingInstructionsOverride(rawPromptConfig: unknown) {
-  if (
-    !rawPromptConfig ||
-    typeof rawPromptConfig !== 'object' ||
-    Array.isArray(rawPromptConfig)
-  ) {
-    return '';
-  }
-
-  const value = (rawPromptConfig as Record<string, unknown>)
-    .gradingInstructionsOverride;
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 export function parseAdminCreateGradingConfig(formData: FormData) {
