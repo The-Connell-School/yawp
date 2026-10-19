@@ -18,6 +18,7 @@ import {
   WorkspaceActionSchema,
   updateWorkspaceEvaluationCase,
   parseCopyableExpectedOutput,
+  MAX_EVALUATION_GROUP_CASES,
 } from '~/domain/ai-evaluation/grading-workspace-actions.server';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import {
@@ -95,7 +96,7 @@ const schemas = {
       cases: z
         .array(suiteCase.extend({ id: ref }))
         .min(1)
-        .max(20),
+        .max(MAX_EVALUATION_GROUP_CASES),
       reason: reasonSchema,
     })
     .strict()
@@ -556,6 +557,15 @@ export function createInternalGradingWorkspaceHandlers(input: {
               const owner = await suite(child!);
               if (!owner)
                 return response({ error: 'Evaluation suite not found' }, 404);
+              // The parent lock serializes the count with other case creates.
+              // Replay has already returned above, even when the group is full.
+              if (owner.cases.length >= MAX_EVALUATION_GROUP_CASES)
+                return response(
+                  {
+                    error: `Evaluation groups support at most ${MAX_EVALUATION_GROUP_CASES} active cases.`,
+                  },
+                  409
+                );
               const saved = await invoke({
                 intent: 'createCase',
                 assignmentTypeId: id,

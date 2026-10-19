@@ -25,6 +25,8 @@ import { parseFirstJsonValue } from '~/utils/llm-json.server';
 import crypto from 'node:crypto';
 import { computeIpHash } from '~/utils/ai-usage-log.server';
 
+export const MAX_EVALUATION_GROUP_CASES = 20;
+
 const GeneratedOutputSchema = z.object({
   categories: z
     .array(
@@ -639,7 +641,7 @@ export async function executeGradingWorkspaceAction(
         })
       )
       .min(1)
-      .max(20)
+      .max(MAX_EVALUATION_GROUP_CASES)
       .safeParse(casesValue);
     if (!parsedCases.success) {
       return errorResponse('Every case needs a name, input, and full output.');
