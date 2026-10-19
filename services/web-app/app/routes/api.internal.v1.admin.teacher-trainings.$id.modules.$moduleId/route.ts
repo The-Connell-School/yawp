@@ -1,4 +1,7 @@
 import { teacherTrainingRoute } from '~/utils/internal-teacher-training-routes.server';
 
 export const loader = teacherTrainingRoute({});
-export const action = teacherTrainingRoute({ PATCH: 'updateModule', DELETE: 'deleteModule' });
+export const action = teacherTrainingRoute({
+  PATCH: 'updateModule',
+  DELETE: 'deleteModule',
+});

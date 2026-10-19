@@ -62,30 +62,68 @@ export function createMultipartUploadHelpers(input: {
   const sign = input.sign ?? getSignedUrl;
   return {
     async start(key: string, contentType: string) {
-      const result = await input.client.send(new CreateMultipartUploadCommand({
-        Bucket: input.bucket, Key: key, ContentType: contentType,
-      }));
-      if (!result.UploadId) throw new Error('Multipart upload did not return an ID');
+      const result = await input.client.send(
+        new CreateMultipartUploadCommand({
+          Bucket: input.bucket,
+          Key: key,
+          ContentType: contentType,
+        })
+      );
+      if (!result.UploadId)
+        throw new Error('Multipart upload did not return an ID');
       return { key, uploadId: result.UploadId };
     },
-    async signPart(key: string, uploadId: string, partNumber: number, contentLength?: number) {
-      return sign(input.client, new UploadPartCommand({
-        Bucket: input.bucket, Key: key, UploadId: uploadId, PartNumber: partNumber,
-        ...(contentLength !== undefined ? { ContentLength: contentLength } : {}),
-      }), { expiresIn: 3600 });
+    async signPart(
+      key: string,
+      uploadId: string,
+      partNumber: number,
+      contentLength?: number
+    ) {
+      return sign(
+        input.client,
+        new UploadPartCommand({
+          Bucket: input.bucket,
+          Key: key,
+          UploadId: uploadId,
+          PartNumber: partNumber,
+          ...(contentLength !== undefined
+            ? { ContentLength: contentLength }
+            : {}),
+        }),
+        { expiresIn: 3600 }
+      );
     },
-    async complete(key: string, uploadId: string, parts: { ETag: string; PartNumber: number }[]) {
-      await input.client.send(new CompleteMultipartUploadCommand({
-        Bucket: input.bucket, Key: key, UploadId: uploadId,
-        MultipartUpload: { Parts: [...parts].sort((a, b) => a.PartNumber - b.PartNumber) },
-      }));
+    async complete(
+      key: string,
+      uploadId: string,
+      parts: { ETag: string; PartNumber: number }[]
+    ) {
+      await input.client.send(
+        new CompleteMultipartUploadCommand({
+          Bucket: input.bucket,
+          Key: key,
+          UploadId: uploadId,
+          MultipartUpload: {
+            Parts: [...parts].sort((a, b) => a.PartNumber - b.PartNumber),
+          },
+        })
+      );
     },
     async abort(key: string, uploadId: string) {
-      await input.client.send(new AbortMultipartUploadCommand({ Bucket: input.bucket, Key: key, UploadId: uploadId }));
+      await input.client.send(
+        new AbortMultipartUploadCommand({
+          Bucket: input.bucket,
+          Key: key,
+          UploadId: uploadId,
+        })
+      );
     },
   };
 }
-const multipart = createMultipartUploadHelpers({ client: s3, bucket: videoBucket });
+const multipart = createMultipartUploadHelpers({
+  client: s3,
+  bucket: videoBucket,
+});
 export const startMultipartUpload = multipart.start;
 export const signPartUpload = multipart.signPart;
 export const completeMultipartUpload = multipart.complete;
