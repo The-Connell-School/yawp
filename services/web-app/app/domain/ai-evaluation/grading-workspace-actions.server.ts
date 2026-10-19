@@ -154,7 +154,7 @@ function inputJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
-function parseCopyableExpectedOutput({
+export function parseCopyableExpectedOutput({
   value,
   rubricCategoryKeys,
   minScore,
@@ -185,6 +185,18 @@ function parseCopyableExpectedOutput({
 
 const RUN_IN_PROGRESS_MESSAGE =
   'An evaluation suite run is already in progress.';
+
+/** The admin group editor and internal case editor share the scoped update. */
+export function updateWorkspaceEvaluationCase(
+  db: Prisma.TransactionClient,
+  scope: { id: string; assignmentTypeId: string; evaluationId: string },
+  data: Prisma.AssignmentTypeEvaluationCaseUpdateManyMutationInput
+) {
+  return db.assignmentTypeEvaluationCase.updateMany({
+    where: { ...scope, archivedAt: null },
+    data,
+  });
+}
 
 /** Shared admin operation. The internal API supplies its already locked transaction. */
 export async function executeGradingWorkspaceAction(
@@ -695,20 +707,20 @@ export async function executeGradingWorkspaceAction(
           existingCase?.criterion.includes('[fixture:improves-after-v1]')
             ? ' [fixture:improves-after-v1]'
             : '';
-        const updatedCase = await tx.assignmentTypeEvaluationCase.updateMany({
-          where: {
+        const updatedCase = await updateWorkspaceEvaluationCase(
+          tx,
+          {
             id: evaluationCase.id,
             evaluationId: input.evaluationId,
             assignmentTypeId: assignmentType.id,
-            archivedAt: null,
           },
-          data: {
+          {
             title: evaluationCase.title,
             documentText: evaluationCase.documentText,
             expectedOutputJson: inputJson(evaluationCase.expectedOutput),
             criterion: `${input.description}${fixtureSuffix}`,
-          },
-        });
+          }
+        );
         if (updatedCase.count === 0) {
           throw new Error('Evaluation case not found.');
         }
