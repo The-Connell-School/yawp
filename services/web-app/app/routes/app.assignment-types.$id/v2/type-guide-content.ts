@@ -26,6 +26,9 @@ export function typeGuideContent(type: TypeIdentity, gradesGrammar: boolean) {
     "The grading assistant scores each paper against the type's rubric";
   const rubricGrading = `${baseGrading}${thesis || five ? ', out of 100 points by default.' : '.'}${gradesGrammar ? ' Grammar and syntax count unless you turn them off for an assignment.' : ''}`;
   return {
+    mobileWhatStudentsWrite: thesis
+      ? 'A formal, thesis-driven critical essay on an angle the student chooses.'
+      : undefined,
     whatStudentsWrite: thesis
       ? 'A formal, thesis-driven critical essay: introduction, thesis statement, body paragraphs and a conclusion, on an angle the student chooses.'
       : five

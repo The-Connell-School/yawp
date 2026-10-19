@@ -71,11 +71,13 @@ export function libraryAdapter(corpus: Corpus) {
     card(entry: PromptEntry) {
       const subject =
         'subjects' in entry
-          ? entry.subjects.join(', ')
+          ? (entry.subjects[0] ?? '')
           : 'themes' in entry
-            ? entry.themes.join(', ')
+            ? (entry.themes[0] ?? '')
             : '';
-      const thinking = entry.cognitiveMoves.map(optionLabel).join(', ');
+      const thinking = entry.cognitiveMoves[0]
+        ? optionLabel(entry.cognitiveMoves[0])
+        : '';
       const grades = entry.gradeBands.length
         ? `Grades ${entry.gradeBands.join(', ')}`
         : '';

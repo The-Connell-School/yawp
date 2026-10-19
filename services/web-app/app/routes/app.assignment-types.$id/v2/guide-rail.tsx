@@ -105,7 +105,18 @@ export function AtAGlance({
         <div className={block}>
           <h3 className="text-xs font-semibold">What students write</h3>
           <p className="text-sm leading-6 text-foreground/85">
-            {content.whatStudentsWrite}
+            {content.mobileWhatStudentsWrite ? (
+              <>
+                <span className="lg:hidden">
+                  {content.mobileWhatStudentsWrite}
+                </span>
+                <span className="hidden lg:inline">
+                  {content.whatStudentsWrite}
+                </span>
+              </>
+            ) : (
+              content.whatStudentsWrite
+            )}
           </p>
         </div>
         {showModules && (

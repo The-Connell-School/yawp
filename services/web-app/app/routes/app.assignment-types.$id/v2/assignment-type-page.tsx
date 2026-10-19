@@ -82,6 +82,12 @@ export function AssignmentTypePageV2() {
     !exit &&
     type.kind !== 'daily_pages' &&
     !data.shortFormPromptLibrary;
+  const requestedClassId = params.get('classId');
+  const initialClassId =
+    requestedClassId &&
+    data.teacherClasses.some((c) => c.id === requestedClassId)
+      ? requestedClassId
+      : undefined;
   const fromLesson = params.get(FROM_LESSON_PARAM);
   const incomingPrompt = params.get('newPrompt');
   const incomingExitMode = params.get(EXIT_TICKET_PARAMS.mode);
@@ -162,7 +168,7 @@ export function AssignmentTypePageV2() {
   return (
     <div
       ref={scroller}
-      className="no-scrollbar h-full w-full overflow-y-scroll"
+      className="no-scrollbar h-full w-full overflow-y-scroll [&_h1]:text-foreground [&_h2]:text-foreground [&_h3]:text-foreground"
       data-tour-variant={type.kind ?? undefined}
     >
       <div className="mx-auto w-full max-w-[1180px] px-4 pb-28 pt-5 sm:px-6 lg:pb-10 lg:pt-6">
@@ -210,7 +216,7 @@ export function AssignmentTypePageV2() {
             <p className="mb-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
               Assignment type
             </p>
-            <h1 className="text-[28px] font-bold leading-tight">
+            <h1 className="text-[26px] font-bold leading-tight tracking-tight lg:text-[28px] lg:tracking-normal">
               {type.title}
             </h1>
             <p className="mt-2 text-sm leading-6 text-foreground/85">
@@ -218,21 +224,19 @@ export function AssignmentTypePageV2() {
             </p>
             <div
               data-testid="type-meta"
-              className="mt-3 flex flex-wrap gap-x-2 gap-y-1 text-xs text-muted-foreground lg:gap-x-0"
+              className="mt-3 text-xs leading-5 text-muted-foreground"
             >
-              {meta.map((item, index) => (
-                <span
-                  key={item}
-                  className="lg:border-r lg:px-3 lg:first:pl-0 lg:last:border-r-0"
-                >
-                  {index > 0 && (
-                    <span className="mr-2 lg:hidden" aria-hidden="true">
-                      ·
-                    </span>
-                  )}
-                  {item}
-                </span>
-              ))}
+              <span className="lg:hidden">{meta.join(' · ')}</span>
+              <div className="hidden flex-wrap gap-y-1 lg:flex">
+                {meta.map((item) => (
+                  <span
+                    key={item}
+                    className="border-r px-3 first:pl-0 last:border-r-0"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
         </header>
@@ -369,7 +373,7 @@ export function AssignmentTypePageV2() {
         assignmentTypeCollaborationSupported={type.collaborationSupported}
         assignmentTypeGradesGrammar={data.assignmentTypeGradesGrammar}
         teacherClasses={data.teacherClasses}
-        initialClassId={params.get('classId') ?? undefined}
+        initialClassId={initialClassId}
         open={assignmentOpen}
         onOpenChange={setAssignmentOpen}
         initialPrompt={prompt}

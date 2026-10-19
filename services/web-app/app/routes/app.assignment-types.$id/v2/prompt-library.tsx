@@ -188,7 +188,7 @@ export function PromptLibraryV2({
             placeholder="Search prompts"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            className="h-9 rounded-full bg-popover pl-9 text-sm lg:w-[220px]"
+            className="!h-9 !rounded-full !bg-popover !pl-9 text-sm lg:w-[220px]"
           />
         </form>
         <div className="hidden flex-wrap gap-2 lg:contents">
