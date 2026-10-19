@@ -32,7 +32,7 @@ test('rubric validation reports field errors without publication and bounds stre
   const invalid = { ...schema, rubric: { categories: [] } };
   expect((await (await http.validate(request({ schema: invalid }))).json()).ok).toBe(false);
   expect((await http.publish(request({ ...payload, schema: invalid }))).status).toBe(422);
-  expect((await http.publish(request({ ...payload, schema: { ...schema, calibrationNotes: 'x'.repeat(310000) } }))).status).toBe(400);
+  expect((await http.publish(request({ ...payload, schema: { ...schema, calibrationNotes: 'x'.repeat(310000) } }))).status).toBe(413);
   expect(calls).toBe(0);
 });
 test('rubric inspection rejects ambiguous query and suppresses infrastructure details', async () => {
