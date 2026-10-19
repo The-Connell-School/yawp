@@ -91,7 +91,7 @@ export function NewAssignment({
       <DropdownMenuContent
         align="end"
         side={mobile ? 'top' : 'bottom'}
-        className="w-[min(340px,calc(100vw-32px))] p-1.5"
+        className="w-[min(340px,calc(100vw-32px))] border-border p-1.5"
       >
         {state === 'ap-history' ? (
           <>
@@ -169,7 +169,7 @@ export function NewAssignment({
           </>
         )}
         {quotaLabel && (
-          <p className="mt-1 border-t px-3 pb-2 pt-3 text-xs text-muted-foreground">
+          <p className="mt-1 border-t border-border px-3 pb-2 pt-3 text-xs text-muted-foreground">
             {quotaLabel}
           </p>
         )}

@@ -154,7 +154,7 @@ export function PromptLibraryV2({
         <div
           role="tablist"
           aria-label="Prompt collection"
-          className="flex shrink-0 rounded-full bg-muted p-1"
+          className="flex shrink-0 rounded-full bg-secondary p-1"
         >
           {(['library', 'mine'] as const).map((value) => (
             <button
@@ -212,7 +212,7 @@ export function PromptLibraryV2({
               </PopoverTrigger>
               <PopoverContent
                 align="start"
-                className="max-h-80 overflow-y-auto"
+                className="max-h-80 overflow-y-auto border-border"
               >
                 {options(facet)}
               </PopoverContent>
@@ -235,7 +235,7 @@ export function PromptLibraryV2({
               )}
             </Button>
           </SheetTrigger>
-          <SheetContent className="overflow-y-auto bg-popover">
+          <SheetContent className="overflow-y-auto border-border bg-popover">
             <SheetHeader>
               <SheetTitle>Filter prompts</SheetTitle>
               <SheetDescription>
@@ -258,7 +258,7 @@ export function PromptLibraryV2({
           {params.get(adapter.searchParam) && (
             <button
               type="button"
-              className="flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs"
+              className="flex items-center gap-1 rounded-full bg-secondary px-2 py-1 text-xs"
               onClick={() => update(adapter.searchParam, '')}
             >
               {params.get(adapter.searchParam)}
@@ -271,7 +271,7 @@ export function PromptLibraryV2({
               type="button"
               key={`${chip.key}:${chip.value}`}
               onClick={() => toggle(chip, chip.value)}
-              className="flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs"
+              className="flex items-center gap-1 rounded-full bg-secondary px-2 py-1 text-xs"
               aria-label={`Remove ${optionLabel(chip.value)} filter`}
             >
               {optionLabel(chip.value)}
@@ -288,7 +288,7 @@ export function PromptLibraryV2({
         </div>
       )}
       {paging.total === 0 ? (
-        <div className="rounded-lg border bg-popover p-8 text-center text-sm text-muted-foreground">
+        <div className="rounded-lg border border-border bg-popover p-8 text-center text-sm text-muted-foreground">
           {collection === 'mine' && !filtered ? (
             'Saved and used prompts show up here. Save a prompt from the library to get started.'
           ) : (
@@ -423,7 +423,7 @@ function PromptCard({
   const card = adapter.card(entry);
   const isSaved = saved || fetcher.data?.success === true;
   return (
-    <article className="flex min-w-0 flex-col rounded-xl border bg-popover p-4">
+    <article className="flex min-w-0 flex-col rounded-xl border border-border bg-popover p-4">
       <div className="mb-2 flex items-start justify-between gap-2">
         <h3 className="min-w-0 text-sm font-semibold leading-5">
           {card.title}

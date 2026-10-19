@@ -43,7 +43,7 @@ export function ResponsiveRailCard({
     <Collapsible
       open={expanded}
       onOpenChange={setExpanded}
-      className="rounded-xl border bg-popover"
+      className="rounded-xl border border-border bg-popover"
     >
       <CollapsibleTrigger className="flex w-full items-center justify-between p-4 text-left lg:hidden">
         <span>
@@ -93,7 +93,7 @@ export function AtAGlance({
     data.shortFormPromptLibrary ||
     type.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY
   );
-  const block = 'space-y-2 border-b p-5 last:border-b-0';
+  const block = 'space-y-2 border-b border-border p-5 last:border-b-0';
   return (
     <>
       <ResponsiveRailCard
@@ -132,7 +132,7 @@ export function AtAGlance({
                 <ol className="space-y-2 pt-1">
                   {modules.map((m, index) => (
                     <li className="flex items-center gap-2 text-xs" key={m.id}>
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border font-mono text-[10px] text-muted-foreground">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border font-mono text-[10px] text-muted-foreground">
                         {index + 1}
                       </span>
                       {m.label}
@@ -193,7 +193,7 @@ export function AtAGlance({
           if (!open) setSheet(null);
         }}
       >
-        <SheetContent className="w-full overflow-y-auto bg-popover sm:max-w-xl">
+        <SheetContent className="w-full overflow-y-auto border-border bg-popover sm:max-w-xl">
           <SheetHeader>
             <SheetTitle>
               {sheet === 'modules' ? 'Module details' : 'Teaching guide'}
@@ -202,7 +202,7 @@ export function AtAGlance({
           </SheetHeader>
           <div className="mt-6">
             {sheet === 'modules' ? (
-              <ol className="divide-y">
+              <ol className="divide-y divide-border">
                 {modules.map((m, index) => (
                   <li key={m.id} className="space-y-2 py-5">
                     <h3 className="font-semibold">
@@ -247,7 +247,7 @@ export function YourAssignments({ data }: { data: TypePageData }) {
             will be listed here.
           </p>
         ) : (
-          <ul className="divide-y">
+          <ul className="divide-y divide-border">
             {assignments.items.map((assignment) => (
               <li key={assignment.id} className="py-3 first:pt-0">
                 <Link
@@ -291,7 +291,7 @@ export function EarlierDocuments({ data }: { data: TypePageData }) {
   const count = data.documents.length + data.archivedDocuments.length;
   if (!count) return null;
   return (
-    <section data-tour="type-documents" className="border-t pt-6">
+    <section data-tour="type-documents" className="border-t border-border pt-6">
       <h2 className="text-sm font-semibold">Earlier documents</h2>
       <p className="mt-2 text-xs leading-5 text-muted-foreground">
         {count} documents you made with this type before assignments. They still
@@ -313,7 +313,7 @@ export function EarlierDocuments({ data }: { data: TypePageData }) {
           if (!open) setView(null);
         }}
       >
-        <SheetContent className="w-full overflow-y-auto bg-popover sm:max-w-2xl">
+        <SheetContent className="w-full overflow-y-auto border-border bg-popover sm:max-w-2xl">
           <SheetHeader>
             <SheetTitle>Earlier documents</SheetTitle>
             <SheetDescription>

@@ -204,7 +204,7 @@ export function AssignmentTypePageV2() {
             <NewAssignment {...menuProps} />
           </div>
         </div>
-        <header className="mb-6 flex flex-col gap-5 border-b pb-6 lg:mb-7 lg:flex-row lg:items-center lg:gap-6">
+        <header className="mb-6 flex flex-col gap-5 border-b border-border pb-6 lg:mb-7 lg:flex-row lg:items-center lg:gap-6">
           {type.image && (
             <img
               src={`/api/image/course/${type.image.id}`}
@@ -231,7 +231,7 @@ export function AssignmentTypePageV2() {
                 {meta.map((item) => (
                   <span
                     key={item}
-                    className="border-r px-3 first:pl-0 last:border-r-0"
+                    className="border-r border-border px-3 first:pl-0 last:border-r-0"
                   >
                     {item}
                   </span>
@@ -275,7 +275,7 @@ export function AssignmentTypePageV2() {
               )
             ) : (
               <>
-                <section className="rounded-xl border bg-popover p-6">
+                <section className="rounded-xl border border-border bg-popover p-6">
                   <h2 className="text-lg font-semibold">
                     {exit
                       ? 'The prompt is composed for you'
@@ -297,7 +297,7 @@ export function AssignmentTypePageV2() {
                       {modules.length === 1 ? 'module' : 'modules'}, in order.
                       Each student works through them in their own document.
                     </p>
-                    <ol className="divide-y">
+                    <ol className="divide-y divide-border">
                       {modules.map((m, index) => (
                         <li key={m.id} className="flex gap-5 py-5">
                           <span className="font-mono text-2xl text-primary">
@@ -319,7 +319,7 @@ export function AssignmentTypePageV2() {
               </>
             )}
             {generator && (
-              <section className="flex flex-col items-start gap-4 rounded-xl border border-dashed p-5 sm:flex-row sm:items-center">
+              <section className="flex flex-col items-start gap-4 rounded-xl border border-border border-dashed p-5 sm:flex-row sm:items-center">
                 <div className="flex-1">
                   <h2 className="text-sm font-semibold">Not finding it?</h2>
                   <p className="mt-1 text-sm leading-6 text-muted-foreground">
@@ -346,7 +346,7 @@ export function AssignmentTypePageV2() {
       {!assignmentOpen && !generatorOpen && custom === null && (
         <div
           data-testid="type-bottom-bar"
-          className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-3 border-t bg-background/95 px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 backdrop-blur lg:hidden"
+          className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-3 border-t border-border bg-background/95 px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 backdrop-blur lg:hidden"
         >
           <div className="min-w-0 flex-1">
             <NewAssignment {...menuProps} mobile />
