@@ -12,6 +12,7 @@ import {
 } from './internal-admin-write.server';
 import {
   issueOwnerInvitation,
+  invalidateOwnerInvitation,
   listOwnerInvitations,
   ownerEmails,
   ownerInvitationOrganization,
@@ -49,7 +50,7 @@ export function createInternalOwnerInvitationHandlers(input: {
 }) {
   const authenticate = input.authenticate ?? authorizeInternalApiRequest;
   async function handle(
-    operation: 'list' | 'create' | 'resend',
+    operation: 'list' | 'create' | 'resend' | 'revoke',
     request: Request,
     id?: string,
     invitationId?: string
@@ -77,7 +78,7 @@ export function createInternalOwnerInvitationHandlers(input: {
     if (
       !id ||
       !identifier.test(id) ||
-      (operation === 'resend' &&
+      ((operation === 'resend' || operation === 'revoke') &&
         (!invitationId || !identifier.test(invitationId)))
     )
       return response({ error: 'Invalid organization or invitation id' }, 400);
@@ -123,10 +124,10 @@ export function createInternalOwnerInvitationHandlers(input: {
     const endpoint =
       operation === 'create'
         ? `POST /api/internal/v1/admin/organizations/${id}/invitations`
-        : `POST /api/internal/v1/admin/organizations/${id}/invitations/${invitationId}/resend`;
+        : `POST /api/internal/v1/admin/organizations/${id}/invitations/${invitationId}/${operation}`;
     const action = `organization.invitation.${operation}`;
     const idempotencyKey =
-      operation === 'create'
+      operation === 'create' || operation === 'revoke'
         ? request.headers.get('idempotency-key')?.trim() || null
         : null;
     if (idempotencyKey && idempotencyKey.length > 200)
@@ -154,9 +155,13 @@ export function createInternalOwnerInvitationHandlers(input: {
           if (idempotencyKey) {
             const previous = await tx.internalPlatformApiAudit.findFirst({
               where: {
-                endpoint,
-                action: `${action}.after`,
-                result: 'after',
+                ...(operation === 'revoke' ? {} : { endpoint }),
+                action:
+                  operation === 'revoke'
+                    ? { in: [`${action}.after`, `${action}.noop`] }
+                    : `${action}.after`,
+                result:
+                  operation === 'revoke' ? { in: ['after', 'noop'] } : 'after',
                 actorEmail: auth.actorEmail,
                 keyId: auth.keyId,
                 targetId: id,
@@ -175,10 +180,12 @@ export function createInternalOwnerInvitationHandlers(input: {
                 );
               const after = (
                 previous.metadata as unknown as {
-                  after?: { results?: Result[] };
+                  after?: { results?: Result[]; invitation?: OwnerInvitation };
                 }
               )?.after;
-              if (!after?.results)
+              if (operation === 'revoke' && after?.invitation)
+                return response({ invitation: after.invitation });
+              if (operation === 'revoke' || !after?.results)
                 return response(
                   { error: 'Idempotency-Key could not be replayed safely' },
                   409
@@ -186,10 +193,58 @@ export function createInternalOwnerInvitationHandlers(input: {
               return response({ results: after.results });
             }
           }
+          if (operation === 'revoke')
+            await tx.$queryRaw`SELECT id FROM "Invitation" WHERE id = ${invitationId} FOR UPDATE`;
           const before = await listOwnerInvitations(tx, id);
           const invitations = structuredClone(before);
           const results: Result[] = [];
           let resent: OwnerInvitation | undefined;
+          if (operation === 'revoke') {
+            const invitation = invitations.find((i) => i.id === invitationId);
+            if (!invitation)
+              return response({ error: 'Invitation not found' }, 404);
+            if (
+              invitation.status === 'accepted' ||
+              invitation.status === 'revoked'
+            ) {
+              // No state change and no write-audit pair. A keyed no-op still needs
+              // a durable replay receipt to bind its exact bytes and response.
+              if (idempotencyKey)
+                await tx.internalPlatformApiAudit.createMany({
+                  data: [
+                    {
+                      actorEmail: auth.actorEmail,
+                      keyId: auth.keyId,
+                      endpoint,
+                      requestHash: hash,
+                      result: 'noop',
+                      action: `${action}.noop`,
+                      targetId: id,
+                      metadata: {
+                        after: { invitation },
+                        idempotencyKey,
+                        reason: parsed.data.reason ?? null,
+                      },
+                    },
+                  ],
+                });
+              return response({ invitation });
+            }
+            await invalidateOwnerInvitation(tx, invitation.id);
+            invitation.status = 'revoked';
+            await writeAuditRows(tx, {
+              auth,
+              endpoint,
+              hash,
+              action,
+              targetId: id,
+              before: { invitations: before },
+              after: { invitations, invitation },
+              reason: parsed.data.reason ?? null,
+              idempotencyKey,
+            });
+            return response({ invitation });
+          }
           if (operation === 'resend') {
             const old = invitations.find((i) => i.id === invitationId);
             if (!old) return response({ error: 'Invitation not found' }, 404);
@@ -198,7 +253,7 @@ export function createInternalOwnerInvitationHandlers(input: {
             const scope = JSON.stringify(['owner-invitation.email', old.email]);
             await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${scope}, 0))`;
             // Unique delete races safely with acceptance: rollback if already consumed.
-            await tx.invitation.delete({ where: { id: old.id } });
+            await invalidateOwnerInvitation(tx, old.id);
             resent = await issueOwnerInvitation(tx, {
               organization,
               email: old.email,
@@ -247,7 +302,7 @@ export function createInternalOwnerInvitationHandlers(input: {
                 continue;
               }
               if (existing) {
-                await tx.invitation.delete({ where: { id: existing.id } });
+                await invalidateOwnerInvitation(tx, existing.id);
                 const old = invitations.find((i) => i.id === existing.id);
                 if (old) old.status = 'revoked';
               }
@@ -300,6 +355,8 @@ export function createInternalOwnerInvitationHandlers(input: {
   return {
     list: (request: Request, id?: string) => handle('list', request, id),
     create: (request: Request, id?: string) => handle('create', request, id),
+    revoke: (request: Request, id?: string, invitationId?: string) =>
+      handle('revoke', request, id, invitationId),
     resend: (request: Request, id?: string, invitationId?: string) =>
       handle('resend', request, id, invitationId),
   };

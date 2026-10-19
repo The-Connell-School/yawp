@@ -8,6 +8,7 @@ const type = 'onboard-owner';
 export const ownerInvitationActions = [
   'organization.invitation.create.after',
   'organization.invitation.resend.after',
+  'organization.invitation.revoke.after',
 ];
 type Db = Pick<
   Prisma.TransactionClient,
@@ -143,6 +144,15 @@ export async function listOwnerInvitations(db: Db, organizationId: string) {
   return [...known.values()].sort(
     (a, b) => b.sentAt.localeCompare(a.sentAt) || a.id.localeCompare(b.id)
   );
+}
+
+/** Legacy verification consumes links by deleting the unique invitation row.
+ * Shared by resend and revoke; a concurrent consumption must abort the write. */
+export async function invalidateOwnerInvitation(
+  db: Pick<Db, 'invitation'>,
+  invitationId: string
+) {
+  await db.invitation.delete({ where: { id: invitationId } });
 }
 
 export class OwnerInvitationDeliveryError extends Error {}
