@@ -1,3 +1,4 @@
+import { currentClassInsightRows } from '~/domain/assignment-insights/class-insight-inputs.server';
 import { classCodeUniquenessEnabled } from '~/utils/class-code-write.server';
 import { useFreeAccountUsage } from '~/components/free-account-usage';
 import { Prisma } from '@app/prisma';
@@ -1287,7 +1288,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         })
       : [];
   const insightByClassAssignmentId = new Map(
-    insightRows
+    (await currentClassInsightRows(insightRows))
       .filter((row) => row.status === 'ready' && row.summaryJson)
       .map((row) => [
         row.classAssignmentId,

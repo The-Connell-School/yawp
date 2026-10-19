@@ -1,3 +1,8 @@
+import { loadClassInsightInputs } from '~/domain/assignment-insights/class-insight-inputs.server';
+import {
+  CLASS_INSIGHT_INPUT_VERSION,
+  classInsightFingerprint,
+} from '~/domain/assignment-insights/class-insight-cache';
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { Prisma } from '@app/prisma';
 
@@ -27,18 +32,20 @@ const GENERATION_CLASS_ASSIGNMENT = {
 };
 
 function mockClassAssignmentAccess(
-  generationResult: typeof GENERATION_CLASS_ASSIGNMENT | null = GENERATION_CLASS_ASSIGNMENT
+  generationResult:
+    | typeof GENERATION_CLASS_ASSIGNMENT
+    | null = GENERATION_CLASS_ASSIGNMENT
 ) {
-  prisma.classAssignment.findFirst.mockImplementation(async (args: {
-    select?: Record<string, boolean>;
-  }) => {
-    const isAuthCheck =
-      args.select?.id === true && Object.keys(args.select).length === 1;
-    if (isAuthCheck) {
-      return generationResult ? { id: 'ca-1' } : null;
+  prisma.classAssignment.findFirst.mockImplementation(
+    async (args: { select?: Record<string, boolean> }) => {
+      const isAuthCheck =
+        args.select?.id === true && Object.keys(args.select).length === 1;
+      if (isAuthCheck) {
+        return generationResult ? { id: 'ca-1' } : null;
+      }
+      return generationResult;
     }
-    return generationResult;
-  });
+  );
 }
 
 const getGradingActor = mock();
@@ -120,7 +127,9 @@ describe('api.domain.assignment-insights', () => {
     prisma.classAssignment.findUnique.mockReset().mockResolvedValue(null);
     prisma.assignmentType.findUnique.mockReset().mockResolvedValue(null);
     prisma.document.findMany.mockReset();
-    prisma.classAssignmentInsight.findUnique.mockReset().mockResolvedValue(null);
+    prisma.classAssignmentInsight.findUnique
+      .mockReset()
+      .mockResolvedValue(null);
     prisma.classAssignmentInsight.upsert.mockReset();
     prisma.classAssignmentInsight.updateMany.mockReset().mockResolvedValue({
       count: 0,
@@ -183,7 +192,13 @@ describe('api.domain.assignment-insights', () => {
     prisma.classAssignmentInsight.findUnique.mockResolvedValue({
       status: 'ready',
       generatedAt: new Date(Date.now() - 60 * 60 * 1000),
-      summaryJson: { overview: 'Cached summary.' },
+      summaryJson: {
+        overview: 'Cached summary.',
+        inputVersion: CLASS_INSIGHT_INPUT_VERSION,
+        gradeFingerprint: classInsightFingerprint(
+          (await loadClassInsightInputs(['ca-1'])).get('ca-1') ?? []
+        ),
+      },
     });
 
     const response = await action({
@@ -202,7 +217,13 @@ describe('api.domain.assignment-insights', () => {
     prisma.classAssignmentInsight.findUnique.mockResolvedValue({
       status: 'ready',
       generatedAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
-      summaryJson: { overview: 'Cached summary.' },
+      summaryJson: {
+        overview: 'Cached summary.',
+        inputVersion: CLASS_INSIGHT_INPUT_VERSION,
+        gradeFingerprint: classInsightFingerprint(
+          (await loadClassInsightInputs(['ca-1'])).get('ca-1') ?? []
+        ),
+      },
       submissionCount: 2,
     });
 
@@ -224,7 +245,13 @@ describe('api.domain.assignment-insights', () => {
     prisma.classAssignmentInsight.findUnique.mockResolvedValue({
       status: 'ready',
       generatedAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
-      summaryJson: { overview: 'Cached summary.' },
+      summaryJson: {
+        overview: 'Cached summary.',
+        inputVersion: CLASS_INSIGHT_INPUT_VERSION,
+        gradeFingerprint: classInsightFingerprint(
+          (await loadClassInsightInputs(['ca-1'])).get('ca-1') ?? []
+        ),
+      },
       submissionCount: 1,
     });
 
@@ -279,7 +306,12 @@ describe('api.domain.assignment-insights', () => {
       },
       rubricJson: {
         categories: [
-          { key: 'budget', label: 'Budget', weight: 0.5, description: 'Costs.' },
+          {
+            key: 'budget',
+            label: 'Budget',
+            weight: 0.5,
+            description: 'Costs.',
+          },
           {
             key: 'recommendation',
             label: 'Recommendation',
@@ -299,7 +331,9 @@ describe('api.domain.assignment-insights', () => {
     prisma.document.findMany.mockResolvedValue([
       {
         id: 'doc-1',
-        membership: { user: { name: 'Sol Bramante', email: 'sol@school.test' } },
+        membership: {
+          user: { name: 'Sol Bramante', email: 'sol@school.test' },
+        },
         submissions: [
           {
             id: 'sub-1',

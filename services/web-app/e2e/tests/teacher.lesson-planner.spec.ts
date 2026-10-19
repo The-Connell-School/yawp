@@ -1,3 +1,4 @@
+import { currentInsightSummary } from '../db-helpers';
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { readFile } from 'node:fs/promises';
@@ -115,13 +116,21 @@ async function seedClassInsight(classAssignmentId: string) {
         status: 'ready',
         submissionCount: 12,
         generatedAt: new Date(),
-        summaryJson,
+        summaryJson: await currentInsightSummary(
+          prisma,
+          classAssignmentId,
+          summaryJson
+        ),
       },
       update: {
         status: 'ready',
         submissionCount: 12,
         generatedAt: new Date(),
-        summaryJson,
+        summaryJson: await currentInsightSummary(
+          prisma,
+          classAssignmentId,
+          summaryJson
+        ),
       },
     });
   } finally {
