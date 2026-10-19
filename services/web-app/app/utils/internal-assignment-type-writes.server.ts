@@ -67,7 +67,7 @@ async function readBoundedBody(request: Request, limit: number) {
     void request.body?.cancel().catch(() => {});
     throw tooLarge();
   }
-  if (!request.body) return '';
+  if (!request.body) return new Uint8Array(0);
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
@@ -82,7 +82,7 @@ async function readBoundedBody(request: Request, limit: number) {
       }
       chunks.push(value);
     }
-    return new TextDecoder().decode(Buffer.concat(chunks, size));
+    return Buffer.concat(chunks, size);
   } finally {
     reader.releaseLock();
   }
@@ -212,7 +212,7 @@ export function createInternalAssignmentTypeWriteHandlers(input: {
   async function handle(operation: Operation, request: Request, id?: string) {
     if (request.method !== methods[operation])
       return response({ error: 'Method not allowed' }, 405);
-    let body: string;
+    let body: Uint8Array;
     try {
       body = await readBoundedBody(
         request,
@@ -232,7 +232,9 @@ export function createInternalAssignmentTypeWriteHandlers(input: {
       return response({ error: 'Invalid assignment type' }, 400);
     let raw: unknown;
     try {
-      raw = JSON.parse(body || '{}');
+      // Verify and hash wire bytes; reject lossy UTF-8 decoding and a leading BOM.
+      const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(body);
+      raw = JSON.parse(text || '{}');
     } catch {
       return response({ error: 'Invalid JSON' }, 400);
     }

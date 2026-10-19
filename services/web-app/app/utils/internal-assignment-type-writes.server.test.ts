@@ -137,7 +137,8 @@ function request(
   options: {
     keyId?: string;
     unsigned?: boolean;
-    raw?: string;
+    raw?: string | Uint8Array;
+    signedBody?: string | Uint8Array;
     idempotency?: string;
     legacy?: boolean;
   } = {}
@@ -151,7 +152,7 @@ function request(
       : signInternalApiRequest({
           method,
           url: base + path,
-          body,
+          body: options.signedBody ?? body,
           keyId: options.keyId ?? 'writer',
           secret,
           actor: 'Operator@Yawp.test',
@@ -195,6 +196,57 @@ function invoke(handlers: any, name: string, req: Request, id = 'at-1') {
   return handlers[name](req, id) as Promise<Response>;
 }
 describe('signed assignment type writes', () => {
+  test('rejects a BOM-prefixed body signed over the unprefixed JSON', async () => {
+    const { handlers, db } = fixture();
+    const text = JSON.stringify({ title: 'Signed' });
+    const raw = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(text)]);
+    const result = await handlers.update(request('PATCH', '/at-1', undefined, { raw, signedBody: text }), 'at-1');
+    expect(result.status).toBe(401);
+    expect(await result.json()).toEqual({ error: 'Unauthorized' });
+    expect(db.$transaction).not.toHaveBeenCalled();
+  });
+
+  test('rejects a correctly signed BOM-prefixed body as invalid JSON', async () => {
+    const { handlers, db } = fixture();
+    const raw = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('{"title":"Signed"}')]);
+    const result = await handlers.update(request('PATCH', '/at-1', undefined, { raw }), 'at-1');
+    expect(result.status).toBe(400);
+    expect(await result.json()).toEqual({ error: 'Invalid JSON' });
+    expect(db.$transaction).not.toHaveBeenCalled();
+  });
+
+  test('rejects invalid UTF-8 signed over the decoded replacement character', async () => {
+    const { handlers, db } = fixture();
+    const raw = Buffer.concat([Buffer.from('{"title":"'), Buffer.from([0xff]), Buffer.from('"}')]);
+    const result = await handlers.update(request('PATCH', '/at-1', undefined, { raw, signedBody: '{"title":"\ufffd"}' }), 'at-1');
+    expect(result.status).toBe(401);
+    expect(await result.json()).toEqual({ error: 'Unauthorized' });
+    expect(db.$transaction).not.toHaveBeenCalled();
+  });
+
+  test.each([[0xff], [0xc3, 0x28]])('rejects correctly signed invalid UTF-8 bytes %j before mutation', async (...bytes) => {
+    const { handlers, db } = fixture();
+    const raw = Buffer.concat([Buffer.from('{"title":"'), Buffer.from(bytes), Buffer.from('"}')]);
+    const result = await handlers.update(request('PATCH', '/at-1', undefined, { raw }), 'at-1');
+    expect(result.status).toBe(400);
+    expect(await result.json()).toEqual({ error: 'Invalid JSON' });
+    expect(db.$transaction).not.toHaveBeenCalled();
+  });
+
+  test.each(['string', 'bytes'])('accepts multibyte UTF-8 signed as %s and audits the wire hash', async (format) => {
+    const { handlers, audits } = fixture();
+    const title = 'Caf\u00e9 \ud83d\ude00';
+    const text = JSON.stringify({ title });
+    const raw = format === 'string' ? text : Buffer.from(text, 'utf8');
+    const result = await handlers.update(request('PATCH', '/at-1', undefined, { raw }), 'at-1');
+    expect(result.status).toBe(200);
+    expect((await result.json()).assignmentType.title).toBe(title);
+    expect(audits).toHaveLength(2);
+    for (const audit of audits) {
+      expect(audit.requestHash).toBe(createHash('sha256').update(Buffer.from(text, 'utf8')).digest('hex'));
+    }
+  });
+
   for (const [name, method, path, body] of cases) {
     test(`${name}: unsigned and legacy 401, read-only key 403, wrong method 405`, async () => {
       const { handlers, db } = fixture();

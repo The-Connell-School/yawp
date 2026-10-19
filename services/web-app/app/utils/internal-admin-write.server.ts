@@ -9,7 +9,7 @@ export const response = (value: unknown, status = 200) =>
     },
   });
 
-export function requestHash(body: string) {
+export function requestHash(body: string | Uint8Array) {
   return createHash('sha256').update(body).digest('hex');
 }
 
