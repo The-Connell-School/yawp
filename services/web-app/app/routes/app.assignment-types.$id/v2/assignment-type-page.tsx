@@ -320,13 +320,13 @@ export function AssignmentTypePageV2() {
             )}
             {generator && (
               <section className="flex flex-col items-start gap-4 rounded-xl border border-border border-dashed p-5 sm:flex-row sm:items-center">
-                <div className="flex-1">
-                  <h2 className="text-sm font-semibold">Not finding it?</h2>
-                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                    Describe what you’re teaching and get three drafts in the
-                    style of the library.
-                  </p>
-                </div>
+                <p className="flex-1 text-sm leading-6 text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    Not finding it?{' '}
+                  </span>
+                  Describe what you’re teaching and get three drafts in the
+                  style of the library.
+                </p>
                 <Button
                   variant="secondary"
                   className="shrink-0 rounded-full"

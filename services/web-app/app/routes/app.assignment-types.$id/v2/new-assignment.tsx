@@ -58,7 +58,7 @@ export function NewAssignment({
             + New assignment
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="end">
+        <PopoverContent align="end" className="border-border">
           <p className="text-sm">Add a class before you assign this.</p>
           <Link
             to="/app/my-classes"

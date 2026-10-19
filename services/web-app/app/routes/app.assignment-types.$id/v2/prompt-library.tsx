@@ -375,7 +375,7 @@ export function PromptLibraryV2({
           </nav>
           <nav
             aria-label="Prompt library pagination"
-            className="flex w-full items-center justify-center gap-5 lg:hidden"
+            className="flex w-full items-center justify-center gap-2 lg:hidden"
           >
             <Button
               variant="ghost"
@@ -385,9 +385,11 @@ export function PromptLibraryV2({
             >
               Previous
             </Button>
+            <span aria-hidden="true">·</span>
             <span>
               Page {paging.page} of {paging.pageCount}
             </span>
+            <span aria-hidden="true">·</span>
             <Button
               variant="ghost"
               size="sm"
