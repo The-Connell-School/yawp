@@ -13,6 +13,7 @@ export default defineConfig({
     '**/free-tier.approval-v2.spec.ts',
     '**/auth.unified-signon.spec.ts',
     '**/auth.unified-backend.spec.ts',
+    '**/auth.unified-teacher-prompts.spec.ts',
     '**/auth.unified-resend.spec.ts',
     '**/auth.unified-google-backend.spec.ts',
     '**/auth.unified-origin-backend.spec.ts',

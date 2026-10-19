@@ -10,6 +10,15 @@ export const DEFAULT_OUTPUT_SCHEMA_JSON = {
   schemaVersion: 1,
 } as const;
 
+/** Accepted types for rubric publication; stored-content readers stay permissive. */
+export const RUBRIC_SCORING_SCALE_TYPES = [
+  'weighted_1_5',
+  'weighted_percent',
+  'act_writing_2_12',
+  'rubric_points',
+  'points_scale',
+] as const;
+
 export type ScoringScaleData = {
   type: string;
   minScore: number;

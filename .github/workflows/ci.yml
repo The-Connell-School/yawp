@@ -657,6 +657,24 @@ jobs:
         working-directory: services/web-app
         run: bun test app/utils/login-rate-limit.fail-closed.test.ts
 
+      - name: Assignment type write API database lifecycle
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          INTERNAL_DIRECTORY_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: |
+          CI=1 bun test --max-concurrency=2 app/utils/internal-assignment-type-writes.integration.test.ts app/utils/internal-assignment-type-module-writes.integration.test.ts app/utils/internal-grading-workspace.integration.test.ts
+          CI=1 bun test --max-concurrency=2 app/utils/internal-owner-invitations.integration.test.ts
+
+      - name: Teacher training API database lifecycle
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          INTERNAL_DIRECTORY_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: CI=1 bun test --max-concurrency=2 app/utils/internal-teacher-trainings.integration.test.ts
+
   typecheck-web-app:
     needs: [paths]
     name: ʦ TypeScript
@@ -699,6 +717,14 @@ jobs:
         working-directory: services/web-app
         run: bun test app/utils/ai-usage-log.server.test.ts app/utils/getLLMCompletion/getLLMCompletion.test.ts
 
+      - name: Teacher training API contracts
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        run: CI=1 ./bin/project test --profile internal-teacher-trainings --json
+
+      - name: Assignment type write API contracts
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        run: CI=1 ./bin/project test --profile internal-assignment-type-writes --json
+
       - name: 🧪 Free-tier spend admission and caller denials (isolated)
         if: ${{ needs.paths.outputs.code == 'true' }}
         working-directory: services/web-app
@@ -736,6 +762,8 @@ jobs:
             app/domain/feature-flags/feature-flags.server.test.ts \
             app/utils/internal-feature-flags-http.server.test.ts \
             app/domain/rubrics/rubric-promotion.test.ts \
+            app/utils/internal-rubrics-http.server.test.ts \
+            app/utils/internal-rubrics-body.server.test.ts \
             app/domain/assignment-types/assignment-type-grading-config.server.test.ts \
             app/domain/assignment-types/assignment-type-grading-config.qa431-legacy.server.test.ts \
             app/domain/assignment-types/assignment-type-grading-config.qa431-probe.server.test.ts \
@@ -1013,6 +1041,21 @@ jobs:
           mkdir -p "$TMPDIR"
           trap 'rm -rf "$SIGNON_MAIL_CAPTURE_DIR"' EXIT
           bun x playwright test --config playwright.unified-backend.config.ts --workers=1
+
+      - name: Sign-on teacher prompts browser flows (mocked flag reads)
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}
+        env:
+          CI: true
+          NODE_ENV: development
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          SESSION_SECRET: ci-local-signon-session-secret
+          SIGNON_LOCAL_TEST: '1'
+          TMPDIR: ${{ runner.temp }}/teacher-prompts
+        run: |
+          mkdir -p "$TMPDIR"
+          ./bin/project test --profile signon-teacher-prompts-unit --json
+          ./bin/project test --profile signon-teacher-prompts-browser --json
 
       - name: Unified sign-on isolated-preview resend browser flows
         if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && needs.paths.outputs.code == 'true') }}

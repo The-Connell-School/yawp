@@ -61,15 +61,18 @@ export function buildFailureSection({
 
 async function prependBacklogItem(backlogPath: string, item: string) {
   const body = await readFile(backlogPath, 'utf8');
-  const heading = 'P0b';
-  const idx = body.indexOf(heading);
-  if (idx === -1) {
-    throw new Error(`Could not find ${heading} in ${backlogPath}`);
+  // Anchor on the real "## P0b" heading line (it may carry a suffix such as
+  // "## P0b — From QA FAILURES.md"), not the first "P0b" mention in prose.
+  const heading = /^##\s+P0b\b.*$/m;
+  const match = heading.exec(body);
+  if (!match) {
+    throw new Error(`Could not find a ## P0b heading in ${backlogPath}`);
   }
-  const lineStart = body.lastIndexOf('\n', idx);
-  const insertAt = body.indexOf('\n', idx);
-  if (insertAt === -1 || lineStart === -1) {
-    throw new Error(`Could not locate ${heading} insertion point in ${backlogPath}`);
+  const headingEnd = match.index + match[0].length;
+  const insertAt = body.indexOf('\n', headingEnd);
+  if (insertAt === -1) {
+    await writeFile(backlogPath, `${body}\n${item}\n`);
+    return;
   }
   const updated = `${body.slice(0, insertAt + 1)}${item}\n${body.slice(insertAt + 1)}`;
   await writeFile(backlogPath, updated);

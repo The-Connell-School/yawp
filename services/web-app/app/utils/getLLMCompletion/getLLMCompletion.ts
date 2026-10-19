@@ -77,8 +77,8 @@ interface Params {
   /** Disable automatic cross-provider transfer for sensitive workloads. */
   allowFallbackProvider?: boolean;
   signal?: AbortSignal;
-  /** Store only counts/timing metadata when prompts contain sensitive records. */
-  logPayload?: 'full' | 'metadata-only';
+  /** Metadata-only redacts payloads; audit-only skips persistence for internal scratch checks. */
+  logPayload?: 'full' | 'metadata-only' | 'audit-only';
   /** Known names or direct identifiers that must be scrubbed from LlmLog text. */
   deidentificationPhrases?: unknown;
 }
@@ -95,9 +95,10 @@ async function logLlmCall(data: {
   totalTokens?: number;
   durationMs?: number;
   metadata?: Record<string, unknown>;
-  logPayload?: 'full' | 'metadata-only';
+  logPayload?: 'full' | 'metadata-only' | 'audit-only';
   deidentificationPhrases?: unknown;
 }) {
+  if (data.logPayload === 'audit-only') return;
   const metadataOnly = data.logPayload === 'metadata-only';
   try {
     await createDeidentifiedLlmLog(prisma, {
@@ -335,20 +336,21 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
       });
       // Best-effort usage decision/attribution log
       // Fire-and-forget: the usage log must never add latency to, or fail, a request.
-      void logAllowedUsage({
-        route: params.attribution.route,
-        feature:
-          (params.metadata && (params.metadata as any).feature) || undefined,
-        membershipId: params.attribution.membershipId ?? undefined,
-        organizationId: params.attribution.organizationId ?? undefined,
-        classId: params.attribution.classId ?? undefined,
-        ipHash: params.attribution.ipHash ?? undefined,
-        requestId: params.attribution.requestId,
-        units: 1,
-        inputTokens: totalInputTokens,
-        outputTokens: totalOutputTokens,
-        latencyMs: durationMs,
-      });
+      if (params.logPayload !== 'audit-only')
+        void logAllowedUsage({
+          route: params.attribution.route,
+          feature:
+            (params.metadata && (params.metadata as any).feature) || undefined,
+          membershipId: params.attribution.membershipId ?? undefined,
+          organizationId: params.attribution.organizationId ?? undefined,
+          classId: params.attribution.classId ?? undefined,
+          ipHash: params.attribution.ipHash ?? undefined,
+          requestId: params.attribution.requestId,
+          units: 1,
+          inputTokens: totalInputTokens,
+          outputTokens: totalOutputTokens,
+          latencyMs: durationMs,
+        });
 
       return responseText;
     }
@@ -513,20 +515,21 @@ async function runOpenAiCompletion({
         deidentificationPhrases: params.deidentificationPhrases,
       });
       // Fire-and-forget: the usage log must never add latency to, or fail, a request.
-      void logAllowedUsage({
-        route: params.attribution.route,
-        feature:
-          (params.metadata && (params.metadata as any).feature) || undefined,
-        membershipId: params.attribution.membershipId ?? undefined,
-        organizationId: params.attribution.organizationId ?? undefined,
-        classId: params.attribution.classId ?? undefined,
-        ipHash: params.attribution.ipHash ?? undefined,
-        requestId: params.attribution.requestId,
-        units: 1,
-        inputTokens: totalInputTokens,
-        outputTokens: totalOutputTokens,
-        latencyMs: durationMs,
-      });
+      if (params.logPayload !== 'audit-only')
+        void logAllowedUsage({
+          route: params.attribution.route,
+          feature:
+            (params.metadata && (params.metadata as any).feature) || undefined,
+          membershipId: params.attribution.membershipId ?? undefined,
+          organizationId: params.attribution.organizationId ?? undefined,
+          classId: params.attribution.classId ?? undefined,
+          ipHash: params.attribution.ipHash ?? undefined,
+          requestId: params.attribution.requestId,
+          units: 1,
+          inputTokens: totalInputTokens,
+          outputTokens: totalOutputTokens,
+          latencyMs: durationMs,
+        });
 
       return responseText;
     }
@@ -558,6 +561,19 @@ async function runOpenAiCompletion({
 }
 
 export async function getLLMCompletion(params: Params) {
+  // Scratch checks are persisted solely by their enclosing internal audit pair.
+  // Keep this opt-in limited to unscoped internal workspace calls; existing
+  // tenant/provider logging remains unchanged for every other caller.
+  if (
+    params.logPayload === 'audit-only' &&
+    (params.attribution.organizationId !== null ||
+      params.attribution.membershipId !== null ||
+      params.attribution.classId != null ||
+      params.attribution.route !== 'api/internal/v1/admin/grading-workspace')
+  )
+    throw new Error(
+      'Audit-only persistence requires internal grading workspace attribution'
+    );
   const startTime = Date.now();
   const fallbackModel = getOpenAiFallbackModel(params);
 

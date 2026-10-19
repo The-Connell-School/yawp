@@ -111,6 +111,33 @@ describe('admin assignment type detail action', () => {
     prisma.rubricRevision.findMany.mockResolvedValue([]);
   });
 
+  test.each(['', '   ', 'Existing override'])(
+    'keeps the selected per-type override and version when the edit textarea is unchanged: %j',
+    async (override) => {
+      const target = {
+        id: 'at-1', rubricJson: null,
+        gradingPromptConfigJson: override.trim() ? { gradingInstructionsOverride: override.trim() } : {},
+      };
+      prisma.assignmentType.findUnique.mockImplementation(async ({ where }: any) => where.id === 'source' ? {
+        id: 'source', archivedAt: null, rubricId: null,
+        scoringScaleJson: { type: 'weighted_1_5', minScore: 1, maxScore: 5 },
+        rubricJson: { categories: [{ key: 'quality', label: 'Quality', description: 'Clear', weight: 1 }] },
+        gradingPromptConfigJson: { systemInstructions: 'Source system', gradingInstructionsOverride: 'Source override' },
+        gradingOutputSchemaJson: { schemaVersion: 1 },
+      } : target);
+      const form = new FormData();
+      form.set('intent', 'updateCourse');
+      form.set('title', 'Copied rubric');
+      form.set('rubricId', 'assignment-type:source');
+      form.set('gradingInstructionsOverride', override);
+      const response = await action({ request: new Request('https://example.test/edit', { method: 'POST', body: form }), params: { id: 'at-1' }, context: {} });
+      expect(response).toMatchObject({ data: { status: 'success' } });
+      const data = prisma.assignmentType.update.mock.calls.at(-1)?.[0].data;
+      expect(data.gradingPromptConfigJson).toEqual({ systemInstructions: 'Source system', gradingInstructionsOverride: 'Source override' });
+      expect(data.gradingAssistantVersion).toBeUndefined();
+    }
+  );
+
   test('keeps a deleted rubric selection error in the editor', async () => {
     prisma.rubric.findUnique.mockResolvedValue(null);
     const form = new FormData();

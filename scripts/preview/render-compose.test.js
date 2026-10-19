@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { renderPreviewCompose } from './render-compose.mjs';
+import { googleOriginAllowlist, renderPreviewCompose } from './render-compose.mjs';
 
 const requireFromWebApp = createRequire(
   new URL('../../services/web-app/package.json', import.meta.url)
@@ -580,6 +580,33 @@ describe('deployment-only unified sign-on control', () => {
       }
     });
   }
+  test('PR previews offer Google only on allowlisted origins; demo is unchanged', () => {
+    const saved = process.env.PREVIEW_GOOGLE_OAUTH_ORIGINS;
+    try {
+      delete process.env.PREVIEW_GOOGLE_OAUTH_ORIGINS;
+      for (const runtime of ['fast', 'production']) {
+        const preview = Bun.YAML.parse(renderCompose({ runtime })).services.web.environment;
+        expect(preview.GOOGLE_OAUTH_REQUIRE_ORIGIN_ALLOWLIST).toBe('true');
+        expect(preview.GOOGLE_OAUTH_ORIGIN_ALLOWLIST).toBe('');
+        const demo = Bun.YAML.parse(renderCompose({ runtime, slug: 'demo' })).services.web.environment;
+        expect(demo.GOOGLE_OAUTH_REQUIRE_ORIGIN_ALLOWLIST).toBeUndefined();
+        expect(demo.GOOGLE_OAUTH_ORIGIN_ALLOWLIST).toBeUndefined();
+      }
+      process.env.PREVIEW_GOOGLE_OAUTH_ORIGINS = ' https://pr-565.preview.yawp.school , https://pr-142.preview.yawp.school';
+      const preview = Bun.YAML.parse(renderCompose()).services.web.environment;
+      expect(preview.GOOGLE_OAUTH_ORIGIN_ALLOWLIST).toBe('https://pr-565.preview.yawp.school,https://pr-142.preview.yawp.school');
+      expect(Bun.YAML.parse(renderCompose()).services.toolbox?.environment?.GOOGLE_OAUTH_ORIGIN_ALLOWLIST).toBeUndefined();
+    } finally {
+      if (saved === undefined) delete process.env.PREVIEW_GOOGLE_OAUTH_ORIGINS;
+      else process.env.PREVIEW_GOOGLE_OAUTH_ORIGINS = saved;
+    }
+  });
+  test('refuses Google origin allowlist entries that are not bare https origins', () => {
+    expect(googleOriginAllowlist('')).toBe('');
+    for (const bad of ['http://pr-1.preview.yawp.school', 'https://pr-1.preview.yawp.school/path', 'pr-1.preview.yawp.school', 'https://a.test,"x: y"']) {
+      expect(() => googleOriginAllowlist(bad)).toThrow('https origins');
+    }
+  });
   test('refuses malformed label transport boolean', () => {
     expect(() => renderCompose({ unifiedSignOn: 'true; echo bad' })).toThrow('true or false');
   });

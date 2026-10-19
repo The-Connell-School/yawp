@@ -31,6 +31,7 @@ import { Label } from '~/components/ui/label';
 import { Input } from '~/components/ui/input';
 import React from 'react';
 import { requireAdmin } from '~/utils/auth.server';
+import { listAdminOwnerInvitations } from '~/domain/organizations/owner-invitations.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const currentUser = await requireAdmin(request);
@@ -55,12 +56,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           },
         },
       }),
-      prisma.invitation.findMany({
-        where: {
-          metadata: JSON.stringify({ organizationId: params.id }),
-          type: 'onboard-owner',
-        },
-      }),
+      listAdminOwnerInvitations(prisma, params.id),
       prisma.organization.count(),
       prisma.assignmentType.findMany({
         where: { archivedAt: null },

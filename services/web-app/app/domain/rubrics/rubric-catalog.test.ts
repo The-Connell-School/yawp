@@ -12,7 +12,7 @@ import {
 
 
 describe('rubric catalog with production rubric content', () => {
-  test('every editable production library rubric opens in the editor and passes the save validator unchanged', () => {
+  test('production library content opens unchanged and publication requires a known scoring type', () => {
     expect(fixture.libraryRubrics.length).toBe(10);
     for (const rubric of fixture.libraryRubrics) {
       const { editable, preservedTopLevelKeys } = toEditable(rubric.schemaJson as any, rubric.name);
@@ -40,14 +40,15 @@ describe('rubric catalog with production rubric content', () => {
     expect(validateEditable(toEditable(perTypeContent(daily as any), 'x').editable, 'assignment-type-rubric').ok).toBe(true);
   });
 
-  test('Strode rubric with blank band descriptions is editable (prod content must not be locked out)', () => {
+  test('Strode blank band descriptions remain valid with weighted_percent', () => {
     const strode = fixture.libraryRubrics.find((rubric) => rubric.name === 'strode-eng101-essay-1-description')!;
-    expect(validateEditable(toEditable(strode.schemaJson as any, strode.name).editable, strode.name).ok).toBe(true);
+    const { editable } = toEditable(strode.schemaJson as any, strode.name);
+    expect(validateEditable(editable, strode.name).ok).toBe(true);
   });
 
   test('the validator still rejects broken edits with a field path', () => {
     const rubric = fixture.libraryRubrics.find((r) => r.name === 'gba300-nonverbal-rubric-STUDENT')!;
-    const { editable } = toEditable(rubric.schemaJson as any, rubric.name);
+    const editable = toEditable(rubric.schemaJson as any, rubric.name).editable;
     const categories = (editable.rubric as any).categories;
     const blank = validateEditable({ ...editable, rubric: { categories: [{ ...categories[0], label: '' }] } }, rubric.name);
     expect(blank.ok).toBe(false);
