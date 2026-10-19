@@ -76,7 +76,7 @@ const rejectionCases = [
   },
 ] as const;
 
-test.each(rejectionCases)('classifies $validationReason and discards all provider text', ({ validationReason, statusCode, message, safeMessage }) => {
+test.each([...rejectionCases])('classifies $validationReason and discards all provider text', ({ validationReason, statusCode, message, safeMessage }) => {
   process.env.EMAIL_PROVIDER = 'resend';
   const diagnostic = emailDeliveryDiagnostic({
     name: 'validation_error', statusCode,
