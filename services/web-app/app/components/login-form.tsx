@@ -24,7 +24,14 @@ export function LoginForm({
   const form = useForm({
     schema: LoginSchema,
     method: 'POST',
-    defaultValues: { redirectTo, email: '', password: '' },
+    submitSource: 'dom',
+    // RVF writes non-null defaults into the DOM when its refs attach.
+    // Undefined defaults preserve credentials entered before hydration.
+    defaultValues: {
+      redirectTo,
+      email: undefined as string | undefined,
+      password: undefined as string | undefined,
+    },
     validationBehaviorConfig: {
       initial: 'onSubmit',
       whenTouched: 'onSubmit',
