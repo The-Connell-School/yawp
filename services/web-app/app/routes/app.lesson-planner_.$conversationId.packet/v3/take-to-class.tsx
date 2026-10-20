@@ -146,7 +146,7 @@ export function TakeToClass({
         <Link to={`${base}/handouts`} data-testid="handouts-print" className={BUTTON}>
           Print
         </Link>
-        <a href={`${base}/packet.pdf?view=handout`} download className={BUTTON}>
+        <a href={`${base}/handouts.pdf`} download data-testid="handouts-pdf" className={BUTTON}>
           PDF
         </a>
       </Row>

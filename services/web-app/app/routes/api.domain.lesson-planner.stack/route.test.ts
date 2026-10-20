@@ -6,7 +6,9 @@ const getLessonPlannerReviewFlags = mock();
 const prisma = {
   lessonPlanConversation: { findFirst: mock(), update: mock() },
   lessonPlanMessage: { findFirst: mock() },
+  lessonPlanMaterial: { updateMany: mock() },
 };
+const ensureStudentVersion = mock();
 const loadStackV3 = mock();
 const actions = {
   addPiecesAt: mock(),
@@ -24,6 +26,7 @@ mock.module('~/domain/feature-flags/feature-flags.server', () => ({ getLessonPla
 mock.module('~/domain/lesson-planner/load-stack-v3.server', () => ({ loadStackV3 }));
 mock.module('~/domain/lesson-planner/stack-actions.server', () => actions);
 mock.module('~/domain/lesson-planner/stack-command.server', () => ({ runStackCommand }));
+mock.module('~/domain/lesson-planner/step-handout.server', () => ({ ensureStudentVersion }));
 
 const { action } = await import('./route');
 
@@ -127,5 +130,29 @@ describe('stack page actions (stack page redesign)', () => {
     });
     expect(actions.addPiecesAt.mock.calls[0][0]).toMatchObject({ keys: ['st:1'], beforeKey: 'm:hist' });
     expect(response.data.keys).toEqual(['m:new']);
+  });
+});
+
+describe("handouts for any step (Brian's run 3, item 8)", () => {
+  test('a step is written for students on request', async () => {
+    ensureStudentVersion.mockReset().mockResolvedValue({ content: 'Pick one object.' });
+    const response = await post({ intent: 'student-version', conversationId: 'plan-1', materialId: 'hook' });
+    expect(ensureStudentVersion.mock.calls[0][0]).toMatchObject({ conversationId: 'plan-1', materialId: 'hook' });
+    expect(response.data).toEqual({ ok: true, materialId: 'hook', content: 'Pick one object.' });
+  });
+
+  test('a model failure says to try again, and changes nothing', async () => {
+    ensureStudentVersion.mockReset().mockRejectedValue(new Error('budget'));
+    const response = await post({ intent: 'student-version', conversationId: 'plan-1', materialId: 'hook' });
+    expect(response.init.status).toBe(503);
+  });
+
+  test('a step goes in or out of the handouts', async () => {
+    prisma.lessonPlanMaterial.updateMany.mockReset().mockResolvedValue({ count: 1 });
+    await post({ intent: 'set-handout', conversationId: 'plan-1', materialId: 'hook', hasHandout: 'false' });
+    expect(prisma.lessonPlanMaterial.updateMany.mock.calls[0][0]).toEqual({
+      where: { id: 'hook', conversationId: 'plan-1' },
+      data: { hasHandout: false },
+    });
   });
 });

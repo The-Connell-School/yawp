@@ -8,6 +8,7 @@ import {
   tableRowBottom,
   renderHandoutPdf,
   renderPacketPdf,
+  renderStepHandoutPdf,
 } from './lesson-pdf.server';
 
 function packetWith(
@@ -589,5 +590,23 @@ mustMention: Whether the material moves.
     expect(text).not.toContain('yawp-slides');
     expect(text).not.toContain('yawp-exit-ticket');
     expect(text).not.toContain('mustMention');
+  });
+});
+
+describe("renderStepHandoutPdf (Brian's run 3, item 8)", () => {
+  test('the steps picked, numbered, with lines to write on for writing steps', async () => {
+    const bytes = await renderStepHandoutPdf({
+      title: 'Day One',
+      className: 'English 10 · Period 3',
+      parts: [
+        { id: 'hook', title: 'What’s in your bag?', content: 'Pick one object that tells a stranger something true about you.', lines: 0 },
+        { id: 'dp', title: 'What one item reveals', content: 'What would your list say about you?', lines: 8 },
+      ],
+    });
+    const text = pdfText(bytes);
+    expect(text).toContain('Pick one object');
+    expect(text).toContain('What would your list say');
+    expect(text).toContain('2. What one item reveals');
+    expect(Buffer.from(bytes).toString('latin1').startsWith('%PDF-')).toBe(true);
   });
 });

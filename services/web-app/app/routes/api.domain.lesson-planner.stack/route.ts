@@ -20,6 +20,7 @@ import {
   type StackSnapshot,
 } from '~/domain/lesson-planner/stack-actions.server';
 import { runStackCommand } from '~/domain/lesson-planner/stack-command.server';
+import { ensureStudentVersion } from '~/domain/lesson-planner/step-handout.server';
 import { clampMinutes } from '~/domain/lesson-planner/stack-timing';
 
 const POST = z
@@ -33,6 +34,10 @@ const POST = z
       'set-details',
       'add-piece',
       'command',
+      // Brian's run 3 (item 8): a step written for students, for a handout.
+      'student-version',
+      // Leave a step out of the handouts, or put it back in.
+      'set-handout',
     ]),
     conversationId: z.string().min(1),
     materialId: z.string().min(1).optional(),
@@ -54,6 +59,7 @@ const POST = z
     beforeKey: z.string().max(200).optional(),
     line: z.string().trim().min(1).max(600).optional(),
     insertAfter: z.string().max(200).optional(),
+    hasHandout: z.enum(['true', 'false']).optional(),
   })
   .strict();
 
@@ -170,6 +176,32 @@ export async function action({ request }: ActionFunctionArgs) {
         beforeKey: data.beforeKey || null,
       });
       return dataResponse({ ok: true, ...result });
+    }
+
+    case 'student-version': {
+      if (!data.materialId) return bad('A step is required.');
+      try {
+        const version = await ensureStudentVersion({
+          request,
+          access,
+          conversationId: conversation.id,
+          materialId: data.materialId,
+        });
+        return version
+          ? dataResponse({ ok: true, materialId: data.materialId, content: version.content })
+          : bad('That step is not in this lesson.', 404);
+      } catch {
+        return bad('The student version did not come back. Try again.', 503);
+      }
+    }
+
+    case 'set-handout': {
+      if (!data.materialId || !data.hasHandout) return bad('A step is required.');
+      await prisma.lessonPlanMaterial.updateMany({
+        where: { id: data.materialId, conversationId: conversation.id },
+        data: { hasHandout: data.hasHandout === 'true' },
+      });
+      return dataResponse({ ok: true });
     }
 
     case 'command': {

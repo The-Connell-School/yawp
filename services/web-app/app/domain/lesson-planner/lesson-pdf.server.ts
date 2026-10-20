@@ -582,3 +582,63 @@ export function pdfFilename(title: string, suffix?: string): string {
     .slice(0, 80);
   return `${base || 'Lesson'}${suffix ? ` - ${suffix}` : ''}.pdf`;
 }
+
+/**
+ * Handouts for any step (Brian's run 3, item 8): the steps the teacher picked,
+ * each as students should read it, numbered, with answer lines sized to the
+ * writing it asks for.
+ */
+export async function renderStepHandoutPdf({
+  title,
+  className,
+  parts,
+}: {
+  title: string;
+  className: string | null;
+  parts: Array<{ id: string; title: string; content: string; lines: number }>;
+}): Promise<Uint8Array> {
+  const single = parts.length === 1;
+  const heading = single ? parts[0]!.title : title;
+  const doc = newDocument(heading);
+  drawTitle(doc, { title: heading, subtitle: className });
+  doc.moveDown(0.6);
+  doc
+    .font(FONTS.body)
+    .fontSize(10.5)
+    .fillColor(MUTED)
+    .text('Name: _______________________     Section: ____________     Date: ____________');
+  doc.moveDown(1.1);
+
+  parts.forEach((part, index) => {
+    if (index > 0) doc.addPage();
+    if (!single) {
+      drawBlock(doc, {
+        kind: 'heading',
+        level: 1,
+        runs: [{ text: `${index + 1}. ${part.title}`, bold: true }],
+      });
+    }
+    drawMarkdown(doc, part.content);
+    if (part.lines > 0) {
+      doc.moveDown(0.8);
+      const left = doc.page.margins.left;
+      const right = doc.page.width - doc.page.margins.right;
+      for (let line = 0; line < part.lines; line += 1) {
+        if (doc.y + 26 > doc.page.height - doc.page.margins.bottom) doc.addPage();
+        doc.y += 24;
+        doc.moveTo(left, doc.y).lineTo(right, doc.y).lineWidth(0.5).strokeColor('#C9C2B8').stroke();
+      }
+      doc.moveDown(0.5);
+    }
+  });
+
+  if (!parts.length) {
+    doc
+      .font(FONTS.italic)
+      .fontSize(BODY_SIZE)
+      .fillColor(MUTED)
+      .text('Pick the steps that go in this handout.');
+  }
+
+  return finish(doc);
+}
