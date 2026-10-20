@@ -52,6 +52,19 @@ export type LoadedLessonPacket = {
   materialKinds: Record<string, string>;
   /** Each filed piece's chat card, by id: "<messageId>:<blockKey>". */
   materialTokens: Record<string, string>;
+  /** Each filed piece's run 3 step fields, by id (null columns stay null). */
+  materialMeta: Record<
+    string,
+    {
+      stepType: string | null;
+      label: string | null;
+      minutes: number | null;
+      hasHandout: boolean | null;
+      yawpAssignmentId: string | null;
+      yawpCreated: boolean;
+      slot: string;
+    }
+  >;
 };
 
 const WRITING_KINDS = new Set(['class-starter', 'daily-pages', 'exit-ticket']);
@@ -118,6 +131,10 @@ export async function loadLessonPacket({
           stepType: true,
           yawpHref: true,
           yawpCreatedAt: true,
+          label: true,
+          hasHandout: true,
+          yawpAssignmentId: true,
+          slot: true,
         },
       },
     },
@@ -271,6 +288,20 @@ export async function loadLessonPacket({
       conversation.materials.map((material) => [
         material.id,
         `${material.sourceMessageId}:${material.blockKey}`,
+      ])
+    ),
+    materialMeta: Object.fromEntries(
+      conversation.materials.map((material) => [
+        material.id,
+        {
+          stepType: material.stepType,
+          label: material.label,
+          minutes: material.minutes,
+          hasHandout: material.hasHandout,
+          yawpAssignmentId: material.yawpAssignmentId,
+          yawpCreated: Boolean(material.yawpCreatedAt),
+          slot: material.slot,
+        },
       ])
     ),
   };
