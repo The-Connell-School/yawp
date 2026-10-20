@@ -1,5 +1,5 @@
 /**
- * Tool layer for the YAWP! Lesson Planner.
+ * Tool layer for the Yawp! Lesson Planner.
  *
  * Two families of tools:
  *

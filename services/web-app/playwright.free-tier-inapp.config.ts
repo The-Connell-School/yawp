@@ -21,7 +21,7 @@ export default defineConfig({
             ? /free-tier\.bundle-quotas\.spec\.ts/
             : process.env.FREE_INAPP_REGRESSION === '1'
               ? /free-tier\.(bundle-quotas|assignment-choices)\.spec\.ts/
-              : /free-tier\.inapp\.spec\.ts/,
+              : /free-tier\.(inapp|site-license-locked-tiles)\.spec\.ts/,
   grep:
     process.env.FREE_INAPP_CONTROLS === '1'
       ? /free-account legacy controls/

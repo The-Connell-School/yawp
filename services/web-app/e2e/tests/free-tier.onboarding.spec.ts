@@ -13,7 +13,7 @@ const ADMIN_DOMAIN = 'e2e-ft.school.edu';
 test.describe('Free tier public flow', () => {
   test('waitlist page loads', async ({ page }) => {
     await page.goto('/free');
-    await expect(page.getByRole('heading', { name: /Try YAWP/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Try Yawp!/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Join the waitlist/i })).toBeVisible();
   });
 
@@ -104,7 +104,7 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     await adminPage.goto(approveUrl!);
     await adminPage.fill('input[name="adminRole"]', 'Principal');
     await adminPage.getByRole('checkbox', { name: /I can approve classroom software/i }).check();
-    await adminPage.getByRole('button', { name: /Approve YAWP/i }).click();
+    await adminPage.getByRole('button', { name: /Approve Yawp!/i }).click();
     await expect(adminPage.getByRole('heading', { name: /Thank you/i })).toBeVisible({
       timeout: 30_000,
     });

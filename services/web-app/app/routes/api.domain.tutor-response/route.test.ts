@@ -447,9 +447,9 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     expect((completionArgs.system[0].text as string)).toContain(
       'Build a working sense of each document before drafting.'
     );
-    // The universal YAWP! Tutor character rides at the top of every AP History
+    // The universal Yawp! Tutor character rides at the top of every AP History
     // prompt, and the section's register mode resolves from its title.
-    expect((completionArgs.system[0].text as string)).toContain('You are the YAWP! Tutor');
+    expect((completionArgs.system[0].text as string)).toContain('You are the Yawp! Tutor');
     expect((completionArgs.system[0].text as string)).toContain(
       'REGISTER MODE FOR THIS MODULE: DRAFTING'
     );
@@ -549,7 +549,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     // defaults and legacy string are both superseded.
     expect(systemText).not.toContain('ADMIN LEQ');
     expect(systemText).not.toContain('Legacy single-string guidance.');
-    expect(systemText).not.toContain('You are the YAWP! Tutor');
+    expect(systemText).not.toContain('You are the Yawp! Tutor');
     expect(systemText).not.toContain('HIPP angle');
     // AP History substance still comes from code.
     expect(systemText).toContain('DBQ Rubric (7 points');

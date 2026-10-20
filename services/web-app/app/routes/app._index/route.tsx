@@ -56,6 +56,7 @@ import {
   DialogTitle,
 } from '~/components/ui/dialog';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import { loadSiteLicenseLockedAssignmentTiles } from '~/domain/free-tier/site-license-locked-assignment-tiles.server';
 
 const DASHBOARD_MAX_TEACHER_CLASSES = 6;
 
@@ -312,6 +313,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     gradesGrammar: gradesGrammarIds.has(type.id),
     ...quotaByTypeId.get(type.id),
   }));
+  const siteLicenseLockedAssignmentTiles =
+    await loadSiteLicenseLockedAssignmentTiles(profile.organization);
 
   // A student's assigned Writing Fundamentals practice, surfaced on their
   // dashboard alongside their classes (each card links into the practice
@@ -368,6 +371,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       name: formatClassLabel(klass),
     })),
     assignmentCreationTypes,
+    siteLicenseLockedAssignmentTiles,
   });
 }
 
@@ -409,7 +413,7 @@ export default function AppRoute() {
                 {freeUsage
                   ? freeUsage.monthly
                     ? 'Your class, assignments, and grading in one place.'
-                    : 'Your class, assignments and grading in one place.'
+                    : 'Your class, assignments, and grading in one place.'
                   : 'Your classes, assignments, and grading in one place.'}
               </p>
             </div>
@@ -435,6 +439,9 @@ export default function AppRoute() {
                   <FreeAssignmentTiles
                     usage={freeUsage}
                     types={data.assignmentCreationTypes}
+                    lockedAssignmentTiles={
+                      data.siteLicenseLockedAssignmentTiles
+                    }
                     onCreate={(id) => {
                       setCreateAssignmentTypeId(id);
                       setIsCreateSheetOpen(true);
@@ -475,6 +482,9 @@ export default function AppRoute() {
                   }}
                   entryPoint="dashboard"
                   assignmentTypes={data.assignmentCreationTypes}
+                  siteLicenseLockedAssignmentTiles={
+                    data.siteLicenseLockedAssignmentTiles
+                  }
                   teacherClasses={data.assignmentCreationClasses}
                   initialAssignmentTypeId={createAssignmentTypeId}
                 />

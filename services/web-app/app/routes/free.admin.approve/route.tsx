@@ -32,6 +32,7 @@ import {
   FreeTierPerson,
 } from '../free-tier/FreeTierAuthCard';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
+import { FREE_TIER_MODEL_TRAINING_LINE } from '~/domain/free-tier/email-copy';
 
 type LoaderData =
   | { ok: false; reason?: string }
@@ -185,7 +186,7 @@ export default function FreeAdminApproveRoute() {
     return (
       <FreeTierAuthCard title="Thank you" icon={<CircleCheck />}>
         <p className="text-sm text-muted-foreground">
-          {actionData.app.name} can start using YAWP. We let them know.
+          {actionData.app.name} can now start using Yawp! We let them know.
         </p>
       </FreeTierAuthCard>
     );
@@ -202,7 +203,7 @@ export default function FreeAdminApproveRoute() {
       'status' in actionData &&
       (actionData.status === 'REJECTED' || actionData.status === 'EXPIRED');
     const message = declined
-      ? 'YAWP did not approve it. Questions? Email support@yawp.school.'
+      ? 'Yawp! did not approve it. Questions? Email support@yawp.school.'
       : actionData.reason === 'email_failed'
         ? "Your approval is saved, but we couldn't send your confirmation email."
         : actionData.reason === 'superseded'
@@ -210,7 +211,7 @@ export default function FreeAdminApproveRoute() {
           : actionData.reason === 'used'
             ? 'This approval link was already used.'
             : actionData.reason === 'budget_exceeded'
-              ? 'YAWP has reached the current free-tier budget for this environment. We did not use this approval link; our team will follow up.'
+              ? 'Yawp! has reached the current free-tier budget for this environment. We did not use this approval link; our team will follow up.'
               : 'We could not complete this approval. The link may be invalid or expired.';
     return (
       <FreeTierAuthCard
@@ -235,7 +236,7 @@ export default function FreeAdminApproveRoute() {
       >
         {actionData.reason === 'email_failed' ? (
           <p className="text-sm text-muted-foreground">
-            The teacher can start using YAWP.
+            The teacher can start using Yawp!
           </p>
         ) : null}
         <p
@@ -256,7 +257,7 @@ export default function FreeAdminApproveRoute() {
       return (
         <FreeTierAuthCard title="Already approved" icon={<CircleCheck />}>
           <p className="text-sm text-muted-foreground">
-            YAWP is already approved for{' '}
+            Yawp! is already approved for{' '}
             {(data as { schoolName?: string }).schoolName ?? 'this school'}.
           </p>
         </FreeTierAuthCard>
@@ -275,7 +276,7 @@ export default function FreeAdminApproveRoute() {
       return (
         <FreeTierAuthCard title="This request is closed" icon={<CircleAlert />}>
           <p className="text-sm text-muted-foreground">
-            YAWP did not approve it. Questions? Email support@yawp.school.
+            Yawp! did not approve it. Questions? Email support@yawp.school.
           </p>
         </FreeTierAuthCard>
       );
@@ -300,16 +301,16 @@ export default function FreeAdminApproveRoute() {
 
   return (
     <FreeTierAuthCard
-      title={`Approve YAWP for ${data.schoolName}`}
+      title={`Approve Yawp! for ${data.schoolName}`}
       aside={
         data.approvalV2 ? (
           <>
-            <h2 className="text-lg font-semibold">About YAWP</h2>
+            <h2 className="text-lg font-semibold">About Yawp!</h2>
             <FreeTierPerson name={data.teacherName} email={data.teacherEmail} />
             <ul className="flex flex-col gap-3 text-sm text-card-foreground">
               <li>Students draft essays with feedback as they write.</li>
               <li>Teachers control assignments and grading.</li>
-              <li>Student writing is never used to train outside models.</li>
+              <li>{FREE_TIER_MODEL_TRAINING_LINE}</li>
             </ul>
             <section
               aria-label="Administrator guide"
@@ -342,7 +343,7 @@ export default function FreeAdminApproveRoute() {
                 aria-hidden="true"
                 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
               />
-              Student writing is never used to train outside models.
+              {FREE_TIER_MODEL_TRAINING_LINE}
             </li>
           </ul>
         </>
@@ -370,7 +371,7 @@ export default function FreeAdminApproveRoute() {
           <Checkbox name="authorized" required className="mt-1" />
           <span>I can approve classroom software for {data.schoolName}.</span>
         </label>
-        <FreeTierButton type="submit">Approve YAWP</FreeTierButton>
+        <FreeTierButton type="submit">Approve Yawp!</FreeTierButton>
       </Form>
       {data.approvalV2 ? (
         <details className="text-sm">

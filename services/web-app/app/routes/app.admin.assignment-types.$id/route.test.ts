@@ -387,7 +387,7 @@ describe('admin assignment type detail action', () => {
     const form = new FormData();
     form.set('intent', 'updateCourse');
     form.set('title', 'AP History Essay');
-    form.set('tutorInstructions', 'WHO YOU ARE. You are the YAWP! Tutor...');
+    form.set('tutorInstructions', 'WHO YOU ARE. You are the Yawp! Tutor...');
 
     await action({
       request: new Request(
@@ -401,7 +401,7 @@ describe('admin assignment type detail action', () => {
     expect(prisma.assignmentType.update).toHaveBeenCalledWith({
       where: { id: 'at-1' },
       data: expect.objectContaining({
-        tutorInstructions: 'WHO YOU ARE. You are the YAWP! Tutor...',
+        tutorInstructions: 'WHO YOU ARE. You are the Yawp! Tutor...',
       }),
     });
   });

@@ -71,6 +71,8 @@ export function renderPreviewCompose({
   internalApiKeys = process.env.DEMO_INTERNAL_API_KEYS,
   demoTrainingMediaEnabled = process.env.DEMO_TRAINING_MEDIA_ENABLED || 'false',
   customIngressActive = process.env.PREVIEW_CUSTOM_INGRESS_ACTIVE !== 'false',
+  demoWebImage = process.env.DEMO_WEB_IMAGE,
+  demoToolboxImage = process.env.DEMO_TOOLBOX_IMAGE,
 } = {}) {
   if (!['true', 'false'].includes(unifiedSignOn)) {
     throw new Error('PREVIEW_UNIFIED_SIGN_ON must be true or false');
@@ -263,11 +265,25 @@ ${env.slug === 'demo' ? '      EMAIL_PROVIDER: "resend"\n' : ''}      RESEND_FRO
     ? `      - ${q(`${controlDir}:/preview-control:ro`)}` : '';
   const toolboxFlagEnvironment = env.prNumber
     ? `      PREVIEW_UNIFIED_SIGN_ON: ${q(unifiedSignOn)}` : '';
+  const registryImagesConfigured = Boolean(demoWebImage && demoToolboxImage);
+  if (demoWebImage && !demoToolboxImage) {
+    throw new Error('DEMO_TOOLBOX_IMAGE is required when DEMO_WEB_IMAGE is set');
+  }
+  if (demoToolboxImage && !demoWebImage) {
+    throw new Error('DEMO_WEB_IMAGE is required when DEMO_TOOLBOX_IMAGE is set');
+  }
+  const productionToolboxBuild = registryImagesConfigured
+    ? ''
+    : `    build:
+      context: ${q(env.sourceDir)}
+      dockerfile: services/web-app/Dockerfile
+      target: deps
+`;
   const toolboxService =
     env.runtime === 'fast'
       ? `  toolbox:
     profiles: ["tools"]
-    image: oven/bun:1.3.1
+    image: oven/bun:1.4.3
     working_dir: /app
 ${fastVolumes}
 ${toolboxControlVolume}
@@ -279,13 +295,8 @@ ${toolboxFlagEnvironment}
 `
       : `  toolbox:
     profiles: ["tools"]
-    build:
-      context: ${q(env.sourceDir)}
-      dockerfile: services/web-app/Dockerfile
-      target: deps
-      args:
-        DATABASE_URL: ${q(env.databaseUrl)}
-${toolboxControlVolume ? `    volumes:
+    image: ${q(registryImagesConfigured ? demoToolboxImage : `${env.composeProject}-toolbox:current`)}
+${productionToolboxBuild}${toolboxControlVolume ? `    volumes:
 ${toolboxControlVolume}` : ''}
     environment:
 ${commonEnvironment}
@@ -296,7 +307,7 @@ ${toolboxFlagEnvironment}
   const webService =
     env.runtime === 'fast'
       ? `  web:
-    image: oven/bun:1.3.1
+    image: oven/bun:1.4.3
     restart: unless-stopped
     working_dir: /app
     command: bash -lc "cd services/web-app && bun run dev -- --host 0.0.0.0 --port 8080"
@@ -305,14 +316,12 @@ ${fastVolumes}${mediaVolumeMount}${demoMediaVolume}
 ${webEnvironment}
 `
       : `  web:
-    image: ${q(`${routerBase}-web:current`)}
-    build:
+    image: ${q(registryImagesConfigured ? demoWebImage : `${routerBase}-web:current`)}
+${registryImagesConfigured ? '' : `    build:
       context: ${q(env.sourceDir)}
       dockerfile: services/web-app/Dockerfile
       target: production
-      args:
-        DATABASE_URL: ${q(env.databaseUrl)}
-${demoMedia ? `    volumes:${demoMediaVolume}\n` : ''}    environment:
+`}${demoMedia ? `    volumes:${demoMediaVolume}\n` : ''}    environment:
 ${webEnvironment}
     restart: unless-stopped
 `;
@@ -378,7 +387,7 @@ ${rendererService}${webService}${legacyTraefikLabels}
       - preview${directPortBlock}
 
   blackboard-lti-mock:
-    image: oven/bun:1.3.1
+    image: oven/bun:1.4.3
     working_dir: /app
     command: bun scripts/blackboard-lti-mock/server.mjs
     volumes:

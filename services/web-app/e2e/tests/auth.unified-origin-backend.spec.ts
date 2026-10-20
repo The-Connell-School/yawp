@@ -170,7 +170,7 @@ for (const width of [1280, 390]) {
         .fill(`${prefix}-${width}@example.test`);
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
       await expect(
-        page.getByRole('heading', { name: 'Welcome to YAWP!' })
+        page.getByRole('heading', { name: 'Welcome to Yawp!' })
       ).toBeVisible();
       await page
         .getByRole('button', { name: "I'm a student I have a class code" })

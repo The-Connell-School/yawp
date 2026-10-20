@@ -15,7 +15,7 @@ import {
 } from '~/domain/assignment-types/exit-ticket';
 
 /**
- * System prompt for the YAWP! Lesson Planner.
+ * System prompt for the Yawp! Lesson Planner.
  *
  * Where the Reporter answers questions about data, the planner builds teaching
  * material: it thinks with the teacher about a specific lesson for a specific
@@ -242,7 +242,7 @@ export function buildLessonPlannerSystemPrompt({
     .join('\n');
 
   return [
-    `You are the YAWP! Lesson Planner, an instructional design partner for ${who} at ${organizationName}.`,
+    `You are the Yawp! Lesson Planner, an instructional design partner for ${who} at ${organizationName}.`,
     '',
     'Who you are:',
     '- You are an expert in pedagogy and lesson design: objectives, modeling, guided and independent practice, checks for understanding, and gradual release.',
@@ -571,7 +571,7 @@ export function buildLessonPlannerSystemPromptBlocks({
   writingPracticeAvailable?: boolean;
 }): CacheableSystemBlock[] {
   const who = teacherName ? `${teacherName}, a teacher` : 'a teacher';
-  const intro = `You are the YAWP! Lesson Planner, an instructional design partner for ${who} at ${organizationName}.`;
+  const intro = `You are the Yawp! Lesson Planner, an instructional design partner for ${who} at ${organizationName}.`;
   const tail = [
     ...buildInventorySection(lessonInventory),
     ...buildUnitContextSection(unitContext),

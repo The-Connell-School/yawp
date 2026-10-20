@@ -203,10 +203,11 @@ for (const viewport of [
       });
       if (!before) {
         await expect(
-          page.getByRole('heading', {
-            name: /Who can approve YAWP\?|Ask your administrator/,
-          })
+          page.getByRole('heading', { name: /Who can approve Yawp!?/i })
         ).toBeVisible();
+        await expect(
+          page.getByRole('list', { name: 'Approval progress' })
+        ).toContainText('Ask your administrator');
       }
       await prisma.freeTierEmailLog.create({
         data: {
@@ -340,7 +341,7 @@ for (const viewport of [
       await admin.goto(replacement.approveUrl);
       await capture('administrator-approval', admin);
       await admin
-        .getByRole('button', { name: 'Approve YAWP', exact: true })
+        .getByRole('button', { name: 'Approve Yawp!', exact: true })
         .click();
       await expect(
         admin.locator('input[name="adminRole"]:invalid')
@@ -348,12 +349,12 @@ for (const viewport of [
       await admin.locator('input[name="adminRole"]').fill('Principal');
       await admin.getByRole('checkbox', { name: before ? /authorized/i : /I can approve classroom software/i }).check();
       await admin
-        .getByRole('button', { name: 'Approve YAWP', exact: true })
+        .getByRole('button', { name: 'Approve Yawp!', exact: true })
         .click();
       await expect(
         admin.getByRole('heading', { name: 'Thank you', exact: true })
       ).toBeVisible({ timeout: 30_000 });
-      if (!before) await expect(admin.getByText('Grace Okafor can start using YAWP. We let them know.', { exact: true })).toBeVisible();
+      if (!before) await expect(admin.getByText('Grace Okafor can now start using Yawp! We let them know.', { exact: true })).toBeVisible();
       await capture('approval-confirmation', admin);
       await admin.goto(replacement.approveUrl);
       await capture('approval-already-approved', admin);

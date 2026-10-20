@@ -12,20 +12,20 @@ import {
 import { isUaPartnerHost } from '~/utils/ua-partner.server';
 
 export const meta: MetaFunction = () => [
-  { title: 'Welcome to YAWP! | Student and Teacher Login' },
+  { title: 'Welcome to Yawp! | Student and Teacher Login' },
   {
     name: 'description',
     content:
-      'YAWP! is a writing platform built for middle school, high school, and college classrooms where students draft essays, get tutor feedback, and teachers follow progress.',
+      'Yawp! is a writing platform built for middle school, high school, and college classrooms where students draft essays, get tutor feedback, and teachers follow progress.',
   },
   {
     property: 'og:title',
-    content: 'Welcome to YAWP! | Student and Teacher Login',
+    content: 'Welcome to Yawp! | Student and Teacher Login',
   },
   {
     property: 'og:description',
     content:
-      'A classroom writing platform where students learn a writing process, draft essays, and get real-time feedback from the YAWP! tutor.',
+      'A classroom writing platform where students learn a writing process, draft essays, and get real-time feedback from the Yawp! tutor.',
   },
   { property: 'og:type', content: 'website' },
 ];
@@ -64,20 +64,20 @@ export default function IndexRoute() {
   return (
     <main className="yawp-entry">
       <section className="yawp-entry-shell">
-        <a className="yawp-entry-logo" href="/" aria-label="YAWP! home">
-          <img src="/img/landing/yawp-logo-circle.jpg" alt="YAWP!" />
+        <a className="yawp-entry-logo" href="/" aria-label="Yawp! home">
+          <img src="/img/landing/yawp-logo-circle.jpg" alt="Yawp!" />
         </a>
 
         <div className="yawp-entry-copy">
           <p className="yawp-entry-kicker">Students and teachers</p>
           <h1>
-            Welcome to YAWP!
+            Welcome to Yawp!
             <span>A space for students to think and write.</span>
           </h1>
           <p className="yawp-entry-description">
-            YAWP! is a writing platform built for middle school, high school,
+            Yawp! is a writing platform built for middle school, high school,
             and college classrooms. Students learn a writing process, draft
-            essays, and get real-time feedback from the YAWP! tutor. Teachers
+            essays, and get real-time feedback from the Yawp! tutor. Teachers
             use curriculum to teach proven lessons, create writing assignments,
             and follow student progress in real time.
           </p>

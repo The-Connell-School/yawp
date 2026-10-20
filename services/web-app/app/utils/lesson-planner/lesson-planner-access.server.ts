@@ -1,5 +1,5 @@
 /**
- * Access gate for the YAWP! Lesson Planner.
+ * Access gate for the Yawp! Lesson Planner.
  *
  * Teacher-only, and gated by the Lesson Planner feature flag for the
  * teacher's school. Students get a 404 so the feature stays invisible to them.
@@ -47,7 +47,7 @@ export async function requireLessonPlannerAccess(
   const access = await getLessonPlannerAccess(request);
   if (!access.allowed) {
     throw data(
-      { error: 'The YAWP! Lesson Planner is not available.' },
+      { error: 'The Yawp! Lesson Planner is not available.' },
       { status: 404 }
     );
   }

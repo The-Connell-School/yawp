@@ -25,7 +25,7 @@ preview_remove_path() {
   local expected_leaf="${2:-}"
   local rm_cmd="${PREVIEW_REMOVE_RM:-rm}"
   local docker_cmd="${PREVIEW_REMOVE_DOCKER:-docker}"
-  local image="${PREVIEW_REMOVE_IMAGE:-oven/bun:1.3.1}"
+  local image="${PREVIEW_REMOVE_IMAGE:-oven/bun:1.4.3}"
   local parent leaf
 
   if ! preview_remove_path_is_safe "$target" "$expected_leaf"; then

@@ -18,8 +18,8 @@ export function approvalMailto(args: {
   adminName: string;
   teacherName: string;
 }) {
-  const subject = 'My YAWP classroom approval request';
-  const body = `Hi ${args.adminName},\n\nI requested your approval to use YAWP with my class. Please look for the approval request from YAWP in your inbox.\n\nThank you,\n${args.teacherName}`;
+  const subject = 'My Yawp! classroom approval request';
+  const body = `Hi ${args.adminName},\n\nI requested your approval to use Yawp! with my class. Please look for the approval request from Yawp! in your inbox.\n\nThank you,\n${args.teacherName}`;
   return `mailto:${encodeURIComponent(args.adminEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 export function approvalSentDate(date: string | Date) {

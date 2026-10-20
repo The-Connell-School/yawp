@@ -53,7 +53,9 @@ echo SERVING
       expect(output.indexOf('unified-signon-flag.mjs')).toBeGreaterThan(output.indexOf('bun run seed-free-tier-ship-review'));
       if (!skip) {
         expect(output.indexOf('unified-signon-flag.mjs')).toBeGreaterThan(output.indexOf('bun run seed-local-dev'));
-        expect(output.indexOf('unified-signon-flag.mjs')).toBeGreaterThan(output.indexOf('bun prisma migrate deploy'));
+        expect(output.indexOf('unified-signon-flag.mjs')).toBeGreaterThan(
+          output.indexOf('scripts/preview/prisma-cli.sh migrate deploy')
+        );
       }
     } finally { rmSync(root, { recursive: true, force: true }); }
   });

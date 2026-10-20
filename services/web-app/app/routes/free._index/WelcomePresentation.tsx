@@ -17,9 +17,9 @@ export function FreeTierWelcomeCard({
 }) {
   return (
     <FreeTierAuthCard
-      title="Try YAWP with your students"
+      title={onboardingV2 ? 'Welcome to Yawp!' : 'Try Yawp! with your students'}
       subtitle={onboardingV2
-        ? "We're so glad you're here and we can't wait for you to YAWP with your students"
+        ? "We're so glad you're here and we can't wait for you to Yawp! with your students"
         : eventLink
           ? 'Use your event link to continue.'
           : 'Join the waitlist. We let teachers in a group at a time.'}
@@ -68,10 +68,10 @@ export function FreeTierBelowHighSchoolCard() {
   return (
     <FreeTierAuthCard status title="Free classrooms are for high school for now">
       <p className="text-sm text-muted-foreground">
-        Thank you for your interest! Free YAWP classrooms are currently available for grades 9–12. We’ve saved your email.
+        Thank you for your interest! Free Yawp! classrooms are currently available for grades 9–12. We’ve saved your email.
       </p>
       <p className="text-sm text-muted-foreground">
-        YAWP is available for younger grades through a site license.
+        Yawp! is available for younger grades through a site license.
         {' '}Contact <a className="underline" href="mailto:hello@yawp.school">hello@yawp.school</a> to learn more.
       </p>
     </FreeTierAuthCard>

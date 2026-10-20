@@ -1,20 +1,20 @@
 import type { MetaFunction } from 'react-router';
 
 export const meta: MetaFunction = () => [
-  { title: 'YAWP! Writing Program | Improve Writing Skills - Get Started' },
+  { title: 'Yawp! Writing Program | Improve Writing Skills - Get Started' },
   {
     name: 'description',
     content:
-      'Discover the YAWP! Writing Program, combining critical writing curriculum, guided tutoring, and teacher training to improve student writing skills and academic integrity.',
+      'Discover the Yawp! Writing Program, combining critical writing curriculum, guided tutoring, and teacher training to improve student writing skills and academic integrity.',
   },
   {
     property: 'og:title',
-    content: 'YAWP! Writing Program | Improve Writing Skills - Get Started',
+    content: 'Yawp! Writing Program | Improve Writing Skills - Get Started',
   },
   {
     property: 'og:description',
     content:
-      'Discover the YAWP! Writing Program, combining critical writing curriculum, guided tutoring, and teacher training to improve student writing skills and academic integrity.',
+      'Discover the Yawp! Writing Program, combining critical writing curriculum, guided tutoring, and teacher training to improve student writing skills and academic integrity.',
   },
   { property: 'og:type', content: 'website' },
 ];
@@ -23,7 +23,7 @@ const demoUrl = 'https://app.usemotion.com/meet/brian-connell/ryxkqvr';
 const loginUrl = '/auth/login';
 const accessibilityUrl = '/accessibility';
 const contactUrl =
-  'mailto:yawp@theconnellschool.com?subject=YAWP!%20Writing%20Program';
+  'mailto:yawp@theconnellschool.com?subject=Yawp!%20Writing%20Program';
 const connellUrl = 'https://www.theconnellschool.com/';
 const itemNumber = '[Item #: AP1030]';
 
@@ -59,7 +59,7 @@ const solutionBlocks = [
   },
   {
     title: 'A Tutor that Guides, Never Writes',
-    body: 'Unlike chatbots, the YAWP! Tutor is trained in our curriculum to deliver immediate, personalized feedback that reinforces the teacher’s lessons and guides students through the writing process, saving teachers and students a ton of time while maintaining academic integrity.',
+    body: 'Unlike chatbots, the Yawp! Tutor is trained in our curriculum to deliver immediate, personalized feedback that reinforces the teacher’s lessons and guides students through the writing process, saving teachers and students a ton of time while maintaining academic integrity.',
     image: '/img/landing/tutor-feedback-screen.jpg',
   },
   {
@@ -105,15 +105,15 @@ const books = [
 const testimonials = [
   ['"I\'ve never felt more proud of an essay in my life."', 'Haley M., 11th grader'],
   [
-    '"YAWP! is a game-changer. My students and I actually look forward to the writing process now."',
+    '"Yawp! is a game-changer. My students and I actually look forward to the writing process now."',
     'Mr. Scott, History Teacher',
   ],
   [
-    '"The YAWP! Tutor was like my own T.A.—it saved me so much time and allowed me to give my students the personal attention they needed."',
+    '"The Yawp! Tutor was like my own T.A.—it saved me so much time and allowed me to give my students the personal attention they needed."',
     'Mrs. Toyer, English Teacher',
   ],
   [
-    '"It was nice to get feedback right away from the YAWP! Tutor. I felt like I was learning how to be a better writer as I was writing."',
+    '"It was nice to get feedback right away from the Yawp! Tutor. I felt like I was learning how to be a better writer as I was writing."',
     'Elijah S., 10th grader',
   ],
 ];
@@ -129,10 +129,10 @@ function Header() {
       >
         Student/Teacher Login
       </a>
-      <a className="yawp-logo-link" href="/" aria-label="YAWP! Writing Program">
+      <a className="yawp-logo-link" href="/" aria-label="Yawp! Writing Program">
         <img
           src="/img/landing/yawp-logo-circle.jpg"
-          alt="YAWP! Writing Program"
+          alt="Yawp! Writing Program"
         />
       </a>
       <a
@@ -184,7 +184,7 @@ export default function IndexRoute() {
           <h1>Transform Your Students’ Writing</h1>
           <h3>
             In the age of ChatGPT, students need more than answers—they need
-            genuine learning. YAWP! combines proven curriculum, a writing tutor
+            genuine learning. Yawp! combines proven curriculum, a writing tutor
             (that doesn&apos;t do the work for them), and teacher training to
             develop confident students who can write effectively in academic
             settings.
@@ -222,7 +222,7 @@ export default function IndexRoute() {
 
       <section className="yawp-section yawp-beige-section">
         <div className="yawp-section-inner yawp-solution-inner">
-          <h2>The YAWP! Solution: Real Teachers, a Writing Tutor, Amazing Essays</h2>
+          <h2>The Yawp! Solution: Real Teachers, a Writing Tutor, Amazing Essays</h2>
           <div className="yawp-solution-stack">
             {solutionBlocks.map((block, index) => (
               <article
@@ -243,13 +243,13 @@ export default function IndexRoute() {
 
       <section className="yawp-section yawp-white-section">
         <div className="yawp-section-inner yawp-comparison-inner">
-          <h3>YAWP! vs. ChatGPT: What’s the Difference?</h3>
+          <h3>Yawp! vs. ChatGPT: What’s the Difference?</h3>
           <table className="yawp-comparison-table">
             <thead>
               <tr>
                 <th />
                 <th>ChatGPT</th>
-                <th>YAWP! Tutor</th>
+                <th>Yawp! Tutor</th>
               </tr>
             </thead>
             <tbody>
@@ -276,7 +276,7 @@ export default function IndexRoute() {
       <section className="yawp-section yawp-beige-section">
         <div className="yawp-section-inner">
           <p className="yawp-books-intro">
-            Following classes, let YAWP! turn your students into published
+            Following classes, let Yawp! turn your students into published
             writers. Our books elevate student voices and demonstrate the great
             work happening in your school.
           </p>
@@ -312,11 +312,11 @@ export default function IndexRoute() {
         <div className="yawp-section-inner">
           <h3>Tired of EdTech that collects dust?</h3>
           <p>
-            YAWP! wasn’t created in Silicon Valley—it was made by teachers
+            Yawp! wasn’t created in Silicon Valley—it was made by teachers
             solving actual problems. The result? Teachers love teaching with it.
             Students love learning with it. Schools see measurable results.
           </p>
-          <p>Schedule a demo and see why more schools are choosing YAWP!</p>
+          <p>Schedule a demo and see why more schools are choosing Yawp!</p>
           <a className="yawp-button yawp-button-primary" href={demoUrl}>
             Schedule a Demo
           </a>
@@ -333,7 +333,7 @@ export default function IndexRoute() {
         </p>
         <pre>
           <code>
-            The YAWP! Writing Program® is a registered trademark of The Connell
+            The Yawp! Writing Program® is a registered trademark of The Connell
             School of Writing and is licensed to participating schools and
             educational organizations. All rights reserved.
           </code>

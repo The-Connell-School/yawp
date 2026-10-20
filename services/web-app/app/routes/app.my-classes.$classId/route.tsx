@@ -45,6 +45,7 @@ import {
   FreeClassroomAssignmentQuotaError,
   loadAssignmentCreationQuotasForTypes,
 } from '~/utils/assignment-quota.server';
+import { loadSiteLicenseLockedAssignmentTiles } from '~/domain/free-tier/site-license-locked-assignment-tiles.server';
 import {
   AssignmentPromptAttachmentError,
   assignmentPromptAttachmentRequestTooLarge,
@@ -1395,6 +1396,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     { id: klass.school.organizationId, plan: klass.school.organization.plan },
     creationTypeRows.map(({ id, kind }) => ({ id, kind }))
   );
+  const siteLicenseLockedAssignmentTiles =
+    await loadSiteLicenseLockedAssignmentTiles(klass.school.organization);
 
   let studentJoinUrl: string | null = null;
   if (klass.school.organization.plan === 'FREE_CLASSROOM') {
@@ -1425,6 +1428,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         ...quotaByTypeId.get(id),
       })
     ),
+    siteLicenseLockedAssignmentTiles,
     apHistoryAssignmentTypeId:
       availableAssignmentTypes.find(
         (assignmentType) =>
@@ -2261,6 +2265,9 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
           }}
           assignments={managedAssignments}
           assignmentTypes={data.assignmentTypes}
+          siteLicenseLockedAssignmentTiles={
+            data.siteLicenseLockedAssignmentTiles
+          }
           apHistoryAssignmentTypeId={data.apHistoryAssignmentTypeId}
           classInsightsEnabled={classInsightsEnabled}
           onViewDocuments={handleViewAssignmentDocuments}

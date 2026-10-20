@@ -76,7 +76,9 @@ describe('demo signed management configuration', () => {
     expect(previewWorkflow).not.toContain('DEMO_INTERNAL_API_KEYS');
     expect(previewWorkflow).not.toContain('YAWP_INTERNAL_API_KEYS');
     const ci = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
-    expect(ci).toContain('bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js');
+    expect(ci).toContain(
+      'bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-ecr-deploy.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js'
+    );
   });
 
   test('workflow preflight refuses missing/malformed keys and never prints configuration', () => {

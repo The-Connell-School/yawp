@@ -468,7 +468,8 @@ export function UnifiedSignon({
       below = (
         <>
           <p>
-            Teachers: new to YAWP!? <Link to="/free">Start a free trial</Link>
+            Teachers: new to Yawp!{' '}
+            <Link to="/free">Start a free trial</Link>
           </p>
           <p>
             Joining a class?{' '}
@@ -531,7 +532,7 @@ export function UnifiedSignon({
       );
       break;
     case 'account-type':
-      title = 'Welcome to YAWP!';
+      title = 'Welcome to Yawp!';
       showIdentity = true;
       body = (
         <>
@@ -754,7 +755,7 @@ export function UnifiedSignon({
             'Already applied? Email me my status',
             () => void run('trial-status')
           )}
-          <p>School uses YAWP!? Ask your admin for an invite.</p>
+          <p>Your school uses Yawp! Ask your admin for an invite.</p>
           {textButton('Back', back)}
         </>
       );
@@ -1045,7 +1046,7 @@ export function UnifiedSignon({
           {primary('Log In')}
         </>
       );
-      below = textButton('New to YAWP? Create an account', createClassAccount);
+      below = textButton('Create a Yawp! account', createClassAccount);
       break;
     case 'joined':
       title =
@@ -1201,7 +1202,7 @@ export function UnifiedSignon({
       <div className="signon-stack">
         {variant === 'existing-account' && (
           <div role="status" className="signon-banner">
-            You already have a YAWP! account. Sign in to continue setting up
+            You already have a Yawp! account. Sign in to continue setting up
             your free trial.
           </div>
         )}
