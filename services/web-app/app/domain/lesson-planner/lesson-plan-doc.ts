@@ -42,6 +42,15 @@ export type LessonPlanDoc = {
   materials: string[];
   instructions: LessonPlanStep[];
   closing: string;
+  /**
+   * The stack's own closing step, which is the Closing section and is not
+   * listed again under Instructions (Brian's run 3, item 12). Null when the
+   * stack has none.
+   */
+  closingStep: LessonPlanStep | null;
+  closingInStack: boolean;
+  /** Prefilled from the exit ticket or Daily Pages in the stack, when any. */
+  assessment: string | null;
 };
 
 /** What the model writes for a plan (see plan-summary.server.ts). */
@@ -130,7 +139,15 @@ const STEP_TITLE: Record<string, string> = {
 };
 
 /** A stack piece as the plan sees it: a step of the lesson, a material, or both. */
-type Expanded = { step?: LessonPlanStep; material?: string; source?: string };
+type Expanded = {
+  step?: LessonPlanStep;
+  material?: string;
+  source?: string;
+  /** The stack piece's kind, to know a closing when it sees one. */
+  kind?: string;
+};
+
+const CLOSING_TITLE = /^\s*(?:closing|close|exit ticket|wrap[- ]?up|closure)\b/i;
 
 function expand(entry: LessonPlanEntry): Expanded[] {
   const { title, minutes } = splitTitle(entry.title);
@@ -231,11 +248,10 @@ function expand(entry: LessonPlanEntry): Expanded[] {
 /** Each piece expanded, with the text a summary is written from. */
 function expandAll(entries: LessonPlanEntry[]): Expanded[] {
   return entries.flatMap((entry) =>
-    expand(entry).map((item) =>
-      item.step && !item.source
-        ? { ...item, source: plain(entry.content) }
-        : item
-    )
+    expand(entry).map((item) => ({
+      ...(item.step && !item.source ? { ...item, source: plain(entry.content) } : item),
+      kind: entry.kind,
+    }))
   );
 }
 
@@ -267,7 +283,8 @@ export function buildLessonPlanDoc({
   const materials = expanded.flatMap((item) =>
     item.material ? [item.material] : []
   );
-  const base = expanded.flatMap((item) => (item.step ? [item.step] : []));
+  const stepItems = expanded.filter((item) => item.step);
+  const base = stepItems.map((item) => item.step!);
   // The model's words only when they are for this exact list of steps.
   const fits = summaries?.steps && summaries.steps.length === base.length;
   const instructions = base.map((step, index) => {
@@ -278,6 +295,15 @@ export function buildLessonPlanDoc({
       purpose: hidePromptIds(written?.purpose?.trim() || step.purpose),
     };
   });
+
+  // The stack decides the sections: its last closing or exit ticket is the
+  // Closing, never a second version beside it (Brian's run 3, item 12).
+  let closingIndex = -1;
+  stepItems.forEach((item, index) => {
+    if (item.kind === 'exit-ticket' || CLOSING_TITLE.test(item.step!.title)) closingIndex = index;
+  });
+  const closingStep = closingIndex >= 0 ? instructions[closingIndex]! : null;
+  const steps = instructions.filter((_, index) => index !== closingIndex);
 
   const length = periodMinutes
     ? `A ${periodMinutes}-minute lesson`
@@ -297,13 +323,28 @@ export function buildLessonPlanDoc({
       : ['Add this lesson’s goals and any standards it meets.'],
     teacherWill: summaries?.teacherWill?.length ? summaries.teacherWill : [],
     materials,
-    instructions,
-    closing:
-      summaries?.closing?.trim() ||
-      (hasExitTicket
-        ? 'Close with the exit ticket, and read the answers before the next class.'
-        : 'Close by asking students what they will carry into the next class.'),
+    instructions: steps,
+    closing: closingStep
+      ? closingStep.summary
+      : `Suggested closing: not in your stack. ${
+          summaries?.closing?.trim() ||
+          (hasExitTicket
+            ? 'Close with the exit ticket, and read the answers before the next class.'
+            : 'Close by asking students what they will carry into the next class.')
+        }`,
+    closingStep,
+    closingInStack: Boolean(closingStep),
+    assessment: assessmentFrom(entries),
   };
+}
+
+/** What the lesson checks, from the writing the stack collects. */
+function assessmentFrom(entries: LessonPlanEntry[]): string | null {
+  const ticket = entries.find((entry) => entry.kind === 'exit-ticket');
+  if (ticket) return `The exit ticket: ${firstSentences(ticket.content)}`;
+  const daily = entries.find((entry) => entry.kind === 'daily-pages');
+  if (daily) return `Daily Pages: ${firstSentences(daily.content)}`;
+  return null;
 }
 
 /** Changes whenever the stack does, so a cached summary is never stale. */

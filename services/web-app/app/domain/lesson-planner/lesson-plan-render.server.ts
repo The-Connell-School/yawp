@@ -30,6 +30,34 @@ function stepHeading(step: LessonPlanDoc['instructions'][number]): string {
 
 const NUMBERING = 'lesson-plan-steps';
 
+const BLANK_HINTS = {
+  standards: 'Add the standards this lesson meets.',
+  differentiation: 'Add supports, extensions and accommodations for your students.',
+  assessment: 'Add how you will check what students learned.',
+};
+
+/** A step as a real (numbered) Heading 3, its summary, and its why. */
+function stepParagraphs(step: LessonPlanDoc['instructions'][number], numbered: boolean): Paragraph[] {
+  const paragraphs = [
+    new Paragraph({
+      text: stepHeading(step),
+      heading: HeadingLevel.HEADING_3,
+      ...(numbered ? { numbering: { reference: NUMBERING, level: 0 } } : {}),
+      spacing: { before: 120 },
+    }),
+  ];
+  if (step.summary) paragraphs.push(new Paragraph({ text: step.summary, indent: { left: 720 } }));
+  if (step.purpose) {
+    paragraphs.push(
+      new Paragraph({
+        indent: { left: 720 },
+        children: [new TextRun({ text: `Why: ${step.purpose}`, italics: true })],
+      })
+    );
+  }
+  return paragraphs;
+}
+
 export async function renderLessonPlanDocx(doc: LessonPlanDoc): Promise<Uint8Array> {
   const heading = (text: string) =>
     new Paragraph({ text, heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 80 } });
@@ -42,34 +70,27 @@ export async function renderLessonPlanDocx(doc: LessonPlanDoc): Promise<Uint8Arr
   const sub = subtitle(doc);
   if (sub) children.push(new Paragraph({ children: [new TextRun({ text: sub, italics: true })] }));
 
+  // Every part is a real heading or paragraph a teacher can edit, restyle or
+  // add to; blank sections carry one italic line saying what goes there
+  // (Brian's run 3, item 12).
+  const hint = (text: string) =>
+    new Paragraph({ children: [new TextRun({ text, italics: true, color: '6B7280' })], spacing: { after: 80 } });
   children.push(heading('Overview'), body(doc.overview));
-  children.push(heading('Goals'), ...doc.goals.map(bullet));
+  children.push(heading('Standards'), hint(BLANK_HINTS.standards));
+  children.push(heading('Learning objectives'), ...doc.goals.map(bullet));
   if (doc.teacherWill.length) children.push(heading('Teacher will'), ...doc.teacherWill.map(bullet));
   if (doc.materials.length) children.push(heading('Materials'), ...doc.materials.map(bullet));
 
   children.push(heading('Instructions'));
   for (const step of doc.instructions) {
-    children.push(
-      new Paragraph({
-        numbering: { reference: NUMBERING, level: 0 },
-        children: [new TextRun({ text: stepHeading(step), bold: true })],
-        spacing: { before: 120 },
-      })
-    );
-    if (step.summary) {
-      children.push(new Paragraph({ text: step.summary, indent: { left: 720 } }));
-    }
-    if (step.purpose) {
-      children.push(
-        new Paragraph({
-          indent: { left: 720 },
-          children: [new TextRun({ text: `Why: ${step.purpose}`, italics: true })],
-        })
-      );
-    }
+    children.push(...stepParagraphs(step, true));
   }
 
-  children.push(heading('Closing'), body(doc.closing));
+  children.push(heading('Closing'));
+  if (doc.closingStep) children.push(...stepParagraphs(doc.closingStep, false));
+  else children.push(body(doc.closing));
+  children.push(heading('Differentiation / accommodations'), hint(BLANK_HINTS.differentiation));
+  children.push(heading('Assessment'), doc.assessment ? body(doc.assessment) : hint(BLANK_HINTS.assessment));
 
   const document = new Document({
     creator: 'YAWP! Lesson Planner',
@@ -136,9 +157,15 @@ export async function renderLessonPlanPdf(doc: LessonPlanDoc): Promise<Uint8Arra
     for (const item of items) pdf.text(`•  ${item}`, { width, indent: 8 });
   };
 
+  const hint = (text: string) => {
+    pdf.font('Helvetica-Oblique').fillColor(MUTED).text(text, { width });
+    pdf.font('Helvetica').fillColor(INK);
+  };
   section('Overview');
   pdf.text(doc.overview, { width });
-  section('Goals');
+  section('Standards');
+  hint(BLANK_HINTS.standards);
+  section('Learning objectives');
   list(doc.goals);
   if (doc.teacherWill.length) {
     section('Teacher will');
@@ -149,8 +176,8 @@ export async function renderLessonPlanPdf(doc: LessonPlanDoc): Promise<Uint8Arra
     list(doc.materials);
   }
   section('Instructions');
-  doc.instructions.forEach((step, index) => {
-    pdf.moveDown(0.3).font('Helvetica-Bold').text(`${index + 1}. ${stepHeading(step)}`, { width });
+  const pdfStep = (step: LessonPlanDoc['instructions'][number], label: string) => {
+    pdf.moveDown(0.3).font('Helvetica-Bold').text(label, { width });
     pdf.font('Helvetica');
     // Placed, not indented: pdfkit indents only a paragraph's first line.
     if (step.summary) pdf.text(step.summary, 72, pdf.y, { width: width - 18 });
@@ -162,9 +189,16 @@ export async function renderLessonPlanPdf(doc: LessonPlanDoc): Promise<Uint8Arra
       pdf.font('Helvetica').fillColor(INK);
     }
     pdf.x = 54;
-  });
+  };
+  doc.instructions.forEach((step, index) => pdfStep(step, `${index + 1}. ${stepHeading(step)}`));
   section('Closing');
-  pdf.text(doc.closing, { width });
+  if (doc.closingStep) pdfStep(doc.closingStep, stepHeading(doc.closingStep));
+  else pdf.text(doc.closing, { width });
+  section('Differentiation / accommodations');
+  hint(BLANK_HINTS.differentiation);
+  section('Assessment');
+  if (doc.assessment) pdf.text(doc.assessment, { width });
+  else hint(BLANK_HINTS.assessment);
 
   pdf.end();
   return new Uint8Array(await done);

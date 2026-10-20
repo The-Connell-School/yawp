@@ -35,14 +35,16 @@ describe("buildLessonPlanDoc (Brian's run 2, D1)", () => {
   });
 
   test('one numbered instruction per moment of the lesson, in stack order', () => {
+    // The exit ticket is the Closing section, not a sixth instruction
+    // (Brian's run 3, item 12).
     expect(doc.instructions.map((step) => step.title)).toEqual([
       'Class starter',
       'Historical context',
       'Literary context',
       'Read aloud',
       'Inventory chart',
-      'Exit ticket',
     ]);
+    expect(doc.closingStep?.title).toBe('Exit ticket');
     expect(doc.instructions[3]!.minutes).toBe(20);
   });
 
@@ -55,7 +57,7 @@ describe("buildLessonPlanDoc (Brian's run 2, D1)", () => {
 
   test('says what each writing piece is for', () => {
     expect(doc.instructions[0]!.purpose).toContain('writing');
-    expect(doc.instructions[5]!.purpose).toContain('before they leave');
+    expect(doc.closingStep!.purpose).toContain('before they leave');
   });
 
   test('materials by name only, the deck among them', () => {
@@ -71,7 +73,7 @@ describe("buildLessonPlanDoc (Brian's run 2, D1)", () => {
     expect(doc.overview).toContain('50-minute');
     expect(doc.overview).toContain('English 11 · Period 5');
     expect(doc.goals.length).toBeGreaterThan(0);
-    expect(doc.closing).toContain('exit ticket');
+    expect(doc.closing).toContain('What did Cross carry');
   });
 
   test('the model\'s summaries win when they line up with the steps', () => {
@@ -149,5 +151,45 @@ describe('entriesFromPacket', () => {
     const entries = entriesFromPacket(packet, { m1: 'class-starter', m2: 'slides' });
     expect(entries.map((entry) => entry.kind)).toEqual(['class-starter', 'lesson', 'notes', 'slides']);
     expect(entries[3]!.content).toContain('yawp-slides');
+  });
+});
+
+describe("buildLessonPlanDoc — the stack decides the sections (Brian's run 3, item 12)", () => {
+  const base = { title: 'Day One', className: 'English 10 · Period 3', periodMinutes: 50 };
+
+  test('a Closing step in the stack is the Closing section, never listed twice', () => {
+    const doc = buildLessonPlanDoc({
+      ...base,
+      entries: [
+        { kind: 'step', title: 'Hook: What’s in your bag? (15 min)', content: 'Students lay out their bags.' },
+        { kind: 'step', title: 'Closing (3 min)', content: 'Exit ticket: one object, one sentence.' },
+      ],
+    });
+    expect(doc.instructions.map((step) => step.title)).toEqual(['Hook: What’s in your bag?']);
+    expect(doc.closingStep).toMatchObject({ title: 'Closing', minutes: 3 });
+    expect(doc.closing).toContain('one object, one sentence');
+    expect(doc.closingInStack).toBe(true);
+  });
+
+  test('an exit ticket at the end is the closing too', () => {
+    const doc = buildLessonPlanDoc({
+      ...base,
+      entries: [
+        { kind: 'step', title: 'Read aloud (12 min)', content: 'Read the opening.' },
+        { kind: 'exit-ticket', title: 'Exit ticket (5 min)', content: 'Name one thing Cross carries.' },
+      ],
+    });
+    expect(doc.instructions).toHaveLength(1);
+    expect(doc.closingStep?.minutes).toBe(5);
+  });
+
+  test('no closing in the stack says so instead of inventing one', () => {
+    const doc = buildLessonPlanDoc({
+      ...base,
+      entries: [{ kind: 'step', title: 'Read aloud (12 min)', content: 'Read the opening.' }],
+    });
+    expect(doc.closingInStack).toBe(false);
+    expect(doc.closingStep).toBeNull();
+    expect(doc.closing).toMatch(/^Suggested closing: not in your stack\./);
   });
 });

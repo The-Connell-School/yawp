@@ -38,7 +38,10 @@ const DOC: LessonPlanDoc = {
     { title: 'Class starter', minutes: 5, summary: 'Students write on what they carry.', purpose: 'Starts from their thinking.' },
     { title: 'Read aloud', minutes: 20, summary: 'You read the opening pages.', purpose: 'Students hear the list form.' },
   ],
-  closing: 'Close with the exit ticket.',
+  closing: 'Students write one object and one sentence.',
+  closingStep: { title: 'Exit ticket', minutes: 3, summary: 'Students write one object and one sentence.', purpose: 'Shows who has it.' },
+  closingInStack: true,
+  assessment: 'The exit ticket: one object, one sentence.',
 };
 
 describe("renderLessonPlanDocx (Brian's run 2, D2)", () => {
@@ -46,7 +49,7 @@ describe("renderLessonPlanDocx (Brian's run 2, D2)", () => {
     const bytes = await renderLessonPlanDocx(DOC);
     expect(Buffer.from(bytes.subarray(0, 2)).toString()).toBe('PK');
     const xml = zipParts(bytes).get('word/document.xml')!;
-    for (const heading of ['Overview', 'Goals', 'Teacher will', 'Materials', 'Instructions', 'Closing']) {
+    for (const heading of ['Overview', 'Learning objectives', 'Teacher will', 'Materials', 'Instructions', 'Closing']) {
       expect(xml).toContain(`>${heading}<`);
     }
     expect(xml).toContain('Heading1');
@@ -56,6 +59,18 @@ describe("renderLessonPlanDocx (Brian's run 2, D2)", () => {
     expect(xml).toContain('Read aloud');
     expect(xml).toContain('Why: Students hear the list form.');
     expect(xml).toContain('5 min');
+  });
+
+  test("fully editable, the stack's closing once, and blank sections to fill (Brian's run 3, item 12)", async () => {
+    const xml = zipParts(await renderLessonPlanDocx(DOC)).get('word/document.xml')!;
+    // Step titles are real headings a teacher can restyle, not bold runs.
+    expect(xml).toContain('Heading3');
+    expect(xml).not.toContain('w:txbx');
+    for (const heading of ['Standards', 'Differentiation / accommodations', 'Assessment']) {
+      expect(xml).toContain(`>${heading}<`);
+    }
+    expect(xml).toContain('The exit ticket: one object, one sentence.');
+    expect(xml.match(/>Exit ticket \(3 min\)</g)?.length).toBe(1);
   });
 
   test('no logo, no image (Brian, item 31)', async () => {
