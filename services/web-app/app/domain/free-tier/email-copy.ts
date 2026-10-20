@@ -297,3 +297,27 @@ Best always,
 
 Brian`;
 }
+
+/** Recover signed admin links from rendered approval email bodies for QA logs. */
+export function adminApprovalUrlsFromEmailBody(text: string): {
+  approveUrl?: string;
+  notRightPersonUrl?: string;
+} {
+  const lines = text.split('\n').map((line) => line.trim());
+  const approveHeading = lines.findIndex(
+    (line) =>
+      line.startsWith('Approve Yawp! for this school') ||
+      /^Approve .+'s free classroom/.test(line)
+  );
+  const forwardHeading = lines.findIndex((line) =>
+    line.startsWith("I'm not the right person")
+  );
+  const approveUrl =
+    approveHeading >= 0 ? lines[approveHeading + 1] : undefined;
+  const notRightPersonUrl =
+    forwardHeading >= 0 ? lines[forwardHeading + 1] : undefined;
+  return {
+    ...(approveUrl?.startsWith('http') ? { approveUrl } : {}),
+    ...(notRightPersonUrl?.startsWith('http') ? { notRightPersonUrl } : {}),
+  };
+}

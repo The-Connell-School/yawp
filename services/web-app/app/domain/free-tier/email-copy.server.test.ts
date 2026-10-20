@@ -1,5 +1,9 @@
 import { expect, test } from 'bun:test';
-import { renderAdminApprovalEmailBody, renderReleaseEmailBody } from './email-copy';
+import {
+  adminApprovalUrlsFromEmailBody,
+  renderAdminApprovalEmailBody,
+  renderReleaseEmailBody,
+} from './email-copy';
 
 test('release email snapshot', () => {
   expect(renderReleaseEmailBody({ name: 'Ada', joinUrl: 'https://yawp.school/join' })).toMatchSnapshot();
@@ -17,6 +21,20 @@ test('admin approval email ignores a custom note and retains links', () => {
   expect(body).not.toContain('Hi!');
   expect(body).toContain('https://yawp.school/a');
   expect(body).toMatchSnapshot();
+});
+
+test('admin approval email body exposes signed URLs for QA logs', () => {
+  const body = renderAdminApprovalEmailBody({
+    teacherName: 'Ada',
+    teacherEmail: 'ada@example.edu',
+    schoolName: 'Example HS',
+    approveUrl: 'https://yawp.school/free/admin/approve?t=a',
+    notRightPersonUrl: 'https://yawp.school/free/admin/not-right-person?t=n',
+  });
+  expect(adminApprovalUrlsFromEmailBody(body)).toEqual({
+    approveUrl: 'https://yawp.school/free/admin/approve?t=a',
+    notRightPersonUrl: 'https://yawp.school/free/admin/not-right-person?t=n',
+  });
 });
 
 test('forwarded admin email greets the new administrator', () => {

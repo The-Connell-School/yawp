@@ -91,7 +91,9 @@ test('crafted forward is refused when rollout is off', async () => {
 
 test('pending guidance describes three weekly reminders and offers a different administrator after they stop', () => {
   stopped = false;
-  expect(renderToStaticMarkup(<Page />)).toContain('up to three times');
+  const active = renderToStaticMarkup(<Page />);
+  expect(active).toContain('up to three times');
+  expect(active).toContain('Resend reminder');
   stopped = true;
   const html = renderToStaticMarkup(<Page />);
   expect(html).toContain(

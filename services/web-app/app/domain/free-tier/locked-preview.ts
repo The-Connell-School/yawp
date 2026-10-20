@@ -1,6 +1,6 @@
 export const LOCKED_PREVIEW_PATH = '/app/free-tier/preview';
 export const LOCKED_PREVIEW_MESSAGE =
-  'Your administrator must approve your classroom before you can create assignments, add students, or use teaching tools.';
+  'Your classroom is ready to explore. Adding students and creating assignments will unlock as soon as your administrator approves.';
 
 export function isLockedPreviewStatus(status: string) {
   return ['ACCOUNT_CREATED', 'ADMIN_SUBMITTED', 'SENT', 'MANUAL_REVIEW'].includes(status);

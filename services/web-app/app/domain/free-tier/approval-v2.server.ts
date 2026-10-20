@@ -31,6 +31,7 @@ import {
   adminApprovalEmailCopyVersionHash,
 } from './email-copy.server';
 import {
+  adminApprovalUrlsFromEmailBody,
   FORWARD_NOTICE_V2_SUBJECT,
   TEACHER_REMINDER_V2_SUBJECT,
   isOnboardingV2CopyVersion,
@@ -39,6 +40,7 @@ import {
   renderForwardNoticeV2Body,
   renderTeacherReminderV2Body,
 } from './email-copy';
+import { sanitizeFreeTierEmailLogPayload } from './email-log-payload.server';
 import { plainTextEmailToHtml } from './email-html.server';
 import {
   evaluateAdminEmailForRuntime,
@@ -950,11 +952,12 @@ async function deliverJob(id: string, now: Date) {
               : job.kind,
           toEmail: message.to,
           success: true,
-          payload: {
+          payload: sanitizeFreeTierEmailLogPayload({
             deliveryId: id,
             approvalId: approval.id,
-            source: job.source,
-          },
+            ...(job.source != null ? { source: job.source } : {}),
+            ...adminApprovalUrlsFromEmailBody(message.text),
+          }),
         },
       });
       if (message.approveLinkId) {

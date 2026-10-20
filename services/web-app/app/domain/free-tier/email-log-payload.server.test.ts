@@ -24,6 +24,20 @@ describe('sanitizeFreeTierEmailLogPayload', () => {
     ).toEqual({ kind: 'admin_approval' });
   });
 
+  test('strips signed URLs on demo', () => {
+    process.env.YAWP_ENVIRONMENT = 'demo';
+    delete process.env.FREE_TIER_DB_TESTS;
+    expect(
+      sanitizeFreeTierEmailLogPayload({
+        approveUrl: 'https://demo.yawp.school/free/admin/approve?t=secret',
+        notRightPersonUrl:
+          'https://demo.yawp.school/free/admin/not-right-person?t=secret',
+        joinUrl: 'https://demo.yawp.school/free/join?t=secret',
+        kind: 'admin_approval',
+      })
+    ).toEqual({ kind: 'admin_approval' });
+  });
+
   test('keeps URLs in FREE_TIER_DB_TESTS integration runs', () => {
     process.env.YAWP_ENVIRONMENT = 'production';
     process.env.FREE_TIER_DB_TESTS = '1';
