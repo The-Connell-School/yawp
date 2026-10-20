@@ -2187,7 +2187,7 @@ suite(
       // Never expose recipient/link values through failed assertion diagnostics.
       expect(delivered.to === email).toBe(true);
       expect(
-        delivered.subject === "You're in — start your Yawp! classroom"
+        delivered.subject === "You're in — start your YAWP! classroom"
       ).toBe(true);
       expect(delivered.text.includes('/free/join?t=')).toBe(true);
       expect(delivered.html.includes('/free/join?t=')).toBe(true);
