@@ -107,6 +107,8 @@ const PLANNER_UNREACHABLE =
   'That lesson did not come back. Please check your connection and try again.';
 
 type ChatMessage = {
+  /** 'stack': asked on the stack page, shown here as one compact line (run 3). */
+  surface?: string | null;
   /** Absent only for an optimistic user turn that has not been written yet. */
   id?: string;
   role: 'user' | 'assistant';
@@ -172,6 +174,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
                 role: true,
                 content: true,
                 keptAudience: true,
+                surface: true,
               },
             },
             materials: {
@@ -779,6 +782,19 @@ export default function LessonPlannerRoute() {
   // Brian's review (B6): "Slide deck from this stack" on the stack screen
   // lands here with ?build=deck and asks once. The parameter is dropped as it
   // is used, so a reload does not ask a second time.
+  // "Rework it in the planner" from the stack page (run 3): the step is named
+  // in the box, ready for the teacher to say what to change.
+  const reworkStep = searchParams.get('rework');
+  useEffect(() => {
+    if (!reworkStep) return;
+    setInput(`Rework “${reworkStep.slice(0, 120)}”: `);
+    const next = new URLSearchParams(searchParams);
+    next.delete('rework');
+    setSearchParams(next, { replace: true });
+    // Once per arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reworkStep]);
+
   const buildRequest = searchParams.get('build');
   const buildAsked = useRef(false);
   useEffect(() => {
@@ -1413,6 +1429,23 @@ function MessageBubble({
   stackPieces?: Record<string, StackPieceRef>;
   disabled: boolean;
 }) {
+  if (message.surface === 'stack') {
+    // A change asked for on the stack page (Brian's run 3, item 7): one
+    // compact line here, never a full reply.
+    return (
+      <div
+        data-testid="stack-turn"
+        data-role={message.role}
+        className="flex items-center gap-2 text-xs text-muted-foreground"
+      >
+        <span className="rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary">
+          {message.role === 'user' ? 'On the stack' : 'Stack change'}
+        </span>
+        <span className="truncate">{message.content.split('\n')[0]}</span>
+      </div>
+    );
+  }
+
   if (message.role === 'user') {
     return (
       <div className="flex justify-end" data-role="user">
