@@ -24,6 +24,7 @@ const REVIEW_FLAGS: LessonPlannerReviewFlag[] = [
   'lesson_planner_share',
   'lesson_planner_run_show',
   'lesson_planner_templates',
+  'lesson_planner_deck_gallery',
 ];
 
 async function stackV3On() {

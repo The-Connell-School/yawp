@@ -88,6 +88,9 @@ export const LESSON_PLANNER_RUN_SHOW_FLAG = 'lesson_planner_run_show' as const;
 
 /** Lesson templates: save a stack's shape, build from it (run 3). Needs stack v3. */
 export const LESSON_PLANNER_TEMPLATES_FLAG = 'lesson_planner_templates' as const;
+
+/** The gallery deck: the Yawp! Lesson Deck Kit's look and templates. Needs deck v2. */
+export const LESSON_PLANNER_DECK_GALLERY_FLAG = 'lesson_planner_deck_gallery' as const;
 /** Free-account v2 presentation only. Missing Setting row stays off in every environment. */
 export const FREE_TIER_INAPP_V2_FLAG = 'free-tier-inapp-v2' as const;
 
@@ -167,6 +170,11 @@ export const FEATURE_FLAGS = {
     label: 'Lesson Planner: templates',
     description:
       'Save a lesson’s shape as a template and start a new lesson from it. Needs the stack page redesign. Off: no templates.',
+  },
+  [LESSON_PLANNER_DECK_GALLERY_FLAG]: {
+    label: 'Lesson Planner: gallery deck',
+    description:
+      'Decks in the Lesson Deck Kit look: paper and pine, one accent per unit, a painting per lesson, and twelve slide templates, in Present, Run the show and PowerPoint. Needs deck v2. Off: the tile deck, and gallery slides are drawn as their nearest tile slide.',
   },
   [FREE_TIER_INAPP_V2_FLAG]: {
     label: 'Free tier in-app v2',

@@ -9,6 +9,7 @@ import {
   LESSON_PLANNER_SHARE_FLAG,
   LESSON_PLANNER_RUN_SHOW_FLAG,
   LESSON_PLANNER_TEMPLATES_FLAG,
+  LESSON_PLANNER_DECK_GALLERY_FLAG,
   LESSON_PLANNER_STACK_PANEL_FLAG,
   FREE_TIER_FLAG,
   FEATURE_FLAGS,
@@ -126,6 +127,7 @@ export async function getLessonPlannerReviewFlags(
     share,
     runShow,
     templates,
+    deckGallery,
   ] = await Promise.all([
     isFeatureFlagEnabled(LESSON_PLANNER_INTAKE_V2_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_STACK_V2_FLAG, orgId),
@@ -136,6 +138,7 @@ export async function getLessonPlannerReviewFlags(
     isFeatureFlagEnabled(LESSON_PLANNER_SHARE_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_RUN_SHOW_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_TEMPLATES_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_DECK_GALLERY_FLAG, orgId),
   ]);
   // The panel shows the stack v2 list; without stack v2 it has nothing to show.
   // The run 3 page builds on stack v2, and the rest build on the run 3 page.
@@ -150,6 +153,7 @@ export async function getLessonPlannerReviewFlags(
     share: share && v3,
     runShow: runShow && v3,
     templates: templates && v3,
+    deckGallery: deckGallery && deckV2,
   };
 }
 
@@ -169,6 +173,8 @@ export type LessonPlannerReviewFlags = {
   runShow: boolean;
   /** Templates; needs stack v3. */
   templates: boolean;
+  /** The gallery deck (Lesson Deck Kit); needs deck v2. */
+  deckGallery: boolean;
 };
 
 /** Yawp! Lesson Planner for teachers at the given school. */
