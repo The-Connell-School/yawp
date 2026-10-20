@@ -1,8 +1,9 @@
 # Lesson Planner: what we built from Brian's third run and the stack page redesign
 
 Plan: [`2026-10-19-lesson-planner-brian-run-3.md`](./2026-10-19-lesson-planner-brian-run-3.md).
-Built on `claude/gracious-wozniak-s6ps88`, which is PR 437's head with `main`
-merged in. One commit per change, with the plan's default answer taken for
+Built on `claude/gracious-wozniak-s6ps88` and pushed to PR 437's branch,
+with `main` merged in (including its Yawp! brand sweep, which the planner's
+new strings now follow: "Create in Yawp!", "Created in Yawp! · Open"). One commit per change, with the plan's default answer taken for
 every open decision (K1–K10).
 
 ## In one paragraph
@@ -13,8 +14,8 @@ first sentence, so the hook keeps its 15 minutes and the header adds up to
 Daily Pages has a short real title. In the chat, every step has its own Add
 to stack on its heading. Its status matches its card and the summary list,
 and it stays in step with the stack page and other tabs. A full lesson
-opens with Brian's line, and "Create in YAWP!" is on every writing step,
-reading "Created in YAWP! · Open" once it is done. Behind a new flag, the
+opens with Brian's line, and "Create in Yawp!" is on every writing step,
+reading "Created in Yawp! · Open" once it is done. Behind a new flag, the
 stack page becomes the run of show from Kevin's brief:
 - a time bar against the period, with at most two one-tap fixes when it
   runs long, and never on writing
@@ -25,21 +26,23 @@ stack page becomes the run of show from Kevin's brief:
 - a finish line, and Take it to class
 
 Further flags add handouts for any step, written for students; posting and
-sending the lesson; Run the show; and templates.
+sending the lesson; Run the show; templates; and the gallery deck from
+Brian's Lesson Deck Kit.
 
 ## How to turn it on
 
 | Flag | What it turns on | Needs |
 | --- | --- | --- |
-| `lesson_planner_stack_v2` (wave 1) | The chat-side changes: Add to stack on every step, one status everywhere, the framing line, Create in YAWP! on every writing step, suggested times | none |
+| `lesson_planner_stack_v2` (wave 1) | The chat-side changes: Add to stack on every step, one status everywhere, the framing line, Create in Yawp! on every writing step, suggested times | none |
 | `lesson_planner_stack_v3` (new) | The run-of-show stack page, the Add a piece panel, the stack chat, fixes, the writing meter, the finish line, Take it to class, handouts for any step | stack v2 |
 | `lesson_planner_share` (new) | Post to your class, Send this lesson | stack v3 |
 | `lesson_planner_run_show` (new) | Run the show | stack v3 |
 | `lesson_planner_templates` (new) | Save this shape as a template, Build from my templates | stack v3 |
 | `lesson_planner_plan_export_v2` (wave 2) | The lesson plan changes (one Closing, real headings, blank sections) | none |
+| `lesson_planner_deck_gallery` (new) | The Lesson Deck Kit look in Present, Run the show, the deck editor and PowerPoint, and the planner's gallery templates | deck v2 |
 
 All are off in production and on in PR previews; the preview seed creates
-the four new rows. With stack v3 off, the stack page is exactly the stack v2
+the five new rows. With stack v3 off, the stack page is exactly the stack v2
 page, with the Phase 0 fixes. The prompt changes apply to everyone, as in
 the earlier waves (prompt version `2026-10-19-run-3-v1`).
 
@@ -57,12 +60,12 @@ the earlier waves (prompt version `2026-10-19-run-3-v1`).
    it…" sits above every full lesson. A model preamble ("I have
    everything I need. Here's the plan.") is dropped, and the prompt now
    says so too.
-4. **Create in YAWP! on every writing step.** This covers class starters,
+4. **Create in Yawp! on every writing step.** This covers class starters,
    Daily Pages, exit tickets (including one written as prose in a Closing
    step), quick writes, and Thesis Essay modules (the thesis statement
    type). Creating from a stack piece is remembered through an optional
    `onCreated` on the shared assignment sheet, and the button becomes
-   "Created in YAWP! · Open" on the stack and on the chat card.
+   "Created in Yawp! · Open" on the stack and on the chat card.
 5. **Stack cards hold only the step.** The last step no longer runs to
    the end of the reply: a `---`, "Total: …", the "You don't have to use
    all of these" line and a closing question to the teacher are cut.
@@ -110,8 +113,8 @@ the earlier waves (prompt version `2026-10-19-run-3-v1`).
     missing. A short first-open line sits on the new stack page.
 14. **Deck.** It is built from the stack, one slide per step marked with
     the step's number, and the hook slide carries its directions, its
-    pair-share question and its landing line. The new brand is not
-    applied (see below).
+    pair-share question and its landing line. Behind its own flag, the
+    deck wears Brian's Lesson Deck Kit (next section).
 
 ## What changed, from Kevin's redesign brief
 
@@ -138,7 +141,7 @@ the earlier waves (prompt version `2026-10-19-run-3-v1`).
   Each template shows its shape, its length, a time bar with the writing
   line and its writing share. Picking one shows the chip and the "What are
   we reading?" placeholder, and the planner keeps the shape.
-- **Writing time.** A step is writing when its kind is a YAWP! writing
+- **Writing time.** A step is writing when its kind is a Yawp! writing
   assignment (class starter, Daily Pages, exit ticket, Thesis Essay
   module) or one was created from it. The teacher never sets it. Writing %
   is writing minutes over the period, or over the total when the total is
@@ -147,10 +150,47 @@ the earlier waves (prompt version `2026-10-19-run-3-v1`).
   - The deck is no longer a step.
   - The duration is the sum of the steps.
   - Steps have type, minutes, label, handout state, a student version
-    and the YAWP! assignment made from them.
+    and the Yawp! assignment made from them.
   - Lessons have set and date timestamps.
   - New tables: templates, carry-over, stack chat turns and share links.
   - Six additive, nullable migrations, each with a rollback.
+
+## The gallery deck, from the Lesson Deck Kit
+
+Behind `lesson_planner_deck_gallery` (needs deck v2), decks follow "The
+gallery and the page" spec:
+- **Look.** Paper `#F3F0E8`, pine `#1F3532` for writing, ink for looking,
+  one accent per unit (ember by default; indigo, olive, plum), Cormorant
+  Garamond over Libre Franklin. A 1280×720 canvas with 80px margins,
+  left-aligned, no boxes, shadows or slide numbers. A small running head
+  (the art's swatch, the unit and the lesson in caps, over a hairline).
+- **Twelve templates.** Each has its italic mode word: title; agenda
+  "Today."; steps "Do."; discuss "Talk."; big idea "Hold this." with an
+  art strip; write "Write." on pine; notes "Know." as a timeline or
+  facts; divider "Part ii." beside the art; read along "Read." with verb
+  tasks; look "Look." on ink with the painting; excerpt "Annotate." on a
+  sheet; exit "Before you go." on the accent wall. Prompts are set at
+  80, 64 or 54px by word count.
+- **Rhythm, enforced by the renderer.** A dark slide only when none of
+  the three before it was (so never two in a row, at most one in four),
+  one accent wall (the last exit), and art only when the deck hangs a
+  work. A slide that loses its ground is drawn on paper; its words never
+  change.
+- **Art.** One work per lesson from a small library, never under text,
+  always credited. It holds Turner's *The Fighting Temeraire* (public
+  domain, taken from the kit) for now.
+- **Where.** Present, Run the show, the deck editor (which edits the new
+  slots) and the PowerPoint download. PowerPoint uses the kit's
+  fallbacks: Georgia set 8% smaller, and Franklin Gothic Book, with the
+  painting embedded.
+- **The planner** learns the templates, their slots, the rhythm, one
+  accent per unit and the art library, only with the flag on. This sits
+  after the cache breakpoint, so the cached prompt is unchanged. Deck
+  repair keeps a gallery deck's layouts.
+- **Flag off.** Nothing changes. A gallery slide in a deck is drawn as
+  its nearest tile slide (an agenda as notes with minutes, an exit as the
+  closing, and so on), so a deck made with the flag on still shows
+  everywhere.
 
 ## Decisions taken with the default
 
@@ -160,7 +200,7 @@ the earlier waves (prompt version `2026-10-19-run-3-v1`).
   hover.
 - **K3.** Google Docs is the Word file plus a guided upload, with no
   Drive sign-in.
-- **K4.** The deck brand is waiting for the values (below).
+- **K4.** The deck brand is Brian's Lesson Deck Kit, behind its own flag.
 - **K5.** Writing is decided by kind, before the assignment is created.
 - **K6.** "Tomorrow" is the next lesson started for the same class
   label.
@@ -181,7 +221,7 @@ the earlier waves (prompt version `2026-10-19-run-3-v1`).
   "Moved from Mon, Oct 19".
 - **The first-open line is remembered per browser**, not per teacher
   account.
-- **"Created in YAWP!" is remembered for pieces in the stack.** A card in
+- **"Created in Yawp!" is remembered for pieces in the stack.** A card in
   the chat whose piece was never added has no stack row to remember it
   on.
 - **No class starter picker.** Since wave 2 each prompt is its own piece
@@ -190,14 +230,17 @@ the earlier waves (prompt version `2026-10-19-run-3-v1`).
   lessons are tied to your class list" (K6).
 - **No "your stack changed since this deck" notice yet.** Rebuild is on
   the deck row.
-- **The brand of the slides is unchanged.** Brian's deck brand link has
-  not reached this session (the PDF covers the stack page).
+- **The gallery deck's art library holds one painting.** The kit names
+  a shortlist; only Turner's came with the kit, and image hosts are
+  blocked from the build. Each further work is one image plus one entry
+  in `deck-art.ts`.
 
 ## Still for Kevin and Brian
 
-- **The deck brand.** Paste the colors, fonts and footer from Brian's
-  Claude Design link, or share it from this account, and it goes into
-  the deck theme.
+- **More art for the gallery deck.** Send the shortlist's images (public
+  domain or licensed) and they go into the library.
+- **A look at the gallery deck on the preview**, against the kit, with a
+  real planner-made deck.
 - **Phone as a remote for Run the show.** It needs a server channel and
   a pairing code (not mocked).
 - **Real Google Doc creation and Classroom posting.** These need Google
