@@ -341,11 +341,13 @@ describe('production deployment contract', () => {
     expect(dockerfile).toContain('FROM deps AS build');
   });
 
-  test('Docker runtime image includes workspace node_modules for web app binaries', () => {
+  test('Docker runtime image resolves web app serve binaries when Bun hoists deps', () => {
     const dockerfile = readRepoFile('services/web-app/Dockerfile');
+    const startScript = readRepoFile('services/web-app/start.sh');
 
-    expect(dockerfile).toContain(
-      'COPY --from=build /app/services/web-app/node_modules ./services/web-app/node_modules'
+    expect(dockerfile).toContain('mkdir -p services/web-app/node_modules');
+    expect(startScript).toContain(
+      '../../node_modules/@react-router/serve/bin.js'
     );
   });
 
@@ -376,9 +378,8 @@ describe('production deployment contract', () => {
     const startScript = readRepoFile('services/web-app/start.sh');
 
     expect(startScript).toContain('cd "$(dirname "$0")"');
-    expect(startScript).toContain(
-      'exec bun node_modules/@react-router/serve/bin.js'
-    );
+    expect(startScript).toContain('@react-router/serve/bin.js');
+    expect(startScript).toContain('exec bun "$serve_bin"');
     expect(startScript).not.toContain('bun run web-app:start');
   });
 

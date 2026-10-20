@@ -31,7 +31,8 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/packages/prisma ./packages/prisma
 COPY --from=build /app/services/web-app/build ./services/web-app/build
 COPY --from=build /app/services/web-app/build/client ./build/client
-COPY --from=build /app/services/web-app/node_modules ./services/web-app/node_modules
+# Bun 1.4+ hoists workspace deps to /app/node_modules; nested copies may be absent.
+RUN mkdir -p services/web-app/node_modules
 COPY --from=build /app/services/web-app/package.json ./services/web-app/package.json
 COPY --from=build /app/services/web-app/start.sh ./services/web-app/start.sh
 COPY --from=build /app/scripts/preview ./scripts/preview
