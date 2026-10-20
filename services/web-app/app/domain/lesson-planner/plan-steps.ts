@@ -157,3 +157,41 @@ function readBoldSteps(content: string, masked: string): PlanStep[] {
     };
   });
 }
+
+export type StepChunk =
+  | { kind: 'markdown'; text: string }
+  | { kind: 'step'; index: number; heading: string };
+
+/**
+ * One run of a reply's prose, cut at the plan's step headings, so each step
+ * can carry its own Add to stack right where it appears (Brian's run 3, item
+ * 1). `from` is the next step to look for; prose parts are cut in reply
+ * order, so steps are matched in order too.
+ */
+export function splitAtStepHeadings(
+  text: string,
+  steps: Pick<PlanStep, 'title'>[],
+  from: number
+): { chunks: StepChunk[]; next: number } {
+  const chunks: StepChunk[] = [];
+  let next = from;
+  let buffer: string[] = [];
+  const flush = () => {
+    const joined = buffer.join('\n');
+    if (joined.trim()) chunks.push({ kind: 'markdown', text: joined });
+    buffer = [];
+  };
+  for (const line of text.split('\n')) {
+    const heading = /^\s{0,3}#{2,3}\s+(.+)$/.exec(line);
+    const wanted = steps[next];
+    if (heading && wanted && cleanTitle(heading[1]!).title === wanted.title) {
+      flush();
+      chunks.push({ kind: 'step', index: next, heading: line.replace(TYPE_TAG, '').trimEnd() });
+      next += 1;
+      continue;
+    }
+    buffer.push(line);
+  }
+  flush();
+  return { chunks, next };
+}

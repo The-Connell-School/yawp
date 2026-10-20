@@ -966,3 +966,72 @@ describe("lesson packet loader — the stack beside the chat (Brian's run 2, A7)
     ).rejects.toMatchObject({ status: 404 });
   });
 });
+
+describe("lesson packet — one segment, one status (Brian's run 3, items 1, 2)", () => {
+  test('keep-all with materialKeys files only those pieces', async () => {
+    fileReplyPieces.mockReset().mockResolvedValue({ added: ['msg-1:0', 'msg-1:1'], skipped: [] });
+    await action({
+      request: formRequest({ intent: 'keep-all', conversationId: 'plan-1', messageId: 'msg-1', materialKeys: '0,1' }),
+    } as any);
+    expect(fileReplyPieces.mock.calls[0][0].onlyKeys).toEqual(['0', '1']);
+  });
+
+  test('remove-material with materialKeys takes the whole segment out', async () => {
+    prisma.lessonPlanMaterial.deleteMany.mockReset().mockResolvedValue({ count: 2 });
+    const response = await action({
+      request: formRequest({ intent: 'remove-material', conversationId: 'plan-1', messageId: 'msg-1', materialKeys: '0,1' }),
+    } as any);
+    expect(prisma.lessonPlanMaterial.deleteMany.mock.calls[0][0].where).toMatchObject({
+      conversationId: 'plan-1',
+      sourceMessageId: 'msg-1',
+      blockKey: { in: ['0', '1'] },
+    });
+    expect((response as any).data).toMatchObject({ added: false, messageId: 'msg-1' });
+  });
+
+  test('the chat can ask which pieces are in the stack, with stack v2 on and no panel', async () => {
+    loadLessonPacket.mockReset().mockResolvedValue({
+      conversationId: 'plan-1',
+      packet: { sections: [], outline: [] },
+      stackDetails: {},
+      materialTokens: { m1: 'msg-1:st', m2: 'msg-1:0' },
+      reviewFlags: { stackV2: true, stackPanel: false },
+    });
+    const response = await loader({
+      request: new Request('http://localhost/api/domain/lesson-planner/packet?conversationId=plan-1&view=tokens'),
+    } as any);
+    expect((response as any).tokens).toEqual(['msg-1:st', 'msg-1:0']);
+    expect(loadLessonPacket.mock.calls[0][0].withStackDetails).toBe(false);
+  });
+});
+
+describe("lesson packet — created in YAWP! (Brian's run 3, item 4)", () => {
+  test('mark-created remembers the assignment on its piece', async () => {
+    prisma.lessonPlanMaterial.updateMany.mockReset().mockResolvedValue({ count: 1 });
+    const response = await action({
+      request: formRequest({
+        intent: 'mark-created',
+        conversationId: 'plan-1',
+        materialId: 'mat-9',
+        yawpHref: '/app/assignment-types/cs-type',
+      }),
+    } as any);
+    const call = prisma.lessonPlanMaterial.updateMany.mock.calls[0][0];
+    expect(call.where).toEqual({ id: 'mat-9', conversationId: 'plan-1' });
+    expect(call.data.yawpHref).toBe('/app/assignment-types/cs-type');
+    expect(call.data.yawpCreatedAt).toBeInstanceOf(Date);
+    expect((response as any).data).toEqual({ created: true, materialId: 'mat-9' });
+  });
+
+  test('only a link into YAWP! assignment types is kept', async () => {
+    const response = await action({
+      request: formRequest({
+        intent: 'mark-created',
+        conversationId: 'plan-1',
+        materialId: 'mat-9',
+        yawpHref: 'https://evil.example/app/assignment-types/x',
+      }),
+    } as any);
+    expect((response as any).init?.status ?? (response as any).status).toBe(422);
+  });
+});

@@ -34,10 +34,49 @@ export function blockMinutesInReply(content: string): Record<string, number> {
   const pieces = placedPieces(content);
   pieces.forEach((piece, index) => {
     if (!piece.emptyStep || piece.minutes == null) return;
-    const next = pieces[index + 1];
-    if (next && !next.step) minutes[next.key] = piece.minutes;
+    const held = blocksUnder(pieces, index);
+    // A step holding several blocks (three framing notes under "Framing
+    // (10 min)") does not hand its whole time to the first of them.
+    if (held.length === 1) minutes[held[0]!] = piece.minutes;
   });
   return minutes;
+}
+
+/** The block keys that sit under the step at `index`, up to the next step. */
+function blocksUnder(pieces: Placed[], index: number): string[] {
+  const keys: string[] = [];
+  for (const piece of pieces.slice(index + 1)) {
+    if (piece.step) break;
+    // The deck belongs to the lesson, not to the step it happens to follow.
+    if (piece.key !== DECK_SLOT) keys.push(piece.key);
+  }
+  return keys;
+}
+
+/**
+ * What each plan step files as, for its one Add to stack button and its one
+ * status, wherever it appears (Brian's run 3, items 1, 2). A step with its own
+ * text is itself; a step that is nothing but its blocks ("## Class starter"
+ * over the prompt, "## Framing" over three notes) is those blocks, so adding
+ * from the step or from the block card is the same add.
+ */
+export function stepSegments(content: string): Record<string, string[]> {
+  const segments: Record<string, string[]> = {};
+  const pieces = placedPieces(content);
+  pieces.forEach((piece, index) => {
+    if (!piece.step) return;
+    segments[piece.key] = piece.emptyStep ? blocksUnder(pieces, index) : [piece.key];
+  });
+  return segments;
+}
+
+/** A segment is in the stack when every piece it files as is. */
+export function segmentInStack(
+  messageId: string,
+  keys: string[],
+  added: ReadonlySet<string>
+): boolean {
+  return keys.length > 0 && keys.every((key) => added.has(`${messageId}:${key}`));
 }
 
 type Placed = {

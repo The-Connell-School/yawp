@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { pieceKeysInReply } from './reply-pieces';
+import { blockMinutesInReply, pieceKeysInReply, segmentInStack, stepSegments } from './reply-pieces';
 
 const DECK = JSON.stringify({
   title: 'Day 1',
@@ -71,5 +71,52 @@ describe('blockMinutesInReply', () => {
   test("a step that is only its block lends the block its minutes", async () => {
     const { blockMinutesInReply } = await import('./reply-pieces');
     expect(blockMinutesInReply(REPLY)).toEqual({ dp: 5, ticket: 5 });
+  });
+});
+
+describe("stepSegments: one status per segment (Brian's run 3, items 1, 2)", () => {
+  const REPLY = [
+    '## Class starter (5 min)',
+    '',
+    '```yawp-daily-pages',
+    'kind: class-starter',
+    'What do you carry?',
+    '```',
+    '',
+    '## Hook (15 min)',
+    '',
+    'Bags out.',
+    '',
+    '## Framing (10 min)',
+    '',
+    '```yawp-material',
+    'kind: notes',
+    'title: Historical',
+    '---',
+    'Vietnam.',
+    '```',
+    '',
+    '```yawp-material',
+    'kind: notes',
+    'title: The author',
+    '---',
+    'O’Brien.',
+    '```',
+  ].join('\n');
+
+  test('a step with text is itself; a step that is only blocks is those blocks', () => {
+    expect(stepSegments(REPLY)).toEqual({ st: ['dp'], 'st:1': ['st:1'], 'st:2': ['0', '1'] });
+  });
+
+  test('in the stack only when every piece is', () => {
+    const added = new Set(['m1:0']);
+    expect(segmentInStack('m1', ['0', '1'], added)).toBe(false);
+    added.add('m1:1');
+    expect(segmentInStack('m1', ['0', '1'], added)).toBe(true);
+    expect(segmentInStack('m1', [], added)).toBe(false);
+  });
+
+  test("a step's minutes go to its block only when it holds one", () => {
+    expect(blockMinutesInReply(REPLY)).toEqual({ dp: 5 });
   });
 });

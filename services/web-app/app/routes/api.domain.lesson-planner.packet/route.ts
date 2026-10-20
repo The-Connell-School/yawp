@@ -72,6 +72,8 @@ const POST = z
       // Brian's run 2 (A4, E3): everything in a reply, as separate pieces.
       'keep-all',
       'split-kept',
+      // Brian's run 3 (item 4): "Created in YAWP! · Open".
+      'mark-created',
     ]),
     conversationId: z.string().min(1),
     messageId: z.string().min(1).optional(),
@@ -79,6 +81,15 @@ const POST = z
     materialId: z.string().min(1).optional(),
     /** Which material block within the reply, for the material intents. */
     materialKey: z.string().min(1).max(8).optional(),
+    /**
+     * Several block keys, comma-separated: one segment of a plan that files
+     * as more than one piece (Brian's run 3, items 1, 2).
+     */
+    materialKeys: z
+      .string()
+      .max(400)
+      .regex(/^[\w:-]{1,8}(,[\w:-]{1,8})*$/)
+      .optional(),
     audience: z.enum(PACKET_AUDIENCES).optional(),
     packetTitle: z.string().max(MAX_PACKET_TITLE_CHARS).optional(),
     sectionTitle: z.string().max(MAX_SECTION_TITLE_CHARS).optional(),
@@ -92,6 +103,12 @@ const POST = z
     confirmReplace: z.enum(['1']).optional(),
     /** `reorder`: every piece's key ("m:<id>" / "r:<id>"), comma-separated. */
     order: z.string().min(1).max(10_000).optional(),
+    /** `mark-created`: where the created assignment opens, inside YAWP!. */
+    yawpHref: z
+      .string()
+      .max(300)
+      .regex(/^\/app\/assignment-types\/[\w-]+(?:\?[\w=&%.-]*)?$/)
+      .optional(),
     /** `move`: the piece to move, and which way. */
     entry: z.string().min(3).max(200).optional(),
     direction: z.enum(['up', 'down']).optional(),
@@ -102,7 +119,8 @@ const POST = z
       (value.intent === 'add-material' ||
         value.intent === 'remove-material' ||
         value.intent === 'replace-material') &&
-      !value.materialKey
+      !value.materialKey &&
+      !(value.intent === 'remove-material' && value.materialKeys)
     ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
@@ -162,7 +180,15 @@ const POST = z
  * same loader as the stack page, so the two never disagree.
  */
 export async function loader({ request }: LoaderFunctionArgs) {
-  const conversationId = new URL(request.url).searchParams.get('conversationId') ?? undefined;
+  const url = new URL(request.url);
+  const conversationId = url.searchParams.get('conversationId') ?? undefined;
+  // What is in the stack, as the chat cards' tokens, so every "In the stack"
+  // in the chat matches the stack however it changed (Brian's run 3, item 2).
+  if (url.searchParams.get('view') === 'tokens') {
+    const loaded = await loadLessonPacket({ request, conversationId, withStackDetails: false });
+    if (!loaded.reviewFlags.stackV2) throw new Response('Not Found', { status: 404 });
+    return { conversationId: loaded.conversationId, tokens: Object.values(loaded.materialTokens) };
+  }
   const loaded = await loadLessonPacket({ request, conversationId });
   if (!loaded.reviewFlags.stackPanel) throw new Response('Not Found', { status: 404 });
   return {
@@ -352,6 +378,17 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse({ removed: true, materialId: data.materialId });
   }
 
+  if (data.intent === 'mark-created') {
+    if (!data.materialId || !data.yawpHref) {
+      return dataResponse({ error: 'A piece and a link are required.' }, { status: 400 });
+    }
+    await prisma.lessonPlanMaterial.updateMany({
+      where: { id: data.materialId, conversationId: conversation.id },
+      data: { yawpHref: data.yawpHref, yawpCreatedAt: new Date() },
+    });
+    return dataResponse({ created: true, materialId: data.materialId });
+  }
+
   if (data.intent === 'keep-all' || data.intent === 'split-kept') {
     const message = await prisma.lessonPlanMessage.findFirst({
       where: { id: data.messageId, conversationId: conversation.id, role: 'assistant' },
@@ -368,6 +405,7 @@ export async function action({ request }: ActionFunctionArgs) {
       message,
       replaceKeptReply: data.intent === 'split-kept',
       confirmReplace: Boolean(data.confirmReplace),
+      ...(data.materialKeys ? { onlyKeys: data.materialKeys.split(',') } : {}),
     });
     return dataResponse({ ...result, messageId: message.id });
   }
@@ -461,11 +499,12 @@ export async function action({ request }: ActionFunctionArgs) {
 
   if (data.intent === 'add-material' || data.intent === 'remove-material') {
     if (data.intent === 'remove-material') {
+      const keys = data.materialKeys?.split(',');
       await prisma.lessonPlanMaterial.deleteMany({
         where: {
           conversationId: conversation.id,
           sourceMessageId: data.messageId!,
-          blockKey: data.materialKey!,
+          blockKey: keys ? { in: keys } : data.materialKey!,
         },
       });
       return dataResponse({

@@ -16,6 +16,7 @@ export async function fileReplyPieces({
   message,
   replaceKeptReply = false,
   confirmReplace = false,
+  onlyKeys,
 }: {
   conversationId: string;
   message: { id: string; createdAt: Date; content: string };
@@ -26,12 +27,17 @@ export async function fileReplyPieces({
   replaceKeptReply?: boolean;
   /** File over pieces the teacher edited by hand, too. */
   confirmReplace?: boolean;
+  /** Only these pieces: one segment of the plan (Brian's run 3, item 1). */
+  onlyKeys?: string[];
 }): Promise<{ added: string[]; skipped: string[] }> {
   const added: string[] = [];
   const skipped: string[] = [];
   const newKeys: string[] = [];
 
-  for (const key of pieceKeysInReply(message.content)) {
+  const keys = pieceKeysInReply(message.content).filter(
+    (key) => !onlyKeys || onlyKeys.includes(key)
+  );
+  for (const key of keys) {
     const material = fileableMaterial(message.content, key);
     if (!material) continue;
     const existing = await prisma.lessonPlanMaterial.findUnique({

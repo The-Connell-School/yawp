@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { planStepKey, planStepIndexForKey, readPlanSteps } from './plan-steps';
+import { planStepKey, planStepIndexForKey, readPlanSteps, splitAtStepHeadings } from './plan-steps';
 
 const PLAN = [
   '# The Things They Carried — Day 1 (50 min)',
@@ -111,5 +111,27 @@ describe("readPlanSteps — a step holds only its own content (Brian's run 3, it
       '**Warm-up (5 min)** Write.\n\n**Closing (5 min)** Share one line.\n\nTotal: 5 + 5 = 10 minutes\n\nWould you like me to make a handout?'
     );
     expect(steps.at(-1)!.content).toBe('Share one line.');
+  });
+});
+
+describe("splitAtStepHeadings (Brian's run 3, item 1)", () => {
+  test('cuts prose at each step heading, in order, across parts', () => {
+    const steps = readPlanSteps(PLAN);
+    const first = splitAtStepHeadings('Intro line.\n\n## Class starter (5 min)\n\nStudents write.', steps, 0);
+    expect(first.chunks.map((chunk) => chunk.kind)).toEqual(['markdown', 'step', 'markdown']);
+    expect(first.chunks[1]).toMatchObject({ index: 0, heading: '## Class starter (5 min)' });
+    expect(first.next).toBe(1);
+    const second = splitAtStepHeadings('## Read aloud (20 min)\n\nRead.\n\n### Questions to ask', steps, first.next);
+    expect(second.chunks[0]).toMatchObject({ kind: 'step', index: 1 });
+    // A sub-heading is not a step.
+    expect(second.chunks.at(-1)).toMatchObject({ kind: 'markdown' });
+    expect(second.next).toBe(2);
+  });
+
+  test('the type tag never shows', () => {
+    const steps = readPlanSteps('## Hook (15 min) {type: activity}\n\nGo.\n\n## Close (5 min)\n\nEnd.');
+    expect(steps[0]!.stepType).toBe('activity');
+    const { chunks } = splitAtStepHeadings('## Hook (15 min) {type: activity}\n\nGo.', steps, 0);
+    expect(chunks[0]).toMatchObject({ kind: 'step', heading: '## Hook (15 min)' });
   });
 });

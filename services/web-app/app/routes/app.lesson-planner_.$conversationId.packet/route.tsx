@@ -16,6 +16,7 @@ import {
   BookMarked,
   PenLine,
   Trash2,
+  Check,
 } from 'lucide-react';
 import {
   KIND_LABEL,
@@ -33,6 +34,7 @@ import {
   useStackRemoval,
 } from '~/components/lesson-planner/use-stack-removal';
 import { stackEntryKey } from '~/domain/lesson-planner/stack-order';
+import { announceStackChange } from '~/components/lesson-planner/stack-channel';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/utils/misc';
 import { MarkdownContent } from '~/components/ai-chat/assistant-markdown';
@@ -63,6 +65,17 @@ export default function LessonPacketRoute() {
     stackDetails,
     periodMinutes,
   } = useLoaderData<typeof loader>();
+
+  // Brian's run 3 (item 2): a change made here shows in an open planner tab.
+  // The first render is the page arriving, not a change.
+  const arrived = useRef(false);
+  useEffect(() => {
+    if (!arrived.current) {
+      arrived.current = true;
+      return;
+    }
+    announceStackChange(conversationId);
+  }, [packet, conversationId]);
   const fetcher = useFetcher();
   const revalidator = useRevalidator();
   const stackV2 = reviewFlags.stackV2;
@@ -694,9 +707,14 @@ export default function LessonPacketRoute() {
                         <Link
                           to={stackDetails[section.id]!.create!.href}
                           data-testid="stack-create-assignment"
+                          data-created={stackDetails[section.id]!.create!.created ? 'true' : undefined}
                           className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary transition hover:bg-primary/15 print:hidden"
                         >
-                          <PenLine size={13} />
+                          {stackDetails[section.id]!.create!.created ? (
+                            <Check size={13} />
+                          ) : (
+                            <PenLine size={13} />
+                          )}
                           {stackDetails[section.id]!.create!.label}
                         </Link>
                       ) : null}
