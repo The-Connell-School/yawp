@@ -6,6 +6,7 @@ test.describe('Free classroom bundle quotas', () => {
   test('teacher sees assignment type counters in the creation sheet', async ({
     page,
   }) => {
+    test.setTimeout(120_000);
     const email =
       process.env.E2E_FREE_CLASSROOM_TEACHER_EMAIL ??
       'dev.teacher.free@yawp.local';

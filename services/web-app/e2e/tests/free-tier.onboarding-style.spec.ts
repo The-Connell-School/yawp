@@ -198,6 +198,9 @@ for (const viewport of [
         '../helpers/free-tier-onboarding'
       );
       await completeClassPreparationStepIfShown(page);
+      await expect(page.locator('input[name="adminName"]')).toBeVisible({
+        timeout: 30_000,
+      });
       if (!before) {
         await expect(
           page.getByRole('heading', {

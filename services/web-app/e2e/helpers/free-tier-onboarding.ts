@@ -15,4 +15,5 @@ export async function completeClassPreparationStepIfShown(
   if (await gradeSelect.count()) await gradeSelect.selectOption(grade);
   else await page.locator('input[name="grade"]').fill(grade);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.waitForURL(/free-tier\/onboarding/, { timeout: 15_000 });
 }

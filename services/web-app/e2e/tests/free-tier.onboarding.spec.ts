@@ -84,6 +84,9 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     expect(page.url()).not.toMatch(/\/auth\/login/);
 
     await completeClassPreparationStepIfShown(page);
+    await expect(page.locator('input[name="adminName"]')).toBeVisible({
+      timeout: 30_000,
+    });
     await page.fill('input[name="adminName"]', 'E2E Principal');
     await page.fill('input[name="adminEmail"]', `principal@${ADMIN_DOMAIN}`);
     await page.fill('input[name="adminRole"]', 'Principal');
@@ -172,6 +175,9 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     expect(page.url()).not.toMatch(/\/auth\/login/);
 
     await completeClassPreparationStepIfShown(page);
+    await expect(page.locator('input[name="adminName"]')).toBeVisible({
+      timeout: 30_000,
+    });
     await page.fill('input[name="adminName"]', 'Wrong Admin');
     await page.fill('input[name="adminEmail"]', `wrong-${stamp}@${ADMIN_DOMAIN}`);
     await page.fill('input[name="adminRole"]', 'Principal');
@@ -231,6 +237,10 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     await page.waitForURL('**/app/free-tier/onboarding**', { timeout: 30_000 });
     expect(page.url()).not.toMatch(/\/auth\/login/);
 
+    await completeClassPreparationStepIfShown(page);
+    await expect(page.locator('input[name="adminName"]')).toBeVisible({
+      timeout: 30_000,
+    });
     await page.fill('input[name="adminName"]', 'Same Person');
     await page.fill('input[name="adminRole"]', 'Principal');
     const email = page.getByRole('textbox', { name: 'Administrator email' });
