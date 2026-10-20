@@ -73,6 +73,31 @@ describe('demo ECR image pull path', () => {
     expect(immutableIndex).toBeGreaterThan(legacyIndex);
   });
 
+  test('demo ECR push role policy includes buildx read actions on demo repositories', () => {
+    const pushPolicyBlock = demoImageRegistryMainTf.slice(
+      demoImageRegistryMainTf.indexOf('Sid    = "PushDemoImages"'),
+      demoImageRegistryMainTf.indexOf('Resource = [for repository in aws_ecr_repository.demo')
+    );
+    const expectedPushActions = [
+      'ecr:BatchCheckLayerAvailability',
+      'ecr:BatchGetImage',
+      'ecr:CompleteLayerUpload',
+      'ecr:GetDownloadUrlForLayer',
+      'ecr:InitiateLayerUpload',
+      'ecr:PutImage',
+      'ecr:UploadLayerPart',
+      'ecr:DescribeRepositories',
+      'ecr:DescribeImages',
+      'ecr:ListImages',
+    ];
+    for (const action of expectedPushActions) {
+      expect(pushPolicyBlock).toContain(`"${action}"`);
+    }
+    expect(demoImageRegistryMainTf).toContain(
+      'Resource = [for repository in aws_ecr_repository.demo : repository.arn]'
+    );
+  });
+
   test('deploy.sh logs into ECR and pulls when demo image variables are set', () => {
     expect(deployScript).toContain('DEMO_WEB_IMAGE');
     expect(deployScript).toContain('DEMO_TOOLBOX_IMAGE');
