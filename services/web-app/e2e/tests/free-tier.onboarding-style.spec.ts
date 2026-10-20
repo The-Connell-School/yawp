@@ -7,6 +7,7 @@ import { setFeatureFlag } from '../feature-flags';
 import { createE2EPrismaClient } from '../prisma-client';
 import { mintFreeTierLinkForE2E } from '../helpers/mint-free-tier-link';
 import { waitForFreeTierEmailPayload } from '../helpers/free-tier-email';
+import { drainFreeTierApprovalJobs } from '../helpers/drain-free-tier-approval-jobs';
 
 // Runs against the normal captured-mail E2E server. Optional lane evidence uses
 // the same routes/fixtures at identical viewports before and after the change.
@@ -340,6 +341,7 @@ for (const viewport of [
         admin.getByRole('heading', { name: 'Request forwarded' })
       ).toBeVisible();
       await capture('forward-confirmation', admin);
+      await drainFreeTierApprovalJobs();
       const replacement = await waitForFreeTierEmailPayload(prisma, {
         applicationId: app.id,
         kind: 'admin_approval',
