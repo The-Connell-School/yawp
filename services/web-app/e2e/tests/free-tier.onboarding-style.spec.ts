@@ -261,6 +261,12 @@ for (const viewport of [
         applicationId: app.id,
         kind: 'admin_approval',
       });
+      await prisma.freeTierApplication.update({
+        where: { id: app.id },
+        data: { status: 'SENT' },
+      });
+      await page.reload();
+      await page.waitForURL('**/app/free-tier/pending**');
       // Historical notes must also be ignored by reminders and replacement sends.
       await prisma.freeTierAdminApproval.updateMany({
         where: { applicationId: app.id },

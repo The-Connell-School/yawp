@@ -5,32 +5,14 @@ const FREE_CLASSROOM_PASSWORD = 'yawp-dev';
 test.describe('Free classroom bundle quotas', () => {
   test('teacher sees assignment type counters in the creation sheet', async ({
     page,
+    signIn,
   }) => {
     test.setTimeout(120_000);
     const email =
       process.env.E2E_FREE_CLASSROOM_TEACHER_EMAIL ??
       'dev.teacher.free@yawp.local';
 
-    await page.goto('/auth/login');
-    await page.waitForLoadState('networkidle');
-    const signOn = page.locator('[data-signon-screen]');
-    if (await signOn.count()) {
-      await page.getByLabel('Email or handle').fill(email);
-      await page.getByLabel('Password', { exact: true }).fill(FREE_CLASSROOM_PASSWORD);
-      await page.getByRole('button', { name: /Log in/i }).click();
-    } else {
-      await page.getByLabel('Email or handle').fill(email);
-      await page.locator('input[type="password"]').fill(FREE_CLASSROOM_PASSWORD);
-      await page.getByRole('button', { name: /log in/i }).click();
-    }
-    await page.waitForURL(
-      (url) =>
-        url.pathname.startsWith('/app') || url.pathname === '/enter-code',
-      { timeout: 15000 }
-    );
-    if (new URL(page.url()).pathname === '/enter-code') {
-      throw new Error('Free classroom teacher should not require enter-code in E2E');
-    }
+    await signIn(email, FREE_CLASSROOM_PASSWORD);
 
     await page.goto('/app/assignments');
     await page.waitForLoadState('networkidle');

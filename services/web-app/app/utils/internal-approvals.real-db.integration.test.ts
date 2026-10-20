@@ -61,7 +61,10 @@ afterEach(async () => {
   setSystemTime();
   await prisma.freeTierApplication.deleteMany({ where: { id: { in: dynamicIds } } });
   dynamicIds.length = 0;
-  await flag('off');
+  await prisma.setting.update({
+    where: { name: flags[0] },
+    data: { value: 'true' },
+  });
 });
 function request(path: string, body?: unknown, key = 'one') {
   const url = 'http://localhost/api/internal/v1/free-tier/approval/' + path;
