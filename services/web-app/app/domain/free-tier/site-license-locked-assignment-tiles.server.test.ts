@@ -50,15 +50,13 @@ test('loads locked tiles from the global catalog for FREE_CLASSROOM orgs', async
     },
   ];
 
-  const testClient = {
-    assignmentType: {
-      findMany: findMany as typeof prisma.assignmentType.findMany,
-    },
-  } satisfies Pick<typeof prisma, 'assignmentType'>;
-
   const tiles = await loadSiteLicenseLockedAssignmentTiles(
     { plan: 'FREE_CLASSROOM' },
-    testClient
+    {
+      assignmentType: {
+        findMany: findMany as unknown as typeof prisma.assignmentType.findMany,
+      },
+    }
   );
 
   expect(findMany).toHaveBeenCalled();
@@ -81,15 +79,13 @@ test('returns no tiles for paid organizations without querying', async () => {
     './site-license-locked-assignment-tiles.server'
   );
 
-  const testClient = {
-    assignmentType: {
-      findMany: findMany as typeof prisma.assignmentType.findMany,
-    },
-  } satisfies Pick<typeof prisma, 'assignmentType'>;
-
   const tiles = await loadSiteLicenseLockedAssignmentTiles(
     { plan: 'SCHOOL' },
-    testClient
+    {
+      assignmentType: {
+        findMany: findMany as unknown as typeof prisma.assignmentType.findMany,
+      },
+    }
   );
 
   expect(tiles).toEqual([]);

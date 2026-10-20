@@ -10,9 +10,15 @@ import {
  * (see provision-free-classroom). Locked tiles must match against the global
  * assignment-type catalog, not scope-filtered types the teacher can create.
  */
+type SiteLicenseLockedAssignmentTilesClient = {
+  assignmentType: {
+    findMany: typeof prisma.assignmentType.findMany;
+  };
+};
+
 export async function loadSiteLicenseLockedAssignmentTiles(
   organization: Pick<{ plan: OrganizationPlan }, 'plan'>,
-  client: Pick<typeof prisma, 'assignmentType'> = prisma
+  client: SiteLicenseLockedAssignmentTilesClient = prisma
 ): Promise<SiteLicenseLockedAssignmentTile[]> {
   if (organization.plan !== 'FREE_CLASSROOM') return [];
 
