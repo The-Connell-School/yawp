@@ -1,11 +1,11 @@
 import { data } from 'react-router';
 import { prisma } from '~/utils/db.server';
 import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { SIGNON_TEACHER_PROMPTS_FLAG } from '~/domain/feature-flags/feature-flags';
+import { UNIFIED_SIGN_ON_FLAG } from '~/domain/feature-flags/feature-flags';
 import { teacherPromptAccount } from './teacher-prompts';
 
 export async function loadTeacherPromptAccount(userId: string) {
-  if (!(await isFeatureFlagEnabled(SIGNON_TEACHER_PROMPTS_FLAG)))
+  if (!(await isFeatureFlagEnabled(UNIFIED_SIGN_ON_FLAG)))
     return undefined;
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: userId },

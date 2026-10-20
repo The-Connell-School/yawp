@@ -20,7 +20,7 @@ const {
   setFeatureFlag,
   findUnknownOrganizationIds,
 } = await import('./feature-flags.server');
-const { SIGNON_TEACHER_PROMPTS_FLAG, GUIDED_TOURS_FLAG, DEMO_FEEDBACK_FLAG, INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, FREE_TIER_INAPP_V2_FLAG, UNIFIED_SIGN_ON_FLAG, FREE_TIER_ONBOARDING_V2_FLAG } = await import(
+const { GUIDED_TOURS_FLAG, DEMO_FEEDBACK_FLAG, INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, UNIFIED_SIGN_ON_FLAG } = await import(
   './feature-flags'
 );
 
@@ -84,14 +84,16 @@ describe('feature flags (server)', () => {
     expect(await isFeatureFlagEnabled(INTERNAL_RUBRICS_FLAG, 'org-2')).toBe(true);
   });
 
-  test('teacher prompts stay off without a row on demo and production', async () => {
+  test('unified sign-on defaults on for demo and preview without a row', async () => {
     const previous = process.env.YAWP_ENVIRONMENT;
     try {
-      for (const environment of ['demo', 'production']) {
+      for (const environment of ['demo', 'preview']) {
         process.env.YAWP_ENVIRONMENT = environment;
         prisma.setting.findUnique.mockResolvedValue(null);
-        expect(await isFeatureFlagEnabled(SIGNON_TEACHER_PROMPTS_FLAG)).toBe(false);
+        expect(await isFeatureFlagEnabled(UNIFIED_SIGN_ON_FLAG)).toBe(true);
       }
+      process.env.YAWP_ENVIRONMENT = 'production';
+      expect(await isFeatureFlagEnabled(UNIFIED_SIGN_ON_FLAG)).toBe(false);
     } finally {
       if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
       else process.env.YAWP_ENVIRONMENT = previous;
@@ -173,13 +175,10 @@ describe('feature flags (server)', () => {
       LESSON_PLANNER_FLAG,
       INTERNAL_RUBRICS_FLAG,
       FREE_TIER_FLAG,
-      FREE_TIER_INAPP_V2_FLAG,
       UNIFIED_SIGN_ON_FLAG,
-      FREE_TIER_ONBOARDING_V2_FLAG,
       'classcode-unique',
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
-      SIGNON_TEACHER_PROMPTS_FLAG,
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[2]).toMatchObject({ key: FREE_TIER_FLAG, mode: 'off', enabled: false });
@@ -203,13 +202,10 @@ describe('feature flags (server)', () => {
       LESSON_PLANNER_FLAG,
       INTERNAL_RUBRICS_FLAG,
       FREE_TIER_FLAG,
-      FREE_TIER_INAPP_V2_FLAG,
       UNIFIED_SIGN_ON_FLAG,
-      FREE_TIER_ONBOARDING_V2_FLAG,
       'classcode-unique',
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
-      SIGNON_TEACHER_PROMPTS_FLAG,
     ]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });
     const where = prisma.setting.findMany.mock.calls[0]?.[0].where;
@@ -372,7 +368,7 @@ for (const deployment of ['demo', 'production']) {
           mode: deployment === 'demo' ? 'everyone' : mode,
           persisted: { mode, orgIds },
           effective: deployment === 'demo' ? { mode: 'everyone', orgIds: [] } : { mode, orgIds },
-          runtimeOverride: deployment === 'demo' ? 'demo_free_tier' : null,
+          runtimeOverride: deployment === 'demo' ? 'non_production_default' : null,
         });
         expect(prisma.setting.upsert).not.toHaveBeenCalled();
       } finally {

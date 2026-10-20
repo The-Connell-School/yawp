@@ -1,10 +1,9 @@
-import { FREE_TIER_ONBOARDING_V2_FLAG } from '~/domain/feature-flags/feature-flags';
-import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { isBelowHsGrade } from './grade-gate';
 
-/** Public traffic has no organization context: only everyone enables v2. */
+/** Public traffic has no organization context: only global free tier enables v2 flows. */
 export function isPublicOnboardingV2Enabled() {
-  return isFeatureFlagEnabled(FREE_TIER_ONBOARDING_V2_FLAG);
+  return isFreeTierEnabled();
 }
 
 export function isSupportedSignupGrade(grade: string) {

@@ -92,17 +92,7 @@ export async function unifiedEntry(request: Request) {
 }
 
 export async function dispatchUnifiedLogin(args: ActionFunctionArgs) {
-  if (!(await isUnifiedSignOnEnabled())) {
-    const { isFeatureFlagEnabled } =
-      await import('~/domain/feature-flags/feature-flags.server');
-    const { SIGNON_TEACHER_PROMPTS_FLAG } =
-      await import('~/domain/feature-flags/feature-flags');
-    if (
-      !(await isFeatureFlagEnabled(SIGNON_TEACHER_PROMPTS_FLAG)) ||
-      !(await getUserId(args.request))
-    )
-      return loginAction(args);
-  }
+  if (!(await isUnifiedSignOnEnabled())) return loginAction(args);
   let form: FormData;
   try {
     form = await args.request.clone().formData();

@@ -107,7 +107,7 @@ test.describe.serial('Free tier guided tour', () => {
       });
       const emailCount = await prisma.freeTierEmailLog.count({ where: { applicationId: application.id } });
       try {
-        await setFeatureFlag('free-tier-onboarding-v2', true);
+        await setFeatureFlag('free-tier', true);
         await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
         await logInAsFreeTeacher(page);
         await page.goto('/app');
@@ -147,7 +147,7 @@ test.describe.serial('Free tier guided tour', () => {
         } else {
           await prisma.freeTierApplication.delete({ where: { id: application.id } });
         }
-        await setFeatureFlag('free-tier-onboarding-v2', false);
+        await setFeatureFlag('free-tier', false);
         await prisma.$disconnect();
       }
     });

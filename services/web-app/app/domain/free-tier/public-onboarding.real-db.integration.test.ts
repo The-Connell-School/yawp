@@ -8,7 +8,7 @@ import * as token from '~/routes/api.free-tier.token/route';
 import { hashToken, releaseBatch } from './service.server';
 const local = process.env.FREE_WELCOME_DB_TESTS === '1' ? test : test.skip;
 const prefix = `welcome-route-${Date.now()}`;
-const flagName = 'feature_flag.free-tier-onboarding-v2';
+const flagName = 'feature_flag.free_tier';
 const baseFlag = 'feature_flag.free_tier';
 const paths = ['free', 'waitlist', 'token'] as const;
 let saved: any[] = [];

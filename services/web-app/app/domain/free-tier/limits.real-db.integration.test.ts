@@ -14,7 +14,7 @@ const enabled = process.env.FREE_TIER_LIMITS_LOCAL_TEST === '1';
 const local = enabled ? test : test.skip;
 const prefix = `limits-${Date.now()}`;
 const baseFlag = 'feature_flag.free_tier';
-const v2Flag = 'feature_flag.free-tier-onboarding-v2';
+const v2Flag = 'feature_flag.free_tier';
 const savedEnv = { ...process.env };
 const url = 'http://localhost/api/internal/v1/free-tier/limits';
 const secret = 'local-limits-database-test-secret-32-characters';

@@ -26,7 +26,11 @@ mock.module('~/utils/db.server', () => ({
   ...realDb,
   prisma: {
     freeTierApplication: { findFirst },
-    setting: { findUnique: mock(async () => null) },
+    setting: {
+      findUnique: mock(async () => null),
+      findMany: mock(async () => []),
+    },
+    orgMembership: { findFirst: mock(async () => null) },
     $transaction: transaction,
   },
 }));
@@ -70,7 +74,7 @@ afterAll(() => {
   mock.restore();
 });
 
-for (const environment of ['demo', 'production']) {
+for (const environment of ['production']) {
   for (const adminEmail of [
     'Teacher+account@gmail.com',
     ' TEACHER+account@GMAIL.COM ',

@@ -13,7 +13,7 @@ beforeAll(async () => {
   if (process.env.FREE_WELCOME_DB_TESTS !== '1') return;
   const url = new URL(process.env.DATABASE_URL!);
   if (!['localhost', '127.0.0.1'].includes(url.hostname) || !(url.pathname.includes('fto-free-page') || (process.env.GITHUB_ACTIONS === 'true' && url.pathname === '/yawp_migration_ci'))) throw new Error('Dedicated local welcome database required');
-  old = await prisma.setting.findUnique({ where: { name: 'feature_flag.free-tier-onboarding-v2' } });
+  old = await prisma.setting.findUnique({ where: { name: 'feature_flag.free_tier' } });
   process.env.FREE_TIER_LINK_HMAC_SECRET = 'local-welcome-copy-tests';
   process.env.PRIMARY_APP_URL = 'http://localhost:5241';
   process.env.FREE_TIER_RELEASE_CAP = '100000';
@@ -23,7 +23,7 @@ afterAll(async () => {
   await prisma.freeTierApplication.deleteMany({ where: { email: { startsWith: prefix } } });
   await prisma.acquisitionToken.deleteMany({ where: { label: { startsWith: prefix } } });
   if (old) await prisma.setting.update({ where: { name: old.name }, data: { value: old.value } });
-  else await prisma.setting.deleteMany({ where: { name: 'feature_flag.free-tier-onboarding-v2' } });
+  else await prisma.setting.deleteMany({ where: { name: 'feature_flag.free_tier' } });
   await prisma.$disconnect();
 });
 local('original copy survives duplicates, later token admission and a flag change before delayed delivery', async () => {
@@ -37,7 +37,7 @@ local('original copy survives duplicates, later token admission and a flag chang
   await submitWaitlist(fields('legacy'), { onboardingV2: true });
   const token = await prisma.acquisitionToken.create({ data: { code: prefix, tokenHash: prefix, label: prefix, bypassWaitlist: true } });
   await redeemToken({ ...fields('legacy'), token: token.code! }, { onboardingV2: true });
-  await prisma.setting.upsert({ where: { name: 'feature_flag.free-tier-onboarding-v2' }, create: { name: 'feature_flag.free-tier-onboarding-v2', value: 'false' }, update: { value: 'false' } });
+  await prisma.setting.upsert({ where: { name: 'feature_flag.free_tier' }, create: { name: 'feature_flag.free_tier', value: 'false' }, update: { value: 'false' } });
   expect((await releaseBatch({ applicationIds: [v2.id] })).released).toBe(1);
   deliver.mockClear();
   expect(await sendReleaseEmailsForApplicationIds([v2.id, legacy.id])).toEqual([{ applicationId: v2.id, ok: true }, { applicationId: legacy.id, ok: true }]);
@@ -47,7 +47,7 @@ local('original copy survives duplicates, later token admission and a flag chang
   expect(deliver.mock.calls[0][0].html).not.toContain('<Teacher>');
   expect(deliver.mock.calls[1][0].subject).toBe("You're in — start your YAWP classroom");
   // Turn v2 on at delivery: the original legacy context still wins.
-  await prisma.setting.update({ where: { name: 'feature_flag.free-tier-onboarding-v2' }, data: { value: 'true' } });
+  await prisma.setting.update({ where: { name: 'feature_flag.free_tier' }, data: { value: 'true' } });
   await sendReleaseEmailsForApplicationIds([legacy.id]);
   expect(deliver.mock.calls.at(-1)![0].subject).toBe("You're in — start your YAWP classroom");
 });

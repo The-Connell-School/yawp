@@ -16,7 +16,7 @@ const prisma = createE2EPrismaClient();
 const shots = process.env.CLASS_STEP_EVIDENCE_DIR;
 const users: string[] = [];
 const apps: string[] = [];
-const flagName = 'feature_flag.free-tier-onboarding-v2';
+const flagName = 'feature_flag.free_tier';
 async function flag(enabled: boolean) {
   await prisma.setting.upsert({
     where: { name: flagName },
