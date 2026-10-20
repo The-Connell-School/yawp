@@ -8,10 +8,7 @@ function req(): Request {
 describe('/lti/jwks', () => {
   test('returns a JWKS with one RSA key', async () => {
     const res = await loader();
-    const body =
-      'data' in (res as object)
-        ? (res as { data: { keys: Array<{ kty: string; kid?: string }> } }).data
-        : await (res as Response).json();
+    const body = (res as { data: { keys: Array<{ kty: string; kid?: string }> } }).data;
     expect(Array.isArray(body.keys)).toBe(true);
     expect(body.keys[0].kty).toBe('RSA');
     expect(body.keys[0].kid).toBeDefined();
