@@ -52,6 +52,34 @@ function stepText(raw: string): string {
   return hidePromptIds(raw.replace(FENCE, '').replace(/\n{3,}/g, '\n\n').trim());
 }
 
+// What the planner writes after the last step is about the plan, not part of
+// it (Brian's run 3, item 5): a rule it puts there, the running total, the
+// "you don't have to use all of these" invite, and its closing question.
+const AFTER_PLAN = [
+  /^\s{0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/,
+  /^\s*(?:\*\*|__)?\s*total\b/i,
+  /\d+\s*\+\s*\d+[^\n]*=\s*\d+\s*min/i,
+  /^\s*(?:\*\*|_)?you don[’']?t have to use (?:all|every)/i,
+];
+const TEACHER_QUESTION =
+  /^\s*(?:want (?:me|to)|would you like|shall i|should i|let me know|anything else|how does (?:this|that) (?:look|sound)|does (?:this|that) (?:look|work|fit))\b[^\n]*$/i;
+
+/**
+ * The last step's text without the planner's commentary after it. Only the
+ * last step runs to the end of the reply, so only it can pick that up.
+ */
+export function withoutTrailingCommentary(text: string): string {
+  const paragraphs = text.split(/\n{2,}/);
+  const cut = paragraphs.findIndex((paragraph, index) => {
+    const firstLine = paragraph.trim().split('\n')[0] ?? '';
+    // Never cut the step's own first paragraph to nothing.
+    return index > 0 && AFTER_PLAN.some((pattern) => pattern.test(firstLine));
+  });
+  const kept = cut === -1 ? paragraphs : paragraphs.slice(0, cut);
+  while (kept.length > 1 && TEACHER_QUESTION.test(kept.at(-1)!.trim())) kept.pop();
+  return kept.join('\n\n').trim();
+}
+
 /** The plan's steps, in order. A reply with fewer than two is not a plan. */
 export function readPlanSteps(content: string): PlanStep[] {
   // Headings inside a fence are not the plan's.
@@ -71,11 +99,12 @@ export function readPlanSteps(content: string): PlanStep[] {
         (other) => other.start > heading.start && other.level <= level
       );
       const { title, minutes } = cleanTitle(heading.text);
+      const text = stepText(content.slice(heading.end, next?.start ?? content.length));
       return {
         key: planStepKey(index),
         title: title || `Step ${index + 1}`,
         minutes,
-        content: stepText(content.slice(heading.end, next?.start ?? content.length)),
+        content: next ? text : withoutTrailingCommentary(text),
         at: heading.start,
       };
     });
@@ -105,12 +134,14 @@ function readBoldSteps(content: string, masked: string): PlanStep[] {
       .replace(MINUTES, '')
       .replace(/^\s*[—–:-]\s*/, '')
       .trim();
+    const last = index === starts.length - 1;
     const body = content.slice(step.end, starts[index + 1]?.start ?? content.length);
+    const text = stepText([restOfLine, body].filter((part) => part.trim()).join('\n'));
     return {
       key: planStepKey(index),
       title: title || `Step ${index + 1}`,
       minutes,
-      content: stepText([restOfLine, body].filter((part) => part.trim()).join('\n')),
+      content: last ? withoutTrailingCommentary(text) : text,
       at: step.start,
     };
   });

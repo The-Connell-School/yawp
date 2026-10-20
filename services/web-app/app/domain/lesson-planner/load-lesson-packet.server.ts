@@ -19,6 +19,7 @@ import {
   type LessonPlannerReviewFlags,
 } from '~/domain/feature-flags/feature-flags.server';
 import { nameIsProvisional } from './lesson-name';
+import { withoutTrailingCommentary } from './plan-steps';
 import { orderStackEntries } from './stack-order';
 
 export type LoadedLessonPacket = {
@@ -150,7 +151,13 @@ export async function loadLessonPacket({
       position: material.position,
       item: {
         id: material.id,
-        content: material.content,
+        // A closing step filed before run 3 may still carry the planner's
+        // total and closing question (Brian's run 3, item 5). Shown without
+        // them; a teacher's own edit is left as written.
+        content:
+          material.kind === 'step' && !material.editedAt
+            ? withoutTrailingCommentary(material.content)
+            : material.content,
         keptAudience: material.audience,
         keptTitle: material.title,
         kind: packetKindForMaterial(material.kind),

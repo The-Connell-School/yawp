@@ -69,3 +69,47 @@ describe("readPlanSteps (Brian's run 2, A3)", () => {
     expect(planStepIndexForKey('dp:3')).toBeNull();
   });
 });
+
+describe("readPlanSteps — a step holds only its own content (Brian's run 3, item 5)", () => {
+  const REPLY = [
+    '## Hook: What’s in your bag? (15 min)',
+    '',
+    'Students lay out what is in their bag.',
+    '',
+    '## Closing (3 min)',
+    '',
+    'Exit ticket: one object, one sentence.',
+    '',
+    'Total: 15 + 5 + 10 + 12 + 5 + 3 = 50 minutes',
+    '',
+    'You don’t have to use all of these. Pick one framing card or all three.',
+    '',
+    'Want to refine or edit any part of this?',
+  ].join('\n');
+
+  test('the last step stops before the total, the invite and the question', () => {
+    const closing = readPlanSteps(REPLY).at(-1)!;
+    expect(closing.content).toBe('Exit ticket: one object, one sentence.');
+  });
+
+  test('a rule after the last step ends it', () => {
+    const steps = readPlanSteps(
+      '## Warm-up (5 min)\n\nWrite.\n\n## Closing (5 min)\n\nShare one line.\n\n---\n\nThat should fill the period nicely.'
+    );
+    expect(steps.at(-1)!.content).toBe('Share one line.');
+  });
+
+  test('a question inside a step that is not the end stays', () => {
+    const steps = readPlanSteps(
+      '## Discussion (10 min)\n\nAsk: What would you carry?\n\nThen pairs share.\n\n## Closing (5 min)\n\nShare.'
+    );
+    expect(steps[0]!.content).toContain('What would you carry?');
+  });
+
+  test('bold steps stop the same way', () => {
+    const steps = readPlanSteps(
+      '**Warm-up (5 min)** Write.\n\n**Closing (5 min)** Share one line.\n\nTotal: 5 + 5 = 10 minutes\n\nWould you like me to make a handout?'
+    );
+    expect(steps.at(-1)!.content).toBe('Share one line.');
+  });
+});
