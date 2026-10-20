@@ -8,6 +8,9 @@ POLICY_NAME="yawp-demo-backup-deny-delete"
 ACCESS_POLICY_NAME="yawp-demo-host-backup-access"
 MANAGED_ROLE_NAME="${DEMO_INSTANCE_ROLE_NAME:-yawp-demo-role}"
 MANAGED_PROFILE_NAME="${DEMO_INSTANCE_PROFILE_NAME:-yawp-demo}"
+DEMO_ECR_WEB_REPOSITORY="${DEMO_ECR_WEB_REPOSITORY:-yawp-demo-web}"
+DEMO_ECR_TOOLBOX_REPOSITORY="${DEMO_ECR_TOOLBOX_REPOSITORY:-yawp-demo-toolbox}"
+DEMO_ECR_REGISTRY_ACCOUNT="${DEMO_ECR_REGISTRY_ACCOUNT:-422348803522}"
 
 [[ "$DEMO_HOST" =~ ^[A-Za-z0-9.-]+$ ]] || {
   echo "Invalid DEMO_HOST" >&2
@@ -29,6 +32,20 @@ MANAGED_PROFILE_NAME="${DEMO_INSTANCE_PROFILE_NAME:-yawp-demo}"
   echo "Invalid DEMO_INSTANCE_PROFILE_NAME" >&2
   exit 1
 }
+[[ "$DEMO_ECR_WEB_REPOSITORY" =~ ^[a-z0-9][a-z0-9._-]{1,255}$ ]] || {
+  echo "Invalid DEMO_ECR_WEB_REPOSITORY" >&2
+  exit 1
+}
+[[ "$DEMO_ECR_TOOLBOX_REPOSITORY" =~ ^[a-z0-9][a-z0-9._-]{1,255}$ ]] || {
+  echo "Invalid DEMO_ECR_TOOLBOX_REPOSITORY" >&2
+  exit 1
+}
+[[ "$DEMO_ECR_REGISTRY_ACCOUNT" =~ ^[0-9]{12}$ ]] || {
+  echo "Invalid DEMO_ECR_REGISTRY_ACCOUNT" >&2
+  exit 1
+}
+demo_ecr_web_arn="arn:aws:ecr:${AWS_REGION}:${DEMO_ECR_REGISTRY_ACCOUNT}:repository/${DEMO_ECR_WEB_REPOSITORY}"
+demo_ecr_toolbox_arn="arn:aws:ecr:${AWS_REGION}:${DEMO_ECR_REGISTRY_ACCOUNT}:repository/${DEMO_ECR_TOOLBOX_REPOSITORY}"
 
 destination="${BACKUP_S3_URI%/}"
 bucket_and_prefix="${destination#s3://}"
@@ -139,7 +156,7 @@ role_arn="$(aws iam get-role \
   exit 1
 }
 
-access_policy_document="$(printf '{"Version":"2012-10-17","Statement":[{"Sid":"ReadProductionDump","Effect":"Allow","Action":"s3:GetObject","Resource":"%s"},{"Sid":"PublishDemoBackups","Effect":"Allow","Action":"s3:PutObject","Resource":"%s"},{"Sid":"InspectBackupBucket","Effect":"Allow","Action":["s3:GetBucketLocation","s3:GetBucketVersioning"],"Resource":"%s"},{"Sid":"PublishPreviewMetrics","Effect":"Allow","Action":"cloudwatch:PutMetricData","Resource":"*","Condition":{"StringEquals":{"cloudwatch:namespace":"Yawp/PreviewHost"}}}]}' "$dump_resource_arn" "$backup_resource_arn" "$bucket_arn")"
+access_policy_document="$(printf '{"Version":"2012-10-17","Statement":[{"Sid":"ReadProductionDump","Effect":"Allow","Action":"s3:GetObject","Resource":"%s"},{"Sid":"PublishDemoBackups","Effect":"Allow","Action":"s3:PutObject","Resource":"%s"},{"Sid":"InspectBackupBucket","Effect":"Allow","Action":["s3:GetBucketLocation","s3:GetBucketVersioning"],"Resource":"%s"},{"Sid":"PublishPreviewMetrics","Effect":"Allow","Action":"cloudwatch:PutMetricData","Resource":"*","Condition":{"StringEquals":{"cloudwatch:namespace":"Yawp/PreviewHost"}}},{"Sid":"PullDemoRegistryImages","Effect":"Allow","Action":["ecr:BatchGetImage","ecr:GetDownloadUrlForLayer","ecr:BatchCheckLayerAvailability"],"Resource":["%s","%s"]},{"Sid":"AuthorizeDemoRegistryPull","Effect":"Allow","Action":"ecr:GetAuthorizationToken","Resource":"*"}]}' "$dump_resource_arn" "$backup_resource_arn" "$bucket_arn" "$demo_ecr_web_arn" "$demo_ecr_toolbox_arn")"
 deny_policy_document="$(printf '{"Version":"2012-10-17","Statement":[{"Sid":"DenyDemoBackupDeletion","Effect":"Deny","Action":["s3:DeleteObject","s3:DeleteObjectVersion"],"Resource":"%s"}]}' "$backup_resource_arn")"
 
 aws iam put-role-policy \

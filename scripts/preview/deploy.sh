@@ -626,6 +626,30 @@ sha256_stream() {
   fi
 }
 
+demo_registry_images_configured() {
+  [[ -n "${DEMO_WEB_IMAGE:-}" && -n "${DEMO_TOOLBOX_IMAGE:-}" ]]
+}
+
+ecr_login_for_demo_images() {
+  local registry="${DEMO_WEB_IMAGE%%/*}"
+  [[ "$registry" =~ ^[0-9]+\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com$ ]] || {
+    echo "DEMO_WEB_IMAGE must be an ECR image URI" >&2
+    exit 1
+  }
+  aws ecr get-login-password --region "${AWS_REGION:-us-east-1}" \
+    | docker login --username AWS --password-stdin "$registry"
+}
+
+build_or_pull_production_images() {
+  local -a services=("$@")
+  if demo_registry_images_configured; then
+    ecr_login_for_demo_images
+    COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" pull "${services[@]}"
+  else
+    COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build "${services[@]}"
+  fi
+}
+
 compute_tooling_fingerprint() {
   (
     cd "$SOURCE_DIR"
@@ -713,7 +737,7 @@ run_tooling_if_needed() {
   # Docker's layer cache keeps unchanged builds cheap while guaranteeing code-only refs
   # cannot silently restart the previously tagged image.
   if [[ "$RUNTIME" == "production" ]]; then
-    COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build web
+    build_or_pull_production_images web
   fi
 
   if [[ "$DATABASE_CREATED" == "0" && "$fingerprint" == "$previous_fingerprint" && -z "$missing_artifacts" ]]; then
@@ -824,7 +848,7 @@ prebuild_production_images() {
   [[ "$RUNTIME" == "production" ]] || return 0
   # Complete every fallible image build before an explicit demo reset can touch data.
   # Docker's layer cache keeps unchanged builds cheap while code-only refs still rebuild.
-  COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build web toolbox
+  build_or_pull_production_images web toolbox
 }
 
 ensure_preview_seats() {
