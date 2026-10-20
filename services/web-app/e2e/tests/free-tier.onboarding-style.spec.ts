@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import type { Page } from '@playwright/test';
 import { expect, test } from '../test-setup';
 import { setFeatureFlag } from '../feature-flags';
 import { createE2EPrismaClient } from '../prisma-client';
@@ -11,6 +12,30 @@ import { waitForFreeTierEmailPayload } from '../helpers/free-tier-email';
 // the same routes/fixtures at identical viewports before and after the change.
 const before = process.env.ONBOARDING_EVIDENCE_PHASE === 'before';
 const evidence = process.env.ONBOARDING_EVIDENCE_DIR;
+
+async function fillFreeSignupForm(
+  page: Page,
+  data: {
+    name: string;
+    email: string;
+    schoolName: string;
+    location: string;
+    gradeLevel: string;
+  },
+  v2: boolean,
+) {
+  if (v2) {
+    await page.getByLabel('First and last name').fill(data.name);
+    await page.getByLabel('School email').fill(data.email);
+    await page.getByLabel('School name').fill(data.schoolName);
+    await page.getByLabel('Location').fill(data.location);
+    await page.getByLabel('Grade level').selectOption(data.gradeLevel);
+  } else {
+    for (const [field, value] of Object.entries(data)) {
+      await page.locator(`input[name="${field}"]`).fill(value);
+    }
+  }
+}
 for (const viewport of [
   { width: 1280, height: 1000 },
   { width: 390, height: 844 },
@@ -102,14 +127,17 @@ for (const viewport of [
         .getByRole('button', { name: 'Join the waitlist', exact: true })
         .click();
       await expect(page.locator('input[name="name"]:invalid')).toHaveCount(1);
-      for (const [field, value] of Object.entries({
-        name: 'Grace Okafor',
-        email: `wait-${stamp}@example.edu`,
-        schoolName: 'Lincoln High School',
-        location: 'Local',
-        gradeLevel: '10',
-      }))
-        await page.locator(`input[name="${field}"]`).fill(value);
+      await fillFreeSignupForm(
+        page,
+        {
+          name: 'Grace Okafor',
+          email: `wait-${stamp}@example.edu`,
+          schoolName: 'Lincoln High School',
+          location: 'Local',
+          gradeLevel: '10',
+        },
+        !before,
+      );
       await page
         .getByRole('button', { name: 'Join the waitlist', exact: true })
         .click();
@@ -131,14 +159,17 @@ for (const viewport of [
         await page.goto(`/free?t=${code}`);
         await capture(`event-${mode}`);
         if (mode !== 'closed') {
-          for (const [field, value] of Object.entries({
-            name: 'Grace Okafor',
-            email: `event-${mode}-${stamp}@example.edu`,
-            schoolName: 'Lincoln High School',
-            location: 'Local',
-            gradeLevel: '10',
-          }))
-            await page.locator(`input[name="${field}"]`).fill(value);
+          await fillFreeSignupForm(
+            page,
+            {
+              name: 'Grace Okafor',
+              email: `event-${mode}-${stamp}@example.edu`,
+              schoolName: 'Lincoln High School',
+              location: 'Local',
+              gradeLevel: '10',
+            },
+            !before,
+          );
           await page
             .getByRole('button', { name: 'Continue', exact: true })
             .click();
