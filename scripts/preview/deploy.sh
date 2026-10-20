@@ -722,6 +722,14 @@ compute_tooling_fingerprint() {
 }
 
 run_tooling_if_needed() {
+  local prisma_cli
+  if [[ "$SLUG" =~ ^pr-[1-9][0-9]*$ ]]; then
+    # PR application refs can predate reviewed control-plane scripts. Fast previews mount
+    # those scripts at /preview-control; do not require prisma-cli.sh in the PR checkout.
+    prisma_cli='PRISMA_CLI_REPO_ROOT=/app bash /preview-control/prisma-cli.sh'
+  else
+    prisma_cli='bash scripts/preview/prisma-cli.sh'
+  fi
   local fingerprint
   local previous_fingerprint=""
   fingerprint="$(compute_tooling_fingerprint)"
@@ -748,31 +756,31 @@ run_tooling_if_needed() {
     # Bundle availability is required before serving code-only demo updates.
     # Run this separately from optional fixture seeds so failure aborts rollout.
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-free-tier-bundle-assignment-types.ts" ]]; then
-      "${compose[@]}" run --rm toolbox bash -lc "bash scripts/preview/prisma-cli.sh generate && cd packages/prisma && bun run seed-free-tier-bundle-assignment-types"
+      "${compose[@]}" run --rm toolbox bash -lc "$prisma_cli generate && cd packages/prisma && bun run seed-free-tier-bundle-assignment-types"
     fi
-    local skip_path_seeds="bash scripts/preview/prisma-cli.sh generate"
+    local skip_path_seeds="$prisma_cli generate && cd packages/prisma"
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-ap-history-library.ts" ]]; then
       skip_path_seeds+=' && bun run seed-ap-history-library'
     fi
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-planner-qa.ts" ]]; then
       skip_path_seeds+=' && bun run seed-preview-planner-qa'
     fi
-    if [[ "$skip_path_seeds" != "bash scripts/preview/prisma-cli.sh generate" ]]; then
+    if [[ "$skip_path_seeds" != "$prisma_cli generate && cd packages/prisma" ]]; then
       echo "Running idempotent preview seeds on existing database (skip path)."
       if ! "${compose[@]}" run --rm toolbox bash -lc "$skip_path_seeds"; then
         echo "Warning: idempotent preview seeds failed; continuing deploy (non-fatal)." >&2
       fi
     fi
     if should_run_signon_qa_seed && [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-signon-qa.ts" ]]; then
-      "${compose[@]}" run --rm toolbox bash -lc "bash scripts/preview/prisma-cli.sh generate && cd packages/prisma && bun run seed-preview-signon-qa"
+      "${compose[@]}" run --rm toolbox bash -lc "$prisma_cli generate && cd packages/prisma && bun run seed-preview-signon-qa"
     fi
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-free-tier-ship-review.ts" ]] && should_run_free_tier_ship_review_seed; then
       echo "Running free-tier ship-review fixture seed on existing preview database (skip path)."
-      "${compose[@]}" run --rm toolbox bash -lc "bash scripts/preview/prisma-cli.sh generate && bun run seed-free-tier-ship-review"
+      "${compose[@]}" run --rm toolbox bash -lc "$prisma_cli generate && cd packages/prisma && bun run seed-free-tier-ship-review"
     fi
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/apply-daily-pages-engagement-v2-seed.ts" ]]; then
       echo "Applying Daily Pages engagement v2 preview seed on existing database (skip path)."
-      "${compose[@]}" run --rm toolbox bash -lc "bash scripts/preview/prisma-cli.sh generate && (bun run scripts/apply-daily-pages-engagement-v2-seed.ts || true)"
+      "${compose[@]}" run --rm toolbox bash -lc "$prisma_cli generate && cd packages/prisma && (bun run scripts/apply-daily-pages-engagement-v2-seed.ts || true)"
     fi
     return 0
   fi
@@ -786,7 +794,7 @@ run_tooling_if_needed() {
   fi
 
   local tooling_command
-  tooling_command='bun install --ignore-scripts && bash scripts/preview/prisma-cli.sh generate && (bash scripts/preview/prisma-cli.sh migrate deploy || bash scripts/preview/prisma-cli.sh migrate deploy)'
+  tooling_command="bun install --ignore-scripts && ${prisma_cli} generate && (${prisma_cli} migrate deploy || ${prisma_cli} migrate deploy) && cd packages/prisma"
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/backfill-class-art-key.ts" ]]; then
     tooling_command+=' && bun run scripts/backfill-class-art-key.ts'
   fi

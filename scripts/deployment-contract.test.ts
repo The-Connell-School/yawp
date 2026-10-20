@@ -714,11 +714,10 @@ describe('PR preview deployment contract', () => {
       'drop_preview_database "$DATABASE_NAME"',
       resetIndex
     );
-    const generateIndex = deployScript.indexOf(
-      'scripts/preview/prisma-cli.sh generate'
-    );
-    const migrateIndex = deployScript.indexOf(
-      'scripts/preview/prisma-cli.sh migrate deploy'
+    const generateIndex = deployScript.indexOf('${prisma_cli} generate');
+    const migrateIndex = deployScript.indexOf('${prisma_cli} migrate deploy');
+    expect(deployScript).toContain(
+      "prisma_cli='PRISMA_CLI_REPO_ROOT=/app bash /preview-control/prisma-cli.sh'"
     );
     const backfillIndex = deployScript.indexOf(
       'bun run scripts/backfill-class-art-key.ts'
@@ -2064,7 +2063,10 @@ describe('isolated preview unified sign-on label deployment contract', () => {
     expect(workflow).toContain('REMOTE_COMMAND=');
     expect(workflow).toContain('run-host-deploy-detached.sh');
     expect(workflow).toContain("needs.preview-policy.outputs.should_deploy == 'true'");
-    expect(workflow).toContain("startsWith(github.event.pull_request.body || '', '[skip preview]') == false");
+    expect(workflow).toContain(
+      "contains(github.event.pull_request.body || '', '[skip preview]') == false"
+    );
+    expect(workflow).toContain('head_commit_message" == *"[skip preview]"*');
     expect(workflow).toContain('bash scripts/preview/check-skip-preview.sh');
     expect(readRepoFile('.github/workflows/demo-environment.yml')).not.toContain('PREVIEW_UNIFIED_SIGN_ON');
   });
