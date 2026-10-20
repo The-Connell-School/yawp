@@ -256,12 +256,49 @@ export default function FreeTierPendingRoute() {
                     ? 'Weekly reminders have stopped. You can pick a different administrator below or contact support@yawp.school for help.'
                     : 'We will remind your administrator weekly, up to three times, and keep you posted.'}
                 </p>
+                <Form method="post">
+                  <input type="hidden" name="intent" value="resend" />
+                  <FreeTierButton
+                    type="submit"
+                    disabled={resending}
+                    variant="outline"
+                  >
+                    {resending ? 'Sending…' : 'Resend reminder'}
+                  </FreeTierButton>
+                </Form>
               </>
             ) : null}
-            {actionData?.ok ? (
+            {actionData?.ok && 'queued' in actionData ? (
               <p role="status" className="text-sm text-muted-foreground">
                 Request forwarded. We will notify your administrator and email
                 you an update.
+              </p>
+            ) : null}
+            {actionData?.ok && !('queued' in actionData) ? (
+              <p className="text-sm text-muted-foreground" role="status">
+                Reminder sent to {current?.adminEmail ?? pending?.adminEmail}.
+              </p>
+            ) : null}
+            {actionData &&
+            !actionData.ok &&
+            'rateLimited' in actionData &&
+            actionData.rateLimited ? (
+              <p className="text-sm text-destructive" role="alert">
+                Too many resend attempts. Please wait a few minutes and try
+                again.
+              </p>
+            ) : null}
+            {actionData && !actionData.ok && actionData.reason === 'email_failed' ? (
+              <p className="text-sm text-destructive" role="alert">
+                We could not send the reminder. Try again later or contact
+                support@yawp.school.
+              </p>
+            ) : null}
+            {actionData && !actionData.ok && actionData.reason === 'config' ? (
+              <p className="text-sm text-destructive" role="alert">
+                {'message' in actionData
+                  ? actionData.message
+                  : 'Free-tier links are temporarily unavailable.'}
               </p>
             ) : null}
             {actionData && !actionData.ok ? (
