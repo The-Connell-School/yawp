@@ -16,6 +16,10 @@ import {
   LESSON_PLANNER_STACK_V2_FLAG,
   LESSON_PLANNER_DECK_V2_FLAG,
   LESSON_PLANNER_PLAN_EXPORT_V2_FLAG,
+  LESSON_PLANNER_STACK_V3_FLAG,
+  LESSON_PLANNER_SHARE_FLAG,
+  LESSON_PLANNER_RUN_SHOW_FLAG,
+  LESSON_PLANNER_TEMPLATES_FLAG,
   LESSON_PLANNER_STACK_PANEL_FLAG,
   isFreeTierGloballyEnabled,
   featureFlagSettingName,
@@ -106,6 +110,10 @@ describe('feature flag registry', () => {
       LESSON_PLANNER_DECK_V2_FLAG,
       LESSON_PLANNER_STACK_PANEL_FLAG,
       LESSON_PLANNER_PLAN_EXPORT_V2_FLAG,
+      LESSON_PLANNER_STACK_V3_FLAG,
+      LESSON_PLANNER_SHARE_FLAG,
+      LESSON_PLANNER_RUN_SHOW_FLAG,
+      LESSON_PLANNER_TEMPLATES_FLAG,
       FREE_TIER_INAPP_V2_FLAG,
       UNIFIED_SIGN_ON_FLAG,
       FREE_TIER_ONBOARDING_V2_FLAG,
@@ -132,6 +140,12 @@ describe('feature flag registry', () => {
     expect(featureFlagSettingName(LESSON_PLANNER_PLAN_EXPORT_V2_FLAG)).toBe(
       'feature_flag.lesson_planner_plan_export_v2'
     );
+    expect(featureFlagSettingName(LESSON_PLANNER_STACK_V3_FLAG)).toBe(
+      'feature_flag.lesson_planner_stack_v3'
+    );
+    expect(featureFlagSettingName(LESSON_PLANNER_SHARE_FLAG)).toBe('feature_flag.lesson_planner_share');
+    expect(featureFlagSettingName(LESSON_PLANNER_RUN_SHOW_FLAG)).toBe('feature_flag.lesson_planner_run_show');
+    expect(featureFlagSettingName(LESSON_PLANNER_TEMPLATES_FLAG)).toBe('feature_flag.lesson_planner_templates');
   });
 
   test('rejects anything that is not a registered flag', () => {

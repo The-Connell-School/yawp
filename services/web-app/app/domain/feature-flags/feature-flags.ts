@@ -71,6 +71,23 @@ export const LESSON_PLANNER_STACK_PANEL_FLAG = 'lesson_planner_stack_panel' as c
  * with what each is for) in Word and PDF. Off: the full packet PDF only.
  */
 export const LESSON_PLANNER_PLAN_EXPORT_V2_FLAG = 'lesson_planner_plan_export_v2' as const;
+
+/**
+ * Lesson Planner stack page redesign (Brian's run 3, Kevin's redesign): the
+ * stack page as the run of show — time bar, one-tap fixes, writing meter,
+ * Add a piece panel, finish line, take it to class. Needs stack v2. Off: the
+ * stack v2 page.
+ */
+export const LESSON_PLANNER_STACK_V3_FLAG = 'lesson_planner_stack_v3' as const;
+
+/** Post to your class and Send this lesson (run 3). Needs stack v3. */
+export const LESSON_PLANNER_SHARE_FLAG = 'lesson_planner_share' as const;
+
+/** Run the show: the teacher's view during class (run 3). Needs stack v3. */
+export const LESSON_PLANNER_RUN_SHOW_FLAG = 'lesson_planner_run_show' as const;
+
+/** Lesson templates: save a stack's shape, build from it (run 3). Needs stack v3. */
+export const LESSON_PLANNER_TEMPLATES_FLAG = 'lesson_planner_templates' as const;
 /** Free-account v2 presentation only. Missing Setting row stays off in every environment. */
 export const FREE_TIER_INAPP_V2_FLAG = 'free-tier-inapp-v2' as const;
 
@@ -130,6 +147,26 @@ export const FEATURE_FLAGS = {
     label: 'Lesson Planner: concise lesson plan (Word and PDF)',
     description:
       'The stack downloads a concise lesson plan (overview, goals, materials, numbered steps with what each is for) as a Word file and a PDF. Off: the full packet PDF only.',
+  },
+  [LESSON_PLANNER_STACK_V3_FLAG]: {
+    label: 'Lesson Planner: stack page redesign',
+    description:
+      'The stack page becomes the run of show: a time bar against the period, at most two one-tap fixes when it runs long, a writing meter, adding pieces in place, and a finish line. Needs stack v2. Off: the stack v2 page. Stacked data is unchanged either way.',
+  },
+  [LESSON_PLANNER_SHARE_FLAG]: {
+    label: 'Lesson Planner: post and send a lesson',
+    description:
+      'Post to your class (one share link, Google Classroom, Canvas, Schoology, Teams) and Send this lesson to a sub, student, family or admin. Needs the stack page redesign. Off: no sharing.',
+  },
+  [LESSON_PLANNER_RUN_SHOW_FLAG]: {
+    label: 'Lesson Planner: run the show',
+    description:
+      "The teacher's view during class, with the slides following on the projector. Needs the stack page redesign. Off: no Run the show.",
+  },
+  [LESSON_PLANNER_TEMPLATES_FLAG]: {
+    label: 'Lesson Planner: templates',
+    description:
+      'Save a lesson’s shape as a template and start a new lesson from it. Needs the stack page redesign. Off: no templates.',
   },
   [FREE_TIER_INAPP_V2_FLAG]: {
     label: 'Free tier in-app v2',

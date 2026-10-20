@@ -5,6 +5,10 @@ import {
   LESSON_PLANNER_STACK_V2_FLAG,
   LESSON_PLANNER_DECK_V2_FLAG,
   LESSON_PLANNER_PLAN_EXPORT_V2_FLAG,
+  LESSON_PLANNER_STACK_V3_FLAG,
+  LESSON_PLANNER_SHARE_FLAG,
+  LESSON_PLANNER_RUN_SHOW_FLAG,
+  LESSON_PLANNER_TEMPLATES_FLAG,
   LESSON_PLANNER_STACK_PANEL_FLAG,
   FREE_TIER_FLAG,
   FEATURE_FLAGS,
@@ -112,15 +116,41 @@ export async function isFeatureFlagEnabled(
 export async function getLessonPlannerReviewFlags(
   orgId: string | null | undefined
 ): Promise<LessonPlannerReviewFlags> {
-  const [intakeV2, stackV2, deckV2, stackPanel, planExportV2] = await Promise.all([
+  const [
+    intakeV2,
+    stackV2,
+    deckV2,
+    stackPanel,
+    planExportV2,
+    stackV3,
+    share,
+    runShow,
+    templates,
+  ] = await Promise.all([
     isFeatureFlagEnabled(LESSON_PLANNER_INTAKE_V2_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_STACK_V2_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_DECK_V2_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_STACK_PANEL_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_PLAN_EXPORT_V2_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_STACK_V3_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_SHARE_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_RUN_SHOW_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_TEMPLATES_FLAG, orgId),
   ]);
   // The panel shows the stack v2 list; without stack v2 it has nothing to show.
-  return { intakeV2, stackV2, deckV2, stackPanel: stackPanel && stackV2, planExportV2 };
+  // The run 3 page builds on stack v2, and the rest build on the run 3 page.
+  const v3 = stackV3 && stackV2;
+  return {
+    intakeV2,
+    stackV2,
+    deckV2,
+    stackPanel: stackPanel && stackV2,
+    planExportV2,
+    stackV3: v3,
+    share: share && v3,
+    runShow: runShow && v3,
+    templates: templates && v3,
+  };
 }
 
 export type LessonPlannerReviewFlags = {
@@ -131,6 +161,14 @@ export type LessonPlannerReviewFlags = {
   stackPanel: boolean;
   /** Brian's run 2 (D1, D2). */
   planExportV2: boolean;
+  /** Brian's run 3 and the stack page redesign; needs stack v2. */
+  stackV3: boolean;
+  /** Post to your class, Send this lesson; needs stack v3. */
+  share: boolean;
+  /** Run the show; needs stack v3. */
+  runShow: boolean;
+  /** Templates; needs stack v3. */
+  templates: boolean;
 };
 
 /** YAWP! Lesson Planner for teachers at the given school. */
