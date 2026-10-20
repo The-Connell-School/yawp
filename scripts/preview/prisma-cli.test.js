@@ -7,16 +7,16 @@ const repoRoot = join(import.meta.dir, '../..');
 describe('preview prisma-cli', () => {
   test('deploy tooling runs Prisma generate and migrate through Node wrapper', () => {
     const deploy = readFileSync(join(repoRoot, 'scripts/preview/deploy.sh'), 'utf8');
-    expect(deploy).toContain('PRISMA_CLI=');
+    expect(deploy).toContain('local prisma_cli');
     expect(deploy).toContain('/preview-control/prisma-cli.sh');
     expect(deploy).toContain('scripts/preview/prisma-cli.sh');
     expect(deploy).not.toContain('bun prisma migrate deploy');
     expect(deploy).not.toMatch(/bun prisma generate/);
     expect(deploy).toContain(
-      '(${PRISMA_CLI} migrate deploy || ${PRISMA_CLI} migrate deploy)'
+      '(${prisma_cli} migrate deploy || ${prisma_cli} migrate deploy)'
     );
-    const generateIndex = deploy.indexOf('${PRISMA_CLI} generate');
-    const migrateIndex = deploy.indexOf('${PRISMA_CLI} migrate deploy');
+    const generateIndex = deploy.indexOf('${prisma_cli} generate');
+    const migrateIndex = deploy.indexOf('${prisma_cli} migrate deploy');
     expect(generateIndex).toBeGreaterThan(-1);
     expect(migrateIndex).toBeGreaterThan(generateIndex);
   });

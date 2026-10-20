@@ -714,10 +714,10 @@ describe('PR preview deployment contract', () => {
       'drop_preview_database "$DATABASE_NAME"',
       resetIndex
     );
-    const generateIndex = deployScript.indexOf('${PRISMA_CLI} generate');
-    const migrateIndex = deployScript.indexOf('${PRISMA_CLI} migrate deploy');
+    const generateIndex = deployScript.indexOf('${prisma_cli} generate');
+    const migrateIndex = deployScript.indexOf('${prisma_cli} migrate deploy');
     expect(deployScript).toContain(
-      "PRISMA_CLI='bash /preview-control/prisma-cli.sh'"
+      "prisma_cli='bash /preview-control/prisma-cli.sh'"
     );
     const backfillIndex = deployScript.indexOf(
       'bun run scripts/backfill-class-art-key.ts'

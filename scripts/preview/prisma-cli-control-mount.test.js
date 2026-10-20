@@ -12,8 +12,8 @@ describe('preview prisma-cli control mount contract', () => {
       'utf8'
     );
 
-    expect(deploy).toContain("PRISMA_CLI='bash /preview-control/prisma-cli.sh'");
-    expect(deploy).toContain("PRISMA_CLI='bash scripts/preview/prisma-cli.sh'");
+    expect(deploy).toContain("prisma_cli='bash /preview-control/prisma-cli.sh'");
+    expect(deploy).toContain("prisma_cli='bash scripts/preview/prisma-cli.sh'");
     expect(deploy).toContain('[[ "$SLUG" =~ ^pr-[1-9][0-9]*$ ]]');
     expect(deploy).not.toMatch(
       /toolbox bash -lc "bash scripts\/preview\/prisma-cli\.sh/
