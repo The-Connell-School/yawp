@@ -5,7 +5,10 @@ import {
   type LoaderFunctionArgs,
 } from 'react-router';
 import { recordLtiLaunchClaims, signToolJwt } from '~/integrations/blackboard-ags.server';
-import { getPreviewAccessSeat } from '~/utils/preview-access.server';
+import {
+  getPreviewAccessSeat,
+  rejectWithoutExplicitPreviewDevLoginAccess,
+} from '~/utils/preview-access.server';
 import { prisma } from '~/utils/db.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { sessionKey, getSessionExpirationDate } from '~/utils/auth.server';
@@ -18,6 +21,9 @@ export async function loader() {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
+  const accessBlock = await rejectWithoutExplicitPreviewDevLoginAccess(request);
+  if (accessBlock) return accessBlock;
+
   const form = await request.formData();
   const idToken = String(form.get('id_token') || '');
   if (!idToken) {
