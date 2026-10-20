@@ -43,7 +43,7 @@ jobs:
 
           gh pr view "$PR_NUMBER" \
             --repo "$GITHUB_REPOSITORY" \
-            --json title,body,headRefName,baseRefName,labels \
+            --json title,body,headRefName,baseRefName,labels,headRefOid \
             > "$RUNNER_TEMP/pr.json"
 
           # Unified sign-on is ON in every PR preview by default. The exact,
@@ -56,6 +56,11 @@ jobs:
           body="$(jq -r '.body // ""' "$RUNNER_TEMP/pr.json")"
           head_ref="$(jq -r '.headRefName // ""' "$RUNNER_TEMP/pr.json")"
           base_ref="$(jq -r '.baseRefName // ""' "$RUNNER_TEMP/pr.json")"
+          head_sha="$(jq -r '.headRefOid // ""' "$RUNNER_TEMP/pr.json")"
+          head_commit_message=""
+          if [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            head_commit_message="$(gh api "/repos/${GITHUB_REPOSITORY}/commits/${head_sha}" --jq '.commit.message // ""')"
+          fi
 
           if [[ "$EVENT_ACTION" == "closed" ]]; then
             reason=closed
@@ -65,7 +70,7 @@ jobs:
             reason=non_default_base
           elif [[ "$EVENT_HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]]; then
             reason=fork
-          elif [[ "$title" == *"[skip preview]"* || "$body" == *"[skip preview]"* || "$head_ref" == *"[skip preview]"* ]]; then
+          elif [[ "$title" == *"[skip preview]"* || "$body" == *"[skip preview]"* || "$head_ref" == *"[skip preview]"* || "$head_commit_message" == *"[skip preview]"* ]]; then
             reason=skip_preview
           else
             should_deploy=true
@@ -85,7 +90,7 @@ jobs:
       github.event.pull_request.base.ref == github.event.repository.default_branch &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       contains(github.event.pull_request.title, '[skip preview]') == false &&
-      startsWith(github.event.pull_request.body || '', '[skip preview]') == false &&
+      contains(github.event.pull_request.body || '', '[skip preview]') == false &&
       contains(github.event.pull_request.head.ref, '[skip preview]') == false
     runs-on: ubuntu-22.04
     environment: preview-host
