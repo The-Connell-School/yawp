@@ -266,6 +266,9 @@ for (const viewport of [
         where: { applicationId: app.id },
         data: { personalNote: 'HISTORICAL INTRO' },
       });
+      await expect(
+        page.getByRole('button', { name: 'Resend reminder' })
+      ).toBeVisible({ timeout: 60_000 });
       await page.getByRole('button', { name: 'Resend reminder' }).click();
       await expect(page.getByRole('status')).toContainText('Reminder sent');
       await capture('reminder-confirmation');

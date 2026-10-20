@@ -29,7 +29,7 @@ const base = new Date();
 const clock = (elapsed = 0) => setSystemTime(new Date(+base + elapsed));
 const dynamicIds: string[] = [];
 async function flag(mode = 'targeted') {
-  await prisma.setting.update({ where: { name: flags[1] }, data: {
+  await prisma.setting.update({ where: { name: flags[0] }, data: {
     value: JSON.stringify({ mode, orgIds: mode === 'targeted' ? [prefix] : [] }),
   } });
 }

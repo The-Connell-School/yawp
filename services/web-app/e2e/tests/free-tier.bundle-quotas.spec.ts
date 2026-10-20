@@ -40,7 +40,9 @@ test.describe('Free classroom bundle quotas', () => {
     });
     await expect(newAssignment).toBeVisible({ timeout: 20_000 });
     await newAssignment.click();
-    const typeTrigger = page.getByRole('combobox').first();
+    const sheet = page.locator('[role="dialog"]');
+    await expect(sheet).toBeVisible({ timeout: 20_000 });
+    const typeTrigger = sheet.getByRole('combobox').first();
     await expect(typeTrigger).toBeVisible({ timeout: 20_000 });
     await expect(typeTrigger).not.toContainText(/\d+ of \d+/);
     await typeTrigger.click();
