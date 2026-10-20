@@ -301,7 +301,7 @@ for (const width of [1280, 390]) {
         .getByRole('checkbox', { name: /I can approve classroom software/ })
         .check();
       await admin
-        .getByRole('button', { name: 'Approve YAWP!', exact: true })
+        .getByRole('button', { name: 'Approve Yawp!', exact: true })
         .click();
       await expect(
         admin.getByRole('heading', { name: 'Thank you', exact: true })

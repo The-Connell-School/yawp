@@ -106,7 +106,7 @@ test.describe('in-app preview access gate', () => {
       /\/auth\/preview-access\?returnTo=%2Faccessibility%3Fgate-e2e%3D1$/
     );
     await expect(
-      page.getByRole('heading', { name: 'Accessibility at YAWP!' })
+      page.getByRole('heading', { name: 'Accessibility at Yawp!' })
     ).not.toBeVisible();
     expect(requestedDevLoginPages).toEqual([]);
     expect(
@@ -124,7 +124,7 @@ test.describe('in-app preview access gate', () => {
 
     await expect(page).toHaveURL(ORIGINAL_PATH);
     await expect(
-      page.getByRole('heading', { name: 'Accessibility at YAWP!' })
+      page.getByRole('heading', { name: 'Accessibility at Yawp!' })
     ).toBeVisible();
     await page
       .getByRole('button', {
@@ -178,13 +178,13 @@ test.describe('in-app preview access gate', () => {
     await expect(page).toHaveURL(
       /\/auth\/preview-access\?returnTo=%2Faccessibility%3Fgate-e2e%3D1$/
     );
-    await expect(page).toHaveTitle('Preview Access | YAWP!');
+    await expect(page).toHaveTitle('Preview Access | Yawp!');
     await expect(page.locator('[data-preview-access-screen]')).toBeVisible();
     await expect(
-      page.getByRole('heading', { name: 'Find your YAWP!' })
+      page.getByRole('heading', { name: 'Find your Yawp!' })
     ).toBeVisible();
     await expect(
-      page.getByRole('heading', { name: 'Accessibility at YAWP!' })
+      page.getByRole('heading', { name: 'Accessibility at Yawp!' })
     ).not.toBeVisible();
 
     await expect
@@ -253,7 +253,7 @@ test.describe('in-app preview access gate', () => {
 
     await expect(page).toHaveURL(ORIGINAL_PATH);
     await expect(
-      page.getByRole('heading', { name: 'Accessibility at YAWP!' })
+      page.getByRole('heading', { name: 'Accessibility at Yawp!' })
     ).toBeVisible();
     await expect(
       page.locator('[data-preview-access-screen]')
@@ -270,7 +270,7 @@ test.describe('in-app preview access gate', () => {
     await page.reload();
     await expect(page).toHaveURL(ORIGINAL_PATH);
     await expect(
-      page.getByRole('heading', { name: 'Accessibility at YAWP!' })
+      page.getByRole('heading', { name: 'Accessibility at Yawp!' })
     ).toBeVisible();
 
     await page
@@ -295,7 +295,7 @@ test.describe('in-app preview access gate', () => {
     );
     await expect(page.locator('[data-preview-access-screen]')).toBeVisible();
     await expect(
-      page.getByRole('heading', { name: 'Accessibility at YAWP!' })
+      page.getByRole('heading', { name: 'Accessibility at Yawp!' })
     ).not.toBeVisible();
   });
 });

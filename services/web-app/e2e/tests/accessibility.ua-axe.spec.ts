@@ -68,7 +68,7 @@ test.describe.serial('UA accessibility axe audit', () => {
   }, testInfo) => {
     await page.goto('/accessibility');
     await expect(
-      page.getByRole('heading', { name: 'Accessibility at YAWP!' })
+      page.getByRole('heading', { name: 'Accessibility at Yawp!' })
     ).toBeVisible();
 
     await scanPage(page, testInfo, 'public-accessibility');

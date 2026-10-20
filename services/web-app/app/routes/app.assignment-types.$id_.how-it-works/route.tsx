@@ -9,7 +9,7 @@
  * Tutor's module instructions, api.domain.tutor-response, the grade release
  * route, and the paste report. See docs/how-to-guides.md.
  *
- * The clips were recorded in YAWP! with demo classes and live in
+ * The clips were recorded in Yawp! with demo classes and live in
  * public/img/thesis-essay-guide, so the page reaches no outside site.
  */
 import { Link, redirect, type LoaderFunctionArgs } from 'react-router';
@@ -105,7 +105,7 @@ const COURSE_TITLE = 'The Thesis-Driven Essay';
 // The course's lessons, in order, with the materials each one comes with.
 // The Tutor's steps follow the same order.
 const LESSONS = [
-  { title: 'Introduce students to YAWP!', plan: true, deck: true },
+  { title: 'Introduce students to Yawp!', plan: true, deck: true },
   { title: 'Pre-writing', plan: true, deck: true },
   { title: 'Developing a thesis statement', plan: true, deck: true },
   { title: 'Introduction paragraph', plan: true, deck: true },
@@ -153,7 +153,7 @@ const GRADING_POINTS = [
 const WILL = [
   'Support students through each step of the essay-writing process.',
   'Ask questions and give feedback on the student’s own draft.',
-  'Show you a copy-paste alert for any text pasted from outside of YAWP!',
+  'Show you a copy-paste alert for any text pasted from outside of Yawp!',
   'Let you give a cold write with the Tutor off.',
   'Fully grade essays with a score and feedback for you to review.',
 ];
@@ -185,10 +185,10 @@ export default function ThesisEssayHowItWorksRoute() {
       <GuideHero
         title="Teach the thesis-driven essay"
         highlight="one step at a time."
-        lede="A full curriculum for teaching the critical essay, in a process students enjoy. You teach each step. Then students write that step with the YAWP! Tutor, which reinforces the day’s lesson."
+        lede="A full curriculum for teaching the critical essay, in a process students enjoy. You teach each step. Then students write that step with the Yawp! Tutor, which reinforces the day’s lesson."
         image={{
           src: `${MEDIA}/hero.jpg`,
-          alt: 'A student’s Macbeth essay beside the YAWP! Tutor. The student has asked the Tutor to write the rest of a paragraph, and the Tutor answers that the paragraph is theirs to write and asks what Banquo notices about Macbeth.',
+          alt: 'A student’s Macbeth essay beside the Yawp! Tutor. The student has asked the Tutor to write the rest of a paragraph, and the Tutor answers that the paragraph is theirs to write and asks what Banquo notices about Macbeth.',
           width: 1120,
           height: 700,
           caption: 'The Tutor on a body paragraph about Macbeth',
@@ -203,7 +203,7 @@ export default function ThesisEssayHowItWorksRoute() {
         <GuideCopy>
           The five-paragraph essay is where younger writers start. The
           thesis-driven essay is what comes next: the more complex, grown-up
-          critical essay, and YAWP!’s flagship assignment. Whether you already
+          critical essay, and Yawp!’s flagship assignment. Whether you already
           teach it or have only taught the five-paragraph essay, you get the
           curriculum and the process to teach it well.
         </GuideCopy>
@@ -276,7 +276,7 @@ export default function ThesisEssayHowItWorksRoute() {
         className="flex flex-col gap-10 rounded-2xl bg-secondary p-6 md:p-10"
       >
         <div className="flex flex-col gap-3">
-          <Eyebrow>The YAWP! Tutor</Eyebrow>
+          <Eyebrow>The Yawp! Tutor</Eyebrow>
           <h2
             id="guide-tutor"
             className="text-2xl font-semibold leading-tight md:text-3xl"

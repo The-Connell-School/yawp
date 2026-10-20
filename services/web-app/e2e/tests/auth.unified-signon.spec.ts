@@ -349,7 +349,7 @@ for (const mode of ['handle', 'email']) {
       .getByRole('button', { name: 'I already have an account' })
       .click();
     await page
-      .getByRole('button', { name: 'Create a YAWP! account' })
+      .getByRole('button', { name: 'Create a Yawp! account' })
       .click();
     await expect(page.locator('[data-signon-screen]')).toHaveAttribute(
       'data-signon-screen',

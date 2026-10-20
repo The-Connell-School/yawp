@@ -659,7 +659,7 @@ export default function LessonPlannerRoute() {
             <Lightbulb size={20} className="shrink-0 text-primary" />
             <div className="min-w-0 flex-1">
               <h2 className="text-lg font-semibold leading-none">
-                YAWP! Lesson Planner
+                Yawp! Lesson Planner
               </h2>
               {/* A day opened out of a unit is one lesson inside a larger arc,
                   and the way back to the map has to be visible from inside it —
@@ -1309,7 +1309,7 @@ function MessageBubble({
             <button
               type="button"
               onClick={() =>
-                printAssistantMessage(body, 'YAWP! Lesson Planner')
+                printAssistantMessage(body, 'Yawp! Lesson Planner')
               }
               className="ml-auto inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
             >
