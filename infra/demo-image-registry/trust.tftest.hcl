@@ -30,10 +30,20 @@ run "demo_image_push_oidc_trust" {
   }
 
   assert {
-    condition = toset(jsondecode(aws_iam_role.demo_image_push.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"]) == toset([
-      "repo:The-Connell-School/yawp:environment:demo",
-      "repo:The-Connell-School@157837314/yawp@989330947:environment:demo",
+    condition = tolist(jsondecode(aws_iam_role.demo_image_push.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"])[0] == "repo:The-Connell-School/yawp:environment:demo"
+    error_message = "First demo OIDC sub must be the legacy slug form."
+  }
+
+  assert {
+    condition = tolist(jsondecode(aws_iam_role.demo_image_push.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"])[1] == "repo:The-Connell-School@157837314/yawp@989330947:environment:demo"
+    error_message = "Second demo OIDC sub must be the immutable subject form."
+  }
+
+  assert {
+    condition = sort(tolist(keys(jsondecode(aws_iam_role.demo_image_push.assume_role_policy).Statement[0].Condition.StringEquals))) == tolist([
+      "token.actions.githubusercontent.com:aud",
+      "token.actions.githubusercontent.com:sub",
     ])
-    error_message = "Demo push role must trust legacy and immutable demo environment OIDC subjects exactly."
+    error_message = "Trust policy must use StringEquals on aud and sub only."
   }
 }

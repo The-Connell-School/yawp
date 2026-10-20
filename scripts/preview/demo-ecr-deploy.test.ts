@@ -22,6 +22,14 @@ const demoImageRegistryMainTf = readFileSync(
   'utf8'
 );
 
+const liveDemoImagePushTrustStringEquals = {
+  'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
+  'token.actions.githubusercontent.com:sub': [
+    'repo:The-Connell-School/yawp:environment:demo',
+    'repo:The-Connell-School@157837314/yawp@989330947:environment:demo',
+  ],
+} as const;
+
 describe('demo ECR image pull path', () => {
   test('demo image push IAM role trusts legacy and immutable GitHub demo OIDC subjects', () => {
     expect(demoImageRegistryMainTf).toContain('variable "github_oidc_demo_environment_subjects"');
@@ -32,10 +40,10 @@ describe('demo ECR image pull path', () => {
       'repo:The-Connell-School@157837314/yawp@989330947:environment:demo'
     );
     expect(demoImageRegistryMainTf).toContain(
-      'var.github_oidc_demo_environment_subjects'
+      '"token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"'
     );
     expect(demoImageRegistryMainTf).toContain(
-      '"token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"'
+      '"token.actions.githubusercontent.com:sub" = var.github_oidc_demo_environment_subjects'
     );
     expect(demoImageRegistryMainTf).not.toMatch(/StringLike[\s\S]*githubusercontent/);
     const trustBlock = demoImageRegistryMainTf.slice(
@@ -44,6 +52,25 @@ describe('demo ECR image pull path', () => {
     );
     expect(trustBlock).not.toContain('StringLike');
     expect(trustBlock).not.toMatch(/:sub"[\s\S]*\*/);
+
+    const defaultSubjectsBlock =
+      demoImageRegistryMainTf.match(
+        /variable "github_oidc_demo_environment_subjects"[\s\S]*?default = \[([\s\S]*?)\]\n/m
+      )?.[1] ?? '';
+    expect(defaultSubjectsBlock.length).toBeGreaterThan(0);
+    for (const subject of liveDemoImagePushTrustStringEquals[
+      'token.actions.githubusercontent.com:sub'
+    ]) {
+      expect(defaultSubjectsBlock).toContain(subject);
+    }
+    const legacyIndex = defaultSubjectsBlock.indexOf(
+      liveDemoImagePushTrustStringEquals['token.actions.githubusercontent.com:sub'][0]
+    );
+    const immutableIndex = defaultSubjectsBlock.indexOf(
+      liveDemoImagePushTrustStringEquals['token.actions.githubusercontent.com:sub'][1]
+    );
+    expect(legacyIndex).toBeGreaterThan(-1);
+    expect(immutableIndex).toBeGreaterThan(legacyIndex);
   });
 
   test('deploy.sh logs into ECR and pulls when demo image variables are set', () => {
