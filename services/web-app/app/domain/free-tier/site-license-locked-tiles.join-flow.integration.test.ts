@@ -5,12 +5,12 @@ import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-ac
 import { loadSiteLicenseLockedAssignmentTiles } from './site-license-locked-assignment-tiles.server';
 import { SITE_LICENSE_LOCKED_TILE_LABELS } from './site-license-locked-assignment-tiles';
 import { seedFreeTierBundleAssignmentTypes } from '../../../../../packages/prisma/scripts/seed-free-tier-bundle-assignment-types';
-import { seedApHistoryLibrary } from '../../../../../packages/prisma/scripts/seed-ap-history-library';
 import {
   importProdFidelityFixtures,
   loadProdFidelityBundle,
 } from '../../../../../packages/prisma/scripts/local-dev/import-prod-fidelity-fixtures';
 import { LOCAL_DEV_ORG_ID } from '../../../../../packages/prisma/scripts/local-dev/dev-personas';
+import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { FREE_CLASSROOM_ASSIGNMENT_KINDS } from '~/utils/entitlements.server';
 
 const enabled = process.env.FREE_TIER_DB_TESTS === '1';
@@ -40,7 +40,17 @@ async function ensureLockedTileCatalogFixtureData() {
   if (!thesis) {
     await importProdFidelityFixtures(prisma, await loadProdFidelityBundle());
   }
-  await seedApHistoryLibrary(prisma, LOCAL_DEV_ORG_ID);
+  await prisma.assignmentType.upsert({
+    where: { systemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY },
+    create: {
+      title: 'AP History Essay',
+      description: 'AP History Essay (join-flow integration fixture)',
+      systemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY,
+      ownerOrgId: LOCAL_DEV_ORG_ID,
+      position: 50,
+    },
+    update: { archivedAt: null },
+  });
 }
 
 afterAll(async () => {

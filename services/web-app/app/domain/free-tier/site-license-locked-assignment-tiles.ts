@@ -43,6 +43,7 @@ export const SITE_LICENSE_LOCKED_TILE_LABELS = {
 /** Canonical platform ACT assignment type titles (prod-fidelity + migration). */
 export const PLATFORM_ACT_WRITING_TITLES = [
   'ACT Writing Section',
+  'ACT Writing Section ',
   'ACT Writing',
 ] as const;
 
