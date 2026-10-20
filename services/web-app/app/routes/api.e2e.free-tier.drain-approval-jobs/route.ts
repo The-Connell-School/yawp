@@ -3,11 +3,10 @@ import { runApprovalJobs } from '~/domain/free-tier/approval-v2.server';
 
 /** E2E-only: inline drain when the background approval worker is disabled. */
 function e2eDrainAllowed() {
-  return (
-    process.env.E2E === 'true' &&
-    process.env.YAWP_ENVIRONMENT !== 'production' &&
-    process.env.YAWP_ENVIRONMENT !== 'demo'
-  );
+  if (process.env.E2E !== 'true') return false;
+  if (process.env.NODE_ENV === 'production') return false;
+  const yawp = process.env.YAWP_ENVIRONMENT;
+  return yawp !== 'preview' && yawp !== 'demo' && yawp !== 'production';
 }
 
 export async function action({ request }: ActionFunctionArgs) {
