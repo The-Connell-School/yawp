@@ -1925,7 +1925,7 @@ export function AssignmentCreationSheetContent({
               <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
                 {isEditing
                   ? 'Collaboration cannot be switched on or off after an assignment is created — groups may already be writing in shared drafts.'
-                  : 'You must assign every student to a group before students can open this assignment. You can arrange groups yourself, shuffle automatically, or use the whole class. Students cannot create groups, move themselves, or create shared documents. When you finalize the groups, Yawp creates one shared document for each group.'}
+                  : 'You must assign every student to a group before students can open this assignment. You can arrange groups yourself, shuffle automatically, or use the whole class. Students cannot create groups, move themselves, or create shared documents. When you finalize the groups, Yawp! creates one shared document for each group.'}
               </p>
               {collaborationEnabled && !isEditing ? (
                 <div className="mt-3 space-y-3 pl-[calc(1rem+0.625rem)]">
