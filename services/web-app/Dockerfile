@@ -5,10 +5,15 @@ ENV DATABASE_URL=${DATABASE_URL}
 
 FROM base AS deps
 WORKDIR /app
+RUN apt-get update -y && apt-get install -y ca-certificates curl gnupg \
+  && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+  && apt-get install -y nodejs
 COPY package.json bun.lock ./
 COPY services/web-app ./services/web-app
 COPY packages/prisma ./packages/prisma
 COPY scripts/preview/free-tier-ship-review-seed-guard.mjs ./scripts/preview/free-tier-ship-review-seed-guard.mjs
+COPY scripts/preview/prisma-cli.sh ./scripts/preview/prisma-cli.sh
+RUN chmod +x scripts/preview/prisma-cli.sh
 RUN bun install --ignore-scripts
 RUN bun prisma generate
 
