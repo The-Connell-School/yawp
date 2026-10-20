@@ -218,4 +218,151 @@ test.describe("Lesson Planner — Brian's third run", () => {
       ).toHaveCount(0);
     });
   });
+
+  test.describe('Phase 1: the planner chat', () => {
+    const PLAN_REPLY = `I have everything I need. Here's the plan.\n\n${DAY_ONE_REPLY}`;
+
+    async function openDayOneChat(
+      page: import('@playwright/test').Page,
+      e2eContext: Ctx & { teacherEmail: string },
+      signIn: (email: string, password: string) => Promise<void>
+    ) {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      const seeded = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Day one of The Things They Carried, English 10, 50 minutes.' },
+        { role: 'assistant', content: PLAN_REPLY },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner?c=${seeded.conversationId}`);
+      return seeded;
+    }
+
+    test('a full lesson opens with what to do with it, not "I have everything I need"', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await openDayOneChat(page, e2eContext, signIn);
+      await expect(page.getByTestId('plan-framing')).toHaveText(
+        "Here's a full lesson. You don't have to use all of it. Give it a quick read first, then add the pieces you want to your stack, or take the whole thing."
+      );
+      await expect(page.getByText('I have everything I need')).toHaveCount(0);
+    });
+
+    test('the hook has its own Add to stack, and the summary list says the same', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await openDayOneChat(page, e2eContext, signIn);
+      const hook = page.getByTestId('plan-segment').filter({ hasText: 'Hook activity' });
+      await expect(hook.getByTestId('segment-toggle')).toHaveText('Add to stack');
+      await hook.getByTestId('segment-toggle').click();
+      await expect(hook.getByTestId('segment-toggle')).toHaveText('In the stack');
+      const listed = page.getByTestId('plan-step').filter({ hasText: 'Hook activity' });
+      await expect(listed.getByTestId('plan-step-toggle')).toHaveText('In the stack');
+    });
+
+    test('adding from a card marks its step; the framing step is its three notes', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await openDayOneChat(page, e2eContext, signIn);
+      await page
+        .getByTestId('daily-pages-card')
+        .filter({ hasText: 'nobody else can see' })
+        .getByTestId('daily-pages-stack-toggle')
+        .click();
+      const starter = page.getByTestId('plan-segment').filter({ hasText: 'Class starter' });
+      await expect(starter.getByTestId('segment-toggle')).toHaveText('In the stack');
+
+      const framing = page.getByTestId('plan-segment').filter({ hasText: 'Framing' });
+      await framing.getByTestId('segment-toggle').click();
+      await expect(framing.getByTestId('segment-toggle')).toHaveText('In the stack');
+      await expect(page.getByTestId('material-card').filter({ hasText: 'Historical context' })).toContainText(
+        'In the stack'
+      );
+    });
+
+    test('removing on the stack page shows in the open chat', async ({ page, signIn, e2eContext, context }) => {
+      const { conversationId } = await openDayOneChat(page, e2eContext, signIn);
+      const hook = page.getByTestId('plan-segment').filter({ hasText: 'Hook activity' });
+      const filed = page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/domain/lesson-planner/packet') &&
+          response.request().method() === 'POST'
+      );
+      await hook.getByTestId('segment-toggle').click();
+      expect((await filed).ok()).toBe(true);
+      await expect(hook.getByTestId('segment-toggle')).toHaveText('In the stack');
+
+      const stack = await context.newPage();
+      await stack.goto(`/app/lesson-planner/${conversationId}/packet`);
+      // The hook is the only piece; its title is an editable field.
+      await expect(stack.getByTestId('packet-section')).toHaveCount(1);
+      await stack.getByTestId('section-remove').click();
+      await expect(stack.getByTestId('packet-section')).toHaveCount(0);
+      // Let the undo window close so the removal is real.
+      await stack.waitForTimeout(6500);
+
+      await page.bringToFront();
+      await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+      await expect(hook.getByTestId('segment-toggle')).toHaveText('Add to stack');
+    });
+
+    test('"Add everything" twice files nothing twice', async ({ page, signIn, e2eContext }) => {
+      const { conversationId } = await openDayOneChat(page, e2eContext, signIn);
+      const addAll = page.getByRole('button', { name: 'Add everything to the stack' });
+      await addAll.click();
+      await expect(page.getByText('Everything is in the stack')).toBeVisible();
+      const prisma = createE2EPrismaClient();
+      try {
+        const first = await prisma.lessonPlanMaterial.count({ where: { conversationId } });
+        const response = await page.request.post('/api/domain/lesson-planner/packet', {
+          form: { intent: 'keep-all', conversationId, messageId: (await prisma.lessonPlanMessage.findFirstOrThrow({ where: { conversationId, role: 'assistant' } })).id },
+        });
+        expect(response.ok()).toBe(true);
+        expect(await prisma.lessonPlanMaterial.count({ where: { conversationId } })).toBe(first);
+        expect(first).toBe(8);
+      } finally {
+        await prisma.$disconnect();
+      }
+    });
+
+    test('the closing exit ticket can be created in YAWP!, then says so', async ({ page, signIn, e2eContext }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId } = await seedDayOneStack(page, e2eContext);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      const closing = page.getByTestId('packet-section').filter({ hasText: 'one object, one sentence' });
+      const create = closing.getByTestId('stack-create-assignment');
+      await expect(create).toHaveText('Create this exit ticket in YAWP!');
+      const href = await create.getAttribute('href');
+      expect(href).toContain('fromPiece=m%3A');
+
+      const prisma = createE2EPrismaClient();
+      let materialId: string;
+      try {
+        materialId = (await prisma.lessonPlanMaterial.findFirstOrThrow({
+          where: { conversationId, kind: 'step', title: { startsWith: 'Closing' } },
+        })).id;
+      } finally {
+        await prisma.$disconnect();
+      }
+      const marked = await page.request.post('/api/domain/lesson-planner/packet', {
+        form: {
+          intent: 'mark-created',
+          conversationId,
+          materialId,
+          yawpHref: new URL(href!, 'http://x').pathname,
+        },
+      });
+      expect(marked.ok()).toBe(true);
+      await page.reload();
+      await expect(
+        page.getByTestId('packet-section').filter({ hasText: 'one object, one sentence' }).getByTestId('stack-create-assignment')
+      ).toHaveText('Created in YAWP! · Open');
+    });
+  });
 });
