@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { expect, test } from '../test-setup';
+import { setFeatureFlag } from '../feature-flags';
 import { createE2EPrismaClient } from '../prisma-client';
 import { mintFreeTierLinkForE2E } from '../helpers/mint-free-tier-link';
 import { waitForFreeTierEmailPayload } from '../helpers/free-tier-email';
@@ -17,11 +18,12 @@ for (const viewport of [
   test(`onboarding uses login controls and completes approval at ${viewport.width}px`, async ({
     page,
     browser,
-  }) => {
+  }, testInfo) => {
     test.setTimeout(180_000);
     await page.setViewportSize(viewport);
     const prisma = createE2EPrismaClient();
-    const stamp = `artboard-${viewport.width}`;
+    const stamp = `artboard-${viewport.width}-${testInfo.retry}`;
+    if (!before) await setFeatureFlag('free-tier-onboarding-v2', true);
     const capture = async (state: string, target = page) => {
       await target.locator('h1').waitFor();
       await target.locator('h1').click();
@@ -91,7 +93,11 @@ for (const viewport of [
       await capture('sign-in');
       await page.goto('/free');
       await capture('waitlist');
-      if (!before) await expect(page.getByText('Join the waitlist. We let teachers in a group at a time.')).toBeVisible();
+      if (!before) {
+        await expect(
+          page.getByText(/We're so glad you're here.*join the waitlist/i)
+        ).toBeVisible();
+      }
       await page
         .getByRole('button', { name: 'Join the waitlist', exact: true })
         .click();
@@ -159,6 +165,7 @@ for (const viewport of [
           gradeLevel: '10',
           status: 'INVITED',
           releasedAt: new Date(),
+          releaseEmailCopyVersion: before ? null : 'free-tier-onboarding-v2',
         },
       });
       const release = await mintFreeTierLinkForE2E(prisma, {
@@ -187,8 +194,14 @@ for (const viewport of [
       await page.waitForURL('**/app/free-tier/onboarding**');
       await capture('teacher-approval-request');
       if (!before) {
-        await expect(page.getByRole('heading', { name: 'Who can approve Yawp!' })).toBeVisible();
-        await expect(page.getByRole('list', { name: 'Approval progress' })).toContainText('Ask your administrator');
+        await expect(
+          page.getByRole('heading', {
+            name: 'One last step: your administrator’s approval',
+          })
+        ).toBeVisible();
+        await expect(
+          page.getByRole('list', { name: 'Onboarding progress' })
+        ).toContainText('Ask your administrator');
       }
       await prisma.freeTierEmailLog.create({
         data: {
@@ -367,6 +380,7 @@ for (const viewport of [
         }
       }
     } finally {
+      if (!before) await setFeatureFlag('free-tier-onboarding-v2', false);
       await admin.close();
       await prisma.$disconnect();
     }
