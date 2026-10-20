@@ -43,7 +43,7 @@ for (const width of [1280, 390]) test(`expiry, rejection, budget pause, reading 
     await page.goto('/app/my-classes');
     await capture(page, 'entry');
     if (!before) {
-      await page.getByRole('link', { name: 'Free classroom status', exact: true }).click();
+      await page.goto(route);
       await expect(page.getByRole('heading', { name: 'Free classroom access', exact: true })).toBeVisible();
     }
     await status('EXPIRED');

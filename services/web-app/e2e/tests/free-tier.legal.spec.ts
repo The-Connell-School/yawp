@@ -101,9 +101,14 @@ for (const [name, result, message] of [
         body: await new Response(encode({ data: result })).text(),
       });
     });
-    for (const [field, value] of Object.entries({
-      name: 'Local Teacher', email: 'legal-fixture@example.test', schoolName: 'Example Organization', location: 'Local', gradeLevel: '10',
-    })) await page.locator(`input[name="${field}"]`).fill(value);
+    const { fillFreeTierWaitlistForm } = await import('../helpers/free-tier-waitlist-form');
+    await fillFreeTierWaitlistForm(page, {
+      name: 'Local Teacher',
+      email: 'legal-fixture@example.test',
+      schoolName: 'Example Organization',
+      location: 'Local',
+      gradeLevel: '10',
+    });
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(page.getByText(message, { exact: true })).toBeVisible();
     if (!result.ok) await expect(page.getByRole('link', { name: 'Join the waitlist', exact: true })).toBeVisible();

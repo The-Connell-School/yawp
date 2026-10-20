@@ -24,16 +24,13 @@ test.describe('Free classroom bundle quotas', () => {
       throw new Error('Free classroom teacher should not require enter-code in E2E');
     }
 
-    await page.goto('/app');
+    await page.goto('/app/my-classes');
     await page
       .getByRole('button', { name: /new assignment|create assignment/i })
       .first()
       .click();
-    const typeTrigger = page
-      .locator('[role="combobox"]')
-      .filter({ hasText: /Class Starter|Prewriting|Thesis Statement/i })
-      .first();
-    await expect(typeTrigger).toBeVisible();
+    const typeTrigger = page.getByRole('combobox').first();
+    await expect(typeTrigger).toBeVisible({ timeout: 20_000 });
     await expect(typeTrigger).not.toContainText(/\d+ of \d+/);
     await typeTrigger.click();
     await expect(

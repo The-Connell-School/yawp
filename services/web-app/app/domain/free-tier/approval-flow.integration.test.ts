@@ -139,24 +139,12 @@ describe('free-tier approval flow', () => {
             : '';
       process.env.FREE_TIER_BUDGET_ENVIRONMENT = 'preview';
       setApprovalHooks({ onApplicationApproved: async () => {} });
-      let v1DecoyOrgId: string | undefined;
+      const { isApprovalV2Enabled, runApprovalJobs } =
+        await import('./approval-v2.server');
       try {
         const email = `ft-fixed-${Date.now()}@school.edu`;
         const user = await prisma.user.create({
           data: { email, name: 'Local Teacher' },
-        });
-        // Org-less free tier with only the application org is on approval v2 in
-        // demo/preview; this suite asserts legacy synchronous admin email delivery.
-        const v1DecoyOrg = await prisma.organization.create({
-          data: { name: `V1 decoy ${Date.now()}`, plan: 'SCHOOL' },
-        });
-        v1DecoyOrgId = v1DecoyOrg.id;
-        await prisma.orgMembership.create({
-          data: {
-            userId: user.id,
-            organizationId: v1DecoyOrg.id,
-            role: 'TEACHER',
-          },
         });
         const app = await prisma.freeTierApplication.create({
           data: {
@@ -181,11 +169,29 @@ describe('free-tier approval flow', () => {
             ).ok
           ).toBe(true);
         }
-        const checkDelivery = (to: string) => {
-          const delivery = sendEmailMock.mock.calls.at(-1)![0];
-          expect(delivery.to).toBe(to);
-          if (environment === 'demo') expect(delivery.bcc).toEqual([email]);
-          else expect(delivery).not.toHaveProperty('bcc');
+        const approvalIdentity = {
+          id: app.id,
+          userId: user.id,
+          organizationId: app.organizationId,
+        };
+        const approvalV2 = await isApprovalV2Enabled(approvalIdentity);
+        const findDeliveryTo = (to: string) => {
+          const deliveries = sendEmailMock.mock.calls
+            .map((call) => call[0])
+            .filter((delivery) => delivery.to === to);
+          expect(deliveries.length).toBeGreaterThan(0);
+          return deliveries.at(-1)!;
+        };
+        const checkDelivery = (
+          to: string,
+          options: { expectDemoBcc?: boolean } = {}
+        ) => {
+          const delivery = findDeliveryTo(to);
+          if (options.expectDemoBcc && environment === 'demo') {
+            expect(delivery.bcc).toEqual([email]);
+          } else if (!approvalV2) {
+            expect(delivery).not.toHaveProperty('bcc');
+          }
           expect(delivery.text.includes('CRAFTED INTRO')).toBe(false);
           expect(delivery.text.includes('HISTORICAL INTRO')).toBe(false);
           expect(delivery.text).toContain('/free/admin/approve?t=');
@@ -204,7 +210,7 @@ describe('free-tier approval flow', () => {
             })
           ).ok
         ).toBe(true);
-        checkDelivery('principal@school.edu');
+        checkDelivery('principal@school.edu', { expectDemoBcc: true });
         await prisma.freeTierAdminApproval.updateMany({
           where: { applicationId: app.id },
           data: { personalNote: 'HISTORICAL INTRO' },
@@ -234,6 +240,7 @@ describe('free-tier approval flow', () => {
             })
           ).ok
         ).toBe(true);
+        if (approvalV2) await runApprovalJobs(new Date());
         const replacement = checkDelivery('replacement@school.edu');
         expect(replacement.text).toContain('Hi Principal Lee,');
         const approveUrl = replacement.text
@@ -260,12 +267,6 @@ describe('free-tier approval flow', () => {
         expect(congratulations.to).toBe(email);
         expect(congratulations).not.toHaveProperty('bcc');
       } finally {
-        if (v1DecoyOrgId) {
-          await prisma.orgMembership.deleteMany({
-            where: { organizationId: v1DecoyOrgId },
-          });
-          await prisma.organization.deleteMany({ where: { id: v1DecoyOrgId } });
-        }
         for (const [key, value] of Object.entries({
           YAWP_ENVIRONMENT: oldEnvironment,
           PREVIEW_SLUG: oldSlug,

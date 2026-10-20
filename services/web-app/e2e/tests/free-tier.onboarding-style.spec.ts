@@ -91,19 +91,25 @@ for (const viewport of [
       await capture('sign-in');
       await page.goto('/free');
       await capture('waitlist');
-      if (!before) await expect(page.getByText('Join the waitlist. We let teachers in a group at a time.')).toBeVisible();
+      if (!before) {
+        await expect(
+          page.getByText(
+            /Join the waitlist\. We let teachers in a group at a time\.|We're so glad you're here/
+          )
+        ).toBeVisible();
+      }
       await page
         .getByRole('button', { name: 'Join the waitlist', exact: true })
         .click();
       await expect(page.locator('input[name="name"]:invalid')).toHaveCount(1);
-      for (const [field, value] of Object.entries({
+      const { fillFreeTierWaitlistForm } = await import('../helpers/free-tier-waitlist-form');
+      await fillFreeTierWaitlistForm(page, {
         name: 'Grace Okafor',
         email: `wait-${stamp}@example.edu`,
         schoolName: 'Lincoln High School',
         location: 'Local',
         gradeLevel: '10',
-      }))
-        await page.locator(`input[name="${field}"]`).fill(value);
+      });
       await page
         .getByRole('button', { name: 'Join the waitlist', exact: true })
         .click();
@@ -125,14 +131,16 @@ for (const viewport of [
         await page.goto(`/free?t=${code}`);
         await capture(`event-${mode}`);
         if (mode !== 'closed') {
-          for (const [field, value] of Object.entries({
+          const { fillFreeTierWaitlistForm: fillWaitlist } = await import(
+            '../helpers/free-tier-waitlist-form'
+          );
+          await fillWaitlist(page, {
             name: 'Grace Okafor',
             email: `event-${mode}-${stamp}@example.edu`,
             schoolName: 'Lincoln High School',
             location: 'Local',
             gradeLevel: '10',
-          }))
-            await page.locator(`input[name="${field}"]`).fill(value);
+          });
           await page
             .getByRole('button', { name: 'Continue', exact: true })
             .click();

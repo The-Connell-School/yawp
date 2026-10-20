@@ -215,7 +215,11 @@ for (const width of [1280, 390]) {
     await authenticate(page, 'inactive');
     const submit = async (code: string) => {
       await page.getByLabel('Class code', { exact: true }).fill(code);
-      await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      const continueButton = page.getByRole('button', {
+        name: /^(Continue|Join class)$/,
+        exact: true,
+      });
+      await continueButton.click();
     };
     // Real known-class resolution reaches the database's inactive-membership denial.
     await submit(QA_CODES.school);

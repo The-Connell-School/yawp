@@ -4,6 +4,7 @@ import { expect, test } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { waitForFreeTierEmailPayload } from '../helpers/free-tier-email';
 import { mintFreeTierLinkForE2E } from '../helpers/mint-free-tier-link';
+import { fillFreeTierWaitlistForm } from '../helpers/free-tier-waitlist-form';
 
 const JOIN_PASSWORD = 'yawp-e2e-pass-1';
 const ADMIN_DOMAIN = 'e2e-ft.school.edu';
@@ -17,11 +18,13 @@ test.describe('Free tier public flow', () => {
 
   test('waitlist form submits', async ({ page }) => {
     await page.goto('/free');
-    await page.fill('input[name="name"]', 'E2E Waitlist');
-    await page.fill('input[name="email"]', `e2e-waitlist+${Date.now()}@yawp.local`);
-    await page.fill('input[name="schoolName"]', 'E2E High');
-    await page.fill('input[name="location"]', 'Local');
-    await page.fill('input[name="gradeLevel"]', '10');
+    await fillFreeTierWaitlistForm(page, {
+      name: 'E2E Waitlist',
+      email: `e2e-waitlist+${Date.now()}@yawp.local`,
+      schoolName: 'E2E High',
+      location: 'Local',
+      gradeLevel: '10',
+    });
     await page.getByRole('button', { name: /Join the waitlist/i }).click();
     await expect(page.getByRole('status')).toContainText(/on the list/i);
   });
