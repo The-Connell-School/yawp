@@ -1332,6 +1332,8 @@ model Organization {
   reporterConversations         ReporterConversation[]
   lessonPlanConversations    LessonPlanConversation[]
   lessonPlanUnits            LessonPlanUnit[]
+  lessonPlanTemplates        LessonPlanTemplate[]
+  lessonPlanCarryOvers       LessonPlanCarryOver[]
   reporterGrowthPlans           ReporterGrowthPlan[]
   aiRequestReservations         AiRequestReservation[]
   submissionActivities          SubmissionActivity[]
@@ -1393,6 +1395,8 @@ model OrgMembership {
   reporterConversations             ReporterConversation[]
   lessonPlanConversations       LessonPlanConversation[]
   lessonPlanUnits               LessonPlanUnit[]
+  lessonPlanTemplates           LessonPlanTemplate[]
+  lessonPlanCarryOvers          LessonPlanCarryOver[]
   reporterGrowthPlansOwned          ReporterGrowthPlan[]           @relation("ReporterGrowthPlanOwner")
   reporterGrowthPlansAsStudent      ReporterGrowthPlan[]           @relation("ReporterGrowthPlanStudent")
   aiRequestReservations             AiRequestReservation[]
@@ -1572,8 +1576,14 @@ model LessonPlanConversation {
   /// per stack and reused until the stack changes (planSummaryKey).
   planSummary      Json?
   planSummaryKey   String?
+  /// When the teacher said "This lesson is set" (stack page redesign); null
+  /// while it is still being worked on. Built-in time is setAt − createdAt.
+  setAt            DateTime? @db.Timestamptz(6)
+  /// The day this lesson will be taught. Null: not chosen yet.
+  lessonDate       DateTime? @db.Timestamptz(6)
   messages                LessonPlanMessage[]
   materials               LessonPlanMaterial[]
+  shareLinks              LessonShareLink[]
 
   @@index([membershipId, updatedAt(sort: Desc)])
   @@index([membershipId, starredAt(sort: Desc)])
@@ -1602,6 +1612,9 @@ model LessonPlanMessage {
   /// Where this kept reply sits in the teacher's stack once they have
   /// reordered it (Brian's run 2, A1). Null: ordered by when it was written.
   position       Int?
+  /// Where the turn was asked: null is the planner chat, 'stack' a change
+  /// asked for on the stack page (shown in the chat as one compact line).
+  surface        String?
   conversationId String
   conversation   LessonPlanConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
@@ -1648,10 +1661,93 @@ model LessonPlanMaterial {
   /// (FW-021, sf-ev-03), kept as data for its assignment sheet and never
   /// shown to the teacher (Brian's run 2, A6).
   promptId        String?
+  /// The step's planned minutes (Brian's run 3, item 9). Null: read from the
+  /// title, as before.
+  minutes         Int?
+  /// What the moment is: class_starter, activity, context, read_aloud,
+  /// daily_pages, thesis_essay, closing. Null: derived from kind and title.
+  stepType        String?
+  /// A label shown in the type chip, e.g. a Thesis Essay module's name.
+  label           String?
+  /// Null: derived (student-facing or writing steps have a handout).
+  hasHandout      Boolean?
+  /// The YAWP! assignment created from this step ("Created in YAWP! · Open").
+  yawpAssignmentId String?
+  yawpHref         String?
+  yawpCreatedAt    DateTime? @db.Timestamptz(6)
+  /// This step rewritten for students, for a handout; studentVersionKey is
+  /// the hash of the content it was written from.
+  studentVersion    String?
+  studentVersionKey String?
 
   @@unique([conversationId, slot])
   @@index([conversationId, sourceMessageId, blockKey])
   @@index([conversationId, sourceCreatedAt])
+}
+
+/// A teacher's lesson shape (stack page redesign): an ordered list of
+/// { type, minutes, label? } slots and a name. The order and timing only,
+/// never the content.
+model LessonPlanTemplate {
+  id             String        @id @default(cuid())
+  createdAt      DateTime      @default(now()) @db.Timestamptz(6)
+  deletedAt      DateTime?     @db.Timestamptz(6)
+  name           String
+  slots          Json
+  periodMinutes  Int?
+  membershipId   String
+  membership     OrgMembership @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([membershipId, createdAt(sort: Desc)])
+  @@index([organizationId])
+}
+
+/// A step a one-tap fix moved "to tomorrow". It waits, keyed by the class,
+/// until the next lesson for that class files it at the top.
+model LessonPlanCarryOver {
+  id                 String        @id @default(cuid())
+  createdAt          DateTime      @default(now()) @db.Timestamptz(6)
+  consumedAt         DateTime?     @db.Timestamptz(6)
+  classKey           String
+  fromConversationId String
+  fromLessonDate     DateTime?     @db.Timestamptz(6)
+  kind               String
+  title              String
+  content            String
+  minutes            Int?
+  stepType           String?
+  membershipId       String
+  membership         OrgMembership @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organizationId     String
+  organization       Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([membershipId, classKey, consumedAt])
+  @@index([organizationId])
+}
+
+/// One link to a read-only page for a lesson: for students (Post to your
+/// class) or for a sub, family or admin (Send this lesson). Only the token's
+/// hash is stored.
+model LessonShareLink {
+  id             String                 @id @default(cuid())
+  createdAt      DateTime               @default(now()) @db.Timestamptz(6)
+  revokedAt      DateTime?              @db.Timestamptz(6)
+  expiresAt      DateTime?              @db.Timestamptz(6)
+  tokenHash      String                 @unique
+  /// student | family | sub | admin
+  audience       String
+  /// What the link opens, e.g. ["deck", "handouts", "daily-pages"].
+  includes       Json
+  /// The teacher's note, shown first (a sub's special instructions).
+  note           String?
+  /// The version rewritten for this reader, when there is one.
+  body           String?
+  conversationId String
+  conversation   LessonPlanConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
 }
 
 /// A saved, forward-looking writing growth plan for one student, produced by

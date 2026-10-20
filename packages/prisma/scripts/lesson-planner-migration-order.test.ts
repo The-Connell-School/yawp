@@ -22,6 +22,12 @@ const LESSON_PLANNER_MIGRATIONS = [
   '20261012100100_lesson_material_prompt_id',
   '20261012100200_lesson_plan_period_minutes',
   '20261012100300_lesson_plan_summary_cache',
+  '20261020100000_lesson_step_fields',
+  '20261020100100_lesson_set_state',
+  '20261020100200_lesson_templates',
+  '20261020100300_lesson_carry_over',
+  '20261020100400_lesson_message_surface',
+  '20261020100500_lesson_share_links',
 ];
 
 describe('lesson planner migration order', () => {
