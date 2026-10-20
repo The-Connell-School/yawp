@@ -867,7 +867,23 @@ jobs:
             app/domain/lesson-planner/plan-summary.server.test.ts \
             app/domain/lesson-planner/lesson-plan-render.server.test.ts \
             app/domain/lesson-planner/branding.test.ts \
-            app/components/lesson-planner/stack-list.test.ts
+            app/components/lesson-planner/stack-list.test.ts \
+            app/domain/lesson-planner/step-types.test.ts \
+            app/domain/lesson-planner/stack-timing.test.ts \
+            app/domain/lesson-planner/short-title.test.ts \
+            app/domain/lesson-planner/fileable-material.test.ts \
+            app/domain/lesson-planner/plan-framing.test.ts \
+            app/domain/lesson-planner/stack-suggestions.test.ts \
+            app/domain/lesson-planner/stack-command.test.ts \
+            app/domain/lesson-planner/stack-steps.test.ts \
+            app/domain/lesson-planner/stack-actions.server.test.ts \
+            app/domain/lesson-planner/step-handout.test.ts \
+            app/domain/lesson-planner/lesson-share.test.ts \
+            app/domain/lesson-planner/lesson-share.server.test.ts \
+            app/domain/lesson-planner/run-show.test.ts \
+            app/domain/lesson-planner/lesson-templates.test.ts \
+            app/domain/lesson-planner/yawp-catalog.server.test.ts \
+            app/routes/api.domain.lesson-planner.stack/route.test.ts
           do
             bun test "$f"
           done

@@ -271,8 +271,9 @@ export function readDailyPagesExercises(content: string): {
         kind,
         prompt: prompt.slice(0, MAX_PROMPT_CHARS),
         promptId,
-        title,
-        minutes,
+        // Only when the block said: older readers see the shape they knew.
+        ...(title ? { title } : {}),
+        ...(minutes != null ? { minutes } : {}),
       });
     }
   }
