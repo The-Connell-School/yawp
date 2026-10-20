@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { loader } from '~/routes/lti.jwks.ts';
+import { loader } from '~/routes/lti.jwks/route.ts';
 
 function req(): Request {
   return new Request('https://example.test/lti/jwks');
@@ -7,12 +7,13 @@ function req(): Request {
 
 describe('/lti/jwks', () => {
   test('returns a JWKS with one RSA key', async () => {
-    const res = await loader({ request: req(), params: {} } as any);
-    expect(res.status).toBe(200);
-    const body = await res.json();
+    const res = await loader();
+    const body =
+      'data' in (res as object)
+        ? (res as { data: { keys: Array<{ kty: string; kid?: string }> } }).data
+        : await (res as Response).json();
     expect(Array.isArray(body.keys)).toBe(true);
     expect(body.keys[0].kty).toBe('RSA');
     expect(body.keys[0].kid).toBeDefined();
   });
 });
-
