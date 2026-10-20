@@ -21,6 +21,7 @@ const {
 } = await import('./approval-flow.server');
 const { mintSignedLink, peekSignedLink, RELEASE_LINK_TTL_MS } =
   await import('./signed-link.server');
+const { saveClassPreparation } = await import('./class-preparation.server');
 
 const enabled = process.env.FREE_TIER_DB_TESTS === '1';
 
@@ -154,6 +155,18 @@ describe('free-tier approval flow', () => {
             status: 'ACCOUNT_CREATED',
           },
         });
+        if (environment !== 'production') {
+          expect(
+            (
+              await saveClassPreparation({
+                applicationId: app.id,
+                userId: user.id,
+                className: 'English 10',
+                grade: '10',
+              })
+            ).ok
+          ).toBe(true);
+        }
         const checkDelivery = (to: string) => {
           const delivery = sendEmailMock.mock.calls.at(-1)![0];
           expect(delivery.to).toBe(to);
