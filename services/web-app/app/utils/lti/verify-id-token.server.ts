@@ -1,7 +1,6 @@
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
 import {
   isBlackboardLtiMockVerificationEnabled,
-  isYawpProductionEnvironment,
   resolveLtiLaunchPlatform,
 } from './platform.server.ts';
 import {
@@ -48,6 +47,30 @@ function audienceMatches(payload: JWTPayload, clientId: string): boolean {
   return false;
 }
 
+function isExpired(payload: JWTPayload, nowSec = Math.floor(Date.now() / 1000)): boolean {
+  const exp = payload.exp;
+  if (typeof exp !== 'number') return true;
+  return exp <= nowSec;
+}
+
+function validateLaunchClaims(
+  payload: JWTPayload,
+  platform: { clientId: string },
+  handshake: { nonce: string },
+  options: { requireExp: boolean; clearHandshake: boolean }
+): Response | null {
+  if (!audienceMatches(payload, platform.clientId)) {
+    return invalidTokenResponse('invalid id_token', 401, options.clearHandshake);
+  }
+  if (options.requireExp && isExpired(payload)) {
+    return invalidTokenResponse('invalid id_token', 401, options.clearHandshake);
+  }
+  if (handshake.nonce && payload.nonce !== handshake.nonce) {
+    return invalidTokenResponse('invalid nonce', 400, options.clearHandshake);
+  }
+  return null;
+}
+
 export async function verifyLtiLaunchIdToken(input: {
   idToken: string;
   state: string;
@@ -79,8 +102,7 @@ export async function verifyLtiLaunchIdToken(input: {
     handshake.clientId ||
     String(env.LTI_CLIENT_ID || 'yawp-blackboard-mock').trim();
   const platform = resolveLtiLaunchPlatform(clientIdHint, env);
-  const mockFallbackAllowed =
-    isBlackboardLtiMockVerificationEnabled(env) && !isYawpProductionEnvironment(env);
+  const mockFallbackAllowed = isBlackboardLtiMockVerificationEnabled(env);
 
   if (!platform) {
     return {
@@ -121,18 +143,12 @@ export async function verifyLtiLaunchIdToken(input: {
     };
   }
 
-  if (verified && !audienceMatches(payload, platform.clientId)) {
-    return {
-      ok: false,
-      response: invalidTokenResponse('invalid id_token', 401, hasHandshake),
-    };
-  }
-
-  if (handshake.nonce && payload.nonce && payload.nonce !== handshake.nonce) {
-    return {
-      ok: false,
-      response: invalidTokenResponse('invalid nonce', 400, hasHandshake),
-    };
+  const claimError = validateLaunchClaims(payload, platform, handshake, {
+    requireExp: !verified,
+    clearHandshake: hasHandshake,
+  });
+  if (claimError) {
+    return { ok: false, response: claimError };
   }
 
   return {

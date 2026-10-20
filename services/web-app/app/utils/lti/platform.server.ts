@@ -14,10 +14,18 @@ export type ConfiguredLtiPlatform = {
   source: 'blackboard-lti-mock';
 };
 
+/**
+ * Matches App Runner production (NODE_ENV=production, YAWP_ENVIRONMENT often unset)
+ * and preview/demo containers (YAWP_ENVIRONMENT=preview|demo under NODE_ENV=production).
+ */
 export function isYawpProductionEnvironment(
   env: NodeJS.ProcessEnv = process.env
 ): boolean {
-  return String(env.YAWP_ENVIRONMENT || '').trim().toLowerCase() === 'production';
+  const yawp = String(env.YAWP_ENVIRONMENT || '').trim().toLowerCase();
+  if (yawp === 'production') return true;
+  if (yawp === 'preview' || yawp === 'demo') return false;
+  if (env.NODE_ENV === 'production') return true;
+  return false;
 }
 
 export function isBlackboardLtiMockVerificationEnabled(

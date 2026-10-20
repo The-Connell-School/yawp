@@ -36,8 +36,34 @@ async function signedIdToken(payload: Record<string, unknown>, jwksUrl: string) 
     .sign(privateKey);
 }
 
+const appRunnerProduction = {
+  NODE_ENV: 'production',
+  BLACKBOARD_LTI_MOCK_URL: 'http://127.0.0.1:9473',
+} as unknown as NodeJS.ProcessEnv;
+
 describe('verifyLtiLaunchIdToken', () => {
-  test('rejects forged tokens on production with no session side effects path', async () => {
+  test('rejects forged tokens on App Runner production even when mock URL is mis-set', async () => {
+    const { verifyLtiLaunchIdToken } = await import('./verify-id-token.server.ts');
+    const payload = {
+      iss: 'https://blackboard.com',
+      aud: 'yawp-blackboard-mock',
+      sub: 'attacker',
+      exp: Math.floor(Date.now() / 1000) + 300,
+      'https://purl.imsglobal.org/spec/lti/claim/message_type':
+        'LtiResourceLinkRequest',
+    };
+    const result = await verifyLtiLaunchIdToken({
+      idToken: unsignedIdToken(payload),
+      state: '',
+      request: new Request('https://yawp.school/lti/launch', { method: 'POST' }),
+      env: appRunnerProduction,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.response.status).toBe(401);
+  });
+
+  test('rejects forged tokens when YAWP_ENVIRONMENT=production', async () => {
     const { verifyLtiLaunchIdToken } = await import('./verify-id-token.server.ts');
     const payload = {
       iss: 'https://blackboard.com',
@@ -120,10 +146,13 @@ describe('verifyLtiLaunchIdToken', () => {
 
   test('allows unsigned mock fallback only when mock verification is enabled', async () => {
     const { verifyLtiLaunchIdToken } = await import('./verify-id-token.server.ts');
+    const now = Math.floor(Date.now() / 1000);
     const payload = {
       iss: 'https://blackboard.com',
       aud: 'yawp-blackboard-mock',
       nonce: 'n1',
+      iat: now,
+      exp: now + 300,
       'https://purl.imsglobal.org/spec/lti/claim/message_type':
         'LtiDeepLinkingRequest',
     };
@@ -138,10 +167,51 @@ describe('verifyLtiLaunchIdToken', () => {
         },
       }),
       env: {
+        NODE_ENV: 'production',
         YAWP_ENVIRONMENT: 'preview',
         BLACKBOARD_LTI_MOCK_URL: 'http://127.0.0.1:9473',
       } as unknown as NodeJS.ProcessEnv,
     });
     expect(result.ok).toBe(true);
+  });
+
+  test('rejects unsigned mock fallback without exp or with wrong aud', async () => {
+    const { verifyLtiLaunchIdToken } = await import('./verify-id-token.server.ts');
+    const baseEnv = {
+      NODE_ENV: 'production',
+      YAWP_ENVIRONMENT: 'preview',
+      BLACKBOARD_LTI_MOCK_URL: 'http://127.0.0.1:9473',
+    } as unknown as NodeJS.ProcessEnv;
+    const request = new Request('https://app.test/lti/launch', {
+      method: 'POST',
+      headers: {
+        cookie:
+          'yawp_lti_state=s1; yawp_lti_nonce=n1; yawp_lti_client=yawp-blackboard-mock',
+      },
+    });
+    const missingExp = await verifyLtiLaunchIdToken({
+      idToken: unsignedIdToken({
+        iss: 'https://blackboard.com',
+        aud: 'yawp-blackboard-mock',
+        nonce: 'n1',
+      }),
+      state: 's1',
+      request,
+      env: baseEnv,
+    });
+    expect(missingExp.ok).toBe(false);
+
+    const wrongAud = await verifyLtiLaunchIdToken({
+      idToken: unsignedIdToken({
+        iss: 'https://blackboard.com',
+        aud: 'wrong-client',
+        nonce: 'n1',
+        exp: Math.floor(Date.now() / 1000) + 300,
+      }),
+      state: 's1',
+      request,
+      env: baseEnv,
+    });
+    expect(wrongAud.ok).toBe(false);
   });
 });

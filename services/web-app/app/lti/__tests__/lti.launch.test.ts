@@ -7,7 +7,7 @@ const fixtureEnv = {
   PREVIEW_DATA_MODE: 'seed',
 };
 const priorEnv = Object.fromEntries(
-  Object.keys(fixtureEnv).map((key) => [key, process.env[key]])
+  [...Object.keys(fixtureEnv), 'NODE_ENV'].map((key) => [key, process.env[key]])
 );
 const priorResponse = globalThis.Response;
 
@@ -63,7 +63,34 @@ function unsignedIdToken(payload: Record<string, unknown>) {
 }
 
 describe('/lti/launch route', () => {
-  test('rejects a forged resource-link launch on production', async () => {
+  test('rejects a forged resource-link launch on App Runner production (NODE_ENV=production)', async () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.YAWP_ENVIRONMENT;
+    process.env.BLACKBOARD_LTI_MOCK_URL = 'http://127.0.0.1:9473';
+    const { action } = await import('~/routes/lti.launch/route.ts');
+    const payload = {
+      iss: 'https://blackboard.com',
+      aud: 'yawp-blackboard-mock',
+      email: 'attacker@example.com',
+      sub: 'attacker',
+      exp: Math.floor(Date.now() / 1000) + 300,
+      'https://purl.imsglobal.org/spec/lti/claim/message_type':
+        'LtiResourceLinkRequest',
+    };
+    const res = await action({
+      request: formPost('https://yawp.school/lti/launch', {
+        id_token: unsignedIdToken(payload),
+      }),
+      params: {},
+    } as any);
+    expect(res.status).toBe(401);
+    expect(prisma.user.create).not.toHaveBeenCalled();
+    expect(prisma.session.create).not.toHaveBeenCalled();
+    Object.assign(process.env, fixtureEnv);
+    process.env.NODE_ENV = (priorEnv.NODE_ENV as typeof process.env.NODE_ENV) ?? 'test';
+  });
+
+  test('rejects a forged resource-link launch when YAWP_ENVIRONMENT=production', async () => {
     process.env.YAWP_ENVIRONMENT = 'production';
     delete process.env.BLACKBOARD_LTI_MOCK_URL;
     const { action } = await import('~/routes/lti.launch/route.ts');
@@ -88,11 +115,16 @@ describe('/lti/launch route', () => {
   });
 
   test('posts the signed deep link server-side and redirects with cleared handshake cookies', async () => {
+    process.env.NODE_ENV = 'production';
+    process.env.YAWP_ENVIRONMENT = 'preview';
     const { action } = await import('~/routes/lti.launch/route.ts');
+    const now = Math.floor(Date.now() / 1000);
     const payload = {
       iss: 'https://blackboard.com',
       aud: 'yawp-blackboard-mock',
       nonce: 'n1',
+      iat: now,
+      exp: now + 300,
       'https://purl.imsglobal.org/spec/lti/claim/message_type':
         'LtiDeepLinkingRequest',
       'https://purl.imsglobal.org/spec/lti/claim/deployment_id':
