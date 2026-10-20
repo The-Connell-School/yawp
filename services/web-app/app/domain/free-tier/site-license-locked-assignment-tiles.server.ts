@@ -2,7 +2,7 @@ import type { OrganizationPlan } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 import {
   resolveSiteLicenseLockedAssignmentTiles,
-  siteLicenseLockedPlatformAssignmentTypesWhere,
+  siteLicenseLockedAssignmentTypesWhere,
   type SiteLicenseLockedAssignmentTile,
 } from '~/domain/free-tier/site-license-locked-assignment-tiles';
 
@@ -24,8 +24,15 @@ export async function loadSiteLicenseLockedAssignmentTiles(
   if (organization.plan !== 'FREE_CLASSROOM') return [];
 
   const catalogTypes = await client.assignmentType.findMany({
-    where: siteLicenseLockedPlatformAssignmentTypesWhere(),
-    select: { id: true, title: true, kind: true, systemKey: true },
+    where: siteLicenseLockedAssignmentTypesWhere(),
+    select: {
+      id: true,
+      title: true,
+      kind: true,
+      systemKey: true,
+      ownerOrgId: true,
+      ownerMembershipId: true,
+    },
     orderBy: { position: 'asc' },
   });
 

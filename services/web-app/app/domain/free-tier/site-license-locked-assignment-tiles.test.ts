@@ -52,7 +52,7 @@ test('orders locked tiles and skips free-bundle kinds', () => {
     'daily_pages',
     'act_writing',
   ]);
-  expect(tiles[0]?.label).toBe('The Thesis-Driven Essay');
+  expect(tiles[0]?.label).toBe('Thesis-Driven Essay');
 });
 
 test('returns no tiles for paid organizations', () => {
@@ -79,15 +79,43 @@ test('org-owned act title decoy does not win over the platform act_writing kind'
       title: 'Spring ACT Writing Unit',
       kind: null,
       systemKey: null,
+      ownerOrgId: null,
+      ownerMembershipId: null,
     },
     {
       id: 'platform-act',
       title: 'ACT Writing Section',
       kind: 'act_writing',
       systemKey: null,
+      ownerOrgId: null,
+      ownerMembershipId: null,
     },
   ]);
   const actTile = tiles.find((tile) => tile.key === 'act_writing');
   expect(actTile?.assignmentTypeId).toBe('platform-act');
-  expect(actTile?.label).toBe('ACT Writing Section');
+  expect(actTile?.label).toBe('ACT Writing Practice');
+});
+
+test('org-owned act_writing kind does not become the locked act tile', () => {
+  const tiles = resolveSiteLicenseLockedAssignmentTiles([
+    {
+      id: 'org-act',
+      title: 'School ACT clone',
+      kind: 'act_writing',
+      systemKey: null,
+      ownerOrgId: 'school-org',
+      ownerMembershipId: null,
+    },
+    {
+      id: 'platform-act',
+      title: 'ACT Writing Section',
+      kind: null,
+      systemKey: null,
+      ownerOrgId: null,
+      ownerMembershipId: null,
+    },
+  ]);
+  expect(tiles.find((tile) => tile.key === 'act_writing')?.assignmentTypeId).toBe(
+    'platform-act'
+  );
 });

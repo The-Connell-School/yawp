@@ -3,7 +3,14 @@ import { prisma } from '~/utils/db.server';
 import { provisionFreeClassroom } from './provision-free-classroom.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { loadSiteLicenseLockedAssignmentTiles } from './site-license-locked-assignment-tiles.server';
+import { SITE_LICENSE_LOCKED_TILE_LABELS } from './site-license-locked-assignment-tiles';
 import { seedFreeTierBundleAssignmentTypes } from '../../../../../packages/prisma/scripts/seed-free-tier-bundle-assignment-types';
+import { seedApHistoryLibrary } from '../../../../../packages/prisma/scripts/seed-ap-history-library';
+import {
+  importProdFidelityFixtures,
+  loadProdFidelityBundle,
+} from '../../../../../packages/prisma/scripts/local-dev/import-prod-fidelity-fixtures';
+import { LOCAL_DEV_ORG_ID } from '../../../../../packages/prisma/scripts/local-dev/dev-personas';
 import { FREE_CLASSROOM_ASSIGNMENT_KINDS } from '~/utils/entitlements.server';
 
 const enabled = process.env.FREE_TIER_DB_TESTS === '1';
@@ -11,6 +18,30 @@ const enabled = process.env.FREE_TIER_DB_TESTS === '1';
 const applicationIds: string[] = [];
 const userIds: string[] = [];
 const orgIds: string[] = [];
+
+async function ensureLockedTileCatalogFixtureData() {
+  await seedFreeTierBundleAssignmentTypes(prisma);
+  await prisma.organization.upsert({
+    where: { id: LOCAL_DEV_ORG_ID },
+    create: {
+      id: LOCAL_DEV_ORG_ID,
+      name: 'Local Dev Organization',
+      plan: 'SCHOOL',
+    },
+    update: {},
+  });
+  const thesis = await prisma.assignmentType.findFirst({
+    where: {
+      archivedAt: null,
+      title: { equals: 'The Thesis-Driven Essay', mode: 'insensitive' },
+    },
+    select: { id: true },
+  });
+  if (!thesis) {
+    await importProdFidelityFixtures(prisma, await loadProdFidelityBundle());
+  }
+  await seedApHistoryLibrary(prisma, LOCAL_DEV_ORG_ID);
+}
 
 afterAll(async () => {
   if (!enabled) return;
@@ -34,7 +65,7 @@ afterAll(async () => {
 test.skipIf(!enabled)(
   'approved /free/join org sees locked tiles even though scope only includes the free bundle',
   async () => {
-    await seedFreeTierBundleAssignmentTypes(prisma);
+    await ensureLockedTileCatalogFixtureData();
 
     const user = await prisma.user.create({
       data: {
@@ -106,6 +137,12 @@ test.skipIf(!enabled)(
       'ap_history_essay',
       'daily_pages',
       'act_writing',
+    ]);
+    expect(lockedTiles.map((tile) => tile.label)).toEqual([
+      SITE_LICENSE_LOCKED_TILE_LABELS.thesis_driven_essay,
+      SITE_LICENSE_LOCKED_TILE_LABELS.ap_history_essay,
+      SITE_LICENSE_LOCKED_TILE_LABELS.daily_pages,
+      SITE_LICENSE_LOCKED_TILE_LABELS.act_writing,
     ]);
   }
 );

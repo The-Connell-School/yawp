@@ -246,6 +246,7 @@ jobs:
           ./services/web-app/app/domain/free-tier/approval.integration.test.ts
           ./services/web-app/app/domain/free-tier/service.integration.test.ts
           ./services/web-app/app/routes/api.free-tier.waitlist/route.integration.test.ts
+          ./services/web-app/app/domain/free-tier/site-license-locked-tiles.join-flow.integration.test.ts
 
       - name: Free tier class preparation (isolated Postgres)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
