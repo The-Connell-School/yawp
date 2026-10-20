@@ -25,6 +25,11 @@ Built on: `claude/gracious-wozniak-s6ps88`, which is PR 437's head
 All code paths are under `services/web-app/app/` unless they start with
 `packages/` or `e2e/`.
 
+**Status (2026-10-20):** built, one commit per change, with the default
+taken for every decision. The report-out, including where the build differs
+from this plan, is
+[`2026-10-20-lesson-planner-brian-run-3-report.md`](./2026-10-20-lesson-planner-brian-run-3-report.md).
+
 Companion documents: the wave 1 plan and report
 ([plan](./2026-10-11-lesson-planner-brian-review.md),
 [report](./2026-10-11-lesson-planner-brian-review-report.md)), and the wave 2
