@@ -75,6 +75,7 @@ describe('ensureLessonPlannerEnabledForPreview', () => {
       'feature_flag.lesson_planner_share',
       'feature_flag.lesson_planner_run_show',
       'feature_flag.lesson_planner_templates',
+      'feature_flag.lesson_planner_deck_gallery',
     ]);
     for (const call of calls) expect(call.create.value).toBe('{"mode":"everyone","orgIds":[]}');
     // The planner is forced on, like free tier; the review flags are

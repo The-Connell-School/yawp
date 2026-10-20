@@ -148,6 +148,7 @@ describe('feature flag registry', () => {
     expect(featureFlagSettingName(LESSON_PLANNER_SHARE_FLAG)).toBe('feature_flag.lesson_planner_share');
     expect(featureFlagSettingName(LESSON_PLANNER_RUN_SHOW_FLAG)).toBe('feature_flag.lesson_planner_run_show');
     expect(featureFlagSettingName(LESSON_PLANNER_TEMPLATES_FLAG)).toBe('feature_flag.lesson_planner_templates');
+    expect(featureFlagSettingName(LESSON_PLANNER_DECK_GALLERY_FLAG)).toBe('feature_flag.lesson_planner_deck_gallery');
   });
 
   test('rejects anything that is not a registered flag', () => {
