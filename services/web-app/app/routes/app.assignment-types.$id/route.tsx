@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type LoaderFunctionArgs,
   data as dataResponse,
   type ActionFunctionArgs,
   Form,
 } from 'react-router';
-import { Link, useLoaderData, useNavigation, useSearchParams } from 'react-router';
+import { Link, useFetcher, useLoaderData, useNavigation, useSearchParams } from 'react-router';
 import { ChevronDownIcon } from 'lucide-react';
 import { DocumentLink } from '~/components/document-link.js';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
@@ -96,6 +96,7 @@ import {
 } from './prompts-library/data';
 import promptsRaw from './prompts-library/prompts.json';
 import { FROM_LESSON_PARAM } from '~/domain/lesson-planner/daily-pages-block';
+import { FROM_PIECE_PARAM } from '~/domain/lesson-planner/stack-create-link';
 import {
   EXIT_TICKET_PARAMS,
   readExitTicketPrefill,
@@ -768,6 +769,23 @@ export default function AppAssignmentTypesIdRoute() {
   // button out of a half-finished lesson needs the way back to still be there
   // once the sheet has done its job.
   const fromLesson = searchParams.get(FROM_LESSON_PARAM);
+  // Which piece of that lesson this came from, so the lesson can say
+  // "Created in YAWP! · Open" once it exists (Brian's run 3, item 4).
+  const fromPiece = searchParams.get(FROM_PIECE_PARAM);
+  const lessonFetcher = useFetcher();
+  const tellLessonCreated = useCallback(() => {
+    if (!fromLesson || !fromPiece?.startsWith('m:')) return;
+    lessonFetcher.submit(
+      {
+        intent: 'mark-created',
+        conversationId: fromLesson,
+        materialId: fromPiece.slice(2),
+        yawpHref: `/app/assignment-types/${data.assignmentType.id}`,
+      },
+      { method: 'post', action: '/api/domain/lesson-planner/packet' }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromLesson, fromPiece, data.assignmentType.id]);
   useEffect(() => {
     if (!incomingPrompt) return;
     setLibraryPrompt(incomingPrompt);
@@ -950,6 +968,7 @@ export default function AppAssignmentTypesIdRoute() {
                 plannedExitTicket={plannedExitTicket}
                 titleRequired={showThesisLibrary}
                 apHistoryEntry={apHistoryEntry}
+                onCreated={tellLessonCreated}
               />
               {showThesisLibrary ? (
                 <ThesisPromptGenerator

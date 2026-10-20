@@ -76,8 +76,11 @@ import { readUnitPlan } from '~/domain/lesson-planner/unit-plan';
 import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
 import { hidePromptIds } from '~/domain/lesson-planner/prompt-ids';
 import { overTime, planMinutes } from '~/domain/lesson-planner/plan-timing';
-import { readPlanSteps } from '~/domain/lesson-planner/plan-steps';
-import { pieceKeysInReply } from '~/domain/lesson-planner/reply-pieces';
+import { readPlanSteps, splitAtStepHeadings } from '~/domain/lesson-planner/plan-steps';
+import { SegmentToggle } from '~/components/lesson-planner/segment-toggle';
+import { FULL_LESSON_FRAMING, stripPlanPreamble } from '~/domain/lesson-planner/plan-framing';
+import { announceStackChange, useStackChanges } from '~/components/lesson-planner/stack-channel';
+import { pieceKeysInReply, segmentInStack, stepSegments } from '~/domain/lesson-planner/reply-pieces';
 import {
   asksToSwapStarter,
   BUILD_FROM_STACK_REQUESTS,
@@ -111,6 +114,8 @@ type ChatMessage = {
   /** Set when this reply is kept in the printable packet. */
   keptAudience?: PacketAudience | null;
 };
+
+type StackPieceRef = { materialId: string; created: { href: string } | null };
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const access = await getLessonPlannerAccess(request);
@@ -178,6 +183,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
                 slot: true,
                 editedAt: true,
                 content: true,
+                yawpHref: true,
+                yawpCreatedAt: true,
               },
             },
           },
@@ -295,6 +302,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
           addedMaterials: selected.materials.map(
             (material) => `${material.sourceMessageId}:${material.blockKey}`
           ),
+          // Each filed piece by its card's token: its id, so creating it in
+          // YAWP! can be remembered, and where to open it once it has been
+          // (Brian's run 3, item 4).
+          stackPieces: Object.fromEntries(
+            selected.materials.map((material) => [
+              `${material.sourceMessageId}:${material.blockKey}`,
+              {
+                materialId: material.id,
+                created:
+                  material.yawpCreatedAt && material.yawpHref
+                    ? { href: material.yawpHref }
+                    : null,
+              },
+            ])
+          ) as Record<string, StackPieceRef>,
           // A deck the teacher edited by hand (Brian's review, E2), which the
           // chat shows in place of the planner's.
           editedDeck: (() => {
@@ -593,13 +615,21 @@ export default function LessonPlannerRoute() {
       setStackVersion((version) => version + 1);
     }
   }, [packetFetcher.state, packetFetcher.data]);
+  // After every change made here: tell other tabs, and settle on what the
+  // server has (Brian's run 3, item 2).
+  useEffect(() => {
+    if (!stackVersion) return;
+    announceStackChange(selectedConversation?.id);
+    refreshStackTokens();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stackVersion]);
 
   // "Add everything to the stack" (Brian's run 2, A4): one piece per step and
   // block, so each can be refined in the stack. Shown as in at once; the
   // answer says which, if any, were left alone because they were hand-edited.
   const keepAllFetcher = useFetcher<{ added?: string[]; skipped?: string[] }>();
   const pendingKeepAll = useRef<string[]>([]);
-  function keepAll(messageId: string, keys: string[]) {
+  function keepAll(messageId: string, keys: string[], onlyThese = false) {
     if (!conversationId) return;
     const tokens = keys.map((key) => `${messageId}:${key}`);
     pendingKeepAll.current = tokens;
@@ -609,10 +639,55 @@ export default function LessonPlannerRoute() {
       return next;
     });
     keepAllFetcher.submit(
-      { intent: 'keep-all', conversationId, messageId },
+      {
+        intent: 'keep-all',
+        conversationId,
+        messageId,
+        // One segment of the plan, not the whole reply (Brian's run 3).
+        ...(onlyThese ? { materialKeys: keys.join(',') } : {}),
+      },
       { method: 'post', action: '/api/domain/lesson-planner/packet' }
     );
   }
+
+  // One segment that files as several pieces ("Framing" over three notes)
+  // goes in or out as one (Brian's run 3, items 1, 2).
+  function toggleSegmentPieces(messageId: string, keys: string[], add: boolean) {
+    if (!conversationId) return;
+    if (add) {
+      keepAll(messageId, keys, true);
+      return;
+    }
+    setAddedMaterials((prev) => {
+      const next = new Set(prev);
+      for (const key of keys) next.delete(`${messageId}:${key}`);
+      return next;
+    });
+    packetFetcher.submit(
+      { intent: 'remove-material', conversationId, messageId, materialKeys: keys.join(',') },
+      { method: 'post', action: '/api/domain/lesson-planner/packet' }
+    );
+  }
+
+  // Every "In the stack" matches the stack, however it changed: here, on the
+  // stack page, in the panel, or in another tab (Brian's run 3, item 2).
+  const tokensFetcher = useFetcher<{ conversationId: string; tokens: string[] }>();
+  const savedConversationId = selectedConversation?.id ?? null;
+  function refreshStackTokens() {
+    if (!reviewFlags.stackV2 || !savedConversationId) return;
+    if (packetFetcher.state !== 'idle' || keepAllFetcher.state !== 'idle') return;
+    tokensFetcher.load(
+      `/api/domain/lesson-planner/packet?conversationId=${encodeURIComponent(savedConversationId)}&view=tokens`
+    );
+  }
+  useStackChanges(reviewFlags.stackV2 ? savedConversationId : null, refreshStackTokens);
+  useEffect(() => {
+    const data = tokensFetcher.data;
+    if (!data || data.conversationId !== savedConversationId) return;
+    if (packetFetcher.state !== 'idle' || keepAllFetcher.state !== 'idle') return;
+    setAddedMaterials(new Set(data.tokens));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tokensFetcher.data]);
   useEffect(() => {
     const data = keepAllFetcher.data;
     if (!data?.added) return;
@@ -988,6 +1063,8 @@ export default function LessonPlannerRoute() {
                   }
                   onReplaceMaterial={replaceMaterial}
                   onKeepAll={keepAll}
+                  onSegment={toggleSegmentPieces}
+                  stackPieces={selectedConversation?.stackPieces ?? {}}
                   teacherClasses={teacherClasses}
                   stackHasPieces={keptCount > 0}
                   disabled={isSending}
@@ -1271,6 +1348,8 @@ function MessageBubble({
   previousUserText = null,
   onReplaceMaterial = null,
   onKeepAll = null,
+  onSegment = null,
+  stackPieces = {},
   disabled,
 }: {
   message: ChatMessage;
@@ -1328,6 +1407,10 @@ function MessageBubble({
   onReplaceMaterial?: ((messageId: string, materialKey: string) => void) | null;
   /** "Add everything to the stack", as separate pieces (Brian's run 2, A4). */
   onKeepAll?: ((messageId: string, keys: string[]) => void) | null;
+  /** One segment of the plan in or out, however many pieces it files as (run 3). */
+  onSegment?: ((messageId: string, keys: string[], add: boolean) => void) | null;
+  /** Filed pieces by card token, for "Created in YAWP!" (run 3, item 4). */
+  stackPieces?: Record<string, StackPieceRef>;
   disabled: boolean;
 }) {
   if (message.role === 'user') {
@@ -1380,10 +1463,22 @@ function MessageBubble({
     stackV2 && deliveredPlan ? overTime(planMinutes(body), periodMinutes) : null;
   // Brian's run 2 (A3, A4): the plan's steps, each a piece of its own, and
   // everything the reply hands over, for "Add everything to the stack".
+  // Brian's run 3 (items 1, 2): every step, including one that is only its
+  // blocks, with the pieces it files as, so its button and its status are
+  // the same wherever it appears.
   const planSteps =
-    stackV2 && deliveredPlan && message.id
-      ? readPlanSteps(message.content).filter((step) => step.content.trim())
-      : [];
+    stackV2 && deliveredPlan && message.id ? readPlanSteps(message.content) : [];
+  const segments = planSteps.length ? stepSegments(message.content) : {};
+  const segmentKeys = (stepKey: string) => segments[stepKey] ?? [stepKey];
+  const toggleSegment = (keys: string[], add: boolean) => {
+    if (!message.id || !keys.length) return;
+    if (keys.length === 1 || !onSegment) {
+      for (const key of keys) onMaterial(message.id, key, add);
+    } else onSegment(message.id, keys, add);
+  };
+  // Inline buttons go on the plan's own headings, matched in reply order.
+  let stepCursor = 0;
+  const framePlan = stackV2 && deliveredPlan && Boolean(message.id);
   const replyPieceKeys =
     stackV2 && deliveredPlan ? pieceKeysInReply(message.content) : [];
   const everythingIn =
@@ -1420,6 +1515,15 @@ function MessageBubble({
       </div>
       <div className="min-w-0 flex-1">
         <div className="rounded-2xl rounded-tl-sm border border-border/60 bg-card px-4 py-3 text-foreground shadow-sm">
+          {framePlan ? (
+            // Brian's run 3 (item 3): a full lesson says what to do with it.
+            <p
+              data-testid="plan-framing"
+              className="mb-3 rounded-lg bg-primary/5 px-3 py-2 text-sm text-foreground"
+            >
+              {FULL_LESSON_FRAMING}
+            </p>
+          ) : null}
           {/* The reply in its own order: a step, then the thing that step
               hands over, then the next step. Everything used to be lifted out
               and stacked below the plan, so the button to assign a warm-up sat
@@ -1427,13 +1531,47 @@ function MessageBubble({
           {parts.map((part, index) => {
             const key = `${message.id ?? 'pending'}:${index}`;
             if (part.kind === 'markdown') {
+              const raw = hidePromptIds(linkMaterialTitles(part.text, materials));
+              // No "I have everything I need" above a plan (Brian's run 3).
+              const text = framePlan && index === 0 ? stripPlanPreamble(raw) : raw;
+              if (!planSteps.length) {
+                return (
+                  <div key={key} className={index > 0 ? 'mt-3' : undefined}>
+                    <MarkdownContent content={text} />
+                  </div>
+                );
+              }
+              // Brian's run 3 (item 1): Add to stack on the hook, the
+              // discussion, the exit ticket… right on each step's heading.
+              const { chunks, next } = splitAtStepHeadings(text, planSteps, stepCursor);
+              stepCursor = next;
               return (
                 <div key={key} className={index > 0 ? 'mt-3' : undefined}>
-                  <MarkdownContent
-                    content={hidePromptIds(
-                      linkMaterialTitles(part.text, materials)
-                    )}
-                  />
+                  {chunks.map((chunk, chunkIndex) => {
+                    if (chunk.kind === 'markdown') {
+                      return <MarkdownContent key={chunkIndex} content={chunk.text} />;
+                    }
+                    const step = planSteps[chunk.index]!;
+                    const keys = segmentKeys(step.key);
+                    return (
+                      <div
+                        key={chunkIndex}
+                        data-testid="plan-segment"
+                        className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1"
+                      >
+                        <div className="min-w-0 [&_h2]:mt-0 [&_h3]:mt-0">
+                          <MarkdownContent content={chunk.heading} />
+                        </div>
+                        {keys.length ? (
+                          <SegmentToggle
+                            isIn={segmentInStack(message.id!, keys, addedMaterials)}
+                            disabled={disabled}
+                            onToggle={(add) => toggleSegment(keys, add)}
+                          />
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
               );
             }
@@ -1445,6 +1583,8 @@ function MessageBubble({
                   assignmentTypeId={dailyPagesTypeId}
                   classStarterTypeId={classStarterTypeId}
                   conversationId={conversationId}
+                  created={stackPieces[`${message.id}:${part.blockKey}`]?.created ?? null}
+                  materialId={stackPieces[`${message.id}:${part.blockKey}`]?.materialId ?? null}
                   added={
                     message.id
                       ? addedMaterials.has(`${message.id}:${part.blockKey}`)
@@ -1471,6 +1611,8 @@ function MessageBubble({
                   ticket={part.ticket}
                   assignmentTypeId={exitTicketTypeId}
                   conversationId={conversationId}
+                  created={stackPieces[`${message.id}:${part.blockKey}`]?.created ?? null}
+                  materialId={stackPieces[`${message.id}:${part.blockKey}`]?.materialId ?? null}
                   added={
                     !!message.id &&
                     addedMaterials.has(`${message.id}:${part.blockKey}`)
@@ -1648,7 +1790,9 @@ function MessageBubble({
             </p>
             <ul className="flex flex-col">
               {planSteps.map((step) => {
-                const isIn = addedMaterials.has(`${message.id}:${step.key}`);
+                const keys = segmentKeys(step.key);
+                if (!keys.length) return null;
+                const isIn = segmentInStack(message.id!, keys, addedMaterials);
                 return (
                   <li
                     key={step.key}
@@ -1666,7 +1810,7 @@ function MessageBubble({
                       disabled={disabled}
                       data-testid="plan-step-toggle"
                       title={isIn ? 'Click to remove from stack' : undefined}
-                      onClick={() => onMaterial(message.id!, step.key, !isIn)}
+                      onClick={() => toggleSegment(keys, !isIn)}
                       className={cn(
                         'inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium transition disabled:opacity-50',
                         isIn

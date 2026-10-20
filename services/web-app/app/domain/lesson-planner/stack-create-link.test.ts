@@ -71,3 +71,71 @@ describe("stackCreateLink (Brian's run 2, A5)", () => {
     ).toBeNull();
   });
 });
+
+describe("stackCreateLink — every writing step (Brian's run 3, item 4)", () => {
+  const base = { blockKey: 'st:5', sourceContent: null, typeIds, conversationId: 'plan-1' };
+
+  test('a closing with an exit ticket written in prose gets the exit ticket sheet', () => {
+    const link = stackCreateLink({
+      ...base,
+      kind: 'step',
+      title: 'Closing (3 min)',
+      content: 'Exit ticket: one object, one sentence about why it matters.',
+    });
+    expect(link?.label).toBe('Create this exit ticket in YAWP!');
+    expect(link?.href).toContain('/app/assignment-types/et-type?');
+    expect(decodeURIComponent(link!.href.replace(/\+/g, ' '))).toContain(
+      'one object, one sentence about why it matters'
+    );
+  });
+
+  test('a quick write in a step goes to the Class Starter sheet', () => {
+    const link = stackCreateLink({
+      ...base,
+      kind: 'step',
+      title: 'Quick write (4 min)',
+      content: 'Students write for four minutes: "What is the heaviest thing you carry?"',
+    });
+    expect(link?.label).toBe('Create this quick write in YAWP!');
+    expect(decodeURIComponent(link!.href.replace(/\+/g, ' '))).toContain('newPrompt=What is the heaviest thing you carry?');
+  });
+
+  test('a step where nobody writes has no button', () => {
+    expect(
+      stackCreateLink({ ...base, kind: 'step', title: 'Hook (15 min)', content: 'Pairs share one object.' })
+    ).toBeNull();
+  });
+
+  test('a Thesis Essay module goes to the thesis sheet', () => {
+    const link = stackCreateLink({
+      ...base,
+      kind: 'step',
+      stepType: 'thesis_essay',
+      title: 'Finding a claim (15 min)',
+      content: 'Students draft a working claim: what is this book really about?',
+      typeIds: { ...typeIds, thesis: 'th-type' },
+    });
+    expect(link?.label).toBe('Create this Thesis Essay assignment in YAWP!');
+    expect(link?.href).toContain('/app/assignment-types/th-type?');
+  });
+
+  test('the link says which piece it came from, so creating it can be remembered', () => {
+    const link = stackCreateLink({
+      ...base,
+      kind: 'class-starter',
+      content: 'Write.',
+      materialId: 'mat-9',
+    });
+    expect(link?.href).toContain('fromPiece=m%3Amat-9');
+  });
+
+  test('once created: "Created in YAWP! · Open"', () => {
+    const link = stackCreateLink({
+      ...base,
+      kind: 'class-starter',
+      content: 'Write.',
+      created: { href: '/app/assignment-types/cs-type' },
+    });
+    expect(link).toEqual({ label: 'Created in YAWP! · Open', href: '/app/assignment-types/cs-type', created: true });
+  });
+});

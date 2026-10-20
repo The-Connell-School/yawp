@@ -37,6 +37,8 @@ type TeacherClass = {
 };
 
 type Props = {
+  /** Told once the assignment exists (the Lesson Planner's "Created in YAWP!"). */
+  onCreated?: () => void;
   assignmentTypeAvailability?: Pick<
     AssignmentCreationAssignmentType,
     'unavailableReason' | 'quotaRemaining' | 'quotaTotal' | 'quotaLabel' |
@@ -92,6 +94,7 @@ export function CreateAssignmentSheet({
   plannedExitTicket = null,
   titleRequired = false,
   apHistoryEntry = null,
+  onCreated,
 }: Props) {
   const fetcher = useFetcher<{ success?: boolean; message?: string }>();
   // Only a class the teacher came from is preselected; with several targets
@@ -128,6 +131,7 @@ export function CreateAssignmentSheet({
       <AssignmentCreationSheet
         open={open}
         onOpenChange={onOpenChange}
+        onCreated={onCreated}
         entryPoint="assignment-type"
         fixedAssignmentTypeId={assignmentTypeId}
         assignmentTypes={[

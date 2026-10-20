@@ -15,6 +15,7 @@ import {
 } from './yawp-catalog';
 import { isExitTicketAssignmentType } from '~/domain/assignment-types/exit-ticket';
 import { DAILY_PAGES_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/daily-pages-rubric';
+import { THESIS_STATEMENT_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/thesis-statement-assignment-type';
 import { CLASS_STARTER_ASSIGNMENT_TYPE_KIND } from '~/domain/assignment-types/class-starter-rubric';
 import { readDocxText } from '~/domain/office/docx';
 import {
@@ -297,6 +298,8 @@ export type WritingExerciseTypeIds = {
   dailyPages: string | null;
   classStarter: string | null;
   exitTicket: string | null;
+  /** The thesis statement type, for a Thesis Essay module (Brian's run 3). */
+  thesis?: string | null;
 };
 
 /**
@@ -342,5 +345,6 @@ export async function findWritingExerciseTypeIds(
       types.find((type) => isClassStarterTitle(type.title))?.id ??
       null,
     exitTicket: types.find((type) => isExitTicketAssignmentType(type))?.id ?? null,
+    thesis: byKind(THESIS_STATEMENT_ASSIGNMENT_TYPE_KIND),
   };
 }

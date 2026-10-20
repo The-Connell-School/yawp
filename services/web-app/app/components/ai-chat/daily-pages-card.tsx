@@ -15,6 +15,8 @@
  * says which one it is and sends it where it belongs.
  */
 import { Link } from 'react-router';
+import { CreatedInYawp } from '~/components/lesson-planner/created-in-yawp';
+import { withPiece } from '~/domain/lesson-planner/stack-create-link';
 import { Check, PenLine, Plus, Repeat, Sparkles } from 'lucide-react';
 import { cn } from '~/utils/misc';
 import {
@@ -32,6 +34,8 @@ export function DailyPagesCard({
   onToggle,
   onReplace,
   disabled = false,
+  created = null,
+  materialId = null,
 }: {
   exercise: DailyPagesExercise;
   /** Null when this org does not have Daily Pages — then it is just a prompt. */
@@ -58,6 +62,10 @@ export function DailyPagesCard({
    */
   onReplace?: (() => void) | null;
   disabled?: boolean;
+  /** Created in YAWP! from this piece of the stack (Brian's run 3, item 4). */
+  created?: { href: string } | null;
+  /** The stack piece this card is, so creating it can be remembered. */
+  materialId?: string | null;
 }) {
   const isStarter = exercise.kind === 'class-starter';
   const targetTypeId =
@@ -123,12 +131,13 @@ export function DailyPagesCard({
               this one
             </button>
           ) : null}
-          {targetTypeId ? (
+          {created ? (
+            <CreatedInYawp href={created.href} />
+          ) : targetTypeId ? (
           <Link
-            to={dailyPagesCreateHref(
-              targetTypeId,
-              exercise.prompt,
-              conversationId
+            to={withPiece(
+              dailyPagesCreateHref(targetTypeId, exercise.prompt, conversationId),
+              materialId
             )}
             data-testid="daily-pages-create"
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90"

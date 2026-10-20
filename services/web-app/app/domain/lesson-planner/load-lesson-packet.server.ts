@@ -116,6 +116,8 @@ export async function loadLessonPacket({
           sourceMessageId: true,
           minutes: true,
           stepType: true,
+          yawpHref: true,
+          yawpCreatedAt: true,
         },
       },
     },
@@ -185,8 +187,10 @@ export async function loadLessonPacket({
 
   const stackDetails: LoadedLessonPacket['stackDetails'] = {};
   if (reviewFlags.stackV2 && withStackDetails) {
-    const writing = conversation.materials.filter((material) =>
-      WRITING_KINDS.has(material.kind)
+    // A step can be writing too, a prose exit ticket or quick write (Brian's
+    // run 3, item 4), so steps get a link when students write in them.
+    const writing = conversation.materials.filter(
+      (material) => WRITING_KINDS.has(material.kind) || material.kind === 'step'
     );
     const typeIds = writing.length
       ? await findWritingExerciseTypeIds({
@@ -215,11 +219,18 @@ export async function loadLessonPacket({
         create: typeIds
           ? stackCreateLink({
               kind: material.kind,
+              title: material.title,
+              stepType: material.stepType,
               content: material.content,
               blockKey: material.blockKey,
               sourceContent: sourceById.get(material.sourceMessageId) ?? null,
               typeIds,
               conversationId: conversation.id,
+              materialId: material.id,
+              created:
+                material.yawpCreatedAt && material.yawpHref
+                  ? { href: material.yawpHref }
+                  : null,
             })
           : null,
       };

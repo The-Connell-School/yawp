@@ -9,6 +9,8 @@
  * to watch for.
  */
 import { Link } from 'react-router';
+import { CreatedInYawp } from '~/components/lesson-planner/created-in-yawp';
+import { withPiece } from '~/domain/lesson-planner/stack-create-link';
 import { Check, ClipboardCheck, Plus, Sparkles } from 'lucide-react';
 import { cn } from '~/utils/misc';
 import {
@@ -30,6 +32,8 @@ export function ExitTicketCard({
   added = false,
   onToggle,
   disabled,
+  created = null,
+  materialId = null,
 }: {
   ticket: PlannedExitTicket;
   /**
@@ -42,6 +46,10 @@ export function ExitTicketCard({
   added?: boolean;
   onToggle?: ((added: boolean) => void) | null;
   disabled?: boolean;
+  /** Created in YAWP! from this piece of the stack (Brian's run 3, item 4). */
+  created?: { href: string } | null;
+  /** The stack piece this card is, so creating it can be remembered. */
+  materialId?: string | null;
 }) {
   const { config } = ticket;
   const focus =
@@ -132,9 +140,14 @@ export function ExitTicketCard({
             {added ? 'In the stack' : 'Add to stack'}
           </button>
         ) : null}
-        {assignmentTypeId ? (
+        {created ? (
+          <CreatedInYawp href={created.href} />
+        ) : assignmentTypeId ? (
           <Link
-            to={exitTicketCreateHref(assignmentTypeId, ticket, conversationId)}
+            to={withPiece(
+              exitTicketCreateHref(assignmentTypeId, ticket, conversationId),
+              materialId
+            )}
             data-testid="exit-ticket-create"
             className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-background px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary/5"
           >
