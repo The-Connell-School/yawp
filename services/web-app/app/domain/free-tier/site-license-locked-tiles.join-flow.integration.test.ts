@@ -76,7 +76,12 @@ test.skipIf(!enabled)(
       select: { id: true, organizationId: true },
     });
 
-    const scopedTypes = await getAvailableAssignmentTypesForScopes({
+    const scopedTypes = await getAvailableAssignmentTypesForScopes<{
+      id: string;
+      title: string;
+      kind: string | null;
+      systemKey: string | null;
+    }>({
       scopes: [
         {
           organizationId: school.organizationId,

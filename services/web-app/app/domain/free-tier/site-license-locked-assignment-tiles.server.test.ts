@@ -1,5 +1,6 @@
 import { expect, mock, test } from 'bun:test';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import { prisma } from '~/utils/db.server';
 
 const findMany = mock(async () => [
   {
@@ -49,9 +50,15 @@ test('loads locked tiles from the global catalog for FREE_CLASSROOM orgs', async
     },
   ];
 
+  const testClient = {
+    assignmentType: {
+      findMany: findMany as typeof prisma.assignmentType.findMany,
+    },
+  } satisfies Pick<typeof prisma, 'assignmentType'>;
+
   const tiles = await loadSiteLicenseLockedAssignmentTiles(
     { plan: 'FREE_CLASSROOM' },
-    { assignmentType: { findMany } }
+    testClient
   );
 
   expect(findMany).toHaveBeenCalled();
@@ -74,9 +81,15 @@ test('returns no tiles for paid organizations without querying', async () => {
     './site-license-locked-assignment-tiles.server'
   );
 
+  const testClient = {
+    assignmentType: {
+      findMany: findMany as typeof prisma.assignmentType.findMany,
+    },
+  } satisfies Pick<typeof prisma, 'assignmentType'>;
+
   const tiles = await loadSiteLicenseLockedAssignmentTiles(
     { plan: 'SCHOOL' },
-    { assignmentType: { findMany } }
+    testClient
   );
 
   expect(tiles).toEqual([]);
