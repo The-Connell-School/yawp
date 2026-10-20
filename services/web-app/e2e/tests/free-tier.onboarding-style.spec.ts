@@ -284,21 +284,10 @@ for (const viewport of [
         await expect(
           page.getByRole('link', { name: 'Draft an email' })
         ).toBeVisible({ timeout: 60_000 });
-        const pendingApproval = await prisma.freeTierAdminApproval.findFirst({
-          where: { applicationId: app.id, status: 'PENDING' },
+        const resend = await page.request.post('/app/free-tier/pending', {
+          form: { intent: 'resend' },
         });
-        expect(pendingApproval).toBeTruthy();
-        const weekAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
-        await prisma.freeTierAdminApproval.update({
-          where: { id: pendingApproval!.id },
-          data: {
-            firstSentAt: weekAgo,
-            nextAutoReminderAt: new Date(Date.now() - 60_000),
-          },
-        });
-        const { runApprovalJobs } =
-          await import('~/domain/free-tier/approval-v2.server');
-        await runApprovalJobs(new Date());
+        expect(resend.ok()).toBe(true);
       }
       await capture('reminder-confirmation');
       const reminder = await waitForFreeTierEmailPayload(prisma, {

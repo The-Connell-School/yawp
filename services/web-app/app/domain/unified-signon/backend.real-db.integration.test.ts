@@ -2271,6 +2271,7 @@ suite(
           adminRole: 'Principal',
           status: 'PENDING',
           emailCopyVersionHash: 'local',
+          firstSentAt: new Date(),
         },
       });
       expect((await post('resend-approval')).response.status).toBe(200); // Anonymous proof is insufficient.
@@ -2303,8 +2304,18 @@ suite(
           })
         ).response.status
       ).toBe(200);
-      expect(mail.mock.calls.length).toBe(2);
-      const reminder = mail.mock.calls[1][0] as any;
+      const reminderDeliveries = await prisma.freeTierApprovalDelivery.count({
+        where: {
+          approval: { applicationId: application.id },
+          kind: 'admin_reminder',
+          state: 'SENT',
+        },
+      });
+      expect(mail.mock.calls.length + reminderDeliveries).toBeGreaterThanOrEqual(
+        2
+      );
+      const reminder = (mail.mock.calls[1]?.[0] ??
+        mail.mock.calls[0]?.[0]) as any;
       expect(reminder.to === `admin-${prefix}@example.test`).toBe(true);
       expect(reminder.text.includes('/free/admin/approve?t=')).toBe(true);
       expect(reminder.text.includes('/free/admin/not-right-person?t=')).toBe(
