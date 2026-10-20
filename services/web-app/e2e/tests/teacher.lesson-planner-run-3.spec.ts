@@ -633,4 +633,104 @@ test.describe("Lesson Planner — Brian's third run", () => {
       expect(all.status()).toBe(200);
     });
   });
+
+  test.describe('Phase 3: post and send', () => {
+    async function seedDeck(conversationId: string, sourceMessageId: string) {
+      const prisma = createE2EPrismaClient();
+      try {
+        await prisma.lessonPlanMaterial.create({
+          data: {
+            conversationId,
+            sourceMessageId,
+            sourceCreatedAt: new Date(),
+            blockKey: 'deck',
+            slot: 'deck',
+            kind: 'slides',
+            title: 'Day One deck',
+            audience: 'teacher',
+            content:
+              '```yawp-slides\n' +
+              JSON.stringify({
+                title: 'Day One',
+                slides: [{ layout: 'title', title: 'What we carry', speakerNotes: 'Let it sit for a beat.', minutes: 1 }],
+              }) +
+              '\n```',
+          },
+        });
+      } finally {
+        await prisma.$disconnect();
+      }
+    }
+
+    test('post to your class: one link to a student page with what was checked, no login', async ({
+      page,
+      signIn,
+      e2eContext,
+      browser,
+    }) => {
+      await stackV3On();
+      await setLessonPlannerReviewFlag('lesson_planner_share', true);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId, assistantIds } = await seedDayOneStack(page, e2eContext);
+      await seedDeck(conversationId, assistantIds[0]!);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      const post = page.getByTestId('post-to-class');
+      await expect(post).toContainText('Google Classroom opens in a new tab');
+      await post.getByTestId('share-copy').click();
+      const link = await post.getByTestId('share-link-text').textContent();
+      expect(link).toMatch(/\/l\/[\w-]{40,}$/);
+
+      const stranger = await browser.newContext();
+      const visitor = await stranger.newPage();
+      await visitor.goto(link!);
+      await expect(visitor.getByTestId('shared-lesson')).toContainText('From your teacher');
+      await expect(visitor.getByTestId('shared-slide')).toHaveCount(1);
+      await expect(visitor.getByTestId('shared-slide')).not.toContainText('Let it sit');
+      await expect(visitor.getByTestId('shared-prompt').first()).toContainText('nobody else can see');
+      await expect(visitor.getByTestId('shared-handout').first()).toBeVisible();
+      await expect(visitor.locator('main')).not.toContainText('Give students 2 minutes');
+      await stranger.close();
+    });
+
+    test('send a sub plan: the note comes first, and the link works without a login', async ({
+      page,
+      signIn,
+      e2eContext,
+      browser,
+    }) => {
+      await stackV3On();
+      await setLessonPlannerReviewFlag('lesson_planner_share', true);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId, assistantIds } = await seedDayOneStack(page, e2eContext);
+      await seedDeck(conversationId, assistantIds[0]!);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      const send = page.getByTestId('send-lesson');
+      await expect(send.getByRole('button', { name: 'Send sub plan' })).toBeVisible();
+      await send.getByRole('tab', { name: 'Family' }).click();
+      await expect(send.getByRole('button', { name: 'Send to family' })).toBeVisible();
+      await send.getByRole('tab', { name: 'Substitute' }).click();
+      await send.getByTestId('send-recipient').fill('sub@school.org');
+      await send.getByLabel('Special instructions for your sub').fill('Fire drill at 10:15. Leave by the east door.');
+      await send.getByTestId('send-button').click();
+      await expect(send.getByTestId('send-done')).toContainText('Sent to sub@school.org');
+      const link = await send.getByTestId('send-link').getAttribute('href');
+
+      const stranger = await browser.newContext();
+      const visitor = await stranger.newPage();
+      await visitor.goto(link!);
+      await expect(visitor.getByTestId('shared-note')).toContainText('Fire drill at 10:15');
+      await expect(visitor.getByTestId('shared-body')).toContainText('Hook activity');
+      // A sub runs the slides, so a sub sees what to say.
+      await expect(visitor.getByTestId('shared-slide')).toContainText('Let it sit');
+      await stranger.close();
+    });
+
+    test('a made-up link opens nothing', async ({ browser }) => {
+      const stranger = await browser.newContext();
+      const visitor = await stranger.newPage();
+      const response = await visitor.goto('/l/abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG');
+      expect(response?.status()).toBe(404);
+      await stranger.close();
+    });
+  });
 });
