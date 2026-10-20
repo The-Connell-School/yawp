@@ -17,6 +17,7 @@ import {
   renderDeckPptx,
 } from '~/domain/lesson-planner/lesson-pptx.server';
 import { renderDeckPptxTile } from '~/domain/lesson-planner/lesson-pptx-tile.server';
+import { renderDeckPptxGallery } from '~/domain/lesson-planner/lesson-pptx-gallery.server';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
 import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 
@@ -29,10 +30,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   // Brian's review (E1): the Yawp! tile template, behind its flag.
   const access = await getLessonPlannerAccess(request);
-  const { deckV2 } = access.allowed
+  const { deckV2, deckGallery } = access.allowed
     ? await getLessonPlannerReviewFlags(access.membership.organization.id)
-    : { deckV2: false };
-  const pptx = deckV2
+    : { deckV2: false, deckGallery: false };
+  // The Lesson Deck Kit, behind its own flag.
+  const pptx = deckGallery
+    ? await renderDeckPptxGallery(deck)
+    : deckV2
     ? await renderDeckPptxTile(deck)
     : await renderDeckPptx(deck);
   const filename = pptxFilename(deck.title || lessonTitle);

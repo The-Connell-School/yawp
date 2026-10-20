@@ -863,4 +863,73 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await expect.poll(() => sent.join('\n')).toContain('templateId=');
     });
   });
+
+  test.describe('The gallery deck (Lesson Deck Kit)', () => {
+    const notes = { speakerNotes: 'Say it.' };
+    const GALLERY_DECK = {
+      title: 'The weight of things',
+      unit: 'The Things They Carried',
+      accent: 'ember',
+      art: 'turner-temeraire',
+      slides: [
+        { layout: 'title', title: 'The weight of things', subtitle: 'Day one', ...notes },
+        { layout: 'agenda', title: 'Today', agenda: [{ title: 'Daily Pages', minutes: 5 }, { title: 'What’s in your bag?', minutes: 15 }], ...notes },
+        { layout: 'write', title: 'Write', body: 'Name one thing you carry that nobody can see.', seconds: 300, ...notes },
+        { layout: 'look', title: 'Look', question: 'What is being carried away here?', ...notes },
+        { layout: 'exit', title: 'Before you go', body: 'One object, one sentence: why it matters.', nextLesson: 'Love', ...notes },
+      ],
+    };
+    const GALLERY_REPLY = `Here is the deck.\n\n\`\`\`yawp-slides\n${JSON.stringify(GALLERY_DECK, null, 2)}\n\`\`\``;
+
+    test('flag on: Present hangs the kit look, with mode words, the art and its credit', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_deck_v2', true);
+      await setLessonPlannerReviewFlag('lesson_planner_deck_gallery', true);
+      const { conversationId, assistantIds } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Build the slide deck for this lesson' },
+        { role: 'assistant', content: GALLERY_REPLY },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/present/${conversationId}/${assistantIds[0]}`);
+      const stage = page.getByTestId('slide-stage');
+      await expect(stage.locator('[data-theme="gallery"]')).toBeVisible();
+      await expect(stage.getByTestId('gallery-credit')).toContainText('The Fighting Temeraire');
+      await page.waitForLoadState('networkidle');
+      await page.keyboard.press('ArrowRight');
+      await expect(stage.getByTestId('gallery-mode')).toHaveText('Today.');
+      await expect(stage).toContainText('THE THINGS THEY CARRIED', { ignoreCase: true });
+      await page.keyboard.press('ArrowRight');
+      await expect(stage.locator('[data-ground="pine"]')).toBeVisible();
+      await expect(stage.getByTestId('gallery-mode')).toHaveText('Write.');
+      await page.keyboard.press('ArrowRight');
+      // Never two dark slides in a row: the look slide after writing is on paper.
+      await expect(stage.locator('[data-template="look"]')).toHaveAttribute('data-ground', 'paper');
+      await page.keyboard.press('ArrowRight');
+      await expect(stage.locator('[data-ground="accent"]')).toBeVisible();
+      await expect(stage.getByTestId('gallery-mode')).toHaveText('Before you go.');
+
+      const response = await page.request.get(`/present/${conversationId}/${assistantIds[0]}.pptx`);
+      expect(response.ok()).toBe(true);
+      expect((await response.body()).byteLength).toBeGreaterThan(50_000); // the painting is in it
+    });
+
+    test('flag off: the same deck draws on the tile template', async ({ page, signIn, e2eContext }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_deck_v2', true);
+      const { conversationId, assistantIds } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Build the slide deck for this lesson' },
+        { role: 'assistant', content: GALLERY_REPLY },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/present/${conversationId}/${assistantIds[0]}`);
+      const stage = page.getByTestId('slide-stage');
+      await expect(stage.locator('[data-theme="tile"]')).toBeVisible();
+      await page.waitForLoadState('networkidle');
+      await page.keyboard.press('ArrowRight');
+      // The agenda reads as a notes slide, with its minutes.
+      await expect(stage).toContainText('What’s in your bag? (15 min)');
+    });
+  });
 });

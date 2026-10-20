@@ -41,6 +41,7 @@ import {
 } from '~/domain/lesson-planner/deck-edit';
 import { saveEditedDeck } from '~/domain/lesson-planner/deck-edit.server';
 import {
+  CLASSIC_SLIDE_LAYOUTS,
   deckDurationMinutes,
   SLIDE_LAYOUTS,
   type Slide,
@@ -50,6 +51,11 @@ import {
   TileSlideCanvas,
   TileSlideThumbnail,
 } from '~/routes/present.$conversationId.$messageId/tile-slide-canvas';
+import {
+  GALLERY_FONTS_HREF,
+  GallerySlideCanvas,
+  GallerySlideThumbnail,
+} from '~/routes/present.$conversationId.$messageId/gallery-slide-canvas';
 
 /**
  * Where saving or leaving the editor goes: back to the stack when the edit
@@ -66,15 +72,15 @@ export function deckEditorReturnTo(conversationId: string, url: string) {
 async function requireDeckEditor(request: Request) {
   const access = await getLessonPlannerAccess(request);
   if (!access.allowed) throw redirect('/app');
-  const { deckV2 } = await getLessonPlannerReviewFlags(
+  const { deckV2, deckGallery } = await getLessonPlannerReviewFlags(
     access.membership.organization.id
   );
   if (!deckV2) throw new Response('Not Found', { status: 404 });
-  return access;
+  return { access, deckGallery };
 }
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  await requireDeckEditor(request);
+  const { deckGallery } = await requireDeckEditor(request);
   const { conversationId, lessonTitle, deck } = await loadLessonDeck({
     request,
     conversationId: params.conversationId,
@@ -92,13 +98,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     lessonTitle,
     deck,
     periodMinutes: lesson?.periodMinutes ?? null,
+    gallery: deckGallery,
     returnTo: deckEditorReturnTo(conversationId, request.url),
   };
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
   await requireMutableRequest(request);
-  const access = await requireDeckEditor(request);
+  const { access } = await requireDeckEditor(request);
   const conversation = await prisma.lessonPlanConversation.findFirst({
     where: {
       id: params.conversationId,
@@ -147,7 +154,7 @@ const LAYOUT_LABELS: Record<Slide['layout'], string> = {
 const UNDO_MS = 8000;
 
 export default function DeckEditorRoute() {
-  const { lessonTitle, deck: loaded, returnTo, periodMinutes } =
+  const { lessonTitle, deck: loaded, returnTo, periodMinutes, gallery } =
     useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
@@ -186,6 +193,7 @@ export default function DeckEditorRoute() {
 
   return (
     <section className="h-full w-full overflow-y-auto">
+      {gallery ? <link rel="stylesheet" href={GALLERY_FONTS_HREF} /> : null}
       <Form method="post" className="mx-auto w-full max-w-7xl px-4 py-6">
         <input type="hidden" name="deck" value={JSON.stringify(deck)} />
         <div className="mb-5 flex flex-wrap items-center gap-2">
@@ -261,7 +269,11 @@ export default function DeckEditorRoute() {
                   aria-label={`Slide ${index + 1}: ${item.title}`}
                 >
                   <div className="pointer-events-none overflow-hidden rounded border">
-                    <TileSlideThumbnail slide={item} number={index + 1} width={238} />
+                    {gallery ? (
+                      <GallerySlideThumbnail deck={deck} index={index} width={238} />
+                    ) : (
+                      <TileSlideThumbnail slide={item} number={index + 1} width={238} />
+                    )}
                   </div>
                 </button>
                 <div className="mt-1.5 flex items-center gap-1">
@@ -295,7 +307,11 @@ export default function DeckEditorRoute() {
             <div className="aspect-[16/9] w-full overflow-hidden rounded-xl shadow-sm ring-1 ring-black/5">
               {/* Brian's run 2 (C4): edit the words on the slide itself; the
                   form below edits the same slide, so the two stay in sync. */}
-              <TileSlideCanvas slide={slide} number={at + 1} onEdit={edit} />
+              {gallery ? (
+                <GallerySlideCanvas deck={deck} index={at} />
+              ) : (
+                <TileSlideCanvas slide={slide} number={at + 1} onEdit={edit} />
+              )}
             </div>
 
             <div className="grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-2">
@@ -307,7 +323,7 @@ export default function DeckEditorRoute() {
                   }
                   className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
                 >
-                  {SLIDE_LAYOUTS.map((layout) => (
+                  {(gallery ? SLIDE_LAYOUTS : CLASSIC_SLIDE_LAYOUTS).map((layout) => (
                     <option key={layout} value={layout}>
                       {LAYOUT_LABELS[layout]}
                     </option>
@@ -345,13 +361,72 @@ export default function DeckEditorRoute() {
                   />
                 </Field>
               ) : null}
-              {['statement', 'prompt', 'quote', 'closing'].includes(slide.layout) ? (
+              {['statement', 'prompt', 'quote', 'closing', 'big_idea', 'write', 'excerpt', 'exit'].includes(slide.layout) ? (
                 <Field label="Text" wide>
                   <textarea
                     value={slide.body ?? ''}
                     maxLength={320}
                     rows={3}
                     onChange={(event) => edit({ body: event.target.value || undefined })}
+                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                  />
+                </Field>
+              ) : null}
+              {slide.layout === 'discuss' || slide.layout === 'look' ? (
+                <Field label="Question" wide>
+                  <textarea
+                    value={slide.question ?? slide.body ?? ''}
+                    maxLength={320}
+                    rows={3}
+                    onChange={(event) => edit({ question: event.target.value || undefined, body: undefined })}
+                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                  />
+                </Field>
+              ) : null}
+              {slide.layout === 'agenda' ? (
+                <Field label="Agenda, one per line" wide>
+                  <textarea
+                    value={(slide.agenda ?? []).map((item) => item.title).join('\n')}
+                    rows={5}
+                    onChange={(event) => {
+                      const next = lines(event.target.value).slice(0, 6);
+                      edit({
+                        agenda: next.length
+                          ? next.map((title, i) => ({ title, minutes: slide.agenda?.[i]?.minutes }))
+                          : undefined,
+                      });
+                    }}
+                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                  />
+                </Field>
+              ) : null}
+              {slide.layout === 'notes' ? (
+                <Field label="Facts, one per line" wide>
+                  <textarea
+                    value={(slide.facts ?? []).join('\n')}
+                    rows={3}
+                    onChange={(event) => {
+                      const next = lines(event.target.value).slice(0, 3);
+                      edit({ facts: next.length ? next : undefined });
+                    }}
+                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                  />
+                </Field>
+              ) : null}
+              {slide.layout === 'read' ? (
+                <Field label="Tasks, one per line (the first word is the verb)" wide>
+                  <textarea
+                    value={(slide.tasks ?? []).map((task) => `${task.verb} ${task.text}`).join('\n')}
+                    rows={4}
+                    onChange={(event) => {
+                      const next = lines(event.target.value)
+                        .slice(0, 4)
+                        .map((line) => {
+                          const [verb, ...rest] = line.split(/\s+/);
+                          return { verb: verb!, text: rest.join(' ') || '…' };
+                        });
+                      edit({ tasks: next.length ? next : undefined });
+                    }}
                     className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
                   />
                 </Field>

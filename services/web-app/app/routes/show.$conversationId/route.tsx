@@ -14,6 +14,7 @@ import { clockText, countdown, slideForStep, type ClockMode } from '~/domain/les
 import { STEP_TYPE_COLORS, stepChipText } from '~/domain/lesson-planner/step-types';
 import { useShowChannel } from '~/components/lesson-planner/show-channel';
 import { TileSlideCanvas } from '../present.$conversationId.$messageId/tile-slide-canvas';
+import { GALLERY_FONTS_HREF, GallerySlideCanvas } from '../present.$conversationId.$messageId/gallery-slide-canvas';
 import { HEADING_FONT, STACK_FONTS_HREF, typeChipStyle } from '../app.lesson-planner_.$conversationId.packet/v3/theme';
 import { cn } from '~/utils/misc';
 
@@ -38,7 +39,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     blocks: loaded.v3.timing.blocks,
     notes: Object.fromEntries(loaded.v3.steps.map((step) => [step.id, step.excerpt])),
     labels: Object.fromEntries(loaded.v3.steps.map((step) => [step.id, step.label])),
-    deck: deck?.kind === 'deck' ? { id: deckRow!.id, slides: deck.deck.slides } : null,
+    deck: deck?.kind === 'deck' ? { id: deckRow!.id, ...deck.deck } : null,
+    gallery: loaded.reviewFlags.deckGallery,
   };
 }
 
@@ -54,7 +56,7 @@ function readClock(): ClockMode {
 }
 
 export default function RunTheShowRoute() {
-  const { conversationId, title, className, periodMinutes, blocks, notes, labels, deck } =
+  const { conversationId, title, className, periodMinutes, blocks, notes, labels, deck, gallery } =
     useLoaderData<typeof loader>();
   const [current, setCurrent] = useState(0);
   const [done, setDone] = useState(false);
@@ -123,6 +125,7 @@ export default function RunTheShowRoute() {
       style={{ backgroundColor: '#1C1A17', fontFamily: "'Instrument Sans', ui-sans-serif, system-ui, sans-serif" }}
     >
       <link rel="stylesheet" href={STACK_FONTS_HREF} />
+      {gallery ? <link rel="stylesheet" href={GALLERY_FONTS_HREF} /> : null}
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3 sm:px-8">
         <div className="flex items-center gap-4">
           <Link
@@ -297,7 +300,11 @@ export default function RunTheShowRoute() {
                 {deck && slideIndex != null ? (
                   <figure className="w-full shrink-0 md:w-72">
                     <div className="aspect-video overflow-hidden rounded-xl bg-[#1C1A17]">
-                      <TileSlideCanvas slide={deck.slides[slideIndex]!} number={slideIndex + 1} />
+                      {gallery ? (
+                        <GallerySlideCanvas deck={deck} index={slideIndex} />
+                      ) : (
+                        <TileSlideCanvas slide={deck.slides[slideIndex]!} number={slideIndex + 1} />
+                      )}
                     </div>
                     <figcaption className="mt-1 text-xs text-[#6E665C]">
                       On the projector now · slide {slideIndex + 1}
