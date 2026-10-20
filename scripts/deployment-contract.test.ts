@@ -334,6 +334,18 @@ describe('production deployment contract', () => {
     expect(dockerfile).toContain('FROM oven/bun:1.3.1 AS base');
   });
 
+  test('Docker image build does not bake preview database credentials into the image', () => {
+    const dockerfile = readRepoFile('services/web-app/Dockerfile');
+    const renderCompose = readRepoFile('scripts/preview/render-compose.mjs');
+
+    expect(dockerfile).not.toMatch(/^\s*ARG DATABASE_URL/m);
+    expect(dockerfile).not.toMatch(/^\s*ENV DATABASE_URL/m);
+    expect(dockerfile).toContain(
+      'DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build bun prisma generate'
+    );
+    expect(renderCompose).not.toMatch(/build:[\s\S]*args:[\s\S]*DATABASE_URL/);
+  });
+
   test('Dockerfile exposes a dependency target for preview migration tooling', () => {
     const dockerfile = readRepoFile('services/web-app/Dockerfile');
 
@@ -914,7 +926,7 @@ describe('PR preview deployment contract', () => {
       )
     );
     const buildIndex = prebuildFunction.indexOf(
-      'COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build web toolbox'
+      'build_or_pull_production_images web toolbox'
     );
     const cacheReturnIndex = deployScript.indexOf(
       'Tooling fingerprint unchanged and database already existed; skipping install/generate/migrate.'
@@ -1645,6 +1657,22 @@ describe('PR preview deployment contract', () => {
 });
 
 describe('demo environment deployment contract', () => {
+  test('demo images build on GitHub-hosted runners and deploy pulls from ECR', () => {
+    const workflow = readRepoFile('.github/workflows/demo-environment.yml');
+    const deployScript = readRepoFile('scripts/preview/deploy.sh');
+
+    expect(workflow).toContain('build-demo-images');
+    expect(workflow).toContain('id-token: write');
+    expect(workflow).toContain('vars.DEMO_ECR_PUSH_ROLE_ARN');
+    expect(workflow).toContain('describe-images');
+    expect(workflow).toContain('DEMO_WEB_IMAGE=');
+    expect(workflow).toContain('DEPLOY_TIMEOUT_SECONDS=1200');
+    expect(deployScript).toContain('demo_registry_images_configured');
+    expect(existsSync(join(repoRoot, 'infra/demo-image-registry/main.tf'))).toBe(
+      true
+    );
+  });
+
   test('demo capacity cleanup protects all container images before the build', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');
     const prepare = workflow.slice(
