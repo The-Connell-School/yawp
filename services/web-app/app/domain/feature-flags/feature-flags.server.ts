@@ -53,7 +53,12 @@ export function isPreviewDeployment(env: Record<string, string | undefined>) {
   return env.YAWP_ENVIRONMENT?.trim().toLowerCase() === 'preview';
 }
 
-/** Demo and PR previews ship with free tier and unified sign-on on without Internal changes. */
+/**
+ * Demo and PR previews ship with free tier and unified sign-on on without Internal
+ * changes. This replaces a separate demo-only route gate (`isDemoFreeTierRouteOpen`);
+ * Internal may have surfaced that as a synthetic `demo_free_tier` override — runtime
+ * and the management API use `free-tier` persisted/effective only.
+ */
 export function isNonProductionDefaultOnDeployment(
   env: Record<string, string | undefined>
 ) {

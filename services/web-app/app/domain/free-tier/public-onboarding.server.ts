@@ -1,7 +1,7 @@
 import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { isBelowHsGrade } from './grade-gate';
 
-/** Public traffic has no organization context: only global free tier enables v2 flows. */
+/** Public signup/waitlist v2 UI and {@link RELEASE_EMAIL_V2_COPY_VERSION} at signup ride on `free-tier` only. */
 export function isPublicOnboardingV2Enabled() {
   return isFreeTierEnabled();
 }
