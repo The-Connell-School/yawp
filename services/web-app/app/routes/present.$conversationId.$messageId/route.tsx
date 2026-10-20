@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { deckDurationMinutes } from '~/domain/lesson-planner/slide-deck';
 import { loadLessonDeck } from '~/domain/lesson-planner/load-deck.server';
+import { useShowChannel } from '~/components/lesson-planner/show-channel';
 import { cn } from '~/utils/misc';
 import { SlideCanvas } from './slide-canvas';
 import { TileSlideCanvas } from './tile-slide-canvas';
@@ -56,6 +57,17 @@ export default function PresentRoute() {
 
   const total = deck.slides.length;
   const slide = deck.slides[index]!;
+
+  // Run the show moves these slides with the teacher (Brian's run 3).
+  const tellShow = useShowChannel(conversationId, (message) => {
+    if (message.type === 'slide') setIndex(Math.min(total - 1, Math.max(0, message.index)));
+    if (message.type === 'ping') tellShow({ type: 'projector-here' });
+  });
+  useEffect(() => {
+    tellShow({ type: 'projector-here' });
+    // Once, on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const go = useCallback(
     (delta: number) =>

@@ -117,7 +117,7 @@ export function FinishLine({
       </dl>
       {runShow ? (
         <Link
-          to={`/app/lesson-planner/${conversationId}/show`}
+          to={`/show/${conversationId}`}
           data-testid="run-the-show"
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--sv-primary)] py-3 text-sm font-semibold text-white transition hover:opacity-90"
         >
