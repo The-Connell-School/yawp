@@ -141,6 +141,8 @@ async function clearLessonPlans(membershipId: string) {
   const prisma = createE2EPrismaClient();
   try {
     await prisma.lessonPlanConversation.deleteMany({ where: { membershipId } });
+    // Templates outlive their lesson, so a retry would otherwise list two.
+    await prisma.lessonPlanTemplate.deleteMany({ where: { membershipId } });
   } finally {
     await prisma.$disconnect();
   }
@@ -845,8 +847,15 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await page.goto('/app/lesson-planner');
       const tiles = page.getByTestId('prompt-tiles').locator('li');
       await expect(tiles.nth(1)).toContainText('Build from my templates');
-      await page.getByTestId('template-tile').click();
+      // The tile only opens the list once the page has hydrated; CI is slow
+      // enough for a first click to land before that.
       const row = page.getByTestId('template-row').filter({ hasText: 'Read & write day' });
+      const tile = page.getByTestId('template-tile');
+      await expect(async () => {
+        // It toggles: click only while it is not open.
+        if ((await tile.getAttribute('aria-pressed')) !== 'true') await tile.click();
+        await expect(row).toBeVisible({ timeout: 1_000 });
+      }).toPass({ timeout: 15_000 });
       await expect(row).toContainText('Class Starter → Activity → Context → Read aloud → Daily Pages → Closing · 50 min');
       await expect(row).toContainText('20% writing');
       await row.click();
