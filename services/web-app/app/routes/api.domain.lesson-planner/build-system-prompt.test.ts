@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { rubricCategories } from '~/domain/grading/rubric';
-import { CLASSIC_SLIDE_LAYOUTS } from '~/domain/lesson-planner/slide-deck';
+import { CLASSIC_SLIDE_LAYOUTS, GALLERY_SLIDE_LAYOUTS } from '~/domain/lesson-planner/slide-deck';
 import { MATERIAL_KINDS } from '~/domain/lesson-planner/lesson-material';
 import { UNIT_PLAN_FENCE } from '~/domain/lesson-planner/unit-plan';
 import { EXIT_TICKET_FENCE } from '~/domain/lesson-planner/exit-ticket-block';
@@ -1757,5 +1757,31 @@ describe('planner prompt — a lesson built from a template (stack page redesign
     expect(tail).toContain('"Read & write day"');
     expect(tail).toContain('2. Read aloud, 20 min');
     expect(blocks[0]!.text).not.toContain('Read & write day');
+  });
+});
+
+describe('buildLessonPlannerSystemPromptBlocks — the gallery deck', () => {
+  const textOf = (deckGallery: boolean) =>
+    buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'Connell School', deckGallery })
+      .map((block) => block.text)
+      .join('\n');
+
+  test('off: no gallery templates, and the cached core is the same either way', () => {
+    expect(textOf(false)).not.toContain('Gallery deck');
+    const core = (on: boolean) =>
+      buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'X', deckGallery: on })[0]!.text;
+    expect(core(true)).toBe(core(false));
+  });
+
+  test('on: every gallery template, its slots, the rhythm and the art', () => {
+    const text = textOf(true);
+    expect(text).toContain('Gallery deck');
+    for (const layout of GALLERY_SLIDE_LAYOUTS) expect(text).toContain(`- ${layout} `);
+    for (const slot of ['agenda', 'question', 'timeline', 'facts', 'tasks', 'accentWord', 'nextLesson']) {
+      expect(text).toContain(`\`${slot}\``);
+    }
+    expect(text).toContain('turner-temeraire');
+    expect(text).toContain('`accent`');
+    expect(text).toMatch(/never two .*dark/i);
   });
 });

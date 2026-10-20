@@ -1,4 +1,5 @@
 import { buildTemplateSection, type LessonTemplate } from '~/domain/lesson-planner/lesson-templates';
+import { DECK_ART } from '~/domain/lesson-planner/deck-art';
 import { rubricCategories } from '~/domain/grading/rubric';
 import type { CacheableSystemBlock } from '~/utils/getLLMCompletion/getLLMCompletion';
 import type { UnitContext } from '~/domain/lesson-planner/unit-plan';
@@ -709,6 +710,34 @@ export function buildLessonPlannerInstructionCore({
 }
 
 /**
+ * The gallery deck (Yawp! Lesson Deck Kit, "The gallery and the page"). After
+ * the cache breakpoint, so the cached core is the same with the flag on or
+ * off; the renderers apply the kit's rhythm whatever the model writes.
+ */
+function buildDeckGallerySection(on: boolean): string[] {
+  if (!on) return [];
+  const art = DECK_ART.map((work) => `\`${work.id}\` (${work.artist}, ${work.title}, ${work.year}; ${work.themes.join(', ')})`).join('; ');
+  return [
+    '',
+    'Gallery deck: decks in this school are hung as a gallery. Beside the layouts above, use these templates (each draws its own italic mode word, so do not repeat it in the title):',
+    '- agenda — "Today." Opens the lesson after the title. Needs `agenda`: up to 6 `{ "title", "minutes" }`, one per step of the plan. Title the slide with the lesson\'s aim, not "Today".',
+    '- discuss — "Talk." Needs `question`. Optional `grouping` ("Pairs · 3 min"), `stem` (a sentence starter), `followUp`.',
+    '- big_idea — "Hold this." One claim. Needs `body`; optional `accentWord`, one word of the body set in the accent.',
+    '- write — "Write." The writing prompt, on a dark ground. Needs `body`; optional `stem` and `seconds`.',
+    '- notes — "Know." Context in a timeline or facts. Needs `timeline` (up to 5 `{ "year", "caption", "mark" }`, mark "accent", "ink" or "open") or `facts` (up to 3 lines).',
+    '- divider — "Part ii." Between movements of a long lesson, over the art. Optional `part` (a roman numeral) and `subtitle`.',
+    '- read — "Read." Reading along. Needs `tasks`: up to 4 `{ "verb", "text" }` ("Underline", "every weight"). Optional `work`, `page`.',
+    '- look — "Look." Looking at the painting, on a dark ground. Needs `question`; optional `routine` ("See · Think · Wonder").',
+    '- excerpt — "Annotate." A passage on a sheet. Needs `body` (the passage); optional `author`, `work`, `page`, and `bullets` for what to mark.',
+    '- exit — "Before you go." The exit ticket, on the accent wall. Needs `body`; optional `nextLesson`.',
+    'Prefer these to the older layouts: big_idea over statement, write or discuss over prompt, excerpt over quote, exit over closing, notes over bullets.',
+    'Rhythm: open with title then agenda, and close with exit. Never the same template twice in a row. Never two dark slides (write, look) in a row, and at most one in four. One exit. A `mode` field (one or two words ending in a period) replaces a template\'s word only when a truer verb fits.',
+    'Prompts read best at 24 words or fewer; a short prompt is set larger.',
+    `On the deck itself: \`unit\` (the unit's name, for the running head), \`accent\` (ember, indigo, olive or plum: one per unit, the same for every lesson in it; ember if unsure), and \`art\`: one work per lesson, only from this library, and only when its themes fit the lesson: ${art}. Leave \`art\` out when nothing fits. The art is shown and credited by Yawp!; never write text about it on a slide except a look question.`,
+  ];
+}
+
+/**
  * System prompt blocks for Anthropic prompt caching. The large stable prefix
  * is cached; the short personalized intro and per-lesson inventory sit after
  * the breakpoint.
@@ -724,6 +753,7 @@ export function buildLessonPlannerSystemPromptBlocks({
   intakeV2 = false,
   lessonLength = null,
   template = null,
+  deckGallery = false,
 }: {
   teacherName: string | null;
   organizationName: string;
@@ -739,6 +769,8 @@ export function buildLessonPlannerSystemPromptBlocks({
   lessonLength?: { minutes: number; classLabel: string | null } | null;
   /** The teacher's template this lesson is built from (run 3). */
   template?: LessonTemplate | null;
+  /** The gallery deck (Lesson Deck Kit): its templates, rhythm and art. */
+  deckGallery?: boolean;
 }): CacheableSystemBlock[] {
   const who = teacherName ? `${teacherName}, a teacher` : 'a teacher';
   const intro = `You are the Yawp! Lesson Planner, an instructional design partner for ${who} at ${organizationName}.`;
@@ -748,6 +780,7 @@ export function buildLessonPlannerSystemPromptBlocks({
     ...buildStackContentsSection(stackContents),
     ...buildUnitContextSection(unitContext),
     ...buildTemplateSection(template),
+    ...buildDeckGallerySection(deckGallery),
   ].join('\n');
   const variable = tail ? `${intro}\n${tail}` : intro;
 

@@ -431,7 +431,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     // Brian's review (B6): with stack v2 on, outputs are built from what the
     // teacher kept, so the planner sees the stack itself, not just its titles.
-    const { stackV2, intakeV2, templates: templatesOn } = await getLessonPlannerReviewFlags(
+    const { stackV2, intakeV2, templates: templatesOn, deckGallery } = await getLessonPlannerReviewFlags(
       ctx.organizationId
     );
     // Brian's run 3: a lesson built from the teacher's own template keeps its
@@ -482,6 +482,7 @@ export async function action({ request }: ActionFunctionArgs) {
       exitTicketsAvailable,
       writingPracticeAvailable: ctx.writingPracticeEnabled,
       template,
+      deckGallery,
     });
 
     const messages: { role: AgentType; content: string; name?: string }[] = [
