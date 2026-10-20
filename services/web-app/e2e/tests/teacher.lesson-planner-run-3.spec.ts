@@ -587,4 +587,50 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await expect(page.getByTestId('take-to-class').getByTestId('deck-present')).toBeVisible();
     });
   });
+
+  test.describe('Phase 3: what goes out of the room', () => {
+    test('handouts for any step: students’ pieces in by default, a teacher step written for students', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await stackV3On();
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId } = await seedDayOneStack(page, e2eContext);
+      const prisma = createE2EPrismaClient();
+      try {
+        const hook = await prisma.lessonPlanMaterial.findFirstOrThrow({
+          where: { conversationId, title: { startsWith: 'Hook activity' } },
+        });
+        const { studentVersionKey } = await import('../../app/domain/lesson-planner/step-handout');
+        await prisma.lessonPlanMaterial.update({
+          where: { id: hook.id },
+          data: {
+            studentVersion: 'Pick one object that tells a stranger something true about you.',
+            studentVersionKey: studentVersionKey(hook.content),
+          },
+        });
+      } finally {
+        await prisma.$disconnect();
+      }
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      await page.getByTestId('handouts-print').click();
+      await expect(page.getByTestId('step-handouts')).toBeVisible();
+      const rows = page.getByTestId('handout-step');
+      await expect(rows).toHaveCount(8);
+      const starter = rows.filter({ hasText: 'Four minutes of writing' });
+      await expect(starter.getByRole('checkbox')).toBeChecked();
+      const hook = rows.filter({ hasText: 'Hook activity' });
+      await expect(hook.getByRole('checkbox')).not.toBeChecked();
+      await hook.getByRole('checkbox').check();
+      await expect(hook.getByTestId('handout-step-status')).toHaveText('Written for students');
+
+      const href = await hook.getByTestId('handout-step-alone').getAttribute('href');
+      const response = await page.request.get(href!);
+      expect(response.status()).toBe(200);
+      expect(response.headers()['content-type']).toBe('application/pdf');
+      const all = await page.request.get(await page.getByTestId('handout-pdf').getAttribute('href') as string);
+      expect(all.status()).toBe(200);
+    });
+  });
 });
