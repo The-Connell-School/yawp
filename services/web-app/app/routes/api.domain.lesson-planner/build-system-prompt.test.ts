@@ -1724,3 +1724,18 @@ describe("planner prompt — Brian's run 3", () => {
     expect(LESSON_PLANNER_PROMPT_VERSION).toBe('2026-10-19-run-3-v1');
   });
 });
+
+describe("planner prompt — the deck is built from the stack (Brian's run 3, item 1)", () => {
+  const prompt = buildLessonPlannerSystemPromptBlocks({
+    teacherName: null,
+    organizationName: 'School',
+    stackContents: [{ title: 'Hook (15 min)', kind: 'step', content: 'Bags out.' }],
+  })
+    .map((block) => block.text)
+    .join('\n');
+  test('one slide per piece, marked with its step', () => {
+    expect(prompt).toContain('gives each piece its own slide');
+    expect(prompt).toContain('`"step"`');
+    expect(prompt).toContain('its pair-share question, and the line the class lands on');
+  });
+});

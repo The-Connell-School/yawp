@@ -61,6 +61,9 @@ const slideSchema = z
     speakerNotes: z.string().trim().min(1).max(2_000),
     // Coerced: the model sometimes writes "5" rather than 5.
     minutes: z.coerce.number().int().min(0).max(60).optional(),
+    // Which stack step this slide belongs to, by its number in the stack
+    // (Brian's run 3): Run the show moves the projector with the teacher.
+    step: z.coerce.number().int().min(1).max(MAX_SLIDES).optional(),
   })
   // Deliberately not .strict(): one stray key should not cost the teacher the
   // whole deck. Unknown fields are dropped, required ones still enforced.

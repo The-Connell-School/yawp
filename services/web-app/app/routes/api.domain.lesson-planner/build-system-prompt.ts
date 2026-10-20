@@ -75,6 +75,7 @@ function buildStackContentsSection(entries: StackContentsEntry[]): string[] {
       ? ['(Some pieces were trimmed here for length; build from their titles and what is shown.)']
       : []),
     '- When the teacher asks for a slide deck or a student handout "from my stack" — or asks for one of those at all while the stack holds pieces — Build from exactly these pieces, in this order, and nothing else. Do not bring back steps from earlier in the conversation that they left out; leaving them out was the decision.',
+    '- A deck built from the stack gives each piece its own slide, in the stack\'s order, and marks each slide with `"step"`: the piece\'s number above (a title slide has none). An activity\'s slide carries what students do: its directions, its pair-share question, and the line the class lands on. Nothing that is not in the stack gets a slide.',
     "- A deck built from the stack covers each piece in the stack's order, and its slides' minutes total the lesson's length. If the pieces need more time than the lesson has, do not stretch the deck: say which pieces to cut, in one line, and build the deck for the time there is.",
     '- If the stack is missing something the output genuinely needs (a deck with nothing to project), say so in one line and ask, rather than inventing it.',
   ];
