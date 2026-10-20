@@ -292,6 +292,7 @@ for (const viewport of [
       const initial = await waitForFreeTierEmailPayload(prisma, {
         applicationId: app.id,
         kind: 'admin_approval',
+        requireUrls: true,
       });
       // Historical notes must also be ignored by reminders and replacement sends.
       await prisma.freeTierAdminApproval.updateMany({
@@ -306,6 +307,7 @@ for (const viewport of [
       const reminder = await waitForFreeTierEmailPayload(prisma, {
         applicationId: app.id,
         kind: 'admin_approval_reminder',
+        requireUrls: true,
       });
       await admin.goto(initial.approveUrl);
       await capture('approval-replaced', admin);
@@ -341,6 +343,9 @@ for (const viewport of [
       const replacement = await waitForFreeTierEmailPayload(prisma, {
         applicationId: app.id,
         kind: 'admin_approval',
+        toEmail: `replacement-${stamp}@example.edu`,
+        requireUrls: true,
+        timeoutMs: 30_000,
       });
       await admin.goto(replacement.approveUrl);
       await capture('administrator-approval', admin);

@@ -905,7 +905,7 @@ async function deliverJob(id: string, now: Date) {
           payload: sanitizeFreeTierEmailLogPayload({
             deliveryId: id,
             approvalId: approval.id,
-            source: job.source,
+            ...(job.source != null ? { source: job.source } : {}),
             ...adminApprovalUrlsFromEmailBody(message.text),
           }),
         },
