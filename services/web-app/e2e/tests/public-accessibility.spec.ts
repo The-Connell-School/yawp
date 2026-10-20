@@ -11,7 +11,7 @@ test.describe('Public accessibility page', () => {
     ).toHaveAttribute('href', '/accessibility');
   });
 
-  test('publishes YAWP accessibility status and reporting contact', async ({
+  test('publishes Yawp! accessibility status and reporting contact', async ({
     page,
   }) => {
     await page.goto('/accessibility');
