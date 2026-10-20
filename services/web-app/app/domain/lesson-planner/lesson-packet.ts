@@ -73,7 +73,8 @@ export function deriveSectionTitle(content: string, index: number): string {
  * counts as its upper bound so a period estimate never runs short.
  */
 function readMinutes(title: string): number | null {
-  const match = title.match(/(\d+)\s*(?:[–—-]\s*(\d+)\s*)?(?:min|minute)/i);
+  // Word-bounded, so "2 mini-lessons" is not two minutes.
+  const match = title.match(/(\d+)\s*(?:[–—-]\s*(\d+)\s*)?(?:min|mins|minutes?)\b(?!-)/i);
   if (!match) return null;
   const upper = match[2] ?? match[1];
   const minutes = Number(upper);
@@ -145,6 +146,11 @@ export type PacketSectionInput = {
   origin?: PacketSectionOrigin;
   /** Set for a material the teacher hand-edited in the stack. */
   editedAt?: Date | string | null;
+  /**
+   * The piece's planned minutes, as stored (Brian's run 3, item 9). Wins over
+   * anything read out of a title; null falls back to the title.
+   */
+  minutes?: number | null;
 };
 
 export type PacketSection = {
@@ -287,16 +293,21 @@ export function buildLessonPacket({
       deck,
       deckFailed: deckOutcome.kind === 'unreadable',
       anchor: `resource-${section.id}`,
+      storedMinutes: section.minutes ?? null,
     };
   });
 
   const outline = built.map((section) => ({
     title: section.title,
-    // A filed piece is named for what it is, minutes and all ("Read aloud
-    // (25 min)"); a kept reply's timing lives in its own heading.
+    // Stored minutes first. Then a filed piece is named for what it is,
+    // minutes and all ("Read aloud (25 min)"): its title wins over its text,
+    // whose first sentence ("Give students 2 minutes…") is not its length
+    // (Brian's run 3, item 9). A kept reply's timing lives in its own heading.
     minutes:
-      readMinutes(section.derivedTitle) ??
-      (section.origin === 'material' ? readMinutes(section.title) : null),
+      section.storedMinutes ??
+      (section.origin === 'material'
+        ? readMinutes(section.title) ?? readMinutes(section.derivedTitle)
+        : readMinutes(section.derivedTitle)),
     steps: readSteps(section.content, section.derivedTitle),
     kind: section.kind,
     anchor: section.anchor,
@@ -305,7 +316,9 @@ export function buildLessonPacket({
   return {
     title: title.trim() || 'Lesson plan',
     className,
-    sections: built.map(({ derivedTitle: _derived, ...section }) => section),
+    sections: built.map(
+      ({ derivedTitle: _derived, storedMinutes: _minutes, ...section }) => section
+    ),
     outline,
     totalMinutes: outline.reduce(
       (total, entry) => total + (entry.minutes ?? 0),

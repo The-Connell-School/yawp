@@ -610,3 +610,46 @@ describe("buildLessonPacket — a stack of pieces adds up (Brian's run 2, B2)", 
     expect(packet.totalMinutes).toBe(37);
   });
 });
+
+describe("buildLessonPacket — times come from the step, not its first sentence (Brian's run 3, item 9)", () => {
+  test("a filed hook keeps its 15 minutes when its text says 'Give students 2 minutes'", () => {
+    const packet = buildLessonPacket({
+      title: 'Day 1',
+      className: null,
+      sections: [
+        {
+          id: 'm1',
+          content: 'Give students 2 minutes to lay out what is in their bag. Then pairs share.',
+          keptTitle: 'Hook activity: What’s in your bag? (15 min)',
+          origin: 'material',
+          kind: 'plan',
+          keptAudience: 'teacher',
+        },
+      ],
+    });
+    expect(packet.outline[0]!.minutes).toBe(15);
+    expect(packet.totalMinutes).toBe(15);
+  });
+
+  test('the stored minutes win over any title', () => {
+    const packet = buildLessonPacket({
+      title: 'Day 1',
+      className: null,
+      sections: [
+        { id: 'm1', content: 'Background.', keptTitle: 'Frame — Historical context', origin: 'material', kind: 'plan', keptAudience: 'teacher', minutes: 4 },
+        { id: 'm2', content: 'Write.', keptTitle: 'Hook (15 min)', origin: 'material', kind: 'plan', keptAudience: 'teacher', minutes: 10 },
+      ],
+    });
+    expect(packet.outline.map((entry) => entry.minutes)).toEqual([4, 10]);
+    expect(packet.totalMinutes).toBe(14);
+  });
+
+  test("'2 mini-lessons' is not two minutes", () => {
+    const packet = buildLessonPacket({
+      title: 'Day 1',
+      className: null,
+      sections: [{ id: 'r1', content: '## 2 mini-lessons\n\nWe teach them back to back.' }],
+    });
+    expect(packet.outline[0]!.minutes).toBeNull();
+  });
+});
