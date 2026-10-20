@@ -89,12 +89,30 @@ async function readParsedValues(
   client: SettingReader = prisma
 ) {
   if (names.length === 0) return [] as FeatureFlagValue[];
-  const rows = await client.setting.findMany({
-    where: { name: { in: [...names] } },
-    select: { name: true, value: true },
-  });
-  const byName = new Map(rows.map((row) => [row.name!, row.value]));
-  return names.map((name) => parseFeatureFlagValue(byName.get(name)));
+  if (typeof client.setting.findMany === 'function') {
+    const rows = await client.setting.findMany({
+      where: { name: { in: [...names] } },
+      select: { name: true, value: true },
+    });
+    const byName = new Map(rows.map((row) => [row.name!, row.value]));
+    return names.map((name) => parseFeatureFlagValue(byName.get(name)));
+  }
+  const findUnique = (
+    client.setting as {
+      findUnique?: (args: {
+        where: { name: string };
+        select: { value: true };
+      }) => Promise<{ value: string } | null>;
+    }
+  ).findUnique;
+  if (!findUnique) return names.map(() => parseFeatureFlagValue(undefined));
+  return Promise.all(
+    names.map(async (name) =>
+      parseFeatureFlagValue(
+        (await findUnique({ where: { name }, select: { value: true } }))?.value
+      )
+    )
+  );
 }
 
 /** Merges the primary free-tier row with folded legacy rows for batch scoping. */

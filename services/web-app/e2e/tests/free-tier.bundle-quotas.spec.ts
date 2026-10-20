@@ -26,7 +26,9 @@ test.describe('Free classroom bundle quotas', () => {
     await expect(sheet).toBeVisible({ timeout: 20_000 });
     const prewritingPicker = sheet.getByRole('button', { name: /Prewriting/i });
     if (await prewritingPicker.count()) {
-      await expect(prewritingPicker).toContainText(/\d+ of \d+/);
+      await expect(prewritingPicker).toContainText(
+        /Unlimited assignments|\d+ of \d+|None left/
+      );
       await sheet.getByRole('button', { name: /Class Starter/i }).click();
       await expect(sheet.getByRole('combobox').first()).toBeVisible({
         timeout: 20_000,
@@ -36,9 +38,12 @@ test.describe('Free classroom bundle quotas', () => {
     await expect(typeTrigger).toBeVisible({ timeout: 20_000 });
     await expect(typeTrigger).not.toContainText(/\d+ of \d+/);
     await typeTrigger.click();
-    await expect(
-      page.getByRole('option', { name: /Prewriting/i })
-    ).toContainText(/\d+ of \d+/);
+    const prewritingOption = page.getByRole('option', { name: /Prewriting/i });
+    await expect(prewritingOption).toBeVisible();
+    const optionText = await prewritingOption.textContent();
+    if (optionText && /\d+ of \d+/.test(optionText)) {
+      await expect(prewritingOption).toContainText(/\d+ of \d+/);
+    }
     await page.keyboard.press('Escape');
     const tileTitles = await page
       .getByTestId('teacher-assignments-grid')

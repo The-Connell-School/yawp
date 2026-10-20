@@ -208,7 +208,7 @@ for (const viewport of [
           })
         ).toBeVisible();
         await expect(
-          page.getByRole('list', { name: 'Approval progress' })
+          page.getByRole('list', { name: 'Onboarding progress' })
         ).toContainText('Ask your administrator');
       }
       await prisma.freeTierEmailLog.create({
