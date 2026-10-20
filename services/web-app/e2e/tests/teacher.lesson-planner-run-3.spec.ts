@@ -733,4 +733,133 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await stranger.close();
     });
   });
+
+  test.describe('Phase 4: Run the show', () => {
+    test('step by step, with the clock off by default; Next to the end', async ({ page, signIn, e2eContext }) => {
+      await stackV3On();
+      await setLessonPlannerReviewFlag('lesson_planner_run_show', true);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId } = await seedDayOneStack(page, e2eContext);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      await page.getByTestId('set-lesson').click();
+      await page.getByTestId('run-the-show').click();
+      await expect(page).toHaveURL(new RegExp(`/show/${conversationId}`));
+
+      const now = page.getByTestId('show-now');
+      await expect(now).toContainText('Now · Step 1 of 8');
+      await expect(page.getByTestId('show-clock')).toHaveText('Planned: 5 min');
+      await page.getByTestId('show-next').click();
+      await expect(page.getByTestId('show-title')).toHaveText('Hook activity: What’s in your bag?');
+      await expect(page.getByTestId('show-rail-step').first()).toHaveAttribute('data-state', 'done');
+      await page.getByTestId('show-rail-step').last().click();
+      await expect(page.getByTestId('show-title')).toHaveText('Closing');
+      await page.getByTestId('show-next').click();
+      await expect(page.getByTestId('show-done')).toContainText('That’s the show.');
+      await page.getByTestId('run-again').click();
+      await expect(now).toContainText('Now · Step 1 of 8');
+    });
+
+    test('countdown: time left, then calm overtime, never red', async ({ page, signIn, e2eContext }) => {
+      await stackV3On();
+      await setLessonPlannerReviewFlag('lesson_planner_run_show', true);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId } = await seedDayOneStack(page, e2eContext);
+      await page.clock.install();
+      await page.goto(`/show/${conversationId}`);
+      await page.getByTestId('clock-countdown').click();
+      await expect(page.getByTestId('show-clock')).toContainText('5:00 left');
+      await page.clock.fastForward('03:30');
+      await expect(page.getByTestId('show-heads-up')).toHaveText('Two minutes left in this step.');
+      await page.clock.fastForward('02:30');
+      const over = page.getByTestId('show-overtime');
+      await expect(over).toContainText('past the plan. No rush.');
+      await expect(over).toHaveClass(/amber/);
+      await expect(over).not.toHaveClass(/red|animate/);
+    });
+
+    test('the projector follows the teacher', async ({ page, signIn, e2eContext, context }) => {
+      await stackV3On();
+      await setLessonPlannerReviewFlag('lesson_planner_run_show', true);
+      await setLessonPlannerReviewFlag('lesson_planner_deck_v2', true);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId, assistantIds } = await seedDayOneStack(page, e2eContext);
+      const prisma = createE2EPrismaClient();
+      let deckId: string;
+      try {
+        deckId = (
+          await prisma.lessonPlanMaterial.create({
+            data: {
+              conversationId,
+              sourceMessageId: assistantIds[0]!,
+              sourceCreatedAt: new Date(),
+              blockKey: 'deck',
+              slot: 'deck',
+              kind: 'slides',
+              title: 'Day One deck',
+              audience: 'teacher',
+              content:
+                '```yawp-slides\n' +
+                JSON.stringify({
+                  title: 'Day One',
+                  slides: [
+                    { layout: 'title', title: 'What we carry', speakerNotes: 'Go.', minutes: 1 },
+                    { layout: 'prompt', title: 'Write', body: 'What do you carry?', speakerNotes: 'Go.', minutes: 5, step: 1 },
+                    { layout: 'statement', title: 'What’s in your bag?', body: 'Pick one object.', speakerNotes: 'Go.', minutes: 15, step: 2 },
+                  ],
+                }) +
+                '\n```',
+            },
+            select: { id: true },
+          })
+        ).id;
+      } finally {
+        await prisma.$disconnect();
+      }
+      const projector = await context.newPage();
+      await projector.goto(`/present/${conversationId}/${deckId}`);
+      await expect(projector.getByTestId('slide-counter')).toHaveText('1 / 3');
+
+      await page.goto(`/show/${conversationId}`);
+      await expect(page.getByTestId('projector-following')).toBeVisible();
+      await expect(projector.getByTestId('slide-counter')).toHaveText('2 / 3');
+      await page.getByTestId('show-next').click();
+      await expect(projector.getByTestId('slide-counter')).toHaveText('3 / 3');
+      await expect(page.getByTestId('show-now')).toContainText('On the projector now · slide 3');
+    });
+  });
+
+  test.describe('Phase 5: templates', () => {
+    test('save a set lesson’s shape, then start a new lesson from it', async ({ page, signIn, e2eContext }) => {
+      await stackV3On();
+      await setLessonPlannerReviewFlag('lesson_planner_templates', true);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId } = await seedDayOneStack(page, e2eContext);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      await page.getByTestId('set-lesson').click();
+      await page.getByTestId('save-template').click();
+      await page.getByTestId('template-name').fill('Read & write day');
+      await page.getByRole('button', { name: 'Save', exact: true }).click();
+      await expect(page.getByTestId('save-template')).toHaveText('Saved as a template ✓');
+
+      await page.goto('/app/lesson-planner');
+      const tiles = page.getByTestId('prompt-tiles').locator('li');
+      await expect(tiles.nth(1)).toContainText('Build from my templates');
+      await page.getByTestId('template-tile').click();
+      const row = page.getByTestId('template-row').filter({ hasText: 'Read & write day' });
+      await expect(row).toContainText('Class Starter → Activity → Context → Read aloud → Daily Pages → Closing · 50 min');
+      await expect(row).toContainText('20% writing');
+      await row.click();
+      await expect(page.getByTestId('template-chip')).toHaveText(/Using your template: Read & write day/);
+      await expect(page.getByLabel('Message the Lesson Planner')).toHaveAttribute('placeholder', /What are we reading\?/);
+
+      const sent: string[] = [];
+      await page.route('**/api/domain/lesson-planner', (route) => {
+        sent.push(route.request().postData() ?? '');
+        return route.abort();
+      });
+      await page.getByLabel('Message the Lesson Planner').fill('Chapter 2 of The Things They Carried');
+      await page.getByRole('button', { name: 'Send message' }).click();
+      await expect.poll(() => sent.join('\n')).toContain('templateId=');
+    });
+  });
 });
