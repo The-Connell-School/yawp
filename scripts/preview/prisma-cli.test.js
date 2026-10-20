@@ -10,6 +10,9 @@ describe('preview prisma-cli', () => {
     expect(deploy).toContain('bash scripts/preview/prisma-cli.sh');
     expect(deploy).not.toContain('bun prisma migrate deploy');
     expect(deploy).not.toMatch(/bun prisma generate/);
+    expect(deploy).toContain(
+      '(bash scripts/preview/prisma-cli.sh migrate deploy || bash scripts/preview/prisma-cli.sh migrate deploy)'
+    );
     const generateIndex = deploy.indexOf('scripts/preview/prisma-cli.sh generate');
     const migrateIndex = deploy.indexOf('scripts/preview/prisma-cli.sh migrate deploy');
     expect(generateIndex).toBeGreaterThan(-1);
