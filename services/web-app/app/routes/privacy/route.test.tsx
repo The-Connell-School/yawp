@@ -13,6 +13,17 @@ describe('privacy route', () => {
     expect(html).toContain('service providers');
     expect(html).not.toContain('does not sell');
     expect(html).not.toContain('as long as needed');
+    expect(html).not.toContain('does not set a retention period');
     expect(html).toContain('automated feedback');
+    expect(html).toContain('October 20, 2026');
+    expect(html).toContain('Amazon Web Services');
+    expect(html).toContain('Anthropic');
+    expect(html).toContain('OpenAI');
+    expect(html).toContain('PostHog');
+    expect(html).toContain('Stripe');
+    expect(html).toContain('7 days');
+    expect(html).toContain('90 days');
+    expect(html).not.toContain('train');
+    expect(html).not.toMatch(/\bAI\b/);
   });
 });

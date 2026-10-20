@@ -3,17 +3,17 @@ import type { ReactNode } from 'react';
 import { PublicLegalPage, PublicLegalSection } from '../terms/PublicLegalPage';
 
 export const meta: MetaFunction = () => [
-  { title: 'Privacy Policy | YAWP! Writing Program' },
+  { title: 'Privacy Policy | Yawp! Writing Program' },
   {
     name: 'description',
     content:
-      'Privacy Policy for YAWP!, a classroom writing platform used by teachers and students.',
+      'Privacy Policy for Yawp!, a classroom writing platform used by teachers and students.',
   },
-  { property: 'og:title', content: 'Privacy Policy | YAWP! Writing Program' },
+  { property: 'og:title', content: 'Privacy Policy | Yawp! Writing Program' },
   {
     property: 'og:description',
     content:
-      'Privacy Policy for YAWP!, a classroom writing platform used by teachers and students.',
+      'Privacy Policy for Yawp!, a classroom writing platform used by teachers and students.',
   },
   { property: 'og:type', content: 'website' },
 ];
@@ -27,12 +27,12 @@ export default function PrivacyRoute() {
     <PublicLegalPage
       title="Privacy Policy"
       eyebrow="Privacy"
-      updated="October 14, 2026"
+      updated="October 20, 2026"
     >
       <p className="text-lg leading-8 text-muted-foreground">
-        YAWP! is a classroom writing platform operated by The Connell School of
+        Yawp! is a classroom writing platform operated by The Connell School of
         Writing. This Privacy Policy explains, in general terms, what
-        information YAWP! collects and how it is used to provide the product.
+        information Yawp! collects and how it is used to provide the product.
       </p>
 
       <PublicLegalSection title="Information We Collect">
@@ -89,36 +89,62 @@ export default function PrivacyRoute() {
 
       <PublicLegalSection title="Automated Feedback">
         <p>
-          YAWP! includes automated feedback features that help students revise
+          Yawp! includes automated feedback features that help students revise
           and help teachers review writing. Student work, prompts, and related
-          context may be processed to provide those features. YAWP! is designed
-          for classroom use where teachers remain responsible for assignments,
-          instruction, grading decisions, and classroom expectations.
+          context may be sent to model providers to provide those features. Yawp!
+          is designed for classroom use where teachers remain responsible for
+          assignments, instruction, grading decisions, and classroom
+          expectations.
         </p>
       </PublicLegalSection>
 
-      <PublicLegalSection title="Sharing">
+      <PublicLegalSection title="Service Providers">
         <p>
-          YAWP! uses service providers for hosting, email, automated feedback features,
-          and analytics where configured. Information is processed by those
-          providers to deliver the enabled features. Classroom work and feedback
-          are available to users according to their roles and access permissions.
+          Yawp! uses service providers to host the product, deliver email, run
+          writing feedback services, process payments, and measure product use
+          where configured. Current providers include:
+        </p>
+        <List>
+          <li>
+            Amazon Web Services (AWS), including hosting, database, object
+            storage, and Amazon Simple Email Service (SES) for email delivery.
+          </li>
+          <li>Anthropic, for writing feedback services.</li>
+          <li>OpenAI, as a configured fallback for some writing feedback services.</li>
+          <li>PostHog, for analytics and error telemetry where configured.</li>
+          <li>Stripe, for payment processing where enabled.</li>
+        </List>
+        <p>
+          Information is processed by those providers to deliver the enabled
+          features. Classroom work and feedback are available to users according
+          to their roles and access permissions.
         </p>
       </PublicLegalSection>
 
-      <PublicLegalSection title="Retention and Choices">
+      <PublicLegalSection title="Retention">
+        <List>
+          <li>
+            Automated database backups are retained for 7 days.
+          </li>
+          <li>
+            Eligible manual database snapshots and database export files in
+            object storage expire after 90 days.
+          </li>
+        </List>
+      </PublicLegalSection>
+
+      <PublicLegalSection title="Your Choices">
         <p>
           For questions about stored account information, classroom records,
-          access, correction, retention, or deletion, contact YAWP! using the
-          address below. This page does not set a retention period or a deletion
-          timetable.
+          access, correction, retention, or deletion, contact Yawp! using the
+          address below.
         </p>
       </PublicLegalSection>
 
       <PublicLegalSection title="Contact">
         <p>
           Questions about this Privacy Policy can be sent to{' '}
-          <a className="underline underline-offset-4" href="mailto:support@yawp.school">support@yawp.school</a>. This page may be updated as YAWP! changes,
+          <a className="underline underline-offset-4" href="mailto:support@yawp.school">support@yawp.school</a>. This page may be updated as Yawp! changes,
           and the updated date above will reflect the current version.
         </p>
       </PublicLegalSection>
