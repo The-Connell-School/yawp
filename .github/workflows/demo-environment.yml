@@ -317,9 +317,16 @@ jobs:
           health="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' "$url/api/healthcheck")"
           test "$health" = "200" || { echo "Demo healthcheck returned HTTP $health"; exit 1; }
 
-          gated_page="$(curl -skL -m 15 "$url")"
-          grep -q 'data-preview-access-screen' <<<"$gated_page" || {
-            echo "Demo request without a preview access cookie did not render the access screen" >&2
+          public_home="$(curl -skL -m 15 "$url")"
+          grep -q 'data-preview-access-screen' <<<"$public_home" && {
+            echo "Demo homepage still renders the site-wide preview access screen" >&2
+            exit 1
+          }
+
+          approval_entry="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' \
+            "$url/free/admin/approve")"
+          test "$approval_entry" = "200" || {
+            echo "Demo /free/admin/approve without a preview access cookie returned HTTP $approval_entry, expected 200" >&2
             exit 1
           }
 
@@ -328,6 +335,21 @@ jobs:
             "$url/auth/dev-login")"
           test "$blocked" = "401" || {
             echo "POST /auth/dev-login without an access cookie returned HTTP $blocked, expected 401" >&2
+            exit 1
+          }
+
+          dev_options="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' \
+            "$url/auth/dev-login/options?cursor=0")"
+          test "$dev_options" = "401" || {
+            echo "GET /auth/dev-login/options without an access cookie returned HTTP $dev_options, expected 401" >&2
+            exit 1
+          }
+
+          lti_blocked="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' \
+            -X POST --data-urlencode 'id_token=fixture' \
+            "$url/lti/launch")"
+          test "$lti_blocked" = "401" || {
+            echo "POST /lti/launch without an access cookie returned HTTP $lti_blocked, expected 401" >&2
             exit 1
           }
 

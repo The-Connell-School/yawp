@@ -8,7 +8,9 @@ import {
   UserRound,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Form, useFetcher } from 'react-router';
+import { Form, useFetcher, useLocation } from 'react-router';
+import { Input } from '~/components/ui/input';
+import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import {
   Popover,
@@ -175,7 +177,11 @@ function LocalDevQuickLoginPanel({
   previewAccessSeatLabel: string | null;
   blackboardLtiMockEnabled: boolean;
 }) {
+  const location = useLocation();
+  const devLoginReturnTo = `${location.pathname}${location.search}`;
   const loginFetcher = useFetcher();
+  const needsDevLoginAccessCode =
+    previewAccessGateEnabled && !previewAccessSeatLabel;
   const [options, setOptions] = useState<LocalDevLoginOption[]>([]);
   const [nextCursor, setNextCursor] = useState<number | null>(null);
   const [hasLoadedFirstPage, setHasLoadedFirstPage] = useState(false);
@@ -226,14 +232,14 @@ function LocalDevQuickLoginPanel({
 
   useEffect(() => {
     isMounted.current = true;
-    if (isOpen && !firstPageRequested.current) {
+    if (isOpen && !firstPageRequested.current && !needsDevLoginAccessCode) {
       firstPageRequested.current = true;
       void loadPage(0);
     }
     return () => {
       isMounted.current = false;
     };
-  }, [isOpen, loadPage]);
+  }, [isOpen, loadPage, needsDevLoginAccessCode]);
 
   const loadMore = useCallback(() => {
     if (nextCursor === null || loadInFlight.current) return;
@@ -256,6 +262,31 @@ function LocalDevQuickLoginPanel({
       className="max-h-72 w-80 max-w-[calc(100vw-2rem)] overflow-y-auto p-1.5"
       onScroll={handleScroll}
     >
+      {needsDevLoginAccessCode ? (
+        <Form method="post" action="/auth/preview-access" className="space-y-2 px-2 py-1">
+          <input type="hidden" name="returnTo" value={devLoginReturnTo} />
+          <p className="text-xs text-muted-foreground">
+            Enter the access code to unlock dev login on this environment.
+          </p>
+          <div className="signon-field">
+            <label htmlFor="beaker-preview-access-code" className="text-xs font-medium">
+              Access code
+            </label>
+            <Input
+              id="beaker-preview-access-code"
+              name="code"
+              autoComplete="off"
+              required
+              className="h-9"
+            />
+          </div>
+          <Button type="submit" size="sm" className="w-full">
+            Unlock dev login
+          </Button>
+        </Form>
+      ) : null}
+      {!needsDevLoginAccessCode ? (
+        <>
       <LoginOptionGroup
         Form={loginFetcher.Form}
         label="Staff"
@@ -292,9 +323,13 @@ function LocalDevQuickLoginPanel({
           Unable to load preview users.
         </p>
       ) : null}
-      {blackboardLtiMockEnabled || previewAccessGateEnabled ? (
+        </>
+      ) : null}
+      {blackboardLtiMockEnabled || previewAccessSeatLabel ? (
         <>
-          {options.length > 0 || blackboardLtiMockEnabled ? (
+          {(options.length > 0 && !needsDevLoginAccessCode) ||
+          blackboardLtiMockEnabled ||
+          previewAccessSeatLabel ? (
             <div className="my-1.5 h-px bg-border/60" aria-hidden="true" />
           ) : null}
           {previewAccessSeatLabel ? (
@@ -303,7 +338,7 @@ function LocalDevQuickLoginPanel({
           {blackboardLtiMockEnabled ? (
             <BlackboardLtiMockLink />
           ) : null}
-          {previewAccessGateEnabled ? (
+          {previewAccessGateEnabled && previewAccessSeatLabel ? (
             <Form method="post" action="/auth/preview-access">
               <input type="hidden" name="intent" value="sign-out" />
               <button

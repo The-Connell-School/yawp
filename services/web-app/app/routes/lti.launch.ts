@@ -7,6 +7,7 @@ import { authSessionStorage } from '~/cookie-session-storages/authentication.ser
 import { sessionKey } from '~/utils/auth.server.ts';
 import { isLocalDevAuthEnabled } from '~/utils/local-dev-auth.server.ts';
 import { blackboardLtiMockUpstreamUrl } from '~/utils/blackboard-lti-mock-ui.server.ts';
+import { rejectWithoutExplicitPreviewDevLoginAccess } from '~/utils/preview-access.server.ts';
 
 const STATE_COOKIE = 'yawp_lti_state';
 const NONCE_COOKIE = 'yawp_lti_nonce';
@@ -28,6 +29,9 @@ function clearCookie(name: string) {
 }
 
 async function handlePost(request: Request) {
+  const accessBlock = await rejectWithoutExplicitPreviewDevLoginAccess(request);
+  if (accessBlock) return accessBlock;
+
   const form = await request.formData();
   const idToken = String(form.get('id_token') || '');
   const state = String(form.get('state') || '');

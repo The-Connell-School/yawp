@@ -1,7 +1,11 @@
 import { redirect, type LoaderFunctionArgs } from 'react-router';
 import { getDomainUrl } from '~/utils/misc';
+import { rejectWithoutExplicitPreviewDevLoginAccess } from '~/utils/preview-access.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
+  const accessBlock = await rejectWithoutExplicitPreviewDevLoginAccess(request);
+  if (accessBlock) return accessBlock;
+
   const url = new URL(request.url);
   // Always route through same-origin proxy; browsers cannot resolve the Docker service name.
   const target = new URL('/dev/blackboard-lti-mock/api/v1/gateway/oidcauth', url.origin);
