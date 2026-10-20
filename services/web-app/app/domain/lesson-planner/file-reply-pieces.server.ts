@@ -7,8 +7,8 @@
  * order, so each can be reordered, removed, renamed and edited in the stack.
  */
 import { prisma } from '~/utils/db.server';
-import { artifactFromAssistantReply } from './artifact-from-reply';
-import { blockMinutesInReply, pieceKeysInReply } from './reply-pieces';
+import { fileableMaterial, stepColumns } from './fileable-material';
+import { pieceKeysInReply } from './reply-pieces';
 import { loadStackOrder, writeStackOrder } from './stack-order.server';
 
 export async function fileReplyPieces({
@@ -31,15 +31,9 @@ export async function fileReplyPieces({
   const skipped: string[] = [];
   const newKeys: string[] = [];
 
-  const carriedMinutes = blockMinutesInReply(message.content);
   for (const key of pieceKeysInReply(message.content)) {
-    const found = artifactFromAssistantReply(message.content, key);
-    if (!found) continue;
-    const minutes = carriedMinutes[key];
-    const material =
-      minutes && !/\(\s*\d+[^)]*min/i.test(found.title)
-        ? { ...found, title: `${found.title} (${minutes} min)` }
-        : found;
+    const material = fileableMaterial(message.content, key);
+    if (!material) continue;
     const existing = await prisma.lessonPlanMaterial.findUnique({
       where: { conversationId_slot: { conversationId, slot: material.slot } },
       select: { sourceMessageId: true, blockKey: true, editedAt: true },
@@ -60,6 +54,7 @@ export async function fileReplyPieces({
       sourceMessageId: message.id,
       blockKey: material.key,
       promptId: material.promptId ?? null,
+      ...stepColumns(material),
     };
     const saved = await prisma.lessonPlanMaterial.upsert({
       where: { conversationId_slot: { conversationId, slot: material.slot } },

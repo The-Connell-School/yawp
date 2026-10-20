@@ -19,7 +19,7 @@ import { prisma } from '~/utils/db.server';
 import { requireMutableRequest } from '~/utils/auth.server';
 import { requireLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import { PACKET_AUDIENCES } from '~/domain/lesson-planner/lesson-packet';
-import { artifactFromAssistantReply } from '~/domain/lesson-planner/artifact-from-reply';
+import { fileableMaterial, stepColumns } from '~/domain/lesson-planner/fileable-material';
 import { fileReplyPieces } from '~/domain/lesson-planner/file-reply-pieces.server';
 import {
   loadStackOrder,
@@ -381,7 +381,7 @@ export async function action({ request }: ActionFunctionArgs) {
       select: { id: true, createdAt: true, content: true },
     });
     const material = message
-      ? artifactFromAssistantReply(message.content, data.materialKey!)
+      ? fileableMaterial(message.content, data.materialKey!)
       : null;
     if (!message || !material) {
       return dataResponse(
@@ -432,6 +432,7 @@ export async function action({ request }: ActionFunctionArgs) {
         sourceMessageId: message.id,
         blockKey: material.key,
         promptId: material.promptId ?? null,
+        ...stepColumns(material),
       };
       return tx.lessonPlanMaterial.upsert({
         where: {
@@ -491,7 +492,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     // Re-read the material from the reply rather than trusting the client with
     // its content: the body is what gets printed and handed to students.
-    const material = artifactFromAssistantReply(
+    const material = fileableMaterial(
       message.content,
       data.materialKey!
     );
@@ -511,6 +512,7 @@ export async function action({ request }: ActionFunctionArgs) {
       sourceMessageId: message.id,
       blockKey: material.key,
       promptId: material.promptId ?? null,
+        ...stepColumns(material),
     };
     // Keyed by what the artifact IS, so filing a revision takes the original's
     // place. A teacher who asks for a shorter handout wants one handout.

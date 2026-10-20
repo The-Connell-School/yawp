@@ -138,6 +138,10 @@ export type LessonMaterial = {
    * run 2, item 17).
    */
   promptId?: string | null;
+  /** The piece's planned minutes, stored with it (Brian's run 3, item 9). */
+  minutes?: number | null;
+  /** The planner's type tag for the step (run 3), e.g. 'activity'. */
+  stepType?: string | null;
 };
 
 const MATERIAL_BLOCK = new RegExp(
@@ -195,6 +199,11 @@ function readTitle(
   const heading = body.match(HEADING)?.[1]?.trim();
   if (heading) return heading.slice(0, MAX_TITLE_CHARS);
   return MATERIAL_KIND_LABELS[kind];
+}
+
+function readHeaderMinutes(raw: string | undefined): number | null {
+  const match = /^(\d{1,3})\b/.exec(raw?.trim() ?? '');
+  return match ? Number(match[1]) : null;
 }
 
 const MAX_SLOT_CHARS = 80;
@@ -256,6 +265,9 @@ export function readLessonMaterials(content: string): {
         ? parsePacketAudience(header.audience)
         : KIND_AUDIENCE[kind],
       content: materialBody,
+      // `minutes: 4` and `type: context` in the header (Brian's run 3, P3).
+      minutes: readHeaderMinutes(header.minutes),
+      stepType: header.type?.trim().toLowerCase() || null,
     });
   }
 

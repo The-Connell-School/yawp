@@ -16,6 +16,8 @@ export type PlanStep = {
   key: string;
   title: string;
   minutes: number | null;
+  /** The planner's `{type: …}` tag on the heading (run 3), when it gave one. */
+  stepType: string | null;
   /** The step's own text: its blocks are pieces of their own. */
   content: string;
   /** Where the step starts in the reply, to keep pieces in reply order. */
@@ -37,8 +39,15 @@ export function planStepIndexForKey(key: string): number | null {
 const MINUTES = /\(?\s*(\d{1,3})\s*(?:[–—-]\s*(\d{1,3})\s*)?(?:min|minutes?)\b\.?\s*\)?/i;
 const FENCE = /```[\s\S]*?```/g;
 
+// `## Hook (15 min) {type: activity}` — the planner tags each step (run 3).
+const TYPE_TAG = /\{\s*type\s*:\s*([a-z _-]{2,24})\s*\}/i;
+
+function readTypeTag(raw: string): string | null {
+  return TYPE_TAG.exec(raw)?.[1]?.trim().toLowerCase() ?? null;
+}
+
 function cleanTitle(raw: string): { title: string; minutes: number | null } {
-  const text = raw.replace(/\*\*|__|`/g, '').trim();
+  const text = raw.replace(TYPE_TAG, '').replace(/\*\*|__|`/g, '').trim();
   const match = MINUTES.exec(text);
   const minutes = match ? Number(match[2] ?? match[1]) : null;
   const title = (match ? text.replace(match[0], ' ') : text)
@@ -104,6 +113,7 @@ export function readPlanSteps(content: string): PlanStep[] {
         key: planStepKey(index),
         title: title || `Step ${index + 1}`,
         minutes,
+        stepType: readTypeTag(heading.text),
         content: next ? text : withoutTrailingCommentary(text),
         at: heading.start,
       };
@@ -141,7 +151,8 @@ function readBoldSteps(content: string, masked: string): PlanStep[] {
       key: planStepKey(index),
       title: title || `Step ${index + 1}`,
       minutes,
-      content: last ? withoutTrailingCommentary(text) : text,
+      stepType: readTypeTag(`${step.label} ${step.rest.slice(0, 60)}`),
+      content: last ? withoutTrailingCommentary(text.replace(TYPE_TAG, '').trim()) : text.replace(TYPE_TAG, '').trim(),
       at: step.start,
     };
   });

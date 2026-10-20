@@ -10,7 +10,7 @@ import { redirect } from 'react-router';
 import { prisma } from '~/utils/db.server';
 import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import { buildLessonPacket, type LessonPacket } from './lesson-packet';
-import { MATERIAL_KIND_LABELS, packetKindForMaterial, type ArtifactKind } from './lesson-material';
+import { DECK_KIND, MATERIAL_KIND_LABELS, packetKindForMaterial, type ArtifactKind } from './lesson-material';
 import { findWritingExerciseTypeIds } from './yawp-catalog.server';
 import { stackCreateLink, type StackCreateLink } from './stack-create-link';
 import { getQuickWritingLessons } from '~/utils/writing-lessons/static-lessons.server';
@@ -20,6 +20,7 @@ import {
 } from '~/domain/feature-flags/feature-flags.server';
 import { nameIsProvisional } from './lesson-name';
 import { withoutTrailingCommentary } from './plan-steps';
+import { DEFAULT_STEP_MINUTES, stepTypeFor } from './step-types';
 import { orderStackEntries } from './stack-order';
 
 export type LoadedLessonPacket = {
@@ -113,6 +114,8 @@ export async function loadLessonPacket({
           editedAt: true,
           position: true,
           sourceMessageId: true,
+          minutes: true,
+          stepType: true,
         },
       },
     },
@@ -127,6 +130,10 @@ export async function loadLessonPacket({
         : (klass.grade ?? null)))
     : // The class the teacher named when they gave the length (run 2, B1).
       (conversation.lessonClassLabel ?? null);
+
+  const reviewFlags = await getLessonPlannerReviewFlags(
+    access.membership.organization.id
+  );
 
   // Kept replies and individually saved materials are one document, ordered by
   // the reply each came from so the packet reads in lesson order rather than in
@@ -163,13 +170,19 @@ export async function loadLessonPacket({
         kind: packetKindForMaterial(material.kind),
         origin: 'material' as const,
         editedAt: material.editedAt,
+        minutes: material.minutes,
+        // Every step shows a time (Brian's run 3, item 9). The deck is built
+        // from the stack, not a step of it.
+        suggestedMinutes:
+          !reviewFlags.stackV2 || material.kind === DECK_KIND
+            ? null
+            : DEFAULT_STEP_MINUTES[
+                stepTypeFor({ kind: material.kind, title: material.title, stored: material.stepType })
+              ],
       },
     })),
   ]);
 
-  const reviewFlags = await getLessonPlannerReviewFlags(
-    access.membership.organization.id
-  );
   const stackDetails: LoadedLessonPacket['stackDetails'] = {};
   if (reviewFlags.stackV2 && withStackDetails) {
     const writing = conversation.materials.filter((material) =>

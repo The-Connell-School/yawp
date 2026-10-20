@@ -56,6 +56,13 @@ export type DailyPagesExercise = {
    * disclaimer about where it did not come from.
    */
   promptId: string | null;
+  /**
+   * A short, real name for the step ("What one item reveals"), from the
+   * block's `title:` line (Brian's run 3, item 11). Null: made from the prompt.
+   */
+  title?: string | null;
+  /** The minutes the planner gave the block's `minutes:` line. */
+  minutes?: number | null;
 };
 
 const DAILY_PAGES_BLOCK = new RegExp(
@@ -98,6 +105,10 @@ export function kindForPromptId(promptId: string): WritingExerciseKind | null {
 
 /** An optional `kind: class-starter` header line. */
 const KIND_LINE = /^\s*kind:\s*([A-Za-z][A-Za-z -]{0,31})\s*$/;
+/** `title: What one item reveals` — a short name for the step (run 3). */
+const TITLE_LINE = /^\s*title:\s*(\S.{0,79})$/i;
+/** `minutes: 10` — the planner's time for the step (run 3). */
+const MINUTES_LINE = /^\s*minutes:\s*(\d{1,3})\s*(?:min(?:utes?)?)?\s*$/i;
 
 /**
  * What a block is when nothing in it says otherwise.
@@ -147,15 +158,31 @@ function readKind(raw: string): WritingExerciseKind {
 function splitHeader(raw: string): {
   kind: WritingExerciseKind;
   promptId: string | null;
+  title: string | null;
+  minutes: number | null;
   rest: string;
 } {
   const lines = raw.split('\n');
   let kind: WritingExerciseKind = DEFAULT_KIND;
   let promptId: string | null = null;
+  let title: string | null = null;
+  let minutes: number | null = null;
   let cursor = 0;
 
   while (cursor < lines.length) {
     const line = lines[cursor]!;
+    const titleMatch = TITLE_LINE.exec(line);
+    if (titleMatch) {
+      title = titleMatch[1]!.trim().replace(/^["“]|["”]$/g, '') || null;
+      cursor += 1;
+      continue;
+    }
+    const minutesMatch = MINUTES_LINE.exec(line);
+    if (minutesMatch) {
+      minutes = Number(minutesMatch[1]);
+      cursor += 1;
+      continue;
+    }
     const idMatch: RegExpExecArray | null =
       promptId === null ? ID_LINE.exec(line) : null;
     if (idMatch) {
@@ -177,7 +204,7 @@ function splitHeader(raw: string): {
   // depth whatever the line above it says.
   if (promptId) kind = kindForPromptId(promptId) ?? kind;
 
-  return { kind, promptId, rest: lines.slice(cursor).join('\n') };
+  return { kind, promptId, title, minutes, rest: lines.slice(cursor).join('\n') };
 }
 
 /**
@@ -193,6 +220,17 @@ function splitBundledBlock(raw: string): string[] {
   let sawText = false;
   for (const line of raw.split('\n')) {
     const isHeader = ID_LINE.test(line) || KIND_LINE.test(line);
+    // A title or minutes line belongs to the prompt it heads; it never
+    // starts a new one on its own.
+    const isLabel = TITLE_LINE.test(line) || MINUTES_LINE.test(line);
+    if (isLabel) {
+      if (sawText) {
+        chunks.push([]);
+        sawText = false;
+      }
+      chunks[chunks.length - 1]!.push(line);
+      continue;
+    }
     if (isHeader && sawText) {
       chunks.push([]);
       sawText = false;
@@ -225,7 +263,7 @@ export function readDailyPagesExercises(content: string): {
   for (const match of content.matchAll(DAILY_PAGES_BLOCK)) {
     body = body.replace(match[0], '');
     for (const chunk of splitBundledBlock(match[1] ?? '')) {
-      const { kind, promptId, rest } = splitHeader(chunk);
+      const { kind, promptId, title, minutes, rest } = splitHeader(chunk);
       const prompt = unquote(rest);
       // An empty block is the model opening one and thinking better of it.
       if (!prompt) continue;
@@ -233,6 +271,8 @@ export function readDailyPagesExercises(content: string): {
         kind,
         prompt: prompt.slice(0, MAX_PROMPT_CHARS),
         promptId,
+        title,
+        minutes,
       });
     }
   }

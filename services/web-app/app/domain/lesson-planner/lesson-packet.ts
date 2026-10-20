@@ -151,6 +151,11 @@ export type PacketSectionInput = {
    * anything read out of a title; null falls back to the title.
    */
   minutes?: number | null;
+  /**
+   * The time to suggest when nothing names one: the step type's default, so
+   * every step shows a time (Brian's run 3, item 9).
+   */
+  suggestedMinutes?: number | null;
 };
 
 export type PacketSection = {
@@ -202,6 +207,8 @@ export type PacketSection = {
 export type PacketOutlineEntry = {
   title: string;
   minutes: number | null;
+  /** True when `minutes` is a suggestion, not a time anyone planned. */
+  suggested?: boolean;
   steps: string[];
   kind: PacketSectionKind;
   anchor: string;
@@ -294,30 +301,40 @@ export function buildLessonPacket({
       deckFailed: deckOutcome.kind === 'unreadable',
       anchor: `resource-${section.id}`,
       storedMinutes: section.minutes ?? null,
+      suggestedMinutes: section.suggestedMinutes ?? null,
     };
   });
 
-  const outline = built.map((section) => ({
+  const outline = built.map((section) => {
+    const planned =
+      section.storedMinutes ??
+      (section.origin === 'material'
+        ? readMinutes(section.title) ?? readMinutes(section.derivedTitle)
+        : readMinutes(section.derivedTitle));
+    return {
     title: section.title,
     // Stored minutes first. Then a filed piece is named for what it is,
     // minutes and all ("Read aloud (25 min)"): its title wins over its text,
     // whose first sentence ("Give students 2 minutes…") is not its length
     // (Brian's run 3, item 9). A kept reply's timing lives in its own heading.
-    minutes:
-      section.storedMinutes ??
-      (section.origin === 'material'
-        ? readMinutes(section.title) ?? readMinutes(section.derivedTitle)
-        : readMinutes(section.derivedTitle)),
+    minutes: planned ?? section.suggestedMinutes,
+    ...(planned == null && section.suggestedMinutes != null ? { suggested: true } : {}),
     steps: readSteps(section.content, section.derivedTitle),
     kind: section.kind,
     anchor: section.anchor,
-  }));
+  };
+  });
 
   return {
     title: title.trim() || 'Lesson plan',
     className,
     sections: built.map(
-      ({ derivedTitle: _derived, storedMinutes: _minutes, ...section }) => section
+      ({
+        derivedTitle: _derived,
+        storedMinutes: _minutes,
+        suggestedMinutes: _suggested,
+        ...section
+      }) => section
     ),
     outline,
     totalMinutes: outline.reduce(

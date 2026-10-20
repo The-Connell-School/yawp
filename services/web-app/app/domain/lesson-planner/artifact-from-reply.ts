@@ -29,7 +29,7 @@ import { planStepIndexForKey, readPlanSteps, type PlanStep } from './plan-steps'
 
 export { DAILY_PAGES_BLOCK_KEY, dailyPagesBlockKey };
 
-const EXERCISE_TITLE_CHARS = 60;
+import { shortTitle } from './short-title';
 
 /**
  * A class starter or Daily Pages prompt, filed on its own (Brian's review,
@@ -42,11 +42,9 @@ export function exerciseAsMaterial(
   key: string
 ): LessonMaterial {
   const label = WRITING_EXERCISE_LABELS[exercise.kind];
-  const firstLine = exercise.prompt.split('\n')[0].trim();
-  const short =
-    firstLine.length > EXERCISE_TITLE_CHARS
-      ? `${firstLine.slice(0, EXERCISE_TITLE_CHARS - 1).trimEnd()}…`
-      : firstLine;
+  // A short, real title, never the prompt cut mid-word (Brian's run 3,
+  // item 11): the planner's own, else the prompt's first clause.
+  const short = exercise.title?.trim() || shortTitle(exercise.prompt);
   return {
     key,
     slot: `${exercise.kind}:${slugify(exercise.prompt).slice(0, 48)}`,
@@ -55,6 +53,7 @@ export function exerciseAsMaterial(
     audience: 'student',
     content: exercise.prompt,
     promptId: exercise.promptId ?? null,
+    minutes: exercise.minutes ?? null,
   };
 }
 
@@ -85,6 +84,8 @@ export function stepAsMaterial(step: PlanStep): LessonMaterial {
     title: step.minutes !== null ? `${step.title} (${step.minutes} min)` : step.title,
     audience: 'teacher',
     content: step.content,
+    minutes: step.minutes,
+    stepType: step.stepType,
   };
 }
 
