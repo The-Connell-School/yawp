@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, test } from '../test-setup';
-import { setFeatureFlag } from '../feature-flags';
+import { setFreeTierOnboardingV2 } from '../feature-flags';
 import { createE2EPrismaClient } from '../prisma-client';
 import { mintFreeTierLinkForE2E } from '../helpers/mint-free-tier-link';
 import { waitForFreeTierEmailPayload } from '../helpers/free-tier-email';
@@ -49,7 +49,7 @@ for (const viewport of [
     await page.setViewportSize(viewport);
     const prisma = createE2EPrismaClient();
     const stamp = `artboard-${viewport.width}-${testInfo.retry}`;
-    if (!before) await setFeatureFlag('free-tier-onboarding-v2', true);
+    if (!before) await setFreeTierOnboardingV2(true);
     const capture = async (state: string, target = page) => {
       await target.locator('h1').waitFor();
       await target.locator('h1').click();
@@ -466,7 +466,7 @@ for (const viewport of [
         }
       }
     } finally {
-      if (!before) await setFeatureFlag('free-tier-onboarding-v2', false);
+      if (!before) await setFreeTierOnboardingV2(false);
       await admin.close();
       await prisma.$disconnect();
     }

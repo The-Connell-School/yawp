@@ -13,6 +13,27 @@ const FOLDED_FREE_TIER_SETTINGS = [
   'feature_flag.free-tier-inapp-v2',
 ] as const;
 
+const FREE_TIER_ONBOARDING_V2_SETTING = 'feature_flag.free-tier-onboarding-v2';
+
+export async function setFreeTierOnboardingV2(enabled: boolean) {
+  const prisma = createE2EPrismaClient();
+  try {
+    const value = enabled ? 'true' : 'false';
+    await prisma.setting.upsert({
+      where: { name: FREE_TIER_ONBOARDING_V2_SETTING },
+      create: {
+        name: FREE_TIER_ONBOARDING_V2_SETTING,
+        value,
+        valueType: 'boolean',
+        description: 'Set by e2e',
+      },
+      update: { value, updatedAt: new Date() },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 export async function setFreeTierFlag(enabled: boolean) {
   const prisma = createE2EPrismaClient();
   try {
