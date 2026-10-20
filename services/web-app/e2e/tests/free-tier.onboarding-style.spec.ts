@@ -370,6 +370,9 @@ for (const viewport of [
       });
       const replacementApproveUrl = `${origin}/free/admin/approve?t=${encodeURIComponent(replacementMint.token)}`;
       await admin.goto(replacementApproveUrl);
+      await expect(
+        admin.getByRole('heading', { name: /Approve Yawp! for/i })
+      ).toBeVisible({ timeout: 30_000 });
       await capture('administrator-approval', admin);
       await admin
         .getByRole('button', { name: 'Approve Yawp!', exact: true })
