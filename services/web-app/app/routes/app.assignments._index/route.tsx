@@ -57,6 +57,7 @@ import {
 } from '~/utils/school-year-scope.server';
 import { formatClassLabel } from '~/utils/teacher-document-work-utils';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import { siteLicenseLockedAssignmentTilesForOrganization } from '~/domain/free-tier/site-license-locked-assignment-tiles';
 
 export const handle = { breadcrumb: 'My Assignments' };
 
@@ -214,6 +215,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
     creationTypeRows.map((type) => type.id)
   );
+  const siteLicenseLockedAssignmentTiles =
+    siteLicenseLockedAssignmentTilesForOrganization(
+      profile.organization,
+      availableAssignmentTypes
+    );
 
   return {
     assignments,
@@ -241,6 +247,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         ...quotaByTypeId.get(type.id),
       }));
     })(),
+    siteLicenseLockedAssignmentTiles,
   };
 }
 
@@ -470,6 +477,7 @@ export default function MyAssignmentsRoute() {
     savedAssignments,
     assignmentCreationClasses,
     assignmentCreationTypes,
+    siteLicenseLockedAssignmentTiles,
   } = useLoaderData<typeof loader>();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -570,6 +578,7 @@ export default function MyAssignmentsRoute() {
           }}
           entryPoint="dashboard"
           assignmentTypes={assignmentCreationTypes}
+          siteLicenseLockedAssignmentTiles={siteLicenseLockedAssignmentTiles}
           teacherClasses={assignmentCreationClasses}
           initialAssignmentTypeId={reusedAssignment.assignmentTypeId}
           initialTitle={reusedAssignment.title}
@@ -785,6 +794,7 @@ export default function MyAssignmentsRoute() {
         onOpenChange={setIsCreateSheetOpen}
         entryPoint="dashboard"
         assignmentTypes={assignmentCreationTypes}
+        siteLicenseLockedAssignmentTiles={siteLicenseLockedAssignmentTiles}
         teacherClasses={assignmentCreationClasses}
       />
     </div>

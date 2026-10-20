@@ -56,6 +56,7 @@ import {
   DialogTitle,
 } from '~/components/ui/dialog';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import { siteLicenseLockedAssignmentTilesForOrganization } from '~/domain/free-tier/site-license-locked-assignment-tiles';
 
 const DASHBOARD_MAX_TEACHER_CLASSES = 6;
 
@@ -312,6 +313,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     gradesGrammar: gradesGrammarIds.has(type.id),
     ...quotaByTypeId.get(type.id),
   }));
+  const siteLicenseLockedAssignmentTiles =
+    siteLicenseLockedAssignmentTilesForOrganization(
+      profile.organization,
+      teacherAssignmentTypes
+    );
 
   // A student's assigned Writing Fundamentals practice, surfaced on their
   // dashboard alongside their classes (each card links into the practice
@@ -368,6 +374,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       name: formatClassLabel(klass),
     })),
     assignmentCreationTypes,
+    siteLicenseLockedAssignmentTiles,
   });
 }
 
@@ -435,6 +442,9 @@ export default function AppRoute() {
                   <FreeAssignmentTiles
                     usage={freeUsage}
                     types={data.assignmentCreationTypes}
+                    lockedAssignmentTiles={
+                      data.siteLicenseLockedAssignmentTiles
+                    }
                     onCreate={(id) => {
                       setCreateAssignmentTypeId(id);
                       setIsCreateSheetOpen(true);
@@ -475,6 +485,9 @@ export default function AppRoute() {
                   }}
                   entryPoint="dashboard"
                   assignmentTypes={data.assignmentCreationTypes}
+                  siteLicenseLockedAssignmentTiles={
+                    data.siteLicenseLockedAssignmentTiles
+                  }
                   teacherClasses={data.assignmentCreationClasses}
                   initialAssignmentTypeId={createAssignmentTypeId}
                 />

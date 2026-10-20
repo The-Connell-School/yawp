@@ -21,6 +21,7 @@ import { Tooltip } from '~/components/ui/tooltip';
 import { useTable } from '~/hooks/useTable';
 import { filterClassAssignmentsByQuery } from './class-assignments-search';
 import type { ClassInsight } from '../app.my-classes.$classId_.assignments.$assignmentId/class-insights-panel';
+import type { SiteLicenseLockedAssignmentTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
 
 export type ClassAssignmentsTabAssignment = AssignmentEditRecord & {
   classAssignmentId: string;
@@ -47,6 +48,7 @@ type ClassAssignmentsTabProps = {
     collaborationSupported: boolean;
     gradesGrammar: boolean;
   }[];
+  siteLicenseLockedAssignmentTiles?: SiteLicenseLockedAssignmentTile[];
   apHistoryAssignmentTypeId?: string | null;
   /** Gated on the organization's classInsightsEnabled flag. */
   classInsightsEnabled: boolean;
@@ -77,6 +79,7 @@ export function ClassAssignmentsTab({
   classOption,
   assignments,
   assignmentTypes,
+  siteLicenseLockedAssignmentTiles = [],
   apHistoryAssignmentTypeId,
   classInsightsEnabled,
   onViewDocuments,
@@ -362,6 +365,7 @@ export function ClassAssignmentsTab({
         entryPoint="class"
         fixedClassId={classOption.id}
         assignmentTypes={assignmentTypes}
+        siteLicenseLockedAssignmentTiles={siteLicenseLockedAssignmentTiles}
         teacherClasses={[classOption]}
       />
     </div>
