@@ -202,7 +202,7 @@ describe('sendEmail', () => {
 
 		const result = await sendEmail({
 			to: 'admin@school.edu',
-			subject: 'Approve YAWP',
+			subject: 'Approve Yawp!',
 			html: '<p>test</p>',
 			text: 'test',
 		});

@@ -23,7 +23,7 @@ const demoUrl = 'https://app.usemotion.com/meet/brian-connell/ryxkqvr';
 const loginUrl = '/auth/login';
 const accessibilityUrl = '/accessibility';
 const contactUrl =
-  'mailto:yawp@theconnellschool.com?subject=YAWP!%20Writing%20Program';
+  'mailto:yawp@theconnellschool.com?subject=Yawp!%20Writing%20Program';
 const connellUrl = 'https://www.theconnellschool.com/';
 const itemNumber = '[Item #: AP1030]';
 

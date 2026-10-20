@@ -22,7 +22,7 @@ export const meta: MetaFunction = () => [
 
 const supportEmail = 'yawp@theconnellschool.com';
 const supportHref =
-  'mailto:yawp@theconnellschool.com?subject=YAWP!%20accessibility%20support';
+  'mailto:yawp@theconnellschool.com?subject=Yawp!%20accessibility%20support';
 
 function Header() {
   return (
