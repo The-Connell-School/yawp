@@ -243,7 +243,7 @@ for (const width of [1280, 390])
     await flag('everyone');
     await page.reload();
     await expect(
-      page.getByRole('heading', { name: 'About YAWP' })
+      page.getByRole('heading', { name: 'About YAWP!' })
     ).toBeVisible();
     await expect(page.locator('[data-guide-slot=administrator]')).toHaveCount(
       1
@@ -271,7 +271,7 @@ for (const width of [1280, 390])
     ).toBeVisible();
     await capture(page, `${width}-admin`);
     await page
-      .getByRole('button', { name: 'Approve YAWP', exact: true })
+      .getByRole('button', { name: 'Approve YAWP!', exact: true })
       .click();
     await expect(page.getByLabel('Your role')).toHaveAttribute(
       'aria-invalid',

@@ -199,7 +199,7 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'my-assignments-new',
         title: 'Create an assignment',
-        body: 'Start a new assignment here. Choose a type, and YAWP shows how many of that type your free classroom has left.',
+        body: 'Start a new assignment here. Choose a type, and YAWP! shows how many of that type your free classroom has left.',
       },
       {
         target: 'my-assignments-list',

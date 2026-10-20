@@ -409,7 +409,7 @@ export default function AppRoute() {
                 {freeUsage
                   ? freeUsage.monthly
                     ? 'Your class, assignments, and grading in one place.'
-                    : 'Your class, assignments and grading in one place.'
+                    : 'Your class, assignments, and grading in one place.'
                   : 'Your classes, assignments, and grading in one place.'}
               </p>
             </div>

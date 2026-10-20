@@ -45,11 +45,11 @@ local('original copy survives duplicates, later token admission and a flag chang
   expect(deliver.mock.calls[0][0].text).toContain("\n\nYou're in!\n\n");
   expect(deliver.mock.calls[0][0].html).toContain('Ada &lt;Teacher&gt;');
   expect(deliver.mock.calls[0][0].html).not.toContain('<Teacher>');
-  expect(deliver.mock.calls[1][0].subject).toBe("You're in — start your YAWP classroom");
+  expect(deliver.mock.calls[1][0].subject).toBe("You're in — start your YAWP! classroom");
   // Turn v2 on at delivery: the original legacy context still wins.
   await prisma.setting.update({ where: { name: 'feature_flag.free-tier-onboarding-v2' }, data: { value: 'true' } });
   await sendReleaseEmailsForApplicationIds([legacy.id]);
-  expect(deliver.mock.calls.at(-1)![0].subject).toBe("You're in — start your YAWP classroom");
+  expect(deliver.mock.calls.at(-1)![0].subject).toBe("You're in — start your YAWP! classroom");
 });
 local('token-created applications persist their initial context once, under concurrent redemption', async () => {
   const token = await prisma.acquisitionToken.create({ data: { code: prefix + '-race', tokenHash: prefix + '-race', label: prefix + '-race', bypassWaitlist: false } });
