@@ -1,7 +1,5 @@
 FROM oven/bun:1.3.1 AS base
 RUN apt-get update -y && apt-get install -y openssl
-ARG DATABASE_URL
-ENV DATABASE_URL=${DATABASE_URL}
 
 FROM base AS deps
 WORKDIR /app
@@ -10,7 +8,7 @@ COPY services/web-app ./services/web-app
 COPY packages/prisma ./packages/prisma
 COPY scripts/preview/free-tier-ship-review-seed-guard.mjs ./scripts/preview/free-tier-ship-review-seed-guard.mjs
 RUN bun install --ignore-scripts
-RUN bun prisma generate
+RUN DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build bun prisma generate
 
 FROM deps AS build
 ENV NODE_OPTIONS=--max-old-space-size=1280
