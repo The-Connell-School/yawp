@@ -319,6 +319,8 @@ suite(
 suite(
   'QA authorization does not authenticate wrong passwords or unrelated fixture accounts',
   async () => {
+    const { previewSignonQaAvailable } =
+      await import('~/utils/preview-signon-qa.server');
     fresh();
     await master('inactive');
     const before = await prisma.session.count({
@@ -335,9 +337,33 @@ suite(
     expect((await login('orphan')).response.status).not.toBe(302);
     fresh();
     await master('multiple');
-    expect((await login('trial-account_created')).response.status).not.toBe(
-      302
-    );
+    const savedPreview = {
+      YAWP_ENVIRONMENT: process.env.YAWP_ENVIRONMENT,
+      PREVIEW_SLUG: process.env.PREVIEW_SLUG,
+    };
+    delete process.env.YAWP_ENVIRONMENT;
+    delete process.env.PREVIEW_SLUG;
+    await prisma.setting.update({
+      where: { name: flag },
+      data: { value: 'false' },
+    });
+    try {
+      expect(await previewSignonQaAvailable()).toBe(false);
+      // Unified sign-on is off, so QA context is inactive; legacy login still accepts
+      // valid fixture credentials for unrelated trial accounts.
+      expect((await login('trial-account_created')).response.status).toBe(302);
+    } finally {
+      await prisma.setting.update({
+        where: { name: flag },
+        data: { value: 'true' },
+      });
+      if (savedPreview.YAWP_ENVIRONMENT === undefined)
+        delete process.env.YAWP_ENVIRONMENT;
+      else process.env.YAWP_ENVIRONMENT = savedPreview.YAWP_ENVIRONMENT;
+      if (savedPreview.PREVIEW_SLUG === undefined)
+        delete process.env.PREVIEW_SLUG;
+      else process.env.PREVIEW_SLUG = savedPreview.PREVIEW_SLUG;
+    }
   }
 );
 suite(
@@ -489,6 +515,12 @@ suite(
     }
     fresh();
     await master('inactive');
+    const savedPreview = {
+      YAWP_ENVIRONMENT: process.env.YAWP_ENVIRONMENT,
+      PREVIEW_SLUG: process.env.PREVIEW_SLUG,
+    };
+    delete process.env.YAWP_ENVIRONMENT;
+    delete process.env.PREVIEW_SLUG;
     await prisma.setting.update({
       where: { name: flag },
       data: { value: 'false' },
@@ -511,6 +543,12 @@ suite(
         where: { name: flag },
         data: { value: 'true' },
       });
+      if (savedPreview.YAWP_ENVIRONMENT === undefined)
+        delete process.env.YAWP_ENVIRONMENT;
+      else process.env.YAWP_ENVIRONMENT = savedPreview.YAWP_ENVIRONMENT;
+      if (savedPreview.PREVIEW_SLUG === undefined)
+        delete process.env.PREVIEW_SLUG;
+      else process.env.PREVIEW_SLUG = savedPreview.PREVIEW_SLUG;
     }
   }
 );

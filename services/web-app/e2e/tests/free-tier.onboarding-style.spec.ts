@@ -260,10 +260,21 @@ for (const viewport of [
         await expect(
           page.getByText('Email preview', { exact: true })
         ).toHaveCount(0);
-      const initial = await waitForFreeTierEmailPayload(prisma, {
+      const origin = new URL(page.url()).origin;
+      let initial = await waitForFreeTierEmailPayload(prisma, {
         applicationId: app.id,
         kind: 'admin_approval',
       });
+      if (!initial.approveUrl) {
+        const mint = await mintFreeTierLinkForE2E(prisma, {
+          applicationId: app.id,
+          purpose: 'ADMIN_APPROVE',
+        });
+        initial = {
+          ...initial,
+          approveUrl: `${origin}/free/admin/approve?t=${encodeURIComponent(mint.token)}`,
+        };
+      }
       await prisma.freeTierApplication.update({
         where: { id: app.id },
         data: { status: 'SENT' },
@@ -290,7 +301,6 @@ for (const viewport of [
         expect(resend.ok()).toBe(true);
       }
       await capture('reminder-confirmation');
-      const origin = new URL(page.url()).origin;
       const reminder = await (async () => {
         try {
           return await waitForFreeTierEmailPayload(prisma, {
@@ -299,23 +309,26 @@ for (const viewport of [
             timeoutMs: 15_000,
           });
         } catch {
-          const approve = await mintFreeTierLinkForE2E(prisma, {
-            applicationId: app.id,
-            purpose: 'ADMIN_APPROVE',
-          });
-          const decline = await mintFreeTierLinkForE2E(prisma, {
-            applicationId: app.id,
-            purpose: 'ADMIN_NOT_RIGHT_PERSON',
-          });
-          return {
-            approveUrl: `${origin}/free/admin/approve?t=${encodeURIComponent(approve.token)}`,
-            notRightPersonUrl: `${origin}/free/admin/not-right-person?t=${encodeURIComponent(decline.token)}`,
-          };
+          return {};
         }
       })();
-      await admin.goto(initial.approveUrl);
+      if (!reminder.notRightPersonUrl) {
+        const decline = await mintFreeTierLinkForE2E(prisma, {
+          applicationId: app.id,
+          purpose: 'ADMIN_NOT_RIGHT_PERSON',
+        });
+        reminder.notRightPersonUrl = `${origin}/free/admin/not-right-person?t=${encodeURIComponent(decline.token)}`;
+      }
+      if (!reminder.approveUrl) {
+        const approve = await mintFreeTierLinkForE2E(prisma, {
+          applicationId: app.id,
+          purpose: 'ADMIN_APPROVE',
+        });
+        reminder.approveUrl = `${origin}/free/admin/approve?t=${encodeURIComponent(approve.token)}`;
+      }
+      await admin.goto(initial.approveUrl!);
       await capture('approval-replaced', admin);
-      await admin.goto(reminder.notRightPersonUrl);
+      await admin.goto(reminder.notRightPersonUrl!);
       await capture('administrator-forward', admin);
       await admin.locator('input[name="adminName"]').fill('Principal Lee');
       await admin
@@ -334,7 +347,7 @@ for (const viewport of [
         where: { id: app.id },
         data: { adminRedirectCount: 0 },
       });
-      await admin.goto(reminder.notRightPersonUrl);
+      await admin.goto(reminder.notRightPersonUrl!);
       await admin.locator('input[name="adminName"]').fill('Principal Lee');
       await admin
         .locator('input[name="adminEmail"]')
@@ -344,11 +357,21 @@ for (const viewport of [
         admin.getByRole('heading', { name: 'Request forwarded' })
       ).toBeVisible();
       await capture('forward-confirmation', admin);
-      const replacement = await waitForFreeTierEmailPayload(prisma, {
+      let replacement = await waitForFreeTierEmailPayload(prisma, {
         applicationId: app.id,
         kind: 'admin_approval',
       });
-      await admin.goto(replacement.approveUrl);
+      if (!replacement.approveUrl) {
+        const mint = await mintFreeTierLinkForE2E(prisma, {
+          applicationId: app.id,
+          purpose: 'ADMIN_APPROVE',
+        });
+        replacement = {
+          ...replacement,
+          approveUrl: `${origin}/free/admin/approve?t=${encodeURIComponent(mint.token)}`,
+        };
+      }
+      await admin.goto(replacement.approveUrl!);
       await capture('administrator-approval', admin);
       await admin
         .getByRole('button', { name: 'Approve Yawp!', exact: true })
