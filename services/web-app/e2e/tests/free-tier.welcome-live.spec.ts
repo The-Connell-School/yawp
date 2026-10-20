@@ -62,7 +62,7 @@ for (const width of [1280, 390]) {
       await expect(page.getByLabel('Grade level')).toHaveJSProperty('tagName', 'INPUT');
     }
     await flag('true'); await page.goto('/free');
-    await expect(page.getByText("We're so glad you're here and we can't wait for you to Yawp! with your students")).toBeVisible();
+    await expect(page.getByText(/We're\ so\ glad\ you're\ here,\ and\ we\ can't\ wait\ for\ you\ to\ use\ Yawp!\ with\ your\ students\./)).toBeVisible();
     await expect(page.getByLabel('Grade level')).toHaveValue('');
     await capture(page, `${width}-v2-welcome`);
     await page.getByRole('button', { name: 'Join the waitlist' }).click();
@@ -71,7 +71,7 @@ for (const width of [1280, 390]) {
     await capture(page, `${width}-v2-validation`);
     await fill(page, `${width}-below`, '7');
     await page.getByRole('button', { name: 'Join the waitlist' }).click();
-    await expect(page.getByRole('heading', { name: 'Free classrooms are for high school for now' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Thanks for your interest in Yawp!' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'hello@yawp.school' })).toHaveAttribute('href', 'mailto:hello@yawp.school');
     await capture(page, `${width}-v2-decline`);
     const row = await prisma.freeTierApplication.findUniqueOrThrow({ where: { email: `${prefix}-${width}-below@example.edu` } });
@@ -93,10 +93,10 @@ for (const width of [1280, 390]) {
     const application = await prisma.freeTierApplication.findUniqueOrThrow({ where: { email: `${prefix}-${width}-token@example.edu` } });
     expect(application.releaseEmailCopyVersion).toBe('free-tier-onboarding-v2');
     const captured = fs.readdirSync(path.join(process.env.TMPDIR!, 'free-welcome-mail')).map(file => JSON.parse(fs.readFileSync(path.join(process.env.TMPDIR!, 'free-welcome-mail', file), 'utf8'))).find(mail => mail.to === application.email);
-    expect(captured.subject).toBe("You're in!");
+    expect(captured.subject).toBe("You're in — start your Yawp! classroom!");
     await page.goto(`/free?t=${token.code}`); await fill(page, `${width}-token-below`, '8');
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Free classrooms are for high school for now' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Thanks for your interest in Yawp!' })).toBeVisible();
     await capture(page, `${width}-v2-token-decline`);
     expect((await prisma.acquisitionToken.findUniqueOrThrow({ where: { id: token.id } })).uses).toBe(1);
     await prisma.acquisitionToken.update({ where: { id: token.id }, data: { bypassWaitlist: false } });

@@ -38,7 +38,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (!peek.ok) return { ok: false as const, reason: peek.reason };
   const app = await prisma.freeTierApplication.findUnique({
     where: { id: peek.applicationId },
-    select: { email: true, name: true, status: true },
+    select: { email: true, name: true, status: true, releaseEmailCopyVersion: true },
   });
   if (!app) return { ok: false as const, reason: 'invalid' as const };
   return {
@@ -47,6 +47,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     email: app.email,
     name: app.name,
     status: app.status,
+    onboardingV2: app.releaseEmailCopyVersion === 'free-tier-onboarding-v2',
   };
 }
 
@@ -112,8 +113,10 @@ export default function FreeJoinRoute() {
 
   return (
     <FreeTierAuthCard
-      title="Create your free classroom"
-      subtitle="You're in. Set up your account."
+      title={data.onboardingV2 ? 'Welcome to Yawp!' : 'Create your free classroom'}
+      subtitle={data.onboardingV2
+        ? 'Your free license covers one class of up to 35 students. Start by creating your account. Next, you’ll set up your class.'
+        : "You're in. Set up your account."}
     >
       {actionData && !actionData.ok ? (
         <p role="alert" className="text-sm text-destructive">

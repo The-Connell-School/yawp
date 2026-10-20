@@ -182,7 +182,9 @@ export default function FreeTierPendingRoute() {
             ? 'Your invite expired'
             : app?.status === 'MANUAL_REVIEW'
               ? "We're reviewing your request"
-              : 'Waiting for your administrator';
+              : app?.status === 'SENT' && current
+                ? `Request sent to ${current.adminName}!`
+                : 'Waiting for your administrator';
     return (
       <FreeTierAuthCard
         title={title}
@@ -211,6 +213,13 @@ export default function FreeTierPendingRoute() {
                   : `Your request to ${current.adminName} is queued.`
                 : 'We will email you when your request is ready.'}
             </p>
+            {app?.status === 'SENT' && current ? (
+              <p className="text-sm text-muted-foreground">
+                You’re almost there! It may be a good idea to give{' '}
+                {current.adminName} a quick heads-up so the email doesn’t get
+                buried. We’ll let you know the moment they approve.
+              </p>
+            ) : null}
             <FreeTierProgress
               steps={[
                 'Account created',
@@ -247,12 +256,49 @@ export default function FreeTierPendingRoute() {
                     ? 'Weekly reminders have stopped. You can pick a different administrator below or contact support@yawp.school for help.'
                     : 'We will remind your administrator weekly, up to three times, and keep you posted.'}
                 </p>
+                <Form method="post">
+                  <input type="hidden" name="intent" value="resend" />
+                  <FreeTierButton
+                    type="submit"
+                    disabled={resending}
+                    variant="outline"
+                  >
+                    {resending ? 'Sending…' : 'Resend reminder'}
+                  </FreeTierButton>
+                </Form>
               </>
             ) : null}
-            {actionData?.ok ? (
+            {actionData?.ok && 'queued' in actionData ? (
               <p role="status" className="text-sm text-muted-foreground">
                 Request forwarded. We will notify your administrator and email
                 you an update.
+              </p>
+            ) : null}
+            {actionData?.ok && !('queued' in actionData) ? (
+              <p className="text-sm text-muted-foreground" role="status">
+                Reminder sent to {current?.adminEmail ?? pending?.adminEmail}.
+              </p>
+            ) : null}
+            {actionData &&
+            !actionData.ok &&
+            'rateLimited' in actionData &&
+            actionData.rateLimited ? (
+              <p className="text-sm text-destructive" role="alert">
+                Too many resend attempts. Please wait a few minutes and try
+                again.
+              </p>
+            ) : null}
+            {actionData && !actionData.ok && actionData.reason === 'email_failed' ? (
+              <p className="text-sm text-destructive" role="alert">
+                We could not send the reminder. Try again later or contact
+                support@yawp.school.
+              </p>
+            ) : null}
+            {actionData && !actionData.ok && actionData.reason === 'config' ? (
+              <p className="text-sm text-destructive" role="alert">
+                {'message' in actionData
+                  ? actionData.message
+                  : 'Free-tier links are temporarily unavailable.'}
               </p>
             ) : null}
             {actionData && !actionData.ok ? (
@@ -279,9 +325,7 @@ export default function FreeTierPendingRoute() {
           </>
         )}
         {lockedPreview && !terminal ? (
-          <Link to="/app/free-tier/preview" className="text-center text-sm font-medium underline underline-offset-4">
-            Look around while you wait
-          </Link>
+          <LockedPreviewInvite />
         ) : null}
       </FreeTierAuthCard>
     );
@@ -376,10 +420,33 @@ export default function FreeTierPendingRoute() {
         </Form>
       ) : null}
       {lockedPreview ? (
-        <Link to="/app/free-tier/preview" className="text-center text-sm font-medium underline underline-offset-4">
-          Look around while you wait
-        </Link>
+        <LockedPreviewInvite />
       ) : null}
     </FreeTierAuthCard>
+  );
+}
+
+/** Locked preview entry; only rendered when the server-side preview gate (onboarding v2) allows it. */
+function LockedPreviewInvite() {
+  return (
+    <section
+      aria-labelledby="locked-preview-invite"
+      className="flex flex-col gap-3 rounded-lg border bg-secondary/40 p-4"
+      data-testid="locked-preview-invite"
+    >
+      <h2 id="locked-preview-invite" className="text-base font-semibold">
+        Take a look around
+      </h2>
+      <p className="text-sm text-muted-foreground">
+        While we wait, let’s explore your Yawp! classroom. You’ll be able to
+        add students and create assignments as soon as you’re approved.
+      </p>
+      <Link
+        to="/app/free-tier/preview"
+        className="inline-flex h-11 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+      >
+        Explore my classroom
+      </Link>
+    </section>
   );
 }

@@ -154,7 +154,7 @@ for (const width of [1440, 390]) {
     await expect(page.getByText(/Sent to Dr. Patel on/)).toBeVisible();
     await expect(page.getByText('Not the right person? Forward this request', { exact: true })).toBeVisible();
     await capture(page, `waiting-${width}`);
-    await page.getByRole('link', { name: 'Look around while you wait' }).click();
+    await page.getByRole('link', { name: 'Explore my classroom' }).click();
     await expect(page.getByRole('heading', { name: 'Look around while you wait' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Create assignment', exact: true })).toBeDisabled();
     await capture(page, `preview-${width}`);
@@ -201,7 +201,7 @@ test('manual review also offers the same read-only preview', async ({ page }) =>
   const { user } = await fixture('11', 'MANUAL_REVIEW');
   await login(page, user.email!);
   await expect(page.getByRole('heading', { name: "We're reviewing your request" })).toBeVisible();
-  await page.getByRole('link', { name: 'Look around while you wait' }).click();
+  await page.getByRole('link', { name: 'Explore my classroom' }).click();
   await expect(page.getByRole('heading', { name: 'Look around while you wait' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Use Lesson Planner', exact: true })).toBeDisabled();
 });
@@ -215,7 +215,7 @@ test('flag OFF keeps waiting flow and does not expose the preview', async ({ pag
   await flag(false);
   await login(page, user.email!);
   await expect(page).toHaveURL(/free-tier\/pending/);
-  await expect(page.getByRole('link', { name: 'Look around while you wait' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Explore my classroom' })).toHaveCount(0);
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await capture(page, `waiting-before-${width}`);
@@ -337,7 +337,7 @@ for (const width of [1440, 390]) {
     try {
       await tourFlag(false);
       await login(page, user.email!);
-      await page.getByRole('link', { name: 'Look around while you wait' }).click();
+      await page.getByRole('link', { name: 'Explore my classroom' }).click();
       await expect(page.getByTestId('guided-tour-welcome')).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'Tour this page' })).toHaveCount(0);
       await capture(page, `waiting-tour-off-${width}`);

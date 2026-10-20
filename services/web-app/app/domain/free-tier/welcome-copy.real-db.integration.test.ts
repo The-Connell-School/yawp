@@ -41,15 +41,17 @@ local('original copy survives duplicates, later token admission and a flag chang
   expect((await releaseBatch({ applicationIds: [v2.id] })).released).toBe(1);
   deliver.mockClear();
   expect(await sendReleaseEmailsForApplicationIds([v2.id, legacy.id])).toEqual([{ applicationId: v2.id, ok: true }, { applicationId: legacy.id, ok: true }]);
-  expect(deliver.mock.calls[0][0].subject).toBe("You're in!");
-  expect(deliver.mock.calls[0][0].text).toContain("\n\nYou're in!\n\n");
-  expect(deliver.mock.calls[0][0].html).toContain('Ada &lt;Teacher&gt;');
+  expect(deliver.mock.calls[0][0].subject).toBe("You're in — start your Yawp! classroom!");
+  expect(deliver.mock.calls[0][0].text).toContain('Good news: your spot is ready.');
+  expect(deliver.mock.calls[0][0].html).toContain('Hi Ada,');
   expect(deliver.mock.calls[0][0].html).not.toContain('<Teacher>');
-  expect(deliver.mock.calls[1][0].subject).toBe("You're in — start your Yawp! classroom");
+  expect(deliver.mock.calls[1][0].subject).toBe("You're in — start your Yawp! classroom!");
+  expect(deliver.mock.calls[1][0].html).toContain('Ada &lt;Teacher&gt;');
+  expect(deliver.mock.calls[1][0].html).not.toContain('<Teacher>');
   // Turn v2 on at delivery: the original legacy context still wins.
   await prisma.setting.update({ where: { name: 'feature_flag.free_tier' }, data: { value: 'true' } });
   await sendReleaseEmailsForApplicationIds([legacy.id]);
-  expect(deliver.mock.calls.at(-1)![0].subject).toBe("You're in — start your Yawp! classroom");
+  expect(deliver.mock.calls.at(-1)![0].subject).toBe("You're in — start your Yawp! classroom!");
 });
 local('token-created applications persist their initial context once, under concurrent redemption', async () => {
   const token = await prisma.acquisitionToken.create({ data: { code: prefix + '-race', tokenHash: prefix + '-race', label: prefix + '-race', bypassWaitlist: false } });

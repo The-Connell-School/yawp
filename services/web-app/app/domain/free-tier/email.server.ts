@@ -6,7 +6,12 @@ import {
   renderCongratulationsEmailBody,
   renderReleaseEmailBody,
 } from './email-copy.server';
-import { renderReleaseEmailSubject } from './email-copy';
+import {
+  CONGRATULATIONS_V2_SUBJECT,
+  isOnboardingV2CopyVersion,
+  renderCongratulationsEmailV2Body,
+  renderReleaseEmailSubject,
+} from './email-copy';
 import { mintSignedLink, RELEASE_LINK_TTL_MS } from './signed-link.server';
 import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
 import { plainTextEmailToHtml } from './email-html.server';
@@ -213,16 +218,25 @@ export async function sendFreeTierCongratulationsEmail(args: {
   adminName: string;
   signInUrl: string;
 }): Promise<EmailSendResult> {
-  const text = renderCongratulationsEmailBody({
-    teacherName: args.teacherName,
-    adminName: args.adminName,
-    signInUrl: args.signInUrl,
-  });
   try {
     assertFreeTierRuntimeConfigured();
+    // Copy follows the version stored with the application, never the live flag.
+    const application = await prisma.freeTierApplication.findUnique({
+      where: { id: args.applicationId }, select: { releaseEmailCopyVersion: true },
+    });
+    const v2 = isOnboardingV2CopyVersion(application?.releaseEmailCopyVersion);
+    const text = v2
+      ? renderCongratulationsEmailV2Body(args)
+      : renderCongratulationsEmailBody({
+          teacherName: args.teacherName,
+          adminName: args.adminName,
+          signInUrl: args.signInUrl,
+        });
     const delivered = await deliverEmail({
       to: args.teacherEmail,
-      subject: `${args.adminName} approved Yawp! for your classroom`,
+      subject: v2
+        ? CONGRATULATIONS_V2_SUBJECT
+        : `${args.adminName} approved Yawp! for your classroom`,
       text,
     });
     if (!delivered.ok) {
