@@ -35,7 +35,7 @@ function canReproduceRootOwnership() {
     // .react-router/types` as root), whose entries the host user then cannot remove.
     const written = spawnSync('docker', [
       'run', '--rm', '--user', '0:0', '--entrypoint', '/bin/sh',
-      '-v', `${probe}:/t`, 'oven/bun:1.3.1', '-c', 'mkdir -p /t/d && echo x > /t/d/f.txt',
+      '-v', `${probe}:/t`, 'oven/bun:1.4.3', '-c', 'mkdir -p /t/d && echo x > /t/d/f.txt',
     ], { stdio: 'ignore' });
     if (written.status !== 0) return false;
     return spawnSync('rm', ['-rf', path.join(probe, 'd')], { stdio: 'ignore' }).status !== 0
@@ -43,7 +43,7 @@ function canReproduceRootOwnership() {
   } finally {
     spawnSync('docker', [
       'run', '--rm', '--user', '0:0', '--entrypoint', '/bin/sh',
-      '-v', `${probe}:/t`, 'oven/bun:1.3.1', '-c', 'rm -rf /t/*',
+      '-v', `${probe}:/t`, 'oven/bun:1.4.3', '-c', 'rm -rf /t/*',
     ], { stdio: 'ignore' });
     rmSync(probe, { recursive: true, force: true });
   }
@@ -96,7 +96,7 @@ function makeEnv(root, pr, { rootOwnedFile = false, withCompose = false } = {}) 
     const generated = path.join(sourceDir, 'services/web-app/.react-router/types');
     const result = spawnSync('docker', [
       'run', '--rm', '--user', '0:0', '--entrypoint', '/bin/sh',
-      '-v', `${sourceDir}:/app`, 'oven/bun:1.3.1',
+      '-v', `${sourceDir}:/app`, 'oven/bun:1.4.3',
       '-c', 'mkdir -p /app/services/web-app/.react-router/types && '
         + 'echo x > /app/services/web-app/.react-router/types/+routes.ts',
     ], { encoding: 'utf8' });
@@ -247,7 +247,7 @@ afterEach(() => {
       // per test root is slow enough to time the hook out — so pay for it only on failure.
       spawnSync('docker', [
         'run', '--rm', '--user', '0:0', '--entrypoint', '/bin/sh',
-        '-v', `${root}:/target`, 'oven/bun:1.3.1', '-c', 'rm -rf /target/*',
+        '-v', `${root}:/target`, 'oven/bun:1.4.3', '-c', 'rm -rf /target/*',
       ], { stdio: 'ignore' });
       rmSync(root, { recursive: true, force: true });
     }

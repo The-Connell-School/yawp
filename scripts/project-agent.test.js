@@ -181,10 +181,10 @@ describe("Yawp project agent CLI", () => {
 
   test("rejects Bun older than the package-manager contract", () => {
     const selected = selectCompatibleBun(["old", "pinned"], (candidate) => ({
-      old: "1.2.2",
-      pinned: "1.3.1",
+      old: "1.3.1",
+      pinned: "1.4.3",
     })[candidate]);
-    expect(selected).toEqual({ executable: "pinned", version: "1.3.1" });
+    expect(selected).toEqual({ executable: "pinned", version: "1.4.3" });
   });
 
   test("parses the generated worktree configuration without evaluating shell", () => {

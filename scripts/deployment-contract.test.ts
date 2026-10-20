@@ -331,7 +331,7 @@ describe('production deployment contract', () => {
   test('Docker build uses the Bun version that wrote the lockfile', () => {
     const dockerfile = readRepoFile('services/web-app/Dockerfile');
 
-    expect(dockerfile).toContain('FROM oven/bun:1.3.1 AS base');
+    expect(dockerfile).toContain('FROM oven/bun:1.4.3 AS base');
   });
 
   test('Docker image build does not bake preview database credentials into the image', () => {
@@ -353,11 +353,13 @@ describe('production deployment contract', () => {
     expect(dockerfile).toContain('FROM deps AS build');
   });
 
-  test('Docker runtime image includes workspace node_modules for web app binaries', () => {
+  test('Docker runtime image resolves web app serve binaries when Bun hoists deps', () => {
     const dockerfile = readRepoFile('services/web-app/Dockerfile');
+    const startScript = readRepoFile('services/web-app/start.sh');
 
-    expect(dockerfile).toContain(
-      'COPY --from=build /app/services/web-app/node_modules ./services/web-app/node_modules'
+    expect(dockerfile).toContain('mkdir -p services/web-app/node_modules');
+    expect(startScript).toContain(
+      '../../node_modules/@react-router/serve/bin.js'
     );
   });
 
@@ -388,9 +390,8 @@ describe('production deployment contract', () => {
     const startScript = readRepoFile('services/web-app/start.sh');
 
     expect(startScript).toContain('cd "$(dirname "$0")"');
-    expect(startScript).toContain(
-      'exec bun node_modules/@react-router/serve/bin.js'
-    );
+    expect(startScript).toContain('@react-router/serve/bin.js');
+    expect(startScript).toContain('exec bun "$serve_bin"');
     expect(startScript).not.toContain('bun run web-app:start');
   });
 
@@ -451,6 +452,7 @@ describe('production deployment contract', () => {
       'seed-free-tier-bundle-assignment-types'
     );
 
+    expect(deployWorkflow).toContain("bun-version: '1.4.3'");
     expect(deployWorkflow).toContain('validate-prisma-migrations');
     expect(deployWorkflow).toContain('needs: [validate-prisma-migrations]');
     expect(deployWorkflow).toContain('bun prisma generate');
@@ -712,8 +714,12 @@ describe('PR preview deployment contract', () => {
       'drop_preview_database "$DATABASE_NAME"',
       resetIndex
     );
-    const generateIndex = deployScript.indexOf('bun prisma generate');
-    const migrateIndex = deployScript.indexOf('bun prisma migrate deploy');
+    const generateIndex = deployScript.indexOf(
+      'scripts/preview/prisma-cli.sh generate'
+    );
+    const migrateIndex = deployScript.indexOf(
+      'scripts/preview/prisma-cli.sh migrate deploy'
+    );
     const backfillIndex = deployScript.indexOf(
       'bun run scripts/backfill-class-art-key.ts'
     );
@@ -754,7 +760,7 @@ describe('PR preview deployment contract', () => {
     );
     expect(deployScript).toContain('packages/prisma/fixtures/prod-fidelity');
     expect(deployScript).toContain('bun run seed-preview-seats');
-    expect(deployScript).toContain('oven/bun:1.3.1');
+    expect(deployScript).toContain('oven/bun:1.4.3');
     expect(deployScript).toContain(
       'bun scripts/preview/access-code.mjs --seats'
     );

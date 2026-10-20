@@ -71,7 +71,7 @@ describe('renderPreviewCompose', () => {
     expect(compose).not.toContain('\n  postgres:\n');
     expect(compose).not.toContain('image: postgres:16');
     expect(compose).toContain('toolbox:');
-    expect(compose).toContain('image: oven/bun:1.3.1');
+    expect(compose).toContain('image: oven/bun:1.4.3');
     expect(compose).toContain('yawp-pr-142-node-modules');
     expect(compose).not.toContain(
       'rm -rf services/web-app/.react-router services/web-app/.vite'

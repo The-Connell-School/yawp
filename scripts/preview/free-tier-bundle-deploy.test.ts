@@ -46,7 +46,12 @@ printf 'SERVING\\n'
       expect(result.exitCode).toBe(0);
       expect(output.match(/bun run seed-free-tier-bundle-assignment-types/g)?.length).toBe(1);
       expect(output.indexOf('bun run seed-free-tier-bundle-assignment-types')).toBeLessThan(output.indexOf('SERVING'));
-      if (!skip) expect(output.indexOf('bun prisma migrate deploy')).toBeLessThan(output.indexOf('bun run seed-free-tier-bundle-assignment-types'));
+      if (!skip)
+        expect(
+          output.indexOf('scripts/preview/prisma-cli.sh migrate deploy')
+        ).toBeLessThan(
+          output.indexOf('bun run seed-free-tier-bundle-assignment-types')
+        );
       expect(output).not.toContain('seed-preview-signon-qa');
       expect(output).not.toContain('seed-local-dev');
       expect(output).not.toContain('drop');
