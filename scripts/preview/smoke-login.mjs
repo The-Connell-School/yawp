@@ -94,8 +94,10 @@ async function assertNoSiteGatePublicEndpoints({ baseUrl, requestFn }) {
     email: 'dev.admin@yawp.local',
   }).toString();
 
+  const anonymousGetDevLoginAllowed = new Set([401, 403, 404, 405]);
+
   const blockedChecks = [
-    { pathname: '/auth/dev-login', method: 'GET' },
+    { pathname: '/auth/dev-login', method: 'GET', relaxedGetDevLogin: true },
     {
       pathname: '/auth/dev-login',
       method: 'POST',
@@ -121,6 +123,22 @@ async function assertNoSiteGatePublicEndpoints({ baseUrl, requestFn }) {
           }
         : {}),
     });
+    if (check.relaxedGetDevLogin) {
+      if (response.status >= 200 && response.status < 400) {
+        throw new Error(
+          `Expected anonymous GET /auth/dev-login not to succeed, got HTTP ${response.status}`
+        );
+      }
+      if (
+        response.status !== 400 &&
+        !anonymousGetDevLoginAllowed.has(response.status)
+      ) {
+        throw new Error(
+          `Expected anonymous GET /auth/dev-login to be blocked (401, 403, 404, or 405), got HTTP ${response.status}`
+        );
+      }
+      continue;
+    }
     if (response.status !== 401) {
       throw new Error(
         `Expected anonymous ${check.method} ${check.pathname} to return HTTP 401, got ${response.status}`

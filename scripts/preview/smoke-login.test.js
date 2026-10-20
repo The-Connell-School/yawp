@@ -11,6 +11,10 @@ import {
 
 const accessCode = 'brave-otter-4193';
 
+function isGet(options = {}) {
+  return !options.method || options.method === 'GET';
+}
+
 function noGateAwareRequest(handler, { onRequest = () => {} } = {}) {
   return async (url, options = {}) => {
     expect(options.headers?.authorization).toBeUndefined();
@@ -19,18 +23,26 @@ function noGateAwareRequest(handler, { onRequest = () => {} } = {}) {
     const hasAccess = options.headers?.cookie?.includes(
       '__yawp_preview_access='
     );
-    if (pathname === '/' && !options.method && !hasAccess) {
+    if (pathname === '/' && isGet(options) && !hasAccess) {
       return { status: 200, headers: {}, body: 'home' };
     }
-    if (pathname === '/api/healthcheck' && !options.method) {
+    if (pathname === '/api/healthcheck' && isGet(options)) {
       return { status: 200, headers: {}, body: 'ok' };
     }
+    if (pathname === '/auth/dev-login' && isGet(options) && !hasAccess) {
+      return { status: 400, headers: {}, body: 'no loader' };
+    }
     if (
-      (pathname === '/auth/dev-login' ||
-        pathname === '/auth/dev-login/options' ||
-        pathname === '/lti/launch') &&
+      pathname === '/auth/dev-login/options' &&
+      isGet(options) &&
       !hasAccess
     ) {
+      return { status: 401, headers: {}, body: 'access required' };
+    }
+    if (pathname === '/lti/launch' && options.method === 'POST' && !hasAccess) {
+      return { status: 401, headers: {}, body: 'access required' };
+    }
+    if (pathname === '/auth/dev-login' && options.method === 'POST' && !hasAccess) {
       return { status: 401, headers: {}, body: 'access required' };
     }
     if (pathname === '/auth/preview-access' && options.method === 'POST') {
@@ -144,6 +156,115 @@ describe('enterPreviewAccess', () => {
       '/auth/dev-login/options',
       '/lti/launch',
     ]);
+  });
+
+  test('without a site gate, accepts blocked GET /auth/dev-login status codes', async () => {
+    for (const status of [401, 403, 404, 405]) {
+      const requestFn = async (url, options = {}) => {
+        const pathname = new URL(url).pathname;
+        if (pathname === '/' && isGet(options)) {
+          return { status: 200, headers: {}, body: 'home' };
+        }
+        if (pathname === '/api/healthcheck' && isGet(options)) {
+          return { status: 200, headers: {}, body: 'ok' };
+        }
+        if (pathname === '/auth/dev-login' && isGet(options)) {
+          return { status, headers: {}, body: '' };
+        }
+        if (pathname === '/auth/dev-login' && options.method === 'POST') {
+          return { status: 401, headers: {}, body: '' };
+        }
+        if (pathname === '/auth/dev-login/options' && isGet(options)) {
+          return { status: 401, headers: {}, body: '' };
+        }
+        if (pathname === '/lti/launch' && options.method === 'POST') {
+          return { status: 401, headers: {}, body: '' };
+        }
+        return { status: 404, headers: {}, body: '' };
+      };
+
+      await expect(
+        enterPreviewAccess({
+          baseUrl: 'https://demo.yawp.school',
+          accessCode,
+          gateEnabled: false,
+          obtainAccessCookie: false,
+          requestFn,
+        })
+      ).resolves.toBe('');
+    }
+  });
+
+  test('accepts React Router 400 for anonymous GET /auth/dev-login without a site gate', async () => {
+    const requestFn = async (url, options = {}) => {
+      const pathname = new URL(url).pathname;
+      if (pathname === '/' && isGet(options)) {
+        return { status: 200, headers: {}, body: 'home' };
+      }
+      if (pathname === '/api/healthcheck' && isGet(options)) {
+        return { status: 200, headers: {}, body: 'ok' };
+      }
+      if (pathname === '/auth/dev-login' && isGet(options)) {
+        return { status: 400, headers: {}, body: 'no loader' };
+      }
+      if (pathname === '/auth/dev-login' && options.method === 'POST') {
+        return { status: 401, headers: {}, body: '' };
+      }
+      if (pathname === '/auth/dev-login/options' && isGet(options)) {
+        return { status: 401, headers: {}, body: '' };
+      }
+      if (pathname === '/lti/launch' && options.method === 'POST') {
+        return { status: 401, headers: {}, body: '' };
+      }
+      return { status: 404, headers: {}, body: '' };
+    };
+
+    await expect(
+      enterPreviewAccess({
+        baseUrl: 'https://demo.yawp.school',
+        accessCode,
+        gateEnabled: false,
+        obtainAccessCookie: false,
+        requestFn,
+      })
+    ).resolves.toBe('');
+  });
+
+  test('without a site gate, rejects a successful GET /auth/dev-login response', async () => {
+    const requestFn = async (url, options = {}) => {
+      const pathname = new URL(url).pathname;
+      if (pathname === '/' && isGet(options)) {
+        return { status: 200, headers: {}, body: 'home' };
+      }
+      if (pathname === '/api/healthcheck' && isGet(options)) {
+        return { status: 200, headers: {}, body: 'ok' };
+      }
+      if (pathname === '/auth/dev-login' && isGet(options)) {
+        return { status: 302, headers: { location: '/app' }, body: '' };
+      }
+      if (pathname === '/auth/dev-login' && options.method === 'POST') {
+        return { status: 401, headers: {}, body: '' };
+      }
+      if (pathname === '/auth/dev-login/options' && isGet(options)) {
+        return { status: 401, headers: {}, body: '' };
+      }
+      if (pathname === '/lti/launch' && options.method === 'POST') {
+        return { status: 401, headers: {}, body: '' };
+      }
+      return { status: 404, headers: {}, body: '' };
+    };
+
+    await expect(
+      enterPreviewAccess({
+        baseUrl: 'https://demo.yawp.school',
+        accessCode,
+        gateEnabled: false,
+        obtainAccessCookie: false,
+        requestFn,
+      })
+    ).rejects.toThrow(
+      'Expected anonymous GET /auth/dev-login not to succeed, got HTTP 302'
+    );
   });
 
   test('without a site gate, can still mint a preview access cookie for dev login', async () => {
