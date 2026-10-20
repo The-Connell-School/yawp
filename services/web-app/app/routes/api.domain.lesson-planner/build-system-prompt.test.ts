@@ -13,6 +13,7 @@ import {
 import {
   buildLessonPlannerSystemPrompt,
   buildLessonPlannerSystemPromptBlocks,
+  LESSON_PLANNER_PROMPT_VERSION,
   RECOMMENDED_LESSON_PLANNER_PROMPTS,
 } from './build-system-prompt';
 
@@ -1693,5 +1694,33 @@ describe("buildLessonPlannerSystemPrompt — one heading per step (Brian's run 2
   test('each step of a plan is its own timed heading', () => {
     const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'Connell School' });
     expect(prompt).toContain('Give every step of a plan its own `##` heading with its minutes');
+  });
+});
+
+describe("planner prompt — Brian's run 3", () => {
+  const prompt = buildLessonPlannerSystemPrompt({} as any);
+
+  test('every step heading carries its minutes and a type tag', () => {
+    expect(prompt).toContain('{type: read_aloud}');
+    expect(prompt).toContain('including a framing note and a Daily Pages reflection');
+  });
+
+  test('no written total and nothing after the last step but the rule and one question', () => {
+    expect(prompt).not.toContain('write the total');
+    expect(prompt).toContain('put a line with only `---` under the last step');
+  });
+
+  test('writing prompts get a short real title; framings their minutes', () => {
+    expect(prompt).toContain('`title: What one item reveals`');
+    expect(prompt).toContain('a `minutes:` line (3–5) and a `type: context` line');
+  });
+
+  test('no preamble, and never asking again for what the teacher said', () => {
+    expect(prompt).toContain("I have everything I need. Here's the plan.");
+    expect(prompt).toContain('Never ask again for anything they already said');
+  });
+
+  test('the prompt version moved', () => {
+    expect(LESSON_PLANNER_PROMPT_VERSION).toBe('2026-10-19-run-3-v1');
   });
 });
