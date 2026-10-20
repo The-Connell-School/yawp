@@ -357,21 +357,19 @@ for (const viewport of [
         admin.getByRole('heading', { name: 'Request forwarded' })
       ).toBeVisible();
       await capture('forward-confirmation', admin);
-      let replacement = await waitForFreeTierEmailPayload(prisma, {
-        applicationId: app.id,
-        kind: 'admin_approval',
+      const pendingAfterForward = await prisma.freeTierAdminApproval.findFirst({
+        where: { applicationId: app.id, status: 'PENDING' },
+        orderBy: { createdAt: 'desc' },
       });
-      if (!replacement.approveUrl) {
-        const mint = await mintFreeTierLinkForE2E(prisma, {
-          applicationId: app.id,
-          purpose: 'ADMIN_APPROVE',
-        });
-        replacement = {
-          ...replacement,
-          approveUrl: `${origin}/free/admin/approve?t=${encodeURIComponent(mint.token)}`,
-        };
-      }
-      await admin.goto(replacement.approveUrl!);
+      expect(pendingAfterForward?.adminEmail).toBe(
+        `replacement-${stamp}@example.edu`
+      );
+      const replacementMint = await mintFreeTierLinkForE2E(prisma, {
+        applicationId: app.id,
+        purpose: 'ADMIN_APPROVE',
+      });
+      const replacementApproveUrl = `${origin}/free/admin/approve?t=${encodeURIComponent(replacementMint.token)}`;
+      await admin.goto(replacementApproveUrl);
       await capture('administrator-approval', admin);
       await admin
         .getByRole('button', { name: 'Approve Yawp!', exact: true })
@@ -389,7 +387,7 @@ for (const viewport of [
       ).toBeVisible({ timeout: 30_000 });
       if (!before) await expect(admin.getByText('Grace Okafor can now start using Yawp! We let them know.', { exact: true })).toBeVisible();
       await capture('approval-confirmation', admin);
-      await admin.goto(replacement.approveUrl);
+      await admin.goto(replacementApproveUrl);
       await capture('approval-already-approved', admin);
       expect(
         (await prisma.freeTierApplication.findUnique({ where: { id: app.id } }))

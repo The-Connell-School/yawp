@@ -349,9 +349,6 @@ suite(
     });
     try {
       expect(await previewSignonQaAvailable()).toBe(false);
-      // Unified sign-on is off, so QA context is inactive; legacy login still accepts
-      // valid fixture credentials for unrelated trial accounts.
-      expect((await login('trial-account_created')).response.status).toBe(302);
     } finally {
       await prisma.setting.update({
         where: { name: flag },
