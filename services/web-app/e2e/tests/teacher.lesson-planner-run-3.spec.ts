@@ -20,7 +20,16 @@ const REVIEW_FLAGS: LessonPlannerReviewFlag[] = [
   'lesson_planner_deck_v2',
   'lesson_planner_stack_panel',
   'lesson_planner_plan_export_v2',
+  'lesson_planner_stack_v3',
+  'lesson_planner_share',
+  'lesson_planner_run_show',
+  'lesson_planner_templates',
 ];
+
+async function stackV3On() {
+  await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+  await setLessonPlannerReviewFlag('lesson_planner_stack_v3', true);
+}
 
 type Ctx = { teacherMembershipId: string; organizationId: string };
 type Turn = { role: 'user' | 'assistant'; content: string };
@@ -314,7 +323,13 @@ test.describe("Lesson Planner — Brian's third run", () => {
     test('"Add everything" twice files nothing twice', async ({ page, signIn, e2eContext }) => {
       const { conversationId } = await openDayOneChat(page, e2eContext, signIn);
       const addAll = page.getByRole('button', { name: 'Add everything to the stack' });
+      const filed = page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/domain/lesson-planner/packet') &&
+          response.request().method() === 'POST'
+      );
       await addAll.click();
+      expect((await filed).ok()).toBe(true);
       await expect(page.getByText('Everything is in the stack')).toBeVisible();
       const prisma = createE2EPrismaClient();
       try {
@@ -363,6 +378,213 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await expect(
         page.getByTestId('packet-section').filter({ hasText: 'one object, one sentence' }).getByTestId('stack-create-assignment')
       ).toHaveText('Created in YAWP! · Open');
+    });
+  });
+
+  test.describe('Phase 2: the stack page is the run of show', () => {
+    const SWAP_REPLY = [
+      'Two more you could use.',
+      '',
+      '```yawp-daily-pages',
+      'kind: class-starter',
+      'title: The heaviest thing you’ve carried',
+      'Write about something heavy you once carried, real or not.',
+      '```',
+    ].join('\n');
+
+    test('flag off: the stack v2 page, unchanged', async ({ page, signIn, e2eContext }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId } = await seedDayOneStack(page, e2eContext);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      await expect(page.getByTestId('build-from-stack')).toBeVisible();
+      await expect(page.getByTestId('stack-v3')).toHaveCount(0);
+    });
+
+    test('the time bar, the writing meter and the run of show add up', async ({ page, signIn, e2eContext }) => {
+      await stackV3On();
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId } = await seedDayOneStack(page, e2eContext);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+
+      await expect(page.getByTestId('stack-v3')).toBeVisible();
+      await expect(page.getByTestId('time-total')).toHaveText('50');
+      await expect(page.getByTestId('time-status')).toHaveText('Right on time');
+      await expect(page.getByTestId('time-block')).toHaveCount(8);
+      await expect(page.getByTestId('writing-strip')).toContainText('20% of class is writing · 10 min');
+      await expect(page.getByTestId('writing-strip')).toContainText('From Class Starter + Daily Pages');
+      const cards = page.getByTestId('run-card');
+      await expect(cards).toHaveCount(8);
+      await expect(cards.nth(1).getByTestId('run-card-start')).toHaveText('05');
+      await expect(cards.nth(1).getByTestId('step-minutes')).toHaveText('15 min');
+      await expect(cards.nth(0).getByTestId('writing-badge')).toBeVisible();
+      await expect(cards.nth(1).getByTestId('writing-badge')).toHaveCount(0);
+      await expect(page.getByTestId('stack-chip-class')).toHaveText('English 10 · Period 3');
+    });
+
+    test('the stepper changes a step, the total and the status', async ({ page, signIn, e2eContext }) => {
+      await stackV3On();
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId } = await seedDayOneStack(page, e2eContext);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      const hook = page.getByTestId('run-card').nth(1);
+      const saved = page.waitForResponse((response) => response.url().includes('/api/domain/lesson-planner/stack') && response.request().method() === 'POST');
+      await hook.getByRole('button', { name: /Fewer minutes for Hook/ }).click();
+      await expect(hook.getByTestId('step-minutes')).toHaveText('14 min');
+      await expect(page.getByTestId('time-status')).toHaveText('1 min to spare');
+      expect((await saved).ok()).toBe(true);
+      await page.reload();
+      await expect(page.getByTestId('run-card').nth(1).getByTestId('step-minutes')).toHaveText('14 min');
+    });
+
+    test('over the period: two fixes, never on writing; Apply and Undo', async ({ page, signIn, e2eContext }) => {
+      await stackV3On();
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId } = await seedDayOneStack(page, e2eContext);
+      const prisma = createE2EPrismaClient();
+      try {
+        await prisma.lessonPlanConversation.update({ where: { id: conversationId }, data: { periodMinutes: 45 } });
+      } finally {
+        await prisma.$disconnect();
+      }
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      await expect(page.getByTestId('time-status')).toHaveText('5 min over');
+      const fixes = page.getByTestId('time-fix');
+      await expect(fixes).toHaveCount(2);
+      await expect(fixes.nth(0)).toContainText('Trim “Hook activity: What’s in your bag?” to 10 min');
+      await expect(fixes.nth(1)).toContainText('to tomorrow');
+      await expect(page.getByTestId('time-fixes')).toContainText('Fixes never cut writing time.');
+
+      await fixes.nth(0).getByRole('button', { name: 'Apply' }).click();
+      await expect(page.getByTestId('time-status')).toHaveText('Right on time');
+      await expect(page.getByTestId('run-card').nth(1).getByTestId('step-minutes')).toHaveText('10 min');
+      await page.getByTestId('stack-change').getByRole('button', { name: 'Undo' }).click();
+      await expect(page.getByTestId('run-card').nth(1).getByTestId('step-minutes')).toHaveText('15 min');
+    });
+
+    test('a Context step moved to tomorrow waits at the top of the next lesson for the class', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await stackV3On();
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId } = await seedDayOneStack(page, e2eContext);
+      const prisma = createE2EPrismaClient();
+      try {
+        await prisma.lessonPlanConversation.update({ where: { id: conversationId }, data: { periodMinutes: 47 } });
+      } finally {
+        await prisma.$disconnect();
+      }
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      const tomorrow = page.getByTestId('time-fix').filter({ hasText: 'to tomorrow' });
+      await expect(tomorrow).toContainText('Frame — The author');
+      await tomorrow.getByRole('button', { name: 'Apply' }).click();
+      await expect(page.getByTestId('run-card')).toHaveCount(7);
+      await expect(page.getByTestId('time-status')).toHaveText('Right on time');
+
+      const next = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Day two.' },
+        { role: 'assistant', content: 'Here is day two.' },
+      ], 'Day Two');
+      await page.goto(`/app/lesson-planner/${next.conversationId}/packet`);
+      const first = page.getByTestId('run-card').first();
+      await expect(first.getByTestId('run-card-title')).toHaveText('Frame — The author');
+      await expect(first.getByTestId('type-chip')).toContainText('Moved from');
+    });
+
+    test('add a piece where the teacher points; the next one lands after it', async ({ page, signIn, e2eContext }) => {
+      await stackV3On();
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId } = await seedDayOneStack(page, e2eContext);
+      const prisma = createE2EPrismaClient();
+      try {
+        await prisma.lessonPlanMessage.create({
+          data: { conversationId, role: 'assistant', content: SWAP_REPLY, createdAt: new Date(Date.UTC(2026, 9, 19, 11)) },
+        });
+      } finally {
+        await prisma.$disconnect();
+      }
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      await page.getByTestId('run-card').nth(1).hover();
+      await page.getByRole('button', { name: /Add a piece after Hook activity/ }).click();
+      await expect(page.getByTestId('insert-placeholder')).toHaveText(/New piece goes here/);
+      const panel = page.getByTestId('add-panel');
+      await expect(panel.getByTestId('add-panel-where')).toHaveText('Goes in at minute 20, after “Hook activity: What’s in your bag?”');
+      const card = panel.getByTestId('suggestion-card').filter({ hasText: 'The heaviest thing' });
+      await expect(card.getByTestId('suggestion-impact')).toHaveText('+5 min · puts you 5 over · writing to 27%');
+      await card.getByRole('button', { name: 'Add' }).click();
+      await expect(page.getByTestId('run-card')).toHaveCount(9);
+      await expect(page.getByTestId('run-card').nth(2).getByTestId('run-card-title')).toHaveText(
+        'The heaviest thing you’ve carried'
+      );
+      await expect(page.getByTestId('time-status')).toHaveText('5 min over');
+      // The insert point moved after the new piece.
+      await expect(panel.getByTestId('add-panel-where')).toContainText('after “The heaviest thing you’ve carried”');
+    });
+
+    test('the stack chat changes the stack in one line, with Undo', async ({ page, signIn, e2eContext }) => {
+      await stackV3On();
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId } = await seedDayOneStack(page, e2eContext);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      await page.getByTestId('open-ask').click();
+      await page.getByTestId('stack-ask-input').fill('shorten the hook to 10 minutes');
+      await page.getByRole('button', { name: 'Send' }).click();
+      const panel = page.getByTestId('add-panel');
+      await expect(panel.getByTestId('ask-reply').last()).toHaveText('Hook activity: What’s in your bag? set to 10 min.');
+      await expect(page.getByTestId('run-card').nth(1).getByTestId('step-minutes')).toHaveText('10 min');
+      await expect(page.getByTestId('time-status')).toHaveText('5 min to spare');
+      await panel.getByTestId('ask-undo').click();
+      await expect(page.getByTestId('run-card').nth(1).getByTestId('step-minutes')).toHaveText('15 min');
+
+      // In the planner chat, the change is one compact line.
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+      await expect(page.getByTestId('stack-turn').first()).toContainText('shorten the hook to 10 minutes');
+    });
+
+    test('set the lesson, then keep editing', async ({ page, signIn, e2eContext }) => {
+      await stackV3On();
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId } = await seedDayOneStack(page, e2eContext);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      await expect(page.getByTestId('finish-line')).toContainText('Ready for');
+      await page.getByTestId('set-lesson').click();
+      const set = page.getByTestId('lesson-set');
+      await expect(set).toContainText('Lesson set for');
+      await expect(set.getByTestId('stat-planned')).toHaveText('50 min');
+      await expect(set.getByTestId('stat-writing')).toHaveText('20%');
+      await expect(page.getByTestId('stack-save-state')).toContainText('Lesson set · saved');
+      await set.getByTestId('keep-editing').click();
+      await expect(page.getByTestId('finish-line')).toBeVisible();
+    });
+
+    test('the deck is built from the stack, not a step in it', async ({ page, signIn, e2eContext }) => {
+      await stackV3On();
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId, assistantIds } = await seedDayOneStack(page, e2eContext);
+      const prisma = createE2EPrismaClient();
+      try {
+        await prisma.lessonPlanMaterial.create({
+          data: {
+            conversationId,
+            sourceMessageId: assistantIds[0]!,
+            sourceCreatedAt: new Date(),
+            blockKey: 'deck',
+            slot: 'deck',
+            kind: 'slides',
+            title: 'Day One deck',
+            audience: 'teacher',
+            content: '```yawp-slides\n' + JSON.stringify({ title: 'Day One', slides: [{ layout: 'title', title: 'Day One', speakerNotes: 'Go.', minutes: 1 }] }) + '\n```',
+          },
+        });
+      } finally {
+        await prisma.$disconnect();
+      }
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      await expect(page.getByTestId('run-card')).toHaveCount(8);
+      await expect(page.getByTestId('time-total')).toHaveText('50');
+      await expect(page.getByTestId('take-to-class').getByTestId('deck-present')).toBeVisible();
     });
   });
 });
