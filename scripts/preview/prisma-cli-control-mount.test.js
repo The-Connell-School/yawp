@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  chmodSync,
   cpSync,
   mkdtempSync,
   readFileSync,
@@ -18,6 +19,7 @@ describe('preview prisma-cli control mount contract', () => {
         join(repoRoot, 'scripts/preview/prisma-cli.sh'),
         join(controlDir, 'prisma-cli.sh')
       );
+      chmodSync(join(controlDir, 'prisma-cli.sh'), 0o755);
       const result = Bun.spawnSync({
         cmd: ['bash', join(controlDir, 'prisma-cli.sh')],
         cwd: tmpdir(),
