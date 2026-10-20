@@ -1,9 +1,21 @@
-function isPreviewFreeTierLogging() {
+import { isDemoEnvironment } from '~/utils/preview-access.server';
+
+function isNonDemoPrPreview(env: NodeJS.ProcessEnv = process.env) {
+  return env.YAWP_ENVIRONMENT === 'preview' && !isDemoEnvironment(env);
+}
+
+function isPreviewFreeTierLogging(env: NodeJS.ProcessEnv = process.env) {
+  if (isDemoEnvironment(env) || env.YAWP_ENVIRONMENT === 'demo') {
+    return false;
+  }
+  if (env.NODE_ENV === 'production') {
+    return isNonDemoPrPreview(env);
+  }
   return (
-    process.env.YAWP_ENVIRONMENT === 'preview' ||
-    process.env.NODE_ENV === 'development' ||
-    process.env.E2E === 'true' ||
-    process.env.FREE_TIER_DB_TESTS === '1'
+    env.YAWP_ENVIRONMENT === 'preview' ||
+    env.NODE_ENV === 'development' ||
+    env.E2E === 'true' ||
+    env.FREE_TIER_DB_TESTS === '1'
   );
 }
 
