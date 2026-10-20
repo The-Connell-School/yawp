@@ -2352,17 +2352,28 @@ suite(
           status: 'INVITED',
         },
       });
+      const previewEnv = process.env.YAWP_ENVIRONMENT;
+      const previewSlug = process.env.PREVIEW_SLUG;
+      delete process.env.YAWP_ENVIRONMENT;
+      delete process.env.PREVIEW_SLUG;
       await prisma.setting.update({
         where: { name: flagName },
         data: { value: 'false' },
       });
-      // The retained dispatcher maps the free-tier route's thrown data to 503.
-      expect((await post('resend-invite')).response.status).toBe(503);
-      expect(mail.mock.calls.length).toBe(2);
-      await prisma.setting.update({
-        where: { name: flagName },
-        data: { value: 'true' },
-      });
+      try {
+        // The retained dispatcher maps the free-tier route's thrown data to 503.
+        expect((await post('resend-invite')).response.status).toBe(503);
+        expect(mail.mock.calls.length).toBe(2);
+      } finally {
+        await prisma.setting.update({
+          where: { name: flagName },
+          data: { value: 'true' },
+        });
+        if (previewEnv === undefined) delete process.env.YAWP_ENVIRONMENT;
+        else process.env.YAWP_ENVIRONMENT = previewEnv;
+        if (previewSlug === undefined) delete process.env.PREVIEW_SLUG;
+        else process.env.PREVIEW_SLUG = previewSlug;
+      }
       await prisma.rateLimitBucket.deleteMany({
         where: {
           key: {

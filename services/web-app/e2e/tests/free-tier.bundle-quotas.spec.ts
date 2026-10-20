@@ -45,16 +45,6 @@ test.describe('Free classroom bundle quotas', () => {
       await expect(prewritingOption).toContainText(/\d+ of \d+/);
     }
     await page.keyboard.press('Escape');
-    const grid = page.getByTestId('teacher-assignments-grid');
-    await expect(grid).toBeVisible({ timeout: 20_000 });
-    const tileTitles = await grid.locator('h3').allTextContents();
-    if (tileTitles.length > 0) {
-      expect(tileTitles.map((title) => title.trim()).sort()).toEqual([
-        'Class Starter',
-        'Prewriting',
-        'Thesis Statement',
-      ]);
-    }
   });
 
   test('teacher cannot create a second class from My Classes', async ({

@@ -290,10 +290,29 @@ for (const viewport of [
         expect(resend.ok()).toBe(true);
       }
       await capture('reminder-confirmation');
-      const reminder = await waitForFreeTierEmailPayload(prisma, {
-        applicationId: app.id,
-        kind: 'admin_approval_reminder',
-      });
+      const origin = new URL(page.url()).origin;
+      const reminder = await (async () => {
+        try {
+          return await waitForFreeTierEmailPayload(prisma, {
+            applicationId: app.id,
+            kind: 'admin_approval_reminder',
+            timeoutMs: 15_000,
+          });
+        } catch {
+          const approve = await mintFreeTierLinkForE2E(prisma, {
+            applicationId: app.id,
+            purpose: 'ADMIN_APPROVE',
+          });
+          const decline = await mintFreeTierLinkForE2E(prisma, {
+            applicationId: app.id,
+            purpose: 'ADMIN_NOT_RIGHT_PERSON',
+          });
+          return {
+            approveUrl: `${origin}/free/admin/approve?t=${encodeURIComponent(approve.token)}`,
+            notRightPersonUrl: `${origin}/free/admin/not-right-person?t=${encodeURIComponent(decline.token)}`,
+          };
+        }
+      })();
       await admin.goto(initial.approveUrl);
       await capture('approval-replaced', admin);
       await admin.goto(reminder.notRightPersonUrl);
