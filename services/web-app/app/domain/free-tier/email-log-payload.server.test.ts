@@ -1,28 +1,27 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import { sanitizeFreeTierEmailLogPayload } from './email-log-payload.server';
 
 describe('sanitizeFreeTierEmailLogPayload', () => {
-  const envKeys = [
-    'YAWP_ENVIRONMENT',
-    'FREE_TIER_DB_TESTS',
-    'NODE_ENV',
-    'PREVIEW_SLUG',
-    'PR_NUMBER',
-    'E2E',
-  ] as const;
-  const prev: Record<string, string | undefined> = {};
-
-  beforeEach(() => {
-    for (const key of envKeys) {
-      prev[key] = process.env[key];
-    }
-  });
+  const savedYawp = process.env.YAWP_ENVIRONMENT;
+  const savedDbTests = process.env.FREE_TIER_DB_TESTS;
+  const savedNodeEnv = process.env.NODE_ENV;
+  const savedPreviewSlug = process.env.PREVIEW_SLUG;
+  const savedPrNumber = process.env.PR_NUMBER;
+  const savedE2e = process.env.E2E;
 
   afterEach(() => {
-    for (const key of envKeys) {
-      if (prev[key] === undefined) delete process.env[key];
-      else process.env[key] = prev[key];
-    }
+    if (savedYawp === undefined) delete process.env.YAWP_ENVIRONMENT;
+    else process.env.YAWP_ENVIRONMENT = savedYawp;
+    if (savedDbTests === undefined) delete process.env.FREE_TIER_DB_TESTS;
+    else process.env.FREE_TIER_DB_TESTS = savedDbTests;
+    if (savedNodeEnv === undefined) Reflect.deleteProperty(process.env, 'NODE_ENV');
+    else process.env.NODE_ENV = savedNodeEnv;
+    if (savedPreviewSlug === undefined) delete process.env.PREVIEW_SLUG;
+    else process.env.PREVIEW_SLUG = savedPreviewSlug;
+    if (savedPrNumber === undefined) delete process.env.PR_NUMBER;
+    else process.env.PR_NUMBER = savedPrNumber;
+    if (savedE2e === undefined) delete process.env.E2E;
+    else process.env.E2E = savedE2e;
   });
 
   test('strips signed URLs outside preview/dev', () => {
