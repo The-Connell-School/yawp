@@ -700,8 +700,12 @@ describe('PR preview deployment contract', () => {
       'drop_preview_database "$DATABASE_NAME"',
       resetIndex
     );
-    const generateIndex = deployScript.indexOf('bun prisma generate');
-    const migrateIndex = deployScript.indexOf('bun prisma migrate deploy');
+    const generateIndex = deployScript.indexOf(
+      'scripts/preview/prisma-cli.sh generate'
+    );
+    const migrateIndex = deployScript.indexOf(
+      'scripts/preview/prisma-cli.sh migrate deploy'
+    );
     const backfillIndex = deployScript.indexOf(
       'bun run scripts/backfill-class-art-key.ts'
     );

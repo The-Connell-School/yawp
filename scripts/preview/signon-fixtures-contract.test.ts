@@ -12,7 +12,7 @@ test('sign-on fixtures run in fresh and unchanged-tooling preview seed paths onl
     '[[ "$SLUG" =~ ^pr-[0-9]+$ && "$DATA_MODE" == "seed" ]]'
   );
   expect(deploy).toContain(
-    'bun prisma generate && cd packages/prisma && bun run seed-preview-signon-qa'
+    'bash scripts/preview/prisma-cli.sh generate && cd packages/prisma && bun run seed-preview-signon-qa'
   );
   expect(deploy).toContain(
     "tooling_command+=' && bun run seed-preview-signon-qa'"
