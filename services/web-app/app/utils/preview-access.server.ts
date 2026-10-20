@@ -184,7 +184,22 @@ function masterCredentialVersion() {
     .slice(0, 24);
 }
 
+/** Named demo host (demo.yawp.school), not a PR preview slug. */
+export function isDemoEnvironment(
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  const slug = String(env.PREVIEW_SLUG ?? env.SLUG ?? '').trim();
+  const prNumber = String(env.PR_NUMBER ?? '').trim();
+  return slug === 'demo' && !prNumber;
+}
+
+/** Site-wide gate: PR previews only. Demo behaves like production for normal browsing. */
 export function isPreviewAccessGateEnabled() {
+  return process.env.PREVIEW_ACCESS_GATE === 'on' && !isDemoEnvironment();
+}
+
+/** Dev-login and beaker panel still require the preview access cookie on demo and previews. */
+export function isPreviewDevLoginAccessCodeRequired() {
   return process.env.PREVIEW_ACCESS_GATE === 'on';
 }
 

@@ -5,7 +5,7 @@ import {
   type LoaderFunctionArgs,
 } from 'react-router';
 import { recordLtiLaunchClaims, signToolJwt } from '~/integrations/blackboard-ags.server';
-import { getPreviewAccessSeat, isPreviewAccessGateEnabled } from '~/utils/preview-access.server';
+import { getPreviewAccessSeat } from '~/utils/preview-access.server';
 import { prisma } from '~/utils/db.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { sessionKey, getSessionExpirationDate } from '~/utils/auth.server';
