@@ -139,10 +139,24 @@ describe('free-tier approval flow', () => {
             : '';
       process.env.FREE_TIER_BUDGET_ENVIRONMENT = 'preview';
       setApprovalHooks({ onApplicationApproved: async () => {} });
+      let v1DecoyOrgId: string | undefined;
       try {
         const email = `ft-fixed-${Date.now()}@school.edu`;
         const user = await prisma.user.create({
           data: { email, name: 'Local Teacher' },
+        });
+        // Org-less free tier with only the application org is on approval v2 in
+        // demo/preview; this suite asserts legacy synchronous admin email delivery.
+        const v1DecoyOrg = await prisma.organization.create({
+          data: { name: `V1 decoy ${Date.now()}`, plan: 'SCHOOL' },
+        });
+        v1DecoyOrgId = v1DecoyOrg.id;
+        await prisma.orgMembership.create({
+          data: {
+            userId: user.id,
+            organizationId: v1DecoyOrg.id,
+            role: 'TEACHER',
+          },
         });
         const app = await prisma.freeTierApplication.create({
           data: {
@@ -246,6 +260,12 @@ describe('free-tier approval flow', () => {
         expect(congratulations.to).toBe(email);
         expect(congratulations).not.toHaveProperty('bcc');
       } finally {
+        if (v1DecoyOrgId) {
+          await prisma.orgMembership.deleteMany({
+            where: { organizationId: v1DecoyOrgId },
+          });
+          await prisma.organization.deleteMany({ where: { id: v1DecoyOrgId } });
+        }
         for (const [key, value] of Object.entries({
           YAWP_ENVIRONMENT: oldEnvironment,
           PREVIEW_SLUG: oldSlug,
