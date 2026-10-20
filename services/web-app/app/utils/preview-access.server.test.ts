@@ -1239,6 +1239,19 @@ describe('demo environment gate split', () => {
     }
   });
 
+  test('explicit dev-tooling guard rejects LTI launch without a preview seat on demo', async () => {
+    const { rejectWithoutExplicitPreviewDevLoginAccess } = await import(
+      './preview-access.server'
+    );
+    const blocked = await rejectWithoutExplicitPreviewDevLoginAccess(
+      request('/lti/launch', { method: 'POST' })
+    );
+    expect(blocked?.status).toBe(401);
+    expect(await blocked?.json()).toEqual({
+      error: 'Preview access code required.',
+    });
+  });
+
   test('pr previews keep the site-wide gate', async () => {
     process.env.PREVIEW_SLUG = 'pr-622';
     process.env.PR_NUMBER = '622';

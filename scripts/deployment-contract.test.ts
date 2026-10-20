@@ -1799,6 +1799,10 @@ describe('demo environment deployment contract', () => {
     expect(workflow).toContain(
       'POST /auth/dev-login without an access cookie returned HTTP $blocked, expected 401'
     );
+    expect(workflow).toContain('/auth/dev-login/options');
+    expect(workflow).toContain('POST /lti/launch without an access cookie');
+    expect(workflow).toContain('/auth/dev-login/options');
+    expect(workflow).toContain('POST /lti/launch without an access cookie');
     expect(workflow).toContain('--data-urlencode "code=$access_code"');
     expect(workflow).not.toContain(deprecatedPreviewBasicAuth);
     expect(workflow).not.toContain('curl --user');

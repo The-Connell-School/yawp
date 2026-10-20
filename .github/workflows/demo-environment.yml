@@ -338,6 +338,21 @@ jobs:
             exit 1
           }
 
+          dev_options="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' \
+            "$url/auth/dev-login/options?cursor=0")"
+          test "$dev_options" = "401" || {
+            echo "GET /auth/dev-login/options without an access cookie returned HTTP $dev_options, expected 401" >&2
+            exit 1
+          }
+
+          lti_blocked="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' \
+            -X POST --data-urlencode 'id_token=fixture' \
+            "$url/lti/launch")"
+          test "$lti_blocked" = "401" || {
+            echo "POST /lti/launch without an access cookie returned HTTP $lti_blocked, expected 401" >&2
+            exit 1
+          }
+
           cookie_jar="$(mktemp)"
           entered="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' -c "$cookie_jar" \
             --data-urlencode "code=$access_code" "$url/auth/preview-access")"
