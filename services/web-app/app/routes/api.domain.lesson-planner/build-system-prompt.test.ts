@@ -1739,3 +1739,22 @@ describe("planner prompt — the deck is built from the stack (Brian's run 3, it
     expect(prompt).toContain('its pair-share question, and the line the class lands on');
   });
 });
+
+describe('planner prompt — a lesson built from a template (stack page redesign)', () => {
+  test('the template’s slots ride in the uncached tail', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'School',
+      template: {
+        id: 't1',
+        name: 'Read & write day',
+        periodMinutes: 50,
+        slots: [{ type: 'class_starter', minutes: 5 }, { type: 'read_aloud', minutes: 20 }],
+      },
+    });
+    const tail = blocks.at(-1)!.text;
+    expect(tail).toContain('"Read & write day"');
+    expect(tail).toContain('2. Read aloud, 20 min');
+    expect(blocks[0]!.text).not.toContain('Read & write day');
+  });
+});

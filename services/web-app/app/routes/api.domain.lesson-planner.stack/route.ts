@@ -29,6 +29,7 @@ import {
   rewriteForAudience,
 } from '~/domain/lesson-planner/lesson-share.server';
 import { getDomainUrl } from '~/utils/misc';
+import { slotsFromSteps } from '~/domain/lesson-planner/lesson-templates';
 
 /** Sends a lesson can make in a day: enough for a sub, a family and an admin. */
 const MAX_SENDS_PER_DAY = 20;
@@ -53,6 +54,8 @@ const POST = z
       'create-share',
       'send-lesson',
       'revoke-share',
+      // Save this shape as a template (stack page redesign).
+      'save-template',
     ]),
     conversationId: z.string().min(1),
     materialId: z.string().min(1).optional(),
@@ -79,6 +82,7 @@ const POST = z
     includes: z.string().max(200).optional(),
     recipient: z.string().trim().email().max(200).optional(),
     note: z.string().trim().max(2_000).optional(),
+    name: z.string().trim().min(1).max(80).optional(),
   })
   .strict();
 
@@ -290,6 +294,30 @@ export async function action({ request }: ActionFunctionArgs) {
         teacherName: null,
       });
       return dataResponse({ ok: true, url, sentTo: data.recipient });
+    }
+
+    case 'save-template': {
+      if (!flags.templates) return bad('Not found.', 404);
+      if (!data.name) return bad('Name the template.');
+      const loaded = await loadStackV3({ request, conversationId: conversation.id });
+      if (!loaded?.v3.timing.blocks.length) return bad('There is nothing in this lesson to save.');
+      // The order and timing, never the content.
+      const template = await prisma.lessonPlanTemplate.create({
+        data: {
+          name: data.name,
+          slots: slotsFromSteps(
+            loaded.v3.timing.blocks.map((block) => ({
+              ...block,
+              label: loaded.v3.steps.find((step) => step.id === block.id)?.label ?? null,
+            }))
+          ),
+          periodMinutes: conversation.periodMinutes,
+          membershipId: access.membership.id,
+          organizationId: access.membership.organization.id,
+        },
+        select: { id: true },
+      });
+      return dataResponse({ ok: true, templateId: template.id });
     }
 
     case 'command': {

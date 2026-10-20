@@ -222,6 +222,9 @@ export function SendLesson({ conversationId }: { conversationId: string }) {
                 <label className="flex items-start gap-2 text-sm">
                   <input
                     type="checkbox"
+                    // The roster needs the lesson tied to a real class, which
+                    // lessons are not yet (plan, decision K6).
+                    disabled={entry.item === 'roster'}
                     checked={items.has(entry.item)}
                     onChange={() => {
                       const next = new Set(items);
@@ -233,7 +236,9 @@ export function SendLesson({ conversationId }: { conversationId: string }) {
                   />
                   <span>
                     {entry.label}
-                    <span className="block text-xs text-[var(--sv-muted)]">{entry.hint}</span>
+                    <span className="block text-xs text-[var(--sv-muted)]">
+                      {entry.item === 'roster' ? 'Coming once lessons are tied to your class list' : entry.hint}
+                    </span>
                   </span>
                 </label>
               </li>

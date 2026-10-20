@@ -49,6 +49,7 @@ import {
   shouldRenameLesson,
 } from '~/domain/lesson-planner/lesson-name';
 import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
+import { TEMPLATE_SLOTS } from '~/domain/lesson-planner/lesson-templates';
 import { buildLessonPlannerSystemPromptBlocks } from './build-system-prompt';
 import {
   buildLessonPlannerAdmissionPolicy,
@@ -119,6 +120,8 @@ const POST = z
     unitDay: z.coerce.number().int().min(1).max(60).optional(),
     /** The day's title from the map, so the new lesson is named before it exists. */
     unitDayTitle: z.string().trim().max(120).optional(),
+    /** A lesson started from one of the teacher's templates (run 3). */
+    templateId: z.string().min(1).max(64).optional(),
     /**
      * Opt in to the progress stream. Absent, the turn answers with one JSON
      * body exactly as it always has — so the streaming path can be turned off
@@ -428,9 +431,23 @@ export async function action({ request }: ActionFunctionArgs) {
 
     // Brian's review (B6): with stack v2 on, outputs are built from what the
     // teacher kept, so the planner sees the stack itself, not just its titles.
-    const { stackV2, intakeV2 } = await getLessonPlannerReviewFlags(
+    const { stackV2, intakeV2, templates: templatesOn } = await getLessonPlannerReviewFlags(
       ctx.organizationId
     );
+    // Brian's run 3: a lesson built from the teacher's own template keeps its
+    // shape. Only the teacher's own, and only with templates on.
+    const templateRow =
+      templatesOn && turn.templateId
+        ? await prisma.lessonPlanTemplate.findFirst({
+            where: { id: turn.templateId, membershipId: access.membership.id, deletedAt: null },
+            select: { id: true, name: true, slots: true, periodMinutes: true },
+          })
+        : null;
+    const parsedSlots = templateRow ? TEMPLATE_SLOTS.safeParse(templateRow.slots) : null;
+    const template =
+      templateRow && parsedSlots?.success
+        ? { id: templateRow.id, name: templateRow.name, slots: parsedSlots.data, periodMinutes: templateRow.periodMinutes }
+        : null;
     const stackContents =
       stackV2 && activeConversation
         ? await loadStackContents(activeConversation.id, {
@@ -444,6 +461,9 @@ export async function action({ request }: ActionFunctionArgs) {
     const heardLength = readLessonLength(turn.message);
     const lessonLength =
       heardLength ??
+      (template?.periodMinutes && !activeConversation?.periodMinutes
+        ? { minutes: template.periodMinutes, classLabel: null }
+        : null) ??
       (activeConversation?.periodMinutes
         ? {
             minutes: activeConversation.periodMinutes,
@@ -461,6 +481,7 @@ export async function action({ request }: ActionFunctionArgs) {
       unitContext,
       exitTicketsAvailable,
       writingPracticeAvailable: ctx.writingPracticeEnabled,
+      template,
     });
 
     const messages: { role: AgentType; content: string; name?: string }[] = [

@@ -1,3 +1,4 @@
+import { buildTemplateSection, type LessonTemplate } from '~/domain/lesson-planner/lesson-templates';
 import { rubricCategories } from '~/domain/grading/rubric';
 import type { CacheableSystemBlock } from '~/utils/getLLMCompletion/getLLMCompletion';
 import type { UnitContext } from '~/domain/lesson-planner/unit-plan';
@@ -722,6 +723,7 @@ export function buildLessonPlannerSystemPromptBlocks({
   writingPracticeAvailable = false,
   intakeV2 = false,
   lessonLength = null,
+  template = null,
 }: {
   teacherName: string | null;
   organizationName: string;
@@ -735,6 +737,8 @@ export function buildLessonPlannerSystemPromptBlocks({
   intakeV2?: boolean;
   /** How long this lesson is, once the teacher has said (Brian's run 2, B1). */
   lessonLength?: { minutes: number; classLabel: string | null } | null;
+  /** The teacher's template this lesson is built from (run 3). */
+  template?: LessonTemplate | null;
 }): CacheableSystemBlock[] {
   const who = teacherName ? `${teacherName}, a teacher` : 'a teacher';
   const intro = `You are the YAWP! Lesson Planner, an instructional design partner for ${who} at ${organizationName}.`;
@@ -743,6 +747,7 @@ export function buildLessonPlannerSystemPromptBlocks({
     ...buildInventorySection(lessonInventory),
     ...buildStackContentsSection(stackContents),
     ...buildUnitContextSection(unitContext),
+    ...buildTemplateSection(template),
   ].join('\n');
   const variable = tail ? `${intro}\n${tail}` : intro;
 

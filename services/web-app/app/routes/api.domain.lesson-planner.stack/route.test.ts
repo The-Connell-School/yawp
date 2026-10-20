@@ -8,6 +8,7 @@ const prisma = {
   lessonPlanMessage: { findFirst: mock() },
   lessonPlanMaterial: { updateMany: mock() },
   lessonShareLink: { count: mock(async () => 0) },
+  lessonPlanTemplate: { create: mock(async (_input: any) => ({ id: 'tpl-1' })) },
 };
 const ensureStudentVersion = mock();
 const share = {
@@ -213,5 +214,31 @@ describe('Post to your class and Send this lesson (stack page redesign)', () => 
     prisma.lessonShareLink.count.mockResolvedValue(20);
     const tooMany = await post({ intent: 'send-lesson', conversationId: 'plan-1', audience: 'family', recipient: 'f@x.org' });
     expect(tooMany.init.status).toBe(429);
+  });
+});
+
+describe('Save this shape as a template (stack page redesign)', () => {
+  test('saves the order and timing, never the content', async () => {
+    getLessonPlannerReviewFlags.mockResolvedValue({ stackV3: true, templates: true });
+    loadStackV3.mockResolvedValue({
+      v3: {
+        timing: {
+          blocks: [
+            { id: 'cs', title: 'Starter', type: 'class_starter', minutes: 5, isWriting: true },
+            { id: 'hook', title: 'Hook', type: 'activity', minutes: 15, isWriting: false },
+          ],
+        },
+        steps: [{ id: 'cs', label: null }, { id: 'hook', label: null }],
+      },
+    });
+    const response = await post({ intent: 'save-template', conversationId: 'plan-1', name: 'Starter + hook' });
+    const data = prisma.lessonPlanTemplate.create.mock.calls.at(-1)![0].data;
+    expect(data).toMatchObject({ name: 'Starter + hook', periodMinutes: 50, membershipId: 'teacher-1' });
+    expect(data.slots).toEqual([
+      { type: 'class_starter', minutes: 5, label: null, isWriting: true },
+      { type: 'activity', minutes: 15, label: null, isWriting: false },
+    ]);
+    expect(JSON.stringify(data)).not.toContain('Hook');
+    expect(response.data.templateId).toBe('tpl-1');
   });
 });

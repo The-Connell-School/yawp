@@ -78,6 +78,8 @@ import { hidePromptIds } from '~/domain/lesson-planner/prompt-ids';
 import { overTime, planMinutes } from '~/domain/lesson-planner/plan-timing';
 import { readPlanSteps, splitAtStepHeadings } from '~/domain/lesson-planner/plan-steps';
 import { SegmentToggle } from '~/components/lesson-planner/segment-toggle';
+import { TEMPLATE_SLOTS, type LessonTemplate } from '~/domain/lesson-planner/lesson-templates';
+import { TemplateChip, TemplateList } from './template-picker';
 import { FULL_LESSON_FRAMING, stripPlanPreamble } from '~/domain/lesson-planner/plan-framing';
 import { announceStackChange, useStackChanges } from '~/components/lesson-planner/stack-channel';
 import { pieceKeysInReply, segmentInStack, stepSegments } from '~/domain/lesson-planner/reply-pieces';
@@ -275,8 +277,26 @@ export async function loader({ request }: LoaderFunctionArgs) {
       }))
     : [];
 
+  // The teacher's lesson shapes, for "Build from my templates" (run 3).
+  const templates: LessonTemplate[] = reviewFlags.templates
+    ? (
+        await prisma.lessonPlanTemplate.findMany({
+          where: { membershipId: access.membership.id, deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          take: 30,
+          select: { id: true, name: true, slots: true, periodMinutes: true },
+        })
+      ).flatMap((row) => {
+        const slots = TEMPLATE_SLOTS.safeParse(row.slots);
+        return slots.success
+          ? [{ id: row.id, name: row.name, slots: slots.data, periodMinutes: row.periodMinutes }]
+          : [];
+      })
+    : [];
+
   return {
     reviewFlags,
+    templates,
     teacherClasses,
     practice,
     dailyPagesTypeId,
@@ -377,6 +397,7 @@ export default function LessonPlannerRoute() {
     unitMapConversation,
     reviewFlags,
     teacherClasses,
+    templates,
   } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const fetcher = useFetcher<LessonPlannerActionData>();
@@ -406,6 +427,8 @@ export default function LessonPlannerRoute() {
     message: string;
     conversationKey: string;
   } | null>(null);
+  // The template a new lesson is being built from (run 3).
+  const [activeTemplate, setActiveTemplate] = useState<LessonTemplate | null>(null);
   const [addedMaterials, setAddedMaterials] = useState<Set<string>>(
     () => new Set(selectedConversation?.addedMaterials ?? [])
   );
@@ -850,6 +873,8 @@ export default function LessonPlannerRoute() {
       ...(unitDay
         ? { unitDay: String(unitDay.day), unitDayTitle: unitDay.title }
         : {}),
+      // A lesson started from a template keeps its shape (run 3).
+      ...(activeTemplate ? { templateId: activeTemplate.id } : {}),
     });
 
     setProgress(PLANNING_PROGRESS_START);
@@ -1047,6 +1072,9 @@ export default function LessonPlannerRoute() {
                 input={input}
                 onInput={setInput}
                 onSend={() => send(input)}
+                templates={reviewFlags.templates ? templates : null}
+                template={activeTemplate}
+                onTemplate={setActiveTemplate}
               />
             ) : (
               messages.map((message, index) => (
@@ -1185,6 +1213,8 @@ function LessonComposer({
   onSend,
   disabled,
   hero,
+  chip = null,
+  placeholder = null,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -1192,6 +1222,9 @@ function LessonComposer({
   disabled: boolean;
   /** Centred on an empty page: taller, and the examples cycle inside it. */
   hero?: boolean;
+  /** Shown inside the box, above the text: the template in use (run 3). */
+  chip?: React.ReactNode;
+  placeholder?: string | null;
 }) {
   const rotating = useRotatingPlaceholder(value.length > 0);
 
@@ -1208,6 +1241,8 @@ function LessonComposer({
         onSend();
       }}
     >
+      <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
+      {chip ? <div className="px-3 pt-2">{chip}</div> : null}
       <Textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -1218,16 +1253,17 @@ function LessonComposer({
           }
         }}
         rows={hero ? 2 : 1}
-        placeholder={hero ? rotating : 'Describe the lesson and your class…'}
+        placeholder={placeholder ?? (hero ? rotating : 'Describe the lesson and your class…')}
         aria-label="Message the Lesson Planner"
         className={cn(
-          'flex-1 resize-none max-sm:text-base',
+          'w-full flex-1 resize-none max-sm:text-base',
           hero
             ? 'max-h-56 min-h-[76px] border-0 bg-transparent text-base shadow-none focus-visible:ring-0'
             : 'max-h-40 min-h-[44px]'
         )}
         disabled={disabled}
       />
+      </div>
       <Button
         type="submit"
         size="icon"
@@ -1249,6 +1285,9 @@ function LessonPlannerEmptyState({
   input,
   onInput,
   onSend,
+  templates = null,
+  template = null,
+  onTemplate,
 }: {
   prompts: Array<{ id: string; label: string; prompt: string }>;
   seedContext: string | null;
@@ -1257,7 +1296,12 @@ function LessonPlannerEmptyState({
   input: string;
   onInput: (value: string) => void;
   onSend: () => void;
+  /** The teacher's templates, with templates on (run 3); null when off. */
+  templates?: LessonTemplate[] | null;
+  template?: LessonTemplate | null;
+  onTemplate?: (template: LessonTemplate | null) => void;
 }) {
+  const [showTemplates, setShowTemplates] = useState(false);
   const freeUsage = useFreeAccountUsage();
   const exhausted = freeUsage?.lessonPlans.remaining === 0;
   return (
@@ -1278,7 +1322,22 @@ function LessonPlannerEmptyState({
           onChange={onInput}
           onSend={onSend}
           disabled={disabled || exhausted}
+          chip={
+            template && onTemplate ? (
+              <TemplateChip name={template.name} onClear={() => onTemplate(null)} />
+            ) : null
+          }
+          placeholder={
+            template ? 'What are we reading? e.g. Ninth grade, Chapter 2 of The Things They Carried' : null
+          }
         />
+        {templates && showTemplates && onTemplate ? (
+          <TemplateList
+            templates={templates}
+            selectedId={template?.id ?? null}
+            onPick={(picked) => onTemplate(picked)}
+          />
+        ) : null}
         {freeUsage && (
           <div
             className="text-sm text-muted-foreground"
@@ -1332,6 +1391,11 @@ function LessonPlannerEmptyState({
           prompts={prompts}
           onPick={onPick}
           disabled={disabled || exhausted}
+          templateTile={
+            templates
+              ? { active: showTemplates, onClick: () => setShowTemplates((open) => !open) }
+              : null
+          }
         />
       </div>
     </div>
