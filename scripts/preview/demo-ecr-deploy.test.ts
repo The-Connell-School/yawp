@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
+import path from 'node:path';
 
 const deployScript = readFileSync(new URL('./deploy.sh', import.meta.url), 'utf8');
 const workflow = readFileSync(
@@ -16,7 +17,87 @@ const deployStep = workflow.slice(
   workflow.indexOf('- name: Verify the demo actually serves')
 );
 
+const demoImageRegistryMainTf = readFileSync(
+  path.resolve('infra/demo-image-registry/main.tf'),
+  'utf8'
+);
+
+const liveDemoImagePushTrustStringEquals = {
+  'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
+  'token.actions.githubusercontent.com:sub': [
+    'repo:The-Connell-School/yawp:environment:demo',
+    'repo:The-Connell-School@157837314/yawp@989330947:environment:demo',
+  ],
+} as const;
+
 describe('demo ECR image pull path', () => {
+  test('demo image push IAM role trusts legacy and immutable GitHub demo OIDC subjects', () => {
+    expect(demoImageRegistryMainTf).toContain('variable "github_oidc_demo_environment_subjects"');
+    expect(demoImageRegistryMainTf).toContain(
+      'repo:The-Connell-School/yawp:environment:demo'
+    );
+    expect(demoImageRegistryMainTf).toContain(
+      'repo:The-Connell-School@157837314/yawp@989330947:environment:demo'
+    );
+    expect(demoImageRegistryMainTf).toContain(
+      '"token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"'
+    );
+    expect(demoImageRegistryMainTf).toContain(
+      '"token.actions.githubusercontent.com:sub" = var.github_oidc_demo_environment_subjects'
+    );
+    expect(demoImageRegistryMainTf).not.toMatch(/StringLike[\s\S]*githubusercontent/);
+    const trustBlock = demoImageRegistryMainTf.slice(
+      demoImageRegistryMainTf.indexOf('resource "aws_iam_role" "demo_image_push"'),
+      demoImageRegistryMainTf.indexOf('resource "aws_iam_role_policy" "demo_image_push"')
+    );
+    expect(trustBlock).not.toContain('StringLike');
+    expect(trustBlock).not.toMatch(/:sub"[\s\S]*\*/);
+
+    const defaultSubjectsBlock =
+      demoImageRegistryMainTf.match(
+        /variable "github_oidc_demo_environment_subjects"[\s\S]*?default = \[([\s\S]*?)\]\n/m
+      )?.[1] ?? '';
+    expect(defaultSubjectsBlock.length).toBeGreaterThan(0);
+    for (const subject of liveDemoImagePushTrustStringEquals[
+      'token.actions.githubusercontent.com:sub'
+    ]) {
+      expect(defaultSubjectsBlock).toContain(subject);
+    }
+    const legacyIndex = defaultSubjectsBlock.indexOf(
+      liveDemoImagePushTrustStringEquals['token.actions.githubusercontent.com:sub'][0]
+    );
+    const immutableIndex = defaultSubjectsBlock.indexOf(
+      liveDemoImagePushTrustStringEquals['token.actions.githubusercontent.com:sub'][1]
+    );
+    expect(legacyIndex).toBeGreaterThan(-1);
+    expect(immutableIndex).toBeGreaterThan(legacyIndex);
+  });
+
+  test('demo ECR push role policy includes buildx read actions on demo repositories', () => {
+    const pushPolicyBlock = demoImageRegistryMainTf.slice(
+      demoImageRegistryMainTf.indexOf('Sid    = "PushDemoImages"'),
+      demoImageRegistryMainTf.indexOf('Resource = [for repository in aws_ecr_repository.demo')
+    );
+    const expectedPushActions = [
+      'ecr:BatchCheckLayerAvailability',
+      'ecr:BatchGetImage',
+      'ecr:CompleteLayerUpload',
+      'ecr:GetDownloadUrlForLayer',
+      'ecr:InitiateLayerUpload',
+      'ecr:PutImage',
+      'ecr:UploadLayerPart',
+      'ecr:DescribeRepositories',
+      'ecr:DescribeImages',
+      'ecr:ListImages',
+    ];
+    for (const action of expectedPushActions) {
+      expect(pushPolicyBlock).toContain(`"${action}"`);
+    }
+    expect(demoImageRegistryMainTf).toContain(
+      'Resource = [for repository in aws_ecr_repository.demo : repository.arn]'
+    );
+  });
+
   test('deploy.sh logs into ECR and pulls when demo image variables are set', () => {
     expect(deployScript).toContain('DEMO_WEB_IMAGE');
     expect(deployScript).toContain('DEMO_TOOLBOX_IMAGE');

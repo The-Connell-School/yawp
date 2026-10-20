@@ -28,6 +28,15 @@ variable "github_repository" {
   default = "The-Connell-School/yawp"
 }
 
+variable "github_oidc_demo_environment_subjects" {
+  type = list(string)
+  default = [
+    "repo:The-Connell-School/yawp:environment:demo",
+    "repo:The-Connell-School@157837314/yawp@989330947:environment:demo",
+  ]
+  description = "Exact GitHub Actions OIDC sub claims for the demo environment (legacy slug and immutable subject forms)."
+}
+
 variable "create_github_oidc_provider" {
   type        = bool
   default     = false
@@ -118,7 +127,7 @@ resource "aws_iam_role" "demo_image_push" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repository}:environment:demo"
+          "token.actions.githubusercontent.com:sub" = var.github_oidc_demo_environment_subjects
         }
       }
     }]
@@ -132,9 +141,9 @@ resource "aws_iam_role_policy" "demo_image_push" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AuthorizeRegistry"
-        Effect = "Allow"
-        Action = ["ecr:GetAuthorizationToken"]
+        Sid      = "AuthorizeRegistry"
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
         Resource = "*"
       },
       {
@@ -142,7 +151,9 @@ resource "aws_iam_role_policy" "demo_image_push" {
         Effect = "Allow"
         Action = [
           "ecr:BatchCheckLayerAvailability",
+          "ecr:BatchGetImage",
           "ecr:CompleteLayerUpload",
+          "ecr:GetDownloadUrlForLayer",
           "ecr:InitiateLayerUpload",
           "ecr:PutImage",
           "ecr:UploadLayerPart",
