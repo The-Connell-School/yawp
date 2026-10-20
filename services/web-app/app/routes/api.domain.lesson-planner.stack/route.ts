@@ -21,6 +21,17 @@ import {
 } from '~/domain/lesson-planner/stack-actions.server';
 import { runStackCommand } from '~/domain/lesson-planner/stack-command.server';
 import { ensureStudentVersion } from '~/domain/lesson-planner/step-handout.server';
+import { AUDIENCE_SETUP, parseShareItems, SHARE_AUDIENCES } from '~/domain/lesson-planner/lesson-share';
+import {
+  createShareLink,
+  emailLessonLink,
+  revokeShareLinks,
+  rewriteForAudience,
+} from '~/domain/lesson-planner/lesson-share.server';
+import { getDomainUrl } from '~/utils/misc';
+
+/** Sends a lesson can make in a day: enough for a sub, a family and an admin. */
+const MAX_SENDS_PER_DAY = 20;
 import { clampMinutes } from '~/domain/lesson-planner/stack-timing';
 
 const POST = z
@@ -38,6 +49,10 @@ const POST = z
       'student-version',
       // Leave a step out of the handouts, or put it back in.
       'set-handout',
+      // Post to your class and Send this lesson (stack page redesign).
+      'create-share',
+      'send-lesson',
+      'revoke-share',
     ]),
     conversationId: z.string().min(1),
     materialId: z.string().min(1).optional(),
@@ -60,6 +75,10 @@ const POST = z
     line: z.string().trim().min(1).max(600).optional(),
     insertAfter: z.string().max(200).optional(),
     hasHandout: z.enum(['true', 'false']).optional(),
+    audience: z.enum(SHARE_AUDIENCES).optional(),
+    includes: z.string().max(200).optional(),
+    recipient: z.string().trim().email().max(200).optional(),
+    note: z.string().trim().max(2_000).optional(),
   })
   .strict();
 
@@ -202,6 +221,75 @@ export async function action({ request }: ActionFunctionArgs) {
         data: { hasHandout: data.hasHandout === 'true' },
       });
       return dataResponse({ ok: true });
+    }
+
+    case 'create-share': {
+      if (!flags.share) return bad('Not found.', 404);
+      const includes = parseShareItems(data.includes);
+      if (!includes.length) return bad('Pick what the link opens.');
+      // One student link per lesson at a time: posting again replaces it.
+      await revokeShareLinks(conversation.id, 'student');
+      const { token } = await createShareLink({ conversationId: conversation.id, audience: 'student', includes });
+      return dataResponse({ ok: true, url: `${getDomainUrl(request)}/l/${token}` });
+    }
+
+    case 'revoke-share': {
+      if (!flags.share) return bad('Not found.', 404);
+      await revokeShareLinks(conversation.id, data.audience);
+      return dataResponse({ ok: true });
+    }
+
+    case 'send-lesson': {
+      if (!flags.share) return bad('Not found.', 404);
+      if (!data.audience || !data.recipient) return bad('Who should it go to?');
+      const sentToday = await prisma.lessonShareLink.count({
+        where: {
+          conversationId: conversation.id,
+          audience: { not: 'student' },
+          createdAt: { gt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+        },
+      });
+      if (sentToday >= MAX_SENDS_PER_DAY) return bad('That is enough sends for this lesson today.', 429);
+      const includes = parseShareItems(data.includes);
+      const loaded = await loadStackV3({ request, conversationId: conversation.id });
+      if (!loaded) return bad('Not found.', 404);
+      const needsText = includes.some((item) => ['plan', 'summary', 'help', 'standards'].includes(item));
+      const body = needsText
+        ? await rewriteForAudience({
+            request,
+            access,
+            audience: data.audience,
+            title: loaded.packet.title,
+            className: loaded.packet.className,
+            steps: loaded.v3.timing.blocks.map((block) => {
+              const step = loaded.v3.steps.find((entry) => entry.id === block.id)!;
+              return {
+                title: block.title,
+                minutes: block.minutes,
+                startsAt: block.startsAt,
+                excerpt: step.excerpt,
+                content: step.content,
+              };
+            }),
+          })
+        : null;
+      const { token } = await createShareLink({
+        conversationId: conversation.id,
+        audience: data.audience,
+        includes,
+        note: data.note || null,
+        body,
+      });
+      const url = `${getDomainUrl(request)}/l/${token}`;
+      const setup = AUDIENCE_SETUP[data.audience];
+      await emailLessonLink({
+        to: data.recipient,
+        subject: `${setup.tab === 'Substitute' ? 'Sub plan' : 'Lesson'}: ${loaded.packet.title}`,
+        link: url,
+        note: data.note || null,
+        teacherName: null,
+      });
+      return dataResponse({ ok: true, url, sentTo: data.recipient });
     }
 
     case 'command': {

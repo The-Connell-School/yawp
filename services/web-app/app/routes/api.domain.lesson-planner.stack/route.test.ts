@@ -7,8 +7,15 @@ const prisma = {
   lessonPlanConversation: { findFirst: mock(), update: mock() },
   lessonPlanMessage: { findFirst: mock() },
   lessonPlanMaterial: { updateMany: mock() },
+  lessonShareLink: { count: mock(async () => 0) },
 };
 const ensureStudentVersion = mock();
+const share = {
+  createShareLink: mock(async (_input: any) => ({ id: 'link-1', token: 'tok_abcdefghijklmnopqrstuvwxyz' })),
+  emailLessonLink: mock(async (_input: any) => ({ status: 'success' })),
+  revokeShareLinks: mock(async (_id: string, _audience?: string) => undefined),
+  rewriteForAudience: mock(async (_input: any) => '## Minute 0 · Hook'),
+};
 const loadStackV3 = mock();
 const actions = {
   addPiecesAt: mock(),
@@ -27,6 +34,7 @@ mock.module('~/domain/lesson-planner/load-stack-v3.server', () => ({ loadStackV3
 mock.module('~/domain/lesson-planner/stack-actions.server', () => actions);
 mock.module('~/domain/lesson-planner/stack-command.server', () => ({ runStackCommand }));
 mock.module('~/domain/lesson-planner/step-handout.server', () => ({ ensureStudentVersion }));
+mock.module('~/domain/lesson-planner/lesson-share.server', () => share);
 
 const { action } = await import('./route');
 
@@ -154,5 +162,56 @@ describe("handouts for any step (Brian's run 3, item 8)", () => {
       where: { id: 'hook', conversationId: 'plan-1' },
       data: { hasHandout: false },
     });
+  });
+});
+
+describe('Post to your class and Send this lesson (stack page redesign)', () => {
+  test('nothing without the share flag', async () => {
+    getLessonPlannerReviewFlags.mockResolvedValue({ stackV3: true, share: false });
+    const response = await post({ intent: 'create-share', conversationId: 'plan-1', includes: 'deck' });
+    expect(response.init.status).toBe(404);
+  });
+
+  test('posting makes one student link that opens what was checked', async () => {
+    getLessonPlannerReviewFlags.mockResolvedValue({ stackV3: true, share: true });
+    const response = await post({ intent: 'create-share', conversationId: 'plan-1', includes: 'deck,handouts,junk' });
+    expect(share.revokeShareLinks).toHaveBeenCalledWith('plan-1', 'student');
+    expect(share.createShareLink.mock.calls.at(-1)![0]).toMatchObject({ audience: 'student', includes: ['deck', 'handouts'] });
+    expect(response.data.url).toBe('http://localhost/l/tok_abcdefghijklmnopqrstuvwxyz');
+  });
+
+  test('a sub plan is rewritten for the sub, linked, and emailed with the note', async () => {
+    getLessonPlannerReviewFlags.mockResolvedValue({ stackV3: true, share: true });
+    loadStackV3.mockResolvedValue({
+      packet: { title: 'Day One', className: 'English 10' },
+      v3: {
+        timing: { blocks: [{ id: 'hook', title: 'Hook', minutes: 15, startsAt: 0 }] },
+        steps: [{ id: 'hook', excerpt: 'Bags out.', content: 'Bags out.' }],
+      },
+    });
+    const response = await post({
+      intent: 'send-lesson',
+      conversationId: 'plan-1',
+      audience: 'sub',
+      recipient: 'sub@school.org',
+      includes: 'plan,handouts,deck',
+      note: 'Fire drill at 10.',
+    });
+    expect(share.createShareLink.mock.calls.at(-1)![0]).toMatchObject({
+      audience: 'sub',
+      note: 'Fire drill at 10.',
+      body: '## Minute 0 · Hook',
+    });
+    expect(share.emailLessonLink.mock.calls.at(-1)![0]).toMatchObject({ to: 'sub@school.org', note: 'Fire drill at 10.' });
+    expect(response.data.sentTo).toBe('sub@school.org');
+  });
+
+  test('a bad address is refused, and so is a 21st send in a day', async () => {
+    getLessonPlannerReviewFlags.mockResolvedValue({ stackV3: true, share: true });
+    const badAddress = await post({ intent: 'send-lesson', conversationId: 'plan-1', audience: 'family', recipient: 'nope' });
+    expect(badAddress.init.status).toBe(422);
+    prisma.lessonShareLink.count.mockResolvedValue(20);
+    const tooMany = await post({ intent: 'send-lesson', conversationId: 'plan-1', audience: 'family', recipient: 'f@x.org' });
+    expect(tooMany.init.status).toBe(429);
   });
 });

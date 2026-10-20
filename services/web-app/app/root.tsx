@@ -100,6 +100,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     url.pathname === '/' ||
     url.pathname === '/info' ||
     /^\/(privacy|terms)(?:\/|\.data)?$/.test(url.pathname) ||
+    // A shared lesson (Lesson Planner run 3) opens without a login.
+    /^\/l\/[\w-]+(?:\.data)?$/.test(url.pathname) ||
     url.pathname === '/auth/preview-access' ||
     url.pathname === '/auth/preview-access.data';
   const cookieHeader = request.headers.get('Cookie');

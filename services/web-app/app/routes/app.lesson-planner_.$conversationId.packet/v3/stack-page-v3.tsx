@@ -21,6 +21,7 @@ import { AddPanel } from './add-panel';
 import { FinishLine } from './finish-line';
 import { PIECE_DRAG_TYPE, RunOfShow } from './run-of-show';
 import { TakeToClass } from './take-to-class';
+import { PostToClass, SendLesson } from './share-cards';
 import { TimeBar } from './time-bar';
 import { HEADING_FONT, STACK_FONTS_HREF, STACK_THEME } from './theme';
 
@@ -49,14 +50,7 @@ function chipDate(iso: string | null): string {
 
 type Change = { text: string; undo: unknown | null };
 
-export function StackPageV3({
-  data,
-  extraRight,
-}: {
-  data: StackPageV3Data;
-  /** Post to your class and Send this lesson, when sharing is on. */
-  extraRight?: { post: React.ReactNode; send: React.ReactNode } | null;
-}) {
+export function StackPageV3({ data }: { data: StackPageV3Data }) {
   const { conversationId, v3, reviewFlags, packet, published } = data;
   const revalidator = useRevalidator();
   const stackFetcher = useFetcher<Record<string, any>>();
@@ -391,9 +385,9 @@ export function StackPageV3({
               handoutCount={steps.filter((step) => step.hasHandout).length}
               deck={v3.deck}
             >
-              {extraRight?.post}
+              {reviewFlags.share ? <PostToClass conversationId={conversationId} title={packet.title} /> : null}
             </TakeToClass>
-            {extraRight?.send}
+            {reviewFlags.share ? <SendLesson conversationId={conversationId} /> : null}
           </div>
         </div>
       </div>
