@@ -30,7 +30,16 @@ import {
   renderAdminApprovalEmailBody,
   adminApprovalEmailCopyVersionHash,
 } from './email-copy.server';
-import { adminApprovalUrlsFromEmailBody } from './email-copy';
+import {
+  adminApprovalUrlsFromEmailBody,
+  FORWARD_NOTICE_V2_SUBJECT,
+  TEACHER_REMINDER_V2_SUBJECT,
+  isOnboardingV2CopyVersion,
+  renderAdminApprovalEmailV2Body,
+  renderAdminApprovalEmailV2Subject,
+  renderForwardNoticeV2Body,
+  renderTeacherReminderV2Body,
+} from './email-copy';
 import { sanitizeFreeTierEmailLogPayload } from './email-log-payload.server';
 import { plainTextEmailToHtml } from './email-html.server';
 import {
@@ -145,6 +154,25 @@ async function adminMessage(
     tx,
   });
   const base = freeTierPublicAppOrigin();
+  const approveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(approve.token)}`;
+  const notRightPersonUrl = `${base}/free/admin/not-right-person?t=${encodeURIComponent(decline.token)}`;
+  if (isOnboardingV2CopyVersion(app.releaseEmailCopyVersion)) {
+    return {
+      to: approval.adminEmail,
+      subject: renderAdminApprovalEmailV2Subject({ teacherName: app.name, reminder }),
+      text: renderAdminApprovalEmailV2Body({
+        teacherName: app.name,
+        schoolName: app.schoolName,
+        className: app.starterClassName,
+        adminRecipientName: approval.adminName,
+        approveUrl,
+        notRightPersonUrl,
+        reminder,
+      }),
+      approveLinkId: approve.linkId,
+      declineLinkId: decline.linkId,
+    };
+  }
   return {
     to: approval.adminEmail,
     subject: `${reminder ? 'Reminder: ' : ''}Approve Yawp! for ${app.schoolName}`,
@@ -416,7 +444,19 @@ export async function forwardApprovalRequest(args: {
       });
       await queue(tx, next.id, 'admin_approval', 0, now, message);
     }
-    await queue(tx, next.id, 'forward_notice', 0, now, {
+    await queue(tx, next.id, 'forward_notice', 0, now, isOnboardingV2CopyVersion(app.releaseEmailCopyVersion)
+      ? {
+          to: app.email,
+          subject: FORWARD_NOTICE_V2_SUBJECT,
+          text: renderForwardNoticeV2Body({
+            teacherName: app.name,
+            adminName: newAdminName,
+            adminEmail: newAdminEmail,
+            manualReview: rules.manualReview,
+            pendingUrl: `${freeTierPublicAppOrigin()}/app/free-tier/pending`,
+          }),
+        }
+      : {
       to: app.email,
       subject: 'Your Yawp! approval request was forwarded',
       text: `Hi ${app.name},\n\nYour approval request is now with ${newAdminName} (${newAdminEmail}). ${rules.manualReview ? 'Our team is reviewing the new request.' : 'We will let you know when they approve.'}\n\nView your request: ${freeTierPublicAppOrigin()}/app/free-tier/pending`,
@@ -644,7 +684,17 @@ async function scheduleApplication(applicationId: string, now: Date) {
         'teacher_followup',
         approval.teacherFollowUpCount + 1,
         now,
-        {
+        isOnboardingV2CopyVersion(app.releaseEmailCopyVersion)
+          ? {
+              to: app.email,
+              subject: TEACHER_REMINDER_V2_SUBJECT,
+              text: renderTeacherReminderV2Body({
+                teacherName: app.name,
+                adminName: approval.adminName,
+                pendingUrl: `${freeTierPublicAppOrigin()}/app/free-tier/pending`,
+              }),
+            }
+          : {
           to: app.email,
           subject: 'Your Yawp! classroom approval request',
           text: `Hi ${app.name},\n\nYour request is waiting for ${approval.adminName}. You can email your administrator directly or forward the request to the right person.\n\nView your request: ${freeTierPublicAppOrigin()}/app/free-tier/pending`,

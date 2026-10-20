@@ -23,7 +23,7 @@ export function FreeTierWelcomeCard({
           ? "We're so glad you're here, and we can't wait for you to use Yawp! with your students. Enter your details below to get started."
           : "We're so glad you're here, and we can't wait for you to use Yawp! with your students. Enter your details below to join the waitlist. We're releasing free classroom licenses to teachers in small groups, so spots open up regularly."
         : eventLink
-          ? 'Use your event link to continue.'
+          ? 'Sign up below to start your free Yawp! classroom.'
           : 'Join the waitlist. We let teachers in a group at a time.'}
     >
       {children}
