@@ -232,7 +232,7 @@ the earlier waves (prompt version `2026-10-19-run-3-v1`).
 - **The earlier specs and typecheck.** All planner e2e suites pass
   together: 139 tests in 10.8 minutes across the original planner spec
   (every flag off), the exit ticket spec, the wave 1 review spec, the
-  run 2 spec and the run 3 spec (25 tests). Every planner unit test file passes on its own, and
+  run 2 spec and the run 3 spec (26 tests). Every planner unit test file passes on its own, and
   typecheck is clean.
 - **Checked by eye:** the stack page at desktop and phone width against
   the boards, the Add panel, Run the show, the template start screen, and
