@@ -1,4 +1,4 @@
-FROM oven/bun:1.3.1 AS base
+FROM oven/bun:1.4.3 AS base
 RUN apt-get update -y && apt-get install -y openssl
 ARG DATABASE_URL
 ENV DATABASE_URL=${DATABASE_URL}

@@ -267,7 +267,7 @@ ${env.slug === 'demo' ? '      EMAIL_PROVIDER: "resend"\n' : ''}      RESEND_FRO
     env.runtime === 'fast'
       ? `  toolbox:
     profiles: ["tools"]
-    image: oven/bun:1.3.1
+    image: oven/bun:1.4.3
     working_dir: /app
 ${fastVolumes}
 ${toolboxControlVolume}
@@ -296,7 +296,7 @@ ${toolboxFlagEnvironment}
   const webService =
     env.runtime === 'fast'
       ? `  web:
-    image: oven/bun:1.3.1
+    image: oven/bun:1.4.3
     restart: unless-stopped
     working_dir: /app
     command: bash -lc "cd services/web-app && bun run dev -- --host 0.0.0.0 --port 8080"
@@ -378,7 +378,7 @@ ${rendererService}${webService}${legacyTraefikLabels}
       - preview${directPortBlock}
 
   blackboard-lti-mock:
-    image: oven/bun:1.3.1
+    image: oven/bun:1.4.3
     working_dir: /app
     command: bun scripts/blackboard-lti-mock/server.mjs
     volumes:

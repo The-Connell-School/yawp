@@ -331,7 +331,7 @@ describe('production deployment contract', () => {
   test('Docker build uses the Bun version that wrote the lockfile', () => {
     const dockerfile = readRepoFile('services/web-app/Dockerfile');
 
-    expect(dockerfile).toContain('FROM oven/bun:1.3.1 AS base');
+    expect(dockerfile).toContain('FROM oven/bun:1.4.3 AS base');
   });
 
   test('Dockerfile exposes a dependency target for preview migration tooling', () => {
@@ -439,6 +439,7 @@ describe('production deployment contract', () => {
       'seed-free-tier-bundle-assignment-types'
     );
 
+    expect(deployWorkflow).toContain("bun-version: '1.4.3'");
     expect(deployWorkflow).toContain('validate-prisma-migrations');
     expect(deployWorkflow).toContain('needs: [validate-prisma-migrations]');
     expect(deployWorkflow).toContain('bun prisma generate');
@@ -746,7 +747,7 @@ describe('PR preview deployment contract', () => {
     );
     expect(deployScript).toContain('packages/prisma/fixtures/prod-fidelity');
     expect(deployScript).toContain('bun run seed-preview-seats');
-    expect(deployScript).toContain('oven/bun:1.3.1');
+    expect(deployScript).toContain('oven/bun:1.4.3');
     expect(deployScript).toContain(
       'bun scripts/preview/access-code.mjs --seats'
     );

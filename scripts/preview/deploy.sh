@@ -171,7 +171,7 @@ load_or_create_access_config() {
         -e PREVIEW_MASTER_ACCESS_CODE="${PREVIEW_MASTER_ACCESS_CODE:-}" \
         -v "$SOURCE_DIR:/app:ro" \
         -w /app \
-        oven/bun:1.3.1 \
+        oven/bun:1.4.3 \
         bun scripts/preview/access-code.mjs --seats
     )"
     printf '%s\n' "$PREVIEW_ACCESS_SEATS" > "$ACCESS_SEATS_FILE"
@@ -762,7 +762,7 @@ run_tooling_if_needed() {
   fi
 
   local tooling_command
-  tooling_command="bun install --ignore-scripts && bash scripts/preview/prisma-cli.sh generate && bash scripts/preview/prisma-cli.sh migrate deploy"
+  tooling_command='bun install --ignore-scripts && bash scripts/preview/prisma-cli.sh generate && (bash scripts/preview/prisma-cli.sh migrate deploy || bash scripts/preview/prisma-cli.sh migrate deploy)'
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/backfill-class-art-key.ts" ]]; then
     tooling_command+=' && bun run scripts/backfill-class-art-key.ts'
   fi
