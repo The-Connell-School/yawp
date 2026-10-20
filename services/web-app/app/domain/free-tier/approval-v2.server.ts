@@ -30,6 +30,8 @@ import {
   renderAdminApprovalEmailBody,
   adminApprovalEmailCopyVersionHash,
 } from './email-copy.server';
+import { adminApprovalUrlsFromEmailBody } from './email-copy';
+import { sanitizeFreeTierEmailLogPayload } from './email-log-payload.server';
 import { plainTextEmailToHtml } from './email-html.server';
 import {
   evaluateAdminEmailForRuntime,
@@ -900,11 +902,12 @@ async function deliverJob(id: string, now: Date) {
               : job.kind,
           toEmail: message.to,
           success: true,
-          payload: {
+          payload: sanitizeFreeTierEmailLogPayload({
             deliveryId: id,
             approvalId: approval.id,
             source: job.source,
-          },
+            ...adminApprovalUrlsFromEmailBody(message.text),
+          }),
         },
       });
       if (message.approveLinkId) {

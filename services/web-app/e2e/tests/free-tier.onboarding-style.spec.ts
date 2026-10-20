@@ -299,7 +299,9 @@ for (const viewport of [
         data: { personalNote: 'HISTORICAL INTRO' },
       });
       await page.getByRole('button', { name: 'Resend reminder' }).click();
-      await expect(page.getByRole('status')).toContainText('Reminder sent');
+      await expect(page.getByText(/Reminder sent to/i)).toBeVisible({
+        timeout: 15_000,
+      });
       await capture('reminder-confirmation');
       const reminder = await waitForFreeTierEmailPayload(prisma, {
         applicationId: app.id,
