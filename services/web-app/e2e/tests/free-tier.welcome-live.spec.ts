@@ -93,7 +93,7 @@ for (const width of [1280, 390]) {
     const application = await prisma.freeTierApplication.findUniqueOrThrow({ where: { email: `${prefix}-${width}-token@example.edu` } });
     expect(application.releaseEmailCopyVersion).toBe('free-tier-onboarding-v2');
     const captured = fs.readdirSync(path.join(process.env.TMPDIR!, 'free-welcome-mail')).map(file => JSON.parse(fs.readFileSync(path.join(process.env.TMPDIR!, 'free-welcome-mail', file), 'utf8'))).find(mail => mail.to === application.email);
-    expect(captured.subject).toBe("You're in — start your YAWP! classroom!");
+    expect(captured.subject).toBe("You're in — start your Yawp! classroom!");
     await page.goto(`/free?t=${token.code}`); await fill(page, `${width}-token-below`, '8');
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Free classrooms are for high school for now' })).toBeVisible();

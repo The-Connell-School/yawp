@@ -81,7 +81,7 @@ test.describe('Free-tier event auto-admit QA', () => {
 
       await page.goto(`/free?t=${encodeURIComponent(code)}`);
       await expect(page).toHaveURL(new RegExp(`/free\\?t=${code}`));
-      await expect(page.getByText('Sign up below to start your free YAWP! classroom.')).toBeVisible();
+      await expect(page.getByText('Sign up below to start your free Yawp! classroom.')).toBeVisible();
       await shot(page, '01-event-link-landing.png');
 
       const scanCookie = (await page.context().cookies()).find(
