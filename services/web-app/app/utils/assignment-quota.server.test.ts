@@ -83,6 +83,40 @@ describe('enforceFreeClassroomAssignmentCreateInTransaction', () => {
     ).rejects.toBeInstanceOf(FreeClassroomAssignmentQuotaError);
   });
 
+  test('rejects premium assignmentTypeId on a free org with kind_not_allowed', async () => {
+    const tx = {
+      class: {
+        findMany: async () => [
+          {
+            id: 'class-free',
+            school: {
+              organization: {
+                id: 'free-org',
+                plan: 'FREE_CLASSROOM',
+              },
+            },
+          },
+        ],
+      },
+      assignmentType: {
+        findUnique: async () => ({ kind: 'daily_pages' }),
+      },
+      organization: { findUnique: async () => ({ plan: 'FREE_CLASSROOM' }) },
+      freeTierApplication: { findFirst: async () => null },
+      $executeRawUnsafe: async () => {},
+      freeClassroomAssignmentKindUsage: {
+        findUnique: async () => ({ lifetimeCreatedCount: 0 }),
+      },
+    } as unknown as Prisma.TransactionClient;
+
+    await expect(
+      enforceFreeClassroomAssignmentCreateInTransaction(tx, {
+        classIds: ['class-free'],
+        assignmentTypeId: 'type-daily-pages',
+      })
+    ).rejects.toMatchObject({ code: 'kind_not_allowed', kind: 'daily_pages' });
+  });
+
   test('skips quota work when deploy-target org is SCHOOL', async () => {
     let assignmentTypeLookups = 0;
     const tx = {

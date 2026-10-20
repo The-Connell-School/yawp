@@ -190,11 +190,18 @@ export default function FreeTierPendingRoute() {
         footer={<FreeTierSignOut />}
       >
         {terminal ? (
-          <p className="text-sm text-muted-foreground">
-            {app.status === 'APPROVED'
-              ? 'You can start teaching with Yawp!'
-              : 'Questions? Email support@yawp.school.'}
-          </p>
+          <>
+            <p className="text-sm text-muted-foreground">
+              {app.status === 'APPROVED'
+                ? "You're all set to start teaching with Yawp!"
+                : 'Questions? Email support@yawp.school.'}
+            </p>
+            {app.status === 'APPROVED' ? (
+              <FreeTierButton asChild>
+                <Link to="/app">Start teaching</Link>
+              </FreeTierButton>
+            ) : null}
+          </>
         ) : (
           <>
             <p className="text-sm text-muted-foreground">
@@ -276,6 +283,23 @@ export default function FreeTierPendingRoute() {
             Look around while you wait
           </Link>
         ) : null}
+      </FreeTierAuthCard>
+    );
+  }
+
+  if (app?.status === 'APPROVED') {
+    return (
+      <FreeTierAuthCard
+        title="Your classroom is approved"
+        icon={<Clock />}
+        footer={<FreeTierSignOut />}
+      >
+        <p className="text-sm text-muted-foreground">
+          You&apos;re all set to start teaching with Yawp!
+        </p>
+        <FreeTierButton asChild>
+          <Link to="/app">Start teaching</Link>
+        </FreeTierButton>
       </FreeTierAuthCard>
     );
   }

@@ -1,6 +1,7 @@
 import { expect, mock, test } from 'bun:test';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { prisma } from '~/utils/db.server';
+import { siteLicenseLockedPlatformAssignmentTypesWhere } from './site-license-locked-assignment-tiles';
 
 const findMany = mock(async () => [
   {
@@ -59,7 +60,11 @@ test('loads locked tiles from the global catalog for FREE_CLASSROOM orgs', async
     }
   );
 
-  expect(findMany).toHaveBeenCalled();
+  expect(findMany).toHaveBeenCalledWith({
+    where: siteLicenseLockedPlatformAssignmentTypesWhere(),
+    select: { id: true, title: true, kind: true, systemKey: true },
+    orderBy: { position: 'asc' },
+  });
   expect(tiles.map((tile) => tile.key)).toEqual([
     'thesis_driven_essay',
     'ap_history_essay',

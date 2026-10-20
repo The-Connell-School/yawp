@@ -49,21 +49,49 @@ const LOCKED_ASSIGNMENT_SPECS: LockedSpec[] = [
   },
   {
     key: 'act_writing',
-    matches: (type) =>
-      type.kind === 'act_writing' ||
-      type.title.trim().toLowerCase().includes('act writing'),
+    matches: (type) => type.kind === 'act_writing',
   },
   {
     key: 'ap_english_language',
     matches: (type) =>
-      type.title.trim().toLowerCase() === 'ap english language',
+      normalizedAssignmentTypeTitle(type.title) === 'ap english language',
   },
   {
     key: 'ap_english_literature',
     matches: (type) =>
-      type.title.trim().toLowerCase() === 'ap english literature',
+      normalizedAssignmentTypeTitle(type.title) === 'ap english literature',
   },
 ];
+
+function normalizedAssignmentTypeTitle(title: string) {
+  return title.trim().toLowerCase();
+}
+
+/** Platform-owned rows eligible for site-license locked tile resolution. */
+export function siteLicenseLockedPlatformAssignmentTypesWhere() {
+  return {
+    ownerOrgId: null,
+    ownerMembershipId: null,
+    archivedAt: null,
+    OR: [
+      { systemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY },
+      { kind: 'daily_pages' },
+      { kind: 'act_writing' },
+      {
+        title: { equals: 'The Thesis-Driven Essay', mode: 'insensitive' as const },
+      },
+      {
+        title: { equals: 'AP English Language', mode: 'insensitive' as const },
+      },
+      {
+        title: {
+          equals: 'AP English Literature',
+          mode: 'insensitive' as const,
+        },
+      },
+    ],
+  };
+}
 
 export function resolveSiteLicenseLockedAssignmentTiles(
   catalogTypes: AssignmentTypeCatalogRow[]

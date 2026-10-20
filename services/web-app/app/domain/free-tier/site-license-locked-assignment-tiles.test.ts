@@ -71,3 +71,23 @@ test('skips specs with no matching assignment type in the catalog', () => {
   expect(tiles.some((tile) => tile.key === 'act_writing')).toBe(false);
   expect(tiles.some((tile) => tile.key === 'ap_english_language')).toBe(false);
 });
+
+test('org-owned act title decoy does not win over the platform act_writing kind', () => {
+  const tiles = resolveSiteLicenseLockedAssignmentTiles([
+    {
+      id: 'decoy',
+      title: 'Spring ACT Writing Unit',
+      kind: null,
+      systemKey: null,
+    },
+    {
+      id: 'platform-act',
+      title: 'ACT Writing Section',
+      kind: 'act_writing',
+      systemKey: null,
+    },
+  ]);
+  const actTile = tiles.find((tile) => tile.key === 'act_writing');
+  expect(actTile?.assignmentTypeId).toBe('platform-act');
+  expect(actTile?.label).toBe('ACT Writing Section');
+});
