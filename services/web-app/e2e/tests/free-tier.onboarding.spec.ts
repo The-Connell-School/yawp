@@ -171,6 +171,7 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     await page.waitForURL('**/app/free-tier/onboarding**', { timeout: 30_000 });
     expect(page.url()).not.toMatch(/\/auth\/login/);
 
+    await completeClassPreparationStepIfShown(page);
     await page.fill('input[name="adminName"]', 'Wrong Admin');
     await page.fill('input[name="adminEmail"]', `wrong-${stamp}@${ADMIN_DOMAIN}`);
     await page.fill('input[name="adminRole"]', 'Principal');

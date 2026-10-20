@@ -24,8 +24,16 @@ async function post(path: typeof paths[number], body: object) {
   const request = new Request(`http://localhost/${path === 'free' ? 'free?index' : 'api/free-tier/' + path}`, {
     method: 'POST', headers, body: path === 'free' ? new URLSearchParams(body as Record<string, string>) : JSON.stringify(body),
   });
-  const result = await ({ free, waitlist, token }[path]).action({ request } as never);
-  return result instanceof Response ? { status: result.status, body: await result.json().catch(() => null) } : { status: 200, body: result };
+  try {
+    const result = await ({ free, waitlist, token }[path]).action({ request } as never);
+    return result instanceof Response ? { status: result.status, body: await result.json().catch(() => null) } : { status: 200, body: result };
+  } catch (error) {
+    const init = (error as { init?: { status?: number }; data?: unknown })?.init;
+    if (init?.status === 404) {
+      return { status: 404, body: (error as { data?: unknown }).data ?? null };
+    }
+    throw error;
+  }
 }
 async function fixture(suffix: string, override: object = {}) {
   const credential = prefix + suffix;
@@ -72,7 +80,9 @@ for (const path of paths) {
     const promotion = { ...fields, gradeLevel: '11' };
     expect((await post(path, promotion)).body.ok).toBe(true);
     await flag('false');
-    expect((await post(path, promotion)).body.ok).toBe(true);
+    const flagOffPost = await post(path, promotion);
+    if (path === 'free') expect(flagOffPost.status).toBe(404);
+    else expect(flagOffPost.body.ok).toBe(true);
     expect(await prisma.freeTierApplication.findUniqueOrThrow({ where: { id: row.id } })).toEqual(row);
     expect((await prisma.acquisitionToken.findUniqueOrThrow({ where: { id: event.id } })).uses).toBe(0);
     expect((await releaseBatch({ applicationIds: [row.id] })).released).toBe(0);

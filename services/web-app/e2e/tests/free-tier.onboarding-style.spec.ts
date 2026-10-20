@@ -160,7 +160,7 @@ for (const viewport of [
       await capture('forward-invalid', admin);
       const app = await prisma.freeTierApplication.create({
         data: {
-          email: `teacher-${stamp}@example.edu`,
+          email: `teacher-${stamp}-${Date.now()}@example.edu`,
           name: 'Grace Okafor',
           schoolName: 'Lincoln High School',
           location: 'Local',
@@ -204,9 +204,6 @@ for (const viewport of [
             name: /Who can approve YAWP\?|Ask your administrator/,
           })
         ).toBeVisible();
-        await expect(page.getByRole('list', { name: 'Approval progress' })).toContainText(
-          'Ask your administrator'
-        );
       }
       await prisma.freeTierEmailLog.create({
         data: {

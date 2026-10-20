@@ -12,9 +12,16 @@ test.describe('Free classroom bundle quotas', () => {
 
     await page.goto('/auth/login');
     await page.waitForLoadState('networkidle');
-    await page.getByLabel('Email or handle').fill(email);
-    await page.locator('input[type="password"]').fill(FREE_CLASSROOM_PASSWORD);
-    await page.getByRole('button', { name: /log in/i }).click();
+    const signOn = page.locator('[data-signon-screen]');
+    if (await signOn.count()) {
+      await page.getByLabel('Email or handle').fill(email);
+      await page.getByLabel('Password', { exact: true }).fill(FREE_CLASSROOM_PASSWORD);
+      await page.getByRole('button', { name: /Log in/i }).click();
+    } else {
+      await page.getByLabel('Email or handle').fill(email);
+      await page.locator('input[type="password"]').fill(FREE_CLASSROOM_PASSWORD);
+      await page.getByRole('button', { name: /log in/i }).click();
+    }
     await page.waitForURL(
       (url) =>
         url.pathname.startsWith('/app') || url.pathname === '/enter-code',
@@ -25,10 +32,13 @@ test.describe('Free classroom bundle quotas', () => {
     }
 
     await page.goto('/app/assignments');
-    await page
-      .getByRole('button', { name: /new assignment|create assignment/i })
-      .first()
-      .click({ timeout: 20_000 });
+    await page.waitForLoadState('networkidle');
+    const newAssignment = page.getByRole('button', {
+      name: 'New Assignment',
+      exact: true,
+    });
+    await expect(newAssignment).toBeVisible({ timeout: 20_000 });
+    await newAssignment.click();
     const typeTrigger = page.getByRole('combobox').first();
     await expect(typeTrigger).toBeVisible({ timeout: 20_000 });
     await expect(typeTrigger).not.toContainText(/\d+ of \d+/);
