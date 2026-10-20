@@ -41,5 +41,10 @@ Then:
    ```
 
 Keep the GitHub **`demo` environment** restricted to trusted dispatchers so OIDC
-`sub` (`repo:The-Connell-School/yawp:environment:demo`) cannot be assumed by untrusted
-workflows.
+`sub` for that environment cannot be assumed by untrusted workflows.
+
+This repository enables GitHub **immutable OIDC subjects** (`use_immutable_subject:
+true`), so live tokens use `repo:The-Connell-School@157837314/yawp@989330947:environment:demo`
+rather than the legacy slug form. The push role trust policy lists **both** exact
+`sub` values (no wildcards); update `github_oidc_demo_environment_subjects` if GitHub
+changes subject customization again.

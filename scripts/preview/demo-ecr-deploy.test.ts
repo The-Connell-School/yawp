@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
+import path from 'node:path';
 
 const deployScript = readFileSync(new URL('./deploy.sh', import.meta.url), 'utf8');
 const workflow = readFileSync(
@@ -16,7 +17,35 @@ const deployStep = workflow.slice(
   workflow.indexOf('- name: Verify the demo actually serves')
 );
 
+const demoImageRegistryMainTf = readFileSync(
+  path.resolve('infra/demo-image-registry/main.tf'),
+  'utf8'
+);
+
 describe('demo ECR image pull path', () => {
+  test('demo image push IAM role trusts legacy and immutable GitHub demo OIDC subjects', () => {
+    expect(demoImageRegistryMainTf).toContain('variable "github_oidc_demo_environment_subjects"');
+    expect(demoImageRegistryMainTf).toContain(
+      'repo:The-Connell-School/yawp:environment:demo'
+    );
+    expect(demoImageRegistryMainTf).toContain(
+      'repo:The-Connell-School@157837314/yawp@989330947:environment:demo'
+    );
+    expect(demoImageRegistryMainTf).toContain(
+      'var.github_oidc_demo_environment_subjects'
+    );
+    expect(demoImageRegistryMainTf).toContain(
+      '"token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"'
+    );
+    expect(demoImageRegistryMainTf).not.toMatch(/StringLike[\s\S]*githubusercontent/);
+    const trustBlock = demoImageRegistryMainTf.slice(
+      demoImageRegistryMainTf.indexOf('resource "aws_iam_role" "demo_image_push"'),
+      demoImageRegistryMainTf.indexOf('resource "aws_iam_role_policy" "demo_image_push"')
+    );
+    expect(trustBlock).not.toContain('StringLike');
+    expect(trustBlock).not.toMatch(/:sub"[\s\S]*\*/);
+  });
+
   test('deploy.sh logs into ECR and pulls when demo image variables are set', () => {
     expect(deployScript).toContain('DEMO_WEB_IMAGE');
     expect(deployScript).toContain('DEMO_TOOLBOX_IMAGE');
