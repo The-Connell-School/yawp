@@ -388,11 +388,13 @@ jobs:
             "DEMO_BACKUP_S3_URI=$(shell_quote "$DEMO_BACKUP_S3_URI")"
             "SOURCE_DIR=$(shell_quote "$remote_source")"
           )
+          deploy_timeout_seconds=3600
           if [[ -n "$demo_web_image" && -n "$demo_toolbox_image" ]]; then
             remote_env+=(
               "DEMO_WEB_IMAGE=$(shell_quote "$demo_web_image")"
               "DEMO_TOOLBOX_IMAGE=$(shell_quote "$demo_toolbox_image")"
             )
+            deploy_timeout_seconds=1200
           fi
           lock_file="${PREVIEW_ROOT}/preview-host.lock"
           deploy_log="${PREVIEW_ROOT}/logs/demo-deploy-${GITHUB_RUN_ID}.log"
@@ -401,7 +403,7 @@ jobs:
           SSH_TARGET="$ssh_target" \
           LOCK_FILE="$lock_file" \
           DEPLOY_LOG="$deploy_log" \
-          DEPLOY_TIMEOUT_SECONDS=1200 \
+          DEPLOY_TIMEOUT_SECONDS="$deploy_timeout_seconds" \
           REMOTE_COMMAND="$deploy_command" \
           bash demo-control/scripts/preview/run-host-deploy-detached.sh \
             | tee /tmp/demo-deploy.log

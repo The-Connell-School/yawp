@@ -1678,7 +1678,9 @@ describe('demo environment deployment contract', () => {
     expect(deployStep).not.toMatch(
       /DEMO_WEB_IMAGE: \$\{\{ needs\.build-demo-images/
     );
-    expect(workflow).toContain('DEPLOY_TIMEOUT_SECONDS=1200');
+    expect(deployStep).toContain('DEPLOY_TIMEOUT_SECONDS="$deploy_timeout_seconds"');
+    expect(deployStep).toContain('deploy_timeout_seconds=1200');
+    expect(deployStep).toContain('deploy_timeout_seconds=3600');
     expect(deployScript).toContain('demo_registry_images_configured');
     expect(existsSync(join(repoRoot, 'infra/demo-image-registry/main.tf'))).toBe(
       true

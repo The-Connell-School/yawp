@@ -41,6 +41,19 @@ describe('demo ECR image pull path', () => {
     expect(buildJob).not.toContain('skip_build=true');
   });
 
+  test('deploy timeout is 1200s for ECR pull and 3600s for on-host build fallback', () => {
+    expect(deployStep).toContain('deploy_timeout_seconds=3600');
+    expect(deployStep).toContain('deploy_timeout_seconds=1200');
+    expect(deployStep).toContain('DEPLOY_TIMEOUT_SECONDS="$deploy_timeout_seconds"');
+    const timeoutBlock = deployStep.slice(
+      deployStep.indexOf('deploy_timeout_seconds=3600'),
+      deployStep.indexOf('lock_file="${PREVIEW_ROOT}/preview-host.lock"')
+    );
+    expect(timeoutBlock.indexOf('deploy_timeout_seconds=1200')).toBeGreaterThan(
+      timeoutBlock.indexOf('if [[ -n "$demo_web_image"')
+    );
+  });
+
   test('when DEMO_ECR_PUSH_ROLE_ARN is unset, build job succeeds with empty outputs and deploy omits image vars', () => {
     expect(buildJob).toContain('id: images-fallback');
     expect(buildJob).toContain("vars.DEMO_ECR_PUSH_ROLE_ARN == ''");
@@ -58,7 +71,6 @@ describe('demo ECR image pull path', () => {
 
   test('when ECR outputs are set, deploy forwards both image URIs to the host', () => {
     expect(deployStep).toContain('"DEMO_TOOLBOX_IMAGE=$(shell_quote "$demo_toolbox_image")"');
-    expect(workflow).toContain('DEPLOY_TIMEOUT_SECONDS=1200');
     expect(workflow).toContain('environment: demo');
     expect(workflow).toContain('docker/setup-buildx-action');
     expect(workflow).toContain('target: production');
