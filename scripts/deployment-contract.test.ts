@@ -1657,15 +1657,27 @@ describe('PR preview deployment contract', () => {
 });
 
 describe('demo environment deployment contract', () => {
-  test('demo images build on GitHub-hosted runners and deploy pulls from ECR', () => {
+  test('demo images build on GitHub-hosted runners with on-host build fallback', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
+    const buildJob = workflow.slice(
+      workflow.indexOf('  build-demo-images:'),
+      workflow.indexOf('  demo-deploy:')
+    );
+    const deployStep = workflow.slice(
+      workflow.indexOf('- name: Deploy demo'),
+      workflow.indexOf('- name: Verify the demo actually serves')
+    );
 
     expect(workflow).toContain('build-demo-images');
     expect(workflow).toContain('id-token: write');
-    expect(workflow).toContain('vars.DEMO_ECR_PUSH_ROLE_ARN');
-    expect(workflow).toContain('describe-images');
-    expect(workflow).toContain('DEMO_WEB_IMAGE=');
+    expect(buildJob).toContain('images-fallback');
+    expect(buildJob).toContain('skip_web');
+    expect(buildJob).toContain('skip_toolbox');
+    expect(deployStep).toContain('if [[ -n "$demo_web_image" && -n "$demo_toolbox_image" ]]; then');
+    expect(deployStep).not.toMatch(
+      /DEMO_WEB_IMAGE: \$\{\{ needs\.build-demo-images/
+    );
     expect(workflow).toContain('DEPLOY_TIMEOUT_SECONDS=1200');
     expect(deployScript).toContain('demo_registry_images_configured');
     expect(existsSync(join(repoRoot, 'infra/demo-image-registry/main.tf'))).toBe(

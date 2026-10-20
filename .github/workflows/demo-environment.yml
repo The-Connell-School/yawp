@@ -48,8 +48,8 @@ jobs:
     runs-on: ubuntu-22.04
     environment: demo
     outputs:
-      demo_web_image: ${{ steps.images.outputs.web_image }}
-      demo_toolbox_image: ${{ steps.images.outputs.toolbox_image }}
+      demo_web_image: ${{ steps.images-ecr.outputs.web_image || steps.images-fallback.outputs.web_image }}
+      demo_toolbox_image: ${{ steps.images-ecr.outputs.toolbox_image || steps.images-fallback.outputs.toolbox_image }}
     steps:
       - name: Checkout the requested application ref
         uses: actions/checkout@v4
@@ -65,26 +65,30 @@ jobs:
           set -euo pipefail
           echo "full_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Check demo image registry configuration
+      - name: On-host build fallback (ECR push role unset)
+        id: images-fallback
+        if: vars.DEMO_ECR_PUSH_ROLE_ARN == ''
         run: |
           set -euo pipefail
-          test -n "${{ vars.DEMO_ECR_PUSH_ROLE_ARN }}" || {
-            echo "Missing repository variable DEMO_ECR_PUSH_ROLE_ARN (output of infra/demo-image-registry)" >&2
-            exit 1
-          }
+          echo "web_image=" >> "$GITHUB_OUTPUT"
+          echo "toolbox_image=" >> "$GITHUB_OUTPUT"
+          echo "DEMO_ECR_PUSH_ROLE_ARN is unset; demo host will build production images locally."
 
       - name: Configure AWS credentials for ECR push
+        if: vars.DEMO_ECR_PUSH_ROLE_ARN != ''
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.DEMO_ECR_PUSH_ROLE_ARN }}
           aws-region: us-east-1
 
       - name: Log in to Amazon ECR
+        if: vars.DEMO_ECR_PUSH_ROLE_ARN != ''
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Resolve demo image URIs
-        id: images
+        id: images-ecr
+        if: vars.DEMO_ECR_PUSH_ROLE_ARN != ''
         env:
           FULL_SHA: ${{ steps.shipping.outputs.full_sha }}
         run: |
@@ -95,20 +99,25 @@ jobs:
           toolbox_image="${registry}/yawp-demo-toolbox:${FULL_SHA}"
           echo "web_image=${web_image}" >> "$GITHUB_OUTPUT"
           echo "toolbox_image=${toolbox_image}" >> "$GITHUB_OUTPUT"
-          if aws ecr describe-images --repository-name yawp-demo-web --image-ids "imageTag=${FULL_SHA}" >/dev/null 2>&1 \
-            && aws ecr describe-images --repository-name yawp-demo-toolbox --image-ids "imageTag=${FULL_SHA}" >/dev/null 2>&1; then
-            echo "skip_build=true" >> "$GITHUB_OUTPUT"
-            echo "Demo images already exist in ECR for ${FULL_SHA}; skipping build."
+          if aws ecr describe-images --repository-name yawp-demo-web --image-ids "imageTag=${FULL_SHA}" >/dev/null 2>&1; then
+            echo "skip_web=true" >> "$GITHUB_OUTPUT"
+            echo "Demo web image already exists in ECR for ${FULL_SHA}; skipping web push."
           else
-            echo "skip_build=false" >> "$GITHUB_OUTPUT"
+            echo "skip_web=false" >> "$GITHUB_OUTPUT"
+          fi
+          if aws ecr describe-images --repository-name yawp-demo-toolbox --image-ids "imageTag=${FULL_SHA}" >/dev/null 2>&1; then
+            echo "skip_toolbox=true" >> "$GITHUB_OUTPUT"
+            echo "Demo toolbox image already exists in ECR for ${FULL_SHA}; skipping toolbox push."
+          else
+            echo "skip_toolbox=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Set up Docker Buildx
-        if: steps.images.outputs.skip_build != 'true'
+        if: vars.DEMO_ECR_PUSH_ROLE_ARN != '' && (steps.images-ecr.outputs.skip_web != 'true' || steps.images-ecr.outputs.skip_toolbox != 'true')
         uses: docker/setup-buildx-action@v3
 
       - name: Build and push demo web image
-        if: steps.images.outputs.skip_build != 'true'
+        if: vars.DEMO_ECR_PUSH_ROLE_ARN != '' && steps.images-ecr.outputs.skip_web != 'true'
         uses: docker/build-push-action@v6
         with:
           context: demo-source
@@ -116,12 +125,12 @@ jobs:
           target: production
           platforms: linux/amd64
           push: true
-          tags: ${{ steps.images.outputs.web_image }}
+          tags: ${{ steps.images-ecr.outputs.web_image }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Build and push demo toolbox image
-        if: steps.images.outputs.skip_build != 'true'
+        if: vars.DEMO_ECR_PUSH_ROLE_ARN != '' && steps.images-ecr.outputs.skip_toolbox != 'true'
         uses: docker/build-push-action@v6
         with:
           context: demo-source
@@ -129,7 +138,7 @@ jobs:
           target: deps
           platforms: linux/amd64
           push: true
-          tags: ${{ steps.images.outputs.toolbox_image }}
+          tags: ${{ steps.images-ecr.outputs.toolbox_image }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -177,8 +186,6 @@ jobs:
       DEMO_BACKUP_S3_URI: ${{ vars.DEMO_BACKUP_S3_URI || 's3://yawp-preview-videos/demo-backups' }}
       DEMO_REQUESTED_REF: ${{ inputs.ref }}
       DEMO_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-      DEMO_WEB_IMAGE: ${{ needs.build-demo-images.outputs.demo_web_image }}
-      DEMO_TOOLBOX_IMAGE: ${{ needs.build-demo-images.outputs.demo_toolbox_image }}
     steps:
       - name: Mask optional Google OAuth credentials
         run: |
@@ -344,6 +351,8 @@ jobs:
           ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
           remote_source="${PREVIEW_ROOT}/sources/demo"
           remote_control="${PREVIEW_ROOT}/control/demo"
+          demo_web_image='${{ needs.build-demo-images.outputs.demo_web_image }}'
+          demo_toolbox_image='${{ needs.build-demo-images.outputs.demo_toolbox_image }}'
           remote_env=(
             "PREVIEW_SLUG=$(shell_quote "$PREVIEW_SLUG")"
             "PREVIEW_DOMAIN=$(shell_quote "$PREVIEW_DOMAIN")"
@@ -377,10 +386,14 @@ jobs:
             "DEMO_RESET_CONFIRMATION=$(shell_quote "$DEMO_RESET_CONFIRMATION")"
             "DEMO_BACKUP_RETENTION=$(shell_quote "$DEMO_BACKUP_RETENTION")"
             "DEMO_BACKUP_S3_URI=$(shell_quote "$DEMO_BACKUP_S3_URI")"
-            "DEMO_WEB_IMAGE=$(shell_quote "$DEMO_WEB_IMAGE")"
-            "DEMO_TOOLBOX_IMAGE=$(shell_quote "$DEMO_TOOLBOX_IMAGE")"
             "SOURCE_DIR=$(shell_quote "$remote_source")"
           )
+          if [[ -n "$demo_web_image" && -n "$demo_toolbox_image" ]]; then
+            remote_env+=(
+              "DEMO_WEB_IMAGE=$(shell_quote "$demo_web_image")"
+              "DEMO_TOOLBOX_IMAGE=$(shell_quote "$demo_toolbox_image")"
+            )
+          fi
           lock_file="${PREVIEW_ROOT}/preview-host.lock"
           deploy_log="${PREVIEW_ROOT}/logs/demo-deploy-${GITHUB_RUN_ID}.log"
           deploy_command="cd $(shell_quote "$remote_control") && ${remote_env[*]} bash scripts/preview/deploy.sh"
