@@ -24,6 +24,11 @@ test.describe('Free classroom bundle quotas', () => {
     await newAssignment.click();
     const sheet = page.locator('[role="dialog"]');
     await expect(sheet).toBeVisible({ timeout: 20_000 });
+    const prewritingPicker = sheet.getByRole('button', { name: /Prewriting/i });
+    if (await prewritingPicker.count()) {
+      await expect(prewritingPicker).toContainText(/\d+ of \d+/);
+      await sheet.getByRole('button', { name: /Class Starter/i }).click();
+    }
     const typeTrigger = sheet.getByRole('combobox').first();
     await expect(typeTrigger).toBeVisible({ timeout: 20_000 });
     await expect(typeTrigger).not.toContainText(/\d+ of \d+/);
