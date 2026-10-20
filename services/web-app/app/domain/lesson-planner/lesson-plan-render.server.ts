@@ -93,7 +93,7 @@ export async function renderLessonPlanDocx(doc: LessonPlanDoc): Promise<Uint8Arr
   children.push(heading('Assessment'), doc.assessment ? body(doc.assessment) : hint(BLANK_HINTS.assessment));
 
   const document = new Document({
-    creator: 'YAWP! Lesson Planner',
+    creator: 'Yawp! Lesson Planner',
     title: doc.title,
     numbering: {
       config: [
@@ -127,7 +127,7 @@ export async function renderLessonPlanPdf(doc: LessonPlanDoc): Promise<Uint8Arra
   const pdf = new PDFDocument({
     size: 'LETTER',
     margin: 54,
-    info: { Title: doc.title, Creator: 'YAWP! Lesson Planner' },
+    info: { Title: doc.title, Creator: 'Yawp! Lesson Planner' },
   });
   const chunks: Buffer[] = [];
   const done = new Promise<Buffer>((resolve, reject) => {

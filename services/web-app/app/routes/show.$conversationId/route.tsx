@@ -17,7 +17,7 @@ import { TileSlideCanvas } from '../present.$conversationId.$messageId/tile-slid
 import { HEADING_FONT, STACK_FONTS_HREF, typeChipStyle } from '../app.lesson-planner_.$conversationId.packet/v3/theme';
 import { cn } from '~/utils/misc';
 
-export const meta: MetaFunction = () => [{ title: 'Run the show · YAWP!' }];
+export const meta: MetaFunction = () => [{ title: 'Run the show · Yawp!' }];
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const loaded = await loadStackV3({ request, conversationId: params.conversationId });

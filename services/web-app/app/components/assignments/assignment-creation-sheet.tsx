@@ -81,6 +81,8 @@ import {
   type ExitTicketGradingDraft,
 } from './exit-ticket-builder';
 import { cn } from '~/utils/misc';
+import { SiteLicenseLockedAssignmentTile } from '~/components/site-license-locked-assignment-tile';
+import type { SiteLicenseLockedAssignmentTile as SiteLicenseLockedTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
 import { toDateInputValue } from '~/utils/date-only';
 import {
   assignmentTypeUsesDailyPagesEngagementRubric,
@@ -264,11 +266,12 @@ export type AssignmentCreationSheetProps = {
   onOpenChange: (open: boolean) => void;
   /**
    * Told once an assignment is created, so a lesson that sent the teacher
-   * here can say "Created in YAWP!" (Brian's run 3, item 4). Optional.
+   * here can say "Created in Yawp!" (Brian's run 3, item 4). Optional.
    */
   onCreated?: () => void;
   entryPoint: AssignmentCreationEntryPoint;
   assignmentTypes: AssignmentCreationAssignmentType[];
+  siteLicenseLockedAssignmentTiles?: SiteLicenseLockedTile[];
   teacherClasses: AssignmentCreationClassOption[];
   fixedAssignmentTypeId?: string;
   initialAssignmentTypeId?: string;
@@ -560,6 +563,13 @@ export function AssignmentCreationSheet({
                 </button>
               );
             })}
+            {(props.siteLicenseLockedAssignmentTiles ?? []).map((tile) => (
+              <SiteLicenseLockedAssignmentTile
+                key={tile.key}
+                label={tile.label}
+                variant="picker"
+              />
+            ))}
           </div>
           <p className="mt-5 text-xs text-muted-foreground">
             {usage.monthly

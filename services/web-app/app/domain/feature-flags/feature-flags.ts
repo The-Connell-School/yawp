@@ -14,7 +14,7 @@
  */
 
 /**
- * YAWP! Lesson Planner (#374). Off: nav and deep links are hidden and every
+ * Yawp! Lesson Planner (#374). Off: nav and deep links are hidden and every
  * planner route/API returns 404. Existing lesson data is kept.
  */
 export const LESSON_PLANNER_FLAG = 'lesson_planner' as const;
@@ -53,7 +53,7 @@ export const LESSON_PLANNER_INTAKE_V2_FLAG = 'lesson_planner_intake_v2' as const
 export const LESSON_PLANNER_STACK_V2_FLAG = 'lesson_planner_stack_v2' as const;
 
 /**
- * Lesson Planner deck v2 (plan E): the YAWP! tile template for PowerPoint and
+ * Lesson Planner deck v2 (plan E): the Yawp! tile template for PowerPoint and
  * Present, and the deck editor. Off: the original deck look, no editor.
  */
 export const LESSON_PLANNER_DECK_V2_FLAG = 'lesson_planner_deck_v2' as const;
@@ -136,7 +136,7 @@ export const FEATURE_FLAGS = {
   [LESSON_PLANNER_DECK_V2_FLAG]: {
     label: 'Lesson Planner: deck template and editor',
     description:
-      'Planner decks use the YAWP! tile template in PowerPoint and Present, and teachers can edit and delete slides. Off: the original deck look and no editor.',
+      'Planner decks use the Yawp! tile template in PowerPoint and Present, and teachers can edit and delete slides. Off: the original deck look and no editor.',
   },
   [LESSON_PLANNER_STACK_PANEL_FLAG]: {
     label: 'Lesson Planner: stack beside the chat',

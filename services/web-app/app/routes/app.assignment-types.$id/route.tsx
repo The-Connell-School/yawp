@@ -770,7 +770,7 @@ export default function AppAssignmentTypesIdRoute() {
   // once the sheet has done its job.
   const fromLesson = searchParams.get(FROM_LESSON_PARAM);
   // Which piece of that lesson this came from, so the lesson can say
-  // "Created in YAWP! · Open" once it exists (Brian's run 3, item 4).
+  // "Created in Yawp! · Open" once it exists (Brian's run 3, item 4).
   const fromPiece = searchParams.get(FROM_PIECE_PARAM);
   const lessonFetcher = useFetcher();
   const tellLessonCreated = useCallback(() => {

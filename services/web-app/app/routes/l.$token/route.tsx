@@ -10,7 +10,7 @@ import { loadSharedLesson } from '~/domain/lesson-planner/load-shared-lesson.ser
 import { HEADING_FONT, STACK_FONTS_HREF, STACK_THEME } from '../app.lesson-planner_.$conversationId.packet/v3/theme';
 
 export const meta: MetaFunction = () => [
-  { title: 'A lesson on YAWP!' },
+  { title: 'A lesson on Yawp!' },
   // A shared lesson is for the people it was sent to, not for search.
   { name: 'robots', content: 'noindex, nofollow' },
 ];
@@ -142,7 +142,7 @@ export default function SharedLessonRoute() {
           </section>
         ) : null}
 
-        <p className="mt-12 text-center text-xs text-[var(--sv-muted)]">Made with the YAWP! Lesson Planner</p>
+        <p className="mt-12 text-center text-xs text-[var(--sv-muted)]">Made with the Yawp! Lesson Planner</p>
       </main>
     </div>
   );

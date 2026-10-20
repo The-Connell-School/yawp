@@ -3,7 +3,11 @@ try {
   GlobalRegistrator.register();
 } catch {}
 import { describe, expect, test } from 'bun:test';
-import { measurePasteProvenance, getPasteEventRanges } from './provenance';
+import {
+  measurePasteProvenance,
+  getPasteEventRanges,
+  UNLINKED_PASTE_EVENT_ID,
+} from './provenance';
 
 function surface(html: string) {
   const root = document.createElement('div');
@@ -49,6 +53,17 @@ describe('paste provenance in the displayed document', () => {
       byEvent: { a: 2, b: 2 },
       unlinkedCharacters: 0,
     });
+  });
+  test('unlinked id selects only legacy marks without an event link', () => {
+    const root = surface(
+      '<p><span data-pasted-source="external">old</span> typed <span data-pasted-source="external" data-paste-event-id="paste_a">new</span> <span data-pasted-source="external">older</span></p>'
+    );
+    expect(
+      getPasteEventRanges(root, UNLINKED_PASTE_EVENT_ID).map((r) => r.toString())
+    ).toEqual(['old', 'older']);
+    expect(
+      getPasteEventRanges(root, 'paste_a').map((r) => r.toString())
+    ).toEqual(['new']);
   });
   test('legacy marks count as unlinked, empty content has no invented percentage', () => {
     expect(

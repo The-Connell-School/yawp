@@ -54,7 +54,7 @@ export const BUILD_FROM_STACK_REQUESTS = {
     'Rebuild the slide deck from my stack, replacing the one in it',
   // Brian's run 2 (item 37): the lesson for a student who was not there.
   makeup:
-    'Make a make-up handout from my stack for a student who was absent today. Tell them to go to their Assignments in YAWP! and complete the class starter and Daily Pages assignments.',
+    'Make a make-up handout from my stack for a student who was absent today. Tell them to go to their Assignments in Yawp! and complete the class starter and Daily Pages assignments.',
 } as const;
 
 export type BuildFromStackRequest = keyof typeof BUILD_FROM_STACK_REQUESTS;

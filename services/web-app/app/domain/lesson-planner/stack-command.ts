@@ -156,7 +156,7 @@ export const STACK_COMMAND_SYSTEM = [
   '- Change only what the teacher asked for. Never touch another step. Never cut or shorten a writing step unless the teacher names it.',
   '- pieces: when the teacher asks for something new ("a quick pair activity after the read aloud"), one to three new pieces, each {"title","minutes","type","text"} with type one of class_starter, activity, context, read_aloud, daily_pages, thesis_essay, closing. Do not add them to ops; the teacher adds the one they want.',
   '- toPlanner: true, with no ops and no pieces, when the line is a question or a bigger change that belongs in the planner chat (why something works, rethink the lesson). Then reply "That’s one for the planner."',
-  '- Write the product name as YAWP!. Never write a library prompt id.',
+  '- Write the product name as Yawp!. Never write a library prompt id.',
 ].join('\n');
 
 export function commandUserMessage({

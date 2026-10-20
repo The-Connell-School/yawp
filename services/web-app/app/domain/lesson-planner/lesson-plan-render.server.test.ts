@@ -33,7 +33,7 @@ const DOC: LessonPlanDoc = {
   overview: 'Students enter the book through what soldiers carried.',
   goals: ['Students will name what an object reveals about a character.'],
   teacherWill: ['Read the opening aloud.', 'Collect the exit tickets.'],
-  materials: ['Class starter (YAWP! assignment): What do you carry?', 'Slide deck: Day 1 (8 slides)'],
+  materials: ['Class starter (Yawp! assignment): What do you carry?', 'Slide deck: Day 1 (8 slides)'],
   instructions: [
     { title: 'Class starter', minutes: 5, summary: 'Students write on what they carry.', purpose: 'Starts from their thinking.' },
     { title: 'Read aloud', minutes: 20, summary: 'You read the opening pages.', purpose: 'Students hear the list form.' },

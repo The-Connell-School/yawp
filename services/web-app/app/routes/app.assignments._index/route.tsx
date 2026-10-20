@@ -57,6 +57,7 @@ import {
 } from '~/utils/school-year-scope.server';
 import { formatClassLabel } from '~/utils/teacher-document-work-utils';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import { loadSiteLicenseLockedAssignmentTiles } from '~/domain/free-tier/site-license-locked-assignment-tiles.server';
 
 export const handle = { breadcrumb: 'My Assignments' };
 
@@ -214,6 +215,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const gradesGrammarIds = await getGrammarGradingAssignmentTypeIds(
     creationTypeRows.map((type) => type.id)
   );
+  const siteLicenseLockedAssignmentTiles =
+    await loadSiteLicenseLockedAssignmentTiles(profile.organization);
 
   return {
     assignments,
@@ -241,6 +244,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         ...quotaByTypeId.get(type.id),
       }));
     })(),
+    siteLicenseLockedAssignmentTiles,
   };
 }
 
@@ -470,6 +474,7 @@ export default function MyAssignmentsRoute() {
     savedAssignments,
     assignmentCreationClasses,
     assignmentCreationTypes,
+    siteLicenseLockedAssignmentTiles,
   } = useLoaderData<typeof loader>();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -549,7 +554,7 @@ export default function MyAssignmentsRoute() {
   const hasSelection = selectedAssignmentIds.length > 0;
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
+    <div className="mx-auto h-full min-h-0 w-full max-w-5xl overflow-y-auto px-4 py-8">
       <h1 className="mb-6 text-2xl font-semibold">My Assignments</h1>
 
       {SAVED_ASSIGNMENTS_ENABLED ? (
@@ -570,6 +575,7 @@ export default function MyAssignmentsRoute() {
           }}
           entryPoint="dashboard"
           assignmentTypes={assignmentCreationTypes}
+          siteLicenseLockedAssignmentTiles={siteLicenseLockedAssignmentTiles}
           teacherClasses={assignmentCreationClasses}
           initialAssignmentTypeId={reusedAssignment.assignmentTypeId}
           initialTitle={reusedAssignment.title}
@@ -785,6 +791,7 @@ export default function MyAssignmentsRoute() {
         onOpenChange={setIsCreateSheetOpen}
         entryPoint="dashboard"
         assignmentTypes={assignmentCreationTypes}
+        siteLicenseLockedAssignmentTiles={siteLicenseLockedAssignmentTiles}
         teacherClasses={assignmentCreationClasses}
       />
     </div>

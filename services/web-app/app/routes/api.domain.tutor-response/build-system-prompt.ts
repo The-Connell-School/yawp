@@ -24,7 +24,7 @@ export const buildTutorSystemPrompt = ({
 }: {
   // The assignment-level General Tutor Instructions, stored on the assignment
   // type and edited in admin. This is the top of the prompt -- where the
-  // Universal YAWP! Tutor Instructions live. Null on assignment types that
+  // Universal Yawp! Tutor Instructions live. Null on assignment types that
   // have not set one, which leaves the prompt exactly as it was.
   generalTutorInstructions?: string | null | undefined;
   tutorInstructions: string | null | undefined;

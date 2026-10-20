@@ -32,7 +32,7 @@ function req(method: string, path: string, value?: unknown, opts: any = {}) {
             body,
             keyId: opts.keyId ?? 'writer',
             secret,
-            actor: 'Operator@example.test',
+            actor: opts.actor ?? 'Operator@example.test',
           }).headers),
       ...(opts.key ? { 'Idempotency-Key': opts.key } : {}),
     },
@@ -141,6 +141,7 @@ function fixture() {
     audits,
     events,
     auditRead,
+    parent,
     handlers: createInternalGradingWorkspaceHandlers({ db, auditRead }),
   };
 }
@@ -148,6 +149,11 @@ beforeEach(() => {
   process.env.YAWP_INTERNAL_API_KEYS = JSON.stringify([
     { id: 'writer', secret, scopes: ['management:write', 'management:read'] },
     { id: 'reader', secret, scopes: ['management:read'] },
+    {
+      id: 'writer-two',
+      secret,
+      scopes: ['management:write', 'management:read'],
+    },
   ]);
   process.env.YAWP_MANAGEMENT_SERVICE_KEY = 'x'.repeat(43);
   process.env.INTERNAL_API_NONCE_STORE = 'memory';
@@ -356,7 +362,7 @@ test('a full group rejects a new case after locking and before any writes', asyn
   expect(f.events).toEqual(['lock']);
   expect(f.audits).toHaveLength(0);
 });
-test('unsupported async run creation returns 405 without model calls', async () => {
+test('run creation without an idempotency key returns 400 without model calls', async () => {
   const f = fixture();
   expect(
     (
@@ -369,7 +375,7 @@ test('unsupported async run creation returns 405 without model calls', async () 
         'at-1'
       )
     ).status
-  ).toBe(405);
+  ).toBe(400);
   expect(completion).not.toHaveBeenCalled();
 });
 test('suite ownership protects case creation and editing', async () => {
@@ -678,4 +684,634 @@ test('scratch default provider adapter requests audit-only persistence', async (
       },
     });
   expect(f.audits).toHaveLength(2);
+});
+
+const runBody = {
+  promptVersion: 'pv-1',
+  suiteId: 'suite-1',
+  reason: 'Reviewed',
+};
+test('new writes require HMAC, write scope, strict bodies and bounded bytes', async () => {
+  for (const [resource, method, path, body, child] of [
+    ['runs', 'POST', '/evaluation-runs', runBody, undefined],
+    ['suite', 'DELETE', '/evaluation-suites/suite-1', {}, 'suite-1'],
+    ['promptVersion', 'DELETE', '/prompt-versions/pv-1', {}, 'pv-1'],
+  ] as const) {
+    const f = fixture();
+    for (const [opts, value, status] of [
+      [{ unsigned: true }, body, 401],
+      [{ keyId: 'reader' }, body, 403],
+      [{}, { ...body, unknown: true }, 400],
+      [{}, { ...body, reason: ' ' }, 400],
+      [{ raw: 'x'.repeat(256 * 1024 + 1) }, body, 413],
+      [{ raw: new Uint8Array([0xff]) }, body, 400],
+    ] as const) {
+      const res = await f.handlers.handle(
+        resource,
+        req(method, path, value, opts),
+        'at-1',
+        child
+      );
+      expect(res.status).toBe(status);
+      expect(Object.keys(await res.json())).toEqual(['error']);
+      expect(res.headers.get('cache-control')).toBe('no-store');
+    }
+    expect(f.db.$transaction).not.toHaveBeenCalled();
+  }
+});
+test('discard refuses production and foreign versions; draft deletion is audited', async () => {
+  const f = fixture();
+  f.db.assignmentTypePromptVersion.delete = mock(async ({ where }: any) => {
+    f.versions.splice(
+      f.versions.findIndex((v) => v.id === where.id),
+      1
+    );
+  });
+  for (const [version, status] of [
+    ['pv-1', 409],
+    ['foreign', 404],
+  ] as const) {
+    const res = await f.handlers.handle(
+      'promptVersion',
+      req('DELETE', `/prompt-versions/${version}`, {}),
+      'at-1',
+      version
+    );
+    expect(res.status).toBe(status);
+    expect(Object.keys(await res.json())).toEqual(['error']);
+  }
+  f.versions.push({
+    ...f.versions[0],
+    id: 'draft-2',
+    version: 2,
+    status: 'draft',
+  });
+  const res = await f.handlers.handle(
+    'promptVersion',
+    req('DELETE', '/prompt-versions/2', {
+      reason: '  Discard reviewed draft  ',
+    }),
+    'at-1',
+    '2'
+  );
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ deleted: { id: 'draft-2' } });
+  expect(f.versions).toHaveLength(1);
+  expect(f.audits.map((a) => a.result)).toEqual(['before', 'after']);
+  expect(f.audits[0].metadata.before.status).toBe('draft');
+  expect(f.audits[1].metadata.after).toBeNull();
+  expect(f.audits[1].metadata.reason).toBe('Discard reviewed draft');
+});
+test('new writes scope suites and prompt ownership; run requires an idempotency key', async () => {
+  const f = fixture();
+  f.db.assignmentTypeEvaluation.findFirst = mock(async () => null);
+  for (const [resource, path, value, child] of [
+    ['suite', '/evaluation-suites/foreign', {}, 'foreign'],
+    ['runs', '/evaluation-runs', { ...runBody, suiteId: 'foreign' }, undefined],
+  ] as const) {
+    const res = await f.handlers.handle(
+      resource,
+      req(resource === 'runs' ? 'POST' : 'DELETE', path, value, {
+        key: 'owned-run',
+      }),
+      'at-1',
+      child
+    );
+    expect(res.status).toBe(404);
+  }
+  const missing = await f.handlers.handle(
+    'runs',
+    req('POST', '/evaluation-runs', runBody),
+    'at-1'
+  );
+  expect(missing.status).toBe(400);
+  expect(completion).not.toHaveBeenCalled();
+});
+
+test('suite delete archives cases, refreshes snapshot, and audits both states', async () => {
+  const f = fixture();
+  const row: any = {
+    id: 'suite-1',
+    assignmentTypeId: 'at-1',
+    archivedAt: null,
+    cases: [{ id: 'case-1', archivedAt: null }],
+  };
+  f.db.assignmentTypeEvaluation.findFirst = mock(async ({ where }: any) =>
+    where.id === row.id && !row.archivedAt ? structuredClone(row) : null
+  );
+  f.db.assignmentTypeEvaluation.updateMany = mock(async ({ data }: any) => {
+    Object.assign(row, data);
+    return { count: 1 };
+  });
+  f.db.assignmentTypeEvaluationCase = {
+    updateMany: mock(async ({ data }: any) => {
+      row.cases.forEach((c: any) => Object.assign(c, data));
+      return { count: 1 };
+    }),
+  };
+  f.db.assignmentTypeEvaluationSuiteVersion = {
+    findFirst: mock(async () => null),
+    create: mock(async ({ data }: any) => ({ id: 'snapshot', ...data })),
+  };
+  const res = await f.handlers.handle(
+    'suite',
+    req('DELETE', '/evaluation-suites/suite-1', { reason: ' Retired ' }),
+    'at-1',
+    'suite-1'
+  );
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ deleted: { id: 'suite-1' } });
+  expect(row.archivedAt).toBeInstanceOf(Date);
+  expect(row.cases[0].archivedAt).toEqual(row.archivedAt);
+  expect(f.db.assignmentTypeEvaluationSuiteVersion.create).toHaveBeenCalled();
+  expect(f.audits[0].metadata.before.archivedAt).toBeNull();
+  expect(f.audits[1].metadata.after.archivedAt).toBeTruthy();
+  expect(f.audits[1].metadata.reason).toBe('Retired');
+});
+
+function runFixture() {
+  const f = fixture();
+  const cases = [
+    {
+      id: 'case-1',
+      title: 'Claim',
+      documentText: 'A defensible claim.',
+      rubricCategoryKey: 'claim',
+      criterion: 'A clear claim',
+    },
+  ];
+  const snapshot = {
+    id: 'snapshot-1',
+    assignmentTypeId: 'at-1',
+    version: 1,
+    contentHash: 'snapshot-hash',
+    snapshotJson: { evaluations: [{ id: 'suite-1', cases }], legacyCases: [] },
+  };
+  const runs: any[] = [];
+  const results: any[] = [];
+  f.db.assignmentTypeEvaluation.findFirst = mock(async ({ where }: any) =>
+    where.id === 'suite-1' ? { id: 'suite-1', cases } : null
+  );
+  f.db.assignmentTypeEvaluationSuiteVersion = {
+    findFirst: mock(async () => snapshot),
+    findUnique: mock(async () => snapshot),
+  };
+  f.db.assignmentTypeEvaluationRun = {
+    findFirst: mock(
+      async ({ where }: any) =>
+        runs.find((r) => Object.entries(where).every(([k, v]) => r[k] === v)) ??
+        null
+    ),
+    create: mock(async ({ data }: any) => {
+      const run = { id: `run-${runs.length + 1}`, results, ...data };
+      runs.push(run);
+      return run;
+    }),
+    update: mock(async ({ where, data }: any) =>
+      Object.assign(
+        runs.find((r) => r.id === where.id),
+        data
+      )
+    ),
+  };
+  f.db.assignmentTypeEvaluationResult = {
+    createMany: mock(async ({ data }: any) => {
+      results.push(...data);
+    }),
+  };
+  f.db.internalPlatformApiAudit.findFirst = mock(
+    async ({ where }: any) =>
+      [...f.audits]
+        .reverse()
+        .find((a) =>
+          Object.entries(where).every(([field, value]) =>
+            field === 'metadata'
+              ? a.metadata.idempotencyKey === (value as any).equals
+              : a[field] === value
+          )
+        ) ?? null
+  );
+  const execute = mock(async ({ purpose }: any) =>
+    JSON.stringify(
+      purpose === 'criterion'
+        ? { passed: true, evidence: 'Grounded' }
+        : {
+            categories: [{ key: 'claim', score: 3, comment: 'Clear claim' }],
+            overallComment: 'Jordan, explain the evidence.',
+          }
+    )
+  );
+  return {
+    ...f,
+    snapshot,
+    runs,
+    results,
+    execute,
+    handlers: createInternalGradingWorkspaceHandlers({ db: f.db, execute }),
+  };
+}
+test('run start executes shared admin logic, returns results, replays once and conflicts', async () => {
+  const f = runFixture();
+  const start = () =>
+    f.handlers.handle(
+      'runs',
+      req('POST', '/evaluation-runs', runBody, { key: 'run-1' }),
+      'at-1'
+    );
+  const first = await start();
+  expect(first.status).toBe(201);
+  const result = await first.json();
+  expect(result.run.status).toBe('completed');
+  expect(result.run.results).toHaveLength(1);
+  expect(result.run.promptRevision).toBe(1);
+  expect(result.run.evaluationSuiteVersionId).toBe('snapshot-1');
+  expect(f.execute).toHaveBeenCalledTimes(2);
+  const replay = await start();
+  expect(replay.status).toBe(200);
+  expect(await replay.json()).toEqual(result);
+  expect(f.execute).toHaveBeenCalledTimes(2);
+  const conflict = await f.handlers.handle(
+    'runs',
+    req(
+      'POST',
+      '/evaluation-runs',
+      { ...runBody, reason: 'Different' },
+      { key: 'run-1' }
+    ),
+    'at-1'
+  );
+  expect(conflict.status).toBe(409);
+  expect(f.audits).toHaveLength(2);
+  expect(f.audits[1].metadata.reason).toBe('Reviewed');
+});
+test('run rejects oversized snapshots before calling provider', async () => {
+  const f = runFixture();
+  f.snapshot.snapshotJson.legacyCases = Array.from({ length: 9 }, (_, i) => ({
+    id: `c-${i}`,
+  })) as any;
+  const res = await f.handlers.handle(
+    'runs',
+    req('POST', '/evaluation-runs', runBody, { key: 'large' }),
+    'at-1'
+  );
+  expect(res.status).toBe(422);
+  expect((await res.json()).error).toContain('8');
+  expect(f.execute).not.toHaveBeenCalled();
+  expect(f.runs).toHaveLength(0);
+});
+test('run budget aborts provider and returns a clear error without a publishable run', async () => {
+  const f = runFixture();
+  let signal: AbortSignal | undefined;
+  const handlers = createInternalGradingWorkspaceHandlers({
+    db: f.db,
+    runBudgetMs: 20,
+    execute: async (input) => {
+      signal = input.signal;
+      return new Promise(() => {});
+    },
+  });
+  const res = await handlers.handle(
+    'runs',
+    req('POST', '/evaluation-runs', runBody, { key: 'timeout' }),
+    'at-1'
+  );
+  expect(res.status).toBe(422);
+  expect((await res.json()).error).toContain('time budget');
+  expect(signal?.aborted).toBe(true);
+  expect(f.runs.some((r) => r.status === 'completed')).toBe(false);
+  expect(f.runs[0].status).toBe('failed');
+  expect(f.runs[0].completedAt).toBeInstanceOf(Date);
+  expect(f.results).toHaveLength(0);
+  expect(f.audits.map((a) => a.result)).toEqual(['before', 'after']);
+  const replay = await handlers.handle(
+    'runs',
+    req('POST', '/evaluation-runs', runBody, { key: 'timeout' }),
+    'at-1'
+  );
+  expect(replay.status).toBe(422);
+});
+
+test('run covers other active groups in the current snapshot for promotion', async () => {
+  const f = runFixture();
+  const other = {
+    ...f.snapshot.snapshotJson.evaluations[0].cases[0],
+    id: 'case-2',
+  };
+  f.snapshot.snapshotJson.evaluations.push({ id: 'suite-2', cases: [other] });
+  const res = await f.handlers.handle(
+    'runs',
+    req('POST', '/evaluation-runs', runBody, { key: 'full-snapshot' }),
+    'at-1'
+  );
+  expect(res.status).toBe(201);
+  const run = (await res.json()).run;
+  expect(run.totalCases).toBe(2);
+  expect(run.results.map((r: any) => r.caseId)).toEqual(['case-1', 'case-2']);
+});
+test('run rejects invalid numeric versions and unsupported methods before domain access', async () => {
+  const f = fixture();
+  for (const version of ['0', '2147483648', '9007199254740993']) {
+    const res = await f.handlers.handle(
+      'runs',
+      req(
+        'POST',
+        '/evaluation-runs',
+        { ...runBody, promptVersion: version },
+        { key: 'version' }
+      ),
+      'at-1'
+    );
+    expect(res.status).toBe(400);
+  }
+  for (const [resource, method, path, child] of [
+    ['runs', 'DELETE', '/evaluation-runs', undefined],
+    ['suite', 'GET', '/evaluation-suites/suite-1', 'suite-1'],
+    ['promptVersion', 'POST', '/prompt-versions/2', '2'],
+  ] as const) {
+    const res = await f.handlers.handle(
+      resource,
+      req(method, path, {}),
+      'at-1',
+      child
+    );
+    expect(res.status).toBe(405);
+    expect(await res.json()).toEqual({ error: 'Method not allowed' });
+  }
+  expect(f.db.$transaction).not.toHaveBeenCalled();
+});
+
+test('database statement timeout during result persistence returns a bounded error', async () => {
+  const f = runFixture();
+  f.db.assignmentTypeEvaluationResult.createMany = mock(async () => {
+    throw new Error('canceling statement due to statement timeout');
+  });
+  const res = await f.handlers.handle(
+    'runs',
+    req('POST', '/evaluation-runs', runBody, { key: 'statement-timeout' }),
+    'at-1'
+  );
+  expect(res.status).toBe(422);
+  expect(await res.json()).toEqual({
+    error: 'Evaluation run database time budget exceeded; retry the request.',
+  });
+  expect(f.runs.some((r) => r.status === 'completed')).toBe(false);
+  expect(f.runs[0].status).toBe('failed');
+  expect(f.audits.map((a) => a.result)).toEqual(['before', 'after']);
+});
+
+test('provider execution observes no open transaction in either call', async () => {
+  const f = runFixture();
+  let open = false;
+  const observations: boolean[] = [];
+  f.db.$transaction = mock(async (fn: any) => {
+    expect(open).toBe(false);
+    open = true;
+    try {
+      return await fn(f.db);
+    } finally {
+      open = false;
+    }
+  });
+  const handlers = createInternalGradingWorkspaceHandlers({
+    db: f.db,
+    execute: async (args) => {
+      observations.push(open);
+      return f.execute(args);
+    },
+  });
+  const res = await handlers.handle(
+    'runs',
+    req('POST', '/evaluation-runs', runBody, { key: 'probe' }),
+    'at-1'
+  );
+  expect(res.status).toBe(201);
+  expect(observations).toEqual([false, false]);
+});
+
+test('durable pending key rejects overlap and changed bytes, then replays completion', async () => {
+  const f = runFixture();
+  let release!: () => void;
+  let ready!: () => void;
+  const waiting = new Promise<void>((resolve) => {
+    ready = resolve;
+  });
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const handlers = createInternalGradingWorkspaceHandlers({
+    db: f.db,
+    execute: async (args) => {
+      ready();
+      await gate;
+      return f.execute(args);
+    },
+  });
+  const start = () =>
+    handlers.handle(
+      'runs',
+      req('POST', '/evaluation-runs', runBody, { key: 'pending' }),
+      'at-1'
+    );
+  const running = start();
+  await waiting;
+  try {
+    expect(f.audits.map((a) => a.result)).toEqual(['before']);
+    expect(f.runs[0].status).toBe('running');
+    const pending = await start();
+    expect(pending.status).toBe(409);
+    expect(await pending.json()).toEqual({
+      error:
+        'An evaluation run request is waiting for another write; retry after it completes.',
+    });
+    const conflict = await handlers.handle(
+      'runs',
+      req(
+        'POST',
+        '/evaluation-runs',
+        { ...runBody, reason: 'Changed' },
+        { key: 'pending' }
+      ),
+      'at-1'
+    );
+    expect(conflict.status).toBe(409);
+    expect((await conflict.json()).error).toContain('different request');
+  } finally {
+    release();
+  }
+  const completed = await running;
+  expect(completed.status).toBe(201);
+  const replay = await start();
+  expect(replay.status).toBe(200);
+  expect(await replay.json()).toEqual(await completed.json());
+  expect(f.execute).toHaveBeenCalledTimes(2);
+});
+
+test('expired pending reservation recovers a crashed run without calling provider again', async () => {
+  const f = runFixture();
+  f.runs.push({
+    id: 'crashed',
+    status: 'running',
+    assignmentTypeId: 'at-1',
+    totalCases: 1,
+  });
+  f.audits.push({
+    action: 'grading-workspace.runs.post.before',
+    endpoint:
+      'POST /api/internal/v1/admin/assignment-types/at-1/evaluation-runs',
+    actorEmail: 'operator@example.test',
+    keyId: 'writer',
+    result: 'before',
+    targetId: 'crashed',
+    requestHash: createHash('sha256')
+      .update(JSON.stringify(runBody))
+      .digest('hex'),
+    metadata: {
+      idempotencyKey: 'expired',
+      expiresAt: new Date(Date.now() - 1).toISOString(),
+    },
+  });
+  const res = await f.handlers.handle(
+    'runs',
+    req('POST', '/evaluation-runs', runBody, { key: 'expired' }),
+    'at-1'
+  );
+  expect(res.status).toBe(422);
+  expect(f.runs[0].status).toBe('failed');
+  expect(f.execute).not.toHaveBeenCalled();
+  expect(f.audits.at(-1).result).toBe('after');
+});
+
+test('discard protects active draft and retired previous version', async () => {
+  const f = fixture();
+  f.versions[0].status = 'draft';
+  f.versions.push({
+    ...f.versions[0],
+    id: 'retired',
+    version: 2,
+    status: 'retired',
+  });
+  for (const id of ['pv-1', 'retired']) {
+    const res = await f.handlers.handle(
+      'promptVersion',
+      req('DELETE', `/prompt-versions/${id}`, {}),
+      'at-1',
+      id
+    );
+    expect(res.status).toBe(409);
+  }
+  expect(f.audits).toHaveLength(0);
+});
+
+test('already archived suite returns 404 without writes', async () => {
+  const f = fixture();
+  f.db.assignmentTypeEvaluation.findFirst = mock(async () => null);
+  const res = await f.handlers.handle(
+    'suite',
+    req('DELETE', '/evaluation-suites/archived', {}),
+    'at-1',
+    'archived'
+  );
+  expect(res.status).toBe(404);
+  expect(f.audits).toHaveLength(0);
+});
+
+test('run supports archived parent, legacy-only snapshot and built-in kind', async () => {
+  const f = runFixture();
+  f.parent.archivedAt = new Date();
+  f.parent.kind = 'thesis_statement';
+  f.snapshot.snapshotJson.legacyCases = f.snapshot.snapshotJson.evaluations[0]
+    .cases as any;
+  f.snapshot.snapshotJson.evaluations = [];
+  const res = await f.handlers.handle(
+    'runs',
+    req('POST', '/evaluation-runs', runBody, { key: 'legacy' }),
+    'at-1'
+  );
+  expect(res.status).toBe(201);
+  expect((await res.json()).run.totalCases).toBe(1);
+});
+
+test('run rejects empty snapshot and AP History assignment context without provider calls', async () => {
+  for (const apHistory of [false, true]) {
+    const f = runFixture();
+    if (apHistory) f.parent.systemKey = 'ap_history_essay';
+    else f.snapshot.snapshotJson.evaluations = [];
+    const res = await f.handlers.handle(
+      'runs',
+      req('POST', '/evaluation-runs', runBody, { key: 'guard' }),
+      'at-1'
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain(
+      apHistory ? 'assignment snapshot' : 'at least one'
+    );
+    expect(f.execute).not.toHaveBeenCalled();
+    expect(f.runs).toHaveLength(0);
+  }
+});
+
+test('run idempotency is scoped to the signed actor and signing key', async () => {
+  for (const changed of [
+    { actor: 'Other@example.test' },
+    { keyId: 'writer-two' },
+  ]) {
+    const f = runFixture();
+    const first = await f.handlers.handle(
+      'runs',
+      req('POST', '/evaluation-runs', runBody, { key: 'scoped' }),
+      'at-1'
+    );
+    expect(first.status).toBe(201);
+    const other = await f.handlers.handle(
+      'runs',
+      req('POST', '/evaluation-runs', runBody, { key: 'scoped', ...changed }),
+      'at-1'
+    );
+    expect(other.status).toBe(201);
+    expect(f.execute).toHaveBeenCalledTimes(4);
+    expect(f.audits).toHaveLength(4);
+  }
+});
+
+test('provider case errors retain admin failed-case semantics and completed replay', async () => {
+  const f = runFixture();
+  let calls = 0;
+  const handlers = createInternalGradingWorkspaceHandlers({
+    db: f.db,
+    execute: async () => {
+      calls++;
+      throw new Error('Provider unavailable');
+    },
+  });
+  const start = () =>
+    handlers.handle(
+      'runs',
+      req('POST', '/evaluation-runs', runBody, { key: 'provider-error' }),
+      'at-1'
+    );
+  const res = await start();
+  expect(res.status).toBe(201);
+  const run = (await res.json()).run;
+  expect(run.status).toBe('completed');
+  expect(run.failedCases).toBe(1);
+  expect(run.results[0].status).toBe('fail');
+  expect((await start()).status).toBe(200);
+  expect(calls).toBe(1);
+});
+
+test('pre-reservation completed audit records remain replayable', async () => {
+  const f = runFixture();
+  const start = () =>
+    f.handlers.handle(
+      'runs',
+      req('POST', '/evaluation-runs', runBody, { key: 'legacy-replay' }),
+      'at-1'
+    );
+  const res = await start();
+  const expected = await res.json();
+  delete f.audits[1].metadata.response;
+  const replay = await start();
+  expect(replay.status).toBe(200);
+  expect(await replay.json()).toEqual(expected);
+  expect(f.execute).toHaveBeenCalledTimes(2);
 });

@@ -34,7 +34,7 @@ describe('planningProgressForTool', () => {
   test('falls back to something a teacher can read', () => {
     const progress = planningProgressForTool('some_new_tool', {}, 1);
 
-    expect(progress.label).toBe('Looking things up in YAWP!');
+    expect(progress.label).toBe('Looking things up in Yawp!');
     expect(progress.fraction).toBeGreaterThan(0);
   });
 

@@ -27,7 +27,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     deckId: params.messageId,
   });
 
-  // Brian's review (E1): the YAWP! tile template, behind its flag.
+  // Brian's review (E1): the Yawp! tile template, behind its flag.
   const access = await getLessonPlannerAccess(request);
   const { deckV2 } = access.allowed
     ? await getLessonPlannerReviewFlags(access.membership.organization.id)

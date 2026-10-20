@@ -345,14 +345,14 @@ test.describe("Lesson Planner — Brian's third run", () => {
       }
     });
 
-    test('the closing exit ticket can be created in YAWP!, then says so', async ({ page, signIn, e2eContext }) => {
+    test('the closing exit ticket can be created in Yawp!, then says so', async ({ page, signIn, e2eContext }) => {
       await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
       await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
       const { conversationId } = await seedDayOneStack(page, e2eContext);
       await page.goto(`/app/lesson-planner/${conversationId}/packet`);
       const closing = page.getByTestId('packet-section').filter({ hasText: 'one object, one sentence' });
       const create = closing.getByTestId('stack-create-assignment');
-      await expect(create).toHaveText('Create this exit ticket in YAWP!');
+      await expect(create).toHaveText('Create this exit ticket in Yawp!');
       const href = await create.getAttribute('href');
       expect(href).toContain('fromPiece=m%3A');
 
@@ -377,7 +377,7 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await page.reload();
       await expect(
         page.getByTestId('packet-section').filter({ hasText: 'one object, one sentence' }).getByTestId('stack-create-assignment')
-      ).toHaveText('Created in YAWP! · Open');
+      ).toHaveText('Created in Yawp! · Open');
     });
   });
 

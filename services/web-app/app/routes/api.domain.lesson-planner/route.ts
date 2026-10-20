@@ -82,7 +82,7 @@ const PLANNER_FAILED =
  * front of a class deserves to be told that.
  */
 const PLANNER_MISCONFIGURED =
-  'The lesson planner cannot reach the model it writes with. This is a setup problem on our end, not something your retry can fix — please tell whoever runs your YAWP! instance.';
+  'The lesson planner cannot reach the model it writes with. This is a setup problem on our end, not something your retry can fix — please tell whoever runs your Yawp! instance.';
 // Roomier than the reporter's cap: a teacher pasting a prompt, a rubric, or a
 // draft handout into the planner is a normal turn, not an attack.
 const MAX_PLANNER_MESSAGE_CHARS = 6_000;

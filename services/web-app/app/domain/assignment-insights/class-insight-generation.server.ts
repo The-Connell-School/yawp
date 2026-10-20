@@ -1,17 +1,17 @@
 import { Prisma } from '@app/prisma';
+import { loadClassInsightInputs } from './class-insight-inputs.server';
 import {
-  aggregateRubricPerformance,
-  type GradedSubmissionInput,
-} from '~/domain/assignment-insights/aggregate-rubric-performance';
+  CLASS_INSIGHT_INPUT_VERSION,
+  classInsightFingerprint,
+  isClassInsightCurrent,
+} from './class-insight-cache';
+import { aggregateRubricPerformance } from '~/domain/assignment-insights/aggregate-rubric-performance';
 import { generateClassInsight } from '~/domain/assignment-insights/class-insight-synthesis.server';
 import {
   classInsightRegenerationCooldownMessage,
   getClassInsightRegenerationCooldown,
 } from '~/domain/assignment-insights/class-insight-regeneration-cooldown';
-import {
-  buildDifferentiation,
-  type DifferentiationInput,
-} from '~/domain/assignment-insights/differentiate-students';
+import { buildDifferentiation } from '~/domain/assignment-insights/differentiate-students';
 import type { ClassInsightSummary } from '~/domain/assignment-insights/class-insight-synthesis';
 import { readInsightRubric } from '~/domain/assignment-insights/insight-rubric.server';
 import { prisma } from '~/utils/db.server';
@@ -91,51 +91,15 @@ async function recordClassInsightFailure(input: {
       },
     });
   } catch (error) {
-    if (!(
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === 'P2002'
-    )) {
+    if (
+      !(
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      )
+    ) {
       throw error;
     }
   }
-}
-
-async function loadDifferentiationInputs(classAssignmentId: string) {
-  const documents = await prisma.document.findMany({
-    where: { classAssignmentId, deletedAt: null },
-    select: {
-      id: true,
-      membership: {
-        select: { user: { select: { name: true, email: true } } },
-      },
-      group: { select: { label: true } },
-      submissions: {
-        where: { gradedAt: { not: null } },
-        orderBy: { submittedAt: 'desc' },
-        take: 1,
-        select: { id: true, rubricScores: true, overallComment: true },
-      },
-    },
-  });
-
-  return documents.flatMap((doc) => {
-    const submission = doc.submissions[0];
-    if (!submission) return [];
-    return [
-      {
-        submissionId: submission.id,
-        studentName:
-          doc.group?.label?.trim() ||
-          doc.membership?.user?.name?.trim() ||
-          doc.membership?.user?.email?.trim() ||
-          null,
-        href: `/app/submissions/${submission.id}`,
-        rubricScores:
-          submission.rubricScores as GradedSubmissionInput['rubricScores'],
-        overallComment: submission.overallComment,
-      },
-    ] satisfies DifferentiationInput[];
-  });
 }
 
 /**
@@ -213,10 +177,16 @@ export async function generateClassAssignmentInsight(input: {
       submissionCount: true,
     },
   });
+  const differentiationInputs =
+    (await loadClassInsightInputs([classAssignment.id])).get(
+      classAssignment.id
+    ) ?? [];
+  const gradeFingerprint = classInsightFingerprint(differentiationInputs);
   const hasReadyInsight = Boolean(
     existingInsight?.status === 'ready' &&
     existingInsight.summaryJson &&
-    existingInsight.generatedAt
+    existingInsight.generatedAt &&
+    isClassInsightCurrent(existingInsight.summaryJson, gradeFingerprint)
   );
   if (hasReadyInsight) {
     const cooldown = getClassInsightRegenerationCooldown(
@@ -233,9 +203,6 @@ export async function generateClassAssignmentInsight(input: {
     }
   }
 
-  const differentiationInputs = await loadDifferentiationInputs(
-    classAssignment.id
-  );
   if (differentiationInputs.length === 0) {
     return {
       success: false,
@@ -351,9 +318,13 @@ export async function generateClassAssignmentInsight(input: {
   }
 
   const differentiation = buildDifferentiation(differentiationInputs, rubric);
-  const enrichedSummary = differentiation
-    ? { ...summary, differentiation }
-    : summary;
+  const enrichedSummary = {
+    ...summary,
+    ...(differentiation ? { differentiation } : {}),
+    scoredCount: aggregate.scoredCount,
+    inputVersion: CLASS_INSIGHT_INPUT_VERSION,
+    gradeFingerprint,
+  };
   const summaryJson = enrichedSummary as unknown as Prisma.InputJsonValue;
 
   await prisma.classAssignmentInsight.upsert({

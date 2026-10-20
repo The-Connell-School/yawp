@@ -171,7 +171,7 @@ export type LessonPlannerReviewFlags = {
   templates: boolean;
 };
 
-/** YAWP! Lesson Planner for teachers at the given school. */
+/** Yawp! Lesson Planner for teachers at the given school. */
 export function isLessonPlannerEnabled(
   orgId: string | null | undefined
 ): Promise<boolean> {

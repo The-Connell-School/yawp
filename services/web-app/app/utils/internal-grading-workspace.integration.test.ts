@@ -105,6 +105,7 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
       sample: 'An argument with evidence',
       expectedOutput,
     };
+    let foreignTypeId: string | undefined;
     try {
       const concurrent = await Promise.all(
         [1, 2].map(() =>
@@ -197,7 +198,9 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
           where: { assignmentTypeId: id },
           orderBy: { version: 'asc' },
         }),
-        audits: await prisma.internalPlatformApiAudit.count({ where: { keyId } }),
+        audits: await prisma.internalPlatformApiAudit.count({
+          where: { keyId },
+        }),
       };
       for (const invalidOutput of [undefined, null]) {
         const invalidCase = await handlers.handle(
@@ -225,7 +228,9 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
           where: { assignmentTypeId: id },
           orderBy: { version: 'asc' },
         }),
-        audits: await prisma.internalPlatformApiAudit.count({ where: { keyId } }),
+        audits: await prisma.internalPlatformApiAudit.count({
+          where: { keyId },
+        }),
       }).toEqual(stateBeforeInvalidCase);
       const caseRes = await handlers.handle(
         'cases',
@@ -348,44 +353,334 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
           )
         ).status
       ).toBe(409);
-      const latest =
-        await prisma.assignmentTypeEvaluationSuiteVersion.findFirstOrThrow({
-          where: { assignmentTypeId: id },
-          orderBy: { version: 'desc' },
+      const foreignType = await prisma.assignmentType.create({
+        data: {
+          title: 'Foreign ownership fixture',
+          position: 999,
+          evaluations: {
+            create: { title: 'Foreign suite', description: 'Owned elsewhere' },
+          },
+        },
+        include: { evaluations: true },
+      });
+      foreignTypeId = foreignType.id;
+      const foreignSuiteId = foreignType.evaluations[0].id;
+      expect(
+        (
+          await handlers.handle(
+            'suite',
+            request('DELETE', `/evaluation-suites/${foreignSuiteId}`),
+            id,
+            foreignSuiteId
+          )
+        ).status
+      ).toBe(404);
+      expect(
+        (
+          await handlers.handle(
+            'runs',
+            request(
+              'POST',
+              '/evaluation-runs',
+              { promptVersion: draft.id, suiteId: foreignSuiteId },
+              'foreign-run'
+            ),
+            id
+          )
+        ).status
+      ).toBe(404);
+      expect(
+        (
+          await prisma.assignmentTypeEvaluation.findUniqueOrThrow({
+            where: { id: foreignSuiteId },
+          })
+        ).archivedAt
+      ).toBeNull();
+
+      const runBody = { promptVersion: draft.id, suiteId: suite.id };
+      let releaseLock!: () => void;
+      let lockReady!: () => void;
+      const locked = new Promise<void>((resolve) => {
+        lockReady = resolve;
+      });
+      const held = new Promise<void>((resolve) => {
+        releaseLock = resolve;
+      });
+      const blocker = prisma.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT id FROM "AssignmentType" WHERE id = ${id} FOR UPDATE`;
+          lockReady();
+          await held;
+        },
+        { timeout: 15000 }
+      );
+      await locked;
+      const unlockTimer = setTimeout(() => releaseLock(), 8000);
+      try {
+        const busy = await handlers.handle(
+          'runs',
+          request('POST', '/evaluation-runs', runBody, 'blocked-run'),
+          id
+        );
+        expect(busy.status).toBe(409);
+        expect(await busy.json()).toEqual({
+          error:
+            'An evaluation run request is waiting for another write; retry after it completes.',
         });
+        expect(calls).toBe(2);
+      } finally {
+        clearTimeout(unlockTimer);
+        releaseLock();
+        await blocker;
+      }
+      const beforeTimeout = await prisma.internalPlatformApiAudit.count({
+        where: { keyId },
+      });
+      let providerSignal: AbortSignal | undefined;
+      const bounded = createInternalGradingWorkspaceHandlers({
+        db: prisma,
+        runBudgetMs: 1000,
+        execute: async ({ signal }) => {
+          providerSignal = signal;
+          return new Promise(() => {});
+        },
+      });
+      const timedOut = await bounded.handle(
+        'runs',
+        request('POST', '/evaluation-runs', runBody, 'timeout-run'),
+        id
+      );
+      expect(timedOut.status).toBe(422);
+      expect((await timedOut.json()).error).toContain('time budget');
+      expect(providerSignal?.aborted).toBe(true);
+      expect(
+        await prisma.assignmentTypeEvaluationRun.count({
+          where: { assignmentTypeId: id },
+        })
+      ).toBe(1);
+      const failedRun =
+        await prisma.assignmentTypeEvaluationRun.findFirstOrThrow({
+          where: { assignmentTypeId: id },
+        });
+      expect(failedRun.status).toBe('failed');
+      expect(failedRun.completedAt).not.toBeNull();
+      expect(
+        await prisma.assignmentTypeEvaluationResult.count({
+          where: { runId: failedRun.id },
+        })
+      ).toBe(0);
+      expect(
+        await prisma.internalPlatformApiAudit.count({ where: { keyId } })
+      ).toBe(beforeTimeout + 2);
+      const runningRevision = (
+        await prisma.assignmentTypePromptVersion.findUniqueOrThrow({
+          where: { id: draft.id },
+        })
+      ).revision;
+      const overlapDraftResponse = await handlers.handle(
+        'promptVersions',
+        request('POST', '/prompt-versions', {}, 'overlap-draft'),
+        id
+      );
+      expect(overlapDraftResponse.status).toBe(201);
+      const overlapDraft = (await overlapDraftResponse.json()).promptVersion;
+      let providerReady!: () => void;
+      let releaseProvider!: () => void;
+      const providerWaiting = new Promise<void>((resolve) => {
+        providerReady = resolve;
+      });
+      const providerGate = new Promise<void>((resolve) => {
+        releaseProvider = resolve;
+      });
+      const slow = createInternalGradingWorkspaceHandlers({
+        db: prisma,
+        execute: async ({ purpose }) => {
+          calls++;
+          providerReady();
+          await providerGate;
+          return JSON.stringify(
+            purpose === 'criterion'
+              ? { passed: true, evidence: 'Grounded in the sample' }
+              : expectedOutput
+          );
+        },
+      });
+      const inFlight = slow.handle(
+        'runs',
+        request('POST', '/evaluation-runs', runBody, 'run'),
+        id
+      );
+      await providerWaiting;
+      try {
+        // A different connection performs the same parent UPDATE as the admin editor.
+        // Its server-side deadline proves completion while the provider is paused.
+        await prisma.$transaction(
+          async (tx) => {
+            await tx.$executeRaw`SET LOCAL lock_timeout = '500ms'`;
+            await tx.assignmentType.update({
+              where: { id },
+              data: { title: 'Edited while provider waits' },
+            });
+          },
+          { timeout: 2000 }
+        );
+        const overlapping = await handlers.handle(
+          'promptVersion',
+          request('DELETE', `/prompt-versions/${overlapDraft.id}`),
+          id,
+          overlapDraft.id
+        );
+        expect(overlapping.status).toBe(200);
+        const edited = await handlers.handle(
+          'promptVersion',
+          request('PATCH', `/prompt-versions/${draft.id}`, {
+            systemMessageTemplate: draft.systemMessageTemplate,
+          }),
+          id,
+          draft.id
+        );
+        expect(edited.status).toBe(200);
+        expect((await edited.json()).promptVersion.revision).toBe(
+          runningRevision + 1
+        );
+
+        const pending = await handlers.handle(
+          'runs',
+          request('POST', '/evaluation-runs', runBody, 'run'),
+          id
+        );
+        expect(pending.status).toBe(409);
+        expect((await pending.json()).error).toContain(
+          'waiting for another write'
+        );
+        const mismatch = await handlers.handle(
+          'runs',
+          request(
+            'POST',
+            '/evaluation-runs',
+            { ...runBody, promptVersion: '1' },
+            'run'
+          ),
+          id
+        );
+        expect(mismatch.status).toBe(409);
+        expect((await mismatch.json()).error).toContain('different request');
+      } finally {
+        releaseProvider();
+      }
+      const started = await inFlight;
+      expect(started.status).toBe(201);
+      const run = (await started.json()).run;
+      expect(run.status).toBe('completed');
+      expect(run.promptRevision).toBe(runningRevision);
+      const stalePublish = await handlers.handle(
+        'publish',
+        request('POST', `/prompt-versions/${draft.id}/publish`, publishBody),
+        id,
+        draft.id
+      );
+      expect(stalePublish.status).toBe(409);
+
+      expect(run.results).toHaveLength(1);
+      expect(calls).toBe(4);
+      const replayed = await handlers.handle(
+        'runs',
+        request('POST', '/evaluation-runs', runBody, 'run'),
+        id
+      );
+      expect(replayed.status).toBe(200);
+      expect((await replayed.json()).run).toEqual(run);
+      expect(calls).toBe(4);
+      expect(
+        (
+          await handlers.handle(
+            'runs',
+            request(
+              'POST',
+              '/evaluation-runs',
+              { ...runBody, promptVersion: '1' },
+              'run'
+            ),
+            id
+          )
+        ).status
+      ).toBe(409);
+      // Simulate a process dying after reservation, then advance the durable
+      // expiry. A different key recovers the guard; late completion is fenced.
+      let crashedReady!: () => void;
+      let releaseCrashed!: () => void;
+      const crashedWaiting = new Promise<void>((resolve) => {
+        crashedReady = resolve;
+      });
+      const crashedGate = new Promise<void>((resolve) => {
+        releaseCrashed = resolve;
+      });
+      const crashedHandlers = createInternalGradingWorkspaceHandlers({
+        db: prisma,
+        execute: async ({ purpose }) => {
+          crashedReady();
+          await crashedGate;
+          return JSON.stringify(
+            purpose === 'criterion'
+              ? { passed: true, evidence: 'Grounded' }
+              : expectedOutput
+          );
+        },
+      });
+      const crashed = crashedHandlers.handle(
+        'runs',
+        request('POST', '/evaluation-runs', runBody, 'crashed-run'),
+        id
+      );
+      await crashedWaiting;
+      try {
+        const reservation =
+          await prisma.internalPlatformApiAudit.findFirstOrThrow({
+            where: {
+              keyId,
+              action: 'grading-workspace.runs.post.before',
+              metadata: { path: ['idempotencyKey'], equals: 'crashed-run' },
+            },
+          });
+        expect((reservation.metadata as any).state).toBe('pending');
+        const expiry = Date.parse((reservation.metadata as any).expiresAt);
+        expect(expiry - Date.now()).toBeGreaterThan(110_000);
+        expect(expiry - Date.now()).toBeLessThanOrEqual(120_000);
+        await prisma.internalPlatformApiAudit.update({
+          where: { id: reservation.id },
+          data: {
+            metadata: {
+              ...(reservation.metadata as any),
+              expiresAt: new Date(Date.now() - 1).toISOString(),
+            },
+          },
+        });
+        const recovered = await handlers.handle(
+          'runs',
+          request('POST', '/evaluation-runs', runBody, 'recovered-run'),
+          id
+        );
+        expect(recovered.status).toBe(201);
+        const failed =
+          await prisma.assignmentTypeEvaluationRun.findUniqueOrThrow({
+            where: { id: reservation.targetId! },
+          });
+        expect(failed.status).toBe('failed');
+        expect(failed.completedAt).not.toBeNull();
+        const expiredReplay = await handlers.handle(
+          'runs',
+          request('POST', '/evaluation-runs', runBody, 'crashed-run'),
+          id
+        );
+        expect(expiredReplay.status).toBe(422);
+      } finally {
+        releaseCrashed();
+      }
+      expect((await crashed).status).toBe(422);
       const current =
         await prisma.assignmentTypePromptVersion.findUniqueOrThrow({
           where: { id: draft.id },
         });
-      // Existing synchronous admin execution owns run creation. Seed its completed
-      // artifact here; the API deliberately does not invent an async job queue.
-      const run = await prisma.assignmentTypeEvaluationRun.create({
-        data: {
-          assignmentTypeId: id,
-          promptVersion: current.version,
-          promptVersionId: current.id,
-          promptRevision: current.revision,
-          evaluationSuiteVersionId: latest.id,
-          evaluationSuiteContentHash: latest.contentHash,
-          promptSnapshotJson: {},
-          status: 'completed',
-          totalCases: 1,
-          passedCases: 1,
-          completedAt: new Date(),
-        },
-      });
-      await prisma.assignmentTypeEvaluationResult.create({
-        data: {
-          runId: run.id,
-          caseId: suite.cases[0].id,
-          caseTitle: sample.name,
-          rubricCategoryKey: 'claim',
-          criterion: 'Identify the claim',
-          status: 'pass',
-          evidence: 'Grounded',
-          gradingOutputJson: expectedOutput,
-        },
-      });
       const published = await handlers.handle(
         'publish',
         request('POST', `/prompt-versions/${draft.id}/publish`, publishBody),
@@ -422,14 +717,74 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
           )
         ).status
       ).toBe(404);
+      expect(
+        (
+          await handlers.handle(
+            'promptVersion',
+            request('DELETE', `/prompt-versions/${draft.id}`),
+            id,
+            draft.id
+          )
+        ).status
+      ).toBe(409);
+      const spare = await handlers.handle(
+        'promptVersions',
+        request('POST', '/prompt-versions', {}, 'spare-draft'),
+        id
+      );
+      expect(spare.status).toBe(201);
+      const spareDraft = (await spare.json()).promptVersion;
+      const discarded = await handlers.handle(
+        'promptVersion',
+        request('DELETE', `/prompt-versions/${spareDraft.id}`),
+        id,
+        spareDraft.id
+      );
+      expect(discarded.status).toBe(200);
+      expect(
+        await prisma.assignmentTypePromptVersion.findUnique({
+          where: { id: spareDraft.id },
+        })
+      ).toBeNull();
+      expect(
+        (
+          await handlers.handle(
+            'suite',
+            request('DELETE', `/evaluation-suites/${suite.id}`),
+            id,
+            'foreign'
+          )
+        ).status
+      ).toBe(404);
+      const deletedSuite = await handlers.handle(
+        'suite',
+        request('DELETE', `/evaluation-suites/${suite.id}`),
+        id,
+        suite.id
+      );
+      expect(deletedSuite.status).toBe(200);
+      expect(await deletedSuite.json()).toEqual({ deleted: { id: suite.id } });
+      const archived = await prisma.assignmentTypeEvaluation.findUniqueOrThrow({
+        where: { id: suite.id },
+        include: { cases: true },
+      });
+      expect(archived.archivedAt).not.toBeNull();
+      expect(archived.cases.every((c) => c.archivedAt !== null)).toBe(true);
+      const retained = await handlers.handle(
+        'run',
+        request('GET', `/evaluation-runs/${run.id}`),
+        id,
+        run.id
+      );
+      expect((await retained.json()).run).toEqual(run);
       const audits = await prisma.internalPlatformApiAudit.findMany({
         where: { keyId },
       });
       const writes = audits.filter(
         (a) => a.result === 'before' || a.result === 'after'
       );
-      expect(writes.filter((a) => a.result === 'before')).toHaveLength(9);
-      expect(writes.filter((a) => a.result === 'after')).toHaveLength(9);
+      expect(writes.filter((a) => a.result === 'before')).toHaveLength(19);
+      expect(writes.filter((a) => a.result === 'after')).toHaveLength(19);
       for (const row of writes) {
         expect(row.actorEmail).toBe('operator@example.test');
         expect((row.metadata as any).reason).toBe('Lifecycle review');
@@ -582,6 +937,8 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
         ).title
       ).toBe('Saved from the admin editor');
     } finally {
+      if (foreignTypeId)
+        await prisma.assignmentType.delete({ where: { id: foreignTypeId } });
       await prisma.assignmentType.delete({ where: { id } });
       await prisma.internalPlatformApiAudit.deleteMany({ where: { keyId } });
       await prisma.internalApiRequestNonce.deleteMany({ where: { keyId } });

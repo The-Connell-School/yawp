@@ -42,7 +42,7 @@ export const AUDIENCE_SETUP: Record<Exclude<ShareAudience, 'student'> | 'student
     items: [
       { item: 'plan', label: 'Sub-ready lesson plan', hint: 'Step-by-step, with exact times and what to say', checked: true },
       { item: 'handouts', label: 'Handouts to print', hint: 'Ready to copy before first period', checked: true },
-      { item: 'deck', label: 'Slide deck link', hint: 'Opens without a YAWP! login', checked: true },
+      { item: 'deck', label: 'Slide deck link', hint: 'Opens without a Yawp! login', checked: true },
       { item: 'roster', label: 'Class roster', hint: 'Names only, for attendance', checked: false },
     ],
   },
@@ -55,7 +55,7 @@ export const AUDIENCE_SETUP: Record<Exclude<ShareAudience, 'student'> | 'student
     items: [
       { item: 'summary', label: 'What we did in class', hint: 'Written for a student who missed it', checked: true },
       { item: 'handouts', label: 'Handouts', hint: 'To print or fill in', checked: true },
-      { item: 'deck', label: 'Slide deck link', hint: 'Opens without a YAWP! login', checked: true },
+      { item: 'deck', label: 'Slide deck link', hint: 'Opens without a Yawp! login', checked: true },
       { item: 'daily-pages', label: 'The writing prompt', hint: 'So they can do it too', checked: true },
     ],
   },

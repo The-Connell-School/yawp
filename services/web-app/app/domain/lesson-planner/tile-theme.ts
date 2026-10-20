@@ -1,5 +1,5 @@
 /**
- * Shared by the YAWP! tile deck template's two renderers — PowerPoint and
+ * Shared by the Yawp! tile deck template's two renderers — PowerPoint and
  * Present — so the two say the same thing and wear the same colours (Brian's
  * review, E1; run 2, C3).
  */
@@ -48,7 +48,7 @@ export function css(color: keyof typeof TILE_COLORS): string {
 
 /**
  * The mark at the foot of each slide (Brian's run 2, item 15: Brian and Kevin
- * to decide). `wordmark` is today's small YAWP!; `faded` is Brian's "phantom"
+ * to decide). `wordmark` is today's small Yawp!; `faded` is Brian's "phantom"
  * idea, the wordmark very transparent; `none` leaves it off.
  */
 export type TileFooterMark = 'wordmark' | 'faded' | 'none';

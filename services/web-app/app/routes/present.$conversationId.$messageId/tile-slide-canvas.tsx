@@ -1,5 +1,5 @@
 /**
- * One slide in the YAWP! tile template (Brian's review, E1), matching the
+ * One slide in the Yawp! tile template (Brian's review, E1), matching the
  * PowerPoint export so Present, PDF and PowerPoint agree.
  *
  * Cream page, raised white tiles with a faint orange border, a mono eyebrow
@@ -83,7 +83,7 @@ export function TileSlideCanvas({
             opacity: footerMark === 'faded' ? 0.18 : 1,
           }}
         >
-          YAWP!
+          Yawp!
         </span>
       ) : null}
       {number ? (

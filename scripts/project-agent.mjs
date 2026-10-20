@@ -9,7 +9,7 @@ const CONFIG_FILE = path.join(ROOT, ".worktree-local", "config.env");
 const DEV_PID_FILE = path.join(ROOT, ".worktree-local", "dev.pid");
 const DEV_LOG_FILE = path.join(ROOT, ".worktree-local", "dev.log");
 const MIN_NODE_MAJOR = 22;
-const MIN_BUN_VERSION = [1, 3, 1];
+const MIN_BUN_VERSION = [1, 4, 3];
 const MAX_CAPTURE_BYTES = 64 * 1024;
 
 function cleanVersion(value) {
@@ -375,7 +375,7 @@ function runTestProfile(profile, { json }) {
   if (chosen === "docs") {
     const result = execute("git", ["diff", "--check", process.env.RECORD_PROOF_BASE_SHA ? `${process.env.RECORD_PROOF_BASE_SHA}..HEAD` : "HEAD"], { json, env: selected.env, timeout: 30000 });
     results.push({ id: "diff-check", ...result });
-  } else if (chosen === "project-cli") run("project-cli", ["test", "./scripts/project-agent.test.js", "./scripts/deployment-contract.test.ts"], 120000);
+  } else if (chosen === "project-cli") run("project-cli", ["test", "--max-concurrency=2", "./scripts/project-agent.test.js", "./scripts/deployment-contract.test.ts", "./scripts/preview/demo-mail-config.test.ts"], 120000);
   else if (chosen === "internal-fresh-migrations") {
     const local = requireConfig();
     results.push({id: chosen, ...execute(selected.bun, ["run", "packages/prisma/scripts/internal-fresh-migrations.ts"], {json, env: {...selected.env, INTERNAL_DIRECTORY_TEST_DATABASE_URL: local.DATABASE_URL}, timeout: 240000})});
@@ -475,7 +475,7 @@ function runTestProfile(profile, { json }) {
   }
   else if (chosen === "internal-content-validation") runWebApp("internal-content-validation", ["test", "app/domain/rubrics/rubric-promotion.test.ts"]);
   else if (chosen === "internal-assignment-type-writes") {
-    for (const file of ["app/utils/getLLMCompletion/getLLMCompletion.test.ts", "app/utils/internal-grading-workspace.server.test.ts", "app/routes/api.domain.assignment-type-evaluations/route.test.ts", "app/routes/api.domain.grading-assistant-test/route.test.ts", "app/routes/api.domain.grading-assistant-benchmark/route.test.ts", "app/routes/app.admin.assignment-types.$id_.prompt/route.test.ts", "app/utils/internal-owner-invitations.server.test.ts", "app/utils/preview-access.server.test.ts", "app/routes/app.admin.organizations.$id/route.test.ts", "app/utils/internal-assignment-type-module-writes.server.test.ts", "app/routes/api.model.assignment-module-session/route.test.ts", "app/routes/api.model.assignment-module-session.$id/route.test.ts", "app/routes/api.domain.tutor-response/route.test.ts", "app/routes/app_.documents_.$id/route.test.ts", "app/utils/internal-assignment-type-writes.server.test.ts", "app/utils/internal-assignment-types.server.test.ts", "app/utils/internal-admin-organizations.server.test.ts", "app/routes/app.admin.assignment-types.new/route.test.ts", "app/routes/app.admin.assignment-types.$id/route.test.ts", "app/routes/app.admin.assignment-types.$id_.modules_.$moduleId/route.test.ts"])
+    for (const file of ["app/utils/getLLMCompletion/getLLMCompletion.test.ts", "app/utils/internal-grading-workspace.server.test.ts", "app/routes/api.domain.assignment-type-evaluations/route.test.ts", "app/routes/api.domain.grading-assistant-test/route.test.ts", "app/routes/api.domain.grading-assistant-benchmark/route.test.ts", "app/routes/app.admin.assignment-types.$id_.prompt/route.test.ts", "app/utils/internal-owner-invitations.server.test.ts", "app/domain/organizations/owner-invitations.server.test.ts", "app/utils/email-delivery-error.server.test.ts", "app/utils/email.server.test.ts", "app/utils/preview-access.server.test.ts", "app/routes/app.admin.organizations.$id/route.test.ts", "app/utils/internal-assignment-type-module-writes.server.test.ts", "app/routes/api.model.assignment-module-session/route.test.ts", "app/routes/api.model.assignment-module-session.$id/route.test.ts", "app/routes/api.domain.tutor-response/route.test.ts", "app/routes/app_.documents_.$id/route.test.ts", "app/utils/internal-assignment-type-writes.server.test.ts", "app/utils/internal-assignment-types.server.test.ts", "app/utils/internal-admin-organizations.server.test.ts", "app/routes/app.admin.assignment-types.new/route.test.ts", "app/routes/app.admin.assignment-types.$id/route.test.ts", "app/routes/app.admin.assignment-types.$id_.modules_.$moduleId/route.test.ts"])
       runWebApp(file, ["test", "--max-concurrency=2", file]);
     run("instruction-fixtures", ["test", "--max-concurrency=2", "./packages/prisma/scripts/seed-local-dev.test.ts", "./packages/prisma/scripts/exit-ticket-fixture.test.ts"]);
   }
@@ -729,7 +729,7 @@ function runTestProfile(profile, { json }) {
     });
   }
   else if (chosen === "free-tier-inapp-unit") {
-    for (const file of ["app/domain/feature-flags/feature-flags.test.ts", "app/domain/feature-flags/feature-flags.server.test.ts", "app/utils/internal-feature-flags-http.server.test.ts", "app/domain/feature-flags/is-free-tier-enabled.server.test.ts", "app/domain/free-tier/inapp-usage.test.ts", "app/domain/free-tier/inapp-usage.server.test.ts", "app/utils/grading-limit-status.server.test.ts", "app/utils/assignment-quota.server.test.ts", "app/utils/entitlements.server.test.ts", "app/domain/free-tier/class-seat-cap.test.ts", "app/utils/lesson-planner/lesson-planner-quota.server.test.ts", "app/routes/app/route.test.tsx", "app/components/assignments/assignment-creation-sheet.test.tsx"]) runWebApp(file, ["test", file]);
+    for (const file of ["app/domain/feature-flags/feature-flags.test.ts", "app/domain/feature-flags/feature-flags.server.test.ts", "app/utils/internal-feature-flags-http.server.test.ts", "app/domain/feature-flags/is-free-tier-enabled.server.test.ts", "app/domain/free-tier/inapp-usage.test.ts", "app/domain/free-tier/inapp-usage.server.test.ts", "app/domain/free-tier/site-license-locked-assignment-tiles.test.ts", "app/utils/grading-limit-status.server.test.ts", "app/utils/assignment-quota.server.test.ts", "app/utils/entitlements.server.test.ts", "app/domain/free-tier/class-seat-cap.test.ts", "app/utils/lesson-planner/lesson-planner-quota.server.test.ts", "app/routes/app/route.test.tsx", "app/components/site-license-locked-assignment-tile.test.tsx", "app/components/free-account-usage.locked-tiles.test.tsx", "app/components/assignments/assignment-creation-sheet.test.tsx"]) runWebApp(file, ["test", file]);
   }
   else if (chosen === "free-tier-inapp-browser") {
     const local = requireConfig();

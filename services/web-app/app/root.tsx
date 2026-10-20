@@ -55,7 +55,7 @@ import {
 import {
   getPreviewAccessSeat,
   isIsolatedPreviewSeatMode,
-  isPreviewAccessGateEnabled,
+  isPreviewDevLoginAccessCodeRequired,
   previewAccessMiddleware,
 } from './utils/preview-access.server.ts';
 import { uaPartnerMiddleware } from './utils/ua-partner.server.ts';
@@ -129,7 +129,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         ENV: getEnv(),
         bannerWarning: null,
         localDevQuickLogin: { enabled: false },
-        previewAccessGateEnabled: isPreviewAccessGateEnabled(),
+        previewAccessGateEnabled: isPreviewDevLoginAccessCodeRequired(),
         previewAccessSeat: null,
         blackboardLtiMockEnabled: false,
         lessonPlannerEnabled: false,
@@ -153,7 +153,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     desc: 'getUserId in root',
   });
   const { prisma } = await import('./utils/db.server.ts');
-  const previewAccessSeat = isPreviewAccessGateEnabled()
+  const previewAccessSeat = isPreviewDevLoginAccessCodeRequired()
     ? await getPreviewAccessSeat(request)
     : null;
   const membershipWhere = userId
@@ -260,7 +260,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       localDevQuickLogin: {
         enabled: localDevQuickLoginEnabled,
       },
-      previewAccessGateEnabled: isPreviewAccessGateEnabled(),
+      previewAccessGateEnabled: isPreviewDevLoginAccessCodeRequired(),
       previewAccessSeat,
       blackboardLtiMockEnabled: isBlackboardLtiMockUiEnabled(),
       impersonation,

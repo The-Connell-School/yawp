@@ -33,7 +33,7 @@ describe("summarizeLessonPlan (Brian's run 2, D1)", () => {
     expect(result?.steps).toHaveLength(2);
     expect(result?.overview).toBe('Students enter the book.');
     expect(PLAN_SUMMARY_SYSTEM).toContain('Never reproduce the full text');
-    expect(PLAN_SUMMARY_SYSTEM).toContain('YAWP!');
+    expect(PLAN_SUMMARY_SYSTEM).toContain('Yawp!');
   });
 
   test('a reply with the wrong number of steps is not used', async () => {

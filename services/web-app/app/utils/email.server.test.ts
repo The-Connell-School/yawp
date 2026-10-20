@@ -75,6 +75,31 @@ describe('sendEmail', () => {
 		}
 	});
 
+  test('create and resend owner templates render through the same Resend transport without a real send', async () => {
+    process.env.EMAIL_PROVIDER = 'resend';
+    process.env.RESEND_API_KEY = 're_fixture_only';
+    process.env.RESEND_FROM_EMAIL = 'fixture@example.test';
+    const { issueOwnerInvitation } = await import('~/domain/organizations/owner-invitations.server');
+    const db = {
+      invitation: { create: async ({ data }: any) => ({ id: 'fixture-invitation', ...data }) },
+    } as unknown as Parameters<typeof issueOwnerInvitation>[0];
+    for (const options of [{ expiresInDays: 14, note: 'Fixture note' }, { expiresInDays: 7 }]) {
+      const result = await issueOwnerInvitation(db, {
+        organization: { id: 'fixture-org', name: 'Fixture organization' },
+        email: 'owner@example.test', origin: 'https://example.test', ...options,
+      });
+      expect(result.id).toBe('fixture-invitation');
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    for (const call of fetchMock.mock.calls) {
+      expect(call[0]).toBe('https://api.resend.com/emails');
+      const payload = JSON.parse(call[1].body);
+      expect(payload.from).toBe('fixture@example.test');
+      expect(payload.to).toBe('owner@example.test');
+      expect(payload.html).toContain('Accept invitation');
+    }
+  });
+
   test('durable approval delivery disables SDK retries without changing legacy callers', async () => {
     process.env.EMAIL_PROVIDER = 'ses';
     sesSend.mockResolvedValue({ MessageId: 'captured' });
@@ -177,7 +202,7 @@ describe('sendEmail', () => {
 
 		const result = await sendEmail({
 			to: 'admin@school.edu',
-			subject: 'Approve YAWP',
+			subject: 'Approve Yawp!',
 			html: '<p>test</p>',
 			text: 'test',
 		});

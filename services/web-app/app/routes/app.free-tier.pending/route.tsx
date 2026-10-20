@@ -190,11 +190,18 @@ export default function FreeTierPendingRoute() {
         footer={<FreeTierSignOut />}
       >
         {terminal ? (
-          <p className="text-sm text-muted-foreground">
-            {app.status === 'APPROVED'
-              ? 'You can start teaching with YAWP.'
-              : 'Questions? Email support@yawp.school.'}
-          </p>
+          <>
+            <p className="text-sm text-muted-foreground">
+              {app.status === 'APPROVED'
+                ? "You're all set to start teaching with Yawp!"
+                : 'Questions? Email support@yawp.school.'}
+            </p>
+            {app.status === 'APPROVED' ? (
+              <FreeTierButton asChild>
+                <Link to="/app">Start teaching</Link>
+              </FreeTierButton>
+            ) : null}
+          </>
         ) : (
           <>
             <p className="text-sm text-muted-foreground">
@@ -209,7 +216,7 @@ export default function FreeTierPendingRoute() {
                 'Account created',
                 'Request sent',
                 app?.status === 'MANUAL_REVIEW'
-                  ? 'YAWP review'
+                  ? 'Yawp! review'
                   : `${current?.adminName ?? 'Your administrator'} approves`,
                 'Start teaching',
               ]}
@@ -223,7 +230,7 @@ export default function FreeTierPendingRoute() {
                 />
                 <p className="text-sm text-muted-foreground">
                   Email your administrator directly to let them know why you
-                  would like to use YAWP with your class.
+                  would like to use Yawp! with your class.
                 </p>
                 <a
                   className="inline-flex h-11 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
@@ -237,8 +244,8 @@ export default function FreeTierPendingRoute() {
                 </a>
                 <p className="text-xs text-muted-foreground">
                   {current.autoRemindersStopped
-                    ? 'Our team will follow up on your request.'
-                    : 'We will remind your administrator weekly, up to four times, and keep you posted.'}
+                    ? 'Weekly reminders have stopped. You can pick a different administrator below or contact support@yawp.school for help.'
+                    : 'We will remind your administrator weekly, up to three times, and keep you posted.'}
                 </p>
               </>
             ) : null}
@@ -280,6 +287,23 @@ export default function FreeTierPendingRoute() {
     );
   }
 
+  if (app?.status === 'APPROVED') {
+    return (
+      <FreeTierAuthCard
+        title="Your classroom is approved"
+        icon={<Clock />}
+        footer={<FreeTierSignOut />}
+      >
+        <p className="text-sm text-muted-foreground">
+          You&apos;re all set to start teaching with Yawp!
+        </p>
+        <FreeTierButton asChild>
+          <Link to="/app">Start teaching</Link>
+        </FreeTierButton>
+      </FreeTierAuthCard>
+    );
+  }
+
   return (
     <FreeTierAuthCard
       title={
@@ -308,7 +332,7 @@ export default function FreeTierPendingRoute() {
           'Account created',
           'Request sent',
           app?.status === 'MANUAL_REVIEW'
-            ? 'YAWP review'
+            ? 'Yawp! review'
             : `${adminName} approves`,
           'Start teaching',
         ]}

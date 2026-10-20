@@ -39,7 +39,7 @@ export const STUDENT_VERSION_SYSTEM = [
   'A framing note becomes a one-page background sheet: three to six short points and one question to think about.',
   'A closing or exit ticket becomes a short slip: the question, and nothing else.',
   'At most 200 words. Markdown: a short heading is optional, then the page. Return only the page.',
-  'Write the product name as YAWP!.',
+  'Write the product name as Yawp!.',
 ].join('\n');
 
 export function studentVersionUserMessage(step: Pick<StackStep, 'title' | 'type' | 'minutes' | 'content'>): string {

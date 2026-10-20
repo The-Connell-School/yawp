@@ -44,6 +44,12 @@ export function measurePasteProvenance(root: HTMLElement): PasteMeasurement {
   return result;
 }
 
+/** Selecting this id highlights marked text that predates per-event links
+ * (marks written before stable paste event ids existed). Such text can't be
+ * attributed to one specific earlier event, only shown as a group.
+ */
+export const UNLINKED_PASTE_EVENT_ID = '__unlinked__';
+
 /** Ranges point at existing text; selecting a report must never edit the
  * ProseMirror DOM (even presentation attributes can trigger its repair loop).
  */
@@ -60,7 +66,9 @@ export function getPasteEventRanges(
     if (
       !mark ||
       !root.contains(mark) ||
-      mark.getAttribute('data-paste-event-id') !== eventId ||
+      (eventId === UNLINKED_PASTE_EVENT_ID
+        ? mark.hasAttribute('data-paste-event-id')
+        : mark.getAttribute('data-paste-event-id') !== eventId) ||
       !node.textContent
     )
       continue;

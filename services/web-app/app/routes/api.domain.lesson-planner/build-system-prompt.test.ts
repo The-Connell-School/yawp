@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { rubricCategories } from '~/domain/grading/rubric';
-import { SLIDE_LAYOUTS } from '~/domain/lesson-planner/slide-deck';
+import { CLASSIC_SLIDE_LAYOUTS } from '~/domain/lesson-planner/slide-deck';
 import { MATERIAL_KINDS } from '~/domain/lesson-planner/lesson-material';
 import { UNIT_PLAN_FENCE } from '~/domain/lesson-planner/unit-plan';
 import { EXIT_TICKET_FENCE } from '~/domain/lesson-planner/exit-ticket-block';
@@ -307,8 +307,9 @@ describe('buildLessonPlannerSystemPrompt — slide decks', () => {
     expect(prompt.toLowerCase()).toContain('json');
   });
 
-  test('documents every layout the renderer can draw', () => {
-    for (const layout of SLIDE_LAYOUTS) {
+  // The gallery templates are taught only with the gallery deck on.
+  test('documents every classic layout the renderer can draw', () => {
+    for (const layout of CLASSIC_SLIDE_LAYOUTS) {
       expect(prompt).toContain(layout);
     }
   });

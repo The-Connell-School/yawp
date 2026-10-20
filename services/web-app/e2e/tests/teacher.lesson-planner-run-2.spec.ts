@@ -79,7 +79,7 @@ const DECK = {
     { layout: 'title', title: 'The Things They Carried', subtitle: 'Day 1', speakerNotes: 'Let it sit.', minutes: 1 },
     { layout: 'prompt', title: 'Class starter', body: 'Write about something you carry every day.', speakerNotes: 'Eight minutes.', minutes: 8 },
     { layout: 'statement', title: 'Hold this question', body: 'Why does a list feel like the right form?', speakerNotes: 'Leave it up.', minutes: 5 },
-    { layout: 'closing', title: 'Before you go', body: 'Exit ticket: open it in YAWP!', speakerNotes: 'Seven minutes.', minutes: 7 },
+    { layout: 'closing', title: 'Before you go', body: 'Exit ticket: open it in Yawp!', speakerNotes: 'Seven minutes.', minutes: 7 },
   ],
 };
 
@@ -346,7 +346,7 @@ test.describe("Lesson Planner — Brian's second run", () => {
   });
 
   test.describe('A5, A6: writing pieces become assignments; codes stay hidden', () => {
-    test('a filed class starter says what it is, offers Create in YAWP!, and shows no code', async ({
+    test('a filed class starter says what it is, offers Create in Yawp!, and shows no code', async ({
       page,
       signIn,
       e2eContext,
@@ -369,7 +369,7 @@ test.describe("Lesson Planner — Brian's second run", () => {
       await expect(page.locator('body')).not.toContainText('FW-021');
       await expect(section).toContainText('Class Starter');
       const create = section.getByTestId('stack-create-assignment');
-      await expect(create).toHaveText('Create this class starter in YAWP!');
+      await expect(create).toHaveText('Create this class starter in Yawp!');
       await expect(create).toHaveAttribute('href', /\/app\/assignment-types\/.+newPrompt=Write/);
     });
 

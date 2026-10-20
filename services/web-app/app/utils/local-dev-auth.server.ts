@@ -5,11 +5,9 @@ import { isLocalDatabaseUrl } from '../../../../packages/prisma/scripts/local-de
  *
  * Two ways to earn it, and both fail closed:
  *
- * 1. A deployed environment with the in-app preview access gate enabled. The root route
- *    middleware reads PREVIEW_ACCESS_GATE itself and blocks every descendant loader,
- *    action, and API/resource route before it runs (except /api/healthcheck and the gate
- *    form). The flag is therefore the enforcement switch, not a claim about a separate
- *    proxy, so it cannot enable role-swap without also putting the gate in front of it.
+ * 1. A deployed preview or demo box with PREVIEW_ACCESS_GATE=on. PR previews also run the
+ *    site-wide access gate in root middleware; demo uses the same flag only to guard the
+ *    beaker dev-login endpoints behind the preview access cookie.
  * 2. A developer's own machine: NODE_ENV=development against a local database.
  *
  * Raw production-dump data is excluded either way. Sanitized production data is a distinct

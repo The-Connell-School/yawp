@@ -4,7 +4,7 @@
  *
  * The old export reproduced everything in the stack — every framing in full,
  * every prompt, the handouts, the slide list — and ran for pages. Brian's
- * model is the YAWP! pre-writing lesson plan: Overview, Goals, Teacher will,
+ * model is the Yawp! pre-writing lesson plan: Overview, Goals, Teacher will,
  * Materials, numbered Instructions, a closing. Each part of the lesson gets a
  * short summary of what happens and what it is for; the full texts live in the
  * handouts and the deck. Only what is in the stack appears, in its order.
@@ -75,7 +75,7 @@ const DEFAULT_PURPOSE: Record<string, string> = {
     'Shows you, before they leave, who has today’s idea and who needs it again.',
   notes: 'Gives students the context they need to enter today’s reading.',
   practice:
-    'Practice on one sentence-level skill, worked in YAWP! with results for you.',
+    'Practice on one sentence-level skill, worked in Yawp! with results for you.',
   handout: 'What students hold and write on while they work.',
   sample: 'A model students can see before they try it themselves.',
 };
@@ -192,8 +192,8 @@ function expand(entry: LessonPlanEntry): Expanded[] {
       const named = afterLabel(title);
       const material =
         entry.kind === 'exit-ticket'
-          ? 'Exit ticket (YAWP! assignment)'
-          : `${STEP_TITLE[entry.kind]} (YAWP! assignment)${named ? `: ${named}` : ''}`;
+          ? 'Exit ticket (Yawp! assignment)'
+          : `${STEP_TITLE[entry.kind]} (Yawp! assignment)${named ? `: ${named}` : ''}`;
       return [
         {
           step: {
@@ -219,7 +219,7 @@ function expand(entry: LessonPlanEntry): Expanded[] {
           },
           material:
             entry.kind === 'practice'
-              ? `${title} (YAWP! assignment)`
+              ? `${title} (Yawp! assignment)`
               : `${title} (${entry.kind === 'sample' ? 'sample' : 'handout'})`,
         },
       ];

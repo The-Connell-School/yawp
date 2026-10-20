@@ -1,7 +1,7 @@
 /**
  * What each moment of a lesson is (Kevin's stack page redesign, "Writing
  * time"): its type and color. Whether a step is writing is a separate thing,
- * set from what it is tied to in YAWP!, never by the teacher.
+ * set from what it is tied to in Yawp!, never by the teacher.
  */
 
 export const STEP_TYPES = [
@@ -52,7 +52,7 @@ export function parseStepType(value: unknown): StepType | null {
   return null;
 }
 
-/** Kinds that are always a YAWP! writing assignment. */
+/** Kinds that are always a Yawp! writing assignment. */
 const WRITING_KINDS = new Set(['class-starter', 'daily-pages', 'exit-ticket', 'thesis-module']);
 
 const TITLE_TYPES: [RegExp, StepType][] = [
@@ -96,7 +96,7 @@ export function stepTypeFor({
 }
 
 /**
- * A step counts as writing when it is tied to a YAWP! writing assignment: by
+ * A step counts as writing when it is tied to a Yawp! writing assignment: by
  * its kind (class starter, Daily Pages, exit ticket, Thesis Essay module), or
  * because one was created from it. Never set by the teacher.
  */
@@ -112,7 +112,7 @@ export function isWritingStep({
   if (WRITING_KINDS.has(kind)) return true;
   if (yawpAssignmentId) return true;
   // A quick write the planner tagged as Daily Pages or a Thesis Essay module
-  // is a YAWP! writing assignment in waiting.
+  // is a Yawp! writing assignment in waiting.
   return stepType === 'daily_pages' || stepType === 'thesis_essay';
 }
 

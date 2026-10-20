@@ -1671,7 +1671,7 @@ model LessonPlanMaterial {
   label           String?
   /// Null: derived (student-facing or writing steps have a handout).
   hasHandout      Boolean?
-  /// The YAWP! assignment created from this step ("Created in YAWP! · Open").
+  /// The Yawp! assignment created from this step ("Created in Yawp! · Open").
   yawpAssignmentId String?
   yawpHref         String?
   yawpCreatedAt    DateTime? @db.Timestamptz(6)

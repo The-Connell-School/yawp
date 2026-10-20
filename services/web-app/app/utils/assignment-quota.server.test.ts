@@ -16,10 +16,10 @@ describe('assignment-quota helpers', () => {
   test('marks out-of-bundle free choices unavailable while preserving paid behavior', () => {
     expect(
       buildAssignmentCreationQuotaFields('FREE_CLASSROOM', null, 0)
-    ).toEqual({ unavailableReason: 'Available with a paid plan.' });
+    ).toEqual({ unavailableReason: 'Available with a site license.' });
     expect(
       buildAssignmentCreationQuotaFields('FREE_CLASSROOM', 'essay', 0)
-    ).toEqual({ unavailableReason: 'Available with a paid plan.' });
+    ).toEqual({ unavailableReason: 'Available with a site license.' });
     expect(buildAssignmentCreationQuotaFields('SCHOOL', 'essay', 0)).toEqual(
       {}
     );
@@ -81,6 +81,40 @@ describe('enforceFreeClassroomAssignmentCreateInTransaction', () => {
         assignmentTypeId: 'type-prewriting',
       })
     ).rejects.toBeInstanceOf(FreeClassroomAssignmentQuotaError);
+  });
+
+  test('rejects premium assignmentTypeId on a free org with kind_not_allowed', async () => {
+    const tx = {
+      class: {
+        findMany: async () => [
+          {
+            id: 'class-free',
+            school: {
+              organization: {
+                id: 'free-org',
+                plan: 'FREE_CLASSROOM',
+              },
+            },
+          },
+        ],
+      },
+      assignmentType: {
+        findUnique: async () => ({ kind: 'daily_pages' }),
+      },
+      organization: { findUnique: async () => ({ plan: 'FREE_CLASSROOM' }) },
+      freeTierApplication: { findFirst: async () => null },
+      $executeRawUnsafe: async () => {},
+      freeClassroomAssignmentKindUsage: {
+        findUnique: async () => ({ lifetimeCreatedCount: 0 }),
+      },
+    } as unknown as Prisma.TransactionClient;
+
+    await expect(
+      enforceFreeClassroomAssignmentCreateInTransaction(tx, {
+        classIds: ['class-free'],
+        assignmentTypeId: 'type-daily-pages',
+      })
+    ).rejects.toMatchObject({ code: 'kind_not_allowed', kind: 'daily_pages' });
   });
 
   test('skips quota work when deploy-target org is SCHOOL', async () => {

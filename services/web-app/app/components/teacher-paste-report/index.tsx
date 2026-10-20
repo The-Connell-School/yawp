@@ -3,6 +3,7 @@ import { CircleCheck, TriangleAlert } from 'lucide-react';
 import {
   measurePasteProvenance,
   getPasteEventRanges,
+  UNLINKED_PASTE_EVENT_ID,
   type PasteMeasurement,
 } from './provenance';
 import { PasteHighlightOverlay } from './highlight-overlay';
@@ -53,6 +54,11 @@ function AuthorizedTeacherPasteReport({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [measurement, setMeasurement] = useState<PasteMeasurement | null>(null);
   const hasPastedText = (measurement?.pastedCharacters ?? 0) > 0;
+  const hasUnlinkedText = (measurement?.unlinkedCharacters ?? 0) > 0;
+  // Earlier (pre-link) events can't point at their own text, but marked text
+  // without an event link still exists; highlight that group instead.
+  const highlightIdFor = (id: string | null) =>
+    id && !id.startsWith('paste_') ? UNLINKED_PASTE_EVENT_ID : id;
   const hasRecordedEvents = (report?.events.length ?? 0) > 0;
   const hasPasteActivity = hasPastedText || hasRecordedEvents;
   const eventQuerySucceeded = report != null || forbidden;
@@ -141,7 +147,7 @@ function AuthorizedTeacherPasteReport({
     if (!contentRoot) return;
     onSelectEvent?.();
     requestAnimationFrame(() => {
-      const ranges = getPasteEventRanges(contentRoot, id);
+      const ranges = getPasteEventRanges(contentRoot, highlightIdFor(id));
       const node = ranges[0]?.startContainer ?? null;
       // Graceful no-op when an event has no surviving linked text.
       if (node && node.parentElement) {
@@ -160,7 +166,7 @@ function AuthorizedTeacherPasteReport({
     <div className="flex h-full min-h-0 w-full flex-col">
       <PasteHighlightOverlay
         contentRoot={contentRoot}
-        eventId={open && !forbidden ? selectedId : null}
+        eventId={open && !forbidden ? highlightIdFor(selectedId) : null}
       />
       {!forbidden ? (
         <div
@@ -324,7 +330,7 @@ function AuthorizedTeacherPasteReport({
                       ? (() => {
                           try {
                             const u = new URL(event.sourceUrl);
-                            return u.hostname.replace(/^www\\./, '');
+                            return u.hostname.replace(/^www\./, '');
                           } catch {
                             return null;
                           }
@@ -336,14 +342,16 @@ function AuthorizedTeacherPasteReport({
                         type="button"
                         data-testid={`paste-event-${event.id}`}
                         aria-pressed={selectedId === event.id}
-                        disabled={!surviving || !linked}
+                        disabled={linked ? !surviving : !hasUnlinkedText}
                         onClick={() => select(event.id)}
                         className={cn(
                           'w-full rounded-md border p-3 text-left text-sm transition disabled:cursor-default',
                           selectedId === event.id
                             ? 'border-amber-500 bg-amber-50'
                             : 'border-border bg-background hover:bg-muted/40',
-                          !surviving && 'opacity-80'
+                          !surviving &&
+                            !(!linked && hasUnlinkedText) &&
+                            'opacity-80'
                         )}
                       >
                         <div className="flex items-start justify-between gap-3">
@@ -351,7 +359,9 @@ function AuthorizedTeacherPasteReport({
                             <TriangleAlert
                               className={cn(
                                 'mt-0.5 h-4 w-4 shrink-0',
-                                surviving ? 'text-amber-600' : 'text-muted-foreground'
+                                surviving || (!linked && hasUnlinkedText)
+                                  ? 'text-amber-600'
+                                  : 'text-muted-foreground'
                               )}
                               aria-hidden="true"
                             />
@@ -377,7 +387,9 @@ function AuthorizedTeacherPasteReport({
                               ? 'Open the document text to locate this event'
                               : linked
                                 ? 'No linked text remains in this version (removed or tracking unavailable)'
-                                : 'Earlier event; position unavailable'}
+                                : hasUnlinkedText
+                                  ? `Earlier event — show ${measurement.unlinkedCharacters.toLocaleString()} earlier marked characters in document`
+                                  : 'Earlier event; position unavailable'}
                         </div>
                       </button>
                     </li>

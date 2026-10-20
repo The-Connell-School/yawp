@@ -120,7 +120,12 @@ test.describe.serial('Free tier guided tour', () => {
         await page.getByLabel('Class name').fill('AP English 11');
         await page.getByLabel('Grade').selectOption('11');
         await page.getByRole('button', { name: 'Continue', exact: true }).click();
-        await expect(page.getByRole('heading', { name: 'Ask your administrator' })).toBeVisible();
+        await expect(
+          page.getByRole('heading', {
+            name: 'Who approves Yawp! for your school?',
+            exact: true,
+          })
+        ).toBeVisible();
         await expect(page.getByTestId('guided-tour-welcome')).toHaveCount(0);
         await shot(page, `onboarding-${width}-administrator`);
         expect(await tourOutcome('dashboard')).toBeNull();
@@ -159,7 +164,7 @@ test.describe.serial('Free tier guided tour', () => {
     await logInAsFreeTeacher(page);
     await page.goto('/app');
 
-    const welcome = page.getByRole('dialog', { name: /Welcome to YAWP/i });
+    const welcome = page.getByRole('dialog', { name: /Welcome to Yawp!/i });
     await expect(welcome).toBeVisible();
     await capturePair(page, 'welcome');
     await page.setViewportSize({ width: 390, height: 844 });
@@ -199,7 +204,7 @@ test.describe.serial('Free tier guided tour', () => {
     // Finished tours stay finished on the next visit.
     await page.reload();
     await expect(
-      page.getByRole('dialog', { name: /Welcome to YAWP/i })
+      page.getByRole('dialog', { name: /Welcome to Yawp!/i })
     ).toHaveCount(0);
   });
 
@@ -240,7 +245,7 @@ test.describe.serial('Free tier guided tour', () => {
     try {
       await logInAsFreeTeacher(nextPage);
       await expect(
-        nextPage.getByRole('dialog', { name: /Welcome to YAWP/i })
+        nextPage.getByRole('dialog', { name: /Welcome to Yawp!/i })
       ).toBeVisible();
       await nextPage.goto('/app/my-classes');
       await expect(
@@ -399,7 +404,7 @@ test.describe.serial('Free tier guided tour', () => {
     await expect.poll(() => tourOutcome('dashboard')).toBe('dismissed');
     await page.reload();
     await expect(
-      page.getByRole('dialog', { name: /Welcome to YAWP/i })
+      page.getByRole('dialog', { name: /Welcome to Yawp!/i })
     ).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Settings' }).click();
@@ -407,7 +412,7 @@ test.describe.serial('Free tier guided tour', () => {
     await page.getByRole('button', { name: 'Restart all tours' }).click();
 
     await expect(
-      page.getByRole('dialog', { name: /Welcome to YAWP/i })
+      page.getByRole('dialog', { name: /Welcome to Yawp!/i })
     ).toBeVisible();
     await expect.poll(() => tourOutcome('dashboard')).toBeNull();
     await shot(page, 'restart-welcome');

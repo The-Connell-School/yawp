@@ -1,5 +1,5 @@
 /**
- * "YAWP" always appears as "YAWP!" (Brian's run 2, item 18), everywhere the
+ * "YAWP" always appears as "Yawp!" (Brian's run 2, item 18), everywhere the
  * planner writes or tells the model to write it.
  */
 import { describe, expect, test } from 'bun:test';
@@ -22,7 +22,7 @@ function unbranded(text: string): string[] {
     .filter((line) => UNBRANDED.test(line.replace(/`[^`]*`/g, '')));
 }
 
-describe("YAWP! everywhere (Brian's run 2, item 18)", () => {
+describe("Yawp! everywhere (Brian's run 2, item 18)", () => {
   test('the system prompt, every variant', () => {
     for (const intakeV2 of [false, true]) {
       for (const exitTicketsAvailable of [false, true]) {
@@ -50,7 +50,7 @@ describe("YAWP! everywhere (Brian's run 2, item 18)", () => {
 
   test('says how to write the name', () => {
     const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'X' });
-    expect(prompt).toContain('The product is written YAWP! (capitals, exclamation point), every time');
+    expect(prompt).toContain('The product is written Yawp! (capitals, exclamation point), every time');
   });
 
   test('starter prompts, progress labels and notes the model reads', () => {

@@ -2,7 +2,7 @@ SET lock_timeout = '5s';
 
 -- Lesson Planner stack page (Brian's run 3, Kevin's stack page redesign):
 -- each step carries its own minutes, type, label and handout state, and
--- remembers the YAWP! assignment created from it. Additive and nullable:
+-- remembers the Yawp! assignment created from it. Additive and nullable:
 -- null falls back to what the app read out of the title before.
 ALTER TABLE "LessonPlanMaterial" ADD COLUMN "minutes" INTEGER;
 ALTER TABLE "LessonPlanMaterial" ADD COLUMN "stepType" TEXT;

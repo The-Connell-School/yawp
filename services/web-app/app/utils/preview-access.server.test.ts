@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import {
   PREVIEW_ACCESS_COOKIE_NAME,
+  FREE_TIER_ACCESS_COOKIE_NAME,
+  FREE_TIER_ACCESS_MAX_AGE,
+  createFreeTierAccessCookie,
+  type FreeTierPreviewDependencies,
   PREVIEW_MASTER_SELECTION_COOKIE_NAME,
   PREVIEW_AUTHORIZED_ACTIVITY_HEADER,
   clearPreviewMasterSelectionCookie,
@@ -30,6 +34,8 @@ const originalEnv = {
   PREVIEW_ACCESS_SEATS: process.env.PREVIEW_ACCESS_SEATS,
   PREVIEW_ACCESS_SECRET: process.env.PREVIEW_ACCESS_SECRET,
   SESSION_SECRET: process.env.SESSION_SECRET,
+  PREVIEW_SLUG: process.env.PREVIEW_SLUG,
+  PR_NUMBER: process.env.PR_NUMBER,
 };
 
 function restore(name: keyof typeof originalEnv) {
@@ -98,6 +104,138 @@ describe('preview access gate', () => {
     restore('PREVIEW_ACCESS_SEATS');
     restore('PREVIEW_ACCESS_SECRET');
     restore('SESSION_SECRET');
+    restore('PREVIEW_SLUG');
+    restore('PR_NUMBER');
+  });
+
+  describe('scoped free-tier access', () => {
+    function dependencies(session: 'anonymous' | 'teacher' | 'denied' = 'anonymous'): FreeTierPreviewDependencies {
+      return {
+        acquisition: mock(async (token) => token === 'valid-event' ? { tokenId: 'event-1' } : null),
+        signed: mock(async (token, purpose) => token === `valid-${purpose}` ? { tokenId: 'link-1', applicationId: 'application-1' } : null),
+        session: mock(async () => session),
+      };
+    }
+    async function enter(path = '/free?t=valid-event', deps = dependencies()) {
+      const guard = mock(async () => null);
+      const next = mock(async () => new Response('flow', { headers: { 'Set-Cookie': 'route-cookie=kept' } }));
+      const middleware = createPreviewAccessMiddleware(guard, repository(), deps);
+      const response = (await middleware(middlewareArgs(request(path)), next))!;
+      return { response, middleware, deps, guard, next, cookie: response.headers.getSetCookie().find(c => c.startsWith(FREE_TIER_ACCESS_COOKIE_NAME + '='))?.split(';', 1)[0] };
+    }
+
+    test('valid acquisition token grants a separate signed cookie without a seat or activity', async () => {
+      const { response, cookie, guard, deps } = await enter();
+      expect(response.status).toBe(200);
+      expect(cookie).toBeDefined();
+      expect(response.headers.getSetCookie()).toContain('route-cookie=kept');
+      const serialized = response.headers.getSetCookie().find(c => c.startsWith(FREE_TIER_ACCESS_COOKIE_NAME + '='))!;
+      for (const flag of ['HttpOnly', 'Secure', 'SameSite=Lax', 'Path=/', `Max-Age=${FREE_TIER_ACCESS_MAX_AGE}`]) expect(serialized).toContain(flag);
+      expect(response.headers.get(PREVIEW_AUTHORIZED_ACTIVITY_HEADER)).toBeNull();
+      expect(response.headers.get('set-cookie')).not.toContain(PREVIEW_ACCESS_COOKIE_NAME + '=');
+      expect(await getPreviewAccessSeat(request('/free', { headers: { cookie: cookie! } }), repository())).toBeNull();
+      expect(guard).not.toHaveBeenCalled();
+      expect(deps.acquisition).toHaveBeenCalledWith('valid-event');
+    });
+
+    test('signed join and both admin links validate the route purpose without consuming', async () => {
+      for (const [path, purpose] of [['/free/join', 'RELEASE'], ['/free/admin/approve', 'ADMIN_APPROVE'], ['/free/admin/not-right-person', 'ADMIN_NOT_RIGHT_PERSON']] as const) {
+        const { response, deps } = await enter(`${path}.data?t=valid-${purpose}`);
+        expect(response.status).toBe(200);
+        expect(deps.signed).toHaveBeenCalledWith(`valid-${purpose}`, purpose);
+        expect(deps.acquisition).not.toHaveBeenCalled();
+      }
+    });
+
+    test('invalid, expired, disabled, exhausted, garbage and missing tokens retain normal rejection', async () => {
+      for (const token of ['invalid', 'expired', 'disabled', 'exhausted', 'garbage', '']) {
+        const { response, next } = await enter('/free?t=' + token);
+        expect(response.status).toBe(302);
+        expect(response.headers.get('location')).toBe('/auth/preview-access?' + new URLSearchParams({ returnTo: '/free?t=' + token }));
+        expect(response.headers.get('set-cookie')).toBeNull();
+        expect(next).not.toHaveBeenCalled();
+      }
+      for (const path of ['/free/join?t=invalid', '/free/admin/approve?t=valid-RELEASE', '/app/admin?t=valid-event', '/free/unknown?t=valid-event']) expect((await enter(path)).response.status).toBe(302);
+    });
+
+    test('cookie covers exact flow paths, data, actions, APIs and manifest reads', async () => {
+      const { middleware, cookie, guard } = await enter();
+      for (const path of ['/free', '/free/', '/free.data', '/free?_data=routes/free._index', '/free/join', '/free/admin/approve', '/free/admin/not-right-person', '/join', '/auth/login', '/auth/logout', '/app/free-tier/onboarding?step=administrator', '/app/free-tier/onboarding.data', '/app/free-tier/pending', '/app/free-tier/preview', '/app/free-tier/status', '/app/free-tier/setup', '/api/free-tier/token', '/api/free-tier/waitlist']) {
+        for (const method of ['GET', 'POST']) {
+          const response = await middleware(middlewareArgs(request(path, { method, headers: { cookie: cookie! } })), async () => new Response('flow'));
+          expect(response?.status).toBe(200);
+          expect(response?.headers.get(PREVIEW_AUTHORIZED_ACTIVITY_HEADER)).toBeNull();
+        }
+      }
+      expect((await middleware(middlewareArgs(request('/__manifest?paths=%2Fapp%2Fadmin', { headers: { cookie: cookie! } })), async () => new Response('manifest')))?.status).toBe(200);
+      expect(guard).not.toHaveBeenCalled();
+    });
+
+    test('grant cannot unlock privileged paths, unknown descendants, or arbitrary app routes', async () => {
+      const { middleware, cookie } = await enter('/free?t=valid-event', dependencies('teacher'));
+      for (const path of ['/auth/dev-login', '/auth/dev-login/options', '/auth/dev-login.data', '/auth/preview-access/choose', '/app/admin', '/app/tester/feedback', '/api/internal/private', '/api/impersonate', '/app/classes', '/app/free-tier/unknown', '/free/join/unknown', '/app/my-classes/other']) {
+        const next = mock(async () => new Response('private'));
+        const response = await middleware(middlewareArgs(request(path, { headers: { cookie: cookie! } })), next);
+        expect(response?.status).toBe(path.startsWith('/api/') ? 401 : 302);
+        expect(next).not.toHaveBeenCalled();
+      }
+    });
+
+    test('only the matching teacher session may use minimal first-login landing routes', async () => {
+      for (const session of ['anonymous', 'teacher', 'denied'] as const) {
+        const { middleware, cookie } = await enter('/free?t=valid-event');
+        const scoped = createPreviewAccessMiddleware(async () => null, repository(), dependencies(session));
+        for (const path of ['/app', '/app.data', '/app/my-classes', '/app/my-classes.data']) {
+          const response = await scoped(middlewareArgs(request(path, { headers: { cookie: cookie! } })), async () => new Response('own classes'));
+          expect(response?.status).toBe(session === 'teacher' ? 200 : 302);
+        }
+        if (session === 'denied') {
+          for (const [path, method] of [['/free', 'GET'], ['/app/free-tier/onboarding', 'POST'], ['/api/free-tier/token', 'GET']] as const) {
+            const response = await scoped(middlewareArgs(request(path, { method, headers: { cookie: cookie! } })), async () => new Response('private'));
+            expect(response?.status).toBe(method === 'POST' || path.startsWith('/api/') ? 401 : 302);
+          }
+          expect((await enter('/free?t=valid-event', dependencies('denied'))).response.status).toBe(302);
+        }
+        expect(middleware).toBeDefined();
+      }
+    });
+
+    test('a free-tier grant cannot help an impersonation context', async () => {
+      const { middleware, cookie } = await enter();
+      const next = mock(async () => new Response('private'));
+      const response = await middleware(middlewareArgs(request('/free', { headers: { cookie: cookie + '; yawp_internal_impersonation=present' } })), next);
+      expect(response?.status).toBe(302);
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    test('forged, expired, future, malformed and tampered cookies fail closed', async () => {
+      const { middleware, cookie } = await enter();
+      const base = { kind: 'acquisition', tokenId: 'event-1', issuedAt: Math.floor(Date.now() / 1000) };
+      for (const invalid of ['forged', { ...base, issuedAt: base.issuedAt - FREE_TIER_ACCESS_MAX_AGE - 1 }, { ...base, issuedAt: base.issuedAt + 3600 }, { ...base, kind: 'master' }, { ...base, tokenId: '' }]) {
+        const signed = (await createFreeTierAccessCookie().serialize(invalid)).split(';', 1)[0];
+        const response = await middleware(middlewareArgs(request('/free', { headers: { cookie: signed } })), async () => new Response('private'));
+        expect(response?.status).toBe(302);
+      }
+      for (const bad of [FREE_TIER_ACCESS_COOKIE_NAME + '=forged', cookie!.slice(0, -5) + 'wrong']) {
+        expect((await middleware(middlewareArgs(request('/free', { headers: { cookie: bad } })), async () => new Response('private')))?.status).toBe(302);
+      }
+    });
+
+    test('gate off performs no validation and adds no cookie with tokens or a forged grant', async () => {
+      delete process.env.PREVIEW_ACCESS_GATE;
+      const deps = dependencies();
+      const middleware = createPreviewAccessMiddleware(async () => null, repository(), deps);
+      for (const path of ['/free', '/free?t=valid-event', '/free/join?t=valid-RELEASE', '/app/admin']) {
+        const next = mock(async () => new Response('production'));
+        const response = await middleware(middlewareArgs(request(path, { headers: { cookie: FREE_TIER_ACCESS_COOKIE_NAME + '=forged' } })), next);
+        expect(await response?.text()).toBe('production');
+        expect(response?.headers.get('set-cookie')).toBeNull();
+        expect(next).toHaveBeenCalledTimes(1);
+      }
+      expect(deps.acquisition).not.toHaveBeenCalled();
+      expect(deps.signed).not.toHaveBeenCalled();
+      expect(deps.session).not.toHaveBeenCalled();
+    });
   });
 
   test('blocks an unauthenticated loader before it runs', async () => {
@@ -298,12 +436,23 @@ describe('preview access gate', () => {
       ['GET', '/api/internal/v1/admin/organizations/org-1/invitations'],
       ['POST', '/api/internal/v1/admin/organizations/org-1/invitations'],
       ['POST', '/api/internal/v1/admin/organizations/org-1/invitations/inv-1/resend'],
+      ['POST', '/api/internal/v1/admin/organizations/org-1/invitations/inv-1/revoke'],
+      ['GET', '/api/internal/v1/admin/organizations/org-1/invitations/inv-1/revoke'],
       ['GET', '/api/internal/v1/admin/grading-benchmark/cases'],
       ['POST', '/api/internal/v1/admin/grading-benchmark/cases/c-1/run'],
       ['GET', '/api/internal/v1/admin/assignment-types/at-1/prompt-versions'],
       ['POST', '/api/internal/v1/admin/assignment-types/at-1/scratch-check'],
       ['GET', '/api/internal/v1/admin/assignment-types/at-1/evaluation-suites'],
       ['GET', '/api/internal/v1/admin/assignment-types/at-1/evaluation-runs'],
+      ['POST', '/api/internal/v1/admin/assignment-types/at-1/evaluation-runs'],
+      [
+        'DELETE',
+        '/api/internal/v1/admin/assignment-types/at-1/evaluation-suites/suite-1',
+      ],
+      [
+        'DELETE',
+        '/api/internal/v1/admin/assignment-types/at-1/prompt-versions/2',
+      ],
       ['GET', '/api/internal/v1/admin/assignment-types'],
       ['POST', '/api/internal/v1/admin/assignment-types'],
       ['GET', '/api/internal/v1/admin/assignment-types/at-1'],
@@ -334,7 +483,7 @@ describe('preview access gate', () => {
       );
       expect(await response?.text()).toBe('ok');
     }
-    expect(next).toHaveBeenCalledTimes(41);
+    expect(next).toHaveBeenCalledTimes(46);
   });
 
   test('fails closed when no access codes are configured', async () => {
@@ -1041,5 +1190,79 @@ describe('preview access codes', () => {
     expect(
       await getPreviewAccessSeat(request('/app', { headers: { cookie } }))
     ).toBeNull();
+  });
+});
+
+describe('demo environment gate split', () => {
+  beforeEach(() => {
+    process.env.NODE_ENV = 'production';
+    process.env.PREVIEW_ACCESS_GATE = 'on';
+    process.env.PREVIEW_DATA_MODE = 'seed';
+    process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
+      {
+        code: 'brave-otter-4193',
+        organizationId: 'local-dev-org',
+        label: 'Master',
+      },
+    ]);
+    process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
+    process.env.PREVIEW_SLUG = 'demo';
+    delete process.env.PR_NUMBER;
+  });
+
+  afterEach(() => {
+    restore('PREVIEW_SLUG');
+    restore('PR_NUMBER');
+  });
+
+  test('demo disables the site-wide gate but keeps dev-login access codes required', async () => {
+    const {
+      isDemoEnvironment,
+      isPreviewAccessGateEnabled,
+      isPreviewDevLoginAccessCodeRequired,
+    } = await import('./preview-access.server');
+    expect(isDemoEnvironment()).toBe(true);
+    expect(isPreviewAccessGateEnabled()).toBe(false);
+    expect(isPreviewDevLoginAccessCodeRequired()).toBe(true);
+  });
+
+  test('demo middleware allows normal routes and approval links without a preview seat cookie', async () => {
+    const next = mock(async () => new Response('ok'));
+    for (const path of ['/app', '/free/admin/approve', '/free?t=ignored']) {
+      const response = await previewAccessMiddleware(
+        middlewareArgs(request(path)),
+        next
+      );
+      expect(response?.status).toBe(200);
+      expect(next).toHaveBeenCalled();
+      next.mockClear();
+    }
+  });
+
+  test('explicit dev-tooling guard rejects LTI launch without a preview seat on demo', async () => {
+    const { rejectWithoutExplicitPreviewDevLoginAccess } = await import(
+      './preview-access.server'
+    );
+    const blocked = await rejectWithoutExplicitPreviewDevLoginAccess(
+      request('/lti/launch', { method: 'POST' })
+    );
+    expect(blocked?.status).toBe(401);
+    expect(await blocked?.json()).toEqual({
+      error: 'Preview access code required.',
+    });
+  });
+
+  test('pr previews keep the site-wide gate', async () => {
+    process.env.PREVIEW_SLUG = 'pr-622';
+    process.env.PR_NUMBER = '622';
+    const { isPreviewAccessGateEnabled } = await import('./preview-access.server');
+    expect(isPreviewAccessGateEnabled()).toBe(true);
+    const next = mock(async () => new Response('ok'));
+    const response = await previewAccessMiddleware(
+      middlewareArgs(request('/app/classes')),
+      next
+    );
+    expect((response as Response).status).toBe(302);
+    expect(next).not.toHaveBeenCalled();
   });
 });

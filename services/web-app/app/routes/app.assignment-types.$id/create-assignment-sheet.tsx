@@ -37,7 +37,7 @@ type TeacherClass = {
 };
 
 type Props = {
-  /** Told once the assignment exists (the Lesson Planner's "Created in YAWP!"). */
+  /** Told once the assignment exists (the Lesson Planner's "Created in Yawp!"). */
   onCreated?: () => void;
   assignmentTypeAvailability?: Pick<
     AssignmentCreationAssignmentType,

@@ -25,7 +25,7 @@ describe('stepTypeFor (stack page redesign, writing time)', () => {
   });
 });
 
-describe('isWritingStep: set from YAWP!, never by the teacher', () => {
+describe('isWritingStep: set from Yawp!, never by the teacher', () => {
   test('writing kinds count before anything is created', () => {
     expect(isWritingStep({ kind: 'class-starter' })).toBe(true);
     expect(isWritingStep({ kind: 'daily-pages' })).toBe(true);

@@ -113,10 +113,10 @@ describe("renderDeckPptxTile (Brian's review, E1)", () => {
     });
   });
 
-  test('wears the YAWP! master: a typographic wordmark and slide numbers, no footer mark', async () => {
+  test('wears the Yawp! master: a typographic wordmark and slide numbers, no footer mark', async () => {
     const parts = pptxParts(await renderDeckPptxTile(DECK));
     const masters = [...parts.keys()].filter((name) => /slideLayouts\/slideLayout\d+\.xml$/.test(name));
-    const yawpLayout = masters.map((name) => parts.get(name)!).find((xml) => xml.includes('YAWP!'));
+    const yawpLayout = masters.map((name) => parts.get(name)!).find((xml) => xml.includes('Yawp!'));
     expect(yawpLayout).toBeDefined();
     expect(yawpLayout).toContain('type="sldNum"');
     // Not "Phantom YAWP", not a logo image.
@@ -183,10 +183,10 @@ describe("renderDeckPptxTile — subtle, subtle, subtle (Brian's run 2, C3, C6)"
 
   test('the footer mark can be faded or left off, for Brian and Kevin to choose', async () => {
     const faded = pptxParts(await renderDeckPptxTile(DECK, { footerMark: 'faded' }));
-    const fadedLayout = [...faded.values()].find((xml) => xml.includes('YAWP!') && xml.includes('alpha'));
+    const fadedLayout = [...faded.values()].find((xml) => xml.includes('Yawp!') && xml.includes('alpha'));
     expect(fadedLayout).toBeDefined();
     const none = pptxParts(await renderDeckPptxTile(DECK, { footerMark: 'none' }));
     const layouts = [...none.entries()].filter(([name]) => /slideLayouts\/slideLayout\d+\.xml$/.test(name));
-    expect(layouts.some(([, xml]) => xml.includes('YAWP!'))).toBe(false);
+    expect(layouts.some(([, xml]) => xml.includes('Yawp!'))).toBe(false);
   });
 });

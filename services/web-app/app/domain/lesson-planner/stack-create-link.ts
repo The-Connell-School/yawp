@@ -1,5 +1,5 @@
 /**
- * "Create this … in YAWP!" from the stack (Brian's run 2, A5, item 5).
+ * "Create this … in Yawp!" from the stack (Brian's run 2, A5, item 5).
  *
  * A writing piece in the stack should become a real assignment from right
  * there, the same choice the chat offers, rather than only a handout.
@@ -99,7 +99,7 @@ export function stackCreateLink({
   typeIds: WritingTypeIds;
   conversationId: string;
 }): StackCreateLink | null {
-  if (created) return { label: 'Created in YAWP! · Open', href: created.href, created: true };
+  if (created) return { label: 'Created in Yawp! · Open', href: created.href, created: true };
   const link = createLinkFor({ kind, title, stepType, content, blockKey, sourceContent, typeIds, conversationId });
   return link ? { ...link, href: withPiece(link.href, materialId) } : null;
 }
@@ -127,7 +127,7 @@ function createLinkFor({
     const prompt = hidePromptIds(content).trim();
     if (!typeIds.thesis || !prompt) return null;
     return {
-      label: 'Create this Thesis Essay assignment in YAWP!',
+      label: 'Create this Thesis Essay assignment in Yawp!',
       href: dailyPagesCreateHref(typeIds.thesis, firstLine(prompt), conversationId),
     };
   }
@@ -135,12 +135,12 @@ function createLinkFor({
     const task = proseWritingTask(title, content);
     if (task?.kind === 'exit-ticket' && typeIds.exitTicket) {
       const href = proseTicketHref(typeIds.exitTicket, task.prompt, conversationId);
-      return href ? { label: 'Create this exit ticket in YAWP!', href } : null;
+      return href ? { label: 'Create this exit ticket in Yawp!', href } : null;
     }
     const shortWriting = typeIds.classStarter ?? typeIds.dailyPages;
     if (task?.kind === 'quick-write' && shortWriting) {
       return {
-        label: 'Create this quick write in YAWP!',
+        label: 'Create this quick write in Yawp!',
         href: dailyPagesCreateHref(shortWriting, task.prompt, conversationId),
       };
     }
@@ -153,8 +153,8 @@ function createLinkFor({
     return {
       label:
         kind === 'class-starter'
-          ? 'Create this class starter in YAWP!'
-          : 'Create this Daily Pages prompt in YAWP!',
+          ? 'Create this class starter in Yawp!'
+          : 'Create this Daily Pages prompt in Yawp!',
       href: dailyPagesCreateHref(typeId, prompt, conversationId),
     };
   }
@@ -163,7 +163,7 @@ function createLinkFor({
     const ticket = readPlannedExitTickets(sourceContent).tickets[exitTicketIndex(blockKey)];
     if (!ticket) return null;
     return {
-      label: 'Create this exit ticket in YAWP!',
+      label: 'Create this exit ticket in Yawp!',
       href: exitTicketCreateHref(typeIds.exitTicket, ticket, conversationId),
     };
   }

@@ -1,4 +1,7 @@
-import { useFreeAccountUsage } from '~/components/free-account-usage';
+import {
+  MonthlyUsageNotice,
+  useFreeAccountUsage,
+} from '~/components/free-account-usage';
 import { useEffect, useRef, useState } from 'react';
 import {
   Link,
@@ -326,7 +329,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             (material) => `${material.sourceMessageId}:${material.blockKey}`
           ),
           // Each filed piece by its card's token: its id, so creating it in
-          // YAWP! can be remembered, and where to open it once it has been
+          // Yawp! can be remembered, and where to open it once it has been
           // (Brian's run 3, item 4).
           stackPieces: Object.fromEntries(
             selected.materials.map((material) => [
@@ -384,6 +387,7 @@ type LessonPlannerActionData = {
 };
 
 export default function LessonPlannerRoute() {
+  const freeUsage = useFreeAccountUsage();
   const {
     conversations,
     selectedConversation,
@@ -961,7 +965,7 @@ export default function LessonPlannerRoute() {
             <Lightbulb size={20} className="shrink-0 text-primary" />
             <div className="min-w-0 flex-1">
               <h2 className="text-lg font-semibold leading-none">
-                YAWP! Lesson Planner
+                Yawp! Lesson Planner
               </h2>
               {/* A day opened out of a unit is one lesson inside a larger arc,
                   and the way back to the map has to be visible from inside it —
@@ -1063,6 +1067,9 @@ export default function LessonPlannerRoute() {
               hasMessages ? 'max-w-3xl' : 'max-w-4xl py-6 sm:py-10'
             )}
           >
+            {freeUsage?.monthly && (
+              <MonthlyUsageNotice usage={freeUsage} feature="lesson-planner" />
+            )}
             {!hasMessages ? (
               <LessonPlannerEmptyState
                 prompts={recommendedPrompts}
@@ -1338,7 +1345,7 @@ function LessonPlannerEmptyState({
             onPick={(picked) => onTemplate(picked)}
           />
         ) : null}
-        {freeUsage && (
+        {freeUsage && !freeUsage.monthly && (
           <div
             className="text-sm text-muted-foreground"
             data-testid="free-lesson-remaining"
@@ -1355,7 +1362,7 @@ function LessonPlannerEmptyState({
                   className="mt-2 inline-block text-primary underline"
                   to={
                     freeUsage.monthly
-                      ? 'mailto:hello@yawp.school?subject=More%20access%20to%20YAWP'
+                      ? 'mailto:hello@yawp.school?subject=More%20access%20to%20Yawp!'
                       : '/app/free-tier/status'
                   }
                 >
@@ -1489,7 +1496,7 @@ function MessageBubble({
   onKeepAll?: ((messageId: string, keys: string[]) => void) | null;
   /** One segment of the plan in or out, however many pieces it files as (run 3). */
   onSegment?: ((messageId: string, keys: string[], add: boolean) => void) | null;
-  /** Filed pieces by card token, for "Created in YAWP!" (run 3, item 4). */
+  /** Filed pieces by card token, for "Created in Yawp!" (run 3, item 4). */
   stackPieces?: Record<string, StackPieceRef>;
   disabled: boolean;
 }) {
@@ -2004,7 +2011,7 @@ function MessageBubble({
             <button
               type="button"
               onClick={() =>
-                printAssistantMessage(body, 'YAWP! Lesson Planner')
+                printAssistantMessage(body, 'Yawp! Lesson Planner')
               }
               className="ml-auto inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
             >

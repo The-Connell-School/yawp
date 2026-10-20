@@ -465,7 +465,7 @@ test.describe("Lesson Planner — Brian's review", () => {
     });
   });
 
-  test.describe('decks: the YAWP! template and editing (E1, E2)', () => {
+  test.describe('decks: the Yawp! template and editing (E1, E2)', () => {
     const DECK = {
       title: 'The Things They Carried — Day 1',
       subtitle: 'English 11 · Period 3',

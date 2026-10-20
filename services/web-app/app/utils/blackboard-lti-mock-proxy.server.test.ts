@@ -30,8 +30,39 @@ afterEach(async () => {
   await Promise.all(servers.splice(0).map((close) => close()));
   delete process.env.BLACKBOARD_LTI_MOCK_URL;
   delete process.env.YAWP_ENVIRONMENT;
+  delete process.env.PREVIEW_SLUG;
+  delete process.env.PR_NUMBER;
+  delete process.env.PREVIEW_ACCESS_SEATS;
+  delete process.env.PREVIEW_ACCESS_SECRET;
   process.env.NODE_ENV = 'test';
   delete process.env.PREVIEW_ACCESS_GATE;
+});
+
+describe('proxyBlackboardLtiMock demo access guard', () => {
+  test('returns 401 on demo without a preview access cookie', async () => {
+    process.env.NODE_ENV = 'production';
+    process.env.YAWP_ENVIRONMENT = 'preview';
+    process.env.PREVIEW_SLUG = 'demo';
+    process.env.PREVIEW_ACCESS_GATE = 'on';
+    process.env.PREVIEW_DATA_MODE = 'seed';
+    process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
+      {
+        code: 'brave-otter-4193',
+        organizationId: 'local-dev-org',
+        label: 'Master',
+      },
+    ]);
+    process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
+    process.env.BLACKBOARD_LTI_MOCK_URL = 'http://127.0.0.1:9473';
+
+    const response = await proxyBlackboardLtiMock(
+      new Request('http://localhost/dev/blackboard-lti-mock/')
+    );
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({
+      error: 'Preview access code required.',
+    });
+  });
 });
 
 describe('proxyBlackboardLtiMock', () => {

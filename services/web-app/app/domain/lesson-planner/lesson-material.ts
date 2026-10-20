@@ -57,7 +57,7 @@ export type ArtifactKind =
  */
 export const LESSON_STEP_KIND = 'step';
 
-/** Writing practice students work in YAWP!, filed as a piece of the lesson. */
+/** Writing practice students work in Yawp!, filed as a piece of the lesson. */
 export const PRACTICE_KIND = 'practice';
 
 /**

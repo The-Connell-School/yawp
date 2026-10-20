@@ -1,16 +1,19 @@
-FROM oven/bun:1.3.1 AS base
+FROM oven/bun:1.4.3 AS base
 RUN apt-get update -y && apt-get install -y openssl
-ARG DATABASE_URL
-ENV DATABASE_URL=${DATABASE_URL}
 
 FROM base AS deps
 WORKDIR /app
+RUN apt-get update -y && apt-get install -y ca-certificates curl gnupg \
+  && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+  && apt-get install -y nodejs
 COPY package.json bun.lock ./
 COPY services/web-app ./services/web-app
 COPY packages/prisma ./packages/prisma
 COPY scripts/preview/free-tier-ship-review-seed-guard.mjs ./scripts/preview/free-tier-ship-review-seed-guard.mjs
+COPY scripts/preview/prisma-cli.sh ./scripts/preview/prisma-cli.sh
+RUN chmod +x scripts/preview/prisma-cli.sh
 RUN bun install --ignore-scripts
-RUN bun prisma generate
+RUN DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build bun prisma generate
 
 FROM deps AS build
 ENV NODE_OPTIONS=--max-old-space-size=1280
@@ -26,7 +29,8 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/packages/prisma ./packages/prisma
 COPY --from=build /app/services/web-app/build ./services/web-app/build
 COPY --from=build /app/services/web-app/build/client ./build/client
-COPY --from=build /app/services/web-app/node_modules ./services/web-app/node_modules
+# Bun 1.4+ hoists workspace deps to /app/node_modules; nested copies may be absent.
+RUN mkdir -p services/web-app/node_modules
 COPY --from=build /app/services/web-app/package.json ./services/web-app/package.json
 COPY --from=build /app/services/web-app/start.sh ./services/web-app/start.sh
 COPY --from=build /app/scripts/preview ./scripts/preview

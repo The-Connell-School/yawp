@@ -123,15 +123,15 @@ export async function emailLessonLink({
   note: string | null;
   teacherName: string | null;
 }) {
-  const from = teacherName ? `${teacherName} sent you a lesson on YAWP!.` : 'A teacher sent you a lesson on YAWP!.';
-  const text = [from, note ? `\n${note}\n` : '', `Open it here: ${link}`, '', 'No YAWP! login needed.'].join('\n');
+  const from = teacherName ? `${teacherName} sent you a lesson on Yawp!.` : 'A teacher sent you a lesson on Yawp!.';
+  const text = [from, note ? `\n${note}\n` : '', `Open it here: ${link}`, '', 'No Yawp! login needed.'].join('\n');
   const escape = (value: string) =>
     value.replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char]!);
   const html = [
     `<p>${escape(from)}</p>`,
     note ? `<p style="padding:12px;background:#F6F1EA;border-radius:8px">${escape(note).replace(/\n/g, '<br>')}</p>` : '',
     `<p><a href="${escape(link)}">Open the lesson</a></p>`,
-    '<p style="color:#6E665C">No YAWP! login needed.</p>',
+    '<p style="color:#6E665C">No Yawp! login needed.</p>',
   ].join('');
   return sendEmail({ to, subject, text, html });
 }

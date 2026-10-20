@@ -5,12 +5,17 @@ import {
   type LoaderFunctionArgs,
 } from 'react-router';
 import { recordLtiLaunchClaims, signToolJwt } from '~/integrations/blackboard-ags.server';
-import { getPreviewAccessSeat, isPreviewAccessGateEnabled } from '~/utils/preview-access.server';
+import {
+  getPreviewAccessSeat,
+  rejectWithoutExplicitPreviewDevLoginAccess,
+} from '~/utils/preview-access.server';
 import { prisma } from '~/utils/db.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { sessionKey, getSessionExpirationDate } from '~/utils/auth.server';
 import { setMembershipId } from '~/cookies/membership-id.server';
 import { combineHeaders, getDomainUrl } from '~/utils/misc';
+import { ltiHandshakeClearCookieHeader } from '~/utils/lti/handshake.server';
+import { verifyLtiLaunchIdToken } from '~/utils/lti/verify-id-token.server';
 
 export async function loader() {
   // Launch is a POST; GET can confirm endpoint is up
@@ -18,20 +23,21 @@ export async function loader() {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
+  const accessBlock = await rejectWithoutExplicitPreviewDevLoginAccess(request);
+  if (accessBlock) return accessBlock;
+
   const form = await request.formData();
   const idToken = String(form.get('id_token') || '');
-  if (!idToken) {
-    return dataResponse({ error: 'missing id_token' }, { status: 400 });
+  const state = String(form.get('state') || '');
+  const verified = await verifyLtiLaunchIdToken({ idToken, state, request });
+  if (!verified.ok) {
+    return verified.response;
   }
-  let claims: any = null;
-  try {
-    const parts = idToken.split('.');
-    if (parts.length < 2) throw new Error('malformed jwt');
-    claims = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
-    recordLtiLaunchClaims(claims);
-  } catch (error) {
-    return dataResponse({ error: 'invalid id_token' }, { status: 400 });
-  }
+  const claims: any = verified.value.payload;
+  const handshakeClearHeader = verified.value.clearHandshake
+    ? ltiHandshakeClearCookieHeader()
+    : null;
+  recordLtiLaunchClaims(claims);
 
   const messageType =
     claims?.['https://purl.imsglobal.org/spec/lti/claim/message_type'];
@@ -98,7 +104,9 @@ export async function action({ request }: ActionFunctionArgs) {
         } catch {}
       }
     }
-    return redirect('/dev/blackboard-lti-mock/learn/courses');
+    return redirect('/dev/blackboard-lti-mock/learn/courses', {
+      headers: handshakeClearHeader ? { 'set-cookie': handshakeClearHeader } : undefined,
+    });
   }
 
   // For a normal resource-link launch, establish a session as the LMS user
@@ -381,7 +389,8 @@ export async function action({ request }: ActionFunctionArgs) {
               expires: session.expirationDate,
             }),
           },
-          { 'set-cookie': await setMembershipId(membershipId) }
+          { 'set-cookie': await setMembershipId(membershipId) },
+          handshakeClearHeader ? { 'set-cookie': handshakeClearHeader } : {}
         ),
       });
     }

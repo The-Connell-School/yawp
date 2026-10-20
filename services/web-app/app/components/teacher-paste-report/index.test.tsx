@@ -121,6 +121,49 @@ describe('TeacherPasteReport', () => {
     );
   });
 
+  it('lets an earlier (pre-link) event highlight legacy marked text', async () => {
+    globalThis.fetch = mock(
+      async () =>
+        new Response(
+          JSON.stringify({
+            events: [
+              {
+                id: 'clegacyevent0001',
+                createdAt: '2026-09-10T12:00:00.000Z',
+                textLength: 220,
+                sourceUrl: null,
+              },
+            ],
+            nextCursor: null,
+          }),
+          { status: 200 }
+        )
+    ) as unknown as typeof fetch;
+    const contentRoot = document.createElement('div');
+    contentRoot.innerHTML =
+      '<p>Typed <span data-pasted-source="external">legacy paste</span></p>';
+    document.body.appendChild(contentRoot);
+
+    root = renderWithContent(contentRoot);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    act(() => {
+      document
+        .querySelector<HTMLButtonElement>('[aria-label="Pasted text report"]')
+        ?.click();
+    });
+
+    const button = document.querySelector<HTMLButtonElement>(
+      '[data-testid="paste-event-clegacyevent0001"]'
+    );
+    expect(button?.disabled).toBe(false);
+    expect(button?.textContent).toContain('12 earlier marked characters');
+    expect(document.body.textContent).not.toContain(
+      'Earlier event; position unavailable'
+    );
+  });
+
   it('does not show the empty state before the event query resolves', async () => {
     let resolveFetch!: (response: Response) => void;
     globalThis.fetch = mock(

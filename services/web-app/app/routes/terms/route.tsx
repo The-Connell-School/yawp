@@ -3,17 +3,17 @@ import type { ReactNode } from 'react';
 import { PublicLegalPage, PublicLegalSection } from './PublicLegalPage';
 
 export const meta: MetaFunction = () => [
-  { title: 'Terms of Service | YAWP! Writing Program' },
+  { title: 'Terms of Service | Yawp! Writing Program' },
   {
     name: 'description',
     content:
-      'Terms of Service for YAWP!, a classroom writing platform used by teachers and students.',
+      'Terms of Service for Yawp!, a classroom writing platform used by teachers and students.',
   },
-  { property: 'og:title', content: 'Terms of Service | YAWP! Writing Program' },
+  { property: 'og:title', content: 'Terms of Service | Yawp! Writing Program' },
   {
     property: 'og:description',
     content:
-      'Terms of Service for YAWP!, a classroom writing platform used by teachers and students.',
+      'Terms of Service for Yawp!, a classroom writing platform used by teachers and students.',
   },
   { property: 'og:type', content: 'website' },
 ];
@@ -30,20 +30,20 @@ export default function TermsRoute() {
       updated="October 14, 2026"
     >
       <p className="text-lg leading-8 text-muted-foreground">
-        These Terms of Service describe the basic rules for using YAWP!, a
+        These Terms of Service describe the basic rules for using Yawp!, a
         classroom writing platform operated by The Connell School of Writing. By
-        using YAWP!, you agree to use the product responsibly and only as
+        using Yawp!, you agree to use the product responsibly and only as
         permitted by your role, organization, and applicable law.
       </p>
 
-      <PublicLegalSection title="Use of YAWP!">
+      <PublicLegalSection title="Use of Yawp!">
         <List>
           <li>
             Teachers and authorized staff may create classes, assignments, and
             feedback workflows.
           </li>
           <li>
-            Students may use YAWP! for assigned classroom writing and related
+            Students may use Yawp! for assigned classroom writing and related
             learning activities.
           </li>
           <li>
@@ -60,15 +60,15 @@ export default function TermsRoute() {
       <PublicLegalSection title="Classroom Content">
         <p>
           Teachers, students, and organizations are responsible for the content
-          they enter into YAWP!, including prompts, drafts, submissions,
-          comments, and classroom materials. YAWP! may process that content to
+          they enter into Yawp!, including prompts, drafts, submissions,
+          comments, and classroom materials. Yawp! may process that content to
           provide product features, support, and troubleshooting.
         </p>
       </PublicLegalSection>
 
       <PublicLegalSection title="Automated Feedback Features">
         <p>
-          YAWP! includes automated feedback and drafting-support features.
+          Yawp! includes automated feedback and drafting-support features.
           These features are intended to support writing instruction, not
           replace teacher judgment or student authorship. Teachers and students
           should review automated feedback for accuracy, appropriateness, and
@@ -88,16 +88,16 @@ export default function TermsRoute() {
 
       <PublicLegalSection title="Service Availability">
         <p>
-          YAWP! is provided as a hosted software product. The product may change
+          Yawp! is provided as a hosted software product. The product may change
           over time, and access may occasionally be interrupted for maintenance,
-          security, operational issues, or factors outside YAWP!'s control.
+          security, operational issues, or factors outside Yawp!'s control.
         </p>
       </PublicLegalSection>
 
       <PublicLegalSection title="Contact">
         <p>
           Questions about these Terms can be sent to <a className="underline underline-offset-4" href="mailto:support@yawp.school">support@yawp.school</a>.
-          These Terms may be updated as YAWP! changes, and the updated date
+          These Terms may be updated as Yawp! changes, and the updated date
           above will reflect the current version.
         </p>
       </PublicLegalSection>

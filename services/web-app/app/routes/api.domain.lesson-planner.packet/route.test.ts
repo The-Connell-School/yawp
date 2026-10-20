@@ -1005,7 +1005,7 @@ describe("lesson packet — one segment, one status (Brian's run 3, items 1, 2)"
   });
 });
 
-describe("lesson packet — created in YAWP! (Brian's run 3, item 4)", () => {
+describe("lesson packet — created in Yawp! (Brian's run 3, item 4)", () => {
   test('mark-created remembers the assignment on its piece', async () => {
     prisma.lessonPlanMaterial.updateMany.mockReset().mockResolvedValue({ count: 1 });
     const response = await action({
@@ -1023,7 +1023,7 @@ describe("lesson packet — created in YAWP! (Brian's run 3, item 4)", () => {
     expect((response as any).data).toEqual({ created: true, materialId: 'mat-9' });
   });
 
-  test('only a link into YAWP! assignment types is kept', async () => {
+  test('only a link into Yawp! assignment types is kept', async () => {
     const response = await action({
       request: formRequest({
         intent: 'mark-created',

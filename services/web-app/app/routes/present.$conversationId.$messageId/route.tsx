@@ -42,7 +42,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     lessonTitle,
     deck,
     durationMinutes: deckDurationMinutes(deck),
-    // Brian's review (E1): the YAWP! tile template, behind its flag.
+    // Brian's review (E1): the Yawp! tile template, behind its flag.
     tileTemplate: deckV2,
   };
 }

@@ -25,3 +25,21 @@ test('a preview origin that is not registered with Google hides the button and d
   expect(html).not.toContain('signon-divider');
   expect(html).toContain('Email or class code');
 });
+
+test('user-facing copy uses Yawp! without Yawp!. or Yawp!?', () => {
+  const entry = render({ googleAvailable: false, googleVisible: false });
+  expect(entry).toContain('Teachers: new to Yawp!');
+  expect(entry).not.toMatch(/Yawp!\?/);
+  expect(entry).not.toMatch(/Yawp!\./);
+
+  const teacher = renderToStaticMarkup(
+    <MemoryRouter>
+      <UnifiedSignon
+        transport={transport}
+        initialState={{ screen: 'teacher' }}
+      />
+    </MemoryRouter>
+  );
+  expect(teacher).toContain('Your school uses Yawp! Ask your admin for an invite.');
+  expect(teacher).not.toMatch(/Yawp!\?/);
+});

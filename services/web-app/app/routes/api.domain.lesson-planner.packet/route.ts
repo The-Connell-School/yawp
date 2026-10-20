@@ -72,7 +72,7 @@ const POST = z
       // Brian's run 2 (A4, E3): everything in a reply, as separate pieces.
       'keep-all',
       'split-kept',
-      // Brian's run 3 (item 4): "Created in YAWP! · Open".
+      // Brian's run 3 (item 4): "Created in Yawp! · Open".
       'mark-created',
     ]),
     conversationId: z.string().min(1),
@@ -103,7 +103,7 @@ const POST = z
     confirmReplace: z.enum(['1']).optional(),
     /** `reorder`: every piece's key ("m:<id>" / "r:<id>"), comma-separated. */
     order: z.string().min(1).max(10_000).optional(),
-    /** `mark-created`: where the created assignment opens, inside YAWP!. */
+    /** `mark-created`: where the created assignment opens, inside Yawp!. */
     yawpHref: z
       .string()
       .max(300)

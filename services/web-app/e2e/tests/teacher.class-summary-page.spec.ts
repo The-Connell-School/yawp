@@ -1,3 +1,4 @@
+import { currentInsightSummary } from '../db-helpers';
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import type { E2EContext } from '../seed-e2e';
@@ -52,7 +53,11 @@ async function seedReadyInsight(e2eContext: E2EContext) {
         classAssignmentId: e2eContext.classAssignmentId,
         status: 'ready',
         submissionCount: 1,
-        summaryJson: FIXTURE_SUMMARY,
+        summaryJson: await currentInsightSummary(
+          prisma,
+          e2eContext.classAssignmentId,
+          FIXTURE_SUMMARY
+        ),
         generatedAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
       },
     });
@@ -128,18 +133,14 @@ test.describe('teacher class summary full page', () => {
     await expect(summaryPage).toBeVisible();
 
     // Content parity spot-checks against the panel's inventory.
-    await expect(
-      summaryPage.getByText(/how the class did/i)
-    ).toBeVisible();
+    await expect(summaryPage.getByText(/how the class did/i)).toBeVisible();
     await expect(
       summaryPage.getByRole('button', { name: /thesis.*strength/i })
     ).toBeVisible();
     await expect(
       summaryPage.getByRole('button', { name: /evidence.*needs work/i })
     ).toBeVisible();
-    await expect(
-      summaryPage.getByText(/suggested next steps/i)
-    ).toBeVisible();
+    await expect(summaryPage.getByText(/suggested next steps/i)).toBeVisible();
     await expect(
       summaryPage.getByText(/model evidence integration/i)
     ).toBeVisible();

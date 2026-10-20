@@ -1,5 +1,5 @@
 /**
- * Tool layer for the YAWP! Lesson Planner.
+ * Tool layer for the Yawp! Lesson Planner.
  *
  * Two families of tools:
  *
@@ -8,7 +8,7 @@
  *   and organization, so the planner reuses those definitions through a strict
  *   allowlist — enough to ground a lesson in how the class actually performed,
  *   with no way to write anything or reach a single student's essay.
- * - YAWP!'s own teaching catalog, so a lesson is built out of the Daily Pages
+ * - Yawp!'s own teaching catalog, so a lesson is built out of the Daily Pages
  *   prompts, Quick Writing Lessons, and Teacher's Lounge material the platform
  *   already has, and every reference comes back with a link the teacher can act
  *   on rather than a description they have to go find.
@@ -81,7 +81,7 @@ export const LESSON_PLANNER_CATALOG_TOOLS: ReporterTool[] = [
   {
     name: 'search_daily_pages_prompts',
     description:
-      "Search YAWP!'s open freewrite prompt library — 200 short, open-ended prompts. This is CLASS STARTER material: the prompts invite writing without asking for the backing a graded entry is scored on, and a class starter is marked on engagement alone. Filter by the text or unit the class is reading (e.g. Macbeth), theme, grade band, prompt type, cognitive move, or seriousness. Use this for a bell-ringer, a warm-up, or a low-stakes entry point. Put the prompt id you chose in the `id:` line of its yawp-daily-pages block, never in prose. For a graded Daily Pages reflection, call search_short_form_prompts instead.",
+      "Search Yawp!'s open freewrite prompt library — 200 short, open-ended prompts. This is CLASS STARTER material: the prompts invite writing without asking for the backing a graded entry is scored on, and a class starter is marked on engagement alone. Filter by the text or unit the class is reading (e.g. Macbeth), theme, grade band, prompt type, cognitive move, or seriousness. Use this for a bell-ringer, a warm-up, or a low-stakes entry point. Put the prompt id you chose in the `id:` line of its yawp-daily-pages block, never in prose. For a graded Daily Pages reflection, call search_short_form_prompts instead.",
     input_schema: {
       type: 'object',
       properties: {
@@ -131,7 +131,7 @@ export const LESSON_PLANNER_CATALOG_TOOLS: ReporterTool[] = [
   {
     name: 'search_short_form_prompts',
     description:
-      "Search YAWP!'s Daily Pages prompt library — short prompts written to be GRADED. Every one asks for the backing as well as the opinion (a reason, a case, a quotation, a counterexample) and says what a finished answer looks like, because Daily Pages is scored on Depth and Development of Thought. Filter by the text or unit the class is reading, theme, grade band, the shape of thinking the prompt sets up, cognitive move, or whether it needs a source text at all. Use this whenever the lesson calls for a written response a student will be graded on — usually after the reading or before a discussion, not at the bell. Put the prompt id you chose in the `id:` line of its yawp-daily-pages block, never in prose. For an ungraded warm-up, call search_daily_pages_prompts instead.",
+      "Search Yawp!'s Daily Pages prompt library — short prompts written to be GRADED. Every one asks for the backing as well as the opinion (a reason, a case, a quotation, a counterexample) and says what a finished answer looks like, because Daily Pages is scored on Depth and Development of Thought. Filter by the text or unit the class is reading, theme, grade band, the shape of thinking the prompt sets up, cognitive move, or whether it needs a source text at all. Use this whenever the lesson calls for a written response a student will be graded on — usually after the reading or before a discussion, not at the bell. Put the prompt id you chose in the `id:` line of its yawp-daily-pages block, never in prose. For an ungraded warm-up, call search_daily_pages_prompts instead.",
     input_schema: {
       type: 'object',
       properties: {
@@ -184,7 +184,7 @@ export const LESSON_PLANNER_CATALOG_TOOLS: ReporterTool[] = [
   {
     name: 'list_writing_lessons',
     description:
-      "List YAWP!'s Writing Fundamentals lessons — short, ready-made lessons in two strands: Grammar & Mechanics (comma splices, passive voice, parallel construction, transitions, agreement) and, where it is switched on, Composition (topic sentences, thesis statements, evidence, analysis, hooks and openings, conclusions). Filter by category or by the rubric skill the class is weak in. Use one of these instead of writing your own mini-lesson on the skill.",
+      "List Yawp!'s Writing Fundamentals lessons — short, ready-made lessons in two strands: Grammar & Mechanics (comma splices, passive voice, parallel construction, transitions, agreement) and, where it is switched on, Composition (topic sentences, thesis statements, evidence, analysis, hooks and openings, conclusions). Filter by category or by the rubric skill the class is weak in. Use one of these instead of writing your own mini-lesson on the skill.",
     input_schema: {
       type: 'object',
       properties: {
@@ -223,7 +223,7 @@ export const LESSON_PLANNER_CATALOG_TOOLS: ReporterTool[] = [
   {
     name: 'list_lounge_materials',
     description:
-      "List the teaching material in this teacher's Teacher's Lounge — course modules and their downloadable resources, including slide decks meant to be shown in class. Use this before building a deck from scratch: if YAWP! already has one for the topic, point the teacher at it and plan around it.",
+      "List the teaching material in this teacher's Teacher's Lounge — course modules and their downloadable resources, including slide decks meant to be shown in class. Use this before building a deck from scratch: if Yawp! already has one for the topic, point the teacher at it and plan around it.",
     input_schema: {
       type: 'object',
       properties: {},
@@ -250,7 +250,7 @@ export const LESSON_PLANNER_CATALOG_TOOLS: ReporterTool[] = [
   {
     name: 'list_assignment_types',
     description:
-      'List the assignment types this teacher can actually assign to a class (Daily Pages, the course essays their school has enabled). Use it to end a lesson on the real YAWP! assignment the students will write.',
+      'List the assignment types this teacher can actually assign to a class (Daily Pages, the course essays their school has enabled). Use it to end a lesson on the real Yawp! assignment the students will write.',
     input_schema: {
       type: 'object',
       properties: {},
@@ -350,7 +350,7 @@ async function handleCatalogToolCall(
           practiceExercises: getQuickWritingPracticePrompts(lesson.slug).length,
         })),
         practiceAvailable: true,
-        note: 'Teach from the lesson, then assign its practice so students work it in YAWP!: put the slug in a yawp-practice block and the teacher gets a button that assigns it to their class.',
+        note: 'Teach from the lesson, then assign its practice so students work it in Yawp!: put the slug in a yawp-practice block and the teacher gets a button that assigns it to their class.',
       };
     }
     case 'get_writing_lesson': {
@@ -434,13 +434,13 @@ export async function handleLessonPlannerToolCall(
     const result = await handleCatalogToolCall(name, input, ctx, dependencies);
     if (result === undefined) {
       return JSON.stringify({
-        error: `Unknown tool: ${name}. The lesson planner can only read class reports and the YAWP! teaching catalog.`,
+        error: `Unknown tool: ${name}. The lesson planner can only read class reports and the Yawp! teaching catalog.`,
       });
     }
     return JSON.stringify(result);
   } catch {
     return JSON.stringify({
-      error: `The ${name} lookup failed. Plan without it and say so rather than inventing YAWP! material.`,
+      error: `The ${name} lookup failed. Plan without it and say so rather than inventing Yawp! material.`,
     });
   }
 }

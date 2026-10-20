@@ -24,7 +24,7 @@ test('explicit v2 email copy renders the admission heading and subject without d
 test('legacy and unknown copy versions retain legacy admission wording', () => {
   for (const copyVersion of [undefined, '2026-10-14-v5', 'unknown']) {
     const args = { ...application, copyVersion };
-    expect(renderReleaseEmailSubject(args)).toBe("You're in — start your YAWP classroom");
-    expect(renderReleaseEmailBody(args)).toContain("You're in — we'd love to have you try YAWP with your students.");
+    expect(renderReleaseEmailSubject(args)).toBe("You're in — start your Yawp! classroom");
+    expect(renderReleaseEmailBody(args)).toContain("You're in — we'd love to have you try Yawp! with your students.");
   }
 });

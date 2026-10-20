@@ -62,9 +62,9 @@ describe("buildLessonPlanDoc (Brian's run 2, D1)", () => {
 
   test('materials by name only, the deck among them', () => {
     expect(doc.materials).toEqual([
-      'Class starter (YAWP! assignment): What do you carry?',
+      'Class starter (Yawp! assignment): What do you carry?',
       'Inventory chart (handout)',
-      'Exit ticket (YAWP! assignment)',
+      'Exit ticket (Yawp! assignment)',
       'Slide deck: The Things They Carried — Day 1 (2 slides)',
     ]);
   });

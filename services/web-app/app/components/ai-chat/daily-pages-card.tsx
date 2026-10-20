@@ -62,7 +62,7 @@ export function DailyPagesCard({
    */
   onReplace?: (() => void) | null;
   disabled?: boolean;
-  /** Created in YAWP! from this piece of the stack (Brian's run 3, item 4). */
+  /** Created in Yawp! from this piece of the stack (Brian's run 3, item 4). */
   created?: { href: string } | null;
   /** The stack piece this card is, so creating it can be remembered. */
   materialId?: string | null;

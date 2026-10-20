@@ -8,7 +8,7 @@
  * read top to bottom.
  *
  * So the map is structured. The planner emits it as a fenced `yawp-unit` block
- * of JSON, and YAWP! renders a real day-by-day board where each day carries its
+ * of JSON, and Yawp! renders a real day-by-day board where each day carries its
  * own "build this day" button. That button is the whole point — the map is
  * worth having because it is the way into the lessons, not because it is a
  * nice summary of them.
@@ -251,7 +251,7 @@ export function hasUnitPlan(content: string): boolean {
  * JSON, a rejected map reads back to it as a map that shipped.
  */
 export const FAILED_UNIT_NOTE =
-  '[The unit map you wrote here failed validation. YAWP! never rendered it and the teacher never saw it. If they ask about the unit, believe them, apologise briefly, and write the map again from scratch — fewer days, one short line per field. Do not refer back to this one as if it exists.]';
+  '[The unit map you wrote here failed validation. Yawp! never rendered it and the teacher never saw it. If they ask about the unit, believe them, apologise briefly, and write the map again from scratch — fewer days, one short line per field. Do not refer back to this one as if it exists.]';
 
 export function markFailedUnitPlans(content: string): string {
   const outcome = readUnitPlan(content);

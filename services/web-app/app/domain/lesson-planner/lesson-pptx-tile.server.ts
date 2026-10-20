@@ -1,9 +1,9 @@
 /**
- * The YAWP! deck template (Brian's review, E1).
+ * The Yawp! deck template (Brian's review, E1).
  *
  * The first export was deliberately plain so teachers could add to it, and it
  * read like generic AI output. This one is designed, using the language of the
- * class tiles on the YAWP! dashboard: cards on a warm cream page, a mono
+ * class tiles on the Yawp! dashboard: cards on a warm cream page, a mono
  * eyebrow over a serif title, a flat terracotta block where a class tile has
  * its art. Beautiful, not decorative: no clip art, no stock graphics, and none
  * of the site's artwork, only the shapes and colours around it.
@@ -410,7 +410,7 @@ export async function renderDeckPptxTile(
   pptx.layout = LAYOUT.name;
   pptx.title = deck.title;
   if (deck.subtitle) pptx.subject = deck.subtitle;
-  pptx.company = 'YAWP!';
+  pptx.company = 'Yawp!';
 
   // A small typographic wordmark and the slide number, on the master, in
   // place of the little footer mark Brian asked to lose.
@@ -423,7 +423,7 @@ export async function renderDeckPptxTile(
         : [
             {
               text: {
-                text: 'YAWP!',
+                text: 'Yawp!',
                 options: {
                   x: MARGIN,
                   y: LAYOUT.height - 0.55,

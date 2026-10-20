@@ -79,7 +79,7 @@ describe('buildApHistoryTutorSystemPrompt', () => {
     expect(prompt).toContain('Never write for the student');
   });
 
-  describe('universal YAWP! Tutor layer', () => {
+  describe('universal Yawp! Tutor layer', () => {
     test('leads with the universal block verbatim, before any AP-specific coaching', () => {
       const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot);
 
@@ -95,7 +95,7 @@ describe('buildApHistoryTutorSystemPrompt', () => {
     test('carries the universal guardrails into both essay types', () => {
       for (const snapshot of [dbqSnapshot, leqSnapshot]) {
         const prompt = buildApHistoryTutorSystemPrompt(snapshot);
-        expect(prompt).toContain('You are the YAWP! Tutor');
+        expect(prompt).toContain('You are the Yawp! Tutor');
         expect(prompt).toContain("I'm not that kind of guy!");
         expect(prompt).toContain('I am mysterious and I contain so many');
         expect(prompt).toContain('MULTILINGUAL.');
@@ -139,7 +139,7 @@ describe('buildApHistoryTutorSystemPrompt', () => {
       const prompt = buildApHistoryTutorSystemPrompt(
         dbqSnapshot,
         undefined,
-        'EDITED IN ADMIN. You are the YAWP! Tutor with a house rule.'
+        'EDITED IN ADMIN. You are the Yawp! Tutor with a house rule.'
       );
 
       expect(prompt.startsWith('EDITED IN ADMIN.')).toBe(true);

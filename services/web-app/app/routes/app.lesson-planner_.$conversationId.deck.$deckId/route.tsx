@@ -3,7 +3,7 @@
  *
  * A teacher may not use every step, so deleting a slide is one click with an
  * Undo, not a dialog. Reorder, duplicate and rewrite any slide, see it in the
- * YAWP! template as it changes, then save: the edit replaces the planner's
+ * Yawp! template as it changes, then save: the edit replaces the planner's
  * deck in the chat, in the stack, in Present and in PowerPoint.
  */
 import { useEffect, useRef, useState } from 'react';

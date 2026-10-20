@@ -2,11 +2,13 @@ import type { Prisma } from '@app/prisma';
 import * as E from '@react-email/components';
 import { generateTOTP } from '~/utils/totp.server';
 import { sendEmail } from '~/utils/email.server';
+import { emailDeliveryDiagnostic } from '~/utils/email-delivery-error.server';
 
 const type = 'onboard-owner';
 export const ownerInvitationActions = [
   'organization.invitation.create.after',
   'organization.invitation.resend.after',
+  'organization.invitation.revoke.after',
 ];
 type Db = Pick<
   Prisma.TransactionClient,
@@ -144,6 +146,15 @@ export async function listOwnerInvitations(db: Db, organizationId: string) {
   );
 }
 
+/** Legacy verification consumes links by deleting the unique invitation row.
+ * Shared by resend and revoke; a concurrent consumption must abort the write. */
+export async function invalidateOwnerInvitation(
+  db: Pick<Db, 'invitation'>,
+  invitationId: string
+) {
+  await db.invitation.delete({ where: { id: invitationId } });
+}
+
 export class OwnerInvitationDeliveryError extends Error {}
 
 /** Extracted from the former admin invite-owners action: same OTP algorithm,
@@ -203,8 +214,9 @@ export async function issueOwnerInvitation(
         </E.Html>
       ),
     });
-    if (delivery.status !== 'success') throw new OwnerInvitationDeliveryError();
-  } catch {
+    if (delivery.status !== 'success') throw delivery.error;
+  } catch (error) {
+    console.error('owner_invitation_delivery_failed', emailDeliveryDiagnostic(error, input.email));
     throw new OwnerInvitationDeliveryError();
   }
   return invitationSummary(row);

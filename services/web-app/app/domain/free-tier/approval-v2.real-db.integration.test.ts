@@ -81,7 +81,7 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
     }
     mock.restore();
   });
-  test('before and at seven days, repeated/concurrent runs, four shared resends, teacher follow-up stop policy', async () => {
+  test('before and at seven days, repeated/concurrent runs, three shared resends, teacher follow-up stop policy', async () => {
     const { app, approval } = await fixture();
     await api.runApprovalJobs(new Date(+now + api.WEEK_MS - 1));
     expect(send).toHaveBeenCalledTimes(0);
@@ -96,17 +96,41 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
     const row = await db.freeTierAdminApproval.findUniqueOrThrow({
       where: { id: approval.id },
     });
-    expect(row.reminderCount).toBe(4);
+    expect(row.reminderCount).toBe(3);
+    expect(row.nextAutoReminderAt).toBeNull();
     expect(row.teacherFollowUpCount).toBe(5);
     expect(row.stopReason).toBe('max_reached');
     expect(row.needsManualFollowUp).toBe(true);
-    expect(send).toHaveBeenCalledTimes(9);
+    expect(send).toHaveBeenCalledTimes(8);
     await db.freeTierApplication.update({
       where: { id: app.id },
       data: { status: 'APPROVED' },
     });
     await api.runApprovalJobs(new Date(+now + 6 * api.WEEK_MS));
-    expect(send).toHaveBeenCalledTimes(9);
+    expect(send).toHaveBeenCalledTimes(8);
+  });
+  test('existing three-reminder records stop without sending a fourth reminder', async () => {
+    const { approval } = await fixture();
+    await db.freeTierAdminApproval.update({
+      where: { id: approval.id },
+      data: { reminderCount: 3 },
+    });
+    await api.runApprovalJobs(new Date(+now + api.WEEK_MS));
+    const row = await db.freeTierAdminApproval.findUniqueOrThrow({
+      where: { id: approval.id },
+    });
+    expect(row).toMatchObject({
+      reminderCount: 3,
+      autoRemindersStopped: true,
+      nextAutoReminderAt: null,
+      stopReason: 'max_reached',
+    });
+    expect(
+      await db.freeTierApprovalDelivery.count({
+        where: { approvalId: approval.id, kind: 'admin_reminder' },
+      })
+    ).toBe(0);
+    expect(send).toHaveBeenCalledTimes(1); // Teacher follow-up only.
   });
   test('manual resends count and do not move weekly cadence; ten minute cooldown', async () => {
     const { app, approval } = await fixture();
@@ -1025,15 +1049,10 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
       now: new Date(+now + api.WEEK_MS + 660000),
     };
     const second = await api.resendApprovalReminder(b);
-    const c = {
-      ...a,
-      idempotencyKey: 'backfill-C',
-      now: new Date(+now + api.WEEK_MS + 1320000),
-    };
-    const fourth = await api.resendApprovalReminder(c);
-    expect(fourth).toMatchObject({
+    if (!second.ok) throw new Error('Expected reminder acceptance');
+    expect(second).toMatchObject({
       ok: true,
-      reminderCount: 4,
+      reminderCount: 3,
       nextAutoReminderAt: null,
     });
     await db.freeTierApprovalDelivery.updateMany({
@@ -1055,8 +1074,12 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
       app.id
     );
     expect(await api.resendApprovalReminder(a)).toEqual(original);
-    expect(await api.resendApprovalReminder(b)).toEqual(second);
-    expect(await api.resendApprovalReminder(c)).toEqual(fourth);
-    expect(send).toHaveBeenCalledTimes(5);
+    // This historical migration reconstructs the original four-reminder policy.
+    // Replaying an old acceptance preserves that result, while scheduling uses the new cap.
+    expect(await api.resendApprovalReminder(b)).toEqual({
+      ...second,
+      nextAutoReminderAt: new Date(+now + 2 * api.WEEK_MS),
+    });
+    expect(send).toHaveBeenCalledTimes(4);
   });
 });

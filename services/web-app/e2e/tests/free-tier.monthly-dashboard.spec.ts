@@ -85,6 +85,21 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
     await expect(
       page.getByText('Your class, assignments, and grading in one place.')
     ).toBeVisible();
+    const rail = page.getByTestId('free-account-rail');
+    await expect(rail.locator('section').last()).toContainText(
+      "Loving what Yawp! is doing for your students' writing?"
+    );
+    expect(
+      await rail
+        .getByTestId('free-account-checklist')
+        .evaluate((el) =>
+          Boolean(
+            el.nextElementSibling?.textContent?.includes(
+              'Get the Advocate Pack'
+            )
+          )
+        )
+    ).toBe(true);
     await expect(page.getByTestId('class-code').first()).toBeInViewport();
     const opener = page
       .getByRole('button', {
@@ -142,9 +157,17 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
     await shot(page, `type-picker-${label}`);
     await page.keyboard.press('Escape');
     await page.goto('/app/lesson-planner');
+    await expect(page.getByTestId('free-lesson-remaining')).toContainText(
+      /Your free classroom includes \d+ lesson plans and \d+ reports each month\. Renews/
+    );
     await shot(page, `lesson-planner-${label}`);
     await page.goto('/app/reporter');
-    await expect(page.getByTestId('reporter-monthly-remaining')).toBeVisible();
+    await expect(page.getByTestId('reporter-monthly-remaining')).toContainText(
+      'Unlimited with a site license'
+    );
+    await expect(page.getByTestId('reporter-monthly-remaining')).toContainText(
+      /Renews [A-Z][a-z]+ 1/
+    );
     await expect(page.getByTestId('free-reporter-locked')).toHaveCount(0);
     await shot(page, `reporter-${label}`);
   }
@@ -166,7 +189,7 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
   );
   await shot(page, 'monthly-usage');
   await page.keyboard.press('Escape');
-  await page.getByRole('link', { name: 'Ready for full access?' }).click();
+  await page.getByRole('link', { name: 'Get the Advocate Pack' }).click();
   await expect(
     page.getByRole('heading', { name: 'Advocate Pack' })
   ).toBeVisible();
@@ -211,7 +234,7 @@ for (const control of ['flag-off', 'untargeted', 'paid', 'pending'] as const)
         await page.waitForURL(/\/app\/free-tier\/preview/);
       } else await login(page, control !== 'paid');
       await expect(
-        page.getByRole('link', { name: 'Ready for full access?' })
+        page.getByRole('link', { name: 'Get the Advocate Pack' })
       ).toHaveCount(0);
       await expect(
         page.getByRole('button', {
@@ -444,6 +467,17 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
       await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
       for (const route of ['lesson-planner', 'reporter']) {
         await page.goto(`/app/${route}`);
+        await expect(
+          page.getByText("and everything you've already made is still here.", {
+            exact: false,
+          })
+        ).toBeVisible();
+        await expect(
+          page.getByRole('link', { name: 'Share Yawp! with my administrator' })
+        ).toHaveAttribute('href', '/app/advocate-pack');
+        await expect(
+          page.getByRole('link', { name: 'Learn about site licenses' })
+        ).toBeVisible();
         await shot(page, `${route}-zero-${width}`);
       }
       if (width === 390) {
@@ -557,16 +591,22 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
           },
         });
         expect(response.status()).toBe(403);
-        expect(await response.json()).toMatchObject({ error: 'approval_required' });
+        expect(await response.json()).toMatchObject({
+          error: 'approval_required',
+        });
       }
     }
-    expect(await db.reporterMessage.count({
-      where: { conversationId: saved.id },
-    })).toBe(messagesBefore);
-    expect(await db.setting.findMany({
-      where: { name: { startsWith: 'free_tier.monthly.' } },
-      orderBy: { name: 'asc' },
-    })).toEqual(usageBefore);
+    expect(
+      await db.reporterMessage.count({
+        where: { conversationId: saved.id },
+      })
+    ).toBe(messagesBefore);
+    expect(
+      await db.setting.findMany({
+        where: { name: { startsWith: 'free_tier.monthly.' } },
+        orderBy: { name: 'asc' },
+      })
+    ).toEqual(usageBefore);
   } finally {
     await db.freeTierApplication.updateMany({
       where: { organizationId: org },

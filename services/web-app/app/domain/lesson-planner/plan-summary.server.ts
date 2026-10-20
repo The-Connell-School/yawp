@@ -17,7 +17,7 @@ export const PLAN_SUMMARY_SYSTEM = [
   '- teacherWill: three to five short lines on what the teacher does.',
   '- steps: exactly one entry per numbered part, in the same order. "summary" is one or two sentences on what happens; "purpose" is one sentence on why this part serves the lesson.',
   '- closing: one sentence on how the lesson ends.',
-  '- Never reproduce the full text of a framing, prompt, handout or slide; summarize it. Never write a library prompt id (FW-021, sf-ev-03). Write the product name as YAWP!.',
+  '- Never reproduce the full text of a framing, prompt, handout or slide; summarize it. Never write a library prompt id (FW-021, sf-ev-03). Write the product name as Yawp!.',
   '- Plain, warm, teacher-to-teacher language. Offer, do not prescribe.',
 ].join('\n');
 

@@ -13,7 +13,7 @@ describe("stackCreateLink (Brian's run 2, A5)", () => {
       typeIds,
       conversationId: 'plan-1',
     });
-    expect(link?.label).toBe('Create this class starter in YAWP!');
+    expect(link?.label).toBe('Create this class starter in Yawp!');
     expect(link?.href).toContain('/app/assignment-types/cs-type?');
     expect(link?.href).toContain('newPrompt=Write+about+something+you+carry.');
     expect(link?.href).toContain('fromLesson=plan-1');
@@ -28,7 +28,7 @@ describe("stackCreateLink (Brian's run 2, A5)", () => {
       typeIds,
       conversationId: 'plan-1',
     });
-    expect(link?.label).toBe('Create this Daily Pages prompt in YAWP!');
+    expect(link?.label).toBe('Create this Daily Pages prompt in Yawp!');
     expect(link?.href).toContain('/app/assignment-types/dp-type?');
     expect(decodeURIComponent(link!.href)).not.toContain('sf-ev-03');
   });
@@ -43,7 +43,7 @@ describe("stackCreateLink (Brian's run 2, A5)", () => {
       typeIds,
       conversationId: 'plan-1',
     });
-    expect(link?.label).toBe('Create this exit ticket in YAWP!');
+    expect(link?.label).toBe('Create this exit ticket in Yawp!');
     expect(link?.href).toContain('/app/assignment-types/et-type');
     expect(decodeURIComponent(link!.href)).toContain('weight');
   });
@@ -82,7 +82,7 @@ describe("stackCreateLink — every writing step (Brian's run 3, item 4)", () =>
       title: 'Closing (3 min)',
       content: 'Exit ticket: one object, one sentence about why it matters.',
     });
-    expect(link?.label).toBe('Create this exit ticket in YAWP!');
+    expect(link?.label).toBe('Create this exit ticket in Yawp!');
     expect(link?.href).toContain('/app/assignment-types/et-type?');
     expect(decodeURIComponent(link!.href.replace(/\+/g, ' '))).toContain(
       'one object, one sentence about why it matters'
@@ -96,7 +96,7 @@ describe("stackCreateLink — every writing step (Brian's run 3, item 4)", () =>
       title: 'Quick write (4 min)',
       content: 'Students write for four minutes: "What is the heaviest thing you carry?"',
     });
-    expect(link?.label).toBe('Create this quick write in YAWP!');
+    expect(link?.label).toBe('Create this quick write in Yawp!');
     expect(decodeURIComponent(link!.href.replace(/\+/g, ' '))).toContain('newPrompt=What is the heaviest thing you carry?');
   });
 
@@ -115,7 +115,7 @@ describe("stackCreateLink — every writing step (Brian's run 3, item 4)", () =>
       content: 'Students draft a working claim: what is this book really about?',
       typeIds: { ...typeIds, thesis: 'th-type' },
     });
-    expect(link?.label).toBe('Create this Thesis Essay assignment in YAWP!');
+    expect(link?.label).toBe('Create this Thesis Essay assignment in Yawp!');
     expect(link?.href).toContain('/app/assignment-types/th-type?');
   });
 
@@ -129,13 +129,13 @@ describe("stackCreateLink — every writing step (Brian's run 3, item 4)", () =>
     expect(link?.href).toContain('fromPiece=m%3Amat-9');
   });
 
-  test('once created: "Created in YAWP! · Open"', () => {
+  test('once created: "Created in Yawp! · Open"', () => {
     const link = stackCreateLink({
       ...base,
       kind: 'class-starter',
       content: 'Write.',
       created: { href: '/app/assignment-types/cs-type' },
     });
-    expect(link).toEqual({ label: 'Created in YAWP! · Open', href: '/app/assignment-types/cs-type', created: true });
+    expect(link).toEqual({ label: 'Created in Yawp! · Open', href: '/app/assignment-types/cs-type', created: true });
   });
 });
