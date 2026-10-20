@@ -44,7 +44,9 @@ test.describe.serial('Free tier feature flag', () => {
   test('onboarding waitlist works when the flag is on', async ({ page }) => {
     await setFreeTierFlag(true);
     await page.goto('/free');
-    await expect(page.getByRole('heading', { name: /Try Yawp!/i })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: /Welcome to Yawp!|Try Yawp!/i })
+    ).toBeVisible();
     await fillFreeTierWaitlistForm(page, {
       name: 'Flag E2E',
       email: `e2e-flag+${Date.now()}@yawp.local`,

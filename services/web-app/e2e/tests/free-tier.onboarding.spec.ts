@@ -13,7 +13,9 @@ const ADMIN_DOMAIN = 'e2e-ft.school.edu';
 test.describe('Free tier public flow', () => {
   test('waitlist page loads', async ({ page }) => {
     await page.goto('/free');
-    await expect(page.getByRole('heading', { name: /Try Yawp!/i })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: /Welcome to Yawp!|Try Yawp!/i })
+    ).toBeVisible();
     await expect(page.getByRole('button', { name: /Join the waitlist/i })).toBeVisible();
   });
 

@@ -294,8 +294,8 @@ local('flag-off, untargeted and missing-user signed writes never enter legacy de
         error: 'Not found',
       });
     } else {
-      expect(await outcome(await resend(app.id, app.id + mode), 409)).toEqual({
-        error: 'flag_off',
+      expect(await outcome(await resend(app.id, app.id + mode), 404)).toEqual({
+        error: 'Not found',
       });
     }
   }

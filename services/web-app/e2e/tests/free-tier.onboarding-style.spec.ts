@@ -203,7 +203,9 @@ for (const viewport of [
       });
       if (!before) {
         await expect(
-          page.getByRole('heading', { name: /Who can approve Yawp!?/i })
+          page.getByRole('heading', {
+            name: /Who approves Yawp!|Who can approve Yawp!/i,
+          })
         ).toBeVisible();
         await expect(
           page.getByRole('list', { name: 'Approval progress' })

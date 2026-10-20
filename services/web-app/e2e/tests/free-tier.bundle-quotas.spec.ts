@@ -28,6 +28,9 @@ test.describe('Free classroom bundle quotas', () => {
     if (await prewritingPicker.count()) {
       await expect(prewritingPicker).toContainText(/\d+ of \d+/);
       await sheet.getByRole('button', { name: /Class Starter/i }).click();
+      await expect(sheet.getByRole('combobox').first()).toBeVisible({
+        timeout: 20_000,
+      });
     }
     const typeTrigger = sheet.getByRole('combobox').first();
     await expect(typeTrigger).toBeVisible({ timeout: 20_000 });

@@ -9,6 +9,10 @@ export async function completeClassPreparationStepIfShown(
   }: { className?: string; grade?: string } = {}
 ) {
   const classNameInput = page.locator('input[name="className"]');
+  await page
+    .locator('input[name="className"], input[name="adminName"]')
+    .first()
+    .waitFor({ state: 'visible', timeout: 30_000 });
   if ((await classNameInput.count()) === 0) return;
   await classNameInput.fill(className);
   const gradeSelect = page.locator('select[name="grade"]');
