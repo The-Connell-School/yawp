@@ -97,7 +97,30 @@ export default function PrivacyRoute() {
           expectations.
         </p>
         <p>
-          Student content is never used to train any model.
+          Student writing is never used to train models. Our model providers,
+          Anthropic and OpenAI, do not train on data sent through their APIs by
+          default, and we have not opted in. See{' '}
+          <a
+            className="underline underline-offset-4"
+            href="https://www.anthropic.com/legal/commercial-terms"
+          >
+            Anthropic Commercial Terms
+          </a>
+          ,{' '}
+          <a
+            className="underline underline-offset-4"
+            href="https://privacy.claude.com/en/articles/7996868-is-my-data-used-for-model-training"
+          >
+            Anthropic Privacy Center
+          </a>
+          , and{' '}
+          <a
+            className="underline underline-offset-4"
+            href="https://openai.com/enterprise-privacy/"
+          >
+            OpenAI enterprise privacy
+          </a>
+          .
         </p>
       </PublicLegalSection>
 
@@ -125,7 +148,17 @@ export default function PrivacyRoute() {
         <p>
           Model providers may hold content for up to 30 days for abuse
           monitoring, then it is deleted automatically, unless longer retention
-          is required by law or the content is flagged for misuse.
+          is required by law or the content is flagged for misuse. As described
+          on{' '}
+          <a
+            className="underline underline-offset-4"
+            href="https://openai.com/enterprise-privacy/"
+          >
+            OpenAI&apos;s enterprise privacy page
+          </a>
+          , API inputs and outputs may be retained for up to 30 days to provide
+          the services and to identify abuse, then removed unless legally
+          required.
         </p>
       </PublicLegalSection>
 
