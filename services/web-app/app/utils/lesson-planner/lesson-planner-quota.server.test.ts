@@ -12,12 +12,13 @@ let limits = {
   updatedByEmail: 'staff@example.test',
 };
 const settingFindMany = mock(async ({ where }: { where: { name?: { in?: string[] } | string } }) => {
-  const names = Array.isArray(where.name?.in)
-    ? where.name.in
-    : typeof where.name === 'string'
-      ? [where.name]
+  const raw = where.name;
+  const names = typeof raw === 'string'
+    ? [raw]
+    : Array.isArray(raw?.in)
+      ? raw.in
       : [];
-  return names.flatMap((name) => {
+  return names.flatMap((name: string) => {
     if (name === 'feature_flag.free_tier')
       return [
         {

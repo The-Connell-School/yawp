@@ -33,11 +33,12 @@ mock.module('~/utils/db.server', () => ({
 }));
 function setUnifiedFlag(value: string | null) {
   unifiedFlagValue = value;
-  findUnique.mockImplementation(async ({ where }: { where: { name: string } }) =>
-    where.name === 'feature_flag.unified-sign-on' && value
+  findUnique.mockImplementation(async (args: unknown) => {
+    const where = (args as { where: { name: string } }).where;
+    return where.name === 'feature_flag.unified-sign-on' && value
       ? { value }
-      : null
-  );
+      : null;
+  });
   findMany.mockImplementation(
     async ({
       where,
