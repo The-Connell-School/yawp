@@ -19,6 +19,7 @@ describe('preview prisma-cli', () => {
     const migrateIndex = deploy.indexOf('${prisma_cli} migrate deploy');
     expect(generateIndex).toBeGreaterThan(-1);
     expect(migrateIndex).toBeGreaterThan(generateIndex);
+    expect(deploy).toContain('migrate deploy) && cd packages/prisma');
   });
 
   test('wrapper executes Prisma via node build entry', () => {
