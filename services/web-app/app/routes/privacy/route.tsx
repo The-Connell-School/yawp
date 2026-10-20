@@ -96,6 +96,9 @@ export default function PrivacyRoute() {
           assignments, instruction, grading decisions, and classroom
           expectations.
         </p>
+        <p>
+          Student content is never used to train any model.
+        </p>
       </PublicLegalSection>
 
       <PublicLegalSection title="Service Providers">
@@ -119,6 +122,11 @@ export default function PrivacyRoute() {
           features. Classroom work and feedback are available to users according
           to their roles and access permissions.
         </p>
+        <p>
+          Model providers may hold content for up to 30 days for abuse
+          monitoring, then it is deleted automatically, unless longer retention
+          is required by law or the content is flagged for misuse.
+        </p>
       </PublicLegalSection>
 
       <PublicLegalSection title="Retention">
@@ -138,6 +146,18 @@ export default function PrivacyRoute() {
           For questions about stored account information, classroom records,
           access, correction, retention, or deletion, contact Yawp! using the
           address below.
+        </p>
+        <p>
+          We delete account and classroom data within 30 days of a verified
+          deletion request sent to{' '}
+          <a className="underline underline-offset-4" href="mailto:support@yawp.school">support@yawp.school</a>.
+        </p>
+      </PublicLegalSection>
+
+      <PublicLegalSection title="Security Incidents">
+        <p>
+          If a security breach affects personal information, we notify affected
+          schools or users within 72 hours of confirming it.
         </p>
       </PublicLegalSection>
 

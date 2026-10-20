@@ -23,7 +23,9 @@ describe('privacy route', () => {
     expect(html).toContain('Stripe');
     expect(html).toContain('7 days');
     expect(html).toContain('90 days');
-    expect(html).not.toContain('train');
+    expect(html).toContain('train');
+    expect(html).toContain('30 days');
+    expect(html).toContain('72 hours');
     expect(html).not.toMatch(/\bAI\b/);
   });
 });
