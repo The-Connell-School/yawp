@@ -192,7 +192,7 @@ export default function FreeTierPendingRoute() {
         {terminal ? (
           <p className="text-sm text-muted-foreground">
             {app.status === 'APPROVED'
-              ? 'You can start teaching with YAWP!'
+              ? 'You can start teaching with Yawp!'
               : 'Questions? Email support@yawp.school.'}
           </p>
         ) : (
@@ -209,7 +209,7 @@ export default function FreeTierPendingRoute() {
                 'Account created',
                 'Request sent',
                 app?.status === 'MANUAL_REVIEW'
-                  ? 'YAWP! review'
+                  ? 'Yawp! review'
                   : `${current?.adminName ?? 'Your administrator'} approves`,
                 'Start teaching',
               ]}
@@ -223,7 +223,7 @@ export default function FreeTierPendingRoute() {
                 />
                 <p className="text-sm text-muted-foreground">
                   Email your administrator directly to let them know why you
-                  would like to use YAWP! with your class.
+                  would like to use Yawp! with your class.
                 </p>
                 <a
                   className="inline-flex h-11 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
@@ -308,7 +308,7 @@ export default function FreeTierPendingRoute() {
           'Account created',
           'Request sent',
           app?.status === 'MANUAL_REVIEW'
-            ? 'YAWP! review'
+            ? 'Yawp! review'
             : `${adminName} approves`,
           'Start teaching',
         ]}

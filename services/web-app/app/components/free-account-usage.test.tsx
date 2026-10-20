@@ -39,7 +39,7 @@ test('both meters always show monthly allowances and the actual UTC renewal date
       'Your free classroom includes 5 lesson plans and 2 reports each month. Renews January 1.'
     );
     expect(html).toContain('Unlimited with a site license');
-    expect(html).not.toContain('Share YAWP!');
+    expect(html).not.toContain('Share Yawp!');
   }
 });
 test('one remaining and exhausted copy use each feature name, renewal and saved-work reassurance', () => {
@@ -62,7 +62,7 @@ test('one remaining and exhausted copy use each feature name, renewal and saved-
     );
     expect(html).toContain('Unlimited with a site license.');
     expect(html).toContain('href="/app/advocate-pack"');
-    expect(html).toContain('Share YAWP! with my administrator');
+    expect(html).toContain('Share Yawp! with my administrator');
     expect(html).toContain('Learn about site licenses');
   }
 });
@@ -79,7 +79,7 @@ test('monthly guidance is absent with the monthly flag off', () => {
 test('Advocate Pack follows incomplete first steps, leads after completion, and stays hidden for legacy usage', () => {
   const html = render(<FreeAccountRail usage={usage} />);
   expect(html.indexOf('free-account-checklist')).toBeLessThan(
-    html.indexOf('Loving what YAWP!')
+    html.indexOf('Loving what Yawp!')
   );
   expect(html).toContain(
     'Our Advocate Pack makes it easy to share what you&#x27;re seeing with your administrator.'
@@ -96,7 +96,7 @@ test('Advocate Pack follows incomplete first steps, leads after completion, and 
     },
   };
   const complete = render(<FreeAccountRail usage={done} />);
-  expect(complete.indexOf('Loving what YAWP!')).toBeLessThan(
+  expect(complete.indexOf('Loving what Yawp!')).toBeLessThan(
     complete.indexOf('free-account-checklist')
   );
   expect(
@@ -105,6 +105,6 @@ test('Advocate Pack follows incomplete first steps, leads after completion, and 
 });
 test('Reporter card uses site-license language', () => {
   const html = render(<FreeReporterLocked />);
-  expect(html).toContain('Reporter comes with a YAWP! site license');
+  expect(html).toContain('Reporter comes with a Yawp! site license');
   expect(html).not.toContain('paid plan');
 });

@@ -116,7 +116,7 @@ const TOURS: Record<TourId, PageTour> = {
   dashboard: {
     id: 'dashboard',
     welcome: {
-      title: 'Welcome to YAWP!',
+      title: 'Welcome to Yawp!',
       body: 'This is your home base: your class, your assignments, and the work waiting for you, all in one place.',
       icon: 'home',
     },
@@ -199,7 +199,7 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'my-assignments-new',
         title: 'Create an assignment',
-        body: 'Start a new assignment here. Choose a type, and YAWP! shows how many of that type your free classroom has left.',
+        body: 'Start a new assignment here. Choose a type, and Yawp! shows how many of that type your free classroom has left.',
       },
       {
         target: 'my-assignments-list',

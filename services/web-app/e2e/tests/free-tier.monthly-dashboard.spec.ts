@@ -87,7 +87,7 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
     ).toBeVisible();
     const rail = page.getByTestId('free-account-rail');
     await expect(rail.locator('section').last()).toContainText(
-      "Loving what YAWP! is doing for your students' writing?"
+      "Loving what Yawp! is doing for your students' writing?"
     );
     expect(
       await rail
@@ -473,7 +473,7 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
           })
         ).toBeVisible();
         await expect(
-          page.getByRole('link', { name: 'Share YAWP! with my administrator' })
+          page.getByRole('link', { name: 'Share Yawp! with my administrator' })
         ).toHaveAttribute('href', '/app/advocate-pack');
         await expect(
           page.getByRole('link', { name: 'Learn about site licenses' })

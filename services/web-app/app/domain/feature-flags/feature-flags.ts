@@ -14,7 +14,7 @@
  */
 
 /**
- * YAWP! Lesson Planner (#374). Off: nav and deep links are hidden and every
+ * Yawp! Lesson Planner (#374). Off: nav and deep links are hidden and every
  * planner route/API returns 404. Existing lesson data is kept.
  */
 export const LESSON_PLANNER_FLAG = 'lesson_planner' as const;

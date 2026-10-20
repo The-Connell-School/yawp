@@ -147,7 +147,7 @@ test('enabled local resolver does not authenticate or accept fixture selectors',
       .getByLabel('Email, handle, or class code')
       .fill('new@example.com');
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Welcome to YAWP!' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Welcome to Yawp!' })).toBeVisible();
     for (const intent of [
       'resolve',
       'verify-code',

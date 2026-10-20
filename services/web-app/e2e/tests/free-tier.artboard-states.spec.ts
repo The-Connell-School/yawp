@@ -233,7 +233,7 @@ for (const width of [1280, 390]) {
       const approvePath = `/free/admin/approve?t=${encodeURIComponent(approve.token)}`;
       await admin.goto(approvePath);
       await admin
-        .getByRole('button', { name: 'Approve YAWP!', exact: true })
+        .getByRole('button', { name: 'Approve Yawp!', exact: true })
         .click();
       await expect(
         admin.locator('input[name="adminRole"]:invalid')
@@ -246,7 +246,7 @@ for (const width of [1280, 390]) {
         await reply(
           admin,
           { ok: false, reason },
-          'Approve YAWP!',
+          'Approve Yawp!',
           `approval-${reason}`,
           reason === 'email_failed'
             ? /approval.*(saved|recorded)|recorded your approval/
