@@ -96,6 +96,32 @@ export default function PrivacyRoute() {
           assignments, instruction, grading decisions, and classroom
           expectations.
         </p>
+        <p>
+          Student writing is never used to train models. Our model providers,
+          Anthropic and OpenAI, do not train on data sent through their APIs by
+          default, and we have not opted in. See{' '}
+          <a
+            className="underline underline-offset-4"
+            href="https://www.anthropic.com/legal/commercial-terms"
+          >
+            Anthropic Commercial Terms
+          </a>
+          ,{' '}
+          <a
+            className="underline underline-offset-4"
+            href="https://privacy.claude.com/en/articles/7996868-is-my-data-used-for-model-training"
+          >
+            Anthropic Privacy Center
+          </a>
+          , and{' '}
+          <a
+            className="underline underline-offset-4"
+            href="https://openai.com/enterprise-privacy/"
+          >
+            OpenAI enterprise privacy
+          </a>
+          .
+        </p>
       </PublicLegalSection>
 
       <PublicLegalSection title="Service Providers">
@@ -119,6 +145,21 @@ export default function PrivacyRoute() {
           features. Classroom work and feedback are available to users according
           to their roles and access permissions.
         </p>
+        <p>
+          Model providers may hold content for up to 30 days for abuse
+          monitoring, then it is deleted automatically, unless longer retention
+          is required by law or the content is flagged for misuse. As described
+          on{' '}
+          <a
+            className="underline underline-offset-4"
+            href="https://openai.com/enterprise-privacy/"
+          >
+            OpenAI&apos;s enterprise privacy page
+          </a>
+          , API inputs and outputs may be retained for up to 30 days to provide
+          the services and to identify abuse, then removed unless legally
+          required.
+        </p>
       </PublicLegalSection>
 
       <PublicLegalSection title="Retention">
@@ -138,6 +179,18 @@ export default function PrivacyRoute() {
           For questions about stored account information, classroom records,
           access, correction, retention, or deletion, contact Yawp! using the
           address below.
+        </p>
+        <p>
+          We delete account and classroom data within 30 days of a verified
+          deletion request sent to{' '}
+          <a className="underline underline-offset-4" href="mailto:support@yawp.school">support@yawp.school</a>.
+        </p>
+      </PublicLegalSection>
+
+      <PublicLegalSection title="Security Incidents">
+        <p>
+          If a security breach affects personal information, we notify affected
+          schools or users within 72 hours of confirming it.
         </p>
       </PublicLegalSection>
 
