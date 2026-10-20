@@ -28,6 +28,7 @@ RUNTIME=production
 compose=(record_compose)
 compute_tooling_fingerprint() { echo current; }
 preview_missing_tooling_artifacts() { :; }
+build_or_pull_production_images() { :; }
 record_compose() { printf '%s\\n' "$*"; if [[ ${failSeed} == true && "$*" == *seed-free-tier-bundle-assignment-types* ]]; then return 17; fi; }
 ${qaSeedGuard}
 ${fn}
