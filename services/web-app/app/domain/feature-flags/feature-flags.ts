@@ -195,7 +195,15 @@ export function parseFeatureFlagValue(
   }
   const { mode, orgIds } = parsed as { mode?: unknown; orgIds?: unknown };
   if (!isFeatureFlagMode(mode)) return { ...OFF };
-  if (mode !== 'targeted') return { mode, orgIds: [] };
+  if (mode !== 'targeted') {
+    if (
+      orgIds !== undefined &&
+      (!Array.isArray(orgIds) ||
+        !orgIds.every((id): id is string => typeof id === 'string'))
+    )
+      return { ...OFF };
+    return { mode, orgIds: [] };
+  }
   if (
     !Array.isArray(orgIds) ||
     !orgIds.every((id): id is string => typeof id === 'string')

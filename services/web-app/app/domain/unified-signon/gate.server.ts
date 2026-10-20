@@ -14,7 +14,8 @@ export async function isUnifiedSignOnEnabled(): Promise<boolean> {
       where: { name: featureFlagSettingName(UNIFIED_SIGN_ON_FLAG) },
       select: { value: true },
     });
-    return parseFeatureFlagValue(row?.value).mode === 'everyone';
+    const parsed = parseFeatureFlagValue(row?.value);
+    return parsed.mode === 'everyone';
   } catch {
     return false;
   }

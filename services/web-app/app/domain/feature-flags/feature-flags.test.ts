@@ -86,7 +86,18 @@ describe('stored flag values', () => {
   const off: FeatureFlagValue = { mode: 'off', orgIds: [] };
   const everyone: FeatureFlagValue = { mode: 'everyone', orgIds: [] };
 
-  test('legacy "true" reads as everyone and "false" as off', () => {
+  test('everyone with invalid orgIds reads as off', () => {
+    expect(parseFeatureFlagValue('{"mode":"everyone","orgIds":false}')).toEqual({
+      mode: 'off',
+      orgIds: [],
+    });
+    expect(parseFeatureFlagValue('{"mode":"everyone","orgIds":[1]}')).toEqual({
+      mode: 'off',
+      orgIds: [],
+    });
+  });
+
+  test('legacy "true" reads as everyone and "false" is off', () => {
     expect(parseFeatureFlagValue('true')).toEqual(everyone);
     expect(parseFeatureFlagValue('false')).toEqual(off);
   });
