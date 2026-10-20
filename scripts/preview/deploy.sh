@@ -905,6 +905,8 @@ rollout_demo_web_without_downtime() {
     PREVIEW_ACCESS_CODE="$smoke_access_code" \
     PREVIEW_DATA_MODE="$DATA_MODE" \
     PREVIEW_RUNTIME="$RUNTIME" \
+    PREVIEW_SLUG="$SLUG" \
+    PR_NUMBER="${PR_NUMBER:-}" \
     PREVIEW_DEV_LOGIN_EMAIL="$PREVIEW_DEV_LOGIN_EMAIL" \
     PREVIEW_LOGIN_EMAIL="${PREVIEW_LOGIN_EMAIL:-}" \
     PREVIEW_LOGIN_PASSWORD="${PREVIEW_LOGIN_PASSWORD:-}" \
@@ -996,6 +998,9 @@ for attempt in $(seq 1 90); do
   if curl -fsS --connect-timeout 1 --max-time 2 "$health_url" >/dev/null; then
     PREVIEW_BASE_URL="$login_url" \
       PREVIEW_DATA_MODE="$DATA_MODE" \
+      PREVIEW_RUNTIME="$RUNTIME" \
+      PREVIEW_SLUG="$SLUG" \
+      PR_NUMBER="${PR_NUMBER:-}" \
       PREVIEW_ACCESS_CODE="$smoke_access_code" \
       node "$SCRIPT_DIR/smoke-login.mjs"
     end_ms="$(date +%s%3N)"
