@@ -174,7 +174,7 @@ for (const viewport of [
       });
       await page.goto(`/free/join?t=${encodeURIComponent(release.token)}`);
       await capture('account-creation');
-      if (!before) await expect(page.getByRole('heading', { name: /^(Welcome to YAWP!|Create your free classroom)$/ })).toBeVisible();
+      if (!before) await expect(page.getByRole('heading', { name: /^(Welcome to Yawp!|Create your free classroom)$/ })).toBeVisible();
       await page.getByRole('button', { name: 'Create account' }).click();
       await expect(page.locator('input[name="password"]:invalid')).toHaveCount(
         1

@@ -113,7 +113,7 @@ export default function FreeJoinRoute() {
 
   return (
     <FreeTierAuthCard
-      title={data.onboardingV2 ? 'Welcome to YAWP!' : 'Create your free classroom'}
+      title={data.onboardingV2 ? 'Welcome to Yawp!' : 'Create your free classroom'}
       subtitle={data.onboardingV2
         ? 'Your free license covers one class of up to 35 students. Start by creating your account. Next, you’ll set up your class.'
         : "You're in. Set up your account."}

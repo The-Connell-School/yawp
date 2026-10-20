@@ -401,7 +401,7 @@ function LockedPreviewInvite() {
         Take a look around
       </h2>
       <p className="text-sm text-muted-foreground">
-        While we wait, let’s explore your YAWP! classroom. You’ll be able to
+        While we wait, let’s explore your Yawp! classroom. You’ll be able to
         add students and create assignments as soon as you’re approved.
       </p>
       <Link

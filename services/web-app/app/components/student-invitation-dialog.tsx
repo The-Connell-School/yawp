@@ -59,7 +59,7 @@ export function StudentInvitationDialog({
       >
         <DialogHeader>
           <DialogTitle className="pr-6 text-2xl">
-            {freeTierCopy && present ? 'Welcome to YAWP!' : 'Add your students to your class'}
+            {freeTierCopy && present ? 'Welcome to Yawp!' : 'Add your students to your class'}
           </DialogTitle>
           <DialogDescription>
             {freeTierCopy
@@ -99,7 +99,7 @@ export function StudentInvitationDialog({
                 the same password they use for their school laptop.
               </li>
               <li>
-                YAWP! will create your username for you. Write it down; you’ll
+                Yawp! will create your username for you. Write it down; you’ll
                 use it with your password every time you sign in.
               </li>
             </>
