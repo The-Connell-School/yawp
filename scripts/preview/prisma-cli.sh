@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Run the Prisma CLI under Node.js. Bun 1.3.x can segfault/SIGILL when it
+# substitutes for Node while executing `prisma migrate deploy` (see demo deploy).
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+node_major_version() {
+  node -p 'Number(process.versions.node.split(".")[0])'
+}
+
+ensure_node() {
+  if command -v node >/dev/null 2>&1 && [[ "$(node_major_version)" -ge 22 ]]; then
+    return 0
+  fi
+  if ! command -v apt-get >/dev/null 2>&1; then
+    echo "preview prisma-cli: Node.js 22+ is required but apt-get is unavailable." >&2
+    exit 1
+  fi
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq
+  apt-get install -y -qq ca-certificates curl gnupg
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  apt-get install -y -qq nodejs
+  if [[ "$(node_major_version)" -lt 22 ]]; then
+    echo "preview prisma-cli: Node.js 22+ is required for Prisma 7." >&2
+    exit 1
+  fi
+}
+
+resolve_prisma_entry() {
+  local candidate
+  for candidate in \
+    "$ROOT/packages/prisma/node_modules/prisma/build/index.js" \
+    "$ROOT/node_modules/prisma/build/index.js"; do
+    if [[ -f "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  echo "preview prisma-cli: Prisma is not installed; run bun install first." >&2
+  exit 1
+}
+
+ensure_node
+PRISMA_ENTRY="$(resolve_prisma_entry)"
+cd "$ROOT/packages/prisma"
+exec node "$PRISMA_ENTRY" "$@"
