@@ -238,6 +238,18 @@ describe('internal feature-flag endpoints', () => {
     });
   });
 
+  test('legacy alias POST upserts the primary free_tier row', async () => {
+    const response = await featureFlagUpdate(
+      post({ mode: 'everyone' }, {}, 'free-tier-onboarding-v2'),
+      'free-tier-onboarding-v2'
+    );
+    expect(response.status).toBe(200);
+    expect(prisma.setting.upsert.mock.calls[0]?.[0].where).toEqual({
+      name: 'feature_flag.free_tier',
+    });
+    expect((await response.json()).flag.key).toBe('free-tier');
+  });
+
   test('legacy {enabled: true} turns a flag on for everyone and reports the change', async () => {
     const response = await featureFlagUpdate(post({ enabled: true }), FLAG);
     expect(response.status).toBe(200);
