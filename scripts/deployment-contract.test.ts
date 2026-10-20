@@ -974,6 +974,7 @@ describe('PR preview deployment contract', () => {
       'export const middleware = [internalImpersonationMiddleware, previewAccessMiddleware, uaPartnerMiddleware]'
     );
     expect(gate).toContain("process.env.PREVIEW_ACCESS_GATE === 'on'");
+    expect(gate).toContain('isDemoEnvironment');
     expect(gate).toContain("'/api/healthcheck'");
     expect(compose).toContain('PREVIEW_ACCESS_GATE: "on"');
     expect(compose).toContain('requirePreviewAccessSeats(accessSeats)');
@@ -1788,10 +1789,13 @@ describe('demo environment deployment contract', () => {
     expect(workflow).toContain('default: false');
   });
 
-  test('the demo deploy proves the in-app gate blocks data before trusting a code', () => {
+  test('the demo deploy keeps browsing public while dev-login stays code-gated', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');
 
-    expect(workflow).toContain('data-preview-access-screen');
+    expect(workflow).toContain(
+      'Demo homepage still renders the site-wide preview access screen'
+    );
+    expect(workflow).toContain('/free/admin/approve');
     expect(workflow).toContain(
       'POST /auth/dev-login without an access cookie returned HTTP $blocked, expected 401'
     );
@@ -1972,20 +1976,21 @@ describe('demo environment deployment contract', () => {
     expect(guard).toContain('iam simulate-principal-policy');
     expect(guard).toContain('explicitDeny');
   });
-  test('workflow verification is anonymous and retains in-app gate assertions', () => {
-    for (const path of [
-      '.github/workflows/preview-environments.yml',
-      '.github/workflows/demo-environment.yml',
-    ]) {
-      const workflow = readRepoFile(path);
+  test('workflow verification is anonymous and retains preview gate assertions', () => {
+    const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml');
+    const demoWorkflow = readRepoFile('.github/workflows/demo-environment.yml');
 
+    for (const workflow of [previewWorkflow, demoWorkflow]) {
       expect(workflow).not.toContain(deprecatedPreviewBasicAuth);
       expect(workflow).not.toContain('curl --user');
-      expect(workflow).toContain('data-preview-access-screen');
       expect(workflow).toContain(
         'POST /auth/dev-login without an access cookie returned HTTP $blocked, expected 401'
       );
     }
+    expect(previewWorkflow).toContain('data-preview-access-screen');
+    expect(demoWorkflow).toContain(
+      'Demo homepage still renders the site-wide preview access screen'
+    );
   });
 });
 

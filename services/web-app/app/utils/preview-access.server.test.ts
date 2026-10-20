@@ -34,6 +34,8 @@ const originalEnv = {
   PREVIEW_ACCESS_SEATS: process.env.PREVIEW_ACCESS_SEATS,
   PREVIEW_ACCESS_SECRET: process.env.PREVIEW_ACCESS_SECRET,
   SESSION_SECRET: process.env.SESSION_SECRET,
+  PREVIEW_SLUG: process.env.PREVIEW_SLUG,
+  PR_NUMBER: process.env.PR_NUMBER,
 };
 
 function restore(name: keyof typeof originalEnv) {
@@ -102,6 +104,8 @@ describe('preview access gate', () => {
     restore('PREVIEW_ACCESS_SEATS');
     restore('PREVIEW_ACCESS_SECRET');
     restore('SESSION_SECRET');
+    restore('PREVIEW_SLUG');
+    restore('PR_NUMBER');
   });
 
   describe('scoped free-tier access', () => {
@@ -1186,5 +1190,66 @@ describe('preview access codes', () => {
     expect(
       await getPreviewAccessSeat(request('/app', { headers: { cookie } }))
     ).toBeNull();
+  });
+});
+
+describe('demo environment gate split', () => {
+  beforeEach(() => {
+    process.env.NODE_ENV = 'production';
+    process.env.PREVIEW_ACCESS_GATE = 'on';
+    process.env.PREVIEW_DATA_MODE = 'seed';
+    process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
+      {
+        code: 'brave-otter-4193',
+        organizationId: 'local-dev-org',
+        label: 'Master',
+      },
+    ]);
+    process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
+    process.env.PREVIEW_SLUG = 'demo';
+    delete process.env.PR_NUMBER;
+  });
+
+  afterEach(() => {
+    restore('PREVIEW_SLUG');
+    restore('PR_NUMBER');
+  });
+
+  test('demo disables the site-wide gate but keeps dev-login access codes required', async () => {
+    const {
+      isDemoEnvironment,
+      isPreviewAccessGateEnabled,
+      isPreviewDevLoginAccessCodeRequired,
+    } = await import('./preview-access.server');
+    expect(isDemoEnvironment()).toBe(true);
+    expect(isPreviewAccessGateEnabled()).toBe(false);
+    expect(isPreviewDevLoginAccessCodeRequired()).toBe(true);
+  });
+
+  test('demo middleware allows normal routes and approval links without a preview seat cookie', async () => {
+    const next = mock(async () => new Response('ok'));
+    for (const path of ['/app', '/free/admin/approve', '/free?t=ignored']) {
+      const response = await previewAccessMiddleware(
+        middlewareArgs(request(path)),
+        next
+      );
+      expect(response?.status).toBe(200);
+      expect(next).toHaveBeenCalled();
+      next.mockClear();
+    }
+  });
+
+  test('pr previews keep the site-wide gate', async () => {
+    process.env.PREVIEW_SLUG = 'pr-622';
+    process.env.PR_NUMBER = '622';
+    const { isPreviewAccessGateEnabled } = await import('./preview-access.server');
+    expect(isPreviewAccessGateEnabled()).toBe(true);
+    const next = mock(async () => new Response('ok'));
+    const response = await previewAccessMiddleware(
+      middlewareArgs(request('/app/classes')),
+      next
+    );
+    expect((response as Response).status).toBe(302);
+    expect(next).not.toHaveBeenCalled();
   });
 });

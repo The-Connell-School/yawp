@@ -148,6 +148,21 @@ describe('auth.dev-login action', () => {
     expect(response.status).toBe(404);
   });
 
+  test('rejects dev login without a preview access cookie when the code is required', async () => {
+    isPreviewAccessGateEnabled.mockReturnValue(true);
+    getPreviewAccessSeat.mockResolvedValue(null);
+
+    const response = await action(
+      actionArgs(makeRequest('dev.admin@yawp.local'))
+    );
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({
+      error: 'Preview access code required.',
+    });
+    expect(prisma.session.create).not.toHaveBeenCalled();
+  });
+
   test('binds preview dev-login to the organization in the access cookie', async () => {
     isPreviewAccessGateEnabled.mockReturnValue(true);
     getPreviewAccessSeat.mockResolvedValue({
