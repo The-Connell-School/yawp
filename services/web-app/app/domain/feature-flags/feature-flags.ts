@@ -51,8 +51,8 @@ export const DEMO_FEEDBACK_FLAG = 'demo-feedback-widget' as const;
 export const GUIDED_TOURS_FLAG = 'guided-tours' as const;
 
 /**
- * Setting rows for granular flags folded into {@link FREE_TIER_FLAG}. Still
- * read (OR with the primary row) until Yawp Internal stops writing them.
+ * Legacy Internal API / Setting names aliased to {@link FREE_TIER_FLAG}. Runtime
+ * reads only `feature_flag.free_tier`; these rows are not OR-merged.
  */
 export const FOLDED_FREE_TIER_LEGACY_SETTINGS = [
   'feature_flag.free-tier-onboarding-v2',
@@ -60,7 +60,8 @@ export const FOLDED_FREE_TIER_LEGACY_SETTINGS = [
 ] as const;
 
 /**
- * Setting rows folded into {@link UNIFIED_SIGN_ON_FLAG}.
+ * Legacy Setting name aliased to {@link UNIFIED_SIGN_ON_FLAG}. Runtime reads only
+ * `feature_flag.unified-sign-on`.
  */
 export const FOLDED_UNIFIED_SIGNON_LEGACY_SETTINGS = [
   'feature_flag.signon-teacher-prompts',

@@ -1,7 +1,5 @@
 import { prisma } from '~/utils/db.server';
 import {
-  FOLDED_FREE_TIER_LEGACY_SETTINGS,
-  FOLDED_UNIFIED_SIGNON_LEGACY_SETTINGS,
   FREE_TIER_FLAG,
   LESSON_PLANNER_FLAG,
   UNIFIED_SIGN_ON_FLAG,
@@ -115,25 +113,20 @@ async function readParsedValues(
   );
 }
 
-/** Merges the primary free-tier row with folded legacy rows for batch scoping. */
+async function readPrimaryFlagValue(
+  key: typeof FREE_TIER_FLAG | typeof UNIFIED_SIGN_ON_FLAG,
+  client: SettingReader = prisma
+): Promise<FeatureFlagValue> {
+  const [value] = await readParsedValues([featureFlagSettingName(key)], client);
+  return value ?? { mode: 'off', orgIds: [] };
+}
+
+/** Primary `feature_flag.free_tier` rollout (demo/preview default on). */
 export async function resolvedFreeTierRollout(
   client: SettingReader = prisma
 ): Promise<FeatureFlagValue> {
   if (isNonProductionDefaultOnDeployment(process.env)) return EVERYONE;
-  const values = await readParsedValues(
-    [featureFlagSettingName(FREE_TIER_FLAG), ...FOLDED_FREE_TIER_LEGACY_SETTINGS],
-    client
-  );
-  if (values.some((value) => value.mode === 'everyone')) return EVERYONE;
-  const orgIds = [
-    ...new Set(
-      values.flatMap((value) =>
-        value.mode === 'targeted' ? value.orgIds : []
-      )
-    ),
-  ];
-  if (orgIds.length > 0) return { mode: 'targeted', orgIds };
-  return { mode: 'off', orgIds: [] };
+  return readPrimaryFlagValue(FREE_TIER_FLAG, client);
 }
 
 function stateFor(
@@ -166,24 +159,16 @@ function applyRuntimeOverrides(state: FeatureFlagState): FeatureFlagState {
   return { ...state, mode: 'everyone', orgIds: [], enabled: true };
 }
 
-/**
- * Whether folded free-tier capability is on for a school (or globally when
- * `orgId` is omitted). Honors legacy granular Setting rows until Internal
- * migrates them into {@link FREE_TIER_FLAG}.
- */
+/** Whether free tier is on for a school from `feature_flag.free_tier` only. */
 export async function isFreeTierCapabilityEnabled(
   orgId?: string | null,
   client: SettingReader = prisma
 ): Promise<boolean> {
   if (isNonProductionDefaultOnDeployment(process.env)) return true;
   try {
-    const [primary, ...legacy] = await readParsedValues(
-      [featureFlagSettingName(FREE_TIER_FLAG), ...FOLDED_FREE_TIER_LEGACY_SETTINGS],
-      client
-    );
+    const primary = await readPrimaryFlagValue(FREE_TIER_FLAG, client);
     if (isFreeTierGloballyEnabled(primary)) return true;
-    if (evaluateFeatureFlag(primary, orgId)) return true;
-    return legacy.some((value) => evaluateFeatureFlag(value, orgId));
+    return evaluateFeatureFlag(primary, orgId);
   } catch (error) {
     console.error('feature_flag_read_failed', {
       key: FREE_TIER_FLAG,
@@ -208,14 +193,9 @@ export async function isFeatureFlagEnabled(
   if (key === UNIFIED_SIGN_ON_FLAG) {
     if (isNonProductionDefaultOnDeployment(process.env)) return true;
     try {
-      const [primary, ...legacy] = await readParsedValues([
-        featureFlagSettingName(UNIFIED_SIGN_ON_FLAG),
-        ...FOLDED_UNIFIED_SIGNON_LEGACY_SETTINGS,
-      ]);
+      const primary = await readPrimaryFlagValue(UNIFIED_SIGN_ON_FLAG);
       if (primary.mode === 'everyone') return true;
-      if (legacy.some((value) => value.mode === 'everyone')) return true;
-      if (evaluateFeatureFlag(primary, orgId)) return true;
-      return legacy.some((value) => evaluateFeatureFlag(value, orgId));
+      return evaluateFeatureFlag(primary, orgId);
     } catch (error) {
       console.error('feature_flag_read_failed', {
         key: UNIFIED_SIGN_ON_FLAG,
