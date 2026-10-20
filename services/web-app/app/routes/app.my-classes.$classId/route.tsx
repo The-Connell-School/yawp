@@ -45,7 +45,7 @@ import {
   FreeClassroomAssignmentQuotaError,
   loadAssignmentCreationQuotasForTypes,
 } from '~/utils/assignment-quota.server';
-import { siteLicenseLockedAssignmentTilesForOrganization } from '~/domain/free-tier/site-license-locked-assignment-tiles';
+import { loadSiteLicenseLockedAssignmentTiles } from '~/domain/free-tier/site-license-locked-assignment-tiles.server';
 import {
   AssignmentPromptAttachmentError,
   assignmentPromptAttachmentRequestTooLarge,
@@ -1397,10 +1397,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     creationTypeRows.map(({ id, kind }) => ({ id, kind }))
   );
   const siteLicenseLockedAssignmentTiles =
-    siteLicenseLockedAssignmentTilesForOrganization(
-      klass.school.organization,
-      availableAssignmentTypes
-    );
+    await loadSiteLicenseLockedAssignmentTiles(klass.school.organization);
 
   let studentJoinUrl: string | null = null;
   if (klass.school.organization.plan === 'FREE_CLASSROOM') {

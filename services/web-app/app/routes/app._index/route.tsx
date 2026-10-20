@@ -56,7 +56,7 @@ import {
   DialogTitle,
 } from '~/components/ui/dialog';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
-import { siteLicenseLockedAssignmentTilesForOrganization } from '~/domain/free-tier/site-license-locked-assignment-tiles';
+import { loadSiteLicenseLockedAssignmentTiles } from '~/domain/free-tier/site-license-locked-assignment-tiles.server';
 
 const DASHBOARD_MAX_TEACHER_CLASSES = 6;
 
@@ -314,10 +314,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ...quotaByTypeId.get(type.id),
   }));
   const siteLicenseLockedAssignmentTiles =
-    siteLicenseLockedAssignmentTilesForOrganization(
-      profile.organization,
-      teacherAssignmentTypes
-    );
+    await loadSiteLicenseLockedAssignmentTiles(profile.organization);
 
   // A student's assigned Writing Fundamentals practice, surfaced on their
   // dashboard alongside their classes (each card links into the practice

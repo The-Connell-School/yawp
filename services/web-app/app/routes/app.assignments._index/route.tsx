@@ -57,7 +57,7 @@ import {
 } from '~/utils/school-year-scope.server';
 import { formatClassLabel } from '~/utils/teacher-document-work-utils';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
-import { siteLicenseLockedAssignmentTilesForOrganization } from '~/domain/free-tier/site-license-locked-assignment-tiles';
+import { loadSiteLicenseLockedAssignmentTiles } from '~/domain/free-tier/site-license-locked-assignment-tiles.server';
 
 export const handle = { breadcrumb: 'My Assignments' };
 
@@ -216,10 +216,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     creationTypeRows.map((type) => type.id)
   );
   const siteLicenseLockedAssignmentTiles =
-    siteLicenseLockedAssignmentTilesForOrganization(
-      profile.organization,
-      availableAssignmentTypes
-    );
+    await loadSiteLicenseLockedAssignmentTiles(profile.organization);
 
   return {
     assignments,
