@@ -979,7 +979,7 @@ function LessonPlannerEmptyState({
                   className="mt-2 inline-block text-primary underline"
                   to={
                     freeUsage.monthly
-                      ? 'mailto:hello@yawp.school?subject=More%20access%20to%20YAWP'
+                      ? 'mailto:hello@yawp.school?subject=More%20access%20to%20YAWP!'
                       : '/app/free-tier/status'
                   }
                 >

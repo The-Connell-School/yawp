@@ -293,7 +293,7 @@ for (const viewport of [
       await admin.goto(replacement.approveUrl);
       await capture('administrator-approval', admin);
       await admin
-        .getByRole('button', { name: 'Approve YAWP', exact: true })
+        .getByRole('button', { name: 'Approve YAWP!', exact: true })
         .click();
       await expect(
         admin.locator('input[name="adminRole"]:invalid')
@@ -301,12 +301,12 @@ for (const viewport of [
       await admin.locator('input[name="adminRole"]').fill('Principal');
       await admin.getByRole('checkbox', { name: before ? /authorized/i : /I can approve classroom software/i }).check();
       await admin
-        .getByRole('button', { name: 'Approve YAWP', exact: true })
+        .getByRole('button', { name: 'Approve YAWP!', exact: true })
         .click();
       await expect(
         admin.getByRole('heading', { name: 'Thank you', exact: true })
       ).toBeVisible({ timeout: 30_000 });
-      if (!before) await expect(admin.getByText('Grace Okafor can start using YAWP. We let them know.', { exact: true })).toBeVisible();
+      if (!before) await expect(admin.getByText('Grace Okafor can start using YAWP! We let them know.', { exact: true })).toBeVisible();
       await capture('approval-confirmation', admin);
       await admin.goto(replacement.approveUrl);
       await capture('approval-already-approved', admin);

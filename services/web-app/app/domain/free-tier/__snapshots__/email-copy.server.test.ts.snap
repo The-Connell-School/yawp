@@ -3,24 +3,24 @@
 exports[`release email snapshot 1`] = `
 "Hi Ada,
 
-You're in — we'd love to have you try YAWP with your students.
+You're in — we'd love to have you try YAWP! with your students.
 
 Create your teacher account to get started:
 https://yawp.school/join
 
 This link is for you only and expires in 30 days.
 
-— The YAWP team"
+— The YAWP! team"
 `;
 
 exports[`admin approval email ignores a custom note and retains links 1`] = `
 "Hi there,
 
-Ada (ada@example.edu) at Example HS would like to use YAWP in their classroom.
+Ada (ada@example.edu) at Example HS would like to use YAWP! in their classroom.
 
-YAWP helps students draft essays with feedback while teachers stay in control of assignments and grading. Student writing is not used to train public language models.
+YAWP! helps students draft essays with feedback while teachers stay in control of assignments and grading. Student writing is not used to train public language models.
 
-Approve YAWP for this school (link expires in 14 days):
+Approve YAWP! for this school (link expires in 14 days):
 https://yawp.school/a
 
 I'm not the right person to approve this:

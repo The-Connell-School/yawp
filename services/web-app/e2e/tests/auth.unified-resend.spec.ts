@@ -150,7 +150,7 @@ for (const width of [1280, 390])
       );
       // Boolean checks keep identifiers and signed links out of assertion output.
       expect(mail.to === email).toBe(true);
-      expect(mail.subject === "You're in — start your YAWP classroom").toBe(
+      expect(mail.subject === "You're in — start your YAWP! classroom").toBe(
         true
       );
       expect(mail.text.includes('/free/join?t=')).toBe(true);

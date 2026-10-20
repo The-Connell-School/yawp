@@ -1045,7 +1045,7 @@ export function UnifiedSignon({
           {primary('Log In')}
         </>
       );
-      below = textButton('New to YAWP? Create an account', createClassAccount);
+      below = textButton('New to YAWP!? Create an account', createClassAccount);
       break;
     case 'joined':
       title =

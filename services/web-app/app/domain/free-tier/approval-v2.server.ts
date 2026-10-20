@@ -145,7 +145,7 @@ async function adminMessage(
   const base = freeTierPublicAppOrigin();
   return {
     to: approval.adminEmail,
-    subject: `${reminder ? 'Reminder: ' : ''}Approve YAWP for ${app.schoolName}`,
+    subject: `${reminder ? 'Reminder: ' : ''}Approve YAWP! for ${app.schoolName}`,
     text: renderAdminApprovalEmailBody({
       teacherName: app.name,
       teacherEmail: app.email,
@@ -416,7 +416,7 @@ export async function forwardApprovalRequest(args: {
     }
     await queue(tx, next.id, 'forward_notice', 0, now, {
       to: app.email,
-      subject: 'Your YAWP approval request was forwarded',
+      subject: 'Your YAWP! approval request was forwarded',
       text: `Hi ${app.name},\n\nYour approval request is now with ${newAdminName} (${newAdminEmail}). ${rules.manualReview ? 'Our team is reviewing the new request.' : 'We will let you know when they approve.'}\n\nView your request: ${freeTierPublicAppOrigin()}/app/free-tier/pending`,
     });
     await tx.freeTierApplication.update({
@@ -644,7 +644,7 @@ async function scheduleApplication(applicationId: string, now: Date) {
         now,
         {
           to: app.email,
-          subject: 'Your YAWP classroom approval request',
+          subject: 'Your YAWP! classroom approval request',
           text: `Hi ${app.name},\n\nYour request is waiting for ${approval.adminName}. You can email your administrator directly or forward the request to the right person.\n\nView your request: ${freeTierPublicAppOrigin()}/app/free-tier/pending`,
         }
       );
