@@ -42,19 +42,33 @@ import { SlideDeckCard } from '~/components/ai-chat/slide-deck-card';
 import type { SlideDeck } from '~/domain/lesson-planner/slide-deck';
 import { buildStudentHandout } from '~/domain/lesson-planner/student-handout';
 import { loadLessonPacket } from '~/domain/lesson-planner/load-lesson-packet.server';
+import { loadStackV3 } from '~/domain/lesson-planner/load-stack-v3.server';
+import { StackPageV3, type StackPageV3Data } from './v3/stack-page-v3';
 import {
   MATERIAL_KIND_LABELS,
   type LessonMaterial,
 } from '~/domain/lesson-planner/lesson-material';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  return loadLessonPacket({
+  const loaded = await loadLessonPacket({
     request,
     conversationId: params.conversationId,
   });
+  // The redesigned stack page (Brian's run 3), behind its flag.
+  if (loaded.reviewFlags.stackV3) {
+    const v3 = await loadStackV3({ request, conversationId: params.conversationId, loaded });
+    if (v3) return v3;
+  }
+  return { ...loaded, v3: null };
 }
 
 export default function LessonPacketRoute() {
+  const data = useLoaderData<typeof loader>();
+  if (data.v3) return <StackPageV3 data={data as StackPageV3Data} />;
+  return <LessonPacketRouteV2 />;
+}
+
+function LessonPacketRouteV2() {
   const {
     conversationId,
     packet,

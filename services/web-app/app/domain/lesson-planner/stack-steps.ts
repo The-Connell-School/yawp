@@ -36,6 +36,8 @@ type Meta = {
 
 const STUDENT_KINDS = new Set(['class-starter', 'daily-pages', 'exit-ticket', 'handout', 'sample']);
 const TITLE_MINUTES = /\s*\(\s*\d+[^)]*min[^)]*\)\s*$/i;
+// The type chip already says what it is; the title says which one.
+const TYPE_PREFIX = /^(?:Class Starter|Daily Pages|Exit ticket|Writing practice)\s*:\s*/i;
 
 function excerptOf(markdown: string): string {
   const text = markdown
@@ -68,7 +70,7 @@ export function stackSteps({
       section.origin === 'material' ? (materialKinds[section.id] ?? 'notes') : 'lesson';
     if (kind === 'slides' || section.deck) return [];
     const meta = materialMeta[section.id];
-    const title = section.title.replace(TITLE_MINUTES, '').trim();
+    const title = section.title.replace(TITLE_MINUTES, '').trim().replace(TYPE_PREFIX, '') || section.title;
     const type = stepTypeFor({ kind, title, stored: meta?.stepType ?? null });
     const entry = outline.get(section.anchor);
     // Planned minutes only; a suggested time is the timing's to fill in.

@@ -47,7 +47,7 @@ describe('suggestedPieces: "From your conversation" (stack page redesign)', () =
       stackSlots: new Set(),
     });
     expect(pieces.map((piece) => piece.title)).toEqual([
-      'Class Starter: The heaviest thing you’ve carried',
+      'The heaviest thing you’ve carried',
       'Hook',
       'Frame — The author',
     ]);

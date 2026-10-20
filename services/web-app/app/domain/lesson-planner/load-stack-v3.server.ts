@@ -33,11 +33,14 @@ export type StackV3 = {
 export async function loadStackV3({
   request,
   conversationId,
+  loaded: already,
 }: {
   request: Request;
   conversationId: string | undefined;
+  /** The packet, when the caller has just loaded it. */
+  loaded?: LoadedLessonPacket;
 }): Promise<(LoadedLessonPacket & { v3: StackV3 }) | null> {
-  let loaded = await loadLessonPacket({ request, conversationId });
+  let loaded = already ?? (await loadLessonPacket({ request, conversationId }));
   if (!loaded.reviewFlags.stackV3) return null;
 
   const conversation = await prisma.lessonPlanConversation.findUniqueOrThrow({
