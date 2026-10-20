@@ -521,9 +521,8 @@ export default function LessonPacketRoute() {
                     Check what belongs in the one combined handout below, or
                     download any piece on its own instead.
                   </p>
-                  {stackV2 ? (
-                    <MakeUpLink conversationId={conversationId} />
-                  ) : null}
+                  {/* The make-up link lives under the stack only (Brian's
+                      run 3, item 8), not in the handout's piece list. */}
                   <div className="flex flex-col gap-1.5">
                     {allHandoutParts.map((part) => {
                       const isIn = !excluded.includes(part.id);
@@ -572,7 +571,14 @@ export default function LessonPacketRoute() {
                 {packet.outline.map((entry, index) => (
                   <li key={index} className="flex gap-3">
                     <span className="w-14 shrink-0 pt-0.5 text-sm tabular-nums text-muted-foreground">
-                      {entry.minutes !== null ? `${entry.minutes} min` : '—'}
+                      {entry.minutes !== null ? (
+                        <span title={entry.suggested ? 'Suggested time' : undefined}>
+                          {entry.suggested ? '~' : ''}
+                          {entry.minutes} min
+                        </span>
+                      ) : (
+                        '—'
+                      )}
                     </span>
                     <div className="min-w-0">
                       <button
