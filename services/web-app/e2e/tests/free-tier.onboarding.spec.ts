@@ -5,6 +5,7 @@ import { createE2EPrismaClient } from '../prisma-client';
 import { waitForFreeTierEmailPayload } from '../helpers/free-tier-email';
 import { mintFreeTierLinkForE2E } from '../helpers/mint-free-tier-link';
 import { fillFreeTierWaitlistForm } from '../helpers/free-tier-waitlist-form';
+import { completeClassPreparationStepIfShown } from '../helpers/free-tier-onboarding';
 
 const JOIN_PASSWORD = 'yawp-e2e-pass-1';
 const ADMIN_DOMAIN = 'e2e-ft.school.edu';
@@ -82,6 +83,7 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     await page.waitForURL('**/app/free-tier/onboarding**', { timeout: 30_000 });
     expect(page.url()).not.toMatch(/\/auth\/login/);
 
+    await completeClassPreparationStepIfShown(page);
     await page.fill('input[name="adminName"]', 'E2E Principal');
     await page.fill('input[name="adminEmail"]', `principal@${ADMIN_DOMAIN}`);
     await page.fill('input[name="adminRole"]', 'Principal');

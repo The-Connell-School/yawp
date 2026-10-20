@@ -8,20 +8,27 @@ import { createE2EPrismaClient } from './prisma-client';
 
 const LESSON_PLANNER_SETTING = 'feature_flag.lesson_planner';
 const FREE_TIER_SETTING = 'feature_flag.free_tier';
+const FOLDED_FREE_TIER_SETTINGS = [
+  'feature_flag.free-tier-onboarding-v2',
+  'feature_flag.free-tier-inapp-v2',
+] as const;
 
 export async function setFreeTierFlag(enabled: boolean) {
   const prisma = createE2EPrismaClient();
   try {
-    await prisma.setting.upsert({
-      where: { name: FREE_TIER_SETTING },
-      create: {
-        name: FREE_TIER_SETTING,
-        value: enabled ? 'true' : 'false',
-        valueType: 'boolean',
-        description: 'Set by e2e',
-      },
-      update: { value: enabled ? 'true' : 'false', updatedAt: new Date() },
-    });
+    const value = enabled ? 'true' : 'false';
+    for (const name of [FREE_TIER_SETTING, ...FOLDED_FREE_TIER_SETTINGS]) {
+      await prisma.setting.upsert({
+        where: { name },
+        create: {
+          name,
+          value,
+          valueType: 'boolean',
+          description: 'Set by e2e',
+        },
+        update: { value, updatedAt: new Date() },
+      });
+    }
   } finally {
     await prisma.$disconnect();
   }

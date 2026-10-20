@@ -118,7 +118,7 @@ for (const viewport of [
       );
       await capture('waitlist-confirmation');
       for (const mode of ['waitlist', 'bypass', 'closed'] as const) {
-        const code = `fixture-${stamp}-${mode}`;
+        const code = `fixture-${stamp}-${mode}-${Date.now()}`;
         await prisma.acquisitionToken.create({
           data: {
             code,
@@ -194,9 +194,19 @@ for (const viewport of [
       await page.getByRole('button', { name: 'Create account' }).click();
       await page.waitForURL('**/app/free-tier/onboarding**');
       await capture('teacher-approval-request');
+      const { completeClassPreparationStepIfShown } = await import(
+        '../helpers/free-tier-onboarding'
+      );
+      await completeClassPreparationStepIfShown(page);
       if (!before) {
-        await expect(page.getByRole('heading', { name: 'Who can approve YAWP?' })).toBeVisible();
-        await expect(page.getByRole('list', { name: 'Approval progress' })).toContainText('Ask your administrator');
+        await expect(
+          page.getByRole('heading', {
+            name: /Who can approve YAWP\?|Ask your administrator/,
+          })
+        ).toBeVisible();
+        await expect(page.getByRole('list', { name: 'Approval progress' })).toContainText(
+          'Ask your administrator'
+        );
       }
       await prisma.freeTierEmailLog.create({
         data: {

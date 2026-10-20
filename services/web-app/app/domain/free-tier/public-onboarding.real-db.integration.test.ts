@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test, mock } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test, mock } from 'bun:test';
 const transport = mock(async (_args: any) => ({ status: 'success' as const }));
 mock.module('~/utils/email.server', () => ({ sendEmail: transport }));
 import { prisma } from '~/utils/db.server';
@@ -51,6 +51,7 @@ afterAll(async () => {
   }
   await prisma.$disconnect();
 });
+describe.serial('public decline by path', () => {
 for (const path of paths) {
   local(`${path}: decline has no admission side effects, duplicates preserve first write and later eligible/off cannot admit`, async () => {
     await flag('true');
@@ -77,6 +78,9 @@ for (const path of paths) {
     expect((await releaseBatch({ applicationIds: [row.id] })).released).toBe(0);
     expect(transport).not.toHaveBeenCalled();
   });
+}
+});
+for (const path of paths) {
   local(`${path}: an existing eligible application remains unchanged under a decline submission`, async () => {
     await flag('true');
     const fields = input(path + '-existing');

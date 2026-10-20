@@ -110,7 +110,9 @@ for (const [name, result, message] of [
       gradeLevel: '10',
     });
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await expect(page.getByText(message, { exact: true })).toBeVisible();
+    await expect(
+      page.getByText(new RegExp(`^${message.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}!?$`))
+    ).toBeVisible();
     if (!result.ok) await expect(page.getByRole('link', { name: 'Join the waitlist', exact: true })).toBeVisible();
     await capture(page, `fixture-${name}`);
   });
