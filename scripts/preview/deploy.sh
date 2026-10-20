@@ -726,7 +726,7 @@ run_tooling_if_needed() {
   if [[ "$SLUG" =~ ^pr-[1-9][0-9]*$ ]]; then
     # PR application refs can predate reviewed control-plane scripts. Fast previews mount
     # those scripts at /preview-control; do not require prisma-cli.sh in the PR checkout.
-    prisma_cli='bash /preview-control/prisma-cli.sh'
+    prisma_cli='PRISMA_CLI_REPO_ROOT=/app bash /preview-control/prisma-cli.sh'
   else
     prisma_cli='bash scripts/preview/prisma-cli.sh'
   fi
@@ -758,14 +758,14 @@ run_tooling_if_needed() {
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-free-tier-bundle-assignment-types.ts" ]]; then
       "${compose[@]}" run --rm toolbox bash -lc "$prisma_cli generate && cd packages/prisma && bun run seed-free-tier-bundle-assignment-types"
     fi
-    local skip_path_seeds="$prisma_cli generate"
+    local skip_path_seeds="$prisma_cli generate && cd packages/prisma"
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-ap-history-library.ts" ]]; then
       skip_path_seeds+=' && bun run seed-ap-history-library'
     fi
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-planner-qa.ts" ]]; then
       skip_path_seeds+=' && bun run seed-preview-planner-qa'
     fi
-    if [[ "$skip_path_seeds" != "$prisma_cli generate" ]]; then
+    if [[ "$skip_path_seeds" != "$prisma_cli generate && cd packages/prisma" ]]; then
       echo "Running idempotent preview seeds on existing database (skip path)."
       if ! "${compose[@]}" run --rm toolbox bash -lc "$skip_path_seeds"; then
         echo "Warning: idempotent preview seeds failed; continuing deploy (non-fatal)." >&2
@@ -776,11 +776,11 @@ run_tooling_if_needed() {
     fi
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-free-tier-ship-review.ts" ]] && should_run_free_tier_ship_review_seed; then
       echo "Running free-tier ship-review fixture seed on existing preview database (skip path)."
-      "${compose[@]}" run --rm toolbox bash -lc "$prisma_cli generate && bun run seed-free-tier-ship-review"
+      "${compose[@]}" run --rm toolbox bash -lc "$prisma_cli generate && cd packages/prisma && bun run seed-free-tier-ship-review"
     fi
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/apply-daily-pages-engagement-v2-seed.ts" ]]; then
       echo "Applying Daily Pages engagement v2 preview seed on existing database (skip path)."
-      "${compose[@]}" run --rm toolbox bash -lc "$prisma_cli generate && (bun run scripts/apply-daily-pages-engagement-v2-seed.ts || true)"
+      "${compose[@]}" run --rm toolbox bash -lc "$prisma_cli generate && cd packages/prisma && (bun run scripts/apply-daily-pages-engagement-v2-seed.ts || true)"
     fi
     return 0
   fi

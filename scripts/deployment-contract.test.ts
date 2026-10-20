@@ -717,7 +717,7 @@ describe('PR preview deployment contract', () => {
     const generateIndex = deployScript.indexOf('${prisma_cli} generate');
     const migrateIndex = deployScript.indexOf('${prisma_cli} migrate deploy');
     expect(deployScript).toContain(
-      "prisma_cli='bash /preview-control/prisma-cli.sh'"
+      "prisma_cli='PRISMA_CLI_REPO_ROOT=/app bash /preview-control/prisma-cli.sh'"
     );
     const backfillIndex = deployScript.indexOf(
       'bun run scripts/backfill-class-art-key.ts'

@@ -24,8 +24,12 @@ describe('preview prisma-cli', () => {
 
   test('wrapper executes Prisma via node build entry', () => {
     const script = readFileSync(join(repoRoot, 'scripts/preview/prisma-cli.sh'), 'utf8');
+    expect(script).toContain('PRISMA_CLI_REPO_ROOT');
+    expect(script).toContain('REPO_ROOT');
+    expect(script).toContain('resolve_repo_root');
     expect(script).toContain('ensure_node');
     expect(script).toContain('setup_22.x');
     expect(script).toContain('exec node "$PRISMA_ENTRY"');
+    expect(script).toContain('cd "$ROOT/packages/prisma"');
   });
 });
