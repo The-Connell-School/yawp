@@ -12,7 +12,7 @@
  * can edit, delete and add slides in PowerPoint exactly as before.
  */
 import PptxGenJS from 'pptxgenjs';
-import type { Slide, SlideDeck } from './slide-deck';
+import { classicSlide, type Slide, type SlideDeck } from './slide-deck';
 import {
   DEFAULT_TILE_FOOTER_MARK,
   notesWithMinutes,
@@ -56,7 +56,7 @@ type PptxSlide = ReturnType<PptxGenJS['addSlide']>;
 
 /** What the slide is for. The minutes are the teacher's (run 2, C2). */
 function eyebrow(spec: Slide): string {
-  return tileEyebrow(spec.layout);
+  return tileEyebrow(classicSlide(spec).layout);
 }
 
 /**
@@ -369,7 +369,8 @@ function addClosingSlide(slide: PptxSlide, spec: Slide): void {
   }
 }
 
-function addSlide(pptx: PptxGenJS, spec: Slide, deck: SlideDeck): void {
+function addSlide(pptx: PptxGenJS, raw: Slide, deck: SlideDeck): void {
+  const spec = classicSlide(raw);
   const slide = pptx.addSlide({ masterName: MASTER });
   switch (spec.layout) {
     case 'title':

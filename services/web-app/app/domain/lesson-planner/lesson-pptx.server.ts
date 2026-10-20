@@ -14,7 +14,7 @@
  * and captured.
  */
 import PptxGenJS from 'pptxgenjs';
-import type { Slide, SlideDeck } from './slide-deck';
+import { classicSlide, type Slide, type SlideDeck } from './slide-deck';
 
 /** YAWP!'s print colour and ink, matched to the packet and the PDF. */
 const BRAND = 'C05A3E';
@@ -255,7 +255,8 @@ function addClosingSlide(slide: PptxSlide, spec: Slide): void {
   }
 }
 
-function addSlide(deck: PptxGenJS, spec: Slide): void {
+function addSlide(deck: PptxGenJS, raw: Slide): void {
+  const spec = classicSlide(raw);
   const slide = deck.addSlide();
   slide.background = { color: PAPER };
 

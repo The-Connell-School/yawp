@@ -12,7 +12,7 @@
  * keystroke goes to the same slide the form below edits, so the two agree.
  */
 import { useLayoutEffect, useRef } from 'react';
-import type { Slide } from '~/domain/lesson-planner/slide-deck';
+import { classicSlide, type Slide } from '~/domain/lesson-planner/slide-deck';
 import {
   css,
   DEFAULT_TILE_FOOTER_MARK,
@@ -39,7 +39,7 @@ const CARD_STYLE = {
 type Edit = ((patch: Partial<Slide>) => void) | undefined;
 
 export function TileSlideCanvas({
-  slide,
+  slide: raw,
   number,
   onEdit,
   footerMark = DEFAULT_TILE_FOOTER_MARK,
@@ -51,6 +51,8 @@ export function TileSlideCanvas({
   onEdit?: (patch: Partial<Slide>) => void;
   footerMark?: TileFooterMark;
 }) {
+  // A gallery slide drawn as its nearest classic layout.
+  const slide = classicSlide(raw);
   const closing = slide.layout === 'closing';
   return (
     <div
@@ -160,7 +162,7 @@ function Eyebrow({ slide, light }: { slide: Slide; light?: boolean }) {
       className="font-mono tracking-[0.2em]"
       style={{ fontSize: EYEBROW_TYPE, color: light ? css('ink') : css('accent') }}
     >
-      {tileEyebrow(slide.layout)}
+      {tileEyebrow(classicSlide(slide).layout)}
     </p>
   );
 }

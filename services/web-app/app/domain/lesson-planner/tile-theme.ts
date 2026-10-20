@@ -3,10 +3,10 @@
  * Present — so the two say the same thing and wear the same colours (Brian's
  * review, E1; run 2, C3).
  */
-import type { SlideLayout } from './slide-deck';
+import type { ClassicSlideLayout } from './slide-deck';
 
 /** What each kind of slide is for, said small above its title. */
-export const TILE_SLIDE_EYEBROWS: Record<SlideLayout, string> = {
+export const TILE_SLIDE_EYEBROWS: Record<ClassicSlideLayout, string> = {
   title: 'Today',
   statement: 'Hold this question',
   bullets: 'Notes',
@@ -55,7 +55,7 @@ export type TileFooterMark = 'wordmark' | 'faded' | 'none';
 export const DEFAULT_TILE_FOOTER_MARK: TileFooterMark = 'wordmark';
 
 /** The eyebrow over a slide's title: what it is for, never how long. */
-export function tileEyebrow(layout: SlideLayout): string {
+export function tileEyebrow(layout: ClassicSlideLayout): string {
   return TILE_SLIDE_EYEBROWS[layout].toUpperCase();
 }
 

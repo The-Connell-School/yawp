@@ -131,6 +131,16 @@ const LAYOUT_LABELS: Record<Slide['layout'], string> = {
   steps: 'Steps',
   quote: 'Quote',
   closing: 'Closing',
+  agenda: 'Agenda',
+  discuss: 'Talk',
+  big_idea: 'Big idea',
+  write: 'Write',
+  notes: 'Know',
+  divider: 'Divider',
+  read: 'Read along',
+  look: 'Look',
+  excerpt: 'Annotate',
+  exit: 'Before you go',
 };
 
 /** How long a deleted slide can still be brought back. */

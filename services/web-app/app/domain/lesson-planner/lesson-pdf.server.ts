@@ -16,7 +16,7 @@ import type { Block, TextRun } from './markdown-blocks';
 import { markdownBlocks } from './markdown-blocks';
 import type { LessonPacket } from './lesson-packet';
 import { buildStudentHandout } from './student-handout';
-import { deckDurationMinutes, type Slide, type SlideDeck } from './slide-deck';
+import { classicSlide, deckDurationMinutes, type Slide, type SlideDeck } from './slide-deck';
 
 /** YAWP!'s print colour, matched to the packet page's header rule. */
 const BRAND = '#c05a3e';
@@ -354,7 +354,7 @@ function drawSlideDeck(doc: Doc, deck: SlideDeck): void {
           { text: `${index + 1}. ${slide.title}${slideTiming(slide)}` },
         ],
       },
-      ...slideFaceBlocks(slide),
+      ...slideFaceBlocks(classicSlide(slide)),
       {
         kind: 'quote',
         runs: [
