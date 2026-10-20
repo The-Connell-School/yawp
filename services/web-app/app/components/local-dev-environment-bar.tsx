@@ -286,6 +286,7 @@ function LocalDevQuickLoginPanel({
         </Form>
       ) : null}
       {!needsDevLoginAccessCode ? (
+        <>
       <LoginOptionGroup
         Form={loginFetcher.Form}
         label="Staff"
@@ -322,6 +323,7 @@ function LocalDevQuickLoginPanel({
           Unable to load preview users.
         </p>
       ) : null}
+        </>
       ) : null}
       {blackboardLtiMockEnabled || previewAccessSeatLabel ? (
         <>
