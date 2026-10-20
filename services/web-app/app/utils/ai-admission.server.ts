@@ -45,7 +45,7 @@ export class AiFreeTierBudgetExceededError extends Error {
 }
 
 export function aiLockedForFreeTierMessage() {
-  return 'Writing tools unlock after your school administrator approves YAWP for your classroom.';
+  return 'Writing tools unlock after your school administrator approves YAWP! for your classroom.';
 }
 
 export function aiFreeTierBudgetExceededMessage() {

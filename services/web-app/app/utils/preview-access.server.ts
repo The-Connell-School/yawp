@@ -184,8 +184,52 @@ function masterCredentialVersion() {
     .slice(0, 24);
 }
 
+/** Named demo host (demo.yawp.school), not a PR preview slug. */
+export function isDemoEnvironment(
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  const slug = String(env.PREVIEW_SLUG ?? env.SLUG ?? '').trim();
+  const prNumber = String(env.PR_NUMBER ?? '').trim();
+  return slug === 'demo' && !prNumber;
+}
+
+/** Site-wide gate: PR previews only. Demo behaves like production for normal browsing. */
 export function isPreviewAccessGateEnabled() {
+  return process.env.PREVIEW_ACCESS_GATE === 'on' && !isDemoEnvironment();
+}
+
+/** Dev-login and beaker panel still require the preview access cookie on demo and previews. */
+export function isPreviewDevLoginAccessCodeRequired() {
   return process.env.PREVIEW_ACCESS_GATE === 'on';
+}
+
+/**
+ * Demo (and any future box with dev-login codes but no site-wide gate) must guard
+ * dev-only HTTP surfaces explicitly — middleware no longer wraps them.
+ */
+export function requiresExplicitPreviewDevLoginAccessGuard() {
+  return (
+    isPreviewDevLoginAccessCodeRequired() && !isPreviewAccessGateEnabled()
+  );
+}
+
+export async function rejectWithoutExplicitPreviewDevLoginAccess(
+  request: Request,
+  repository: PreviewAccessSeatRepository = databasePreviewSeatRepository
+): Promise<Response | null> {
+  if (!requiresExplicitPreviewDevLoginAccessGuard()) return null;
+  if (!isPreviewAccessConfigured()) {
+    return Response.json(
+      { error: 'Preview access is not configured.' },
+      { status: 503, headers: { 'Cache-Control': 'no-store' } }
+    );
+  }
+  const seat = await getPreviewAccessSeat(request, repository);
+  if (seat) return null;
+  return Response.json(
+    { error: 'Preview access code required.' },
+    { status: 401, headers: { 'Cache-Control': 'no-store' } }
+  );
 }
 
 export function isIsolatedPreviewSeatMode() {
@@ -630,9 +674,9 @@ function stripCodeQueryParam(request: Request): Response | null {
 }
 
 /**
- * The preview access flag and this request-boundary middleware are the same switch.
- * Therefore PREVIEW_ACCESS_GATE=on cannot expose role-swap without also putting the
- * gate in front of every descendant loader, action, and resource/API route.
+ * Site-wide preview middleware runs only when {@link isPreviewAccessGateEnabled}.
+ * Demo keeps PREVIEW_ACCESS_GATE=on for dev-login codes but skips this middleware;
+ * dev-only routes must call {@link rejectWithoutExplicitPreviewDevLoginAccess} themselves.
  */
 export function createPreviewAccessMiddleware(
   sessionGuard: PreviewSeatSessionGuard = enforcePreviewSeatSession,

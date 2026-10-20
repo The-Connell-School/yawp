@@ -209,7 +209,7 @@ export default function FreeTierLandingRoute() {
 
   const title = data.mode === 'token' && data.linkClosed
     ? 'This link is closed'
-    : submitSuccess?.headline ?? 'Try YAWP with your students';
+    : submitSuccess?.headline ?? 'Try YAWP! with your students';
   const subtitle = submitted || (data.mode === 'token' && data.linkClosed)
     ? undefined
     : data.mode === 'token' ? 'Use your event link to continue.'

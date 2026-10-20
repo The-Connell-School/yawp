@@ -156,8 +156,8 @@ export async function sendFreeTierAdminApprovalEmail(args: {
       : undefined,
   });
   const subject = args.isReminder
-    ? `Reminder: Approve YAWP for ${args.schoolName}`
-    : `Approve YAWP for ${args.schoolName}`;
+    ? `Reminder: Approve YAWP! for ${args.schoolName}`
+    : `Approve YAWP! for ${args.schoolName}`;
   try {
     assertFreeTierRuntimeConfigured();
     const delivered = await deliverEmail({
@@ -222,7 +222,7 @@ export async function sendFreeTierCongratulationsEmail(args: {
     assertFreeTierRuntimeConfigured();
     const delivered = await deliverEmail({
       to: args.teacherEmail,
-      subject: `${args.adminName} approved YAWP for your classroom`,
+      subject: `${args.adminName} approved YAWP! for your classroom`,
       text,
     });
     if (!delivered.ok) {

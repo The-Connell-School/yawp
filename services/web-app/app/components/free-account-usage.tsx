@@ -436,7 +436,7 @@ export function FreeReporterLocked() {
 }
 
 export const FULL_ACCESS_CONTACT =
-  'mailto:hello@yawp.school?subject=More%20access%20to%20YAWP';
+  'mailto:hello@yawp.school?subject=More%20access%20to%20YAWP!';
 export function AdvocatePackEntry() {
   return (
     <section className="rounded-xl border bg-popover p-5 shadow-sm">
