@@ -57,6 +57,107 @@ function resolveRedirect(baseUrl, location) {
   return new URL(location, baseUrl).toString();
 }
 
+/** Named demo host (demo.yawp.school), not a PR preview slug. */
+export function isDemoEnvironment(env = process.env) {
+  const slug = String(env.PREVIEW_SLUG ?? env.SLUG ?? '').trim();
+  const prNumber = String(env.PR_NUMBER ?? '').trim();
+  return slug === 'demo' && !prNumber;
+}
+
+/** Site-wide gate: PR previews only. Demo behaves like production for normal browsing. */
+export function isPreviewAccessGateEnabled(env = process.env) {
+  const gate = String(env.PREVIEW_ACCESS_GATE ?? 'on').trim();
+  return gate === 'on' && !isDemoEnvironment(env);
+}
+
+function joinCookieHeaders(accessCookie, authCookies) {
+  if (accessCookie && authCookies) return `${accessCookie}; ${authCookies}`;
+  return accessCookie || authCookies || '';
+}
+
+async function assertNoSiteGatePublicEndpoints({ baseUrl, requestFn }) {
+  const anonymousPage = await requestFn(baseUrl);
+  if (anonymousPage.status !== 200) {
+    throw new Error(
+      `Expected anonymous GET / to return HTTP 200 without a site gate, got ${anonymousPage.status}`
+    );
+  }
+
+  const health = await requestFn(appendPath(baseUrl, '/api/healthcheck'));
+  if (health.status !== 200) {
+    throw new Error(
+      `Expected GET /api/healthcheck to return HTTP 200, got ${health.status}`
+    );
+  }
+
+  const devLoginProbeBody = new URLSearchParams({
+    email: 'dev.admin@yawp.local',
+  }).toString();
+
+  const blockedChecks = [
+    { pathname: '/auth/dev-login', method: 'GET' },
+    {
+      pathname: '/auth/dev-login',
+      method: 'POST',
+      body: devLoginProbeBody,
+      contentType: 'application/x-www-form-urlencoded',
+    },
+    { pathname: '/auth/dev-login/options', method: 'GET' },
+    {
+      pathname: '/lti/launch',
+      method: 'POST',
+      body: 'id_token=fixture',
+      contentType: 'application/x-www-form-urlencoded',
+    },
+  ];
+
+  for (const check of blockedChecks) {
+    const response = await requestFn(appendPath(baseUrl, check.pathname), {
+      method: check.method,
+      ...(check.body
+        ? {
+            body: check.body,
+            headers: { 'content-type': check.contentType },
+          }
+        : {}),
+    });
+    if (response.status !== 401) {
+      throw new Error(
+        `Expected anonymous ${check.method} ${check.pathname} to return HTTP 401, got ${response.status}`
+      );
+    }
+  }
+}
+
+async function submitPreviewAccessCode({
+  baseUrl,
+  accessCode,
+  requestFn,
+}) {
+  if (!accessCode) throw new Error('accessCode is required');
+
+  const form = new URLSearchParams({
+    code: accessCode,
+    returnTo: '/',
+  }).toString();
+  const access = await requestFn(appendPath(baseUrl, '/auth/preview-access'), {
+    method: 'POST',
+    body: form,
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+  });
+  if (access.status < 300 || access.status >= 400) {
+    throw new Error(`Expected access-code redirect, got HTTP ${access.status}`);
+  }
+
+  const cookie = getCookies(access.headers);
+  if (!cookie.includes('__yawp_preview_access=')) {
+    throw new Error('Expected access code to set the preview access cookie');
+  }
+  return cookie;
+}
+
 async function getWithRedirects(
   url,
   { cookie, maxRedirects = 3, requestFn = request } = {}
@@ -89,9 +190,18 @@ async function getWithRedirects(
 export async function enterPreviewAccess({
   baseUrl,
   accessCode,
+  gateEnabled = isPreviewAccessGateEnabled(),
+  obtainAccessCookie = gateEnabled,
   requestFn = request,
 } = {}) {
   if (!baseUrl) throw new Error('baseUrl is required');
+
+  if (!gateEnabled) {
+    await assertNoSiteGatePublicEndpoints({ baseUrl, requestFn });
+    if (!obtainAccessCookie) return '';
+    return submitPreviewAccessCode({ baseUrl, accessCode, requestFn });
+  }
+
   if (!accessCode) throw new Error('accessCode is required');
 
   const anonymousPage = await requestFn(baseUrl);
@@ -126,26 +236,7 @@ export async function enterPreviewAccess({
     );
   }
 
-  const form = new URLSearchParams({
-    code: accessCode,
-    returnTo: '/',
-  }).toString();
-  const access = await requestFn(appendPath(baseUrl, '/auth/preview-access'), {
-    method: 'POST',
-    body: form,
-    headers: {
-      'content-type': 'application/x-www-form-urlencoded',
-    },
-  });
-  if (access.status < 300 || access.status >= 400) {
-    throw new Error(`Expected access-code redirect, got HTTP ${access.status}`);
-  }
-
-  const cookie = getCookies(access.headers);
-  if (!cookie.includes('__yawp_preview_access=')) {
-    throw new Error('Expected access code to set the preview access cookie');
-  }
-  return cookie;
+  return submitPreviewAccessCode({ baseUrl, accessCode, requestFn });
 }
 
 export async function loginCookieHeader({
@@ -158,9 +249,12 @@ export async function loginCookieHeader({
 } = {}) {
   if (!baseUrl) throw new Error('baseUrl is required');
   if (!email || !password) throw new Error('email and password are required');
+  const gateEnabled = isPreviewAccessGateEnabled();
   const accessCookie = await enterPreviewAccess({
     baseUrl,
     accessCode,
+    gateEnabled,
+    obtainAccessCookie: gateEnabled,
     requestFn,
   });
 
@@ -174,7 +268,7 @@ export async function loginCookieHeader({
     method: 'POST',
     body: form,
     headers: {
-      cookie: accessCookie,
+      ...(accessCookie ? { cookie: accessCookie } : {}),
       'content-type': 'application/x-www-form-urlencoded',
     },
   });
@@ -187,7 +281,7 @@ export async function loginCookieHeader({
   if (!authCookies) {
     throw new Error('Expected login to set an auth cookie');
   }
-  return `${accessCookie}; ${authCookies}`;
+  return joinCookieHeaders(accessCookie, authCookies);
 }
 
 export async function runLoginSmoke({
@@ -231,6 +325,7 @@ export async function runDevLoginSmoke({
   const accessCookie = await enterPreviewAccess({
     baseUrl,
     accessCode,
+    obtainAccessCookie: true,
     requestFn,
   });
 
@@ -243,7 +338,7 @@ export async function runDevLoginSmoke({
     method: 'POST',
     body: form,
     headers: {
-      cookie: accessCookie,
+      ...(accessCookie ? { cookie: accessCookie } : {}),
       'content-type': 'application/x-www-form-urlencoded',
     },
   });
@@ -256,7 +351,7 @@ export async function runDevLoginSmoke({
   if (!authCookies) {
     throw new Error('Expected dev login to set an auth cookie');
   }
-  const cookies = `${accessCookie}; ${authCookies}`;
+  const cookies = joinCookieHeaders(accessCookie, authCookies);
 
   const app = await getWithRedirects(appendPath(baseUrl, '/app'), {
     cookie: cookies,
