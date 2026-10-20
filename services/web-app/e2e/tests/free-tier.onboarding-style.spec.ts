@@ -187,7 +187,7 @@ for (const viewport of [
       await page.waitForURL('**/app/free-tier/onboarding**');
       await capture('teacher-approval-request');
       if (!before) {
-        await expect(page.getByRole('heading', { name: 'Who can approve YAWP?' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Who can approve Yawp!' })).toBeVisible();
         await expect(page.getByRole('list', { name: 'Approval progress' })).toContainText('Ask your administrator');
       }
       await prisma.freeTierEmailLog.create({
@@ -306,7 +306,7 @@ for (const viewport of [
       await expect(
         admin.getByRole('heading', { name: 'Thank you', exact: true })
       ).toBeVisible({ timeout: 30_000 });
-      if (!before) await expect(admin.getByText('Grace Okafor can start using Yawp! We let them know.', { exact: true })).toBeVisible();
+      if (!before) await expect(admin.getByText('Grace Okafor can now start using Yawp! We let them know.', { exact: true })).toBeVisible();
       await capture('approval-confirmation', admin);
       await admin.goto(replacement.approveUrl);
       await capture('approval-already-approved', admin);

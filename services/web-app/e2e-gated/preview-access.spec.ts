@@ -42,7 +42,7 @@ test.describe('in-app preview access gate', () => {
     try {
       const landing = await request.get(`/free?t=${code}`, { maxRedirects: 0 });
       expect(landing.status()).toBe(200);
-      expect(await landing.text()).toMatch(/Try YAWP/i);
+      expect(await landing.text()).toMatch(/Try Yawp!/i);
       const { cookies } = await request.storageState();
       expect(cookies.some(c => c.name === '__yawp_free_tier_access' && c.httpOnly)).toBe(true);
       expect(cookies.some(c => c.name === '__yawp_preview_access')).toBe(false);

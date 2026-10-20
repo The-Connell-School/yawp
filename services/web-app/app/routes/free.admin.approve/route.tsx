@@ -32,6 +32,7 @@ import {
   FreeTierPerson,
 } from '../free-tier/FreeTierAuthCard';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
+import { FREE_TIER_MODEL_TRAINING_LINE } from '~/domain/free-tier/email-copy';
 
 type LoaderData =
   | { ok: false; reason?: string }
@@ -185,7 +186,7 @@ export default function FreeAdminApproveRoute() {
     return (
       <FreeTierAuthCard title="Thank you" icon={<CircleCheck />}>
         <p className="text-sm text-muted-foreground">
-          {actionData.app.name} can start using Yawp! We let them know.
+          {actionData.app.name} can now start using Yawp! We let them know.
         </p>
       </FreeTierAuthCard>
     );
@@ -309,7 +310,7 @@ export default function FreeAdminApproveRoute() {
             <ul className="flex flex-col gap-3 text-sm text-card-foreground">
               <li>Students draft essays with feedback as they write.</li>
               <li>Teachers control assignments and grading.</li>
-              <li>Student writing is never used to train outside models.</li>
+              <li>{FREE_TIER_MODEL_TRAINING_LINE}</li>
             </ul>
             <section
               aria-label="Administrator guide"
@@ -342,7 +343,7 @@ export default function FreeAdminApproveRoute() {
                 aria-hidden="true"
                 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
               />
-              Student writing is never used to train outside models.
+              {FREE_TIER_MODEL_TRAINING_LINE}
             </li>
           </ul>
         </>

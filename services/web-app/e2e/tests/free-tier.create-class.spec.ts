@@ -217,7 +217,10 @@ for (const width of [1280, 390]) {
     await page.getByLabel('Grade').selectOption('mixed');
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(
-      page.getByRole('heading', { name: 'Ask your administrator' })
+      page.getByRole('heading', {
+        name: 'Who approves Yawp! for your school?',
+        exact: true,
+      })
     ).toBeVisible();
     await expect(page.locator('[aria-current="step"]')).toContainText(
       'Ask your administrator'
@@ -349,7 +352,7 @@ test('flag off and paid memberships preserve legacy onboarding; existing request
   await flag(false);
   await login(page, user.email!);
   await expect(
-    page.getByRole('heading', { name: 'Who can approve YAWP?' })
+    page.getByRole('heading', { name: 'Who can approve Yawp!' })
   ).toBeVisible();
   await expect(page.getByLabel('Class name')).toHaveCount(0);
   await capture(page, '1280-legacy');
@@ -364,7 +367,7 @@ test('flag off and paid memberships preserve legacy onboarding; existing request
     });
     await login(page, paid.user.email!);
     await expect(
-      page.getByRole('heading', { name: 'Who can approve YAWP?' })
+      page.getByRole('heading', { name: 'Who can approve Yawp!' })
     ).toBeVisible();
     await expect(page.getByLabel('Class name')).toHaveCount(0);
     await capture(page, '1280-non-free');

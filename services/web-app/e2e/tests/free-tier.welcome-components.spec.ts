@@ -12,7 +12,7 @@ for (const width of [1280, 390]) {
       await page.evaluate(() => document.fonts.ready);
       const v2 = state.startsWith('v2');
       if (state.endsWith('form')) {
-        await expect(page.getByText(v2 ? "We're so glad you're here and we can't wait for you to YAWP with your students" : 'Join the waitlist. We let teachers in a group at a time.')).toBeVisible();
+        await expect(page.getByText(v2 ? "We're so glad you're here and we can't wait for you to Yawp! with your students" : 'Join the waitlist. We let teachers in a group at a time.')).toBeVisible();
         const name = page.getByRole('textbox', { name: v2 ? 'First and last name' : 'Your name', exact: true });
         await expect(name).toHaveAttribute('name', 'name');
         await expect(name).toHaveAttribute('required', '');

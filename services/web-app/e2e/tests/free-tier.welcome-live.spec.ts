@@ -62,7 +62,7 @@ for (const width of [1280, 390]) {
       await expect(page.getByLabel('Grade level')).toHaveJSProperty('tagName', 'INPUT');
     }
     await flag('true'); await page.goto('/free');
-    await expect(page.getByText("We're so glad you're here and we can't wait for you to YAWP with your students")).toBeVisible();
+    await expect(page.getByText("We're so glad you're here and we can't wait for you to Yawp! with your students")).toBeVisible();
     await expect(page.getByLabel('Grade level')).toHaveValue('');
     await capture(page, `${width}-v2-welcome`);
     await page.getByRole('button', { name: 'Join the waitlist' }).click();
