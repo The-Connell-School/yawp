@@ -17,7 +17,7 @@ export default defineConfig({
     command: `bun run dev -- --port ${process.env.CLASS_STEP_PORT} --host 127.0.0.1 --strictPort`,
     url: `http://localhost:${process.env.CLASS_STEP_PORT}`,
     reuseExistingServer: false,
-    timeout: 120000,
+    timeout: 180000,
     env: {
       CACHE_DATABASE_PATH: `${process.env.TMPDIR}/locked-preview-cache.sqlite`,
       DATABASE_PATH: `${process.env.TMPDIR}/locked-preview-local.sqlite`,

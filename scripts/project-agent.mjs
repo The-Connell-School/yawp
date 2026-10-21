@@ -523,9 +523,10 @@ function runTestProfile(profile, { json }) {
   }
   else if (chosen === "free-tier-locked-preview-browser") {
     const local = requireConfig();
+    const evidenceDir = path.join(webAppRoot, "locked-preview-evidence");
     results.push({ id: chosen, ...execute(selected.bun, ["x", "playwright", "test", "--config=playwright.locked-preview.config.ts", "--workers=1"], {
       json, cwd: webAppRoot, timeout: 600000,
-      env: { ...selected.env, ...parseEnvFile(fs.readFileSync(path.join(webAppRoot, '.env'), 'utf8')), CI: '1', DATABASE_URL: local.DATABASE_URL, CLASS_STEP_PORT: local.DEV_PORT },
+      env: { ...selected.env, ...parseEnvFile(fs.readFileSync(path.join(webAppRoot, '.env'), 'utf8')), CI: '1', DATABASE_URL: local.DATABASE_URL, CLASS_STEP_PORT: local.DEV_PORT, LOCKED_PREVIEW_EVIDENCE_DIR: evidenceDir },
     }) });
   }
   else if (chosen === "free-tier-class-step-unit") {
