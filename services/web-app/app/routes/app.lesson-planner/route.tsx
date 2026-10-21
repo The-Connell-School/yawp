@@ -1033,7 +1033,7 @@ function LessonPlannerEmptyState({
         <PromptTiles
           prompts={prompts}
           onPick={onPick}
-          disabled={disabled || exhausted}
+          disabled={disabled || Boolean(exhausted)}
         />
       </div>
     </div>
