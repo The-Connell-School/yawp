@@ -92,6 +92,14 @@ export async function readFreeAccountUsage(
   const reporter = policy.enabled
     ? await readMonthlyUsage(organizationId, 'reporter')
     : 0;
+  const pendingLessonPlannerQuota =
+    hideTeachingSecrets && policy.lessonPlannerMeteringEnabled
+      ? {
+          used: lessonPlans,
+          total: limits.lessonPlannerMonthly,
+          remaining: Math.max(0, limits.lessonPlannerMonthly - lessonPlans),
+        }
+      : undefined;
   return {
     ...buildFreeAccountUsage({
       monthly: policy.enabled,
@@ -104,6 +112,9 @@ export async function readFreeAccountUsage(
       assignmentCounts: Object.fromEntries(assignmentCounts),
     }),
     monthly: policy.enabled,
+    ...(pendingLessonPlannerQuota
+      ? { pendingLessonPlannerQuota }
+      : {}),
     ...(policy.enabled
       ? {
           renewsAt: lessonPlanMonthWindow(new Date()).lt.toISOString(),

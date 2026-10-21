@@ -30,10 +30,22 @@ afterEach(() => {
   });
 });
 test('pending direct APIs fail with 403 before execution; app reads pass through', async () => {
-  for (const path of ['/api/domain/reporter', '/api/domain/lesson-planner', '/app/assignments']) {
+  for (const path of ['/api/domain/reporter', '/app/assignments']) {
     try { await enforceLockedPreviewRequest(new Request(`http://local${path}`, { method: 'POST' }), 'teacher'); throw Error('allowed'); }
     catch (e) { expect((e as Response).status).toBe(403); }
   }
+  await enforceLockedPreviewRequest(
+    new Request('http://local/api/domain/lesson-planner', { method: 'POST' }),
+    'teacher'
+  );
+  await expect(
+    enforceLockedPreviewRequest(
+      new Request('http://local/api/domain/lesson-planner/packet', {
+        method: 'POST',
+      }),
+      'teacher'
+    )
+  ).rejects.toMatchObject({ status: 403 });
   await enforceLockedPreviewRequest(new Request('http://local/app/reporter'), 'teacher');
   await enforceLockedPreviewRequest(new Request('http://local/app/my-classes'), 'teacher');
 });
@@ -50,19 +62,29 @@ test('a new teacher has no organization membership until approval; the default s
   await expect(enforceLockedPreviewRequest(new Request('http://local/api/assignments/create', { method: 'POST' }), 'teacher')).rejects.toMatchObject({ status: 403 });
 });
 test('flag off, approved and other roles retain normal behavior', async () => {
-  const req = new Request('http://local/api/domain/lesson-planner', { method: 'POST' });
+  const plannerReq = new Request('http://local/api/domain/lesson-planner', {
+    method: 'POST',
+  });
+  const assignmentReq = new Request('http://local/api/assignments/create', {
+    method: 'POST',
+  });
   enabled = false;
-  await enforceLockedPreviewRequest(req, 'teacher');
+  await enforceLockedPreviewRequest(plannerReq, 'teacher');
   enabled = true;
   application.status = 'APPROVED';
-  await enforceLockedPreviewRequest(req, 'teacher');
+  await enforceLockedPreviewRequest(plannerReq, 'teacher');
   application.status = 'SENT';
   memberships[0].role = 'STUDENT';
-  await expect(enforceLockedPreviewRequest(req, 'teacher')).rejects.toMatchObject({
+  await enforceLockedPreviewRequest(plannerReq, 'teacher');
+  await expect(
+    enforceLockedPreviewRequest(assignmentReq, 'teacher')
+  ).rejects.toMatchObject({
     status: 403,
   });
   memberships[0].role = 'ADMIN';
-  await expect(enforceLockedPreviewRequest(req, 'teacher')).rejects.toMatchObject({
+  await expect(
+    enforceLockedPreviewRequest(assignmentReq, 'teacher')
+  ).rejects.toMatchObject({
     status: 403,
   });
 });
@@ -107,4 +129,18 @@ test('domain enrollment/assignment guard denies pending and does not deny approv
   application.status = 'APPROVED'; await assertOrganizationTeachingApproved(db as any, 'org-a');
   application.status = 'SENT'; enabled = false; await assertOrganizationTeachingApproved(db as any, 'org-a');
   expect(queries[0].where.organizationId).toBe('org-a');
+});
+test('pending lesson planner scope allows SENT and MANUAL_REVIEW only', async () => {
+  for (const status of ['SENT', 'MANUAL_REVIEW'] as const) {
+    application.status = status;
+    await assertOrganizationTeachingApproved(db as any, 'org-a', {
+      allowPendingLessonPlanner: true,
+    });
+  }
+  application.status = 'ACCOUNT_CREATED';
+  await expect(
+    assertOrganizationTeachingApproved(db as any, 'org-a', {
+      allowPendingLessonPlanner: true,
+    })
+  ).rejects.toMatchObject({ status: 403 });
 });

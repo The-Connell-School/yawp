@@ -1,4 +1,5 @@
 import { monthlyFreeTierPolicy } from '~/domain/free-tier/monthly-policy.server';
+import { organizationHasPendingFreeTierLessonPlannerMetering } from '~/domain/free-tier/locked-preview.server';
 import {
   beginMonthlyOperation,
   replayMonthlyOperation,
@@ -292,6 +293,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const monthlyPolicy = await monthlyFreeTierPolicy(
     access.membership.organization
   );
+  const lessonPlannerMetering = monthlyPolicy.lessonPlannerMeteringEnabled;
   let reservation: Reservation | null = null;
   const operationInput = {
     message: turn.message,
@@ -315,7 +317,7 @@ export async function action({ request }: ActionFunctionArgs) {
       }
     );
   }
-  if (monthlyPolicy.enabled && turn.requestId) {
+  if (lessonPlannerMetering && turn.requestId) {
     const replay = await replayMonthlyOperation({
       organizationId: ctx.organizationId,
       membershipId: ctx.membershipId,
@@ -325,7 +327,7 @@ export async function action({ request }: ActionFunctionArgs) {
     });
     if (replay) return monthlyResponse(monthlyOperationResponse(replay));
   }
-  if (monthlyPolicy.enabled && !activeConversationForQuota) {
+  if (lessonPlannerMetering && !activeConversationForQuota) {
     if (!turn.requestId)
       return monthlyResponse(
         Response.json({ error: 'Request ID is required.' }, { status: 400 })
@@ -342,7 +344,19 @@ export async function action({ request }: ActionFunctionArgs) {
       return monthlyResponse(monthlyOperationResponse(admitted));
     reservation = admitted;
   }
-  if (!activeConversationForQuota && !monthlyPolicy.enabled) {
+  if (
+    !activeConversationForQuota &&
+    !lessonPlannerMetering &&
+    (monthlyPolicy.meteringLookupFailed ||
+      (await organizationHasPendingFreeTierLessonPlannerMetering(
+        ctx.organizationId
+      )))
+  ) {
+    return monthlyResponse(
+      dataResponse({ error: PLANNER_FAILED }, { status: 503 })
+    );
+  }
+  if (!activeConversationForQuota && !lessonPlannerMetering) {
     try {
       await assertCanCreateLessonPlan({
         organizationId: ctx.organizationId,

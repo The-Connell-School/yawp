@@ -377,7 +377,9 @@ export async function handleLessonPlannerToolCall(
 ): Promise<string> {
   const { assertOrganizationTeachingApproved } = await import('~/domain/free-tier/locked-preview.server');
   const { prisma } = await import('~/utils/db.server');
-  await assertOrganizationTeachingApproved(prisma, ctx.organizationId);
+  await assertOrganizationTeachingApproved(prisma, ctx.organizationId, {
+    allowPendingLessonPlanner: true,
+  });
   if (allowedReporterTools.has(name)) {
     // Rebuild the context explicitly: the reporter handler stages writes into a
     // caller-supplied buffer, and the planner must never hand it one.

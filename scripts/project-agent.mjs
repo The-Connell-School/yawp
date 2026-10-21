@@ -512,7 +512,7 @@ function runTestProfile(profile, { json }) {
       }) });
   }
   else if (chosen === "free-tier-locked-preview-unit") {
-    for (const file of ["app/routes/auth.inv.onboard-student/ua-onboarding.test.ts", "app/domain/free-tier/locked-preview.test.ts", "app/domain/free-tier/locked-preview.server.test.ts", "app/domain/collaboration/student-roster.server.test.ts", "app/domain/lesson-planner/lesson-planner-tools.server.test.ts", "app/domain/reporter/reporter-tools.server.test.ts", "app/utils/assignment-quota.server.test.ts", "app/utils/ai-admission.server.test.ts", "app/utils/impersonation-read-only.server.test.ts", "app/utils/auth.server.test.ts"]) runWebApp(file, ["test", "--max-concurrency=2", file]);
+    for (const file of ["app/routes/auth.inv.onboard-student/ua-onboarding.test.ts", "app/domain/free-tier/locked-preview.test.ts", "app/domain/free-tier/locked-preview.server.test.ts", "app/domain/free-tier/monthly-policy.test.ts", "app/domain/collaboration/student-roster.server.test.ts", "app/domain/lesson-planner/lesson-planner-tools.server.test.ts", "app/domain/reporter/reporter-tools.server.test.ts", "app/utils/assignment-quota.server.test.ts", "app/utils/ai-admission.server.test.ts", "app/utils/impersonation-read-only.server.test.ts", "app/utils/auth.server.test.ts"]) runWebApp(file, ["test", "--max-concurrency=2", file]);
   }
   else if (chosen === "free-tier-locked-preview-db") {
     const local = requireConfig();

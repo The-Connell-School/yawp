@@ -52,6 +52,8 @@ export function buildFreeAccountUsage(input: {
 }
 export type FreeAccountUsage = ReturnType<typeof buildFreeAccountUsage> & {
   monthly?: boolean;
+  /** Pending teachers: LP monthly cap without switching the tile to approved monthly mode. */
+  pendingLessonPlannerQuota?: UsageCount;
   renewsAt?: string;
   reporter?: UsageCount;
   classCode?: string | null;

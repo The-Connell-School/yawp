@@ -205,7 +205,7 @@ for (const width of [1440, 390]) {
     for (const path of [
       '/api/assignments/create',
       '/api/domain/reporter',
-      '/api/domain/lesson-planner',
+      '/api/domain/lesson-planner/packet',
       '/app/organization/students',
     ]) {
       const response = await page.request.post(path, {
@@ -214,6 +214,14 @@ for (const width of [1440, 390]) {
       });
       expect(response.status(), path).toBe(403);
     }
+    const plannerResponse = await page.request.post(
+      '/api/domain/lesson-planner',
+      {
+        form: { message: 'Outline a lesson on thesis statements' },
+        maxRedirects: 0,
+      }
+    );
+    expect(plannerResponse.status()).not.toBe(403);
     expect(await prisma.assignment.count()).toBe(before);
     await prisma.freeTierApplication.update({
       where: { id: app.id },
