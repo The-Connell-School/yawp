@@ -34,6 +34,7 @@ const loginUrl = '/app';
 const signupUrl = '/auth/inv/signup';
 const infoUrl = '/info';
 const accessibilityUrl = '/accessibility';
+const privacyUrl = '/privacy';
 const itemNumber = '[Item #: AP1030]';
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -118,6 +119,10 @@ export default function IndexRoute() {
           <span className="yawp-footer-divider" aria-hidden="true" />
           <a className="yawp-footer-meta-link" href={accessibilityUrl}>
             Accessibility
+          </a>
+          <span className="yawp-footer-divider" aria-hidden="true" />
+          <a className="yawp-footer-meta-link" href={privacyUrl}>
+            Privacy
           </a>
         </footer>
       </section>
