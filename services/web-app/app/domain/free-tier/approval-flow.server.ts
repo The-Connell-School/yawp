@@ -27,7 +27,7 @@ import { ensureFreeTierProductionApprovalHooks } from './approval-hooks.server';
 import { forwardApprovalSchema } from './approval-waiting';
 import {
   fetchFreeTierApplicationTerminalGate,
-  forwardAlreadySucceededForToken,
+  forwardIdempotentReplay,
   resolveAdminLinkTerminalGate,
 } from './admin-link-gate.server';
 import {
@@ -555,7 +555,13 @@ export async function redirectSchoolAdmin(args: {
     const gate = await fetchFreeTierApplicationTerminalGate(earlyAppId);
     if (gate) return { ok: false as const, ...gate };
   }
-  if (await forwardAlreadySucceededForToken(args.token)) {
+  if (
+    await forwardIdempotentReplay({
+      token: args.token,
+      newAdminName: parsed.data.newAdminName,
+      newAdminEmail: parsed.data.newAdminEmail,
+    })
+  ) {
     return { ok: true as const, idempotent: true as const };
   }
 
@@ -566,7 +572,11 @@ export async function redirectSchoolAdmin(args: {
   if (!peek.ok) {
     if (
       peek.reason === 'used' &&
-      (await forwardAlreadySucceededForToken(args.token))
+      (await forwardIdempotentReplay({
+        token: args.token,
+        newAdminName: parsed.data.newAdminName,
+        newAdminEmail: parsed.data.newAdminEmail,
+      }))
     ) {
       return { ok: true as const, idempotent: true as const };
     }

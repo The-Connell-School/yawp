@@ -27,7 +27,7 @@ import {
 } from './signed-link.server';
 import {
   fetchFreeTierApplicationTerminalGate,
-  forwardAlreadySucceededForToken,
+  forwardIdempotentReplay,
   resolveAdminLinkTerminalGate,
 } from './admin-link-gate.server';
 import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
@@ -512,7 +512,13 @@ export async function forwardApprovalByToken(args: {
     const gate = await fetchFreeTierApplicationTerminalGate(earlyAppId);
     if (gate) return { ok: false as const, ...gate };
   }
-  if (await forwardAlreadySucceededForToken(args.token)) {
+  if (
+    await forwardIdempotentReplay({
+      token: args.token,
+      newAdminName: parsed.data.newAdminName,
+      newAdminEmail: parsed.data.newAdminEmail,
+    })
+  ) {
     return { ok: true as const, idempotent: true as const };
   }
 
@@ -523,7 +529,11 @@ export async function forwardApprovalByToken(args: {
   if (!peek.ok) {
     if (
       peek.reason === 'used' &&
-      (await forwardAlreadySucceededForToken(args.token))
+      (await forwardIdempotentReplay({
+        token: args.token,
+        newAdminName: parsed.data.newAdminName,
+        newAdminEmail: parsed.data.newAdminEmail,
+      }))
     ) {
       return { ok: true as const, idempotent: true as const };
     }

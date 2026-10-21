@@ -5,6 +5,7 @@ import {
   type ConsumeLinkResult,
 } from './signed-link.server';
 import type { FreeTierSignedLinkPurpose } from '@app/prisma';
+import { normalizeEmail } from './service.server';
 
 export type FreeTierAdminTerminalReason = 'already_approved' | 'declined';
 
@@ -69,6 +70,27 @@ export async function forwardAlreadySucceededForToken(token: string): Promise<bo
     select: { id: true },
   });
   return !!redirected;
+}
+
+/** Idempotent replay only when the same forward payload is resubmitted. */
+export async function forwardIdempotentReplay(args: {
+  token: string;
+  newAdminName: string;
+  newAdminEmail: string;
+}): Promise<boolean> {
+  if (!(await forwardAlreadySucceededForToken(args.token))) return false;
+  const applicationId = applicationIdFromSignedToken(args.token);
+  if (!applicationId) return false;
+  const pending = await prisma.freeTierAdminApproval.findFirst({
+    where: { applicationId, status: 'PENDING' },
+    orderBy: { createdAt: 'desc' },
+    select: { adminName: true, adminEmail: true },
+  });
+  if (!pending) return false;
+  return (
+    pending.adminName.trim() === args.newAdminName.trim() &&
+    normalizeEmail(pending.adminEmail) === normalizeEmail(args.newAdminEmail)
+  );
 }
 
 export async function resolveAdminLinkTerminalGate(args: {
