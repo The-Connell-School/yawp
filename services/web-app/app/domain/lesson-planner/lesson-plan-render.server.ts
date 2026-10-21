@@ -32,6 +32,7 @@ const NUMBERING = 'lesson-plan-steps';
 
 const BLANK_HINTS = {
   standards: 'Add the standards this lesson meets.',
+  moreStandards: 'Add any others this lesson meets.',
   differentiation: 'Add supports, extensions and accommodations for your students.',
   assessment: 'Add how you will check what students learned.',
 };
@@ -76,7 +77,12 @@ export async function renderLessonPlanDocx(doc: LessonPlanDoc): Promise<Uint8Arr
   const hint = (text: string) =>
     new Paragraph({ children: [new TextRun({ text, italics: true, color: '6B7280' })], spacing: { after: 80 } });
   children.push(heading('Overview'), body(doc.overview));
-  children.push(heading('Standards'), hint(BLANK_HINTS.standards));
+  // The ones the teacher named, then room for more; never inferred.
+  children.push(
+    heading('Standards'),
+    ...doc.standards.map(bullet),
+    hint(doc.standards.length ? BLANK_HINTS.moreStandards : BLANK_HINTS.standards)
+  );
   children.push(heading('Learning objectives'), ...doc.goals.map(bullet));
   if (doc.teacherWill.length) children.push(heading('Teacher will'), ...doc.teacherWill.map(bullet));
   if (doc.materials.length) children.push(heading('Materials'), ...doc.materials.map(bullet));
@@ -164,7 +170,8 @@ export async function renderLessonPlanPdf(doc: LessonPlanDoc): Promise<Uint8Arra
   section('Overview');
   pdf.text(doc.overview, { width });
   section('Standards');
-  hint(BLANK_HINTS.standards);
+  list(doc.standards);
+  hint(doc.standards.length ? BLANK_HINTS.moreStandards : BLANK_HINTS.standards);
   section('Learning objectives');
   list(doc.goals);
   if (doc.teacherWill.length) {

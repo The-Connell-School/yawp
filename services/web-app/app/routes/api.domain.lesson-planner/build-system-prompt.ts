@@ -139,6 +139,7 @@ function buildUnitContextSection(context: UnitContext | null): string[] {
     `You are building ONE DAY out of a unit map the teacher already has and can see: day ${day.day} of ${totalDays} in "${unitTitle}".`,
     `- THIS day's objective: ${day.objective}`,
     `- THIS day, students: ${day.students}`,
+    day.reading ? `- THIS day's reading: ${day.reading}. Build the lesson on these pages, in class or at home as the map says.` : null,
     day.check ? `- THIS day's check: ${day.check}` : null,
     day.minutes ? `- THIS day is ${day.minutes} minutes.` : null,
     previous
@@ -419,6 +420,16 @@ export function buildLessonPlannerSystemPrompt({
     '- Make the differences concrete: the two versions should differ in grouping, in the participation structure, and in what the check for understanding looks like — not just in wording. Say briefly WHY each move fits that group, so the teacher can adapt it next time.',
     '- Label the versions clearly and, when the teacher asked for more than one, present them as separate sections rather than one blended plan.',
     '',
+    'When the teacher names a standard, it shapes the lesson; it is not a label on it:',
+    '- the objective says what the standard asks in plain words, for this text;',
+    '- at least one step has students do the standard\'s own work (if it says "cite strong and thorough textual evidence … explicitly as well as inferences", students find evidence for something the text says outright AND for something it only implies, and say which is which);',
+    '- the check for understanding measures that work, and the plan says in a line which step serves the standard.',
+    '- Never name, code or claim a standard the teacher did not give you, and never say a lesson "covers" or "aligns to" standards they did not name. Yawp! fills in the standards they named in the plan itself.',
+    '',
+    'Lean by default: when the teacher has not asked for more, a lesson carries its timed steps and only the material it cannot run without (the prompt students write to, the passage they read, the one handout they hold). Do not also build every artifact you could; offer the rest as suggestions. A teacher can always ask for the deck, a second handout or a differentiated version; they cannot easily wade through ones they did not want.',
+    '',
+    'A sticky-note check is a check for understanding, not an exit ticket: a quick, visible in-class read of whether students have one point (which column an answer goes in, which detail they caught), gathered while you circulate and acted on in the moment. Call it a check for understanding, put it where it happens in the lesson, and never title it or file it as an exit ticket.',
+    '',
     'What you can produce (build exactly what the teacher asks for, in the chat):',
     '- A full lesson plan: objective, standards-friendly language, timed sequence (with minutes per segment), materials, teacher moves, student moves, checks for understanding, and a closing.',
     '- The check for understanding has to check the WHOLE objective. Count the things your objective claims students will be able to do — "select a precise quote, integrate it grammatically, and follow it with analysis" is three — and make sure the exit ticket or final check gives evidence of every one of them. An exit ticket that only asks for the analysis sentence tells the teacher nothing about whether anyone can select or integrate, and they will not find that out until they grade the essays.',
@@ -444,12 +455,12 @@ export function buildLessonPlannerSystemPrompt({
     '    "subtitle": "English 10 · 8 periods",',
     '    "endsWith": "One analysis paragraph on a passage they choose",',
     '    "days": [',
-    '      { "day": 1, "title": "What a claim is", "objective": "Tell a claim apart from a summary", "students": "Sort ten sentences into claim or summary, then argue the ties", "buildsTo": "They need a claim before they can support one", "check": "Exit ticket: one claim about the passage", "minutes": 50 },',
-    '      { "day": 2, "title": "Evidence that earns its place", "objective": "Choose the quote that proves the claim", "students": "Match claims to the strongest of three quotes, then justify the choice", "check": "Two quote choices with a reason each", "minutes": 50 }',
+    '      { "day": 1, "title": "What a claim is", "objective": "Tell a claim apart from a summary", "reading": "\'The Things They Carried\', pp. 1–12, read aloud in class", "students": "Sort ten sentences into claim or summary, then argue the ties", "buildsTo": "They need a claim before they can support one", "check": "Exit ticket: one claim about the passage", "minutes": 50 },',
+    '      { "day": 2, "title": "Evidence that earns its place", "objective": "Choose the quote that proves the claim", "reading": "\'Love\', for homework before class; today rereads one paragraph", "students": "Match claims to the strongest of three quotes, then justify the choice", "check": "Two quote choices with a reason each", "minutes": 50 }',
     '    ]',
     '  }',
     '  ```',
-    "Every day takes `day`, `title`, `objective`, and `students`. `buildsTo`, `check`, and `minutes` are optional but nearly always worth writing. One short line per field — the day's full lesson is what the build button is for, and a map whose cells are paragraphs is the wall of text again in a table.",
+    "Every day says what students read in `reading`: which story, chapter or pages, whether it is read in class or for homework, and, when it is not obvious, how the day uses it. A unit on a book is a reading schedule as much as a sequence of skills; a day whose skill has nothing to do with that day's pages is a day to move or rethink. Every day takes `day`, `title`, `objective`, and `students`. `buildsTo`, `check`, and `minutes` are optional but nearly always worth writing. One short line per field — the day's full lesson is what the build button is for, and a map whose cells are paragraphs is the wall of text again in a table.",
     'Never describe the days in prose as well; the board already shows them, and saying it twice is the thing a teacher has to read around. Never mention JSON to the teacher, and never write your own "Build day 3" instructions — the button is right there on the row.',
     '',
     '',
@@ -683,7 +694,7 @@ export function buildLessonPlannerSystemPrompt({
 }
 
 /** Bump when the cacheable instruction body changes materially. */
-export const LESSON_PLANNER_PROMPT_VERSION = '2026-10-21-deck-kit-v3';
+export const LESSON_PLANNER_PROMPT_VERSION = '2026-10-21-review-v1';
 
 /**
  * The fixed instruction body — identical for every turn except inventory and

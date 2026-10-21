@@ -22,6 +22,7 @@ import {
 } from './lesson-plan-doc';
 import { PLAN_SUMMARY_SYSTEM, summarizeLessonPlan } from './plan-summary.server';
 import { buildKitPlan, type KitPlan } from './kit-plan';
+import { teacherStandards } from './teacher-standards';
 
 const SUMMARY_DEADLINE_MS = 25_000;
 const SUMMARY_MAX_TOKENS = 2_000;
@@ -100,12 +101,19 @@ export async function loadLessonPlan({
     }
   }
 
+  // The standards the teacher named in the chat: never inferred.
+  const asked = await prisma.lessonPlanMessage.findMany({
+    where: { conversationId: loaded.conversationId, role: 'user' },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    select: { content: true },
+  });
   const doc = buildLessonPlanDoc({
     title: loaded.packet.title,
     className: loaded.packet.className,
     periodMinutes: loaded.periodMinutes,
     entries,
     summaries,
+    standards: teacherStandards(asked.map((message) => message.content)),
   });
   return { doc, kit: deckGallery ? buildKitPlan({ doc, entries }) : null };
 }

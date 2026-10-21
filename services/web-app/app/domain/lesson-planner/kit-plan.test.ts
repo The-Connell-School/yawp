@@ -116,6 +116,16 @@ describe('buildKitPlan: the lesson plan spec v1 data model', () => {
   });
 });
 
+describe('buildKitPlan: standards', () => {
+  test('the standards the teacher named go in the Standards box; none, and it is the empty box', () => {
+    const doc = buildLessonPlanDoc({ title: 'T', className: null, periodMinutes: null, entries: entries.slice(0, 2), standards: ['RL.9-10.1'] });
+    const box = buildKitPlan({ doc, entries: entries.slice(0, 2) }).body.find((block) => block.type === 'standards');
+    expect(box).toEqual({ type: 'standards', items: ['RL.9-10.1'] });
+    const none = buildLessonPlanDoc({ title: 'T', className: null, periodMinutes: null, entries: entries.slice(0, 2) });
+    expect(buildKitPlan({ doc: none, entries: entries.slice(0, 2) }).body.find((block) => block.type === 'standards')).toEqual({ type: 'standards' });
+  });
+});
+
 describe('kitRuns: inline marks', () => {
   test('bold, italic and colored', () => {
     expect(kitRuns('A **bold** and *quiet* ~~2B5C8A|blue part~~.')).toEqual([

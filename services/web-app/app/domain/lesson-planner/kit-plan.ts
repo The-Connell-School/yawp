@@ -20,7 +20,8 @@ export type KitBlock =
   | { type: 'callout'; title: string; paras: string[] }
   | { type: 'h2'; text: string }
   | { type: 'twoCol'; cols: Array<[string, string[]]> }
-  | { type: 'standards' }
+  /** The standards the teacher named, when any; the box has room for more. */
+  | { type: 'standards'; items?: string[] }
   | { type: 'bullets'; items: string[] }
   | { type: 'phase'; text: string }
   | {
@@ -52,6 +53,7 @@ export type KitPlan = {
 
 export const KIT_PLAN_PROGRAM = 'Yawp! Writing Program';
 export const KIT_PLAN_STANDARDS_PLACEHOLDER = '[ Add the standards this lesson covers ]';
+export const KIT_PLAN_MORE_STANDARDS = '[ Add any others this lesson covers ]';
 
 const PROCESS_NAMES: Record<(typeof WRITING_PROCESS_STEPS)[number], string> = {
   'pre-writing': 'pre-writing',
@@ -142,7 +144,7 @@ export function buildKitPlan({ doc, entries }: { doc: LessonPlanDoc; entries: Le
     { type: 'callout', title: 'Overview', paras: [doc.overview] },
     { type: 'h2', text: 'Goals' },
     { type: 'twoCol', cols },
-    { type: 'standards' },
+    doc.standards?.length ? { type: 'standards', items: doc.standards } : { type: 'standards' },
     { type: 'h2', text: 'Materials' },
     { type: 'bullets', items: [...new Set(materials)] },
     { type: 'h2', text: 'Lesson steps' },

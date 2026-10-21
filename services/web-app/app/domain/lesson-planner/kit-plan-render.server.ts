@@ -27,7 +27,7 @@ import {
   WidthType,
 } from 'docx';
 import PDFDocument from 'pdfkit';
-import { KIT_PLAN_PROGRAM, KIT_PLAN_STANDARDS_PLACEHOLDER, kitRuns, type KitBlock, type KitListItem, type KitPlan } from './kit-plan';
+import { KIT_PLAN_MORE_STANDARDS, KIT_PLAN_PROGRAM, KIT_PLAN_STANDARDS_PLACEHOLDER, kitRuns, type KitBlock, type KitListItem, type KitPlan } from './kit-plan';
 import { registerKitFonts } from './kit-fonts.server';
 
 /** Spec "Type and color". */
@@ -153,7 +153,7 @@ function twoCol(block: Extract<KitBlock, { type: 'twoCol' }>, plan: KitPlan): Ta
   });
 }
 
-function standards(): Table {
+function standards(items: string[] = [], plan: KitPlan): Table {
   return new Table({
     width: { size: TEXT_WIDTH, type: WidthType.DXA },
     columnWidths: [TEXT_WIDTH],
@@ -173,8 +173,16 @@ function standards(): Table {
                 spacing: { after: 60 },
                 children: [new TextRun({ text: 'Standards covered', font: SERIF, size: SIZE.body + 2, color: C.ink })],
               }),
+              ...items.map((item) => bullet(item, plan, 200)),
               new Paragraph({
-                children: [new TextRun({ text: KIT_PLAN_STANDARDS_PLACEHOLDER, font: SANS, size: SIZE.body, color: C.stone })],
+                children: [
+                  new TextRun({
+                    text: items.length ? KIT_PLAN_MORE_STANDARDS : KIT_PLAN_STANDARDS_PLACEHOLDER,
+                    font: SANS,
+                    size: SIZE.body,
+                    color: C.stone,
+                  }),
+                ],
               }),
             ],
           }),
@@ -222,7 +230,7 @@ function blocks(list: KitBlock[], plan: KitPlan, counter: { step: number }): Arr
       case 'twoCol':
         return [twoCol(block, plan), spacer()];
       case 'standards':
-        return [standards(), spacer()];
+        return [standards(block.items, plan), spacer()];
       case 'bullets':
         return block.items.map((item) => bullet(item, plan));
       case 'phase':
@@ -528,7 +536,13 @@ export async function renderKitPlanPdf(plan: KitPlan): Promise<Uint8Array> {
           shadedBox(
             (x, w) => {
               pdf.font(F.serif).fontSize(10.5).fillColor(hex(C.ink)).text('Standards covered', x, pdf.y, { width: w });
-              pdf.moveDown(0.3).font(F.sans).fontSize(10).fillColor(hex(C.stone)).text(KIT_PLAN_STANDARDS_PLACEHOLDER, x, pdf.y, { width: w });
+              pdf.moveDown(0.3);
+              if (block.items?.length) list(block.items, x, w);
+              pdf
+                .font(F.sans)
+                .fontSize(10)
+                .fillColor(hex(C.stone))
+                .text(block.items?.length ? KIT_PLAN_MORE_STANDARDS : KIT_PLAN_STANDARDS_PLACEHOLDER, x, pdf.y, { width: w });
             },
             { border: C.rule }
           );

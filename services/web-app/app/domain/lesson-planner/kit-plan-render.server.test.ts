@@ -126,6 +126,16 @@ describe('renderKitPlanDocx: the lesson plan spec v1 Word file', () => {
   });
 });
 
+describe('renderKitPlanDocx: standards the teacher named', () => {
+  test('listed in the box, with room for more', async () => {
+    const named: KitPlan = { ...plan, body: plan.body.map((block) => (block.type === 'standards' ? { type: 'standards', items: ['RL.9-10.1'] } : block)) };
+    const doc = zipParts(await renderKitPlanDocx(named)).get('word/document.xml')!;
+    expect(doc).toContain('RL.9-10.1');
+    expect(doc).toContain('[ Add any others this lesson covers ]');
+    expect(doc).not.toContain('[ Add the standards this lesson covers ]');
+  });
+});
+
 describe('renderKitPlanPdf', () => {
   test('a Letter PDF with Gelasio and Arimo embedded', async () => {
     const bytes = await renderKitPlanPdf(plan);

@@ -1722,7 +1722,7 @@ describe("planner prompt — Brian's run 3", () => {
   });
 
   test('the prompt version moved', () => {
-    expect(LESSON_PLANNER_PROMPT_VERSION).toBe('2026-10-21-deck-kit-v3');
+    expect(LESSON_PLANNER_PROMPT_VERSION).toBe('2026-10-21-review-v1');
   });
 });
 
@@ -1826,5 +1826,29 @@ describe('planner prompt — writing the slides, for every deck (Lesson Deck Kit
     expect(prompt).toContain('current MLA edition');
     expect(prompt).toContain('40 words');
     expect(prompt).toContain('Never add content just to fill space');
+  });
+});
+
+describe('planner prompt — the Oct 21 review (standards, scope, checks, units)', () => {
+  const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'School' });
+
+  test('a standard the teacher names shapes the lesson, and none is ever inferred', () => {
+    expect(prompt).toContain('When the teacher names a standard, it shapes the lesson');
+    expect(prompt).toContain('the objective says what the standard asks in plain words');
+    expect(prompt).toContain('Never name, code or claim a standard the teacher did not give you');
+  });
+
+  test('lean by default: what the lesson cannot run without, and offer the rest', () => {
+    expect(prompt).toContain('Lean by default');
+    expect(prompt).toContain('offer the rest as suggestions');
+  });
+
+  test('a sticky-note check is a check for understanding, not an exit ticket', () => {
+    expect(prompt).toContain('A sticky-note check is a check for understanding, not an exit ticket');
+  });
+
+  test('every day of a unit map says what students read, and where', () => {
+    expect(prompt).toContain('`reading`');
+    expect(prompt).toContain('in class or for homework');
   });
 });

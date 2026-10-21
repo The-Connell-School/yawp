@@ -58,3 +58,13 @@ describe('isLectureStep: a step the teacher talks through, which earns its own s
     }
   });
 });
+
+describe('a sticky-note check is a check for understanding, not an exit ticket (Oct 21)', () => {
+  test('its type is not the closing, and nothing offers to create an exit ticket for it', async () => {
+    const { proseWritingTask } = await import('./stack-create-link');
+    const title = 'Sticky-note check: which axis?';
+    const content = 'Each student puts a sticky note on the axis they think the quote belongs on. Circulate and count.';
+    expect(stepTypeFor({ kind: 'step', title })).not.toBe('closing');
+    expect(proseWritingTask(title, content)).toBeNull();
+  });
+});

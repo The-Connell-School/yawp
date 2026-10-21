@@ -42,6 +42,7 @@ const DOC: LessonPlanDoc = {
   closingStep: { title: 'Exit ticket', minutes: 3, summary: 'Students write one object and one sentence.', purpose: 'Shows who has it.' },
   closingInStack: true,
   assessment: 'The exit ticket: one object, one sentence.',
+  standards: [],
 };
 
 describe("renderLessonPlanDocx (Brian's run 2, D2)", () => {
@@ -71,6 +72,14 @@ describe("renderLessonPlanDocx (Brian's run 2, D2)", () => {
     }
     expect(xml).toContain('The exit ticket: one object, one sentence.');
     expect(xml.match(/>Exit ticket \(3 min\)</g)?.length).toBe(1);
+  });
+
+  test('the standards the teacher named fill the Standards section, in the Word file and the PDF', async () => {
+    const named = { ...DOC, standards: ['RL.9-10.1: Cite strong and thorough textual evidence.'] };
+    const xml = zipParts(await renderLessonPlanDocx(named)).get('word/document.xml')!;
+    expect(xml).toContain('RL.9-10.1: Cite strong and thorough textual evidence.');
+    expect(xml).not.toContain('Add the standards this lesson meets.');
+    expect(xml).toContain('Add any others this lesson meets.');
   });
 
   test('no logo, no image (Brian, item 31)', async () => {

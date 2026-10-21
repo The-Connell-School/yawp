@@ -60,6 +60,8 @@ export type LessonPlanDoc = {
   closingInStack: boolean;
   /** Prefilled from the exit ticket or Daily Pages in the stack, when any. */
   assessment: string | null;
+  /** The standards the teacher named in the planner, never inferred. */
+  standards: string[];
 };
 
 /** What the model writes for a plan (see plan-summary.server.ts). */
@@ -282,12 +284,15 @@ export function buildLessonPlanDoc({
   periodMinutes,
   entries,
   summaries,
+  standards = [],
 }: {
   title: string;
   className: string | null;
   periodMinutes: number | null;
   entries: LessonPlanEntry[];
   summaries?: LessonPlanSummaries | null;
+  /** The standards the teacher named (teacher-standards.ts). */
+  standards?: string[];
 }): LessonPlanDoc {
   const expanded = expandAll(entries);
   const materials = expanded.flatMap((item) =>
@@ -348,6 +353,7 @@ export function buildLessonPlanDoc({
     closingStep,
     closingInStack: Boolean(closingStep),
     assessment: assessmentFrom(entries),
+    standards,
   };
 }
 
