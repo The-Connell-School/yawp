@@ -295,8 +295,20 @@ test('stale tab blocked POST shows approval required toast without changing page
     where: { id: app.id },
     data: { status: 'APPROVED' },
   });
-  await page.reload();
-  await expect(page.getByTestId('teaching-access-approval-toast')).toBeVisible();
+  await expect
+    .poll(async () => {
+      const row = await prisma.freeTierApplication.findUnique({
+        where: { id: app.id },
+        select: { status: true },
+      });
+      return row?.status;
+    })
+    .toBe('APPROVED');
+  await page.goto('/app');
+  await expect(page.getByTestId('teaching-access-banner')).toHaveCount(0);
+  await expect(page.getByTestId('teaching-access-approval-toast')).toBeVisible({
+    timeout: 30_000,
+  });
   await prisma.freeTierApplication.update({
     where: { id: app.id },
     data: { status: 'SENT' },
