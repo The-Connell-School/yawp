@@ -243,6 +243,11 @@ for (const width of [1440, 390]) {
     await page.reload();
     await expect(page.getByTestId('teaching-access-banner')).toHaveCount(0);
     await expect(page.getByTestId('teaching-access-approval-toast')).toBeVisible();
+    await page
+      .getByTestId('teaching-access-approval-toast')
+      .getByRole('button', { name: 'Dismiss' })
+      .click();
+    await expect(page.getByTestId('teaching-access-approval-toast')).toHaveCount(0);
     await page.reload();
     await expect(page.getByTestId('teaching-access-approval-toast')).toHaveCount(0);
     await page.goto('/app/assignments');
