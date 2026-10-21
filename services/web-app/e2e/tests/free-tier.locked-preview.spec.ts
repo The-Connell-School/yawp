@@ -190,28 +190,20 @@ for (const width of [1440, 390]) {
     const lockedTileImg = page
       .locator('[data-testid="site-license-locked-assignment-tile"] img')
       .first();
-    if (await lockedTileImg.count()) {
+    if (width === 1440 && (await lockedTileImg.count())) {
       const imgBox = await lockedTileImg.boundingBox();
-      if (width === 1440) expect(imgBox?.height ?? 0).toBeLessThanOrEqual(64);
-      else expect(imgBox?.height ?? 0).toBeLessThanOrEqual(56);
+      expect(imgBox?.height ?? 0).toBeLessThanOrEqual(64);
       const siteLock = page.getByTestId('site-license-lock-button').first();
-      if (width === 1440) {
-        await siteLock.focus();
-        await page.waitForTimeout(350);
-        await expect(
-          page.getByRole('tooltip', { name: /Available with a site license/i })
-        ).toBeVisible();
-        await siteLock.blur();
-      } else {
-        await siteLock.click();
-        await expect(
-          page.getByRole('tooltip', { name: /Available with a site license/i })
-        ).toBeVisible();
-        await page.waitForTimeout(2100);
-        await expect(
-          page.getByRole('tooltip', { name: /Available with a site license/i })
-        ).toHaveCount(0);
-      }
+      await siteLock.focus();
+      await page.waitForTimeout(350);
+      await expect(
+        page.getByRole('tooltip', { name: /Available with a site license/i })
+      ).toBeVisible();
+      await siteLock.blur();
+    }
+    if (width === 390 && (await lockedTileImg.count())) {
+      const imgBox = await lockedTileImg.boundingBox();
+      expect(imgBox?.height ?? 0).toBeLessThanOrEqual(56);
     }
     await capture(page, `locked-picker-${width}`);
     await page.keyboard.press('Escape');
@@ -235,9 +227,8 @@ for (const width of [1440, 390]) {
       ).toBeVisible();
     } else {
       await page
+        .getByTestId('free-assignment-tiles')
         .getByRole('button', { name: 'Create assignment' })
-        .filter({ visible: true })
-        .first()
         .click();
       await expect(
         page.getByRole('heading', { name: 'Unlocks after approval' })

@@ -81,6 +81,27 @@ test('free-tier flag on shows locked assignment tiles on dashboard and picker', 
   ).toBeVisible();
 });
 
+test('site-license lock tooltip on mobile tap (~2s)', async ({ page }) => {
+  await flag('free_tier', true);
+  await flag('free-tier-inapp-v2', true);
+  await flag('free-tier-onboarding-v2', { mode: 'targeted', orgIds: [org] });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loginFreeTeacher(page);
+  await page.goto('/app');
+  const lock = page
+    .getByTestId('free-assignment-tiles')
+    .getByTestId('site-license-lock-button')
+    .first();
+  await lock.click();
+  await expect(
+    page.getByRole('tooltip', { name: /Available with a site license/i })
+  ).toBeVisible();
+  await page.waitForTimeout(2100);
+  await expect(
+    page.getByRole('tooltip', { name: /Available with a site license/i })
+  ).toHaveCount(0);
+});
+
 test('free-tier flag off keeps the licensed teacher dashboard unchanged', async ({
   page,
 }) => {
