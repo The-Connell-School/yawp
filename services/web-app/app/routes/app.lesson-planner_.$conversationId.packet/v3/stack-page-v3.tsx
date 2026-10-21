@@ -208,7 +208,8 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
   const templateName = `${steps.map((step) => STEP_TYPE_LABELS[step.type]).slice(0, 3).join(', ')} (${timing.total} min)`;
 
   return (
-    <div data-testid="stack-v3" className="min-h-full" style={STACK_THEME}>
+    // The app shell is a fixed-height frame: the page owns its scrolling.
+    <div data-testid="stack-v3" className="h-full w-full overflow-y-auto" style={STACK_THEME}>
       {/* The page's own fonts, loaded only here. */}
       <link rel="stylesheet" href={STACK_FONTS_HREF} />
       <div className="mx-auto w-full max-w-[1180px] px-4 pb-24 pt-5 sm:px-6">

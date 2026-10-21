@@ -56,7 +56,8 @@ export default function StepHandoutsRoute() {
   const waiting = steps.some((step) => included.has(step.id) && !step.ready && !failed.has(step.id));
 
   return (
-    <div data-testid="step-handouts" className="min-h-full" style={STACK_THEME}>
+    // The app shell is a fixed-height frame: the page owns its scrolling.
+    <div data-testid="step-handouts" className="h-full w-full overflow-y-auto" style={STACK_THEME}>
       <link rel="stylesheet" href={STACK_FONTS_HREF} />
       <div className="mx-auto w-full max-w-3xl px-4 pb-20 pt-5 sm:px-6">
         <Link
