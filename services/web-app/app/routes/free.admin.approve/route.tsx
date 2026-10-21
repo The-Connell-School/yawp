@@ -8,6 +8,7 @@ import {
   isApprovalV2Enabled,
   forwardApprovalByToken,
 } from '~/domain/free-tier/approval-v2.server';
+import { FREE_TIER_MODEL_TRAINING_LINE } from '~/domain/free-tier/email-copy';
 import {
   ApprovalForwardForm,
   approvalForwardError,
@@ -309,7 +310,7 @@ export default function FreeAdminApproveRoute() {
             <ul className="flex flex-col gap-3 text-sm text-card-foreground">
               <li>Students draft essays with feedback as they write.</li>
               <li>Teachers control assignments and grading.</li>
-              <li>Student writing is never used to train outside models.</li>
+              <li>{FREE_TIER_MODEL_TRAINING_LINE}</li>
             </ul>
             <section
               aria-label="Administrator guide"
@@ -342,7 +343,7 @@ export default function FreeAdminApproveRoute() {
                 aria-hidden="true"
                 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
               />
-              Student writing is never used to train outside models.
+              {FREE_TIER_MODEL_TRAINING_LINE}
             </li>
           </ul>
         </>

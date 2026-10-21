@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import {
   CONGRATULATIONS_V2_SUBJECT,
+  FREE_TIER_MODEL_TRAINING_LINE,
   RELEASE_EMAIL_V2_COPY_VERSION,
   TEACHER_REMINDER_V2_SUBJECT,
   isFreeTierNdpaCompleted,
