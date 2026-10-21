@@ -42,8 +42,10 @@ export async function readFreeAccountUsage(
   const membershipId = profile.id;
   const hideTeachingSecrets = await shouldHideFreeTierTeachingSecrets(userId);
   const { limits, monthly } = await effectiveFreeTierLimits(organizationId);
-  const monthlyUsageCard = policy.lessonPlannerMeteringEnabled;
+  const shellMonthly = policy.enabled;
+  const lessonPlannerMonthlyMetering = policy.lessonPlannerMeteringEnabled;
   const entitlements = getEntitlementsForPlan('FREE_CLASSROOM', limits);
+  const lessonPlanCap = entitlements.features.lessonPlanQuota!;
   const klass = await prisma.class.findFirst({
     where: {
       isArchived: false,
@@ -60,6 +62,7 @@ export async function readFreeAccountUsage(
     writingSubmitted,
     graded,
     gradingPause,
+    monthlyLessonPlansUsed,
   ] = await Promise.all([
     klass
       ? countFreeClassSeatUsage(
@@ -69,7 +72,7 @@ export async function readFreeAccountUsage(
         )
       : { currentStudents: 0, pendingInvites: 0 },
     getFreeClassroomAssignmentQuotaUsage(organizationId),
-    countOrganizationLessonPlans(organizationId, monthly && monthlyUsageCard),
+    countOrganizationLessonPlans(organizationId, monthly),
     klass
       ? prisma.document.count({
           where: {
@@ -89,24 +92,39 @@ export async function readFreeAccountUsage(
         })
       : 0,
     readGradingLimitStatus(membershipId),
+    lessonPlannerMonthlyMetering && !shellMonthly
+      ? countOrganizationLessonPlans(organizationId, true)
+      : Promise.resolve(null),
   ]);
   const reporterUsed = policy.enabled
     ? await readMonthlyUsage(organizationId, 'reporter')
     : 0;
+  const usageCounts = buildFreeAccountUsage({
+    monthly: shellMonthly,
+    seatCap: entitlements.studentSeatCap!,
+    lessonPlanCap,
+    assignmentCaps: FREE_CLASSROOM_ASSIGNMENT_QUOTAS,
+    students: seats.currentStudents,
+    pendingInvites: seats.pendingInvites,
+    lessonPlans,
+    assignmentCounts: Object.fromEntries(assignmentCounts),
+  });
+  const lessonPlannerMonthly =
+    monthlyLessonPlansUsed === null
+      ? undefined
+      : {
+          used: monthlyLessonPlansUsed,
+          total: lessonPlanCap,
+          remaining: Math.max(0, lessonPlanCap - monthlyLessonPlansUsed),
+        };
   return {
-    ...buildFreeAccountUsage({
-      monthly: monthlyUsageCard,
-      seatCap: entitlements.studentSeatCap!,
-      lessonPlanCap: entitlements.features.lessonPlanQuota!,
-      assignmentCaps: FREE_CLASSROOM_ASSIGNMENT_QUOTAS,
-      students: seats.currentStudents,
-      pendingInvites: seats.pendingInvites,
-      lessonPlans,
-      assignmentCounts: Object.fromEntries(assignmentCounts),
-    }),
-    monthly: monthlyUsageCard,
-    reporterLocked: monthlyUsageCard && !policy.enabled,
-    ...(monthlyUsageCard
+    ...usageCounts,
+    monthly: shellMonthly,
+    lessonPlannerMonthlyMetering,
+    unlimitedFreeAssignmentTiles: lessonPlannerMonthlyMetering,
+    reporterLocked: lessonPlannerMonthlyMetering && !policy.enabled,
+    ...(lessonPlannerMonthly ? { lessonPlannerMonthly } : {}),
+    ...(shellMonthly
       ? {
           renewsAt: lessonPlanMonthWindow(new Date()).lt.toISOString(),
           reporter: {
@@ -115,7 +133,11 @@ export async function readFreeAccountUsage(
             remaining: Math.max(0, limits.reporterMonthly - reporterUsed),
           },
         }
-      : {}),
+      : lessonPlannerMonthlyMetering
+        ? {
+            renewsAt: lessonPlanMonthWindow(new Date()).lt.toISOString(),
+          }
+        : {}),
     classCode: hideTeachingSecrets ? null : (klass?.code ?? null),
     classCodeHidden: hideTeachingSecrets,
     classId: klass?.id ?? null,

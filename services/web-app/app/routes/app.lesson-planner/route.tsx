@@ -3,6 +3,7 @@ import {
   lessonPlannerPausedPlaceholder,
   useFreeAccountUsage,
 } from '~/components/free-account-usage';
+import { isLessonPlannerMonthlyExhausted } from '~/domain/free-tier/inapp-usage';
 import { useEffect, useRef, useState } from 'react';
 import {
   Link,
@@ -959,7 +960,7 @@ function LessonPlannerEmptyState({
 }) {
   const freeUsage = useFreeAccountUsage();
   const exhausted =
-    freeUsage?.monthly && freeUsage.lessonPlans.remaining === 0;
+    freeUsage && isLessonPlannerMonthlyExhausted(freeUsage);
   const pausedPlaceholder =
     exhausted && freeUsage
       ? lessonPlannerPausedPlaceholder(freeUsage)
@@ -987,7 +988,9 @@ function LessonPlannerEmptyState({
         {freeUsage ? (
           <LessonPlannerMonthlyLimitNotice usage={freeUsage} />
         ) : null}
-        {freeUsage && !freeUsage.monthly && (
+        {freeUsage &&
+        !freeUsage.lessonPlannerMonthlyMetering &&
+        !freeUsage.monthly ? (
           <div
             className="text-sm text-muted-foreground"
             data-testid="free-lesson-remaining"
@@ -1009,7 +1012,7 @@ function LessonPlannerEmptyState({
               `${freeUsage.lessonPlans.remaining} of ${freeUsage.lessonPlans.total} lesson plans left`
             )}
           </div>
-        )}
+        ) : null}
       </div>
       {seedContext ? (
         <div

@@ -86,6 +86,12 @@ export function lessonPlannerMonthlyWarning(
 
 export type FreeAccountUsage = ReturnType<typeof buildFreeAccountUsage> & {
   monthly?: boolean;
+  /** Org-scoped monthly LP quota applies (pending or approved); sidebar meter stays on `monthly`. */
+  lessonPlannerMonthlyMetering?: boolean;
+  /** Monthly LP counts for limit UI when pending (`monthly` is false). */
+  lessonPlannerMonthly?: UsageCount;
+  /** Assignment tiles show unlimited copy while `monthly` may still be false for pending teachers. */
+  unlimitedFreeAssignmentTiles?: boolean;
   /** Reporter row is locked until school administrator approval. */
   reporterLocked?: boolean;
   renewsAt?: string;
@@ -102,3 +108,16 @@ export type FreeAccountUsage = ReturnType<typeof buildFreeAccountUsage> & {
   };
   gradingPause: { retryAt: string; limit: number; window: string } | null;
 };
+
+export function lessonPlannerMonthlyUsage(usage: FreeAccountUsage): UsageCount {
+  return usage.lessonPlannerMonthly ?? usage.lessonPlans;
+}
+
+export function isLessonPlannerMonthlyExhausted(
+  usage: FreeAccountUsage
+): boolean {
+  if (usage.lessonPlannerMonthlyMetering) {
+    return lessonPlannerMonthlyUsage(usage).remaining === 0;
+  }
+  return !usage.monthly && usage.lessonPlans.remaining === 0;
+}

@@ -1,9 +1,6 @@
 import './free-account.css';
 import { readFreeAccountUsage } from '~/domain/free-tier/inapp-usage.server';
-import {
-  FreeAccountUsagePopover,
-  monthlyUsageShowsMobileDot,
-} from '~/components/free-account-usage';
+import { FreeAccountUsagePopover } from '~/components/free-account-usage';
 import { canUseMockAdmin, requireMockAdmin } from '~/utils/mock-admin.server';
 import {
   Form,
@@ -432,9 +429,7 @@ export default function Route() {
                           icon: (
                             <>
                               <Microscope size={18} />
-                              {freeAccountUsage.reporterLocked && (
-                                <Lock size={12} />
-                              )}
+                              {!freeAccountUsage.monthly && <Lock size={12} />}
                             </>
                           ),
                         },
@@ -603,16 +598,8 @@ export default function Route() {
             ref={mobileNavTrigger}
             aria-label={freeAccountUsage ? 'Open app navigation' : undefined}
             onClick={() => setIsMobileNavOpen(true)}
-            className="relative"
           >
             <HamburgerIcon />
-            {freeAccountUsage &&
-            monthlyUsageShowsMobileDot(freeAccountUsage) ? (
-              <span
-                className="absolute right-1 top-1 size-2 rounded-full bg-red-600"
-                aria-hidden
-              />
-            ) : null}
           </Button>
           <div className="flex items-center">
             {freeAccountUsage &&
