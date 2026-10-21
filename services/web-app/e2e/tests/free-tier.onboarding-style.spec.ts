@@ -300,24 +300,11 @@ for (const viewport of [
         where: { applicationId: app.id },
         data: { personalNote: 'HISTORICAL INTRO' },
       });
-      const legacyResend = page.getByRole('button', {
-        name: 'Resend reminder',
+      const resend = await page.request.post('/app/free-tier/pending', {
+        form: { intent: 'resend' },
       });
-      if (await legacyResend.count()) {
-        await legacyResend.click();
-        await expect(page.getByText(/Reminder sent to/i)).toBeVisible({
-          timeout: 15_000,
-        });
-      } else {
-        await expect(
-          page.getByRole('link', { name: 'Draft an email' })
-        ).toBeVisible({ timeout: 60_000 });
-        const resend = await page.request.post('/app/free-tier/pending', {
-          form: { intent: 'resend' },
-        });
-        expect(resend.ok()).toBe(true);
-        await drainFreeTierApprovalJobs();
-      }
+      expect(resend.ok()).toBe(true);
+      await drainFreeTierApprovalJobs();
       await capture('reminder-confirmation');
       const origin = new URL(page.url()).origin;
       const reminder = await (async () => {

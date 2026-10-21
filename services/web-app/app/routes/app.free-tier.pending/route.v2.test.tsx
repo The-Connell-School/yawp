@@ -40,16 +40,29 @@ mock.module('~/utils/rate-limit.server', () => ({
 mock.module('~/domain/free-tier/approval-flow.server', () => ({
   resendFreeTierAdminApprovalReminder: async () => ({ ok: true }),
 }));
+mock.module('~/domain/free-tier/locked-preview.server', () => ({
+  getLockedPreviewApplication: async () => ({ id: 'app' }),
+}));
+mock.module('~/cookies/membership-id.server', () => ({
+  getMembershipId: async () => null,
+}));
 let stopped = false;
 mock.module('react-router', () => ({
   ...router,
   useLoaderData: () => ({
     app: { status: 'SENT', name: 'Teacher' },
+    pending: {
+      adminName: 'Patel',
+      adminEmail:
+        'very.long.administrator.email.address+tag@subdomain.example-school.edu',
+    },
+    lockedPreview: true,
     approvalV2: {
       approval: {
         id: 'current',
         adminName: 'Patel',
-        adminEmail: 'patel@example.org',
+        adminEmail:
+          'very.long.administrator.email.address+tag@subdomain.example-school.edu',
         autoRemindersStopped: stopped,
       },
     },
@@ -57,6 +70,7 @@ mock.module('react-router', () => ({
   useActionData: () => undefined,
   useNavigation: () => ({ state: 'idle' }),
   Form: ({ children, ...props }: any) => <form {...props}>{children}</form>,
+  Link: ({ children, ...props }: any) => <a {...props}>{children}</a>,
 }));
 const { default: Page, action, loader } = await import('./route');
 afterAll(() => mock.restore());
@@ -83,21 +97,20 @@ test('forward action passes authenticated owner and expected current approval', 
 });
 test('crafted forward is refused when rollout is off', async () => {
   enabled = false;
-  forward.mockClear();
+  forward.mockReset();
   const result = await action({ request: request() } as never);
   expect(result.ok).toBe(false);
   expect(forward).not.toHaveBeenCalled();
 });
 
-test('pending guidance describes three weekly reminders and offers a different administrator after they stop', () => {
+test('pending page offers explore and forward actions without legacy resend controls', () => {
   stopped = false;
-  const active = renderToStaticMarkup(<Page />);
-  expect(active).toContain('up to three times');
-  expect(active).toContain('Resend reminder');
-  stopped = true;
   const html = renderToStaticMarkup(<Page />);
-  expect(html).toContain(
-    'Weekly reminders have stopped. You can pick a different administrator below or contact support@yawp.school for help.'
-  );
-  expect(html).toContain('Forward this request');
+  expect(html).toContain('Explore my classroom');
+  expect(html).toContain('Not the right person?');
+  expect(html).not.toContain('Resend reminder');
+  expect(html).not.toContain('Draft an email');
+  expect(html).not.toContain('Take a look around');
+  expect(html).toContain('[overflow-wrap:anywhere]');
+  expect(html).toContain('data-testid="free-tier-person-email"');
 });
