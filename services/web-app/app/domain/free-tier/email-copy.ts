@@ -221,7 +221,7 @@ ${args.notRightPersonUrl}
 Questions about student privacy?
 ${ferpaComplianceBullet()}
 - What student information do you collect? Students join with a class code and their first and last name. We don't collect student email addresses.
-- Is student writing used to train language models? No.
+- Is student writing used to train models? No.
 - Who can see student work? Only the student and their teacher. (We encourage teachers to share student work and reports with administrators on request.)
 - Can student data be deleted? Yes, on request.
 - Who is it for? The free tier is for high school classes only.
