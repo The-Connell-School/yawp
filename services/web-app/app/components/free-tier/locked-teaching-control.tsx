@@ -8,8 +8,8 @@ import {
   type ReactNode,
 } from 'react';
 import useBreakpoint from '~/hooks/useBreakpoint';
+import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import {
-  Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipRoot,
@@ -51,6 +51,7 @@ export function LockedTeachingControl({
   const lockedChild = cloneElement(child, {
     'aria-disabled': true as const,
     disabled: undefined,
+    tabIndex: isMobile ? child.props.tabIndex : 0,
     className: cn(child.props.className, 'pointer-events-auto opacity-60'),
     onClick: (event: React.MouseEvent) => {
       event.preventDefault();
@@ -94,8 +95,14 @@ export function LockedTeachingControl({
       </span>
       <TooltipProvider delayDuration={300}>
         <TooltipRoot>
-          <TooltipTrigger asChild>{lockedChild}</TooltipTrigger>
-          <TooltipContent side="top">{tooltip}</TooltipContent>
+          <TooltipTrigger asChild>
+            <span className="inline-flex max-w-full">{lockedChild}</span>
+          </TooltipTrigger>
+          <TooltipPrimitive.Portal>
+            <TooltipContent side="top" className="z-[200]">
+              {tooltip}
+            </TooltipContent>
+          </TooltipPrimitive.Portal>
         </TooltipRoot>
       </TooltipProvider>
     </>

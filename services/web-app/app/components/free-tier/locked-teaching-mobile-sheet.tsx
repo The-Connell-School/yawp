@@ -36,7 +36,7 @@ export function LockedTeachingMobileSheet({
     >
       <SheetContent
         side="bottom"
-        className="rounded-t-2xl pb-8"
+        className="h-auto max-h-[min(90dvh,100%)] rounded-t-2xl pb-8"
         overlayClassName="bg-black/35"
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
