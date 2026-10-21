@@ -82,7 +82,8 @@ export function lessonMaterialsFor({
   resources: LessonResource[];
 }): LessonMaterial[] {
   const teachable = resources.filter(
-    (resource) => !isCaptionResource(resource) && !isTranscriptResource(resource)
+    (resource) =>
+      !isCaptionResource(resource) && !isTranscriptResource(resource)
   );
   const plans = teachable.filter(isLessonPlan);
   const decks = teachable.filter(

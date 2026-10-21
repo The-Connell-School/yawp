@@ -10,9 +10,8 @@ mock.module('~/utils/db.server', () => ({
   },
 }));
 
-const { getLessonMaterialsForAssignmentType } = await import(
-  './lesson-materials.server'
-);
+const { getLessonMaterialsForAssignmentType } =
+  await import('./lesson-materials.server');
 
 afterAll(() => {
   mock.restore();
