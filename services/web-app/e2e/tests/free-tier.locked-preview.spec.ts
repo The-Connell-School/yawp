@@ -282,7 +282,7 @@ for (const width of [390, 1440]) {
   });
 }
 
-test('stale tab blocked POST shows approval required toast without changing page state', async ({
+test('stale tab blocked POST returns approval_required without changing page state', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
