@@ -4,6 +4,7 @@ import { type CollaborationGroupMode } from '~/domain/assignments/collaboration'
 import {
   parseAssignmentCollaboration,
   resolveCollaborationForAssignmentCreate,
+  stripCollaborationFromAssignmentUpdateData,
 } from './assignment-collaboration.server';
 
 const form = (entries: Record<string, string | string[]>) => {
@@ -152,29 +153,54 @@ describe('parseAssignmentCollaboration', () => {
     });
   });
 
-  test('forces solo settings for group-project assignment types', () => {
+  test('forces solo settings for every new assignment', () => {
     const collaborative = {
       collaborationEnabled: true,
       collaborationGroupMode: 'teacher' as const,
       collaborationGroupSize: 4,
     };
-    expect(
-      resolveCollaborationForAssignmentCreate(collaborative, {
-        collaborationSupported: true,
-      })
-    ).toEqual({
+    expect(resolveCollaborationForAssignmentCreate(collaborative)).toEqual({
       collaborationEnabled: false,
       collaborationGroupMode: 'teacher',
       collaborationGroupSize: null,
     });
+  });
+});
+
+describe('stripCollaborationFromAssignmentUpdateData', () => {
+  test('removes collaboration fields from solo assignment updates', () => {
     expect(
-      resolveCollaborationForAssignmentCreate(collaborative, {
-        collaborationSupported: false,
+      stripCollaborationFromAssignmentUpdateData(false, {
+        prompt: 'Hi',
+        collaborationEnabled: true,
+        collaborationGroupMode: 'random',
+        collaborationGroupSize: 3,
       })
-    ).toEqual(collaborative);
+    ).toEqual({ prompt: 'Hi' });
   });
 
+  test('blocks turning a collaborative assignment solo via update', () => {
+    expect(
+      stripCollaborationFromAssignmentUpdateData(true, {
+        prompt: 'Hi',
+        collaborationEnabled: false,
+      })
+    ).toEqual({ prompt: 'Hi' });
+  });
+
+  test('allows other fields on collaborative assignments', () => {
+    expect(
+      stripCollaborationFromAssignmentUpdateData(true, {
+        prompt: 'Hi',
+        collaborationEnabled: true,
+      })
+    ).toEqual({ prompt: 'Hi', collaborationEnabled: true });
+  });
+});
+
+describe('parseAssignmentCollaboration (continued)', () => {
   test('ignores group settings entirely when collaboration is off', () => {
+
     // A teacher who configures groups and then switches the toggle back off
     // should get a plain solo assignment, not a validation error.
     expect(

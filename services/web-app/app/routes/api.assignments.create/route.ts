@@ -275,8 +275,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const collaboration = resolveCollaborationForAssignmentCreate(
-    collaborationResult.value,
-    assignmentType
+    collaborationResult.value
   );
 
   if (collaboration.collaborationEnabled) {
