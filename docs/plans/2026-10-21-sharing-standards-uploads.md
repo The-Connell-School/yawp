@@ -93,3 +93,22 @@ Tests first in each step; one commit per change.
    and whether a teacher agrees. Ship "See which Common Core standards are
    present in this lesson" only if the results hold up. Keep the wording
    to Common Core, never "your state's standards".
+
+## Status (Oct 21)
+
+Steps 1–14 are done and on PR 437; step 15 is this report and the push.
+Where the build differs from the plan:
+
+- **Uploads before a lesson exists.** The plan had the first upload start
+  the lesson. That would have let a lesson start without counting against
+  the lesson quota, so instead an upload added before the first message
+  waits (24 hours, in that tab) and the first message attaches it.
+- **Long unit-map cells.** Only cells up to twice the limit are trimmed. A
+  paragraph in a cell still fails the map, so the board never shows a wall
+  of text.
+- **"Paper instead"** (the before-class list, from earlier today) is still
+  remembered per browser.
+- **Not testable end to end:** the planner reading a document in a real
+  turn. E2E stubs the model, so the e2e tests cover the upload, the chips,
+  the errors and the request that carries the documents, and unit tests
+  cover the prompt and the tool. Try it on the preview with a real chapter.

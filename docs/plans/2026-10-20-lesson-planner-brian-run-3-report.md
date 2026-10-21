@@ -321,12 +321,54 @@ named "Lesson Planner: Lesson Deck Kit". With it off, nothing changes.
   - The PowerPoint, the Word file and the PDF were rendered and compared
     with the kit's pages.
 
+## Sharing, standards and your own documents (Oct 21 review)
+
+Plan and status: [`2026-10-21-sharing-standards-uploads.md`](./2026-10-21-sharing-standards-uploads.md).
+
+- **Post to your class** leads with **Copy link**, to paste into Google
+  Classroom, Canvas, Schoology or anywhere. The Canvas and Schoology
+  buttons that only copied the link are gone. Google Classroom and Teams
+  are offered as their own share pages, with the note that they may ask
+  which account to use and that Yawp! is not connected to them.
+- **Family:** "What we did and why", plus two or three ways to talk about
+  it at dinner.
+- **Admin:**
+  - The standards the teacher named in the planner (codes such as
+    RL.9-10.1, or text they gave as a standard), never inferred. With none
+    named, the option is off and says how to add one.
+  - **Invite them to observe** adds an invitation with the class and day.
+- **Slide numbers** are off the slide face in every template (Present, Run
+  the show, the editor and PowerPoint). The presenter's own counter stays.
+- **Standards in the plan.** A standard the teacher names shapes the lesson:
+  the objective, a step that does its work, and a check that measures it.
+  The plan's Standards section lists the ones they named, with room for
+  more. "See which Common Core standards are present in this lesson" is not
+  built. It needs the Common Core ELA 7–12 text and the comparison in the
+  plan first, and the wording stays Common Core, not state standards.
+- **Leaner by default:** the timed steps and only the material a lesson
+  cannot run without; the rest is offered.
+- **Sticky-note checks** are checks for understanding, never exit tickets.
+- **Unit maps:**
+  - Each day says what students read and whether in class or at home, on
+    the board, in print and when the day is built.
+  - A cell a little too long is trimmed instead of losing the whole map
+    (the likely "glitch").
+- **Your own documents** (flag `lesson_planner_uploads`): a paperclip in the
+  planner adds PDF, Word, PowerPoint, text or Markdown, up to 10 MB and 10
+  per lesson. Only the text is kept. The planner builds from them, quotes
+  them, says which one a step uses, and reads long ones a part at a time.
+
 ## Still for Kevin and Brian
 
 - **More art for the gallery deck.** The kit's reference table names
   seven more works (Hopper, Klee, Degas, Mondrian and others). Museum sites
   are blocked from the build machine, so send their images and they go
   into the library with their colors.
+- **Standards experiment.** Load Common Core ELA 7–12 and compare a
+  detailed lesson with a pared-down one before offering "See which Common
+  Core standards are present". State standards wait for onboarding.
+- **Try uploads on the preview** with a real chapter and handout: the model
+  path cannot run in e2e.
 - **For Brian:** the kit writes the brand as "YAWP!" in mixed case, while
   the app writes "Yawp!" (the Oct 20 sweep). The plan footer and the exit
   button follow the app for now. The kit's artifact link and its
