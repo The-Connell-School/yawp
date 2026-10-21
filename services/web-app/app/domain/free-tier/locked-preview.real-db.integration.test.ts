@@ -322,7 +322,9 @@ local('pending teacher lesson planner monthly quota reserves and exhausts', asyn
       input: { message: 'one-more' },
     });
     expect(exhausted.kind).toBe('exhausted');
-    expect(monthlyOperationResponse(exhausted).status).toBe(403);
+    if (exhausted.kind === 'exhausted') {
+      expect(monthlyOperationResponse(exhausted).status).toBe(403);
+    }
   } finally {
     await prisma.setting.deleteMany({
       where: {

@@ -353,7 +353,7 @@ export async function action({ request }: ActionFunctionArgs) {
       )))
   ) {
     return monthlyResponse(
-      dataResponse({ error: PLANNER_FAILED }, { status: 503 })
+      Response.json({ error: PLANNER_FAILED }, { status: 503 })
     );
   }
   if (!activeConversationForQuota && !lessonPlannerMetering) {
