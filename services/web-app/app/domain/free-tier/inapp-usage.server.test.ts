@@ -64,6 +64,10 @@ mock.module('~/utils/lesson-planner/lesson-planner-quota.server', () => ({
 mock.module('~/utils/rate-limit.server', () => ({
   readGradingLimitStatus: async () => null,
 }));
+const shouldHideFreeTierTeachingSecrets = mock(async () => false);
+mock.module('./locked-preview.server', () => ({
+  shouldHideFreeTierTeachingSecrets,
+}));
 const profile = {
   id: 'teacher',
   role: 'TEACHER',
@@ -75,11 +79,22 @@ beforeEach(() => {
   count.mockClear();
   settingRead.mockClear();
   settingReadMany.mockClear();
+  shouldHideFreeTierTeachingSecrets.mockClear();
+  shouldHideFreeTierTeachingSecrets.mockResolvedValue(false);
 });
 const { readFreeAccountUsage } = await import('./inapp-usage.server');
+test('pending approval hides class code from shell usage', async () => {
+  shouldHideFreeTierTeachingSecrets.mockResolvedValue(true);
+  freeTierValue = '{"mode":"targeted","orgIds":["org"]}';
+  const usage = await readFreeAccountUsage(profile, true, 'user-1');
+  expect(usage!.classCode).toBeNull();
+  expect(usage!.classCodeHidden).toBe(true);
+  expect(usage!.classId).toBe('class');
+  expect(usage!.checklist.classReady).toBe(true);
+});
 test('adapter reads authoritative usage, including invites and lifetime counts', async () => {
   freeTierValue = '{"mode":"targeted","orgIds":["org"]}';
-  const usage = await readFreeAccountUsage(profile, true);
+  const usage = await readFreeAccountUsage(profile, true, 'user-1');
   expect(usage!.students.total).toBe(10);
   expect(usage!.students.remaining).toBe(0);
   expect(usage!.assignments.map((row) => row.remaining)).toEqual([9, 0, 3]);
@@ -97,7 +112,7 @@ test('adapter reads authoritative usage, including invites and lifetime counts',
 });
 test('free tier usage reflects configured caps without hiding excess students', async () => {
   freeTierValue = '{"mode":"everyone","orgIds":[]}';
-  const usage = await readFreeAccountUsage(profile, true);
+  const usage = await readFreeAccountUsage(profile, true, 'user-1');
   expect(usage!.students.total).toBe(10);
   expect(usage!.students.remaining).toBe(0);
   expect(usage!.monthly).toBe(true);
@@ -111,13 +126,13 @@ test('free tier usage reflects configured caps without hiding excess students', 
 for (const value of [null, 'false', '{"mode":"off","orgIds":[]}']) {
   test(`no usage queries with missing/off Setting: ${value}`, async () => {
     freeTierValue = value;
-    expect(await readFreeAccountUsage(profile, true)).toBeNull();
+    expect(await readFreeAccountUsage(profile, true, 'user-1')).toBeNull();
     expect(classRead).not.toHaveBeenCalled();
     expect(count).not.toHaveBeenCalled();
   });
 }
 test('free-tier off prevents usage reads even when route gate is open', async () => {
-  expect(await readFreeAccountUsage(profile, false)).toBeNull();
+  expect(await readFreeAccountUsage(profile, false, 'user-1')).toBeNull();
   expect(settingReadMany).not.toHaveBeenCalled();
   expect(classRead).not.toHaveBeenCalled();
 });
@@ -127,7 +142,7 @@ for (const change of [
 ]) {
   test(`ineligible account does not read usage: ${JSON.stringify(change)}`, async () => {
     expect(
-      await readFreeAccountUsage({ ...profile, ...change }, true)
+      await readFreeAccountUsage({ ...profile, ...change }, true, 'user-1')
     ).toBeNull();
     expect(settingReadMany).not.toHaveBeenCalled();
     expect(classRead).not.toHaveBeenCalled();
@@ -152,10 +167,10 @@ test('loader gate requires free tier for the organization on production', async 
 });
 test('targeting respects the authenticated organization', async () => {
   freeTierValue = '{"mode":"targeted","orgIds":["other"]}';
-  expect(await readFreeAccountUsage(profile, true)).toBeNull();
+  expect(await readFreeAccountUsage(profile, true, 'user-1')).toBeNull();
   expect(classRead).not.toHaveBeenCalled();
   freeTierValue = '{"mode":"targeted","orgIds":["org"]}';
-  expect(await readFreeAccountUsage(profile, true)).not.toBeNull();
+  expect(await readFreeAccountUsage(profile, true, 'user-1')).not.toBeNull();
 });
 test('production does not override a missing free-tier setting', async () => {
   const previous = process.env.YAWP_ENVIRONMENT;

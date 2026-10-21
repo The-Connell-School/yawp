@@ -18,11 +18,13 @@ export function LockedTeachingMobileSheet({
   onOpenChange,
   returnFocusRef,
   adminName = 'your administrator',
+  body,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
   adminName?: string;
+  body?: string;
 }) {
   return (
     <Sheet
@@ -48,7 +50,7 @@ export function LockedTeachingMobileSheet({
           <SheetTitle>{TEACHING_ACCESS_MOBILE_SHEET_TITLE}</SheetTitle>
         </SheetHeader>
         <p className="mt-2 text-sm text-muted-foreground">
-          {teachingAccessMobileSheetBody(adminName)}
+          {body ?? teachingAccessMobileSheetBody(adminName)}
         </p>
         <div className="mt-6 flex flex-col gap-3">
           <Button

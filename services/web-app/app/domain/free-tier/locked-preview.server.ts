@@ -69,6 +69,10 @@ export async function enforceLockedPreviewRequest(request: Request, userId: stri
 }
 
 /** Provisions the browse-only classroom once the teacher is waiting on approval. */
+export async function shouldHideFreeTierTeachingSecrets(userId: string) {
+  return userHasPendingFreeTierTeachingLock(userId);
+}
+
 export async function ensureLockedPreviewClassroomForUser(userId: string) {
   const application = await prisma.freeTierApplication.findFirst({
     where: {
@@ -82,7 +86,28 @@ export async function ensureLockedPreviewClassroomForUser(userId: string) {
   if (!application) return null;
   if (!(await isFeatureFlagEnabled(FREE_TIER_FLAG, application.organizationId)))
     return null;
-  return provisionFreeClassroom(application.id);
+  const result = await provisionFreeClassroom(application.id);
+  const organizationId =
+    result.status === 'provisioned' || result.status === 'already_provisioned'
+      ? result.organizationId
+      : null;
+  if (organizationId) {
+    const { ensureLockedPreviewSampleAssignments } =
+      await import('./locked-preview-class-seed.server');
+    const klass = await prisma.class.findFirst({
+      where: {
+        isArchived: false,
+        school: { organizationId },
+        teachers: { some: { userId } },
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    if (klass) {
+      await ensureLockedPreviewSampleAssignments(organizationId, klass.id);
+    }
+  }
+  return result;
 }
 
 /** Transaction-aware backstop for enrollment and assignment writers without a Request. */

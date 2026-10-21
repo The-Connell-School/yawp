@@ -21,9 +21,13 @@ const {
 } = await import('./locked-preview.server');
 afterEach(() => {
   enabled = true;
-  application = { status: 'SENT', organizationId: 'org-a' };
+  application = { id: 'app-a', status: 'SENT', organizationId: 'org-a' };
   memberships = [{ role: 'TEACHER', organizationId: 'org-a', organization: { plan: 'FREE_CLASSROOM' } }];
   queries.length = 0;
+  db.freeTierApplication.findFirst = mock(async (q: any) => {
+    queries.push(q);
+    return application;
+  });
 });
 test('pending direct APIs fail with 403 before execution; app reads pass through', async () => {
   for (const path of ['/api/domain/reporter', '/api/domain/lesson-planner', '/app/assignments']) {
@@ -91,6 +95,13 @@ test('a pending application blocks mutations even with a mismatched membership c
     )
   ).rejects.toMatchObject({ status: 403 });
 });
+test('userHasPendingFreeTierTeachingLock fails closed when application lookup throws', async () => {
+  db.freeTierApplication.findFirst = mock(async () => {
+    throw new Error('db_unavailable');
+  });
+  await expect(userHasPendingFreeTierTeachingLock('teacher')).resolves.toBe(true);
+});
+
 test('domain enrollment/assignment guard denies pending and does not deny approved or flag off', async () => {
   await expect(assertOrganizationTeachingApproved(db as any, 'org-a')).rejects.toMatchObject({ status: 403 });
   application.status = 'APPROVED'; await assertOrganizationTeachingApproved(db as any, 'org-a');
