@@ -228,14 +228,14 @@ export default function FreeAdminNotRightPersonRoute() {
   const data = useLoaderData<LoaderData>();
   const actionData = useActionData<typeof action>();
 
+  if (actionData?.ok) {
+    return <AdminForwardSentCard />;
+  }
+
   if (!data.ok) {
     const terminal = terminalFromLoader(data);
     if (terminal) return terminal;
     return <AdminLinkInvalidCard />;
-  }
-
-  if (actionData?.ok) {
-    return <AdminForwardSentCard />;
   }
 
   const actionTerminal = actionData ? terminalFromAction(actionData) : null;
