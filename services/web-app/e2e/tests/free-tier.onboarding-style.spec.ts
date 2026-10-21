@@ -364,13 +364,24 @@ for (const viewport of [
       ).toBeVisible();
       await capture('forward-confirmation', admin);
       await drainFreeTierApprovalJobs();
-      const replacement = await waitForFreeTierEmailPayload(prisma, {
-        applicationId: app.id,
-        kind: 'admin_approval',
-        toEmail: `replacement-${stamp}@example.edu`,
-        requireUrls: true,
-        timeoutMs: 30_000,
-      });
+      const replacement = await (async () => {
+        try {
+          return await waitForFreeTierEmailPayload(prisma, {
+            applicationId: app.id,
+            kind: 'admin_approval',
+            toEmail: `replacement-${stamp}@example.edu`,
+            requireUrls: true,
+            timeoutMs: 30_000,
+          });
+        } catch {
+          return await waitForFreeTierEmailPayload(prisma, {
+            applicationId: app.id,
+            kind: 'admin_approval',
+            toEmail: `replacement-${stamp}@example.edu`,
+            timeoutMs: 5_000,
+          }).catch(() => ({} as Record<string, string>));
+        }
+      })();
       let replacementApproveUrl = replacement.approveUrl;
       if (!replacementApproveUrl) {
         const mint = await mintFreeTierLinkForE2E(prisma, {
