@@ -5,16 +5,18 @@
  * lesson_planner_plan_export_v2 is on.
  */
 import type { LoaderFunctionArgs } from 'react-router';
-import { loadLessonPlanDoc } from '~/domain/lesson-planner/load-lesson-plan-doc.server';
+import { loadLessonPlan } from '~/domain/lesson-planner/load-lesson-plan-doc.server';
+import { renderKitPlanDocx } from '~/domain/lesson-planner/kit-plan-render.server';
 import {
   lessonPlanFilename,
   renderLessonPlanDocx,
 } from '~/domain/lesson-planner/lesson-plan-render.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  const doc = await loadLessonPlanDoc({ request, conversationId: params.conversationId });
-  const file = await renderLessonPlanDocx(doc);
-  const filename = lessonPlanFilename(doc.title, 'docx');
+  const { doc, kit } = await loadLessonPlan({ request, conversationId: params.conversationId });
+  // With the Lesson Deck Kit on, the plan to its lesson plan spec v1.
+  const file = kit ? await renderKitPlanDocx(kit) : await renderLessonPlanDocx(doc);
+  const filename = lessonPlanFilename(kit?.title ?? doc.title, 'docx');
   return new Response(file as unknown as BodyInit, {
     headers: {
       'Content-Type':

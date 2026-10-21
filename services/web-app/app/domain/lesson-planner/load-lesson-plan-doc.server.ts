@@ -21,25 +21,32 @@ import {
   type LessonPlanSummaries,
 } from './lesson-plan-doc';
 import { PLAN_SUMMARY_SYSTEM, summarizeLessonPlan } from './plan-summary.server';
+import { buildKitPlan, type KitPlan } from './kit-plan';
 
 const SUMMARY_DEADLINE_MS = 25_000;
 const SUMMARY_MAX_TOKENS = 2_000;
 
-export async function loadLessonPlanDoc({
+/**
+ * The plan, and with the Lesson Deck Kit on, the same plan to the kit's
+ * lesson plan spec v1 (its name, color and fonts from the deck).
+ */
+export async function loadLessonPlan({
   request,
   conversationId,
 }: {
   request: Request;
   conversationId: string | undefined;
-}): Promise<LessonPlanDoc> {
+}): Promise<{ doc: LessonPlanDoc; kit: KitPlan | null }> {
   const access = await getLessonPlannerAccess(request);
   if (!access.allowed) throw redirect('/app');
-  const { planExportV2 } = await getLessonPlannerReviewFlags(access.membership.organization.id);
+  const { planExportV2, deckGallery } = await getLessonPlannerReviewFlags(access.membership.organization.id);
   if (!planExportV2) throw new Response('Not Found', { status: 404 });
 
   const loaded = await loadLessonPacket({ request, conversationId, withStackDetails: false });
   const entries = entriesFromPacket(loaded.packet, loaded.materialKinds);
-  const key = planSummaryKey(entries);
+  // The kit's plan asks for short step titles, which a summary written before
+  // it does not have.
+  const key = `${planSummaryKey(entries)}${deckGallery ? '-kit1' : ''}`;
   const stored = await prisma.lessonPlanConversation.findFirst({
     where: { id: loaded.conversationId },
     select: { planSummary: true, planSummaryKey: true },
@@ -93,11 +100,16 @@ export async function loadLessonPlanDoc({
     }
   }
 
-  return buildLessonPlanDoc({
+  const doc = buildLessonPlanDoc({
     title: loaded.packet.title,
     className: loaded.packet.className,
     periodMinutes: loaded.periodMinutes,
     entries,
     summaries,
   });
+  return { doc, kit: deckGallery ? buildKitPlan({ doc, entries }) : null };
+}
+
+export async function loadLessonPlanDoc(args: { request: Request; conversationId: string | undefined }): Promise<LessonPlanDoc> {
+  return (await loadLessonPlan(args)).doc;
 }

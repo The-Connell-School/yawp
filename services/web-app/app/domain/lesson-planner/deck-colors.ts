@@ -52,7 +52,8 @@ export function readableOnPaper(hex: string): string {
   return out;
 }
 
-function normalized(hex: string): string | null {
+/** "9c4a22" or "#9C4A22" → "#9C4A22"; null when it is not a hex color. */
+export function normalizedHex(hex: string): string | null {
   const match = HEX.exec(hex.trim());
   return match ? `#${match[1]!.toUpperCase()}` : null;
 }
@@ -65,7 +66,7 @@ export function deckColors(
   deck: { colors?: string[] | null; accent?: string | null },
   art: { colors?: string[] } | null
 ): string[] {
-  const own = (deck.colors ?? []).map(normalized).filter((hex): hex is string => Boolean(hex));
+  const own = (deck.colors ?? []).map(normalizedHex).filter((hex): hex is string => Boolean(hex));
   const chosen = own.length
     ? own
     : art?.colors?.length

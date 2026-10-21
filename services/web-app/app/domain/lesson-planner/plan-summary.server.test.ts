@@ -36,6 +36,29 @@ describe("summarizeLessonPlan (Brian's run 2, D1)", () => {
     expect(PLAN_SUMMARY_SYSTEM).toContain('Yawp!');
   });
 
+  test('short step titles and optional steps, for the lesson plan spec; a bad one is dropped, not fatal', async () => {
+    const result = await summarizeLessonPlan({
+      title: 'Day 1',
+      className: null,
+      periodMinutes: null,
+      steps,
+      complete: async () =>
+        JSON.stringify({
+          overview: 'O.',
+          goals: ['G.'],
+          teacherWill: [],
+          steps: [
+            { title: 'Write to start', summary: 'S.', purpose: 'P.', optional: true },
+            { title: 7, summary: 'S.', purpose: 'P.' },
+          ],
+          closing: 'C.',
+        }),
+    });
+    expect(result?.steps?.[0]).toMatchObject({ title: 'Write to start', optional: true });
+    expect(result?.steps?.[1]!.title).toBeUndefined();
+    expect(PLAN_SUMMARY_SYSTEM).toContain('two to six words');
+  });
+
   test('a reply with the wrong number of steps is not used', async () => {
     const result = await summarizeLessonPlan({
       title: 'Day 1',

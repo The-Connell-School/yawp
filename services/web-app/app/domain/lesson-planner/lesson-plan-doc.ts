@@ -21,6 +21,8 @@ export type LessonPlanEntry = {
   kind: string;
   title: string;
   content: string;
+  /** Its number in the stack, the one a deck's slides carry as `step`. */
+  piece?: number;
 };
 
 export type LessonPlanStep = {
@@ -30,6 +32,13 @@ export type LessonPlanStep = {
   summary: string;
   /** Why this step serves the lesson. */
   purpose: string;
+  /** Two to six words that say what happens (lesson plan spec v1). */
+  shortTitle?: string;
+  /** Marked "Optional:" in the plan. */
+  optional?: boolean;
+  /** The stack piece this step comes from, and its kind. */
+  piece?: number;
+  kind?: string;
 };
 
 export type LessonPlanDoc = {
@@ -59,7 +68,7 @@ export type LessonPlanSummaries = {
   goals?: string[];
   teacherWill?: string[];
   /** One per instruction, in order. */
-  steps?: Array<{ summary: string; purpose: string }>;
+  steps?: Array<{ summary: string; purpose: string; title?: string; optional?: boolean }>;
   closing?: string;
 };
 
@@ -250,6 +259,7 @@ function expandAll(entries: LessonPlanEntry[]): Expanded[] {
   return entries.flatMap((entry) =>
     expand(entry).map((item) => ({
       ...(item.step && !item.source ? { ...item, source: plain(entry.content) } : item),
+      ...(item.step ? { step: { ...item.step, kind: entry.kind, ...(entry.piece ? { piece: entry.piece } : {}) } } : {}),
       kind: entry.kind,
     }))
   );
@@ -289,10 +299,13 @@ export function buildLessonPlanDoc({
   const fits = summaries?.steps && summaries.steps.length === base.length;
   const instructions = base.map((step, index) => {
     const written = fits ? summaries!.steps![index] : null;
+    const shortTitle = written?.title?.trim();
     return {
       ...step,
       summary: hidePromptIds(written?.summary?.trim() || step.summary),
       purpose: hidePromptIds(written?.purpose?.trim() || step.purpose),
+      ...(shortTitle ? { shortTitle: hidePromptIds(shortTitle) } : {}),
+      ...(written?.optional ? { optional: true } : {}),
     };
   });
 
@@ -368,10 +381,16 @@ export function entriesFromPacket(
   packet: LessonPacket,
   materialKinds: Record<string, string>
 ): LessonPlanEntry[] {
+  // A deck is built from the stack without the deck in it, so its slides
+  // number the other pieces.
+  let piece = 0;
   return packet.sections.flatMap((section): LessonPlanEntry[] => {
+    const isDeck = section.origin === 'material' && (materialKinds[section.id] ?? section.kind) === 'slides';
+    if (!isDeck) piece += 1;
     if (section.origin === 'material') {
       return [
         {
+          ...(isDeck ? {} : { piece }),
           kind:
             materialKinds[section.id] ??
             (section.kind === 'slides'
@@ -387,7 +406,7 @@ export function entriesFromPacket(
       ];
     }
     return [
-      { kind: 'lesson', title: section.title, content: section.content },
+      { kind: 'lesson', title: section.title, content: section.content, piece },
       ...(section.deck
         ? [
             {
