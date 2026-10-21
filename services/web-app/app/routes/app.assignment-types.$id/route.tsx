@@ -117,6 +117,10 @@ import thesisPromptsRaw from './thesis-prompts-library/prompts.json';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
 import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
+import { LessonMaterialsCard } from '~/components/lesson-materials-card';
+import { getLessonMaterialsForAssignmentType } from '~/domain/assignment-types/lesson-materials.server';
+import { AboutWritingStep } from './about-writing-step/about-writing-step';
+import { isWritingStepKind, WRITING_STEP_COPY } from './about-writing-step/content';
 
 /** How the Lesson Planner hands a written warm-up to this page. */
 const NEW_PROMPT_PARAM = 'newPrompt';
@@ -593,6 +597,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ),
     }));
 
+  // Prewriting and Thesis Statement are single steps of the thesis-driven
+  // essay; their pages carry the course lesson that teaches the step.
+  const writingStepLesson =
+    isTeacher && isWritingStepKind(assignmentType.kind)
+      ? await getLessonMaterialsForAssignmentType(
+          assignmentType.kind,
+          profile.id
+        )
+      : null;
+
   const isStudent = profile.role === 'STUDENT';
   const assignmentCreationAvailability = isTeacher
     ? (await loadAssignmentCreationQuotasForTypes(profile.organization, [
@@ -615,6 +629,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     shortFormPromptLibrary,
     thesisPromptLibrary,
     apHistoryLibrary,
+    writingStepLesson,
     // Teacher-facing guidance, so it follows the same role gate the other
     // assignment types' directions do.
     showAboutExitTicket:
@@ -818,6 +833,10 @@ export default function AppAssignmentTypesIdRoute() {
   }, [incomingExitTicketMode, incomingExitTicket, setSearchParams]);
 
   const showThesisLibrary = data.thesisPromptLibrary != null;
+  const writingStepCopy =
+    isTeacher && isWritingStepKind(data.assignmentType.kind)
+      ? WRITING_STEP_COPY[data.assignmentType.kind]
+      : null;
   const isApHistoryAssignmentType =
     data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   const canCreateDirectDocument = !isApHistoryAssignmentType;
@@ -859,7 +878,8 @@ export default function AppAssignmentTypesIdRoute() {
 
           {isTeacher ? (
             <div className="flex items-center gap-2">
-              {isThesisDrivenEssayTitle(data.assignmentType.title) ? (
+              {isThesisDrivenEssayTitle(data.assignmentType.title) ||
+              writingStepCopy ? (
                 <SeeHowItWorksLink
                   to={`/app/assignment-types/${data.assignmentType.id}/how-it-works`}
                 />
@@ -1006,6 +1026,10 @@ export default function AppAssignmentTypesIdRoute() {
           </div>
         </div>
         {data.showAboutExitTicket ? <AboutExitTicket /> : null}
+        {writingStepCopy ? <AboutWritingStep copy={writingStepCopy} /> : null}
+        {data.writingStepLesson ? (
+          <LessonMaterialsCard lesson={data.writingStepLesson} />
+        ) : null}
         {data.promptLibrary ? (
           <div data-tour="type-directions">
             <TeacherDirections variant={data.promptLibrary.variant} />
