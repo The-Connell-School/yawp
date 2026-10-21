@@ -170,6 +170,7 @@ test('free tier usage reflects configured caps without hiding excess students', 
 
 for (const value of [null, 'false', '{"mode":"off","orgIds":[]}']) {
   test(`no usage queries with missing/off Setting: ${value}`, async () => {
+    applicationStatus = null;
     freeTierValue = value;
     expect(await readFreeAccountUsage(profile, true, 'user-1')).toBeNull();
     expect(classRead).not.toHaveBeenCalled();
@@ -211,6 +212,7 @@ test('loader gate requires free tier for the organization on production', async 
   }
 });
 test('targeting respects the authenticated organization', async () => {
+  applicationStatus = null;
   freeTierValue = '{"mode":"targeted","orgIds":["other"]}';
   expect(await readFreeAccountUsage(profile, true, 'user-1')).toBeNull();
   expect(classRead).not.toHaveBeenCalled();
