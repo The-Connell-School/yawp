@@ -17,7 +17,7 @@
 import { Link } from 'react-router';
 import { CreatedInYawp } from '~/components/lesson-planner/created-in-yawp';
 import { withPiece } from '~/domain/lesson-planner/stack-create-link';
-import { Check, PenLine, Plus, Repeat, Sparkles } from 'lucide-react';
+import { Check, PenLine, Plus, Repeat } from 'lucide-react';
 import { cn } from '~/utils/misc';
 import {
   dailyPagesCreateHref,
@@ -142,7 +142,6 @@ export function DailyPagesCard({
             data-testid="daily-pages-create"
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90"
           >
-            <Sparkles size={13} />
             {onReplace
               ? `Create ${targetLabel === 'Class Starter' ? 'class starter' : 'Daily Pages'} assignment`
               : `Create this ${targetLabel} exercise for your class`}

@@ -11,7 +11,7 @@
 import { Link } from 'react-router';
 import { CreatedInYawp } from '~/components/lesson-planner/created-in-yawp';
 import { withPiece } from '~/domain/lesson-planner/stack-create-link';
-import { Check, ClipboardCheck, Plus, Sparkles } from 'lucide-react';
+import { Check, ClipboardCheck, Plus } from 'lucide-react';
 import { cn } from '~/utils/misc';
 import {
   exitTicketCreateHref,
@@ -151,7 +151,6 @@ export function ExitTicketCard({
             data-testid="exit-ticket-create"
             className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-background px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary/5"
           >
-            <Sparkles size={13} />
             Create this exit ticket for your class
           </Link>
         ) : null}

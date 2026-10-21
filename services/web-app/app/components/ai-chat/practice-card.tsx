@@ -12,7 +12,7 @@
  * not know is dropped, and a set left with none is not drawn at all.
  */
 import { useState } from 'react';
-import { Check, Dumbbell, Plus, Sparkles } from 'lucide-react';
+import { Check, Dumbbell, Plus } from 'lucide-react';
 import type { PracticeSkillOption } from '~/components/writing-lessons/practice-skill-picker';
 import {
   WritingPracticeAssignmentSheet,
@@ -113,7 +113,6 @@ export function PracticeCard({
               onClick={() => setOpen(true)}
               className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90"
             >
-              <Sparkles size={13} />
               Assign this practice to your class
             </button>
           ) : null}
