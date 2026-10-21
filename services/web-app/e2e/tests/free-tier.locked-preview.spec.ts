@@ -316,8 +316,8 @@ test('stale tab blocked POST shows approval required toast without changing page
   const bannerBefore = await page.getByTestId('teaching-access-banner').count();
   await page.evaluate(async () => {
     const body = new FormData();
-    body.set('state', 'collapsed');
-    await fetch('/api/preferences/nav', { method: 'POST', body });
+    body.set('intent', 'create');
+    await fetch('/api/assignments/create', { method: 'POST', body });
   });
   await expect(page.getByTestId('teaching-access-error-toast')).toBeVisible();
   await expect(page.getByTestId('teaching-access-banner')).toHaveCount(
