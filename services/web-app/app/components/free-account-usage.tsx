@@ -32,6 +32,10 @@ import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image
 import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import type { RefObject } from 'react';
+import {
+  teachingAccessMobileSheetBodyInvite,
+  TEACHING_ACCESS_LOCKED_TOOLTIP,
+} from '~/domain/free-tier/teaching-access-copy';
 
 export function useFreeAccountUsage() {
   return (
@@ -330,6 +334,18 @@ export function FreeAssignmentTiles({
 export function FreeAccountChecklist({ usage }: { usage: FreeAccountUsage }) {
   const [invitationOpen, setInvitationOpen] = useState(false);
   const invitationTriggerRef = useRef<HTMLButtonElement>(null);
+  const { locked: teachingLocked, state: teachingAccessState } =
+    useTeachingAccess();
+  const teachingAccessAdminName =
+    teachingAccessState.variant === 'locked'
+      ? teachingAccessState.adminName
+      : 'your administrator';
+  const lockedInviteProps = {
+    locked: true as const,
+    adminName: teachingAccessAdminName,
+    mobileSheetBody: teachingAccessMobileSheetBodyInvite(teachingAccessAdminName),
+    tooltip: TEACHING_ACCESS_LOCKED_TOOLTIP,
+  };
   const steps = [
     {
       label: usage.monthly
@@ -431,6 +447,29 @@ export function FreeAccountChecklist({ usage }: { usage: FreeAccountUsage }) {
                   </span>
                   Add your students to your class
                 </button>
+              ) : usage.monthly &&
+                step.label === 'Add your students to your class' &&
+                usage.classId &&
+                (usage.classCodeHidden || (teachingLocked && !usage.classCode)) ? (
+                <LockedTeachingControl {...lockedInviteProps}>
+                  <button
+                    type="button"
+                    data-testid="checklist-invite-locked"
+                    className="flex gap-3 text-left text-sm text-primary underline opacity-60"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'flex size-[22px] shrink-0 items-center justify-center rounded-full border-2',
+                        step.done &&
+                          'border-emerald-800 bg-emerald-800 text-white'
+                      )}
+                    >
+                      {step.done && <Check size={14} />}
+                    </span>
+                    Add your students to your class
+                  </button>
+                </LockedTeachingControl>
               ) : (
                 <Link to={step.to} className="flex gap-3 text-sm">
                   <span

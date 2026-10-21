@@ -318,6 +318,50 @@ async function exploreLockedApp(page: import('@playwright/test').Page, userEmail
   await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
 }
 
+test('pending teacher /app HTML and loader data omit the real class code', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { user, app } = await fixture('11', 'SENT');
+  await provisionPendingClassroom(app.id, user.id!);
+  const klass = await prisma.class.findFirstOrThrow({
+    where: {
+      teachers: { some: { user: { id: user.id } } },
+    },
+    select: { id: true, code: true },
+  });
+  await exploreLockedApp(page, user.email!);
+  let html = await page.content();
+  expect(html).not.toContain(klass.code);
+  await page.goto('/app/my-classes');
+  html = await page.content();
+  expect(html).not.toContain(klass.code);
+  await page.goto(`/app/my-classes/${klass.id}?tab=students`);
+  html = await page.content();
+  expect(html).not.toContain(klass.code);
+});
+
+test('approved teacher sees the real class code on the dashboard card', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { user, app } = await fixture('11', 'SENT');
+  await provisionPendingClassroom(app.id, user.id!);
+  await prisma.freeTierApplication.update({
+    where: { id: app.id },
+    data: { status: 'APPROVED' },
+  });
+  const klass = await prisma.class.findFirstOrThrow({
+    where: {
+      teachers: { some: { user: { id: user.id } } },
+    },
+    select: { id: true, code: true },
+  });
+  await login(page, user.email!);
+  await page.goto('/app');
+  await expect(page.getByTestId('class-code')).toContainText(klass.code);
+});
+
 test('locked class surfaces hide the real class code and lock invite controls', async ({
   page,
 }) => {

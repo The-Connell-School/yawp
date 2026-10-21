@@ -16,11 +16,13 @@ import {
 import { effectiveFreeTierLimits } from './limits.server';
 import { buildFreeAccountUsage, type FreeAccountUsage } from './inapp-usage';
 import { readGradingLimitStatus } from '~/utils/rate-limit.server';
+import { shouldHideFreeTierTeachingSecrets } from './locked-preview.server';
 
 /** Gate before performing any additional v2 usage reads. */
 export async function readFreeAccountUsage(
   profile: FreeTierInappProfile & { id: string },
-  freeTierRouteOpen: boolean
+  freeTierRouteOpen: boolean,
+  userId: string
 ): Promise<FreeAccountUsage | null> {
   if (
     !freeTierRouteOpen ||
@@ -38,6 +40,7 @@ export async function readFreeAccountUsage(
     return null;
   const organizationId = profile.organization.id;
   const membershipId = profile.id;
+  const hideTeachingSecrets = await shouldHideFreeTierTeachingSecrets(userId);
   const { limits, monthly } = await effectiveFreeTierLimits(organizationId);
   const entitlements = getEntitlementsForPlan('FREE_CLASSROOM', limits);
   const klass = await prisma.class.findFirst({
@@ -111,10 +114,11 @@ export async function readFreeAccountUsage(
           },
         }
       : {}),
-    classCode: klass?.code ?? null,
+    classCode: hideTeachingSecrets ? null : (klass?.code ?? null),
+    classCodeHidden: hideTeachingSecrets,
     classId: klass?.id ?? null,
     checklist: {
-      classReady: Boolean(klass?.code),
+      classReady: Boolean(klass?.id),
       assignmentCreated: [...assignmentCounts.values()].some((n) => n > 0),
       writingSubmitted: writingSubmitted > 0,
       graded: graded > 0,

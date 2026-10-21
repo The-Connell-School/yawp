@@ -211,7 +211,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     : ({ variant: 'none' } satisfies TeachingAccessShellState);
   return data({
     mockAdminAvailable,
-    freeAccountUsage: await readFreeAccountUsage(profile, freeTierRouteOpen),
+    freeAccountUsage: await readFreeAccountUsage(
+      profile,
+      freeTierRouteOpen,
+      userId
+    ),
     schoolYearScope: {
       selected,
       options: selectableOptions,

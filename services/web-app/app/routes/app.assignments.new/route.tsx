@@ -49,17 +49,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
     orderBy: [{ grade: 'asc' }, { period: 'asc' }],
   });
 
-  const assignmentTypes = await getAvailableAssignmentTypesForScopes({
-    scopes: [
-      {
-        organizationId: profile.organization.id,
-        schoolId: classes[0]?.schoolId,
-        teacherProfileId: profile.id,
-      },
-    ],
-    select: { id: true, title: true },
-    orderBy: { position: 'asc' },
-  });
+  const assignmentTypes =
+    await getAvailableAssignmentTypesForScopes<{ id: string; title: string }>({
+      scopes: [
+        {
+          organizationId: profile.organization.id,
+          schoolId: classes[0]?.schoolId,
+          teacherProfileId: profile.id,
+        },
+      ],
+      select: { id: true, title: true },
+      orderBy: { position: 'asc' },
+    });
 
   return {
     assignmentTypes,

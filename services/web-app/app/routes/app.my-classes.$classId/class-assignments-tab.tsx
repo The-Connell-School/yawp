@@ -253,7 +253,13 @@ export function ClassAssignmentsTab({
               </Button>
             );
             return teachingLocked ? (
-              <LockedTeachingControl locked adminName={teachingAccessAdminName}>
+              <LockedTeachingControl
+                locked
+                adminName={teachingAccessAdminName}
+                mobileSheetBody={teachingAccessMobileSheetBodySend(
+                  teachingAccessAdminName
+                )}
+              >
                 {createButton}
               </LockedTeachingControl>
             ) : (
@@ -392,12 +398,21 @@ export function ClassAssignmentsTab({
                     <TableCell className="pr-4">
                       {teachingLocked ? (
                         <LockedTeachingControl {...sendLockProps}>
-                          <AssignmentDocumentsPill
-                            documentCount={assignment.documentCount}
-                            onClick={() => {}}
-                            ariaLabel={`View documents for ${title}`}
-                            testId={`assignment-documents-${assignment.id}`}
-                          />
+                          <button
+                            type="button"
+                            className={cn(
+                              badgeVariants({ variant: 'secondary' }),
+                              'cursor-pointer gap-1 py-1 pl-2 pr-1 opacity-60'
+                            )}
+                            aria-label={`View documents for ${title}`}
+                            data-testid={`assignment-documents-${assignment.id}`}
+                          >
+                            {assignmentDocumentsLabel(assignment.documentCount)}
+                            <ChevronRight
+                              className="size-3 shrink-0"
+                              aria-hidden="true"
+                            />
+                          </button>
                         </LockedTeachingControl>
                       ) : (
                         <AssignmentDocumentsPill
