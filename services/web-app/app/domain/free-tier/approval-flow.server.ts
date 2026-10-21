@@ -655,7 +655,7 @@ export async function redirectSchoolAdmin(args: {
   const prePending = await prisma.freeTierAdminApproval.findFirst({
     where: { applicationId: preApp.id, status: 'PENDING' },
     orderBy: { createdAt: 'desc' },
-    select: { id: true },
+    select: { id: true, adminName: true },
   });
   if (!prePending) {
     const decided = await fetchFreeTierApplicationTerminalGate(preApp.id);
@@ -704,6 +704,7 @@ export async function redirectSchoolAdmin(args: {
       approveUrl,
       notRightPersonUrl,
       adminRecipientName: newAdminNameTrim,
+      forwardedByAdminName: prePending.adminName,
     });
     if (!emailResult.ok) {
       await abandonMintedSignedLinks([minted.approveMint.linkId, minted.declineMint.linkId]);

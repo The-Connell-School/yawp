@@ -10,7 +10,7 @@ const webServer = process.env.APPROVAL_V2_REUSE_DEV
       url: baseURL,
       reuseExistingServer: false,
       timeout: 120000,
-      gracefulShutdown: { signal: 'SIGTERM', timeout: 10000 },
+      gracefulShutdown: { signal: 'SIGTERM' as const, timeout: 10000 },
       env: {
         CACHE_DATABASE_PATH: `${process.env.TMPDIR}/approval-v2-cache.sqlite`,
         DATABASE_PATH: `${process.env.TMPDIR}/approval-v2-local.sqlite`,
@@ -18,8 +18,12 @@ const webServer = process.env.APPROVAL_V2_REUSE_DEV
         FREE_TIER_LINK_HMAC_SECRET:
           process.env.FREE_TIER_LINK_HMAC_SECRET ??
           'local-approval-v2-test-secret',
-        DATABASE_URL: process.env.E2E_DATABASE_URL,
-        E2E_DATABASE_URL: process.env.E2E_DATABASE_URL,
+        ...(process.env.E2E_DATABASE_URL
+          ? {
+              DATABASE_URL: process.env.E2E_DATABASE_URL,
+              E2E_DATABASE_URL: process.env.E2E_DATABASE_URL,
+            }
+          : {}),
         PRIMARY_APP_URL: baseURL,
         FREE_TIER_APPROVAL_WORKER_ENABLED: 'false',
       },
