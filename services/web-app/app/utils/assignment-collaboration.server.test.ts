@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
 import { type CollaborationGroupMode } from '~/domain/assignments/collaboration';
-import { parseAssignmentCollaboration } from './assignment-collaboration.server';
+import {
+  parseAssignmentCollaboration,
+  resolveCollaborationForAssignmentCreate,
+} from './assignment-collaboration.server';
 
 const form = (entries: Record<string, string | string[]>) => {
   const formData = new FormData();
@@ -147,6 +150,28 @@ describe('parseAssignmentCollaboration', () => {
       success: false,
       message: 'Group size must be between 2 and 8 students.',
     });
+  });
+
+  test('forces solo settings for group-project assignment types', () => {
+    const collaborative = {
+      collaborationEnabled: true,
+      collaborationGroupMode: 'teacher' as const,
+      collaborationGroupSize: 4,
+    };
+    expect(
+      resolveCollaborationForAssignmentCreate(collaborative, {
+        collaborationSupported: true,
+      })
+    ).toEqual({
+      collaborationEnabled: false,
+      collaborationGroupMode: 'teacher',
+      collaborationGroupSize: null,
+    });
+    expect(
+      resolveCollaborationForAssignmentCreate(collaborative, {
+        collaborationSupported: false,
+      })
+    ).toEqual(collaborative);
   });
 
   test('ignores group settings entirely when collaboration is off', () => {

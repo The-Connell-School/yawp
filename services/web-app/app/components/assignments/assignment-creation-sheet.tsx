@@ -760,9 +760,21 @@ export function AssignmentCreationSheetContent({
       selectedType.quotaExhausted)
       ? ''
       : requestedTypeId;
-  // Collaboration is offered for every assignment type now, so this only asks
-  // whether a type has been chosen at all.
-  const selectedTypeSupportsCollaboration = Boolean(assignmentTypeId);
+  const selectedAssignmentTypeRecord = assignmentTypes.find(
+    (type) => type.id === assignmentTypeId
+  );
+  // Group-project types (GBA 300, etc.) always produce one document per student.
+  const selectedTypeIsGroupProject = Boolean(
+    selectedAssignmentTypeRecord?.collaborationSupported
+  );
+  const selectedTypeOffersCollaborationToggle =
+    Boolean(assignmentTypeId) && !selectedTypeIsGroupProject;
+  const showCollaborationToggle =
+    isEditing && collaborationEnabled
+      ? true
+      : selectedTypeOffersCollaborationToggle;
+  const showGroupProjectIndividualNotice =
+    !isEditing && selectedTypeIsGroupProject && Boolean(assignmentTypeId);
   // Offered only where there is something to turn off. Switching it on cannot
   // invent a grammar category for a rubric that has none.
   const selectedTypeGradesGrammar = Boolean(
@@ -1885,12 +1897,22 @@ export function AssignmentCreationSheetContent({
             </div>
           ) : null}
 
-          {/* Collaborative drafts. Available for every assignment type, and frozen
-            after creation for the same reason the tutor toggle is: students may
+          {/* Collaborative drafts for non-group-project types. Group-project types
+            always fan out to solo documents (see notice below). Frozen after
+            creation for the same reason the tutor toggle is: students may
             already have group drafts built around it.
             Group membership itself is arranged per class afterwards, because an
             assignment fans out to one ClassAssignment per class. */}
-          {selectedTypeSupportsCollaboration ? (
+          {showGroupProjectIndividualNotice ? (
+            <div className="pt-6">
+              <p className="text-sm text-muted-foreground">
+                Each student receives their own document when they start this
+                assignment. Yawp! does not create a shared group document, and
+                you do not need to set up groups.
+              </p>
+            </div>
+          ) : null}
+          {showCollaborationToggle ? (
             <div className="pt-6">
               {isEditing ? null : (
                 <input

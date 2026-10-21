@@ -12,6 +12,22 @@ export type ParseAssignmentCollaborationResult =
   | { success: true; value: AssignmentCollaborationSettings }
   | { success: false; message: string };
 
+/**
+ * Group-project assignment types (`AssignmentType.collaborationSupported`) always
+ * fan out to one solo document per student. Collaboration cannot be turned on for
+ * new assignments of those types, even if a client posts `collaborationEnabled:
+ * true`. Existing assignments with collaboration already enabled are unchanged.
+ */
+export function resolveCollaborationForAssignmentCreate(
+  parsed: AssignmentCollaborationSettings,
+  assignmentType: { collaborationSupported: boolean }
+): AssignmentCollaborationSettings {
+  if (assignmentType.collaborationSupported) {
+    return SOLO_COLLABORATION_SETTINGS;
+  }
+  return parsed;
+}
+
 function lastValue(formData: FormData, field: string): string | undefined {
   return formData
     .getAll(field)

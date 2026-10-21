@@ -91,7 +91,7 @@ function idleFetcher(data: Record<string, unknown> | null = null) {
 }
 
 const assignmentTypes = [
-  // type-1 is in the collaborative-drafts pilot; type-2 is not.
+  // type-1 is a group-project type (collaborationSupported); type-2 is not.
   {
     id: 'type-1',
     title: 'Literary Analysis',
@@ -830,18 +830,20 @@ describe('AssignmentCreationSheetContent', () => {
   });
 
   describe('collaborative drafts', () => {
-    it('offers the toggle for a kind of writing in the pilot', () => {
+    it('does not offer the toggle for a group-project assignment type', () => {
       root = renderSheet({
         entryPoint: 'assignment-type',
         fixedAssignmentTypeId: 'type-1',
       }).root;
 
       expect(
-        controlById('assignment-create-collaboration-enabled')
-      ).not.toBeNull();
+        document.getElementById('assignment-create-collaboration-enabled')
+      ).toBeNull();
+      expectText('Each student receives their own document');
+      expectText('Yawp! does not create a shared group document');
     });
 
-    it('offers the toggle for a kind of writing outside the former pilot', () => {
+    it('offers the toggle for assignment types outside group projects', () => {
       root = renderSheet({
         entryPoint: 'assignment-type',
         fixedAssignmentTypeId: 'type-2',
@@ -858,7 +860,7 @@ describe('AssignmentCreationSheetContent', () => {
       // parser's default.
       root = renderSheet({
         entryPoint: 'assignment-type',
-        fixedAssignmentTypeId: 'type-1',
+        fixedAssignmentTypeId: 'type-2',
         initialCollaborationEnabled: true,
       }).root;
 
@@ -877,7 +879,7 @@ describe('AssignmentCreationSheetContent', () => {
     it('posts the chosen mode', () => {
       root = renderSheet({
         entryPoint: 'assignment-type',
-        fixedAssignmentTypeId: 'type-1',
+        fixedAssignmentTypeId: 'type-2',
         initialCollaborationEnabled: true,
       }).root;
 
@@ -887,7 +889,7 @@ describe('AssignmentCreationSheetContent', () => {
     it('asks for a group size for the sized modes', () => {
       root = renderSheet({
         entryPoint: 'assignment-type',
-        fixedAssignmentTypeId: 'type-1',
+        fixedAssignmentTypeId: 'type-2',
         initialCollaborationEnabled: true,
       }).root;
 
@@ -902,7 +904,7 @@ describe('AssignmentCreationSheetContent', () => {
       const went: string[] = [];
       root = renderSheet({
         entryPoint: 'assignment-type',
-        fixedAssignmentTypeId: 'type-1',
+        fixedAssignmentTypeId: 'type-2',
         createFetcher: idleFetcher({
           success: true,
           nextStep: {
@@ -932,7 +934,7 @@ describe('AssignmentCreationSheetContent', () => {
       // a value and the server keeps producing solo assignments.
       root = renderSheet({
         entryPoint: 'assignment-type',
-        fixedAssignmentTypeId: 'type-1',
+        fixedAssignmentTypeId: 'type-2',
       }).root;
 
       const values = allInputsByName('collaborationEnabled').map(
