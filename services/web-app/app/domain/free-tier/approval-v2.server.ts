@@ -140,7 +140,8 @@ async function adminMessage(
   tx: Tx,
   app: FreeTierApplication,
   approval: FreeTierAdminApproval,
-  reminder: boolean
+  reminder: boolean,
+  options: { forwardedByAdminName?: string | null } = {}
 ): Promise<Message> {
   const approve = await mintSignedLink({
     applicationId: app.id,
@@ -182,6 +183,7 @@ async function adminMessage(
       adminRecipientName: approval.adminName,
       approveUrl: `${base}/free/admin/approve?t=${encodeURIComponent(approve.token)}`,
       notRightPersonUrl: `${base}/free/admin/not-right-person?t=${encodeURIComponent(decline.token)}`,
+      forwardedByAdminName: options.forwardedByAdminName,
       reminderLead: reminder
         ? 'This is a reminder about the approval request below.'
         : undefined,
@@ -450,7 +452,9 @@ export async function forwardApprovalRequest(args: {
       },
     });
     if (!rules.manualReview) {
-      const message = await adminMessage(tx, app, next, false);
+      const message = await adminMessage(tx, app, next, false, {
+        forwardedByAdminName: pending.adminName,
+      });
       await tx.freeTierAdminApproval.update({
         where: { id: next.id },
         data: { signedLinkId: message.approveLinkId },
