@@ -309,10 +309,6 @@ test('stale tab blocked POST shows approval required toast without changing page
   await expect(page.getByTestId('teaching-access-approval-toast')).toBeVisible({
     timeout: 30_000,
   });
-  await page
-    .getByTestId('teaching-access-approval-toast')
-    .getByRole('button', { name: 'Dismiss' })
-    .click();
   await prisma.freeTierApplication.update({
     where: { id: app.id },
     data: { status: 'SENT' },
@@ -339,9 +335,10 @@ test('stale tab blocked POST shows approval required toast without changing page
   });
   expect(blocked.status).toBe(403);
   expect(blocked.payload?.error).toBe('approval_required');
-  await expect(page.getByTestId('teaching-access-error-toast')).toBeVisible({
-    timeout: 10_000,
-  });
+  await expect
+    .poll(async () => page.getByTestId('teaching-access-error-toast').count())
+    .toBeGreaterThan(0);
+  await expect(page.getByTestId('teaching-access-error-toast')).toBeVisible();
   await expect(page.getByTestId('teaching-access-banner')).toHaveCount(
     bannerBefore
   );
