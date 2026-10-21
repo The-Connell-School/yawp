@@ -158,7 +158,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-for (const width of [1440, 390]) {
+for (const width of [390, 1440]) {
   test(`waiting teacher explores the real app in locked mode at ${width}px`, async ({
     page,
   }) => {
@@ -226,10 +226,11 @@ for (const width of [1440, 390]) {
         })
       ).toBeVisible();
     } else {
-      await page
+      const mobileCreate = page
         .getByTestId('free-assignment-tiles')
-        .getByRole('button', { name: 'Create assignment' })
-        .click();
+        .getByRole('button', { name: 'Create assignment' });
+      await mobileCreate.scrollIntoViewIfNeeded();
+      await mobileCreate.click({ timeout: 15_000 });
       await expect(
         page.getByRole('heading', { name: 'Unlocks after approval' })
       ).toBeVisible();
