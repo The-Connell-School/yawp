@@ -38,9 +38,19 @@ import { FreeTierOnboardingTimeline } from '../free-tier/FreeTierOnboardingTimel
 
 const MAX_NAME = 200;
 
-function progressedDestination(status: string) {
-  if (status === 'SENT' || status === 'MANUAL_REVIEW')
+async function progressedDestination(
+  status: string,
+  userId: string,
+  organizationId: string | null
+) {
+  if (status === 'SENT' || status === 'MANUAL_REVIEW') {
+    const { isFeatureFlagEnabled } =
+      await import('~/domain/feature-flags/feature-flags.server');
+    const { FREE_TIER_FLAG } = await import('~/domain/feature-flags/feature-flags');
+    if (await isFeatureFlagEnabled(FREE_TIER_FLAG, organizationId))
+      return '/app';
     return '/app/free-tier/pending';
+  }
   if (status === 'APPROVED') return '/app/my-classes';
   if (status === 'REJECTED' || status === 'EXPIRED')
     return '/app/free-tier/status';
@@ -67,7 +77,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const onboardingV2 =
     !!app && (await isClassPreparationEnabled(userId, app.organizationId));
   const destination =
-    onboardingV2 && app ? progressedDestination(app.status) : null;
+    onboardingV2 && app
+      ? await progressedDestination(app.status, userId, app.organizationId)
+      : null;
   if (destination) throw redirect(destination);
   const step = new URL(request.url).searchParams.get('step');
   if (needsClassPreparation(app, onboardingV2) && step === 'administrator')
@@ -116,7 +128,9 @@ export async function action({ request }: ActionFunctionArgs) {
     userId,
     app.organizationId
   );
-  const destination = onboardingV2 ? progressedDestination(app.status) : null;
+  const destination = onboardingV2
+    ? await progressedDestination(app.status, userId, app.organizationId)
+    : null;
   if (destination) return redirect(destination);
   if (formData.get('intent') === 'prepare-class') {
     const values = {
@@ -154,7 +168,14 @@ export async function action({ request }: ActionFunctionArgs) {
         return redirect('/app/free-tier/onboarding');
       return result;
     }
-    throw redirect('/app/free-tier/pending');
+    const { ensureLockedPreviewClassroomForUser } =
+      await import('~/domain/free-tier/locked-preview.server');
+    await ensureLockedPreviewClassroomForUser(userId);
+    const nextStatus = result.status;
+    const nextDestination = onboardingV2
+      ? await progressedDestination(nextStatus, userId, app.organizationId)
+      : '/app/free-tier/pending';
+    throw redirect(nextDestination ?? '/app/free-tier/pending');
   } catch (error) {
     if (error instanceof Response) throw error;
     return {

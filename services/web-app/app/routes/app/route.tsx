@@ -82,6 +82,7 @@ import {
   TourThisPageButton,
 } from '~/components/guided-tour/guided-tour';
 import { loadGuidedTours } from '~/domain/guided-tours/guided-tours.server';
+import { LockedPreviewBanner } from '~/components/free-tier/locked-preview-banner';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -106,6 +107,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         isStudent: false,
       },
       guidedTours: null,
+      lockedPreview: null,
     });
   }
   const userId = await requireUserId(request);
@@ -123,6 +125,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (freeTierApplication) {
     const { retryFreeClassroomProvisioningForUser } =
       await import('~/domain/free-tier/provision-free-classroom.server');
+    const { ensureLockedPreviewClassroomForUser } =
+      await import('~/domain/free-tier/locked-preview.server');
+    await ensureLockedPreviewClassroomForUser(userId);
     await retryFreeClassroomProvisioningForUser(userId);
     await enforceFreeTierTeacherGate({
       userId,
@@ -140,6 +145,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           isStudent: false,
         },
         guidedTours: null,
+        lockedPreview: null,
       });
     }
   }
@@ -190,6 +196,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // Free classroom teachers get page tours instead of a hands-on orientation.
   const guidedTours = await loadGuidedTours(userId, profile, request);
+  const { loadLockedPreviewShellState } =
+    await import('~/domain/free-tier/locked-preview-shell.server');
+  const { getMembershipId } = await import('~/cookies/membership-id.server');
+  const lockedPreview =
+    profile.role === 'TEACHER' && freeTierRouteOpen
+      ? await loadLockedPreviewShellState(userId, await getMembershipId(request))
+      : null;
 
   return data({
     mockAdminAvailable,
@@ -200,6 +213,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       isStudent: profile.role === 'STUDENT',
     },
     guidedTours,
+    lockedPreview,
   });
 }
 
@@ -228,7 +242,8 @@ export default function Route() {
   const location = useLocation();
   const user = useUser();
   const shellData = useLoaderData<typeof loader>();
-  const { schoolYearScope, guidedTours, mockAdminAvailable } = shellData;
+  const { schoolYearScope, guidedTours, mockAdminAvailable, lockedPreview } =
+    shellData;
   const freeAccountUsage =
     'freeAccountUsage' in shellData ? shellData.freeAccountUsage : null;
   const rootData =
@@ -610,6 +625,12 @@ export default function Route() {
           height:100% of this whole column (which double-counts that chrome
           and pushes fixed-height app shells like the Reporter off-screen).
         */}
+        {lockedPreview ? (
+          <LockedPreviewBanner
+            lockedPreview={lockedPreview}
+            teacherName={user.name ?? 'Teacher'}
+          />
+        ) : null}
         <NavExpandedContext.Provider
           value={{ isMobileNavOpen, setIsMobileNavOpen }}
         >

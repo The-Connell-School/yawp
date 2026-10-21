@@ -20,16 +20,16 @@ afterEach(() => {
   memberships = [{ role: 'TEACHER', organizationId: 'org-a', organization: { plan: 'FREE_CLASSROOM' } }];
   queries.length = 0;
 });
-test('pending direct APIs fail with 403 before execution; reads redirect to the preview', async () => {
+test('pending direct APIs fail with 403 before execution; app reads pass through', async () => {
   for (const path of ['/api/domain/reporter', '/api/domain/lesson-planner', '/app/assignments']) {
     try { await enforceLockedPreviewRequest(new Request(`http://local${path}`, { method: 'POST' }), 'teacher'); throw Error('allowed'); }
     catch (e) { expect((e as Response).status).toBe(403); }
   }
-  try { await enforceLockedPreviewRequest(new Request('http://local/app/reporter'), 'teacher'); throw Error('allowed'); }
-  catch (e) { expect((e as Response).headers.get('location')).toBe('/app/free-tier/preview'); }
+  await enforceLockedPreviewRequest(new Request('http://local/app/reporter'), 'teacher');
+  await enforceLockedPreviewRequest(new Request('http://local/app/my-classes'), 'teacher');
 });
-test('allowed preview reads, preparation and approval actions pass', async () => {
-  await enforceLockedPreviewRequest(new Request('http://local/app/free-tier/preview'), 'teacher');
+test('allowed app reads, preparation and approval actions pass', async () => {
+  await enforceLockedPreviewRequest(new Request('http://local/app/assignment-types/at-1'), 'teacher');
   await enforceLockedPreviewRequest(new Request('http://local/app/free-tier/onboarding', { method: 'POST' }), 'teacher');
   await enforceLockedPreviewRequest(new Request('http://local/app/free-tier/pending', { method: 'POST' }), 'teacher');
 });

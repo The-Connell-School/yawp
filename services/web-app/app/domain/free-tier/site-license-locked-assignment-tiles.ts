@@ -22,12 +22,14 @@ export type AssignmentTypeCatalogRow = {
   systemKey?: string | null;
   ownerOrgId?: string | null;
   ownerMembershipId?: string | null;
+  image?: { id: string } | null;
 };
 
 export type SiteLicenseLockedAssignmentTile = {
   key: string;
   label: string;
   assignmentTypeId: string;
+  imageId?: string | null;
 };
 
 /** User-facing labels for locked tiles (never sourced from assignment type titles). */
@@ -170,6 +172,7 @@ export function resolveSiteLicenseLockedAssignmentTiles(
       key: spec.key,
       label: SITE_LICENSE_LOCKED_TILE_LABELS[spec.key],
       assignmentTypeId: match.id,
+      imageId: match.image?.id ?? null,
     });
   }
   return tiles;

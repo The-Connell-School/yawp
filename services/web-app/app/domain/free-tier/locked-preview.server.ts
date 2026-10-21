@@ -3,7 +3,14 @@ import { redirect } from 'react-router';
 import { prisma } from '~/utils/db.server';
 import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { FREE_TIER_FLAG } from '~/domain/feature-flags/feature-flags';
-import { isLockedPreviewRequestAllowed, isLockedPreviewStatus, LOCKED_PREVIEW_MESSAGE, LOCKED_PREVIEW_PATH } from './locked-preview';
+import {
+  isLockedPreviewRequestAllowed,
+  isLockedPreviewStatus,
+  LOCKED_PREVIEW_APP_HOME,
+  LOCKED_PREVIEW_MESSAGE,
+  LOCKED_PREVIEW_PATH,
+} from './locked-preview';
+import { provisionFreeClassroom } from './provision-free-classroom.server';
 
 export async function getLockedPreviewApplication(userId: string, membershipId?: string | null) {
   const app = await prisma.freeTierApplication.findFirst({
@@ -35,9 +42,26 @@ export async function enforceLockedPreviewRequest(request: Request, userId: stri
   if (!(pathname === '/app' || pathname.startsWith('/app/') || pathname.startsWith('/api/'))) return;
   if (!(await getLockedPreviewApplication(userId, membershipId))) return;
   if (isLockedPreviewRequestAllowed(request.method, pathname)) return;
-  if (['GET', 'HEAD'].includes(request.method) && !pathname.startsWith('/api/'))
-    throw redirect(LOCKED_PREVIEW_PATH);
+  if (['GET', 'HEAD'].includes(request.method))
+    throw redirect(LOCKED_PREVIEW_APP_HOME);
   throw Response.json({ error: 'approval_required', message: LOCKED_PREVIEW_MESSAGE }, { status: 403 });
+}
+
+/** Provisions the browse-only classroom once the teacher is waiting on approval. */
+export async function ensureLockedPreviewClassroomForUser(userId: string) {
+  const application = await prisma.freeTierApplication.findFirst({
+    where: {
+      userId,
+      organizationId: null,
+      status: { in: ['SENT', 'MANUAL_REVIEW'] },
+    },
+    orderBy: { updatedAt: 'desc' },
+    select: { id: true, organizationId: true },
+  });
+  if (!application) return null;
+  if (!(await isFeatureFlagEnabled(FREE_TIER_FLAG, application.organizationId)))
+    return null;
+  return provisionFreeClassroom(application.id);
 }
 
 /** Transaction-aware backstop for enrollment and assignment writers without a Request. */

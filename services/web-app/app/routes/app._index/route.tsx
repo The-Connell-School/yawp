@@ -309,6 +309,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // for this column, so it is optional there and defaulted here.
     collaborationSupported: type.collaborationSupported ?? false,
     kind: type.kind ?? null,
+    imageId: type.image?.id ?? null,
     rubricName: type.rubric?.name ?? null,
     gradesGrammar: gradesGrammarIds.has(type.id),
     ...quotaByTypeId.get(type.id),

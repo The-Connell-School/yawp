@@ -83,6 +83,9 @@ import {
 import { cn } from '~/utils/misc';
 import { SiteLicenseLockedAssignmentTile } from '~/components/site-license-locked-assignment-tile';
 import type { SiteLicenseLockedAssignmentTile as SiteLicenseLockedTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
+import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
+import { useTeachingLocked } from '~/components/free-tier/use-teaching-locked';
+import { LOCKED_PREVIEW_MESSAGE } from '~/domain/free-tier/locked-preview';
 import { toDateInputValue } from '~/utils/date-only';
 import {
   assignmentTypeUsesDailyPagesEngagementRubric,
@@ -211,6 +214,7 @@ export type AssignmentCreationAssignmentType = {
    * forgot to load it would render an exit ticket as a blank prompt.
    */
   kind: string | null;
+  imageId?: string | null;
   /** Library rubric name when the type points at a shared rubric (e.g. SJP Daily Pages). */
   rubricName?: string | null;
   /** Displayed for a catalog type excluded by the organization plan. */
@@ -489,6 +493,7 @@ export function AssignmentCreationSheet({
   const extractFetcher = useFetcher<ExtractFetcherData>();
   const navigate = useNavigate();
   const usage = useFreeAccountUsage();
+  const teachingLocked = useTeachingLocked();
   const [pickedTypeId, setPickedTypeId] = useState<string>();
   useEffect(() => {
     if (!props.open) setPickedTypeId(undefined);
@@ -513,6 +518,11 @@ export function AssignmentCreationSheet({
             <SheetTitle>New Assignment</SheetTitle>
           </SheetHeader>
           <p className="mb-3 mt-6 text-sm font-medium">Assignment type</p>
+          {teachingLocked ? (
+            <p className="mb-3 text-sm text-muted-foreground" role="status">
+              {LOCKED_PREVIEW_MESSAGE}
+            </p>
+          ) : null}
           <div className="rounded-xl border bg-popover p-1 shadow-sm">
             {usage.assignments.map((row) => {
               const type = props.assignmentTypes.find(
@@ -521,21 +531,26 @@ export function AssignmentCreationSheet({
               const selected =
                 type?.id ===
                 initialAssignmentTypeSelection(props.assignmentTypes);
+              const disabled =
+                Boolean(teachingLocked) ||
+                !type ||
+                (!usage.monthly && row.remaining === 0) ||
+                Boolean(type?.unavailableReason);
               return (
                 <button
                   type="button"
                   key={row.kind}
-                  disabled={
-                    !type ||
-                    (!usage.monthly && row.remaining === 0) ||
-                    Boolean(type.unavailableReason)
-                  }
+                  disabled={disabled}
                   onClick={() => setPickedTypeId(type?.id)}
                   className={cn(
                     'flex min-h-[60px] w-full items-center gap-3 rounded-lg p-3 text-left text-sm disabled:text-muted-foreground',
                     selected && 'bg-secondary'
                   )}
                 >
+                  <AssignmentTypeTileImage
+                    imageId={type?.imageId}
+                    className="h-10 w-10 shrink-0 rounded-md"
+                  />
                   <span className="w-4 shrink-0">
                     {selected && <Check size={14} />}
                   </span>
@@ -547,14 +562,18 @@ export function AssignmentCreationSheet({
                         row.remaining === 0 && 'text-amber-800'
                       )}
                     >
-                      {usage.monthly
-                        ? 'Unlimited assignments'
-                        : row.remaining
-                          ? `${row.remaining} of ${row.total} left`
-                          : 'None left'}
+                      {teachingLocked
+                        ? 'Unlocks after approval'
+                        : usage.monthly
+                          ? 'Unlimited assignments'
+                          : row.remaining
+                            ? `${row.remaining} of ${row.total} left`
+                            : 'None left'}
                     </span>
                   </span>
-                  {!usage.monthly && row.remaining === 0 && <Lock size={14} />}
+                  {!usage.monthly && row.remaining === 0 && !teachingLocked && (
+                    <Lock size={14} />
+                  )}
                 </button>
               );
             })}
@@ -563,6 +582,7 @@ export function AssignmentCreationSheet({
                 key={tile.key}
                 label={tile.label}
                 variant="picker"
+                imageId={tile.imageId}
               />
             ))}
           </div>
@@ -624,6 +644,7 @@ export function AssignmentCreationSheetContent({
   navigate = () => {},
   renderSheet = true,
 }: AssignmentCreationSheetContentProps) {
+  const teachingLocked = useTeachingLocked();
   const [selectedAssignmentTypeId, setSelectedAssignmentTypeId] = useState(
     initialAssignmentTypeSelection(
       assignmentTypes,
@@ -1061,6 +1082,7 @@ export function AssignmentCreationSheetContent({
   }
 
   const isSubmitDisabled =
+    Boolean(teachingLocked) ||
     isSaving ||
     isExtracting ||
     !assignmentTypeId ||
@@ -2039,6 +2061,11 @@ export function AssignmentCreationSheetContent({
 
         {formError ? (
           <p className="text-sm text-destructive">{formError}</p>
+        ) : null}
+        {teachingLocked ? (
+          <p className="text-sm text-muted-foreground" role="status">
+            {LOCKED_PREVIEW_MESSAGE}
+          </p>
         ) : null}
 
         <div className="flex items-center justify-end gap-2 pt-4">

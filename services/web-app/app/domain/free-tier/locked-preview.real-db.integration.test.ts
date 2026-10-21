@@ -81,11 +81,17 @@ local('real authenticated route actions reject crafted requests before parsing o
     ] as const) {
       await expect(action({ request: new Request(`http://localhost${path}`, { method: 'POST', headers, body: 'crafted-invalid-body' }) } as never)).rejects.toMatchObject({ status: 403 });
     }
-    const result = await preview({ request: new Request('http://localhost/app/free-tier/preview?organizationId=foreign-org', { headers }) } as never);
-    expect(result.entries.length).toBeGreaterThan(0);
-    expect(JSON.stringify(result)).not.toContain(orgId);
-    const copy = await preview({ request: new Request('http://localhost/app/free-tier/preview?q=AI%20will', { headers }) } as never);
-    expect(copy.total).toBe(0);
+    try {
+      await preview({
+        request: new Request(
+          'http://localhost/app/free-tier/preview?organizationId=foreign-org',
+          { headers }
+        ),
+      } as never);
+      throw new Error('expected redirect');
+    } catch (error) {
+      expect((error as Response).headers.get('location')).toBe('/app');
+    }
     await expect(createAssignment({ request: new Request('http://localhost/api/assignments/create', { method: 'POST' }) } as never)).rejects.toMatchObject({ status: 302 });
   } finally { await prisma.session.delete({ where: { id: session.id } }); }
 });

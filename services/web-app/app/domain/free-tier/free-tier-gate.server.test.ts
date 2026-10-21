@@ -1,5 +1,11 @@
-import { describe, expect, test } from 'bun:test';
-import { enforceFreeTierTeacherGate } from './free-tier-gate.server';
+import { beforeEach, describe, expect, mock, test } from 'bun:test';
+
+let freeTierFlagEnabled = false;
+mock.module('~/domain/feature-flags/feature-flags.server', () => ({
+  isFeatureFlagEnabled: mock(async () => freeTierFlagEnabled),
+}));
+
+const { enforceFreeTierTeacherGate } = await import('./free-tier-gate.server');
 
 function app(overrides: Partial<{
   status: string;
@@ -32,6 +38,10 @@ async function expectRedirect(
 }
 
 describe('enforceFreeTierTeacherGate', () => {
+  beforeEach(() => {
+    freeTierFlagEnabled = false;
+  });
+
   test('no application returns null', async () => {
     const result = await enforceFreeTierTeacherGate({
       userId: 'u1',
@@ -63,31 +73,31 @@ describe('enforceFreeTierTeacherGate', () => {
     );
   });
 
-  test('REJECTED cannot stay on pending', async () => {
+  test('SENT with locked preview allows the real app and redirects the waiting page', async () => {
+    freeTierFlagEnabled = true;
+    const row = app({
+      status: 'SENT',
+      adminApprovals: [{ adminName: 'P', adminEmail: 'p@school.edu' }],
+    });
+    expect(
+      await enforceFreeTierTeacherGate({
+        userId: 'u1',
+        pathname: '/app/my-classes',
+        application: row,
+      })
+    ).toBe(row);
     await expectRedirect(
       () =>
         enforceFreeTierTeacherGate({
           userId: 'u1',
           pathname: '/app/free-tier/pending',
-          application: app({ status: 'REJECTED' }),
+          application: row,
         }),
-      '/app/free-tier/status'
+      '/app'
     );
   });
 
-  test('EXPIRED redirects to status', async () => {
-    await expectRedirect(
-      () =>
-        enforceFreeTierTeacherGate({
-          userId: 'u1',
-          pathname: '/app/reporter',
-          application: app({ status: 'EXPIRED' }),
-        }),
-      '/app/free-tier/status'
-    );
-  });
-
-  test('SENT redirects to pending', async () => {
+  test('SENT without locked preview redirects to pending', async () => {
     await expectRedirect(
       () =>
         enforceFreeTierTeacherGate({
@@ -102,7 +112,7 @@ describe('enforceFreeTierTeacherGate', () => {
     );
   });
 
-  test('MANUAL_REVIEW redirects to pending', async () => {
+  test('MANUAL_REVIEW without locked preview redirects to pending', async () => {
     await expectRedirect(
       () =>
         enforceFreeTierTeacherGate({
@@ -114,16 +124,17 @@ describe('enforceFreeTierTeacherGate', () => {
     );
   });
 
-  test('ADMIN_SUBMITTED redirects to onboarding (email failure retry)', async () => {
-    await expectRedirect(
-      () =>
-        enforceFreeTierTeacherGate({
-          userId: 'u1',
-          pathname: '/app/free-tier/pending',
-          application: app({ status: 'ADMIN_SUBMITTED' }),
-        }),
-      '/app/free-tier/onboarding'
-    );
+  test('pending route allowed for SENT when locked preview is off', async () => {
+    const row = app({
+      status: 'SENT',
+      adminApprovals: [{ adminName: 'A', adminEmail: 'a@school.edu' }],
+    });
+    const result = await enforceFreeTierTeacherGate({
+      userId: 'u1',
+      pathname: '/app/free-tier/pending',
+      application: row,
+    });
+    expect(result).toBe(row);
   });
 
   test('ACCOUNT_CREATED redirects to onboarding', async () => {
@@ -136,18 +147,5 @@ describe('enforceFreeTierTeacherGate', () => {
         }),
       '/app/free-tier/onboarding'
     );
-  });
-
-  test('pending route allowed for SENT', async () => {
-    const row = app({
-      status: 'SENT',
-      adminApprovals: [{ adminName: 'A', adminEmail: 'a@school.edu' }],
-    });
-    const result = await enforceFreeTierTeacherGate({
-      userId: 'u1',
-      pathname: '/app/free-tier/pending',
-      application: row,
-    });
-    expect(result).toBe(row);
   });
 });

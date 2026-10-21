@@ -27,6 +27,7 @@ const loadFreeTierGateApplication = mock(async () => ({
 }));
 const enforceFreeTierTeacherGate = mock(async () => null);
 const retryFreeClassroomProvisioningForUser = mock(async () => {});
+const ensureLockedPreviewClassroomForUser = mock(async () => {});
 
 mock.module('~/utils/mock-admin.server', () => ({
   canUseMockAdmin,
@@ -51,6 +52,9 @@ mock.module('~/domain/free-tier/free-tier-gate.server', () => ({
 mock.module('~/domain/free-tier/provision-free-classroom.server', () => ({
   retryFreeClassroomProvisioningForUser,
 }));
+mock.module('~/domain/free-tier/locked-preview.server', () => ({
+  ensureLockedPreviewClassroomForUser,
+}));
 
 const { loader } = await import('./route');
 
@@ -72,6 +76,7 @@ describe('app parent free-tier loader gate', () => {
     loadFreeTierGateApplication.mockClear();
     enforceFreeTierTeacherGate.mockClear();
     retryFreeClassroomProvisioningForUser.mockClear();
+    ensureLockedPreviewClassroomForUser.mockClear();
     if (oldPreviewSlug === undefined) delete process.env.PREVIEW_SLUG;
     else process.env.PREVIEW_SLUG = oldPreviewSlug;
     if (oldYawpEnvironment === undefined) delete process.env.YAWP_ENVIRONMENT;
@@ -89,6 +94,7 @@ describe('app parent free-tier loader gate', () => {
     } as any);
 
     expect(loadFreeTierGateApplication).toHaveBeenCalledWith('user-1');
+    expect(ensureLockedPreviewClassroomForUser).toHaveBeenCalledWith('user-1');
     expect(retryFreeClassroomProvisioningForUser).toHaveBeenCalledWith('user-1');
     expect(enforceFreeTierTeacherGate).toHaveBeenCalledWith({
       userId: 'user-1',
@@ -111,6 +117,7 @@ describe('app parent free-tier loader gate', () => {
         isStudent: false,
       },
       guidedTours: null,
+      lockedPreview: null,
     });
   });
 });
