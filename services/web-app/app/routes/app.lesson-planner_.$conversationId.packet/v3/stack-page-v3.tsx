@@ -10,7 +10,7 @@ import { Link, useFetcher, useRevalidator } from 'react-router';
 import { Check, ChevronLeft, BookMarked, Lightbulb, X } from 'lucide-react';
 import type { LoadedLessonPacket } from '~/domain/lesson-planner/load-lesson-packet.server';
 import type { StackV3 } from '~/domain/lesson-planner/load-stack-v3.server';
-import type { StackStep } from '~/domain/lesson-planner/stack-steps';
+import { notYetInYawp, type StackStep } from '~/domain/lesson-planner/stack-steps';
 import type { SuggestedPiece } from '~/domain/lesson-planner/stack-suggestions';
 import { clampMinutes, stackTiming, timeFixes, type TimeFix } from '~/domain/lesson-planner/stack-timing';
 import { STEP_TYPE_LABELS } from '~/domain/lesson-planner/step-types';
@@ -19,6 +19,7 @@ import { StackUndoToast, useStackRemoval } from '~/components/lesson-planner/use
 import { MaterialRichEditor } from '../material-rich-editor';
 import { AddPanel } from './add-panel';
 import { FinishLine } from './finish-line';
+import { usePaperSteps } from './yawp-checklist';
 import { PIECE_DRAG_TYPE, RunOfShow } from './run-of-show';
 import { TakeToClass } from './take-to-class';
 import { PostToClass, SendLesson } from './share-cards';
@@ -87,6 +88,8 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
   }, [v3.steps, localOrder, localMinutes, hiddenIds]);
   const timing = useMemo(() => stackTiming(steps, data.periodMinutes), [steps, data.periodMinutes]);
   const fixes = useMemo(() => timeFixes(timing), [timing]);
+  const [onPaper, markPaper] = usePaperSteps(conversationId);
+  const missing = useMemo(() => notYetInYawp(steps, onPaper), [steps, onPaper]);
 
   const [openId, setOpenId] = useState<string | null>(null);
   const [editing, setEditing] = useState<StackStep | null>(null);
@@ -337,6 +340,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
                 <RunOfShow
                   conversationId={conversationId}
                   hasDeck={Boolean(v3.deck)}
+                  missingIds={new Set(missing.map((step) => step.id))}
                   steps={steps}
                   blocks={timing.blocks}
                   openId={openId}
@@ -371,6 +375,8 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
               createdAt={v3.createdAt}
               setAt={v3.setAt}
               lessonDate={v3.lessonDate}
+              missing={missing}
+              onPaper={markPaper}
               busy={busy}
               onSet={() => post(setFetcher, STACK_API, { intent: 'set-lesson' })}
               onKeepEditing={() => post(setFetcher, STACK_API, { intent: 'unset-lesson' })}

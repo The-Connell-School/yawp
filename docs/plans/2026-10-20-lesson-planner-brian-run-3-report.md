@@ -258,6 +258,19 @@ gallery and the page" spec:
   blocked from the build. Each further work is one image plus one entry
   in `deck-art.ts`.
 
+- **Slides for a lecture.** A deck built from the stack gave a lecture
+  one slide, however many parts it taught. A lecture or mini-lesson on the
+  run of show now offers **Build slides for this lecture**. The planner
+  builds (or rebuilds) the lesson's one deck with a slide for each part,
+  all marked with that step, so Run the show still finds them.
+- **Before class: what is not in Yawp! yet.** A teacher can choose paper
+  over a Yawp! assignment, but should never reach class thinking an exit
+  ticket exists when it was never made. Each writing step whose
+  assignment is not made carries a "Not in Yawp! yet" tag on its card. The
+  finish line lists them ("Exit ticket", "Class starter", "Daily Pages"),
+  each with Create and Paper instead. A made one leaves the list on its
+  own. Paper instead is remembered in that browser only.
+
 ## The Lesson Deck Kit v3, the lesson plan spec and handouts (Oct 21)
 
 Brian's notes, organized, the decisions and the plan are in

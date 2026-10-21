@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { buildLessonPacket } from './lesson-packet';
-import { stackSteps } from './stack-steps';
+import { notYetInYawp, stackSteps } from './stack-steps';
 import { stackTiming } from './stack-timing';
 
 describe('stackSteps: the run of show (stack page redesign)', () => {
@@ -37,5 +37,21 @@ describe('stackSteps: the run of show (stack page redesign)', () => {
 
   test('the header total is the sum of the steps', () => {
     expect(stackTiming(steps, 50).total).toBe(24);
+  });
+});
+
+describe('notYetInYawp: what still has to be made in Yawp! before class', () => {
+  const step = (id: string, create: { created?: boolean } | null) => ({
+    id,
+    create: create ? { label: 'Create', href: '/x', ...create } : null,
+  });
+
+  test('writing steps with a Create link that has not been used, in order', () => {
+    const steps = [step('starter', { created: true }), step('lecture', null), step('ticket', {}), step('daily', { created: false })];
+    expect(notYetInYawp(steps).map((s) => s.id)).toEqual(['ticket', 'daily']);
+  });
+
+  test('leaves out what the teacher is doing on paper', () => {
+    expect(notYetInYawp([step('ticket', {}), step('daily', {})], new Set(['ticket'])).map((s) => s.id)).toEqual(['daily']);
   });
 });

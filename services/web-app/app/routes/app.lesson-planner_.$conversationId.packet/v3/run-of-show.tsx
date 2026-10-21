@@ -134,6 +134,7 @@ export function RunOfShow({
   onAddAtEnd,
   busy,
   hasDeck = false,
+  missingIds = new Set(),
 }: {
   conversationId: string;
   steps: StackStep[];
@@ -154,6 +155,8 @@ export function RunOfShow({
   busy: boolean;
   /** The lesson has a deck already: a lecture's slides rebuild it. */
   hasDeck?: boolean;
+  /** Writing steps whose Yawp! assignment is not made yet. */
+  missingIds?: ReadonlySet<string>;
 }) {
   const [dragKey, setDragKey] = useState<string | null>(null);
   const byId = new Map(blocks.map((block) => [block.id, block]));
@@ -247,6 +250,15 @@ export function RunOfShow({
                     <span className="flex flex-wrap items-center gap-1.5">
                       <TypeChip step={step} />
                       {step.isWriting ? <WritingBadge /> : null}
+                      {missingIds.has(step.id) ? (
+                        <span
+                          data-testid="not-in-yawp"
+                          className="inline-flex items-center rounded-full border border-dashed px-2 py-0.5 text-[11px] font-semibold"
+                          style={{ borderColor: 'var(--sv-writing)', color: 'var(--sv-writing)' }}
+                        >
+                          Not in Yawp! yet
+                        </span>
+                      ) : null}
                     </span>
                     <span data-testid="run-card-title" className="mt-1 block text-sm font-semibold sm:truncate">
                       {step.title}

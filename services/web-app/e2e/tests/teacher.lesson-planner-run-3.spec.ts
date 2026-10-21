@@ -497,6 +497,53 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await expect(page.getByTestId('finish-line')).toBeVisible();
     });
 
+    test('before class: what is not in Yawp! yet is listed, and leaves the list once made or put on paper', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await stackV3On();
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId } = await seedDayOneStack(page, e2eContext);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      const checklist = page.getByTestId('finish-line').getByTestId('yawp-checklist');
+      await expect(checklist).toContainText('Not in Yawp! yet');
+      const items = checklist.getByTestId('yawp-checklist-item');
+      const before = await items.count();
+      expect(before).toBeGreaterThan(0);
+      await expect(page.getByTestId('not-in-yawp')).toHaveCount(before);
+      const closing = items.filter({ hasText: /closing/i });
+      await expect(closing).toHaveCount(1);
+
+      // Made in Yawp!: off the list.
+      const prisma = createE2EPrismaClient();
+      let materialId: string;
+      try {
+        materialId = (await prisma.lessonPlanMaterial.findFirstOrThrow({
+          where: { conversationId, kind: 'step', title: { startsWith: 'Closing' } },
+        })).id;
+      } finally {
+        await prisma.$disconnect();
+      }
+      const href = await closing.getByRole('link', { name: 'Create' }).getAttribute('href');
+      const marked = await page.request.post('/api/domain/lesson-planner/packet', {
+        form: { intent: 'mark-created', conversationId, materialId, yawpHref: new URL(href!, 'http://x').pathname },
+      });
+      expect(marked.ok()).toBe(true);
+      await page.reload();
+      await expect(page.getByTestId('finish-line').getByTestId('yawp-checklist-item')).toHaveCount(before - 1);
+
+      // On paper: off the list too, and it stays off.
+      if (before > 1) {
+        await page.waitForLoadState('networkidle');
+        await page.getByTestId('finish-line').getByTestId('yawp-paper').first().click();
+        await expect(page.getByTestId('finish-line').getByTestId('yawp-checklist-item')).toHaveCount(before - 2);
+        await page.reload();
+        await expect(page.getByTestId('finish-line').getByTestId('yawp-checklist-item')).toHaveCount(before - 2);
+        await expect(page.getByTestId('not-in-yawp')).toHaveCount(before - 2);
+      }
+    });
+
     test('a lecture step offers slides of its own, and the planner is asked for a slide per part', async ({
       page,
       signIn,

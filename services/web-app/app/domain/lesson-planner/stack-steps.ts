@@ -103,3 +103,13 @@ export function stackSteps({
 }
 
 export type { StepType };
+
+/**
+ * The writing steps whose Yawp! assignment has not been made yet, in order,
+ * less the ones the teacher is running on paper. A teacher can be offered
+ * Yawp! for an exit ticket and choose paper; what they should never do is
+ * reach class thinking it exists when it does not.
+ */
+export function notYetInYawp<T extends Pick<StackStep, 'id' | 'create'>>(steps: T[], onPaper: ReadonlySet<string> = new Set()): T[] {
+  return steps.filter((step) => step.create && !step.create.created && !onPaper.has(step.id));
+}

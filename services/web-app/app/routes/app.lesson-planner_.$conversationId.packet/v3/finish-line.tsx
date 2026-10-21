@@ -6,7 +6,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Check, Play } from 'lucide-react';
+import type { StackStep } from '~/domain/lesson-planner/stack-steps';
 import type { StackTiming } from '~/domain/lesson-planner/stack-timing';
+import { YawpChecklist } from './yawp-checklist';
 import { HEADING_FONT } from './theme';
 
 function weekday(iso: string | null): string {
@@ -45,6 +47,8 @@ export function FinishLine({
   onSaveTemplate,
   suggestedTemplateName,
   busy,
+  missing = [],
+  onPaper = () => {},
 }: {
   conversationId: string;
   timing: StackTiming;
@@ -58,6 +62,9 @@ export function FinishLine({
   onSaveTemplate: (name: string) => void;
   suggestedTemplateName: string;
   busy: boolean;
+  /** Writing steps not made in Yawp! yet (and not on paper). */
+  missing?: StackStep[];
+  onPaper?: (id: string) => void;
 }) {
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState(suggestedTemplateName);
@@ -77,6 +84,7 @@ export function FinishLine({
           {line}
           {timing.writingMinutes ? ` ${timing.writingPercent}% writing.` : ''}
         </p>
+        <YawpChecklist missing={missing} onPaper={onPaper} />
         <button
           type="button"
           data-testid="set-lesson"
@@ -115,6 +123,7 @@ export function FinishLine({
           </dd>
         </div>
       </dl>
+      <YawpChecklist missing={missing} onPaper={onPaper} />
       {runShow ? (
         <Link
           to={`/show/${conversationId}`}
