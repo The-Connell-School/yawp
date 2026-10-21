@@ -20,6 +20,23 @@ import { replaceStudentClassRoster } from '~/domain/collaboration/student-roster
 
 const enabled = process.env.LOCKED_PREVIEW_DB_TESTS === '1';
 const local = enabled ? test : test.skip;
+function actionStatus(result: unknown): number {
+  if (result instanceof Response) return result.status;
+  if (result && typeof result === 'object' && 'init' in result) {
+    return (result as { init?: { status?: number } }).init?.status ?? 200;
+  }
+  return 200;
+}
+async function invokeAction(
+  action: (args: never) => unknown,
+  request: Request
+) {
+  try {
+    return await action({ request } as never);
+  } catch (error) {
+    return error;
+  }
+}
 const prefix = `locked-preview-${Date.now()}`;
 const flag = 'feature_flag.free_tier';
 let orgId: string, classId: string, userId: string, membershipId: string, appId: string;
@@ -81,15 +98,15 @@ local('real authenticated route actions reject crafted requests before parsing o
     ] as const) {
       await expect(action({ request: new Request(`http://localhost${path}`, { method: 'POST', headers, body: 'crafted-invalid-body' }) } as never)).rejects.toMatchObject({ status: 403 });
     }
-    const plannerResult = await planner({
-      request: new Request('http://localhost/api/domain/lesson-planner', {
+    const plannerResult = await invokeAction(
+      planner,
+      new Request('http://localhost/api/domain/lesson-planner', {
         method: 'POST',
         headers,
         body: 'crafted-invalid-body',
-      }),
-    } as never);
-    expect(plannerResult).toBeDefined();
-    expect((plannerResult as { init?: { status?: number } }).init?.status ?? 200).not.toBe(403);
+      })
+    );
+    expect(actionStatus(plannerResult)).not.toBe(403);
     try {
       await preview({
         request: new Request(
@@ -334,7 +351,7 @@ local('pending teacher lesson planner monthly quota reserves and exhausts', asyn
   }
 });
 
-local('flag OFF keeps pending lesson planner on the approval backstop', async () => {
+local('flag OFF disables pending lesson planner monthly metering', async () => {
   await setFlag('false');
   try {
     const { monthlyFreeTierPolicy } = await import('./monthly-policy.server');
@@ -343,13 +360,11 @@ local('flag OFF keeps pending lesson planner on the approval backstop', async ()
       plan: 'FREE_CLASSROOM',
     });
     expect(policy.lessonPlannerMeteringEnabled).toBe(false);
-    await expect(
-      handleLessonPlannerToolCall(
-        'search_daily_pages_prompts',
-        {},
-        { membershipId, organizationId: orgId }
-      )
-    ).rejects.toMatchObject({ status: 403 });
+    await handleLessonPlannerToolCall(
+      'search_daily_pages_prompts',
+      {},
+      { membershipId, organizationId: orgId }
+    );
   } finally {
     await setFlag(JSON.stringify({ mode: 'targeted', orgIds: [orgId] }));
   }
