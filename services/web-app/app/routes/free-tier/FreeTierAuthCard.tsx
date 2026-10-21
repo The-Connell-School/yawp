@@ -186,13 +186,20 @@ export function FreeTierPerson({
   email?: string;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-border p-3.5 text-sm text-card-foreground">
+    <div className="flex min-w-0 items-center gap-3 rounded-lg border border-border p-3.5 text-sm text-card-foreground">
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary">
         <UserRound aria-hidden="true" className="h-4 w-4" />
       </span>
-      <div>
+      <div className="min-w-0">
         <p className="font-semibold">{name}</p>
-        {email ? <p className="text-muted-foreground">{email}</p> : null}
+        {email ? (
+          <p
+            className="text-muted-foreground [overflow-wrap:anywhere]"
+            data-testid="free-tier-person-email"
+          >
+            {email}
+          </p>
+        ) : null}
       </div>
     </div>
   );
