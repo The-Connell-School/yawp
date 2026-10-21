@@ -38,7 +38,9 @@ const settingReadMany = mock(async ({ where }: any) => {
 });
 mock.module('~/utils/db.server', () => ({
   prisma: {
-    freeTierApplication: { findFirst: async () => ({ id: 'approved' }) },
+    freeTierApplication: {
+      findFirst: async () => ({ status: 'APPROVED' as const }),
+    },
     setting: { findUnique: settingRead, findMany: settingReadMany },
     class: { findFirst: classRead },
     document: { count },
