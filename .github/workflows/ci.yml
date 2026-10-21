@@ -5,6 +5,10 @@ on:
     branches:
       - main
     types: [opened, synchronize, reopened, ready_for_review]
+  # Cloud-agent branches: run CI on push when PR synchronize is delayed or skipped.
+  push:
+    branches:
+      - 'cursor/**'
 
 concurrency:
   group: ci-${{ github.ref }}
