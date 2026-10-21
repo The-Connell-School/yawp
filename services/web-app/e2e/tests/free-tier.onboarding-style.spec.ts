@@ -346,9 +346,10 @@ for (const viewport of [
       });
       if (await legacyResend.count()) {
         await legacyResend.click();
-        await expect(page.getByText(/Reminder sent to/i)).toBeVisible({
+        await expect(page.getByText(/Reminder sent/i)).toBeVisible({
           timeout: 15_000,
         });
+        await drainFreeTierApprovalJobs();
       } else {
         await expect(
           page.getByRole('link', { name: 'Draft an email' })
