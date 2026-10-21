@@ -13,13 +13,14 @@ import {
   FileText,
   GripVertical,
   Minus,
+  MonitorPlay,
   PenLine,
   Plus,
   X,
 } from 'lucide-react';
 import type { StackStep } from '~/domain/lesson-planner/stack-steps';
 import type { TimedBlock } from '~/domain/lesson-planner/stack-timing';
-import { stepChipText } from '~/domain/lesson-planner/step-types';
+import { isLectureStep, stepChipText } from '~/domain/lesson-planner/step-types';
 import { cn } from '~/utils/misc';
 import { typeChipStyle } from './theme';
 
@@ -132,6 +133,7 @@ export function RunOfShow({
   onEdit,
   onAddAtEnd,
   busy,
+  hasDeck = false,
 }: {
   conversationId: string;
   steps: StackStep[];
@@ -150,6 +152,8 @@ export function RunOfShow({
   onEdit: (step: StackStep) => void;
   onAddAtEnd: () => void;
   busy: boolean;
+  /** The lesson has a deck already: a lecture's slides rebuild it. */
+  hasDeck?: boolean;
 }) {
   const [dragKey, setDragKey] = useState<string | null>(null);
   const byId = new Map(blocks.map((block) => [block.id, block]));
@@ -330,6 +334,15 @@ export function RunOfShow({
                     >
                       Rework it in the planner
                     </Link>
+                    {isLectureStep(step.title) ? (
+                      <Link
+                        to={`/app/lesson-planner?c=${conversationId}&build=lecture&step=${encodeURIComponent(step.title)}${hasDeck ? '&deck=1' : ''}`}
+                        data-testid="lecture-slides"
+                        className="inline-flex items-center gap-1 font-semibold text-[var(--sv-primary)] underline underline-offset-2"
+                      >
+                        <MonitorPlay size={12} /> Build slides for this lecture
+                      </Link>
+                    ) : null}
                     {step.create ? (
                       <Link
                         to={step.create.href}

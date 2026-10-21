@@ -336,6 +336,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
               {steps.length ? (
                 <RunOfShow
                   conversationId={conversationId}
+                  hasDeck={Boolean(v3.deck)}
                   steps={steps}
                   blocks={timing.blocks}
                   openId={openId}

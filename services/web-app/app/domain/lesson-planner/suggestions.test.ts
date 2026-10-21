@@ -6,6 +6,7 @@ import {
   asksForDeck,
   asksToSwapStarter,
   isFileActionSuggestion,
+  lectureSlidesRequest,
   looksLikeLessonPlan,
   SWAP_STARTER_SUGGESTION,
   mentionsRoomPersonality,
@@ -484,5 +485,18 @@ describe('asksForDeck', () => {
   test('anything else', () => {
     expect(asksForDeck('Build the student handout from my stack')).toBe(false);
     expect(asksForDeck('What does slide 3 say?')).toBe(false);
+  });
+});
+
+describe('lectureSlidesRequest: slides for one lecture, from the stack page', () => {
+  test('names the step, asks for a slide per part, and keeps one deck', () => {
+    const asked = lectureSlidesRequest('Mini-lesson: Girard’s three ideas', { hasDeck: false });
+    expect(asked).toContain('“Mini-lesson: Girard’s three ideas”');
+    expect(asked).toContain('a slide for each part');
+    expect(asksForDeck(asked)).toBe(true);
+  });
+
+  test('with a deck already, it replaces that deck rather than adding a second', () => {
+    expect(lectureSlidesRequest('Lecture', { hasDeck: true })).toContain('replacing the one in it');
   });
 });

@@ -59,6 +59,18 @@ export const BUILD_FROM_STACK_REQUESTS = {
 
 export type BuildFromStackRequest = keyof typeof BUILD_FROM_STACK_REQUESTS;
 
+/**
+ * Slides for one lecture in the stack: a slide for each part it teaches,
+ * inside the lesson's one deck (Run the show finds a step's slides by its
+ * step number, so a second deck would be one it never shows).
+ */
+export function lectureSlidesRequest(title: string, { hasDeck }: { hasDeck: boolean }): string {
+  const step = `“${title.trim().slice(0, 120)}”`;
+  return hasDeck
+    ? `Rebuild the slide deck from my stack, replacing the one in it, and give the lecture ${step} a slide for each part it teaches`
+    : `Build the slide deck from my stack, and give the lecture ${step} a slide for each part it teaches`;
+}
+
 export function isBuildFromStackRequest(
   value: string | null
 ): value is BuildFromStackRequest {

@@ -497,6 +497,54 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await expect(page.getByTestId('finish-line')).toBeVisible();
     });
 
+    test('a lecture step offers slides of its own, and the planner is asked for a slide per part', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await stackV3On();
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId, assistantIds } = await seedDayOneStack(page, e2eContext);
+      const prisma = createE2EPrismaClient();
+      try {
+        await prisma.lessonPlanMaterial.create({
+          data: {
+            conversationId,
+            sourceMessageId: assistantIds[0]!,
+            sourceCreatedAt: new Date(),
+            blockKey: 'lecture',
+            slot: 'lecture',
+            kind: 'step',
+            title: 'Mini-lesson: Girard’s three ideas (15 min)',
+            audience: 'teacher',
+            content: '1. Mimetic desire (5 min) We want what others want.\n2. Mimetic crisis (5 min) Rivalry spreads.\n3. The scapegoat (5 min) One victim restores order.',
+          },
+        });
+      } finally {
+        await prisma.$disconnect();
+      }
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      // Only a lecture offers it.
+      const starter = page.getByTestId('run-card').first();
+      await starter.getByRole('button', { expanded: false }).first().click();
+      await expect(starter.getByTestId('run-card-detail')).toBeVisible();
+      await expect(starter.getByTestId('lecture-slides')).toHaveCount(0);
+      const lecture = page.getByTestId('run-card').filter({ hasText: 'Mini-lesson: Girard’s three ideas' });
+      await lecture.getByRole('button', { expanded: false }).first().click();
+      await expect(lecture.getByTestId('lecture-slides')).toHaveText('Build slides for this lecture');
+
+      const asked: string[] = [];
+      await page.route('**/api/domain/lesson-planner', (route) => {
+        asked.push(route.request().postData() ?? '');
+      });
+      await lecture.getByTestId('lecture-slides').click();
+      await expect(page).toHaveURL(new RegExp(`c=${conversationId}`));
+      await expect
+        .poll(() => decodeURIComponent(asked.join('\n').replace(/\+/g, ' ')))
+        .toContain('give the lecture “Mini-lesson: Girard’s three ideas” a slide for each part it teaches');
+      await expect(page).not.toHaveURL(/build=|step=/);
+    });
+
     test('the deck is built from the stack, not a step in it', async ({ page, signIn, e2eContext }) => {
       await stackV3On();
       await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);

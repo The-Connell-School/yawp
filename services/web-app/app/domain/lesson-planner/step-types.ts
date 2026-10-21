@@ -132,3 +132,13 @@ export const DEFAULT_STEP_MINUTES: Record<StepType, number> = {
   thesis_essay: 15,
   closing: 5,
 };
+
+const LECTURE = /\bmini[- ]?(?:lesson|lecture)\b|\blecture\b|\bdirect instruction\b/i;
+
+/**
+ * A step the teacher talks the class through (a lecture, a mini-lesson):
+ * one slide is not enough for it, so the stack page offers slides for it.
+ */
+export function isLectureStep(title: string): boolean {
+  return LECTURE.test(title);
+}

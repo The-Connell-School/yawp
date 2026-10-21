@@ -1739,6 +1739,12 @@ describe("planner prompt — the deck is built from the stack (Brian's run 3, it
     expect(prompt).toContain('`"step"`');
     expect(prompt).toContain('its pair-share question, and the line the class lands on');
   });
+
+  test('a lecture gets a slide for each part it teaches, all marked with its step', () => {
+    expect(prompt).toContain('A lecture or mini-lesson is the exception');
+    expect(prompt).toContain('a slide for each part it teaches');
+    expect(prompt).toContain('all marked with the lecture\'s `"step"`');
+  });
 });
 
 describe('planner prompt — a lesson built from a template (stack page redesign)', () => {

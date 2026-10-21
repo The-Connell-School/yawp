@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { isWritingStep, parseStepType, stepChipText, stepTypeFor } from './step-types';
+import { isLectureStep, isWritingStep, parseStepType, stepChipText, stepTypeFor } from './step-types';
 
 describe('stepTypeFor (stack page redesign, writing time)', () => {
   test('kinds that say what they are', () => {
@@ -43,4 +43,18 @@ describe('isWritingStep: set from Yawp!, never by the teacher', () => {
 test('a Thesis Essay module shows its name in the chip', () => {
   expect(stepChipText('thesis_essay', 'Module 1')).toBe('Thesis Essay · Module 1');
   expect(stepChipText('context')).toBe('Context');
+});
+
+describe('isLectureStep: a step the teacher talks through, which earns its own slides', () => {
+  test('lectures and mini-lessons, however they are written', () => {
+    for (const title of ['Mini-lesson: Girard’s three ideas', 'Mini lecture (12 min)', 'Lecture: the war at home', 'Direct instruction — thesis moves', 'Minilesson']) {
+      expect(isLectureStep(title)).toBe(true);
+    }
+  });
+
+  test('not a discussion, a reading, or writing', () => {
+    for (const title of ['Group work: Find Girard', 'Read aloud', 'Class Starter: Wanting', 'Closing']) {
+      expect(isLectureStep(title)).toBe(false);
+    }
+  });
 });

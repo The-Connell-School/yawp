@@ -92,6 +92,7 @@ import { pieceKeysInReply, segmentInStack, stepSegments } from '~/domain/lesson-
 import {
   asksToSwapStarter,
   BUILD_FROM_STACK_REQUESTS,
+  lectureSlidesRequest,
   isBuildFromStackRequest,
   isFileActionSuggestion,
   looksLikeLessonPlan,
@@ -829,12 +830,20 @@ export default function LessonPlannerRoute() {
   const buildAsked = useRef(false);
   useEffect(() => {
     if (buildAsked.current || !reviewFlags.stackV2 || !conversationId) return;
-    if (!isBuildFromStackRequest(buildRequest)) return;
+    // "Build slides for this lecture" on the stack page names its step.
+    const lecture = buildRequest === 'lecture' ? searchParams.get('step')?.trim() : null;
+    if (!lecture && !isBuildFromStackRequest(buildRequest)) return;
     buildAsked.current = true;
     const next = new URLSearchParams(searchParams);
     next.delete('build');
+    next.delete('step');
+    next.delete('deck');
     setSearchParams(next, { replace: true });
-    send(BUILD_FROM_STACK_REQUESTS[buildRequest]);
+    send(
+      lecture
+        ? lectureSlidesRequest(lecture, { hasDeck: searchParams.get('deck') === '1' })
+        : BUILD_FROM_STACK_REQUESTS[buildRequest as keyof typeof BUILD_FROM_STACK_REQUESTS]
+    );
     // Runs once per arrival; send is stable enough for a one-shot.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buildRequest, conversationId, reviewFlags.stackV2]);
