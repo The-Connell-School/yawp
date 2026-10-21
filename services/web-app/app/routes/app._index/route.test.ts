@@ -739,6 +739,7 @@ describe('app index loader assignments', () => {
         gradesGrammar: false,
         kind: null,
         imageId: 'image-1',
+        imageTitle: null,
         rubricName: null,
       },
     ]);
