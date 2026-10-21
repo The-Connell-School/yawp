@@ -192,6 +192,49 @@ export default function FreeAdminApproveRoute() {
     );
   }
 
+  if (!data.ok && data.reason === 'already_approved') {
+    return (
+      <FreeTierAuthCard title="Already approved" icon={<CircleCheck />}>
+        <p className="text-sm text-muted-foreground">
+          Yawp! is already approved for{' '}
+          {(data as { schoolName?: string }).schoolName ?? 'this school'}.
+        </p>
+      </FreeTierAuthCard>
+    );
+  }
+  if (!data.ok && data.reason === 'declined') {
+    return (
+      <FreeTierAuthCard title="This request is closed" icon={<CircleAlert />}>
+        <p className="text-sm text-muted-foreground">
+          Yawp! did not approve it. Questions? Email support@yawp.school.
+        </p>
+      </FreeTierAuthCard>
+    );
+  }
+
+  if (actionData && !actionData.ok && actionData.reason === 'already_approved') {
+    return (
+      <FreeTierAuthCard title="Already approved" icon={<CircleCheck />}>
+        <p className="text-sm text-muted-foreground">
+          Yawp! is already approved for{' '}
+          {'schoolName' in actionData && actionData.schoolName
+            ? actionData.schoolName
+            : 'this school'}
+          .
+        </p>
+      </FreeTierAuthCard>
+    );
+  }
+  if (actionData && !actionData.ok && actionData.reason === 'declined') {
+    return (
+      <FreeTierAuthCard title="This request is closed" icon={<CircleAlert />}>
+        <p className="text-sm text-muted-foreground">
+          Yawp! did not approve it. Questions? Email support@yawp.school.
+        </p>
+      </FreeTierAuthCard>
+    );
+  }
+
   if (
     actionData &&
     !actionData.ok &&
