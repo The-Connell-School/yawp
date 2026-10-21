@@ -24,6 +24,12 @@ import {
 } from './signed-link.server';
 import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
 import { ensureFreeTierProductionApprovalHooks } from './approval-hooks.server';
+import { forwardApprovalSchema } from './approval-waiting';
+import {
+  fetchFreeTierApplicationTerminalGate,
+  forwardIdempotentReplay,
+  resolveAdminLinkTerminalGate,
+} from './admin-link-gate.server';
 import {
   sendFreeTierAdminApprovalEmail,
   sendFreeTierAdminReminderEmail,
@@ -513,40 +519,105 @@ export async function resendFreeTierAdminApprovalReminder(args: {
   return { ok: true as const };
 }
 
+function terminalGateFromApplication(app: {
+  status: string;
+  schoolName: string;
+}): { ok: false; reason: 'already_approved' | 'declined'; schoolName: string } | null {
+  if (app.status === 'APPROVED') {
+    return { ok: false as const, reason: 'already_approved' as const, schoolName: app.schoolName };
+  }
+  if (app.status === 'REJECTED' || app.status === 'EXPIRED') {
+    return { ok: false as const, reason: 'declined' as const, schoolName: app.schoolName };
+  }
+  return null;
+}
+
 export async function redirectSchoolAdmin(args: {
   token: string;
   newAdminName: string;
   newAdminEmail: string;
   request: Request;
 }) {
-  const signed = await peekSignedLink({
-    token: args.token,
-    expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
+  const parsed = forwardApprovalSchema.safeParse({
+    newAdminName: args.newAdminName,
+    newAdminEmail: args.newAdminEmail,
   });
-  if (signed.ok) {
-    const identity = await prisma.freeTierApplication.findUnique({
-      where: { id: signed.applicationId },
-      select: { id: true, userId: true, organizationId: true },
-    });
-    if (identity && (await isApprovalV2Enabled(identity)))
-      return forwardApprovalByToken(args);
+  if (!parsed.success) {
+    return {
+      ok: false as const,
+      reason: 'validation' as const,
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
   }
-  const newEmail = normalizeEmail(args.newAdminEmail);
-  const meta = hashRequestMeta(args.request);
-  const copyHash = adminApprovalEmailCopyVersionHash();
+
+  const earlyAppId = applicationIdFromSignedToken(args.token);
+  if (earlyAppId) {
+    const gate = await fetchFreeTierApplicationTerminalGate(earlyAppId);
+    if (gate) return { ok: false as const, ...gate };
+  }
+  if (
+    await forwardIdempotentReplay({
+      token: args.token,
+      newAdminName: parsed.data.newAdminName,
+      newAdminEmail: parsed.data.newAdminEmail,
+    })
+  ) {
+    return { ok: true as const, idempotent: true as const };
+  }
 
   const peek = await peekSignedLink({
     token: args.token,
     expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
   });
-  if (!peek.ok) return peek;
+  if (!peek.ok) {
+    if (
+      peek.reason === 'used' &&
+      (await forwardIdempotentReplay({
+        token: args.token,
+        newAdminName: parsed.data.newAdminName,
+        newAdminEmail: parsed.data.newAdminEmail,
+      }))
+    ) {
+      return { ok: true as const, idempotent: true as const };
+    }
+    const gate = await resolveAdminLinkTerminalGate({ token: args.token, peek });
+    if (gate) return { ok: false as const, ...gate };
+    return peek;
+  }
+
+  const identity = await prisma.freeTierApplication.findUnique({
+    where: { id: peek.applicationId },
+    select: { id: true, userId: true, organizationId: true, status: true, schoolName: true },
+  });
+  const preTerminal = identity ? terminalGateFromApplication(identity) : null;
+  if (preTerminal) return preTerminal;
+
+  if (identity && (await isApprovalV2Enabled(identity))) {
+    return forwardApprovalByToken({
+      token: args.token,
+      newAdminName: parsed.data.newAdminName,
+      newAdminEmail: parsed.data.newAdminEmail,
+      request: args.request,
+    });
+  }
+
+  const newEmail = parsed.data.newAdminEmail;
+  const meta = hashRequestMeta(args.request);
+  const copyHash = adminApprovalEmailCopyVersionHash();
 
   const preApp = await prisma.freeTierApplication.findUnique({
     where: { id: peek.applicationId },
     select: { id: true, email: true, name: true, schoolName: true, status: true, adminRedirectCount: true },
   });
-  if (!preApp || (preApp.status !== 'SENT' && preApp.status !== 'MANUAL_REVIEW')) {
-    return { ok: false as const, reason: 'illegal_state' as const };
+  if (!preApp) return { ok: false as const, reason: 'not_found' as const };
+  const appGate = terminalGateFromApplication(preApp);
+  if (appGate) return appGate;
+  if (preApp.status !== 'SENT' && preApp.status !== 'MANUAL_REVIEW') {
+    return {
+      ok: false as const,
+      reason: 'illegal_state' as const,
+      status: preApp.status,
+    };
   }
   if (preApp.adminRedirectCount >= ADMIN_REDIRECT_CHAIN_CAP) {
     return { ok: false as const, reason: 'chain_cap' as const };
@@ -557,7 +628,11 @@ export async function redirectSchoolAdmin(args: {
     orderBy: { createdAt: 'desc' },
     select: { id: true },
   });
-  if (!prePending) return { ok: false as const, reason: 'not_found' as const };
+  if (!prePending) {
+    const decided = await fetchFreeTierApplicationTerminalGate(preApp.id);
+    if (decided) return { ok: false as const, ...decided };
+    return { ok: false as const, reason: 'not_found' as const };
+  }
 
   const rules = evaluateAdminEmailForRuntime(
     {
@@ -568,7 +643,7 @@ export async function redirectSchoolAdmin(args: {
     resolveFreeTierRuntimeEnvironment()
   );
 
-  const newAdminNameTrim = args.newAdminName.trim();
+  const newAdminNameTrim = parsed.data.newAdminName;
 
   const minted = await prisma.$transaction(async (tx) => {
     const approveMint = await mintSignedLink({
@@ -614,7 +689,10 @@ export async function redirectSchoolAdmin(args: {
       where: { id: peek.applicationId },
       select: { id: true, email: true, name: true, schoolName: true, status: true, adminRedirectCount: true },
     });
-    if (!app || (app.status !== 'SENT' && app.status !== 'MANUAL_REVIEW')) {
+    if (!app) return { ok: false as const, reason: 'not_found' as const };
+    const txGate = terminalGateFromApplication(app);
+    if (txGate) return txGate;
+    if (app.status !== 'SENT' && app.status !== 'MANUAL_REVIEW') {
       return { ok: false as const, reason: 'illegal_state' as const };
     }
     if (app.adminRedirectCount >= ADMIN_REDIRECT_CHAIN_CAP) {
@@ -679,6 +757,7 @@ export async function redirectSchoolAdmin(args: {
   }
 
   if (!result.ok) return result;
+  if ('idempotent' in result && result.idempotent) return result;
   return { ok: true as const };
 }
 

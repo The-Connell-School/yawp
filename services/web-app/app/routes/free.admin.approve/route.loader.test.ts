@@ -27,6 +27,7 @@ mock.module('~/domain/free-tier/approval-v2.server', () => ({
 
 mock.module('~/domain/free-tier/approval-flow.server', () => ({
   completeSchoolAdminApproval: async () => ({ ok: true }),
+  redirectSchoolAdmin: async () => ({ ok: false, reason: 'invalid' }),
 }));
 
 const { loader } = await import('./route');

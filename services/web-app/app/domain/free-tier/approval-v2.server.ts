@@ -19,11 +19,17 @@ import {
   resolvedFreeTierRollout,
 } from '~/domain/feature-flags/feature-flags.server';
 import {
+  applicationIdFromSignedToken,
   claimSignedLinkInTransaction,
   invalidateOpenAdminApprovalLinks,
   mintSignedLink,
   peekSignedLink,
 } from './signed-link.server';
+import {
+  fetchFreeTierApplicationTerminalGate,
+  forwardIdempotentReplay,
+  resolveAdminLinkTerminalGate,
+} from './admin-link-gate.server';
 import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
 import {
   renderAdminApprovalEmailBody,
@@ -363,6 +369,20 @@ export async function forwardApprovalRequest(args: {
     });
     if (!app || !(await isApprovalV2Enabled(app, tx)))
       return fail('not_allowed');
+    if (app.status === 'APPROVED') {
+      return {
+        ok: false as const,
+        reason: 'already_approved' as const,
+        schoolName: app.schoolName,
+      };
+    }
+    if (app.status === 'REJECTED' || app.status === 'EXPIRED') {
+      return {
+        ok: false as const,
+        reason: 'declined' as const,
+        schoolName: app.schoolName,
+      };
+    }
     if (app.status !== 'SENT' && app.status !== 'MANUAL_REVIEW')
       return fail('already_decided');
     const pending = await tx.freeTierAdminApproval.findFirst({
@@ -476,19 +496,69 @@ export async function forwardApprovalByToken(args: {
   newAdminEmail: string;
   request: Request;
 }) {
+  const parsed = forwardApprovalSchema.safeParse({
+    newAdminName: args.newAdminName,
+    newAdminEmail: args.newAdminEmail,
+  });
+  if (!parsed.success) {
+    return {
+      ...fail('validation'),
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  const earlyAppId = applicationIdFromSignedToken(args.token);
+  if (earlyAppId) {
+    const gate = await fetchFreeTierApplicationTerminalGate(earlyAppId);
+    if (gate) return { ok: false as const, ...gate };
+  }
+  if (
+    await forwardIdempotentReplay({
+      token: args.token,
+      newAdminName: parsed.data.newAdminName,
+      newAdminEmail: parsed.data.newAdminEmail,
+    })
+  ) {
+    return { ok: true as const, idempotent: true as const };
+  }
+
   const peek = await peekSignedLink({
     token: args.token,
     expectedPurpose: args.purpose ?? 'ADMIN_NOT_RIGHT_PERSON',
   });
-  if (!peek.ok) return peek;
+  if (!peek.ok) {
+    if (
+      peek.reason === 'used' &&
+      (await forwardIdempotentReplay({
+        token: args.token,
+        newAdminName: parsed.data.newAdminName,
+        newAdminEmail: parsed.data.newAdminEmail,
+      }))
+    ) {
+      return { ok: true as const, idempotent: true as const };
+    }
+    const gate = await resolveAdminLinkTerminalGate({ token: args.token, peek });
+    if (gate) return { ok: false as const, ...gate };
+    return peek;
+  }
+
+  const gate = await fetchFreeTierApplicationTerminalGate(peek.applicationId);
+  if (gate) return { ok: false as const, ...gate };
+
   const pending = await prisma.freeTierAdminApproval.findFirst({
     where: { applicationId: peek.applicationId, status: 'PENDING' },
     orderBy: { createdAt: 'desc' },
     select: { id: true },
   });
-  if (!pending) return fail('not_allowed');
+  if (!pending) {
+    const lateGate = await fetchFreeTierApplicationTerminalGate(peek.applicationId);
+    if (lateGate) return { ok: false as const, ...lateGate };
+    return fail('not_allowed');
+  }
   return forwardApprovalRequest({
     ...args,
+    newAdminName: parsed.data.newAdminName,
+    newAdminEmail: parsed.data.newAdminEmail,
     tokenPurpose: args.purpose,
     applicationId: peek.applicationId,
     currentApprovalId: pending.id,

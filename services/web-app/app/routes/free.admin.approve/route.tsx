@@ -192,6 +192,50 @@ export default function FreeAdminApproveRoute() {
     );
   }
 
+  if (!data.ok && data.reason === 'already_approved') {
+    return (
+      <FreeTierAuthCard title="Already approved" icon={<CircleCheck />}>
+        <p className="text-sm text-muted-foreground">
+          Yawp! is already approved for{' '}
+          {(data as { schoolName?: string }).schoolName ?? 'this school'}.
+        </p>
+      </FreeTierAuthCard>
+    );
+  }
+  if (!data.ok && data.reason === 'declined') {
+    return (
+      <FreeTierAuthCard title="This request is closed" icon={<CircleAlert />}>
+        <p className="text-sm text-muted-foreground">
+          Yawp! did not approve it. Questions? Email support@yawp.school.
+        </p>
+      </FreeTierAuthCard>
+    );
+  }
+
+  if (actionData && !actionData.ok && actionData.reason === 'already_approved') {
+    const approvedSchool =
+      'schoolName' in actionData &&
+      typeof (actionData as { schoolName?: unknown }).schoolName === 'string'
+        ? (actionData as { schoolName: string }).schoolName
+        : 'this school';
+    return (
+      <FreeTierAuthCard title="Already approved" icon={<CircleCheck />}>
+        <p className="text-sm text-muted-foreground">
+          Yawp! is already approved for {approvedSchool}.
+        </p>
+      </FreeTierAuthCard>
+    );
+  }
+  if (actionData && !actionData.ok && actionData.reason === 'declined') {
+    return (
+      <FreeTierAuthCard title="This request is closed" icon={<CircleAlert />}>
+        <p className="text-sm text-muted-foreground">
+          Yawp! did not approve it. Questions? Email support@yawp.school.
+        </p>
+      </FreeTierAuthCard>
+    );
+  }
+
   if (
     actionData &&
     !actionData.ok &&
