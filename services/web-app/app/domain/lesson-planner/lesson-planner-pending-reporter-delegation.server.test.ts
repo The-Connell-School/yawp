@@ -9,7 +9,10 @@ const db = {
   organization: {
     findUnique: mock(async () => ({ plan: 'FREE_CLASSROOM' })),
   },
-  class: { findMany: mock(async () => []) },
+  class: {
+    findMany: mock(async () => []),
+    findFirst: mock(async () => null),
+  },
 };
 
 mock.module('~/utils/db.server', () => ({ prisma: db }));
