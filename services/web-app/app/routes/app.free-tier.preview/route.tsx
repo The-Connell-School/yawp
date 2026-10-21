@@ -4,11 +4,9 @@ import {
   ensureLockedPreviewClassroomForUser,
   userHasPendingFreeTierTeachingLock,
 } from '~/domain/free-tier/locked-preview.server';
-import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
 import { prisma } from '~/utils/db.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  await requireFreeTierEnabled();
   const userId = await requireUserId(request);
   if (!(await userHasPendingFreeTierTeachingLock(userId))) {
     throw redirect('/app/free-tier/pending');

@@ -7,9 +7,6 @@ test('preview provisions locked classroom then redirects to app', async () => {
     status: 'provisioned' as const,
     organizationId: 'org-1',
   }));
-  mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
-    requireFreeTierEnabled: async () => {},
-  }));
   mock.module('~/utils/auth.server', () => ({
     requireUserId: async () => 'teacher-1',
   }));
@@ -41,9 +38,6 @@ test('preview provisions locked classroom then redirects to app', async () => {
 });
 
 test('preview redirects to pending when teaching lock is off', async () => {
-  mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
-    requireFreeTierEnabled: async () => {},
-  }));
   mock.module('~/utils/auth.server', () => ({
     requireUserId: async () => 'teacher-1',
   }));
