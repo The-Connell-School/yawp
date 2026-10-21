@@ -56,7 +56,7 @@ mock.module('react-router', () => ({
       adminEmail:
         'very.long.administrator.email.address+tag@subdomain.example-school.edu',
     },
-    lockedPreview: true,
+    showExploreClassroom: true,
     approvalV2: {
       approval: {
         id: 'current',

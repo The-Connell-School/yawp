@@ -1,7 +1,7 @@
 import { afterEach, expect, mock, test } from 'bun:test';
 
 let enabled = true;
-let application: any = { status: 'SENT', organizationId: 'org-a' };
+let application: any = { id: 'app-a', status: 'SENT', organizationId: 'org-a' };
 let memberships: any[] = [{ role: 'TEACHER', organizationId: 'org-a', organization: { plan: 'FREE_CLASSROOM' } }];
 const queries: any[] = [];
 const db = {
@@ -16,11 +16,12 @@ mock.module('~/domain/feature-flags/feature-flags.server', () => ({
 const {
   enforceLockedPreviewRequest,
   assertOrganizationTeachingApproved,
+  getLockedPreviewApplication,
   userHasPendingFreeTierTeachingLock,
 } = await import('./locked-preview.server');
 afterEach(() => {
   enabled = true;
-  application = { status: 'SENT', organizationId: 'org-a' };
+  application = { id: 'app-a', status: 'SENT', organizationId: 'org-a' };
   memberships = [{ role: 'TEACHER', organizationId: 'org-a', organization: { plan: 'FREE_CLASSROOM' } }];
   queries.length = 0;
   db.freeTierApplication.findFirst = mock(async (q: any) => {
@@ -64,6 +65,17 @@ test('flag off, approved and other roles retain normal behavior', async () => {
   await expect(enforceLockedPreviewRequest(req, 'teacher')).rejects.toMatchObject({
     status: 403,
   });
+});
+test('stale default-org membership hides preview app identity but pending lock stays on', async () => {
+  memberships = [
+    { id: 'default', role: 'TEACHER', organizationId: 'default-org', organization: { plan: 'FREE_CLASSROOM' } },
+    { id: 'free', role: 'TEACHER', organizationId: 'org-a', organization: { plan: 'FREE_CLASSROOM' } },
+  ];
+  expect(await getLockedPreviewApplication('teacher', 'default')).toBeNull();
+  expect(await userHasPendingFreeTierTeachingLock('teacher')).toBe(true);
+  expect(await getLockedPreviewApplication('teacher')).toEqual(
+    expect.objectContaining({ organizationId: 'org-a' })
+  );
 });
 test('a pending application blocks mutations even with a mismatched membership cookie', async () => {
   memberships[0].organizationId = 'org-b';

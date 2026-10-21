@@ -8,8 +8,7 @@ import {
   Link,
 } from 'react-router';
 import { useEffect, useState } from 'react';
-import { getLockedPreviewApplication } from '~/domain/free-tier/locked-preview.server';
-import { getMembershipId } from '~/cookies/membership-id.server';
+import { userHasPendingFreeTierTeachingLock } from '~/domain/free-tier/locked-preview.server';
 import { isClassPreparationEnabled } from '~/domain/free-tier/class-preparation.server';
 import { needsClassPreparation } from '~/domain/free-tier/class-preparation';
 import {
@@ -129,7 +128,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     app,
     pending,
     lastFailedEmail,
-    lockedPreview: Boolean(await getLockedPreviewApplication(userId, await getMembershipId(request))),
+    showExploreClassroom: await userHasPendingFreeTierTeachingLock(userId),
     approvalV2: app ? await getApprovalWaitingDetails(app) : null,
   };
 }
@@ -220,7 +219,7 @@ function LockedPreviewExploreButton() {
 }
 
 export default function FreeTierPendingRoute() {
-  const { app, pending, lastFailedEmail, lockedPreview, approvalV2 } =
+  const { app, pending, lastFailedEmail, showExploreClassroom, approvalV2 } =
     useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
@@ -311,10 +310,10 @@ export default function FreeTierPendingRoute() {
                   name={current.adminName}
                   email={current.adminEmail}
                 />
-                {lockedPreview ? <LockedPreviewExploreButton /> : null}
+                {showExploreClassroom ? <LockedPreviewExploreButton /> : null}
               </>
             ) : null}
-            {lockedPreview && app?.status === 'MANUAL_REVIEW' ? (
+            {showExploreClassroom && app?.status === 'MANUAL_REVIEW' ? (
               <LockedPreviewExploreButton />
             ) : null}
             {actionData?.ok && 'queued' in actionData ? (
@@ -388,10 +387,10 @@ export default function FreeTierPendingRoute() {
       {pending && app?.status === 'SENT' ? (
         <>
           <FreeTierPerson name={adminName} email={pending.adminEmail} />
-          {lockedPreview ? <LockedPreviewExploreButton /> : null}
+          {showExploreClassroom ? <LockedPreviewExploreButton /> : null}
         </>
       ) : null}
-      {lockedPreview && app?.status === 'MANUAL_REVIEW' ? (
+      {showExploreClassroom && app?.status === 'MANUAL_REVIEW' ? (
         <LockedPreviewExploreButton />
       ) : null}
     </FreeTierAuthCard>

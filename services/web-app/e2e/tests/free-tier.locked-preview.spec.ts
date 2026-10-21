@@ -230,6 +230,53 @@ for (const width of [1440, 390]) {
   });
 }
 
+test('explore stays on pending when classroom is not provisioned yet', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { user, app } = await fixture('11', 'SENT');
+  await login(page, user.email!);
+  await page.goto('/app/free-tier/pending');
+  await expect(
+    page.getByRole('link', { name: 'Explore my classroom' })
+  ).toBeVisible();
+  await page.getByRole('link', { name: 'Explore my classroom' }).click();
+  await expect(page).toHaveURL(/\/app$/);
+  await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
+  const updated = await prisma.freeTierApplication.findUniqueOrThrow({
+    where: { id: app.id },
+    select: { organizationId: true },
+  });
+  expect(updated.organizationId).toBeTruthy();
+});
+
+test('explore shows with a stale default-org membership cookie', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { user, app } = await fixture('11', 'SENT');
+  await provisionPendingClassroom(app.id, user.id!);
+  const defaultMembership = await prisma.orgMembership.create({
+    data: {
+      userId: user.id!,
+      organizationId: 'default-org',
+      role: 'TEACHER',
+    },
+    select: { id: true },
+  });
+  await login(page, user.email!);
+  await page.request.post('/api/membership-id', {
+    form: { membershipId: defaultMembership.id },
+  });
+  await page.goto('/app/free-tier/pending');
+  await expect(
+    page.getByRole('link', { name: 'Explore my classroom' })
+  ).toBeVisible();
+  await page.getByRole('link', { name: 'Explore my classroom' }).click();
+  await expect(page).toHaveURL(/\/app$/);
+  await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
+});
+
 test('stale tab blocked POST shows approval required toast without changing page state', async ({
   page,
 }) => {
