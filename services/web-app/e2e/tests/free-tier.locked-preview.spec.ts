@@ -177,7 +177,9 @@ for (const width of [1440, 390]) {
     await expect(page).toHaveURL(/\/app$/);
     await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
     await expect(
-      page.getByText(/Waiting for Dr\. Patel to approve your classroom/)
+      page
+        .getByTestId('teaching-access-banner')
+        .getByText(/Waiting for Dr\. Patel to approve your classroom/)
     ).toBeVisible();
     await capture(page, `locked-app-before-${width}`);
     await page
