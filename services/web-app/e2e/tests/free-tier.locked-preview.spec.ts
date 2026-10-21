@@ -332,20 +332,20 @@ test('locked class surfaces hide the real class code and lock invite controls', 
   });
   await exploreLockedApp(page, user.email!);
   await page.goto('/app/my-classes');
-  await expect(page.getByTestId('my-classes-invite-students')).toBeVisible();
+  await expect(page.getByTestId('my-classes-class-options')).toBeVisible();
   await page.goto(`/app/my-classes/${klass.id}?tab=students`);
   await expect(page.getByTestId('free-class-join-card-locked')).toBeVisible();
   const html = await page.content();
   expect(html).not.toContain(klass.code);
   await expect(page.getByTestId('class-code-masked')).toBeVisible();
   await expect(page.getByTestId('class-qr-locked-placeholder')).toBeVisible();
-  await page.getByTestId('invite-students-button').hover();
+  await page.getByTestId('copy-join-link-button').hover();
   await expect(
     page.getByText('Unlocks once your administrator approves.')
   ).toBeVisible();
 });
 
-test('locked assignments tab shows sample rows and locked send', async ({
+test('locked assignments tab shows sample rows and locked documents pill', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 900 });
@@ -358,7 +358,7 @@ test('locked assignments tab shows sample rows and locked send', async ({
   await exploreLockedApp(page, user.email!);
   await page.goto(`/app/my-classes/${klass.id}?tab=assignments`);
   await expect(page.getByText('Sample · Not sent').first()).toBeVisible();
-  await page.getByRole('button', { name: 'Send' }).first().click();
+  await page.getByTestId(/assignment-documents-/).first().click();
   await expect(
     page.getByRole('heading', { name: 'Unlocks after approval' })
   ).toBeVisible();

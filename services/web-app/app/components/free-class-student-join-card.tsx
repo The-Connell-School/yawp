@@ -1,4 +1,4 @@
-import { QrCode, Copy, Expand, Lock, Mail } from 'lucide-react';
+import { QrCode, Copy, Expand, Lock } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { Button } from '~/components/ui/button';
@@ -60,7 +60,7 @@ export function FreeClassStudentJoinCard({
         data-testid="free-class-join-card-locked"
         className="rounded-xl border bg-popover p-5 shadow-sm"
       >
-        <h3 className="text-sm font-semibold">Invite students</h3>
+        <h3 className="text-sm font-semibold">How students join</h3>
         <div className="mt-4 flex flex-wrap items-start justify-between gap-5">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -79,36 +79,35 @@ export function FreeClassStudentJoinCard({
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <LockedTeachingControl {...lockProps}>
-                <Button
-                  type="button"
-                  size="sm"
-                  data-testid="invite-students-button"
-                >
-                  <Mail size={14} className="mr-2" />
-                  Invite students
-                </Button>
-              </LockedTeachingControl>
-              <LockedTeachingControl {...lockProps}>
                 <Button type="button" variant="outline" size="sm">
                   <Expand size={14} className="mr-2" />
                   Show on board
                 </Button>
               </LockedTeachingControl>
               <LockedTeachingControl {...lockProps}>
-                <Button type="button" variant="outline" size="sm">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  data-testid="copy-join-link-button"
+                >
                   <Copy size={14} className="mr-2" />
                   Copy join link
                 </Button>
               </LockedTeachingControl>
             </div>
           </div>
-          <div
-            data-testid="class-qr-locked-placeholder"
-            className="flex size-28 shrink-0 flex-col items-center justify-center gap-2 rounded-lg border bg-muted/40 p-2 text-xs text-muted-foreground"
-            aria-hidden
-          >
-            <Lock size={36} />
-          </div>
+          <LockedTeachingControl {...lockProps}>
+            <button
+              type="button"
+              data-testid="class-qr-locked-placeholder"
+              className="flex size-28 shrink-0 flex-col items-center justify-center gap-2 rounded-lg border bg-muted/40 p-2 text-xs text-muted-foreground"
+              aria-label="QR code"
+            >
+              <Lock size={36} aria-hidden />
+              QR code
+            </button>
+          </LockedTeachingControl>
         </div>
       </div>
     );

@@ -1,9 +1,8 @@
 import { useRef, useState } from 'react';
-import { Mail, MoreHorizontal } from 'lucide-react';
+import { MoreHorizontal } from 'lucide-react';
 import { useFreeAccountUsage } from '~/components/free-account-usage';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
-import { Button } from '~/components/ui/button';
 import {
   teachingAccessMobileSheetBodyInvite,
   TEACHING_ACCESS_LOCKED_TOOLTIP,
@@ -132,15 +131,14 @@ export function TeacherClassCard({
       {showLockedInvite ? (
         <div className="flex items-center justify-end border-t px-4 py-3">
           <LockedTeachingControl {...inviteLockProps}>
-            <Button
+            <button
               type="button"
-              size="sm"
-              variant="outline"
-              data-testid="my-classes-invite-students"
+              data-testid="my-classes-class-options"
+              aria-label={`Class options for ${title}`}
+              className="rounded-md p-2 hover:bg-secondary"
             >
-              <Mail className="mr-2 h-4 w-4" />
-              Invite students
-            </Button>
+              <MoreHorizontal size={20} />
+            </button>
           </LockedTeachingControl>
         </div>
       ) : null}

@@ -495,7 +495,7 @@ export function FreeReporterLocked() {
             <Lock size={20} aria-hidden="true" />
           </span>
           <h2 className="text-xl font-bold leading-[1.35]">
-            Reporter comes with Yawp! for schools
+            Reporter comes with a Yawp! site license
           </h2>
           <ul className="flex flex-col gap-2.5 text-[15px]">
             <li className="flex gap-2.5">

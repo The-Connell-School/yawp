@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Form, Link } from 'react-router';
-import { ArrowDown, ArrowUp, Plus, Search, Send, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Plus, Search, Trash2 } from 'lucide-react';
 import { Badge } from '~/components/ui/badge';
 import {
   teachingAccessMobileSheetBodySend,
@@ -9,7 +9,13 @@ import {
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
 import type { AssignmentEditRecord } from '~/components/assignments/assignment-edit-sheet';
-import { AssignmentDocumentsPill } from './assignment-documents-pill';
+import {
+  AssignmentDocumentsPill,
+  assignmentDocumentsLabel,
+} from './assignment-documents-pill';
+import { badgeVariants } from '~/components/ui/badge';
+import { ChevronRight } from 'lucide-react';
+import { cn } from '~/utils/misc';
 import { TutorOffBadge } from '~/components/assignments/tutor-off-badge';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
@@ -314,18 +320,13 @@ export function ClassAssignmentsTab({
                 </TableHead>
                 <TableHead className="whitespace-nowrap">Type</TableHead>
                 {teachingLocked ? (
-                  <>
-                    <TableHead className="whitespace-nowrap">Status</TableHead>
-                    <TableHead className="whitespace-nowrap pr-4">Send</TableHead>
-                  </>
+                  <TableHead className="whitespace-nowrap">Status</TableHead>
                 ) : (
-                  <>
-                    <TableHead className="whitespace-nowrap">Graded</TableHead>
-                    <TableHead className="whitespace-nowrap pr-4">
-                      Documents
-                    </TableHead>
-                  </>
+                  <TableHead className="whitespace-nowrap">Graded</TableHead>
                 )}
+                <TableHead className="whitespace-nowrap pr-4">
+                  Documents
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -380,41 +381,35 @@ export function ClassAssignmentsTab({
                       {assignment.assignmentType.title}
                     </TableCell>
                     {teachingLocked ? (
-                      <>
-                        <TableCell className="text-muted-foreground">
-                          Not sent
-                        </TableCell>
-                        <TableCell className="pr-4">
-                          <LockedTeachingControl {...sendLockProps}>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              data-testid={`assignment-send-${assignment.id}`}
-                            >
-                              <Send className="mr-2 h-4 w-4" />
-                              Send
-                            </Button>
-                          </LockedTeachingControl>
-                        </TableCell>
-                      </>
+                      <TableCell className="text-muted-foreground">
+                        Not sent
+                      </TableCell>
                     ) : (
-                      <>
-                        <TableCell className="text-muted-foreground">
-                          {assignment.gradedCount}
-                        </TableCell>
-                        <TableCell className="pr-4">
+                      <TableCell className="text-muted-foreground">
+                        {assignment.gradedCount}
+                      </TableCell>
+                    )}
+                    <TableCell className="pr-4">
+                      {teachingLocked ? (
+                        <LockedTeachingControl {...sendLockProps}>
                           <AssignmentDocumentsPill
                             documentCount={assignment.documentCount}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              onViewDocuments(assignment.id);
-                            }}
+                            onClick={() => {}}
                             ariaLabel={`View documents for ${title}`}
+                            testId={`assignment-documents-${assignment.id}`}
                           />
-                        </TableCell>
-                      </>
-                    )}
+                        </LockedTeachingControl>
+                      ) : (
+                        <AssignmentDocumentsPill
+                          documentCount={assignment.documentCount}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onViewDocuments(assignment.id);
+                          }}
+                          ariaLabel={`View documents for ${title}`}
+                        />
+                      )}
+                    </TableCell>
                   </TableRow>
                 );
               })}
