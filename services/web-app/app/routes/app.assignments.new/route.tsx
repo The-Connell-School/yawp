@@ -24,10 +24,24 @@ import { prisma } from '~/utils/db.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { formatClassCardTitle } from '~/utils/class-display';
 
+async function assertPendingFreeTierInlineAssignmentRoute(userId: string) {
+  const { isFreeTierEnabled } =
+    await import('~/domain/feature-flags/feature-flags.server');
+  const { userHasPendingFreeTierTeachingLock } =
+    await import('~/domain/free-tier/locked-preview.server');
+  if (!(await isFreeTierEnabled())) {
+    throw new Response(null, { status: 404, statusText: 'Not Found' });
+  }
+  if (!(await userHasPendingFreeTierTeachingLock(userId))) {
+    throw new Response(null, { status: 404, statusText: 'Not Found' });
+  }
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
   if (profile.role !== 'TEACHER') throw redirect('/app');
+  await assertPendingFreeTierInlineAssignmentRoute(userId);
 
   const url = new URL(request.url);
   const initialAssignmentTypeId = url.searchParams.get('assignmentTypeId') ?? '';
@@ -78,6 +92,8 @@ export async function action({ request }: ActionFunctionArgs) {
   if (profile.role !== 'TEACHER') {
     return dataResponse({ error: 'Only teachers can create assignments.' }, { status: 403 });
   }
+
+  await assertPendingFreeTierInlineAssignmentRoute(userId);
 
   const formData = await request.formData();
   const { guardTeachingFormAction } =
