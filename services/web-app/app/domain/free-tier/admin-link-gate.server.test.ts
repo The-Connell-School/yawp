@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test';
 
-const findUnique = mock(async () => null);
+const findUnique = mock(async (): Promise<Record<string, unknown> | null> => null);
 const findFirst = mock(async () => null);
 
 beforeAll(() => mock.restore());

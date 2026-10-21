@@ -14,14 +14,18 @@ export default defineConfig({
   webServer: {
     command: `bash -c 'trap "../../bin/project dev stop --json" EXIT INT TERM; ../../bin/project dev start --json; node -e "setInterval(() => {}, 1000)"'`,
     url: baseURL,
-    reuseExistingServer: false,
+    reuseExistingServer: !!process.env.APPROVAL_V2_REUSE_DEV,
     timeout: 120000,
     gracefulShutdown: { signal: 'SIGTERM', timeout: 10000 },
     env: {
       CACHE_DATABASE_PATH: `${process.env.TMPDIR}/approval-v2-cache.sqlite`,
       DATABASE_PATH: `${process.env.TMPDIR}/approval-v2-local.sqlite`,
       SIGNON_MAIL_CAPTURE_DIR: `${process.env.TMPDIR}/approval-v2-mail`,
-      FREE_TIER_LINK_HMAC_SECRET: 'local-approval-v2-test-secret',
+      FREE_TIER_LINK_HMAC_SECRET:
+        process.env.FREE_TIER_LINK_HMAC_SECRET ??
+        'local-approval-v2-test-secret',
+      DATABASE_URL: process.env.E2E_DATABASE_URL,
+      E2E_DATABASE_URL: process.env.E2E_DATABASE_URL,
       PRIMARY_APP_URL: baseURL,
       FREE_TIER_APPROVAL_WORKER_ENABLED: 'false',
     },

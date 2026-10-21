@@ -615,6 +615,12 @@ export async function redirectSchoolAdmin(args: {
   if (preTerminal) return preTerminal;
 
   if (identity && (await isApprovalV2Enabled(identity))) {
+    if (
+      peek.purpose !== 'ADMIN_APPROVE' &&
+      peek.purpose !== 'ADMIN_NOT_RIGHT_PERSON'
+    ) {
+      return { ok: false as const, reason: 'purpose_mismatch' as const };
+    }
     const forwarded = await forwardApprovalByToken({
       token: args.token,
       purpose: peek.purpose,

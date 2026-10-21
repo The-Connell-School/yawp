@@ -1,11 +1,29 @@
 import { afterAll, describe, expect, mock, test } from 'bun:test';
 import type { LoaderFunctionArgs } from 'react-router';
 
-const terminalGate = mock(async () => null);
-const peekSignedLink = mock(async () => ({
-  ok: true,
-  applicationId: 'app-1',
-}));
+const terminalGate = mock(
+  async (): Promise<{
+    reason: 'already_approved' | 'declined';
+    schoolName: string;
+    teacherName: string;
+  } | null> => null
+);
+const peekSignedLink = mock(
+  async (): Promise<
+    | { ok: true; applicationId: string }
+    | { ok: false; reason: string }
+  > => ({
+    ok: true,
+    applicationId: 'app-1',
+  })
+);
+const linkReplacedGate = mock(
+  async (): Promise<{
+    reason: 'link_replaced';
+    schoolName: string;
+    teacherName: string;
+  } | null> => null
+);
 
 mock.module('~/utils/db.server', () => ({
   prisma: { freeTierApplication: { findUnique: async () => null } },
@@ -20,8 +38,6 @@ mock.module('~/domain/free-tier/signed-link.server', () => ({
   applicationIdFromSignedToken: () => 'app-1',
   isFreeTierLinkSigningConfigured: () => true,
 }));
-
-const linkReplacedGate = mock(async () => null);
 
 mock.module('~/domain/free-tier/admin-link-gate.server', () => ({
   fetchFreeTierApplicationTerminalGate: terminalGate,

@@ -176,21 +176,22 @@ function terminalFromLoader(data: Extract<LoaderData, { ok: false }>) {
 
 function terminalFromAction(actionData: NonNullable<ReturnType<typeof useActionData<typeof action>>>) {
   if (actionData.ok) return null;
+  const actionApp =
+    'app' in actionData
+      ? (actionData as { app?: { name?: string; schoolName?: string } }).app
+      : undefined;
   const teacherName =
-    'app' in actionData && actionData.app?.name
-      ? actionData.app.name
-      : 'teacherName' in actionData &&
-          typeof (actionData as { teacherName?: string }).teacherName ===
-            'string'
-        ? (actionData as { teacherName: string }).teacherName
-        : 'A teacher';
+    actionApp?.name ??
+    ('teacherName' in actionData &&
+    typeof (actionData as { teacherName?: string }).teacherName === 'string'
+      ? (actionData as { teacherName: string }).teacherName
+      : 'A teacher');
   const schoolName =
-    'app' in actionData && actionData.app?.schoolName
-      ? actionData.app.schoolName
-      : 'schoolName' in actionData &&
-          typeof (actionData as { schoolName?: string }).schoolName === 'string'
-        ? (actionData as { schoolName: string }).schoolName
-        : 'your school';
+    actionApp?.schoolName ??
+    ('schoolName' in actionData &&
+    typeof (actionData as { schoolName?: string }).schoolName === 'string'
+      ? (actionData as { schoolName: string }).schoolName
+      : 'your school');
   if (actionData.reason === 'already_approved') {
     return (
       <AdminAlreadyApprovedCard

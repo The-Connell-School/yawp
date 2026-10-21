@@ -497,9 +497,16 @@ export async function forwardApprovalByToken(args: {
     select: { id: true },
   });
   if (!pending) return fail('not_allowed');
+  const tokenPurpose = args.purpose ?? peek.purpose;
+  if (
+    tokenPurpose !== 'ADMIN_APPROVE' &&
+    tokenPurpose !== 'ADMIN_NOT_RIGHT_PERSON'
+  ) {
+    return fail('purpose_mismatch');
+  }
   return forwardApprovalRequest({
     ...args,
-    tokenPurpose: args.purpose ?? peek.purpose,
+    tokenPurpose,
     applicationId: peek.applicationId,
     currentApprovalId: pending.id,
   });

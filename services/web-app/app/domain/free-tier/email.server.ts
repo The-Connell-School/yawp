@@ -15,6 +15,7 @@ import {
 import { mintSignedLink, RELEASE_LINK_TTL_MS } from './signed-link.server';
 import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
 import { renderAdminApprovalEmailHtml } from './admin-approval-email-html.server';
+import { plainTextEmailToHtml } from './email-html.server';
 import { renderAdminApprovalEmailSubject } from './admin-approval-copy';
 import { sanitizeFreeTierEmailLogPayload } from './email-log-payload.server';
 import { assertFreeTierRuntimeConfigured } from './free-tier-config.server';
