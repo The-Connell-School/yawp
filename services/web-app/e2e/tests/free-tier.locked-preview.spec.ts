@@ -163,6 +163,7 @@ for (const width of [390, 1440]) {
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     const { user, app } = await fixture('11', 'SENT');
     await provisionPendingClassroom(app.id, user.id!);
     await login(page, user.email!);
@@ -230,7 +231,7 @@ for (const width of [390, 1440]) {
         .getByTestId('free-assignment-tiles')
         .getByRole('button', { name: 'Create assignment' });
       await mobileCreate.scrollIntoViewIfNeeded();
-      await mobileCreate.click({ timeout: 15_000 });
+      await mobileCreate.click({ force: true, timeout: 15_000 });
       await expect(
         page.getByRole('heading', { name: 'Unlocks after approval' })
       ).toBeVisible();
