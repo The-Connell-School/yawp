@@ -169,6 +169,11 @@ for (const width of [1440, 390]) {
     await login(page, user.email!);
     await page.goto('/app/free-tier/pending');
     await expect(page).toHaveURL(/\/app\/free-tier\/pending$/);
+    await expect(page.getByText(/Sent to Dr\. Patel on/)).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Not the right person?' })
+    ).toBeVisible();
+    await capture(page, `waiting-${width}`);
     await page.getByRole('link', { name: 'Explore my classroom' }).click();
     await expect(page).toHaveURL(/\/app$/);
     await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
@@ -182,6 +187,20 @@ for (const width of [1440, 390]) {
       .click();
     await expect(page.getByRole('heading', { name: 'New assignment' })).toBeVisible();
     await capture(page, `locked-picker-${width}`);
+    await page.keyboard.press('Escape');
+    if (width === 1440) {
+      const create = page.getByRole('button', { name: 'Create assignment' }).first();
+      await create.focus();
+      await expect(
+        page.getByText(/Unlocks once your administrator approves/)
+      ).toBeVisible();
+    } else {
+      await page.getByRole('button', { name: 'Create assignment' }).first().click();
+      await expect(
+        page.getByRole('heading', { name: 'Unlocks after approval' })
+      ).toBeVisible();
+      await page.getByRole('button', { name: 'Got it' }).click();
+    }
     const before = await prisma.assignment.count();
     for (const path of [
       '/api/assignments/create',
@@ -203,6 +222,8 @@ for (const width of [1440, 390]) {
     await page.reload();
     await expect(page.getByTestId('teaching-access-banner')).toHaveCount(0);
     await expect(page.getByTestId('teaching-access-approval-toast')).toBeVisible();
+    await page.reload();
+    await expect(page.getByTestId('teaching-access-approval-toast')).toHaveCount(0);
     await page.goto('/app/assignments');
     await expect(page.getByRole('heading', { name: 'My Assignments', exact: true })).toBeVisible();
     await capture(page, `approved-assignments-${width}`);

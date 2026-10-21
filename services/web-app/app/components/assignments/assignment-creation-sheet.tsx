@@ -788,9 +788,11 @@ export function AssignmentCreationSheetContent({
       selectedType.quotaExhausted)
       ? ''
       : requestedTypeId;
-  // Collaboration is offered for every assignment type now, so this only asks
-  // whether a type has been chosen at all.
-  const selectedTypeSupportsCollaboration = Boolean(assignmentTypeId);
+  const showIndividualDocumentNotice =
+    !isEditing && Boolean(assignmentTypeId);
+  // New assignments are always solo; only show the frozen control when editing
+  // an assignment that was already collaborative.
+  const showCollaborationToggle = isEditing && collaborationEnabled;
   // Offered only where there is something to turn off. Switching it on cannot
   // invent a grammar category for a rubric that has none.
   const selectedTypeGradesGrammar = Boolean(
@@ -1789,6 +1791,16 @@ export function AssignmentCreationSheetContent({
           ) : null}
         </div>
 
+        {showIndividualDocumentNotice ? (
+          <div className="pt-6">
+            <p className="text-sm text-muted-foreground">
+              Each student receives their own document when they start this
+              assignment. Yawp! does not create a shared group document, and
+              you do not need to set up groups.
+            </p>
+          </div>
+        ) : null}
+
         {/* The quick builder keeps a default exit ticket to one screen:
             everything a teacher rarely changes waits in here, still posting
             its value, until they open it. */}
@@ -1913,12 +1925,10 @@ export function AssignmentCreationSheetContent({
             </div>
           ) : null}
 
-          {/* Collaborative drafts. Available for every assignment type, and frozen
-            after creation for the same reason the tutor toggle is: students may
-            already have group drafts built around it.
-            Group membership itself is arranged per class afterwards, because an
-            assignment fans out to one ClassAssignment per class. */}
-          {selectedTypeSupportsCollaboration ? (
+          {/* Frozen after creation for assignments that were already
+            collaborative: students may already have group drafts built around
+            it. */}
+          {showCollaborationToggle ? (
             <div className="pt-6">
               {isEditing ? null : (
                 <input

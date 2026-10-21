@@ -10,6 +10,8 @@ import {
   enforceFreeClassroomAssignmentCreateInTransaction,
   enforceFreeClassroomAssignmentRetypeInTransaction,
 } from '~/utils/assignment-quota.server';
+import { SOLO_COLLABORATION_SETTINGS } from '~/domain/assignments/collaboration';
+import { stripCollaborationFromAssignmentUpdateData } from '~/utils/assignment-collaboration.server';
 import { prisma } from '~/utils/db.server';
 
 export class AssignmentHasCollaborativeWorkError extends Error {}
@@ -49,9 +51,12 @@ export async function createAssignmentDeployedToClasses(params: {
         )
       : null;
     const assignment = await tx.assignment.create({
-      data: releasedRevisionId
-        ? { ...params.data, rubricRevisionId: releasedRevisionId }
-        : params.data,
+      data: {
+        ...(releasedRevisionId
+          ? { ...params.data, rubricRevisionId: releasedRevisionId }
+          : params.data),
+        ...SOLO_COLLABORATION_SETTINGS,
+      },
     });
 
     if (uniqueClassIds.length > 0) {
@@ -80,7 +85,11 @@ export async function updateAssignmentInClassDeployment(params: {
         id: params.assignmentId,
         classAssignments: { some: { classId: params.classId } },
       },
-      select: { id: true, assignmentTypeId: true },
+      select: {
+        id: true,
+        assignmentTypeId: true,
+        collaborationEnabled: true,
+      },
     });
     if (!existing) {
       throw new Error('assignment_not_found_for_class');
@@ -98,7 +107,10 @@ export async function updateAssignmentInClassDeployment(params: {
     }
     return tx.assignment.update({
       where: { id: existing.id },
-      data: params.data,
+      data: stripCollaborationFromAssignmentUpdateData(
+        existing.collaborationEnabled,
+        params.data as Record<string, unknown>
+      ) as Prisma.AssignmentUncheckedUpdateInput,
     });
   });
 }

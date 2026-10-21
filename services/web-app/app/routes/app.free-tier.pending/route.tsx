@@ -7,6 +7,7 @@ import {
   useNavigation,
   Link,
 } from 'react-router';
+import { useEffect, useState } from 'react';
 import { getLockedPreviewApplication } from '~/domain/free-tier/locked-preview.server';
 import { getMembershipId } from '~/cookies/membership-id.server';
 import { isClassPreparationEnabled } from '~/domain/free-tier/class-preparation.server';
@@ -16,16 +17,12 @@ import {
   isApprovalV2Enabled,
   forwardApprovalRequest,
 } from '~/domain/free-tier/approval-v2.server';
-import {
-  approvalMailto,
-  approvalSentDate,
-} from '~/domain/free-tier/approval-waiting';
+import { approvalSentDate } from '~/domain/free-tier/approval-waiting';
 import {
   ApprovalForwardForm,
   approvalForwardError,
 } from '../free-tier/ApprovalForwardForm';
 import { Clock } from 'lucide-react';
-import { Form } from 'react-router';
 import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { RATE_LIMITS } from '~/config/rate-limits';
@@ -40,6 +37,60 @@ import {
 } from '../free-tier/FreeTierAuthCard';
 import { freeTierConfigErrorMessage } from '~/domain/free-tier/free-tier-config.server';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
+import { Button } from '~/components/ui/button';
+
+const FORWARD_ERROR_REASONS = new Set([
+  'validation',
+  'same_administrator',
+  'chain_cap',
+  'superseded',
+  'rate_limited',
+  'unavailable',
+]);
+
+type PendingActionData = Awaited<ReturnType<typeof action>>;
+
+function isForwardActionError(
+  data: PendingActionData | undefined
+): data is { ok: false; reason: string } {
+  return Boolean(
+    data &&
+      !data.ok &&
+      'reason' in data &&
+      typeof data.reason === 'string' &&
+      FORWARD_ERROR_REASONS.has(data.reason)
+  );
+}
+
+function PendingBelowCardActions({
+  showForwardToggle,
+  approvalId,
+  busy,
+  forwardOpen,
+  onToggleForward,
+}: {
+  showForwardToggle: boolean;
+  approvalId?: string;
+  busy: boolean;
+  forwardOpen: boolean;
+  onToggleForward: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-1">
+      {showForwardToggle ? (
+        <Button type="button" variant="link" onClick={onToggleForward}>
+          Not the right person?
+        </Button>
+      ) : null}
+      <FreeTierSignOut />
+      {showForwardToggle && forwardOpen ? (
+        <div className="mt-4 w-full max-w-[240px] text-left">
+          <ApprovalForwardForm approvalId={approvalId} busy={busy} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireFreeTierEnabled();
@@ -160,6 +211,14 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 }
 
+function LockedPreviewExploreButton() {
+  return (
+    <FreeTierButton asChild data-testid="locked-preview-explore">
+      <Link to="/app/free-tier/preview">Explore my classroom</Link>
+    </FreeTierButton>
+  );
+}
+
 export default function FreeTierPendingRoute() {
   const { app, pending, lastFailedEmail, lockedPreview, approvalV2 } =
     useLoaderData<typeof loader>();
@@ -167,6 +226,12 @@ export default function FreeTierPendingRoute() {
   const navigation = useNavigation();
   const resending = navigation.state === 'submitting';
   const adminName = pending?.adminName ?? 'your administrator';
+  const [forwardOpen, setForwardOpen] = useState(false);
+
+  useEffect(() => {
+    if (isForwardActionError(actionData)) setForwardOpen(true);
+  }, [actionData]);
+
   if (approvalV2) {
     const current = approvalV2.approval;
     const terminal =
@@ -185,11 +250,20 @@ export default function FreeTierPendingRoute() {
               : app?.status === 'SENT' && current
                 ? `Request sent to ${current.adminName}!`
                 : 'Waiting for your administrator';
+    const showForwardToggle = Boolean(current && !terminal);
     return (
       <FreeTierAuthCard
         title={title}
         icon={<Clock />}
-        footer={<FreeTierSignOut />}
+        footer={
+          <PendingBelowCardActions
+            showForwardToggle={showForwardToggle}
+            approvalId={current?.id}
+            busy={resending}
+            forwardOpen={forwardOpen}
+            onToggleForward={() => setForwardOpen((open) => !open)}
+          />
+        }
       >
         {terminal ? (
           <>
@@ -237,36 +311,11 @@ export default function FreeTierPendingRoute() {
                   name={current.adminName}
                   email={current.adminEmail}
                 />
-                <p className="text-sm text-muted-foreground">
-                  Email your administrator directly to let them know why you
-                  would like to use Yawp! with your class.
-                </p>
-                <a
-                  className="inline-flex h-11 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
-                  href={approvalMailto({
-                    adminEmail: current.adminEmail,
-                    adminName: current.adminName,
-                    teacherName: app.name,
-                  })}
-                >
-                  Draft an email
-                </a>
-                <p className="text-xs text-muted-foreground">
-                  {current.autoRemindersStopped
-                    ? 'Weekly reminders have stopped. You can pick a different administrator below or contact support@yawp.school for help.'
-                    : 'We will remind your administrator weekly, up to three times, and keep you posted.'}
-                </p>
-                <Form method="post">
-                  <input type="hidden" name="intent" value="resend" />
-                  <FreeTierButton
-                    type="submit"
-                    disabled={resending}
-                    variant="outline"
-                  >
-                    {resending ? 'Sending…' : 'Resend reminder'}
-                  </FreeTierButton>
-                </Form>
+                {lockedPreview ? <LockedPreviewExploreButton /> : null}
               </>
+            ) : null}
+            {lockedPreview && app?.status === 'MANUAL_REVIEW' ? (
+              <LockedPreviewExploreButton />
             ) : null}
             {actionData?.ok && 'queued' in actionData ? (
               <p role="status" className="text-sm text-muted-foreground">
@@ -274,59 +323,13 @@ export default function FreeTierPendingRoute() {
                 you an update.
               </p>
             ) : null}
-            {actionData?.ok && !('queued' in actionData) ? (
-              <p className="text-sm text-muted-foreground" role="status">
-                Reminder sent to {current?.adminEmail ?? pending?.adminEmail}.
-              </p>
-            ) : null}
-            {actionData &&
-            !actionData.ok &&
-            'rateLimited' in actionData &&
-            actionData.rateLimited ? (
-              <p className="text-sm text-destructive" role="alert">
-                Too many resend attempts. Please wait a few minutes and try
-                again.
-              </p>
-            ) : null}
-            {actionData && !actionData.ok && actionData.reason === 'email_failed' ? (
-              <p className="text-sm text-destructive" role="alert">
-                We could not send the reminder. Try again later or contact
-                support@yawp.school.
-              </p>
-            ) : null}
-            {actionData && !actionData.ok && actionData.reason === 'config' ? (
-              <p className="text-sm text-destructive" role="alert">
-                {'message' in actionData
-                  ? actionData.message
-                  : 'Free-tier links are temporarily unavailable.'}
-              </p>
-            ) : null}
-            {actionData && !actionData.ok ? (
+            {isForwardActionError(actionData) ? (
               <p role="alert" className="text-sm text-destructive">
-                {approvalForwardError(actionData.reason ?? 'unavailable')}
+                {approvalForwardError(actionData.reason)}
               </p>
-            ) : null}
-            {current ? (
-              <details
-                className="text-sm"
-                open={actionData && !actionData.ok ? true : undefined}
-              >
-                <summary className="cursor-pointer py-2 text-primary underline underline-offset-4">
-                  Not the right person? Forward this request
-                </summary>
-                <div className="pt-3">
-                  <ApprovalForwardForm
-                    approvalId={current.id}
-                    busy={resending}
-                  />
-                </div>
-              </details>
             ) : null}
           </>
         )}
-        {lockedPreview && !terminal ? (
-          <LockedPreviewInvite />
-        ) : null}
       </FreeTierAuthCard>
     );
   }
@@ -383,70 +386,14 @@ export default function FreeTierPendingRoute() {
         current={2}
       />
       {pending && app?.status === 'SENT' ? (
-        <FreeTierPerson name={adminName} email={pending.adminEmail} />
+        <>
+          <FreeTierPerson name={adminName} email={pending.adminEmail} />
+          {lockedPreview ? <LockedPreviewExploreButton /> : null}
+        </>
       ) : null}
-      {actionData?.ok ? (
-        <p className="text-sm text-muted-foreground" role="status">
-          Reminder sent to {pending?.adminEmail}.
-        </p>
-      ) : null}
-      {actionData &&
-      !actionData.ok &&
-      'rateLimited' in actionData &&
-      actionData.rateLimited ? (
-        <p className="text-sm text-destructive" role="alert">
-          Too many resend attempts. Please wait a few minutes and try again.
-        </p>
-      ) : null}
-      {actionData && !actionData.ok && actionData.reason === 'email_failed' ? (
-        <p className="text-sm text-destructive" role="alert">
-          We could not send the reminder. Try again later or contact
-          support@yawp.school.
-        </p>
-      ) : null}
-      {actionData && !actionData.ok && actionData.reason === 'config' ? (
-        <p className="text-sm text-destructive" role="alert">
-          {'message' in actionData
-            ? actionData.message
-            : 'Free-tier links are temporarily unavailable.'}
-        </p>
-      ) : null}
-      {app?.status === 'SENT' ? (
-        <Form method="post">
-          <input type="hidden" name="intent" value="resend" />
-          <FreeTierButton type="submit" disabled={resending} variant="outline">
-            {resending ? 'Sending…' : 'Resend reminder'}
-          </FreeTierButton>
-        </Form>
-      ) : null}
-      {lockedPreview ? (
-        <LockedPreviewInvite />
+      {lockedPreview && app?.status === 'MANUAL_REVIEW' ? (
+        <LockedPreviewExploreButton />
       ) : null}
     </FreeTierAuthCard>
-  );
-}
-
-/** Locked preview entry; only rendered when the server-side preview gate (onboarding v2) allows it. */
-function LockedPreviewInvite() {
-  return (
-    <section
-      aria-labelledby="locked-preview-invite"
-      className="flex flex-col gap-3 rounded-lg border bg-secondary/40 p-4"
-      data-testid="locked-preview-invite"
-    >
-      <h2 id="locked-preview-invite" className="text-base font-semibold">
-        Take a look around
-      </h2>
-      <p className="text-sm text-muted-foreground">
-        While we wait, let’s explore your Yawp! classroom. You’ll be able to
-        add students and create assignments as soon as you’re approved.
-      </p>
-      <Link
-        to="/app/free-tier/preview"
-        className="inline-flex h-11 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
-      >
-        Explore my classroom
-      </Link>
-    </section>
   );
 }

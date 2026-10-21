@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Form, Link } from 'react-router';
 import { ArrowDown, ArrowUp, Plus, Search, Trash2 } from 'lucide-react';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
+import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
 import type { AssignmentEditRecord } from '~/components/assignments/assignment-edit-sheet';
 import { AssignmentDocumentsPill } from './assignment-documents-pill';
 import { TutorOffBadge } from '~/components/assignments/tutor-off-badge';
@@ -52,6 +53,7 @@ type ClassAssignmentsTabProps = {
   apHistoryAssignmentTypeId?: string | null;
   /** Gated on the organization's classInsightsEnabled flag. */
   classInsightsEnabled: boolean;
+  teachingLocked?: boolean;
   onViewDocuments: (assignmentId: string) => void;
   /**
    * Selecting a row navigates to the assignment detail full page (see
@@ -82,6 +84,7 @@ export function ClassAssignmentsTab({
   siteLicenseLockedAssignmentTiles = [],
   apHistoryAssignmentTypeId,
   classInsightsEnabled,
+  teachingLocked = false,
   onViewDocuments,
   onSelectAssignment,
 }: ClassAssignmentsTabProps) {
@@ -217,16 +220,25 @@ export function ClassAssignmentsTab({
               </Tooltip>
             </Form>
           ) : null}
-          <Button
-            type="button"
-            size="sm"
-            className="shrink-0"
-            data-testid="new-assignment-button"
-            onClick={() => setIsCreateSheetOpen(true)}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            New Assignment
-          </Button>
+          {(() => {
+            const createButton = (
+              <Button
+                type="button"
+                size="sm"
+                className="shrink-0"
+                data-testid="new-assignment-button"
+                onClick={() => setIsCreateSheetOpen(true)}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                New Assignment
+              </Button>
+            );
+            return teachingLocked ? (
+              <LockedTeachingControl locked>{createButton}</LockedTeachingControl>
+            ) : (
+              createButton
+            );
+          })()}
         </div>
       </div>
 
@@ -366,6 +378,7 @@ export function ClassAssignmentsTab({
         fixedClassId={classOption.id}
         assignmentTypes={assignmentTypes}
         siteLicenseLockedAssignmentTiles={siteLicenseLockedAssignmentTiles}
+        teachingLocked={teachingLocked}
         teacherClasses={[classOption]}
       />
     </div>
