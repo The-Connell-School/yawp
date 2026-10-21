@@ -339,9 +339,9 @@ for (const viewport of [
         data: { adminRedirectCount: 100 },
       });
       await admin.getByRole('button', { name: 'Forward request' }).click();
-      await expect(
-        admin.getByRole('heading', { name: 'Unable to forward' })
-      ).toBeVisible();
+      await expect(admin.getByRole('alert')).toContainText(
+        'forwarded too many times'
+      );
       await capture('forward-error', admin);
       await prisma.freeTierApplication.update({
         where: { id: app.id },
@@ -354,7 +354,7 @@ for (const viewport of [
         .fill(`replacement-${stamp}@example.edu`);
       await admin.getByRole('button', { name: 'Forward request' }).click();
       await expect(
-        admin.getByRole('heading', { name: 'Request forwarded' })
+        admin.getByRole('heading', { name: 'Forward sent' })
       ).toBeVisible();
       await capture('forward-confirmation', admin);
       await drainFreeTierApprovalJobs();
@@ -392,7 +392,13 @@ for (const viewport of [
       await expect(
         admin.getByRole('heading', { name: 'Thank you', exact: true })
       ).toBeVisible({ timeout: 30_000 });
-      if (!before) await expect(admin.getByText('Grace Okafor can start using Yawp! We let them know.', { exact: true })).toBeVisible();
+      if (!before)
+        await expect(
+          admin.getByText(
+            'Grace Okafor at Lincoln High School can start using Yawp! We let them know.',
+            { exact: true }
+          )
+        ).toBeVisible();
       await capture('approval-confirmation', admin);
       await admin.goto(replacementApproveUrl);
       await capture('approval-already-approved', admin);
@@ -447,7 +453,7 @@ for (const viewport of [
           );
           await expect(
             admin.getByRole('heading', {
-              name: before ? 'Link expired or already used' : 'This link expired or was used',
+              name: before ? 'Link expired or already used' : 'This link has expired',
               exact: true,
             })
           ).toBeVisible();

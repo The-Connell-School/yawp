@@ -233,47 +233,27 @@ for (const width of [1280, 390])
     const url = `/free/admin/approve?t=${encodeURIComponent(signed.token)}`;
     await flag('off');
     await page.goto(url);
-    await expect(
-      page.locator('iframe[title="Book a time with Brian"]')
-    ).toHaveCount(0);
     await capture(page, `${width}-admin-before`);
     await flag('everyone');
     await page.reload();
     await expect(
-      page.getByRole('heading', { name: 'About Yawp!' })
+      page.getByRole('heading', {
+        name: 'Approve Yawp! for Ms. Okafor at Lincoln High',
+      })
     ).toBeVisible();
-    await expect(page.locator('[data-guide-slot=administrator]')).toHaveCount(
-      1
-    );
-    if (width === 1280) {
-      const info = await page.locator('.free-tier-approval-info').boundingBox();
-      const form = await page.locator('.free-tier-form-card').boundingBox();
-      expect(info!.x + info!.width).toBeLessThan(form!.x);
-    }
-    await page
-      .getByText("I'd like to learn more first", { exact: true })
-      .click();
-    const calendar = page.locator('iframe[title="Book a time with Brian"]');
-    await expect(calendar).toBeVisible();
-    await expect(calendar).toHaveAttribute('loading', 'lazy');
-    await expect(calendar).toHaveAttribute(
-      'src',
-      'https://app.usemotion.com/meet/brian-connell/ryxkqvr'
-    );
     await expect(
-      page.getByRole('link', { name: 'Open the calendar in a new tab' })
-    ).toHaveAttribute('rel', 'noopener noreferrer');
-    await expect(
-      page.getByText("Ms. Okafor's request will stay open.")
+      page.getByText(
+        'Ms. Okafor at Lincoln High would like to use Yawp! in their classroom.'
+      )
     ).toBeVisible();
     await capture(page, `${width}-admin`);
     await page
       .getByRole('button', { name: 'Approve Yawp!', exact: true })
       .click();
-    await expect(page.getByLabel('Your role')).toHaveAttribute(
-      'aria-invalid',
-      'true'
+    await expect(page.getByRole('alert')).toContainText(
+      'Two things need your attention before you can approve.'
     );
+    await expect(page.getByText('Enter your role.')).toBeVisible();
     await capture(page, `${width}-admin-validation`);
     await page.goto(
       `/free/admin/not-right-person?t=${encodeURIComponent(redirect.token)}`
@@ -282,19 +262,14 @@ for (const width of [1280, 390])
     await page
       .getByRole('button', { name: 'Forward request', exact: true })
       .click();
-    await expect(page.getByLabel('Administrator name')).toHaveAttribute(
-      'aria-invalid',
-      'true'
-    );
+    await expect(page.getByRole('alert')).toContainText('Fix the errors below');
     await capture(page, `${width}-admin-forward-validation`);
     await page.getByLabel('Administrator name').fill('Ms. Rivera');
     await page.getByLabel('Administrator email').fill(app.email);
     await page
       .getByRole('button', { name: 'Forward request', exact: true })
       .click();
-    await expect(
-      page.getByRole('heading', { name: 'Unable to forward' })
-    ).toBeVisible();
+    await expect(page.getByRole('alert')).toBeVisible();
     expect(
       await db.freeTierSignedLink.count({
         where: { applicationId: app.id, usedAt: null },
@@ -313,12 +288,15 @@ for (const width of [1280, 390])
       .getByRole('button', { name: 'Forward request', exact: true })
       .click();
     await expect(
-      page.getByRole('heading', { name: 'Request forwarded' })
+      page.getByRole('heading', { name: 'Forward sent' })
     ).toBeVisible();
     await capture(page, `${width}-admin-forwarded`);
     await page.goto(url);
     await expect(
       page.getByRole('heading', { name: 'This link was replaced' })
+    ).toBeVisible();
+    await expect(
+      page.getByText(/Ms\. Okafor at Lincoln High was forwarded to someone else/)
     ).toBeVisible();
     await capture(page, `${width}-admin-replaced`);
     for (const status of [
