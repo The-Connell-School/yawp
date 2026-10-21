@@ -28,6 +28,10 @@ mock.module('~/components/ui/tooltip', () => ({
   ),
 }));
 
+mock.module('~/components/free-tier/use-teaching-locked', () => ({
+  useTeachingLocked: () => null,
+}));
+
 const { AssignmentCreationSheetContent, assignmentCreationClassLabel } =
   await import('./assignment-creation-sheet');
 const { SAVED_ASSIGNMENTS_ENABLED } =
