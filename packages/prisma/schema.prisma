@@ -1584,6 +1584,7 @@ model LessonPlanConversation {
   messages                LessonPlanMessage[]
   materials               LessonPlanMaterial[]
   shareLinks              LessonShareLink[]
+  uploads                 LessonPlanUpload[]
 
   @@index([membershipId, updatedAt(sort: Desc)])
   @@index([membershipId, starredAt(sort: Desc)])
@@ -1748,6 +1749,28 @@ model LessonShareLink {
   conversation   LessonPlanConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
+}
+
+/// A document a teacher gave the lesson planner as source material (Oct 21).
+/// Only the text read out of it is kept, never the file.
+model LessonPlanUpload {
+  id             String                 @id @default(cuid())
+  createdAt      DateTime               @default(now()) @db.Timestamptz(6)
+  name           String
+  contentType    String
+  byteSize       Int
+  /// The text read out of the file, capped.
+  text           String
+  /// More text than was kept.
+  truncated      Boolean                @default(false)
+  /// Null until the lesson's first message, which attaches it.
+  conversationId String?
+  conversation   LessonPlanConversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  /// The teacher who uploaded it; every read is scoped to them.
+  membershipId   String
+
+  @@index([conversationId])
+  @@index([membershipId])
 }
 
 /// A saved, forward-looking writing growth plan for one student, produced by

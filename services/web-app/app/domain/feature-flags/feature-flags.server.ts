@@ -9,6 +9,7 @@ import {
   LESSON_PLANNER_RUN_SHOW_FLAG,
   LESSON_PLANNER_TEMPLATES_FLAG,
   LESSON_PLANNER_DECK_GALLERY_FLAG,
+  LESSON_PLANNER_UPLOADS_FLAG,
   LESSON_PLANNER_STACK_PANEL_FLAG,
   FREE_TIER_FLAG,
   LESSON_PLANNER_FLAG,
@@ -249,6 +250,7 @@ export async function getLessonPlannerReviewFlags(
     runShow,
     templates,
     deckGallery,
+    uploads,
   ] = await Promise.all([
     isFeatureFlagEnabled(LESSON_PLANNER_INTAKE_V2_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_STACK_V2_FLAG, orgId),
@@ -260,6 +262,7 @@ export async function getLessonPlannerReviewFlags(
     isFeatureFlagEnabled(LESSON_PLANNER_RUN_SHOW_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_TEMPLATES_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_DECK_GALLERY_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_UPLOADS_FLAG, orgId),
   ]);
   // The panel shows the stack v2 list; without stack v2 it has nothing to show.
   // The run 3 page builds on stack v2, and the rest build on the run 3 page.
@@ -275,6 +278,7 @@ export async function getLessonPlannerReviewFlags(
     runShow: runShow && v3,
     templates: templates && v3,
     deckGallery: deckGallery && deckV2,
+    uploads,
   };
 }
 
@@ -296,6 +300,8 @@ export type LessonPlannerReviewFlags = {
   templates: boolean;
   /** The gallery deck (Lesson Deck Kit); needs deck v2. */
   deckGallery: boolean;
+  /** The teacher's own documents as source material (Oct 21). */
+  uploads: boolean;
 };
 
 /** Yawp! Lesson Planner for teachers at the given school. */

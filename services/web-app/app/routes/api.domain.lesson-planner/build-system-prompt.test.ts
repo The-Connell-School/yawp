@@ -1852,3 +1852,18 @@ describe('planner prompt — the Oct 21 review (standards, scope, checks, units)
     expect(prompt).toContain('in class or for homework');
   });
 });
+
+describe('planner prompt — the teacher’s own documents (Oct 21)', () => {
+  test('in the uncached tail, so the cached core is the same with or without them', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({
+      teacherName: null,
+      organizationName: 'School',
+      sources: [{ id: 'u1', name: 'Chapter 1.pdf', text: 'Jimmy Cross carried letters.', truncated: false }],
+    });
+    expect(blocks.at(-1)!.text).toContain('<document id="u1" name="Chapter 1.pdf"');
+    expect(blocks[0]!.text).not.toContain('Chapter 1.pdf');
+    const plain = buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'School' });
+    expect(blocks[0]!.text).toBe(plain[0]!.text);
+    expect(plain.at(-1)!.text).not.toContain('<document');
+  });
+});

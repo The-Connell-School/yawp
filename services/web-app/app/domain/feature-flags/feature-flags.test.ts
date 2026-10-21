@@ -19,6 +19,7 @@ import {
   LESSON_PLANNER_RUN_SHOW_FLAG,
   LESSON_PLANNER_TEMPLATES_FLAG,
   LESSON_PLANNER_DECK_GALLERY_FLAG,
+  LESSON_PLANNER_UPLOADS_FLAG,
   LESSON_PLANNER_STACK_PANEL_FLAG,
   FOLDED_FREE_TIER_LEGACY_SETTINGS,
   isFreeTierGloballyEnabled,
@@ -55,6 +56,7 @@ describe('feature flag registry', () => {
       LESSON_PLANNER_RUN_SHOW_FLAG,
       LESSON_PLANNER_TEMPLATES_FLAG,
       LESSON_PLANNER_DECK_GALLERY_FLAG,
+      LESSON_PLANNER_UPLOADS_FLAG,
       UNIFIED_SIGN_ON_FLAG,
       CLASS_CODE_UNIQUE_FLAG,
       DEMO_FEEDBACK_FLAG,
@@ -106,6 +108,7 @@ describe('feature flag registry', () => {
     expect(featureFlagSettingName(LESSON_PLANNER_RUN_SHOW_FLAG)).toBe('feature_flag.lesson_planner_run_show');
     expect(featureFlagSettingName(LESSON_PLANNER_TEMPLATES_FLAG)).toBe('feature_flag.lesson_planner_templates');
     expect(featureFlagSettingName(LESSON_PLANNER_DECK_GALLERY_FLAG)).toBe('feature_flag.lesson_planner_deck_gallery');
+    expect(featureFlagSettingName(LESSON_PLANNER_UPLOADS_FLAG)).toBe('feature_flag.lesson_planner_uploads');
   });
 
   test('rejects anything that is not a registered flag', () => {

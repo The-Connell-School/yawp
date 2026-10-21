@@ -91,6 +91,9 @@ export const LESSON_PLANNER_TEMPLATES_FLAG = 'lesson_planner_templates' as const
 /** The Yawp! Lesson Deck Kit: decks, the lesson plan spec and handouts. Needs deck v2. */
 export const LESSON_PLANNER_DECK_GALLERY_FLAG = 'lesson_planner_deck_gallery' as const;
 
+/** Teachers upload their own documents as source material for the planner (Oct 21). */
+export const LESSON_PLANNER_UPLOADS_FLAG = 'lesson_planner_uploads' as const;
+
 /** @deprecated Registry key `free_tier` — use {@link FREE_TIER_FLAG}. */
 export const FREE_TIER_FLAG_LEGACY_KEY = 'free_tier' as const;
 
@@ -187,6 +190,11 @@ export const FEATURE_FLAGS = {
     label: 'Lesson Planner: Lesson Deck Kit',
     description:
       'The Yawp! Lesson Deck Kit (spec v3): decks in Georgia and Arial on paper and pine, two or three colors from the lesson’s painting, mode words only where they do a job, and twelve slide templates, in Present, Run the show and PowerPoint; with the lesson plan export on, the lesson plan to the kit’s lesson plan spec; and handouts in the lesson’s fonts and color. Needs deck v2. Off: the tile deck, and gallery slides are drawn as their nearest tile slide.',
+  },
+  [LESSON_PLANNER_UPLOADS_FLAG]: {
+    label: 'Lesson Planner: your own documents',
+    description:
+      'Teachers attach their own PDF, Word, PowerPoint or text files to a lesson, and the planner builds from them: their texts, terms and sequence. Only the text is kept, never the file. Off: no attach button.',
   },
   [UNIFIED_SIGN_ON_FLAG]: {
     label: 'Unified sign-on',

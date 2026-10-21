@@ -67,6 +67,8 @@ const LESSON_PLANNER_REVIEW_FLAG_SETTINGS = [
   'feature_flag.lesson_planner_templates',
   // The Lesson Deck Kit (gallery deck).
   'feature_flag.lesson_planner_deck_gallery',
+  // The teacher's own documents (docs/plans/2026-10-21-sharing-standards-uploads.md).
+  'feature_flag.lesson_planner_uploads',
 ] as const;
 
 /**

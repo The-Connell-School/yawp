@@ -1,5 +1,12 @@
 import { monthlyFreeTierPolicy } from '~/domain/free-tier/monthly-policy.server';
 import {
+  MAX_PENDING_UPLOAD_IDS,
+  PENDING_UPLOAD_MS,
+  readUploadPart,
+  UPLOAD_TOOL,
+  type LessonUpload,
+} from '~/domain/lesson-planner/lesson-uploads';
+import {
   beginMonthlyOperation,
   replayMonthlyOperation,
   finishMonthlyOperation,
@@ -122,6 +129,12 @@ const POST = z
     unitDayTitle: z.string().trim().max(120).optional(),
     /** A lesson started from one of the teacher's templates (run 3). */
     templateId: z.string().min(1).max(64).optional(),
+    /** Documents added before the lesson's first message, to attach to it (Oct 21). */
+    uploadIds: z
+      .string()
+      .max(400)
+      .regex(/^[\w-]{1,40}(,[\w-]{1,40}){0,9}$/)
+      .optional(),
     /**
      * Opt in to the progress stream. Absent, the turn answers with one JSON
      * body exactly as it always has — so the streaming path can be turned off
@@ -431,9 +444,28 @@ export async function action({ request }: ActionFunctionArgs) {
 
     // Brian's review (B6): with stack v2 on, outputs are built from what the
     // teacher kept, so the planner sees the stack itself, not just its titles.
-    const { stackV2, intakeV2, templates: templatesOn, deckGallery } = await getLessonPlannerReviewFlags(
+    const { stackV2, intakeV2, templates: templatesOn, deckGallery, uploads: uploadsOn } = await getLessonPlannerReviewFlags(
       ctx.organizationId
     );
+    // The teacher's own documents (Oct 21): this lesson's, and any added
+    // before its first message, which this turn attaches. Only theirs.
+    const pendingUploadIds = (turn.uploadIds ?? '').split(',').filter(Boolean).slice(0, MAX_PENDING_UPLOAD_IDS);
+    const sources: Array<LessonUpload & { conversationId: string | null }> = uploadsOn
+      ? await prisma.lessonPlanUpload.findMany({
+          where: {
+            membershipId: ctx.membershipId,
+            OR: [
+              ...(activeConversation ? [{ conversationId: activeConversation.id }] : []),
+              ...(pendingUploadIds.length
+                ? [{ id: { in: pendingUploadIds }, conversationId: null, createdAt: { gt: new Date(Date.now() - PENDING_UPLOAD_MS) } }]
+                : []),
+            ],
+          },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          select: { id: true, name: true, text: true, truncated: true, conversationId: true },
+        })
+      : [];
+    const attachUploadIds = sources.filter((source) => !source.conversationId).map((source) => source.id);
     // Brian's run 3: a lesson built from the teacher's own template keeps its
     // shape. Only the teacher's own, and only with templates on.
     const templateRow =
@@ -483,6 +515,7 @@ export async function action({ request }: ActionFunctionArgs) {
       writingPracticeAvailable: ctx.writingPracticeEnabled,
       template,
       deckGallery,
+      sources,
     });
 
     const messages: { role: AgentType; content: string; name?: string }[] = [
@@ -525,12 +558,14 @@ export async function action({ request }: ActionFunctionArgs) {
             ipHash: computeIpHash(request),
           },
           maxToolRounds: PLANNER_MAX_TOOL_ROUNDS,
-          tools: LESSON_PLANNER_TOOLS,
+          tools: sources.length ? [...LESSON_PLANNER_TOOLS, UPLOAD_TOOL] : LESSON_PLANNER_TOOLS,
           handleToolCall: async (name, input) => {
             // Reported before the call, not after: the teacher should see what is
             // being looked up while it is being looked up.
             toolRound += 1;
             report(planningProgressForTool(name, input, toolRound));
+            // Read from this turn's own documents: never another lesson's.
+            if (name === UPLOAD_TOOL.name) return JSON.stringify(readUploadPart(sources, input));
             const result = await handleLessonPlannerToolCall(name, input, ctx);
             for (const link of collectToolLinks(result)) toolLinks.add(link);
             return result;
@@ -660,6 +695,12 @@ export async function action({ request }: ActionFunctionArgs) {
                   select: { id: true },
                 }));
 
+          if (attachUploadIds.length) {
+            await transaction.lessonPlanUpload.updateMany({
+              where: { id: { in: attachUploadIds }, membershipId: ctx.membershipId, conversationId: null },
+              data: { conversationId: persistedConversation.id },
+            });
+          }
           await transaction.lessonPlanMessage.create({
             data: {
               conversationId: persistedConversation.id,

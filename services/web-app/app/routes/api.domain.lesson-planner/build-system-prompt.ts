@@ -1,4 +1,5 @@
 import { buildTemplateSection, type LessonTemplate } from '~/domain/lesson-planner/lesson-templates';
+import { buildSourcesSection, type LessonUpload } from '~/domain/lesson-planner/lesson-uploads';
 import { DECK_ART } from '~/domain/lesson-planner/deck-art';
 import { rubricCategories } from '~/domain/grading/rubric';
 import type { CacheableSystemBlock } from '~/utils/getLLMCompletion/getLLMCompletion';
@@ -778,6 +779,7 @@ export function buildLessonPlannerSystemPromptBlocks({
   lessonLength = null,
   template = null,
   deckGallery = false,
+  sources = [],
 }: {
   teacherName: string | null;
   organizationName: string;
@@ -795,6 +797,8 @@ export function buildLessonPlannerSystemPromptBlocks({
   template?: LessonTemplate | null;
   /** The gallery deck (Lesson Deck Kit): its templates, rhythm and art. */
   deckGallery?: boolean;
+  /** The teacher's own documents for this lesson (Oct 21). */
+  sources?: LessonUpload[];
 }): CacheableSystemBlock[] {
   const who = teacherName ? `${teacherName}, a teacher` : 'a teacher';
   const intro = `You are the Yawp! Lesson Planner, an instructional design partner for ${who} at ${organizationName}.`;
@@ -805,6 +809,7 @@ export function buildLessonPlannerSystemPromptBlocks({
     ...buildUnitContextSection(unitContext),
     ...buildTemplateSection(template),
     ...buildDeckGallerySection(deckGallery),
+    ...buildSourcesSection(sources),
   ].join('\n');
   const variable = tail ? `${intro}\n${tail}` : intro;
 

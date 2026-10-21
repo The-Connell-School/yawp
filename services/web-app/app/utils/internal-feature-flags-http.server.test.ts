@@ -129,6 +129,7 @@ describe('internal feature-flag endpoints', () => {
       'lesson_planner_run_show',
       'lesson_planner_templates',
       'lesson_planner_deck_gallery',
+      'lesson_planner_uploads',
       'unified-sign-on',
       'classcode-unique',
       'demo-feedback-widget',
@@ -137,8 +138,8 @@ describe('internal feature-flag endpoints', () => {
     expect(body.flags[0]).toMatchObject({ key: FLAG, mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[1]).toMatchObject({ key: 'internal_rubrics', label: 'Rubrics from Yawp Internal', mode: 'off', orgIds: [], enabled: false });
     expect(body.flags[2]).toMatchObject({ key: 'free-tier', label: 'Free tier', mode: 'off', orgIds: [], enabled: false });
-    // The planner's flags follow free tier (3 to 12).
-    expect(body.flags[13]).toMatchObject({
+    // The planner's flags follow free tier (3 to 13).
+    expect(body.flags[14]).toMatchObject({
       key: 'unified-sign-on', mode: 'off', orgIds: [], enabled: false,
       persisted: { mode: 'off', orgIds: [] },
       effective: { mode: 'off', orgIds: [] }, runtimeOverride: null,
@@ -224,6 +225,7 @@ describe('internal feature-flag endpoints', () => {
       'lesson_planner_run_show',
       'lesson_planner_templates',
       'lesson_planner_deck_gallery',
+      'lesson_planner_uploads',
       'unified-sign-on',
       'classcode-unique',
       'demo-feedback-widget',
