@@ -62,6 +62,18 @@ export async function enforceLockedPreviewRequest(request: Request, userId: stri
   const pathname = new URL(request.url).pathname;
   if (!(pathname === '/app' || pathname.startsWith('/app/') || pathname.startsWith('/api/'))) return;
   if (!(await userHasPendingFreeTierTeachingLock(userId))) return;
+  if (pathname === '/api/domain/lesson-planner' && request.method === 'POST') {
+    const app = await getLockedPreviewApplication(userId, membershipId);
+    if (
+      app &&
+      (app.status === 'ACCOUNT_CREATED' || app.status === 'ADMIN_SUBMITTED')
+    ) {
+      throw Response.json(
+        { error: 'approval_required', message: LOCKED_PREVIEW_MESSAGE },
+        { status: 403 }
+      );
+    }
+  }
   if (isLockedPreviewRequestAllowed(request.method, pathname)) return;
   if (['GET', 'HEAD'].includes(request.method))
     throw redirect(LOCKED_PREVIEW_APP_HOME);

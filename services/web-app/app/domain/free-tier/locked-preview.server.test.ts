@@ -38,6 +38,18 @@ test('pending direct APIs fail with 403 before execution; app reads pass through
     new Request('http://local/api/domain/lesson-planner', { method: 'POST' }),
     'teacher'
   );
+  for (const status of ['ACCOUNT_CREATED', 'ADMIN_SUBMITTED'] as const) {
+    application.status = status;
+    await expect(
+      enforceLockedPreviewRequest(
+        new Request('http://local/api/domain/lesson-planner', {
+          method: 'POST',
+        }),
+        'teacher'
+      )
+    ).rejects.toMatchObject({ status: 403 });
+  }
+  application.status = 'SENT';
   await expect(
     enforceLockedPreviewRequest(
       new Request('http://local/api/domain/lesson-planner/packet', {
