@@ -274,7 +274,7 @@ export function FreeAssignmentTiles({
                 !teachingLocked &&
                 (!type || (!usage.monthly && row.remaining === 0))
               }
-              onClick={() => onCreate(type?.id)}
+              onClick={() => onCreate(teachingLocked ? undefined : type?.id)}
               aria-label={`New ${row.label} assignment`}
               className="flex min-h-[92px] flex-col overflow-hidden rounded-xl border bg-popover text-left shadow-sm disabled:bg-muted/30"
             >
