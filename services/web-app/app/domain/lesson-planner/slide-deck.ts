@@ -130,6 +130,19 @@ const slideSchema = z
     page: z.string().trim().min(1).max(20).optional(),
     part: z.string().trim().min(1).max(12).optional(),
     nextLesson: z.string().trim().min(1).max(MAX_TITLE_CHARS).optional(),
+    // Deck spec v3: the divider that starts a stage names its writing-process
+    // step (Step 1. pre-writing … Step 6. title and format).
+    processStep: z.coerce.number().int().min(1).max(6).optional(),
+    // A quiz question's choices; the correct one (1-based) gets a soft band.
+    choices: z.array(line).min(2).max(5).optional(),
+    answer: z.coerce.number().int().min(1).max(5).optional(),
+    // The exit slide's Yawp! button ("Open Yawp! → Exit ticket").
+    button: z.string().trim().min(1).max(40).optional(),
+    // The title slide's course line ("English 9").
+    course: z.string().trim().min(1).max(80).optional(),
+    // Which of the deck's colors (1-based) this slide uses, for a section
+    // that keeps its own color.
+    color: z.coerce.number().int().min(1).max(3).optional(),
     // Which stack step this slide belongs to, by its number in the stack
     // (Brian's run 3): Run the show moves the projector with the teacher.
     step: z.coerce.number().int().min(1).max(MAX_SLIDES).optional(),
@@ -190,6 +203,9 @@ const deckSchema = z.object({
   // head), its accent, and the painting from the art library it hangs.
   unit: z.string().trim().min(1).max(80).optional(),
   accent: z.enum(DECK_ACCENTS).optional(),
+  // Deck spec v3: two or three colors from the painting; the first is the
+  // primary. Without them, the painting's own colors are used.
+  colors: z.array(z.string().trim().regex(/^#?[0-9a-fA-F]{6}$/)).min(1).max(3).optional(),
   art: z.string().trim().min(1).max(60).optional(),
   slides: z.array(slideSchema).min(1).max(MAX_SLIDES),
 });

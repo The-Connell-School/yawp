@@ -106,3 +106,33 @@ describe('classicSlide: a gallery slide on a classic renderer', () => {
     ]);
   });
 });
+
+describe('Deck spec v3 slots', () => {
+  const n = { speakerNotes: 'Say it.' };
+
+  test('a deck carries its painting’s colors; slides their step, quiz, button and color pick', () => {
+    const result = validateSlideDeck(
+      JSON.stringify({
+        title: 'Conclusion Paragraph',
+        colors: ['#9C4A22', '#3F5A73', '#7D6118'],
+        slides: [
+          { layout: 'title', title: 'Conclusion Paragraph', course: 'English 9', ...n },
+          { layout: 'divider', title: 'We write.', processStep: 5, ...n },
+          { layout: 'discuss', title: 'Quiz', question: 'Which move comes first?', choices: ['Restate', 'Widen', 'Close'], answer: 1, color: 2, ...n },
+          { layout: 'exit', title: 'Before you go', body: 'One line.', button: 'Exit ticket', ...n },
+        ],
+      })
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.deck.colors).toEqual(['#9C4A22', '#3F5A73', '#7D6118']);
+    expect(result.deck.slides[1]!.processStep).toBe(5);
+    expect(result.deck.slides[2]).toMatchObject({ choices: ['Restate', 'Widen', 'Close'], answer: 1, color: 2 });
+    expect(result.deck.slides[3]!.button).toBe('Exit ticket');
+  });
+
+  test('a writing-process step outside 1 to 6, or a fourth deck color, is refused', () => {
+    expect(validateSlideDeck(JSON.stringify({ title: 'X', slides: [{ layout: 'divider', title: 'We write.', processStep: 7, ...n }] })).ok).toBe(false);
+    expect(validateSlideDeck(JSON.stringify({ title: 'X', colors: ['#111111', '#222222', '#333333', '#444444'], slides: [{ layout: 'title', title: 'X', ...n }] })).ok).toBe(false);
+  });
+});
