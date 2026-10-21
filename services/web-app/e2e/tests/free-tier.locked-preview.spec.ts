@@ -309,17 +309,39 @@ test('stale tab blocked POST shows approval required toast without changing page
   await expect(page.getByTestId('teaching-access-approval-toast')).toBeVisible({
     timeout: 30_000,
   });
+  await page
+    .getByTestId('teaching-access-approval-toast')
+    .getByRole('button', { name: 'Dismiss' })
+    .click();
   await prisma.freeTierApplication.update({
     where: { id: app.id },
     data: { status: 'SENT' },
   });
+  await expect
+    .poll(async () => {
+      const row = await prisma.freeTierApplication.findUnique({
+        where: { id: app.id },
+        select: { status: true },
+      });
+      return row?.status;
+    })
+    .toBe('SENT');
   const bannerBefore = await page.getByTestId('teaching-access-banner').count();
-  await page.evaluate(async () => {
+  const blocked = await page.evaluate(async () => {
     const body = new FormData();
     body.set('intent', 'create');
-    await fetch('/api/assignments/create', { method: 'POST', body });
+    const response = await fetch('/api/assignments/create', {
+      method: 'POST',
+      body,
+    });
+    const payload = await response.json().catch(() => null);
+    return { status: response.status, payload };
   });
-  await expect(page.getByTestId('teaching-access-error-toast')).toBeVisible();
+  expect(blocked.status).toBe(403);
+  expect(blocked.payload?.error).toBe('approval_required');
+  await expect(page.getByTestId('teaching-access-error-toast')).toBeVisible({
+    timeout: 10_000,
+  });
   await expect(page.getByTestId('teaching-access-banner')).toHaveCount(
     bannerBefore
   );
