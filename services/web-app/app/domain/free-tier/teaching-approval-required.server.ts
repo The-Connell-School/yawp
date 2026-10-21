@@ -1,13 +1,16 @@
 import type { ActionFunctionArgs } from 'react-router';
 import { data as dataResponse } from 'react-router';
 import { userHasPendingFreeTierTeachingLock } from './locked-preview.server';
+import {
+  TEACHING_APPROVAL_REQUIRED_ERROR,
+  type TeachingApprovalRequiredFields,
+} from './teaching-approval-required';
 
-export const TEACHING_APPROVAL_REQUIRED_ERROR = 'approval_required' as const;
-
-export type TeachingApprovalRequiredFields = Record<
-  string,
-  string | string[] | undefined
->;
+export {
+  TEACHING_APPROVAL_REQUIRED_ERROR,
+  isTeachingApprovalRequiredActionData,
+  type TeachingApprovalRequiredFields,
+} from './teaching-approval-required';
 
 export function teachingApprovalRequiredResponse(
   fields: TeachingApprovalRequiredFields
@@ -19,22 +22,6 @@ export function teachingApprovalRequiredResponse(
       fields,
     },
     { status: 403 }
-  );
-}
-
-export function isTeachingApprovalRequiredActionData(
-  data: unknown
-): data is {
-  error: typeof TEACHING_APPROVAL_REQUIRED_ERROR;
-  approvalRequired: true;
-  fields: TeachingApprovalRequiredFields;
-} {
-  return (
-    typeof data === 'object' &&
-    data !== null &&
-    'approvalRequired' in data &&
-    (data as { approvalRequired?: boolean }).approvalRequired === true &&
-    'fields' in data
   );
 }
 

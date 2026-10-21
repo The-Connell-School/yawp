@@ -18,10 +18,7 @@ import { Textarea } from '~/components/ui/textarea';
 import { TeachingApprovalRequiredAlert } from '~/components/free-tier/teaching-approval-required-alert';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import { lockedTeachingButtonProps } from '~/components/free-tier/locked-teaching-control';
-import {
-  guardTeachingFormAction,
-  isTeachingApprovalRequiredActionData,
-} from '~/domain/free-tier/teaching-approval-required.server';
+import { isTeachingApprovalRequiredActionData } from '~/domain/free-tier/teaching-approval-required';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
@@ -83,6 +80,8 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const formData = await request.formData();
+  const { guardTeachingFormAction } =
+    await import('~/domain/free-tier/teaching-approval-required.server');
   const blocked = await guardTeachingFormAction(request, userId, formData);
   if (blocked) return blocked;
 
