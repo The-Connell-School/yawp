@@ -182,24 +182,44 @@ for (const width of [1440, 390]) {
     ).toBeVisible();
     await capture(page, `locked-app-before-${width}`);
     await page
-      .getByRole('button', { name: /New .* assignment/i })
-      .first()
+      .getByRole('button', { name: /New Class Starter assignment/i })
       .click();
     await expect(page.getByRole('heading', { name: 'New assignment' })).toBeVisible();
+    await expect(page.getByText('Choose a type.')).toBeVisible();
     await capture(page, `locked-picker-${width}`);
     await page.keyboard.press('Escape');
     if (width === 1440) {
       const create = page.getByRole('button', { name: 'Create assignment' }).first();
+      await create.hover();
+      await page.waitForTimeout(350);
+      await expect(
+        page.getByRole('tooltip', {
+          name: /Unlocks once your administrator approves/,
+        })
+      ).toBeVisible();
       await create.focus();
       await expect(
-        page.getByText(/Unlocks once your administrator approves/)
+        page.getByRole('tooltip', {
+          name: /Unlocks once your administrator approves/,
+        })
       ).toBeVisible();
     } else {
       await page.getByRole('button', { name: 'Create assignment' }).first().click();
       await expect(
         page.getByRole('heading', { name: 'Unlocks after approval' })
       ).toBeVisible();
+      const sheet = page.getByRole('dialog');
+      const box = await sheet.boundingBox();
+      expect(box?.height ?? 0).toBeLessThan(900 * 0.75);
       await page.getByRole('button', { name: 'Got it' }).click();
+    }
+    if (width === 390) {
+      await expect(
+        page.getByTestId('teaching-access-banner').getByText(/View status/)
+      ).toBeVisible();
+      await expect(
+        page.getByTestId('teaching-access-banner').getByText(/\.\.\./)
+      ).toHaveCount(0);
     }
     const before = await prisma.assignment.count();
     for (const path of [

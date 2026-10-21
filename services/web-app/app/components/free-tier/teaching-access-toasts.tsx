@@ -9,6 +9,10 @@ import {
 } from '~/domain/free-tier/teaching-access-copy';
 import useBreakpoint from '~/hooks/useBreakpoint';
 
+/** Keeps teaching-access toasts above the demo "Give feedback" control when present. */
+export const TEACHING_ACCESS_TOAST_DESKTOP_POSITION =
+  'bottom-[var(--teaching-access-toast-bottom,1.5rem)] right-6';
+
 export function ApprovalRequiredToast({
   onDismiss,
   mobilePinned,
@@ -26,7 +30,7 @@ export function ApprovalRequiredToast({
         'fixed z-[100] w-[min(100%,22rem)] rounded-lg border bg-popover p-4 shadow-lg',
         isMobile
           ? 'left-3 right-3 top-[calc(var(--teaching-access-banner-offset,3.5rem)+0.5rem)]'
-          : 'bottom-6 right-6'
+          : TEACHING_ACCESS_TOAST_DESKTOP_POSITION
       )}
     >
       <div className="flex gap-3">
@@ -71,7 +75,7 @@ export function ApprovalSuccessToast({
       data-testid="teaching-access-approval-toast"
       className={cn(
         'fixed z-[100] w-[min(100%,22rem)] rounded-lg border bg-popover p-4 shadow-lg motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-200',
-        className ?? 'bottom-6 right-6'
+        className ?? TEACHING_ACCESS_TOAST_DESKTOP_POSITION
       )}
     >
       <div className="flex gap-3">
