@@ -11,6 +11,7 @@ import {
   setLessonPlannerReviewFlag,
   type LessonPlannerReviewFlag,
 } from '../feature-flags';
+import { DAY_ONE_REPLY } from '../fixtures/lesson-planner/day-one-reply';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
 
@@ -35,72 +36,6 @@ async function stackV3On() {
 type Ctx = { teacherMembershipId: string; organizationId: string };
 type Turn = { role: 'user' | 'assistant'; content: string };
 
-/** Brian's day one lesson, as the planner returned it on run 3. */
-export const DAY_ONE_REPLY = [
-  '# Day One: The Things They Carried — What We Carry',
-  '',
-  '## Class starter (5 min)',
-  '',
-  '```yawp-daily-pages',
-  'kind: class-starter',
-  'title: Four minutes of writing, then a share',
-  'What is one thing you carry every day that nobody else can see?',
-  '```',
-  '',
-  '## Hook activity: What’s in your bag? (15 min)',
-  '',
-  'Give students 2 minutes to lay out what is in their bag or pockets, or list it from memory. Then they pick one object that would tell a stranger something true about them. Pairs share, then pull 4–5 objects to the whole class. Land on: the things people carry are never just things.',
-  '',
-  '## Framing (10 min)',
-  '',
-  '```yawp-material',
-  'kind: notes',
-  'title: Frame — Historical context',
-  'minutes: 4',
-  'type: context',
-  '---',
-  'The Vietnam War, 1965–1973, and who was drafted.',
-  '```',
-  '',
-  '```yawp-material',
-  'kind: notes',
-  'title: Frame — The author',
-  'minutes: 3',
-  'type: context',
-  '---',
-  'Tim O’Brien was drafted in 1968.',
-  '```',
-  '',
-  '```yawp-material',
-  'kind: notes',
-  'title: Frame — Literary context',
-  'minutes: 3',
-  'type: context',
-  '---',
-  'A story about stories: fiction that knows it is fiction.',
-  '```',
-  '',
-  '## Read aloud: the opening of the title story (12 min)',
-  '',
-  'If you like reading aloud yourself, take the first pages. Stop at the first list.',
-  '',
-  '## Daily Pages (5 min)',
-  '',
-  '```yawp-daily-pages',
-  'kind: daily-pages',
-  'O’Brien lists what every soldier carries — down to the ounce. What would your list say about you?',
-  '```',
-  '',
-  '## Closing (3 min)',
-  '',
-  'Exit ticket: one object, one sentence about why it matters.',
-  '',
-  'Total: 5 + 15 + 4 + 3 + 3 + 12 + 5 + 3 = 50 minutes',
-  '',
-  'You don’t have to use all of these. Pick one framing card or all three.',
-  '',
-  'Want to refine or edit any part of this?',
-].join('\n');
 
 export async function seedConversation(e2eContext: Ctx, turns: Turn[], title = 'Day One') {
   const prisma = createE2EPrismaClient();
@@ -1088,6 +1023,49 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await page.mouse.move(500, 400);
       await page.mouse.wheel(0, 1500);
       await expect.poll(() => stack.evaluate((element) => element.scrollTop)).toBeGreaterThan(100);
+    });
+  });
+
+  test.describe('the how-it-works guide follows the planner', () => {
+    test('with the review flags on, it shows the run of show, sharing, Run the show, templates and the gallery deck', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      for (const flag of REVIEW_FLAGS) await setLessonPlannerReviewFlag(flag, true);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto('/app/lesson-planner/how-it-works');
+      await expect(page.getByRole('heading', { name: 'Your lesson, start to finish' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Run the show' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Reuse a shape that works' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Post it, or send it' })).toBeVisible();
+      for (const clip of ['plan-steps', 'run-of-show', 'run-the-show', 'templates', 'gallery-deck']) {
+        await expect(page.locator(`video[poster$="/${clip}.jpg"]`)).toHaveCount(1);
+      }
+      await expect(page.getByTestId('guide-wont')).toContainText('only when you post or send it');
+      // Every clip and still the guide points at is really there.
+      const sources = await page.locator('video source, img[src*="lesson-planner-guide"], video[poster]').evaluateAll((nodes) =>
+        nodes.map((node) => node.getAttribute('src') ?? node.getAttribute('poster')!)
+      );
+      for (const source of sources) expect((await page.request.get(source)).ok(), source).toBe(true);
+
+      // The new sections stay in bounds on a phone too.
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto('/app/lesson-planner/how-it-works');
+      await expect(page.getByRole('heading', { name: 'Run the show' })).toBeAttached();
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      expect(overflow).toBeLessThanOrEqual(0);
+    });
+
+    test('with them off, it is the guide teachers have today', async ({ page, signIn, e2eContext }) => {
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto('/app/lesson-planner/how-it-works');
+      await expect(page.getByRole('heading', { name: 'Everything for the lesson, in one place to print' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Run the show' })).toHaveCount(0);
+      await expect(page.getByRole('heading', { name: 'Reuse a shape that works' })).toHaveCount(0);
+      await expect(page.locator('video[poster$="/plan.jpg"]')).toHaveCount(1);
+      await expect(page.locator('video[poster$="/deck.jpg"]')).toHaveCount(1);
+      await expect(page.getByTestId('guide-wont')).toContainText('They stay in your account');
     });
   });
 });
