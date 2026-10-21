@@ -2557,6 +2557,8 @@ test.describe('Yawp! Lesson Planner', () => {
     const slider = page.getByRole('slider', {
       name: /lesson length in minutes/i,
     });
+    // Filled before hydration, the change never reaches React.
+    await page.waitForLoadState('networkidle');
     await slider.fill('90');
     await expect(page.getByTestId('lesson-minutes-value')).toHaveText(
       '1 hr 30 min'

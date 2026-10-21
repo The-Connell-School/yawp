@@ -841,7 +841,15 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await page.getByTestId('set-lesson').click();
       await page.getByTestId('save-template').click();
       await page.getByTestId('template-name').fill('Read & write day');
+      // The ✓ shows at once; leaving before the save lands would cancel it.
+      const saved = page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/domain/lesson-planner/stack') &&
+          response.request().method() === 'POST' &&
+          (response.request().postData() ?? '').includes('save-template')
+      );
       await page.getByRole('button', { name: 'Save', exact: true }).click();
+      expect((await saved).ok()).toBe(true);
       await expect(page.getByTestId('save-template')).toHaveText('Saved as a template ✓');
 
       await page.goto('/app/lesson-planner');
