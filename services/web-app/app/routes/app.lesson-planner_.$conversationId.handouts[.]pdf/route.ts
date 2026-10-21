@@ -25,6 +25,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     title: handouts.title,
     className: handouts.className,
     parts,
+    kit: handouts.kit,
   });
   const filename = pdfFilename(handouts.title, parts.length === 1 ? parts[0]!.title : 'Student handout');
   const disposition = url.searchParams.get('inline') === '1' ? 'inline' : 'attachment';

@@ -7,6 +7,7 @@ import { prisma } from '~/utils/db.server';
 import { loadStackV3 } from './load-stack-v3.server';
 import { answerLinesFor, handoutContent, isStudentFacing, studentVersionKey } from './step-handout';
 import type { StackStep } from './stack-steps';
+import { handoutKit } from './lesson-pdf.server';
 
 export type HandoutStep = Pick<StackStep, 'id' | 'title' | 'type' | 'label' | 'isWriting' | 'kind'> & {
   /** In the handout unless the teacher takes it out. */
@@ -58,5 +59,6 @@ export async function loadStepHandouts({
     title: loaded.packet.title,
     className: loaded.packet.className,
     steps,
+    kit: handoutKit(loaded.packet, loaded.reviewFlags),
   };
 }

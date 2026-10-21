@@ -6,6 +6,7 @@
  * review flags, so each test turns on what it needs and the afterEach turns
  * every flag back off.
  */
+import { inflateRawSync } from 'node:zlib';
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import {
@@ -21,7 +22,30 @@ const REVIEW_FLAGS: LessonPlannerReviewFlag[] = [
   'lesson_planner_deck_v2',
   'lesson_planner_stack_panel',
   'lesson_planner_plan_export_v2',
+  'lesson_planner_deck_gallery',
 ];
+
+/** The files inside a .docx, by name, read through the zip's central directory. */
+function zipParts(bytes: Buffer): Map<string, string> {
+  const end = bytes.lastIndexOf('PK\x05\x06', bytes.length, 'latin1');
+  const count = bytes.readUInt16LE(end + 10);
+  let cursor = bytes.readUInt32LE(end + 16);
+  const parts = new Map<string, string>();
+  for (let index = 0; index < count; index += 1) {
+    const method = bytes.readUInt16LE(cursor + 10);
+    const size = bytes.readUInt32LE(cursor + 20);
+    const nameLength = bytes.readUInt16LE(cursor + 28);
+    const extraLength = bytes.readUInt16LE(cursor + 30);
+    const commentLength = bytes.readUInt16LE(cursor + 32);
+    const local = bytes.readUInt32LE(cursor + 42);
+    const name = bytes.toString('utf8', cursor + 46, cursor + 46 + nameLength);
+    const start = local + 30 + bytes.readUInt16LE(local + 26) + bytes.readUInt16LE(local + 28);
+    const raw = bytes.subarray(start, start + size);
+    parts.set(name, (method === 8 ? inflateRawSync(raw) : raw).toString('utf8'));
+    cursor += 46 + nameLength + extraLength + commentLength;
+  }
+  return parts;
+}
 
 type Ctx = { teacherMembershipId: string; organizationId: string };
 type Turn = { role: 'user' | 'assistant'; content: string };
@@ -875,6 +899,59 @@ test.describe("Lesson Planner — Brian's second run", () => {
       expect((await response.body()).subarray(0, 5).toString()).toBe('%PDF-');
       // The full packet is still there for whoever wants everything.
       await expect(page.getByRole('link', { name: 'Full packet (PDF)' })).toBeVisible();
+    });
+
+    test('with the Lesson Deck Kit on, the plan follows the lesson plan spec and the handout the plan’s fonts', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      await setLessonPlannerReviewFlag('lesson_planner_deck_v2', true);
+      await setLessonPlannerReviewFlag('lesson_planner_plan_export_v2', true);
+      await setLessonPlannerReviewFlag('lesson_planner_deck_gallery', true);
+      const notes = { speakerNotes: 'Say it.' };
+      const deck = {
+        title: 'Lesson 5: Conclusion Paragraph',
+        unit: 'The Critical Essay',
+        art: 'turner-temeraire',
+        slides: [
+          { layout: 'title', title: 'Conclusion Paragraph', subtitle: 'Land the plane', ...notes },
+          { layout: 'divider', title: 'We write.', processStep: 5, ...notes },
+          { layout: 'write', title: 'An ending you remember', body: 'What ending stayed with you?', step: 1, ...notes },
+          { layout: 'exit', title: 'Before you go', body: 'Your last line.', step: 2, ...notes },
+        ],
+      };
+      const { conversationId } = await seedStack(e2eContext, [
+        { title: 'Class Starter: An ending', kind: 'class-starter', audience: 'student', content: 'Write about an ending you remember.' },
+        { title: 'Exit ticket', kind: 'exit-ticket', audience: 'student', content: 'Write your last line.' },
+        { title: deck.title, kind: 'slides', content: `\`\`\`yawp-slides\n${JSON.stringify(deck)}\n\`\`\`` },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+
+      const response = await page.request.get(`/app/lesson-planner/${conversationId}/plan.docx`);
+      expect(response.ok()).toBe(true);
+      expect(response.headers()['content-disposition']).toContain('Conclusion Paragraph - Lesson plan.docx');
+      const document = zipParts(await response.body()).get('word/document.xml')!;
+      for (const text of [
+        'YAWP! LESSON PLAN · THE CRITICAL ESSAY',
+        'Land the plane',
+        '5 of the writing process: conclusion',
+        '[ Add the standards this lesson covers ]',
+        'Student access to yawp.school',
+        'An ending you remember',
+      ]) {
+        expect(document).toContain(text);
+      }
+      // The lesson color is the painting's rust.
+      expect(document).toContain('9C4A22');
+
+      const pdf = await page.request.get(`/app/lesson-planner/${conversationId}/plan.pdf`);
+      expect((await pdf.body()).toString('latin1')).toContain('Gelasio');
+      const handout = await page.request.get(`/app/lesson-planner/${conversationId}/packet.pdf?view=handout`);
+      expect(handout.ok()).toBe(true);
+      expect((await handout.body()).toString('latin1')).toContain('Arimo');
     });
 
     test('flag off: no Word download, and the route is not there', async ({ page, signIn, e2eContext }) => {

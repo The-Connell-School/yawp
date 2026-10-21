@@ -9,6 +9,7 @@ import {
   renderHandoutPdf,
   renderPacketPdf,
   renderStepHandoutPdf,
+  handoutKit,
 } from './lesson-pdf.server';
 
 function packetWith(
@@ -266,6 +267,36 @@ describe('renderHandoutPdf', () => {
     const text = pdfText(await renderHandoutPdf({ packet, only: 's1' }));
     expect(text).toContain('Name:');
     expect(text).toContain('Section:');
+  });
+});
+
+describe('handouts with the Lesson Deck Kit on', () => {
+  const packet = packetWith([
+    { id: 's2', content: '## Practice\n\nUnderline the sentence that proves it.', keptAudience: 'student' },
+  ]);
+
+  test('off: Helvetica and Yawp!’s print colour, as before', async () => {
+    expect(handoutKit(packet, { deckGallery: false })).toBeNull();
+    const raw = pdfMetadata(await renderHandoutPdf({ packet }));
+    expect(raw).toContain('Helvetica');
+    expect(raw).not.toContain('Gelasio');
+  });
+
+  test('on: the lesson plan’s fonts and the lesson’s color', async () => {
+    const kit = handoutKit(packet, { deckGallery: true })!;
+    expect(kit.color).toMatch(/^#[0-9A-F]{6}$/);
+    const raw = pdfMetadata(await renderHandoutPdf({ packet, kit }));
+    expect(raw).toContain('Gelasio');
+    expect(raw).toContain('Arimo');
+    const steps = pdfMetadata(
+      await renderStepHandoutPdf({ title: 'T', className: null, parts: [{ id: 'a', title: 'A', content: 'Write.', lines: 2 }], kit })
+    );
+    expect(steps).toContain('Arimo');
+  });
+
+  test('on: the deck’s primary color', () => {
+    const withDeck = { ...packet, sections: [{ ...packet.sections[0]!, deck: { title: 'D', colors: ['#3F5A73'], slides: [{ layout: 'title', title: 'D', speakerNotes: 'n' }] } }] };
+    expect(handoutKit(withDeck as never, { deckGallery: true })!.color).toBe('#3F5A73');
   });
 });
 
