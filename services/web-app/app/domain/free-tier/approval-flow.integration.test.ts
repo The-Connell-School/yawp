@@ -735,8 +735,9 @@ describe('free-tier approval flow', () => {
       newAdminEmail: 'late@school.edu',
       request: forwardReq,
     });
-    expect(forwarded).toEqual({
-      ok: false,
+    expect(forwarded.ok).toBe(false);
+    if (forwarded.ok) throw new Error('expected already_approved');
+    expect(forwarded).toMatchObject({
       reason: 'already_approved',
       schoolName: 'Approved Forward HS',
     });

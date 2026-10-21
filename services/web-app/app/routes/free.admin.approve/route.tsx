@@ -213,14 +213,15 @@ export default function FreeAdminApproveRoute() {
   }
 
   if (actionData && !actionData.ok && actionData.reason === 'already_approved') {
+    const approvedSchool =
+      'schoolName' in actionData &&
+      typeof (actionData as { schoolName?: unknown }).schoolName === 'string'
+        ? (actionData as { schoolName: string }).schoolName
+        : 'this school';
     return (
       <FreeTierAuthCard title="Already approved" icon={<CircleCheck />}>
         <p className="text-sm text-muted-foreground">
-          Yawp! is already approved for{' '}
-          {'schoolName' in actionData && actionData.schoolName
-            ? actionData.schoolName
-            : 'this school'}
-          .
+          Yawp! is already approved for {approvedSchool}.
         </p>
       </FreeTierAuthCard>
     );

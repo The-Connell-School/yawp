@@ -72,15 +72,21 @@ function loaderTerminalView(data: LoaderData) {
   return null;
 }
 
+function schoolNameFromAction(actionData: object): string | undefined {
+  if (
+    'schoolName' in actionData &&
+    typeof (actionData as { schoolName?: unknown }).schoolName === 'string'
+  ) {
+    return (actionData as { schoolName: string }).schoolName;
+  }
+  return undefined;
+}
+
 function actionTerminalView(actionData: NonNullable<ReturnType<typeof useActionData<typeof action>>>) {
   if (actionData.ok) return null;
   if (actionData.reason === 'already_approved') {
     return (
-      <AlreadyApprovedCard
-        schoolName={
-          'schoolName' in actionData ? actionData.schoolName : undefined
-        }
-      />
+      <AlreadyApprovedCard schoolName={schoolNameFromAction(actionData)} />
     );
   }
   if (actionData.reason === 'declined') {
