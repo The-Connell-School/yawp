@@ -372,6 +372,11 @@ const TOURS: Record<TourId, PageTour> = {
         body: 'New → Assignment gives it to your class. New → Document lets you try it yourself first, the way your students will. Use these assignments to help students practice and develop their own ideas.',
       },
       {
+        target: 'type-directions',
+        title: 'How it works',
+        body: 'What prewriting is, how to run it, and how it is scored. The lesson plan, slide deck, and tutorial video for the Pre-writing lesson sit right under it.',
+      },
+      {
         target: 'type-modules',
         title: 'The writing process',
         body: 'The steps this assignment walks students through. Open one for an overview of what they will do.',
@@ -399,7 +404,7 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'type-directions',
         title: 'How it works',
-        body: 'How the prompts work and what tends to get the best essays out of students.',
+        body: 'What a thesis statement assignment is, how to run it, and how it is scored. The lesson plan, slide deck, and tutorial video for the thesis lesson sit right under it.',
       },
       {
         target: 'type-library',
