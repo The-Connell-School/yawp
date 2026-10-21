@@ -24,6 +24,12 @@ import type {
   FreeAccountUsage,
   UsageCount,
 } from '~/domain/free-tier/inapp-usage';
+import {
+  formatUsageRenewsLabel,
+  lessonPlannerMonthlyWarning,
+  usagePercent,
+} from '~/domain/free-tier/inapp-usage';
+import { AlertTriangle } from 'lucide-react';
 import { lessonPlanMonthWindow } from '~/utils/lesson-planner/month-window';
 import { cn } from '~/utils/misc';
 import { SiteLicenseLockedAssignmentTile } from '~/components/site-license-locked-assignment-tile';
@@ -44,21 +50,123 @@ export function useFreeAccountUsage() {
     )?.freeAccountUsage ?? null
   );
 }
-function Meter({ count }: { count: UsageCount }) {
+function MonthlyUsageBar({
+  percent,
+  tone,
+}: {
+  percent: number;
+  tone: 'default' | 'warning' | 'limit';
+}) {
   return (
     <div
-      className="h-1.5 overflow-hidden rounded-full bg-secondary"
+      className="h-1 overflow-hidden rounded-full bg-secondary"
       aria-hidden="true"
     >
       <div
         className={cn(
-          'h-full rounded-full bg-primary',
-          count.remaining === 0 && 'bg-amber-600'
+          'h-full rounded-full bg-foreground/80 motion-safe:transition-[width] motion-safe:duration-300',
+          tone === 'warning' && 'bg-amber-600',
+          tone === 'limit' && 'bg-red-700'
         )}
-        style={{
-          width: `${count.total === 0 ? 100 : Math.min(100, (count.used / count.total) * 100)}%`,
-        }}
+        style={{ width: `${percent}%` }}
       />
+    </div>
+  );
+}
+
+export function monthlyUsageShowsMobileDot(usage: FreeAccountUsage): boolean {
+  if (!usage.monthly) return false;
+  return lessonPlannerMonthlyWarning(usage.lessonPlans) !== 'none';
+}
+
+export function MonthlyUsageSidebarCard({
+  usage,
+  compact,
+}: {
+  usage: FreeAccountUsage;
+  compact?: boolean;
+}) {
+  if (!usage.monthly || !usage.reporter) return null;
+  const lpPercent = usagePercent(usage.lessonPlans);
+  const lpWarning = lessonPlannerMonthlyWarning(usage.lessonPlans);
+  const lpTone =
+    lpWarning === 'limit'
+      ? 'limit'
+      : lpWarning === 'warning'
+        ? 'warning'
+        : 'default';
+  const reporterPercent = usage.reporterLocked
+    ? null
+    : usagePercent(usage.reporter);
+  return (
+    <div
+      className={cn('flex flex-col gap-2 text-sm', compact && 'gap-1.5')}
+      data-testid="monthly-usage-card"
+    >
+      {!compact && (
+        <p className="font-semibold leading-none">Monthly usage</p>
+      )}
+      <div className="space-y-1">
+        <div className="flex items-baseline justify-between gap-2 text-xs">
+          <span>Lesson Planner</span>
+          <span
+            className={cn(
+              'font-medium tabular-nums',
+              lpTone === 'warning' && 'text-amber-700',
+              lpTone === 'limit' && 'text-red-800'
+            )}
+          >
+            {lpPercent}%
+          </span>
+        </div>
+        <MonthlyUsageBar percent={lpPercent} tone={lpTone} />
+      </div>
+      <div className="space-y-1">
+        <div className="flex items-baseline justify-between gap-2 text-xs">
+          <span className="flex items-center gap-1">
+            Reporter
+            {usage.reporterLocked ? (
+              <Lock size={12} className="text-muted-foreground" aria-hidden />
+            ) : null}
+          </span>
+          {usage.reporterLocked ? (
+            <span className="text-[11px] text-muted-foreground">
+              Unlocks after approval
+            </span>
+          ) : (
+            <span className="font-medium tabular-nums">{reporterPercent}%</span>
+          )}
+        </div>
+        {!usage.reporterLocked ? (
+          <MonthlyUsageBar
+            percent={reporterPercent ?? 0}
+            tone="default"
+          />
+        ) : null}
+      </div>
+      {lpWarning === 'warning' ? (
+        <p
+          className="flex items-start gap-1.5 text-xs text-amber-800"
+          data-testid="monthly-usage-warning"
+        >
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden />
+          Almost at this month&apos;s limit
+        </p>
+      ) : null}
+      {lpWarning === 'limit' ? (
+        <p
+          className="flex items-start gap-1.5 text-xs text-red-800"
+          data-testid="monthly-usage-limit"
+        >
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden />
+          Lesson Planner limit reached
+        </p>
+      ) : null}
+      {usage.renewsAt ? (
+        <p className="text-[11px] text-muted-foreground">
+          {formatUsageRenewsLabel(usage.renewsAt)}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -79,50 +187,22 @@ export function FreeAccountUsagePopover({
   const trigger = (
     <button
       type="button"
-      aria-label="Usage"
+      aria-label="Monthly usage"
       className={cn(
         'mx-4 mb-3 flex flex-col gap-2 rounded-lg border bg-popover p-3 text-left text-sm',
         !expanded && 'mx-1 p-2'
       )}
     >
-      <span className="flex items-center justify-between font-semibold">
-        {expanded ? (
-          <>
-            {usage.monthly ? 'Monthly usage' : 'Usage'}{' '}
-            <ChevronRight size={14} />
-          </>
-        ) : (
-          <Users size={18} />
-        )}
-      </span>
-      {expanded && (
+      {expanded ? (
         <>
-          <span className="flex justify-between text-xs">
-            <span>{usage.monthly ? 'Lesson Planner' : 'Students'}</span>
-            <span className="text-muted-foreground">
-              {usage.monthly
-                ? `${usage.lessonPlans.remaining} left`
-                : usage.students.remaining === 0
-                  ? 'Full'
-                  : `${usage.students.remaining} left`}
-            </span>
+          <span className="flex items-center justify-between font-semibold">
+            Monthly usage
+            <ChevronRight size={14} />
           </span>
-          <Meter count={usage.monthly ? usage.lessonPlans : usage.students} />
-          {usage.monthly && usage.reporter && (
-            <>
-              <span className="flex justify-between text-xs">
-                <span>Reporter</span>
-                <span className="text-muted-foreground">
-                  {usage.reporter.remaining} left
-                </span>
-              </span>
-              <Meter count={usage.reporter} />
-            </>
-          )}
-          {!usage.monthly && usage.warning && (
-            <span className="text-xs text-amber-800">{usage.warning}</span>
-          )}
+          <MonthlyUsageSidebarCard usage={usage} compact />
         </>
+      ) : (
+        <ChartNoAxesColumn size={18} aria-hidden />
       )}
     </button>
   );
@@ -149,7 +229,7 @@ export function FreeAccountUsagePopover({
             onMobileClose();
           }}
         >
-          <SheetTitle className="mb-4 font-bold">Usage</SheetTitle>
+          <SheetTitle className="mb-4 font-bold">Monthly usage</SheetTitle>
           {details}
         </SheetContent>
       </Sheet>
@@ -164,62 +244,59 @@ export function FreeAccountUsagePopover({
         aria-label="Usage"
         className="w-[min(340px,calc(100vw-24px))] rounded-xl p-5"
       >
-        <h2 className="mb-4 text-lg font-bold">Usage</h2>
+        <h2 className="mb-4 text-lg font-bold">Monthly usage</h2>
         {details}
       </PopoverContent>
     </Popover>
   );
 }
 function FreeAccountUsageDetails({ usage }: { usage: FreeAccountUsage }) {
+  if (!usage.monthly) return null;
   return (
     <>
-      <div className="space-y-4">
-        {(usage.monthly
-          ? [
-              { label: 'Lesson Planner', ...usage.lessonPlans },
-              { label: 'Reporter', ...usage.reporter! },
-            ]
-          : [
-              { label: 'Students', ...usage.students },
-              ...usage.assignments,
-              { label: 'Lesson plans', ...usage.lessonPlans },
-            ]
-        ).map((row) => (
-          <div key={row.label}>
-            <div className="mb-1.5 flex justify-between gap-2 text-sm">
-              <span>{row.label}</span>
-              <span
-                className={cn(
-                  'text-xs text-muted-foreground',
-                  !usage.monthly && row.remaining === 0 && 'text-amber-800'
-                )}
-              >
-                {row.used} of {row.total} ·{' '}
-                {row.remaining === 0 ? 'none left' : `${row.remaining} left`}
-              </span>
-            </div>
-            <Meter count={row} />
-          </div>
-        ))}
-      </div>
-      <p className="mt-5 text-xs leading-relaxed text-muted-foreground">
-        {usage.monthly ? (
-          'Monthly uses reset on the first day of each month (UTC). Deleting a report or draft does not restore a use.'
-        ) : (
-          <>
-            Assignments count when you create them. Deleting one doesn't give it
-            back.
-          </>
-        )}
-      </p>
+      <MonthlyUsageSidebarCard usage={usage} />
       <Link
-        to={usage.monthly ? FULL_ACCESS_CONTACT : '/app/free-tier/status'}
+        to={FULL_ACCESS_CONTACT}
         className="mt-4 inline-block text-sm text-primary underline"
       >
-        Need more? Talk to us
+        Talk to us
       </Link>
     </>
   );
+}
+
+export function LessonPlannerMonthlyLimitNotice({
+  usage,
+}: {
+  usage: FreeAccountUsage;
+}) {
+  if (!usage.monthly || usage.lessonPlans.remaining > 0 || !usage.renewsAt) {
+    return null;
+  }
+  const renews = formatUsageRenewsLabel(usage.renewsAt).replace(/^Renews /, '');
+  return (
+    <div
+      className="w-full max-w-3xl rounded-xl border border-red-200 bg-popover p-4 text-left shadow-sm"
+      data-testid="lesson-planner-monthly-limit"
+    >
+      <p className="flex items-start gap-2 text-sm font-semibold text-red-900">
+        <AlertTriangle size={18} className="mt-0.5 shrink-0" aria-hidden />
+        You&apos;ve reached this month&apos;s Lesson Planner limit
+      </p>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Renews {renews}. Unlimited with a site license.{' '}
+        <a href={FULL_ACCESS_CONTACT} className="text-primary underline">
+          Talk to us
+        </a>
+      </p>
+    </div>
+  );
+}
+
+export function lessonPlannerPausedPlaceholder(usage: FreeAccountUsage): string {
+  if (!usage.renewsAt) return 'Lesson Planner is paused until next month.';
+  const renews = formatUsageRenewsLabel(usage.renewsAt).replace(/^Renews /, '');
+  return `Lesson Planner is paused until ${renews}.`;
 }
 export function FreeAssignmentTiles({
   usage,
@@ -303,14 +380,9 @@ export function FreeAssignmentTiles({
                     />
                   )}
                 </span>
-                <span
-                  className={cn(
-                    'text-[13px] text-muted-foreground',
-                    !usage.monthly && row.remaining === 0 && 'text-amber-800'
-                  )}
-                >
+                <span className="text-[13px] text-muted-foreground">
                   {usage.monthly
-                    ? 'Unlimited assignments'
+                    ? 'Unlimited'
                     : row.remaining
                       ? `${row.remaining} of ${row.total} left`
                       : 'None left'}

@@ -578,7 +578,7 @@ export function AssignmentCreationSheet({
                       )}
                     >
                       {usage.monthly
-                        ? 'Unlimited assignments'
+                        ? 'Unlimited'
                         : row.remaining
                           ? `${row.remaining} of ${row.total} left`
                           : 'None left'}

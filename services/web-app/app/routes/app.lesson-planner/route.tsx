@@ -1,5 +1,6 @@
 import {
-  MonthlyUsageNotice,
+  LessonPlannerMonthlyLimitNotice,
+  lessonPlannerPausedPlaceholder,
   useFreeAccountUsage,
 } from '~/components/free-account-usage';
 import { useEffect, useRef, useState } from 'react';
@@ -628,7 +629,7 @@ export default function LessonPlannerRoute() {
     setStreamed(landed ?? { error: PLANNER_UNREACHABLE });
     // The loader owns the lesson list and which unit days are built, and the
     // fetcher would have refreshed both for us.
-    if (landed?.reply) revalidator.revalidate();
+    if (landed?.reply || landed?.conversationId) revalidator.revalidate();
   }
 
   const hasMessages = messages.length > 0;
@@ -774,9 +775,6 @@ export default function LessonPlannerRoute() {
               hasMessages ? 'max-w-3xl' : 'max-w-4xl py-6 sm:py-10'
             )}
           >
-            {freeUsage?.monthly && (
-              <MonthlyUsageNotice usage={freeUsage} feature="lesson-planner" />
-            )}
             {!hasMessages ? (
               <LessonPlannerEmptyState
                 prompts={recommendedPrompts}
@@ -881,6 +879,7 @@ function LessonComposer({
   onSend,
   disabled,
   hero,
+  placeholderOverride,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -888,6 +887,7 @@ function LessonComposer({
   disabled: boolean;
   /** Centred on an empty page: taller, and the examples cycle inside it. */
   hero?: boolean;
+  placeholderOverride?: string;
 }) {
   const rotating = useRotatingPlaceholder(value.length > 0);
 
@@ -914,7 +914,10 @@ function LessonComposer({
           }
         }}
         rows={hero ? 2 : 1}
-        placeholder={hero ? rotating : 'Describe the lesson and your class…'}
+        placeholder={
+          placeholderOverride ??
+          (hero ? rotating : 'Describe the lesson and your class…')
+        }
         aria-label="Message the Lesson Planner"
         className={cn(
           'flex-1 resize-none max-sm:text-base',
@@ -955,7 +958,12 @@ function LessonPlannerEmptyState({
   onSend: () => void;
 }) {
   const freeUsage = useFreeAccountUsage();
-  const exhausted = freeUsage?.lessonPlans.remaining === 0;
+  const exhausted =
+    freeUsage?.monthly && freeUsage.lessonPlans.remaining === 0;
+  const pausedPlaceholder =
+    exhausted && freeUsage
+      ? lessonPlannerPausedPlaceholder(freeUsage)
+      : undefined;
   return (
     <div className="flex flex-col items-center gap-8">
       <div className="flex w-full max-w-3xl flex-col items-center gap-5 text-center">
@@ -973,8 +981,12 @@ function LessonPlannerEmptyState({
           value={input}
           onChange={onInput}
           onSend={onSend}
-          disabled={disabled || exhausted}
+          disabled={disabled || Boolean(exhausted)}
+          placeholderOverride={pausedPlaceholder}
         />
+        {freeUsage ? (
+          <LessonPlannerMonthlyLimitNotice usage={freeUsage} />
+        ) : null}
         {freeUsage && !freeUsage.monthly && (
           <div
             className="text-sm text-muted-foreground"
@@ -983,18 +995,12 @@ function LessonPlannerEmptyState({
             {exhausted ? (
               <>
                 <p>
-                  You have used all {freeUsage.lessonPlans.total} lesson plans
-                  {freeUsage.monthly
-                    ? ' this month. Come back next month to plan another.'
-                    : '. Delete one to plan another.'}
+                  You have used all {freeUsage.lessonPlans.total} lesson plans.
+                  Delete one to plan another.
                 </p>
                 <Link
                   className="mt-2 inline-block text-primary underline"
-                  to={
-                    freeUsage.monthly
-                      ? 'mailto:hello@yawp.school?subject=More%20access%20to%20Yawp!'
-                      : '/app/free-tier/status'
-                  }
+                  to="/app/free-tier/status"
                 >
                   Need more? Talk to us
                 </Link>

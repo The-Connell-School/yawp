@@ -50,8 +50,44 @@ export function buildFreeAccountUsage(input: {
               : null,
   };
 }
+export function usagePercent(count: UsageCount): number {
+  if (count.total <= 0) return 0;
+  return Math.min(100, Math.round((count.used / count.total) * 100));
+}
+
+export function formatUsageRenewsLabel(renewsAtIso: string): string {
+  const date = new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(renewsAtIso));
+  return `Renews ${date}`;
+}
+
+export function formatUsageRenewsUntil(renewsAtIso: string): string {
+  const date = new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(renewsAtIso));
+  return date;
+}
+
+export type MonthlyUsageWarning = 'none' | 'warning' | 'limit';
+
+export function lessonPlannerMonthlyWarning(
+  count: UsageCount
+): MonthlyUsageWarning {
+  const percent = usagePercent(count);
+  if (percent >= 100) return 'limit';
+  if (percent >= 90) return 'warning';
+  return 'none';
+}
+
 export type FreeAccountUsage = ReturnType<typeof buildFreeAccountUsage> & {
   monthly?: boolean;
+  /** Reporter row is locked until school administrator approval. */
+  reporterLocked?: boolean;
   renewsAt?: string;
   reporter?: UsageCount;
   classCode?: string | null;

@@ -42,6 +42,7 @@ export async function readFreeAccountUsage(
   const membershipId = profile.id;
   const hideTeachingSecrets = await shouldHideFreeTierTeachingSecrets(userId);
   const { limits, monthly } = await effectiveFreeTierLimits(organizationId);
+  const monthlyUsageCard = policy.lessonPlannerMeteringEnabled;
   const entitlements = getEntitlementsForPlan('FREE_CLASSROOM', limits);
   const klass = await prisma.class.findFirst({
     where: {
@@ -68,7 +69,7 @@ export async function readFreeAccountUsage(
         )
       : { currentStudents: 0, pendingInvites: 0 },
     getFreeClassroomAssignmentQuotaUsage(organizationId),
-    countOrganizationLessonPlans(organizationId, monthly),
+    countOrganizationLessonPlans(organizationId, monthly && monthlyUsageCard),
     klass
       ? prisma.document.count({
           where: {
@@ -89,12 +90,12 @@ export async function readFreeAccountUsage(
       : 0,
     readGradingLimitStatus(membershipId),
   ]);
-  const reporter = policy.enabled
+  const reporterUsed = policy.enabled
     ? await readMonthlyUsage(organizationId, 'reporter')
     : 0;
   return {
     ...buildFreeAccountUsage({
-      monthly: policy.enabled,
+      monthly: monthlyUsageCard,
       seatCap: entitlements.studentSeatCap!,
       lessonPlanCap: entitlements.features.lessonPlanQuota!,
       assignmentCaps: FREE_CLASSROOM_ASSIGNMENT_QUOTAS,
@@ -103,14 +104,15 @@ export async function readFreeAccountUsage(
       lessonPlans,
       assignmentCounts: Object.fromEntries(assignmentCounts),
     }),
-    monthly: policy.enabled,
-    ...(policy.enabled
+    monthly: monthlyUsageCard,
+    reporterLocked: monthlyUsageCard && !policy.enabled,
+    ...(monthlyUsageCard
       ? {
           renewsAt: lessonPlanMonthWindow(new Date()).lt.toISOString(),
           reporter: {
-            used: reporter,
+            used: reporterUsed,
             total: limits.reporterMonthly,
-            remaining: Math.max(0, limits.reporterMonthly - reporter),
+            remaining: Math.max(0, limits.reporterMonthly - reporterUsed),
           },
         }
       : {}),
