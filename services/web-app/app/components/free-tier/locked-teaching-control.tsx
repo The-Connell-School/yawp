@@ -45,6 +45,7 @@ export function LockedTeachingControl({
     onClick?: (event: React.MouseEvent) => void;
     onKeyDown?: (event: React.KeyboardEvent) => void;
     disabled?: boolean;
+    tabIndex?: number;
     'aria-disabled'?: boolean | 'true' | 'false';
   }>;
 
