@@ -13,19 +13,46 @@ export type ParseAssignmentCollaborationResult =
   | { success: false; message: string };
 
 /**
- * Group-project assignment types (`AssignmentType.collaborationSupported`) always
- * fan out to one solo document per student. Collaboration cannot be turned on for
- * new assignments of those types, even if a client posts `collaborationEnabled:
- * true`. Existing assignments with collaboration already enabled are unchanged.
+ * New assignments always fan out to one solo document per student. Collaboration
+ * cannot be turned on at creation time, even if a client posts
+ * `collaborationEnabled: true`. Existing assignments with collaboration already
+ * enabled are unchanged.
  */
 export function resolveCollaborationForAssignmentCreate(
-  parsed: AssignmentCollaborationSettings,
-  assignmentType: { collaborationSupported: boolean }
+  _parsed: AssignmentCollaborationSettings
 ): AssignmentCollaborationSettings {
-  if (assignmentType.collaborationSupported) {
-    return SOLO_COLLABORATION_SETTINGS;
+  return SOLO_COLLABORATION_SETTINGS;
+}
+
+const COLLABORATION_ASSIGNMENT_FIELDS = [
+  'collaborationEnabled',
+  'collaborationGroupMode',
+  'collaborationGroupSize',
+] as const;
+
+/**
+ * Prevents turning a solo assignment collaborative via update, and prevents
+ * turning an in-flight collaborative assignment solo through a generic update.
+ */
+export function stripCollaborationFromAssignmentUpdateData<
+  T extends Record<string, unknown>,
+>(existingCollaborationEnabled: boolean, data: T): T {
+  if (existingCollaborationEnabled) {
+    if (data.collaborationEnabled === false) {
+      const next = { ...data };
+      for (const key of COLLABORATION_ASSIGNMENT_FIELDS) {
+        delete next[key];
+      }
+      return next;
+    }
+    return data;
   }
-  return parsed;
+
+  const next = { ...data };
+  for (const key of COLLABORATION_ASSIGNMENT_FIELDS) {
+    delete next[key];
+  }
+  return next;
 }
 
 function lastValue(formData: FormData, field: string): string | undefined {

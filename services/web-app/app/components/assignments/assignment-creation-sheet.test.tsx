@@ -830,121 +830,36 @@ describe('AssignmentCreationSheetContent', () => {
   });
 
   describe('collaborative drafts', () => {
-    it('does not offer the toggle for a group-project assignment type', () => {
-      root = renderSheet({
-        entryPoint: 'assignment-type',
-        fixedAssignmentTypeId: 'type-1',
-      }).root;
+    it('does not offer the toggle when creating any assignment type', () => {
+      for (const typeId of ['type-1', 'type-2'] as const) {
+        root = renderSheet({
+          entryPoint: 'assignment-type',
+          fixedAssignmentTypeId: typeId,
+        }).root;
 
-      expect(
-        document.getElementById('assignment-create-collaboration-enabled')
-      ).toBeNull();
-      expectText('Each student receives their own document');
-      expectText('Yawp! does not create a shared group document');
-    });
-
-    it('offers the toggle for assignment types outside group projects', () => {
-      root = renderSheet({
-        entryPoint: 'assignment-type',
-        fixedAssignmentTypeId: 'type-2',
-      }).root;
-
-      expect(
-        document.getElementById('assignment-create-collaboration-enabled')
-      ).not.toBeNull();
-    });
-
-    it('offers every group mode, not just a size', () => {
-      // The sheet shipped with only a size stepper, so the three modes designed
-      // for this feature were unreachable and every assignment silently got the
-      // parser's default.
-      root = renderSheet({
-        entryPoint: 'assignment-type',
-        fixedAssignmentTypeId: 'type-2',
-        initialCollaborationEnabled: true,
-      }).root;
-
-      const labels = Array.from(
-        document.querySelectorAll('button[aria-pressed]')
-      ).map((button) => button.textContent ?? '');
-      for (const fragment of [
-        'make the groups',
-        'Group them for me',
-        'whole class',
-      ]) {
-        expect(labels.some((label) => label.includes(fragment))).toBe(true);
+        expect(
+          document.getElementById('assignment-create-collaboration-enabled')
+        ).toBeNull();
+        expectText('Each student receives their own document');
+        expectText('Yawp! does not create a shared group document');
       }
     });
 
-    it('posts the chosen mode', () => {
-      root = renderSheet({
-        entryPoint: 'assignment-type',
-        fixedAssignmentTypeId: 'type-2',
-        initialCollaborationEnabled: true,
-      }).root;
-
-      expect(inputByName('collaborationGroupMode').value).toBe('teacher');
-    });
-
-    it('asks for a group size for the sized modes', () => {
-      root = renderSheet({
-        entryPoint: 'assignment-type',
-        fixedAssignmentTypeId: 'type-2',
-        initialCollaborationEnabled: true,
-      }).root;
-
-      expect(
-        document.getElementById('assignment-create-collaboration-group-size')
-      ).not.toBeNull();
-    });
-
-    it('sends the teacher to group setup once the assignment is created', () => {
-      // Closing the sheet was the whole ending, which left a collaborative
-      // assignment looking done while its groups did not exist yet.
-      const went: string[] = [];
-      root = renderSheet({
-        entryPoint: 'assignment-type',
-        fixedAssignmentTypeId: 'type-2',
-        createFetcher: idleFetcher({
-          success: true,
-          nextStep: {
-            url: '/app/class-assignments/ca-1/groups',
-            classCount: 1,
-          },
-        }),
-        navigate: (to: string) => went.push(to),
-      }).root;
-
-      expect(went).toEqual(['/app/class-assignments/ca-1/groups']);
-    });
-
-    it('does not navigate for a solo assignment', () => {
-      const went: string[] = [];
+    it('shows the frozen toggle when editing an existing collaborative assignment', () => {
       root = renderSheet({
         entryPoint: 'dashboard',
-        createFetcher: idleFetcher({ success: true, nextStep: null }),
-        navigate: (to: string) => went.push(to),
+        editingAssignment: { id: 'a-1', classId: 'class-1' },
+        initialCollaborationEnabled: true,
       }).root;
 
-      expect(went).toEqual([]);
-    });
-
-    it('posts collaboration off by default even when the toggle is shown', () => {
-      // A hidden false accompanies the checkbox, so an unchecked box still posts
-      // a value and the server keeps producing solo assignments.
-      root = renderSheet({
-        entryPoint: 'assignment-type',
-        fixedAssignmentTypeId: 'type-2',
-      }).root;
-
-      const values = allInputsByName('collaborationEnabled').map(
-        (input) => input.value
-      );
-      expect(values).toContain('false');
+      expect(
+        controlById('assignment-create-collaboration-enabled')
+      ).not.toBeNull();
       expect(
         isChecked(controlById('assignment-create-collaboration-enabled'))
-      ).toBe(false);
+      ).toBe(true);
     });
+
   });
 
   it('shows scaled engagement tiers when the grading panel is open', () => {
@@ -1350,11 +1265,13 @@ describe('AssignmentCreationSheetContent', () => {
       expect((more as HTMLDetailsElement).open).toBe(false);
       for (const id of [
         'assignment-create-tutor-enabled',
-        'assignment-create-collaboration-enabled',
         'assignment-create-exit-ticket-lesson-notes',
       ]) {
         expect(more.contains(controlById(id))).toBe(true);
       }
+      expect(document.body.textContent).toMatch(
+        /Each student receives their own document/
+      );
       // Tucked away is not switched off: the tutor still posts its value.
       expect(allInputsByName('tutorEnabled').length).toBeGreaterThan(0);
     });
