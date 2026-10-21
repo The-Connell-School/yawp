@@ -73,28 +73,21 @@ describe('enforceFreeTierTeacherGate', () => {
     );
   });
 
-  test('SENT with locked preview allows the real app and redirects the waiting page', async () => {
+  test('SENT with locked preview allows the real app and the waiting page', async () => {
     freeTierFlagEnabled = true;
     const row = app({
       status: 'SENT',
       adminApprovals: [{ adminName: 'P', adminEmail: 'p@school.edu' }],
     });
-    expect(
-      await enforceFreeTierTeacherGate({
-        userId: 'u1',
-        pathname: '/app/my-classes',
-        application: row,
-      })
-    ).toBe(row);
-    await expectRedirect(
-      () =>
-        enforceFreeTierTeacherGate({
+    for (const pathname of ['/app/my-classes', '/app/free-tier/pending']) {
+      expect(
+        await enforceFreeTierTeacherGate({
           userId: 'u1',
-          pathname: '/app/free-tier/pending',
+          pathname,
           application: row,
-        }),
-      '/app'
-    );
+        })
+      ).toBe(row);
+    }
   });
 
   test('SENT without locked preview redirects to pending', async () => {

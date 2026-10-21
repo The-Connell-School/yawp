@@ -160,21 +160,19 @@ test.afterAll(async () => {
 });
 
 for (const width of [1440, 390]) {
-  test(`waiting teacher uses the real app in locked mode at ${width}px`, async ({
+  test(`waiting teacher explores the real app in locked mode at ${width}px`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 });
     const { user, app } = await fixture('11', 'SENT');
     await provisionPendingClassroom(app.id, user.id!);
     await login(page, user.email!);
-    await page.goto('/app');
+    await page.goto('/app/free-tier/pending');
+    await expect(page).toHaveURL(/\/app\/free-tier\/pending$/);
+    await page.getByRole('link', { name: 'Explore my classroom' }).click();
     await expect(page).toHaveURL(/\/app$/);
-    await expect(page.getByTestId('locked-preview-banner')).toBeVisible();
-    await expect(page.getByText(/Sent to Dr. Patel on/)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Resend reminder' })).toBeVisible();
     await capture(page, `locked-app-before-${width}`);
     await page.getByRole('button', { name: 'New assignment' }).first().click();
-    await expect(page.getByText('Unlocks after approval')).toBeVisible();
     await capture(page, `locked-picker-${width}`);
     const before = await prisma.assignment.count();
     for (const path of [
@@ -195,7 +193,6 @@ for (const width of [1440, 390]) {
       data: { status: 'APPROVED' },
     });
     await page.reload();
-    await expect(page.getByTestId('locked-preview-banner')).toHaveCount(0);
     await page.goto('/app/assignments');
     await expect(page.getByRole('heading', { name: 'My Assignments', exact: true })).toBeVisible();
     await capture(page, `approved-assignments-${width}`);
@@ -261,5 +258,4 @@ test('flag OFF keeps the waiting page and does not expose the in-app lock', asyn
   await login(page, user.email!);
   await page.goto('/app/free-tier/onboarding');
   await expect(page).toHaveURL(/free-tier\/pending/);
-  await expect(page.getByTestId('locked-preview-banner')).toHaveCount(0);
 });

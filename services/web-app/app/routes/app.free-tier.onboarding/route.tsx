@@ -38,19 +38,9 @@ import { FreeTierOnboardingTimeline } from '../free-tier/FreeTierOnboardingTimel
 
 const MAX_NAME = 200;
 
-async function progressedDestination(
-  status: string,
-  userId: string,
-  organizationId: string | null
-) {
-  if (status === 'SENT' || status === 'MANUAL_REVIEW') {
-    const { isFeatureFlagEnabled } =
-      await import('~/domain/feature-flags/feature-flags.server');
-    const { FREE_TIER_FLAG } = await import('~/domain/feature-flags/feature-flags');
-    if (await isFeatureFlagEnabled(FREE_TIER_FLAG, organizationId))
-      return '/app';
+async function progressedDestination(status: string) {
+  if (status === 'SENT' || status === 'MANUAL_REVIEW')
     return '/app/free-tier/pending';
-  }
   if (status === 'APPROVED') return '/app/my-classes';
   if (status === 'REJECTED' || status === 'EXPIRED')
     return '/app/free-tier/status';
@@ -78,7 +68,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     !!app && (await isClassPreparationEnabled(userId, app.organizationId));
   const destination =
     onboardingV2 && app
-      ? await progressedDestination(app.status, userId, app.organizationId)
+      ? await progressedDestination(app.status)
       : null;
   if (destination) throw redirect(destination);
   const step = new URL(request.url).searchParams.get('step');
@@ -129,7 +119,7 @@ export async function action({ request }: ActionFunctionArgs) {
     app.organizationId
   );
   const destination = onboardingV2
-    ? await progressedDestination(app.status, userId, app.organizationId)
+    ? await progressedDestination(app.status)
     : null;
   if (destination) return redirect(destination);
   if (formData.get('intent') === 'prepare-class') {
@@ -173,7 +163,7 @@ export async function action({ request }: ActionFunctionArgs) {
     await ensureLockedPreviewClassroomForUser(userId);
     const nextStatus = result.status;
     const nextDestination = onboardingV2
-      ? await progressedDestination(nextStatus, userId, app.organizationId)
+      ? await progressedDestination(nextStatus)
       : '/app/free-tier/pending';
     throw redirect(nextDestination ?? '/app/free-tier/pending');
   } catch (error) {

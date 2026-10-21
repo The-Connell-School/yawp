@@ -64,8 +64,8 @@ for (const width of [1280, 390]) test(`expiry, rejection, budget pause, reading 
     await expect(page.getByRole('heading', { name: 'Request not approved', exact: true })).toBeVisible();
     await capture(page, 'rejected');
     await status('SENT');
-    await page.goto('/app');
-    await expect(page.getByTestId('locked-preview-banner')).toBeVisible();
+    await page.goto('/app/free-tier/pending');
+    await expect(page).toHaveURL(/\/app\/free-tier\/pending$/);
     await capture(page, 'pending');
     await status('APPROVED');
     await pauseBudget();

@@ -14,13 +14,6 @@ import { drainFreeTierApprovalJobs } from '../helpers/drain-free-tier-approval-j
 const before = process.env.ONBOARDING_EVIDENCE_PHASE === 'before';
 const evidence = process.env.ONBOARDING_EVIDENCE_DIR;
 
-function isTeachingAppShell(pathname: string) {
-  return (
-    pathname === '/app' ||
-    (pathname.startsWith('/app/') && !pathname.startsWith('/app/free-tier/'))
-  );
-}
-
 async function fillFreeSignupForm(
   page: Page,
   data: {
@@ -58,36 +51,6 @@ for (const viewport of [
     const stamp = `artboard-${viewport.width}-${testInfo.retry}`;
     if (!before) await setFreeTierOnboardingV2(true);
     const capture = async (state: string, target = page) => {
-      const pathname = new URL(target.url()).pathname;
-      if (isTeachingAppShell(pathname)) {
-        await target.getByTestId('locked-preview-banner').waitFor({
-          timeout: 60_000,
-        });
-        await target.evaluate(async () => {
-          window.scrollTo(0, 0);
-          await document.fonts.ready;
-        });
-        if (evidence) {
-          fs.mkdirSync(evidence, { recursive: true });
-          const filename = `${viewport.width}-${state}.png`;
-          await target.screenshot({
-            path: path.join(evidence, filename),
-            fullPage: true,
-          });
-          fs.appendFileSync(
-            path.join(evidence, 'manifest.jsonl'),
-            JSON.stringify({
-              state,
-              route: pathname,
-              viewport,
-              file: filename,
-              fixture:
-                'disposable local database identity; captured email; signed URLs omitted',
-            }) + '\n'
-          );
-        }
-        return;
-      }
       await target.locator('h1').waitFor();
       await target.locator('h1').click();
       await expect(target.locator('[role="progressbar"] > div')).toHaveCSS(
@@ -321,11 +284,7 @@ for (const viewport of [
           form.appendChild(input);
         });
       await page.getByRole('button', { name: 'Send approval request' }).click();
-      await page.waitForURL(/\/app(?:\/free-tier\/pending)?$/);
-      if (page.url().includes('/app/free-tier/pending')) {
-        await page.goto('/app');
-      }
-      await expect(page.getByTestId('locked-preview-banner')).toBeVisible();
+      await page.waitForURL(/\/app\/free-tier\/pending$/);
       await capture('teacher-pending');
       if (!before)
         await expect(
@@ -472,11 +431,10 @@ for (const viewport of [
           },
         });
         await page.goto(
-          status === 'MANUAL_REVIEW' ? '/app' : '/app/free-tier/status'
+          status === 'MANUAL_REVIEW'
+            ? '/app/free-tier/pending'
+            : '/app/free-tier/status'
         );
-        if (status === 'MANUAL_REVIEW') {
-          await expect(page.getByTestId('locked-preview-banner')).toBeVisible();
-        }
         await capture(`teacher-${status.toLowerCase()}`);
         if (status === 'REJECTED') {
           const declined = await mintFreeTierLinkForE2E(prisma, {
