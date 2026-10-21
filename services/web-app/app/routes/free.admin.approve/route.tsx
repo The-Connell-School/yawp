@@ -244,17 +244,19 @@ export default function FreeAdminApproveRoute() {
   const data = useLoaderData<LoaderData>();
   const actionData = useActionData<typeof action>();
 
-  if (!data.ok) {
-    const terminal = terminalFromLoader(data);
-    if (terminal) return terminal;
-    return <AdminLinkInvalidCard />;
-  }
-
   if (actionData?.ok && 'idempotent' in actionData && actionData.idempotent) {
     return (
       <AdminAlreadyApprovedCard
-        teacherName={data.teacherName}
-        schoolName={data.schoolName}
+        teacherName={
+          'app' in actionData && actionData.app
+            ? actionData.app.name
+            : (data.teacherName ?? 'A teacher')
+        }
+        schoolName={
+          'app' in actionData && actionData.app
+            ? actionData.app.schoolName
+            : (data.schoolName ?? 'your school')
+        }
       />
     );
   }
@@ -266,6 +268,12 @@ export default function FreeAdminApproveRoute() {
         schoolName={actionData.app.schoolName}
       />
     );
+  }
+
+  if (!data.ok) {
+    const terminal = terminalFromLoader(data);
+    if (terminal) return terminal;
+    return <AdminLinkInvalidCard />;
   }
 
   const actionTerminal = actionData ? terminalFromAction(actionData) : null;
