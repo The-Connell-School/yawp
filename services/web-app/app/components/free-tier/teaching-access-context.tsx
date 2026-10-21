@@ -74,8 +74,11 @@ export function TeachingAccessProvider({
 
   useEffect(() => {
     const originalFetch = window.fetch.bind(window);
-    window.fetch = async (...args) => {
-      const response = await originalFetch(...args);
+    const patchedFetch = async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
+      const response = await originalFetch(input, init);
       if (response.status === 403) {
         try {
           const data = await response.clone().json();
@@ -88,6 +91,7 @@ export function TeachingAccessProvider({
       }
       return response;
     };
+    window.fetch = Object.assign(patchedFetch, originalFetch);
     return () => {
       window.fetch = originalFetch;
     };
