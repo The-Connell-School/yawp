@@ -15,14 +15,17 @@ mock.module('~/utils/db.server', () => ({ prisma }));
 
 const {
   isFeatureFlagEnabled,
+  isFreeTierCapabilityEnabled,
+  isFreeTierEnabled,
   isLessonPlannerEnabled,
   listFeatureFlags,
   setFeatureFlag,
   findUnknownOrganizationIds,
 } = await import('./feature-flags.server');
-const { SIGNON_TEACHER_PROMPTS_FLAG, GUIDED_TOURS_FLAG, DEMO_FEEDBACK_FLAG, INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, FREE_TIER_INAPP_V2_FLAG, UNIFIED_SIGN_ON_FLAG, FREE_TIER_ONBOARDING_V2_FLAG } = await import(
+const { GUIDED_TOURS_FLAG, DEMO_FEEDBACK_FLAG, INTERNAL_RUBRICS_FLAG, LESSON_PLANNER_FLAG, FREE_TIER_FLAG, UNIFIED_SIGN_ON_FLAG, FOLDED_FREE_TIER_LEGACY_SETTINGS, FOLDED_UNIFIED_SIGNON_LEGACY_SETTINGS } = await import(
   './feature-flags'
 );
+const { isUnifiedSignOnEnabled } = await import('../unified-signon/gate.server');
 
 const NAME = 'feature_flag.lesson_planner';
 /** Removed with its feature; its Setting row may still exist in a database. */
@@ -84,14 +87,16 @@ describe('feature flags (server)', () => {
     expect(await isFeatureFlagEnabled(INTERNAL_RUBRICS_FLAG, 'org-2')).toBe(true);
   });
 
-  test('teacher prompts stay off without a row on demo and production', async () => {
+  test('unified sign-on defaults on for demo and preview without a row', async () => {
     const previous = process.env.YAWP_ENVIRONMENT;
     try {
-      for (const environment of ['demo', 'production']) {
+      for (const environment of ['demo', 'preview']) {
         process.env.YAWP_ENVIRONMENT = environment;
         prisma.setting.findUnique.mockResolvedValue(null);
-        expect(await isFeatureFlagEnabled(SIGNON_TEACHER_PROMPTS_FLAG)).toBe(false);
+        expect(await isFeatureFlagEnabled(UNIFIED_SIGN_ON_FLAG)).toBe(true);
       }
+      process.env.YAWP_ENVIRONMENT = 'production';
+      expect(await isFeatureFlagEnabled(UNIFIED_SIGN_ON_FLAG)).toBe(false);
     } finally {
       if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
       else process.env.YAWP_ENVIRONMENT = previous;
@@ -173,13 +178,10 @@ describe('feature flags (server)', () => {
       LESSON_PLANNER_FLAG,
       INTERNAL_RUBRICS_FLAG,
       FREE_TIER_FLAG,
-      FREE_TIER_INAPP_V2_FLAG,
       UNIFIED_SIGN_ON_FLAG,
-      FREE_TIER_ONBOARDING_V2_FLAG,
       'classcode-unique',
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
-      SIGNON_TEACHER_PROMPTS_FLAG,
     ]);
     expect(flags[1]).toMatchObject({ key: INTERNAL_RUBRICS_FLAG, mode: 'off', enabled: false });
     expect(flags[2]).toMatchObject({ key: FREE_TIER_FLAG, mode: 'off', enabled: false });
@@ -203,13 +205,10 @@ describe('feature flags (server)', () => {
       LESSON_PLANNER_FLAG,
       INTERNAL_RUBRICS_FLAG,
       FREE_TIER_FLAG,
-      FREE_TIER_INAPP_V2_FLAG,
       UNIFIED_SIGN_ON_FLAG,
-      FREE_TIER_ONBOARDING_V2_FLAG,
       'classcode-unique',
       DEMO_FEEDBACK_FLAG,
       GUIDED_TOURS_FLAG,
-      SIGNON_TEACHER_PROMPTS_FLAG,
     ]);
     expect(flags[0]).toMatchObject({ mode: 'off', enabled: false });
     const where = prisma.setting.findMany.mock.calls[0]?.[0].where;
@@ -344,6 +343,85 @@ describe('feature flags (server)', () => {
     expect(result.flag.mode).toBe('off');
   });
 
+  test('free tier ignores legacy onboarding/inapp rows when primary is off', async () => {
+    prisma.setting.findMany.mockResolvedValue([
+      { name: 'feature_flag.free_tier', value: '{"mode":"off","orgIds":[]}' },
+    ]);
+    prisma.setting.findUnique.mockResolvedValue({
+      value: '{"mode":"off","orgIds":[]}',
+    });
+    expect(await isFreeTierCapabilityEnabled('org-1')).toBe(false);
+    expect(await isFreeTierEnabled()).toBe(false);
+  });
+
+  test('free tier uses primary row when on; legacy off does not block', async () => {
+    prisma.setting.findMany.mockResolvedValue([
+      { name: 'feature_flag.free_tier', value: '{"mode":"targeted","orgIds":["org-1"]}' },
+    ]);
+    expect(await isFreeTierCapabilityEnabled('org-1')).toBe(true);
+    expect(await isFreeTierCapabilityEnabled('org-2')).toBe(false);
+    expect(await isFreeTierEnabled()).toBe(false);
+  });
+
+  test('unified sign-on ignores legacy teacher-prompts when primary is off', async () => {
+    prisma.setting.findUnique.mockImplementation(async (args: { where: { name: string } }) => {
+      if (args.where.name === 'feature_flag.unified-sign-on') {
+        return { value: '{"mode":"off","orgIds":[]}' };
+      }
+      if (args.where.name === FOLDED_UNIFIED_SIGNON_LEGACY_SETTINGS[0]) {
+        return { value: '{"mode":"everyone","orgIds":[]}' };
+      }
+      return null;
+    });
+    expect(await isFeatureFlagEnabled(UNIFIED_SIGN_ON_FLAG, 'org-1')).toBe(false);
+    expect(await isUnifiedSignOnEnabled()).toBe(false);
+  });
+
+  test('unified sign-on anonymous login stays off when only legacy prompts are everyone', async () => {
+    prisma.setting.findUnique.mockImplementation(async (args: { where: { name: string } }) => {
+      if (args.where.name === 'feature_flag.unified-sign-on') return null;
+      if (args.where.name === FOLDED_UNIFIED_SIGNON_LEGACY_SETTINGS[0]) {
+        return { value: 'true' };
+      }
+      return null;
+    });
+    expect(await isUnifiedSignOnEnabled()).toBe(false);
+  });
+
+  test('demo and preview default free tier and unified sign-on on without rows', async () => {
+    const previous = process.env.YAWP_ENVIRONMENT;
+    try {
+      for (const environment of ['demo', 'preview'] as const) {
+        process.env.YAWP_ENVIRONMENT = environment;
+        prisma.setting.findUnique.mockResolvedValue(null);
+        prisma.setting.findMany.mockResolvedValue([]);
+        expect(await isFreeTierCapabilityEnabled('org-1')).toBe(true);
+        expect(await isFreeTierEnabled()).toBe(true);
+        expect(await isFeatureFlagEnabled(UNIFIED_SIGN_ON_FLAG)).toBe(true);
+        expect(await isUnifiedSignOnEnabled()).toBe(true);
+      }
+    } finally {
+      if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
+      else process.env.YAWP_ENVIRONMENT = previous;
+    }
+  });
+
+  test('production fails closed when primary rows are missing', async () => {
+    const previous = process.env.YAWP_ENVIRONMENT;
+    process.env.YAWP_ENVIRONMENT = 'production';
+    prisma.setting.findUnique.mockResolvedValue(null);
+    prisma.setting.findMany.mockResolvedValue([]);
+    try {
+      expect(await isFreeTierCapabilityEnabled('org-1')).toBe(false);
+      expect(await isFreeTierEnabled()).toBe(false);
+      expect(await isFeatureFlagEnabled(UNIFIED_SIGN_ON_FLAG)).toBe(false);
+      expect(await isUnifiedSignOnEnabled()).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
+      else process.env.YAWP_ENVIRONMENT = previous;
+    }
+  });
+
   test('finds organizations that do not exist with one query', async () => {
     prisma.organization.findMany.mockResolvedValue([{ id: 'org-1' }]);
     expect(await findUnknownOrganizationIds(['org-1', 'org-404'])).toEqual(['org-404']);
@@ -372,7 +450,7 @@ for (const deployment of ['demo', 'production']) {
           mode: deployment === 'demo' ? 'everyone' : mode,
           persisted: { mode, orgIds },
           effective: deployment === 'demo' ? { mode: 'everyone', orgIds: [] } : { mode, orgIds },
-          runtimeOverride: deployment === 'demo' ? 'demo_free_tier' : null,
+          runtimeOverride: deployment === 'demo' ? 'non_production_default' : null,
         });
         expect(prisma.setting.upsert).not.toHaveBeenCalled();
       } finally {

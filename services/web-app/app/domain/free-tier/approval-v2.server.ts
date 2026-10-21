@@ -13,12 +13,11 @@ import type {
 } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 import { sendEmail } from '~/utils/email.server';
+import { FREE_TIER_FLAG } from '~/domain/feature-flags/feature-flags';
 import {
-  FREE_TIER_ONBOARDING_V2_FLAG,
-  evaluateFeatureFlag,
-  parseFeatureFlagValue,
-  featureFlagSettingName,
-} from '~/domain/feature-flags/feature-flags';
+  isFeatureFlagEnabled,
+  resolvedFreeTierRollout,
+} from '~/domain/feature-flags/feature-flags.server';
 import {
   claimSignedLinkInTransaction,
   invalidateOpenAdminApprovalLinks,
@@ -69,15 +68,8 @@ const fail = (reason: string) => ({ ok: false as const, reason });
 /** Fails closed; existing site memberships never enter this rollout. */
 export async function isApprovalV2Enabled(app: AppIdentity, db: Tx = prisma) {
   try {
-    const flag = await db.setting.findUnique({
-      where: { name: featureFlagSettingName(FREE_TIER_ONBOARDING_V2_FLAG) },
-      select: { value: true },
-    });
     if (
-      !evaluateFeatureFlag(
-        parseFeatureFlagValue(flag?.value),
-        app.organizationId
-      ) ||
+      !(await isFeatureFlagEnabled(FREE_TIER_FLAG, app.organizationId)) ||
       !app.userId
     )
       return false;
@@ -1027,12 +1019,8 @@ async function deliverJob(id: string, now: Date) {
 /** Bounded durable work; multiple app instances may safely run this drain. */
 export async function runApprovalJobs(now = new Date()) {
   // No writes, scheduling, or delivery when the rollout is globally off.
-  const flag = await prisma.setting.findUnique({
-    where: { name: featureFlagSettingName(FREE_TIER_ONBOARDING_V2_FLAG) },
-    select: { value: true },
-  });
-  if (parseFeatureFlagValue(flag?.value).mode === 'off') return;
-  const rollout = parseFeatureFlagValue(flag?.value);
+  const rollout = await resolvedFreeTierRollout(prisma);
+  if (rollout.mode === 'off') return;
   const scope =
     rollout.mode === 'targeted'
       ? { organizationId: { in: rollout.orgIds } }

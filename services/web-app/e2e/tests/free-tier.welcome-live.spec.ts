@@ -4,7 +4,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
 if (!process.env.FREE_WELCOME_PORT) throw new Error('Use ./bin/project test --profile free-tier-welcome-live-browser');
 const prisma = createE2EPrismaClient();
-const flagName = 'feature_flag.free-tier-onboarding-v2';
+const flagName = 'feature_flag.free_tier';
 const baseFlag = 'feature_flag.free_tier';
 const prefix = `welcome-browser-${Date.now()}`;
 const shots = process.env.FREE_WELCOME_EVIDENCE_DIR;

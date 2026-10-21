@@ -231,7 +231,7 @@ describe('legacy public student approval admission', () => {
       expect(prisma.session.create).toHaveBeenCalledTimes(1);
       expect(transaction).toHaveBeenCalledTimes(1);
       expect(isFeatureFlagEnabled).toHaveBeenCalledWith(
-        'free-tier-onboarding-v2',
+        'free-tier',
         'org-free'
       );
     });

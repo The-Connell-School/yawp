@@ -9,7 +9,7 @@ import {
   FEATURE_FLAG_MODES,
   MAX_FEATURE_FLAG_ORG_IDS,
   type FeatureFlagValue,
-  isFeatureFlagKey,
+  resolveFeatureFlagKey,
   normalizeFeatureFlagValue,
 } from '~/domain/feature-flags/feature-flags';
 import {
@@ -78,7 +78,8 @@ export async function featureFlagUpdate(request: Request, key: string | undefine
     const denied = await authenticateAndAuditWrite(request, { body: text ?? '' });
     if (denied) return denied;
   }
-  if (!isFeatureFlagKey(key)) return response({ error: 'Unknown feature flag' }, 404);
+  const flagKey = resolveFeatureFlagKey(key);
+  if (!flagKey) return response({ error: 'Unknown feature flag' }, 404);
   if (!request.headers.get('content-type')?.startsWith('application/json')) {
     return response({ error: 'Invalid content type' }, 400);
   }
@@ -108,9 +109,9 @@ export async function featureFlagUpdate(request: Request, key: string | undefine
     if (unknownOrgIds.length > 0) {
       return response({ error: 'Unknown organizations', unknownOrgIds }, 400);
     }
-    const result = await setFeatureFlag(key, next, operator.data);
+    const result = await setFeatureFlag(flagKey, next, operator.data);
     console.info('feature_flag_set', {
-      key,
+      key: flagKey,
       mode: next.mode,
       orgCount: next.orgIds.length,
       changed: result.changed,

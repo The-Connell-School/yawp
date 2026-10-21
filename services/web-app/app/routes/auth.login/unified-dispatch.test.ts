@@ -2,8 +2,26 @@ import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
 
 const requireAnonymous = mock(async (_request: Request) => {});
 const loginAction = mock(async (_args: unknown) => new Response('legacy'));
+let unifiedFlagValue: string | null = null;
 const findUnique = mock(
   async (_args: unknown): Promise<{ value: string } | null> => null
+);
+const findMany = mock(
+  async ({
+    where,
+  }: {
+    where: { name: { in: string[] } };
+  }): Promise<Array<{ name: string; value: string }>> => {
+    if (
+      unifiedFlagValue &&
+      where.name.in.some((name) => name.startsWith('feature_flag.'))
+    ) {
+      return where.name.in
+        .filter((name) => name === 'feature_flag.unified-sign-on')
+        .map((name) => ({ name, value: unifiedFlagValue! }));
+    }
+    return [];
+  }
 );
 mock.module('~/utils/auth.server', () => ({
   requireAnonymous,
@@ -11,8 +29,29 @@ mock.module('~/utils/auth.server', () => ({
 }));
 mock.module('./login.server', () => ({ loginAction }));
 mock.module('~/utils/db.server', () => ({
-  prisma: { setting: { findUnique } },
+  prisma: { setting: { findUnique, findMany } },
 }));
+function setUnifiedFlag(value: string | null) {
+  unifiedFlagValue = value;
+  findUnique.mockImplementation(async (args: unknown) => {
+    const where = (args as { where: { name: string } }).where;
+    return where.name === 'feature_flag.unified-sign-on' && value
+      ? { value }
+      : null;
+  });
+  findMany.mockImplementation(
+    async ({
+      where,
+    }: {
+      where: { name: { in: string[] } };
+    }): Promise<Array<{ name: string; value: string }>> => {
+      if (!unifiedFlagValue) return [];
+      return where.name.in
+        .filter((name) => name === 'feature_flag.unified-sign-on')
+        .map((name) => ({ name, value: unifiedFlagValue! }));
+    }
+  );
+}
 mock.module('~/components/login-form', () => ({ LoginForm: () => null }));
 mock.module('~/components/error-boundary', () => ({
   GeneralErrorBoundary: () => null,
@@ -38,7 +77,9 @@ beforeEach(() => {
   requireAnonymous.mockClear();
   loginAction.mockClear();
   findUnique.mockReset();
-  findUnique.mockResolvedValue(null);
+  findMany.mockReset();
+  setUnifiedFlag(null);
+  process.env.YAWP_ENVIRONMENT = 'production';
 });
 
 const args = (request: Request) =>
@@ -55,7 +96,7 @@ for (const value of [
   '{"mode":"everyone","orgIds":[1]}',
 ]) {
   test(`flag ${String(value)} keeps legacy loader and POST dispatch`, async () => {
-    findUnique.mockResolvedValue(value === null ? null : { value });
+    setUnifiedFlag(value === null ? null : value);
     expect(
       await loader(
         args(
@@ -100,7 +141,7 @@ test('anonymous guard runs before enabled UI dispatch', async () => {
 });
 
 test('enabled entry sanitizes redirect and never exposes fixture selectors or Google', async () => {
-  findUnique.mockResolvedValue({ value: '{"mode":"everyone","orgIds":[]}' });
+  setUnifiedFlag('{"mode":"everyone","orgIds":[]}');
   const result = await loader(
     args(
       new Request(
@@ -117,7 +158,8 @@ test('enabled entry sanitizes redirect and never exposes fixture selectors or Go
 });
 
 test('a PR preview hides Google on an origin missing from its allowlist', async () => {
-  findUnique.mockResolvedValue({ value: '{"mode":"everyone","orgIds":[]}' });
+  setUnifiedFlag('{"mode":"everyone","orgIds":[]}');
+  process.env.YAWP_ENVIRONMENT = 'preview';
   process.env.GOOGLE_OAUTH_REQUIRE_ORIGIN_ALLOWLIST = 'true';
   process.env.GOOGLE_OAUTH_ORIGIN_ALLOWLIST = '';
   try {
@@ -136,7 +178,7 @@ test('a PR preview hides Google on an origin missing from its allowlist', async 
 
 test('signed-in entry retains the legacy destination off and uses app only on', async () => {
   for (const enabled of [false, true]) {
-    findUnique.mockResolvedValue(enabled ? { value: 'true' } : null);
+    setUnifiedFlag(enabled ? 'true' : null);
     requireAnonymous.mockRejectedValueOnce(
       new Response(null, { status: 302, headers: { Location: '/' } })
     );
@@ -152,7 +194,7 @@ test('signed-in entry retains the legacy destination off and uses app only on', 
 });
 
 test('enabled resolver delegates fields to the authoritative backend', async () => {
-  findUnique.mockResolvedValue({ value: 'true' });
+  setUnifiedFlag('true');
   const result = await action(
     args(
       new Request('http://localhost/auth/login', {
@@ -180,7 +222,7 @@ test('enabled resolver delegates fields to the authoritative backend', async () 
 });
 
 test('enabled password submission delegates unchanged to existing action', async () => {
-  findUnique.mockResolvedValue({ value: 'true' });
+  setUnifiedFlag('true');
   const request = new Request('http://localhost/auth/login', {
     method: 'POST',
     body: new URLSearchParams({
@@ -231,7 +273,7 @@ function proxyRequest(
   });
 }
 function enablePreview() {
-  findUnique.mockResolvedValue({ value: 'true' });
+  setUnifiedFlag('true');
   process.env.YAWP_ENVIRONMENT = 'preview';
   process.env.PRIMARY_APP_URL = publicOrigin;
 }
@@ -315,10 +357,11 @@ test('configured origin cannot authorize another request host', async () => {
     ).status
   ).toBe(403);
 });
-for (const environment of ['demo', 'production', 'development', '']) {
+for (const environment of ['production', 'development', '']) {
   test(`no proxy correction outside preview: ${environment}`, async () => {
-    enablePreview();
+    setUnifiedFlag('true');
     process.env.YAWP_ENVIRONMENT = environment;
+    process.env.PRIMARY_APP_URL = publicOrigin;
     expect((await action(args(proxyRequest()))) as Response).toMatchObject({
       status: 403,
     });

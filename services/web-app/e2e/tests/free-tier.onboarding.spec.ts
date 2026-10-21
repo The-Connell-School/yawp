@@ -4,6 +4,8 @@ import { expect, test } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { waitForFreeTierEmailPayload } from '../helpers/free-tier-email';
 import { mintFreeTierLinkForE2E } from '../helpers/mint-free-tier-link';
+import { fillFreeTierWaitlistForm } from '../helpers/free-tier-waitlist-form';
+import { completeClassPreparationStepIfShown } from '../helpers/free-tier-onboarding';
 
 const JOIN_PASSWORD = 'yawp-e2e-pass-1';
 const ADMIN_DOMAIN = 'e2e-ft.school.edu';
@@ -11,17 +13,21 @@ const ADMIN_DOMAIN = 'e2e-ft.school.edu';
 test.describe('Free tier public flow', () => {
   test('waitlist page loads', async ({ page }) => {
     await page.goto('/free');
-    await expect(page.getByRole('heading', { name: /Try Yawp!/i })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: /Welcome to Yawp!|Try Yawp!/i })
+    ).toBeVisible();
     await expect(page.getByRole('button', { name: /Join the waitlist/i })).toBeVisible();
   });
 
   test('waitlist form submits', async ({ page }) => {
     await page.goto('/free');
-    await page.fill('input[name="name"]', 'E2E Waitlist');
-    await page.fill('input[name="email"]', `e2e-waitlist+${Date.now()}@yawp.local`);
-    await page.fill('input[name="schoolName"]', 'E2E High');
-    await page.fill('input[name="location"]', 'Local');
-    await page.fill('input[name="gradeLevel"]', '10');
+    await fillFreeTierWaitlistForm(page, {
+      name: 'E2E Waitlist',
+      email: `e2e-waitlist+${Date.now()}@yawp.local`,
+      schoolName: 'E2E High',
+      location: 'Local',
+      gradeLevel: '10',
+    });
     await page.getByRole('button', { name: /Join the waitlist/i }).click();
     await expect(page.getByRole('status')).toContainText(/on the list/i);
   });
@@ -79,6 +85,10 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     await page.waitForURL('**/app/free-tier/onboarding**', { timeout: 30_000 });
     expect(page.url()).not.toMatch(/\/auth\/login/);
 
+    await completeClassPreparationStepIfShown(page);
+    await expect(page.locator('input[name="adminName"]')).toBeVisible({
+      timeout: 30_000,
+    });
     await page.fill('input[name="adminName"]', 'E2E Principal');
     await page.fill('input[name="adminEmail"]', `principal@${ADMIN_DOMAIN}`);
     await page.fill('input[name="adminRole"]', 'Principal');
@@ -166,6 +176,10 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     await page.waitForURL('**/app/free-tier/onboarding**', { timeout: 30_000 });
     expect(page.url()).not.toMatch(/\/auth\/login/);
 
+    await completeClassPreparationStepIfShown(page);
+    await expect(page.locator('input[name="adminName"]')).toBeVisible({
+      timeout: 30_000,
+    });
     await page.fill('input[name="adminName"]', 'Wrong Admin');
     await page.fill('input[name="adminEmail"]', `wrong-${stamp}@${ADMIN_DOMAIN}`);
     await page.fill('input[name="adminRole"]', 'Principal');
@@ -225,6 +239,10 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     await page.waitForURL('**/app/free-tier/onboarding**', { timeout: 30_000 });
     expect(page.url()).not.toMatch(/\/auth\/login/);
 
+    await completeClassPreparationStepIfShown(page);
+    await expect(page.locator('input[name="adminName"]')).toBeVisible({
+      timeout: 30_000,
+    });
     await page.fill('input[name="adminName"]', 'Same Person');
     await page.fill('input[name="adminRole"]', 'Principal');
     const email = page.getByRole('textbox', { name: 'Administrator email' });

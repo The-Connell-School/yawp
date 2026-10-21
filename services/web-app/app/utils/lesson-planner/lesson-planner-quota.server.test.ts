@@ -11,10 +11,30 @@ let limits = {
   updatedAt: '2026-10-16T00:00:00.000Z',
   updatedByEmail: 'staff@example.test',
 };
+const settingFindMany = mock(async ({ where }: { where: { name?: { in?: string[] } | string } }) => {
+  const raw = where.name;
+  const names = typeof raw === 'string'
+    ? [raw]
+    : Array.isArray(raw?.in)
+      ? raw.in
+      : [];
+  return names.flatMap((name: string) => {
+    if (name === 'feature_flag.free_tier')
+      return [
+        {
+          name,
+          value: v2
+            ? '{"mode":"everyone","orgIds":[]}'
+            : '{"mode":"off","orgIds":[]}',
+        },
+      ];
+    return [];
+  });
+});
 const setting = mock(async ({ where }: any) => {
   if (where.name === 'free_tier.limits.v1')
     return { value: JSON.stringify(limits) };
-  return { value: String(v2) };
+  return null;
 });
 
 mock.module('~/utils/db.server', () => ({
@@ -22,11 +42,11 @@ mock.module('~/utils/db.server', () => ({
     $transaction: async (fn: any) =>
       fn({
         $executeRaw: async () => {},
-        setting: { findMany: async () => [] },
+        setting: { findMany: settingFindMany, findUnique: setting },
         lessonPlanConversation: { count },
       }),
     lessonPlanConversation: { count },
-    setting: { findUnique: setting, findMany: async () => [] },
+    setting: { findUnique: setting, findMany: settingFindMany },
   },
 }));
 
@@ -43,6 +63,7 @@ afterAll(() => {
 beforeEach(() => {
   count.mockReset();
   setting.mockClear();
+  settingFindMany.mockClear();
   v2 = false;
   limits.lessonPlannerMonthly = 2;
 });

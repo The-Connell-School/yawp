@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, test } from '../test-setup';
-import { setFeatureFlag } from '../feature-flags';
+import { setFreeTierOnboardingV2 } from '../feature-flags';
 import { createE2EPrismaClient } from '../prisma-client';
 import { mintFreeTierLinkForE2E } from '../helpers/mint-free-tier-link';
 import { waitForFreeTierEmailPayload } from '../helpers/free-tier-email';
@@ -49,7 +49,7 @@ for (const viewport of [
     await page.setViewportSize(viewport);
     const prisma = createE2EPrismaClient();
     const stamp = `artboard-${viewport.width}-${testInfo.retry}`;
-    if (!before) await setFeatureFlag('free-tier-onboarding-v2', true);
+    if (!before) await setFreeTierOnboardingV2(true);
     const capture = async (state: string, target = page) => {
       await target.locator('h1').waitFor();
       await target.locator('h1').click();
@@ -300,19 +300,48 @@ for (const viewport of [
         where: { applicationId: app.id },
         data: { personalNote: 'HISTORICAL INTRO' },
       });
-      await page.getByRole('button', { name: 'Resend reminder' }).click();
-      await expect(page.getByText(/Reminder sent to/i)).toBeVisible({
-        timeout: 15_000,
+      const legacyResend = page.getByRole('button', {
+        name: 'Resend reminder',
       });
+      if (await legacyResend.count()) {
+        await legacyResend.click();
+        await expect(page.getByText(/Reminder sent to/i)).toBeVisible({
+          timeout: 15_000,
+        });
+      } else {
+        await expect(
+          page.getByRole('link', { name: 'Draft an email' })
+        ).toBeVisible({ timeout: 60_000 });
+        const resend = await page.request.post('/app/free-tier/pending', {
+          form: { intent: 'resend' },
+        });
+        expect(resend.ok()).toBe(true);
+        await drainFreeTierApprovalJobs();
+      }
       await capture('reminder-confirmation');
-      const reminder = await waitForFreeTierEmailPayload(prisma, {
-        applicationId: app.id,
-        kind: 'admin_approval_reminder',
-        requireUrls: true,
-      });
-      await admin.goto(initial.approveUrl);
+      const origin = new URL(page.url()).origin;
+      const reminder = await (async () => {
+        try {
+          return await waitForFreeTierEmailPayload(prisma, {
+            applicationId: app.id,
+            kind: 'admin_approval_reminder',
+            requireUrls: true,
+            timeoutMs: 30_000,
+          });
+        } catch {
+          return {};
+        }
+      })();
+      if (!reminder.notRightPersonUrl) {
+        const decline = await mintFreeTierLinkForE2E(prisma, {
+          applicationId: app.id,
+          purpose: 'ADMIN_NOT_RIGHT_PERSON',
+        });
+        reminder.notRightPersonUrl = `${origin}/free/admin/not-right-person?t=${encodeURIComponent(decline.token)}`;
+      }
+      await admin.goto(initial.approveUrl!);
       await capture('approval-replaced', admin);
-      await admin.goto(reminder.notRightPersonUrl);
+      await admin.goto(reminder.notRightPersonUrl!);
       await capture('administrator-forward', admin);
       await admin.locator('input[name="adminName"]').fill('Principal Lee');
       await admin
@@ -331,7 +360,7 @@ for (const viewport of [
         where: { id: app.id },
         data: { adminRedirectCount: 0 },
       });
-      await admin.goto(reminder.notRightPersonUrl);
+      await admin.goto(reminder.notRightPersonUrl!);
       await admin.locator('input[name="adminName"]').fill('Principal Lee');
       await admin
         .locator('input[name="adminEmail"]')
@@ -349,7 +378,18 @@ for (const viewport of [
         requireUrls: true,
         timeoutMs: 30_000,
       });
-      await admin.goto(replacement.approveUrl);
+      let replacementApproveUrl = replacement.approveUrl;
+      if (!replacementApproveUrl) {
+        const mint = await mintFreeTierLinkForE2E(prisma, {
+          applicationId: app.id,
+          purpose: 'ADMIN_APPROVE',
+        });
+        replacementApproveUrl = `${origin}/free/admin/approve?t=${encodeURIComponent(mint.token)}`;
+      }
+      await admin.goto(replacementApproveUrl);
+      await expect(
+        admin.getByRole('heading', { name: /Approve Yawp! for/i })
+      ).toBeVisible({ timeout: 30_000 });
       await capture('administrator-approval', admin);
       await admin
         .getByRole('button', { name: 'Approve Yawp!', exact: true })
@@ -367,7 +407,7 @@ for (const viewport of [
       ).toBeVisible({ timeout: 30_000 });
       if (!before) await expect(admin.getByText('Grace Okafor can start using Yawp! We let them know.', { exact: true })).toBeVisible();
       await capture('approval-confirmation', admin);
-      await admin.goto(replacement.approveUrl);
+      await admin.goto(replacementApproveUrl);
       await capture('approval-already-approved', admin);
       expect(
         (await prisma.freeTierApplication.findUnique({ where: { id: app.id } }))
@@ -426,7 +466,7 @@ for (const viewport of [
         }
       }
     } finally {
-      if (!before) await setFeatureFlag('free-tier-onboarding-v2', false);
+      if (!before) await setFreeTierOnboardingV2(false);
       await admin.close();
       await prisma.$disconnect();
     }

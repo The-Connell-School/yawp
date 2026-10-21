@@ -30,21 +30,18 @@ export const LESSON_PLANNER_FLAG = 'lesson_planner' as const;
 export const INTERNAL_RUBRICS_FLAG = 'internal_rubrics' as const;
 
 /**
- * Free Tier C (#416). Off: public `/free` UI routes, teacher onboarding, operator
- * admin UI, and internal release/link-mint APIs behave as if the product were not shipped.
- * On for `everyone` only; `targeted` is treated as off for anonymous `/free`
- * routes (there is no organization context). Waitlist/token APIs on main stay available.
+ * Free Tier (signup, admin approval, onboarding, create-class, timeline,
+ * locked preview, in-app limits/reports, QR/event landing, and related APIs).
+ * Stored under the legacy Setting name `feature_flag.free_tier`.
  */
-export const FREE_TIER_FLAG = 'free_tier' as const;
+export const FREE_TIER_FLAG = 'free-tier' as const;
 
-/** Free-account v2 presentation only. Missing Setting row stays off in every environment. */
-export const FREE_TIER_INAPP_V2_FLAG = 'free-tier-inapp-v2' as const;
+/** @deprecated Registry key `free_tier` — use {@link FREE_TIER_FLAG}. */
+export const FREE_TIER_FLAG_LEGACY_KEY = 'free_tier' as const;
 
-/** Unified sign-on UI. Default off; anonymous entry requires everyone mode. */
+/** Unified sign-on UI and signed-in teacher prompt flows. Default off. */
 export const UNIFIED_SIGN_ON_FLAG = 'unified-sign-on' as const;
 
-/** Free tier onboarding v2. Missing or invalid Setting values stay off in every environment. */
-export const FREE_TIER_ONBOARDING_V2_FLAG = 'free-tier-onboarding-v2' as const;
 /** Global class-code validation and Generate code controls. Default off. */
 export const CLASS_CODE_UNIQUE_FLAG = 'classcode-unique' as const;
 
@@ -53,8 +50,22 @@ export const DEMO_FEEDBACK_FLAG = 'demo-feedback-widget' as const;
 
 export const GUIDED_TOURS_FLAG = 'guided-tours' as const;
 
-/** Teacher prompts on signed-in recovery screens. Missing Setting stays off. */
-export const SIGNON_TEACHER_PROMPTS_FLAG = 'signon-teacher-prompts' as const;
+/**
+ * Legacy Internal API / Setting names aliased to {@link FREE_TIER_FLAG}. Runtime
+ * reads only `feature_flag.free_tier`; these rows are not OR-merged.
+ */
+export const FOLDED_FREE_TIER_LEGACY_SETTINGS = [
+  'feature_flag.free-tier-onboarding-v2',
+  'feature_flag.free-tier-inapp-v2',
+] as const;
+
+/**
+ * Legacy Setting name aliased to {@link UNIFIED_SIGN_ON_FLAG}. Runtime reads only
+ * `feature_flag.unified-sign-on`.
+ */
+export const FOLDED_UNIFIED_SIGNON_LEGACY_SETTINGS = [
+  'feature_flag.signon-teacher-prompts',
+] as const;
 
 export const FEATURE_FLAGS = {
   [LESSON_PLANNER_FLAG]: {
@@ -70,38 +81,27 @@ export const FEATURE_FLAGS = {
   [FREE_TIER_FLAG]: {
     label: 'Free tier',
     description:
-      'Enables Free Tier C teacher onboarding, school-admin approval links, operator release tools, and related UI. Off: those routes and release APIs return 404; waitlist/token APIs behave as on main until yawp-internal turns this on for everyone.',
-  },
-  [FREE_TIER_INAPP_V2_FLAG]: {
-    label: 'Free tier in-app v2',
-    description:
-      'Shows the v2 usage and limit presentation for eligible free-account teachers when free tier is available. Default off on demo and production; existing controls and enforcement remain active when off.',
+      'Enables Free Tier teacher onboarding, school-admin approval, operator release tools, in-app limits, locked preview, create-class, and related UI. Off: those routes and release APIs return 404; waitlist/token APIs behave as on main until yawp-internal turns this on for everyone.',
   },
   [UNIFIED_SIGN_ON_FLAG]: {
     label: 'Unified sign-on',
     description:
-      'Shows the unified sign-on at /auth/login. Default off. Keep disabled on demo and production during October 16 testing. Backend-dependent operations remain unavailable until the backend integration ships.',
-  },
-  [FREE_TIER_ONBOARDING_V2_FLAG]: {
-    label: 'Free tier onboarding v2',
-    description:
-      'Approval reminders, forward requests, create-your-class step and locked preview for free-tier teachers.',
+      'Shows unified sign-on at /auth/login and signed-in teacher classroom entry prompts. Default off on production; on by default on demo and PR previews.',
   },
   [CLASS_CODE_UNIQUE_FLAG]: {
     label: 'Unique class codes',
-    description: 'Enforces global class-code availability and shows Generate code. Default off on demo and production. Only everyone mode is supported; targeted mode stays off because uniqueness spans all organizations.',
+    description:
+      'Enforces global class-code availability and shows Generate code. Default off on demo and production. Only everyone mode is supported; targeted mode stays off because uniqueness spans all organizations.',
   },
   [DEMO_FEEDBACK_FLAG]: {
     label: 'Demo feedback widget',
-    description: 'Shows the feedback note panel for signed-in demo users. Default off; production submissions are always denied.',
+    description:
+      'Shows the feedback note panel for signed-in demo users. Default off; production submissions are always denied.',
   },
   [GUIDED_TOURS_FLAG]: {
     label: 'Free classroom page tours',
-    description: 'Welcome cards, page replay and tour progress for free classroom teachers. Default off on demo and production; free tier must also be enabled.',
-  },
-  [SIGNON_TEACHER_PROMPTS_FLAG]: {
-    label: 'Sign-on teacher prompts',
-    description: 'Shows teacher classroom entry prompts on signed-in inactive and class-code screens, with a sign-out step for handle-only accounts. Default off on demo and production.',
+    description:
+      'Welcome cards, page replay and tour progress for free classroom teachers. Default off on demo and production; free tier must also be enabled.',
   },
 } as const satisfies Record<string, { label: string; description: string }>;
 
@@ -109,14 +109,29 @@ export type FeatureFlagKey = keyof typeof FEATURE_FLAGS;
 
 export const FEATURE_FLAG_KEYS = Object.keys(FEATURE_FLAGS) as FeatureFlagKey[];
 
+const REGISTERED_FLAG_ALIASES: Record<string, FeatureFlagKey> = {
+  [FREE_TIER_FLAG_LEGACY_KEY]: FREE_TIER_FLAG,
+  'free-tier-onboarding-v2': FREE_TIER_FLAG,
+  'free-tier-inapp-v2': FREE_TIER_FLAG,
+  'signon-teacher-prompts': UNIFIED_SIGN_ON_FLAG,
+};
+
+export function resolveFeatureFlagKey(
+  value: unknown
+): FeatureFlagKey | undefined {
+  if (typeof value !== 'string') return undefined;
+  if (Object.hasOwn(FEATURE_FLAGS, value)) return value as FeatureFlagKey;
+  if (Object.hasOwn(REGISTERED_FLAG_ALIASES, value))
+    return REGISTERED_FLAG_ALIASES[value];
+  return undefined;
+}
+
 export function isFeatureFlagKey(value: unknown): value is FeatureFlagKey {
-  return (
-    typeof value === 'string' &&
-    (FEATURE_FLAG_KEYS as readonly string[]).includes(value)
-  );
+  return resolveFeatureFlagKey(value) !== undefined;
 }
 
 export function featureFlagSettingName(key: FeatureFlagKey): string {
+  if (key === FREE_TIER_FLAG) return 'feature_flag.free_tier';
   return `feature_flag.${key}`;
 }
 
@@ -180,7 +195,15 @@ export function parseFeatureFlagValue(
   }
   const { mode, orgIds } = parsed as { mode?: unknown; orgIds?: unknown };
   if (!isFeatureFlagMode(mode)) return { ...OFF };
-  if (mode !== 'targeted') return { mode, orgIds: [] };
+  if (mode !== 'targeted') {
+    if (
+      orgIds !== undefined &&
+      (!Array.isArray(orgIds) ||
+        !orgIds.every((id): id is string => typeof id === 'string'))
+    )
+      return { ...OFF };
+    return { mode, orgIds: [] };
+  }
   if (
     !Array.isArray(orgIds) ||
     !orgIds.every((id): id is string => typeof id === 'string')
