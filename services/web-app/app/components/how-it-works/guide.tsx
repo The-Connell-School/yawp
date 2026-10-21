@@ -66,7 +66,8 @@ export function GuideHero({
   title: string;
   highlight: string;
   lede: string;
-  image: {
+  /** Left out on a guide with no picture yet; the text then spans the row. */
+  image?: {
     src: string;
     alt: string;
     width: number;
@@ -75,7 +76,12 @@ export function GuideHero({
   };
 }) {
   return (
-    <header className="grid items-center gap-8 md:grid-cols-2 md:gap-12">
+    <header
+      className={cn(
+        'grid items-center gap-8 md:gap-12',
+        image && 'md:grid-cols-2'
+      )}
+    >
       <div className="flex flex-col gap-4">
         <Eyebrow>See how it works</Eyebrow>
         <h1 className="text-3xl font-bold leading-tight md:text-5xl">
@@ -85,20 +91,22 @@ export function GuideHero({
           {lede}
         </p>
       </div>
-      <figure className="flex flex-col items-center gap-2">
-        <div className="rotate-1 rounded-2xl border bg-background p-2 shadow-lg">
-          <img
-            src={image.src}
-            alt={image.alt}
-            width={image.width}
-            height={image.height}
-            className="block h-auto w-full rounded-lg"
-          />
-        </div>
-        <figcaption className="text-xs text-muted-foreground">
-          {image.caption}
-        </figcaption>
-      </figure>
+      {image ? (
+        <figure className="flex flex-col items-center gap-2">
+          <div className="rotate-1 rounded-2xl border bg-background p-2 shadow-lg">
+            <img
+              src={image.src}
+              alt={image.alt}
+              width={image.width}
+              height={image.height}
+              className="block h-auto w-full rounded-lg"
+            />
+          </div>
+          <figcaption className="text-xs text-muted-foreground">
+            {image.caption}
+          </figcaption>
+        </figure>
+      ) : null}
     </header>
   );
 }

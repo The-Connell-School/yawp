@@ -1,5 +1,7 @@
 /**
- * "See how it works": a short, teacher-facing tour of The Thesis-Driven Essay.
+ * "See how it works": a short, teacher-facing tour of The Thesis-Driven Essay,
+ * and of Prewriting and Thesis Statement, its steps assigned on their own
+ * (see writing-step-guide.tsx).
  *
  * The cadence leads: the teacher teaches a step from the course, then students
  * write that step with the Tutor, which reinforces the lesson. It says what
@@ -32,7 +34,13 @@ import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-drive
 import { isAssignmentTypeAvailableForAnyScope } from '~/utils/assignment-type-access.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { getLessonMaterialsForAssignmentType } from '~/domain/assignment-types/lesson-materials.server';
+import {
+  isWritingStepKind,
+  WRITING_STEP_COPY,
+} from '../app.assignment-types.$id/about-writing-step/content';
 import { TransferChart } from './transfer-chart';
+import { WritingStepGuide } from './writing-step-guide';
 
 const MEDIA = '/img/thesis-essay-guide';
 
@@ -71,9 +79,22 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const assignmentType = await prisma.assignmentType.findFirst({
     where: { id: assignmentTypeId, archivedAt: null },
-    select: { id: true, title: true },
+    select: { id: true, title: true, kind: true },
   });
-  // Only The Thesis-Driven Essay has a guide so far.
+  // Prewriting and Thesis Statement, single steps of the essay, have their own
+  // shorter guide.
+  if (assignmentType && isWritingStepKind(assignmentType.kind)) {
+    return {
+      guide: 'writing-step' as const,
+      kind: assignmentType.kind,
+      pagePath,
+      lesson: await getLessonMaterialsForAssignmentType(
+        assignmentType.kind,
+        profile.id
+      ),
+    };
+  }
+  // Otherwise only The Thesis-Driven Essay has a guide so far.
   if (!assignmentType || !isThesisDrivenEssayTitle(assignmentType.title)) {
     throw redirect(pagePath);
   }
@@ -95,6 +116,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 
   return {
+    guide: 'thesis-essay' as const,
     pagePath,
     coursePath: course ? `/app/teacher-trainings/${course.id}` : null,
   };
@@ -177,8 +199,29 @@ function clip(name: string, label: string) {
   );
 }
 
-export default function ThesisEssayHowItWorksRoute() {
-  const { pagePath, coursePath } = useLoaderData<typeof loader>();
+export default function HowItWorksRoute() {
+  const data = useLoaderData<typeof loader>();
+  if (data.guide === 'writing-step') {
+    return (
+      <WritingStepGuide
+        copy={WRITING_STEP_COPY[data.kind]}
+        pagePath={data.pagePath}
+        lesson={data.lesson}
+      />
+    );
+  }
+  return (
+    <ThesisEssayGuide pagePath={data.pagePath} coursePath={data.coursePath} />
+  );
+}
+
+function ThesisEssayGuide({
+  pagePath,
+  coursePath,
+}: {
+  pagePath: string;
+  coursePath: string | null;
+}) {
 
   return (
     <GuidePage backTo={pagePath} backLabel="Back to The Thesis-Driven Essay">
