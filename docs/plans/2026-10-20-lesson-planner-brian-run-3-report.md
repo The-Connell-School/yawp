@@ -192,6 +192,29 @@ gallery and the page" spec:
   closing, and so on), so a deck made with the flag on still shows
   everywhere.
 
+## Kevin's notes from testing (Oct 21)
+
+- **No AI sparkle.** It is gone from the Create buttons on class starter,
+  Daily Pages, exit ticket and practice cards.
+- **Options side by side.** Brian asked for three class starters and
+  three exit tickets, each with its own buttons, but did not ask for a
+  vertical list. Two or more options of one kind in a row now sit in one
+  horizontal row with arrows and "1 of 3", each card keeping its Add and
+  Create. The same applies to framing cards and practice.
+- **Pages scroll.** The run-of-show stack page and the step handouts page
+  could not be scrolled at all: the app frame has a fixed height, and
+  these pages did not scroll themselves. They do now, and an e2e test
+  scrolls with the mouse wheel (it fails on the old layout).
+- **Clearer plan steps.** In the chat, each step of a proposed lesson is
+  its own section: a number, a real heading, its minutes in a chip, and a
+  divider above it.
+- **Stack order and time.** Pieces added one by one from the same reply
+  now read in the reply's order, not the order they were clicked. A card
+  that is the only one under its step brings the step's minutes (lecture
+  notes under "Mini-lecture (12 min)" are 12, not a guessed 5). The first
+  run-of-show card says "Start" instead of "00 min in", which read as a
+  step with no time. Rows filed before this keep their order.
+
 ## Decisions taken with the default
 
 - **K1.** Finish line and Take it to class replace "When the sequence is
