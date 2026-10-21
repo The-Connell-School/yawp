@@ -17,7 +17,7 @@ mock.module('./limits.server', () => ({
   }),
   readFreeTierLimits: async () => testLimits,
 }));
-let applicationStatus: 'APPROVED' | 'SENT' | 'MANUAL_REVIEW' = 'APPROVED';
+let applicationStatus: 'APPROVED' | 'SENT' | 'MANUAL_REVIEW' | null = 'APPROVED';
 let previousYawpEnvironment: string | undefined;
 const classRead = mock(async (..._args: any[]) => ({
   id: 'class',
