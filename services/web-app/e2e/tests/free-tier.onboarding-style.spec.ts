@@ -457,10 +457,19 @@ for (const viewport of [
       ).toBe('APPROVED');
       // Disposable status fixtures reach the same guarded routes without email.
       await prisma.freeTierEmailLog.deleteMany({ where: { applicationId: app.id, success: false } });
+      const { organizationId: provisionedOrgId } =
+        await prisma.freeTierApplication.findUniqueOrThrow({
+          where: { id: app.id },
+          select: { organizationId: true },
+        });
       for (const status of ['REJECTED', 'EXPIRED', 'MANUAL_REVIEW'] as const) {
         await prisma.freeTierApplication.update({
           where: { id: app.id },
-          data: { status, organizationId: null },
+          data: {
+            status,
+            organizationId:
+              status === 'MANUAL_REVIEW' ? provisionedOrgId : null,
+          },
         });
         await page.goto(
           status === 'MANUAL_REVIEW' ? '/app' : '/app/free-tier/status'
