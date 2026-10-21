@@ -258,10 +258,67 @@ gallery and the page" spec:
   blocked from the build. Each further work is one image plus one entry
   in `deck-art.ts`.
 
+## The Lesson Deck Kit v3, the lesson plan spec and handouts (Oct 21)
+
+Brian's notes, organized, the decisions and the plan are in
+[`2026-10-21-lesson-deck-kit-v3.md`](./2026-10-21-lesson-deck-kit-v3.md).
+It all sits behind the same flag, `lesson_planner_deck_gallery`, now
+named "Lesson Planner: Lesson Deck Kit". With it off, nothing changes.
+
+- **Decks follow spec v3.** Georgia and Arial only (Gelasio and Arimo
+  stand in on machines without them). Each deck takes two or three colors
+  from its painting, darkened until they read on paper. Mode words appear
+  only where they do a job: *Today's program* replaces the agenda's
+  headline, *Know this.* and *Before you go.* close the right slides, and a
+  word that repeats the headline or the slide before it is dropped.
+  Dividers name the writing-process step (*Step 5.*). Quizzes mark the
+  right answer with a soft color band. Running heads carry no lesson or
+  day numbers, there is one accent wall at most, the painting is shown
+  large three times at most, and there is no transparency. Present, Run
+  the show and the PowerPoint draw the same deck.
+- **The planner writes to the kit.** Its gallery instructions were
+  replaced with spec v3: the twelve templates with their limits, the
+  mode-word rules, the painting's colors, `~~1|…~~` color coding,
+  writing-process dividers, quiz answers and the Yawp! button. Every deck,
+  gallery or not, now follows the kit's writing rules: no lesson or day
+  numbers, no filler, never give the answer away, current MLA, and sized
+  to the space. Deck repair keeps the new fields.
+- **The lesson plan follows the lesson plan spec v1** (with plan export
+  v2 on). This covers:
+  - Kicker, title and subtitle taken from the deck, in the painting's
+    primary color.
+  - The Step, Slide deck and Platform lines.
+  - The Overview callout, a Goals table, and an empty Standards box.
+  - Materials that always name the deck and yawp.school.
+  - Phases, and steps numbered straight through with short titles. Each
+    step has a SLIDES line that names the deck's slides for it.
+  - The footer "Yawp! Writing Program | … lesson plan | Page N".
+
+  The Word file uses built-in headings, real numbering, a page field,
+  fixed twip tables and clear shading, on US Letter with 0.75-inch
+  margins. The PDF is the same plan, with Gelasio and Arimo embedded.
+- **Handouts** (the student handout and step handouts) use the plan's
+  fonts and the lesson's color.
+- **Checked:**
+  - Unit tests for the colors, the mode rules, the renderers, the plan
+    model and both plan files, plus the prompt.
+  - E2E tests for the deck in Present and PowerPoint, and for the plan
+    download and handouts.
+  - All planner e2e suites and typecheck.
+  - The PowerPoint, the Word file and the PDF were rendered and compared
+    with the kit's pages.
+
 ## Still for Kevin and Brian
 
-- **More art for the gallery deck.** Send the shortlist's images (public
-  domain or licensed) and they go into the library.
+- **More art for the gallery deck.** The kit's reference table names
+  seven more works (Hopper, Klee, Degas, Mondrian and others). Museum sites
+  are blocked from the build machine, so send their images and they go
+  into the library with their colors.
+- **For Brian:** the kit writes the brand as "YAWP!" in mixed case, while
+  the app writes "Yawp!" (the Oct 20 sweep). The plan footer and the exit
+  button follow the app for now. The kit's artifact link and its
+  `lesson-plan/` folder could not be opened from here, so the plan was
+  built from the PDF's spec and data model.
 - **A look at the gallery deck on the preview**, against the kit, with a
   real planner-made deck.
 - **Phone as a remote for Run the show.** It needs a server channel and

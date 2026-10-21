@@ -142,3 +142,17 @@ change, everything behind the kit flag.
 14. Re-record the guide's gallery clip with the recorder; update the guide
     copy for the kit.
 15. Report-out, push to PR 437, update its description.
+
+## Status (Oct 21)
+
+All 15 steps are done and on PR 437. The changes from the plan:
+
+- The PDF plan is drawn directly from the same data model, rather than
+  converted from the Word file.
+- Phases come from step types: class starter is the opening, Daily Pages
+  and practice are writing, and the lesson's closing or exit ticket is
+  the closing. Phase labels appear only when a plan has more than one.
+- A step's SLIDES line comes from the deck's `step` marks. A deck built
+  before the marks existed gets no SLIDES lines.
+- The plan summary marks optional steps and writes short titles. A cached
+  summary is rewritten once when the kit is on.

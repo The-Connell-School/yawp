@@ -537,11 +537,13 @@ export default function LessonPlannerHowItWorksRoute() {
             </Copy>
             {deckGallery ? (
               <Copy>
-                Decks are hung like a gallery: warm paper, one accent color for
-                the unit, a painting chosen for the lesson and always credited,
-                and a slide for each kind of moment, from{' '}
-                <em>Today.</em> to <em>Write.</em> to <em>Before you go.</em> The
-                same look carries to PowerPoint.
+                Decks are hung like a gallery: Georgia and Arial on warm paper,
+                one painting chosen for the lesson and always credited, and two
+                or three colors taken from it. A slide for each kind of moment,
+                with a word over it only when the task changes, from{' '}
+                <em>Today’s program</em> to <em>Write.</em> to{' '}
+                <em>Before you go.</em> No lesson numbers, so you can reorder
+                lessons. The same deck opens in PowerPoint and Google Slides.
               </Copy>
             ) : null}
           </div>
@@ -562,7 +564,7 @@ export default function LessonPlannerHowItWorksRoute() {
           {deckGallery ? (
             <Clip
               name="gallery-deck"
-              label="Paging through a gallery deck for The Things They Carried: a title slide with a Turner painting, Today’s agenda, a Talk question, a timeline, a Read along slide, and Before you go."
+              label="Paging through a gallery deck for The Things They Carried in Georgia and Arial: a title slide with a Turner painting, Today’s program, a Write prompt on pine, a Talk question, a timeline in the painting’s colors, a Read along slide, a quick check with its answer marked, and Before you go on the rust accent wall."
             />
           ) : (
             <Clip
@@ -629,9 +631,13 @@ export default function LessonPlannerHowItWorksRoute() {
                 </Copy>
                 <Ticks
                   items={[
-                    'A one-page timed lesson plan, as Word, Google Docs or PDF',
+                    deckGallery
+                      ? 'A lesson plan that matches the deck: its name, its color, its slides by step, as Word, Google Docs or PDF'
+                      : 'A one-page timed lesson plan, as Word, Google Docs or PDF',
                     'The slide deck, built from your stack',
-                    'Handouts for any step, rewritten for students, with room to write',
+                    deckGallery
+                      ? 'Handouts for any step, rewritten for students, in the plan’s fonts and color'
+                      : 'Handouts for any step, rewritten for students, with room to write',
                   ]}
                 />
               </Row>

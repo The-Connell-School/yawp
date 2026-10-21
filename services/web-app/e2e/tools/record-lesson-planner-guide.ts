@@ -38,10 +38,9 @@ const notes = { speakerNotes: 'Let it land, then move on.' };
 const GALLERY_DECK = {
   title: 'What we carry',
   unit: 'The Things They Carried',
-  accent: 'ember',
   art: 'turner-temeraire',
   slides: [
-    { layout: 'title', title: 'What we carry', subtitle: 'Day one', ...notes },
+    { layout: 'title', title: 'What we carry', subtitle: 'The weight of small things', course: 'English 11', ...notes },
     {
       layout: 'agenda',
       title: 'The things they carried',
@@ -82,7 +81,17 @@ const GALLERY_DECK = {
       step: 4,
       ...notes,
     },
-    { layout: 'exit', title: 'Before you go', body: 'One object, one sentence: why it matters.', nextLesson: 'Love', step: 6, ...notes },
+    {
+      layout: 'discuss',
+      title: 'Quick check',
+      question: 'What does O’Brien list first for every man?',
+      choices: ['Their weapons', 'The necessities', 'Their letters'],
+      answer: 2,
+      color: 2,
+      step: 4,
+      ...notes,
+    },
+    { layout: 'exit', title: 'Before you go', body: 'One object, one sentence: why it matters.', button: 'Exit ticket', nextLesson: 'Love', step: 6, ...notes },
   ],
 };
 
@@ -273,7 +282,7 @@ test('record the Lesson Planner guide', async ({ page, signIn, e2eContext, brows
     await p.waitForLoadState('networkidle');
     await p.evaluate(() => document.fonts.ready);
     await pace(p, 1600);
-    for (let i = 0; i < 7; i += 1) {
+    for (let i = 0; i < 8; i += 1) {
       await p.keyboard.press('ArrowRight');
       await pace(p, 1500);
     }
