@@ -40,13 +40,10 @@ type Edit = ((patch: Partial<Slide>) => void) | undefined;
 
 export function TileSlideCanvas({
   slide: raw,
-  number,
   onEdit,
   footerMark = DEFAULT_TILE_FOOTER_MARK,
 }: {
   slide: Slide;
-  /** 1-based, for the corner. */
-  number?: number;
   /** The deck editor: edit the words on the slide itself. */
   onEdit?: (patch: Partial<Slide>) => void;
   footerMark?: TileFooterMark;
@@ -71,7 +68,8 @@ export function TileSlideCanvas({
           <TileBody slide={slide} onEdit={onEdit} />
         </div>
       )}
-      {/* The wordmark and the slide number, in place of a footer mark. */}
+      {/* The wordmark, in place of a footer mark. No slide number: teachers
+          add and delete slides, and a number goes wrong (Oct 21 review). */}
       {!closing && slide.layout !== 'title' && footerMark !== 'none' ? (
         <span
           data-testid="tile-footer-mark"
@@ -84,14 +82,6 @@ export function TileSlideCanvas({
           }}
         >
           Yawp!
-        </span>
-      ) : null}
-      {number ? (
-        <span
-          className="absolute bottom-[3.5%] right-[5.5%] font-mono tabular-nums"
-          style={{ fontSize: EYEBROW_TYPE, color: closing ? css('ink') : css('muted') }}
-        >
-          {number}
         </span>
       ) : null}
     </div>
@@ -422,11 +412,9 @@ function TileBody({ slide, onEdit }: { slide: Slide; onEdit: Edit }) {
  */
 export function TileSlideThumbnail({
   slide,
-  number,
   width,
 }: {
   slide: Slide;
-  number?: number;
   /** Rendered width in pixels. */
   width: number;
 }) {
@@ -437,7 +425,7 @@ export function TileSlideThumbnail({
         className="absolute left-0 top-0 origin-top-left"
         style={{ width: 960, height: 540, transform: `scale(${scale})` }}
       >
-        <TileSlideCanvas slide={slide} number={number} />
+        <TileSlideCanvas slide={slide} />
       </div>
     </div>
   );

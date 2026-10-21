@@ -113,12 +113,12 @@ describe("renderDeckPptxTile (Brian's review, E1)", () => {
     });
   });
 
-  test('wears the Yawp! master: a typographic wordmark and slide numbers, no footer mark', async () => {
+  test('wears the Yawp! master: a typographic wordmark, no footer mark, and no slide numbers (Oct 21: teachers delete slides)', async () => {
     const parts = pptxParts(await renderDeckPptxTile(DECK));
     const masters = [...parts.keys()].filter((name) => /slideLayouts\/slideLayout\d+\.xml$/.test(name));
     const yawpLayout = masters.map((name) => parts.get(name)!).find((xml) => xml.includes('Yawp!'));
     expect(yawpLayout).toBeDefined();
-    expect(yawpLayout).toContain('type="sldNum"');
+    expect(yawpLayout).not.toContain('type="sldNum"');
     // Not "Phantom YAWP", not a logo image.
     expect([...parts.values()].join('')).not.toContain('Phantom');
   });

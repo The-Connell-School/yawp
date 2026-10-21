@@ -439,16 +439,6 @@ export async function renderDeckPptxTile(
               },
             },
           ],
-    slideNumber: {
-      x: LAYOUT.width - MARGIN - 0.6,
-      y: LAYOUT.height - 0.55,
-      w: 0.6,
-      h: 0.35,
-      fontFace: T.mono,
-      fontSize: 10,
-      color: T.muted,
-      align: 'right',
-    },
   });
 
   for (const slide of deck.slides) addSlide(pptx, slide, deck);

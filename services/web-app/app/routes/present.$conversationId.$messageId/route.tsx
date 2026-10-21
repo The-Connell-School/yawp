@@ -201,7 +201,7 @@ export default function PresentRoute() {
             {galleryTemplate ? (
               <GallerySlideCanvas deck={deck} index={index} />
             ) : tileTemplate ? (
-              <TileSlideCanvas slide={slide} number={index + 1} />
+              <TileSlideCanvas slide={slide} />
             ) : (
               <SlideCanvas slide={slide} />
             )}
@@ -217,7 +217,7 @@ export default function PresentRoute() {
                 {galleryTemplate ? (
                   <GallerySlideCanvas deck={deck} index={printIndex} />
                 ) : tileTemplate ? (
-                  <TileSlideCanvas slide={printed} number={printIndex + 1} />
+                  <TileSlideCanvas slide={printed} />
                 ) : (
                   <SlideCanvas slide={printed} />
                 )}

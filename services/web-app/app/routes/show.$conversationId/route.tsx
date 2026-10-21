@@ -303,7 +303,7 @@ export default function RunTheShowRoute() {
                       {gallery ? (
                         <GallerySlideCanvas deck={deck} index={slideIndex} />
                       ) : (
-                        <TileSlideCanvas slide={deck.slides[slideIndex]!} number={slideIndex + 1} />
+                        <TileSlideCanvas slide={deck.slides[slideIndex]!} />
                       )}
                     </div>
                     <figcaption className="mt-1 text-xs text-[#6E665C]">

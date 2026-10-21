@@ -272,7 +272,7 @@ export default function DeckEditorRoute() {
                     {gallery ? (
                       <GallerySlideThumbnail deck={deck} index={index} width={238} />
                     ) : (
-                      <TileSlideThumbnail slide={item} number={index + 1} width={238} />
+                      <TileSlideThumbnail slide={item} width={238} />
                     )}
                   </div>
                 </button>
@@ -310,7 +310,7 @@ export default function DeckEditorRoute() {
               {gallery ? (
                 <GallerySlideCanvas deck={deck} index={at} />
               ) : (
-                <TileSlideCanvas slide={slide} number={at + 1} onEdit={edit} />
+                <TileSlideCanvas slide={slide} onEdit={edit} />
               )}
             </div>
 
