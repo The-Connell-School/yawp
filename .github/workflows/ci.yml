@@ -1104,10 +1104,10 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
         run: bun prisma migrate deploy
 
-      - name: 🌱 Seed local dev fixtures
+      - name: 🌱 Seed free-tier assignment catalog
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
-        run: bun run --cwd packages/prisma seed-local-dev.ts
+        run: bun run --cwd packages/prisma seed-free-tier-bundle-assignment-types
 
       - name: 🔖 Resolve Playwright version
         id: playwright-version
