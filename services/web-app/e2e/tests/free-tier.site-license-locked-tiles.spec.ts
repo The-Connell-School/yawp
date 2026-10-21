@@ -56,12 +56,29 @@ test('free-tier flag on shows locked assignment tiles on dashboard and picker', 
   await expect(tiles.getByTestId('site-license-locked-assignment-tile')).not.toHaveCount(
     0
   );
-  await expect(tiles).toContainText('Available with a site license.');
+  await expect(tiles).not.toContainText('Available with a site license.');
+  const dashImg = tiles.locator('img').first();
+  const dashBox = await dashImg.boundingBox();
+  expect(dashBox?.height ?? 0).toBeLessThanOrEqual(64);
+  const lock = tiles.getByTestId('site-license-lock-button').first();
+  await lock.focus();
+  await page.waitForTimeout(350);
+  await expect(
+    page.getByRole('tooltip', { name: /Available with a site license/i })
+  ).toBeVisible();
   await page.getByRole('button', { name: 'New assignment' }).click();
   await expect(
     page.getByTestId('site-license-locked-assignment-tile').first()
   ).toBeVisible();
-  await expect(page.getByText('Available with a site license.').first()).toBeVisible();
+  await expect(page.getByText('Available with a site license.').first()).toHaveCount(
+    0
+  );
+  const pickerLock = page.getByTestId('site-license-lock-button').first();
+  await pickerLock.hover();
+  await page.waitForTimeout(350);
+  await expect(
+    page.getByRole('tooltip', { name: /Available with a site license/i })
+  ).toBeVisible();
 });
 
 test('free-tier flag off keeps the licensed teacher dashboard unchanged', async ({

@@ -29,6 +29,11 @@ import { cn } from '~/utils/misc';
 import { SiteLicenseLockedAssignmentTile } from '~/components/site-license-locked-assignment-tile';
 import type { SiteLicenseLockedAssignmentTile as SiteLicenseLockedTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
 import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
+import {
+  assignmentTypeTileCardClassName,
+  assignmentTypeTileFooterClassName,
+  assignmentTypeTileImageClassName,
+} from '~/components/assignment-type-tile-layout';
 import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import type { RefObject } from 'react';
@@ -276,42 +281,66 @@ export function FreeAssignmentTiles({
               }
               onClick={() => onCreate(teachingLocked ? undefined : type?.id)}
               aria-label={`New ${row.label} assignment`}
-              className="flex min-h-[92px] flex-col overflow-hidden rounded-xl border bg-popover text-left shadow-sm disabled:bg-muted/30"
+              className={cn(
+                assignmentTypeTileCardClassName(
+                  'bg-popover shadow-sm disabled:bg-muted/30'
+                )
+              )}
             >
               <AssignmentTypeTileImage
                 imageId={type?.imageId}
                 imageTitle={type?.imageTitle}
-                className="h-16 w-full"
+                className={assignmentTypeTileImageClassName}
               />
-              <span className="flex flex-col gap-1 p-3.5 pt-2">
-                <span className="flex w-full items-start justify-between gap-2 text-[15px] font-medium">
-                  {row.label}
-                  {teachingLocked ? (
+              {teachingLocked ? (
+                <span className="flex flex-col gap-1 px-3 py-2 sm:py-2.5">
+                  <span className="flex w-full items-start justify-between gap-2 text-[15px] font-medium">
+                    {row.label}
                     <Lock
                       size={16}
-                      className="mt-1 shrink-0 text-muted-foreground"
+                      className="mt-0.5 shrink-0 text-muted-foreground"
                       aria-hidden
                     />
-                  ) : (
-                    <Plus
-                      size={16}
-                      className="mt-1 shrink-0 text-muted-foreground"
-                    />
-                  )}
+                  </span>
+                  <span
+                    className={cn(
+                      'text-[13px] text-muted-foreground',
+                      !usage.monthly && row.remaining === 0 && 'text-amber-800'
+                    )}
+                  >
+                    {usage.monthly
+                      ? 'Unlimited assignments'
+                      : row.remaining
+                        ? `${row.remaining} of ${row.total} left`
+                        : 'None left'}
+                  </span>
                 </span>
+              ) : (
                 <span
-                  className={cn(
-                    'text-[13px] text-muted-foreground',
-                    !usage.monthly && row.remaining === 0 && 'text-amber-800'
+                  className={assignmentTypeTileFooterClassName(
+                    'text-[15px] font-medium'
                   )}
                 >
-                  {usage.monthly
-                    ? 'Unlimited assignments'
-                    : row.remaining
-                      ? `${row.remaining} of ${row.total} left`
-                      : 'None left'}
+                  <span className="min-w-0 flex-1 truncate">{row.label}</span>
+                  <span
+                    className={cn(
+                      'shrink-0 text-[13px] font-normal text-muted-foreground',
+                      !usage.monthly && row.remaining === 0 && 'text-amber-800'
+                    )}
+                  >
+                    {usage.monthly
+                      ? 'Unlimited'
+                      : row.remaining
+                        ? `${row.remaining} of ${row.total} left`
+                        : 'None left'}
+                  </span>
+                  <Plus
+                    size={16}
+                    className="shrink-0 text-muted-foreground"
+                    aria-hidden
+                  />
                 </span>
-              </span>
+              )}
             </button>
           );
         })}

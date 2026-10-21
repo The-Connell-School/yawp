@@ -187,6 +187,32 @@ for (const width of [1440, 390]) {
       .click();
     await expect(page.getByRole('heading', { name: 'New assignment' })).toBeVisible();
     await expect(page.getByText('Choose a type.')).toBeVisible();
+    const lockedTileImg = page
+      .locator('[data-testid="site-license-locked-assignment-tile"] img')
+      .first();
+    if (await lockedTileImg.count()) {
+      const imgBox = await lockedTileImg.boundingBox();
+      if (width === 1440) expect(imgBox?.height ?? 0).toBeLessThanOrEqual(64);
+      else expect(imgBox?.height ?? 0).toBeLessThanOrEqual(56);
+      const siteLock = page.getByTestId('site-license-lock-button').first();
+      if (width === 1440) {
+        await siteLock.focus();
+        await page.waitForTimeout(350);
+        await expect(
+          page.getByRole('tooltip', { name: /Available with a site license/i })
+        ).toBeVisible();
+        await siteLock.blur();
+      } else {
+        await siteLock.click();
+        await expect(
+          page.getByRole('tooltip', { name: /Available with a site license/i })
+        ).toBeVisible();
+        await page.waitForTimeout(2100);
+        await expect(
+          page.getByRole('tooltip', { name: /Available with a site license/i })
+        ).toHaveCount(0);
+      }
+    }
     await capture(page, `locked-picker-${width}`);
     await page.keyboard.press('Escape');
     await expect(page.getByRole('heading', { name: 'New assignment' })).toHaveCount(
