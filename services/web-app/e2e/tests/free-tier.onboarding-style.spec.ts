@@ -347,7 +347,13 @@ for (const viewport of [
         where: { id: app.id },
         data: { adminRedirectCount: 0 },
       });
-      await admin.goto(reminder.notRightPersonUrl!);
+      const freshForward = await mintFreeTierLinkForE2E(prisma, {
+        applicationId: app.id,
+        purpose: 'ADMIN_NOT_RIGHT_PERSON',
+      });
+      await admin.goto(
+        `${origin}/free/admin/not-right-person?t=${encodeURIComponent(freshForward.token)}`
+      );
       await admin.locator('input[name="adminName"]').fill('Principal Lee');
       await admin
         .locator('input[name="adminEmail"]')
