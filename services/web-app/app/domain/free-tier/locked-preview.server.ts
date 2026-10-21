@@ -12,6 +12,27 @@ import {
 } from './locked-preview';
 import { provisionFreeClassroom } from './provision-free-classroom.server';
 
+/** Pending approval from the teacher's own application — not membership cookie or org. */
+export async function userHasPendingFreeTierTeachingLock(
+  userId: string
+): Promise<boolean> {
+  try {
+    const app = await prisma.freeTierApplication.findFirst({
+      where: { userId },
+      select: { status: true, organizationId: true },
+    });
+    if (!app || !isLockedPreviewStatus(app.status)) return false;
+    if (
+      !(await isFeatureFlagEnabled(FREE_TIER_FLAG, app.organizationId ?? undefined))
+    ) {
+      return false;
+    }
+    return true;
+  } catch {
+    return true;
+  }
+}
+
 export async function getLockedPreviewApplication(userId: string, membershipId?: string | null) {
   const app = await prisma.freeTierApplication.findFirst({
     where: { userId },
@@ -40,7 +61,7 @@ export async function getLockedPreviewApplication(userId: string, membershipId?:
 export async function enforceLockedPreviewRequest(request: Request, userId: string, membershipId?: string | null) {
   const pathname = new URL(request.url).pathname;
   if (!(pathname === '/app' || pathname.startsWith('/app/') || pathname.startsWith('/api/'))) return;
-  if (!(await getLockedPreviewApplication(userId, membershipId))) return;
+  if (!(await userHasPendingFreeTierTeachingLock(userId))) return;
   if (isLockedPreviewRequestAllowed(request.method, pathname)) return;
   if (['GET', 'HEAD'].includes(request.method))
     throw redirect(LOCKED_PREVIEW_APP_HOME);

@@ -30,6 +30,7 @@ import { SiteLicenseLockedAssignmentTile } from '~/components/site-license-locke
 import type { SiteLicenseLockedAssignmentTile as SiteLicenseLockedTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
 import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
 import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
+import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import type { RefObject } from 'react';
 
 export function useFreeAccountUsage() {
@@ -225,12 +226,20 @@ export function FreeAssignmentTiles({
   createTriggerRef,
 }: {
   usage: FreeAccountUsage;
-  types: Array<{ id: string; kind?: string | null; imageId?: string | null }>;
+  types: Array<{
+    id: string;
+    kind?: string | null;
+    imageId?: string | null;
+    imageTitle?: string | null;
+  }>;
   lockedAssignmentTiles?: SiteLicenseLockedTile[];
   teachingLocked?: boolean;
   onCreate: (id?: string) => void;
   createTriggerRef?: RefObject<HTMLButtonElement | null>;
 }) {
+  const { state } = useTeachingAccess();
+  const adminName =
+    state.variant === 'locked' ? state.adminName : 'your administrator';
   const createButton = (
     <button
       ref={createTriggerRef as RefObject<HTMLButtonElement> | undefined}
@@ -247,7 +256,9 @@ export function FreeAssignmentTiles({
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-bold">Assignments</h2>
         {teachingLocked ? (
-          <LockedTeachingControl locked>{createButton}</LockedTeachingControl>
+          <LockedTeachingControl locked adminName={adminName}>
+            {createButton}
+          </LockedTeachingControl>
         ) : (
           createButton
         )}
@@ -269,6 +280,7 @@ export function FreeAssignmentTiles({
             >
               <AssignmentTypeTileImage
                 imageId={type?.imageId}
+                imageTitle={type?.imageTitle}
                 className="h-16 w-full"
               />
               <span className="flex flex-col gap-1 p-3.5 pt-2">

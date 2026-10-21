@@ -1505,7 +1505,12 @@ export default function ClassDetailRoute() {
 
 function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
   const freeUsage = useFreeAccountUsage();
-  const { locked: teachingLocked } = useTeachingAccess();
+  const { locked: teachingLocked, state: teachingAccessState } =
+    useTeachingAccess();
+  const teachingAccessAdminName =
+    teachingAccessState.variant === 'locked'
+      ? teachingAccessState.adminName
+      : 'your administrator';
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -2394,7 +2399,9 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                   </Button>
                 );
                 return teachingLocked ? (
-                  <LockedTeachingControl locked>{addButton}</LockedTeachingControl>
+                  <LockedTeachingControl locked adminName={teachingAccessAdminName}>
+                    {addButton}
+                  </LockedTeachingControl>
                 ) : (
                   addButton
                 );

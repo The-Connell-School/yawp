@@ -214,6 +214,7 @@ export type AssignmentCreationAssignmentType = {
    */
   kind: string | null;
   imageId?: string | null;
+  imageTitle?: string | null;
   /** Library rubric name when the type points at a shared rubric (e.g. SJP Daily Pages). */
   rubricName?: string | null;
   /** Displayed for a catalog type excluded by the organization plan. */
@@ -329,6 +330,7 @@ export type AssignmentCreationSheetProps = {
   /** Present reopens the notes section filled in; absent leaves the default. */
   initialExitTicketLessonNotes?: ExitTicketLessonNotes | null;
   teachingLocked?: boolean;
+  createAssignmentTriggerRef?: React.RefObject<HTMLButtonElement | null>;
 };
 
 type AssignmentCreationSheetContentProps = AssignmentCreationSheetProps & {
@@ -512,6 +514,7 @@ export function AssignmentCreationSheet({
         usage={usage}
         assignmentTypes={props.assignmentTypes}
         lockedAssignmentTiles={props.siteLicenseLockedAssignmentTiles ?? []}
+        createTriggerRef={props.createAssignmentTriggerRef}
       />
     );
   }

@@ -230,6 +230,35 @@ for (const width of [1440, 390]) {
   });
 }
 
+test('stale tab blocked POST shows approval required toast without changing page state', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { user, app } = await fixture('11', 'SENT');
+  await provisionPendingClassroom(app.id, user.id!);
+  await login(page, user.email!);
+  await page.goto('/app/free-tier/pending');
+  await page.getByRole('link', { name: 'Explore my classroom' }).click();
+  await prisma.freeTierApplication.update({
+    where: { id: app.id },
+    data: { status: 'APPROVED' },
+  });
+  await page.reload();
+  await expect(page.getByTestId('teaching-access-approval-toast')).toBeVisible();
+  await prisma.freeTierApplication.update({
+    where: { id: app.id },
+    data: { status: 'SENT' },
+  });
+  const bannerBefore = await page.getByTestId('teaching-access-banner').count();
+  await page.evaluate(async () => {
+    await fetch('/api/preferences/nav', { method: 'POST', body: new FormData() });
+  });
+  await expect(page.getByTestId('teaching-access-error-toast')).toBeVisible();
+  await expect(page.getByTestId('teaching-access-banner')).toHaveCount(
+    bannerBefore
+  );
+});
+
 test('legacy public enrollment cannot bypass pending approval', async ({ page }) => {
   const { app, user } = await fixture('11', 'SENT');
   await provisionPendingClassroom(app.id, user.id!);

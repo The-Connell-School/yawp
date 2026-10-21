@@ -61,8 +61,8 @@ export function TeachingAccessProvider({
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === 'base' || breakpoint === 'sm';
 
-  const locked = state.variant === 'locked';
   const loading = state.variant === 'loading';
+  const locked = state.variant === 'locked' || loading;
 
   useEffect(() => {
     for (const fetcher of fetchers) {
@@ -71,6 +71,27 @@ export function TeachingAccessProvider({
       }
     }
   }, [fetchers]);
+
+  useEffect(() => {
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = async (...args) => {
+      const response = await originalFetch(...args);
+      if (response.status === 403) {
+        try {
+          const data = await response.clone().json();
+          if (isApprovalRequiredPayload(data)) {
+            setErrorToastOpen(true);
+          }
+        } catch {
+          // Non-JSON 403 responses are ignored.
+        }
+      }
+      return response;
+    };
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, []);
 
   useEffect(() => {
     if (state.variant !== 'locked') return;
@@ -159,6 +180,12 @@ export function TeachingAccessProvider({
           }}
           onBlurCapture={() => {
             approvalPausedRef.current = false;
+            if (approvalToastOpen) {
+              approvalTimerRef.current = setTimeout(
+                () => dismissApprovalToast(),
+                8000
+              );
+            }
           }}
         >
           <ApprovalSuccessToast

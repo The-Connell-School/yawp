@@ -245,6 +245,36 @@ local('waiting tour POST persists only its own progress while all teaching route
   }
 });
 
+local('pending teacher with stale membership cookie is still denied on default-deny paths', async () => {
+  const foreignOrg = await prisma.organization.create({
+    data: { name: `${prefix}-stale-cookie`, plan: 'FREE_CLASSROOM' },
+  });
+  const staleMembership = await prisma.orgMembership.create({
+    data: {
+      userId,
+      organizationId: foreignOrg.id,
+      role: 'TEACHER',
+    },
+  });
+  try {
+    for (const path of [
+      '/app/my-classes',
+      '/api/preferences/nav',
+    ] as const) {
+      await expect(
+        enforceLockedPreviewRequest(
+          new Request(`http://localhost${path}`, { method: 'POST' }),
+          userId,
+          staleMembership.id
+        )
+      ).rejects.toMatchObject({ status: 403 });
+    }
+  } finally {
+    await prisma.orgMembership.delete({ where: { id: staleMembership.id } });
+    await prisma.organization.delete({ where: { id: foreignOrg.id } });
+  }
+});
+
 local('approval restores assignment admission and flag OFF preserves request behavior', async () => {
   const request = new Request('http://localhost/api/assignments/create', { method: 'POST' });
   await setFlag('false');

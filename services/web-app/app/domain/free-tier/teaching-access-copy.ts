@@ -3,8 +3,13 @@ export const TEACHING_ACCESS_LOCKED_TOOLTIP =
 
 export const TEACHING_ACCESS_MOBILE_SHEET_TITLE = 'Unlocks after approval' as const;
 
-export const TEACHING_ACCESS_MOBILE_SHEET_BODY =
-  'Creating assignments, adding students, and sending invites unlock once your administrator approves your classroom.' as const;
+export function teachingAccessMobileSheetBody(adminName: string) {
+  const who =
+    adminName.trim() && adminName !== 'your administrator'
+      ? adminName.trim()
+      : 'your administrator';
+  return `Creating assignments, adding students, and sending invites unlock once ${who} approves your classroom.`;
+}
 
 export const TEACHING_ACCESS_APPROVAL_TOAST_TITLE =
   "You're approved. Start teaching." as const;

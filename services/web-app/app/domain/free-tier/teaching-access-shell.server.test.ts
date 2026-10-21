@@ -79,7 +79,7 @@ test('returns locked with admin name while preview is active', async () => {
   });
 });
 
-test('returns loading until locked preview membership resolves', async () => {
+test('returns locked from application status even when preview membership is unresolved', async () => {
   lockedApp = null;
   expect(
     await loadTeachingAccessShellState({
@@ -88,7 +88,11 @@ test('returns loading until locked preview membership resolves', async () => {
       organizationPlan: 'FREE_CLASSROOM',
       organizationId: 'org-a',
     })
-  ).toEqual({ variant: 'loading' });
+  ).toEqual({
+    variant: 'locked',
+    applicationId: 'app-1',
+    adminName: 'Dr. Patel',
+  });
 });
 
 test('returns unlocked with one-time approval toast', async () => {

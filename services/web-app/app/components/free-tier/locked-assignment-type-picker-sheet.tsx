@@ -19,6 +19,7 @@ type FreeType = {
   id: string;
   kind?: string | null;
   imageId?: string | null;
+  imageTitle?: string | null;
   title: string;
 };
 
@@ -66,6 +67,7 @@ export function LockedAssignmentTypePickerSheet({
       kind: 'free' as const,
       label: row.label,
       imageId: type.imageId,
+      imageTitle: type.imageTitle,
       included: usage.monthly
         ? 'Unlimited'
         : `${row.total} included`,
@@ -155,6 +157,7 @@ export function LockedAssignmentTypePickerSheet({
                 >
                   <AssignmentTypeTileImage
                     imageId={tile.imageId}
+                    imageTitle={'imageTitle' in tile ? tile.imageTitle : null}
                     className="h-24 w-full"
                   />
                   <div className="flex flex-1 flex-col gap-1 p-3">
@@ -186,6 +189,7 @@ export function LockedAssignmentTypePickerSheet({
               >
                 <AssignmentTypeTileImage
                   imageId={tile.imageId}
+                  imageTitle={'imageTitle' in tile ? tile.imageTitle : null}
                   className="h-24 w-full"
                 />
                 <div className="flex flex-1 flex-col gap-1 p-3">

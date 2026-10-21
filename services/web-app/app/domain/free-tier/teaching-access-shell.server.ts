@@ -1,8 +1,6 @@
 import { prisma } from '~/utils/db.server';
 import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { FREE_TIER_FLAG } from '~/domain/feature-flags/feature-flags';
-import { getLockedPreviewApplication } from './locked-preview.server';
-
 export type TeachingAccessShellState =
   | { variant: 'none' }
   | { variant: 'loading' }
@@ -51,13 +49,6 @@ export async function loadTeachingAccessShellState(args: {
   if (!application) return { variant: 'none' };
 
   if (application.status === 'SENT' || application.status === 'MANUAL_REVIEW') {
-    const locked = await getLockedPreviewApplication(
-      args.userId,
-      args.membershipId
-    );
-    if (!locked) {
-      return { variant: 'loading' };
-    }
     const adminName =
       application.adminApprovals[0]?.adminName ?? 'your administrator';
     return {

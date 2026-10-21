@@ -9,7 +9,7 @@ import {
 } from '~/components/ui/sheet';
 import { Button } from '~/components/ui/button';
 import {
-  TEACHING_ACCESS_MOBILE_SHEET_BODY,
+  teachingAccessMobileSheetBody,
   TEACHING_ACCESS_MOBILE_SHEET_TITLE,
 } from '~/domain/free-tier/teaching-access-copy';
 
@@ -17,10 +17,12 @@ export function LockedTeachingMobileSheet({
   open,
   onOpenChange,
   returnFocusRef,
+  adminName = 'your administrator',
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
+  adminName?: string;
 }) {
   return (
     <Sheet
@@ -46,7 +48,7 @@ export function LockedTeachingMobileSheet({
           <SheetTitle>{TEACHING_ACCESS_MOBILE_SHEET_TITLE}</SheetTitle>
         </SheetHeader>
         <p className="mt-2 text-sm text-muted-foreground">
-          {TEACHING_ACCESS_MOBILE_SHEET_BODY}
+          {teachingAccessMobileSheetBody(adminName)}
         </p>
         <div className="mt-6 flex flex-col gap-3">
           <Button
