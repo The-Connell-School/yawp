@@ -84,6 +84,7 @@ import { cn } from '~/utils/misc';
 import { SiteLicenseLockedAssignmentTile } from '~/components/site-license-locked-assignment-tile';
 import type { SiteLicenseLockedAssignmentTile as SiteLicenseLockedTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
 import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
+import { LockedAssignmentTypePickerSheet } from '~/components/free-tier/locked-assignment-type-picker-sheet';
 import { toDateInputValue } from '~/utils/date-only';
 import {
   assignmentTypeUsesDailyPagesEngagementRubric,
@@ -327,6 +328,7 @@ export type AssignmentCreationSheetProps = {
   initialExitTicketAnswerType?: ExitTicketAnswerType | null;
   /** Present reopens the notes section filled in; absent leaves the default. */
   initialExitTicketLessonNotes?: ExitTicketLessonNotes | null;
+  teachingLocked?: boolean;
 };
 
 type AssignmentCreationSheetContentProps = AssignmentCreationSheetProps & {
@@ -495,6 +497,25 @@ export function AssignmentCreationSheet({
   useEffect(() => {
     if (!props.open) setPickedTypeId(undefined);
   }, [props.open]);
+  if (
+    props.teachingLocked &&
+    usage &&
+    !props.editingAssignment &&
+    !props.fixedAssignmentTypeId &&
+    !props.initialAssignmentTypeId &&
+    !pickedTypeId
+  ) {
+    return (
+      <LockedAssignmentTypePickerSheet
+        open={props.open}
+        onOpenChange={props.onOpenChange}
+        usage={usage}
+        assignmentTypes={props.assignmentTypes}
+        lockedAssignmentTiles={props.siteLicenseLockedAssignmentTiles ?? []}
+      />
+    );
+  }
+
   if (
     usage &&
     props.assignmentTypes.some(

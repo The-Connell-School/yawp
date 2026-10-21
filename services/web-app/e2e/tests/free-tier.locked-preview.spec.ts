@@ -171,8 +171,16 @@ for (const width of [1440, 390]) {
     await expect(page).toHaveURL(/\/app\/free-tier\/pending$/);
     await page.getByRole('link', { name: 'Explore my classroom' }).click();
     await expect(page).toHaveURL(/\/app$/);
+    await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
+    await expect(
+      page.getByText(/Waiting for Dr\. Patel to approve your classroom/)
+    ).toBeVisible();
     await capture(page, `locked-app-before-${width}`);
-    await page.getByRole('button', { name: 'New assignment' }).first().click();
+    await page
+      .getByRole('button', { name: /New .* assignment/i })
+      .first()
+      .click();
+    await expect(page.getByRole('heading', { name: 'New assignment' })).toBeVisible();
     await capture(page, `locked-picker-${width}`);
     const before = await prisma.assignment.count();
     for (const path of [
@@ -193,6 +201,8 @@ for (const width of [1440, 390]) {
       data: { status: 'APPROVED' },
     });
     await page.reload();
+    await expect(page.getByTestId('teaching-access-banner')).toHaveCount(0);
+    await expect(page.getByTestId('teaching-access-approval-toast')).toBeVisible();
     await page.goto('/app/assignments');
     await expect(page.getByRole('heading', { name: 'My Assignments', exact: true })).toBeVisible();
     await capture(page, `approved-assignments-${width}`);

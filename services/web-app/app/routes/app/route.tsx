@@ -82,6 +82,9 @@ import {
   TourThisPageButton,
 } from '~/components/guided-tour/guided-tour';
 import { loadGuidedTours } from '~/domain/guided-tours/guided-tours.server';
+import { TeachingAccessProvider } from '~/components/free-tier/teaching-access-context';
+import type { TeachingAccessShellState } from '~/domain/free-tier/teaching-access-shell.server';
+import { getMembershipId } from '~/cookies/membership-id.server';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -106,6 +109,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         isStudent: false,
       },
         guidedTours: null,
+        teachingAccess: { variant: 'none' } satisfies TeachingAccessShellState,
       });
   }
   const userId = await requireUserId(request);
@@ -143,6 +147,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           isStudent: false,
         },
         guidedTours: null,
+        teachingAccess: { variant: 'none' } satisfies TeachingAccessShellState,
       });
     }
   }
@@ -193,6 +198,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // Free classroom teachers get page tours instead of a hands-on orientation.
   const guidedTours = await loadGuidedTours(userId, profile, request);
+  const { loadTeachingAccessShellState } =
+    await import('~/domain/free-tier/teaching-access-shell.server');
+  const teachingAccess = freeTierRouteOpen
+    ? await loadTeachingAccessShellState({
+        userId,
+        membershipId: await getMembershipId(request),
+        role: profile.role,
+        organizationPlan: profile.organization.plan,
+        organizationId: profile.organization.id,
+      })
+    : ({ variant: 'none' } satisfies TeachingAccessShellState);
   return data({
     mockAdminAvailable,
     freeAccountUsage: await readFreeAccountUsage(profile, freeTierRouteOpen),
@@ -202,6 +218,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       isStudent: profile.role === 'STUDENT',
     },
     guidedTours,
+    teachingAccess,
   });
 }
 
@@ -230,7 +247,8 @@ export default function Route() {
   const location = useLocation();
   const user = useUser();
   const shellData = useLoaderData<typeof loader>();
-  const { schoolYearScope, guidedTours, mockAdminAvailable } = shellData;
+  const { schoolYearScope, guidedTours, mockAdminAvailable, teachingAccess } =
+    shellData;
   const freeAccountUsage =
     'freeAccountUsage' in shellData ? shellData.freeAccountUsage : null;
   const rootData =
@@ -612,13 +630,19 @@ export default function Route() {
           height:100% of this whole column (which double-counts that chrome
           and pushes fixed-height app shells like the Reporter off-screen).
         */}
-        <NavExpandedContext.Provider
-          value={{ isMobileNavOpen, setIsMobileNavOpen }}
+        <TeachingAccessProvider
+          state={
+            teachingAccess ?? ({ variant: 'none' } satisfies TeachingAccessShellState)
+          }
         >
-          <div className="min-h-0 flex-1">
-            <Outlet key={location.pathname} />
-          </div>
-        </NavExpandedContext.Provider>
+          <NavExpandedContext.Provider
+            value={{ isMobileNavOpen, setIsMobileNavOpen }}
+          >
+            <div className="min-h-0 flex-1">
+              <Outlet key={location.pathname} />
+            </div>
+          </NavExpandedContext.Provider>
+        </TeachingAccessProvider>
         {guidedTours && !isReadOnlyImpersonation ? (
           <GuidedTour {...guidedTours} />
         ) : null}

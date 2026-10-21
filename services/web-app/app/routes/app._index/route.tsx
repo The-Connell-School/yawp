@@ -3,6 +3,8 @@ import {
   FreeAssignmentTiles,
   FreeAccountRail,
 } from '~/components/free-account-usage';
+import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
+import { TeachingAccessDashboardSkeleton } from '~/components/free-tier/teaching-access-dashboard-skeleton';
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
 import {
   Form,
@@ -376,9 +378,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 }
 
+function teacherFirstName(fullName: string) {
+  const part = fullName.trim().split(/\s+/)[0];
+  return part || fullName;
+}
+
 export default function AppRoute() {
   const data = useLoaderData<typeof loader>();
   const freeUsage = useFreeAccountUsage();
+  const { locked, loading } = useTeachingAccess();
   const ContentColumn = freeUsage ? 'div' : Fragment;
   const navigate = useNavigate();
   const user = useUser();
@@ -390,6 +398,10 @@ export default function AppRoute() {
   >();
   const isTeacher = user.selectedMembership?.role === 'TEACHER';
   const assignmentsEnabled = data.assignmentsEnabled ?? false;
+
+  if (isTeacher && freeUsage && loading) {
+    return <TeachingAccessDashboardSkeleton />;
+  }
 
   if (isTeacher) {
     const needsGradingCount = data.teacherWorkspaceClassStats.reduce(
@@ -409,13 +421,13 @@ export default function AppRoute() {
         <div className="flex w-full justify-between border-b bg-secondary">
           <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
             <div className="flex flex-col">
-              <h2>Welcome, {user.name}!</h2>
+              <h2>Welcome, {teacherFirstName(user.name ?? 'Teacher')}!</h2>
               <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
-                {freeUsage
-                  ? freeUsage.monthly
+                {locked
+                  ? 'Your classroom is set up. Look around while you wait.'
+                  : freeUsage
                     ? 'Your class, assignments, and grading in one place.'
-                    : 'Your class, assignments, and grading in one place.'
-                  : 'Your classes, assignments, and grading in one place.'}
+                    : 'Your classes, assignments, and grading in one place.'}
               </p>
             </div>
           </div>
@@ -443,6 +455,7 @@ export default function AppRoute() {
                     lockedAssignmentTiles={
                       data.siteLicenseLockedAssignmentTiles
                     }
+                    teachingLocked={locked}
                     onCreate={(id) => {
                       setCreateAssignmentTypeId(id);
                       setIsCreateSheetOpen(true);
@@ -488,6 +501,7 @@ export default function AppRoute() {
                   }
                   teacherClasses={data.assignmentCreationClasses}
                   initialAssignmentTypeId={createAssignmentTypeId}
+                  teachingLocked={locked}
                 />
               </>
             ) : null}

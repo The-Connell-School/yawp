@@ -41,6 +41,7 @@ model FreeTierApplication {
   notes            String?
   teacherPersonalNote String?
   adminRedirectCount Int                     @default(0)
+  lockedPreviewApprovalToastSeenAt DateTime? @db.Timestamptz(6)
   approvalDecisions FreeTierApprovalDecision[]
   adminApprovals    FreeTierAdminApproval[]
   signedLinks       FreeTierSignedLink[]

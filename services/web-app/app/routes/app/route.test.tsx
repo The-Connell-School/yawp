@@ -117,6 +117,7 @@ describe('app parent free-tier loader gate', () => {
         isStudent: false,
       },
       guidedTours: null,
+      teachingAccess: { variant: 'none' },
     });
   });
 });
