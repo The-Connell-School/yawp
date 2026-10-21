@@ -19,7 +19,7 @@ import { prisma } from '~/utils/db.server';
 import { requireMutableRequest } from '~/utils/auth.server';
 import { requireLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import { PACKET_AUDIENCES } from '~/domain/lesson-planner/lesson-packet';
-import { fileableMaterial, stepColumns } from '~/domain/lesson-planner/fileable-material';
+import { fileableMaterial, stepColumns, writtenAt } from '~/domain/lesson-planner/fileable-material';
 import { fileReplyPieces } from '~/domain/lesson-planner/file-reply-pieces.server';
 import {
   loadStackOrder,
@@ -419,7 +419,7 @@ export async function action({ request }: ActionFunctionArgs) {
       select: { id: true, createdAt: true, content: true },
     });
     const material = message
-      ? fileableMaterial(message.content, data.materialKey!)
+      ? fileableMaterial(message.content, data.materialKey!, { alone: true })
       : null;
     if (!message || !material) {
       return dataResponse(
@@ -466,7 +466,7 @@ export async function action({ request }: ActionFunctionArgs) {
         title: material.title,
         audience: data.audience ?? material.audience,
         content: material.content,
-        sourceCreatedAt: message.createdAt,
+        sourceCreatedAt: writtenAt(message.createdAt, material),
         sourceMessageId: message.id,
         blockKey: material.key,
         promptId: material.promptId ?? null,
@@ -531,10 +531,11 @@ export async function action({ request }: ActionFunctionArgs) {
 
     // Re-read the material from the reply rather than trusting the client with
     // its content: the body is what gets printed and handed to students.
-    const material = fileableMaterial(
-      message.content,
-      data.materialKey!
-    );
+    // Added on its own from its card (Kevin's notes): the only card under a
+    // step brings the step's minutes with it.
+    const material = fileableMaterial(message.content, data.materialKey!, {
+      alone: true,
+    });
     if (!material) {
       return dataResponse(
         { error: 'That material is not part of this lesson.' },
@@ -547,7 +548,7 @@ export async function action({ request }: ActionFunctionArgs) {
       title: material.title,
       audience: data.audience ?? material.audience,
       content: material.content,
-      sourceCreatedAt: message.createdAt,
+      sourceCreatedAt: writtenAt(message.createdAt, material),
       sourceMessageId: message.id,
       blockKey: material.key,
       promptId: material.promptId ?? null,

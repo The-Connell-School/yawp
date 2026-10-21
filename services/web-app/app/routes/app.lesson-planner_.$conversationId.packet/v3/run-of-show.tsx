@@ -210,12 +210,25 @@ export function RunOfShow({
             >
               <div className="flex items-stretch">
                 <div className="flex w-12 shrink-0 flex-col items-center justify-center border-r border-[var(--sv-line)] py-2 sm:w-16">
-                  <span data-testid="run-card-start" className="text-lg font-bold tabular-nums">
-                    {String(block?.startsAt ?? 0).padStart(2, '0')}
-                  </span>
-                  <span className="text-[9px] font-semibold uppercase tracking-wide text-[var(--sv-muted)]">
-                    min in
-                  </span>
+                  {/* The first step starts the class; "00 min in" read as a
+                      step with no time (Kevin's notes). */}
+                  {block?.startsAt ? (
+                    <>
+                      <span data-testid="run-card-start" className="text-lg font-bold tabular-nums">
+                        {String(block.startsAt).padStart(2, '0')}
+                      </span>
+                      <span className="text-[9px] font-semibold uppercase tracking-wide text-[var(--sv-muted)]">
+                        min in
+                      </span>
+                    </>
+                  ) : (
+                    <span
+                      data-testid="run-card-start"
+                      className="text-[10px] font-bold uppercase tracking-wide text-[var(--sv-muted)]"
+                    >
+                      Start
+                    </span>
+                  )}
                 </div>
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1.5 px-3 py-2.5">
                   {editable ? (

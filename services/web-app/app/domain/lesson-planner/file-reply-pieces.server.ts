@@ -7,7 +7,7 @@
  * order, so each can be reordered, removed, renamed and edited in the stack.
  */
 import { prisma } from '~/utils/db.server';
-import { fileableMaterial, stepColumns } from './fileable-material';
+import { fileableMaterial, stepColumns, writtenAt } from './fileable-material';
 import { pieceKeysInReply } from './reply-pieces';
 import { loadStackOrder, writeStackOrder } from './stack-order.server';
 
@@ -56,7 +56,7 @@ export async function fileReplyPieces({
       title: material.title,
       audience: material.audience,
       content: material.content,
-      sourceCreatedAt: message.createdAt,
+      sourceCreatedAt: writtenAt(message.createdAt, material),
       sourceMessageId: message.id,
       blockKey: material.key,
       promptId: material.promptId ?? null,

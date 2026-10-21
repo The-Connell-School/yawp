@@ -9,16 +9,31 @@
  */
 import { artifactFromAssistantReply } from './artifact-from-reply';
 import type { LessonMaterial } from './lesson-material';
-import { blockMinutesInReply } from './reply-pieces';
+import { blockMinutesInReply, pieceRankInReply, soleBlockStepMinutes } from './reply-pieces';
 import { parseStepType } from './step-types';
 
 const TITLE_MINUTES = /\(\s*\d+[^)]*min/i;
 
-export function fileableMaterial(content: string, key: string): LessonMaterial | null {
+export type FileableMaterial = LessonMaterial & {
+  /** Its place in the reply, so pieces of one reply keep the reply's order. */
+  rank: number;
+};
+
+export function fileableMaterial(
+  content: string,
+  key: string,
+  /** Added on its own from its card, not with the rest of the reply. */
+  { alone = false }: { alone?: boolean } = {}
+): FileableMaterial | null {
   const found = artifactFromAssistantReply(content, key);
   if (!found) return null;
-  const minutes = found.minutes ?? blockMinutesInReply(content)[key] ?? null;
+  const minutes =
+    found.minutes ??
+    blockMinutesInReply(content)[key] ??
+    (alone ? soleBlockStepMinutes(content)[key] : undefined) ??
+    null;
   return {
+    rank: pieceRankInReply(content, key),
     ...found,
     // The title keeps "(N min)" too, while the old stack page still reads
     // minutes out of titles (dual-write).
@@ -28,6 +43,16 @@ export function fileableMaterial(content: string, key: string): LessonMaterial |
         : found.title,
     minutes,
   };
+}
+
+/**
+ * When a filed piece was written, for the stack's written order: its reply's
+ * time plus its place in that reply, in milliseconds. Pieces of one reply
+ * then read in the reply's order however they were added (Kevin's notes),
+ * and never past the next reply, which is seconds later.
+ */
+export function writtenAt(replyCreatedAt: Date, material: { rank?: number }): Date {
+  return new Date(replyCreatedAt.getTime() + (material.rank ?? 0));
 }
 
 /** The new step columns for a filed piece. */

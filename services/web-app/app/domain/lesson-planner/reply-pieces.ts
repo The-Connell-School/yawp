@@ -42,6 +42,30 @@ export function blockMinutesInReply(content: string): Record<string, number> {
   return minutes;
 }
 
+/**
+ * Minutes for a block that is the only one under a step with its own words
+ * ("## Mini-lecture (12 min)", a line of directions, then the notes). Only
+ * for a card the teacher adds on its own (Kevin's notes): filed with the rest
+ * of the reply, the step itself carries those minutes.
+ */
+export function soleBlockStepMinutes(content: string): Record<string, number> {
+  const minutes: Record<string, number> = {};
+  const pieces = placedPieces(content);
+  pieces.forEach((piece, index) => {
+    if (!piece.step || piece.emptyStep || piece.minutes == null) return;
+    const held = blocksUnder(pieces, index);
+    if (held.length === 1) minutes[held[0]!] = piece.minutes;
+  });
+  return minutes;
+}
+
+/** Where a piece sits in its reply, counting steps and blocks in reading order. */
+export function pieceRankInReply(content: string, key: string): number {
+  const keys = placedPieces(content).map((piece) => piece.key);
+  const at = keys.indexOf(key);
+  return at < 0 ? keys.length : at;
+}
+
 /** The block keys that sit under the step at `index`, up to the next step. */
 function blocksUnder(pieces: Placed[], index: number): string[] {
   const keys: string[] = [];
