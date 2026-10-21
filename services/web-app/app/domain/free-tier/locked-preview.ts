@@ -21,5 +21,7 @@ export function isLockedPreviewRequestAllowed(method: string, pathname: string) 
     return method === 'POST';
   // The action independently checks teacher identity, flags and preview-only intent.
   if (pathname === '/api/guided-tours') return method === 'POST';
+  // Full-page teaching forms handle approval_required inline in their actions.
+  if (pathname === '/app/assignments/new') return method === 'POST';
   return false;
 }

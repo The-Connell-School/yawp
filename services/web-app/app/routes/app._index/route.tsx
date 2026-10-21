@@ -59,6 +59,7 @@ import {
 } from '~/components/ui/dialog';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { loadSiteLicenseLockedAssignmentTiles } from '~/domain/free-tier/site-license-locked-assignment-tiles.server';
+import { shouldHideFreeTierTeachingSecrets } from '~/domain/free-tier/locked-preview.server';
 
 const DASHBOARD_MAX_TEACHER_CLASSES = 6;
 
@@ -149,6 +150,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ? await getStudentEnrolledClasses(profile.id, schoolYearScope)
     : [];
 
+  const hideTeachingSecrets = !useStudentExperience
+    ? await shouldHideFreeTierTeachingSecrets(userId)
+    : false;
+
   const teacherClasses = !useStudentExperience
     ? await prisma.class.findMany({
         where: {
@@ -233,7 +238,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           const classStats = teacherClassStatsById.get(klass.id);
           return {
             id: klass.id,
-            code: klass.code,
+            code: hideTeachingSecrets ? null : klass.code,
             grade: klass.grade,
             period: klass.period,
             title: klass.title,

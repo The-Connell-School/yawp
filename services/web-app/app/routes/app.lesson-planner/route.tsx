@@ -8,10 +8,13 @@ import {
   redirect,
   useFetcher,
   useLoaderData,
+  useNavigation,
   useRevalidator,
   useSearchParams,
   type LoaderFunctionArgs,
 } from 'react-router';
+import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
+import { TeachingAccessLessonPlannerSkeleton } from '~/components/free-tier/teaching-access-lesson-planner-skeleton';
 import {
   BookmarkCheck,
   BookmarkPlus,
@@ -261,6 +264,9 @@ type LessonPlannerActionData = {
 };
 
 export default function LessonPlannerRoute() {
+  const navigation = useNavigation();
+  const { locked: teachingLocked, loading: teachingLoading } =
+    useTeachingAccess();
   const freeUsage = useFreeAccountUsage();
   const {
     conversations,
@@ -636,6 +642,13 @@ export default function LessonPlannerRoute() {
   const firstAssistantIndex = messages.findIndex(
     (message) => message.role === 'assistant'
   );
+
+  if (
+    (teachingLocked || teachingLoading) &&
+    navigation.state === 'loading'
+  ) {
+    return <TeachingAccessLessonPlannerSkeleton />;
+  }
 
   return (
     <section className="flex h-full w-full">

@@ -1,24 +1,38 @@
-import { QrCode, Copy, Expand } from 'lucide-react';
+import { QrCode, Copy, Expand, Lock } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
+import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
+import {
+  teachingAccessClassCodeCaption,
+  teachingAccessMobileSheetBodyInvite,
+  TEACHING_ACCESS_CLASS_CODE_HIDDEN_LABEL,
+  TEACHING_ACCESS_LOCKED_TOOLTIP,
+} from '~/domain/free-tier/teaching-access-copy';
+
+const MASKED_CLASS_CODE_DISPLAY = '••••-••••-••••-••••';
 
 export function FreeClassStudentJoinCard({
   joinUrl,
   classCode,
   compact = false,
+  teachingLocked = false,
+  adminName = 'your administrator',
 }: {
   joinUrl: string;
   classCode: string;
   compact?: boolean;
+  teachingLocked?: boolean;
+  adminName?: string;
 }) {
   const [showQr, setShowQr] = useState(false);
   const [showBoard, setShowBoard] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
   useEffect(() => {
+    if (teachingLocked) return;
     let cancelled = false;
     QRCode.toDataURL(joinUrl, { margin: 1, width: 200 })
       .then((url) => {
@@ -30,7 +44,74 @@ export function FreeClassStudentJoinCard({
     return () => {
       cancelled = true;
     };
-  }, [joinUrl]);
+  }, [joinUrl, teachingLocked]);
+
+  const inviteSheetBody = teachingAccessMobileSheetBodyInvite(adminName);
+  const lockProps = {
+    locked: teachingLocked,
+    adminName,
+    mobileSheetBody: inviteSheetBody,
+    tooltip: TEACHING_ACCESS_LOCKED_TOOLTIP,
+  };
+
+  if (compact && teachingLocked) {
+    return (
+      <div
+        data-testid="free-class-join-card-locked"
+        className="rounded-xl border bg-popover p-5 shadow-sm"
+      >
+        <h3 className="text-sm font-semibold">How students join</h3>
+        <div className="mt-4 flex flex-wrap items-start justify-between gap-5">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <p className="text-xs text-muted-foreground">Class code</p>
+              <p
+                data-testid="class-code-masked"
+                className="break-all font-mono text-3xl font-semibold tracking-wide text-muted-foreground"
+                aria-label={TEACHING_ACCESS_CLASS_CODE_HIDDEN_LABEL}
+              >
+                {MASKED_CLASS_CODE_DISPLAY}
+              </p>
+              <Lock className="size-4 text-muted-foreground" aria-hidden />
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {teachingAccessClassCodeCaption(adminName)}
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <LockedTeachingControl {...lockProps}>
+                <Button type="button" variant="outline" size="sm">
+                  <Expand size={14} className="mr-2" />
+                  Show on board
+                </Button>
+              </LockedTeachingControl>
+              <LockedTeachingControl {...lockProps}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  data-testid="copy-join-link-button"
+                >
+                  <Copy size={14} className="mr-2" />
+                  Copy join link
+                </Button>
+              </LockedTeachingControl>
+            </div>
+          </div>
+          <LockedTeachingControl {...lockProps}>
+            <button
+              type="button"
+              data-testid="class-qr-locked-placeholder"
+              className="flex size-28 shrink-0 flex-col items-center justify-center gap-2 rounded-lg border bg-muted/40 p-2 text-xs text-muted-foreground"
+              aria-label="QR code"
+            >
+              <Lock size={36} aria-hidden />
+              QR code
+            </button>
+          </LockedTeachingControl>
+        </div>
+      </div>
+    );
+  }
 
   if (compact)
     return (

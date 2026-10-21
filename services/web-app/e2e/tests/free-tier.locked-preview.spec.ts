@@ -310,6 +310,125 @@ test('legacy public enrollment cannot bypass pending approval', async ({ page })
   expect(response.status()).toBe(403);
 });
 
+async function exploreLockedApp(page: import('@playwright/test').Page, userEmail: string) {
+  await login(page, userEmail);
+  await page.goto('/app/free-tier/pending');
+  await page.getByRole('link', { name: 'Explore my classroom' }).click();
+  await expect(page).toHaveURL(/\/app$/);
+  await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
+}
+
+test('pending teacher /app HTML and loader data omit the real class code', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { user, app } = await fixture('11', 'SENT');
+  await provisionPendingClassroom(app.id, user.id!);
+  const klass = await prisma.class.findFirstOrThrow({
+    where: {
+      teachers: { some: { user: { id: user.id } } },
+    },
+    select: { id: true, code: true },
+  });
+  await exploreLockedApp(page, user.email!);
+  let html = await page.content();
+  expect(html).not.toContain(klass.code);
+  await page.goto('/app/my-classes');
+  html = await page.content();
+  expect(html).not.toContain(klass.code);
+  await page.goto(`/app/my-classes/${klass.id}?tab=students`);
+  html = await page.content();
+  expect(html).not.toContain(klass.code);
+});
+
+test('approved teacher sees the real class code on the dashboard card', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { user, app } = await fixture('11', 'SENT');
+  await provisionPendingClassroom(app.id, user.id!);
+  await prisma.freeTierApplication.update({
+    where: { id: app.id },
+    data: { status: 'APPROVED' },
+  });
+  const klass = await prisma.class.findFirstOrThrow({
+    where: {
+      teachers: { some: { user: { id: user.id } } },
+    },
+    select: { id: true, code: true },
+  });
+  await login(page, user.email!);
+  await page.goto('/app');
+  await expect(page.getByTestId('class-code')).toContainText(klass.code);
+});
+
+test('locked class surfaces hide the real class code and lock invite controls', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { user, app } = await fixture('11', 'SENT');
+  await provisionPendingClassroom(app.id, user.id!);
+  const klass = await prisma.class.findFirstOrThrow({
+    where: {
+      teachers: { some: { user: { id: user.id } } },
+    },
+    select: { id: true, code: true },
+  });
+  await exploreLockedApp(page, user.email!);
+  await page.goto('/app/my-classes');
+  await expect(page.getByTestId('my-classes-class-options')).toBeVisible();
+  await page.goto(`/app/my-classes/${klass.id}?tab=students`);
+  await expect(page.getByTestId('free-class-join-card-locked')).toBeVisible();
+  const html = await page.content();
+  expect(html).not.toContain(klass.code);
+  await expect(page.getByTestId('class-code-masked')).toBeVisible();
+  await expect(page.getByTestId('class-qr-locked-placeholder')).toBeVisible();
+  await page.getByTestId('copy-join-link-button').hover();
+  await expect(
+    page.getByText('Unlocks once your administrator approves.')
+  ).toBeVisible();
+});
+
+test('locked assignments tab shows sample rows and locked documents pill', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  const { user, app } = await fixture('11', 'SENT');
+  await provisionPendingClassroom(app.id, user.id!);
+  const klass = await prisma.class.findFirstOrThrow({
+    where: { teachers: { some: { user: { id: user.id } } } },
+    select: { id: true },
+  });
+  await exploreLockedApp(page, user.email!);
+  await page.goto(`/app/my-classes/${klass.id}?tab=assignments`);
+  await expect(page.getByText('Sample · Not sent').first()).toBeVisible();
+  await page.getByTestId(/assignment-documents-/).first().click();
+  await expect(
+    page.getByRole('heading', { name: 'Unlocks after approval' })
+  ).toBeVisible();
+  await expect(
+    page.getByText(/Sending assignments to your class unlocks once Dr\. Patel/)
+  ).toBeVisible();
+});
+
+test('full-page assignment form shows inline approval alert and keeps field values', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { user, app } = await fixture('11', 'SENT');
+  await provisionPendingClassroom(app.id, user.id!);
+  await exploreLockedApp(page, user.email!);
+  await page.goto('/app/assignments/new');
+  await page.getByLabel('Title').fill('Community Gardens — Prewriting');
+  await page.getByLabel('Prompt').fill('Pick one community garden in your town.');
+  await page.getByRole('button', { name: 'Create assignment' }).click();
+  await expect(page.getByTestId('teaching-approval-required-alert')).toBeVisible();
+  await expect(page.getByLabel('Title')).toHaveValue('Community Gardens — Prewriting');
+  await expect(page.getByLabel('Prompt')).toHaveValue(
+    'Pick one community garden in your town.'
+  );
+});
+
 test('flag OFF keeps the waiting page and does not expose the in-app lock', async ({
   page,
 }) => {

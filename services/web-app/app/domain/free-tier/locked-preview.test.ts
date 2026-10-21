@@ -23,6 +23,7 @@ test('preparation, resend and logout actions stay available while app reads are 
   }
   for (const path of ['/app/free-tier/onboarding', '/app/free-tier/pending', '/auth/logout'])
     expect(isLockedPreviewRequestAllowed('POST', path)).toBe(true);
+  expect(isLockedPreviewRequestAllowed('POST', '/app/assignments/new')).toBe(true);
 });
 
 test('crafted requests cannot mutate teaching routes or resource APIs', () => {
