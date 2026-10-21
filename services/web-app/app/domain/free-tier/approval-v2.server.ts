@@ -25,21 +25,21 @@ import {
   peekSignedLink,
 } from './signed-link.server';
 import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
-import {
-  renderAdminApprovalEmailBody,
-  adminApprovalEmailCopyVersionHash,
-} from './email-copy.server';
+import { adminApprovalEmailCopyVersionHash } from './email-copy.server';
 import {
   adminApprovalUrlsFromEmailBody,
   FORWARD_NOTICE_V2_SUBJECT,
   TEACHER_REMINDER_V2_SUBJECT,
   isOnboardingV2CopyVersion,
-  renderAdminApprovalEmailV2Body,
-  renderAdminApprovalEmailV2Subject,
   renderForwardNoticeV2Body,
   renderTeacherReminderV2Body,
 } from './email-copy';
 import { sanitizeFreeTierEmailLogPayload } from './email-log-payload.server';
+import { renderAdminApprovalEmailHtml } from './admin-approval-email-html.server';
+import {
+  renderAdminApprovalEmailSubject,
+  renderAdminApprovalEmailPlainText,
+} from './admin-approval-copy';
 import { plainTextEmailToHtml } from './email-html.server';
 import {
   evaluateAdminEmailForRuntime,
@@ -60,6 +60,7 @@ type Message = {
   to: string;
   subject: string;
   text: string;
+  html?: string;
   approveLinkId?: string;
   declineLinkId?: string;
 };
@@ -148,37 +149,33 @@ async function adminMessage(
   const base = freeTierPublicAppOrigin();
   const approveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(approve.token)}`;
   const notRightPersonUrl = `${base}/free/admin/not-right-person?t=${encodeURIComponent(decline.token)}`;
-  if (isOnboardingV2CopyVersion(app.releaseEmailCopyVersion)) {
-    return {
-      to: approval.adminEmail,
-      subject: renderAdminApprovalEmailV2Subject({ teacherName: app.name, reminder }),
-      text: renderAdminApprovalEmailV2Body({
-        teacherName: app.name,
-        schoolName: app.schoolName,
-        className: app.starterClassName,
-        adminRecipientName: approval.adminName,
-        approveUrl,
-        notRightPersonUrl,
-        reminder,
-      }),
-      approveLinkId: approve.linkId,
-      declineLinkId: decline.linkId,
-    };
-  }
+  const forwardedByAdminName = approval.redirectedFromId
+    ? (
+        await tx.freeTierAdminApproval.findUnique({
+          where: { id: approval.redirectedFromId },
+          select: { adminName: true },
+        })
+      )?.adminName
+    : null;
+  const body = {
+    teacherName: app.name,
+    teacherEmail: app.email,
+    schoolName: app.schoolName,
+    approveUrl,
+    notRightPersonUrl,
+    forwardedByAdminName,
+    reminder,
+  };
   return {
     to: approval.adminEmail,
-    subject: `${reminder ? 'Reminder: ' : ''}Approve Yawp! for ${app.schoolName}`,
-    text: renderAdminApprovalEmailBody({
+    subject: renderAdminApprovalEmailSubject({
       teacherName: app.name,
-      teacherEmail: app.email,
       schoolName: app.schoolName,
-      adminRecipientName: approval.adminName,
-      approveUrl: `${base}/free/admin/approve?t=${encodeURIComponent(approve.token)}`,
-      notRightPersonUrl: `${base}/free/admin/not-right-person?t=${encodeURIComponent(decline.token)}`,
-      reminderLead: reminder
-        ? 'This is a reminder about the approval request below.'
-        : undefined,
+      reminder,
+      forwardedByAdminName: forwardedByAdminName,
     }),
+    text: renderAdminApprovalEmailPlainText(body),
+    html: renderAdminApprovalEmailHtml(body),
     approveLinkId: approve.linkId,
     declineLinkId: decline.linkId,
   };
@@ -476,10 +473,23 @@ export async function forwardApprovalByToken(args: {
   newAdminEmail: string;
   request: Request;
 }) {
-  const peek = await peekSignedLink({
-    token: args.token,
-    expectedPurpose: args.purpose ?? 'ADMIN_NOT_RIGHT_PERSON',
-  });
+  const peek =
+    args.purpose != null
+      ? await peekSignedLink({
+          token: args.token,
+          expectedPurpose: args.purpose,
+        })
+      : await (async () => {
+          const decline = await peekSignedLink({
+            token: args.token,
+            expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
+          });
+          if (decline.ok) return decline;
+          return peekSignedLink({
+            token: args.token,
+            expectedPurpose: 'ADMIN_APPROVE',
+          });
+        })();
   if (!peek.ok) return peek;
   const pending = await prisma.freeTierAdminApproval.findFirst({
     where: { applicationId: peek.applicationId, status: 'PENDING' },
@@ -489,7 +499,7 @@ export async function forwardApprovalByToken(args: {
   if (!pending) return fail('not_allowed');
   return forwardApprovalRequest({
     ...args,
-    tokenPurpose: args.purpose,
+    tokenPurpose: args.purpose ?? peek.purpose,
     applicationId: peek.applicationId,
     currentApprovalId: pending.id,
   });
@@ -880,7 +890,7 @@ async function deliverJob(id: string, now: Date) {
           to: message.to,
           subject: message.subject,
           text: message.text,
-          html: plainTextEmailToHtml(message.text),
+          html: message.html ?? plainTextEmailToHtml(message.text),
           singleAttempt: true,
         });
         accepted = result.status === 'success';

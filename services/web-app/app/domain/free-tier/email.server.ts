@@ -14,7 +14,8 @@ import {
 } from './email-copy';
 import { mintSignedLink, RELEASE_LINK_TTL_MS } from './signed-link.server';
 import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
-import { plainTextEmailToHtml } from './email-html.server';
+import { renderAdminApprovalEmailHtml } from './admin-approval-email-html.server';
+import { renderAdminApprovalEmailSubject } from './admin-approval-copy';
 import { sanitizeFreeTierEmailLogPayload } from './email-log-payload.server';
 import { assertFreeTierRuntimeConfigured } from './free-tier-config.server';
 import { resolveFreeTierRuntimeEnvironment } from './usage-budget.server';
@@ -147,6 +148,7 @@ export async function sendFreeTierAdminApprovalEmail(args: {
   approveUrl: string;
   notRightPersonUrl: string;
   adminRecipientName?: string | null;
+  forwardedByAdminName?: string | null;
   isReminder?: boolean;
 }): Promise<EmailSendResult> {
   const text = renderAdminApprovalEmailBody({
@@ -156,23 +158,37 @@ export async function sendFreeTierAdminApprovalEmail(args: {
     approveUrl: args.approveUrl,
     notRightPersonUrl: args.notRightPersonUrl,
     adminRecipientName: args.adminRecipientName,
-    reminderLead: args.isReminder
-      ? 'This is a reminder about the approval request below.'
-      : undefined,
+    forwardedByAdminName: args.forwardedByAdminName,
+    reminder: args.isReminder,
   });
-  const subject = args.isReminder
-    ? `Reminder: Approve Yawp! for ${args.schoolName}`
-    : `Approve Yawp! for ${args.schoolName}`;
+  const subject = renderAdminApprovalEmailSubject({
+    teacherName: args.teacherName,
+    schoolName: args.schoolName,
+    reminder: args.isReminder,
+    forwardedByAdminName: args.forwardedByAdminName,
+  });
+  const html = renderAdminApprovalEmailHtml({
+    teacherName: args.teacherName,
+    teacherEmail: args.teacherEmail,
+    schoolName: args.schoolName,
+    approveUrl: args.approveUrl,
+    notRightPersonUrl: args.notRightPersonUrl,
+    forwardedByAdminName: args.forwardedByAdminName,
+    reminder: args.isReminder,
+  });
   try {
     assertFreeTierRuntimeConfigured();
-    const delivered = await deliverEmail({
+    const result = await sendEmail({
       to: args.to,
       ...(resolveFreeTierRuntimeEnvironment() === 'demo'
         ? { bcc: [args.teacherEmail] }
         : {}),
       subject,
       text,
+      html,
     });
+    const error = emailSendErrorMessage(result);
+    const delivered = error ? { ok: false as const, error } : { ok: true as const };
     if (!delivered.ok) {
       await logEmail({
         applicationId: args.applicationId,

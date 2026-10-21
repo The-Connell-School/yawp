@@ -14,17 +14,25 @@ This link is for you only and expires in 30 days.
 `;
 
 exports[`admin approval email ignores a custom note and retains links 1`] = `
-"Hi there,
+"Approve Yawp! for Ada at Example HS
 
-Ada (ada@example.edu) at Example HS would like to use Yawp! in their classroom.
+Ada at Example HS would like to use Yawp! in their classroom. They named you as the administrator who can approve classroom software.
 
-Yawp! helps students draft essays with feedback while teachers stay in control of assignments and grading. Student writing is never used to train models.
+Ada
+Teacher at Example HS
+ada@example.edu
 
-Approve Yawp! for this school (link expires in 14 days):
+Students draft essays with feedback as they write.
+Teachers control assignments and grading.
+Student writing is never used to train outside models.
+
+Review and approve:
 https://yawp.school/a
 
-I'm not the right person to approve this:
+Not the right person? Forward this request:
 https://yawp.school/n
 
-Questions? Contact support@yawp.school."
+This link works for 14 days. You don't need a Yawp! account.
+
+Sent by Yawp! · yawp.school"
 `;
