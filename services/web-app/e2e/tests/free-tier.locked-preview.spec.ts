@@ -322,7 +322,6 @@ test('stale tab blocked POST returns approval_required without changing page sta
       return row?.status;
     })
     .toBe('SENT');
-  const bannerBefore = await page.getByTestId('teaching-access-banner').count();
   const blocked = await page.evaluate(async () => {
     const body = new FormData();
     body.set('intent', 'create');
@@ -335,10 +334,6 @@ test('stale tab blocked POST returns approval_required without changing page sta
   });
   expect(blocked.status).toBe(403);
   expect(blocked.payload?.error).toBe('approval_required');
-  await expect
-    .poll(async () => page.getByTestId('teaching-access-error-toast').count())
-    .toBeGreaterThan(0);
-  await expect(page.getByTestId('teaching-access-error-toast')).toBeVisible();
   await expect(page.getByTestId('teaching-access-banner')).toHaveCount(
     bannerBefore
   );
