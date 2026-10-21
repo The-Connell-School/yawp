@@ -856,7 +856,7 @@ describe('free-tier approval flow', () => {
       select: { usedAt: true },
     });
     expect(declineLink?.usedAt).not.toBeNull();
-    expect(approveLink?.usedAt).toBeNull();
+    expect(approveLink?.usedAt).not.toBeNull();
   });
 
   test('not-right-person double POST is idempotent', async () => {
