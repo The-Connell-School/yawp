@@ -1,4 +1,4 @@
-# CI: pull_request synchronize runs full test matrix including Playwright E2E.
+# CI: pull_request synchronize runs full test matrix including Playwright E2E (locked preview evidence).
 name: CI
 on:
   pull_request:
