@@ -2,6 +2,12 @@ import {
   MonthlyUsageNotice,
   useFreeAccountUsage,
 } from '~/components/free-account-usage';
+import {
+  SourceAttachButton,
+  SourceChips,
+  useSourceDocuments,
+  type SourceDocumentsState,
+} from '~/components/lesson-planner/source-documents';
 import { groupOptionParts } from '~/domain/lesson-planner/option-groups';
 import type { ReplyPart } from '~/domain/lesson-planner/reply-parts';
 import { OptionRow } from '~/components/ai-chat/option-row';
@@ -199,6 +205,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
                 yawpCreatedAt: true,
               },
             },
+            uploads: {
+              orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+              select: { id: true, name: true, truncated: true },
+            },
           },
         })
       : null;
@@ -335,6 +345,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
           // Each filed piece by its card's token: its id, so creating it in
           // Yawp! can be remembered, and where to open it once it has been
           // (Brian's run 3, item 4).
+          // The teacher's own documents for this lesson (Oct 21).
+          uploads: reviewFlags.uploads ? selected.uploads : [],
           stackPieces: Object.fromEntries(
             selected.materials.map((material) => [
               `${material.sourceMessageId}:${material.blockKey}`,
@@ -442,6 +454,12 @@ export default function LessonPlannerRoute() {
   );
   const conversationId = selectedConversation?.id ?? pendingConversationId;
   const conversationKey = conversationId ?? 'new';
+  // The teacher's own documents (Oct 21).
+  const sources = useSourceDocuments({
+    conversationId,
+    saved: selectedConversation?.uploads ?? [],
+    enabled: reviewFlags.uploads,
+  });
   const transcriptRef = useRef<HTMLDivElement>(null);
   // Track the last fetcher result we merged so switching conversations (which
   // re-runs this effect with the same stale data) can't re-append a reply.
@@ -891,6 +909,8 @@ export default function LessonPlannerRoute() {
         : {}),
       // A lesson started from a template keeps its shape (run 3).
       ...(activeTemplate ? { templateId: activeTemplate.id } : {}),
+      // Documents added before the first message go with it (Oct 21).
+      ...(sources.pendingIds.length ? { uploadIds: sources.pendingIds.join(',') } : {}),
     });
 
     setProgress(PLANNING_PROGRESS_START);
@@ -1094,6 +1114,7 @@ export default function LessonPlannerRoute() {
                 templates={reviewFlags.templates ? templates : null}
                 template={activeTemplate}
                 onTemplate={setActiveTemplate}
+                sources={sources}
               />
             ) : (
               messages.map((message, index) => (
@@ -1200,6 +1221,7 @@ export default function LessonPlannerRoute() {
                 onChange={setInput}
                 onSend={() => send(input)}
                 disabled={isSending}
+                sources={sources}
               />
             </div>
           </div>
@@ -1234,11 +1256,14 @@ function LessonComposer({
   hero,
   chip = null,
   placeholder = null,
+  sources = null,
 }: {
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
   disabled: boolean;
+  /** The teacher's own documents (Oct 21); null with uploads off. */
+  sources?: SourceDocumentsState | null;
   /** Centred on an empty page: taller, and the examples cycle inside it. */
   hero?: boolean;
   /** Shown inside the box, above the text: the template in use (run 3). */
@@ -1260,8 +1285,10 @@ function LessonComposer({
         onSend();
       }}
     >
+      {sources ? <SourceAttachButton state={sources} disabled={disabled} /> : null}
       <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
       {chip ? <div className="px-3 pt-2">{chip}</div> : null}
+      {sources ? <SourceChips state={sources} /> : null}
       <Textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -1307,6 +1334,7 @@ function LessonPlannerEmptyState({
   templates = null,
   template = null,
   onTemplate,
+  sources = null,
 }: {
   prompts: Array<{ id: string; label: string; prompt: string }>;
   seedContext: string | null;
@@ -1319,6 +1347,7 @@ function LessonPlannerEmptyState({
   templates?: LessonTemplate[] | null;
   template?: LessonTemplate | null;
   onTemplate?: (template: LessonTemplate | null) => void;
+  sources?: SourceDocumentsState | null;
 }) {
   const [showTemplates, setShowTemplates] = useState(false);
   const freeUsage = useFreeAccountUsage();
@@ -1341,6 +1370,7 @@ function LessonPlannerEmptyState({
           onChange={onInput}
           onSend={onSend}
           disabled={disabled || exhausted}
+          sources={sources}
           chip={
             template && onTemplate ? (
               <TemplateChip name={template.name} onClear={() => onTemplate(null)} />

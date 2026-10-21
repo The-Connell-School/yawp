@@ -36,6 +36,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     runShow: flags.runShow,
     templates: flags.templates,
     deckGallery: flags.deckGallery,
+    uploads: flags.uploads,
   };
 }
 
@@ -284,7 +285,7 @@ function Still({ name, alt, width, height }: { name: string; alt: string; width:
 }
 
 export default function LessonPlannerHowItWorksRoute() {
-  const { stackV2, stackV3, share, runShow, templates, deckGallery } =
+  const { stackV2, stackV3, share, runShow, templates, deckGallery, uploads } =
     useLoaderData<typeof loader>();
   return (
     // Own the scroll: the app shell is a fixed-height, overflow-hidden frame.
@@ -386,6 +387,15 @@ export default function LessonPlannerHowItWorksRoute() {
               Answers are one tap: suggested replies, a slider for the period
               length, and a checklist of activity types.
             </Copy>
+            {uploads ? (
+              <Copy>
+                <strong className="text-foreground">Bring your own material.</strong>{' '}
+                The paperclip adds your documents: the chapter, last year’s
+                handout, your notes (PDF, Word, PowerPoint or text). The planner
+                builds from them, quotes them, and says which one each step uses.
+                Only the text is kept.
+              </Copy>
+            ) : null}
           </Row>
 
           {stackV2 ? (

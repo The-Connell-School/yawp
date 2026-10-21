@@ -5,6 +5,8 @@
  * Every reply is seeded: the model is never called. Each test turns on the
  * flags it needs and the afterEach turns every flag back off.
  */
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import {
@@ -26,6 +28,7 @@ const REVIEW_FLAGS: LessonPlannerReviewFlag[] = [
   'lesson_planner_run_show',
   'lesson_planner_templates',
   'lesson_planner_deck_gallery',
+  'lesson_planner_uploads',
 ];
 
 async function stackV3On() {
@@ -78,6 +81,8 @@ async function clearLessonPlans(membershipId: string) {
     await prisma.lessonPlanConversation.deleteMany({ where: { membershipId } });
     // Templates outlive their lesson, so a retry would otherwise list two.
     await prisma.lessonPlanTemplate.deleteMany({ where: { membershipId } });
+    // A document added before a first message has no lesson to go with.
+    await prisma.lessonPlanUpload.deleteMany({ where: { membershipId } });
   } finally {
     await prisma.$disconnect();
   }
@@ -1045,6 +1050,92 @@ test.describe("Lesson Planner — Brian's third run", () => {
     });
   });
 
+  test.describe('Your own documents (Oct 21)', () => {
+    const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../app/domain/lesson-planner/fixtures');
+    const notes = { name: 'my-notes.md', mimeType: 'text/markdown', buffer: Buffer.from('# Chapter 1 notes\n\nStart with the letters from Martha.') };
+
+    test('flag off: no paperclip, and the API is not there', async ({ page, signIn, e2eContext }) => {
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto('/app/lesson-planner');
+      await expect(page.getByLabel('Message the Lesson Planner')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Add your own document' })).toHaveCount(0);
+      const response = await page.request.post('/api/domain/lesson-planner/uploads', {
+        multipart: { intent: 'upload', file: notes },
+      });
+      expect(response.status()).toBe(404);
+    });
+
+    test('add documents to a new lesson; they go with its first message; the wrong file says why', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_uploads', true);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto('/app/lesson-planner');
+      await page.waitForLoadState('networkidle');
+      await expect(page.getByRole('button', { name: 'Add your own document' })).toBeVisible();
+
+      const input = page.getByTestId('source-file-input');
+      await input.setInputFiles(path.join(fixtures, 'reading-guide.pdf'));
+      await expect(page.getByTestId('source-document')).toHaveText(/reading-guide\.pdf/);
+      await input.setInputFiles(notes);
+      await expect(page.getByTestId('source-document')).toHaveCount(2);
+
+      // A scan has no text to read: the teacher is told, and nothing is added.
+      await input.setInputFiles(path.join(fixtures, 'scanned.pdf'));
+      await expect(page.getByTestId('source-error')).toContainText('It may be a scan');
+      await expect(page.getByTestId('source-document')).toHaveCount(2);
+
+      // Taken back out.
+      await page.getByRole('button', { name: 'Remove my-notes.md' }).click();
+      await expect(page.getByTestId('source-document')).toHaveCount(1);
+
+      const asked: string[] = [];
+      await page.route('**/api/domain/lesson-planner', (route) => {
+        asked.push(route.request().postData() ?? '');
+      });
+      await page.getByLabel('Message the Lesson Planner').fill('Plan day one from my reading guide.');
+      await page.getByRole('button', { name: 'Send message' }).click();
+      await expect.poll(() => asked.join('\n')).toContain('uploadIds=');
+
+      const prisma = createE2EPrismaClient();
+      try {
+        const rows = await prisma.lessonPlanUpload.findMany({
+          where: { membershipId: e2eContext.teacherMembershipId },
+          select: { id: true, name: true, text: true, conversationId: true },
+        });
+        expect(rows.map((row) => row.name)).toEqual(['reading-guide.pdf']);
+        expect(rows[0]!.text).toContain('Jimmy Cross carried letters');
+        expect(rows[0]!.conversationId).toBeNull();
+        expect(asked.join('\n')).toContain(`uploadIds=${rows[0]!.id}`);
+      } finally {
+        await prisma.lessonPlanUpload.deleteMany({ where: { membershipId: e2eContext.teacherMembershipId } });
+        await prisma.$disconnect();
+      }
+    });
+
+    test('a lesson keeps its documents, and only its teacher can add to it', async ({ page, signIn, e2eContext }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_uploads', true);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Day one.' },
+        { role: 'assistant', content: 'Here is the plan.' },
+      ]);
+      const added = await page.request.post('/api/domain/lesson-planner/uploads', {
+        multipart: { intent: 'upload', conversationId, file: notes },
+      });
+      expect(added.ok()).toBe(true);
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+      await expect(page.getByTestId('source-document')).toHaveText(/my-notes\.md/);
+
+      const elsewhere = await page.request.post('/api/domain/lesson-planner/uploads', {
+        multipart: { intent: 'upload', conversationId: 'not-a-lesson-of-yours', file: notes },
+      });
+      expect(elsewhere.status()).toBe(404);
+    });
+  });
+
   test.describe("Kevin's notes on the latest run", () => {
     const LECTURE_REPLY = [
       '# The war at home',
@@ -1203,6 +1294,7 @@ test.describe("Lesson Planner — Brian's third run", () => {
         await expect(page.locator(`video[poster$="/${clip}.jpg"]`)).toHaveCount(1);
       }
       await expect(page.getByTestId('guide-wont')).toContainText('only when you post or send it');
+      await expect(page.getByText('Bring your own material.')).toBeVisible();
       // Every clip and still the guide points at is really there.
       const sources = await page.locator('video source, img[src*="lesson-planner-guide"], video[poster]').evaluateAll((nodes) =>
         nodes.map((node) => node.getAttribute('src') ?? node.getAttribute('poster')!)
@@ -1226,6 +1318,7 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await expect(page.locator('video[poster$="/plan.jpg"]')).toHaveCount(1);
       await expect(page.locator('video[poster$="/deck.jpg"]')).toHaveCount(1);
       await expect(page.getByTestId('guide-wont')).toContainText('They stay in your account');
+      await expect(page.getByText('Bring your own material.')).toHaveCount(0);
     });
   });
 });
