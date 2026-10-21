@@ -216,7 +216,7 @@ export default function FreeTierOnboardingRoute() {
 
   return (
     <FreeTierAuthCard
-      title={onboardingV2 ? 'Who approves Yawp! for your school?' : 'Who can approve Yawp!'}
+      title={onboardingV2 ? 'One last step: your administrator’s approval' : 'Who can approve Yawp!'}
       footer={<FreeTierSignOut />}
       subtitle={onboardingV2 ? undefined : 'A site or district administrator. Department chairs and teachers can’t.'}
     >
@@ -269,7 +269,7 @@ export default function FreeTierOnboardingRoute() {
           }
         }}
       >
-        <FreeTierFieldLabel label="Administrator name" htmlFor="adminName">
+        <FreeTierFieldLabel label={onboardingV2 ? 'Administrator’s name' : 'Administrator name'} htmlFor="adminName">
           <FreeTierTextInput
             id="adminName"
             name="adminName"
@@ -302,11 +302,11 @@ export default function FreeTierOnboardingRoute() {
             {adminEmailError}
           </p>
         ) : null}
-        <FreeTierFieldLabel label="Administrator role" htmlFor="adminRole">
+        <FreeTierFieldLabel label={onboardingV2 ? 'Title' : 'Administrator role'} htmlFor="adminRole">
           <FreeTierTextInput
             id="adminRole"
             name="adminRole"
-            placeholder="Principal, Technology Director"
+            placeholder={onboardingV2 ? 'Principal, Assistant Principal, Director of Curriculum and Instruction' : 'Principal, Technology Director'}
             required
             maxLength={100}
             defaultValue={pending?.adminRole ?? ''}

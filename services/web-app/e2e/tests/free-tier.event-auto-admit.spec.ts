@@ -81,7 +81,7 @@ test.describe('Free-tier event auto-admit QA', () => {
 
       await page.goto(`/free?t=${encodeURIComponent(code)}`);
       await expect(page).toHaveURL(new RegExp(`/free\\?t=${code}`));
-      await expect(page.getByText('Use your event link to continue.')).toBeVisible();
+      await expect(page.getByText('Sign up below to start your free Yawp! classroom.')).toBeVisible();
       await shot(page, '01-event-link-landing.png');
 
       const scanCookie = (await page.context().cookies()).find(
@@ -126,7 +126,7 @@ test.describe('Free-tier event auto-admit QA', () => {
       });
 
       await page.goto(`/free/join?t=${encodeURIComponent(release.token)}`);
-      await expect(page.getByRole('heading', { name: 'Create your free classroom' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: /^(Welcome to Yawp!|Create your free classroom)$/ })).toBeVisible();
       await shot(page, '03-release-join-account-form.png');
 
       await page.getByLabel('Your name').fill(teacherName);

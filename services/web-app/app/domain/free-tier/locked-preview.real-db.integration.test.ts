@@ -21,7 +21,7 @@ import { replaceStudentClassRoster } from '~/domain/collaboration/student-roster
 const enabled = process.env.LOCKED_PREVIEW_DB_TESTS === '1';
 const local = enabled ? test : test.skip;
 const prefix = `locked-preview-${Date.now()}`;
-const flag = 'feature_flag.free-tier-onboarding-v2';
+const flag = 'feature_flag.free_tier';
 let orgId: string, classId: string, userId: string, membershipId: string, appId: string;
 let originalFlag: string | null = null;
 async function setFlag(value: string) {

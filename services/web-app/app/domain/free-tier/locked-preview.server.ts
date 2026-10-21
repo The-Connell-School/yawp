@@ -2,7 +2,7 @@ import type { Prisma } from '@app/prisma';
 import { redirect } from 'react-router';
 import { prisma } from '~/utils/db.server';
 import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { FREE_TIER_ONBOARDING_V2_FLAG } from '~/domain/feature-flags/feature-flags';
+import { FREE_TIER_FLAG } from '~/domain/feature-flags/feature-flags';
 import { isLockedPreviewRequestAllowed, isLockedPreviewStatus, LOCKED_PREVIEW_MESSAGE, LOCKED_PREVIEW_PATH } from './locked-preview';
 
 export async function getLockedPreviewApplication(userId: string, membershipId?: string | null) {
@@ -11,7 +11,7 @@ export async function getLockedPreviewApplication(userId: string, membershipId?:
     select: { id: true, status: true, organizationId: true },
   });
   if (!app || !isLockedPreviewStatus(app.status) ||
-      !(await isFeatureFlagEnabled(FREE_TIER_ONBOARDING_V2_FLAG, app.organizationId))) return null;
+      !(await isFeatureFlagEnabled(FREE_TIER_FLAG, app.organizationId))) return null;
   const memberships = await prisma.orgMembership.findMany({
     where: { userId, isActive: true },
     orderBy: { createdAt: 'desc' },
@@ -45,7 +45,7 @@ export async function assertOrganizationTeachingApproved(
   tx: Pick<Prisma.TransactionClient, 'organization' | 'freeTierApplication'>,
   organizationId: string
 ) {
-  if (!(await isFeatureFlagEnabled(FREE_TIER_ONBOARDING_V2_FLAG, organizationId))) return;
+  if (!(await isFeatureFlagEnabled(FREE_TIER_FLAG, organizationId))) return;
   const org = await tx.organization.findUnique({ where: { id: organizationId }, select: { plan: true } });
   if (org?.plan !== 'FREE_CLASSROOM') return;
   const app = await tx.freeTierApplication.findFirst({

@@ -25,7 +25,7 @@ function mockedFlags(): Plugin {
         source
           .replace(
             /(export async function isFeatureFlagEnabled\([\s\S]*?\): Promise<boolean> \{)/,
-            '$1\n if (key === "signon-teacher-prompts") return JSON.parse(readTestFlagState(process.env.SIGNON_TEACHER_PROMPTS_MOCK_STATE!, "utf8")).teacherPrompts === true;'
+            '$1\n if (key === "unified-sign-on") return JSON.parse(readTestFlagState(process.env.SIGNON_TEACHER_PROMPTS_MOCK_STATE!, "utf8")).teacherPrompts === true;'
           )
           .replace(
             /(export async function isFreeTierEnabled\([\s\S]*?\): Promise<boolean> \{)/,

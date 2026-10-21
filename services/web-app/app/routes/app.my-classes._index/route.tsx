@@ -41,7 +41,6 @@ import { ALL_SCHOOL_YEARS } from '~/utils/school-year';
 import { resolveTeacherSchoolYearScope } from '~/utils/school-year-scope.server';
 import { resolveStudentSchoolYearScope } from '~/utils/school-year-scope.server';
 import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { isDemoFreeTierRouteOpen } from '~/utils/free-tier/free-tier-feature-gate.server';
 
 async function getTeacherSchoolIds(membershipId: string) {
   const teacher = await prisma.orgMembership.findUnique({
@@ -146,7 +145,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const entitlements = getEntitlements(profile.organization);
   const canShareClassroomReport = profile.organization.plan === 'FREE_CLASSROOM'
-    && (isDemoFreeTierRouteOpen(process.env) || await isFreeTierEnabled());
+    && (await isFreeTierEnabled());
   let classCreateBlockedMessage: string | null = null;
   if (entitlements.activeClassCap != null) {
     const activeClassCount = await prisma.class.count({

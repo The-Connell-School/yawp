@@ -1,7 +1,7 @@
 import { redirect } from 'react-router';
 import { prisma } from '~/utils/db.server';
 import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { FREE_TIER_ONBOARDING_V2_FLAG } from '~/domain/feature-flags/feature-flags';
+import { FREE_TIER_FLAG } from '~/domain/feature-flags/feature-flags';
 import { LOCKED_PREVIEW_PATH } from './locked-preview';
 
 const TERMINAL_OPEN_PATHS = ['/app/free-tier/status', '/auth/logout'];
@@ -52,7 +52,7 @@ export async function enforceFreeTierTeacherGate(args: {
 
   if (args.pathname === LOCKED_PREVIEW_PATH &&
       (application.status === 'SENT' || application.status === 'MANUAL_REVIEW') &&
-      await isFeatureFlagEnabled(FREE_TIER_ONBOARDING_V2_FLAG, application.organizationId)) return application;
+      await isFeatureFlagEnabled(FREE_TIER_FLAG, application.organizationId)) return application;
 
   if (application.status === 'REJECTED' || application.status === 'EXPIRED') {
     if (!isTerminalOpenPath(args.pathname)) throw redirect('/app/free-tier/status');

@@ -16,7 +16,7 @@ const prisma = createE2EPrismaClient();
 const shots = process.env.CLASS_STEP_EVIDENCE_DIR;
 const users: string[] = [];
 const apps: string[] = [];
-const flagName = 'feature_flag.free-tier-onboarding-v2';
+const flagName = 'feature_flag.free_tier';
 async function flag(enabled: boolean) {
   await prisma.setting.upsert({
     where: { name: flagName },
@@ -153,11 +153,11 @@ for (const width of [1280, 390]) {
     const { user, app } = await fixture();
     await login(page, user.email!);
     await expect(
-      page.getByRole('heading', { name: 'Create your class' })
+      page.getByRole('heading', { name: 'Let’s set up your classroom' })
     ).toBeVisible();
     await expect(page.getByLabel('Grade')).toHaveValue('11');
     await expect(page.locator('[aria-current="step"]')).toContainText(
-      'Create your class'
+      'Set up your class'
     );
     await page.getByLabel('Class name').focus();
     await page.keyboard.press('Tab');
@@ -193,9 +193,9 @@ for (const width of [1280, 390]) {
     expect(pendingPost.headers().location).toBe('/app/free-tier/onboarding');
     await page.goto('/app/free-tier/onboarding?step=administrator');
     await expect(
-      page.getByRole('heading', { name: 'Create your class' })
+      page.getByRole('heading', { name: 'Let’s set up your classroom' })
     ).toBeVisible();
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByRole('button', { name: 'Create my class', exact: true }).click();
     await expect(page.locator('#className:invalid')).toHaveCount(1);
     // Exercise associated server errors with browser validation deliberately bypassed.
     await page
@@ -204,7 +204,7 @@ for (const width of [1280, 390]) {
       .evaluate((el) => el.setAttribute('novalidate', ''));
     await page.getByLabel('Class name').fill('   ');
     await page.getByLabel('Grade').selectOption('');
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByRole('button', { name: 'Create my class', exact: true }).click();
     await expect(
       page.getByText('Enter a class name with 1–100 characters.')
     ).toBeVisible();
@@ -215,12 +215,9 @@ for (const width of [1280, 390]) {
     await capture(page, `${width}-validation`);
     await page.getByLabel('Class name').fill('AP English 11');
     await page.getByLabel('Grade').selectOption('mixed');
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByRole('button', { name: 'Create my class', exact: true }).click();
     await expect(
-      page.getByRole('heading', {
-        name: 'Who approves Yawp! for your school?',
-        exact: true,
-      })
+      page.getByRole('heading', { name: 'One last step: your administrator’s approval' })
     ).toBeVisible();
     await expect(page.locator('[aria-current="step"]')).toContainText(
       'Ask your administrator'
@@ -244,7 +241,7 @@ for (const width of [1280, 390]) {
     ).toBe(0);
     await page.goto('/app/my-classes');
     await expect(page).toHaveURL(/free-tier\/onboarding/);
-    await page.getByLabel('Administrator name').fill('Dr. Patel');
+    await page.getByLabel('Administrator’s name').fill('Dr. Patel');
     const selfPost = await page.request.post('/app/free-tier/onboarding', {
       form: {
         adminName: 'Self',
@@ -256,7 +253,7 @@ for (const width of [1280, 390]) {
     expect(selfPost.status()).toBe(400);
     const ownEmail = page.getByLabel('Administrator email');
     await ownEmail.fill(user.email!);
-    await page.getByLabel('Administrator role').fill('Principal');
+    await page.getByLabel('Title').fill('Principal');
     await page.getByRole('button', { name: 'Send approval request' }).click();
     await expect(ownEmail).toHaveAttribute('aria-invalid', 'true');
     await expect(ownEmail).toHaveAttribute('aria-describedby', 'adminEmail-error');
@@ -275,7 +272,7 @@ for (const width of [1280, 390]) {
     ).toBe('ACCOUNT_CREATED');
     await ownEmail.fill('patel@example.edu');
     await expect(ownEmail).not.toHaveAttribute('aria-invalid', 'true');
-    await page.getByLabel('Administrator role').fill('Principal');
+    await page.getByLabel('Title').fill('Principal');
     await page.getByRole('button', { name: 'Send approval request' }).click();
     await expect(page).toHaveURL(/free-tier\/pending/);
     const payload = await waitForFreeTierEmailPayload(prisma, {
@@ -340,7 +337,7 @@ test('missing and unsupported grades require an explicit choice', async ({
       '10',
       '11',
       '12',
-      'Mixed grades',
+      'Mixed high school grades',
     ]);
   }
 });

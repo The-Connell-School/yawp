@@ -107,25 +107,20 @@ test.describe.serial('Free tier guided tour', () => {
       });
       const emailCount = await prisma.freeTierEmailLog.count({ where: { applicationId: application.id } });
       try {
-        await setFeatureFlag('free-tier-onboarding-v2', true);
+        await setFeatureFlag('free-tier', true);
         await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
         await logInAsFreeTeacher(page);
         await page.goto('/app');
         await expect(page).toHaveURL(/\/app\/free-tier\/onboarding$/);
-        await expect(page.getByRole('heading', { name: 'Create your class' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Let’s set up your classroom' })).toBeVisible();
         await expect(page.getByTestId('guided-tour-welcome')).toHaveCount(0);
         await expect(page.getByRole('button', { name: 'Tour this page' })).toHaveCount(0);
-        await expect(page.locator('[aria-current="step"]')).toContainText('Create your class');
+        await expect(page.locator('[aria-current="step"]')).toContainText('Set up your class');
         await shot(page, `onboarding-${width}-class`);
         await page.getByLabel('Class name').fill('AP English 11');
         await page.getByLabel('Grade').selectOption('11');
-        await page.getByRole('button', { name: 'Continue', exact: true }).click();
-        await expect(
-          page.getByRole('heading', {
-            name: 'Who approves Yawp! for your school?',
-            exact: true,
-          })
-        ).toBeVisible();
+        await page.getByRole('button', { name: 'Create my class', exact: true }).click();
+        await expect(page.getByRole('heading', { name: 'One last step: your administrator’s approval' })).toBeVisible();
         await expect(page.getByTestId('guided-tour-welcome')).toHaveCount(0);
         await shot(page, `onboarding-${width}-administrator`);
         expect(await tourOutcome('dashboard')).toBeNull();
@@ -152,7 +147,7 @@ test.describe.serial('Free tier guided tour', () => {
         } else {
           await prisma.freeTierApplication.delete({ where: { id: application.id } });
         }
-        await setFeatureFlag('free-tier-onboarding-v2', false);
+        await setFeatureFlag('free-tier', false);
         await prisma.$disconnect();
       }
     });

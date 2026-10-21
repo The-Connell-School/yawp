@@ -23,9 +23,9 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
   const now = new Date('2026-10-14T15:02:00Z');
   async function flag(mode = 'targeted', orgIds = [organizationId]) {
     await db.setting.upsert({
-      where: { name: 'feature_flag.free-tier-onboarding-v2' },
+      where: { name: 'feature_flag.free_tier' },
       create: {
-        name: 'feature_flag.free-tier-onboarding-v2',
+        name: 'feature_flag.free_tier',
         value: JSON.stringify({ mode, orgIds }),
       },
       update: { value: JSON.stringify({ mode, orgIds }) },
@@ -388,7 +388,7 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
         await db.$executeRawUnsafe(`CREATE FUNCTION "${trigger}"() RETURNS trigger LANGUAGE plpgsql AS $$
           BEGIN
             IF NEW."approvalId" = '${approval.id}' AND NEW.state = 'DELIVERING' AND OLD.state = 'QUEUED' THEN
-              UPDATE "Setting" SET value = '${pausedValue}' WHERE name = 'feature_flag.free-tier-onboarding-v2';
+              UPDATE "Setting" SET value = '${pausedValue}' WHERE name = 'feature_flag.free_tier';
             END IF;
             RETURN NEW;
           END $$`);
@@ -399,7 +399,7 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
           expect(
             (
               await db.setting.findUniqueOrThrow({
-                where: { name: 'feature_flag.free-tier-onboarding-v2' },
+                where: { name: 'feature_flag.free_tier' },
               })
             ).value
           ).toBe(pausedValue);

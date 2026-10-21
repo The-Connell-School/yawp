@@ -9,7 +9,7 @@ const enabled = process.env.CLASS_STEP_DB_TESTS === '1';
 const ids: string[] = [];
 const userIds: string[] = [];
 const orgIds: string[] = [];
-const flagName = 'feature_flag.free-tier-onboarding-v2';
+const flagName = 'feature_flag.free_tier';
 async function flag(value: boolean) {
   await prisma.setting.upsert({
     where: { name: flagName },

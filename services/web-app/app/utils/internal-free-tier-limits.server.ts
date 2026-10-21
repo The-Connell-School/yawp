@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { FREE_TIER_ONBOARDING_V2_FLAG } from '~/domain/feature-flags/feature-flags';
+import { FREE_TIER_FLAG } from '~/domain/feature-flags/feature-flags';
 import { isFeatureFlagEnabled, isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { FREE_TIER_LIMIT_BOUNDS, type FreeTierLimits } from '~/domain/free-tier/limits';
 import { readFreeTierLimits, updateFreeTierLimits } from '~/domain/free-tier/limits.server';
@@ -34,7 +34,7 @@ export async function freeTierLimitsHttp(request: Request): Promise<Response> {
   });
   if (auth instanceof Response) return auth;
   if (request.method === 'GET') return response(await readFreeTierLimits());
-  if (!(await isFeatureFlagEnabled(FREE_TIER_ONBOARDING_V2_FLAG))) return response({ error: 'flag_off' }, 409);
+  if (!(await isFeatureFlagEnabled(FREE_TIER_FLAG))) return response({ error: 'flag_off' }, 409);
   let input: z.infer<typeof inputSchema>;
   try { input = inputSchema.parse(JSON.parse(body)); }
   catch { return response({ error: 'Invalid input' }, 400); }

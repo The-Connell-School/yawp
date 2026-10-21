@@ -30,6 +30,18 @@ describe('isFreeTierEnabled', () => {
       select: { value: true },
     });
   });
+
+  test('defaults on for demo and preview without reading the database', async () => {
+    const previous = process.env.YAWP_ENVIRONMENT;
+    try {
+      process.env.YAWP_ENVIRONMENT = 'preview';
+      expect(await isFreeTierEnabled()).toBe(true);
+      expect(prisma.setting.findUnique).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
+      else process.env.YAWP_ENVIRONMENT = previous;
+    }
+  });
 });
 
 test('status checks can propagate read failures while existing callers still fail closed', async () => {

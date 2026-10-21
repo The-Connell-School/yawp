@@ -78,9 +78,9 @@ describe('app parent free-tier loader gate', () => {
     else process.env.YAWP_ENVIRONMENT = oldYawpEnvironment;
   });
 
-  test('lets demo free-tier applicants reach the onboarding shell when the stored flag is off', async () => {
+  test('lets demo free-tier applicants reach the onboarding shell when demo default-on applies', async () => {
     process.env.YAWP_ENVIRONMENT = 'demo';
-    isFreeTierEnabled.mockResolvedValue(false);
+    isFreeTierEnabled.mockResolvedValue(true);
 
     const response = await loader({
       request: new Request('https://yawp.test/app/free-tier/onboarding'),

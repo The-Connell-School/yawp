@@ -16,9 +16,9 @@ const db = createE2EPrismaClient();
 const shots = process.env.APPROVAL_V2_EVIDENCE_DIR;
 async function flag(mode: 'off' | 'everyone' | 'targeted') {
   await db.setting.upsert({
-    where: { name: 'feature_flag.free-tier-onboarding-v2' },
+    where: { name: 'feature_flag.free_tier' },
     create: {
-      name: 'feature_flag.free-tier-onboarding-v2',
+      name: 'feature_flag.free_tier',
       value: JSON.stringify({ mode, orgIds: ['another-org'] }),
     },
     update: { value: JSON.stringify({ mode, orgIds: ['another-org'] }) },

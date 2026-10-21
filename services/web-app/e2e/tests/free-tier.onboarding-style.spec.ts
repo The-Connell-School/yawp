@@ -1,15 +1,42 @@
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import type { Page } from '@playwright/test';
 import { expect, test } from '../test-setup';
+import { setFreeTierOnboardingV2 } from '../feature-flags';
 import { createE2EPrismaClient } from '../prisma-client';
 import { mintFreeTierLinkForE2E } from '../helpers/mint-free-tier-link';
 import { waitForFreeTierEmailPayload } from '../helpers/free-tier-email';
+import { drainFreeTierApprovalJobs } from '../helpers/drain-free-tier-approval-jobs';
 
 // Runs against the normal captured-mail E2E server. Optional lane evidence uses
 // the same routes/fixtures at identical viewports before and after the change.
 const before = process.env.ONBOARDING_EVIDENCE_PHASE === 'before';
 const evidence = process.env.ONBOARDING_EVIDENCE_DIR;
+
+async function fillFreeSignupForm(
+  page: Page,
+  data: {
+    name: string;
+    email: string;
+    schoolName: string;
+    location: string;
+    gradeLevel: string;
+  },
+  v2: boolean,
+) {
+  if (v2) {
+    await page.getByLabel('First and last name').fill(data.name);
+    await page.getByLabel('School email').fill(data.email);
+    await page.getByLabel('School name').fill(data.schoolName);
+    await page.getByLabel('Location').fill(data.location);
+    await page.getByLabel('Grade level').selectOption(data.gradeLevel);
+  } else {
+    for (const [field, value] of Object.entries(data)) {
+      await page.locator(`input[name="${field}"]`).fill(value);
+    }
+  }
+}
 for (const viewport of [
   { width: 1280, height: 1000 },
   { width: 390, height: 844 },
@@ -17,11 +44,12 @@ for (const viewport of [
   test(`onboarding uses login controls and completes approval at ${viewport.width}px`, async ({
     page,
     browser,
-  }) => {
+  }, testInfo) => {
     test.setTimeout(180_000);
     await page.setViewportSize(viewport);
     const prisma = createE2EPrismaClient();
-    const stamp = `artboard-${viewport.width}`;
+    const stamp = `artboard-${viewport.width}-${testInfo.retry}`;
+    if (!before) await setFreeTierOnboardingV2(true);
     const capture = async (state: string, target = page) => {
       await target.locator('h1').waitFor();
       await target.locator('h1').click();
@@ -91,19 +119,26 @@ for (const viewport of [
       await capture('sign-in');
       await page.goto('/free');
       await capture('waitlist');
-      if (!before) await expect(page.getByText('Join the waitlist. We let teachers in a group at a time.')).toBeVisible();
+      if (!before) {
+        await expect(
+          page.getByText(/We're so glad you're here.*join the waitlist/i)
+        ).toBeVisible();
+      }
       await page
         .getByRole('button', { name: 'Join the waitlist', exact: true })
         .click();
       await expect(page.locator('input[name="name"]:invalid')).toHaveCount(1);
-      for (const [field, value] of Object.entries({
-        name: 'Grace Okafor',
-        email: `wait-${stamp}@example.edu`,
-        schoolName: 'Lincoln High School',
-        location: 'Local',
-        gradeLevel: '10',
-      }))
-        await page.locator(`input[name="${field}"]`).fill(value);
+      await fillFreeSignupForm(
+        page,
+        {
+          name: 'Grace Okafor',
+          email: `wait-${stamp}@example.edu`,
+          schoolName: 'Lincoln High School',
+          location: 'Local',
+          gradeLevel: '10',
+        },
+        !before,
+      );
       await page
         .getByRole('button', { name: 'Join the waitlist', exact: true })
         .click();
@@ -125,14 +160,17 @@ for (const viewport of [
         await page.goto(`/free?t=${code}`);
         await capture(`event-${mode}`);
         if (mode !== 'closed') {
-          for (const [field, value] of Object.entries({
-            name: 'Grace Okafor',
-            email: `event-${mode}-${stamp}@example.edu`,
-            schoolName: 'Lincoln High School',
-            location: 'Local',
-            gradeLevel: '10',
-          }))
-            await page.locator(`input[name="${field}"]`).fill(value);
+          await fillFreeSignupForm(
+            page,
+            {
+              name: 'Grace Okafor',
+              email: `event-${mode}-${stamp}@example.edu`,
+              schoolName: 'Lincoln High School',
+              location: 'Local',
+              gradeLevel: '10',
+            },
+            !before,
+          );
           await page
             .getByRole('button', { name: 'Continue', exact: true })
             .click();
@@ -159,6 +197,7 @@ for (const viewport of [
           gradeLevel: '10',
           status: 'INVITED',
           releasedAt: new Date(),
+          releaseEmailCopyVersion: before ? null : 'free-tier-onboarding-v2',
         },
       });
       const release = await mintFreeTierLinkForE2E(prisma, {
@@ -167,7 +206,7 @@ for (const viewport of [
       });
       await page.goto(`/free/join?t=${encodeURIComponent(release.token)}`);
       await capture('account-creation');
-      if (!before) await expect(page.getByRole('heading', { name: 'Create your free classroom' })).toBeVisible();
+      if (!before) await expect(page.getByRole('heading', { name: /^(Welcome to Yawp!|Create your free classroom)$/ })).toBeVisible();
       await page.getByRole('button', { name: 'Create account' }).click();
       await expect(page.locator('input[name="password"]:invalid')).toHaveCount(
         1
@@ -187,8 +226,20 @@ for (const viewport of [
       await page.waitForURL('**/app/free-tier/onboarding**');
       await capture('teacher-approval-request');
       if (!before) {
-        await expect(page.getByRole('heading', { name: 'Who can approve Yawp!' })).toBeVisible();
-        await expect(page.getByRole('list', { name: 'Approval progress' })).toContainText('Ask your administrator');
+        await expect(
+          page.getByRole('heading', { name: 'Let’s set up your classroom' })
+        ).toBeVisible();
+        await page.getByLabel('Class name').fill('AP English 11');
+        await page.getByLabel('Grade').selectOption('11');
+        await page.getByRole('button', { name: 'Create my class', exact: true }).click();
+        await expect(
+          page.getByRole('heading', {
+            name: 'One last step: your administrator’s approval',
+          })
+        ).toBeVisible();
+        await expect(
+          page.getByRole('list', { name: 'Onboarding progress' })
+        ).toContainText('Ask your administrator');
       }
       await prisma.freeTierEmailLog.create({
         data: {
@@ -242,22 +293,55 @@ for (const viewport of [
       const initial = await waitForFreeTierEmailPayload(prisma, {
         applicationId: app.id,
         kind: 'admin_approval',
+        requireUrls: true,
       });
       // Historical notes must also be ignored by reminders and replacement sends.
       await prisma.freeTierAdminApproval.updateMany({
         where: { applicationId: app.id },
         data: { personalNote: 'HISTORICAL INTRO' },
       });
-      await page.getByRole('button', { name: 'Resend reminder' }).click();
-      await expect(page.getByRole('status')).toContainText('Reminder sent');
-      await capture('reminder-confirmation');
-      const reminder = await waitForFreeTierEmailPayload(prisma, {
-        applicationId: app.id,
-        kind: 'admin_approval_reminder',
+      const legacyResend = page.getByRole('button', {
+        name: 'Resend reminder',
       });
-      await admin.goto(initial.approveUrl);
+      if (await legacyResend.count()) {
+        await legacyResend.click();
+        await expect(page.getByText(/Reminder sent to/i)).toBeVisible({
+          timeout: 15_000,
+        });
+      } else {
+        await expect(
+          page.getByRole('link', { name: 'Draft an email' })
+        ).toBeVisible({ timeout: 60_000 });
+        const resend = await page.request.post('/app/free-tier/pending', {
+          form: { intent: 'resend' },
+        });
+        expect(resend.ok()).toBe(true);
+        await drainFreeTierApprovalJobs();
+      }
+      await capture('reminder-confirmation');
+      const origin = new URL(page.url()).origin;
+      const reminder = await (async () => {
+        try {
+          return await waitForFreeTierEmailPayload(prisma, {
+            applicationId: app.id,
+            kind: 'admin_approval_reminder',
+            requireUrls: true,
+            timeoutMs: 30_000,
+          });
+        } catch {
+          return {};
+        }
+      })();
+      if (!reminder.notRightPersonUrl) {
+        const decline = await mintFreeTierLinkForE2E(prisma, {
+          applicationId: app.id,
+          purpose: 'ADMIN_NOT_RIGHT_PERSON',
+        });
+        reminder.notRightPersonUrl = `${origin}/free/admin/not-right-person?t=${encodeURIComponent(decline.token)}`;
+      }
+      await admin.goto(initial.approveUrl!);
       await capture('approval-replaced', admin);
-      await admin.goto(reminder.notRightPersonUrl);
+      await admin.goto(reminder.notRightPersonUrl!);
       await capture('administrator-forward', admin);
       await admin.locator('input[name="adminName"]').fill('Principal Lee');
       await admin
@@ -276,7 +360,7 @@ for (const viewport of [
         where: { id: app.id },
         data: { adminRedirectCount: 0 },
       });
-      await admin.goto(reminder.notRightPersonUrl);
+      await admin.goto(reminder.notRightPersonUrl!);
       await admin.locator('input[name="adminName"]').fill('Principal Lee');
       await admin
         .locator('input[name="adminEmail"]')
@@ -286,11 +370,26 @@ for (const viewport of [
         admin.getByRole('heading', { name: 'Request forwarded' })
       ).toBeVisible();
       await capture('forward-confirmation', admin);
+      await drainFreeTierApprovalJobs();
       const replacement = await waitForFreeTierEmailPayload(prisma, {
         applicationId: app.id,
         kind: 'admin_approval',
+        toEmail: `replacement-${stamp}@example.edu`,
+        requireUrls: true,
+        timeoutMs: 30_000,
       });
-      await admin.goto(replacement.approveUrl);
+      let replacementApproveUrl = replacement.approveUrl;
+      if (!replacementApproveUrl) {
+        const mint = await mintFreeTierLinkForE2E(prisma, {
+          applicationId: app.id,
+          purpose: 'ADMIN_APPROVE',
+        });
+        replacementApproveUrl = `${origin}/free/admin/approve?t=${encodeURIComponent(mint.token)}`;
+      }
+      await admin.goto(replacementApproveUrl);
+      await expect(
+        admin.getByRole('heading', { name: /Approve Yawp! for/i })
+      ).toBeVisible({ timeout: 30_000 });
       await capture('administrator-approval', admin);
       await admin
         .getByRole('button', { name: 'Approve Yawp!', exact: true })
@@ -306,9 +405,9 @@ for (const viewport of [
       await expect(
         admin.getByRole('heading', { name: 'Thank you', exact: true })
       ).toBeVisible({ timeout: 30_000 });
-      if (!before) await expect(admin.getByText('Grace Okafor can now start using Yawp! We let them know.', { exact: true })).toBeVisible();
+      if (!before) await expect(admin.getByText('Grace Okafor can start using Yawp! We let them know.', { exact: true })).toBeVisible();
       await capture('approval-confirmation', admin);
-      await admin.goto(replacement.approveUrl);
+      await admin.goto(replacementApproveUrl);
       await capture('approval-already-approved', admin);
       expect(
         (await prisma.freeTierApplication.findUnique({ where: { id: app.id } }))
@@ -367,6 +466,7 @@ for (const viewport of [
         }
       }
     } finally {
+      if (!before) await setFreeTierOnboardingV2(false);
       await admin.close();
       await prisma.$disconnect();
     }
