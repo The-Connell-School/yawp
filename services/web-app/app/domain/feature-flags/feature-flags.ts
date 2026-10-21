@@ -171,7 +171,7 @@ export const FEATURE_FLAGS = {
   [LESSON_PLANNER_SHARE_FLAG]: {
     label: 'Lesson Planner: post and send a lesson',
     description:
-      'Post to your class (one share link, Google Classroom, Canvas, Schoology, Teams) and Send this lesson to a sub, student, family or admin. Needs the stack page redesign. Off: no sharing.',
+      'Post to your class (one link to copy anywhere, or Google Classroom’s and Teams’ own share pages) and Send this lesson to a sub, student, family or admin. Needs the stack page redesign. Off: no sharing.',
   },
   [LESSON_PLANNER_RUN_SHOW_FLAG]: {
     label: 'Lesson Planner: run the show',

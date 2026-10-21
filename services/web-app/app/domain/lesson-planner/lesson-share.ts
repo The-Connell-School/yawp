@@ -20,6 +20,7 @@ export const SHARE_ITEMS = [
   'help',
   'standards',
   'writing',
+  'observe',
 ] as const;
 export type ShareItem = (typeof SHARE_ITEMS)[number];
 
@@ -66,8 +67,8 @@ export const AUDIENCE_SETUP: Record<Exclude<ShareAudience, 'student'> | 'student
     noteHint: 'Shows up first, in your words.',
     button: 'Send to family',
     items: [
-      { item: 'summary', label: 'What we’re learning', hint: 'In plain language', checked: true },
-      { item: 'help', label: 'How to help at home', hint: 'One question to ask at dinner', checked: true },
+      { item: 'summary', label: 'What we did and why', hint: 'In plain language, no jargon', checked: true },
+      { item: 'help', label: 'Talking about it at dinner', hint: 'Two or three ways to start the conversation', checked: true },
     ],
   },
   admin: {
@@ -79,10 +80,45 @@ export const AUDIENCE_SETUP: Record<Exclude<ShareAudience, 'student'> | 'student
     items: [
       { item: 'plan', label: 'Lesson plan', hint: 'Timed, with a why for each step', checked: true },
       { item: 'writing', label: 'Writing time', hint: 'How much of class is writing', checked: true },
-      { item: 'standards', label: 'Standards', hint: 'From your lesson plan, when you added them', checked: false },
+      { item: 'standards', label: 'Standards', hint: 'The ones you named in the planner', checked: true },
+      { item: 'observe', label: 'Invite them to observe', hint: 'An invitation to come and see this lesson', checked: false },
     ],
   },
 };
+
+/**
+ * What an admin page adds after the summary, in the teacher's own terms:
+ * the standards they named (never inferred) and an invitation to observe.
+ */
+export function adminExtras({
+  standards,
+  observe,
+  className,
+  lessonDate,
+}: {
+  standards: string[] | null;
+  observe: boolean;
+  className: string | null;
+  lessonDate: string | null;
+}): string {
+  const parts: string[] = [];
+  if (standards?.length) {
+    parts.push(['## Standards', '', 'As the teacher named them for this lesson:', '', ...standards.map((standard) => `- ${standard}`)].join('\n'));
+  }
+  if (observe) {
+    const when = lessonDate
+      ? new Date(lessonDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' })
+      : null;
+    parts.push(
+      [
+        '## You’re invited to observe',
+        '',
+        `The teacher would welcome you in class for this lesson${className ? ` with ${className}` : ''}${when ? ` on ${when}` : ''}. Reply to this email to set a time.`,
+      ].join('\n')
+    );
+  }
+  return parts.join('\n\n');
+}
 
 /** What "Post to your class" can open (the student page). */
 export const POST_ITEMS: Array<{ item: ShareItem; label: string }> = [
@@ -123,12 +159,13 @@ export const REWRITE_SYSTEM: Record<ShareAudience, string> = {
   ].join('\n'),
   family: [
     'Rewrite a teacher’s lesson for a student’s family.',
-    'Plain language, no education jargon: what the class is learning and why, in four or five sentences, then a "## How to help at home" section with one question to ask at dinner.',
-    'Markdown. At most 220 words. Return only the page.',
+    'Plain language, no education jargon: what the class did and why it matters, in four or five sentences, then a "## Talking about it at dinner" section with two or three open questions or conversation starters a family could use, tied to what the class actually did, none with a right answer to check.',
+    'Markdown. At most 260 words. Return only the page.',
   ].join('\n'),
   admin: [
     'Summarize a teacher’s lesson for a school administrator.',
     'What the lesson does and for whom, then the steps with their minutes and one line of why each, then how much of the period is writing.',
+    'Never name a standard, a standards code or an alignment claim: Yawp! adds the standards the teacher named itself, and says nothing about the ones they did not.',
     'Professional and concise. Markdown. At most 350 words. Return only the summary.',
   ].join('\n'),
 };

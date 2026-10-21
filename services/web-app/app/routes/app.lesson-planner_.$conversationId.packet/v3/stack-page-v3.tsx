@@ -395,7 +395,7 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
             >
               {reviewFlags.share ? <PostToClass conversationId={conversationId} title={packet.title} /> : null}
             </TakeToClass>
-            {reviewFlags.share ? <SendLesson conversationId={conversationId} /> : null}
+            {reviewFlags.share ? <SendLesson conversationId={conversationId} standards={v3.standards} /> : null}
           </div>
         </div>
       </div>

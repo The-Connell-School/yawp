@@ -939,6 +939,7 @@ jobs:
             app/domain/lesson-planner/deck-gallery.test.ts \
             app/domain/lesson-planner/deck-colors.test.ts \
             app/domain/lesson-planner/kit-plan.test.ts \
+            app/domain/lesson-planner/teacher-standards.test.ts \
             app/domain/lesson-planner/kit-plan-render.server.test.ts \
             app/domain/lesson-planner/lesson-pptx-gallery.server.test.ts \
             app/domain/lesson-planner/option-groups.test.ts \

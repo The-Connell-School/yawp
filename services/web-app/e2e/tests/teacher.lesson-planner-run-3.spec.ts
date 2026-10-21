@@ -708,7 +708,10 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await seedDeck(conversationId, assistantIds[0]!);
       await page.goto(`/app/lesson-planner/${conversationId}/packet`);
       const post = page.getByTestId('post-to-class');
-      await expect(post).toContainText('Google Classroom opens in a new tab');
+      await expect(post.getByTestId('share-paste-hint')).toContainText('Paste it into Google Classroom, Canvas, Schoology');
+      // Nothing that looks like a Canvas or Schoology integration.
+      await expect(post.getByRole('button', { name: /Canvas|Schoology/ })).toHaveCount(0);
+      await expect(post).toContainText('Yawp! is not connected to them');
       await post.getByTestId('share-copy').click();
       const link = await post.getByTestId('share-link-text').textContent();
       expect(link).toMatch(/\/l\/[\w-]{40,}$/);
@@ -755,6 +758,60 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await expect(visitor.getByTestId('shared-body')).toContainText('Hook activity');
       // A sub runs the slides, so a sub sees what to say.
       await expect(visitor.getByTestId('shared-slide')).toContainText('Let it sit');
+      await stranger.close();
+    });
+
+    test('admin: the standards the teacher named, never invented, and an invitation to observe', async ({
+      page,
+      signIn,
+      e2eContext,
+      browser,
+    }) => {
+      await stackV3On();
+      await setLessonPlannerReviewFlag('lesson_planner_share', true);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+
+      // No standard named: the option says how to get one, and is off.
+      const plain = await seedDayOneStack(page, e2eContext);
+      await page.goto(`/app/lesson-planner/${plain.conversationId}/packet`);
+      let send = page.getByTestId('send-lesson');
+      await send.getByRole('tab', { name: 'Family' }).click();
+      await expect(send).toContainText('What we did and why');
+      await expect(send).toContainText('Talking about it at dinner');
+      await send.getByRole('tab', { name: 'Admin' }).click();
+      await expect(send.getByRole('checkbox', { name: /Standards/ })).toBeDisabled();
+      await expect(send).toContainText('Name a standard in the planner to include it');
+
+      // Named in the chat: it goes to the admin, in the teacher's words.
+      const { conversationId, assistantIds } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Day one of The Things They Carried, English 10, 50 minutes. The standard is RL.9-10.1: Cite strong and thorough textual evidence to support analysis.' },
+        { role: 'assistant', content: DAY_ONE_REPLY },
+      ]);
+      const kept = await page.request.post('/api/domain/lesson-planner/packet', {
+        form: { intent: 'keep-all', conversationId, messageId: assistantIds[0]! },
+      });
+      expect(kept.ok()).toBe(true);
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      await page.waitForLoadState('networkidle');
+      send = page.getByTestId('send-lesson');
+      await send.getByRole('tab', { name: 'Admin' }).click();
+      const standards = send.getByRole('checkbox', { name: /Standards/ });
+      await expect(standards).toBeEnabled();
+      await expect(standards).toBeChecked();
+      await expect(send).toContainText('The ones you named in the planner: RL.9-10.1');
+      await send.getByRole('checkbox', { name: /Invite them to observe/ }).check();
+      await send.getByTestId('send-recipient').fill('principal@school.org');
+      await send.getByTestId('send-button').click();
+      await expect(send.getByTestId('send-done')).toContainText('Sent to principal@school.org');
+      const link = await send.getByTestId('send-link').getAttribute('href');
+
+      const stranger = await browser.newContext();
+      const visitor = await stranger.newPage();
+      await visitor.goto(link!);
+      const body = visitor.getByTestId('shared-body');
+      await expect(body).toContainText('As the teacher named them for this lesson');
+      await expect(body).toContainText('RL.9-10.1: Cite strong and thorough textual evidence to support analysis.');
+      await expect(body).toContainText('You’re invited to observe');
       await stranger.close();
     });
 

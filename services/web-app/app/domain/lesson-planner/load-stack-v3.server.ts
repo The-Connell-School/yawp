@@ -5,6 +5,7 @@
  * is not in the stack yet. Built on the same packet loader as every other
  * view of the stack, so none of them can disagree.
  */
+import { teacherStandards } from './teacher-standards';
 import { prisma } from '~/utils/db.server';
 import { loadLessonPacket, type LoadedLessonPacket } from './load-lesson-packet.server';
 import { readSlideDeck } from './slide-deck';
@@ -28,6 +29,8 @@ export type StackV3 = {
   askHistory: Array<{ id: string; role: 'user' | 'assistant'; content: string }>;
   /** Shown once, until the teacher closes it (Brian's run 3, item 13). */
   firstOpen: boolean;
+  /** The standards the teacher named in this lesson's chat, never inferred. */
+  standards: string[];
 };
 
 export async function loadStackV3({
@@ -107,6 +110,9 @@ export async function loadStackV3({
           role: message.role === 'user' ? ('user' as const) : ('assistant' as const),
           content: message.content,
         })),
+      standards: teacherStandards(
+        conversation.messages.filter((message) => message.role === 'user').map((message) => message.content)
+      ),
       firstOpen: !conversation.setAt && !conversation.messages.some((message) => message.surface === STACK_SURFACE),
     },
   };

@@ -21,7 +21,7 @@ import {
 } from '~/domain/lesson-planner/stack-actions.server';
 import { runStackCommand } from '~/domain/lesson-planner/stack-command.server';
 import { ensureStudentVersion } from '~/domain/lesson-planner/step-handout.server';
-import { AUDIENCE_SETUP, parseShareItems, SHARE_AUDIENCES } from '~/domain/lesson-planner/lesson-share';
+import { adminExtras, AUDIENCE_SETUP, parseShareItems, SHARE_AUDIENCES } from '~/domain/lesson-planner/lesson-share';
 import {
   createShareLink,
   emailLessonLink,
@@ -257,8 +257,8 @@ export async function action({ request }: ActionFunctionArgs) {
       const includes = parseShareItems(data.includes);
       const loaded = await loadStackV3({ request, conversationId: conversation.id });
       if (!loaded) return bad('Not found.', 404);
-      const needsText = includes.some((item) => ['plan', 'summary', 'help', 'standards'].includes(item));
-      const body = needsText
+      const needsText = includes.some((item) => ['plan', 'summary', 'help'].includes(item));
+      const rewritten = needsText
         ? await rewriteForAudience({
             request,
             access,
@@ -277,6 +277,18 @@ export async function action({ request }: ActionFunctionArgs) {
             }),
           })
         : null;
+      // The standards the teacher named and an invitation to observe: added
+      // here, in their own terms, never written by the model.
+      const extras =
+        data.audience === 'admin'
+          ? adminExtras({
+              standards: includes.includes('standards') ? loaded.v3.standards : null,
+              observe: includes.includes('observe'),
+              className: loaded.packet.className,
+              lessonDate: loaded.v3.lessonDate,
+            })
+          : '';
+      const body = [rewritten, extras].filter(Boolean).join('\n\n') || null;
       const { token } = await createShareLink({
         conversationId: conversation.id,
         audience: data.audience,
@@ -288,7 +300,9 @@ export async function action({ request }: ActionFunctionArgs) {
       const setup = AUDIENCE_SETUP[data.audience];
       await emailLessonLink({
         to: data.recipient,
-        subject: `${setup.tab === 'Substitute' ? 'Sub plan' : 'Lesson'}: ${loaded.packet.title}`,
+        subject: `${
+          setup.tab === 'Substitute' ? 'Sub plan' : includes.includes('observe') ? 'Invitation to observe' : 'Lesson'
+        }: ${loaded.packet.title}`,
         link: url,
         note: data.note || null,
         teacherName: null,

@@ -1,7 +1,10 @@
 /**
  * Post to your class and Send this lesson (stack page redesign). v1 is a
  * plain share link: no Google, Canvas or Microsoft account is connected, so
- * the teacher picks the class and the kind of post on the other side.
+ * the teacher picks the class and the kind of post on the other side. The
+ * link to copy comes first (Oct 21 review): nothing that looks like an LMS
+ * integration unless it is one, and Classroom's and Teams' share pages are
+ * offered as what they are.
  */
 import { useEffect, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
@@ -15,6 +18,7 @@ import {
   type ShareAudience,
   type ShareItem,
 } from '~/domain/lesson-planner/lesson-share';
+import { shortStandard } from '~/domain/lesson-planner/teacher-standards';
 import { cn } from '~/utils/misc';
 import { HEADING_FONT } from './theme';
 
@@ -106,33 +110,29 @@ export function PostToClass({ conversationId, title }: { conversationId: string;
           </label>
         ))}
       </div>
-      <p className="mt-3 text-xs text-white/60">
-        Google Classroom opens in a new tab. Pick your class there and post it as an announcement,
-        material or assignment.
-      </p>
       <button
         type="button"
-        data-testid="share-classroom"
+        data-testid="share-copy"
         disabled={!items.size || fetcher.state !== 'idle'}
-        onClick={() => share('classroom')}
-        className="mt-2 w-full rounded-lg bg-white py-2.5 text-sm font-semibold text-[var(--sv-ink)] transition hover:opacity-90 disabled:opacity-50"
+        onClick={() => share('copy')}
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-white py-2.5 text-sm font-semibold text-[var(--sv-ink)] transition hover:opacity-90 disabled:opacity-50"
       >
-        Share to Google Classroom
+        <Copy size={14} /> {copied ? 'Link copied' : 'Copy link'}
       </button>
+      <p data-testid="share-paste-hint" className="mt-2 text-xs text-white/60">
+        Paste it into Google Classroom, Canvas, Schoology or wherever your students look.
+      </p>
       <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-white/70">
-        <span>Elsewhere:</span>
-        {(['Canvas', 'Schoology'] as const).map((name) => (
-          <button
-            key={name}
-            type="button"
-            disabled={!items.size}
-            onClick={() => share('copy')}
-            title={`Copies the link; paste it into ${name}.`}
-            className="rounded-full border border-white/25 px-2.5 py-1 font-semibold text-white"
-          >
-            {name}
-          </button>
-        ))}
+        <span>Or open a share page:</span>
+        <button
+          type="button"
+          data-testid="share-classroom"
+          disabled={!items.size}
+          onClick={() => share('classroom')}
+          className="rounded-full border border-white/25 px-2.5 py-1 font-semibold text-white"
+        >
+          Google Classroom
+        </button>
         <button
           type="button"
           disabled={!items.size}
@@ -141,16 +141,11 @@ export function PostToClass({ conversationId, title }: { conversationId: string;
         >
           Teams
         </button>
-        <button
-          type="button"
-          data-testid="share-copy"
-          disabled={!items.size}
-          onClick={() => share('copy')}
-          className="inline-flex items-center gap-1 rounded-full border border-white/25 px-2.5 py-1 font-semibold text-white"
-        >
-          <Copy size={11} /> {copied ? 'Copied' : 'Copy link'}
-        </button>
       </div>
+      <p className="mt-1 text-[11px] text-white/50">
+        Google’s and Microsoft’s own share pages. They may ask which account to use; Yawp! is not
+        connected to them.
+      </p>
       {url ? (
         <p className="mt-2 break-all text-[11px] text-white/60" data-testid="share-link-text">
           {url}
@@ -160,7 +155,7 @@ export function PostToClass({ conversationId, title }: { conversationId: string;
   );
 }
 
-export function SendLesson({ conversationId }: { conversationId: string }) {
+export function SendLesson({ conversationId, standards = [] }: { conversationId: string; standards?: string[] }) {
   const fetcher = useFetcher<{ ok?: boolean; sentTo?: string; url?: string; error?: string }>();
   const [audience, setAudience] = useState<ShareAudience>('sub');
   const setup = AUDIENCE_SETUP[audience];
@@ -168,7 +163,12 @@ export function SendLesson({ conversationId }: { conversationId: string }) {
     Object.fromEntries(
       SHARE_AUDIENCES.map((key) => [
         key,
-        new Set(AUDIENCE_SETUP[key].items.filter((entry) => entry.checked).map((entry) => entry.item)),
+        new Set(
+          AUDIENCE_SETUP[key].items
+            // Standards only when the teacher named some: never an empty claim.
+            .filter((entry) => entry.checked && (entry.item !== 'standards' || standards.length))
+            .map((entry) => entry.item)
+        ),
       ])
     ) as Record<ShareAudience, Set<ShareItem>>
   );
@@ -224,7 +224,7 @@ export function SendLesson({ conversationId }: { conversationId: string }) {
                     type="checkbox"
                     // The roster needs the lesson tied to a real class, which
                     // lessons are not yet (plan, decision K6).
-                    disabled={entry.item === 'roster'}
+                    disabled={entry.item === 'roster' || (entry.item === 'standards' && !standards.length)}
                     checked={items.has(entry.item)}
                     onChange={() => {
                       const next = new Set(items);
@@ -237,7 +237,13 @@ export function SendLesson({ conversationId }: { conversationId: string }) {
                   <span>
                     {entry.label}
                     <span className="block text-xs text-[var(--sv-muted)]">
-                      {entry.item === 'roster' ? 'Coming once lessons are tied to your class list' : entry.hint}
+                      {entry.item === 'roster'
+                        ? 'Coming once lessons are tied to your class list'
+                        : entry.item === 'standards'
+                          ? standards.length
+                            ? `${entry.hint}: ${standards.map(shortStandard).join('; ')}`
+                            : 'Name a standard in the planner to include it'
+                          : entry.hint}
                     </span>
                   </span>
                 </label>

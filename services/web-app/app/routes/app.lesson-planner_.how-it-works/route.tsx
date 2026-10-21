@@ -657,13 +657,16 @@ export default function LessonPlannerHowItWorksRoute() {
                   <Copy>
                     <strong className="text-foreground">Post to your class</strong>{' '}
                     makes one link to a student page with the slides and handouts
-                    you check, ready for Google Classroom, Canvas or Schoology.
+                    you check. Copy it into Google Classroom, Canvas, Schoology or
+                    wherever your students look.
                   </Copy>
                   <Copy>
                     <strong className="text-foreground">Send this lesson</strong>{' '}
                     rewrites it for whoever is reading: a sub plan with exact
-                    times, a catch-up page for a student who missed class, or a
-                    note for a family or an admin.
+                    times, a catch-up page for a student who missed class, what
+                    the class did and why for a family (with ways to talk about
+                    it at dinner), or the plan for an admin, with the standards
+                    you named and an invitation to observe.
                   </Copy>
                 </Row>
               ) : null}
