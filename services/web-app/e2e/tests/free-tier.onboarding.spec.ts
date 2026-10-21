@@ -268,9 +268,6 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     ).toBeVisible({ timeout: 30_000 });
 
     await adminPage.goto(emailPayload.notRightPersonUrl!);
-    await adminPage.fill('input[name="adminName"]', 'Late Admin');
-    await adminPage.fill('input[name="adminEmail"]', `late-${stamp}@${ADMIN_DOMAIN}`);
-    await adminPage.getByRole('button', { name: /Forward request/i }).click();
     await expect(
       adminPage.getByRole('heading', { name: 'Already approved' })
     ).toBeVisible({ timeout: 30_000 });
