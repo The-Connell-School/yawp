@@ -26,6 +26,12 @@ mock.module('~/components/ui/tooltip', () => ({
       <span>{text}</span>
     </>
   ),
+  TooltipProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipRoot: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipContent: ({ children }: { children: ReactNode }) => (
+    <span>{children}</span>
+  ),
 }));
 
 
