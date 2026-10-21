@@ -26,6 +26,8 @@ import type {
 } from '~/domain/free-tier/inapp-usage';
 import { lessonPlanMonthWindow } from '~/utils/lesson-planner/month-window';
 import { cn } from '~/utils/misc';
+import { SiteLicenseLockedAssignmentTile } from '~/components/site-license-locked-assignment-tile';
+import type { SiteLicenseLockedAssignmentTile as SiteLicenseLockedTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
 
 export function useFreeAccountUsage() {
   return (
@@ -214,10 +216,12 @@ function FreeAccountUsageDetails({ usage }: { usage: FreeAccountUsage }) {
 export function FreeAssignmentTiles({
   usage,
   types,
+  lockedAssignmentTiles = [],
   onCreate,
 }: {
   usage: FreeAccountUsage;
   types: Array<{ id: string; kind?: string | null }>;
+  lockedAssignmentTiles?: SiteLicenseLockedTile[];
   onCreate: (id?: string) => void;
 }) {
   return (
@@ -267,6 +271,13 @@ export function FreeAssignmentTiles({
             </button>
           );
         })}
+        {lockedAssignmentTiles.map((tile) => (
+          <SiteLicenseLockedAssignmentTile
+            key={tile.key}
+            label={tile.label}
+            variant="dashboard"
+          />
+        ))}
       </div>
     </div>
   );
@@ -287,23 +298,40 @@ export function FreeAccountChecklist({ usage }: { usage: FreeAccountUsage }) {
         : '/app/my-classes',
     },
     {
-      label: 'Create your first assignment',
+      label: usage.monthly ? 'Give your first assignment' : 'Create your first assignment',
       done: usage.checklist.assignmentCreated,
       to: '/app/assignments',
-      hint: 'Class Starter is a good first one.',
+      hint: usage.monthly
+        ? 'A five-minute Class Starter is the easiest way to begin.'
+        : 'Class Starter is a good first one.',
     },
-    {
-      label: 'A student turns in writing',
-      done: usage.checklist.writingSubmitted,
-      to: '/app/documents',
-    },
-    {
-      label: 'Grade it',
-      done: usage.checklist.graded,
-      to: '/app/documents?status=needs-grading&reset=1',
-      hint: 'Using the grading assistant.',
-    },
+    ...(usage.monthly
+      ? [
+          {
+            label: 'See what your class needs',
+            done: usage.checklist.writingSubmitted,
+            to: usage.classId
+              ? `/app/my-classes/${usage.classId}`
+              : '/app/my-classes',
+            hint: 'Your Class Summary, after students submit.',
+          },
+        ]
+      : [
+          {
+            label: 'A student turns in writing',
+            done: usage.checklist.writingSubmitted,
+            to: '/app/documents',
+          },
+          {
+            label: 'Grade it',
+            done: usage.checklist.graded,
+            to: '/app/documents?status=needs-grading&reset=1',
+            hint: 'Using the grading assistant.',
+          },
+        ]),
   ];
+  const doneCount =
+    steps.filter((s) => s.done).length + (usage.monthly ? 1 : 0);
   return (
     <>
       <aside
@@ -311,12 +339,30 @@ export function FreeAccountChecklist({ usage }: { usage: FreeAccountUsage }) {
         data-testid="free-account-checklist"
       >
         <div className="flex items-baseline justify-between gap-2">
-          <h2 className="text-lg font-bold">Get your class going</h2>
+          <h2 className="text-lg font-bold">
+            {usage.monthly ? 'Your first steps' : 'Get your class going'}
+          </h2>
           <span className="text-xs text-muted-foreground">
-            {steps.filter((s) => s.done).length} of 4
+            {doneCount} of 4
           </span>
         </div>
         <ol className="mt-3">
+          {usage.monthly ? (
+            <li className="flex gap-3 border-t py-3 text-sm">
+              <span
+                aria-hidden="true"
+                className="flex size-[22px] shrink-0 items-center justify-center rounded-full border-2 border-emerald-800 bg-emerald-800 text-white"
+              >
+                <Check size={14} />
+              </span>
+              <span>
+                <span className="text-muted-foreground">Your class is ready</span>
+                <span className="mt-1 block text-[13px] text-muted-foreground">
+                  1 class · up to {usage.students.total} students
+                </span>
+              </span>
+            </li>
+          ) : null}
           {steps.map((step) => (
             <li key={step.label} className="border-t py-3">
               {usage.monthly &&
@@ -375,6 +421,7 @@ export function FreeAccountChecklist({ usage }: { usage: FreeAccountUsage }) {
         <StudentInvitationDialog
           returnFocusRef={invitationTriggerRef}
           code={usage.classCode}
+          freeTierCopy
           open={invitationOpen}
           onOpenChange={setInvitationOpen}
         />
@@ -403,7 +450,7 @@ export function FreeReporterLocked() {
             <Lock size={20} aria-hidden="true" />
           </span>
           <h2 className="text-xl font-bold leading-[1.35]">
-            Reporter comes with a YAWP! site license
+            Reporter comes with a Yawp! site license
           </h2>
           <ul className="flex flex-col gap-2.5 text-[15px]">
             <li className="flex gap-2.5">
@@ -436,12 +483,12 @@ export function FreeReporterLocked() {
 }
 
 export const FULL_ACCESS_CONTACT =
-  'mailto:hello@yawp.school?subject=More%20access%20to%20YAWP!';
+  'mailto:hello@yawp.school?subject=More%20access%20to%20Yawp!';
 export function AdvocatePackEntry() {
   return (
     <section className="rounded-xl border bg-popover p-5 shadow-sm">
       <h2 className="text-lg font-bold">
-        Loving what YAWP! is doing for your students' writing?
+        Loving what Yawp! is doing for your students' writing?
       </h2>
       <p className="mt-2 text-sm">
         A site license opens the full platform to you and your colleagues. Our
@@ -511,7 +558,7 @@ export function MonthlyUsageNotice({
       {count.remaining === 0 && (
         <div className="mt-3 flex flex-wrap gap-3">
           <Link to="/app/advocate-pack" className="text-primary underline">
-            Share YAWP! with my administrator
+            Share Yawp! with my administrator
           </Link>
           <a href={FULL_ACCESS_CONTACT} className="text-primary underline">
             Learn about site licenses

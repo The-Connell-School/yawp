@@ -11,13 +11,13 @@ test.describe('Public accessibility page', () => {
     ).toHaveAttribute('href', '/accessibility');
   });
 
-  test('publishes YAWP accessibility status and reporting contact', async ({
+  test('publishes Yawp! accessibility status and reporting contact', async ({
     page,
   }) => {
     await page.goto('/accessibility');
 
     await expect(
-      page.getByRole('heading', { name: 'Accessibility at YAWP!' })
+      page.getByRole('heading', { name: 'Accessibility at Yawp!' })
     ).toBeVisible();
     await expect(
       page.getByText('designed and evaluated for WCAG 2.1 Level AA support')

@@ -120,7 +120,7 @@ export default function UaBillingRoute() {
               ? 'The 2026 student license ended on December 31, 2026.'
               : suspended
                 ? UA_DISPUTE_SUSPENDED_MESSAGE
-                : 'Pay the one-time $35 semester fee to continue to YAWP! Access runs through December 31, 2026.'}
+                : 'Pay the one-time $35 semester fee to continue to Yawp! Access runs through December 31, 2026.'}
           </p>
           {actionData?.error ? (
             <p role="alert" className="text-sm text-destructive">

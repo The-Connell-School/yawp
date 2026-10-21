@@ -82,7 +82,6 @@ import {
   TourThisPageButton,
 } from '~/components/guided-tour/guided-tour';
 import { loadGuidedTours } from '~/domain/guided-tours/guided-tours.server';
-import { isDemoFreeTierRouteOpen } from '~/utils/free-tier/free-tier-feature-gate.server';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -114,8 +113,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const { isFreeTierEnabled } =
     await import('~/domain/feature-flags/feature-flags.server');
   const freeTierFeatureOn = await isFreeTierEnabled();
-  const freeTierRouteOpen =
-    freeTierFeatureOn || isDemoFreeTierRouteOpen(process.env);
+  const freeTierRouteOpen = freeTierFeatureOn;
   const { loadFreeTierGateApplication, enforceFreeTierTeacherGate } =
     await import('~/domain/free-tier/free-tier-gate.server');
   const freeTierApplication = freeTierRouteOpen

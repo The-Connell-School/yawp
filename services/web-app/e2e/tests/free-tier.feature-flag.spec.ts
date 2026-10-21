@@ -1,6 +1,7 @@
 import { expect, test } from '../test-setup';
 import { setFreeTierFlag } from '../feature-flags';
 import { createE2EPrismaClient } from '../prisma-client';
+import { fillFreeTierWaitlistForm } from '../helpers/free-tier-waitlist-form';
 
 test.describe.serial('Free tier feature flag', () => {
   test.afterAll(async () => {
@@ -43,12 +44,16 @@ test.describe.serial('Free tier feature flag', () => {
   test('onboarding waitlist works when the flag is on', async ({ page }) => {
     await setFreeTierFlag(true);
     await page.goto('/free');
-    await expect(page.getByRole('heading', { name: /Try YAWP/i })).toBeVisible();
-    await page.fill('input[name="name"]', 'Flag E2E');
-    await page.fill('input[name="email"]', `e2e-flag+${Date.now()}@yawp.local`);
-    await page.fill('input[name="schoolName"]', 'Flag High');
-    await page.fill('input[name="location"]', 'Local');
-    await page.fill('input[name="gradeLevel"]', '10');
+    await expect(
+      page.getByRole('heading', { name: /Welcome to Yawp!|Try Yawp!/i })
+    ).toBeVisible();
+    await fillFreeTierWaitlistForm(page, {
+      name: 'Flag E2E',
+      email: `e2e-flag+${Date.now()}@yawp.local`,
+      schoolName: 'Flag High',
+      location: 'Local',
+      gradeLevel: '10',
+    });
     await page.getByRole('button', { name: /Join the waitlist/i }).click();
     await expect(page.getByRole('status')).toContainText(/on the list/i);
   });

@@ -237,7 +237,7 @@ const WILL = [
   'Work with you. It asks about your class, and you make the calls on what’s best for it.',
   'Plan lessons and full units for your classes.',
   'Write the slides, handouts, answer keys, and exit tickets.',
-  'Use how your class has been scoring in YAWP! to aim the lesson.',
+  'Use how your class has been scoring in Yawp! to aim the lesson.',
   'Leave everything for you to edit before students see it.',
 ];
 
@@ -313,7 +313,7 @@ export default function LessonPlannerHowItWorksRoute() {
             <Eyebrow>Or start from your data</Eyebrow>
             <H3>“Plan this lesson,” from any Class Summary</H3>
             <Copy>
-              When YAWP! summarizes how a class did on an assignment, each
+              When Yawp! summarizes how a class did on an assignment, each
               suggested next step gets a{' '}
               <strong className="text-foreground">Plan this lesson</strong>{' '}
               link. The planner opens with the message already written from that
@@ -456,7 +456,7 @@ export default function LessonPlannerHowItWorksRoute() {
               <strong className="text-foreground">
                 Build the slide deck for this lesson
               </strong>{' '}
-              makes a real deck, timed to the same period. Present it from YAWP!
+              makes a real deck, timed to the same period. Present it from Yawp!
               or download it as PowerPoint.
             </Copy>
           </div>
@@ -464,7 +464,7 @@ export default function LessonPlannerHowItWorksRoute() {
             media={
               <Clip
                 name="present"
-                label="Presenting the lesson’s slide deck from YAWP!, with speaker notes opened beside a slide."
+                label="Presenting the lesson’s slide deck from Yawp!, with speaker notes opened beside a slide."
               />
             }
           >

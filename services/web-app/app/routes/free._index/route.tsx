@@ -209,10 +209,10 @@ export default function FreeTierLandingRoute() {
 
   const title = data.mode === 'token' && data.linkClosed
     ? 'This link is closed'
-    : submitSuccess?.headline ?? 'Try YAWP! with your students';
+    : submitSuccess?.headline ?? 'Try Yawp! with your students';
   const subtitle = submitted || (data.mode === 'token' && data.linkClosed)
     ? undefined
-    : data.mode === 'token' ? 'Use your event link to continue.'
+    : data.mode === 'token' ? 'Sign up below to start your free Yawp! classroom.'
     : 'Join the waitlist. We let teachers in a group at a time.';
 
   const contents = (

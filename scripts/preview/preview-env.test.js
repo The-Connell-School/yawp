@@ -254,7 +254,7 @@ describe('buildPreviewEnv', () => {
     expect(workflow).not.toContain(deprecatedTransportAuth);
     expect(workflow).toContain('PREVIEW_ACCESS_CODE=');
     expect(deploy).toContain('access-code.mjs');
-    expect(deploy).toContain('oven/bun:1.3.1');
+    expect(deploy).toContain('oven/bun:1.4.3');
     expect(deploy).toContain('bun scripts/preview/access-code.mjs --seats');
     expect(deploy).toContain('PREVIEW_ACCESS_CODES');
     expect(deploy).toContain('PREVIEW_ACCESS_SEATS');

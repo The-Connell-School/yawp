@@ -2,7 +2,6 @@ import type { Prisma } from '@app/prisma';
 import { lockStudentRosters } from '~/domain/collaboration/class-assignment-lock.server';
 import { prisma } from '~/utils/db.server';
 import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { isDemoFreeTierRouteOpen } from '~/utils/free-tier/free-tier-feature-gate.server';
 import {
   assertFreeClassSeatAvailableInTx,
   enrollStudentInClassWithSeatCap,
@@ -97,7 +96,7 @@ export async function resolveStudentClassCode(
     );
     return own.filter((_, index) => eligible[index]);
   }
-  if (!isDemoFreeTierRouteOpen(process.env) && !(await isFreeTierEnabled()))
+  if (!(await isFreeTierEnabled()))
     return [];
   // Fetch ids/details only server-side, at most two. Any collision fails closed;
   // eligibility filtering must not turn a collision into a different target.

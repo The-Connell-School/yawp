@@ -12,7 +12,7 @@ for (const width of [1280, 390]) {
       await page.evaluate(() => document.fonts.ready);
       const v2 = state.startsWith('v2');
       if (state.endsWith('form')) {
-        await expect(page.getByText(v2 ? "We're so glad you're here and we can't wait for you to YAWP with your students" : 'Join the waitlist. We let teachers in a group at a time.')).toBeVisible();
+        await expect(page.getByText(v2 ? /We're\ so\ glad\ you're\ here,\ and\ we\ can't\ wait\ for\ you\ to\ use\ Yawp!\ with\ your\ students\./ : 'Join the waitlist. We let teachers in a group at a time.')).toBeVisible();
         const name = page.getByRole('textbox', { name: v2 ? 'First and last name' : 'Your name', exact: true });
         await expect(name).toHaveAttribute('name', 'name');
         await expect(name).toHaveAttribute('required', '');
@@ -31,7 +31,7 @@ for (const width of [1280, 390]) {
         await expect(page.getByText('Your join link is on its way to ada@example.test.')).toBeVisible();
       } else {
         await expect(page.getByRole('status')).toContainText(v2 ? "You're on the list!" : "You're on the list");
-        await expect(page.getByText('We will email ada@example.test when your classroom is ready.')).toBeVisible();
+        await expect(page.getByText(v2 ? /We'll email you at ada@example\.test as soon as your spot opens up\./ : 'We will email ada@example.test when your classroom is ready.')).toBeVisible();
         if (v2) await expect(page.getByRole('status').locator('svg')).toHaveClass(/text-emerald-800/);
       }
       await expect(page.getByRole('link', { name: 'Terms of Service', exact: true })).toBeVisible();

@@ -1,7 +1,7 @@
 import { type ActionFunctionArgs } from 'react-router';
 import { signoutDestination } from '~/domain/unified-signon/teacher-prompts';
 import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
-import { SIGNON_TEACHER_PROMPTS_FLAG } from '~/domain/feature-flags/feature-flags';
+import { UNIFIED_SIGN_ON_FLAG } from '~/domain/feature-flags/feature-flags';
 import { logout } from '~/utils/auth.server.ts';
 
 const actionImpl = async ({ request }: ActionFunctionArgs) => {
@@ -10,7 +10,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
   );
   const redirectTo =
     requested === '/free' &&
-    (await isFeatureFlagEnabled(SIGNON_TEACHER_PROMPTS_FLAG))
+    (await isFeatureFlagEnabled(UNIFIED_SIGN_ON_FLAG))
       ? requested
       : '/auth/login';
   return logout({

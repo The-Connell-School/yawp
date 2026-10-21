@@ -71,7 +71,7 @@ describe('renderPreviewCompose', () => {
     expect(compose).not.toContain('\n  postgres:\n');
     expect(compose).not.toContain('image: postgres:16');
     expect(compose).toContain('toolbox:');
-    expect(compose).toContain('image: oven/bun:1.3.1');
+    expect(compose).toContain('image: oven/bun:1.4.3');
     expect(compose).toContain('yawp-pr-142-node-modules');
     expect(compose).not.toContain(
       'rm -rf services/web-app/.react-router services/web-app/.vite'
@@ -127,6 +127,27 @@ describe('renderPreviewCompose', () => {
     expect(compose).toContain('dockerfile: services/web-app/Dockerfile');
     expect(compose).toContain('target: deps');
     expect(compose).toContain('target: production');
+    expect(compose).not.toMatch(/build:[\s\S]*args:[\s\S]*DATABASE_URL/);
+  });
+
+  test('uses pre-built registry images for demo when image variables are set', () => {
+    const webImage =
+      '422348803522.dkr.ecr.us-east-1.amazonaws.com/yawp-demo-web:abc123def4567890abcdef1234567890abcdef12';
+    const toolboxImage =
+      '422348803522.dkr.ecr.us-east-1.amazonaws.com/yawp-demo-toolbox:abc123def4567890abcdef1234567890abcdef12';
+    const compose = renderCompose({
+      prNumber: undefined,
+      slug: 'demo',
+      runtime: 'production',
+      demoWebImage: webImage,
+      demoToolboxImage: toolboxImage,
+    });
+
+    expect(compose).toContain(`image: "${webImage}"`);
+    expect(compose).toContain(`image: "${toolboxImage}"`);
+    expect(compose).not.toContain('target: production');
+    expect(compose).not.toContain('target: deps');
+    expect(compose).not.toContain('build:');
   });
 
   test('joins the shared preview network for the host ingress', () => {

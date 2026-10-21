@@ -171,7 +171,7 @@ load_or_create_access_config() {
         -e PREVIEW_MASTER_ACCESS_CODE="${PREVIEW_MASTER_ACCESS_CODE:-}" \
         -v "$SOURCE_DIR:/app:ro" \
         -w /app \
-        oven/bun:1.3.1 \
+        oven/bun:1.4.3 \
         bun scripts/preview/access-code.mjs --seats
     )"
     printf '%s\n' "$PREVIEW_ACCESS_SEATS" > "$ACCESS_SEATS_FILE"
@@ -626,6 +626,30 @@ sha256_stream() {
   fi
 }
 
+demo_registry_images_configured() {
+  [[ -n "${DEMO_WEB_IMAGE:-}" && -n "${DEMO_TOOLBOX_IMAGE:-}" ]]
+}
+
+ecr_login_for_demo_images() {
+  local registry="${DEMO_WEB_IMAGE%%/*}"
+  [[ "$registry" =~ ^[0-9]+\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com$ ]] || {
+    echo "DEMO_WEB_IMAGE must be an ECR image URI" >&2
+    exit 1
+  }
+  aws ecr get-login-password --region "${AWS_REGION:-us-east-1}" \
+    | docker login --username AWS --password-stdin "$registry"
+}
+
+build_or_pull_production_images() {
+  local -a services=("$@")
+  if demo_registry_images_configured; then
+    ecr_login_for_demo_images
+    COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" pull "${services[@]}"
+  else
+    COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build "${services[@]}"
+  fi
+}
+
 compute_tooling_fingerprint() {
   (
     cd "$SOURCE_DIR"
@@ -698,6 +722,14 @@ compute_tooling_fingerprint() {
 }
 
 run_tooling_if_needed() {
+  local prisma_cli
+  if [[ "$SLUG" =~ ^pr-[1-9][0-9]*$ ]]; then
+    # PR application refs can predate reviewed control-plane scripts. Fast previews mount
+    # those scripts at /preview-control; do not require prisma-cli.sh in the PR checkout.
+    prisma_cli='PRISMA_CLI_REPO_ROOT=/app bash /preview-control/prisma-cli.sh'
+  else
+    prisma_cli='bash scripts/preview/prisma-cli.sh'
+  fi
   local fingerprint
   local previous_fingerprint=""
   fingerprint="$(compute_tooling_fingerprint)"
@@ -713,7 +745,7 @@ run_tooling_if_needed() {
   # Docker's layer cache keeps unchanged builds cheap while guaranteeing code-only refs
   # cannot silently restart the previously tagged image.
   if [[ "$RUNTIME" == "production" ]]; then
-    COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build web
+    build_or_pull_production_images web
   fi
 
   if [[ "$DATABASE_CREATED" == "0" && "$fingerprint" == "$previous_fingerprint" && -z "$missing_artifacts" ]]; then
@@ -724,31 +756,31 @@ run_tooling_if_needed() {
     # Bundle availability is required before serving code-only demo updates.
     # Run this separately from optional fixture seeds so failure aborts rollout.
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-free-tier-bundle-assignment-types.ts" ]]; then
-      "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && cd packages/prisma && bun run seed-free-tier-bundle-assignment-types'
+      "${compose[@]}" run --rm toolbox bash -lc "$prisma_cli generate && cd packages/prisma && bun run seed-free-tier-bundle-assignment-types"
     fi
-    local skip_path_seeds='bun prisma generate'
+    local skip_path_seeds="$prisma_cli generate && cd packages/prisma"
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-ap-history-library.ts" ]]; then
       skip_path_seeds+=' && bun run seed-ap-history-library'
     fi
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-planner-qa.ts" ]]; then
       skip_path_seeds+=' && bun run seed-preview-planner-qa'
     fi
-    if [[ "$skip_path_seeds" != 'bun prisma generate' ]]; then
+    if [[ "$skip_path_seeds" != "$prisma_cli generate && cd packages/prisma" ]]; then
       echo "Running idempotent preview seeds on existing database (skip path)."
       if ! "${compose[@]}" run --rm toolbox bash -lc "$skip_path_seeds"; then
         echo "Warning: idempotent preview seeds failed; continuing deploy (non-fatal)." >&2
       fi
     fi
     if should_run_signon_qa_seed && [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-signon-qa.ts" ]]; then
-      "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && cd packages/prisma && bun run seed-preview-signon-qa'
+      "${compose[@]}" run --rm toolbox bash -lc "$prisma_cli generate && cd packages/prisma && bun run seed-preview-signon-qa"
     fi
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/seed-free-tier-ship-review.ts" ]] && should_run_free_tier_ship_review_seed; then
       echo "Running free-tier ship-review fixture seed on existing preview database (skip path)."
-      "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && bun run seed-free-tier-ship-review'
+      "${compose[@]}" run --rm toolbox bash -lc "$prisma_cli generate && cd packages/prisma && bun run seed-free-tier-ship-review"
     fi
     if [[ -f "$SOURCE_DIR/packages/prisma/scripts/apply-daily-pages-engagement-v2-seed.ts" ]]; then
       echo "Applying Daily Pages engagement v2 preview seed on existing database (skip path)."
-      "${compose[@]}" run --rm toolbox bash -lc 'bun prisma generate && (bun run scripts/apply-daily-pages-engagement-v2-seed.ts || true)'
+      "${compose[@]}" run --rm toolbox bash -lc "$prisma_cli generate && cd packages/prisma && (bun run scripts/apply-daily-pages-engagement-v2-seed.ts || true)"
     fi
     return 0
   fi
@@ -762,7 +794,7 @@ run_tooling_if_needed() {
   fi
 
   local tooling_command
-  tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy'
+  tooling_command="bun install --ignore-scripts && ${prisma_cli} generate && (${prisma_cli} migrate deploy || ${prisma_cli} migrate deploy) && cd packages/prisma"
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/backfill-class-art-key.ts" ]]; then
     tooling_command+=' && bun run scripts/backfill-class-art-key.ts'
   fi
@@ -824,7 +856,7 @@ prebuild_production_images() {
   [[ "$RUNTIME" == "production" ]] || return 0
   # Complete every fallible image build before an explicit demo reset can touch data.
   # Docker's layer cache keeps unchanged builds cheap while code-only refs still rebuild.
-  COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build web toolbox
+  build_or_pull_production_images web toolbox
 }
 
 ensure_preview_seats() {
@@ -873,6 +905,8 @@ rollout_demo_web_without_downtime() {
     PREVIEW_ACCESS_CODE="$smoke_access_code" \
     PREVIEW_DATA_MODE="$DATA_MODE" \
     PREVIEW_RUNTIME="$RUNTIME" \
+    PREVIEW_SLUG="$SLUG" \
+    PR_NUMBER="${PR_NUMBER:-}" \
     PREVIEW_DEV_LOGIN_EMAIL="$PREVIEW_DEV_LOGIN_EMAIL" \
     PREVIEW_LOGIN_EMAIL="${PREVIEW_LOGIN_EMAIL:-}" \
     PREVIEW_LOGIN_PASSWORD="${PREVIEW_LOGIN_PASSWORD:-}" \
@@ -964,6 +998,9 @@ for attempt in $(seq 1 90); do
   if curl -fsS --connect-timeout 1 --max-time 2 "$health_url" >/dev/null; then
     PREVIEW_BASE_URL="$login_url" \
       PREVIEW_DATA_MODE="$DATA_MODE" \
+      PREVIEW_RUNTIME="$RUNTIME" \
+      PREVIEW_SLUG="$SLUG" \
+      PR_NUMBER="${PR_NUMBER:-}" \
       PREVIEW_ACCESS_CODE="$smoke_access_code" \
       node "$SCRIPT_DIR/smoke-login.mjs"
     end_ms="$(date +%s%3N)"

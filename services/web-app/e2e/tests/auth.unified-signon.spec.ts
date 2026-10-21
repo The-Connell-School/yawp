@@ -97,8 +97,8 @@ for (const width of [1280, 390]) {
       [
         'class-found',
         [
-          "I'm new to YAWP Create an account",
-          'I already have an account Sign in to join',
+          'New Create an account',
+          'Returning Sign in with your handle',
         ],
       ],
       [
@@ -263,7 +263,7 @@ test('class choice and account-type paths keep join context without server effec
     if (request.method() !== 'GET') calls.push(request.url());
   });
   await page.goto('/e2e/fixtures/unified-signon/index.html?state=class-found');
-  await page.getByRole('button', { name: "I'm new to YAWP" }).click();
+  await page.getByRole('button', { name: /^New/ }).click();
   await expect(
     page.getByRole('heading', { name: 'Create your account' })
   ).toBeVisible();
@@ -338,7 +338,7 @@ for (const mode of ['handle', 'email']) {
     await page.goto(
       `/e2e/fixtures/unified-signon/index.html?state=class-found${mode === 'email' ? '-email' : ''}&redirectTo=%2Fapp%2Fmy-classes`
     );
-    await page.getByRole('button', { name: "I'm new to YAWP" }).click();
+    await page.getByRole('button', { name: /^New/ }).click();
     const target = mode === 'email' ? 'class-email' : 'class-handle';
     await expect(page.locator('[data-signon-screen]')).toHaveAttribute(
       'data-signon-screen',
@@ -349,7 +349,7 @@ for (const mode of ['handle', 'email']) {
       .getByRole('button', { name: 'I already have an account' })
       .click();
     await page
-      .getByRole('button', { name: 'Create a YAWP! account' })
+      .getByRole('button', { name: 'Create a Yawp! account' })
       .click();
     await expect(page.locator('[data-signon-screen]')).toHaveAttribute(
       'data-signon-screen',

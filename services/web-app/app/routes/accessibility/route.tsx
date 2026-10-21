@@ -2,27 +2,27 @@ import type { MetaFunction } from 'react-router';
 import type { ReactNode } from 'react';
 
 export const meta: MetaFunction = () => [
-  { title: 'Accessibility at YAWP! | YAWP! Writing Program' },
+  { title: 'Accessibility at Yawp! | Yawp! Writing Program' },
   {
     name: 'description',
     content:
-      'Accessibility information for the YAWP! Writing Program, including WCAG 2.1 Level AA support, known limitations, and how to report an accessibility issue.',
+      'Accessibility information for the Yawp! Writing Program, including WCAG 2.1 Level AA support, known limitations, and how to report an accessibility issue.',
   },
   {
     property: 'og:title',
-    content: 'Accessibility at YAWP! | YAWP! Writing Program',
+    content: 'Accessibility at Yawp! | Yawp! Writing Program',
   },
   {
     property: 'og:description',
     content:
-      'YAWP! documents WCAG 2.1 Level AA accessibility support and provides an accessibility contact path for schools, teachers, students, and evaluators.',
+      'Yawp! documents WCAG 2.1 Level AA accessibility support and provides an accessibility contact path for schools, teachers, students, and evaluators.',
   },
   { property: 'og:type', content: 'website' },
 ];
 
 const supportEmail = 'yawp@theconnellschool.com';
 const supportHref =
-  'mailto:yawp@theconnellschool.com?subject=YAWP!%20accessibility%20support';
+  'mailto:yawp@theconnellschool.com?subject=Yawp!%20accessibility%20support';
 
 function Header() {
   return (
@@ -31,14 +31,14 @@ function Header() {
         <a
           className="inline-flex items-center gap-3 font-semibold text-foreground"
           href="/"
-          aria-label="YAWP! home"
+          aria-label="Yawp! home"
         >
           <img
             className="h-10 w-10 rounded-full"
             src="/img/landing/yawp-logo-circle.jpg"
             alt=""
           />
-          <span>YAWP!</span>
+          <span>Yawp!</span>
         </a>
         <nav
           aria-label="Public accessibility navigation"
@@ -85,11 +85,11 @@ export default function AccessibilityRoute() {
             Accessibility
           </p>
           <h1 className="mt-3 text-4xl font-semibold tracking-normal text-foreground sm:text-5xl">
-            Accessibility at YAWP!
+            Accessibility at Yawp!
           </h1>
           <p className="mt-5 text-lg leading-8 text-muted-foreground">
-            YAWP! is a classroom writing platform for middle school, high
-            school, and college use. The YAWP! product is designed and
+            Yawp! is a classroom writing platform for middle school, high
+            school, and college use. The Yawp! product is designed and
             evaluated for WCAG 2.1 Level AA support across the product flows
             schools use to teach, write, review, and grade.
           </p>
@@ -107,7 +107,7 @@ export default function AccessibilityRoute() {
 
         <Section title="Accessibility Support">
           <p>
-            YAWP! uses semantic browser controls where possible, visible focus
+            Yawp! uses semantic browser controls where possible, visible focus
             styles in shared controls, labeled form patterns, keyboard-capable
             editor foundations, and accessible component primitives for menus,
             dialogs, tabs, switches, and similar controls.
@@ -128,7 +128,7 @@ export default function AccessibilityRoute() {
             Student writing workflows do not require audio or video playback.
             Teacher&apos;s Lounge video modules can include WebVTT captions and
             transcript resources. When captions and transcripts are present,
-            YAWP! exposes captions through the video player and provides
+            Yawp! exposes captions through the video player and provides
             transcript and caption download links on the module page.
           </p>
         </Section>

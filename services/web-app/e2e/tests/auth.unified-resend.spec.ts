@@ -150,7 +150,7 @@ for (const width of [1280, 390])
       );
       // Boolean checks keep identifiers and signed links out of assertion output.
       expect(mail.to === email).toBe(true);
-      expect(mail.subject === "You're in — start your YAWP! classroom").toBe(
+      expect(mail.subject === "You're in — start your Yawp! classroom!").toBe(
         true
       );
       expect(mail.text.includes('/free/join?t=')).toBe(true);
@@ -203,7 +203,7 @@ for (const width of [1280, 390])
       ).toBe(1);
     });
 for (const width of [1280, 390])
-  test(`flag-OFF login signup and free-trial controls at ${width}`, async ({
+  test(`preview fixture keeps unified sign-on when setting is false at ${width}`, async ({
     page,
   }) => {
     await db.setting.update({
@@ -217,10 +217,12 @@ for (const width of [1280, 390])
       ['/free', 'free-trial'],
     ]) {
       await page.goto(route);
-      if (name === 'login')
+      if (name === 'login') {
+        await expect(page.locator('[data-signon-screen]')).toBeVisible();
         await expect(
           page.getByRole('heading', { name: 'Welcome back!' })
-        ).toBeVisible();
+        ).toHaveCount(0);
+      }
       if (name === 'free-trial')
         await expect(
           page.getByRole('button', { name: /waitlist|submit|continue|trial/i })

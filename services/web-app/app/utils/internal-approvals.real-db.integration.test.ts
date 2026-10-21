@@ -10,7 +10,7 @@ const local = enabled ? test : test.skip;
 const prefix = `i1-${Date.now()}`;
 const secret = 'local-i1-integration-secret-at-least-32';
 const saved = { ...process.env };
-const flags = ['feature_flag.free_tier', 'feature_flag.free-tier-onboarding-v2'];
+const flags = ['feature_flag.free_tier'];
 let savedFlags: { name: string; value: string }[] = [];
 let validated = false;
 const ids: string[] = [];
@@ -28,10 +28,16 @@ const approvalResendHttp = (request: Request, id?: string) => action({ request, 
 const base = new Date();
 const clock = (elapsed = 0) => setSystemTime(new Date(+base + elapsed));
 const dynamicIds: string[] = [];
-async function flag(mode = 'targeted') {
-  await prisma.setting.update({ where: { name: flags[1] }, data: {
-    value: JSON.stringify({ mode, orgIds: mode === 'targeted' ? [prefix] : [] }),
-  } });
+async function flag(mode: 'off' | 'everyone' | 'targeted' = 'everyone') {
+  await prisma.setting.update({
+    where: { name: flags[0] },
+    data: {
+      value: JSON.stringify({
+        mode,
+        orgIds: mode === 'targeted' ? [prefix] : [],
+      }),
+    },
+  });
 }
 async function fixture() {
   clock(); delivery.mockClear();
@@ -61,7 +67,10 @@ afterEach(async () => {
   setSystemTime();
   await prisma.freeTierApplication.deleteMany({ where: { id: { in: dynamicIds } } });
   dynamicIds.length = 0;
-  await flag('off');
+  await prisma.setting.update({
+    where: { name: flags[0] },
+    data: { value: 'true' },
+  });
 });
 function request(path: string, body?: unknown, key = 'one') {
   const url = 'http://localhost/api/internal/v1/free-tier/approval/' + path;
@@ -237,8 +246,11 @@ local('signed resend recovers migrated legacy acceptance and its cooldown withou
     { applicationId: app.id, kind: 'admin_approval_reminder', toEmail: approval.adminEmail, success: false, createdAt: new Date(+base + 600000) },
   ] });
   await flag('off');
-  expect((await detail(app.id)).adminRequest).toMatchObject({ reminderCount: 1, lastReminderSource: null, lastReminderAt: new Date(+base + 1000).toISOString() });
-  await flag(); clock(600999);
+  expect((await approvalDetail(request('applications/' + app.id))).status).toBe(
+    404
+  );
+  await flag();
+  clock(600999);
   expect(await outcome(await resend(app.id, app.id + '-early'), 409)).toEqual({ error: 'rate_limited' });
   clock(601000);
   expect(await outcome(await resend(app.id, app.id + '-exact'), 200)).toMatchObject({ reminderCount: 2 });
@@ -262,21 +274,39 @@ local('automatic and signed manual reminders share the three-reminder cap and pe
   expect(await prisma.freeTierApprovalDelivery.count({ where: { approvalId: approval.id, kind: 'admin_reminder', state: 'SENT' } })).toBe(3);
   expect(delivery).toHaveBeenCalledTimes(5); // Three reminders, two teacher follow-ups.
   await flag('off');
-  const filtered = await (await approvalQueue(request('queue?q=' + prefix + '&needsFollowUp=true&limit=1'))).json();
-  expect(filtered.applications.map((row: any) => row.id)).toEqual([app.id]);
-  expect(filtered.counts).toEqual({ ADMIN_SUBMITTED: 0, MANUAL_REVIEW: 0, SENT: 1 });
-  expect(filtered.nextCursor).toBeNull();
+  expect(
+    (await approvalQueue(request('queue?q=' + prefix + '&needsFollowUp=true&limit=1')))
+      .status
+  ).toBe(404);
 });
 
 local('flag-off, untargeted and missing-user signed writes never enter legacy delivery', async () => {
   const { app, approval } = await fixture();
-  for (const mode of ['off', 'targeted']) {
+  for (const mode of ['off', 'targeted'] as const) {
     await flag(mode);
-    if (mode === 'targeted') await prisma.freeTierApplication.update({ where: { id: app.id }, data: { organizationId: 'untargeted' } });
-    expect(await outcome(await resend(app.id, app.id + mode), 409)).toEqual({ error: 'flag_off' });
+    if (mode === 'targeted')
+      await prisma.freeTierApplication.update({
+        where: { id: app.id },
+        data: { organizationId: 'untargeted' },
+      });
+    if (mode === 'off') {
+      expect(await outcome(await resend(app.id, app.id + mode), 404)).toEqual({
+        error: 'Not found',
+      });
+    } else {
+      expect(await outcome(await resend(app.id, app.id + mode), 404)).toEqual({
+        error: 'Not found',
+      });
+    }
   }
-  await prisma.freeTierApplication.update({ where: { id: app.id }, data: { organizationId: prefix, userId: null } });
-  expect(await outcome(await resend(app.id, app.id + '-no-user'), 409)).toEqual({ error: 'flag_off' });
+  await flag('everyone');
+  await prisma.freeTierApplication.update({
+    where: { id: app.id },
+    data: { organizationId: prefix, userId: null },
+  });
+  expect(await outcome(await resend(app.id, app.id + '-no-user'), 409)).toEqual({
+    error: 'flag_off',
+  });
   expect(delivery).not.toHaveBeenCalled();
   expect(await prisma.freeTierApprovalDelivery.count({ where: { approvalId: approval.id } })).toBe(0);
   expect(await prisma.freeTierEmailLog.count({ where: { applicationId: app.id } })).toBe(0);

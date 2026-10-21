@@ -899,7 +899,7 @@ async function seedBareLessonPlan(e2eContext: {
   }
 }
 
-test.describe('YAWP! Lesson Planner', () => {
+test.describe('Yawp! Lesson Planner', () => {
   test.afterEach(async ({ e2eContext }) => {
     // Seeded lessons would otherwise pile up across tests and retries, and the
     // library legitimately shows every one of them.

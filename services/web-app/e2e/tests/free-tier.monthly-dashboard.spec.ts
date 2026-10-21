@@ -43,17 +43,15 @@ test.beforeEach(async () => {
   });
 });
 test.afterAll(async () => {
-  await flag('free-tier-onboarding-v2', false);
+  await flag('free-tier', false);
   await db.$disconnect();
 });
 test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dialog', async ({
   page,
   context,
 }) => {
-  await flag('free_tier', true);
-  await flag('free-tier-inapp-v2', true);
+  await flag('free-tier', { mode: 'targeted', orgIds: [org] });
   await flag('lesson_planner', true);
-  await flag('free-tier-onboarding-v2', { mode: 'targeted', orgIds: [org] });
   const emptyClass = await db.class.findFirstOrThrow({
     where: { school: { organizationId: org }, isArchived: false },
   });
@@ -87,7 +85,7 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
     ).toBeVisible();
     const rail = page.getByTestId('free-account-rail');
     await expect(rail.locator('section').last()).toContainText(
-      "Loving what YAWP! is doing for your students' writing?"
+      "Loving what Yawp! is doing for your students' writing?"
     );
     expect(
       await rail
@@ -204,10 +202,8 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
 });
 for (const control of ['flag-off', 'untargeted', 'paid', 'pending'] as const)
   test(`compatibility ${control}`, async ({ page }) => {
-    await flag('free_tier', true);
-    await flag('free-tier-inapp-v2', true);
     await flag(
-      'free-tier-onboarding-v2',
+      'free-tier',
       control === 'flag-off'
         ? false
         : {
@@ -259,10 +255,8 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
     baseline,
     'Consumer behavior is implemented after the main-baseline captures'
   );
-  await flag('free_tier', true);
-  await flag('free-tier-inapp-v2', true);
+  await flag('free-tier', { mode: 'targeted', orgIds: [org] });
   await flag('lesson_planner', true);
-  await flag('free-tier-onboarding-v2', { mode: 'targeted', orgIds: [org] });
   await login(page);
   const klass = await db.class.findFirstOrThrow({
     where: { school: { organizationId: org }, isArchived: false },
@@ -473,7 +467,7 @@ test('monthly zero/exhausted direct requests, saved reads and unlimited assignme
           })
         ).toBeVisible();
         await expect(
-          page.getByRole('link', { name: 'Share YAWP! with my administrator' })
+          page.getByRole('link', { name: 'Share Yawp! with my administrator' })
         ).toHaveAttribute('href', '/app/advocate-pack');
         await expect(
           page.getByRole('link', { name: 'Learn about site licenses' })

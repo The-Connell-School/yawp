@@ -16,9 +16,9 @@ const db = createE2EPrismaClient();
 const shots = process.env.APPROVAL_V2_EVIDENCE_DIR;
 async function flag(mode: 'off' | 'everyone' | 'targeted') {
   await db.setting.upsert({
-    where: { name: 'feature_flag.free-tier-onboarding-v2' },
+    where: { name: 'feature_flag.free_tier' },
     create: {
-      name: 'feature_flag.free-tier-onboarding-v2',
+      name: 'feature_flag.free_tier',
       value: JSON.stringify({ mode, orgIds: ['another-org'] }),
     },
     update: { value: JSON.stringify({ mode, orgIds: ['another-org'] }) },
@@ -243,7 +243,7 @@ for (const width of [1280, 390])
     await flag('everyone');
     await page.reload();
     await expect(
-      page.getByRole('heading', { name: 'About YAWP!' })
+      page.getByRole('heading', { name: 'About Yawp!' })
     ).toBeVisible();
     await expect(page.locator('[data-guide-slot=administrator]')).toHaveCount(
       1
@@ -271,7 +271,7 @@ for (const width of [1280, 390])
     ).toBeVisible();
     await capture(page, `${width}-admin`);
     await page
-      .getByRole('button', { name: 'Approve YAWP!', exact: true })
+      .getByRole('button', { name: 'Approve Yawp!', exact: true })
       .click();
     await expect(page.getByLabel('Your role')).toHaveAttribute(
       'aria-invalid',

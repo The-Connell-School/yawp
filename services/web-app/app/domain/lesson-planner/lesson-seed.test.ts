@@ -56,8 +56,8 @@ describe('buildLessonSeed', () => {
     assignmentTitle: 'The Crucible argument essay',
   });
 
-  test('uses the YAWP! brand in the prefilled planner ask', () => {
-    expect(seed.prompt).toContain("YAWP!'s class summary");
+  test('uses the Yawp! brand in the prefilled planner ask', () => {
+    expect(seed.prompt).toContain("Yawp!'s class summary");
     expect(seed.prompt).not.toContain("Yawp's class summary");
   });
 

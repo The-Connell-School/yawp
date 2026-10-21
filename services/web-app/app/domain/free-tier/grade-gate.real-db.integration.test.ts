@@ -10,7 +10,7 @@ import { signInternalApiRequest } from '~/utils/internal-platform-auth.server';
 const enabled = process.env.GRADE_GATE_LOCAL_TEST === '1';
 const local = enabled ? test : test.skip;
 const prefix = `grade-gate-${Date.now()}`;
-const flag = 'feature_flag.free-tier-onboarding-v2';
+const flag = 'feature_flag.free_tier';
 const baseFlag = 'feature_flag.free_tier';
 const savedEnv = { ...process.env };
 let savedFlags: any[] = [];

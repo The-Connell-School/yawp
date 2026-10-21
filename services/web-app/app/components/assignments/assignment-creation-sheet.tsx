@@ -81,6 +81,8 @@ import {
   type ExitTicketGradingDraft,
 } from './exit-ticket-builder';
 import { cn } from '~/utils/misc';
+import { SiteLicenseLockedAssignmentTile } from '~/components/site-license-locked-assignment-tile';
+import type { SiteLicenseLockedAssignmentTile as SiteLicenseLockedTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
 import { toDateInputValue } from '~/utils/date-only';
 import {
   assignmentTypeUsesDailyPagesEngagementRubric,
@@ -264,6 +266,7 @@ export type AssignmentCreationSheetProps = {
   onOpenChange: (open: boolean) => void;
   entryPoint: AssignmentCreationEntryPoint;
   assignmentTypes: AssignmentCreationAssignmentType[];
+  siteLicenseLockedAssignmentTiles?: SiteLicenseLockedTile[];
   teacherClasses: AssignmentCreationClassOption[];
   fixedAssignmentTypeId?: string;
   initialAssignmentTypeId?: string;
@@ -555,6 +558,13 @@ export function AssignmentCreationSheet({
                 </button>
               );
             })}
+            {(props.siteLicenseLockedAssignmentTiles ?? []).map((tile) => (
+              <SiteLicenseLockedAssignmentTile
+                key={tile.key}
+                label={tile.label}
+                variant="picker"
+              />
+            ))}
           </div>
           <p className="mt-5 text-xs text-muted-foreground">
             {usage.monthly
@@ -1915,7 +1925,7 @@ export function AssignmentCreationSheetContent({
               <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
                 {isEditing
                   ? 'Collaboration cannot be switched on or off after an assignment is created — groups may already be writing in shared drafts.'
-                  : 'You must assign every student to a group before students can open this assignment. You can arrange groups yourself, shuffle automatically, or use the whole class. Students cannot create groups, move themselves, or create shared documents. When you finalize the groups, Yawp creates one shared document for each group.'}
+                  : 'You must assign every student to a group before students can open this assignment. You can arrange groups yourself, shuffle automatically, or use the whole class. Students cannot create groups, move themselves, or create shared documents. When you finalize the groups, Yawp! creates one shared document for each group.'}
               </p>
               {collaborationEnabled && !isEditing ? (
                 <div className="mt-3 space-y-3 pl-[calc(1rem+0.625rem)]">

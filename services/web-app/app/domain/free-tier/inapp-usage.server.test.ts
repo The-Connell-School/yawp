@@ -7,31 +7,39 @@ const classRead = mock(async (..._args: any[]) => ({
   code: 'CLASS',
 }));
 const count = mock(async () => 0);
-let v2Value: string | null = null;
-let onboarding = false;
-let freeTier = true;
+let freeTierValue: string | null = 'true';
+const settingRows = () => ({
+  'feature_flag.free_tier': freeTierValue,
+  'feature_flag.free-tier-onboarding-v2': null,
+  'feature_flag.free-tier-inapp-v2': null,
+  'free_tier.limits.v1': JSON.stringify({
+    studentSeatCap: 10,
+    lessonPlannerMonthly: 0,
+    reporterMonthly: 100,
+    version: 1,
+    updatedAt: '2026-10-16T00:00:00.000Z',
+    updatedByEmail: 'staff@example.test',
+  }),
+});
 const settingRead = mock(async ({ where }: any) => {
-  if (where.name === 'free_tier.limits.v1')
-    return {
-      value: JSON.stringify({
-        studentSeatCap: 10,
-        lessonPlannerMonthly: 0,
-        reporterMonthly: 100,
-        version: 1,
-        updatedAt: '2026-10-16T00:00:00.000Z',
-        updatedByEmail: 'staff@example.test',
-      }),
-    };
-  if (where.name === 'feature_flag.free-tier-onboarding-v2')
-    return { value: String(onboarding) };
-  const value =
-    where.name === 'feature_flag.free_tier' ? String(freeTier) : v2Value;
-  return value === null ? null : { value };
+  const rows = settingRows();
+  const value = rows[where.name as keyof typeof rows];
+  return value === null || value === undefined ? null : { value };
+});
+const settingReadMany = mock(async ({ where }: any) => {
+  const rows = settingRows();
+  return where.name.in
+    .map((name: string) =>
+      rows[name as keyof typeof rows] == null
+        ? null
+        : { name, value: rows[name as keyof typeof rows]! }
+    )
+    .filter(Boolean);
 });
 mock.module('~/utils/db.server', () => ({
   prisma: {
     freeTierApplication: { findFirst: async () => ({ id: 'approved' }) },
-    setting: { findUnique: settingRead },
+    setting: { findUnique: settingRead, findMany: settingReadMany },
     class: { findFirst: classRead },
     document: { count },
   },
@@ -62,19 +70,20 @@ const profile = {
   organization: { id: 'org', plan: 'FREE_CLASSROOM' },
 };
 beforeEach(() => {
-  v2Value = 'true';
-  onboarding = false;
-  freeTier = true;
+  freeTierValue = 'true';
   classRead.mockClear();
   count.mockClear();
   settingRead.mockClear();
+  settingReadMany.mockClear();
 });
 const { readFreeAccountUsage } = await import('./inapp-usage.server');
 test('adapter reads authoritative usage, including invites and lifetime counts', async () => {
+  freeTierValue = '{"mode":"targeted","orgIds":["org"]}';
   const usage = await readFreeAccountUsage(profile, true);
-  expect(usage!.students.remaining).toBe(21);
+  expect(usage!.students.total).toBe(10);
+  expect(usage!.students.remaining).toBe(0);
   expect(usage!.assignments.map((row) => row.remaining)).toEqual([9, 0, 3]);
-  expect(usage!.lessonPlans.remaining).toBe(3);
+  expect(usage!.lessonPlans.remaining).toBe(0);
   expect(classRead.mock.calls[0][0].where).toMatchObject({
     school: { organizationId: 'org' },
     teachers: { some: { id: 'teacher' } },
@@ -86,8 +95,8 @@ test('adapter reads authoritative usage, including invites and lifetime counts',
     graded: false,
   });
 });
-test('onboarding v2 usage reflects configured caps without hiding excess students', async () => {
-  onboarding = true;
+test('free tier usage reflects configured caps without hiding excess students', async () => {
+  freeTierValue = '{"mode":"everyone","orgIds":[]}';
   const usage = await readFreeAccountUsage(profile, true);
   expect(usage!.students.total).toBe(10);
   expect(usage!.students.remaining).toBe(0);
@@ -100,58 +109,74 @@ test('onboarding v2 usage reflects configured caps without hiding excess student
 });
 
 for (const value of [null, 'false', '{"mode":"off","orgIds":[]}']) {
-  test(`no v2 usage queries with missing/off Setting: ${value}`, async () => {
-    v2Value = value;
+  test(`no usage queries with missing/off Setting: ${value}`, async () => {
+    freeTierValue = value;
     expect(await readFreeAccountUsage(profile, true)).toBeNull();
     expect(classRead).not.toHaveBeenCalled();
     expect(count).not.toHaveBeenCalled();
   });
 }
-test('free-tier off prevents usage reads even with v2 on', async () => {
+test('free-tier off prevents usage reads even when route gate is open', async () => {
   expect(await readFreeAccountUsage(profile, false)).toBeNull();
-  expect(settingRead).not.toHaveBeenCalled();
+  expect(settingReadMany).not.toHaveBeenCalled();
   expect(classRead).not.toHaveBeenCalled();
 });
 for (const change of [
   { role: 'STUDENT' },
   { organization: { id: 'org', plan: 'SCHOOL' } },
 ]) {
-  test(`ineligible account does not read v2 usage: ${JSON.stringify(change)}`, async () => {
+  test(`ineligible account does not read usage: ${JSON.stringify(change)}`, async () => {
     expect(
       await readFreeAccountUsage({ ...profile, ...change }, true)
     ).toBeNull();
-    expect(settingRead).not.toHaveBeenCalled();
+    expect(settingReadMany).not.toHaveBeenCalled();
     expect(classRead).not.toHaveBeenCalled();
   });
 }
 const { isFreeTierInappV2Enabled } =
   await import('./inapp-feature-gate.server');
-test('independent loader gate requires both flags', async () => {
-  freeTier = false;
-  expect(await isFreeTierInappV2Enabled(profile)).toBe(false);
-  freeTier = true;
-  expect(await isFreeTierInappV2Enabled(profile)).toBe(true);
-  v2Value = null;
-  expect(await isFreeTierInappV2Enabled(profile)).toBe(false);
+test('loader gate requires free tier for the organization on production', async () => {
+  const previous = process.env.YAWP_ENVIRONMENT;
+  process.env.YAWP_ENVIRONMENT = 'production';
+  try {
+    freeTierValue = 'false';
+    expect(await isFreeTierInappV2Enabled(profile)).toBe(false);
+    freeTierValue = '{"mode":"targeted","orgIds":["org"]}';
+    expect(await isFreeTierInappV2Enabled(profile)).toBe(true);
+    freeTierValue = '{"mode":"targeted","orgIds":["other"]}';
+    expect(await isFreeTierInappV2Enabled(profile)).toBe(false);
+  } finally {
+    if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
+    else process.env.YAWP_ENVIRONMENT = previous;
+  }
 });
 test('targeting respects the authenticated organization', async () => {
-  v2Value = '{"mode":"targeted","orgIds":["other"]}';
+  freeTierValue = '{"mode":"targeted","orgIds":["other"]}';
   expect(await readFreeAccountUsage(profile, true)).toBeNull();
   expect(classRead).not.toHaveBeenCalled();
-  v2Value = '{"mode":"targeted","orgIds":["org"]}';
+  freeTierValue = '{"mode":"targeted","orgIds":["org"]}';
   expect(await readFreeAccountUsage(profile, true)).not.toBeNull();
 });
-for (const deployment of ['demo', 'production']) {
-  test(`${deployment} does not override a missing v2 setting`, async () => {
-    const previous = process.env.YAWP_ENVIRONMENT;
-    process.env.YAWP_ENVIRONMENT = deployment;
-    try {
-      v2Value = null;
-      expect(await isFreeTierInappV2Enabled(profile)).toBe(false);
-      expect(classRead).not.toHaveBeenCalled();
-    } finally {
-      if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
-      else process.env.YAWP_ENVIRONMENT = previous;
-    }
-  });
-}
+test('production does not override a missing free-tier setting', async () => {
+  const previous = process.env.YAWP_ENVIRONMENT;
+  process.env.YAWP_ENVIRONMENT = 'production';
+  try {
+    freeTierValue = null;
+    expect(await isFreeTierInappV2Enabled(profile)).toBe(false);
+    expect(classRead).not.toHaveBeenCalled();
+  } finally {
+    if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
+    else process.env.YAWP_ENVIRONMENT = previous;
+  }
+});
+test('demo enables in-app presentation without a stored setting row', async () => {
+  const previous = process.env.YAWP_ENVIRONMENT;
+  process.env.YAWP_ENVIRONMENT = 'demo';
+  try {
+    freeTierValue = null;
+    expect(await isFreeTierInappV2Enabled(profile)).toBe(true);
+  } finally {
+    if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
+    else process.env.YAWP_ENVIRONMENT = previous;
+  }
+});

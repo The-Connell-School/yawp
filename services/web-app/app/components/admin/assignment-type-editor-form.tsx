@@ -334,7 +334,7 @@ export function AssignmentTypeEditorForm({
 
         <Section
           title="General tutor instructions"
-          description="The top of every tutor prompt for this assignment type. Paste the Universal YAWP! Tutor Instructions here and leave them unedited — this is the Tutor's character, identical across every course. Per-step substance belongs in the modules below."
+          description="The top of every tutor prompt for this assignment type. Paste the Universal Yawp! Tutor Instructions here and leave them unedited — this is the Tutor's character, identical across every course. Per-step substance belongs in the modules below."
         >
           <div className="space-y-2">
             <FieldLabel htmlFor="assignmentTypeTutorInstructions">
@@ -345,7 +345,7 @@ export function AssignmentTypeEditorForm({
               name="tutorInstructions"
               rows={14}
               className="font-mono text-xs"
-              placeholder="WHO YOU ARE. You are the YAWP! Tutor..."
+              placeholder="WHO YOU ARE. You are the Yawp! Tutor..."
               value={tutorInstructions}
               onChange={(event) => setTutorInstructions(event.target.value)}
             />
