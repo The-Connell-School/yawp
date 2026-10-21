@@ -284,7 +284,11 @@ for (const viewport of [
           form.appendChild(input);
         });
       await page.getByRole('button', { name: 'Send approval request' }).click();
-      await page.waitForURL('**/app/free-tier/pending**');
+      await page.waitForURL(/\/app(?:\/free-tier\/pending)?$/);
+      if (page.url().includes('/app/free-tier/pending')) {
+        await page.goto('/app');
+      }
+      await expect(page.getByTestId('locked-preview-banner')).toBeVisible();
       await capture('teacher-pending');
       if (!before)
         await expect(
@@ -421,10 +425,11 @@ for (const viewport of [
           data: { status, organizationId: null },
         });
         await page.goto(
-          status === 'MANUAL_REVIEW'
-            ? '/app/free-tier/pending'
-            : '/app/free-tier/status'
+          status === 'MANUAL_REVIEW' ? '/app' : '/app/free-tier/status'
         );
+        if (status === 'MANUAL_REVIEW') {
+          await expect(page.getByTestId('locked-preview-banner')).toBeVisible();
+        }
         await capture(`teacher-${status.toLowerCase()}`);
         if (status === 'REJECTED') {
           const declined = await mintFreeTierLinkForE2E(prisma, {

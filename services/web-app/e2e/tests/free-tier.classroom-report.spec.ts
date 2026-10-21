@@ -115,7 +115,7 @@ for (const key of ['student', 'paidTeacher']) test(`${key} has no report entry o
 test('inactive membership, approval and feature gates protect direct report requests', async ({ page }) => {
   test.skip(before);
   await login(page);
-  for (const [status, destination] of [['SENT', '/app/free-tier/pending'], ['ACCOUNT_CREATED', '/app/free-tier/onboarding'], ['EXPIRED', '/app/free-tier/status'], ['REJECTED', '/app/free-tier/status']] as const) {
+  for (const [status, destination] of [['SENT', '/app'], ['ACCOUNT_CREATED', '/app/free-tier/onboarding'], ['EXPIRED', '/app/free-tier/status'], ['REJECTED', '/app/free-tier/status']] as const) {
     await db.freeTierApplication.update({ where: { email: `${prefix}teacher@yawp.invalid` }, data: { status } });
     try {
       const denied = await page.request.get(`${reportUrl}.data?_routes=routes/app.classroom-report`, { maxRedirects: 0 });

@@ -121,7 +121,7 @@ for (const key of ['student', 'paidTeacher']) test(`${key} has no packet entry o
 test('inactive membership, application and flag gates protect both request forms', async ({ page }) => {
   test.skip(before);
   await login(page);
-  for (const [status, destination] of [['SENT', '/app/free-tier/pending'], ['MANUAL_REVIEW', '/app/free-tier/pending'], ['ADMIN_SUBMITTED', '/app/free-tier/onboarding'], ['ACCOUNT_CREATED', '/app/free-tier/onboarding'], ['EXPIRED', '/app/free-tier/status'], ['REJECTED', '/app/free-tier/status']] as const) {
+  for (const [status, destination] of [['SENT', '/app'], ['MANUAL_REVIEW', '/app'], ['ADMIN_SUBMITTED', '/app/free-tier/onboarding'], ['ACCOUNT_CREATED', '/app/free-tier/onboarding'], ['EXPIRED', '/app/free-tier/status'], ['REJECTED', '/app/free-tier/status']] as const) {
     await db.freeTierApplication.update({ where: { email: 'report-local-teacher@yawp.invalid' }, data: { status } });
     try { await denied(page, destination); }
     finally { await db.freeTierApplication.update({ where: { email: 'report-local-teacher@yawp.invalid' }, data: { status: 'APPROVED' } }); }
