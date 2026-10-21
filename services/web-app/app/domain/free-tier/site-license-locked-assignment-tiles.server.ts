@@ -32,6 +32,7 @@ export async function loadSiteLicenseLockedAssignmentTiles(
       systemKey: true,
       ownerOrgId: true,
       ownerMembershipId: true,
+      image: { select: { id: true } },
     },
     orderBy: { position: 'asc' },
   });

@@ -8,13 +8,15 @@ export function ApprovalForwardForm({
   approvalId,
   token,
   busy = false,
+  action = '',
 }: {
   approvalId?: string;
   token?: string;
   busy?: boolean;
+  action?: string;
 }) {
   return (
-    <Form method="post" className="flex flex-col gap-4 text-sm">
+    <Form method="post" action={action} className="flex flex-col gap-4 text-sm">
       <input type="hidden" name="intent" value="forward" />
       {approvalId ? (
         <input type="hidden" name="approvalId" value={approvalId} />

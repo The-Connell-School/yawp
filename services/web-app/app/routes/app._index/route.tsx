@@ -3,6 +3,8 @@ import {
   FreeAssignmentTiles,
   FreeAccountRail,
 } from '~/components/free-account-usage';
+import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
+import { TeachingAccessDashboardSkeleton } from '~/components/free-tier/teaching-access-dashboard-skeleton';
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
 import {
   Form,
@@ -14,7 +16,7 @@ import {
   useNavigate,
 } from 'react-router';
 import { PenLine } from 'lucide-react';
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import type { Route as RootRoute } from '../../+types/root';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import { Button } from '~/components/ui/button';
@@ -77,7 +79,7 @@ export type AssignmentTypeRow = {
   kind?: string | null;
   systemKey?: string | null;
   collaborationSupported?: boolean;
-  image?: { id: string } | null;
+  image?: { id: string; altText?: string | null } | null;
   rubric?: { name: string } | null;
 };
 
@@ -271,7 +273,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             kind: true,
             collaborationSupported: true,
             systemKey: true,
-            image: { select: { id: true } },
+            image: { select: { id: true, altText: true } },
             rubric: { select: { name: true } },
           },
           orderBy: { position: 'asc' },
@@ -309,6 +311,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // for this column, so it is optional there and defaulted here.
     collaborationSupported: type.collaborationSupported ?? false,
     kind: type.kind ?? null,
+    imageId: type.image?.id ?? null,
+    imageTitle: type.image?.altText ?? null,
     rubricName: type.rubric?.name ?? null,
     gradesGrammar: gradesGrammarIds.has(type.id),
     ...quotaByTypeId.get(type.id),
@@ -375,20 +379,31 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 }
 
+function teacherFirstName(fullName: string) {
+  const part = fullName.trim().split(/\s+/)[0];
+  return part || fullName;
+}
+
 export default function AppRoute() {
   const data = useLoaderData<typeof loader>();
   const freeUsage = useFreeAccountUsage();
+  const { locked, loading } = useTeachingAccess();
   const ContentColumn = freeUsage ? 'div' : Fragment;
   const navigate = useNavigate();
   const user = useUser();
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
+  const createAssignmentTriggerRef = useRef<HTMLButtonElement>(null);
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
   const [createAssignmentTypeId, setCreateAssignmentTypeId] = useState<
     string | undefined
   >();
   const isTeacher = user.selectedMembership?.role === 'TEACHER';
   const assignmentsEnabled = data.assignmentsEnabled ?? false;
+
+  if (isTeacher && freeUsage && loading) {
+    return <TeachingAccessDashboardSkeleton />;
+  }
 
   if (isTeacher) {
     const needsGradingCount = data.teacherWorkspaceClassStats.reduce(
@@ -408,13 +423,13 @@ export default function AppRoute() {
         <div className="flex w-full justify-between border-b bg-secondary">
           <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
             <div className="flex flex-col">
-              <h2>Welcome, {user.name}!</h2>
+              <h2>Welcome, {teacherFirstName(user.name ?? 'Teacher')}!</h2>
               <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
-                {freeUsage
-                  ? freeUsage.monthly
+                {locked
+                  ? 'Your classroom is set up. Look around while you wait.'
+                  : freeUsage
                     ? 'Your class, assignments, and grading in one place.'
-                    : 'Your class, assignments, and grading in one place.'
-                  : 'Your classes, assignments, and grading in one place.'}
+                    : 'Your classes, assignments, and grading in one place.'}
               </p>
             </div>
           </div>
@@ -442,6 +457,8 @@ export default function AppRoute() {
                     lockedAssignmentTiles={
                       data.siteLicenseLockedAssignmentTiles
                     }
+                    teachingLocked={locked}
+                    createTriggerRef={createAssignmentTriggerRef}
                     onCreate={(id) => {
                       setCreateAssignmentTypeId(id);
                       setIsCreateSheetOpen(true);
@@ -487,6 +504,8 @@ export default function AppRoute() {
                   }
                   teacherClasses={data.assignmentCreationClasses}
                   initialAssignmentTypeId={createAssignmentTypeId}
+                  teachingLocked={locked}
+                  createAssignmentTriggerRef={createAssignmentTriggerRef}
                 />
               </>
             ) : null}

@@ -93,7 +93,7 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     await page.fill('input[name="adminEmail"]', `principal@${ADMIN_DOMAIN}`);
     await page.fill('input[name="adminRole"]', 'Principal');
     await page.getByRole('button', { name: /Send approval request/i }).click();
-    await page.waitForURL('**/app/free-tier/pending**', { timeout: 30_000 });
+    await page.waitForURL(/\/app\/free-tier\/pending$/, { timeout: 30_000 });
 
     const emailPayload = await waitForFreeTierEmailPayload(prisma, {
       applicationId: app.id,
@@ -184,7 +184,7 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     await page.fill('input[name="adminEmail"]', `wrong-${stamp}@${ADMIN_DOMAIN}`);
     await page.fill('input[name="adminRole"]', 'Principal');
     await page.getByRole('button', { name: /Send approval request/i }).click();
-    await page.waitForURL('**/app/free-tier/pending**', { timeout: 30_000 });
+    await page.waitForURL(/\/app\/free-tier\/pending$/, { timeout: 30_000 });
 
     const emailPayload = await waitForFreeTierEmailPayload(prisma, {
       applicationId: app.id,
@@ -287,7 +287,7 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     await expect(page.getByText(message, { exact: true })).toHaveCount(0);
     if (shots) await page.screenshot({ path: path.join(shots, `${stage}-distinct-control.png`), fullPage: true, animations: 'disabled', mask: [email] });
     await page.getByRole('button', { name: /Send approval request/i }).click();
-    await page.waitForURL('**/app/free-tier/pending**');
+    await page.waitForURL(/\/app\/free-tier\/pending$/);
     expect((await prisma.freeTierApplication.findUnique({ where: { id: app.id } }))?.status).toBe('SENT');
     // E2E delivery is captured locally by the existing mail fixture.
     expect(await prisma.freeTierEmailLog.count({ where: { applicationId: app.id, kind: 'admin_approval', success: true } })).toBe(1);

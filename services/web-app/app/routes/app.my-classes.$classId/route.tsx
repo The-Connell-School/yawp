@@ -1,6 +1,8 @@
 import { currentClassInsightRows } from '~/domain/assignment-insights/class-insight-inputs.server';
 import { classCodeUniquenessEnabled } from '~/utils/class-code-write.server';
 import { useFreeAccountUsage } from '~/components/free-account-usage';
+import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
+import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
 import { Prisma } from '@app/prisma';
 import {
   type ActionFunctionArgs,
@@ -1503,6 +1505,12 @@ export default function ClassDetailRoute() {
 
 function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
   const freeUsage = useFreeAccountUsage();
+  const { locked: teachingLocked, state: teachingAccessState } =
+    useTeachingAccess();
+  const teachingAccessAdminName =
+    teachingAccessState.variant === 'locked'
+      ? teachingAccessState.adminName
+      : 'your administrator';
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -2270,6 +2278,7 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
           }
           apHistoryAssignmentTypeId={data.apHistoryAssignmentTypeId}
           classInsightsEnabled={classInsightsEnabled}
+          teachingLocked={teachingLocked}
           onViewDocuments={handleViewAssignmentDocuments}
           onSelectAssignment={(assignmentId) =>
             navigate(
@@ -2378,14 +2387,25 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
                   </Tooltip>
                 </>
               )}
-              <Button
-                size="sm"
-                type="button"
-                onClick={() => setIsAddStudentSheetOpen(true)}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Add Student
-              </Button>
+              {(() => {
+                const addButton = (
+                  <Button
+                    size="sm"
+                    type="button"
+                    onClick={() => setIsAddStudentSheetOpen(true)}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Student
+                  </Button>
+                );
+                return teachingLocked ? (
+                  <LockedTeachingControl locked adminName={teachingAccessAdminName}>
+                    {addButton}
+                  </LockedTeachingControl>
+                ) : (
+                  addButton
+                );
+              })()}
             </div>
           </div>
 

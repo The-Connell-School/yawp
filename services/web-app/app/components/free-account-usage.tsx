@@ -28,6 +28,10 @@ import { lessonPlanMonthWindow } from '~/utils/lesson-planner/month-window';
 import { cn } from '~/utils/misc';
 import { SiteLicenseLockedAssignmentTile } from '~/components/site-license-locked-assignment-tile';
 import type { SiteLicenseLockedAssignmentTile as SiteLicenseLockedTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
+import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
+import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
+import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
+import type { RefObject } from 'react';
 
 export function useFreeAccountUsage() {
   return (
@@ -217,25 +221,47 @@ export function FreeAssignmentTiles({
   usage,
   types,
   lockedAssignmentTiles = [],
+  teachingLocked = false,
   onCreate,
+  createTriggerRef,
 }: {
   usage: FreeAccountUsage;
-  types: Array<{ id: string; kind?: string | null }>;
+  types: Array<{
+    id: string;
+    kind?: string | null;
+    imageId?: string | null;
+    imageTitle?: string | null;
+  }>;
   lockedAssignmentTiles?: SiteLicenseLockedTile[];
+  teachingLocked?: boolean;
   onCreate: (id?: string) => void;
+  createTriggerRef?: RefObject<HTMLButtonElement | null>;
 }) {
+  const { state } = useTeachingAccess();
+  const adminName =
+    state.variant === 'locked' ? state.adminName : 'your administrator';
+  const createButton = (
+    <button
+      ref={createTriggerRef as RefObject<HTMLButtonElement> | undefined}
+      type="button"
+      disabled={!teachingLocked && !usage.monthly && usage.allAssignmentsUsed}
+      onClick={() => onCreate()}
+      className="text-sm text-primary underline disabled:text-muted-foreground"
+    >
+      {teachingLocked ? 'Create assignment' : 'New assignment'}
+    </button>
+  );
   return (
     <div data-testid="free-assignment-tiles">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-bold">Assignments</h2>
-        <button
-          type="button"
-          disabled={!usage.monthly && usage.allAssignmentsUsed}
-          onClick={() => onCreate()}
-          className="text-sm text-primary underline disabled:text-muted-foreground"
-        >
-          New assignment
-        </button>
+        {teachingLocked ? (
+          <LockedTeachingControl locked adminName={adminName}>
+            {createButton}
+          </LockedTeachingControl>
+        ) : (
+          createButton
+        )}
       </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {usage.assignments.map((row) => {
@@ -244,29 +270,47 @@ export function FreeAssignmentTiles({
             <button
               key={row.kind}
               type="button"
-              disabled={!type || (!usage.monthly && row.remaining === 0)}
+              disabled={
+                !teachingLocked &&
+                (!type || (!usage.monthly && row.remaining === 0))
+              }
               onClick={() => onCreate(type?.id)}
               aria-label={`New ${row.label} assignment`}
-              className="flex min-h-[92px] flex-col gap-1.5 rounded-xl border bg-popover p-3.5 text-left shadow-sm disabled:bg-muted/30"
+              className="flex min-h-[92px] flex-col overflow-hidden rounded-xl border bg-popover text-left shadow-sm disabled:bg-muted/30"
             >
-              <span className="flex w-full items-start justify-between gap-2 text-[15px] font-medium">
-                {row.label}
-                <Plus
-                  size={16}
-                  className="mt-1 shrink-0 text-muted-foreground"
-                />
-              </span>
-              <span
-                className={cn(
-                  'text-[13px] text-muted-foreground',
-                  !usage.monthly && row.remaining === 0 && 'text-amber-800'
-                )}
-              >
-                {usage.monthly
-                  ? 'Unlimited assignments'
-                  : row.remaining
-                    ? `${row.remaining} of ${row.total} left`
-                    : 'None left'}
+              <AssignmentTypeTileImage
+                imageId={type?.imageId}
+                imageTitle={type?.imageTitle}
+                className="h-16 w-full"
+              />
+              <span className="flex flex-col gap-1 p-3.5 pt-2">
+                <span className="flex w-full items-start justify-between gap-2 text-[15px] font-medium">
+                  {row.label}
+                  {teachingLocked ? (
+                    <Lock
+                      size={16}
+                      className="mt-1 shrink-0 text-muted-foreground"
+                      aria-hidden
+                    />
+                  ) : (
+                    <Plus
+                      size={16}
+                      className="mt-1 shrink-0 text-muted-foreground"
+                    />
+                  )}
+                </span>
+                <span
+                  className={cn(
+                    'text-[13px] text-muted-foreground',
+                    !usage.monthly && row.remaining === 0 && 'text-amber-800'
+                  )}
+                >
+                  {usage.monthly
+                    ? 'Unlimited assignments'
+                    : row.remaining
+                      ? `${row.remaining} of ${row.total} left`
+                      : 'None left'}
+                </span>
               </span>
             </button>
           );
@@ -276,6 +320,7 @@ export function FreeAssignmentTiles({
             key={tile.key}
             label={tile.label}
             variant="dashboard"
+            imageId={tile.imageId}
           />
         ))}
       </div>

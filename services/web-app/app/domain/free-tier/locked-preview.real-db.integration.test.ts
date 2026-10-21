@@ -81,11 +81,17 @@ local('real authenticated route actions reject crafted requests before parsing o
     ] as const) {
       await expect(action({ request: new Request(`http://localhost${path}`, { method: 'POST', headers, body: 'crafted-invalid-body' }) } as never)).rejects.toMatchObject({ status: 403 });
     }
-    const result = await preview({ request: new Request('http://localhost/app/free-tier/preview?organizationId=foreign-org', { headers }) } as never);
-    expect(result.entries.length).toBeGreaterThan(0);
-    expect(JSON.stringify(result)).not.toContain(orgId);
-    const copy = await preview({ request: new Request('http://localhost/app/free-tier/preview?q=AI%20will', { headers }) } as never);
-    expect(copy.total).toBe(0);
+    try {
+      await preview({
+        request: new Request(
+          'http://localhost/app/free-tier/preview?organizationId=foreign-org',
+          { headers }
+        ),
+      } as never);
+      throw new Error('expected redirect');
+    } catch (error) {
+      expect((error as Response).headers.get('location')).toBe('/app');
+    }
     await expect(createAssignment({ request: new Request('http://localhost/api/assignments/create', { method: 'POST' }) } as never)).rejects.toMatchObject({ status: 302 });
   } finally { await prisma.session.delete({ where: { id: session.id } }); }
 });
@@ -236,6 +242,36 @@ local('waiting tour POST persists only its own progress while all teaching route
       if (row) await prisma.setting.update({ where: { name }, data: { value: row.value } });
       else await prisma.setting.deleteMany({ where: { name } });
     }
+  }
+});
+
+local('pending teacher with stale membership cookie is still denied on default-deny paths', async () => {
+  const foreignOrg = await prisma.organization.create({
+    data: { name: `${prefix}-stale-cookie`, plan: 'FREE_CLASSROOM' },
+  });
+  const staleMembership = await prisma.orgMembership.create({
+    data: {
+      userId,
+      organizationId: foreignOrg.id,
+      role: 'TEACHER',
+    },
+  });
+  try {
+    for (const path of [
+      '/app/my-classes',
+      '/api/preferences/nav',
+    ] as const) {
+      await expect(
+        enforceLockedPreviewRequest(
+          new Request(`http://localhost${path}`, { method: 'POST' }),
+          userId,
+          staleMembership.id
+        )
+      ).rejects.toMatchObject({ status: 403 });
+    }
+  } finally {
+    await prisma.orgMembership.delete({ where: { id: staleMembership.id } });
+    await prisma.organization.delete({ where: { id: foreignOrg.id } });
   }
 });
 

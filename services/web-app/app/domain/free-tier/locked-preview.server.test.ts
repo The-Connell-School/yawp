@@ -20,16 +20,16 @@ afterEach(() => {
   memberships = [{ role: 'TEACHER', organizationId: 'org-a', organization: { plan: 'FREE_CLASSROOM' } }];
   queries.length = 0;
 });
-test('pending direct APIs fail with 403 before execution; reads redirect to the preview', async () => {
+test('pending direct APIs fail with 403 before execution; app reads pass through', async () => {
   for (const path of ['/api/domain/reporter', '/api/domain/lesson-planner', '/app/assignments']) {
     try { await enforceLockedPreviewRequest(new Request(`http://local${path}`, { method: 'POST' }), 'teacher'); throw Error('allowed'); }
     catch (e) { expect((e as Response).status).toBe(403); }
   }
-  try { await enforceLockedPreviewRequest(new Request('http://local/app/reporter'), 'teacher'); throw Error('allowed'); }
-  catch (e) { expect((e as Response).headers.get('location')).toBe('/app/free-tier/preview'); }
+  await enforceLockedPreviewRequest(new Request('http://local/app/reporter'), 'teacher');
+  await enforceLockedPreviewRequest(new Request('http://local/app/my-classes'), 'teacher');
 });
-test('allowed preview reads, preparation and approval actions pass', async () => {
-  await enforceLockedPreviewRequest(new Request('http://local/app/free-tier/preview'), 'teacher');
+test('allowed app reads, preparation and approval actions pass', async () => {
+  await enforceLockedPreviewRequest(new Request('http://local/app/assignment-types/at-1'), 'teacher');
   await enforceLockedPreviewRequest(new Request('http://local/app/free-tier/onboarding', { method: 'POST' }), 'teacher');
   await enforceLockedPreviewRequest(new Request('http://local/app/free-tier/pending', { method: 'POST' }), 'teacher');
 });
@@ -42,16 +42,38 @@ test('a new teacher has no organization membership until approval; the default s
 });
 test('flag off, approved and other roles retain normal behavior', async () => {
   const req = new Request('http://local/api/domain/lesson-planner', { method: 'POST' });
-  enabled = false; await enforceLockedPreviewRequest(req, 'teacher');
-  enabled = true; application.status = 'APPROVED'; await enforceLockedPreviewRequest(req, 'teacher');
-  application.status = 'SENT'; memberships[0].role = 'STUDENT'; await enforceLockedPreviewRequest(req, 'teacher');
-  memberships[0].role = 'ADMIN'; await enforceLockedPreviewRequest(req, 'teacher');
+  enabled = false;
+  await enforceLockedPreviewRequest(req, 'teacher');
+  enabled = true;
+  application.status = 'APPROVED';
+  await enforceLockedPreviewRequest(req, 'teacher');
+  application.status = 'SENT';
+  memberships[0].role = 'STUDENT';
+  await expect(enforceLockedPreviewRequest(req, 'teacher')).rejects.toMatchObject({
+    status: 403,
+  });
+  memberships[0].role = 'ADMIN';
+  await expect(enforceLockedPreviewRequest(req, 'teacher')).rejects.toMatchObject({
+    status: 403,
+  });
 });
-test('an application cannot lock a different tenant or existing paid membership', async () => {
+test('a pending application blocks mutations even with a mismatched membership cookie', async () => {
   memberships[0].organizationId = 'org-b';
-  await enforceLockedPreviewRequest(new Request('http://local/app/reporter'), 'teacher');
-  memberships[0].organizationId = 'org-a'; memberships[0].organization.plan = 'SCHOOL';
-  await enforceLockedPreviewRequest(new Request('http://local/app/reporter'), 'teacher');
+  await expect(
+    enforceLockedPreviewRequest(
+      new Request('http://local/api/assignments/create', { method: 'POST' }),
+      'teacher',
+      'stale-membership-id'
+    )
+  ).rejects.toMatchObject({ status: 403 });
+  memberships[0].organizationId = 'org-a';
+  memberships[0].organization.plan = 'SCHOOL';
+  await expect(
+    enforceLockedPreviewRequest(
+      new Request('http://local/app/my-classes', { method: 'POST' }),
+      'teacher'
+    )
+  ).rejects.toMatchObject({ status: 403 });
 });
 test('domain enrollment/assignment guard denies pending and does not deny approved or flag off', async () => {
   await expect(assertOrganizationTeachingApproved(db as any, 'org-a')).rejects.toMatchObject({ status: 403 });
