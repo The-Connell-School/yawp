@@ -158,7 +158,7 @@ export function LockedAssignmentTypePickerSheet({
                 >
                   <AssignmentTypeTileImage
                     imageId={tile.imageId}
-                    imageTitle={'imageTitle' in tile ? tile.imageTitle : null}
+                    imageTitle={tile.imageTitle}
                     className="h-24 w-full"
                   />
                   <div className="flex flex-1 flex-col gap-1 p-3">
