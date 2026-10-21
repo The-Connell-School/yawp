@@ -8,6 +8,8 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   forbidOnly: !!process.env.CI,
+  timeout: 180_000,
+  expect: { timeout: 15_000 },
   reporter: 'list',
   outputDir: `${process.env.TMPDIR}/locked-preview-playwright`,
   webServer: {

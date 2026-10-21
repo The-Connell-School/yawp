@@ -189,6 +189,9 @@ for (const width of [1440, 390]) {
     await expect(page.getByText('Choose a type.')).toBeVisible();
     await capture(page, `locked-picker-${width}`);
     await page.keyboard.press('Escape');
+    await expect(page.getByRole('heading', { name: 'New assignment' })).toHaveCount(
+      0
+    );
     if (width === 1440) {
       const create = page.getByRole('button', { name: 'Create assignment' }).first();
       await create.hover();
@@ -205,7 +208,11 @@ for (const width of [1440, 390]) {
         })
       ).toBeVisible();
     } else {
-      await page.getByRole('button', { name: 'Create assignment' }).first().click();
+      await page
+        .getByRole('button', { name: 'Create assignment' })
+        .filter({ visible: true })
+        .first()
+        .click();
       await expect(
         page.getByRole('heading', { name: 'Unlocks after approval' })
       ).toBeVisible();
