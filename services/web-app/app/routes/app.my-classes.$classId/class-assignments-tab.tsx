@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Form, Link } from 'react-router';
-import { ArrowDown, ArrowUp, Plus, Search, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Plus, Search, Send, Trash2 } from 'lucide-react';
+import { Badge } from '~/components/ui/badge';
+import {
+  teachingAccessMobileSheetBodySend,
+  TEACHING_ACCESS_LOCKED_TOOLTIP,
+} from '~/domain/free-tier/teaching-access-copy';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
 import type { AssignmentEditRecord } from '~/components/assignments/assignment-edit-sheet';
@@ -54,6 +59,7 @@ type ClassAssignmentsTabProps = {
   /** Gated on the organization's classInsightsEnabled flag. */
   classInsightsEnabled: boolean;
   teachingLocked?: boolean;
+  teachingAccessAdminName?: string;
   onViewDocuments: (assignmentId: string) => void;
   /**
    * Selecting a row navigates to the assignment detail full page (see
@@ -85,9 +91,16 @@ export function ClassAssignmentsTab({
   apHistoryAssignmentTypeId,
   classInsightsEnabled,
   teachingLocked = false,
+  teachingAccessAdminName = 'your administrator',
   onViewDocuments,
   onSelectAssignment,
 }: ClassAssignmentsTabProps) {
+  const sendLockProps = {
+    locked: teachingLocked,
+    adminName: teachingAccessAdminName,
+    mobileSheetBody: teachingAccessMobileSheetBodySend(teachingAccessAdminName),
+    tooltip: TEACHING_ACCESS_LOCKED_TOOLTIP,
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [pagination, setPagination] = useState({ skip: 0, take: 20 });
@@ -234,7 +247,9 @@ export function ClassAssignmentsTab({
               </Button>
             );
             return teachingLocked ? (
-              <LockedTeachingControl locked>{createButton}</LockedTeachingControl>
+              <LockedTeachingControl locked adminName={teachingAccessAdminName}>
+                {createButton}
+              </LockedTeachingControl>
             ) : (
               createButton
             );
@@ -261,18 +276,20 @@ export function ClassAssignmentsTab({
           <Table aria-label="Assignments">
             <TableHeader className="rounded-t-lg">
               <TableRow className="rounded-t-lg bg-muted/50">
-                <TableHead className="w-[50px] rounded-tl-lg pl-4">
-                  <Checkbox
-                    aria-label="Select all assignments"
-                    checked={
-                      filteredAssignments.length > 0 &&
-                      selectedAssignmentIds.length ===
-                        filteredAssignments.length
-                    }
-                    onCheckedChange={handleSelectAll}
-                  />
-                </TableHead>
-                <TableHead>
+                {!teachingLocked ? (
+                  <TableHead className="w-[50px] rounded-tl-lg pl-4">
+                    <Checkbox
+                      aria-label="Select all assignments"
+                      checked={
+                        filteredAssignments.length > 0 &&
+                        selectedAssignmentIds.length ===
+                          filteredAssignments.length
+                      }
+                      onCheckedChange={handleSelectAll}
+                    />
+                  </TableHead>
+                ) : null}
+                <TableHead className={teachingLocked ? 'rounded-tl-lg pl-4' : undefined}>
                   <Button
                     type="button"
                     variant="ghost"
@@ -296,10 +313,19 @@ export function ClassAssignmentsTab({
                   </Button>
                 </TableHead>
                 <TableHead className="whitespace-nowrap">Type</TableHead>
-                <TableHead className="whitespace-nowrap">Graded</TableHead>
-                <TableHead className="whitespace-nowrap pr-4">
-                  Documents
-                </TableHead>
+                {teachingLocked ? (
+                  <>
+                    <TableHead className="whitespace-nowrap">Status</TableHead>
+                    <TableHead className="whitespace-nowrap pr-4">Send</TableHead>
+                  </>
+                ) : (
+                  <>
+                    <TableHead className="whitespace-nowrap">Graded</TableHead>
+                    <TableHead className="whitespace-nowrap pr-4">
+                      Documents
+                    </TableHead>
+                  </>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -309,24 +335,30 @@ export function ClassAssignmentsTab({
                 return (
                   <TableRow
                     key={assignment.classAssignmentId}
-                    className="cursor-pointer"
+                    className={teachingLocked ? undefined : 'cursor-pointer'}
                     data-state={
                       selectedAssignmentIds.includes(assignment.id)
                         ? 'selected'
                         : undefined
                     }
-                    onClick={() => onSelectAssignment(assignment.id)}
+                    onClick={
+                      teachingLocked
+                        ? undefined
+                        : () => onSelectAssignment(assignment.id)
+                    }
                   >
-                    <TableCell
-                      className="max-h-[37px] pl-4"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <Checkbox
-                        aria-label={`Select assignment ${title}`}
-                        checked={selectedAssignmentIds.includes(assignment.id)}
-                        onCheckedChange={() => handleSelect(assignment.id)}
-                      />
-                    </TableCell>
+                    {!teachingLocked ? (
+                      <TableCell
+                        className="max-h-[37px] pl-4"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <Checkbox
+                          aria-label={`Select assignment ${title}`}
+                          checked={selectedAssignmentIds.includes(assignment.id)}
+                          onCheckedChange={() => handleSelect(assignment.id)}
+                        />
+                      </TableCell>
+                    ) : null}
                     <TableCell className="font-medium">
                       <div className="flex flex-wrap items-center gap-2">
                         <span
@@ -335,25 +367,54 @@ export function ClassAssignmentsTab({
                         >
                           {title}
                         </span>
-                        <TutorOffBadge tutorEnabled={assignment.tutorEnabled} />
+                        {teachingLocked ? (
+                          <Badge variant="secondary" className="font-normal">
+                            Sample · Not sent
+                          </Badge>
+                        ) : (
+                          <TutorOffBadge tutorEnabled={assignment.tutorEnabled} />
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {assignment.assignmentType.title}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {assignment.gradedCount}
-                    </TableCell>
-                    <TableCell className="pr-4">
-                      <AssignmentDocumentsPill
-                        documentCount={assignment.documentCount}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onViewDocuments(assignment.id);
-                        }}
-                        ariaLabel={`View documents for ${title}`}
-                      />
-                    </TableCell>
+                    {teachingLocked ? (
+                      <>
+                        <TableCell className="text-muted-foreground">
+                          Not sent
+                        </TableCell>
+                        <TableCell className="pr-4">
+                          <LockedTeachingControl {...sendLockProps}>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              data-testid={`assignment-send-${assignment.id}`}
+                            >
+                              <Send className="mr-2 h-4 w-4" />
+                              Send
+                            </Button>
+                          </LockedTeachingControl>
+                        </TableCell>
+                      </>
+                    ) : (
+                      <>
+                        <TableCell className="text-muted-foreground">
+                          {assignment.gradedCount}
+                        </TableCell>
+                        <TableCell className="pr-4">
+                          <AssignmentDocumentsPill
+                            documentCount={assignment.documentCount}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onViewDocuments(assignment.id);
+                            }}
+                            ariaLabel={`View documents for ${title}`}
+                          />
+                        </TableCell>
+                      </>
+                    )}
                   </TableRow>
                 );
               })}

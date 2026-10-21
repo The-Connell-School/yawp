@@ -105,6 +105,6 @@ test('Advocate Pack follows incomplete first steps, leads after completion, and 
 });
 test('Reporter card uses site-license language', () => {
   const html = render(<FreeReporterLocked />);
-  expect(html).toContain('Reporter comes with a Yawp! site license');
+  expect(html).toContain('Reporter comes with Yawp! for schools');
   expect(html).not.toContain('paid plan');
 });

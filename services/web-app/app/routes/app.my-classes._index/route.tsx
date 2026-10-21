@@ -35,6 +35,7 @@ import { generateClassCode } from '~/utils/class';
 import { studentJoinTokenForClassCreate } from '~/utils/class-student-join-token.server';
 import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
 import { getTeacherClassCardStats } from '~/utils/teacher-class-card-stats.server';
+import { shouldHideFreeTierTeachingSecrets } from '~/domain/free-tier/locked-preview.server';
 import { pickClassArtKeyForOrganization } from '~/utils/class-art-assignment.server';
 import { getStudentEnrolledClasses } from '~/utils/student-classes.server';
 import { ALL_SCHOOL_YEARS } from '~/utils/school-year';
@@ -130,10 +131,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ).values()
   ).sort((a, b) => a.name.localeCompare(b.name));
 
+  const hideTeachingSecrets = await shouldHideFreeTierTeachingSecrets(userId);
+
   const classesWithStats = classes.map((klass) => {
     const stats = classStats.find((s) => s.classId === klass.id);
     return {
       ...klass,
+      code: hideTeachingSecrets ? null : klass.code,
       legacyClassArtIndex: klass.classArtIndex,
       stats,
       _count: {

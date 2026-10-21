@@ -9,9 +9,12 @@ import {
   redirect,
   useFetcher,
   useLoaderData,
+  useNavigation,
   useSearchParams,
   type LoaderFunctionArgs,
 } from 'react-router';
+import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
+import { TeachingAccessReporterSkeleton } from '~/components/free-tier/teaching-access-reporter-skeleton';
 import {
   CornerDownRight,
   Loader2,
@@ -123,6 +126,9 @@ type GrowthPlanProposal = {
 };
 
 export default function ReporterRoute() {
+  const navigation = useNavigation();
+  const { locked: teachingLocked, loading: teachingLoading } =
+    useTeachingAccess();
   const usage = useFreeAccountUsage();
   const monthlyUsage = usage?.monthly ? usage.reporter : null;
   const exhausted = monthlyUsage?.remaining === 0;
@@ -267,6 +273,13 @@ export default function ReporterRoute() {
   }
 
   const hasMessages = messages.length > 0;
+
+  if (
+    (teachingLocked || teachingLoading) &&
+    navigation.state === 'loading'
+  ) {
+    return <TeachingAccessReporterSkeleton />;
+  }
 
   if (freeLocked) return <FreeReporterLocked />;
 
