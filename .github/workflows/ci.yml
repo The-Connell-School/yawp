@@ -1112,7 +1112,8 @@ jobs:
       - name: 🔖 Resolve Playwright version
         id: playwright-version
         working-directory: services/web-app
-        run: echo "version=$(node -p \"require('@playwright/test/package.json').version\")" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
 
       - name: 💾 Cache Playwright browsers
         id: playwright-cache
