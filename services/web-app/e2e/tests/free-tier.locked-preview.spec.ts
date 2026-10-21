@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test, expect } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
+import { provisionFreeClassroomForE2E } from '../helpers/provision-free-classroom-for-e2e';
 if (!process.env.CLASS_STEP_PORT) {
   throw new Error(
     'Run class-step tests with ./bin/project test --profile free-tier-locked-preview-browser'
@@ -93,9 +94,7 @@ async function login(page: import('@playwright/test').Page, email: string) {
 }
 
 async function provisionPendingClassroom(appId: string, userId: string) {
-  const { provisionFreeClassroom } =
-    await import('~/domain/free-tier/provision-free-classroom.server');
-  await provisionFreeClassroom(appId);
+  provisionFreeClassroomForE2E(appId);
   const app = await prisma.freeTierApplication.findUniqueOrThrow({
     where: { id: appId },
     select: { organizationId: true },
