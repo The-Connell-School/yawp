@@ -79,6 +79,7 @@ export function LockedAssignmentTypePickerSheet({
       kind: 'locked' as const,
       label: tile.label,
       imageId: tile.imageId,
+      imageTitle: null as string | null,
       included: SITE_LICENSE_UNAVAILABLE_REASON,
       selected: false,
       onSelect: undefined,
