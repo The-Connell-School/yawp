@@ -152,7 +152,9 @@ for (const width of [1440, 390]) {
     await login(page, user.email!);
     await expect(page).toHaveURL(/free-tier\/pending/);
     await expect(page.getByText(/Sent to Dr. Patel on/)).toBeVisible();
-    await expect(page.getByText('Not the right person? Forward this request', { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Not the right person?' })
+    ).toBeVisible();
     await capture(page, `waiting-${width}`);
     await page.getByRole('link', { name: 'Explore my classroom' }).click();
     await expect(page.getByRole('heading', { name: 'Look around while you wait' })).toBeVisible();

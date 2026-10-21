@@ -139,13 +139,10 @@ for (const width of [1280, 390])
       page.getByText('Sent to Dr. Patel on October 14')
     ).toBeVisible();
     await expect(
-      page.getByRole('link', { name: 'Draft an email' })
-    ).toHaveAttribute(
-      'href',
-      /mailto:patel%2Bapproval%40example\.org\?subject=/
-    );
+      page.getByRole('link', { name: 'Explore my classroom' })
+    ).toBeVisible();
     await capture(page, `${width}-waiting`);
-    await page.getByText('Not the right person? Forward this request').click();
+    await page.getByRole('button', { name: 'Not the right person?' }).click();
     await capture(page, `${width}-forward`);
     await page
       .getByRole('button', { name: 'Forward request', exact: true })
@@ -208,7 +205,7 @@ test('flag-off and non-target controls', async ({ page }) => {
     ).toHaveCount(0);
     await expect(
       page.getByRole('button', { name: 'Resend reminder' })
-    ).toBeVisible();
+    ).toHaveCount(0);
     await capture(page, `1280-${mode}`);
   }
 });
@@ -364,7 +361,7 @@ test('paid member remains on legacy waiting page with rollout on', async ({
     ).toHaveCount(0);
     await expect(
       page.getByRole('button', { name: 'Resend reminder' })
-    ).toBeVisible();
+    ).toHaveCount(0);
     await capture(page, '1280-paid-member');
   } finally {
     await db.orgMembership.deleteMany({ where: { organizationId: org.id } });
