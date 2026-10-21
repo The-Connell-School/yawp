@@ -941,4 +941,145 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await expect(stage).toContainText('What’s in your bag? (15 min)');
     });
   });
+
+  test.describe("Kevin's notes on the latest run", () => {
+    const LECTURE_REPLY = [
+      '# The war at home',
+      '',
+      '## Class starter (5 min)',
+      '',
+      'Students write as they come in.',
+      '',
+      '```yawp-daily-pages',
+      'kind: class-starter',
+      'What is one thing you carry that nobody else can see?',
+      '```',
+      '',
+      '## Mini-lecture: the draft (12 min)',
+      '',
+      'Walk through the notes, stopping for questions.',
+      '',
+      '```yawp-material',
+      'kind: notes',
+      'title: Lecture notes: the draft',
+      '---',
+      'The draft lottery began in 1969.',
+      '```',
+      '',
+      '## Closing (3 min)',
+      '',
+      'One sentence on the way out.',
+    ].join('\n');
+    const OPTIONS_REPLY = [
+      'Pick one:',
+      '',
+      '```yawp-daily-pages\nkind: class-starter\nThink of the last time you tried to convince someone.\n```',
+      '',
+      '```yawp-daily-pages\nkind: class-starter\nWrite about a rule you think is wrong.\n```',
+      '',
+      '```yawp-daily-pages\nkind: class-starter\nDescribe something you believed last year.\n```',
+    ].join('\n');
+
+    test('a plan’s steps read as numbered sections with their time; no sparkle on Create', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await stackV3On();
+      const { conversationId } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Plan it' },
+        { role: 'assistant', content: LECTURE_REPLY },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+      const lecture = page.getByTestId('plan-segment').filter({ hasText: 'Mini-lecture' });
+      await expect(lecture.getByTestId('plan-step-title')).toHaveText('Mini-lecture: the draft');
+      await expect(lecture.getByTestId('plan-step-minutes')).toHaveText('12 min');
+      await expect(lecture.getByRole('heading', { level: 2 })).toBeVisible();
+      await expect(page.getByTestId('daily-pages-create').locator('svg')).toHaveCount(0);
+    });
+
+    test('options sit side by side, paged with arrows, each with its own buttons', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      const { conversationId } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Three warm-ups' },
+        { role: 'assistant', content: OPTIONS_REPLY },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+      const row = page.getByTestId('option-row');
+      await expect(row).toHaveCount(1);
+      await expect(row).toContainText('Class starter options');
+      await expect(row.getByTestId('daily-pages-card')).toHaveCount(3);
+      await expect(row.getByTestId('daily-pages-create')).toHaveCount(3);
+      await expect(row.getByTestId('option-row-position')).toHaveText('1 of 3');
+      await expect(row.getByTestId('option-prev')).toBeDisabled();
+      // One row, not three cards stacked: the cards share a top edge.
+      const tops = await row.getByTestId('daily-pages-card').evaluateAll((cards) =>
+        cards.map((card) => Math.round(card.getBoundingClientRect().top))
+      );
+      expect(new Set(tops).size).toBe(1);
+      await page.waitForLoadState('networkidle');
+      await row.getByTestId('option-next').click();
+      await expect(row.getByTestId('option-row-position')).toHaveText('2 of 3');
+    });
+
+    test('cards added out of order land in the reply’s order, with their step’s time', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await stackV3On();
+      const { conversationId } = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Plan it' },
+        { role: 'assistant', content: LECTURE_REPLY },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner?c=${conversationId}`);
+      await page.waitForLoadState('networkidle');
+      // Kevin's order: the lecture notes first, then the class starter.
+      const filed = () =>
+        page.waitForResponse((response) => response.url().includes('/api/domain/lesson-planner/packet') && response.request().method() === 'POST');
+      const notesAdded = filed();
+      await page
+        .getByTestId('material-card')
+        .filter({ hasText: 'Lecture notes' })
+        .getByRole('button', { name: /Add to stack/ })
+        .click();
+      await notesAdded;
+      const starterAdded = filed();
+      await page.getByTestId('daily-pages-card').getByRole('button', { name: /Add to stack/ }).click();
+      await starterAdded;
+
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      const cards = page.getByTestId('run-card');
+      await expect(cards).toHaveCount(2);
+      await expect(cards.nth(0)).toContainText('Class Starter');
+      await expect(cards.nth(0).getByTestId('run-card-start')).toHaveText('Start');
+      await expect(cards.nth(0)).toContainText('5 min');
+      await expect(cards.nth(1)).toContainText('Lecture notes');
+      await expect(cards.nth(1)).toContainText('12 min');
+      await expect(cards.nth(1).getByTestId('run-card-start')).toHaveText('05');
+    });
+
+    test('the stack page scrolls with the wheel when it runs past the screen', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await stackV3On();
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      const { conversationId } = await seedDayOneStack(page, e2eContext);
+      await page.setViewportSize({ width: 1280, height: 600 });
+      await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+      const stack = page.getByTestId('stack-v3');
+      await expect(stack).toBeVisible();
+      await page.mouse.move(500, 400);
+      await page.mouse.wheel(0, 1500);
+      await expect.poll(() => stack.evaluate((element) => element.scrollTop)).toBeGreaterThan(100);
+    });
+  });
 });

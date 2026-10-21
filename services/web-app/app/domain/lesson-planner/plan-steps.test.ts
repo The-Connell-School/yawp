@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { planStepKey, planStepIndexForKey, readPlanSteps, splitAtStepHeadings } from './plan-steps';
+import { planStepKey, planStepIndexForKey, readPlanSteps, readStepHeading, splitAtStepHeadings } from './plan-steps';
 
 const PLAN = [
   '# The Things They Carried — Day 1 (50 min)',
@@ -133,5 +133,21 @@ describe("splitAtStepHeadings (Brian's run 3, item 1)", () => {
     expect(steps[0]!.stepType).toBe('activity');
     const { chunks } = splitAtStepHeadings('## Hook (15 min) {type: activity}\n\nGo.', steps, 0);
     expect(chunks[0]).toMatchObject({ kind: 'step', heading: '## Hook (15 min)' });
+  });
+});
+
+describe('readStepHeading', () => {
+  test('title, minutes and level, with the type tag and bold gone', () => {
+    expect(readStepHeading('## Hook activity: What’s in your bag? (15 min)')).toEqual({
+      level: 2,
+      title: 'Hook activity: What’s in your bag?',
+      minutes: 15,
+    });
+    expect(readStepHeading('### **Framing** — 10 minutes {type: context}')).toEqual({
+      level: 3,
+      title: 'Framing',
+      minutes: 10,
+    });
+    expect(readStepHeading('## Closing')).toEqual({ level: 2, title: 'Closing', minutes: null });
   });
 });

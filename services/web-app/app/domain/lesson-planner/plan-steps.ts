@@ -57,6 +57,16 @@ function cleanTitle(raw: string): { title: string; minutes: number | null } {
   return { title, minutes };
 }
 
+/**
+ * A step's heading line, as the chat shows it (Kevin's notes): the level the
+ * plan wrote, the title, and the minutes pulled out to sit in their own chip.
+ */
+export function readStepHeading(line: string): { level: 2 | 3; title: string; minutes: number | null } {
+  const match = /^\s{0,3}(#{2,3})\s+(.+)$/.exec(line);
+  const { title, minutes } = cleanTitle(match ? match[2]! : line);
+  return { level: match?.[1] === '###' ? 3 : 2, title, minutes };
+}
+
 function stepText(raw: string): string {
   return hidePromptIds(raw.replace(FENCE, '').replace(/\n{3,}/g, '\n\n').trim());
 }

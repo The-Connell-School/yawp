@@ -2,6 +2,9 @@ import {
   MonthlyUsageNotice,
   useFreeAccountUsage,
 } from '~/components/free-account-usage';
+import { groupOptionParts } from '~/domain/lesson-planner/option-groups';
+import type { ReplyPart } from '~/domain/lesson-planner/reply-parts';
+import { OptionRow } from '~/components/ai-chat/option-row';
 import { useEffect, useRef, useState } from 'react';
 import {
   Link,
@@ -79,7 +82,7 @@ import { readUnitPlan } from '~/domain/lesson-planner/unit-plan';
 import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
 import { hidePromptIds } from '~/domain/lesson-planner/prompt-ids';
 import { overTime, planMinutes } from '~/domain/lesson-planner/plan-timing';
-import { readPlanSteps, splitAtStepHeadings } from '~/domain/lesson-planner/plan-steps';
+import { readPlanSteps, readStepHeading, splitAtStepHeadings } from '~/domain/lesson-planner/plan-steps';
 import { SegmentToggle } from '~/components/lesson-planner/segment-toggle';
 import { TEMPLATE_SLOTS, type LessonTemplate } from '~/domain/lesson-planner/lesson-templates';
 import { TemplateChip, TemplateList } from './template-picker';
@@ -1612,6 +1615,151 @@ function MessageBubble({
     offerStarterSwap: stackV2 && offersStarter && !isSwapReply,
   });
 
+  const renderPart = (part: ReplyPart, index: number) => {
+    const key = `${message.id ?? 'pending'}:${index}`;
+    if (part.kind === 'markdown') {
+      const raw = hidePromptIds(linkMaterialTitles(part.text, materials));
+      // No "I have everything I need" above a plan (Brian's run 3).
+      const text = framePlan && index === 0 ? stripPlanPreamble(raw) : raw;
+      if (!planSteps.length) {
+        return (
+          <div key={key} className={index > 0 ? 'mt-3' : undefined}>
+            <MarkdownContent content={text} />
+          </div>
+        );
+      }
+      // Brian's run 3 (item 1): Add to stack on the hook, the
+      // discussion, the exit ticket… right on each step's heading.
+      const { chunks, next } = splitAtStepHeadings(text, planSteps, stepCursor);
+      stepCursor = next;
+      return (
+        <div key={key} className={index > 0 ? 'mt-3' : undefined}>
+          {chunks.map((chunk, chunkIndex) => {
+            if (chunk.kind === 'markdown') {
+              return <MarkdownContent key={chunkIndex} content={chunk.text} />;
+            }
+            const step = planSteps[chunk.index]!;
+            const keys = segmentKeys(step.key);
+            return (
+              <div
+                key={chunkIndex}
+                data-testid="plan-segment"
+                // Each step its own section, easy to find at a glance (Kevin's
+                // notes): a number, a title that reads as a heading, the time.
+                className="mt-5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border/70 pt-4"
+              >
+                <StepHeading line={chunk.heading} number={chunk.index + 1} />
+                {keys.length ? (
+                  <SegmentToggle
+                    isIn={segmentInStack(message.id!, keys, addedMaterials)}
+                    disabled={disabled}
+                    onToggle={(add) => toggleSegment(keys, add)}
+                  />
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+    if (part.kind === 'daily-pages') {
+      return (
+        <DailyPagesCard
+          key={key}
+          exercise={part.exercise}
+          assignmentTypeId={dailyPagesTypeId}
+          classStarterTypeId={classStarterTypeId}
+          conversationId={conversationId}
+          created={stackPieces[`${message.id}:${part.blockKey}`]?.created ?? null}
+          materialId={stackPieces[`${message.id}:${part.blockKey}`]?.materialId ?? null}
+          added={
+            message.id
+              ? addedMaterials.has(`${message.id}:${part.blockKey}`)
+              : false
+          }
+          onToggle={
+            stackV2 && message.id
+              ? (next) => onMaterial(message.id!, part.blockKey, next)
+              : undefined
+          }
+          onReplace={
+            isSwapReply && message.id && onReplaceMaterial
+              ? () => onReplaceMaterial(message.id!, part.blockKey)
+              : null
+          }
+          disabled={disabled}
+        />
+      );
+    }
+    if (part.kind === 'exit-ticket') {
+      return (
+        <ExitTicketCard
+          key={key}
+          ticket={part.ticket}
+          assignmentTypeId={exitTicketTypeId}
+          conversationId={conversationId}
+          created={stackPieces[`${message.id}:${part.blockKey}`]?.created ?? null}
+          materialId={stackPieces[`${message.id}:${part.blockKey}`]?.materialId ?? null}
+          added={
+            !!message.id &&
+            addedMaterials.has(`${message.id}:${part.blockKey}`)
+          }
+          onToggle={
+            message.id
+              ? (added) => onMaterial(message.id!, part.blockKey, added)
+              : null
+          }
+          disabled={disabled}
+        />
+      );
+    }
+    if (part.kind === 'resource') {
+      return <LessonResourceCard key={key} resource={part.resource} />;
+    }
+    if (part.kind === 'practice') {
+      return (
+        <PracticeCard
+          key={key}
+          practice={part.practice}
+          lessons={practice.lessons}
+          classes={practice.classes}
+          added={
+            message.id
+              ? addedMaterials.has(`${message.id}:${part.blockKey}`)
+              : false
+          }
+          onToggle={
+            stackV2 && message.id
+              ? (next) => onMaterial(message.id!, part.blockKey, next)
+              : null
+          }
+          disabled={disabled}
+        />
+      );
+    }
+    return (
+      <div key={key} className="mt-3">
+        <MaterialCard
+          material={{
+            ...part.material,
+            content: hidePromptIds(part.material.content),
+          }}
+          added={
+            !!message.id &&
+            addedMaterials.has(`${message.id}:${part.material.key}`)
+          }
+          onToggle={
+            message.id
+              ? (added) =>
+                  onMaterial(message.id!, part.material.key, added)
+              : null
+          }
+          disabled={disabled}
+        />
+      </div>
+    );
+  };
+
   return (
     <div className="flex gap-3" data-role="assistant">
       <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary ring-1 ring-primary/15">
@@ -1632,150 +1780,16 @@ function MessageBubble({
               hands over, then the next step. Everything used to be lifted out
               and stacked below the plan, so the button to assign a warm-up sat
               inches away from the warm-up. */}
-          {parts.map((part, index) => {
-            const key = `${message.id ?? 'pending'}:${index}`;
-            if (part.kind === 'markdown') {
-              const raw = hidePromptIds(linkMaterialTitles(part.text, materials));
-              // No "I have everything I need" above a plan (Brian's run 3).
-              const text = framePlan && index === 0 ? stripPlanPreamble(raw) : raw;
-              if (!planSteps.length) {
-                return (
-                  <div key={key} className={index > 0 ? 'mt-3' : undefined}>
-                    <MarkdownContent content={text} />
-                  </div>
-                );
-              }
-              // Brian's run 3 (item 1): Add to stack on the hook, the
-              // discussion, the exit ticket… right on each step's heading.
-              const { chunks, next } = splitAtStepHeadings(text, planSteps, stepCursor);
-              stepCursor = next;
-              return (
-                <div key={key} className={index > 0 ? 'mt-3' : undefined}>
-                  {chunks.map((chunk, chunkIndex) => {
-                    if (chunk.kind === 'markdown') {
-                      return <MarkdownContent key={chunkIndex} content={chunk.text} />;
-                    }
-                    const step = planSteps[chunk.index]!;
-                    const keys = segmentKeys(step.key);
-                    return (
-                      <div
-                        key={chunkIndex}
-                        data-testid="plan-segment"
-                        className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1"
-                      >
-                        <div className="min-w-0 [&_h2]:mt-0 [&_h3]:mt-0">
-                          <MarkdownContent content={chunk.heading} />
-                        </div>
-                        {keys.length ? (
-                          <SegmentToggle
-                            isIn={segmentInStack(message.id!, keys, addedMaterials)}
-                            disabled={disabled}
-                            onToggle={(add) => toggleSegment(keys, add)}
-                          />
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            }
-            if (part.kind === 'daily-pages') {
-              return (
-                <DailyPagesCard
-                  key={key}
-                  exercise={part.exercise}
-                  assignmentTypeId={dailyPagesTypeId}
-                  classStarterTypeId={classStarterTypeId}
-                  conversationId={conversationId}
-                  created={stackPieces[`${message.id}:${part.blockKey}`]?.created ?? null}
-                  materialId={stackPieces[`${message.id}:${part.blockKey}`]?.materialId ?? null}
-                  added={
-                    message.id
-                      ? addedMaterials.has(`${message.id}:${part.blockKey}`)
-                      : false
-                  }
-                  onToggle={
-                    stackV2 && message.id
-                      ? (next) => onMaterial(message.id!, part.blockKey, next)
-                      : undefined
-                  }
-                  onReplace={
-                    isSwapReply && message.id && onReplaceMaterial
-                      ? () => onReplaceMaterial(message.id!, part.blockKey)
-                      : null
-                  }
-                  disabled={disabled}
-                />
-              );
-            }
-            if (part.kind === 'exit-ticket') {
-              return (
-                <ExitTicketCard
-                  key={key}
-                  ticket={part.ticket}
-                  assignmentTypeId={exitTicketTypeId}
-                  conversationId={conversationId}
-                  created={stackPieces[`${message.id}:${part.blockKey}`]?.created ?? null}
-                  materialId={stackPieces[`${message.id}:${part.blockKey}`]?.materialId ?? null}
-                  added={
-                    !!message.id &&
-                    addedMaterials.has(`${message.id}:${part.blockKey}`)
-                  }
-                  onToggle={
-                    message.id
-                      ? (added) => onMaterial(message.id!, part.blockKey, added)
-                      : null
-                  }
-                  disabled={disabled}
-                />
-              );
-            }
-            if (part.kind === 'resource') {
-              return <LessonResourceCard key={key} resource={part.resource} />;
-            }
-            if (part.kind === 'practice') {
-              return (
-                <PracticeCard
-                  key={key}
-                  practice={part.practice}
-                  lessons={practice.lessons}
-                  classes={practice.classes}
-                  added={
-                    message.id
-                      ? addedMaterials.has(`${message.id}:${part.blockKey}`)
-                      : false
-                  }
-                  onToggle={
-                    stackV2 && message.id
-                      ? (next) => onMaterial(message.id!, part.blockKey, next)
-                      : null
-                  }
-                  disabled={disabled}
-                />
-              );
-            }
-            return (
-              <div key={key} className="mt-3">
-                <MaterialCard
-                  material={{
-                    ...part.material,
-                    content: hidePromptIds(part.material.content),
-                  }}
-                  added={
-                    !!message.id &&
-                    addedMaterials.has(`${message.id}:${part.material.key}`)
-                  }
-                  onToggle={
-                    message.id
-                      ? (added) =>
-                          onMaterial(message.id!, part.material.key, added)
-                      : null
-                  }
-                  disabled={disabled}
-                />
-              </div>
-            );
-          })}
+          {groupOptionParts(parts).map((group) =>
+            group.kind === 'single' ? (
+              renderPart(parts[group.index]!, group.index)
+            ) : (
+              // Options side by side, paged with arrows (Kevin's notes).
+              <OptionRow key={`${message.id ?? 'pending'}:options:${group.indexes[0]}`} label={group.label}>
+                {group.indexes.map((index) => renderPart(parts[index]!, index))}
+              </OptionRow>
+            )
+          )}
           {unitOutcome.kind === 'unit' ? (
             <div className="mt-3">
               <UnitPlanCard
@@ -2069,6 +2083,33 @@ function MessageBubble({
           </div>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/** A plan step's heading in the chat: its number, its title and its time. */
+function StepHeading({ line, number }: { line: string; number: number }) {
+  const { level, title, minutes } = readStepHeading(line);
+  const Tag = level === 3 ? 'h3' : 'h2';
+  return (
+    <div className="flex min-w-0 items-center gap-2.5">
+      <span
+        aria-hidden
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
+      >
+        {number}
+      </span>
+      <Tag data-testid="plan-step-title" className="min-w-0 text-base font-semibold leading-snug text-foreground">
+        {title}
+      </Tag>
+      {minutes ? (
+        <span
+          data-testid="plan-step-minutes"
+          className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-muted-foreground"
+        >
+          {minutes} min
+        </span>
+      ) : null}
     </div>
   );
 }
