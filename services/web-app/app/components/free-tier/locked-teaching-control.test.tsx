@@ -35,15 +35,16 @@ describe('LockedTeachingControl desktop tooltip', () => {
 
     await act(async () => {
       root.render(
-        createElement(
-          LockedTeachingControl,
-          {
-            locked: true,
-            adminName: 'Dr. Patel',
-            tooltip: 'Unlocks once your administrator approves.',
-          },
-          createElement(Button, { type: 'button' }, 'Locked action') as ReactElement
-        )
+        createElement(LockedTeachingControl, {
+          locked: true,
+          adminName: 'Dr. Patel',
+          tooltip: 'Unlocks once your administrator approves.',
+          children: createElement(
+            Button,
+            { type: 'button' },
+            'Locked action'
+          ) as ReactElement,
+        })
       );
     });
 
