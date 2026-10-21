@@ -122,24 +122,6 @@ export async function peekAdminSignedLinkForLoader(args: {
   return peekSignedLink(args);
 }
 
-export async function peekAdminForwardEntryLink(token: string) {
-  const decline = await peekSignedLink({
-    token,
-    expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
-  });
-  if (decline.ok) return decline;
-  return peekSignedLink({ token, expectedPurpose: 'ADMIN_APPROVE' });
-}
-
-export async function applicationContextFromToken(token: string) {
-  const applicationId = applicationIdFromSignedToken(token);
-  if (!applicationId) return null;
-  return prisma.freeTierApplication.findUnique({
-    where: { id: applicationId },
-    select: { name: true, schoolName: true, email: true, status: true },
-  });
-}
-
 export type FreeTierAdminLinkReplacedGate = {
   reason: 'link_replaced';
   schoolName: string;

@@ -210,6 +210,71 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     expect(pending?.adminEmail).toBe(`principal-${stamp}@${ADMIN_DOMAIN}`);
   });
 
+  test('not-right-person on already approved application shows Already approved', async ({
+    page,
+    browser,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const stamp = Date.now();
+    const teacherEmail = `ft-forward-approved-${stamp}@${ADMIN_DOMAIN}`;
+    const teacherName = 'FT Approved Forward Teacher';
+    const schoolName = `FT Approved Forward High ${stamp}`;
+
+    const app = await prisma.freeTierApplication.create({
+      data: {
+        email: teacherEmail,
+        name: teacherName,
+        schoolName,
+        location: 'E2E',
+        gradeLevel: '10',
+        status: 'INVITED',
+        releasedAt: new Date(),
+      },
+    });
+
+    const releaseMint = await mintFreeTierLinkForE2E(prisma, {
+      applicationId: app.id,
+      purpose: 'RELEASE',
+    });
+
+    await page.goto(`/free/join?t=${encodeURIComponent(releaseMint.token)}`);
+    await page.fill('input[name="name"]', teacherName);
+    await page.fill('input[name="password"]', JOIN_PASSWORD);
+    await page.fill('input[name="confirmPassword"]', JOIN_PASSWORD);
+    await page.getByRole('button', { name: /Create account/i }).click();
+    await page.waitForURL('**/app/free-tier/onboarding**', { timeout: 30_000 });
+
+    await completeClassPreparationStepIfShown(page);
+    await page.fill('input[name="adminName"]', 'Wrong Admin');
+    await page.fill('input[name="adminEmail"]', `wrong-${stamp}@${ADMIN_DOMAIN}`);
+    await page.fill('input[name="adminRole"]', 'Principal');
+    await page.getByRole('button', { name: /Send approval request/i }).click();
+    await page.waitForURL(/\/app\/free-tier\/pending$/, { timeout: 30_000 });
+
+    const emailPayload = await waitForFreeTierEmailPayload(prisma, {
+      applicationId: app.id,
+      kind: 'admin_approval',
+    });
+    expect(emailPayload.approveUrl).toBeTruthy();
+    expect(emailPayload.notRightPersonUrl).toBeTruthy();
+
+    const adminPage = await browser.newPage();
+    await adminPage.goto(emailPayload.approveUrl!);
+    await adminPage.fill('input[name="adminRole"]', 'Principal');
+    await adminPage.getByRole('checkbox', { name: /I can approve classroom software/i }).check();
+    await adminPage.getByRole('button', { name: /Approve Yawp!/i }).click();
+    await expect(
+      adminPage.getByRole('heading', { name: /Thank you|Already approved/i })
+    ).toBeVisible({ timeout: 30_000 });
+
+    await adminPage.goto(emailPayload.notRightPersonUrl!);
+    await expect(
+      adminPage.getByRole('heading', { name: 'Already approved' })
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(adminPage.getByText(schoolName)).toBeVisible();
+    await adminPage.close();
+  });
+
   test('self administrator is rejected inline and by direct POST before any approval writes', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 1000 });
     const prisma = createE2EPrismaClient();

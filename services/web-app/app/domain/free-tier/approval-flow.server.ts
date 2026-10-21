@@ -30,7 +30,6 @@ import {
   forwardIdempotentReplay,
   resolveAdminLinkReplacedGate,
   resolveAdminLinkTerminalGate,
-  peekAdminForwardEntryLink,
 } from './admin-link-gate.server';
 import {
   sendFreeTierAdminApprovalEmail,
@@ -525,7 +524,12 @@ function terminalGateFromApplication(app: {
   status: string;
   schoolName: string;
   name: string;
-}) {
+}): {
+  ok: false;
+  reason: 'already_approved' | 'declined';
+  schoolName: string;
+  teacherName: string;
+} | null {
   if (app.status === 'APPROVED') {
     return {
       ok: false as const,
@@ -578,7 +582,10 @@ export async function redirectSchoolAdmin(args: {
     return { ok: true as const, idempotent: true as const };
   }
 
-  const peek = await peekAdminForwardEntryLink(args.token);
+  const peek = await peekSignedLink({
+    token: args.token,
+    expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
+  });
   if (!peek.ok) {
     if (
       peek.reason === 'used' &&
@@ -615,24 +622,12 @@ export async function redirectSchoolAdmin(args: {
   if (preTerminal) return preTerminal;
 
   if (identity && (await isApprovalV2Enabled(identity))) {
-    if (
-      peek.purpose !== 'ADMIN_APPROVE' &&
-      peek.purpose !== 'ADMIN_NOT_RIGHT_PERSON'
-    ) {
-      return { ok: false as const, reason: 'purpose_mismatch' as const };
-    }
-    const forwarded = await forwardApprovalByToken({
+    return forwardApprovalByToken({
       token: args.token,
-      purpose: peek.purpose,
       newAdminName: parsed.data.newAdminName,
       newAdminEmail: parsed.data.newAdminEmail,
       request: args.request,
     });
-    if (!forwarded.ok && forwarded.reason === 'already_decided' && identity) {
-      const gate = terminalGateFromApplication(identity);
-      if (gate) return gate;
-    }
-    return forwarded;
   }
 
   const newEmail = parsed.data.newAdminEmail;
@@ -660,7 +655,7 @@ export async function redirectSchoolAdmin(args: {
   const prePending = await prisma.freeTierAdminApproval.findFirst({
     where: { applicationId: preApp.id, status: 'PENDING' },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, adminName: true },
+    select: { id: true },
   });
   if (!prePending) {
     const decided = await fetchFreeTierApplicationTerminalGate(preApp.id);
@@ -709,7 +704,6 @@ export async function redirectSchoolAdmin(args: {
       approveUrl,
       notRightPersonUrl,
       adminRecipientName: newAdminNameTrim,
-      forwardedByAdminName: prePending.adminName,
     });
     if (!emailResult.ok) {
       await abandonMintedSignedLinks([minted.approveMint.linkId, minted.declineMint.linkId]);
@@ -724,7 +718,10 @@ export async function redirectSchoolAdmin(args: {
       where: { id: peek.applicationId },
       select: { id: true, email: true, name: true, schoolName: true, status: true, adminRedirectCount: true },
     });
-    if (!app || (app.status !== 'SENT' && app.status !== 'MANUAL_REVIEW')) {
+    if (!app) return { ok: false as const, reason: 'not_found' as const };
+    const txGate = terminalGateFromApplication(app);
+    if (txGate) return txGate;
+    if (app.status !== 'SENT' && app.status !== 'MANUAL_REVIEW') {
       return { ok: false as const, reason: 'illegal_state' as const };
     }
     if (app.adminRedirectCount >= ADMIN_REDIRECT_CHAIN_CAP) {
@@ -789,6 +786,7 @@ export async function redirectSchoolAdmin(args: {
   }
 
   if (!result.ok) return result;
+  if ('idempotent' in result && result.idempotent) return result;
   return { ok: true as const };
 }
 

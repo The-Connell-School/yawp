@@ -7,11 +7,12 @@ import {
 import { CircleAlert } from 'lucide-react';
 import {
   applicationIdFromSignedToken,
+  peekSignedLink,
 } from '~/domain/free-tier/signed-link.server';
 import {
   fetchFreeTierApplicationTerminalGate,
-  peekAdminForwardEntryLink,
   resolveAdminLinkReplacedGate,
+  resolveAdminLinkTerminalGate,
 } from '~/domain/free-tier/admin-link-gate.server';
 import { redirectSchoolAdmin } from '~/domain/free-tier/approval-flow.server';
 import { approvalForwardError } from '../free-tier/ApprovalForwardForm';
@@ -47,7 +48,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   await requireFreeTierEnabled();
   const token = new URL(request.url).searchParams.get('t') ?? '';
   if (!token) return { ok: false as const, reason: 'invalid' as const };
-  const peek = await peekAdminForwardEntryLink(token);
+  const peek = await peekSignedLink({
+    token,
+    expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
+  });
   const appId = peek.ok
     ? peek.applicationId
     : applicationIdFromSignedToken(token);
@@ -83,6 +87,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       };
     }
   }
+  const gate = await resolveAdminLinkTerminalGate({ token, peek });
+  if (gate) return { ok: false as const, ...gate };
   const replaced = await resolveAdminLinkReplacedGate({ token, peek });
   if (replaced) return { ok: false as const, ...replaced };
   return { ok: false as const, reason: peek.reason ?? 'invalid' };
@@ -91,14 +97,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export async function action({ request }: ActionFunctionArgs) {
   await requireFreeTierEnabled();
   const formData = await request.formData();
-  const token = String(formData.get('token') ?? '');
   const result = await redirectSchoolAdmin({
-    token,
+    token: String(formData.get('token') ?? ''),
     newAdminName: String(formData.get('adminName') ?? ''),
     newAdminEmail: String(formData.get('adminEmail') ?? ''),
     request,
   });
+  if (!result.ok && result.reason === 'link_replaced') {
+    return result;
+  }
   if (!result.ok && result.reason === 'superseded') {
+    const token = String(formData.get('token') ?? '');
     const appId = applicationIdFromSignedToken(token);
     if (appId) {
       const gate = await fetchFreeTierApplicationTerminalGate(appId);
@@ -107,10 +116,7 @@ export async function action({ request }: ActionFunctionArgs) {
         where: { id: appId },
         select: { name: true, schoolName: true, status: true },
       });
-      if (
-        app &&
-        !['APPROVED', 'REJECTED', 'EXPIRED'].includes(app.status)
-      ) {
+      if (app && !['APPROVED', 'REJECTED', 'EXPIRED'].includes(app.status)) {
         return {
           ok: false as const,
           reason: 'link_replaced' as const,
@@ -194,6 +200,27 @@ function terminalFromAction(actionData: NonNullable<ReturnType<typeof useActionD
       />
     );
   }
+  if (
+    actionData.reason === 'illegal_state' &&
+    'status' in actionData &&
+    actionData.status === 'APPROVED'
+  ) {
+    return (
+      <AdminAlreadyApprovedCard
+        teacherName={teacherName}
+        schoolName={schoolName}
+      />
+    );
+  }
+  if (
+    actionData.reason === 'illegal_state' &&
+    'status' in actionData &&
+    (actionData.status === 'REJECTED' || actionData.status === 'EXPIRED')
+  ) {
+    return (
+      <AdminDeclinedCard teacherName={teacherName} schoolName={schoolName} />
+    );
+  }
   return null;
 }
 
@@ -218,7 +245,8 @@ export default function FreeAdminNotRightPersonRoute() {
     if (
       actionData.reason === 'invalid' ||
       actionData.reason === 'expired' ||
-      actionData.reason === 'purpose_mismatch'
+      actionData.reason === 'purpose_mismatch' ||
+      actionData.reason === 'used'
     ) {
       return <AdminLinkInvalidCard />;
     }
@@ -247,17 +275,6 @@ export default function FreeAdminNotRightPersonRoute() {
             }}
           />
         </FreeTierAuthCard>
-      );
-    }
-    if (
-      actionData.reason === 'link_replaced' ||
-      actionData.reason === 'superseded'
-    ) {
-      return (
-        <AdminLinkReplacedCard
-          teacherName={data.teacherName}
-          schoolName={data.schoolName}
-        />
       );
     }
     if (
