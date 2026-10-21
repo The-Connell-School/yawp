@@ -109,8 +109,8 @@ export async function updateAssignmentInClassDeployment(params: {
       where: { id: existing.id },
       data: stripCollaborationFromAssignmentUpdateData(
         existing.collaborationEnabled,
-        params.data
-      ),
+        params.data as Record<string, unknown>
+      ) as Prisma.AssignmentUncheckedUpdateInput,
     });
   });
 }

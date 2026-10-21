@@ -34,9 +34,10 @@ const COLLABORATION_ASSIGNMENT_FIELDS = [
  * Prevents turning a solo assignment collaborative via update, and prevents
  * turning an in-flight collaborative assignment solo through a generic update.
  */
-export function stripCollaborationFromAssignmentUpdateData<
-  T extends Record<string, unknown>,
->(existingCollaborationEnabled: boolean, data: T): T {
+export function stripCollaborationFromAssignmentUpdateData(
+  existingCollaborationEnabled: boolean,
+  data: Record<string, unknown>
+): Record<string, unknown> {
   if (existingCollaborationEnabled) {
     if (data.collaborationEnabled === false) {
       const next = { ...data };

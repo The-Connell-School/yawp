@@ -848,7 +848,7 @@ describe('AssignmentCreationSheetContent', () => {
     it('shows the frozen toggle when editing an existing collaborative assignment', () => {
       root = renderSheet({
         entryPoint: 'dashboard',
-        editingAssignment: { id: 'a-1', classId: 'class-1' },
+        editingAssignment: { id: 'a-1' },
         initialCollaborationEnabled: true,
       }).root;
 
