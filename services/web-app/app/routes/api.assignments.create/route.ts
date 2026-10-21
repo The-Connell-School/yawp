@@ -35,7 +35,10 @@ import {
   parseAssignmentGradingIntent,
   parseAssignmentRubricOverrides,
 } from '~/utils/assignment-grading-intent.server';
-import { parseAssignmentCollaboration } from '~/utils/assignment-collaboration.server';
+import {
+  parseAssignmentCollaboration,
+  resolveCollaborationForAssignmentCreate,
+} from '~/utils/assignment-collaboration.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
 import { parseAssignmentGrammarGrading } from '~/utils/assignment-grammar-grading.server';
 import {
@@ -223,6 +226,7 @@ export async function action({ request }: ActionFunctionArgs) {
       id: true,
       systemKey: true,
       kind: true,
+      collaborationSupported: true,
       rubric: { select: { name: true, schemaJson: true } },
     },
   });
@@ -270,7 +274,10 @@ export async function action({ request }: ActionFunctionArgs) {
     }
   }
 
-  const collaboration = collaborationResult.value;
+  const collaboration = resolveCollaborationForAssignmentCreate(
+    collaborationResult.value,
+    assignmentType
+  );
 
   if (collaboration.collaborationEnabled) {
     const emptyClass = await prisma.class.findFirst({

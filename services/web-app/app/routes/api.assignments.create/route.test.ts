@@ -217,6 +217,7 @@ describe('api.assignments.create', () => {
         id: true,
         systemKey: true,
         kind: true,
+        collaborationSupported: true,
         rubric: { select: { name: true, schemaJson: true } },
       },
     });
@@ -577,6 +578,7 @@ describe('api.assignments.create', () => {
         id: true,
         systemKey: true,
         kind: true,
+        collaborationSupported: true,
         rubric: { select: { name: true, schemaJson: true } },
       },
     });
@@ -1018,7 +1020,7 @@ describe('api.assignments.create', () => {
         params: {},
       } as any);
 
-    test('stores the settings when the assignment type is in the pilot', async () => {
+    test('creates a solo assignment when the assignment type is a group project', async () => {
       enablePilot();
 
       const body = await readBody(await createWithCollaboration());
@@ -1027,16 +1029,17 @@ describe('api.assignments.create', () => {
       expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            collaborationEnabled: true,
+            collaborationEnabled: false,
             collaborationGroupMode: 'teacher',
-            collaborationGroupSize: 3,
+            collaborationGroupSize: null,
           }),
         })
       );
+      expect(autoArrangeNewAssignment).not.toHaveBeenCalled();
     });
 
     test('rejects collaborative creation when a selected class has no students', async () => {
-      enablePilot();
+      disablePilot();
       prisma.class.findFirst.mockResolvedValue({ id: 'class-1' });
 
       const response = await createWithCollaboration();
@@ -1090,7 +1093,7 @@ describe('api.assignments.create', () => {
     test('passes the chosen mode through to the assignment', async () => {
       // The sheet posts a mode now; before, every collaborative assignment
       // silently took the parser's default because nothing rendered a picker.
-      enablePilot();
+      disablePilot();
 
       await createWithCollaboration({ collaborationGroupMode: 'random' });
 
@@ -1102,7 +1105,7 @@ describe('api.assignments.create', () => {
     });
 
     test('arranges groups at creation for the modes that describe one', async () => {
-      enablePilot();
+      disablePilot();
       createAssignmentDeployedToClasses.mockResolvedValue({
         id: 'assignment-1',
       });
@@ -1119,7 +1122,7 @@ describe('api.assignments.create', () => {
     test('whole class drops the posted size', async () => {
       // The group is the roster, so a size would be meaningless -- and the
       // stepper is hidden for this mode, so a posted one is stale.
-      enablePilot();
+      disablePilot();
       createAssignmentDeployedToClasses.mockResolvedValue({
         id: 'assignment-1',
       });
@@ -1166,7 +1169,7 @@ describe('api.assignments.create', () => {
     test('sends the teacher on to group setup, because creating is not the end', async () => {
       // The sheet used to just close, leaving a collaborative assignment looking
       // finished while its groups did not exist and no student could see it.
-      enablePilot();
+      disablePilot();
       createAssignmentDeployedToClasses.mockResolvedValue({
         id: 'assignment-1',
       });
@@ -1183,7 +1186,7 @@ describe('api.assignments.create', () => {
     });
 
     test('says plainly that students cannot see it yet', async () => {
-      enablePilot();
+      disablePilot();
       createAssignmentDeployedToClasses.mockResolvedValue({
         id: 'assignment-1',
       });
