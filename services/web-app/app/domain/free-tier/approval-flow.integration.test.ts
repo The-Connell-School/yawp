@@ -748,7 +748,7 @@ describe('free-tier approval flow', () => {
     expect(declineLink?.usedAt).toBeNull();
   });
 
-  test('not-right-person GET peek twice then POST still forwards', async () => {
+  test('not-right-person GET and HEAD-style peeks then POST still forwards without consuming links early', async () => {
     const email = `ft-forward-peek-${Date.now()}@school.edu`;
     const app = await prisma.freeTierApplication.create({
       data: {
@@ -786,16 +786,55 @@ describe('free-tier approval flow', () => {
       : null;
     if (!declineToken) throw new Error('missing decline token');
 
-    const firstPeek = await peekSignedLink({
-      token: declineToken,
-      expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
+    const approveUrl = (emailLog?.payload as { approveUrl?: string } | null)
+      ?.approveUrl;
+    const approveToken = approveUrl
+      ? new URL(approveUrl).searchParams.get('t')
+      : null;
+    if (!approveToken) throw new Error('missing approve token');
+    const declineLinkId = (
+      await prisma.freeTierSignedLink.findFirst({
+        where: {
+          applicationId: app.id,
+          purpose: 'ADMIN_NOT_RIGHT_PERSON',
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      })
+    )?.id;
+    const approveLinkId = (
+      await prisma.freeTierSignedLink.findFirst({
+        where: { applicationId: app.id, purpose: 'ADMIN_APPROVE' },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      })
+    )?.id;
+    if (!declineLinkId || !approveLinkId) throw new Error('missing link rows');
+
+    for (const _method of ['GET', 'HEAD'] as const) {
+      for (const peekResult of [
+        await peekSignedLink({
+          token: declineToken,
+          expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
+        }),
+        await peekSignedLink({
+          token: approveToken,
+          expectedPurpose: 'ADMIN_APPROVE',
+        }),
+      ]) {
+        expect(peekResult.ok).toBe(true);
+      }
+    }
+    const beforeForwardDecline = await prisma.freeTierSignedLink.findUnique({
+      where: { id: declineLinkId },
+      select: { usedAt: true },
     });
-    const secondPeek = await peekSignedLink({
-      token: declineToken,
-      expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
+    const beforeForwardApprove = await prisma.freeTierSignedLink.findUnique({
+      where: { id: approveLinkId },
+      select: { usedAt: true },
     });
-    expect(firstPeek.ok).toBe(true);
-    expect(secondPeek.ok).toBe(true);
+    expect(beforeForwardDecline?.usedAt).toBeNull();
+    expect(beforeForwardApprove?.usedAt).toBeNull();
 
     const req = new Request('https://yawp.test/free/admin/not-right-person', {
       headers: { 'user-agent': 'test', 'x-forwarded-for': '203.0.113.52' },
@@ -807,6 +846,17 @@ describe('free-tier approval flow', () => {
       request: req,
     });
     expect(forwarded.ok).toBe(true);
+
+    const declineLink = await prisma.freeTierSignedLink.findUnique({
+      where: { id: declineLinkId },
+      select: { usedAt: true },
+    });
+    const approveLink = await prisma.freeTierSignedLink.findUnique({
+      where: { id: approveLinkId },
+      select: { usedAt: true },
+    });
+    expect(declineLink?.usedAt).not.toBeNull();
+    expect(approveLink?.usedAt).toBeNull();
   });
 
   test('not-right-person double POST is idempotent', async () => {
@@ -878,107 +928,6 @@ describe('free-tier approval flow', () => {
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error('expected invalid token');
     expect(result.reason).toBe('invalid');
-  });
-
-  test('not-right-person GET and HEAD loaders leave signed links unused', async () => {
-    const email = `ft-forward-head-${Date.now()}@school.edu`;
-    const app = await prisma.freeTierApplication.create({
-      data: {
-        email,
-        name: 'Head Forward Teacher',
-        schoolName: 'Head Forward HS',
-        location: 'NY',
-        gradeLevel: '9',
-        status: 'ACCOUNT_CREATED',
-        userId: (
-          await prisma.user.create({
-            data: { email, name: 'Head Forward Teacher' },
-            select: { id: true },
-          })
-        ).id,
-      },
-    });
-    const submit = await submitAdminDetails({
-      applicationId: app.id,
-      userId: app.userId!,
-      adminName: 'Wrong Person',
-      adminEmail: 'wrong@school.edu',
-      adminRole: 'Principal',
-    });
-    expect(submit.ok).toBe(true);
-    const emailLog = await prisma.freeTierEmailLog.findFirst({
-      where: { applicationId: app.id, kind: 'admin_approval', success: true },
-      orderBy: { createdAt: 'desc' },
-    });
-    const declineUrl = (
-      emailLog?.payload as { notRightPersonUrl?: string } | null
-    )?.notRightPersonUrl;
-    const declineToken = declineUrl
-      ? new URL(declineUrl).searchParams.get('t')
-      : null;
-    if (!declineToken) throw new Error('missing decline token');
-    const linkId = (
-      await prisma.freeTierSignedLink.findFirst({
-        where: {
-          applicationId: app.id,
-          purpose: 'ADMIN_NOT_RIGHT_PERSON',
-        },
-        orderBy: { createdAt: 'desc' },
-        select: { id: true },
-      })
-    )?.id;
-    if (!linkId) throw new Error('missing decline link row');
-
-    const { loader: notRightLoader } = await import(
-      '../../routes/free.admin.not-right-person/route'
-    );
-    const { loader: approveLoader } = await import(
-      '../../routes/free.admin.approve/route'
-    );
-    const approveUrl = (emailLog?.payload as { approveUrl?: string } | null)
-      ?.approveUrl;
-    const approveToken = approveUrl
-      ? new URL(approveUrl).searchParams.get('t')
-      : null;
-    if (!approveToken) throw new Error('missing approve token');
-    const approveLinkId = (
-      await prisma.freeTierSignedLink.findFirst({
-        where: { applicationId: app.id, purpose: 'ADMIN_APPROVE' },
-        orderBy: { createdAt: 'desc' },
-        select: { id: true },
-      })
-    )?.id;
-    if (!approveLinkId) throw new Error('missing approve link row');
-
-    for (const method of ['GET', 'HEAD'] as const) {
-      await notRightLoader({
-        request: new Request(
-          `https://yawp.test/free/admin/not-right-person?t=${encodeURIComponent(declineToken)}`,
-          { method }
-        ),
-        params: {},
-        context: {},
-      } as any);
-      await approveLoader({
-        request: new Request(
-          `https://yawp.test/free/admin/approve?t=${encodeURIComponent(approveToken)}`,
-          { method }
-        ),
-        params: {},
-        context: {},
-      } as any);
-    }
-
-    const declineLink = await prisma.freeTierSignedLink.findUnique({
-      where: { id: linkId },
-      select: { usedAt: true },
-    });
-    const approveLink = await prisma.freeTierSignedLink.findUnique({
-      where: { id: approveLinkId },
-      select: { usedAt: true },
-    });
-    expect(declineLink?.usedAt).toBeNull();
-    expect(approveLink?.usedAt).toBeNull();
   });
 
   test('not-right-person forward validation rejects bad email without consuming link', async () => {

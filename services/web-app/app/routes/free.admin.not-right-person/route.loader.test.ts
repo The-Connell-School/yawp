@@ -50,4 +50,22 @@ describe('free.admin.not-right-person loader', () => {
       schoolName: 'TS High',
     });
   });
+
+  test('HEAD requests use the same loader peek path as GET', async () => {
+    peekSignedLink.mockResolvedValueOnce({
+      ok: true,
+      applicationId: 'app-1',
+    });
+    fetchGate.mockResolvedValueOnce(null);
+    const data = await loader({
+      request: new Request(
+        'https://yawp.test/free/admin/not-right-person?t=token',
+        { method: 'HEAD' }
+      ),
+      params: {},
+      context: {},
+    } as LoaderFunctionArgs);
+    expect(data).toEqual({ ok: true, token: 'token' });
+    expect(peekSignedLink).toHaveBeenCalled();
+  });
 });
