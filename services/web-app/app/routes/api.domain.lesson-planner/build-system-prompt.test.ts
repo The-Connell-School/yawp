@@ -1722,7 +1722,7 @@ describe("planner prompt — Brian's run 3", () => {
   });
 
   test('the prompt version moved', () => {
-    expect(LESSON_PLANNER_PROMPT_VERSION).toBe('2026-10-19-run-3-v1');
+    expect(LESSON_PLANNER_PROMPT_VERSION).toBe('2026-10-21-deck-kit-v3');
   });
 });
 
@@ -1781,7 +1781,44 @@ describe('buildLessonPlannerSystemPromptBlocks — the gallery deck', () => {
       expect(text).toContain(`\`${slot}\``);
     }
     expect(text).toContain('turner-temeraire');
-    expect(text).toContain('`accent`');
     expect(text).toMatch(/never two .*dark/i);
+  });
+
+  // Lesson Deck Kit v3 (Brian, Oct 21).
+  test('v3: colors from the painting, color coding, quiz answers and the Yawp! button', () => {
+    const text = textOf(true);
+    expect(text).toContain('`colors`');
+    expect(text).toContain('#9C4A22');
+    expect(text).toContain('~~1|');
+    for (const slot of ['processStep', 'choices', 'answer', 'button', 'course', 'color']) {
+      expect(text).toContain(`\`${slot}\``);
+    }
+    expect(text).toContain('Today’s program');
+    expect(text).toContain('Know this.');
+    expect(text).toContain('Step 5.');
+    expect(text).toMatch(/mode word only when it does a job/i);
+    expect(text).toContain('one accent wall');
+    expect(text).not.toContain('ember, indigo, olive or plum');
+  });
+
+  test('v3: each template’s limits from the kit', () => {
+    const text = textOf(true);
+    expect(text).toContain('3–6 items');
+    expect(text).toContain('2–4 steps, 18 words or fewer each');
+    expect(text).toContain('40–90 words');
+    expect(text).toContain('Only in decks over 10 slides');
+  });
+});
+
+describe('planner prompt — writing the slides, for every deck (Lesson Deck Kit v3)', () => {
+  const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'School' });
+  test('no lesson or day numbers, no filler, never the answer, current MLA, sized to the space', () => {
+    expect(prompt).toContain('No lesson or day numbers');
+    expect(prompt).toContain('"Pre-Writing", not "Lesson 2: Pre-Writing"');
+    expect(prompt).toContain('No filler');
+    expect(prompt).toContain('never hints at its own answer');
+    expect(prompt).toContain('current MLA edition');
+    expect(prompt).toContain('40 words');
+    expect(prompt).toContain('Never add content just to fill space');
   });
 });

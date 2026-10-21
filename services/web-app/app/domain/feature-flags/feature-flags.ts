@@ -88,7 +88,7 @@ export const LESSON_PLANNER_RUN_SHOW_FLAG = 'lesson_planner_run_show' as const;
 /** Lesson templates: save a stack's shape, build from it (run 3). Needs stack v3. */
 export const LESSON_PLANNER_TEMPLATES_FLAG = 'lesson_planner_templates' as const;
 
-/** The gallery deck: the Yawp! Lesson Deck Kit's look and templates. Needs deck v2. */
+/** The Yawp! Lesson Deck Kit: decks, the lesson plan spec and handouts. Needs deck v2. */
 export const LESSON_PLANNER_DECK_GALLERY_FLAG = 'lesson_planner_deck_gallery' as const;
 
 /** @deprecated Registry key `free_tier` — use {@link FREE_TIER_FLAG}. */
@@ -184,9 +184,9 @@ export const FEATURE_FLAGS = {
       'Save a lesson’s shape as a template and start a new lesson from it. Needs the stack page redesign. Off: no templates.',
   },
   [LESSON_PLANNER_DECK_GALLERY_FLAG]: {
-    label: 'Lesson Planner: gallery deck',
+    label: 'Lesson Planner: Lesson Deck Kit',
     description:
-      'Decks in the Lesson Deck Kit look: paper and pine, one accent per unit, a painting per lesson, and twelve slide templates, in Present, Run the show and PowerPoint. Needs deck v2. Off: the tile deck, and gallery slides are drawn as their nearest tile slide.',
+      'The Yawp! Lesson Deck Kit (spec v3): decks in Georgia and Arial on paper and pine, two or three colors from the lesson’s painting, mode words only where they do a job, and twelve slide templates, in Present, Run the show and PowerPoint; with the lesson plan export on, the lesson plan to the kit’s lesson plan spec; and handouts in the lesson’s fonts and color. Needs deck v2. Off: the tile deck, and gallery slides are drawn as their nearest tile slide.',
   },
   [UNIFIED_SIGN_ON_FLAG]: {
     label: 'Unified sign-on',

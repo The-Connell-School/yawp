@@ -520,7 +520,12 @@ export function buildLessonPlannerSystemPrompt({
     '- steps — directions students follow. Needs `bullets`. The layout numbers them for you, so do not write "1." at the start of each one.',
     '- compare — two versions of the same sentence, paragraph, or approach, side by side. Needs `left` and `right`, each `{ "label": …, "text": … }`. This is the right layout whenever you would otherwise write "Version A… Version B…", and it is the most useful slide in a writing lesson.',
     'Rules that decide whether a deck is any good:',
-    '- One idea per slide. If a slide has two ideas, it is two slides.',
+    '- One idea per slide. If a slide has two ideas, it is two slides. Keep a slide to 40 words, and 30 on a slide students write or look at; past that, split it.',
+    '- No lesson or day numbers. Titles use the lesson\'s name only ("Pre-Writing", not "Lesson 2: Pre-Writing", and never "Day 3"), so a teacher can reorder lessons without the deck going wrong.',
+    '- No filler. Every line on a slide teaches, instructs or credits: no clever tie-ins, no invented tagline under a section title.',
+    '- Never give the answer away. A prompt or challenge never hints at its own answer ("Put these words in a logical order", not "biggest to smallest").',
+    '- Size content to the space. Keep what the slide says and let Yawp! balance it on the slide. Never add content just to fill space; empty space is fine.',
+    '- Check what you teach. Any convention on a slide (MLA citation, formatting, punctuation) must be correct for the current MLA edition.',
     "- A deck covers only this lesson's reading and material: the pages, chapter or story assigned for this day, and what is in the plan or the stack. Do not bring in later chapters, other stories in the book, or what you know of the whole book beyond today's reading — students have not read it yet, and a slide that gives it away spoils the reading. If a slide needs context from outside today's pages, use only what a framing in the plan or stack already says.",
     '- No two slides in a row share a title. A fact slide and the question it sets up get different titles ("The war in 1969", then "Why carry it?").',
     '- Slide text never carries a time instruction ("Write for 4 minutes. Go."). The minutes live in `minutes`, which the teacher sees and students do not; the slide says what to do, not how long.',
@@ -677,7 +682,7 @@ export function buildLessonPlannerSystemPrompt({
 }
 
 /** Bump when the cacheable instruction body changes materially. */
-export const LESSON_PLANNER_PROMPT_VERSION = '2026-10-19-run-3-v1';
+export const LESSON_PLANNER_PROMPT_VERSION = '2026-10-21-deck-kit-v3';
 
 /**
  * The fixed instruction body — identical for every turn except inventory and
@@ -710,30 +715,37 @@ export function buildLessonPlannerInstructionCore({
 }
 
 /**
- * The gallery deck (Yawp! Lesson Deck Kit, "The gallery and the page"). After
- * the cache breakpoint, so the cached core is the same with the flag on or
- * off; the renderers apply the kit's rhythm whatever the model writes.
+ * The gallery deck (Yawp! Lesson Deck Kit, spec v3). After the cache
+ * breakpoint, so the cached core is the same with the flag on or off; the
+ * renderers apply the kit's rhythm and mode-word rules whatever the model
+ * writes.
  */
 function buildDeckGallerySection(on: boolean): string[] {
   if (!on) return [];
-  const art = DECK_ART.map((work) => `\`${work.id}\` (${work.artist}, ${work.title}, ${work.year}; ${work.themes.join(', ')})`).join('; ');
+  const art = DECK_ART.map(
+    (work) => `\`${work.id}\` (${work.artist}, ${work.title}, ${work.year}; colors ${work.colors.join(', ')}; ${work.themes.join(', ')})`
+  ).join('; ');
   return [
     '',
-    'Gallery deck: decks in this school are hung as a gallery. Beside the layouts above, use these templates (each draws its own italic mode word, so do not repeat it in the title):',
-    '- agenda — "Today." Opens the lesson after the title. Needs `agenda`: up to 6 `{ "title", "minutes" }`, one per step of the plan. Title the slide with the lesson\'s aim, not "Today".',
-    '- discuss — "Talk." Needs `question`. Optional `grouping` ("Pairs · 3 min"), `stem` (a sentence starter), `followUp`.',
-    '- big_idea — "Hold this." One claim. Needs `body`; optional `accentWord`, one word of the body set in the accent.',
-    '- write — "Write." The writing prompt, on a dark ground. Needs `body`; optional `stem` and `seconds`.',
-    '- notes — "Know." Context in a timeline or facts. Needs `timeline` (up to 5 `{ "year", "caption", "mark" }`, mark "accent", "ink" or "open") or `facts` (up to 3 lines).',
-    '- divider — "Part ii." Between movements of a long lesson, over the art. Optional `part` (a roman numeral) and `subtitle`.',
-    '- read — "Read." Reading along. Needs `tasks`: up to 4 `{ "verb", "text" }` ("Underline", "every weight"). Optional `work`, `page`.',
-    '- look — "Look." Looking at the painting, on a dark ground. Needs `question`; optional `routine` ("See · Think · Wonder").',
-    '- excerpt — "Annotate." A passage on a sheet. Needs `body` (the passage); optional `author`, `work`, `page`, and `bullets` for what to mark.',
-    '- exit — "Before you go." The exit ticket, on the accent wall. Needs `body`; optional `nextLesson`.',
+    'Gallery deck (Yawp! Lesson Deck Kit): decks in this school are hung as a gallery. Use these twelve templates; each draws its own italic mode word, so never repeat it in the title.',
+    '- title — no mode word. `title` 3 words or fewer, `subtitle` 5 or fewer, optional `course` ("English 9 · Critical Essay"). The painting hangs on it.',
+    '- agenda — "Today’s program", which replaces the headline. Needs `agenda`: 3–6 items `{ "title", "minutes" }`, one per step of the plan; optional `body`, one lead sentence.',
+    '- steps — "Do." Directions students follow. `title` the task, `minutes`, and `bullets`: 2–4 steps, 18 words or fewer each.',
+    '- discuss — "Talk." One question, 18 words or fewer, in `question`. Optional `grouping` ("Pairs"), `minutes`, `stem` (a sentence starter), `followUp`. For a quiz, add `choices` (2–5 short answers) and `answer` (the number of the right one): Yawp! marks it with a soft color band when you reveal it, so never mark it in the text.',
+    '- big_idea — no mode word unless you set `mode` to "Hold this.". One statement of 28 words or fewer in `body`; `accentWord` is one word of it set in the deck color; optional `followUp`.',
+    '- write — "Write." The writing prompt, on pine. `body` 40 words or fewer; `routine` ("Class starter" or "Daily Pages"); `minutes` or `seconds` for the timer; optional `stem`.',
+    '- notes — "Know this." Context to keep. `timeline`: 3–5 `{ "year", "caption" }` with captions 6 words or fewer (`mark` "accent", "ink" or "open"), and/or `facts`: up to 3 lines.',
+    '- divider — names the stage. Only in decks over 10 slides. `title` is a verb title ("We write."), optional `subtitle` for the detail. When it starts a stage of the writing process, give `processStep`: 1 pre-writing, 2 thesis, 3 introduction, 4 body paragraphs, 5 conclusion, 6 title and format, and the divider reads "Step 5." Otherwise `part` (a roman numeral) reads "Part iv.".',
+    '- read — "Read." Reading along. `title`, optional `body` for the instruction, `tasks`: 3 or fewer `{ "verb", "text" }` each led by a verb ("Underline", "every weight"). Optional `work`, `page`.',
+    '- look — "Look." Looking at the painting, on ink. Optional warm-up, once per deck. Needs `question`; optional `seconds`, `routine` ("See · Think · Wonder"), `followUp`.',
+    '- excerpt — "Annotate." A passage on a sheet: `body` is 40–90 words, as printed, and only text the teacher supplied or a tool returned. `author`, `work`, `page`; `bullets` for what to mark.',
+    '- exit — "Before you go." Always last, on the accent wall. `body` the prompt or stem; `button` the label of the Yawp! button ("Exit ticket"); optional `nextLesson`.',
     'Prefer these to the older layouts: big_idea over statement, write or discuss over prompt, excerpt over quote, exit over closing, notes over bullets.',
-    'Rhythm: open with title then agenda, and close with exit. Never the same template twice in a row. Never two dark slides (write, look) in a row, and at most one in four. One exit. A `mode` field (one or two words ending in a period) replaces a template\'s word only when a truer verb fits.',
-    'Prompts read best at 24 words or fewer; a short prompt is set larger.',
-    `On the deck itself: \`unit\` (the unit's name, for the running head), \`accent\` (ember, indigo, olive or plum: one per unit, the same for every lesson in it; ember if unsure), and \`art\`: one work per lesson, only from this library, and only when its themes fit the lesson: ${art}. Leave \`art\` out when nothing fits. The art is shown and credited by Yawp!; never write text about it on a slide except a look question.`,
+    'A mode word only when it does a job: when the task changes (Look. Write. Read. Talk.), to mark the process (Step 2.), to flag something to keep (Know this.), or to close (Before you go.). Yawp! drops one that repeats the headline or the one before it. Set `mode` only when a truer instruction fits ("Combine."), written as an instruction ("Know this.", not "Know."), or `"mode": "none"` to leave it off. About a third of slides carry one.',
+    'Rhythm: open with title then agenda, and close with exit. Never the same template twice in a row. Never two dark slides (write, look) in a row, and at most one in four. Neutral walls: paper, one accent wall at most (the exit). Pine only for writing, ink only for looking at the painting.',
+    'Prompt type sizes itself: 12 words or fewer is set largest, up to 24 smaller, up to 40 smaller again. Over 40 words, split the slide.',
+    'Colors: give the deck `colors`, two or three hex colors from its painting, the painting\'s own listed below. The first is the primary. Mode words and accents rotate through them, and a slide can pick one with `color` (1, 2 or 3), for instance a quiz in one color and the review in another. Never highlight words: color them. When a slide teaches the parts of something (the three parts of a thesis, the moves of a conclusion), give each part its color and keep it all the way through, the sample paragraph included, by writing `~~1|the claim~~`, `~~2|the reason~~`, `~~3|the so-what~~` in any text field.',
+    `On the deck itself: \`unit\` (the unit's name, for the running head) and \`art\`: one work per lesson, chosen by theme, never by class, only from this library: ${art}. Leave \`art\` out when nothing fits. The art is shown and credited by Yawp!; never write about it on a slide except a look question. The deck and slide titles carry no lesson or day numbers.`,
   ];
 }
 
