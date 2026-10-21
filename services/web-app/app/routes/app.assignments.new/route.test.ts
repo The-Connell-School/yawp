@@ -9,7 +9,9 @@ const requireMembership = mock(async () => ({
 }));
 const isFreeTierEnabled = mock(async () => true);
 const userHasPendingFreeTierTeachingLock = mock(async () => true);
-const guardTeachingFormAction = mock(async () => null as null);
+const guardTeachingFormAction = mock<
+  () => Promise<Awaited<ReturnType<typeof import('~/domain/free-tier/teaching-approval-required.server').guardTeachingFormAction>>>
+>(async () => null);
 const getAvailableAssignmentTypesForScopes = mock(async () => [
   { id: 'type-1', title: 'Class Starter' },
 ]);
