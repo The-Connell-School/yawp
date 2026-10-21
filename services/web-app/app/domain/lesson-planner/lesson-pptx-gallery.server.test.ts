@@ -72,54 +72,71 @@ function slideText(parts: Map<string, string>, number: number): string {
 const notes = { speakerNotes: 'Say it.' };
 
 const deck: SlideDeck = {
-  title: 'The weight of things',
+  title: 'Lesson 4: The weight of things',
   unit: 'The Things They Carried',
   accent: 'indigo',
   art: 'turner-temeraire',
   slides: [
-    { layout: 'title', title: 'The weight of things', ...notes },
-    { layout: 'agenda', title: 'Today', agenda: [{ title: 'Daily Pages', minutes: 10 }], ...notes },
-    { layout: 'write', title: 'Write', body: 'Name one thing you carry.', ...notes },
-    { layout: 'look', title: 'Look', question: 'What is being carried away?', ...notes },
-    { layout: 'exit', title: 'Before you go', body: 'One sentence: what weighs most?', nextLesson: 'Love', ...notes },
+    { layout: 'title', title: 'The weight of things', subtitle: 'What we carry', course: 'English 9', ...notes },
+    { layout: 'agenda', title: 'Today', body: 'One question runs through it.', agenda: [{ title: 'Daily Pages', minutes: 10 }], ...notes },
+    { layout: 'write', title: 'Write', body: 'Name one thing you carry.', routine: 'Class starter', minutes: 4, ...notes },
+    { layout: 'look', title: 'Look', question: 'What is being carried away?', seconds: 30, ...notes },
+    { layout: 'discuss', title: 'Quiz', question: 'Which comes first in a thesis?', choices: ['The claim', 'The reason'], answer: 1, ...notes },
+    { layout: 'exit', title: 'Before you go', body: 'One sentence: what weighs most?', button: 'Exit ticket', nextLesson: 'Love', ...notes },
   ],
 };
 
-describe('renderDeckPptxGallery', () => {
+describe('renderDeckPptxGallery (Deck spec v3)', () => {
   test('one slide per slide, each with its notes', async () => {
     const parts = pptxParts(await renderDeckPptxGallery(deck));
-    expect(parts.has('ppt/slides/slide5.xml')).toBe(true);
-    expect(parts.has('ppt/slides/slide6.xml')).toBe(false);
+    expect(parts.has('ppt/slides/slide6.xml')).toBe(true);
+    expect(parts.has('ppt/slides/slide7.xml')).toBe(false);
     expect(parts.get('ppt/notesSlides/notesSlide3.xml')).toContain('Say it.');
   });
 
-  test('mode words, the running head, and no slide numbers', async () => {
+  test('mode words where they do a job, a running head with no lesson number, no slide numbers', async () => {
     const parts = pptxParts(await renderDeckPptxGallery(deck));
-    expect(slideText(parts, 2)).toContain('Today.');
+    expect(slideText(parts, 2)).toContain('Today’s program');
     expect(slideText(parts, 2)).toContain('THE THINGS THEY CARRIED · THE WEIGHT OF THINGS');
+    expect(slideText(parts, 2)).not.toContain('LESSON 4');
     expect(slideText(parts, 3)).toContain('Write.');
-    expect(slideText(parts, 5)).toContain('Before you go.');
-    for (let n = 1; n <= 5; n += 1) expect(parts.get(`ppt/slides/slide${n}.xml`)).not.toContain('type="sldNum"');
+    expect(slideText(parts, 3)).toContain('MINUTES');
+    expect(slideText(parts, 6)).toContain('Before you go.');
+    expect(slideText(parts, 6)).toContain('Open Yawp! → Exit ticket');
+    for (let n = 1; n <= 6; n += 1) expect(parts.get(`ppt/slides/slide${n}.xml`)).not.toContain('type="sldNum"');
   });
 
-  test('the kit grounds and accent, in fonts every classroom has', async () => {
+  test('Georgia and Arial only, Georgia never bold, sizes at px × 0.75', async () => {
+    const parts = pptxParts(await renderDeckPptxGallery(deck));
+    const all = [1, 2, 3, 4, 5, 6].map((n) => parts.get(`ppt/slides/slide${n}.xml`)!).join('');
+    const faces = new Set([...all.matchAll(/typeface="([^"]+)"/g)].map((match) => match[1]));
+    expect([...faces].sort()).toEqual(['Arial', 'Georgia']);
+    // A Georgia run never carries b="1".
+    for (const run of all.matchAll(/<a:rPr[^>]*>(?:(?!<\/a:rPr>).)*typeface="Georgia"/g)) expect(run[0]).not.toContain(' b="1"');
+    // The title at 112px is 84pt.
+    expect(parts.get('ppt/slides/slide1.xml')).toContain('sz="8400"');
+  });
+
+  test('the painting’s colors: the primary on the wall, a soft band behind the answer, no transparency', async () => {
     const parts = pptxParts(await renderDeckPptxGallery(deck));
     expect(parts.get('ppt/slides/slide3.xml')).toContain('1F3532'); // pine for writing
-    expect(parts.get('ppt/slides/slide5.xml')).toContain('2F5873'); // the indigo wall
-    expect(parts.get('ppt/slides/slide2.xml')).toContain('Georgia');
-    expect(parts.get('ppt/slides/slide2.xml')).toContain('Franklin Gothic Book');
+    expect(parts.get('ppt/slides/slide6.xml')).toContain('9C4A22'); // the painting's rust wall
+    expect(slideText(parts, 5)).toContain('The claim');
+    const all = [1, 2, 3, 4, 5, 6].map((n) => parts.get(`ppt/slides/slide${n}.xml`)!).join('');
+    expect(all).not.toContain('<a:alpha');
   });
 
-  test('the art hangs, credited, and never under text', async () => {
+  test('the art hangs pre-cropped, credited, and never under text', async () => {
     const parts = pptxParts(await renderDeckPptxGallery(deck));
-    expect([...parts.keys()].some((name) => /^ppt\/media\/.+\.(jpe?g|png)$/.test(name))).toBe(true);
+    expect([...parts.keys()].filter((name) => /^ppt\/media\/.+\.(jpe?g|png)$/.test(name)).length).toBeGreaterThan(1);
     expect(slideText(parts, 1)).toContain('The Fighting Temeraire');
+    expect(slideText(parts, 1)).toContain('National Gallery, London');
   });
 
-  test('a deck with no art and no accent still renders', async () => {
+  test('a deck with no art and no colors still renders', async () => {
     const plain: SlideDeck = { title: 'Plain', slides: [{ layout: 'bullets', title: 'Notes', bullets: ['One'], ...notes }] };
     const parts = pptxParts(await renderDeckPptxGallery(plain));
-    expect(slideText(parts, 1)).toContain('Know.');
+    expect(slideText(parts, 1)).toContain('Know this.');
     expect([...parts.keys()].some((name) => /^ppt\/media\/.+\.(jpe?g|png)$/.test(name))).toBe(false);
   });
 });

@@ -819,21 +819,22 @@ test.describe("Lesson Planner — Brian's third run", () => {
   test.describe('The gallery deck (Lesson Deck Kit)', () => {
     const notes = { speakerNotes: 'Say it.' };
     const GALLERY_DECK = {
-      title: 'The weight of things',
+      title: 'Lesson 1: The weight of things',
       unit: 'The Things They Carried',
       accent: 'ember',
       art: 'turner-temeraire',
       slides: [
-        { layout: 'title', title: 'The weight of things', subtitle: 'Day one', ...notes },
+        { layout: 'title', title: 'The weight of things', subtitle: 'What we carry', course: 'English 9', ...notes },
         { layout: 'agenda', title: 'Today', agenda: [{ title: 'Daily Pages', minutes: 5 }, { title: 'What’s in your bag?', minutes: 15 }], ...notes },
         { layout: 'write', title: 'Write', body: 'Name one thing you carry that nobody can see.', seconds: 300, ...notes },
         { layout: 'look', title: 'Look', question: 'What is being carried away here?', ...notes },
-        { layout: 'exit', title: 'Before you go', body: 'One object, one sentence: why it matters.', nextLesson: 'Love', ...notes },
+        { layout: 'discuss', title: 'Quiz', question: 'Which comes first in a thesis?', choices: ['The claim', 'The reason', 'The evidence'], answer: 1, ...notes },
+        { layout: 'exit', title: 'Before you go', body: 'One object, one sentence: why it matters.', button: 'Exit ticket', nextLesson: 'Love', ...notes },
       ],
     };
     const GALLERY_REPLY = `Here is the deck.\n\n\`\`\`yawp-slides\n${JSON.stringify(GALLERY_DECK, null, 2)}\n\`\`\``;
 
-    test('flag on: Present hangs the kit look, with mode words, the art and its credit', async ({
+    test('flag on: Present hangs the kit look (spec v3): mode words, colors from the painting, the art and its credit', async ({
       page,
       signIn,
       e2eContext,
@@ -851,8 +852,10 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await expect(stage.getByTestId('gallery-credit')).toContainText('The Fighting Temeraire');
       await page.waitForLoadState('networkidle');
       await page.keyboard.press('ArrowRight');
-      await expect(stage.getByTestId('gallery-mode')).toHaveText('Today.');
-      await expect(stage).toContainText('THE THINGS THEY CARRIED', { ignoreCase: true });
+      await expect(stage.getByTestId('gallery-mode')).toHaveText('Today’s program');
+      await expect(stage).toContainText('THE THINGS THEY CARRIED · THE WEIGHT OF THINGS', { ignoreCase: true });
+      // No lesson or day numbers in the running head.
+      await expect(stage).not.toContainText('Lesson 1', { ignoreCase: true });
       await page.keyboard.press('ArrowRight');
       await expect(stage.locator('[data-ground="pine"]')).toBeVisible();
       await expect(stage.getByTestId('gallery-mode')).toHaveText('Write.');
@@ -860,8 +863,13 @@ test.describe("Lesson Planner — Brian's third run", () => {
       // Never two dark slides in a row: the look slide after writing is on paper.
       await expect(stage.locator('[data-template="look"]')).toHaveAttribute('data-ground', 'paper');
       await page.keyboard.press('ArrowRight');
-      await expect(stage.locator('[data-ground="accent"]')).toBeVisible();
+      // A correct quiz answer gets a soft color band, never a highlight.
+      await expect(stage.getByTestId('gallery-answer')).toHaveText(/The claim/);
+      await page.keyboard.press('ArrowRight');
+      // The accent wall is the painting's primary color (rust).
+      await expect(stage.locator('[data-ground="accent"]')).toHaveCSS('background-color', 'rgb(156, 74, 34)');
       await expect(stage.getByTestId('gallery-mode')).toHaveText('Before you go.');
+      await expect(stage.getByTestId('gallery-yawp-button')).toHaveText('Open Yawp! → Exit ticket');
 
       const response = await page.request.get(`/present/${conversationId}/${assistantIds[0]}.pptx`);
       expect(response.ok()).toBe(true);
