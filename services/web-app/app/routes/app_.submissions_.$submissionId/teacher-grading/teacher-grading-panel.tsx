@@ -1287,9 +1287,7 @@ export function TeacherGradingPanel({
                 categoryBounds?.max ?? activeRubricConfig.maxScore;
               const effectiveLabel = mapDailyPagesBandTitle(configuredScoreLabel);
               const scoreLabel = hasScore
-                ? effectiveLabel
-                  ? `${effectiveLabel} (${current.score}/${categoryMaxScore})`
-                  : `${current.score}/${categoryMaxScore}`
+                ? effectiveLabel ?? `${current.score}/${categoryMaxScore}`
                 : 'Not scored';
               const isGrammarCategory = isGrammarHighlightCategory(item);
               const showFeedback = isCategoryFeedbackEnabled(item);
