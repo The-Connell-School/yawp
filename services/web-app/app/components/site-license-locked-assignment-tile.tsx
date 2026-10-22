@@ -3,6 +3,9 @@ import {
   assignmentTypeTileCardClassName,
   assignmentTypeTileFooterClassName,
   assignmentTypeTileImageClassName,
+  assignmentTypeTileImageWrapClassName,
+  assignmentTypeTileMetaClassName,
+  assignmentTypeTileNameClassName,
 } from '~/components/assignment-type-tile-layout';
 import { SiteLicenseLockButton } from '~/components/site-license-lock-button';
 import { cn } from '~/utils/misc';
@@ -62,13 +65,15 @@ export function SiteLicenseLockedAssignmentTile({
         className
       )}
     >
-      <AssignmentTypeTileImage
-        imageId={imageId}
-        className={assignmentTypeTileImageClassName}
-      />
+      <div className={assignmentTypeTileImageWrapClassName()}>
+        <AssignmentTypeTileImage
+          imageId={imageId}
+          className={assignmentTypeTileImageClassName}
+        />
+      </div>
       <span className={assignmentTypeTileFooterClassName('font-medium')}>
-        <span className="min-w-0 flex-1 truncate">{label}</span>
-        <SiteLicenseLockButton />
+        <span className={assignmentTypeTileNameClassName()}>{label}</span>
+        <SiteLicenseLockButton className="self-start" />
       </span>
     </div>
   );
@@ -102,14 +107,16 @@ export function SiteLicenseLockedAssignmentGridTile({
         )
       )}
     >
-      <AssignmentTypeTileImage
-        imageId={imageId}
-        imageTitle={imageTitle}
-        className={assignmentTypeTileImageClassName}
-      />
+      <div className={assignmentTypeTileImageWrapClassName()}>
+        <AssignmentTypeTileImage
+          imageId={imageId}
+          imageTitle={imageTitle}
+          className={assignmentTypeTileImageClassName}
+        />
+      </div>
       <div className={assignmentTypeTileFooterClassName('text-sm font-medium')}>
-        <span className="min-w-0 flex-1 truncate">{label}</span>
-        <SiteLicenseLockButton />
+        <span className={assignmentTypeTileNameClassName()}>{label}</span>
+        <SiteLicenseLockButton className="self-start" />
       </div>
     </div>
   );

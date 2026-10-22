@@ -5,14 +5,32 @@ export const assignmentTypeTileImageClassName = 'h-14 w-full sm:h-16';
 
 export function assignmentTypeTileCardClassName(extra?: string) {
   return cn(
-    'flex flex-col overflow-hidden rounded-xl border text-left',
+    'flex h-auto w-full flex-col self-start overflow-hidden rounded-xl border text-left',
     extra
   );
 }
 
+export function assignmentTypeTileImageWrapClassName(extra?: string) {
+  return cn('shrink-0 overflow-hidden', extra);
+}
+
 export function assignmentTypeTileFooterClassName(extra?: string) {
   return cn(
-    'flex items-center justify-between gap-2 px-3 py-2 sm:py-2.5',
+    'flex items-start justify-between gap-x-2 gap-y-0.5 px-3 py-2 sm:py-2.5',
+    extra
+  );
+}
+
+export function assignmentTypeTileNameClassName(extra?: string) {
+  return cn(
+    'min-w-0 flex-1 text-left leading-snug [overflow-wrap:anywhere]',
+    extra
+  );
+}
+
+export function assignmentTypeTileMetaClassName(extra?: string) {
+  return cn(
+    'shrink-0 self-start text-xs font-normal text-muted-foreground whitespace-nowrap',
     extra
   );
 }

@@ -33,6 +33,9 @@ import {
   assignmentTypeTileCardClassName,
   assignmentTypeTileFooterClassName,
   assignmentTypeTileImageClassName,
+  assignmentTypeTileImageWrapClassName,
+  assignmentTypeTileMetaClassName,
+  assignmentTypeTileNameClassName,
 } from '~/components/assignment-type-tile-layout';
 import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
@@ -291,11 +294,13 @@ export function FreeAssignmentTiles({
                 )
               )}
             >
-              <AssignmentTypeTileImage
-                imageId={type?.imageId}
-                imageTitle={type?.imageTitle}
-                className={assignmentTypeTileImageClassName}
-              />
+              <div className={assignmentTypeTileImageWrapClassName()}>
+                <AssignmentTypeTileImage
+                  imageId={type?.imageId}
+                  imageTitle={type?.imageTitle}
+                  className={assignmentTypeTileImageClassName}
+                />
+              </div>
               {teachingLocked ? (
                 <span className="flex flex-col gap-1 px-3 py-2 sm:py-2.5">
                   <span className="flex w-full items-start justify-between gap-2 text-[15px] font-medium">
@@ -325,10 +330,12 @@ export function FreeAssignmentTiles({
                     'text-[15px] font-medium'
                   )}
                 >
-                  <span className="min-w-0 flex-1 truncate">{row.label}</span>
+                  <span className={assignmentTypeTileNameClassName()}>
+                    {row.label}
+                  </span>
                   <span
                     className={cn(
-                      'shrink-0 text-[13px] font-normal text-muted-foreground',
+                      assignmentTypeTileMetaClassName('text-[13px]'),
                       !usage.monthly && row.remaining === 0 && 'text-amber-800'
                     )}
                   >

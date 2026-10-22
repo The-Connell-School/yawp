@@ -12,6 +12,9 @@ import {
   assignmentTypeTileCardClassName,
   assignmentTypeTileFooterClassName,
   assignmentTypeTileImageClassName,
+  assignmentTypeTileImageWrapClassName,
+  assignmentTypeTileMetaClassName,
+  assignmentTypeTileNameClassName,
 } from '~/components/assignment-type-tile-layout';
 import { SiteLicenseLockedAssignmentGridTile } from '~/components/site-license-locked-assignment-tile';
 import type { SiteLicenseLockedAssignmentTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
@@ -116,11 +119,12 @@ export function LockedAssignmentTypePickerSheet({
             <X className="h-5 w-5" />
           </button>
         </SheetHeader>
-        <div
-          role="listbox"
-          aria-labelledby={titleId}
-          className="mt-6 grid flex-1 grid-cols-1 gap-3 overflow-y-auto sm:grid-cols-3"
-          onKeyDown={(event) => {
+        <div className="mt-6 min-h-0 flex-1 overflow-y-auto">
+          <div
+            role="listbox"
+            aria-labelledby={titleId}
+            className="grid auto-rows-min grid-cols-2 content-start items-start gap-3 sm:grid-cols-3"
+            onKeyDown={(event) => {
             const focusable = tileRefs.current.filter(Boolean);
             const index = focusable.findIndex(
               (el) => el === document.activeElement
@@ -178,22 +182,29 @@ export function LockedAssignmentTypePickerSheet({
                   tile.selected && 'border-primary ring-1 ring-primary'
                 )}
               >
-                <AssignmentTypeTileImage
-                  imageId={tile.imageId}
-                  imageTitle={tile.imageTitle}
-                  className={assignmentTypeTileImageClassName}
-                />
+                <div className={assignmentTypeTileImageWrapClassName()}>
+                  <AssignmentTypeTileImage
+                    imageId={tile.imageId}
+                    imageTitle={tile.imageTitle}
+                    className={assignmentTypeTileImageClassName}
+                  />
+                </div>
                 <div
                   className={assignmentTypeTileFooterClassName(
                     'text-sm font-medium'
                   )}
                 >
-                  <span className="min-w-0 flex-1 truncate">{tile.label}</span>
-                  <span className="shrink-0 text-xs font-normal text-muted-foreground">
+                  <span className={assignmentTypeTileNameClassName()}>
+                    {tile.label}
+                  </span>
+                  <span className={assignmentTypeTileMetaClassName()}>
                     {tile.included}
                   </span>
                   {tile.selected ? (
-                    <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+                    <Check
+                      className="h-4 w-4 shrink-0 self-start text-primary"
+                      aria-hidden
+                    />
                   ) : null}
                 </div>
               </button>

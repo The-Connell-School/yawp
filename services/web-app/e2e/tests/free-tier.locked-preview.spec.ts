@@ -4,6 +4,7 @@ import path from 'node:path';
 import { test, expect } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
 import { provisionFreeClassroomForE2E } from '../helpers/provision-free-classroom-for-e2e';
+import { seedSiteLicenseLockedCatalogForE2E } from '../helpers/seed-site-license-locked-catalog-for-e2e';
 if (!process.env.CLASS_STEP_PORT) {
   throw new Error(
     'Run class-step tests with ./bin/project test --profile free-tier-locked-preview-browser'
@@ -114,18 +115,32 @@ async function provisionPendingClassroom(appId: string, userId: string) {
   });
 }
 
+const pr655FinalDir = '/cursor/stores/self/artifacts/screenshots/pr655-final';
+
 async function capture(page: import('@playwright/test').Page, state: string) {
   if (!shots) return;
   fs.mkdirSync(shots, { recursive: true });
   await page.evaluate(() => document.fonts.ready);
+  const filename = `${state}-impl.png`;
+  const shotPath = path.join(shots, filename);
   await page.screenshot({
-    path: path.join(shots, `${state}-impl.png`),
+    path: shotPath,
     fullPage: true,
     animations: 'disabled',
   });
+  try {
+    fs.mkdirSync(pr655FinalDir, { recursive: true });
+    fs.copyFileSync(shotPath, path.join(pr655FinalDir, `${state}.png`));
+  } catch {
+    /* Agent store may be read-only in some runners. */
+  }
 }
 
 test.describe.configure({ mode: 'serial' });
+
+test.beforeAll(async () => {
+  await seedSiteLicenseLockedCatalogForE2E(prisma);
+});
 
 test.beforeEach(async () => {
   await prisma.organization.upsert({
@@ -197,6 +212,24 @@ for (const width of [390, 1440]) {
       .click();
     await expect(page.getByRole('heading', { name: 'New assignment' })).toBeVisible();
     await expect(page.getByText('Choose a type.')).toBeVisible();
+    const listbox = page.getByRole('listbox');
+    await expect(
+      listbox.getByTestId('site-license-locked-assignment-tile')
+    ).toHaveCount(6, { timeout: 15_000 });
+    const pickerTiles = listbox.locator(
+      ':scope > button, :scope > [data-testid="site-license-locked-assignment-tile"]'
+    );
+    const tileCount = await pickerTiles.count();
+    expect(tileCount).toBeGreaterThanOrEqual(6);
+    for (let i = 0; i < tileCount; i++) {
+      const box = await pickerTiles.nth(i).boundingBox();
+      expect(box?.height ?? 999).toBeLessThan(140);
+    }
+    await expect(
+      listbox.getByRole('option', { name: /Thesis Statement/i })
+    ).toBeVisible();
+    await expect(listbox.getByText('Class ...')).toHaveCount(0);
+    await expect(listbox.getByText('Prewrit...')).toHaveCount(0);
     const lockedTileImg = page
       .locator('[data-testid="site-license-locked-assignment-tile"] img')
       .first();
