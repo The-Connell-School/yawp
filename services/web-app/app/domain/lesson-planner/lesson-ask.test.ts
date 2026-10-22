@@ -330,7 +330,7 @@ describe('composeIntakeReply', () => {
         choice: null,
         activityIds: [],
       })
-    ).toBe('For English 11 · Period 3, 90 minutes. For English 10 · Period 5, 50 minutes.');
+    ).toBe('For English 11 · Period 3, 90 minutes. For English 10 · Period 5, 50 minutes. The same lesson for both classes.');
   });
 
   test('a class typed by hand, with no length asked', () => {
@@ -345,5 +345,23 @@ describe('composeIntakeReply', () => {
 
   test('nothing chosen is an empty message, so Send stays off', () => {
     expect(composeIntakeReply({ classes: [], choice: null, activityIds: [] })).toBe('');
+  });
+});
+
+describe("two classes: the same lesson, said once (Brian's run 4)", () => {
+  const classes = [
+    { title: 'English 10 · Period 3', minutes: 50 },
+    { title: 'English 11 · Period 5', minutes: 50 },
+  ];
+  test('the same lesson for both classes is the default', () => {
+    expect(composeIntakeReply({ classes, choice: null, activityIds: [] })).toBe(
+      'For English 10 · Period 3, 50 minutes. For English 11 · Period 5, 50 minutes. The same lesson for both classes.'
+    );
+  });
+  test('or a version for each', () => {
+    expect(composeIntakeReply({ classes, choice: null, activityIds: [], sameLesson: false })).toContain('A version of the lesson for each class.');
+  });
+  test('one class says nothing about it', () => {
+    expect(composeIntakeReply({ classes: classes.slice(0, 1), choice: null, activityIds: [] })).toBe('For English 10 · Period 3, 50 minutes.');
   });
 });

@@ -125,9 +125,11 @@ test.describe("Lesson Planner — Brian's fourth run", () => {
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
     await expect(page.getByTestId('plan-segment').filter({ hasText: 'Closing' }).getByTestId('segment-toggle')).toHaveCount(0);
+    await expect(page.getByTestId('plan-segment').filter({ hasText: 'Closing' }).getByTestId('segment-choice')).toHaveText('Pick one below to add it');
     const save = page.waitForResponse((response) => response.url().includes('/api/domain/lesson-planner/packet') && response.request().method() === 'POST');
     await page.getByTestId('exit-ticket-stack-toggle').nth(1).click();
     expect((await save).ok()).toBe(true);
+    await expect(page.getByTestId('plan-segment').filter({ hasText: 'Closing' }).getByTestId('segment-choice')).toHaveText('In the stack');
 
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
     // One card, the ticket, as the Closing: 5 minutes, never a second card for the step.

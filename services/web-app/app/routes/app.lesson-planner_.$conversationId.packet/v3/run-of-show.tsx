@@ -56,12 +56,15 @@ export function WritingBadge() {
 function InsertPoint({
   active,
   dragging,
+  still = false,
   onInsert,
   onDropPiece,
   label,
 }: {
   active: boolean;
   dragging: boolean;
+  /** A step is being dragged: the gap keeps its size, so nothing moves under the pointer. */
+  still?: boolean;
   onInsert: () => void;
   onDropPiece: (event: DragEvent) => void;
   label: string;
@@ -91,13 +94,17 @@ function InsertPoint({
           onDropPiece(event);
         }}
         className={cn(
-          'my-1 flex items-center justify-center rounded-xl border-2 border-dashed text-xs font-semibold transition-all',
-          over
-            ? 'h-14 border-[var(--sv-coral)] bg-[#FBE5DC] text-[var(--sv-primary)]'
-            : 'h-6 border-[var(--sv-line)] text-[var(--sv-muted)]'
+          still
+            ? 'h-3 rounded-full transition-colors'
+            : 'my-1 flex items-center justify-center rounded-xl border-2 border-dashed text-xs font-semibold transition-all',
+          still
+            ? over && 'bg-[var(--sv-coral)]'
+            : over
+              ? 'h-14 border-[var(--sv-coral)] bg-[#FBE5DC] text-[var(--sv-primary)]'
+              : 'h-6 border-[var(--sv-line)] text-[var(--sv-muted)]'
         )}
       >
-        Drop here
+        {still ? null : 'Drop here'}
       </div>
     );
   }
@@ -167,6 +174,7 @@ export function RunOfShow({
       key={`gap-${index}`}
       active={insertAt === index}
       dragging={dragging || dragKey !== null}
+      still={!dragging && dragKey !== null}
       onInsert={() => onInsertAt(index)}
       onDropPiece={(event) => {
         // A step dragged by its handle lands in the gap it is dropped in.
@@ -274,6 +282,15 @@ export function RunOfShow({
                           style={{ borderColor: 'var(--sv-writing)', color: 'var(--sv-writing)' }}
                         >
                           Not in Yawp! yet
+                        </span>
+                      ) : step.create?.created ? (
+                        // Made: said plainly, with the way to open it in the card (Brian's run 4).
+                        <span
+                          data-testid="in-yawp"
+                          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold text-white"
+                          style={{ backgroundColor: 'var(--sv-writing)' }}
+                        >
+                          <Check size={11} /> Assignment created
                         </span>
                       ) : null}
                     </span>

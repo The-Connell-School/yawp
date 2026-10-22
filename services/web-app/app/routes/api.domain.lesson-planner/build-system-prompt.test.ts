@@ -1722,7 +1722,7 @@ describe("planner prompt — Brian's run 3", () => {
   });
 
   test('the prompt version moved', () => {
-    expect(LESSON_PLANNER_PROMPT_VERSION).toBe('2026-10-22-review-v1');
+    expect(LESSON_PLANNER_PROMPT_VERSION).toBe('2026-10-22-review-v2');
   });
 });
 
@@ -1892,6 +1892,12 @@ describe('planner prompt — the painting is chosen, not reused (Kevin, Oct 22)'
 });
 
 describe("planner prompt — Brian's run 4", () => {
+  test('two classes: the same lesson is asked once, never again', () => {
+    const prompt = buildLessonPlannerSystemPrompt({ teacherName: 'Brian', organizationName: 'Connell School', intakeV2: true });
+    expect(prompt).toContain('same lesson for all of them (the default) or a version for each');
+    expect(prompt).toContain('Never ask that again.');
+  });
+
   for (const intakeV2 of [false, true]) {
     const prompt = buildLessonPlannerSystemPrompt({ teacherName: 'Brian', organizationName: 'Connell School', intakeV2 });
 
@@ -1902,8 +1908,11 @@ describe("planner prompt — Brian's run 4", () => {
     });
 
     test(`no "not this, but that"; every student contribution received warmly (intake v2: ${intakeV2})`, () => {
-      expect(prompt).toContain('Never use the "not this, but that" turn');
+      expect(prompt).toContain('No "not this, but that" turns, no staged contrasts and no aphoristic closing lines');
+      expect(prompt).toContain('Students remember being seen more than they remember being taught');
       expect(prompt).toContain('Every student contribution is received warmly.');
+      expect(prompt).toContain('All engagement is good engagement');
+      expect(prompt).toContain('The product is written Yawp! (capital Y, lowercase "awp", the exclamation point)');
     });
   }
 });

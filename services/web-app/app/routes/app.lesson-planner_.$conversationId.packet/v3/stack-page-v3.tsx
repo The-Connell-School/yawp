@@ -207,7 +207,9 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
 
   const setFetcher = stackFetcher;
   const isSet = Boolean(v3.setAt);
-  const saveState = busy ? 'Saving…' : isSet ? 'Lesson set · saved' : 'Saved';
+  // Two different saves, named apart (Brian's run 4): every change is a
+  // saved draft; the library is the teacher's choice.
+  const saveState = busy ? 'Saving…' : isSet ? 'Lesson set · saved' : 'Draft saved';
   const templateName = `${steps.map((step) => STEP_TYPE_LABELS[step.type]).slice(0, 3).join(', ')} (${timing.total} min)`;
 
   return (
@@ -235,8 +237,15 @@ export function StackPageV3({ data }: { data: StackPageV3Data }) {
                 onClick={() => post(packetFetcher, PACKET_API, { intent: published ? 'unpublish' : 'publish' })}
                 className="inline-flex items-center gap-1 rounded-full bg-[#FBE5DC] px-3 py-1.5 text-xs font-semibold text-[var(--sv-primary)]"
               >
-                <BookMarked size={13} /> {published ? 'In your library' : 'Add to your library'}
+                <BookMarked size={13} /> {published ? 'In my library' : 'Save to my library'}
               </button>
+              <Link
+                to="/app/lesson-planner/library"
+                data-testid="open-library"
+                className="text-xs font-semibold text-[var(--sv-primary)] underline"
+              >
+                My library
+              </Link>
             </div>
           </div>
           <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--sv-primary)]">

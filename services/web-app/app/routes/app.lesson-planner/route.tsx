@@ -95,7 +95,7 @@ import { TEMPLATE_SLOTS, type LessonTemplate } from '~/domain/lesson-planner/les
 import { TemplateChip, TemplateList } from './template-picker';
 import { FULL_LESSON_FRAMING, stripPlanPreamble } from '~/domain/lesson-planner/plan-framing';
 import { announceStackChange, useStackChanges } from '~/components/lesson-planner/stack-channel';
-import { pieceKeysInReply, segmentInStack, stepSegments, stepsOfferingChoice } from '~/domain/lesson-planner/reply-pieces';
+import { pieceKeysInReply, segmentInStack, stepBlockKeys, stepSegments, stepsOfferingChoice } from '~/domain/lesson-planner/reply-pieces';
 import {
   asksToSwapStarter,
   BUILD_FROM_STACK_REQUESTS,
@@ -1629,10 +1629,13 @@ function MessageBubble({
   const planSteps =
     stackV2 && deliveredPlan && message.id ? readPlanSteps(message.content) : [];
   const segments = planSteps.length ? stepSegments(message.content) : {};
+  const stepBlocks = planSteps.length ? stepBlockKeys(message.content) : {};
   // A step offering options (three class starters) has no button of its own:
   // each option has its Add, and the step cannot know which is meant.
   const choiceSteps = planSteps.length ? stepsOfferingChoice(message.content) : new Set<string>();
   const segmentKeys = (stepKey: string) => segments[stepKey] ?? [stepKey];
+  // The options under a choice step, for whether one of them is in.
+  const optionKeysUnder = (stepKey: string) => stepBlocks[stepKey] ?? [];
   const toggleSegment = (keys: string[], add: boolean) => {
     if (!message.id || !keys.length) return;
     if (keys.length === 1 || !onSegment) {
@@ -1711,6 +1714,16 @@ function MessageBubble({
                     disabled={disabled}
                     onToggle={(add) => toggleSegment(keys, add)}
                   />
+                ) : choiceSteps.has(step.key) ? (
+                  // Every numbered step says where it stands (Brian's run 4):
+                  // a choice is added by picking one of its options below.
+                  <span data-testid="segment-choice" className="text-xs font-semibold text-muted-foreground">
+                    {[...addedMaterials].some((token) =>
+                      optionKeysUnder(step.key).some((key) => token === `${message.id}:${key}`)
+                    )
+                      ? 'In the stack'
+                      : 'Pick one below to add it'}
+                  </span>
                 ) : null}
               </div>
             );

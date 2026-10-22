@@ -94,6 +94,16 @@ export function stepSegments(content: string): Record<string, string[]> {
   return segments;
 }
 
+/** The blocks under each step, the deck aside, by step key. */
+export function stepBlockKeys(content: string): Record<string, string[]> {
+  const under: Record<string, string[]> = {};
+  const pieces = placedPieces(content);
+  pieces.forEach((piece, index) => {
+    if (piece.step) under[piece.key] = blocksUnder(pieces, index);
+  });
+  return under;
+}
+
 /** Blocks that are alternatives when a step holds more than one: the teacher picks one. */
 const OPTION_BLOCKS = new Set(['yawp-daily-pages', 'yawp-exit-ticket', 'yawp-practice']);
 

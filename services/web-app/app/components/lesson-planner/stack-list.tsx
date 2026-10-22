@@ -57,7 +57,7 @@ export function StackList({
   onReorder: (keys: string[]) => void;
   onRemove: (item: StackListItem) => void;
   onJump?: (item: StackListItem) => void;
-  /** The narrow panel beside the chat: no minutes column, tighter rows. */
+  /** The narrow panel beside the chat: tighter rows. */
   compact?: boolean;
 }) {
   const incoming = items.map((item) => item.key);
@@ -119,7 +119,8 @@ export function StackList({
           }}
           className={cn(
             'group flex items-center gap-1 rounded-lg border border-transparent bg-background px-1 py-1 text-sm transition',
-            over === item.key && 'border-primary/50 bg-primary/5'
+            over === item.key && 'border-primary/50 bg-primary/5',
+            compact && 'py-0.5'
           )}
         >
           <span
@@ -138,11 +139,10 @@ export function StackList({
           >
             {item.title}
           </button>
-          {!compact && item.minutes !== null ? (
-            <span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
-              {item.minutes}m
-            </span>
-          ) : null}
+          {/* A time on every piece, in the panel too (Brian's run 4). */}
+          <span data-testid="stack-list-minutes" className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
+            {item.minutes !== null ? `${item.minutes}m` : '–'}
+          </span>
           <span className="flex shrink-0 items-center">
             <button
               type="button"

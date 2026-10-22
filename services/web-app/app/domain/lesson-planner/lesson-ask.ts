@@ -284,17 +284,28 @@ export function composeIntakeReply({
   classes,
   choice,
   activityIds,
+  sameLesson = true,
 }: {
   /** Checked classes, or the one typed by hand; minutes null when not asked. */
   classes: Array<{ title: string; minutes: number | null }>;
   choice: string | null;
   activityIds: string[];
+  /** Two or more classes: one lesson for all of them, or a version each. */
+  sameLesson?: boolean;
 }): string {
   const parts: string[] = classes.map((klass) =>
     klass.minutes === null
       ? `For ${klass.title}.`
       : `For ${klass.title}, ${klass.minutes} minutes.`
   );
+  // Said once, so the planner never asks again (Brian's run 4).
+  if (classes.length > 1) {
+    parts.push(
+      sameLesson
+        ? `The same lesson for ${classes.length === 2 ? 'both classes' : 'all of these classes'}.`
+        : 'A version of the lesson for each class.'
+    );
+  }
   const chosen = choice?.trim();
   if (chosen) parts.push(isFinished(chosen) ? chosen : `${chosen}.`);
   const activities = composeAskReply({ minutes: null, activityIds });

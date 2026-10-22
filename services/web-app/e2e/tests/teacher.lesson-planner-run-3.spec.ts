@@ -242,6 +242,7 @@ test.describe("Lesson Planner — Brian's third run", () => {
       const starterStep = page.getByTestId('plan-segment').filter({ hasText: 'Class starter' });
       await expect(starterStep).toBeVisible();
       await expect(starterStep.getByTestId('segment-toggle')).toHaveCount(0);
+      await expect(starterStep.getByTestId('segment-choice')).toHaveText('Pick one below to add it');
       await expect(page.getByTestId('plan-segment').filter({ hasText: 'Mini-lesson' }).getByTestId('segment-toggle')).toHaveText(
         'Add to stack'
       );

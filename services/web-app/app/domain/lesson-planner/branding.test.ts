@@ -50,7 +50,7 @@ describe("Yawp! everywhere (Brian's run 2, item 18)", () => {
 
   test('says how to write the name', () => {
     const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'X' });
-    expect(prompt).toContain('The product is written Yawp! (capitals, exclamation point), every time');
+    expect(prompt).toContain('The product is written Yawp! (capital Y, lowercase "awp", the exclamation point), every time');
   });
 
   test('starter prompts, progress labels and notes the model reads', () => {

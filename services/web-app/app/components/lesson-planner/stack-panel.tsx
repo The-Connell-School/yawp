@@ -66,6 +66,7 @@ export function StackPanel({
     },
   });
   const shown = items.filter((item) => !hiddenIds.includes(item.id));
+  const minutes = shown.reduce((sum, item) => sum + (item.minutes ?? 0), 0);
 
   return (
     <aside
@@ -79,6 +80,7 @@ export function StackPanel({
           Your stack
           <span className="ml-1 font-normal text-muted-foreground">
             · {shown.length} {shown.length === 1 ? 'piece' : 'pieces'}
+            {minutes ? <span data-testid="stack-panel-total"> · {minutes} min</span> : null}
           </span>
         </p>
         <button

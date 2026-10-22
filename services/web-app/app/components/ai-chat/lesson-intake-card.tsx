@@ -91,6 +91,7 @@ export function LessonIntakeCard({
       )
   );
   const [choice, setChoice] = useState<string | null>(null);
+  const [sameLesson, setSameLesson] = useState(true);
   const [otherText, setOtherText] = useState('');
   const [activityIds, setActivityIds] = useState<string[]>([]);
 
@@ -148,6 +149,7 @@ export function LessonIntakeCard({
       classes: classLines,
       choice: finalChoice,
       activityIds,
+      sameLesson,
     }),
   ]
     .filter(Boolean)
@@ -244,6 +246,33 @@ export function LessonIntakeCard({
               className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
             />
           )}
+          {chosenClasses.length > 1 ? (
+            // Two classes: the same lesson first, asked here once (Brian's run 4).
+            <div role="radiogroup" aria-label="One lesson or one each" data-testid="intake-same-lesson" className="mt-3 flex flex-wrap gap-2">
+              {[
+                { same: true, label: chosenClasses.length === 2 ? 'The same lesson for both classes' : 'The same lesson for all of them' },
+                { same: false, label: 'A version for each class' },
+              ].map((option) => (
+                <label
+                  key={option.label}
+                  className={cn(
+                    'inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition focus-within:ring-2 focus-within:ring-primary',
+                    sameLesson === option.same ? 'border-primary bg-primary/10 font-medium text-primary' : 'border-border hover:bg-foreground/[0.03]'
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="intake-same-lesson"
+                    checked={sameLesson === option.same}
+                    disabled={disabled}
+                    onChange={() => setSameLesson(option.same)}
+                    className="h-4 w-4 accent-primary"
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+          ) : null}
         </fieldset>
       ) : null}
 
