@@ -166,6 +166,7 @@ describe('readUnitPlan — a map that will not render', () => {
       'Here you go.\n\n```yawp-unit\n{"days":[{"day":1}]}\n```'
     );
     expect(marked).toContain('failed validation');
+    expect(marked).toContain('Yawp! never rendered it');
     expect(marked).not.toContain('"days"');
   });
 

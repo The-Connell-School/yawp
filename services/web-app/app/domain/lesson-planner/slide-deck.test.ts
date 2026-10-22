@@ -314,6 +314,7 @@ describe('markFailedDecks', () => {
     // Without this the model reads its own JSON in the history, concludes the
     // deck exists, and tells the teacher to scroll down and find it.
     expect(marked.toLowerCase()).toContain('failed');
+    expect(marked).toContain('Yawp! never rendered it');
     expect(marked.toLowerCase()).toContain('build it again');
   });
 

@@ -577,7 +577,7 @@ describe('buildLessonPlannerSystemPrompt — bringing material in', () => {
 
   test('warns that an invented address costs them the material', () => {
     expect(prompt.toLowerCase()).toContain(
-      'yawp deletes any block whose address did not come back from a tool'
+      'yawp! deletes any block whose address did not come back from a tool'
     );
   });
 });
@@ -639,7 +639,7 @@ describe('buildLessonPlannerSystemPrompt — when to ask the length', () => {
     );
     // The app strips it either way; the model should know rather than be
     // surprised that its control vanished.
-    expect(lower).toContain('yawp removes the control');
+    expect(lower).toContain('yawp! removes the control');
   });
 });
 
@@ -1354,5 +1354,32 @@ describe('writing fundamentals', () => {
     );
     expect(entry).toBeTruthy();
     expect(entry!.prompt.toLowerCase()).toContain('practice');
+  });
+});
+
+describe('buildLessonPlannerSystemPrompt — the name is written Yawp!', () => {
+  // The planner echoes the prompt's wording back to teachers, so the brand
+  // has to be right here: "Yawp!", never a bare "Yawp" or "YAWP".
+  for (const exitTicketsAvailable of [false, true]) {
+    for (const writingPracticeAvailable of [false, true]) {
+      test(`exit tickets ${exitTicketsAvailable ? 'on' : 'off'}, writing practice ${writingPracticeAvailable ? 'on' : 'off'}`, () => {
+        const prompt = buildLessonPlannerSystemPrompt({
+          teacherName: 'Ms. Rivera',
+          organizationName: 'Connell School',
+          exitTicketsAvailable,
+          writingPracticeAvailable,
+        });
+        expect(prompt).toContain('Yawp!');
+        expect(prompt).not.toMatch(/\bYawp\b(?!!)/);
+        expect(prompt).not.toMatch(/\bYAWP\b/);
+        expect(prompt).not.toContain('Yawp!.');
+      });
+    }
+  }
+
+  test('recommended prompts', () => {
+    for (const { label, prompt } of RECOMMENDED_LESSON_PLANNER_PROMPTS) {
+      expect(`${label} ${prompt}`).not.toMatch(/\bYawp\b(?!!)/);
+    }
   });
 });

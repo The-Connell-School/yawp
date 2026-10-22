@@ -189,7 +189,7 @@ export async function readLoungeMaterial(
   const href = `/api/teacher-training-module-resource/${resourceId}`;
   if (!isReadableMaterial(resource)) {
     return {
-      error: `"${resource.name}" is not a format Yawp can open — only .pptx and .docx can be read. Link it by name and say nothing about what is inside it.`,
+      error: `"${resource.name}" is not a format Yawp! can open — only .pptx and .docx can be read. Link it by name and say nothing about what is inside it.`,
     };
   }
 

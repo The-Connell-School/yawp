@@ -251,7 +251,7 @@ export function hasUnitPlan(content: string): boolean {
  * JSON, a rejected map reads back to it as a map that shipped.
  */
 export const FAILED_UNIT_NOTE =
-  '[The unit map you wrote here failed validation. Yawp never rendered it and the teacher never saw it. If they ask about the unit, believe them, apologise briefly, and write the map again from scratch — fewer days, one short line per field. Do not refer back to this one as if it exists.]';
+  '[The unit map you wrote here failed validation. Yawp! never rendered it and the teacher never saw it. If they ask about the unit, believe them, apologise briefly, and write the map again from scratch — fewer days, one short line per field. Do not refer back to this one as if it exists.]';
 
 export function markFailedUnitPlans(content: string): string {
   const outcome = readUnitPlan(content);

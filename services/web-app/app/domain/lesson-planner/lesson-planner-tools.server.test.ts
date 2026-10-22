@@ -137,7 +137,14 @@ describe('handleLessonPlannerToolCall', () => {
     const result = await callTool('drop_tables', {}, { ...ctx });
 
     expect(JSON.parse(result).error).toContain('drop_tables');
+    expect(JSON.parse(result).error).toContain('the Yawp! teaching catalog');
     expect(handleReporterToolCall).not.toHaveBeenCalled();
+  });
+
+  test('writes the name as Yawp! in every catalog tool description', () => {
+    const text = JSON.stringify(LESSON_PLANNER_CATALOG_TOOLS);
+    expect(text).toContain('Yawp!');
+    expect(text).not.toMatch(/\bYawp\b(?!!)/);
   });
 
   test('never forwards a growth-plan write buffer to the reporter layer', async () => {
@@ -385,6 +392,7 @@ describe('handleLessonPlannerToolCall', () => {
 
     expect(result.error).toMatch(/plan without it/i);
     expect(result.error).not.toContain('db down');
+    expect(result.error).toContain('inventing Yawp! material');
   });
 });
 
