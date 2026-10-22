@@ -26,7 +26,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
   let provision: Awaited<
     ReturnType<typeof ensureLockedPreviewClassroomForUser>
-  >;
+  > = null;
   try {
     provision = await ensureLockedPreviewClassroomForUser(userId);
   } catch (error) {

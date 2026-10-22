@@ -3,11 +3,20 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 const requireUserId = mock(async () => 'teacher-1');
 const requireFreeTierEnabled = mock(async () => {});
 const userHasPendingFreeTierTeachingLock = mock(async () => true);
-const ensureLockedPreviewClassroomForUser = mock(async () => ({
-  status: 'provisioned' as const,
+type PreviewProvisionResult = Awaited<
+  ReturnType<
+    typeof import('~/domain/free-tier/locked-preview.server').ensureLockedPreviewClassroomForUser
+  >
+>;
+const ensureLockedPreviewClassroomForUser = mock<
+  (userId: string) => Promise<PreviewProvisionResult>
+>(async () => ({
+  status: 'provisioned',
   organizationId: 'org-1',
 }));
-const findFirst = mock(async () => ({ status: 'SENT' }));
+const findFirst = mock(async (): Promise<{ status: string } | null> => ({
+  status: 'SENT',
+}));
 
 beforeEach(() => {
   requireUserId.mockReset().mockResolvedValue('teacher-1');
