@@ -358,6 +358,29 @@ Plan and status: [`2026-10-21-sharing-standards-uploads.md`](./2026-10-21-sharin
   per lesson. Only the text is kept. The planner builds from them, quotes
   them, says which one a step uses, and reads long ones a part at a time.
 
+## The painting is chosen, not reused (Oct 22)
+
+The Turner in the art library was Brian's example of how to use a painting,
+from the kit's Conclusion Paragraph deck. It was the only painting in the
+library, with themes broad enough (war, memory, carrying) that the planner
+hung it on almost every deck.
+
+- **The planner:**
+  - A painting is now optional, chosen only when what it shows truly fits
+    the lesson.
+  - It is told never to pick one because it is the only one, and that a
+    deck without a painting is a good deck.
+  - It sees the paintings this teacher used on recent decks, and does not
+    reuse one outside that unit.
+- **The Turner** keeps Brian's colors, but its themes are now what it
+  shows (endings, the end of an era, the old giving way to the new).
+- **Adding paintings:** `bun scripts/add-deck-art.ts <image> --id … --focal
+  x,y` cuts the whole image and its three crops at the focal point, samples
+  two or three colors readable on paper, and prints the library entry to
+  fill in. Museum and Wikimedia image hosts are blocked from the build
+  environment, so the images have to come in by hand (or with those hosts
+  allowed).
+
 ## Still for Kevin and Brian
 
 - **More art for the gallery deck.** The kit's reference table names

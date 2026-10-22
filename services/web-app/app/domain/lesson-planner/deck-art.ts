@@ -30,6 +30,8 @@ export type DeckArt = {
   /** Two or three colors from the painting, each 4.5:1 or better on paper. */
   colors: string[];
   rights: string;
+  /** What the painting shows, in a line: the planner matches on this first. */
+  subject: string;
   /** What the work is about, for the planner to match against a lesson. */
   themes: string[];
 };
@@ -54,7 +56,11 @@ export const DECK_ART: DeckArt[] = [
     // The kit's Conclusion Paragraph deck: rust, slate, ochre.
     colors: ['#9C4A22', '#3F5A73', '#7D6118'],
     rights: 'Public domain',
-    themes: ['war', 'memory', 'loss', 'carrying', 'endings', 'change', 'age', 'the end of an era'],
+    // Brian's example in the kit (the Conclusion Paragraph deck), not a house
+    // painting: its themes are what it shows, kept narrow so it is not
+    // reached for on every lesson (Kevin, Oct 22).
+    subject: 'an old warship towed to be broken up, under a setting sun',
+    themes: ['endings', 'the end of an era', 'the old giving way to the new', 'obsolescence', 'progress and its cost'],
   },
 ];
 

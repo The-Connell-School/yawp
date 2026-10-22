@@ -1,4 +1,5 @@
 import { buildTemplateSection, type LessonTemplate } from '~/domain/lesson-planner/lesson-templates';
+import type { RecentArt } from '~/domain/lesson-planner/recent-art';
 import { buildSourcesSection, type LessonUpload } from '~/domain/lesson-planner/lesson-uploads';
 import { DECK_ART } from '~/domain/lesson-planner/deck-art';
 import { rubricCategories } from '~/domain/grading/rubric';
@@ -733,10 +734,10 @@ export function buildLessonPlannerInstructionCore({
  * renderers apply the kit's rhythm and mode-word rules whatever the model
  * writes.
  */
-function buildDeckGallerySection(on: boolean): string[] {
+function buildDeckGallerySection(on: boolean, recentArt: RecentArt[] = []): string[] {
   if (!on) return [];
   const art = DECK_ART.map(
-    (work) => `\`${work.id}\` (${work.artist}, ${work.title}, ${work.year}; colors ${work.colors.join(', ')}; ${work.themes.join(', ')})`
+    (work) => `\`${work.id}\` (${work.artist}, ${work.title}, ${work.year}: ${work.subject}; about ${work.themes.join(', ')}; colors ${work.colors.join(', ')})`
   ).join('; ');
   return [
     '',
@@ -758,7 +759,15 @@ function buildDeckGallerySection(on: boolean): string[] {
     'Rhythm: open with title then agenda, and close with exit. Never the same template twice in a row. Never two dark slides (write, look) in a row, and at most one in four. Neutral walls: paper, one accent wall at most (the exit). Pine only for writing, ink only for looking at the painting.',
     'Prompt type sizes itself: 12 words or fewer is set largest, up to 24 smaller, up to 40 smaller again. Over 40 words, split the slide.',
     'Colors: give the deck `colors`, two or three hex colors from its painting, the painting\'s own listed below. The first is the primary. Mode words and accents rotate through them, and a slide can pick one with `color` (1, 2 or 3), for instance a quiz in one color and the review in another. Never highlight words: color them. When a slide teaches the parts of something (the three parts of a thesis, the moves of a conclusion), give each part its color and keep it all the way through, the sample paragraph included, by writing `~~1|the claim~~`, `~~2|the reason~~`, `~~3|the so-what~~` in any text field.',
-    `On the deck itself: \`unit\` (the unit's name, for the running head) and \`art\`: one work per lesson, chosen by theme, never by class, only from this library: ${art}. Leave \`art\` out when nothing fits. The art is shown and credited by Yawp!; never write about it on a slide except a look question. The deck and slide titles carry no lesson or day numbers.`,
+    `On the deck itself: \`unit\` (the unit's name, for the running head) and, optionally, \`art\`. The deck and slide titles carry no lesson or day numbers.`,
+    `A painting is optional. Choose one only when what it shows (its subject, not just a mood) truly belongs with this lesson's text or idea, and then one work per lesson, chosen by theme, never by class, only from this library: ${art}. Never choose a painting because it is the only one or because it was used before: a deck without a painting is a good deck, in its own colors. Leave \`art\` out unless it fits. The art is shown and credited by Yawp!; never write about it on a slide except a look question.`,
+    ...(recentArt.length
+      ? [
+          `Paintings this teacher has used lately: ${recentArt
+            .map((used) => `\`${used.art}\` in "${used.lesson}"${used.unit ? ` (${used.unit})` : ''}`)
+            .join('; ')}. Do not use one of these again unless this lesson is in that same unit.`,
+        ]
+      : []),
   ];
 }
 
@@ -780,6 +789,7 @@ export function buildLessonPlannerSystemPromptBlocks({
   template = null,
   deckGallery = false,
   sources = [],
+  recentArt = [],
 }: {
   teacherName: string | null;
   organizationName: string;
@@ -799,6 +809,8 @@ export function buildLessonPlannerSystemPromptBlocks({
   deckGallery?: boolean;
   /** The teacher's own documents for this lesson (Oct 21). */
   sources?: LessonUpload[];
+  /** Paintings on this teacher's recent decks, with the gallery deck on. */
+  recentArt?: RecentArt[];
 }): CacheableSystemBlock[] {
   const who = teacherName ? `${teacherName}, a teacher` : 'a teacher';
   const intro = `You are the Yawp! Lesson Planner, an instructional design partner for ${who} at ${organizationName}.`;
@@ -808,7 +820,7 @@ export function buildLessonPlannerSystemPromptBlocks({
     ...buildStackContentsSection(stackContents),
     ...buildUnitContextSection(unitContext),
     ...buildTemplateSection(template),
-    ...buildDeckGallerySection(deckGallery),
+    ...buildDeckGallerySection(deckGallery, recentArt),
     ...buildSourcesSection(sources),
   ].join('\n');
   const variable = tail ? `${intro}\n${tail}` : intro;

@@ -1867,3 +1867,26 @@ describe('planner prompt — the teacher’s own documents (Oct 21)', () => {
     expect(plain.at(-1)!.text).not.toContain('<document');
   });
 });
+
+describe('planner prompt — the painting is chosen, not reused (Kevin, Oct 22)', () => {
+  const textOf = (recentArt: Array<{ art: string; lesson: string; unit: string | null }> = []) =>
+    buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'School', deckGallery: true, recentArt })
+      .map((block) => block.text)
+      .join('\n');
+
+  test('optional, and only when what the painting shows fits the lesson', () => {
+    const text = textOf();
+    expect(text).toContain('A painting is optional');
+    expect(text).toContain('what it shows');
+    expect(text).toContain('Never choose a painting because it is the only one');
+    expect(text).toContain('an old warship towed to be broken up');
+  });
+
+  test('the paintings this teacher used lately, not to be reused outside their unit', () => {
+    const text = textOf([{ art: 'turner-temeraire', lesson: 'Conclusion Paragraph', unit: 'The Critical Essay' }]);
+    expect(text).toContain('Paintings this teacher has used lately');
+    expect(text).toContain('`turner-temeraire` in "Conclusion Paragraph" (The Critical Essay)');
+    expect(text).toContain('Do not use one of these again unless this lesson is in that same unit');
+    expect(textOf()).not.toContain('Paintings this teacher has used lately');
+  });
+});

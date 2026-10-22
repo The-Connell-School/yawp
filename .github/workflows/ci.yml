@@ -942,6 +942,7 @@ jobs:
             app/domain/lesson-planner/teacher-standards.test.ts \
             app/domain/lesson-planner/lesson-uploads.test.ts \
             app/domain/lesson-planner/transcript-scroll.test.ts \
+            app/domain/lesson-planner/recent-art.test.ts \
             app/domain/lesson-planner/source-documents.server.test.ts \
             app/domain/lesson-planner/kit-plan-render.server.test.ts \
             app/domain/lesson-planner/lesson-pptx-gallery.server.test.ts \

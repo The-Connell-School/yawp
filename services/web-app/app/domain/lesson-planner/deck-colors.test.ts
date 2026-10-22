@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   PAPER,
   contrastRatio,
+  paletteFromPixels,
   deckColors,
   readableOnPaper,
   slideColor,
@@ -74,5 +75,37 @@ describe('splitColorMarks: color can carry meaning', () => {
   test('plain text is one run; an unknown color number falls back to the primary', () => {
     expect(splitColorMarks('Plain.', colors)).toEqual([{ text: 'Plain.' }]);
     expect(splitColorMarks('~~9|x~~', colors)).toEqual([{ text: 'x', color: '#9C4A22' }]);
+  });
+});
+
+describe('paletteFromPixels: two or three colors sampled from a painting', () => {
+  const fill = (rgb: [number, number, number], count: number) => Array.from({ length: count }, () => rgb);
+
+  test('the strongest distinct colors, each readable on paper, grays left out', () => {
+    const pixels = [
+      ...fill([200, 90, 40], 400), // rust, the most
+      ...fill([60, 100, 160], 250), // a blue
+      ...fill([205, 95, 45], 100), // the same rust again
+      ...fill([128, 128, 128], 900), // gray sky: never a deck color
+      ...fill([200, 170, 40], 150), // ochre
+    ];
+    const palette = paletteFromPixels(pixels);
+    expect(palette).toHaveLength(3);
+    for (const hex of palette) expect(contrastRatio(hex, PAPER)).toBeGreaterThanOrEqual(4.5);
+    // Rust first (the most of it), then the ochre and the blue: never twice the same hue.
+    const hue = (hex: string) => {
+      const [r, g, b] = [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16) / 255) as [number, number, number];
+      const max = Math.max(r, g, b);
+      const d = max - Math.min(r, g, b);
+      const h = max === r ? ((g - b) / d) * 60 : max === g ? ((b - r) / d + 2) * 60 : ((r - g) / d + 4) * 60;
+      const degrees = (h + 360) % 360;
+      return degrees < 35 ? 'red' : degrees < 70 ? 'yellow' : degrees > 180 && degrees < 260 ? 'blue' : 'other';
+    };
+    expect(palette.map(hue)[0]).toBe('red');
+    expect(new Set(palette.map(hue))).toEqual(new Set(['red', 'blue', 'yellow']));
+  });
+
+  test('a nearly gray painting still gets one color, from its strongest tint', () => {
+    expect(paletteFromPixels([...fill([120, 120, 125], 500), ...fill([140, 110, 90], 50)])).toHaveLength(1);
   });
 });

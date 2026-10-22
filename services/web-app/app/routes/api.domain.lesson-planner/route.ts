@@ -1,4 +1,5 @@
 import { monthlyFreeTierPolicy } from '~/domain/free-tier/monthly-policy.server';
+import { recentArtFrom } from '~/domain/lesson-planner/recent-art';
 import {
   MAX_PENDING_UPLOAD_IDS,
   PENDING_UPLOAD_MS,
@@ -503,6 +504,29 @@ export async function action({ request }: ActionFunctionArgs) {
           }
         : null);
 
+    // The paintings on this teacher's other recent decks, so a painting is
+    // chosen for the lesson rather than reused (Kevin, Oct 22).
+    const recentArt = deckGallery
+      ? recentArtFrom(
+          (
+            await prisma.lessonPlanMessage.findMany({
+              where: {
+                role: AgentType.Assistant,
+                content: { contains: '```yawp-slides' },
+                conversation: {
+                  membershipId: ctx.membershipId,
+                  deletedAt: null,
+                  ...(activeConversation ? { id: { not: activeConversation.id } } : {}),
+                },
+              },
+              orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+              take: 20,
+              select: { content: true },
+            })
+          ).map((message) => message.content)
+        )
+      : [];
+
     const system = buildLessonPlannerSystemPromptBlocks({
       teacherName: null,
       lessonLength,
@@ -516,6 +540,7 @@ export async function action({ request }: ActionFunctionArgs) {
       template,
       deckGallery,
       sources,
+      recentArt,
     });
 
     const messages: { role: AgentType; content: string; name?: string }[] = [
