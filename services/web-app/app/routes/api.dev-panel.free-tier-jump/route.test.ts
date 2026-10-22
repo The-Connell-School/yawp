@@ -43,7 +43,7 @@ describe('api.dev-panel.free-tier-jump', () => {
       }),
       params: {},
       context: {},
-    });
+    } as Parameters<typeof action>[0]);
     expect(response.status).toBe(403);
     expect(executeJump).not.toHaveBeenCalled();
   });
@@ -63,7 +63,7 @@ describe('api.dev-panel.free-tier-jump', () => {
       }),
       params: {},
       context: {},
-    });
+    } as Parameters<typeof action>[0]);
     expect(response.status).toBe(200);
     expect(executeJump).toHaveBeenCalled();
   });

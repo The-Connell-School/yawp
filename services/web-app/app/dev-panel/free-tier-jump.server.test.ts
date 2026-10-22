@@ -78,12 +78,13 @@ describe('executeFreeTierStateJump monthly usage seeding', () => {
       organizationId: 'org-1',
     });
     expect(result.ok).toBe(true);
+    const upsertCalls = settingUpsert.mock.calls as unknown as Array<
+      [{ where?: { name?: string }; create?: { name?: string } }]
+    >;
     expect(
-      settingUpsert.mock.calls.some(
-        (call) => call[0]?.where?.name === FREE_TIER_LIMITS_SETTING
-      )
+      upsertCalls.some((call) => call[0]?.where?.name === FREE_TIER_LIMITS_SETTING)
     ).toBe(false);
-    const limitsUpsert = settingUpsert.mock.calls.find(
+    const limitsUpsert = upsertCalls.find(
       (call) => call[0]?.create?.name === FREE_TIER_LIMITS_SETTING
     );
     expect(limitsUpsert).toBeUndefined();
