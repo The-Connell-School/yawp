@@ -1,11 +1,16 @@
 import { expect, test } from 'bun:test';
 import { usageNavRingVisible } from '~/components/free-tier/usage-nav-ring';
 import {
+  usageNavCollapsedAccessibleName,
   usageNavLevelFromCount,
   usageNavMobileWarningDot,
   usageNavLevelHeadline,
   usagePercentLeft,
 } from './usage-nav-meter';
+import {
+  USAGE_NAV_MOBILE_HIT_SIZE,
+  USAGE_NAV_RING_SIZE_COLLAPSED,
+} from '~/components/free-tier/usage-nav-ring-svg';
 import { formatUsageRenewsLabel } from './inapp-usage';
 
 const count = (remaining: number, total: number) => ({
@@ -38,6 +43,26 @@ test('all-used headline includes UTC renew date', () => {
 test('usageNavMobileWarningDot only for few left', () => {
   expect(usageNavMobileWarningDot(['plenty', 'about-half'])).toBe(false);
   expect(usageNavMobileWarningDot(['few'])).toBe(true);
+});
+
+test('usageNavCollapsedAccessibleName matches frame 08 copy', () => {
+  expect(
+    usageNavCollapsedAccessibleName({
+      feature: 'lesson-planner',
+      count: count(20, 100),
+    })
+  ).toBe('Lesson Planner, A few left');
+  expect(
+    usageNavCollapsedAccessibleName({
+      feature: 'reporter',
+      count: count(80, 100),
+    })
+  ).toBe('Reporter, Plenty left');
+});
+
+test('collapsed and mobile hit targets use 44px', () => {
+  expect(USAGE_NAV_RING_SIZE_COLLAPSED).toBe(44);
+  expect(USAGE_NAV_MOBILE_HIT_SIZE).toBe(44);
 });
 
 test('hide-on-error is represented by absent ring render', () => {
