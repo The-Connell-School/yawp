@@ -280,6 +280,10 @@ test.beforeEach(async () => {
   await flag(true);
 });
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.removeItem('yawp-dev-panel'));
+});
+
 test.afterAll(async () => {
   await flag(false);
   const applications = await prisma.freeTierApplication.findMany({
@@ -674,7 +678,6 @@ test('legacy public enrollment cannot bypass pending approval', async ({ page })
 });
 
 async function exploreLockedApp(page: import('@playwright/test').Page, userEmail: string) {
-  await page.addInitScript(() => localStorage.removeItem('yawp-dev-panel'));
   await login(page, userEmail);
   await page.goto('/app/free-tier/pending');
   await page.getByRole('link', { name: 'Explore my classroom' }).click();
@@ -773,7 +776,8 @@ test('locked assignments tab shows sample rows and locked documents pill', async
   await expect(page.getByText('Sample · Not sent').first()).toBeVisible();
   const documentsPill = page.getByTestId(/assignment-documents-/).first();
   await expect(documentsPill).toBeVisible();
-  await documentsPill.click({ force: true });
+  await documentsPill.scrollIntoViewIfNeeded();
+  await documentsPill.click();
   const sheet = page.getByRole('dialog');
   await expect(sheet).toBeVisible();
   await expect(
