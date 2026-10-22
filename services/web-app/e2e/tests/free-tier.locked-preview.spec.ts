@@ -322,8 +322,20 @@ for (const width of [390, 1440]) {
       page.getByRole('button', { name: 'Not the right person?' })
     ).toBeVisible();
     await capture(page, `waiting-${width}`);
-    await page.getByRole('link', { name: 'Explore my classroom' }).click();
+    const exploreLink = page.getByRole('link', { name: 'Explore my classroom' });
+    await expect(exploreLink).toHaveAttribute('href', '/app');
+    await exploreLink.click();
     await expect(page).toHaveURL(/\/app$/);
+    await expect(page).not.toHaveURL(/free-tier\/preview/);
+    await expect(
+      page.getByRole('heading', { name: /Look around while you wait/i })
+    ).toHaveCount(0);
+    await expect(page.locator('[data-tour="preview-content-nav"]')).toHaveCount(
+      0
+    );
+    await expect(
+      page.getByRole('heading', { name: 'New assignment' })
+    ).toHaveCount(0);
     await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
     await expect(
       page

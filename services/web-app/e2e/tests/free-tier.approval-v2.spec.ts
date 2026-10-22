@@ -144,9 +144,13 @@ for (const width of [1280, 390])
       'href',
       /mailto:patel%2Bapproval%40example\.org\?subject=/
     );
-    await expect(
-      page.getByRole('link', { name: 'Explore my classroom' })
-    ).toBeVisible();
+    const explore = page.getByRole('link', { name: 'Explore my classroom' });
+    await expect(explore).toBeVisible();
+    await expect(explore).toHaveAttribute('href', '/app');
+    await explore.click();
+    await expect(page).toHaveURL(/\/app$/);
+    await expect(page.getByTestId('app._index')).toBeVisible();
+    await page.goto('/app/free-tier/pending');
     await capture(page, `${width}-waiting`);
     await page.getByRole('button', { name: 'Not the right person?' }).click();
     await capture(page, `${width}-forward`);

@@ -216,7 +216,7 @@ export async function action({ request }: ActionFunctionArgs) {
 function LockedPreviewExploreButton() {
   return (
     <FreeTierButton asChild data-testid="locked-preview-explore">
-      <Link to="/app/free-tier/preview">Explore my classroom</Link>
+      <Link to="/app">Explore my classroom</Link>
     </FreeTierButton>
   );
 }

@@ -37,6 +37,8 @@ test('approval v2 SENT shows explore when preview membership gate would fail', a
   const html = renderToStaticMarkup(<Page />);
   expect(html).toContain('Explore my classroom');
   expect(html).toContain('data-testid="locked-preview-explore"');
+  expect(html).toContain('to="/app"');
+  expect(html).not.toContain('/app/free-tier/preview');
 });
 
 test('approval v2 MANUAL_REVIEW shows explore without pending admin row', async () => {
