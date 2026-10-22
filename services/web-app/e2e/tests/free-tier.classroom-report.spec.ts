@@ -34,6 +34,7 @@ for (const width of [1280, 390]) test(`teacher navigation, counts, copy and prin
   for (const [metric, value] of [['activeClasses', '2'], ['enrolledStudents', '2'], ['assignments', '2'], ['submittedWriting', '3']]) await expect(report.getByTestId(metric!)).toHaveText(value!);
   await expect(report).toContainText('all years');
   await expect(report).toContainText('Generated at:');
+  await expect(page.getByText('Recipients do not need a Yawp! account.')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await capture(page, 'report');
   await page.evaluate(() => {

@@ -154,6 +154,9 @@ for (const width of [1280, 390]) {
         await expect(
           page.getByText(/Ask your teacher for the class join link/)
         ).toBeVisible();
+        await expect(
+          page.getByText(/Class codes alone are not enough to join on Yawp!/)
+        ).toBeVisible();
         await expect(page.locator('input')).toHaveCount(0);
       }
       await shot(on ? 'bare-link' : 'flag-off-bare-link');

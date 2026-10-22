@@ -19,3 +19,11 @@ test('all-zero activity retains useful planning content and true zero counts', (
   const text = pitchPacketText(pitchPacketSections({ ...report, activeClasses: 0, enrolledStudents: 0, assignments: 0, submittedWriting: 0 }, limits));
   for (const line of ['Active classes: 0', 'Distinct enrolled students: 0', 'Assignments: 0', 'Submitted writing: 0', 'Evaluation checklist', 'No submitted writing in this scope yet.']) expect(text).toContain(line);
 });
+
+test('packet writes the name as Yawp!', () => {
+  const text = pitchPacketText(pitchPacketSections(report, limits));
+  expect(text).toContain('whether Yawp! fits your teaching workflow');
+  expect(text).toContain('activity report in Yawp!');
+  expect(text).not.toMatch(/\bYawp\b(?!!)/);
+  expect(text).not.toContain('Yawp!.');
+});
