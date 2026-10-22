@@ -1,13 +1,12 @@
 import {
   cloneElement,
   isValidElement,
+  useEffect,
   useId,
   useRef,
   useState,
   type ReactElement,
-  type ReactNode,
 } from 'react';
-import useBreakpoint from '~/hooks/useBreakpoint';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import {
   TooltipContent,
@@ -18,6 +17,25 @@ import {
 import { TEACHING_ACCESS_LOCKED_TOOLTIP } from '~/domain/free-tier/teaching-access-copy';
 import { LockedTeachingMobileSheet } from './locked-teaching-mobile-sheet';
 import { cn } from '~/utils/misc';
+
+const TEACHING_ACCESS_MOBILE_MEDIA = '(max-width: 639px)';
+
+function readTeachingAccessMobileViewport() {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia(TEACHING_ACCESS_MOBILE_MEDIA).matches;
+}
+
+function useTeachingAccessMobileViewport() {
+  const [isMobile, setIsMobile] = useState(readTeachingAccessMobileViewport);
+  useEffect(() => {
+    const media = window.matchMedia(TEACHING_ACCESS_MOBILE_MEDIA);
+    const update = () => setIsMobile(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+  return isMobile;
+}
 
 export function LockedTeachingControl({
   locked,
@@ -32,13 +50,7 @@ export function LockedTeachingControl({
   adminName?: string;
   mobileSheetBody?: string;
 }) {
-  const breakpoint = useBreakpoint();
-  const isMobile =
-    breakpoint === 'base' ||
-    breakpoint === 'sm' ||
-    (breakpoint === undefined &&
-      typeof window !== 'undefined' &&
-      window.innerWidth < 640);
+  const isMobile = useTeachingAccessMobileViewport();
   const [sheetOpen, setSheetOpen] = useState(false);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const descriptionId = useId();
