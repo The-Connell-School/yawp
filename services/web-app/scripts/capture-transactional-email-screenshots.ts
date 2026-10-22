@@ -161,12 +161,12 @@ async function screenshot(page: import('playwright').Page, html: string, file: s
   await page.screenshot({ path: file, fullPage: true });
 }
 
-/** Simulate blocked images: alt text + dashed wordmark box (design frame 62). */
+/** Simulate blocked images: dashed wordmark box (design frame 62). */
 function htmlWithBlockedLogos(html: string) {
-  return html.replace(
-    /(<img[^>]*class="yawp-logo-(?:light|dark)"[^>]*)\ssrc="[^"]*"/gi,
-    '$1 src=""'
-  );
+  const fallback = `<div style="width:112px;height:57px;border:1px dashed #b8b4a8;box-sizing:border-box;font-family:Georgia,serif;font-size:22px;font-weight:700;color:#3c3828;display:flex;align-items:center;padding-left:10px">Yawp!</div>`;
+  return html
+    .replace(/<img[^>]*class="yawp-logo-light"[^>]*\/?>/gi, fallback)
+    .replace(/<img[^>]*class="yawp-logo-dark"[^>]*\/?>/gi, '');
 }
 
 async function main() {
@@ -199,10 +199,6 @@ async function main() {
 
   const release = all[0]!.html;
   await screenshot(dark, release, path.join(outDir, '01-teacher-release-dark-600.png'));
-  await imagesOff.addStyleTag({
-    content:
-      '.yawp-logo-light, .yawp-logo-dark { border: 1px dashed #b8b4a8 !important; box-sizing: border-box; }',
-  });
   await screenshot(
     imagesOff,
     htmlWithBlockedLogos(release),
