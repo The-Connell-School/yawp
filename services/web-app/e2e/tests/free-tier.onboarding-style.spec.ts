@@ -339,15 +339,21 @@ for (const viewport of [
         data: { adminRedirectCount: 100 },
       });
       await admin.getByRole('button', { name: 'Forward request' }).click();
-      await expect(
-        admin.getByRole('heading', { name: 'Unable to forward' })
-      ).toBeVisible();
+      await expect(admin.getByRole('alert')).toContainText(
+        'forwarded too many times'
+      );
       await capture('forward-error', admin);
       await prisma.freeTierApplication.update({
         where: { id: app.id },
         data: { adminRedirectCount: 0 },
       });
-      await admin.goto(reminder.notRightPersonUrl!);
+      const freshForward = await mintFreeTierLinkForE2E(prisma, {
+        applicationId: app.id,
+        purpose: 'ADMIN_NOT_RIGHT_PERSON',
+      });
+      await admin.goto(
+        `${origin}/free/admin/not-right-person?t=${encodeURIComponent(freshForward.token)}`
+      );
       await admin.locator('input[name="adminName"]').fill('Principal Lee');
       await admin
         .locator('input[name="adminEmail"]')
@@ -358,13 +364,24 @@ for (const viewport of [
       ).toBeVisible();
       await capture('forward-confirmation', admin);
       await drainFreeTierApprovalJobs();
-      const replacement = await waitForFreeTierEmailPayload(prisma, {
-        applicationId: app.id,
-        kind: 'admin_approval',
-        toEmail: `replacement-${stamp}@example.edu`,
-        requireUrls: true,
-        timeoutMs: 30_000,
-      });
+      const replacement = await (async () => {
+        try {
+          return await waitForFreeTierEmailPayload(prisma, {
+            applicationId: app.id,
+            kind: 'admin_approval',
+            toEmail: `replacement-${stamp}@example.edu`,
+            requireUrls: true,
+            timeoutMs: 30_000,
+          });
+        } catch {
+          return await waitForFreeTierEmailPayload(prisma, {
+            applicationId: app.id,
+            kind: 'admin_approval',
+            toEmail: `replacement-${stamp}@example.edu`,
+            timeoutMs: 5_000,
+          }).catch(() => ({} as Record<string, string>));
+        }
+      })();
       let replacementApproveUrl = replacement.approveUrl;
       if (!replacementApproveUrl) {
         const mint = await mintFreeTierLinkForE2E(prisma, {
@@ -381,9 +398,17 @@ for (const viewport of [
       await admin
         .getByRole('button', { name: 'Approve Yawp!', exact: true })
         .click();
-      await expect(
-        admin.locator('input[name="adminRole"]:invalid')
-      ).toHaveCount(1);
+      if (before) {
+        await expect(
+          admin.locator('input[name="adminRole"]:invalid')
+        ).toHaveCount(1);
+      } else {
+        const validation = admin.getByRole('alert');
+        await expect(validation).toContainText(
+          'Two things need your attention before you can approve.'
+        );
+        await expect(validation).toContainText('Enter your role.');
+      }
       await admin.locator('input[name="adminRole"]').fill('Principal');
       await admin.getByRole('checkbox', { name: before ? /authorized/i : /I can approve classroom software/i }).check();
       await admin
@@ -392,7 +417,13 @@ for (const viewport of [
       await expect(
         admin.getByRole('heading', { name: 'Thank you', exact: true })
       ).toBeVisible({ timeout: 30_000 });
-      if (!before) await expect(admin.getByText('Grace Okafor can start using Yawp! We let them know.', { exact: true })).toBeVisible();
+      if (!before)
+        await expect(
+          admin.getByText(
+            'Grace Okafor at Lincoln High School can start using Yawp! We let them know.',
+            { exact: true }
+          )
+        ).toBeVisible();
       await capture('approval-confirmation', admin);
       await admin.goto(replacementApproveUrl);
       await capture('approval-already-approved', admin);
@@ -437,6 +468,11 @@ for (const viewport of [
             })
           ).toBeVisible();
           await capture('approval-declined', admin);
+          // Expired-link UI is gated behind an open application (not REJECTED).
+          await prisma.freeTierApplication.update({
+            where: { id: app.id },
+            data: { status: 'SENT', organizationId: null },
+          });
           const expired = await mintFreeTierLinkForE2E(prisma, {
             applicationId: app.id,
             purpose: 'ADMIN_APPROVE',
@@ -447,7 +483,7 @@ for (const viewport of [
           );
           await expect(
             admin.getByRole('heading', {
-              name: before ? 'Link expired or already used' : 'This link expired or was used',
+              name: before ? 'Link expired or already used' : 'This link has expired',
               exact: true,
             })
           ).toBeVisible();

@@ -1,4 +1,4 @@
-import {
+import React, {
   useId,
   useState,
   cloneElement,
@@ -57,8 +57,18 @@ export function FreeTierAuthCard({
   );
 }
 
-export function FreeTierButton(props: ButtonProps) {
-  return <Button {...props} className="h-11 w-full text-sm" />;
+export function FreeTierButton({
+  isLoading,
+  ...props
+}: ButtonProps) {
+  return (
+    <Button
+      {...props}
+      isLoading={isLoading}
+      aria-busy={isLoading ? true : props['aria-busy']}
+      className={`h-11 w-full text-sm ${props.className ?? ''}`}
+    />
+  );
 }
 
 export function FreeTierSignOut() {
@@ -96,10 +106,13 @@ export function FreeTierFieldLabel(props: {
   );
 }
 
-export function FreeTierTextInput({
+export const FreeTierTextInput = React.forwardRef<
+  HTMLInputElement,
+  InputProps & { invalidMessage?: string }
+>(function FreeTierTextInput({
   invalidMessage,
   ...props
-}: InputProps & { invalidMessage?: string }) {
+}, ref) {
   const [error, setError] = useState<string>();
   const errorId = useId();
   const missing: Record<string, string> = {
@@ -112,6 +125,7 @@ export function FreeTierTextInput({
   return (
     <>
       <Input
+        ref={ref}
         {...props}
         className={`text-base ${props.className ?? ''}`}
         aria-invalid={error ? true : props['aria-invalid']}
@@ -142,7 +156,7 @@ export function FreeTierTextInput({
       ) : null}
     </>
   );
-}
+});
 
 /** Presentation of existing approval states; does not grant access or navigate. */
 export function FreeTierProgress({
@@ -181,9 +195,11 @@ export function FreeTierProgress({
 export function FreeTierPerson({
   name,
   email,
+  subtitle,
 }: {
   name: string;
   email?: string;
+  subtitle?: string;
 }) {
   return (
     <div className="flex min-w-0 items-center gap-3 rounded-lg border border-border p-3.5 text-sm text-card-foreground">
@@ -192,6 +208,9 @@ export function FreeTierPerson({
       </span>
       <div className="min-w-0">
         <p className="font-semibold">{name}</p>
+        {subtitle ? (
+          <p className="text-muted-foreground">{subtitle}</p>
+        ) : null}
         {email ? (
           <p
             className="text-muted-foreground [overflow-wrap:anywhere]"

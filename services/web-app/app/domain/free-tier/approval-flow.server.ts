@@ -28,6 +28,7 @@ import { forwardApprovalSchema } from './approval-waiting';
 import {
   fetchFreeTierApplicationTerminalGate,
   forwardIdempotentReplay,
+  resolveAdminLinkReplacedGate,
   resolveAdminLinkTerminalGate,
 } from './admin-link-gate.server';
 import {
@@ -522,12 +523,28 @@ export async function resendFreeTierAdminApprovalReminder(args: {
 function terminalGateFromApplication(app: {
   status: string;
   schoolName: string;
-}): { ok: false; reason: 'already_approved' | 'declined'; schoolName: string } | null {
+  name: string;
+}): {
+  ok: false;
+  reason: 'already_approved' | 'declined';
+  schoolName: string;
+  teacherName: string;
+} | null {
   if (app.status === 'APPROVED') {
-    return { ok: false as const, reason: 'already_approved' as const, schoolName: app.schoolName };
+    return {
+      ok: false as const,
+      reason: 'already_approved' as const,
+      schoolName: app.schoolName,
+      teacherName: app.name,
+    };
   }
   if (app.status === 'REJECTED' || app.status === 'EXPIRED') {
-    return { ok: false as const, reason: 'declined' as const, schoolName: app.schoolName };
+    return {
+      ok: false as const,
+      reason: 'declined' as const,
+      schoolName: app.schoolName,
+      teacherName: app.name,
+    };
   }
   return null;
 }
@@ -582,12 +599,24 @@ export async function redirectSchoolAdmin(args: {
     }
     const gate = await resolveAdminLinkTerminalGate({ token: args.token, peek });
     if (gate) return { ok: false as const, ...gate };
+    const replaced = await resolveAdminLinkReplacedGate({
+      token: args.token,
+      peek,
+    });
+    if (replaced) return { ok: false as const, ...replaced };
     return peek;
   }
 
   const identity = await prisma.freeTierApplication.findUnique({
     where: { id: peek.applicationId },
-    select: { id: true, userId: true, organizationId: true, status: true, schoolName: true },
+    select: {
+      id: true,
+      userId: true,
+      organizationId: true,
+      status: true,
+      schoolName: true,
+      name: true,
+    },
   });
   const preTerminal = identity ? terminalGateFromApplication(identity) : null;
   if (preTerminal) return preTerminal;
@@ -626,7 +655,7 @@ export async function redirectSchoolAdmin(args: {
   const prePending = await prisma.freeTierAdminApproval.findFirst({
     where: { applicationId: preApp.id, status: 'PENDING' },
     orderBy: { createdAt: 'desc' },
-    select: { id: true },
+    select: { id: true, adminName: true },
   });
   if (!prePending) {
     const decided = await fetchFreeTierApplicationTerminalGate(preApp.id);
@@ -675,6 +704,7 @@ export async function redirectSchoolAdmin(args: {
       approveUrl,
       notRightPersonUrl,
       adminRecipientName: newAdminNameTrim,
+      forwardedByAdminName: prePending.adminName,
     });
     if (!emailResult.ok) {
       await abandonMintedSignedLinks([minted.approveMint.linkId, minted.declineMint.linkId]);

@@ -242,7 +242,7 @@ describe('free-tier approval flow', () => {
         ).toBe(true);
         if (approvalV2) await runApprovalJobs(new Date());
         const replacement = checkDelivery('replacement@school.edu');
-        expect(replacement.text).toContain('Hi Principal Lee,');
+        expect(replacement.text).toContain('Principal Pat forwarded this to you');
         const approveUrl = replacement.text
           .split('\n')
           .find((line: string) => line.includes('/free/admin/approve?t='))!;

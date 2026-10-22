@@ -21,6 +21,7 @@ mock.module('~/domain/free-tier/signed-link.server', () => ({
 mock.module('~/domain/free-tier/admin-link-gate.server', () => ({
   fetchFreeTierApplicationTerminalGate: fetchGate,
   resolveAdminLinkTerminalGate: async () => null,
+  resolveAdminLinkReplacedGate: async () => null,
 }));
 
 mock.module('~/domain/free-tier/approval-flow.server', () => ({
@@ -38,6 +39,7 @@ describe('free.admin.not-right-person loader', () => {
     fetchGate.mockResolvedValueOnce({
       reason: 'already_approved',
       schoolName: 'TS High',
+      teacherName: 'Jordan Rivera',
     });
     const data = await loader({
       request: new Request('https://yawp.test/free/admin/not-right-person?t=token'),
@@ -48,6 +50,7 @@ describe('free.admin.not-right-person loader', () => {
       ok: false,
       reason: 'already_approved',
       schoolName: 'TS High',
+      teacherName: 'Jordan Rivera',
     });
   });
 
@@ -57,6 +60,10 @@ describe('free.admin.not-right-person loader', () => {
       applicationId: 'app-1',
     });
     fetchGate.mockResolvedValueOnce(null);
+    findUnique.mockResolvedValueOnce({
+      schoolName: 'TS High',
+      name: 'Jordan Rivera',
+    });
     const data = await loader({
       request: new Request(
         'https://yawp.test/free/admin/not-right-person?t=token',
@@ -65,7 +72,13 @@ describe('free.admin.not-right-person loader', () => {
       params: {},
       context: {},
     } as LoaderFunctionArgs);
-    expect(data).toEqual({ ok: true, token: 'token' });
+    expect(data).toEqual({
+      ok: true,
+      token: 'token',
+      schoolName: 'TS High',
+      teacherName: 'Jordan Rivera',
+      approveBackToken: undefined,
+    });
     expect(peekSignedLink).toHaveBeenCalled();
   });
 });

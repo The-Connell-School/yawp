@@ -12,6 +12,7 @@ export type FreeTierAdminTerminalReason = 'already_approved' | 'declined';
 export type FreeTierAdminTerminalGate = {
   reason: FreeTierAdminTerminalReason;
   schoolName: string;
+  teacherName: string;
 };
 
 export async function fetchFreeTierApplicationTerminalGate(
@@ -19,14 +20,22 @@ export async function fetchFreeTierApplicationTerminalGate(
 ): Promise<FreeTierAdminTerminalGate | null> {
   const app = await prisma.freeTierApplication.findUnique({
     where: { id: applicationId },
-    select: { status: true, schoolName: true },
+    select: { status: true, schoolName: true, name: true },
   });
   if (!app) return null;
   if (app.status === 'APPROVED') {
-    return { reason: 'already_approved', schoolName: app.schoolName };
+    return {
+      reason: 'already_approved',
+      schoolName: app.schoolName,
+      teacherName: app.name,
+    };
   }
   if (app.status === 'REJECTED' || app.status === 'EXPIRED') {
-    return { reason: 'declined', schoolName: app.schoolName };
+    return {
+      reason: 'declined',
+      schoolName: app.schoolName,
+      teacherName: app.name,
+    };
   }
   return null;
 }
@@ -46,7 +55,9 @@ function linkIdFromSignedToken(token: string): string | null {
 }
 
 /** True when this not-right-person link was consumed by a successful forward. */
-export async function forwardAlreadySucceededForToken(token: string): Promise<boolean> {
+export async function forwardAlreadySucceededForToken(
+  token: string
+): Promise<boolean> {
   const applicationId = applicationIdFromSignedToken(token);
   const linkId = linkIdFromSignedToken(token);
   if (!applicationId || !linkId) return false;
@@ -109,4 +120,66 @@ export async function peekAdminSignedLinkForLoader(args: {
   expectedPurpose: FreeTierSignedLinkPurpose;
 }): Promise<ConsumeLinkResult> {
   return peekSignedLink(args);
+}
+
+export type FreeTierAdminLinkReplacedGate = {
+  reason: 'link_replaced';
+  schoolName: string;
+  teacherName: string;
+};
+
+/** After forward invalidates an admin link, while the request is still open. */
+export async function resolveAdminLinkReplacedGate(args: {
+  token: string;
+  peek: ConsumeLinkResult;
+}): Promise<FreeTierAdminLinkReplacedGate | null> {
+  if (args.peek.ok) return null;
+  if (args.peek.reason !== 'superseded' && args.peek.reason !== 'used') {
+    return null;
+  }
+  const applicationId = applicationIdFromSignedToken(args.token);
+  if (!applicationId) return null;
+  const app = await prisma.freeTierApplication.findUnique({
+    where: { id: applicationId },
+    select: { name: true, schoolName: true, status: true },
+  });
+  if (!app) return null;
+  if (['APPROVED', 'REJECTED', 'EXPIRED'].includes(app.status)) return null;
+
+  if (args.peek.reason === 'superseded') {
+    return {
+      reason: 'link_replaced',
+      teacherName: app.name,
+      schoolName: app.schoolName,
+    };
+  }
+
+  if (await forwardAlreadySucceededForToken(args.token)) {
+    return {
+      reason: 'link_replaced',
+      teacherName: app.name,
+      schoolName: app.schoolName,
+    };
+  }
+
+  const linkId = linkIdFromSignedToken(args.token);
+  if (!linkId) return null;
+  const link = await prisma.freeTierSignedLink.findUnique({
+    where: { id: linkId },
+    select: { usedAt: true },
+  });
+  if (!link?.usedAt) return null;
+  const redirected = await prisma.freeTierAdminApproval.findFirst({
+    where: { applicationId, status: 'REDIRECTED' },
+    orderBy: { decidedAt: 'desc' },
+    select: { decidedAt: true },
+  });
+  if (redirected?.decidedAt && redirected.decidedAt >= link.usedAt) {
+    return {
+      reason: 'link_replaced',
+      teacherName: app.name,
+      schoolName: app.schoolName,
+    };
+  }
+  return null;
 }
