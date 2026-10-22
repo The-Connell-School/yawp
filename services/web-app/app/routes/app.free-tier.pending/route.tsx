@@ -19,11 +19,9 @@ import {
 import { loadTeacherDeniedSurface } from '~/domain/free-tier/approval-deny.server';
 import {
   teacherAllRequestsUsedBody,
-  teacherAskAnotherHint,
   teacherDeniedStatusBody,
   teacherDeniedStatusTitle,
 } from '~/domain/free-tier/admin-deny-copy';
-import { ADMIN_REDIRECT_CHAIN_CAP } from '~/domain/free-tier/admin-email-rules.server';
 import {
   approvalMailto,
   approvalSentDate,
@@ -339,11 +337,7 @@ export default function FreeTierPendingRoute() {
   }, [askOpen]);
 
   if (teacherDenied && approvalV2?.enabled) {
-    const { denied, chainCapReached } = teacherDenied;
-    const hint = teacherAskAnotherHint(
-      app?.adminRedirectCount ?? 0,
-      ADMIN_REDIRECT_CHAIN_CAP
-    );
+    const { denied, chainCapReached, askAnotherHint: hint } = teacherDenied;
     return (
       <FreeTierAuthCard
         title={teacherDeniedStatusTitle()}

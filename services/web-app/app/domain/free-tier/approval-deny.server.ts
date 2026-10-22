@@ -12,6 +12,7 @@ import { isApprovalV2Enabled } from './approval-v2.server';
 import { sendFreeTierTeacherDenyEmail } from './email.server';
 import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
 import { ADMIN_REDIRECT_CHAIN_CAP } from './admin-email-rules.server';
+import { teacherAskAnotherHint } from './admin-deny-copy';
 
 const fail = (reason: string) => ({ ok: false as const, reason });
 
@@ -270,5 +271,9 @@ export async function loadTeacherDeniedSurface(args: { applicationId: string }) 
     denied,
     forwardsRemaining: Math.max(0, ADMIN_REDIRECT_CHAIN_CAP - app.adminRedirectCount),
     chainCapReached: app.adminRedirectCount >= ADMIN_REDIRECT_CHAIN_CAP,
+    askAnotherHint: teacherAskAnotherHint(
+      app.adminRedirectCount,
+      ADMIN_REDIRECT_CHAIN_CAP
+    ),
   };
 }
