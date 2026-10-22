@@ -174,8 +174,13 @@ function GiveFeedbackSheet({
 
   useEffect(() => {
     if (state.subSheet !== 'give-feedback') return;
-    void captureFeedbackScreenshot().then(setScreenshot).catch(() => setScreenshot(null));
-  }, [state.subSheet]);
+    void captureFeedbackScreenshot()
+      .then(setScreenshot)
+      .catch(() => setScreenshot(null))
+      .finally(() => {
+        window.setTimeout(() => document.getElementById(noteId)?.focus(), 250);
+      });
+  }, [noteId, state.subSheet]);
 
   if (state.subSheet !== 'give-feedback' || !path) return null;
 
