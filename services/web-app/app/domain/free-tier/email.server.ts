@@ -2,7 +2,6 @@ import { sendEmail } from '~/utils/email.server';
 import { prisma } from '~/utils/db.server';
 import {
   ADMIN_APPROVAL_EMAIL_COPY_VERSION,
-  renderAdminApprovalEmailBody,
   renderCongratulationsEmailBody,
   renderReleaseEmailBody,
 } from './email-copy.server';
@@ -14,9 +13,8 @@ import {
 } from './email-copy';
 import { mintSignedLink, RELEASE_LINK_TTL_MS } from './signed-link.server';
 import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
-import { renderAdminApprovalEmailHtml } from './admin-approval-email-html.server';
 import { plainTextEmailToHtml } from './email-html.server';
-import { renderAdminApprovalEmailSubject } from './admin-approval-copy';
+import { buildDesignedAdminApprovalEmail } from './admin-approval-email.server';
 import { sanitizeFreeTierEmailLogPayload } from './email-log-payload.server';
 import { assertFreeTierRuntimeConfigured } from './free-tier-config.server';
 import { resolveFreeTierRuntimeEnvironment } from './usage-budget.server';
@@ -152,23 +150,7 @@ export async function sendFreeTierAdminApprovalEmail(args: {
   forwardedByAdminName?: string | null;
   isReminder?: boolean;
 }): Promise<EmailSendResult> {
-  const text = renderAdminApprovalEmailBody({
-    teacherName: args.teacherName,
-    teacherEmail: args.teacherEmail,
-    schoolName: args.schoolName,
-    approveUrl: args.approveUrl,
-    notRightPersonUrl: args.notRightPersonUrl,
-    adminRecipientName: args.adminRecipientName,
-    forwardedByAdminName: args.forwardedByAdminName,
-    reminder: args.isReminder,
-  });
-  const subject = renderAdminApprovalEmailSubject({
-    teacherName: args.teacherName,
-    schoolName: args.schoolName,
-    reminder: args.isReminder,
-    forwardedByAdminName: args.forwardedByAdminName,
-  });
-  const html = renderAdminApprovalEmailHtml({
+  const { subject, text, html } = buildDesignedAdminApprovalEmail({
     teacherName: args.teacherName,
     teacherEmail: args.teacherEmail,
     schoolName: args.schoolName,

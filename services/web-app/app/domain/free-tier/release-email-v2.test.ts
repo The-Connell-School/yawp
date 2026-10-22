@@ -1,12 +1,8 @@
 import { expect, test } from 'bun:test';
 import {
   CONGRATULATIONS_V2_SUBJECT,
-  FREE_TIER_MODEL_TRAINING_LINE,
   RELEASE_EMAIL_V2_COPY_VERSION,
   TEACHER_REMINDER_V2_SUBJECT,
-  isFreeTierNdpaCompleted,
-  renderAdminApprovalEmailV2Body,
-  renderAdminApprovalEmailV2Subject,
   renderCongratulationsEmailV2Body,
   renderReleaseEmailBody,
   renderReleaseEmailSubject,
@@ -39,60 +35,27 @@ test('legacy and unknown copy versions keep legacy body wording with the new sub
   }
 });
 
-test('v2 approval, reminder and approved emails follow the copy rules', () => {
-  const approval = renderAdminApprovalEmailV2Body({
+test('v2 teacher reminder and approved emails follow the copy rules', () => {
+  const teacher = renderTeacherReminderV2Body({
     teacherName: 'Jordan Smith',
-    schoolName: 'Lincoln High',
-    className: 'English 9',
-    adminRecipientName: 'Dr. Lee',
-    approveUrl: 'https://example.test/approve',
-    notRightPersonUrl: 'https://example.test/not-right',
+    adminName: 'Dr. Lee',
+    pendingUrl: 'https://example.test/pending',
   });
-  const reminder = renderAdminApprovalEmailV2Body({
+  const approved = renderCongratulationsEmailV2Body({
     teacherName: 'Jordan Smith',
-    schoolName: 'Lincoln High',
-    approveUrl: 'https://example.test/approve',
-    notRightPersonUrl: 'https://example.test/not-right',
-    reminder: true,
+    adminName: 'Dr. Lee',
+    signInUrl: 'https://example.test/login',
   });
-  const teacher = renderTeacherReminderV2Body({ teacherName: 'Jordan Smith', adminName: 'Dr. Lee', pendingUrl: 'https://example.test/pending' });
-  const approved = renderCongratulationsEmailV2Body({ teacherName: 'Jordan Smith', adminName: 'Dr. Lee', signInUrl: 'https://example.test/login' });
-  expect(renderAdminApprovalEmailV2Subject({ teacherName: 'Jordan Smith' })).toBe('Jordan Smith would like to use Yawp! with their students');
-  expect(renderAdminApprovalEmailV2Subject({ teacherName: 'Jordan Smith', reminder: true })).toBe('Reminder: Jordan Smith is waiting on your approval for Yawp!');
-  expect(TEACHER_REMINDER_V2_SUBJECT).toBe('Your Yawp! classroom is still waiting on approval');
-  expect(CONGRATULATIONS_V2_SUBJECT).toBe("You're approved! Your Yawp! classroom is ready");
-  expect(approval).toContain('Jordan Smith, who teaches English 9 at Lincoln High,');
-  expect(approval).toContain('https://example.test/not-right');
-  expect(reminder.indexOf("We're checking in")).toBeLessThan(reminder.indexOf('What Yawp! is.'));
+  expect(TEACHER_REMINDER_V2_SUBJECT).toBe(
+    'Your Yawp! classroom is still waiting on approval'
+  );
+  expect(CONGRATULATIONS_V2_SUBJECT).toBe(
+    "You're approved! Your Yawp! classroom is ready"
+  );
   expect(teacher).toContain('Request approval from a different administrator');
   expect(approved).toContain('Hi Jordan,');
-  for (const text of [approval, reminder, teacher, approved]) {
+  for (const text of [teacher, approved]) {
     expect(text).not.toMatch(/\bAI\b/);
     expect(text).not.toMatch(/Yawp(?!!)/);
   }
-  expect(approval).not.toContain('National Student Data Privacy Agreement');
-});
-
-test('admin approval email includes NDPA only when FREE_TIER_NDPA_COMPLETED is true', () => {
-  const prior = process.env.FREE_TIER_NDPA_COMPLETED;
-  delete process.env.FREE_TIER_NDPA_COMPLETED;
-  const without = renderAdminApprovalEmailV2Body({
-    teacherName: 'Jordan Smith',
-    schoolName: 'Lincoln High',
-    approveUrl: 'https://example.test/approve',
-    notRightPersonUrl: 'https://example.test/not-right',
-  });
-  expect(without).not.toContain('National Student Data Privacy Agreement');
-  expect(isFreeTierNdpaCompleted()).toBe(false);
-
-  process.env.FREE_TIER_NDPA_COMPLETED = 'true';
-  const withNdpa = renderAdminApprovalEmailV2Body({
-    teacherName: 'Jordan Smith',
-    schoolName: 'Lincoln High',
-    approveUrl: 'https://example.test/approve',
-    notRightPersonUrl: 'https://example.test/not-right',
-  });
-  expect(withNdpa).toContain('National Student Data Privacy Agreement (NDPA)');
-  if (prior === undefined) delete process.env.FREE_TIER_NDPA_COMPLETED;
-  else process.env.FREE_TIER_NDPA_COMPLETED = prior;
 });
