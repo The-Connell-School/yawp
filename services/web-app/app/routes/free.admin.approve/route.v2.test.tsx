@@ -1,7 +1,11 @@
-import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, expect, mock, test } from 'bun:test';
 import * as router from 'react-router';
+import {
+  mockCardPageChromeForSsr,
+  renderWithCardPageChrome,
+} from '~/components/card-page-chrome.ssr-test-setup';
 afterAll(() => mock.restore());
+mockCardPageChromeForSsr({ signedIn: false });
 mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
   requireFreeTierEnabled: async () => {},
 }));
@@ -74,7 +78,10 @@ test('approval rejects a blank role on the server without consuming a link', asy
 });
 
 test('approve page uses the designed heading and forward link', () => {
-  const html = renderToStaticMarkup(<Page />);
+  const html = renderWithCardPageChrome(
+    <Page />,
+    '/free/admin/approve?t=token'
+  );
   expect(html).toContain(
     'Approve Yawp! for Jordan Rivera at Lincoln High School'
   );

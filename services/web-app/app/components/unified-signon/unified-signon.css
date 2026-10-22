@@ -6,7 +6,8 @@
 .auth-page-shell:has(.unified-signon) .auth-page-frame {
   gap: 24px;
 }
-.auth-page-shell:has(.unified-signon) .auth-page-logo img {
+.auth-page-shell:has(.unified-signon) .auth-page-logo img,
+.auth-page-shell:has(.unified-signon) .card-page-logo-link img {
   width: 208px;
   height: 208px;
   object-fit: contain;
