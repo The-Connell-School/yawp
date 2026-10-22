@@ -245,28 +245,20 @@ export default function FreeAdminApproveRoute() {
   const actionData = useActionData<typeof action>();
 
   if (actionData?.ok && 'idempotent' in actionData && actionData.idempotent) {
+    const teacherName = data.ok ? data.teacherName : 'A teacher';
+    const schoolName = data.ok ? data.schoolName : 'your school';
     return (
       <AdminAlreadyApprovedCard
-        teacherName={
-          'app' in actionData && actionData.app
-            ? actionData.app.name
-            : (data.teacherName ?? 'A teacher')
-        }
-        schoolName={
-          'app' in actionData && actionData.app
-            ? actionData.app.schoolName
-            : (data.schoolName ?? 'your school')
-        }
+        teacherName={teacherName}
+        schoolName={schoolName}
       />
     );
   }
 
   if (actionData?.ok && 'app' in actionData && actionData.app) {
+    const app = actionData.app as { name: string; schoolName: string };
     return (
-      <AdminThankYouCard
-        teacherName={actionData.app.name}
-        schoolName={actionData.app.schoolName}
-      />
+      <AdminThankYouCard teacherName={app.name} schoolName={app.schoolName} />
     );
   }
 
