@@ -51,10 +51,11 @@ const actionSchema = z.discriminatedUnion('type', [
     .strict(),
 ]);
 const submissionSchema = z.object({
-  note: z.string().trim().min(1).max(4000),
+  note: z.string().trim().min(1).max(2000),
   severity: severitySchema.nullable().optional(),
   url: pathSchema,
   actions: z.array(actionSchema).max(5),
+  screenshot: z.string().max(500_000).nullable().optional(),
 });
 const json = (body: unknown, status: number) =>
   Response.json(body, {
@@ -120,7 +121,9 @@ export async function submitDemoFeedback(
         })
         .join(' → ')
         .slice(0, 4000),
-      whatIWish: '',
+      whatIWish: parsed.data.screenshot
+        ? '[screenshot attached in dev panel feedback]'
+        : '',
       severity: parsed.data.severity ?? null,
       actions: parsed.data.actions,
     });

@@ -21,6 +21,11 @@ function redirectBareAppRoute(): Plugin {
 }
 
 export default defineConfig({
+  define: {
+    __YAWP_DEV_PANEL_BUILD__: JSON.stringify(
+      process.env.YAWP_ENVIRONMENT !== 'production'
+    ),
+  },
   plugins: [redirectBareAppRoute(), reactRouter(), tsconfigPaths()],
   resolve: {
     conditions: ['import', 'require'],
