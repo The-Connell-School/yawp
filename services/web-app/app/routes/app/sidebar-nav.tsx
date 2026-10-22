@@ -172,6 +172,13 @@ type SidebarNavLinksProps = {
   isAppNavLinkActive: (linkTo: string, pathname: string) => boolean;
   forceFullNavigation?: boolean;
   renderLinkTrailing?: (link: SidebarNavLink) => React.ReactNode;
+  renderNavRow?: (input: {
+    link: SidebarNavLink;
+    isActive: boolean;
+    rowClassName: string;
+    linkClassName: string;
+    icon: React.ReactNode;
+  }) => React.ReactNode | null;
 };
 
 export function SidebarNavLinks({
@@ -182,6 +189,7 @@ export function SidebarNavLinks({
   isAppNavLinkActive,
   forceFullNavigation = false,
   renderLinkTrailing,
+  renderNavRow,
 }: SidebarNavLinksProps) {
   const lessonPlannerFlagOn =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root')
@@ -246,6 +254,15 @@ export function SidebarNavLinks({
                   ) : null}
                 </>
               );
+
+              const customRow = renderNavRow?.({
+                link,
+                isActive,
+                rowClassName,
+                linkClassName,
+                icon,
+              });
+              if (customRow) return customRow;
 
               if (forceFullNavigation) {
                 return (

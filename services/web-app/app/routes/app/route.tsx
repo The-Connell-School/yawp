@@ -2,6 +2,7 @@ import './free-account.css';
 import { readFreeAccountUsage } from '~/domain/free-tier/inapp-usage.server';
 import {
   freeTierNavMobileWarningDot,
+  renderFreeTierNavRow,
   renderFreeTierNavTrailing,
 } from '~/components/free-tier/free-tier-nav-usage';
 import { canUseMockAdmin, requireMockAdmin } from '~/utils/mock-admin.server';
@@ -453,6 +454,24 @@ export default function Route() {
                       usage: freeAccountUsage,
                       loading: usageNavLoading,
                       navExpanded,
+                      isMobile,
+                    })
+                : undefined
+            }
+            renderNavRow={
+              freeAccountUsage
+                ? ({ link, isActive, rowClassName, linkClassName, icon }) =>
+                    renderFreeTierNavRow({
+                      link,
+                      usage: freeAccountUsage,
+                      loading: usageNavLoading,
+                      navExpanded,
+                      isMobile,
+                      isActive,
+                      rowClassName,
+                      linkClassName,
+                      forceFullNavigation: isClassDetailRoute,
+                      icon,
                     })
                 : undefined
             }
