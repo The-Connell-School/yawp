@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { createPassword } from '../../../../packages/prisma/scripts/utils';
+import bcrypt from 'bcryptjs';
 import { LOCAL_DEV_PASSWORD } from '../../../../packages/prisma/scripts/local-dev/dev-personas';
 import { provisionFreeClassroom } from '~/domain/free-tier/provision-free-classroom.server';
 import {
@@ -39,7 +39,7 @@ type JumpInput = {
 
 async function ensureThrowawayTeacher(organizationId: string) {
   const email = `test+${randomUUID().slice(0, 8)}@yawp.local`;
-  const passwordHash = createPassword(LOCAL_DEV_PASSWORD).hash;
+  const passwordHash = bcrypt.hashSync(LOCAL_DEV_PASSWORD, 10);
   const user = await prisma.user.create({
     data: {
       email,

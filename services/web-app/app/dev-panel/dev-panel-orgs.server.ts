@@ -4,11 +4,10 @@ import {
   UA_PREVIEW_ORG_ID,
   UA_PREVIEW_ORG_NAME,
 } from '../../../../packages/prisma/scripts/local-dev/dev-personas';
-import {
-  PREVIEW_FREE_CLASSROOM_ORG_ID,
-  PREVIEW_FREE_CLASSROOM_ORG_NAME,
-} from '../../../../packages/prisma/scripts/local-dev/seed-preview-free-classroom';
 import { prisma } from '~/utils/db.server';
+
+const PREVIEW_FREE_CLASSROOM_ORG_ID = 'preview-free-classroom';
+const PREVIEW_FREE_CLASSROOM_ORG_NAME = 'Yawp Preview — Free Classroom';
 import {
   getPreviewAccessSeat,
   isPreviewDevLoginAccessCodeRequired,
