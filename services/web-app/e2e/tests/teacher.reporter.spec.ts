@@ -82,7 +82,7 @@ test.describe('Yawp Reporter', () => {
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto('/app/reporter');
 
-    const composer = page.getByLabel('Message Yawp Reporter');
+    const composer = page.getByLabel('Message Yawp! Reporter');
     await composer.fill('How is my first period class doing?');
     await page.getByRole('button', { name: 'Send message' }).click();
 
@@ -188,7 +188,7 @@ test.describe('Yawp Reporter', () => {
       await page.setViewportSize(viewport);
       await page.goto('/app/reporter');
 
-      const composer = page.getByLabel('Message Yawp Reporter');
+      const composer = page.getByLabel('Message Yawp! Reporter');
       const send = page.getByRole('button', { name: 'Send message' });
       await expect(composer).toBeVisible();
       await expect(send).toBeVisible();

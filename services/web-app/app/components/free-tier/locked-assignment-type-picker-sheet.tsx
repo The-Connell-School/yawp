@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Check, Lock, X } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -8,8 +8,19 @@ import {
 } from '~/components/ui/sheet';
 import { Button } from '~/components/ui/button';
 import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
+import {
+  assignmentTypeTileCardClassName,
+  assignmentTypeTileFooterClassName,
+  assignmentTypeTileImageClassName,
+  assignmentTypeTileImageWrapClassName,
+  assignmentTypeTileMetaClassName,
+  assignmentTypeTileNameClassName,
+  assignmentTypeTileMetaTestId,
+  assignmentTypeTileNameTestId,
+  assignmentTypeTileTrailingIconClassName,
+} from '~/components/assignment-type-tile-layout';
+import { SiteLicenseLockedAssignmentGridTile } from '~/components/site-license-locked-assignment-tile';
 import type { SiteLicenseLockedAssignmentTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
-import { SITE_LICENSE_UNAVAILABLE_REASON } from '~/domain/free-tier/site-license-message';
 import { TEACHING_ACCESS_LOCKED_TOOLTIP } from '~/domain/free-tier/teaching-access-copy';
 import { cn } from '~/utils/misc';
 import type { FreeAccountUsage } from '~/domain/free-tier/inapp-usage';
@@ -80,7 +91,6 @@ export function LockedAssignmentTypePickerSheet({
       label: tile.label,
       imageId: tile.imageId,
       imageTitle: null as string | null,
-      included: SITE_LICENSE_UNAVAILABLE_REASON,
       selected: false,
       onSelect: undefined,
     })),
@@ -91,6 +101,7 @@ export function LockedAssignmentTypePickerSheet({
       <SheetContent
         className="flex w-full flex-col sm:max-w-[560px]"
         overlayClassName="bg-black/35"
+        showCloseButton={false}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           tileRefs.current[0]?.focus();
@@ -112,11 +123,12 @@ export function LockedAssignmentTypePickerSheet({
             <X className="h-5 w-5" />
           </button>
         </SheetHeader>
-        <div
-          role="listbox"
-          aria-labelledby={titleId}
-          className="mt-6 grid flex-1 grid-cols-1 gap-3 overflow-y-auto sm:grid-cols-3"
-          onKeyDown={(event) => {
+        <div className="mt-6 min-h-0 flex-1 overflow-y-auto">
+          <div
+            role="listbox"
+            aria-labelledby={titleId}
+            className="grid auto-rows-min grid-cols-2 content-start items-start gap-3 sm:grid-cols-3"
+            onKeyDown={(event) => {
             const focusable = tileRefs.current.filter(Boolean);
             const index = focusable.findIndex(
               (el) => el === document.activeElement
@@ -145,32 +157,16 @@ export function LockedAssignmentTypePickerSheet({
           {allTiles.map((tile, index) => {
             if (tile.kind === 'locked') {
               return (
-                <div
+                <SiteLicenseLockedAssignmentGridTile
                   key={tile.key}
-                  role="option"
-                  aria-disabled="true"
-                  aria-label={`${tile.label}. ${SITE_LICENSE_UNAVAILABLE_REASON}`}
+                  label={tile.label}
+                  imageId={tile.imageId}
+                  imageTitle={tile.imageTitle}
                   tabIndex={0}
-                  ref={(el) => {
+                  tileRef={(el) => {
                     tileRefs.current[index] = el as HTMLButtonElement | null;
                   }}
-                  className="flex cursor-not-allowed flex-col overflow-hidden rounded-xl border bg-muted/30 opacity-70 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <AssignmentTypeTileImage
-                    imageId={tile.imageId}
-                    imageTitle={tile.imageTitle}
-                    className="h-24 w-full"
-                  />
-                  <div className="flex flex-1 flex-col gap-1 p-3">
-                    <span className="flex items-start justify-between gap-2 text-sm font-medium">
-                      {tile.label}
-                      <Lock className="h-4 w-4 shrink-0" aria-hidden />
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {tile.included}
-                    </span>
-                  </div>
-                </div>
+                />
               );
             }
             return (
@@ -184,29 +180,49 @@ export function LockedAssignmentTypePickerSheet({
                 }}
                 onClick={tile.onSelect}
                 className={cn(
-                  'flex flex-col overflow-hidden rounded-xl border bg-popover text-left outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  assignmentTypeTileCardClassName(
+                    'bg-popover outline-none focus-visible:ring-2 focus-visible:ring-ring'
+                  ),
                   tile.selected && 'border-primary ring-1 ring-primary'
                 )}
               >
-                <AssignmentTypeTileImage
-                  imageId={tile.imageId}
-                  imageTitle={tile.imageTitle}
-                  className="h-24 w-full"
-                />
-                <div className="flex flex-1 flex-col gap-1 p-3">
-                  <span className="flex items-start justify-between gap-2 text-sm font-medium">
+                <div className={assignmentTypeTileImageWrapClassName()}>
+                  <AssignmentTypeTileImage
+                    imageId={tile.imageId}
+                    imageTitle={tile.imageTitle}
+                    className={assignmentTypeTileImageClassName}
+                  />
+                </div>
+                <div
+                  className={assignmentTypeTileFooterClassName(
+                    'text-sm font-medium'
+                  )}
+                >
+                  <span
+                    className={assignmentTypeTileNameClassName()}
+                    data-testid={assignmentTypeTileNameTestId}
+                  >
                     {tile.label}
-                    {tile.selected ? (
-                      <Check className="h-4 w-4 shrink-0 text-primary" />
-                    ) : null}
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                  <span
+                    className={assignmentTypeTileMetaClassName()}
+                    data-testid={assignmentTypeTileMetaTestId}
+                  >
                     {tile.included}
                   </span>
+                  {tile.selected ? (
+                    <Check
+                      className={assignmentTypeTileTrailingIconClassName(
+                        'h-4 w-4 text-primary'
+                      )}
+                      aria-hidden
+                    />
+                  ) : null}
                 </div>
               </button>
             );
           })}
+          </div>
         </div>
         <div className="mt-4 flex items-center justify-between gap-3 border-t pt-4">
           <p className="text-xs text-muted-foreground">

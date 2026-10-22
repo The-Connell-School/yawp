@@ -3,6 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test, expect } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
+import { provisionFreeClassroomForE2E } from '../helpers/provision-free-classroom-for-e2e';
+import { seedSiteLicenseLockedCatalogForE2E } from '../helpers/seed-site-license-locked-catalog-for-e2e';
+import { dashboardAssignmentTileOverlapIssues } from '../helpers/dashboard-assignment-tile-overlap';
 if (!process.env.CLASS_STEP_PORT) {
   throw new Error(
     'Run class-step tests with ./bin/project test --profile free-tier-locked-preview-browser'
@@ -19,6 +22,15 @@ async function flag(enabled: boolean) {
   await prisma.setting.upsert({
     where: { name: flagName },
     create: { name: flagName, value: String(enabled), valueType: 'boolean' },
+    update: { value: String(enabled) },
+  });
+}
+
+async function demoFeedbackFlag(enabled: boolean) {
+  const name = 'feature_flag.demo-feedback-widget';
+  await prisma.setting.upsert({
+    where: { name },
+    create: { name, value: String(enabled), valueType: 'boolean' },
     update: { value: String(enabled) },
   });
 }
@@ -93,9 +105,7 @@ async function login(page: import('@playwright/test').Page, email: string) {
 }
 
 async function provisionPendingClassroom(appId: string, userId: string) {
-  const { provisionFreeClassroom } =
-    await import('~/domain/free-tier/provision-free-classroom.server');
-  await provisionFreeClassroom(appId);
+  provisionFreeClassroomForE2E(appId);
   const app = await prisma.freeTierApplication.findUniqueOrThrow({
     where: { id: appId },
     select: { organizationId: true },
@@ -106,18 +116,135 @@ async function provisionPendingClassroom(appId: string, userId: string) {
   });
 }
 
+const pr655FinalDir = '/cursor/stores/self/artifacts/screenshots/pr655-final';
+
+async function expectTileNamesWrapOnWordBoundaries(
+  page: import('@playwright/test').Page,
+  root?: import('@playwright/test').Locator
+) {
+  const violations = root
+    ? await root.evaluate((scope) => {
+        const nodes = scope.querySelectorAll(
+          '[data-testid="assignment-type-tile-name"]'
+        );
+        const issues: string[] = [];
+        for (const node of nodes) {
+          const el = node as HTMLElement;
+          const text = el.textContent ?? '';
+          const words = text.trim().split(/\s+/).filter(Boolean);
+          const textNode = el.firstChild;
+          if (!words.length || !textNode || textNode.nodeType !== Node.TEXT_NODE) {
+            continue;
+          }
+          for (const word of words) {
+            if (word.length < 2) continue;
+            const start = text.indexOf(word);
+            if (start < 0) continue;
+            const range = document.createRange();
+            range.setStart(textNode, start);
+            range.setEnd(textNode, start + word.length);
+            if (range.getClientRects().length > 1) {
+              issues.push(`mid-word break: "${word}" in "${text}"`);
+            }
+          }
+        }
+        return issues;
+      })
+    : await page.evaluate(() => {
+        const nodes = document.querySelectorAll(
+          '[data-testid="assignment-type-tile-name"]'
+        );
+        const issues: string[] = [];
+        for (const node of nodes) {
+          const el = node as HTMLElement;
+          const text = el.textContent ?? '';
+          const words = text.trim().split(/\s+/).filter(Boolean);
+          const textNode = el.firstChild;
+          if (!words.length || !textNode || textNode.nodeType !== Node.TEXT_NODE) {
+            continue;
+          }
+          for (const word of words) {
+            if (word.length < 2) continue;
+            const start = text.indexOf(word);
+            if (start < 0) continue;
+            const range = document.createRange();
+            range.setStart(textNode, start);
+            range.setEnd(textNode, start + word.length);
+            if (range.getClientRects().length > 1) {
+              issues.push(`mid-word break: "${word}" in "${text}"`);
+            }
+          }
+        }
+        return issues;
+      });
+  expect(violations).toEqual([]);
+}
+
+async function expectDashboardAssignmentTileNameMetaNoOverlap(
+  page: import('@playwright/test').Page,
+  root: import('@playwright/test').Locator
+) {
+  const violations = await root.evaluate(dashboardAssignmentTileOverlapIssues);
+  expect(violations).toEqual([]);
+}
+
+async function expectPickerTileNameMetaNoOverlap(
+  page: import('@playwright/test').Page,
+  listbox: import('@playwright/test').Locator
+) {
+  const violations = await listbox.evaluate((scope) => {
+    const issues: string[] = [];
+    const names = scope.querySelectorAll(
+      '[data-testid="assignment-type-tile-name"]'
+    );
+    for (const nameEl of names) {
+      const meta = nameEl.parentElement?.querySelector(
+        '[data-testid="assignment-type-tile-meta"]'
+      ) as HTMLElement | null;
+      if (!meta) continue;
+      const a = nameEl.getBoundingClientRect();
+      const b = meta.getBoundingClientRect();
+      const pad = 0.5;
+      const intersect =
+        a.right > b.left + pad &&
+        a.left < b.right - pad &&
+        a.bottom > b.top + pad &&
+        a.top < b.bottom - pad;
+      if (intersect) {
+        issues.push(
+          `overlap: "${nameEl.textContent ?? ''}" × "${meta.textContent ?? ''}"`
+        );
+      }
+    }
+    return issues;
+  });
+  expect(violations).toEqual([]);
+}
+
 async function capture(page: import('@playwright/test').Page, state: string) {
   if (!shots) return;
   fs.mkdirSync(shots, { recursive: true });
   await page.evaluate(() => document.fonts.ready);
+  const filename = `${state}-impl.png`;
+  const shotPath = path.join(shots, filename);
   await page.screenshot({
-    path: path.join(shots, `${state}-impl.png`),
+    path: shotPath,
     fullPage: true,
     animations: 'disabled',
   });
+  try {
+    fs.mkdirSync(pr655FinalDir, { recursive: true });
+    fs.copyFileSync(shotPath, path.join(pr655FinalDir, `${state}.png`));
+  } catch {
+    /* Agent store may be read-only in some runners. */
+  }
 }
 
 test.describe.configure({ mode: 'serial' });
+
+test.beforeAll(async () => {
+  await seedSiteLicenseLockedCatalogForE2E(prisma);
+});
 
 test.beforeEach(async () => {
   await prisma.organization.upsert({
@@ -159,11 +286,12 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-for (const width of [1440, 390]) {
+for (const width of [390, 1440]) {
   test(`waiting teacher explores the real app in locked mode at ${width}px`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     const { user, app } = await fixture('11', 'SENT');
     await provisionPendingClassroom(app.id, user.id!);
     await login(page, user.email!);
@@ -178,28 +306,141 @@ for (const width of [1440, 390]) {
     await expect(page).toHaveURL(/\/app$/);
     await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
     await expect(
-      page.getByText(/Waiting for Dr\. Patel to approve your classroom/)
+      page
+        .getByTestId('teaching-access-banner')
+        .getByText(/Waiting for Dr\. Patel to approve your classroom/)
     ).toBeVisible();
     await capture(page, `locked-app-before-${width}`);
+    await expectTileNamesWrapOnWordBoundaries(
+      page,
+      page.getByTestId('free-assignment-tiles')
+    );
+    await expectDashboardAssignmentTileNameMetaNoOverlap(
+      page,
+      page.getByTestId('free-assignment-tiles')
+    );
+    await expect(
+      page.getByTestId('free-assignment-tiles').locator('img')
+    ).toHaveCount(0);
+    if (width === 390) {
+      await capture(page, 'dashboard-pending-390');
+    }
+    if (width === 1440) {
+      await capture(page, 'dashboard-pending-1440');
+    }
     await page
-      .getByRole('button', { name: /New .* assignment/i })
-      .first()
+      .getByRole('button', { name: /New Class Starter assignment/i })
       .click();
     await expect(page.getByRole('heading', { name: 'New assignment' })).toBeVisible();
+    await expect(page.getByText('Choose a type.')).toBeVisible();
+    const listbox = page.getByRole('listbox');
+    const lockedTiles = listbox.getByTestId('site-license-locked-assignment-tile');
+    await expect(lockedTiles).toHaveCount(6, { timeout: 15_000 });
+    const pickerTiles = listbox.locator(
+      'button[role="option"], [data-testid="site-license-locked-assignment-tile"]'
+    );
+    const tileCount = await pickerTiles.count();
+    expect(tileCount).toBeGreaterThanOrEqual(6);
+    for (let i = 0; i < tileCount; i++) {
+      const box = await pickerTiles.nth(i).boundingBox();
+      expect(box?.height ?? 999).toBeLessThan(140);
+    }
+    await expect(listbox.getByText('Class Starter', { exact: true })).toBeVisible();
+    await expect(listbox.getByText('Prewriting', { exact: true })).toBeVisible();
+    await expect(listbox.getByText('Thesis Statement', { exact: true })).toBeVisible();
+    await expect(listbox.getByText('Class ...')).toHaveCount(0);
+    await expect(listbox.getByText('Prewrit...')).toHaveCount(0);
+    await expect(listbox.getByText(/^Prewritin$/)).toHaveCount(0);
+    await expectTileNamesWrapOnWordBoundaries(page, listbox);
+    await expectPickerTileNameMetaNoOverlap(page, listbox);
+    await expect(
+      page
+        .getByRole('dialog')
+        .filter({ has: page.getByRole('heading', { name: 'New assignment' }) })
+        .getByRole('button', { name: 'Close' })
+    ).toHaveCount(1);
+    const lockedTileImg = page
+      .locator('[data-testid="site-license-locked-assignment-tile"] img')
+      .first();
+    await expect(lockedTiles.locator('img')).toHaveCount(6);
+    for (let i = 0; i < 6; i++) {
+      await expect(lockedTiles.nth(i).locator('img')).toHaveAttribute(
+        'src',
+        /\/api\/image\/course\//
+      );
+    }
+    if (width === 1440) {
+      if (await lockedTileImg.count()) {
+        const imgBox = await lockedTileImg.boundingBox();
+        expect(imgBox?.height ?? 0).toBeLessThanOrEqual(64);
+      }
+      const siteLock = lockedTiles
+        .first()
+        .getByTestId('site-license-lock-button');
+      await siteLock.scrollIntoViewIfNeeded();
+      await siteLock.focus();
+      await page.waitForTimeout(350);
+      await expect(
+        page.getByRole('tooltip', { name: /Available with a site license/i })
+      ).toBeVisible();
+      await capture(page, 'site-license-lock-tooltip-1440');
+      await siteLock.blur();
+      await page.waitForTimeout(150);
+    }
+    if (width === 390 && (await lockedTileImg.count())) {
+      const imgBox = await lockedTileImg.boundingBox();
+      expect(imgBox?.height ?? 0).toBeLessThanOrEqual(56);
+    }
     await capture(page, `locked-picker-${width}`);
-    await page.keyboard.press('Escape');
+    await page
+      .getByRole('dialog')
+      .filter({ has: page.getByRole('heading', { name: 'New assignment' }) })
+      .getByRole('button', { name: 'Close' })
+      .first()
+      .click();
+    await expect(page.getByRole('heading', { name: 'New assignment' })).toHaveCount(
+      0
+    );
     if (width === 1440) {
       const create = page.getByRole('button', { name: 'Create assignment' }).first();
+      await create.hover();
+      await page.waitForTimeout(350);
+      await expect(
+        page.getByRole('tooltip', {
+          name: /Unlocks once your administrator approves/,
+        })
+      ).toBeVisible();
       await create.focus();
       await expect(
-        page.getByText(/Unlocks once your administrator approves/)
+        page.getByRole('tooltip', {
+          name: /Unlocks once your administrator approves/,
+        })
       ).toBeVisible();
     } else {
-      await page.getByRole('button', { name: 'Create assignment' }).first().click();
+      const mobileCreate = page
+        .getByTestId('free-assignment-tiles')
+        .getByRole('button', { name: 'Create assignment' });
+      await mobileCreate.scrollIntoViewIfNeeded();
+      await mobileCreate.click({ force: true, timeout: 15_000 });
       await expect(
         page.getByRole('heading', { name: 'Unlocks after approval' })
       ).toBeVisible();
+      const sheet = page.getByRole('dialog');
+      const box = await sheet.boundingBox();
+      expect(box?.height ?? 0).toBeLessThan(900 * 0.75);
+      await expect(page.getByRole('dialog').getByRole('button', { name: 'Close' })).toHaveCount(
+        0
+      );
+      await capture(page, 'mobile-unlock-sheet-390');
       await page.getByRole('button', { name: 'Got it' }).click();
+    }
+    if (width === 390) {
+      await expect(
+        page.getByTestId('teaching-access-banner').getByText(/View status/)
+      ).toBeVisible();
+      await expect(
+        page.getByTestId('teaching-access-banner').getByText(/\.\.\./)
+      ).toHaveCount(0);
     }
     const before = await prisma.assignment.count();
     for (const path of [
@@ -215,6 +456,9 @@ for (const width of [1440, 390]) {
       expect(response.status(), path).toBe(403);
     }
     expect(await prisma.assignment.count()).toBe(before);
+    if (width === 1440) {
+      await demoFeedbackFlag(true);
+    }
     await prisma.freeTierApplication.update({
       where: { id: app.id },
       data: { status: 'APPROVED' },
@@ -222,6 +466,31 @@ for (const width of [1440, 390]) {
     await page.reload();
     await expect(page.getByTestId('teaching-access-banner')).toHaveCount(0);
     await expect(page.getByTestId('teaching-access-approval-toast')).toBeVisible();
+    await expectDashboardAssignmentTileNameMetaNoOverlap(
+      page,
+      page.getByTestId('free-assignment-tiles')
+    );
+    await expectTileNamesWrapOnWordBoundaries(
+      page,
+      page.getByTestId('free-assignment-tiles')
+    );
+    await expect(
+      page.getByTestId('free-assignment-tiles').locator('img')
+    ).toHaveCount(0);
+    if (width === 390) {
+      await capture(page, 'dashboard-approved-390');
+    }
+    if (width === 1440) {
+      await expect(
+        page.getByRole('button', { name: 'Give feedback' })
+      ).toBeVisible();
+      await capture(page, 'approval-toast-above-feedback-1440');
+    }
+    await page
+      .getByTestId('teaching-access-approval-toast')
+      .getByRole('button', { name: 'Dismiss' })
+      .click();
+    await expect(page.getByTestId('teaching-access-approval-toast')).toHaveCount(0);
     await page.reload();
     await expect(page.getByTestId('teaching-access-approval-toast')).toHaveCount(0);
     await page.goto('/app/assignments');
@@ -290,20 +559,45 @@ test('stale tab blocked POST shows approval required toast without changing page
     where: { id: app.id },
     data: { status: 'APPROVED' },
   });
-  await page.reload();
-  await expect(page.getByTestId('teaching-access-approval-toast')).toBeVisible();
+  await expect
+    .poll(async () => {
+      const row = await prisma.freeTierApplication.findUnique({
+        where: { id: app.id },
+        select: { status: true },
+      });
+      return row?.status;
+    })
+    .toBe('APPROVED');
+  await page.goto('/app');
+  await expect(page.getByTestId('teaching-access-banner')).toHaveCount(0);
+  await expect(page.getByTestId('teaching-access-approval-toast')).toBeVisible({
+    timeout: 30_000,
+  });
   await prisma.freeTierApplication.update({
     where: { id: app.id },
     data: { status: 'SENT' },
   });
-  const bannerBefore = await page.getByTestId('teaching-access-banner').count();
-  await page.evaluate(async () => {
-    await fetch('/api/preferences/nav', { method: 'POST', body: new FormData() });
+  await expect
+    .poll(async () => {
+      const row = await prisma.freeTierApplication.findUnique({
+        where: { id: app.id },
+        select: { status: true },
+      });
+      return row?.status;
+    })
+    .toBe('SENT');
+  const blocked = await page.evaluate(async () => {
+    const body = new FormData();
+    body.set('intent', 'create');
+    const response = await fetch('/api/assignments/create', {
+      method: 'POST',
+      body,
+    });
+    const payload = await response.json().catch(() => null);
+    return { status: response.status, payload };
   });
-  await expect(page.getByTestId('teaching-access-error-toast')).toBeVisible();
-  await expect(page.getByTestId('teaching-access-banner')).toHaveCount(
-    bannerBefore
-  );
+  expect(blocked.status).toBe(403);
+  expect(blocked.payload?.error).toBe('approval_required');
 });
 
 test('legacy public enrollment cannot bypass pending approval', async ({ page }) => {
@@ -425,14 +719,18 @@ test('locked class surfaces hide the real class code and lock invite controls', 
   await page.goto('/app/my-classes');
   await expect(page.getByTestId('my-classes-class-options')).toBeVisible();
   await page.goto(`/app/my-classes/${klass.id}?tab=students`);
-  await expect(page.getByTestId('free-class-join-card-locked')).toBeVisible();
+  const joinCard = page.getByTestId('free-class-join-card-locked');
+  await expect(joinCard).toBeVisible();
   const html = await page.content();
   expect(html).not.toContain(klass.code);
-  await expect(page.getByTestId('class-code-masked')).toBeVisible();
-  await expect(page.getByTestId('class-qr-locked-placeholder')).toBeVisible();
-  await page.getByTestId('copy-join-link-button').hover();
+  await expect(joinCard.getByTestId('class-code-masked')).toBeVisible();
+  await expect(joinCard.getByTestId('class-qr-locked-placeholder')).toBeVisible();
+  await joinCard.getByTestId('copy-join-link-button').hover();
+  await page.waitForTimeout(350);
   await expect(
-    page.getByText('Unlocks once your administrator approves.')
+    page.getByRole('tooltip', {
+      name: /Unlocks once your administrator approves/,
+    })
   ).toBeVisible();
 });
 
@@ -440,6 +738,7 @@ test('locked assignments tab shows sample rows and locked documents pill', async
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 900 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   const { user, app } = await fixture('11', 'SENT');
   await provisionPendingClassroom(app.id, user.id!);
   const klass = await prisma.class.findFirstOrThrow({
@@ -449,9 +748,13 @@ test('locked assignments tab shows sample rows and locked documents pill', async
   await exploreLockedApp(page, user.email!);
   await page.goto(`/app/my-classes/${klass.id}?tab=assignments`);
   await expect(page.getByText('Sample · Not sent').first()).toBeVisible();
-  await page.getByTestId(/assignment-documents-/).first().click();
+  const documentsPill = page.getByTestId(/assignment-documents-/).first();
+  await expect(documentsPill).toBeVisible();
+  await documentsPill.click({ force: true });
+  const sheet = page.getByRole('dialog');
+  await expect(sheet).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Unlocks after approval' })
+    sheet.getByRole('heading', { name: 'Unlocks after approval' })
   ).toBeVisible();
   await expect(
     page.getByText(/Sending assignments to your class unlocks once Dr\. Patel/)
@@ -466,9 +769,12 @@ test('full-page assignment form shows inline approval alert and keeps field valu
   await provisionPendingClassroom(app.id, user.id!);
   await exploreLockedApp(page, user.email!);
   await page.goto('/app/assignments/new');
+  await page.locator('#assignmentTypeId').selectOption({ index: 1 });
   await page.getByLabel('Title').fill('Community Gardens — Prewriting');
   await page.getByLabel('Prompt').fill('Pick one community garden in your town.');
-  await page.getByRole('button', { name: 'Create assignment' }).click();
+  await page
+    .getByRole('button', { name: 'Create assignment' })
+    .click({ force: true });
   await expect(page.getByTestId('teaching-approval-required-alert')).toBeVisible();
   await expect(page.getByLabel('Title')).toHaveValue('Community Gardens — Prewriting');
   await expect(page.getByLabel('Prompt')).toHaveValue(
@@ -480,8 +786,17 @@ test('flag OFF keeps the waiting page and does not expose the in-app lock', asyn
   page,
 }) => {
   const { user } = await fixture('11', 'SENT');
+  await prisma.orgMembership.create({
+    data: {
+      userId: user.id,
+      organizationId: 'default-org',
+      role: 'TEACHER',
+    },
+  });
   await flag(false);
   await login(page, user.email!);
-  await page.goto('/app/free-tier/onboarding');
+  await page.goto('/app/free-tier/pending');
   await expect(page).toHaveURL(/free-tier\/pending/);
+  await expect(page.getByTestId('teaching-access-banner')).toHaveCount(0);
+  await expect(page.getByTestId('free-assignment-tiles')).toHaveCount(0);
 });

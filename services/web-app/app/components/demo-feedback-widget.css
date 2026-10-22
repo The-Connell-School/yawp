@@ -21,11 +21,16 @@
   display: none;
 }
 
+body:has(.demo-feedback-trigger) {
+  --teaching-access-toast-bottom: calc(5rem + 2.75rem + 0.75rem);
+}
+
 @media (max-width: 639px) {
   /* A dedicated row keeps both controls outside the app's scrolling/action area.
      :has ties the reservation to the rendered, app-only, demo-flagged widget. */
   body:has(.demo-feedback-trigger) {
     --demo-feedback-space: calc(76px + env(safe-area-inset-bottom, 0px));
+    --teaching-access-toast-bottom: calc(var(--demo-feedback-space) + 1rem);
   }
 
   body:has(.demo-feedback-trigger) [data-feedback-content-frame],

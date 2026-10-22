@@ -8,9 +8,6 @@ mock.module('~/components/student-invitation-dialog', () => ({
 }));
 
 const { FreeAssignmentTiles } = await import('./free-account-usage');
-const { SITE_LICENSE_UNAVAILABLE_REASON } = await import(
-  '~/domain/free-tier/site-license-message'
-);
 
 const usage: FreeAccountUsage = {
   monthly: true,
@@ -55,8 +52,10 @@ test('FreeAssignmentTiles renders site-license locked tiles after entitled rows'
     </StaticRouter>
   );
   expect(html).toContain('data-testid="free-assignment-tiles"');
+  expect(html).toContain('data-testid="dashboard-assignment-tile"');
   expect(html).toContain('Daily Pages');
-  expect(html).toContain(SITE_LICENSE_UNAVAILABLE_REASON);
+  expect(html).toContain('site-license-lock-button');
+  expect(html).not.toContain('Available with a site license.');
 });
 
 test('FreeAssignmentTiles omits locked tiles when the list is empty', () => {

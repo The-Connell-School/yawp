@@ -28,7 +28,12 @@ import { lessonPlanMonthWindow } from '~/utils/lesson-planner/month-window';
 import { cn } from '~/utils/misc';
 import { SiteLicenseLockedAssignmentTile } from '~/components/site-license-locked-assignment-tile';
 import type { SiteLicenseLockedAssignmentTile as SiteLicenseLockedTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
-import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
+import {
+  dashboardAssignmentTileClassName,
+  DashboardAssignmentTileFooter,
+  dashboardAssignmentTileTestId,
+  assignmentTypeTileTrailingIconClassName,
+} from '~/components/assignment-type-tile-layout';
 import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import type { RefObject } from 'react';
@@ -267,55 +272,58 @@ export function FreeAssignmentTiles({
           createButton
         )}
       </div>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid auto-rows-min grid-cols-2 items-start gap-3 lg:grid-cols-3">
         {usage.assignments.map((row) => {
           const type = types.find((t) => t.kind === row.kind);
           return (
             <button
               key={row.kind}
               type="button"
+              data-testid={dashboardAssignmentTileTestId}
               disabled={
                 !teachingLocked &&
                 (!type || (!usage.monthly && row.remaining === 0))
               }
-              onClick={() => onCreate(type?.id)}
+              onClick={() => onCreate(teachingLocked ? undefined : type?.id)}
               aria-label={`New ${row.label} assignment`}
-              className="flex min-h-[92px] flex-col overflow-hidden rounded-xl border bg-popover text-left shadow-sm disabled:bg-muted/30"
+              className={cn(
+                dashboardAssignmentTileClassName('disabled:bg-muted/30')
+              )}
             >
-              <AssignmentTypeTileImage
-                imageId={type?.imageId}
-                imageTitle={type?.imageTitle}
-                className="h-16 w-full"
-              />
-              <span className="flex flex-col gap-1 p-3.5 pt-2">
-                <span className="flex w-full items-start justify-between gap-2 text-[15px] font-medium">
-                  {row.label}
-                  {teachingLocked ? (
+              <DashboardAssignmentTileFooter
+                label={row.label}
+                meta={
+                  usage.monthly
+                    ? 'Unlimited'
+                    : row.remaining
+                      ? `${row.remaining} of ${row.total} left`
+                      : 'None left'
+                }
+                metaClassName={
+                  !usage.monthly && row.remaining === 0
+                    ? 'text-amber-800'
+                    : undefined
+                }
+                trailing={
+                  teachingLocked ? (
                     <Lock
                       size={16}
-                      className="mt-1 shrink-0 text-muted-foreground"
+                      className={assignmentTypeTileTrailingIconClassName(
+                        'text-muted-foreground'
+                      )}
                       aria-hidden
                     />
                   ) : (
                     <Plus
                       size={16}
-                      className="mt-1 shrink-0 text-muted-foreground"
+                      className={assignmentTypeTileTrailingIconClassName(
+                        'text-muted-foreground'
+                      )}
+                      aria-hidden
                     />
-                  )}
-                </span>
-                <span
-                  className={cn(
-                    'text-[13px] text-muted-foreground',
-                    !usage.monthly && row.remaining === 0 && 'text-amber-800'
-                  )}
-                >
-                  {usage.monthly
-                    ? 'Unlimited assignments'
-                    : row.remaining
-                      ? `${row.remaining} of ${row.total} left`
-                      : 'None left'}
-                </span>
-              </span>
+                  )
+                }
+              />
             </button>
           );
         })}

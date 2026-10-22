@@ -1,10 +1,14 @@
-# CI: pull_request synchronize runs full test matrix including Playwright E2E.
+# CI: pull_request synchronize runs full test matrix including Playwright E2E (locked preview evidence).
 name: CI
 on:
   pull_request:
     branches:
       - main
     types: [opened, synchronize, reopened, ready_for_review]
+  # Cloud-agent branches: run CI on push when PR synchronize is delayed or skipped.
+  push:
+    branches:
+      - 'cursor/**'
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -368,6 +372,19 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
           LOCKED_PREVIEW_DB_TESTS: '1'
         run: bun test --max-concurrency=2 ./services/web-app/app/domain/free-tier/locked-preview.real-db.integration.test.ts
+
+      - name: 🧪 Free-tier locked teaching UI (isolated)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        run: |
+          set -e
+          bun test app/components/free-tier/locked-teaching-control.test.tsx
+          bun test app/components/free-tier/teaching-access-banner.test.tsx
+          bun test app/components/free-tier/teaching-access-toasts.test.tsx
+          bun test app/components/assignments/assignment-creation-locked-picker.test.tsx
+          bun test app/components/site-license-lock-button.test.tsx
+          bun test app/components/site-license-locked-assignment-tile.test.tsx
+          bun test app/components/free-account-usage.locked-tiles.test.tsx
 
       - name: 🧪 Free-account in-app usage adapter (isolated; mocks prisma)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -1042,6 +1059,124 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-results-${{ github.run_id }}-${{ matrix.shard }}
+          path: services/web-app/test-results/
+          retention-days: 7
+
+  e2e-locked-preview:
+    needs: [paths]
+    if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    name: 🧪 Free-tier locked preview browser
+    runs-on: ubuntu-22.04
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v3
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 22
+
+      - name: 📥 Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: '1.4.3'
+
+      - name: 💾 Cache bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: 📦 Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: ⚙️ Generate Prisma Client
+        run: bun prisma generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+
+      - name: 🧱 Apply Prisma migrations
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+        run: bun prisma migrate deploy
+
+      - name: 🌱 Seed free-tier assignment catalog
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+        run: bun run --cwd packages/prisma seed-free-tier-bundle-assignment-types
+
+      - name: 🔖 Resolve Playwright version
+        id: playwright-version
+        working-directory: services/web-app
+        run: |
+          echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: 💾 Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
+          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+
+      - name: Install Playwright chromium
+        working-directory: services/web-app
+        timeout-minutes: 15
+        run: |
+          version=$(node -p "require('@playwright/test/package.json').version")
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            bunx --package "@playwright/test@${version}" playwright install chromium
+          else
+            bunx --package "@playwright/test@${version}" playwright install --with-deps chromium
+          fi
+
+      - name: 🧪 Locked preview Playwright + evidence
+        working-directory: services/web-app
+        env:
+          CI: true
+          NODE_ENV: development
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+          SESSION_SECRET: ci-locked-preview-session-secret
+          CLASS_STEP_PORT: '5199'
+          LOCKED_PREVIEW_EVIDENCE_DIR: locked-preview-evidence
+          TMPDIR: ${{ runner.temp }}/locked-preview
+          FREE_TIER_LINK_HMAC_SECRET: ci-locked-preview-free-tier-link-hmac-secret
+          PRIMARY_APP_URL: http://127.0.0.1:5199
+        run: |
+          mkdir -p locked-preview-evidence "$TMPDIR"
+          bun x playwright test --config playwright.locked-preview.config.ts --workers=1
+
+      - name: Upload locked preview evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: locked-preview-evidence-${{ github.run_id }}
+          path: services/web-app/locked-preview-evidence/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload Playwright results on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: locked-preview-playwright-results-${{ github.run_id }}
           path: services/web-app/test-results/
           retention-days: 7
 

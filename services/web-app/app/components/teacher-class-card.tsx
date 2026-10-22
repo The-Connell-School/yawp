@@ -55,7 +55,7 @@ export function TeacherClassCard({
   const enabled =
     usage?.monthly && usage.classId === klass.id && Boolean(klass.code);
   const showLockedInvite =
-    teachingLocked && usage?.classId === klass.id && usage?.monthly;
+    teachingLocked && usage?.classId === klass.id;
   const [invitationOpen, setInvitationOpen] = useState(false);
   const invitationTriggerRef = useRef<HTMLButtonElement>(null);
   const inviteLockProps = {
