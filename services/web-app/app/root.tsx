@@ -463,7 +463,7 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
           <Outlet />
         </div>
       </div>
-      {!data.devPanelEnabled &&
+      {!data.internalImpersonation &&
       data.testerFeedbackAvailable &&
       !data.demoFeedbackAvailable ? (
         <TesterFeedbackWidget />
