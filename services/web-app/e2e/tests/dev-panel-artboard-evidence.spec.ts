@@ -187,6 +187,14 @@ test.describe('Dev panel artboard evidence', () => {
     await shot(page, '60');
 
     await page.unroute('**/api/demo-feedback');
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => {
+      const raw = localStorage.getItem('yawp-dev-panel');
+      if (!raw) return;
+      const saved = JSON.parse(raw) as { subSheet?: string | null };
+      saved.subSheet = null;
+      localStorage.setItem('yawp-dev-panel', JSON.stringify(saved));
+    });
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/app/assignments');

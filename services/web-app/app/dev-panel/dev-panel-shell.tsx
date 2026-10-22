@@ -49,7 +49,10 @@ import {
 import { DevPanelOrgPicker } from './dev-panel-org-picker';
 import { useVisualViewportFooterStyle } from './use-visual-viewport-footer';
 import type { FreeTierJumpStep } from './free-tier-jump.server';
-import { feedbackPath } from '~/utils/demo-feedback-context';
+import {
+  createFeedbackContext,
+  feedbackPath,
+} from '~/utils/demo-feedback-context';
 
 function useMedia(query: string) {
   const [matches, setMatches] = useState(false);
@@ -156,9 +159,13 @@ function AccessCodeModal({
 function GiveFeedbackSheet({
   onClose,
   pushed,
+  feedbackActions,
 }: {
   onClose?: () => void;
   pushed?: boolean;
+  feedbackActions: () => ReturnType<
+    ReturnType<typeof createFeedbackContext>['snapshot']
+  >;
 }) {
   const { state, closeSubSheet, updateForms, clearFeedbackForm } = useDevPanel();
   const close = onClose ?? closeSubSheet;
@@ -214,7 +221,7 @@ function GiveFeedbackSheet({
         body: JSON.stringify({
           note: note.trim(),
           url: path,
-          actions: [],
+          actions: feedbackActions(),
           screenshot,
         }),
       });
@@ -362,6 +369,37 @@ export function DevPanelShell() {
   const selectedOrg = state.org ?? orgs[0]?.id ?? null;
   const feedbackPathValue = feedbackPath(location.pathname + location.search);
   const demoFeedbackEnabled = Boolean(rootData?.demoFeedbackAvailable);
+  const feedbackContext = useRef(createFeedbackContext());
+
+  useEffect(() => {
+    if (!state.open) return;
+    feedbackContext.current.route(location.pathname + location.search);
+  }, [state.open, location.pathname, location.search]);
+
+  useEffect(() => {
+    if (!state.open) return;
+    const onClick = (event: MouseEvent) => {
+      if (!(event.target instanceof Element)) return;
+      if (
+        event.target.closest(
+          'input, textarea, select, [contenteditable], [data-yawp-dev-panel]'
+        )
+      ) {
+        return;
+      }
+      const control = event.target.closest(
+        'button, a, [role="button"], [role="link"]'
+      );
+      if (control) {
+        feedbackContext.current.click(
+          control.matches('a, [role="link"]') ? 'link' : 'button',
+          location.pathname + location.search
+        );
+      }
+    };
+    document.addEventListener('click', onClick, true);
+    return () => document.removeEventListener('click', onClick, true);
+  }, [state.open, location.pathname, location.search]);
 
   useEffect(() => {
     if (!state.open) return;
@@ -645,7 +683,9 @@ export function DevPanelShell() {
       </footer>
       <AccessCodeModal open={accessOpen} onOpenChange={setAccessOpen} />
       {!isPhone && state.subSheet === 'give-feedback' ? (
-        <GiveFeedbackSheet />
+        <GiveFeedbackSheet
+          feedbackActions={() => feedbackContext.current.snapshot()}
+        />
       ) : null}
       {!isPhone && state.subSheet === 'free-tier-states' ? (
         <FreeTierStatesSheet onClose={closeSubSheet} orgId={selectedOrg} />
@@ -667,7 +707,11 @@ export function DevPanelShell() {
           aria-modal={isPhone ? true : undefined}
         >
           {isPhone && state.subSheet === 'give-feedback' ? (
-            <GiveFeedbackSheet onClose={closeSubSheet} pushed />
+            <GiveFeedbackSheet
+              onClose={closeSubSheet}
+              pushed
+              feedbackActions={() => feedbackContext.current.snapshot()}
+            />
           ) : isPhone && state.subSheet === 'free-tier-states' ? (
             <FreeTierStatesSheet
               onClose={closeSubSheet}
