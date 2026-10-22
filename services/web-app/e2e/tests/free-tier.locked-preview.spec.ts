@@ -236,13 +236,14 @@ for (const width of [390, 1440]) {
         expect(imgBox?.height ?? 0).toBeLessThanOrEqual(64);
       }
       const siteLock = page.getByTestId('site-license-lock-button').first();
-      await siteLock.focus();
+      await siteLock.scrollIntoViewIfNeeded();
+      await siteLock.hover();
       await page.waitForTimeout(350);
       await expect(
         page.getByRole('tooltip', { name: /Available with a site license/i })
       ).toBeVisible();
       await capture(page, 'site-license-lock-tooltip-1440');
-      await siteLock.blur();
+      await page.mouse.move(0, 0);
     }
     if (width === 390 && (await lockedTileImg.count())) {
       const imgBox = await lockedTileImg.boundingBox();

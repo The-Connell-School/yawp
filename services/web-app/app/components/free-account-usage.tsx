@@ -275,7 +275,7 @@ export function FreeAssignmentTiles({
           createButton
         )}
       </div>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid auto-rows-min grid-cols-2 items-start gap-3 lg:grid-cols-4">
         {usage.assignments.map((row) => {
           const type = types.find((t) => t.kind === row.kind);
           return (
