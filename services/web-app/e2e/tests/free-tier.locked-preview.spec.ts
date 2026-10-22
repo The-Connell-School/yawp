@@ -552,8 +552,8 @@ test('locked assignments tab shows sample rows and locked documents pill', async
   await page.goto(`/app/my-classes/${klass.id}?tab=assignments`);
   await expect(page.getByText('Sample · Not sent').first()).toBeVisible();
   const documentsPill = page.getByTestId(/assignment-documents-/).first();
-  await documentsPill.scrollIntoViewIfNeeded();
-  await documentsPill.click({ force: true });
+  await expect(documentsPill).toBeVisible();
+  await documentsPill.click({ force: true, timeout: 15_000 });
   await expect(
     page.getByRole('heading', { name: 'Unlocks after approval' })
   ).toBeVisible();
