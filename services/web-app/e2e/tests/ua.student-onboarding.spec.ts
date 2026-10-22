@@ -13,6 +13,11 @@ const LICENSE_CUTOFF = new Date('2027-01-01T06:00:00.000Z');
 const APP_ORIGIN = 'http://127.0.0.1:5173';
 const UA_APP_ORIGIN = 'http://ua.localhost:5173';
 
+/** Card-page chrome uses a logo link; UA entry pages still expose a Yawp image alt. */
+function yawpBrandLocator(page: Page) {
+  return page.getByRole('link', { name: 'Yawp! home' }).or(page.getByAltText('Yawp'));
+}
+
 async function signIn(
   page: Page,
   email: string,
@@ -184,7 +189,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
       await expect(page.getByAltText('The University of Alabama')).toHaveCount(
         0
       );
-      await expect(page.getByAltText('Yawp')).toBeVisible();
+      await expect(yawpBrandLocator(page)).toBeVisible();
 
       await page.getByLabel('Email').fill(studentEmail);
       await page.getByRole('button', { name: 'Submit' }).click();
@@ -222,7 +227,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
       await expect(page.getByAltText('The University of Alabama')).toHaveCount(
         0
       );
-      await expect(page.getByAltText('Yawp')).toBeVisible();
+      await expect(yawpBrandLocator(page)).toBeVisible();
 
       const { otp } = await generateTOTP({
         secret: invitation.secret,
@@ -238,7 +243,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
       await expect(page.getByAltText('The University of Alabama')).toHaveCount(
         0
       );
-      await expect(page.getByAltText('Yawp')).toBeVisible();
+      await expect(yawpBrandLocator(page)).toBeVisible();
       await expect(page.getByLabel('Class')).toHaveCount(0);
       await page.getByLabel('Name').fill('UA New Student');
       await page
@@ -280,7 +285,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
       await expect(page.getByAltText('The University of Alabama')).toHaveCount(
         0
       );
-      await expect(page.getByAltText('Yawp')).toBeVisible();
+      await expect(yawpBrandLocator(page)).toBeVisible();
     } finally {
       await prisma.$disconnect();
     }
@@ -392,7 +397,7 @@ test.describe.serial('University of Alabama student onboarding', () => {
       await expect(page.getByAltText('The University of Alabama')).toHaveCount(
         0
       );
-      await expect(page.getByAltText('Yawp')).toBeVisible();
+      await expect(yawpBrandLocator(page)).toBeVisible();
       await page.getByLabel('Email').fill(e2eContext.userEmail);
       await page.getByLabel('Password').fill('johndoe');
       await page.getByRole('button', { name: 'Log in' }).click();

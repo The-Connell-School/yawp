@@ -61,7 +61,9 @@ describe('useCardPageUnsavedFormGuard', () => {
 
       expect(beforeUnloadListener).toBeDefined();
 
-      const cleanEvent = { preventDefault: mock(() => {}) } as BeforeUnloadEvent;
+      const cleanEvent = {
+        preventDefault: mock(() => {}),
+      } as unknown as BeforeUnloadEvent;
       beforeUnloadListener?.(cleanEvent);
       expect(cleanEvent.preventDefault).not.toHaveBeenCalled();
 
@@ -74,7 +76,9 @@ describe('useCardPageUnsavedFormGuard', () => {
         'yes'
       );
 
-      const dirtyEvent = { preventDefault: mock(() => {}) } as BeforeUnloadEvent;
+      const dirtyEvent = {
+        preventDefault: mock(() => {}),
+      } as unknown as BeforeUnloadEvent;
       beforeUnloadListener?.(dirtyEvent);
       expect(dirtyEvent.preventDefault).toHaveBeenCalled();
 
@@ -86,7 +90,7 @@ describe('useCardPageUnsavedFormGuard', () => {
 
       const afterSubmitEvent = {
         preventDefault: mock(() => {}),
-      } as BeforeUnloadEvent;
+      } as unknown as BeforeUnloadEvent;
       beforeUnloadListener?.(afterSubmitEvent);
       expect(afterSubmitEvent.preventDefault).not.toHaveBeenCalled();
     } finally {
