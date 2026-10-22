@@ -1,6 +1,10 @@
-import { renderToStaticMarkup } from 'react-dom/server';
 import * as router from 'react-router';
 import { afterAll, expect, mock, test } from 'bun:test';
+import {
+  mockCardPageChromeForSsr,
+  renderWithCardPageChrome,
+} from '~/components/card-page-chrome.ssr-test-setup';
+mockCardPageChromeForSsr();
 let enabled = true;
 const forward = mock(async (_args: any) => ({ ok: true, queued: true }));
 mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
@@ -116,7 +120,7 @@ test('crafted forward is refused when rollout is off', async () => {
 
 test('pending page offers draft request mailto, explore, and forward without legacy resend', () => {
   stopped = false;
-  const html = renderToStaticMarkup(<Page />);
+  const html = renderWithCardPageChrome(<Page />);
   expect(html).toContain('Explore my classroom');
   expect(html).toContain('Not the right person?');
   expect(html).toContain('Draft a Request');

@@ -1,6 +1,11 @@
-import { renderToStaticMarkup } from 'react-dom/server';
 import * as router from 'react-router';
 import { afterAll, expect, mock, test } from 'bun:test';
+import {
+  mockCardPageChromeForSsr,
+  renderWithCardPageChrome,
+} from '~/components/card-page-chrome.ssr-test-setup';
+
+mockCardPageChromeForSsr();
 
 mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
   requireFreeTierEnabled: async () => {},
@@ -30,7 +35,7 @@ const { default: Page } = await import('./route');
 afterAll(() => mock.restore());
 
 test('approved teachers get a Start teaching link to /app', () => {
-  const html = renderToStaticMarkup(<Page />);
+  const html = renderWithCardPageChrome(<Page />);
   expect(html).toContain('Your classroom is approved');
   expect(html).toContain('all set to start teaching with Yawp!');
   expect(html).toContain('Start teaching');
