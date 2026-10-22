@@ -679,7 +679,9 @@ export default function LessonPlannerHowItWorksRoute() {
                     it at dinner), or the plan for an admin, with the standards
                     you named and an invitation to observe. Each gets an email
                     with a link; no login needed. A preview of Yawp! never sends
-                    email and says so; copy the link to send it yourself.
+                    email and says so, and if an email fails you are told, with
+                    the link to send yourself. Every shared page prints or saves
+                    as a PDF, and a sub can present the slides.
                   </Copy>
                 </Row>
               ) : null}

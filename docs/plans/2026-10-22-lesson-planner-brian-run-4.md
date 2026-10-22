@@ -47,3 +47,65 @@ All done and on PR 437. Notes:
   production, or read the four emails in the image above.
 - **Room view is for one screen.** With two screens, keep Run the show on
   the laptop and open the slides on the projector, as before.
+
+## Brian's detailed notes (session log, Oct 22)
+
+The session log arrived after the summary. Its raw notes file
+(`2026-10-22-two-class-lesson-raw-notes.md`) did not, so this works from
+the log. Items done above are marked "above".
+
+### Must fix
+
+| # | Note | Done |
+| --- | --- | --- |
+| 1 | One input mode per turn | Above (prompt rule) |
+| 2 | Every numbered step stackable; the lesson totals 45 of 50 | Above. Every step now also shows a state: a choice step says "Pick one below to add it", then "In the stack" |
+| 3 | Drag handles | Above. Dragging a step also no longer pushes the cards down under the pointer (the drop slots keep their size) |
+| 4 | Back to the run of show after creating an assignment | Above. "Same scroll position" is not kept; the page opens at the top |
+| 5 | Share emails: confirm preview, guarantee production, on-screen sent/failed, examples | Above, plus a three-state result: **sent**, **preview** (no email from a preview) or **failed** (red, with the link to send yourself). Examples: `2026-10-22-lesson-emails.png` |
+| 6 | One writing number, listed by step name | Above. The meter, the shared pages and the summary read "From Class Starter · Exit Ticket" (what students write) |
+| 7 | What counts as writing; older lessons re-tagged on open | Above. Writing is worked out each time a stack loads, so older lessons count paper writing as soon as they open |
+| 8 | Yawp! everywhere, before NCTE | Above, plus: capitals no longer turn the name into YAWP! (kickers, running heads, eyebrows and slide labels in the app, the kit plan PDF and Word file, and PowerPoint), the kit kicker reads "Yawp! LESSON PLAN", the LTI line item is "Yawp! essay", and the planner and share rewrites are told the rule. The logo is unchanged |
+| 9 | The sub gets the actual slides | Above (slides on the page), plus **Present the slides** full screen from the sub's page |
+
+### Should fix
+
+| Note | Done |
+| --- | --- |
+| Two classes: "The same lesson for both classes" first, then never asked again | The intake card asks it once, with the same lesson chosen; the planner is told never to ask again |
+| Voice: no "not X, but Y", staged contrasts or aphoristic closers | The planner rule quotes Brian's five examples. Every share rewrite has the same rule |
+| Receive every contribution warmly | The planner rule, in Brian's terms: wherever students share, one or two kind sentences; correction only when something crosses a line |
+| A loading indicator that visibly moves | The progress label's "…" is three moving dots (still for anyone who asks for reduced motion) |
+| "Assignment created" once created | The run-of-show card says "Assignment created"; its detail keeps "Created in Yawp! · Open". The chip itself can't be a link (it sits inside the card's toggle) |
+| Slides by audience | The sub can present them. Everyone else sees them on the page and can print or save it as a PDF |
+| "These writing exercises are available to students as assignments in Yawp!" only for created steps | Done, listing those steps by name |
+| Family page: "Today in class, students…" | In the family rewrite |
+| Student page: never "Hey!"; purple prompts clickable | "We missed you in class." A prompt made in Yawp! opens Yawp! in a new window. It opens the student's Yawp! home, not the assignment itself (see questions) |
+| Admin page: Download PDF / Print | "Print or save as PDF" on every shared page |
+| Decks use the full brand; no slide numbers | Done earlier (Lesson Deck Kit v3, Oct 21) |
+| "Draft saved" vs "Save to my library"; a library link | Done on the stack page |
+| Stack: lesson order, a time on every item, a running total | The panel beside the chat shows minutes on every piece and the total. New pieces already go in lesson order (Oct 20) |
+
+### Questions Brian raised, answered from the code
+
+- **Library "Empty" on every item: a bug.** The library counted only whole
+  kept replies (the old way to stack), not pieces filed from the chat.
+  Fixed: it counts the pieces (the deck aside) and shows the class.
+- **"Built in 51 min"** is clock time from the lesson's first message to
+  "Set the lesson", including any time away. It is not active time.
+- **Draft titles stay the first prompt.** A lesson is named from its first
+  plan's heading. If that heading was generic ("Lesson Plan") it stayed
+  on the first message for good. Fixed: while the name is still the first
+  message, a later plan names it.
+- **"ELA / Secondary Literature" and "Do Now".** The admin rewrite made
+  them up. Every rewrite now uses the class name and step names as given.
+- **Live mode and projection.** "Open the slides on the projector" opens a
+  synced slides window, for a second display. Mirrored, the class sees the
+  teacher's screen, so there is now "This screen is on the projector",
+  which hides notes and the clock.
+- **Step 1 showed slide 3.** Run the show picks the slide a deck marks for
+  the step, else one whose title shares two of the step's words, else the
+  step's place after a title slide. An agenda slide, or an early slide
+  sharing words with the step, gives slide 3. Not changed without seeing
+  the deck.
+- **The empty first bubble** did not reproduce here.
