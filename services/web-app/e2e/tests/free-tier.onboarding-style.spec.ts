@@ -398,9 +398,16 @@ for (const viewport of [
       await admin
         .getByRole('button', { name: 'Approve Yawp!', exact: true })
         .click();
-      await expect(
-        admin.locator('input[name="adminRole"]:invalid')
-      ).toHaveCount(1);
+      if (before) {
+        await expect(
+          admin.locator('input[name="adminRole"]:invalid')
+        ).toHaveCount(1);
+      } else {
+        await expect(admin.getByRole('alert')).toContainText(
+          'Two things need your attention before you can approve.'
+        );
+        await expect(admin.getByText('Enter your role.')).toBeVisible();
+      }
       await admin.locator('input[name="adminRole"]').fill('Principal');
       await admin.getByRole('checkbox', { name: before ? /authorized/i : /I can approve classroom software/i }).check();
       await admin
