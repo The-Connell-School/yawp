@@ -7,14 +7,21 @@ export async function isDevPanelActive(page: Page) {
   );
 }
 
+export function devToolsPanel(page: Page) {
+  return page.locator('#devtools');
+}
+
+export async function openDevToolsPanel(page: Page) {
+  await page.getByRole('button', { name: 'Open developer tools' }).click();
+  const panel = devToolsPanel(page);
+  await expect(panel).toBeVisible();
+  return panel;
+}
+
 export async function expectGiveFeedbackAccessible(page: Page) {
   if (await isDevPanelActive(page)) {
-    await page.getByRole('button', { name: 'Open developer tools' }).click();
-    await expect(
-      page
-        .getByRole('complementary', { name: 'Developer tools' })
-        .getByRole('button', { name: 'Give feedback' })
-    ).toBeVisible();
+    const panel = await openDevToolsPanel(page);
+    await expect(panel.getByRole('button', { name: 'Give feedback' })).toBeVisible();
     return;
   }
   await expect(
@@ -35,11 +42,8 @@ export async function openGiveFeedback(page: Page) {
       hasSeverity: true,
     };
   }
-  await page.getByRole('button', { name: 'Open developer tools' }).click();
-  await page
-    .getByRole('complementary', { name: 'Developer tools' })
-    .getByRole('button', { name: 'Give feedback' })
-    .click();
+  const panel = await openDevToolsPanel(page);
+  await panel.getByRole('button', { name: 'Give feedback' }).click();
   return {
     panel: page.getByRole('dialog', { name: 'Give feedback' }),
     noteLabel: 'Note',

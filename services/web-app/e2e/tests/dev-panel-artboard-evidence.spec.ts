@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { test, expect } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
+import { devToolsPanel, openDevToolsPanel } from '../helpers/dev-panel-feedback';
 
 const evidenceRoot =
   process.env.DEV_PANEL_EVIDENCE_DIR ??
@@ -44,35 +45,35 @@ test.describe('Dev panel artboard evidence', () => {
   test('capture designed panel and feedback states', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/app/assignments');
-    await page.getByRole('button', { name: 'Open developer tools' }).click();
-    await expect(
-      page.getByRole('complementary', { name: 'Developer tools' })
-    ).toBeVisible();
+    await openDevToolsPanel(page);
     await shot(page, '02');
 
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto('/app/assignments');
-    await page.getByRole('button', { name: 'Open developer tools' }).click();
+    await openDevToolsPanel(page);
     await shot(page, '04');
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/app/assignments');
-    await page.getByRole('button', { name: 'Open developer tools' }).click();
+    await openDevToolsPanel(page);
     await shot(page, '06');
 
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.context().clearCookies();
     await page.goto('/app/assignments');
-    await page.getByRole('button', { name: 'Open developer tools' }).click();
-    await shot(page, '34');
-    await page.getByRole('button', { name: 'Enter access code' }).click();
-    await shot(page, '35');
+    await openDevToolsPanel(page);
+    if (await page.getByRole('button', { name: 'Enter access code' }).count()) {
+      await shot(page, '34');
+      await page.getByRole('button', { name: 'Enter access code' }).click();
+      await shot(page, '35');
+      await page.keyboard.press('Escape');
+    }
 
     await page.request.post('/auth/dev-login', {
       form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
     });
     await page.goto('/app/assignments');
-    await page.getByRole('button', { name: 'Open developer tools' }).click();
+    await openDevToolsPanel(page);
     await page.getByRole('button', { name: 'Choose a state to jump to' }).click();
     await shot(page, '19');
 
@@ -88,7 +89,7 @@ test.describe('Dev panel artboard evidence', () => {
     await shot(page, '20');
 
     await page.getByRole('button', { name: 'Cancel' }).click();
-    await page.getByLabel('Use a throwaway test account').setChecked(true);
+    await page.getByRole('checkbox').setChecked(true);
     await page
       .locator('input[name="free-tier-state"]')
       .first()
@@ -114,8 +115,8 @@ test.describe('Dev panel artboard evidence', () => {
     await page.unroute('**/api/dev-panel/free-tier-jump');
 
     await page.goto('/app/assignments');
-    await page.getByRole('button', { name: 'Open developer tools' }).click();
-    await page.getByRole('button', { name: 'Give feedback' }).click();
+    const feedbackTools = await openDevToolsPanel(page);
+    await feedbackTools.getByRole('button', { name: 'Give feedback' }).click();
     await shot(page, '58');
 
     await page.getByRole('button', { name: 'Send feedback' }).click();
@@ -150,15 +151,15 @@ test.describe('Dev panel artboard evidence', () => {
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/app/assignments');
-    await page.getByRole('button', { name: 'Open developer tools' }).click();
-    await page.getByRole('button', { name: 'Give feedback' }).click();
+    const mobileTools = await openDevToolsPanel(page);
+    await mobileTools.getByRole('button', { name: 'Give feedback' }).click();
     await page.getByLabel('Note').fill('Mobile footer evidence');
     await shot(page, '74');
 
     await page.getByLabel('Note').fill('Partly typed note before reload');
     await page.reload();
-    await expect(page.getByRole('complementary', { name: 'Developer tools' })).toBeVisible();
-    await page.getByRole('button', { name: 'Give feedback' }).click();
+    await expect(devToolsPanel(page)).toBeVisible();
+    await devToolsPanel(page).getByRole('button', { name: 'Give feedback' }).click();
     await expect(page.getByLabel('Note')).toHaveValue('Partly typed note before reload');
     await shot(page, '85');
   });

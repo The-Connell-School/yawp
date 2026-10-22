@@ -49,13 +49,13 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
         page.getByRole('button', { name: 'Give feedback', exact: true })
       ).toHaveCount(0);
     }
-    await expect(
-      page.getByRole('button', { name: 'Log feedback', exact: true })
-    ).toBeVisible();
+    const logFeedback = page.getByRole('button', {
+      name: 'Log feedback',
+      exact: true,
+    });
+    await expect(logFeedback).toBeVisible();
     await screenshot('before-disabled');
-    await page
-      .getByRole('button', { name: 'Log feedback', exact: true })
-      .click();
+    await logFeedback.click();
     const legacy = page.getByRole('dialog', { name: 'Log feedback' });
     await legacy
       .getByLabel('What I did')
