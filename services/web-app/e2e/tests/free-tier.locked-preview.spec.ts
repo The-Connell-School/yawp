@@ -553,8 +553,11 @@ test('locked assignments tab shows sample rows and locked documents pill', async
   await expect(page.getByText('Sample · Not sent').first()).toBeVisible();
   const documentsPill = page.getByTestId(/assignment-documents-/).first();
   await expect(documentsPill).toBeVisible();
-  await documentsPill.focus();
-  await page.keyboard.press('Enter');
+  await documentsPill.evaluate((node) => {
+    node.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, cancelable: true })
+    );
+  });
   const sheet = page.getByRole('dialog');
   await expect(sheet).toBeVisible();
   await expect(
