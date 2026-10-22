@@ -245,14 +245,15 @@ for (const width of [390, 1440]) {
         page.getByRole('tooltip', { name: /Available with a site license/i })
       ).toBeVisible();
       await capture(page, 'site-license-lock-tooltip-1440');
-      await page.mouse.move(0, 0);
+      await siteLock.blur();
+      await page.waitForTimeout(150);
     }
     if (width === 390 && (await lockedTileImg.count())) {
       const imgBox = await lockedTileImg.boundingBox();
       expect(imgBox?.height ?? 0).toBeLessThanOrEqual(56);
     }
     await capture(page, `locked-picker-${width}`);
-    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Close' }).click();
     await expect(page.getByRole('heading', { name: 'New assignment' })).toHaveCount(
       0
     );
