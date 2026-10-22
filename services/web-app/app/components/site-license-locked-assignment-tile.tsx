@@ -4,10 +4,11 @@ import {
   assignmentTypeTileFooterClassName,
   assignmentTypeTileImageClassName,
   assignmentTypeTileImageWrapClassName,
-  assignmentTypeTileMetaClassName,
   assignmentTypeTileNameClassName,
   assignmentTypeTileNameTestId,
   assignmentTypeTileTrailingIconClassName,
+  dashboardAssignmentTileClassName,
+  DashboardAssignmentTileFooter,
 } from '~/components/assignment-type-tile-layout';
 import { SiteLicenseLockButton } from '~/components/site-license-lock-button';
 import { cn } from '~/utils/misc';
@@ -61,38 +62,20 @@ export function SiteLicenseLockedAssignmentTile({
       aria-label={label}
       data-testid="site-license-locked-assignment-tile"
       className={cn(
-        assignmentTypeTileCardClassName(
-          'cursor-not-allowed bg-muted/20'
+        dashboardAssignmentTileClassName(
+          'cursor-not-allowed text-muted-foreground opacity-80'
         ),
         className
       )}
     >
-      <div
-        className={cn(
-          assignmentTypeTileImageWrapClassName(),
-          'relative grayscale'
-        )}
-      >
-        <AssignmentTypeTileImage
-          imageId={imageId}
-          className={assignmentTypeTileImageClassName}
-        />
-        <div
-          className="pointer-events-none absolute inset-0 bg-muted/35"
-          aria-hidden
-        />
-      </div>
-      <span className={assignmentTypeTileFooterClassName('font-medium')}>
-        <span
-          className={assignmentTypeTileNameClassName()}
-          data-testid={assignmentTypeTileNameTestId}
-        >
-          {label}
-        </span>
-        <SiteLicenseLockButton
-          className={assignmentTypeTileTrailingIconClassName('ml-auto')}
-        />
-      </span>
+      <DashboardAssignmentTileFooter
+        label={label}
+        trailing={
+          <SiteLicenseLockButton
+            className={assignmentTypeTileTrailingIconClassName()}
+          />
+        }
+      />
     </div>
   );
 }

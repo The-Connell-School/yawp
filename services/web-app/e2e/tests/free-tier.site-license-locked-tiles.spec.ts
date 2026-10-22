@@ -57,9 +57,7 @@ test('free-tier flag on shows locked assignment tiles on dashboard and picker', 
     0
   );
   await expect(tiles).not.toContainText('Available with a site license.');
-  const dashImg = tiles.locator('img').first();
-  const dashBox = await dashImg.boundingBox();
-  expect(dashBox?.height ?? 0).toBeLessThanOrEqual(64);
+  await expect(tiles.locator('img')).toHaveCount(0);
   const lock = tiles.getByTestId('site-license-lock-button').first();
   await lock.focus();
   await page.waitForTimeout(350);

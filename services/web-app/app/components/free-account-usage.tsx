@@ -28,14 +28,11 @@ import { lessonPlanMonthWindow } from '~/utils/lesson-planner/month-window';
 import { cn } from '~/utils/misc';
 import { SiteLicenseLockedAssignmentTile } from '~/components/site-license-locked-assignment-tile';
 import type { SiteLicenseLockedAssignmentTile as SiteLicenseLockedTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
-import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
 import {
-  assignmentTypeTileCardClassName,
-  assignmentTypeTileImageClassName,
-  assignmentTypeTileImageWrapClassName,
-  assignmentTypeTileTrailingIconClassName,
+  dashboardAssignmentTileClassName,
   DashboardAssignmentTileFooter,
   dashboardAssignmentTileTestId,
+  assignmentTypeTileTrailingIconClassName,
 } from '~/components/assignment-type-tile-layout';
 import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
@@ -275,7 +272,7 @@ export function FreeAssignmentTiles({
           createButton
         )}
       </div>
-      <div className="grid auto-rows-min grid-cols-2 items-start gap-3 lg:grid-cols-4">
+      <div className="grid auto-rows-min grid-cols-2 items-start gap-3 lg:grid-cols-3">
         {usage.assignments.map((row) => {
           const type = types.find((t) => t.kind === row.kind);
           return (
@@ -290,18 +287,9 @@ export function FreeAssignmentTiles({
               onClick={() => onCreate(teachingLocked ? undefined : type?.id)}
               aria-label={`New ${row.label} assignment`}
               className={cn(
-                assignmentTypeTileCardClassName(
-                  'bg-popover shadow-sm disabled:bg-muted/30'
-                )
+                dashboardAssignmentTileClassName('disabled:bg-muted/30')
               )}
             >
-              <div className={assignmentTypeTileImageWrapClassName()}>
-                <AssignmentTypeTileImage
-                  imageId={type?.imageId}
-                  imageTitle={type?.imageTitle}
-                  className={assignmentTypeTileImageClassName}
-                />
-              </div>
               <DashboardAssignmentTileFooter
                 label={row.label}
                 meta={

@@ -26,7 +26,15 @@ export const assignmentTypeTileNameTestId = 'assignment-type-tile-name';
 export const assignmentTypeTileMetaTestId = 'assignment-type-tile-meta';
 export const dashboardAssignmentTileTestId = 'dashboard-assignment-tile';
 
-/** Dashboard Assignments grid tiles: name on its own row, meta + icon below (never overlaps). */
+/** v2 dashboard Assignments cards: text-only, ~117px-wide in a 3-col row (see design frames). */
+export function dashboardAssignmentTileClassName(extra?: string) {
+  return cn(
+    'flex min-h-[92px] w-full flex-col overflow-hidden rounded-xl border bg-popover p-3 text-left shadow-sm',
+    extra
+  );
+}
+
+/** Name top-left, icon top-right; meta left-aligned on the row below (picker uses artwork tiles instead). */
 export function DashboardAssignmentTileFooter({
   label,
   meta,
@@ -34,31 +42,33 @@ export function DashboardAssignmentTileFooter({
   trailing,
 }: {
   label: string;
-  meta: ReactNode;
+  meta?: ReactNode;
   metaClassName?: string;
   trailing: ReactNode;
 }) {
   return (
-    <div className="flex w-full min-w-0 flex-col gap-y-0.5 px-3 py-1.5 sm:py-2">
-      <span
-        className="block min-w-0 w-full text-left text-[15px] font-medium leading-snug"
-        data-testid={assignmentTypeTileNameTestId}
-      >
-        {label}
-      </span>
-      <div className="flex w-full min-w-0 items-baseline justify-end gap-x-2">
+    <>
+      <div className="flex w-full min-w-0 items-start justify-between gap-2">
+        <span
+          className="min-w-0 flex-1 text-left text-[15px] font-medium leading-snug"
+          data-testid={assignmentTypeTileNameTestId}
+        >
+          {label}
+        </span>
+        <span className="shrink-0 self-start leading-none">{trailing}</span>
+      </div>
+      {meta != null && meta !== '' ? (
         <span
           className={cn(
-            assignmentTypeTileMetaClassName('ml-0 text-[13px]'),
+            'mt-1 block text-left text-[13px] font-normal leading-snug text-muted-foreground',
             metaClassName
           )}
           data-testid={assignmentTypeTileMetaTestId}
         >
           {meta}
         </span>
-        {trailing}
-      </div>
-    </div>
+      ) : null}
+    </>
   );
 }
 

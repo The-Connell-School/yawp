@@ -319,8 +319,14 @@ for (const width of [390, 1440]) {
       page,
       page.getByTestId('free-assignment-tiles')
     );
+    await expect(
+      page.getByTestId('free-assignment-tiles').locator('img')
+    ).toHaveCount(0);
     if (width === 390) {
       await capture(page, 'dashboard-pending-390');
+    }
+    if (width === 1440) {
+      await capture(page, 'dashboard-pending-1440');
     }
     await page
       .getByRole('button', { name: /New Class Starter assignment/i })
@@ -468,6 +474,9 @@ for (const width of [390, 1440]) {
       page,
       page.getByTestId('free-assignment-tiles')
     );
+    await expect(
+      page.getByTestId('free-assignment-tiles').locator('img')
+    ).toHaveCount(0);
     if (width === 390) {
       await capture(page, 'dashboard-approved-390');
     }
