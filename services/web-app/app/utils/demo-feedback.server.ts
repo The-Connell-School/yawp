@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { readBoundedText } from './bounded-body.server';
 import { FEEDBACK_CAPTURE_EVENTS, feedbackPath } from './demo-feedback-context';
 import { severitySchema, type FeedbackInput } from './tester-feedback.server';
+import { isDevPanelRuntimeEnabled } from '~/dev-panel/dev-panel-runtime.server';
 
 export interface DemoFeedbackDependencies {
   environment(): string;
@@ -14,6 +15,7 @@ export interface DemoFeedbackDependencies {
 export async function demoFeedbackAvailable(
   deps: Pick<DemoFeedbackDependencies, 'environment' | 'flagEnabled'>
 ) {
+  if (isDevPanelRuntimeEnabled()) return true;
   if (deps.environment() !== 'demo') return false;
   try {
     return await deps.flagEnabled();
@@ -103,7 +105,7 @@ export async function submitDemoFeedback(
   try {
     const saved = await deps.save({
       userId: user.id,
-      environment: 'demo',
+      environment: deps.environment().slice(0, 100) || 'demo',
       userAgent: (request.headers.get('user-agent') || '').slice(0, 1000),
       url: parsed.data.url,
       whatHappened: parsed.data.note,
