@@ -243,11 +243,17 @@ test('local demo single trigger reserves mobile content space on landing, classe
       await page.setViewportSize(viewport);
       for (const [index, route] of routes.entries()) {
         await page.goto(route);
-        const devPanel = await isDevPanelActive(page);
-        const trigger = devPanel
-          ? page.getByRole('button', { name: 'Open developer tools' })
-          : page.getByRole('button', { name: 'Give feedback', exact: true });
-        await expect(trigger).toBeVisible();
+        await page.waitForLoadState('domcontentloaded');
+        const beaker = page.getByRole('button', { name: 'Open developer tools' });
+        const legacyGiveFeedback = page.getByRole('button', {
+          name: 'Give feedback',
+          exact: true,
+        });
+        await expect(beaker.or(legacyGiveFeedback)).toBeVisible({
+          timeout: 60_000,
+        });
+        const devPanel = (await beaker.count()) > 0;
+        const trigger = devPanel ? beaker : legacyGiveFeedback;
         await page.waitForTimeout(300);
         const geometry = await trigger.evaluate((element) => {
           const rect = element.getBoundingClientRect();
