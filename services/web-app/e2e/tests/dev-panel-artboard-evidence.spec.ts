@@ -2,7 +2,11 @@ import { copyFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { test, expect } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
-import { devToolsPanel, openDevToolsPanel } from '../helpers/dev-panel-feedback';
+import {
+  devToolsPanel,
+  openDevToolsPanel,
+  openGiveFeedback,
+} from '../helpers/dev-panel-feedback';
 
 const evidenceRoot =
   process.env.DEV_PANEL_EVIDENCE_DIR ??

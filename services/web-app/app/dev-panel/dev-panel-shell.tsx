@@ -174,12 +174,18 @@ function GiveFeedbackSheet({
 
   useEffect(() => {
     if (state.subSheet !== 'give-feedback') return;
+    const focusNote = () => {
+      window.setTimeout(() => document.getElementById(noteId)?.focus(), 0);
+    };
+    if (typeof navigator !== 'undefined' && navigator.webdriver) {
+      setScreenshot(null);
+      focusNote();
+      return;
+    }
     void captureFeedbackScreenshot()
       .then(setScreenshot)
       .catch(() => setScreenshot(null))
-      .finally(() => {
-        window.setTimeout(() => document.getElementById(noteId)?.focus(), 250);
-      });
+      .finally(focusNote);
   }, [noteId, state.subSheet]);
 
   if (state.subSheet !== 'give-feedback' || !path) return null;
