@@ -87,3 +87,15 @@ html.yawp-dev-panel-closing:not(.yawp-dev-panel-reduced-motion)
 html.yawp-dev-panel-capturing [data-yawp-dev-panel] {
   visibility: hidden !important;
 }
+
+body:has(.yawp-dev-panel-beaker),
+body:has([data-yawp-dev-panel]) {
+  --teaching-access-toast-bottom: calc(5rem + 2.75rem + 0.75rem);
+}
+
+@media (max-width: 639px) {
+  body:has(.yawp-dev-panel-beaker),
+  body:has([data-yawp-dev-panel]) {
+    --teaching-access-toast-bottom: calc(5rem + 1rem);
+  }
+}

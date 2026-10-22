@@ -18,6 +18,16 @@ import {
   CollapsibleTrigger,
 } from '~/components/ui/collapsible';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '~/components/ui/alert-dialog';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -33,8 +43,12 @@ import { captureFeedbackScreenshot } from './capture-feedback-screenshot';
 import { useDevPanel } from './dev-panel-provider';
 import {
   FREE_TIER_STATE_GROUPS,
+  findFreeTierState,
   freeTierStateSummary,
 } from './free-tier-states.catalog';
+import { DevPanelOrgPicker } from './dev-panel-org-picker';
+import { useVisualViewportFooterStyle } from './use-visual-viewport-footer';
+import type { FreeTierJumpStep } from './free-tier-jump.server';
 import { feedbackPath } from '~/utils/demo-feedback-context';
 
 function useMedia(query: string) {
@@ -144,6 +158,8 @@ function GiveFeedbackSheet() {
   const location = useLocation();
   const path = feedbackPath(location.pathname + location.search);
   const noteId = useId();
+  const isPhone = useMedia('(max-width: 639px)');
+  const footerStyle = useVisualViewportFooterStyle(isPhone);
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [status, setStatus] = useState<'idle' | 'submitting' | 'sent' | 'error'>('idle');
   const [error, setError] = useState('');
@@ -257,7 +273,13 @@ function GiveFeedbackSheet() {
         )}
       </div>
       {status !== 'sent' ? (
-        <div className="border-t p-4">
+        <div
+          className={cn(
+            'border-t bg-background p-4',
+            isPhone && 'fixed inset-x-0 bottom-0 z-20 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]'
+          )}
+          style={isPhone ? footerStyle : undefined}
+        >
           <Button
             type="button"
             className="w-full"
@@ -400,21 +422,11 @@ export function DevPanelShell() {
                 <ChevronDown className="size-4" aria-hidden="true" />
               </CollapsibleTrigger>
               <CollapsibleContent className="px-2 pb-2">
-                <label className="text-xs font-medium" htmlFor="dev-panel-org">
-                  Org
-                </label>
-                <select
-                  id="dev-panel-org"
-                  className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm"
-                  value={selectedOrg ?? ''}
-                  onChange={(event) => setOrg(event.target.value)}
-                >
-                  {orgs.map((org) => (
-                    <option key={org.id} value={org.id}>
-                      {org.name}
-                    </option>
-                  ))}
-                </select>
+                <DevPanelOrgPicker
+                  orgs={orgs}
+                  value={selectedOrg}
+                  onChange={setOrg}
+                />
                 {loginState === 'loading' ? (
                   <p role="status" className="mt-2 text-xs text-muted-foreground">
                     Loading quick logins…
@@ -652,6 +664,10 @@ function FreeTierStatesSheet({
   const { state, updateForms } = useDevPanel();
   const [filter, setFilter] = useState('');
   const [jumping, setJumping] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [switchSteps, setSwitchSteps] = useState<FreeTierJumpStep[] | null>(
+    null
+  );
   const [error, setError] = useState('');
   const selected = state.forms.selectedStateId ?? null;
   const throwaway = state.forms.throwawaySwitch !== false;
@@ -669,15 +685,36 @@ function FreeTierStatesSheet({
     })).filter((group) => group.states.length > 0);
   }, [filter]);
 
-  const jump = async () => {
+  const beginJump = () => {
     if (!selected || !orgId) return;
     if (!throwaway) {
-      const ok = window.confirm(
-        'Turn off throwaway mode will change the signed-in account. Continue?'
-      );
-      if (!ok) return;
+      setConfirmOpen(true);
+      return;
     }
+    void runJump();
+  };
+
+  const runJump = async () => {
+    if (!selected || !orgId) return;
+    const found = findFreeTierState(selected);
+    const pendingSteps: FreeTierJumpStep[] = [
+      {
+        id: 'account',
+        label: throwaway ? 'Making test account…' : 'Using signed-in account…',
+        done: false,
+      },
+      {
+        id: 'state',
+        label: found
+          ? `Setting up ${found.state.label}…`
+          : 'Setting up state…',
+        done: false,
+      },
+      { id: 'reload', label: 'Reloading Yawp!…', done: false },
+    ];
+    setConfirmOpen(false);
     setJumping(true);
+    setSwitchSteps(pendingSteps);
     setError('');
     try {
       const response = await fetch('/api/dev-panel/free-tier-jump', {
@@ -690,12 +727,18 @@ function FreeTierStatesSheet({
       if (!response.ok) {
         setError(result?.error ?? 'Jump failed.');
         setJumping(false);
+        setSwitchSteps(null);
         return;
       }
-      window.location.assign(result.redirectTo);
+      const steps = (result.steps ?? pendingSteps) as FreeTierJumpStep[];
+      setSwitchSteps(steps);
+      window.setTimeout(() => {
+        window.location.assign(result.redirectTo);
+      }, 350);
     } catch {
       setError('Jump failed.');
       setJumping(false);
+      setSwitchSteps(null);
     }
   };
 
@@ -723,11 +766,25 @@ function FreeTierStatesSheet({
         ) : null}
       </div>
       <div className="flex-1 space-y-3 overflow-y-auto p-3">
+        {jumping && switchSteps ? (
+          <div className="space-y-3 rounded-md border bg-muted/30 p-3" role="status">
+            <p className="text-sm font-medium">Switching…</p>
+            <ol className="space-y-2 text-sm">
+              {switchSteps.map((step) => (
+                <li key={step.id} className="flex items-start gap-2">
+                  <span aria-hidden="true">{step.done ? '✓' : '…'}</span>
+                  <span>{step.label}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        ) : null}
         <label className="flex items-center justify-between gap-2 text-sm">
           <span>Use a throwaway test account</span>
           <input
             type="checkbox"
             checked={throwaway}
+            disabled={jumping}
             onChange={(event) => updateForms({ throwawaySwitch: event.target.checked })}
           />
         </label>
@@ -773,11 +830,28 @@ function FreeTierStatesSheet({
           type="button"
           className="w-full"
           disabled={!selected || jumping}
-          onClick={() => void jump()}
+          onClick={() => beginJump()}
         >
           {jumping ? 'Switching…' : 'Jump to this state'}
         </Button>
       </div>
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Change the signed-in account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Throwaway mode is off, so this jump will update data on the account you are
+              signed in with. Continue only if that is what you want.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void runJump()}>
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

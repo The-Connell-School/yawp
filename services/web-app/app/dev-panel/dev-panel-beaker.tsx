@@ -7,7 +7,7 @@ export function DevPanelBeaker() {
   const { state, openPanel } = useDevPanel();
   if (state.open) return null;
   return (
-    <div className="fixed bottom-4 right-4 z-30">
+    <div className="local-dev-environment-control yawp-dev-panel-beaker fixed bottom-4 right-4 z-30">
       <Tooltip text="Developer tools (Alt+Shift+D)" delayDuration={0}>
         <button
           type="button"
