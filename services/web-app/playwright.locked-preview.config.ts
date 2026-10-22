@@ -26,6 +26,7 @@ export default defineConfig({
       SIGNON_MAIL_CAPTURE_DIR: `${process.env.TMPDIR}/locked-preview-mail`,
       FREE_TIER_LINK_HMAC_SECRET: 'local-locked-preview-test-signing-secret',
       PRIMARY_APP_URL: `http://localhost:${process.env.CLASS_STEP_PORT}`,
+      YAWP_ENVIRONMENT: 'demo',
     },
   },
   use: {
