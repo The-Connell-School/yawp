@@ -262,6 +262,7 @@ function GiveFeedbackSheet({
               <Label htmlFor={noteId}>Note</Label>
               <Textarea
                 id={noteId}
+                autoFocus
                 rows={6}
                 maxLength={2000}
                 value={note}
