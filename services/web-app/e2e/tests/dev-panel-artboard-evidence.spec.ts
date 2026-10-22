@@ -85,18 +85,16 @@ test.describe('Dev panel artboard evidence', () => {
     });
     await page.goto('/app/assignments');
     const tools = await openDevToolsPanel(page);
-    if (await tools.getByRole('button', { name: 'Enter access code' }).count()) {
-      test.skip(true, 'Preview access gate requires a seat code in this environment');
-    }
     await tools.getByRole('button', { name: 'Choose a state to jump to' }).click();
+    const stateSheet = page.getByRole('dialog', { name: 'Free-tier states' });
+    await expect(stateSheet).toBeVisible();
     await shot(page, '19');
 
-    await page
-      .locator('input[name="free-tier-state"]')
-      .first()
-      .check();
-    await page.getByRole('checkbox').setChecked(false);
-    await page.getByRole('button', { name: 'Jump to this state' }).click();
+    await stateSheet.locator('input[name="free-tier-state"]').first().check();
+    await stateSheet
+      .getByRole('checkbox', { name: 'Use a throwaway test account' })
+      .setChecked(false);
+    await stateSheet.getByRole('button', { name: 'Jump to this state' }).click();
     await expect(
       page.getByRole('heading', { name: 'Change the signed-in account?' })
     ).toBeVisible();

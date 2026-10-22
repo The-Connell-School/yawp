@@ -169,7 +169,7 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     await screenshot('error-mobile');
     await page.unroute('**/api/demo-feedback');
     await retryPanel.getByRole('button', { name: 'Send feedback' }).click();
-    await expect(panel.getByRole('status')).toHaveText(/Feedback saved\. Thank you\./);
+    await expect(retryPanel.getByRole('status')).toHaveText(/Feedback saved\. Thank you\./);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth
