@@ -14,10 +14,6 @@ import { createRoot, type Root } from 'react-dom/client';
 import { Button } from '~/components/ui/button';
 import { TEACHING_ACCESS_LOCKED_TOOLTIP } from '~/domain/free-tier/teaching-access-copy';
 
-mock.module('~/hooks/useBreakpoint', () => ({
-  default: () => 'md',
-}));
-
 const { LockedTeachingControl } = await import('./locked-teaching-control');
 
 function renderDesktopLockedControl(tooltip?: string) {

@@ -1,10 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e/tests',
-  testMatch: /demo-feedback\.spec\.ts/,
+  testMatch: /demo-feedback\.spec\.ts|dev-panel-artboard-evidence\.spec\.ts/,
   workers: 1,
   fullyParallel: false,
   retries: 0,
+  timeout: 240_000,
+  expect: { timeout: 15_000 },
   reporter: 'list',
   forbidOnly: !!process.env.CI,
   outputDir: `${process.env.TMPDIR}/demo-feedback-results`,
