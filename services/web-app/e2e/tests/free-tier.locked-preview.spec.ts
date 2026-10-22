@@ -224,9 +224,7 @@ for (const width of [390, 1440]) {
       const box = await pickerTiles.nth(i).boundingBox();
       expect(box?.height ?? 999).toBeLessThan(140);
     }
-    await expect(
-      listbox.getByRole('option', { name: /Thesis Statement/i })
-    ).toBeVisible();
+    await expect(listbox.getByText('Thesis Statement', { exact: true })).toBeVisible();
     await expect(listbox.getByText('Class ...')).toHaveCount(0);
     await expect(listbox.getByText('Prewrit...')).toHaveCount(0);
     const lockedTileImg = page
