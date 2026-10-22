@@ -68,7 +68,6 @@ export const FREE_TIER_STATE_GROUPS: FreeTierStateGroup[] = [
     id: 'approved',
     title: 'Approved',
     summary: 'Signs in as a teacher',
-    // Design exports 19/81 will add two more Approved rows; do not invent them here.
     states: [
       {
         id: 'approved.first-time-toast',
@@ -95,6 +94,18 @@ export const FREE_TIER_STATE_GROUPS: FreeTierStateGroup[] = [
         id: 'approved.usage-all-used',
         label: 'Usage: all used',
         description: 'Ring empty until November 1.',
+      },
+      {
+        id: 'approved.lesson-planner-limit',
+        label: 'Lesson Planner limit screen',
+        description:
+          'Monthly Lesson Planner usage at cap; limit UI from PR #657 when merged.',
+      },
+      {
+        id: 'approved.reporter-limit',
+        label: 'Reporter limit screen',
+        description:
+          'Monthly Reporter usage at cap; limit UI from PR #657 when merged.',
       },
     ],
   },

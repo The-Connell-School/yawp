@@ -300,7 +300,9 @@ export async function executeFreeTierStateJump(
       case 'approved.usage-plenty-left':
       case 'approved.usage-about-half-left':
       case 'approved.usage-a-few-left':
-      case 'approved.usage-all-used': {
+      case 'approved.usage-all-used':
+      case 'approved.lesson-planner-limit':
+      case 'approved.reporter-limit': {
         const app = await upsertApplication(
           target.userId,
           target.email,
@@ -329,10 +331,19 @@ export async function executeFreeTierStateJump(
                   ? { lp: 4, rep: 2 }
                   : state.id === 'approved.usage-all-used'
                     ? { lp: 5, rep: 2 }
-                    : { lp: 0, rep: 0 };
+                    : state.id === 'approved.lesson-planner-limit'
+                      ? { lp: 5, rep: 0 }
+                      : state.id === 'approved.reporter-limit'
+                        ? { lp: 0, rep: 2 }
+                        : { lp: 0, rep: 0 };
           await seedMonthlyUsage(org.organizationId, usage.lp, usage.rep);
         }
-        redirectTo = '/app';
+        redirectTo =
+          state.id === 'approved.lesson-planner-limit'
+            ? '/app/lesson-planner'
+            : state.id === 'approved.reporter-limit'
+              ? '/app/reporter'
+              : '/app';
         break;
       }
       default:
