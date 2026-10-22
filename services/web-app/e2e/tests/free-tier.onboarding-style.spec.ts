@@ -468,6 +468,11 @@ for (const viewport of [
             })
           ).toBeVisible();
           await capture('approval-declined', admin);
+          // Expired-link UI is gated behind an open application (not REJECTED).
+          await prisma.freeTierApplication.update({
+            where: { id: app.id },
+            data: { status: 'SENT', organizationId: null },
+          });
           const expired = await mintFreeTierLinkForE2E(prisma, {
             applicationId: app.id,
             purpose: 'ADMIN_APPROVE',
