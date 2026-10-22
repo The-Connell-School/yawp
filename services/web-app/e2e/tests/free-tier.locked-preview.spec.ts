@@ -400,6 +400,8 @@ test('flag OFF keeps the waiting page and does not expose the in-app lock', asyn
   });
   await flag(false);
   await login(page, user.email!);
-  await page.goto('/app/free-tier/onboarding');
+  await page.goto('/app/free-tier/pending');
   await expect(page).toHaveURL(/free-tier\/pending/);
+  await expect(page.getByTestId('teaching-access-banner')).toHaveCount(0);
+  await expect(page.getByTestId('free-assignment-tiles')).toHaveCount(0);
 });
