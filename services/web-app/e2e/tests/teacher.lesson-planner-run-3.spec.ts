@@ -789,7 +789,7 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await send.getByTestId('send-recipient').fill('sub@school.org');
       await send.getByLabel('Special instructions for your sub').fill('Fire drill at 10:15. Leave by the east door.');
       await send.getByTestId('send-button').click();
-      await expect(send.getByTestId('send-done')).toContainText('Sent to sub@school.org');
+      await expect(send.getByTestId('send-done')).toContainText('sub@school.org');
       const link = await send.getByTestId('send-link').getAttribute('href');
 
       const stranger = await browser.newContext();
@@ -843,7 +843,7 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await send.getByRole('checkbox', { name: /Invite them to observe/ }).check();
       await send.getByTestId('send-recipient').fill('principal@school.org');
       await send.getByTestId('send-button').click();
-      await expect(send.getByTestId('send-done')).toContainText('Sent to principal@school.org');
+      await expect(send.getByTestId('send-done')).toContainText('principal@school.org');
       const link = await send.getByTestId('send-link').getAttribute('href');
 
       const stranger = await browser.newContext();

@@ -9,6 +9,8 @@ import { sendEmail } from '~/utils/email.server';
 import { plannerComplete, type PlannerAccess } from './planner-completion.server';
 import {
   fallbackLessonText,
+  lessonEmail,
+  withoutWritingShare,
   REWRITE_SYSTEM,
   type ShareAudience,
   type ShareItem,
@@ -104,34 +106,26 @@ export async function rewriteForAudience({
       route: 'routes/api.domain.lesson-planner.stack',
       maxTokens: 1_200,
     });
-    return written.trim() || fallback;
+    // The page shows the writing time from the stack; never a second one.
+    return withoutWritingShare(written) || fallback;
   } catch {
     return fallback;
   }
 }
 
-export async function emailLessonLink({
-  to,
-  subject,
-  link,
-  note,
-  teacherName,
-}: {
-  to: string;
-  subject: string;
-  link: string;
-  note: string | null;
-  teacherName: string | null;
-}) {
-  const from = teacherName ? `${teacherName} sent you a lesson on Yawp!.` : 'A teacher sent you a lesson on Yawp!.';
-  const text = [from, note ? `\n${note}\n` : '', `Open it here: ${link}`, '', 'No Yawp! login needed.'].join('\n');
-  const escape = (value: string) =>
-    value.replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char]!);
-  const html = [
-    `<p>${escape(from)}</p>`,
-    note ? `<p style="padding:12px;background:#F6F1EA;border-radius:8px">${escape(note).replace(/\n/g, '<br>')}</p>` : '',
-    `<p><a href="${escape(link)}">Open the lesson</a></p>`,
-    '<p style="color:#6E665C">No Yawp! login needed.</p>',
-  ].join('');
-  return sendEmail({ to, subject, text, html });
+/** Ids the email util returns when it logs an email instead of sending it. */
+const NOT_SENT = new Set(['preview-captured', 'mocked', 'local-captured']);
+
+/**
+ * Emails the link. `sent` is false on a PR preview (and locally), where email
+ * is logged and never delivered, so the page can say so instead of "Sent"
+ * (Brian's run 4, item 5).
+ */
+export async function emailLessonLink(
+  options: Parameters<typeof lessonEmail>[0] & { to: string }
+): Promise<{ sent: boolean }> {
+  const { subject, text, html } = lessonEmail(options);
+  const result = await sendEmail({ to: options.to, subject, text, html });
+  const id = result.status === 'success' ? (result.data as { id?: string } | undefined)?.id : undefined;
+  return { sent: result.status === 'success' && !NOT_SENT.has(id ?? '') };
 }

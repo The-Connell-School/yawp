@@ -7,6 +7,8 @@ import {
   parseShareItems,
   REWRITE_SYSTEM,
   teamsShareUrl,
+  lessonEmail,
+  withoutWritingShare,
 } from './lesson-share';
 
 describe('Post to your class and Send this lesson (stack page redesign)', () => {
@@ -73,5 +75,45 @@ describe('adminExtras: only what the teacher said', () => {
 
   test('no standards named: no Standards section at all', () => {
     expect(adminExtras({ standards: [], observe: false, className: null, lessonDate: null })).toBe('');
+  });
+});
+
+describe("withoutWritingShare: one writing number, from the stack (Brian's run 4, item 6)", () => {
+  test("the model's own percentage goes; the rest of the sentence's paragraph stays", () => {
+    const text = [
+      '## The lesson',
+      '',
+      'Students read chapter 3 closely. About 29% of the period is spent writing. They finish with an exit ticket.',
+      '',
+      '- Writing: 29% of class',
+      '- Discussion: 20 min',
+    ].join('\n');
+    const out = withoutWritingShare(text);
+    expect(out).not.toContain('29%');
+    expect(out).toContain('Students read chapter 3 closely. They finish with an exit ticket.');
+    expect(out).toContain('- Discussion: 20 min');
+  });
+  test('the admin rewrite is not asked for a writing share', () => {
+    expect(REWRITE_SYSTEM.admin).not.toMatch(/writing/i);
+  });
+});
+
+describe("lessonEmail: each audience's email (Brian's run 4, item 5)", () => {
+  const base = { title: 'Catcher, ch. 1–4', className: 'English 11', link: 'https://yawp.example/l/abc', note: null, teacherName: 'Brian' };
+  test('says who sent it, what it is for, and the link, with no login needed', () => {
+    for (const audience of ['sub', 'student', 'family', 'admin'] as const) {
+      const email = lessonEmail({ ...base, audience });
+      expect(email.text).toContain('Brian sent you');
+      expect(email.text).toContain('https://yawp.example/l/abc');
+      expect(email.html).toContain('Sent with Yawp! No login needed.');
+    }
+    expect(lessonEmail({ ...base, audience: 'sub' }).subject).toBe('Sub plan: Catcher, ch. 1–4');
+    expect(lessonEmail({ ...base, audience: 'family' }).text).toContain('talk about it at home');
+  });
+  test('an admin invited to observe is told so in the subject', () => {
+    expect(lessonEmail({ ...base, audience: 'admin', observe: true }).subject).toBe('Invitation to observe: Catcher, ch. 1–4');
+  });
+  test("the teacher's note is escaped in the HTML", () => {
+    expect(lessonEmail({ ...base, audience: 'sub', note: 'Seats <b>fixed</b>' }).html).toContain('Seats &lt;b&gt;fixed&lt;/b&gt;');
   });
 });

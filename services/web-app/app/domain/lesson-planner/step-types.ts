@@ -104,17 +104,30 @@ export function isWritingStep({
   kind,
   yawpAssignmentId,
   stepType,
+  title = '',
+  content = '',
 }: {
   kind: string;
   yawpAssignmentId?: string | null;
   stepType?: StepType | null;
+  /** A step's own words: students writing on paper is writing too. */
+  title?: string;
+  content?: string;
 }): boolean {
   if (WRITING_KINDS.has(kind)) return true;
   if (yawpAssignmentId) return true;
   // A quick write the planner tagged as Daily Pages or a Thesis Essay module
-  // is a Yawp! writing assignment in waiting.
-  return stepType === 'daily_pages' || stepType === 'thesis_essay';
+  // is a Yawp! writing assignment in waiting, and a class starter is writing
+  // wherever it is filed.
+  if (stepType === 'daily_pages' || stepType === 'thesis_essay' || stepType === 'class_starter') return true;
+  // Brian's run 4, item 6: an exit ticket or a reflection written on paper
+  // counts as much as one made in Yawp!.
+  return PROSE_WRITING.test(title) || PROSE_WRITING.test(content);
 }
+
+/** Students writing, said in a step's words. */
+const PROSE_WRITING =
+  /\b(?:exit (?:ticket|slip)s?|class starter|daily pages|thesis|quick[- ]?writes?|free[- ]?writes?|journal(?:s|ing)?|(?:written|writing a) reflection|reflection (?:writing|paragraph)|students write|write (?:a|one|two|three) (?:sentence|paragraph|line)s?|write for (?:\d+|one|two|three|four|five|a few) min)/i;
 
 /** The chip's text: the type, and its label when it has one. */
 export function stepChipText(type: StepType, label?: string | null): string {

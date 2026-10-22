@@ -70,7 +70,7 @@ export function suggestedPieces({
           material.title,
         type,
         minutes: material.minutes ?? null,
-        isWriting: isWritingStep({ kind: material.kind, stepType: type }),
+        isWriting: isWritingStep({ kind: material.kind, stepType: type, title: material.title, content: material.content }),
         line: firstSentence(material.content),
       });
     }

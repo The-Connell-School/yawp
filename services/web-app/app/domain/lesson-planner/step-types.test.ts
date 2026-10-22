@@ -37,6 +37,16 @@ describe('isWritingStep: set from Yawp!, never by the teacher', () => {
   });
   test('the hook is not writing', () => {
     expect(isWritingStep({ kind: 'step', stepType: 'activity' })).toBe(false);
+    expect(isWritingStep({ kind: 'step', title: 'Pair talk', content: 'Partners compare what Holden says about Pencey.' })).toBe(false);
+  });
+  test("writing on paper counts: starters, exit tickets, Daily Pages, thesis, reflections (Brian's run 4, item 6)", () => {
+    const step = (title: string, content = '') => isWritingStep({ kind: 'step', title, content });
+    expect(isWritingStep({ kind: 'step', stepType: 'class_starter' })).toBe(true);
+    expect(step('Closing', 'Exit ticket: what does Holden avoid saying?')).toBe(true);
+    expect(step('Daily Pages', 'Ten minutes, any prompt.')).toBe(true);
+    expect(step('Thesis workshop')).toBe(true);
+    expect(step('Wrap-up', 'Students write a short reflection on paper: one thing that changed their mind.')).toBe(true);
+    expect(step('Quick write (5 min)')).toBe(true);
   });
 });
 

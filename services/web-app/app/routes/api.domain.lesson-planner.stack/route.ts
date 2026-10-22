@@ -21,7 +21,7 @@ import {
 } from '~/domain/lesson-planner/stack-actions.server';
 import { runStackCommand } from '~/domain/lesson-planner/stack-command.server';
 import { ensureStudentVersion } from '~/domain/lesson-planner/step-handout.server';
-import { adminExtras, AUDIENCE_SETUP, parseShareItems, SHARE_AUDIENCES } from '~/domain/lesson-planner/lesson-share';
+import { adminExtras, parseShareItems, SHARE_AUDIENCES } from '~/domain/lesson-planner/lesson-share';
 import {
   createShareLink,
   emailLessonLink,
@@ -297,17 +297,19 @@ export async function action({ request }: ActionFunctionArgs) {
         body,
       });
       const url = `${getDomainUrl(request)}/l/${token}`;
-      const setup = AUDIENCE_SETUP[data.audience];
-      await emailLessonLink({
+      const teacher = await prisma.user.findUnique({ where: { id: access.userId }, select: { name: true } });
+      const { sent } = await emailLessonLink({
         to: data.recipient,
-        subject: `${
-          setup.tab === 'Substitute' ? 'Sub plan' : includes.includes('observe') ? 'Invitation to observe' : 'Lesson'
-        }: ${loaded.packet.title}`,
+        audience: data.audience,
+        title: loaded.packet.title,
+        className: loaded.packet.className,
         link: url,
         note: data.note || null,
-        teacherName: null,
+        teacherName: teacher?.name ?? null,
+        observe: data.audience === 'admin' && includes.includes('observe'),
       });
-      return dataResponse({ ok: true, url, sentTo: data.recipient });
+      // On a preview no email goes out; say so rather than "Sent".
+      return dataResponse({ ok: true, url, sentTo: data.recipient, sent });
     }
 
     case 'save-template': {

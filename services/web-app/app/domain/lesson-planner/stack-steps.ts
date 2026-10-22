@@ -78,6 +78,8 @@ export function stackSteps({
     const isWriting = isWritingStep({
       kind,
       stepType: type,
+      title,
+      content: section.content,
       yawpAssignmentId: meta?.yawpAssignmentId ?? (meta?.yawpCreated ? 'created' : null),
     });
     return [

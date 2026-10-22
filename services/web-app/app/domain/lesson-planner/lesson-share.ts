@@ -120,6 +120,71 @@ export function adminExtras({
   return parts.join('\n\n');
 }
 
+/** What each audience's email says around the link (Brian's run 4, item 5). */
+const EMAIL_COPY: Record<ShareAudience, { subject: string; intro: string; button: string }> = {
+  sub: {
+    subject: 'Sub plan',
+    intro: 'Here is the plan for the class you are covering: each step in order, with its times and what to say. Handouts to print are on the page too.',
+    button: 'Open the sub plan',
+  },
+  student: {
+    subject: 'What we did in class',
+    intro: 'Here is what we did in class while you were out, and what to do to catch up.',
+    button: 'See what you missed',
+  },
+  family: {
+    subject: 'What we did in class',
+    intro: 'Here is what we did in class and why, with a few ways to talk about it at home.',
+    button: 'Read about the lesson',
+  },
+  admin: {
+    subject: 'Lesson plan',
+    intro: 'Here is the lesson plan, timed, with a line on why each step is there.',
+    button: 'Open the lesson plan',
+  },
+};
+
+export function lessonEmail({
+  audience,
+  title,
+  className,
+  link,
+  note,
+  teacherName,
+  observe = false,
+}: {
+  audience: ShareAudience;
+  title: string;
+  className: string | null;
+  link: string;
+  note: string | null;
+  teacherName: string | null;
+  observe?: boolean;
+}): { subject: string; text: string; html: string } {
+  const copy = EMAIL_COPY[audience];
+  const who = teacherName?.trim() || 'A teacher';
+  const lesson = className ? `${title} (${className})` : title;
+  const subject = `${audience === 'admin' && observe ? 'Invitation to observe' : copy.subject}: ${title}`;
+  const opener = `${who} sent you ${audience === 'sub' ? 'a sub plan' : 'a lesson'}: ${lesson}.`;
+  const intro =
+    audience === 'admin' && observe ? `${copy.intro} You are invited to come and see it taught.` : copy.intro;
+  const text = [opener, '', intro, note ? `\n${note}\n` : '', `${copy.button}: ${link}`, '', 'Sent with Yawp! No login needed.'].join('\n');
+  const escape = (value: string) =>
+    value.replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char]!);
+  const html = [
+    '<div style="font-family:Georgia,serif;max-width:560px;color:#2B2622">',
+    `<p style="font-size:16px"><strong>${escape(opener)}</strong></p>`,
+    `<p>${escape(intro)}</p>`,
+    note
+      ? `<p style="padding:12px;background:#F6F1EA;border-radius:8px">${escape(note).replace(/\n/g, '<br>')}</p>`
+      : '',
+    `<p><a href="${escape(link)}" style="display:inline-block;padding:10px 16px;background:#C2502E;color:#fff;border-radius:8px;text-decoration:none;font-weight:bold">${escape(copy.button)}</a></p>`,
+    '<p style="color:#6E665C;font-size:13px">Sent with Yawp! No login needed.</p>',
+    '</div>',
+  ].join('');
+  return { subject, text, html };
+}
+
 /** What "Post to your class" can open (the student page). */
 export const POST_ITEMS: Array<{ item: ShareItem; label: string }> = [
   { item: 'deck', label: 'Slide deck' },
@@ -164,11 +229,31 @@ export const REWRITE_SYSTEM: Record<ShareAudience, string> = {
   ].join('\n'),
   admin: [
     'Summarize a teacher’s lesson for a school administrator.',
-    'What the lesson does and for whom, then the steps with their minutes and one line of why each, then how much of the period is writing.',
+    'What the lesson does and for whom, then the steps with their minutes and one line of why each.',
     'Never name a standard, a standards code or an alignment claim: Yawp! adds the standards the teacher named itself, and says nothing about the ones they did not.',
     'Professional and concise. Markdown. At most 350 words. Return only the summary.',
   ].join('\n'),
 };
+
+/**
+ * Never a share of class time spent writing in the rewritten text (Brian's
+ * run 4, item 6): the page shows the one number, worked out from the stack,
+ * and a second one from the model (29% beside 20%) is always wrong. Drops
+ * any sentence that puts a percentage on writing.
+ */
+export function withoutWritingShare(text: string): string {
+  const share = /\d+\s*(?:%|percent)[^.!?\n]*\bwrit|\bwrit[^.!?\n]*\d+\s*(?:%|percent)/i;
+  return text
+    .split('\n')
+    .map((line) => {
+      if (!share.test(line)) return line;
+      const sentences = line.match(/[^.!?]+[.!?]*\s*/g) ?? [line];
+      return sentences.filter((sentence) => !share.test(sentence)).join('').trimEnd();
+    })
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
 
 /** What the page says when no rewrite came back: the steps, timed. */
 export function fallbackLessonText(
