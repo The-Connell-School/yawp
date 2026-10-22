@@ -343,7 +343,7 @@ export default function FreeTierPendingRoute() {
             ) : null}
             <FreeTierProgress
               steps={[
-                'Account created',
+                'Account and class created',
                 'Request sent',
                 app?.status === 'MANUAL_REVIEW'
                   ? 'Yawp! review'
@@ -430,7 +430,7 @@ export default function FreeTierPendingRoute() {
       ) : null}
       <FreeTierProgress
         steps={[
-          'Account created',
+          'Account and class created',
           'Request sent',
           app?.status === 'MANUAL_REVIEW'
             ? 'Yawp! review'
