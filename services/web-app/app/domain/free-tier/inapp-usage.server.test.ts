@@ -1,7 +1,24 @@
-import { test, expect, mock, beforeEach } from 'bun:test';
+import { test, expect, mock, beforeEach, afterEach } from 'bun:test';
 mock.module('./monthly-operations.server', () => ({
   readMonthlyUsage: async () => 1,
 }));
+const testLimits = {
+  studentSeatCap: 10,
+  lessonPlannerMonthly: 0,
+  reporterMonthly: 100,
+  version: 1,
+  updatedAt: '2026-10-16T00:00:00.000Z',
+  updatedByEmail: 'staff@example.test',
+};
+mock.module('./limits.server', () => ({
+  effectiveFreeTierLimits: async () => ({
+    monthly: true,
+    limits: testLimits,
+  }),
+  readFreeTierLimits: async () => testLimits,
+}));
+let applicationStatus: 'APPROVED' | 'SENT' | 'MANUAL_REVIEW' | null = 'APPROVED';
+let previousYawpEnvironment: string | undefined;
 const classRead = mock(async (..._args: any[]) => ({
   id: 'class',
   code: 'CLASS',
@@ -38,7 +55,9 @@ const settingReadMany = mock(async ({ where }: any) => {
 });
 mock.module('~/utils/db.server', () => ({
   prisma: {
-    freeTierApplication: { findFirst: async () => ({ id: 'approved' }) },
+    freeTierApplication: {
+      findFirst: async () => ({ status: applicationStatus }),
+    },
     setting: { findUnique: settingRead, findMany: settingReadMany },
     class: { findFirst: classRead },
     document: { count },
@@ -74,13 +93,27 @@ const profile = {
   organization: { id: 'org', plan: 'FREE_CLASSROOM' },
 };
 beforeEach(() => {
+  mock.module('./limits.server', () => ({
+    effectiveFreeTierLimits: async () => ({
+      monthly: true,
+      limits: testLimits,
+    }),
+    readFreeTierLimits: async () => testLimits,
+  }));
+  previousYawpEnvironment = process.env.YAWP_ENVIRONMENT;
+  delete process.env.YAWP_ENVIRONMENT;
   freeTierValue = 'true';
+  applicationStatus = 'APPROVED';
   classRead.mockClear();
   count.mockClear();
   settingRead.mockClear();
   settingReadMany.mockClear();
   shouldHideFreeTierTeachingSecrets.mockClear();
   shouldHideFreeTierTeachingSecrets.mockResolvedValue(false);
+});
+afterEach(() => {
+  if (previousYawpEnvironment === undefined) delete process.env.YAWP_ENVIRONMENT;
+  else process.env.YAWP_ENVIRONMENT = previousYawpEnvironment;
 });
 const { readFreeAccountUsage } = await import('./inapp-usage.server');
 test('pending approval hides class code from shell usage', async () => {
@@ -92,6 +125,18 @@ test('pending approval hides class code from shell usage', async () => {
   expect(usage!.classId).toBe('class');
   expect(usage!.checklist.classReady).toBe(true);
 });
+test('pending LP metering keeps main sidebar monthly flag and adds LP fields', async () => {
+  applicationStatus = 'SENT';
+  freeTierValue = '{"mode":"targeted","orgIds":["org"]}';
+  const usage = await readFreeAccountUsage(profile, true, 'user-1');
+  expect(usage!.monthly).toBe(false);
+  expect(usage!.lessonPlannerMonthlyMetering).toBe(true);
+  expect(usage!.unlimitedFreeAssignmentTiles).toBe(true);
+  expect(usage!.reporterLocked).toBe(true);
+  expect(usage!.lessonPlannerMonthly?.used).toBe(2);
+  expect(usage!.renewsAt).toBeDefined();
+});
+
 test('adapter reads authoritative usage, including invites and lifetime counts', async () => {
   freeTierValue = '{"mode":"targeted","orgIds":["org"]}';
   const usage = await readFreeAccountUsage(profile, true, 'user-1');
@@ -125,6 +170,7 @@ test('free tier usage reflects configured caps without hiding excess students', 
 
 for (const value of [null, 'false', '{"mode":"off","orgIds":[]}']) {
   test(`no usage queries with missing/off Setting: ${value}`, async () => {
+    applicationStatus = null;
     freeTierValue = value;
     expect(await readFreeAccountUsage(profile, true, 'user-1')).toBeNull();
     expect(classRead).not.toHaveBeenCalled();
@@ -166,6 +212,7 @@ test('loader gate requires free tier for the organization on production', async 
   }
 });
 test('targeting respects the authenticated organization', async () => {
+  applicationStatus = null;
   freeTierValue = '{"mode":"targeted","orgIds":["other"]}';
   expect(await readFreeAccountUsage(profile, true, 'user-1')).toBeNull();
   expect(classRead).not.toHaveBeenCalled();

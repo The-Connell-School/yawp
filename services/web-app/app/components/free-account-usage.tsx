@@ -8,6 +8,7 @@ import {
 } from '~/components/ui/sheet';
 import { Link, useRouteLoaderData } from 'react-router';
 import {
+  AlertTriangle,
   ChartNoAxesColumn,
   Check,
   ChevronRight,
@@ -23,6 +24,10 @@ import {
 import type {
   FreeAccountUsage,
   UsageCount,
+} from '~/domain/free-tier/inapp-usage';
+import {
+  formatUsageRenewsLabel,
+  isLessonPlannerMonthlyExhausted,
 } from '~/domain/free-tier/inapp-usage';
 import { lessonPlanMonthWindow } from '~/utils/lesson-planner/month-window';
 import { cn } from '~/utils/misc';
@@ -249,7 +254,11 @@ export function FreeAssignmentTiles({
     <button
       ref={createTriggerRef as RefObject<HTMLButtonElement> | undefined}
       type="button"
-      disabled={!teachingLocked && !usage.monthly && usage.allAssignmentsUsed}
+      disabled={
+        !teachingLocked &&
+        !usage.unlimitedFreeAssignmentTiles &&
+        usage.allAssignmentsUsed
+      }
       onClick={() => onCreate()}
       className="text-sm text-primary underline disabled:text-muted-foreground"
     >
@@ -278,7 +287,8 @@ export function FreeAssignmentTiles({
               data-testid={dashboardAssignmentTileTestId}
               disabled={
                 !teachingLocked &&
-                (!type || (!usage.monthly && row.remaining === 0))
+                (!type ||
+                  (!usage.unlimitedFreeAssignmentTiles && row.remaining === 0))
               }
               onClick={() => onCreate(teachingLocked ? undefined : type?.id)}
               aria-label={`New ${row.label} assignment`}
@@ -509,7 +519,11 @@ export function FreeAccountChecklist({ usage }: { usage: FreeAccountUsage }) {
     </>
   );
 }
-export function FreeReporterLocked() {
+export function FreeReporterLocked({
+  variant = 'pending',
+}: {
+  variant?: 'pending' | 'site-license';
+}) {
   return (
     <section
       data-testid="free-reporter-locked"
@@ -517,6 +531,11 @@ export function FreeReporterLocked() {
     >
       <header className="bg-secondary px-4 py-6 sm:px-12">
         <h1 className="text-[28px] font-bold leading-[1.2]">Reporter</h1>
+        {variant === 'pending' ? (
+          <p className="mt-1 text-sm text-muted-foreground">
+            Your class reports.
+          </p>
+        ) : null}
       </header>
       <div className="px-4 pb-12 pt-6 sm:px-12">
         <section
@@ -530,28 +549,37 @@ export function FreeReporterLocked() {
             <Lock size={20} aria-hidden="true" />
           </span>
           <h2 className="text-xl font-bold leading-[1.35]">
-            Reporter comes with a Yawp! site license
+            {variant === 'pending'
+              ? 'Unlocks after approval'
+              : 'Reporter comes with a Yawp! site license'}
           </h2>
-          <ul className="flex flex-col gap-2.5 text-[15px]">
-            <li className="flex gap-2.5">
-              <ChartNoAxesColumn
-                size={18}
-                className="mt-0.5 shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              />
-              Writing growth across every class
-            </li>
-            <li className="flex gap-2.5">
-              <Users
-                size={18}
-                className="mt-0.5 shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              />
-              Reports for departments and families
-            </li>
-          </ul>
+          {variant === 'pending' ? (
+            <p className="text-[15px] text-muted-foreground">
+              Reporter opens once your administrator approves your free
+              classroom.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2.5 text-[15px]">
+              <li className="flex gap-2.5">
+                <ChartNoAxesColumn
+                  size={18}
+                  className="mt-0.5 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                Writing growth across every class
+              </li>
+              <li className="flex gap-2.5">
+                <Users
+                  size={18}
+                  className="mt-0.5 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                Reports for departments and families
+              </li>
+            </ul>
+          )}
           <Link
-            to="/app/free-tier/status"
+            to={variant === 'pending' ? '/app/free-tier/status' : '/app/free-tier/status'}
             className="inline-flex h-10 items-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
           >
             Talk to us
@@ -562,8 +590,108 @@ export function FreeReporterLocked() {
   );
 }
 
+export function FreeReporterMonthlyLimit({
+  usage,
+}: {
+  usage: FreeAccountUsage;
+}) {
+  if (!usage.renewsAt || !usage.reporter) return null;
+  const renews = formatUsageRenewsLabel(usage.renewsAt).replace(/^Renews /, '');
+  return (
+    <section
+      data-testid="free-reporter-monthly-limit"
+      className="flex h-full flex-col overflow-auto"
+    >
+      <header className="bg-secondary px-4 py-6 sm:px-12">
+        <h1 className="text-[28px] font-bold leading-[1.2]">Reporter</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Your class reports.</p>
+      </header>
+      <div className="px-4 pb-12 pt-6 sm:px-12">
+        <section className="flex max-w-[616px] flex-col items-start gap-3 rounded-xl border bg-popover p-7 text-left shadow-sm">
+          <UsageNavRingMiniStatic />
+          <h2 className="text-xl font-bold leading-[1.35]">
+            You&apos;ve reached this month&apos;s Reporter limit
+          </h2>
+          <p className="text-[15px] text-muted-foreground">
+            Renews {renews}. Unlimited with a site license.
+          </p>
+          <a
+            href={FULL_ACCESS_CONTACT}
+            className="inline-flex h-10 items-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
+          >
+            Talk to us
+          </a>
+        </section>
+      </div>
+    </section>
+  );
+}
+
+function UsageNavRingMiniStatic() {
+  return (
+    <svg
+      width={18}
+      height={18}
+      viewBox="0 0 18 18"
+      className="shrink-0 text-muted-foreground"
+      aria-hidden
+    >
+      <circle
+        cx={9}
+        cy={9}
+        r={7}
+        fill="none"
+        className="stroke-muted"
+        strokeWidth={2}
+      />
+    </svg>
+  );
+}
+
 export const FULL_ACCESS_CONTACT =
   'mailto:hello@yawp.school?subject=More%20access%20to%20Yawp!';
+
+export function LessonPlannerMonthlyLimitNotice({
+  usage,
+}: {
+  usage: FreeAccountUsage;
+}) {
+  if (
+    !usage.lessonPlannerMonthlyMetering ||
+    !isLessonPlannerMonthlyExhausted(usage) ||
+    !usage.renewsAt
+  ) {
+    return null;
+  }
+  const renews = formatUsageRenewsLabel(usage.renewsAt).replace(/^Renews /, '');
+  return (
+    <div
+      className="w-full max-w-3xl rounded-xl border border-red-200 bg-popover p-4 text-left shadow-sm"
+      data-testid="lesson-planner-monthly-limit"
+    >
+      <p className="flex items-start gap-2 text-sm font-semibold text-red-900">
+        <AlertTriangle size={18} className="mt-0.5 shrink-0" aria-hidden />
+        You&apos;ve reached this month&apos;s Lesson Planner limit
+      </p>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Renews {renews}. Unlimited with a site license.
+      </p>
+      <a
+        href={FULL_ACCESS_CONTACT}
+        className="mt-3 inline-flex h-10 items-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
+      >
+        Talk to us
+      </a>
+    </div>
+  );
+}
+
+export function lessonPlannerPausedPlaceholder(usage: FreeAccountUsage): string {
+  if (!usage.renewsAt) return 'Lesson Planner is paused until next month.';
+  const renews = formatUsageRenewsLabel(usage.renewsAt).replace(/^Renews /, '');
+  return `Lesson Planner is paused until ${renews}.`;
+}
+
 export function AdvocatePackEntry() {
   return (
     <section className="rounded-xl border bg-popover p-5 shadow-sm">

@@ -1,47 +1,45 @@
-import { describe, test, expect } from 'bun:test';
-import { buildFreeAccountUsage } from './inapp-usage';
+import { expect, test } from 'bun:test';
+import {
+  formatUsageRenewsLabel,
+  isLessonPlannerMonthlyExhausted,
+} from './inapp-usage';
 
-const basis = {
-  seatCap: 35,
-  lessonPlanCap: 5,
-  assignmentCaps: { class_starter: 12, prewriting: 3, thesis_statement: 3 },
-};
-describe('free account presentation counts', () => {
-  test('zero, partial and exhausted lifetime assignment counts', () => {
-    const usage = buildFreeAccountUsage({
-      ...basis,
-      students: 12,
-      pendingInvites: 2,
-      lessonPlans: 2,
-      assignmentCounts: { class_starter: 3, prewriting: 9 },
-    });
-    expect(usage.students).toEqual({ used: 14, total: 35, remaining: 21 });
-    expect(usage.assignments.map((a) => a.remaining)).toEqual([9, 0, 3]);
-    expect(usage.lessonPlans.remaining).toBe(3);
-    expect(usage.warning).toBe('Prewriting: none left');
-  });
-  test('full seats, all used assignments and lesson-plan exhaustion', () => {
-    const usage = buildFreeAccountUsage({
-      ...basis,
-      students: 36,
-      pendingInvites: 0,
-      lessonPlans: 5,
-      assignmentCounts: basis.assignmentCaps,
-    });
-    expect(usage.students.remaining).toBe(0);
-    expect(usage.allAssignmentsUsed).toBe(true);
-    expect(usage.lessonPlans.remaining).toBe(0);
-    expect(usage.warning).toBe('Class is full');
-  });
-  test('does not invent usage or change the supplied caps', () => {
-    const usage = buildFreeAccountUsage({
-      ...basis,
-      students: 0,
-      pendingInvites: 0,
-      lessonPlans: 0,
-      assignmentCounts: {},
-    });
-    expect(usage.assignments.map((a) => a.total)).toEqual([12, 3, 3]);
-    expect(usage.warning).toBeNull();
-  });
+test('formatUsageRenewsLabel uses UTC month and day', () => {
+  expect(formatUsageRenewsLabel('2026-11-01T00:00:00.000Z')).toBe(
+    'Renews November 1'
+  );
+});
+
+test('isLessonPlannerMonthlyExhausted uses monthly metering when enabled', () => {
+  const base = {
+    students: { used: 0, total: 10, remaining: 10 },
+    assignments: [],
+    lessonPlans: { used: 0, total: 5, remaining: 5 },
+    allAssignmentsUsed: false,
+    warning: null,
+    classId: null,
+    checklist: {
+      classReady: true,
+      assignmentCreated: false,
+      writingSubmitted: false,
+      graded: false,
+    },
+    gradingPause: null,
+  };
+  expect(
+    isLessonPlannerMonthlyExhausted({
+      ...base,
+      monthly: false,
+      lessonPlannerMonthlyMetering: true,
+      lessonPlannerMonthly: { used: 5, total: 5, remaining: 0 },
+    })
+  ).toBe(true);
+  expect(
+    isLessonPlannerMonthlyExhausted({
+      ...base,
+      monthly: false,
+      lessonPlannerMonthlyMetering: false,
+      lessonPlans: { used: 5, total: 5, remaining: 0 },
+    })
+  ).toBe(true);
 });

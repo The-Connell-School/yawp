@@ -222,6 +222,9 @@ for (const width of [1280, 390]) {
     await expect(page.locator('[aria-current="step"]')).toContainText(
       'Ask your administrator'
     );
+    await expect(
+      page.getByRole('list', { name: 'Onboarding progress' })
+    ).toContainText('Account and class created');
     await capture(page, `${width}-administrator`);
     await page.getByRole('link', { name: 'Back to your class' }).click();
     await expect(page).toHaveURL(/step=class/);
@@ -275,6 +278,9 @@ for (const width of [1280, 390]) {
     await page.getByLabel('Title').fill('Principal');
     await page.getByRole('button', { name: 'Send approval request' }).click();
     await expect(page).toHaveURL(/free-tier\/pending/);
+    await expect(
+      page.getByRole('list', { name: 'Approval progress' })
+    ).toContainText('Account and class created');
     const payload = await waitForFreeTierEmailPayload(prisma, {
       applicationId: app.id,
       kind: 'admin_approval',
@@ -351,6 +357,9 @@ test('flag off and paid memberships preserve legacy onboarding; existing request
   await expect(
     page.getByRole('heading', { name: 'Who can approve Yawp!' })
   ).toBeVisible();
+  await expect(
+    page.getByRole('list', { name: 'Approval progress' })
+  ).toContainText('Account created');
   await expect(page.getByLabel('Class name')).toHaveCount(0);
   await capture(page, '1280-legacy');
   await flag(true);

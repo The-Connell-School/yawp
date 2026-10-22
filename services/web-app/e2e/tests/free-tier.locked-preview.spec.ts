@@ -480,7 +480,7 @@ for (const width of [390, 1440]) {
     for (const path of [
       '/api/assignments/create',
       '/api/domain/reporter',
-      '/api/domain/lesson-planner',
+      '/api/domain/lesson-planner/packet',
       '/app/organization/students',
     ]) {
       const response = await page.request.post(path, {
@@ -489,6 +489,14 @@ for (const width of [390, 1440]) {
       });
       expect(response.status(), path).toBe(403);
     }
+    const plannerResponse = await page.request.post(
+      '/api/domain/lesson-planner',
+      {
+        form: { message: 'Outline a lesson on thesis statements' },
+        maxRedirects: 0,
+      }
+    );
+    expect(plannerResponse.status()).not.toBe(403);
     expect(await prisma.assignment.count()).toBe(before);
     if (width === 1440) {
       await demoFeedbackFlag(true);

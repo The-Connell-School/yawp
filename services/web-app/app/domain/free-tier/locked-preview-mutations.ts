@@ -2,7 +2,6 @@
 export const LOCKED_PREVIEW_DENIED_MUTATIONS = [
   '/api/assignments/create',
   '/api/domain/reporter',
-  '/api/domain/lesson-planner',
   '/api/domain/lesson-planner/packet',
   '/api/invitations',
   '/app/organization/students',

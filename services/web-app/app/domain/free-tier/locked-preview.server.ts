@@ -62,6 +62,18 @@ export async function enforceLockedPreviewRequest(request: Request, userId: stri
   const pathname = new URL(request.url).pathname;
   if (!(pathname === '/app' || pathname.startsWith('/app/') || pathname.startsWith('/api/'))) return;
   if (!(await userHasPendingFreeTierTeachingLock(userId))) return;
+  if (pathname === '/api/domain/lesson-planner' && request.method === 'POST') {
+    const app = await getLockedPreviewApplication(userId, membershipId);
+    if (
+      app &&
+      (app.status === 'ACCOUNT_CREATED' || app.status === 'ADMIN_SUBMITTED')
+    ) {
+      throw Response.json(
+        { error: 'approval_required', message: LOCKED_PREVIEW_MESSAGE },
+        { status: 403 }
+      );
+    }
+  }
   if (isLockedPreviewRequestAllowed(request.method, pathname)) return;
   if (['GET', 'HEAD'].includes(request.method))
     throw redirect(LOCKED_PREVIEW_APP_HOME);
@@ -110,10 +122,16 @@ export async function ensureLockedPreviewClassroomForUser(userId: string) {
   return result;
 }
 
+export type TeachingApprovalScope = {
+  /** Pending SENT/MANUAL_REVIEW orgs may run Lesson Planner metering only. */
+  allowPendingLessonPlanner?: true;
+};
+
 /** Transaction-aware backstop for enrollment and assignment writers without a Request. */
 export async function assertOrganizationTeachingApproved(
   tx: Pick<Prisma.TransactionClient, 'organization' | 'freeTierApplication'>,
-  organizationId: string
+  organizationId: string,
+  scope?: TeachingApprovalScope
 ) {
   if (!(await isFeatureFlagEnabled(FREE_TIER_FLAG, organizationId))) return;
   const org = await tx.organization.findUnique({ where: { id: organizationId }, select: { plan: true } });
@@ -121,6 +139,38 @@ export async function assertOrganizationTeachingApproved(
   const app = await tx.freeTierApplication.findFirst({
     where: { organizationId }, orderBy: { createdAt: 'desc' }, select: { status: true },
   });
-  if (app && isLockedPreviewStatus(app.status))
+  if (app && isLockedPreviewStatus(app.status)) {
+    if (
+      scope?.allowPendingLessonPlanner &&
+      (app.status === 'SENT' || app.status === 'MANUAL_REVIEW')
+    ) {
+      return;
+    }
     throw Response.json({ error: 'approval_required', message: LOCKED_PREVIEW_MESSAGE }, { status: 403 });
+  }
+}
+
+/** Fail-closed helper for Lesson Planner when monthly metering cannot be resolved. */
+export async function organizationHasPendingFreeTierLessonPlannerMetering(
+  organizationId: string
+): Promise<boolean> {
+  try {
+    if (!(await isFeatureFlagEnabled(FREE_TIER_FLAG, organizationId))) return false;
+    const org = await prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { plan: true },
+    });
+    if (org?.plan !== 'FREE_CLASSROOM') return false;
+    const app = await prisma.freeTierApplication.findFirst({
+      where: {
+        organizationId,
+        status: { in: ['SENT', 'MANUAL_REVIEW'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    return Boolean(app);
+  } catch {
+    return true;
+  }
 }
