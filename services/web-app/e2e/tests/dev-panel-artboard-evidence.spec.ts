@@ -56,9 +56,10 @@ test.describe('Dev panel artboard evidence', () => {
 
   test('capture designed panel and feedback states', async ({ page }) => {
     test.setTimeout(240_000);
-    await page.evaluate(() => localStorage.removeItem('yawp-dev-panel'));
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/app/assignments');
+    await page.evaluate(() => localStorage.removeItem('yawp-dev-panel'));
+    await page.reload();
     await openDevToolsPanel(page);
     await shot(page, '01');
 
