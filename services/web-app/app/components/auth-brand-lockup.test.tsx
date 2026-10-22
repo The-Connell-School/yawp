@@ -10,6 +10,9 @@ describe('authentication brand lockup', () => {
     expect(markup).toContain('yawp_black_logo.png');
     expect(markup).toContain('+');
     expect(markup).not.toContain('crimson');
+    expect(markup).toContain('aria-label="The University of Alabama and Yawp!"');
+    expect(markup).toContain('alt="Yawp!"');
+    expect(markup).not.toContain('alt="Yawp"');
   });
 
   test('keeps the existing Yawp-only logo outside UA context', () => {
@@ -17,5 +20,6 @@ describe('authentication brand lockup', () => {
 
     expect(markup).toContain('logo_for_light_mode.png');
     expect(markup).not.toContain('university-of-alabama');
+    expect(markup).toContain('alt="Yawp!"');
   });
 });
