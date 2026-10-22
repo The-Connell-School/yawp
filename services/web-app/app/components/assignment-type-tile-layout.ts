@@ -16,7 +16,7 @@ export function assignmentTypeTileImageWrapClassName(extra?: string) {
 
 export function assignmentTypeTileFooterClassName(extra?: string) {
   return cn(
-    'flex flex-wrap items-start justify-between gap-x-2 gap-y-0.5 px-3 py-1.5 sm:py-2',
+    'grid grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-x-2 gap-y-0.5 px-3 py-1.5 sm:py-2',
     extra
   );
 }

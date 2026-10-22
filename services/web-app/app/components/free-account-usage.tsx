@@ -309,14 +309,16 @@ export function FreeAssignmentTiles({
                   )}
                 >
                   <span
-                    className={assignmentTypeTileNameClassName()}
+                    className={assignmentTypeTileNameClassName('col-start-1 row-start-1')}
                     data-testid={assignmentTypeTileNameTestId}
                   >
                     {row.label}
                   </span>
                   <span
                     className={cn(
-                      assignmentTypeTileMetaClassName('text-[13px]'),
+                      assignmentTypeTileMetaClassName(
+                        'col-start-2 row-start-1 text-[13px]'
+                      ),
                       !usage.monthly && row.remaining === 0 && 'text-amber-800'
                     )}
                   >
@@ -328,7 +330,7 @@ export function FreeAssignmentTiles({
                   </span>
                   <Lock
                     size={16}
-                    className="mt-0.5 shrink-0 self-start text-muted-foreground"
+                    className="col-start-3 row-start-1 mt-0.5 shrink-0 self-start text-muted-foreground"
                     aria-hidden
                   />
                 </span>

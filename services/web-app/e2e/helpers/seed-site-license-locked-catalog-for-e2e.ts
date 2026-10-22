@@ -6,7 +6,7 @@ const emptyJson = {};
 async function attachDonorImageIfMissing(
   prisma: PrismaClient,
   assignmentTypeId: string,
-  donor: { contentType: string; blob: Buffer; altText: string | null }
+  donor: { contentType: string; blob: Uint8Array; altText: string | null }
 ) {
   const existing = await prisma.assignmentTypeImage.findUnique({
     where: { assignmentTypeId },
@@ -17,7 +17,7 @@ async function attachDonorImageIfMissing(
     data: {
       assignmentTypeId,
       contentType: donor.contentType,
-      blob: donor.blob,
+      blob: Buffer.from(donor.blob),
       altText: donor.altText,
     },
   });

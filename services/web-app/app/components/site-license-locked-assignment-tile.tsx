@@ -81,14 +81,19 @@ export function SiteLicenseLockedAssignmentTile({
           aria-hidden
         />
       </div>
-      <span className={assignmentTypeTileFooterClassName('font-medium')}>
+      <span
+        className={cn(
+          assignmentTypeTileFooterClassName('font-medium'),
+          'grid-cols-[minmax(0,1fr)_auto]'
+        )}
+      >
         <span
-          className={assignmentTypeTileNameClassName()}
+          className={assignmentTypeTileNameClassName('col-start-1 row-start-1')}
           data-testid={assignmentTypeTileNameTestId}
         >
           {label}
         </span>
-        <SiteLicenseLockButton className="self-start" />
+        <SiteLicenseLockButton className="col-start-2 row-start-1 self-start" />
       </span>
     </div>
   );
@@ -138,14 +143,19 @@ export function SiteLicenseLockedAssignmentGridTile({
           aria-hidden
         />
       </div>
-      <div className={assignmentTypeTileFooterClassName('text-sm font-medium')}>
+      <div
+        className={cn(
+          assignmentTypeTileFooterClassName('text-sm font-medium'),
+          'grid-cols-[minmax(0,1fr)_auto]'
+        )}
+      >
         <span
-          className={assignmentTypeTileNameClassName()}
+          className={assignmentTypeTileNameClassName('col-start-1 row-start-1')}
           data-testid={assignmentTypeTileNameTestId}
         >
           {label}
         </span>
-        <SiteLicenseLockButton className="self-start" />
+        <SiteLicenseLockButton className="col-start-2 row-start-1 self-start" />
       </div>
     </div>
   );
