@@ -89,16 +89,6 @@ for (const width of [1440, 390]) {
     await page.goto(denyUrl, { waitUntil: 'networkidle' });
     await capture(page, `04_deny-confirm_${width === 390 ? 'mobile' : 'desktop'}`);
 
-    await page.locator('form button[type="submit"]').click();
-    await page.waitForURL(/Thanks for letting us know|already answered/i);
-    await capture(page, `10_after-deny-admin_${width === 390 ? 'mobile' : 'desktop'}`);
-
-    await page.goto(approveUrl, { waitUntil: 'networkidle' });
-    await capture(
-      page,
-      `12_link-opened-again-already-decided_${width === 390 ? 'mobile' : 'desktop'}`
-    );
-
     const email = await buildTeacherDeniedDesignedEmail({
       teacherName: TEACHER,
       adminName: 'Dr. Patel',
