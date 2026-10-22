@@ -56,6 +56,29 @@ export function usageNavFeatureLabel(feature: UsageNavFeature): string {
   return feature === 'lesson-planner' ? 'Lesson Planner' : 'Reporter';
 }
 
+/** Collapsed sidebar link label, e.g. "Lesson Planner, A few left". */
+export function usageNavCollapsedAccessibleName(input: {
+  feature: UsageNavFeature;
+  count?: UsageCount;
+  loading?: boolean;
+}): string {
+  const feature = usageNavFeatureLabel(input.feature);
+  if (input.loading) return `${feature}, loading usage`;
+  if (!input.count || input.count.total <= 0) return feature;
+  const level = usageNavLevelFromCount(input.count);
+  const levelPhrase =
+    level === 'few'
+      ? 'A few left'
+      : level === 'about-half'
+        ? 'About half left'
+        : level === 'plenty'
+          ? 'Plenty left'
+          : level === 'all-used'
+            ? 'All used this month'
+            : feature;
+  return `${feature}, ${levelPhrase}`;
+}
+
 export function usageNavAccessibleName(input: {
   feature: UsageNavFeature;
   count: UsageCount;

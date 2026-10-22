@@ -1,3 +1,4 @@
+import * as SheetPrimitive from '@radix-ui/react-dialog';
 import {
   useCallback,
   useEffect,
@@ -10,21 +11,24 @@ import { cn } from '~/utils/misc';
 import type { UsageCount } from '~/domain/free-tier/inapp-usage';
 import {
   usageNavAccessibleName,
-  usageNavLevelFromCount,
-  usageNavLevelHeadline,
-  usageNavPopoverDetail,
   usageNavShowsTerracotta,
   usagePercentLeft,
   type UsageNavFeature,
-  type UsageNavLevel,
 } from '~/domain/free-tier/usage-nav-meter';
-import { FULL_ACCESS_CONTACT } from '~/components/free-account-usage';
+import { UsageNavPopoverBody } from '~/components/free-tier/usage-nav-popover-body';
+import { UsageNavMobileSheet } from '~/components/free-tier/usage-nav-mobile-sheet';
+import {
+  USAGE_NAV_MOBILE_HIT_SIZE,
+  USAGE_NAV_RING_SIZE_EXPANDED,
+  UsageNavRingSvg,
+  usageNavLevelForCount,
+  usageNavRingDash,
+} from '~/components/free-tier/usage-nav-ring-svg';
+import { handleUsageNavPopoverKeyDown } from '~/components/free-tier/usage-nav-keyboard';
 
-const RING_SIZE = 18;
-const STROKE = 2;
-const R = (RING_SIZE - STROKE) / 2;
-const C = 2 * Math.PI * R;
 type HoverTimer = ReturnType<typeof setTimeout>;
+
+export type UsageNavRingVariant = 'expanded-trailing' | 'mobile-drawer';
 
 type UsageNavRingProps = {
   feature: UsageNavFeature;
@@ -32,6 +36,7 @@ type UsageNavRingProps = {
   renewsAtIso?: string;
   loading?: boolean;
   hidden?: boolean;
+  variant?: UsageNavRingVariant;
   popoverAlign?: 'start' | 'end';
   className?: string;
 };
@@ -52,6 +57,7 @@ export function UsageNavRing({
   renewsAtIso,
   loading = false,
   hidden = false,
+  variant = 'expanded-trailing',
   popoverAlign = 'end',
   className,
 }: UsageNavRingProps) {
@@ -62,15 +68,12 @@ export function UsageNavRing({
   const openTimer = useRef<HoverTimer | null>(null);
   const closeTimer = useRef<HoverTimer | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const popoverRef = useRef<HTMLDivElement>(null);
+  const talkToUsRef = useRef<HTMLAnchorElement>(null);
   const labelId = useId();
 
-  const level: UsageNavLevel = loading
-    ? 'loading'
-    : count
-      ? usageNavLevelFromCount(count)
-      : 'hidden';
+  const level = usageNavLevelForCount(loading, count);
   const targetPercent = loading || !count ? 0 : usagePercentLeft(count);
+  const isMobile = variant === 'mobile-drawer';
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -87,12 +90,8 @@ export function UsageNavRing({
       setAnimatedPercent(targetPercent);
       return;
     }
-    if (reducedMotion) {
-      setAnimatedPercent(targetPercent);
-      return;
-    }
     setAnimatedPercent(targetPercent);
-  }, [targetPercent, reducedMotion]);
+  }, [targetPercent]);
 
   const clearTimers = useCallback(() => {
     if (openTimer.current) clearTimeout(openTimer.current);
@@ -102,14 +101,16 @@ export function UsageNavRing({
   }, []);
 
   const scheduleOpen = useCallback(() => {
+    if (isMobile) return;
     clearTimers();
     openTimer.current = setTimeout(() => setOpen(true), 300);
-  }, [clearTimers]);
+  }, [clearTimers, isMobile]);
 
   const scheduleClose = useCallback(() => {
+    if (isMobile) return;
     clearTimers();
     closeTimer.current = setTimeout(() => setOpen(false), 200);
-  }, [clearTimers]);
+  }, [clearTimers, isMobile]);
 
   useEffect(() => () => clearTimers(), [clearTimers]);
 
@@ -118,10 +119,12 @@ export function UsageNavRing({
   }
 
   const terracotta = !loading && usageNavShowsTerracotta(level);
-  const dash =
-    animatedPercent === null
-      ? 0
-      : (Math.max(0, Math.min(100, animatedPercent)) / 100) * C;
+  const dash = usageNavRingDash(
+    count,
+    level,
+    USAGE_NAV_RING_SIZE_EXPANDED,
+    animatedPercent
+  );
   const ariaLabel = loading
     ? 'Loading usage'
     : count
@@ -129,11 +132,71 @@ export function UsageNavRing({
       : 'Usage';
 
   const onKeyDown = (event: KeyboardEvent) => {
-    if (event.key === 'Escape') {
-      event.stopPropagation();
-      setOpen(false);
-    }
+    if (isMobile) return;
+    handleUsageNavPopoverKeyDown(event, {
+      open,
+      focusTalkToUs: () => talkToUsRef.current?.focus(),
+      closePopover: () => setOpen(false),
+      refocusTrigger: () => triggerRef.current?.focus(),
+    });
   };
+
+  const ringVisual = loading ? (
+    <UsageNavRingSvg
+      size={USAGE_NAV_RING_SIZE_EXPANDED}
+      dash={0}
+      terracotta={false}
+      animate={false}
+      reducedMotion
+    />
+  ) : (
+    <UsageNavRingSvg
+      size={USAGE_NAV_RING_SIZE_EXPANDED}
+      dash={level === 'all-used' ? 0 : dash}
+      terracotta={terracotta}
+      animate
+      reducedMotion={reducedMotion}
+      showArc={level !== 'all-used'}
+    />
+  );
+
+  if (isMobile) {
+    return (
+      <SheetPrimitive.Root open={open} onOpenChange={setOpen}>
+        {loading ? (
+          <span role="status" aria-live="polite" className="sr-only">
+            Loading usage
+          </span>
+        ) : null}
+        <button
+          ref={triggerRef}
+          type="button"
+          aria-label={ariaLabel}
+          aria-haspopup={loading ? undefined : 'dialog'}
+          aria-expanded={loading ? undefined : open}
+          disabled={loading}
+          className={cn(
+            'inline-flex size-11 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            className
+          )}
+          onClick={loading ? undefined : () => setOpen(true)}
+          data-testid={`usage-nav-ring-${feature}`}
+        >
+          {ringVisual}
+        </button>
+        {!loading && count ? (
+          <UsageNavMobileSheet
+            open={open}
+            onOpenChange={setOpen}
+            feature={feature}
+            count={count}
+            renewsAtIso={renewsAtIso}
+            returnFocusRef={triggerRef}
+          />
+        ) : null}
+      </SheetPrimitive.Root>
+    );
+  }
 
   return (
     <span
@@ -152,164 +215,53 @@ export function UsageNavRing({
           aria-hidden
           data-testid={`usage-nav-ring-${feature}`}
         >
-          <UsageNavRingSvg
-            dash={0}
-            terracotta={false}
-            animate={false}
-            reducedMotion
-          />
+          {ringVisual}
         </span>
       ) : (
-      <button
-        ref={triggerRef}
-        type="button"
-        aria-label={ariaLabel}
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        aria-labelledby={open ? labelId : undefined}
-        className="inline-flex items-center justify-center rounded-full outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
-        onFocus={() => setOpen(true)}
-        onClick={() => setOpen((value) => !value)}
-        onKeyDown={onKeyDown}
-        data-testid={`usage-nav-ring-${feature}`}
-      >
-        <UsageNavRingSvg
-          dash={level === 'all-used' ? 0 : dash}
-          terracotta={terracotta}
-          animate
-          reducedMotion={reducedMotion}
-          showArc={level !== 'all-used'}
-        />
-      </button>
+        <button
+          ref={triggerRef}
+          type="button"
+          aria-label={ariaLabel}
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          aria-labelledby={open ? labelId : undefined}
+          className="inline-flex items-center justify-center rounded-full outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
+          onFocus={() => setOpen(true)}
+          onClick={() => setOpen((value) => !value)}
+          onKeyDown={onKeyDown}
+          data-testid={`usage-nav-ring-${feature}`}
+        >
+          {ringVisual}
+        </button>
       )}
       {open && !loading && count ? (
         <div
-          ref={popoverRef}
           role="dialog"
           id={labelId}
           className={cn(
             'absolute z-50 w-[min(280px,calc(100vw-24px))] rounded-xl border bg-popover p-4 text-sm shadow-md',
             'animate-in fade-in duration-150',
             !reducedMotion && 'slide-in-from-left-1',
-            popoverAlign === 'end' ? 'left-full top-1/2 ml-2 -translate-y-1/2' : 'right-full top-1/2 mr-2 -translate-y-1/2',
-            'data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=closed]:duration-100',
+            popoverAlign === 'end'
+              ? 'left-full top-1/2 ml-2 -translate-y-1/2'
+              : 'right-full top-1/2 mr-2 -translate-y-1/2',
             reducedMotion && 'data-[state=closed]:slide-in-from-left-0'
           )}
           onMouseEnter={scheduleOpen}
           onMouseLeave={scheduleClose}
           data-testid={`usage-nav-popover-${feature}`}
         >
-          <p className="flex items-center gap-2 font-semibold">
-            <UsageNavRingMini
-              count={count}
-              level={level}
-              loading={false}
-            />
-            {usageNavLevelHeadline(level, renewsAtIso)}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {usageNavPopoverDetail({ feature, count, renewsAtIso })}
-          </p>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Unlimited with a site license.{' '}
-            <a href={FULL_ACCESS_CONTACT} className="text-primary underline">
-              Talk to us
-            </a>
-          </p>
+          <UsageNavPopoverBody
+            feature={feature}
+            count={count}
+            level={level}
+            renewsAtIso={renewsAtIso}
+            talkToUsRef={talkToUsRef}
+          />
         </div>
       ) : null}
     </span>
   );
 }
 
-function UsageNavRingSvg({
-  dash,
-  terracotta,
-  animate,
-  reducedMotion,
-  showArc = true,
-}: {
-  dash: number;
-  terracotta: boolean;
-  animate: boolean;
-  reducedMotion: boolean;
-  showArc?: boolean;
-}) {
-  return (
-    <svg
-      width={RING_SIZE}
-      height={RING_SIZE}
-      viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
-      className={cn(
-        '-rotate-90',
-        animate && !reducedMotion && 'transition-all duration-[400ms] ease-out'
-      )}
-      aria-hidden
-    >
-      <circle
-        cx={RING_SIZE / 2}
-        cy={RING_SIZE / 2}
-        r={R}
-        fill="none"
-        className="stroke-muted"
-        strokeWidth={STROKE}
-      />
-      {showArc && dash > 0 ? (
-        <circle
-          cx={RING_SIZE / 2}
-          cy={RING_SIZE / 2}
-          r={R}
-          fill="none"
-          strokeWidth={STROKE}
-          strokeLinecap="round"
-          className={cn(terracotta ? 'stroke-primary' : 'stroke-foreground')}
-          strokeDasharray={`${dash} ${C}`}
-        />
-      ) : null}
-    </svg>
-  );
-}
-
-function UsageNavRingMini({
-  count,
-  level,
-  loading,
-}: {
-  count: UsageCount;
-  level: UsageNavLevel;
-  loading: boolean;
-}) {
-  const left = usagePercentLeft(count);
-  const dash = (left / 100) * C;
-  const terracotta = usageNavShowsTerracotta(level);
-  return (
-    <svg
-      width={16}
-      height={16}
-      viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
-      className="-rotate-90 shrink-0"
-      aria-hidden
-    >
-      <circle
-        cx={RING_SIZE / 2}
-        cy={RING_SIZE / 2}
-        r={R}
-        fill="none"
-        className="stroke-muted"
-        strokeWidth={STROKE}
-      />
-      {!loading && level !== 'all-used' ? (
-        <circle
-          cx={RING_SIZE / 2}
-          cy={RING_SIZE / 2}
-          r={R}
-          fill="none"
-          strokeWidth={STROKE}
-          strokeLinecap="round"
-          className={cn(terracotta ? 'stroke-primary' : 'stroke-foreground')}
-          strokeDasharray={`${dash} ${C}`}
-        />
-      ) : null}
-    </svg>
-  );
-}
+export { USAGE_NAV_MOBILE_HIT_SIZE };
