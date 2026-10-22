@@ -24,7 +24,7 @@ import {
   ApprovalForwardForm,
   approvalForwardError,
 } from '../free-tier/ApprovalForwardForm';
-import { Clock, Mail } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import { getTransactionalEmailFrom } from '~/utils/email.server';
 import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -254,7 +254,6 @@ function PendingDraftRequestLink({
         })}
         rel="noopener noreferrer"
       >
-        <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
         Draft a Request
       </a>
     </FreeTierButton>
@@ -342,18 +341,6 @@ export default function FreeTierPendingRoute() {
                 buried. We’ll let you know the moment they approve.
               </p>
             ) : null}
-            {current && app?.status === 'SENT' ? (
-              <>
-                <PendingDraftRequestLink
-                  adminEmail={current.adminEmail}
-                  adminName={current.adminName}
-                  teacherName={app.name}
-                  schoolName={app.schoolName ?? 'your school'}
-                  approvalEmailFrom={approvalEmailFrom}
-                />
-                {showExploreClassroom ? <LockedPreviewExploreButton /> : null}
-              </>
-            ) : null}
             <FreeTierProgress
               steps={[
                 'Account created',
@@ -366,10 +353,20 @@ export default function FreeTierPendingRoute() {
               current={2}
             />
             {current && app?.status === 'SENT' ? (
-              <FreeTierPerson
-                name={current.adminName}
-                email={current.adminEmail}
-              />
+              <>
+                <FreeTierPerson
+                  name={current.adminName}
+                  email={current.adminEmail}
+                />
+                <PendingDraftRequestLink
+                  adminEmail={current.adminEmail}
+                  adminName={current.adminName}
+                  teacherName={app.name}
+                  schoolName={app.schoolName ?? 'your school'}
+                  approvalEmailFrom={approvalEmailFrom}
+                />
+                {showExploreClassroom ? <LockedPreviewExploreButton /> : null}
+              </>
             ) : null}
             {showExploreClassroom && app?.status === 'MANUAL_REVIEW' ? (
               <LockedPreviewExploreButton />
@@ -444,6 +441,7 @@ export default function FreeTierPendingRoute() {
       />
       {pending && app?.status === 'SENT' ? (
         <>
+          <FreeTierPerson name={adminName} email={pending.adminEmail} />
           <PendingDraftRequestLink
             adminEmail={pending.adminEmail}
             adminName={adminName}
@@ -452,7 +450,6 @@ export default function FreeTierPendingRoute() {
             approvalEmailFrom={approvalEmailFrom}
           />
           {showExploreClassroom ? <LockedPreviewExploreButton /> : null}
-          <FreeTierPerson name={adminName} email={pending.adminEmail} />
         </>
       ) : null}
       {showExploreClassroom && app?.status === 'MANUAL_REVIEW' ? (
