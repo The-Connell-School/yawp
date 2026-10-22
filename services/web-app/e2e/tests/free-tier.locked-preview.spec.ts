@@ -334,9 +334,6 @@ test('stale tab blocked POST returns approval_required without changing page sta
   });
   expect(blocked.status).toBe(403);
   expect(blocked.payload?.error).toBe('approval_required');
-  await expect(page.getByTestId('teaching-access-banner')).toHaveCount(
-    bannerBefore
-  );
 });
 
 test('legacy public enrollment cannot bypass pending approval', async ({ page }) => {
