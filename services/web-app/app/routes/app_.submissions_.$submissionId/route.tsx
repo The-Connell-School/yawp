@@ -113,7 +113,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function shouldRevalidate({
   defaultShouldRevalidate,
+  currentUrl,
+  nextUrl,
 }: ShouldRevalidateFunctionArgs) {
+  if (currentUrl.pathname !== nextUrl.pathname) {
+    return true;
+  }
   return defaultShouldRevalidate;
 }
 

@@ -126,7 +126,8 @@ test.describe.serial('Teacher grading: a Class Starter submission', () => {
     }
     await page.getByRole('option', { name: 'Absent', exact: true }).click();
     // Absent is a judgment, not a blank.
-    await expect(page.getByText('Absent (0/3)')).toBeVisible();
+    await expect(engagementTrigger).toContainText('Absent');
+    await expect(engagementTrigger).not.toContainText('(0/3)');
 
     // No grammar or syntax markup anywhere on the panel.
     await expect(page.getByText(/grammar\/syntax issues/i)).toHaveCount(0);
@@ -148,9 +149,8 @@ test.describe.serial('Teacher grading: a Class Starter submission', () => {
       '',
       { timeout: 30000 }
     );
-    await expect(page.getByText('All in (3/3)')).toBeVisible({
-      timeout: 30000,
-    });
+    await expect(engagementTrigger).toContainText('All in', { timeout: 30000 });
+    await expect(engagementTrigger).not.toContainText('(3/3)');
     await expect(page.getByText(/Grammar issues:/i)).toHaveCount(0);
 
     const grade = await readGrade(submissionId);

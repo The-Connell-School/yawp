@@ -28,7 +28,12 @@ mock.module('~/domain/free-tier/approval-v2.server', () => ({
     enabled
       ? {
           enabled: true,
-          approval: { id: 'current' },
+          approval: {
+            id: 'current',
+            adminName: 'Patel',
+            adminEmail:
+              'very.long.administrator.email.address+tag@subdomain.example-school.edu',
+          },
           firstSentAt: new Date('2026-10-14'),
         }
       : null,
@@ -50,13 +55,18 @@ let stopped = false;
 mock.module('react-router', () => ({
   ...router,
   useLoaderData: () => ({
-    app: { status: 'SENT', name: 'Teacher' },
+    app: {
+      status: 'SENT',
+      name: 'Teacher',
+      schoolName: 'Lincoln High School',
+    },
     pending: {
       adminName: 'Patel',
       adminEmail:
         'very.long.administrator.email.address+tag@subdomain.example-school.edu',
     },
     showExploreClassroom: true,
+    approvalEmailFrom: 'transactional-from@example.org',
     approvalV2: {
       approval: {
         id: 'current',
@@ -65,6 +75,7 @@ mock.module('react-router', () => ({
           'very.long.administrator.email.address+tag@subdomain.example-school.edu',
         autoRemindersStopped: stopped,
       },
+      firstSentAt: new Date('2026-10-14'),
     },
   }),
   useActionData: () => undefined,
@@ -103,11 +114,26 @@ test('crafted forward is refused when rollout is off', async () => {
   expect(forward).not.toHaveBeenCalled();
 });
 
-test('pending page offers explore and forward actions without legacy resend controls', () => {
+test('pending page offers draft request mailto, explore, and forward without legacy resend', () => {
   stopped = false;
   const html = renderToStaticMarkup(<Page />);
   expect(html).toContain('Explore my classroom');
   expect(html).toContain('Not the right person?');
+  expect(html).toContain('Draft a Request');
+  expect(html).toContain('data-testid="pending-draft-request"');
+  expect(html).toContain(
+    'href="mailto:very.long.administrator.email.address%2Btag%40subdomain.example-school.edu?'
+  );
+  expect(html).toContain('Lincoln%20High%20School');
+  expect(html).toContain('transactional-from%40example.org');
+  expect(html).toContain('start%20writing%20with%20Yawp!');
+  expect(html).not.toContain('with%20Yawp!.');
+  expect(html).toContain('free-tier-draft-request');
+  expect(html).toContain('Explore my classroom');
+  const draftIdx = html.indexOf('pending-draft-request');
+  const exploreIdx = html.indexOf('locked-preview-explore');
+  expect(draftIdx).toBeGreaterThan(-1);
+  expect(exploreIdx).toBeGreaterThan(draftIdx);
   expect(html).not.toContain('Resend reminder');
   expect(html).not.toContain('Draft an email');
   expect(html).not.toContain('Take a look around');
