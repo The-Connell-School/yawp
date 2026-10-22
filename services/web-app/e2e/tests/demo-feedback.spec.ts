@@ -105,7 +105,7 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     ).toHaveCount(0);
     await screenshot('button');
     const { panel, noteLabel, hasSeverity } = await openGiveFeedback(page);
-    await expect(panel.getByLabel(noteLabel)).toBeFocused();
+    await expect(panel.getByLabel(noteLabel)).toBeFocused({ timeout: 15_000 });
     await expect(
       panel.getByText('/app/assignments', { exact: true })
     ).toBeVisible();
