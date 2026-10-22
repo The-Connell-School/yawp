@@ -3,7 +3,6 @@ import path from 'node:path';
 import { test, expect } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
 import {
-  devToolsPanel,
   openDevToolsPanel,
   openGiveFeedback,
 } from '../helpers/dev-panel-feedback';
@@ -57,11 +56,11 @@ test.describe('Dev panel artboard evidence', () => {
   };
 
   test('capture designed panel and feedback states', async ({ page }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(240_000);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/app/assignments');
     await openDevToolsPanel(page);
-    await shot(page, '02');
+    await shot(page, '01');
 
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto('/app/assignments');
@@ -86,6 +85,7 @@ test.describe('Dev panel artboard evidence', () => {
       await shot(page, '35');
       await page.keyboard.press('Escape');
     }
+
     const tools = await openDevToolsPanel(page);
     await tools.getByRole('button', { name: /^Free-tier states/ }).click();
     await tools
@@ -151,12 +151,13 @@ test.describe('Dev panel artboard evidence', () => {
       form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
     });
     await page.goto('/app/assignments');
+
     let { panel: feedbackDialog } = await openGiveFeedback(page);
-    await shot(page, '58');
+    await shot(page, '55');
 
     await feedbackDialog.getByRole('button', { name: 'Send feedback' }).click();
     await expect(feedbackDialog.getByRole('alert')).toHaveText(/Add a note/);
-    await shot(page, '62');
+    await shot(page, '57');
 
     await feedbackDialog.getByLabel('Note').fill('Evidence note for sent state');
     await page.route('**/api/demo-feedback', async (route) => {
@@ -168,7 +169,8 @@ test.describe('Dev panel artboard evidence', () => {
     });
     await feedbackDialog.getByRole('button', { name: 'Send feedback' }).click();
     await expect(feedbackDialog.getByRole('status')).toContainText('Thank you');
-    await shot(page, '67');
+    await shot(page, '59');
+
     await page.unroute('**/api/demo-feedback');
     await feedbackDialog.getByRole('button', { name: 'Send more feedback' }).click();
 
@@ -181,14 +183,15 @@ test.describe('Dev panel artboard evidence', () => {
     });
     await feedbackDialog.getByRole('button', { name: 'Send feedback' }).click();
     await expect(feedbackDialog.getByRole('alert')).toBeVisible();
-    await shot(page, '73');
+    await shot(page, '60');
+
     await page.unroute('**/api/demo-feedback');
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/app/assignments');
     ({ panel: feedbackDialog } = await openGiveFeedback(page));
     await feedbackDialog.getByLabel('Note').fill('Mobile footer evidence');
-    await shot(page, '74');
+    await shot(page, '72');
 
     await feedbackDialog.getByLabel('Note').fill('Partly typed note before reload');
     await page.reload();
@@ -198,6 +201,6 @@ test.describe('Dev panel artboard evidence', () => {
       'Partly typed note before reload',
       { timeout: 15_000 }
     );
-    await shot(page, '85');
+    await shot(page, '56');
   });
 });

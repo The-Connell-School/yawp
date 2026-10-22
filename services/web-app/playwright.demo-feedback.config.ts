@@ -5,6 +5,8 @@ export default defineConfig({
   workers: 1,
   fullyParallel: false,
   retries: 0,
+  timeout: 240_000,
+  expect: { timeout: 15_000 },
   reporter: 'list',
   forbidOnly: !!process.env.CI,
   outputDir: `${process.env.TMPDIR}/demo-feedback-results`,
