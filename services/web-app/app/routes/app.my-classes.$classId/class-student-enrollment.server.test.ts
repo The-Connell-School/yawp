@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 const prisma = {
   $transaction: mock(async (fn: any) => fn(prisma)),
   $queryRaw: mock(),
-  class: { findFirst: mock() },
+  class: { findFirst: mock(), findUnique: mock() },
   user: { findFirst: mock() },
   orgMembership: { update: mock(), create: mock() },
   invitation: { findFirst: mock(), delete: mock(), create: mock(), count: mock() },
@@ -418,8 +418,15 @@ describe('sendStudentClassInvite', () => {
     prisma.$transaction.mockReset();
     prisma.$queryRaw.mockReset();
     prisma.class.findFirst.mockReset();
+    prisma.class.findUnique.mockReset();
     prisma.invitation.count.mockReset();
     mockNonFreeClassSeatCap();
+    prisma.class.findUnique.mockResolvedValue({
+      title: 'English 10',
+      period: 3,
+      grade: 10,
+      teachers: [{ user: { name: 'Ms. Whitaker' } }],
+    });
     generateTOTP.mockReset();
     sendEmail.mockReset();
 

@@ -1,16 +1,20 @@
 import { renderAdminApprovalEmailPlainText } from './admin-approval-copy';
+import {
+  plainTextButton,
+  plainTextEmailFooter,
+} from '~/emails/plain-text-footer';
+import { defaultTransactionalEmailOrigin } from '~/emails/plain-text-footer';
 
 export const ADMIN_APPROVAL_EMAIL_COPY_VERSION = '2026-10-21-admin-v1';
-
-/** Matches the Privacy Policy model-training statement (single sentence). */
-export const FREE_TIER_MODEL_TRAINING_LINE =
-  'Student writing is never used to train models.';
 // Pass the version stored with the application when admission was requested.
 // Do not derive delayed email wording from the flag at delivery time.
 export const RELEASE_EMAIL_V2_COPY_VERSION = 'free-tier-onboarding-v2';
 
-export function renderReleaseEmailSubject(_args: { copyVersion?: string } = {}) {
-  // Bryant and Brian (10/19): one subject for every release email.
+export function renderReleaseEmailSubject(args: { copyVersion?: string } = {}) {
+  if (args.copyVersion === RELEASE_EMAIL_V2_COPY_VERSION) {
+    return RELEASE_EMAIL_V2_SUBJECT;
+  }
+  // Legacy applications keep the historical subject line.
   return "You're in — start your Yawp! classroom!";
 }
 
@@ -110,23 +114,29 @@ function firstName(name: string) {
   return name.trim().split(/\s+/)[0] || name.trim() || 'there';
 }
 
-export const RELEASE_EMAIL_V2_SUBJECT = "You're in — start your Yawp! classroom!";
+export const RELEASE_EMAIL_V2_SUBJECT =
+  "You're in: start your Yawp! classroom";
 
 export function renderReleaseEmailV2Body(args: { name: string; joinUrl: string }) {
+  const origin = defaultTransactionalEmailOrigin();
   return `Hi ${firstName(args.name)},
 
-Good news: your spot is ready. Your free Yawp! classroom license covers one class of up to 35 students, with no cost to you or your school.
+Your spot is ready. Your free Yawp! classroom license covers one class of up to 35 students, at no cost to you or your school.
 
-Getting started takes about five minutes. You'll set up your class, then ask your administrator to approve it. While you wait, you can explore everything.
+Setup takes about five minutes: create your class, then ask your administrator to approve it. You can explore everything while you wait.
 
-Get started:
-${args.joinUrl}
+${plainTextButton('Get started', args.joinUrl)}
 
-This link is for you only and expires in 30 days.
+This link is just for you and expires in 30 days.
 
-Changed your mind? That's okay. Reply to this email and let us know, and we'll pass your spot to another teacher.
+Changed your mind? Just reply and let us know, and we'll pass your spot to another teacher.
 
-${BRIAN_SIGNATURE}`;
+${BRIAN_SIGNATURE}
+
+${plainTextEmailFooter(
+  "You're getting this because you signed up for a free Yawp! classroom license.",
+  origin
+)}`;
 }
 
 export const TEACHER_REMINDER_V2_SUBJECT =
@@ -136,22 +146,31 @@ export function renderTeacherReminderV2Body(args: {
   teacherName: string;
   adminName: string;
   pendingUrl: string;
+  changeAdminUrl?: string;
 }) {
+  const origin = defaultTransactionalEmailOrigin();
+  const changeAdminUrl = args.changeAdminUrl ?? args.pendingUrl;
   return `Hi ${firstName(args.teacherName)},
 
-We haven't heard from ${args.adminName} yet, so we've sent them a friendly reminder. If it feels right, a quick word in the hallway or a short email from you can help it rise to the top of their inbox.
+We haven't heard from ${args.adminName} yet, so we sent a friendly reminder. A quick word in the hallway or a short email from you can help, too.
 
-In the meantime, your classroom preview is ready for you to explore.
+In the meantime, your classroom preview is ready to explore.
 
-Explore my classroom:
-${args.pendingUrl}
+${plainTextButton('Explore my classroom', args.pendingUrl)}
 
-Think another administrator might be able to approve sooner? You can send your request to someone else.
+Think another administrator could approve sooner? You can send your request to them instead.
 
-Request approval from a different administrator:
-${args.pendingUrl}
+${plainTextButton(
+  'Request approval from a different administrator',
+  changeAdminUrl
+)}
 
-${BRIAN_SIGNATURE}`;
+${BRIAN_SIGNATURE}
+
+${plainTextEmailFooter(
+  "You're getting this once a week while your classroom waits for approval. It stops as soon as you're approved.",
+  origin
+)}`;
 }
 
 export const FORWARD_NOTICE_V2_SUBJECT = 'Your Yawp! approval request was forwarded';
@@ -163,14 +182,22 @@ export function renderForwardNoticeV2Body(args: {
   manualReview: boolean;
   pendingUrl: string;
 }) {
+  const origin = defaultTransactionalEmailOrigin();
+  const followUp = args.manualReview
+    ? 'Our team is reviewing the new request.'
+    : "We'll let you know the moment they approve.";
   return `Hi ${firstName(args.teacherName)},
 
-Your approval request is now with ${args.adminName} (${args.adminEmail}). ${args.manualReview ? 'Our team is reviewing the new request.' : "We'll let you know the moment they approve."}
+Your approval request is now with ${args.adminName} (${args.adminEmail}). ${followUp}
 
-View your request:
-${args.pendingUrl}
+${plainTextButton('View your request', args.pendingUrl)}
 
-${BRIAN_SIGNATURE}`;
+${BRIAN_SIGNATURE}
+
+${plainTextEmailFooter(
+  "You're getting this because you asked a school administrator to approve your Yawp! classroom.",
+  origin
+)}`;
 }
 
 export const CONGRATULATIONS_V2_SUBJECT =
@@ -181,18 +208,23 @@ export function renderCongratulationsEmailV2Body(args: {
   adminName: string;
   signInUrl: string;
 }) {
+  const origin = defaultTransactionalEmailOrigin();
   return `Hi ${firstName(args.teacherName)},
 
-Good news: ${args.adminName} approved your classroom! All free features are now unlocked. Your next step is to add your students to your class. It takes about five minutes with your students in the room.
+${args.adminName} approved your classroom, so all free features are now unlocked.
 
-Add students:
-${args.signInUrl}
+Next, add your students. It takes about five minutes with your class in the room.
 
-It might be worth a quick thank-you to ${args.adminName}, too.
+${plainTextButton('Add students', args.signInUrl)}
 
-Best always,
+A quick thank-you to ${args.adminName} might be nice, too.
 
-Brian`;
+${BRIAN_SIGNATURE}
+
+${plainTextEmailFooter(
+  `You're getting this because ${args.adminName} approved your Yawp! classroom.`,
+  origin
+)}`;
 }
 
 /** Recover signed admin links from rendered approval email bodies for QA logs. */

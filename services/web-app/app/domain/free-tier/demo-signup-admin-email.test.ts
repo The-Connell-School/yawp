@@ -93,7 +93,7 @@ describe('demo free-tier signup admin email subjects (#659)', () => {
   });
 
   test('forward recipient on approval-v2 outbox uses the forward subject with button and plain text', async () => {
-    const designed = buildDesignedAdminApprovalEmail({
+    const designed = await buildDesignedAdminApprovalEmail({
       teacherName,
       teacherEmail,
       schoolName,
@@ -104,7 +104,7 @@ describe('demo free-tier signup admin email subjects (#659)', () => {
     expect(designed.subject).toBe(`Can you approve Yawp! for ${atSchool}?`);
     expectDesignedDelivery(designed);
 
-    const html = htmlForStoredAdminApprovalEmail({
+    const html = await htmlForStoredAdminApprovalEmail({
       subject: designed.subject,
       text: designed.text,
       html: designed.html,

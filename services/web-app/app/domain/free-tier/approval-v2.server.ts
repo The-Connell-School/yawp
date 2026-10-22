@@ -48,6 +48,10 @@ import {
 import { sanitizeFreeTierEmailLogPayload } from './email-log-payload.server';
 import { plainTextEmailToHtml } from './email-html.server';
 import {
+  buildTeacherForwardedDesignedEmail,
+  buildTeacherStillWaitingDesignedEmail,
+} from '~/emails/build-free-tier-emails.server';
+import {
   evaluateAdminEmailForRuntime,
   ADMIN_REDIRECT_CHAIN_CAP,
 } from './admin-email-rules.server';
@@ -156,7 +160,7 @@ async function adminMessage(
   const base = freeTierPublicAppOrigin();
   const approveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(approve.token)}`;
   const notRightPersonUrl = `${base}/free/admin/not-right-person?t=${encodeURIComponent(decline.token)}`;
-  const designed = buildDesignedAdminApprovalEmail({
+  const designed = await buildDesignedAdminApprovalEmail({
     teacherName: app.name,
     teacherEmail: app.email,
     schoolName: app.schoolName,
@@ -938,17 +942,45 @@ async function deliverJob(id: string, now: Date) {
       let accepted = false,
         retryable = false;
       try {
-        const html =
-          job.kind === 'admin_approval' || job.kind === 'admin_reminder'
-            ? htmlForStoredAdminApprovalEmail({
-                subject: message.subject,
-                text: message.text,
-                html: message.html,
-                teacherName: app.name,
-                teacherEmail: app.email,
-                schoolName: app.schoolName,
-              })
-            : plainTextEmailToHtml(message.text);
+        const pendingUrl = `${freeTierPublicAppOrigin()}/app/free-tier/pending`;
+        let html: string;
+        if (job.kind === 'admin_approval' || job.kind === 'admin_reminder') {
+          html = await htmlForStoredAdminApprovalEmail({
+            subject: message.subject,
+            text: message.text,
+            html: message.html,
+            teacherName: app.name,
+            teacherEmail: app.email,
+            schoolName: app.schoolName,
+          });
+        } else if (
+          job.kind === 'teacher_followup' &&
+          isOnboardingV2CopyVersion(app.releaseEmailCopyVersion)
+        ) {
+          html = (
+            await buildTeacherStillWaitingDesignedEmail({
+              teacherName: app.name,
+              adminName: approval.adminName,
+              exploreUrl: pendingUrl,
+              changeAdminUrl: pendingUrl,
+            })
+          ).html;
+        } else if (
+          job.kind === 'forward_notice' &&
+          isOnboardingV2CopyVersion(app.releaseEmailCopyVersion)
+        ) {
+          html = (
+            await buildTeacherForwardedDesignedEmail({
+              teacherName: app.name,
+              adminName: approval.adminName,
+              adminEmail: approval.adminEmail,
+              manualReview: app.status === 'MANUAL_REVIEW',
+              pendingUrl,
+            })
+          ).html;
+        } else {
+          html = plainTextEmailToHtml(message.text);
+        }
         const result = await sendEmail({
           to: message.to,
           subject: message.subject,
