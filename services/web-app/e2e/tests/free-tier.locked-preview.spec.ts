@@ -253,7 +253,10 @@ for (const width of [390, 1440]) {
       expect(imgBox?.height ?? 0).toBeLessThanOrEqual(56);
     }
     await capture(page, `locked-picker-${width}`);
-    await page.getByRole('button', { name: 'Close' }).click();
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Close' })
+      .click();
     await expect(page.getByRole('heading', { name: 'New assignment' })).toHaveCount(
       0
     );
