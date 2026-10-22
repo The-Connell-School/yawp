@@ -44,6 +44,11 @@ function cellPad(top = 0, right = 0, bottom = 0, left = 0) {
   return { padding: `${top}px ${right}px ${bottom}px ${left}px` };
 }
 
+/** HTML `bgcolor` for Outlook; omitted from React's typed TD props. */
+function tdBg(color: string) {
+  return { bgcolor: color } as React.TdHTMLAttributes<HTMLTableCellElement>;
+}
+
 export function YawpEmailLayout({
   preheader,
   logoBlackUrl,
@@ -92,7 +97,7 @@ export function YawpEmailLayout({
           width="100%"
           cellPadding={0}
           cellSpacing={0}
-          bgcolor={EMAIL_PAGE_BG}
+          {...tdBg(EMAIL_PAGE_BG)}
           className="yawp-page"
           style={{ backgroundColor: EMAIL_PAGE_BG, width: '100%' }}
         >
@@ -111,7 +116,7 @@ export function YawpEmailLayout({
                     <tr>
                       <td
                         className="yawp-card yawp-card-pad"
-                        bgcolor={EMAIL_CARD_BG}
+                        {...tdBg(EMAIL_CARD_BG)}
                         style={{
                           backgroundColor: EMAIL_CARD_BG,
                           border: `1px solid ${EMAIL_CARD_BORDER}`,
@@ -240,7 +245,7 @@ function LogoHeader({
       <tr>
         <td
           align="left"
-          bgcolor={EMAIL_CARD_BG}
+          {...tdBg(EMAIL_CARD_BG)}
           className="yawp-pad-x yawp-logo-cell"
           style={{
             ...padX(32, 16),
@@ -307,7 +312,7 @@ export function EmailBanner({ children }: { children: React.ReactNode }) {
       <tbody>
         <tr>
           <td
-            bgcolor={EMAIL_BANNER_BG}
+            {...tdBg(EMAIL_BANNER_BG)}
             className="yawp-banner yawp-text"
             style={{
               backgroundColor: EMAIL_BANNER_BG,
@@ -331,7 +336,7 @@ function CelebrationBand({ text }: { text: string }) {
   return (
     <tr>
       <td
-        bgcolor={EMAIL_PRIMARY}
+        {...tdBg(EMAIL_PRIMARY)}
         className="yawp-celebration yawp-pad-x"
         style={{
           backgroundColor: EMAIL_PRIMARY,
@@ -355,8 +360,7 @@ export function EmailBodyBlocks({ paragraphs }: { paragraphs: React.ReactNode[] 
       {paragraphs.map((paragraph, index) => (
         <tr key={index}>
           <td
-            className="yawp-text"
-            className="yawp-pad-x"
+            className="yawp-text yawp-pad-x"
             style={{
               ...padX(index === 0 ? 20 : 20, 0),
               fontFamily: FONT_SANS,
@@ -378,8 +382,7 @@ export function EmailMutedLead({ children }: { children: React.ReactNode }) {
   return (
     <tr>
       <td
-        className="yawp-muted"
-        className="yawp-pad-x"
+        className="yawp-muted yawp-pad-x"
         style={{
           ...padX(20, 0),
           fontFamily: FONT_SANS,
@@ -405,7 +408,7 @@ export function IdentityCard({ rows }: { rows: IdentityRow[] }) {
           width="100%"
           cellPadding={0}
           cellSpacing={0}
-          bgcolor={EMAIL_IDENTITY_BG}
+          {...tdBg(EMAIL_IDENTITY_BG)}
           className="yawp-identity"
           style={{
             backgroundColor: EMAIL_IDENTITY_BG,
@@ -503,7 +506,7 @@ export function AboutYawpList({
                         <td
                           width={7}
                           height={7}
-                          bgcolor={EMAIL_PRIMARY}
+                          {...tdBg(EMAIL_PRIMARY)}
                           style={{
                             width: '7px',
                             height: '7px',
@@ -556,7 +559,7 @@ export function CodeBlock({
           width="100%"
           cellPadding={0}
           cellSpacing={0}
-          bgcolor={EMAIL_CODE_BG}
+          {...tdBg(EMAIL_CODE_BG)}
           className="yawp-code"
           style={{
             backgroundColor: EMAIL_CODE_BG,
@@ -630,7 +633,7 @@ export function PersonalNoteBlock({
           width="100%"
           cellPadding={0}
           cellSpacing={0}
-          bgcolor={EMAIL_IDENTITY_BG}
+          {...tdBg(EMAIL_IDENTITY_BG)}
           className="yawp-identity"
           style={{
             backgroundColor: EMAIL_IDENTITY_BG,
@@ -698,14 +701,12 @@ export function PillButton({
             <tr>
               <td
                 className="yawp-btn-cell"
-                bgcolor={EMAIL_PRIMARY}
+                {...tdBg(EMAIL_PRIMARY)}
                 style={{
                   backgroundColor: EMAIL_PRIMARY,
                   borderRadius: '999px',
                 }}
               >
-                {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
-                {/* @ts-expect-error outlook conditional */}
                 <div
                   dangerouslySetInnerHTML={{
                     __html: `<!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${safeHref}" style="height:48px;v-text-anchor:middle;width:280px;" arcsize="50%" stroke="f" fillcolor="${EMAIL_PRIMARY}"><w:anchorlock/><center style="color:#ffffff;font-family:Arial,sans-serif;font-size:18px;font-weight:bold;">${escapeHtml(label)}</center></v:roundrect><![endif]-->`,

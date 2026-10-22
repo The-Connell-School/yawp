@@ -8,7 +8,7 @@ import {
 import { CircleAlert, Shield } from 'lucide-react';
 import { Form } from 'react-router';
 import { peekSignedLink } from '~/domain/free-tier/signed-link.server';
-import { FREE_TIER_MODEL_TRAINING_LINE } from '~/domain/free-tier/email-copy';
+import { FREE_TIER_ADMIN_MODEL_TRAINING_LINE as FREE_TIER_MODEL_TRAINING_LINE } from '~/domain/free-tier/admin-approval-copy';
 import { createFreeTierTeacherAccount } from '~/domain/free-tier/approval-flow.server';
 import {
   getPasswordHash,
