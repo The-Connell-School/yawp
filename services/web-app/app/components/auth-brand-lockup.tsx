@@ -34,7 +34,7 @@ export function AuthBrandLockup({ partner }: { partner?: 'ua' | null }) {
   return (
     <img
       src="/img/logo_for_light_mode.png"
-      alt="Yawp"
+      alt="Yawp!"
       className="mx-auto h-auto w-48 rounded object-cover sm:w-52"
     />
   );
@@ -54,7 +54,7 @@ function YawpMark({ className = 'w-52 sm:w-64' }: { className?: string }) {
   return (
     <img
       src="/img/yawp_black_logo.png"
-      alt="Yawp"
+      alt="Yawp!"
       className={`h-auto shrink-0 object-contain ${className}`}
     />
   );

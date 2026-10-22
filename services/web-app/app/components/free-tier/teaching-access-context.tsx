@@ -86,7 +86,7 @@ export function TeachingAccessProvider({
             setErrorToastOpen(true);
           }
         } catch {
-          // Non-JSON 403 responses are ignored.
+          setErrorToastOpen(true);
         }
       }
       return response;

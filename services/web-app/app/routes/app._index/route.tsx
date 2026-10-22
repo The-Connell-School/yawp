@@ -465,7 +465,7 @@ export default function AppRoute() {
                     teachingLocked={locked}
                     createTriggerRef={createAssignmentTriggerRef}
                     onCreate={(id) => {
-                      setCreateAssignmentTypeId(id);
+                      setCreateAssignmentTypeId(locked ? undefined : id);
                       setIsCreateSheetOpen(true);
                     }}
                   />

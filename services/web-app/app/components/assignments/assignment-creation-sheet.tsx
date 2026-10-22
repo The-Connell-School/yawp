@@ -503,8 +503,6 @@ export function AssignmentCreationSheet({
     props.teachingLocked &&
     usage &&
     !props.editingAssignment &&
-    !props.fixedAssignmentTypeId &&
-    !props.initialAssignmentTypeId &&
     !pickedTypeId
   ) {
     return (
@@ -520,6 +518,7 @@ export function AssignmentCreationSheet({
   }
 
   if (
+    !props.teachingLocked &&
     usage &&
     props.assignmentTypes.some(
       (type) => !type.unavailableReason && !type.quotaExhausted
