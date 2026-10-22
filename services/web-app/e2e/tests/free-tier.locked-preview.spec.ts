@@ -674,10 +674,9 @@ test('legacy public enrollment cannot bypass pending approval', async ({ page })
 });
 
 async function exploreLockedApp(page: import('@playwright/test').Page, userEmail: string) {
+  await page.addInitScript(() => localStorage.removeItem('yawp-dev-panel'));
   await login(page, userEmail);
   await page.goto('/app/free-tier/pending');
-  await page.evaluate(() => localStorage.removeItem('yawp-dev-panel'));
-  await page.reload({ waitUntil: 'domcontentloaded' });
   await page.getByRole('link', { name: 'Explore my classroom' }).click();
   await expect(page).toHaveURL(/\/app$/);
   await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
