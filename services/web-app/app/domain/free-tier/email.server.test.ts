@@ -120,6 +120,13 @@ describe('approval recipients and fixed copy', () => {
         expect(delivered.text).toContain(args.approveUrl);
         expect(delivered.text).toContain(args.notRightPersonUrl);
         expect(delivered.text).toContain('This link works for 14 days');
+        expect(delivered.text).toContain('Review and approve:');
+        expect(delivered.html).toContain('Review and approve</a>');
+        expect(delivered.html).toContain(`href="${args.approveUrl}"`);
+        expect(delivered.subject).toContain('would like to use Yawp!');
+        expect(delivered.html).toContain(
+          `Approve Yawp! for ${args.teacherName} at ${args.schoolName}`
+        );
         expect(logEmail.mock.calls.at(-1)?.[0].data.success).toBe(true);
       });
     }
