@@ -230,9 +230,11 @@ for (const width of [390, 1440]) {
     const lockedTileImg = page
       .locator('[data-testid="site-license-locked-assignment-tile"] img')
       .first();
-    if (width === 1440 && (await lockedTileImg.count())) {
-      const imgBox = await lockedTileImg.boundingBox();
-      expect(imgBox?.height ?? 0).toBeLessThanOrEqual(64);
+    if (width === 1440) {
+      if (await lockedTileImg.count()) {
+        const imgBox = await lockedTileImg.boundingBox();
+        expect(imgBox?.height ?? 0).toBeLessThanOrEqual(64);
+      }
       const siteLock = page.getByTestId('site-license-lock-button').first();
       await siteLock.focus();
       await page.waitForTimeout(350);
