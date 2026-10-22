@@ -165,6 +165,7 @@ function GiveFeedbackSheet({
   const location = useLocation();
   const path = feedbackPath(location.pathname + location.search);
   const noteId = useId();
+  const pageUrlId = useId();
   const isPhone = useMedia('(max-width: 639px)');
   const footerStyle = useVisualViewportFooterStyle(isPhone);
   const [screenshot, setScreenshot] = useState<string | null>(null);
@@ -305,8 +306,8 @@ function GiveFeedbackSheet({
               </div>
             ) : null}
             <div className="space-y-1">
-              <Label>Page URL</Label>
-              <Input readOnly value={path} />
+              <Label htmlFor={pageUrlId}>Page URL</Label>
+              <Input id={pageUrlId} readOnly value={path} />
             </div>
           </>
         )}

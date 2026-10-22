@@ -26,7 +26,6 @@ test.describe('Dev panel artboard evidence', () => {
   });
 
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => localStorage.removeItem('yawp-dev-panel'));
     await page.request.post('/auth/dev-login', {
       form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
     });
@@ -57,6 +56,7 @@ test.describe('Dev panel artboard evidence', () => {
 
   test('capture designed panel and feedback states', async ({ page }) => {
     test.setTimeout(240_000);
+    await page.evaluate(() => localStorage.removeItem('yawp-dev-panel'));
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/app/assignments');
     await openDevToolsPanel(page);

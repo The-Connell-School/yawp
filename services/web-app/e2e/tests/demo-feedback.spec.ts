@@ -16,7 +16,6 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
   page,
 }) => {
   test.setTimeout(120_000);
-  await page.addInitScript(() => localStorage.removeItem('yawp-dev-panel'));
   await page.request.post('/auth/dev-login', {
     form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
   });
@@ -45,6 +44,7 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
       create: { name: flag, value: 'false', valueType: 'boolean' },
       update: { value: 'false' },
     });
+    await page.evaluate(() => localStorage.removeItem('yawp-dev-panel'));
     await page.goto('/app/assignments');
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
