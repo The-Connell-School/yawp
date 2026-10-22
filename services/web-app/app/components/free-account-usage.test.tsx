@@ -103,8 +103,12 @@ test('Advocate Pack follows incomplete first steps, leads after completion, and 
     render(<FreeAccountRail usage={{ ...done, monthly: false }} />)
   ).not.toContain('Get the Advocate Pack');
 });
-test('Reporter card uses site-license language', () => {
-  const html = render(<FreeReporterLocked />);
-  expect(html).toContain('Reporter comes with a Yawp! site license');
+test('Reporter pending lock copy matches approval gate', () => {
+  const html = render(<FreeReporterLocked variant="pending" />);
+  expect(html).toContain('Unlocks after approval');
   expect(html).not.toContain('paid plan');
+});
+test('Reporter site-license variant keeps upgrade language', () => {
+  const html = render(<FreeReporterLocked variant="site-license" />);
+  expect(html).toContain('Reporter comes with a Yawp! site license');
 });
