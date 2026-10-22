@@ -96,7 +96,7 @@ import {
 } from './prompts-library/data';
 import promptsRaw from './prompts-library/prompts.json';
 import { FROM_LESSON_PARAM } from '~/domain/lesson-planner/daily-pages-block';
-import { FROM_PIECE_PARAM } from '~/domain/lesson-planner/stack-create-link';
+import { BACK_PARAM, FROM_PIECE_PARAM, lessonBackHref } from '~/domain/lesson-planner/stack-create-link';
 import {
   EXIT_TICKET_PARAMS,
   readExitTicketPrefill,
@@ -862,7 +862,7 @@ export default function AppAssignmentTypesIdRoute() {
           <Button asChild variant="outline">
             {fromLesson && lessonPlannerEnabled ? (
               <Link
-                to={`/app/lesson-planner?c=${fromLesson}`}
+                to={lessonBackHref(fromLesson, searchParams.get(BACK_PARAM))}
                 className="w-fit"
                 data-testid="back-to-lesson"
               >

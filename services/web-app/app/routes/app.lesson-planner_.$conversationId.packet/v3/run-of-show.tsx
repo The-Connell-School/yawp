@@ -21,6 +21,7 @@ import {
 import type { StackStep } from '~/domain/lesson-planner/stack-steps';
 import type { TimedBlock } from '~/domain/lesson-planner/stack-timing';
 import { isLectureStep, stepChipText } from '~/domain/lesson-planner/step-types';
+import { movedToSlot } from '~/domain/lesson-planner/stack-order';
 import { cn } from '~/utils/misc';
 import { typeChipStyle } from './theme';
 
@@ -165,9 +166,21 @@ export function RunOfShow({
     <InsertPoint
       key={`gap-${index}`}
       active={insertAt === index}
-      dragging={dragging}
+      dragging={dragging || dragKey !== null}
       onInsert={() => onInsertAt(index)}
-      onDropPiece={(event) => onDropPieceAt(index, event)}
+      onDropPiece={(event) => {
+        // A step dragged by its handle lands in the gap it is dropped in.
+        const moving = event.dataTransfer.getData(STEP_DRAG_TYPE);
+        if (moving) {
+          event.preventDefault();
+          setDragKey(null);
+          const keys = steps.map((entry) => entry.key);
+          const next = movedToSlot(keys, moving, index);
+          if (next.join() !== keys.join()) onReorder(next);
+          return;
+        }
+        onDropPieceAt(index, event);
+      }}
       label={
         index === 0
           ? 'Add a piece at the start'
@@ -192,22 +205,26 @@ export function RunOfShow({
               data-open={open ? 'true' : undefined}
               draggable={editable}
               onDragStart={(event) => {
-                setDragKey(step.key);
                 event.dataTransfer.setData(STEP_DRAG_TYPE, step.key);
                 event.dataTransfer.effectAllowed = 'move';
+                // The drop slots open after the drag has begun: changing the
+                // page in dragstart itself can cancel the drag.
+                window.setTimeout(() => setDragKey(step.key), 0);
               }}
               onDragEnd={() => setDragKey(null)}
               onDragOver={(event) => {
-                if (dragKey && event.dataTransfer.types.includes(STEP_DRAG_TYPE)) event.preventDefault();
+                if (event.dataTransfer.types.includes(STEP_DRAG_TYPE)) event.preventDefault();
               }}
               onDrop={(event) => {
                 const moving = event.dataTransfer.getData(STEP_DRAG_TYPE);
+                setDragKey(null);
                 if (!moving || moving === step.key) return;
                 event.preventDefault();
-                const keys = steps.map((entry) => entry.key).filter((key) => key !== moving);
-                keys.splice(keys.indexOf(step.key), 0, moving);
-                onReorder(keys);
-                setDragKey(null);
+                // Dropped on a card: before it from its top half, after it
+                // from its bottom half, so one step down is a real move.
+                const box = event.currentTarget.getBoundingClientRect();
+                const after = event.clientY > box.top + box.height / 2;
+                onReorder(movedToSlot(steps.map((entry) => entry.key), moving, index + (after ? 1 : 0)));
               }}
               className={cn(
                 'overflow-hidden rounded-xl border bg-[var(--sv-card)] transition',

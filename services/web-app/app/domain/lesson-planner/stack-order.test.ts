@@ -4,6 +4,7 @@ import {
   orderStackEntries,
   parseStackEntryKey,
   stackEntryKey,
+  movedToSlot,
 } from './stack-order';
 
 const at = (minute: number) => Date.UTC(2026, 9, 12, 10, minute);
@@ -65,5 +66,21 @@ describe('stack entry keys', () => {
     expect(parseStackEntryKey('x:1')).toBeNull();
     expect(parseStackEntryKey('m:')).toBeNull();
     expect(parseStackEntryKey('')).toBeNull();
+  });
+});
+
+describe("movedToSlot: dragging a step in the run of show (Brian's run 4, item 3)", () => {
+  const keys = ['a', 'b', 'c', 'd'];
+  test('down by one: into the gap after the next step', () => {
+    expect(movedToSlot(keys, 'a', 2)).toEqual(['b', 'a', 'c', 'd']);
+  });
+  test('up by one, to the start, to the end', () => {
+    expect(movedToSlot(keys, 'c', 1)).toEqual(['a', 'c', 'b', 'd']);
+    expect(movedToSlot(keys, 'd', 0)).toEqual(['d', 'a', 'b', 'c']);
+    expect(movedToSlot(keys, 'a', 4)).toEqual(['b', 'c', 'd', 'a']);
+  });
+  test('a gap beside the step leaves the order as it was', () => {
+    expect(movedToSlot(keys, 'b', 1)).toEqual(keys);
+    expect(movedToSlot(keys, 'b', 2)).toEqual(keys);
   });
 });

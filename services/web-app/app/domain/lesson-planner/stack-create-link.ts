@@ -22,6 +22,18 @@ export type StackCreateLink = { label: string; href: string; created?: boolean }
 /** Which lesson piece a create link came from, so the sheet can say so back. */
 export const FROM_PIECE_PARAM = 'fromPiece';
 
+/**
+ * Where "Back to your lesson" goes (Brian's run 4, item 4): a sheet opened
+ * from the stack page returns to the run of show, not to the chat.
+ */
+export const BACK_PARAM = 'back';
+
+export function lessonBackHref(conversationId: string, back: string | null): string {
+  return back === 'stack'
+    ? `/app/lesson-planner/${encodeURIComponent(conversationId)}/packet`
+    : `/app/lesson-planner?c=${encodeURIComponent(conversationId)}`;
+}
+
 export function withPiece(href: string, materialId?: string | null): string {
   if (!materialId) return href;
   const url = new URL(href, 'http://local');
@@ -101,7 +113,10 @@ export function stackCreateLink({
 }): StackCreateLink | null {
   if (created) return { label: 'Created in Yawp! · Open', href: created.href, created: true };
   const link = createLinkFor({ kind, title, stepType, content, blockKey, sourceContent, typeIds, conversationId });
-  return link ? { ...link, href: withPiece(link.href, materialId) } : null;
+  if (!link) return null;
+  const url = new URL(withPiece(link.href, materialId), 'http://local');
+  url.searchParams.set(BACK_PARAM, 'stack');
+  return { ...link, href: `${url.pathname}?${url.searchParams}` };
 }
 
 function createLinkFor({

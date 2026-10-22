@@ -52,3 +52,17 @@ export function parseStackEntryKey(key: string): StackEntryRef | null {
   if (!match) return null;
   return { origin: match[1] === 'm' ? 'material' : 'reply', id: match[2]! };
 }
+
+/**
+ * The order after a step is dropped into a gap of the run of show (Brian's
+ * run 4, item 3). `slot` counts the gaps of the order as it was: 0 before
+ * the first step, `keys.length` after the last.
+ */
+export function movedToSlot(keys: string[], moving: string, slot: number): string[] {
+  const from = keys.indexOf(moving);
+  if (from < 0) return keys;
+  const rest = keys.filter((key) => key !== moving);
+  const at = Math.max(0, Math.min(rest.length, slot > from ? slot - 1 : slot));
+  rest.splice(at, 0, moving);
+  return rest;
+}

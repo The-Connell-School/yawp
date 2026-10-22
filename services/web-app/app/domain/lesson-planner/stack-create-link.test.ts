@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { stackCreateLink } from './stack-create-link';
+import { lessonBackHref, stackCreateLink } from './stack-create-link';
 
 const typeIds = { dailyPages: 'dp-type', classStarter: 'cs-type', exitTicket: 'et-type' };
 
@@ -17,6 +17,7 @@ describe("stackCreateLink (Brian's run 2, A5)", () => {
     expect(link?.href).toContain('/app/assignment-types/cs-type?');
     expect(link?.href).toContain('newPrompt=Write+about+something+you+carry.');
     expect(link?.href).toContain('fromLesson=plan-1');
+    expect(link?.href).toContain('back=stack');
   });
 
   test('a Daily Pages prompt goes to Daily Pages, without any old id footer', () => {
@@ -137,5 +138,14 @@ describe("stackCreateLink — every writing step (Brian's run 3, item 4)", () =>
       created: { href: '/app/assignment-types/cs-type' },
     });
     expect(link).toEqual({ label: 'Created in Yawp! · Open', href: '/app/assignment-types/cs-type', created: true });
+  });
+});
+
+describe("lessonBackHref (Brian's run 4, item 4)", () => {
+  test('from the stack page: back to the run of show', () => {
+    expect(lessonBackHref('plan-1', 'stack')).toBe('/app/lesson-planner/plan-1/packet');
+  });
+  test('from the chat: back to the chat', () => {
+    expect(lessonBackHref('plan-1', null)).toBe('/app/lesson-planner?c=plan-1');
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { blockMinutesInReply, pieceKeysInReply, segmentInStack, stepSegments, stepsOfferingChoice } from './reply-pieces';
+import { blockMinutesInReply, pieceKeysInReply, segmentInStack, optionSteps, stepSegments, stepsOfferingChoice } from './reply-pieces';
 import { readPlanSteps } from './plan-steps';
 
 const DECK = JSON.stringify({
@@ -144,5 +144,34 @@ describe('stepsOfferingChoice: a step whose options each have their own Add (Kev
   test('a step with one block, or none, does not', () => {
     const one = ['## Class starter (5 min)', 'Write.', starter('One prompt.')].join('\n\n');
     expect(stepsOfferingChoice(one).size).toBe(0);
+  });
+});
+
+describe("optionSteps: picking an option files its step (Brian's run 4, item 2)", () => {
+  const ticket = (text: string) => '```yawp-exit-ticket\n' + text + '\n```';
+  const reply = [
+    '## Discussion (20 min)',
+    'Talk about Holden.',
+    '## Closing (5 min) {type: closing}',
+    'Name the one thing Holden avoids. Then pick a ticket.',
+    ticket('mode: basic'),
+    ticket('mode: basic'),
+    ticket('mode: basic'),
+  ].join('\n\n');
+
+  test('each option under a Closing with its own words files the Closing too', () => {
+    const steps = readPlanSteps(reply);
+    const held = optionSteps(reply);
+    const keys = Object.keys(held);
+    expect(keys).toHaveLength(3);
+    for (const key of keys) {
+      expect(held[key]!.step).toBe(steps[1]!.key);
+      expect(held[key]!.options).toEqual(keys);
+    }
+  });
+
+  test('options under a step that is only its options file on their own', () => {
+    const bare = ['## Discussion (20 min)', 'Talk.', '## Closing (5 min)', ticket('mode: basic'), ticket('mode: specific\nfocus: explain-concept\ntopic: phonies')].join('\n\n');
+    expect(optionSteps(bare)).toEqual({});
   });
 });

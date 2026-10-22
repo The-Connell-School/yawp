@@ -118,6 +118,28 @@ export function stepsOfferingChoice(content: string): Set<string> {
   return offering;
 }
 
+/**
+ * The step each option files with (Brian's run 4, item 2). A step that offers
+ * a choice and has words of its own ("## Closing (5 min)", the takeaway, then
+ * three exit tickets) has no button, so picking an option files the step too:
+ * otherwise the Closing never reaches the stack or the run of show. `options`
+ * is every option under that step, so taking the last one out takes the step
+ * out with it.
+ */
+export function optionSteps(content: string): Record<string, { step: string; options: string[] }> {
+  const held: Record<string, { step: string; options: string[] }> = {};
+  const pieces = placedPieces(content);
+  const choices = stepsOfferingChoice(content);
+  pieces.forEach((piece, index) => {
+    if (!piece.step || piece.emptyStep || !choices.has(piece.key)) return;
+    const options = blocksUnder(pieces, index).filter((key) =>
+      pieces.some((other) => other.key === key && other.block && OPTION_BLOCKS.has(other.block))
+    );
+    for (const key of options) held[key] = { step: piece.key, options };
+  });
+  return held;
+}
+
 /** A segment is in the stack when every piece it files as is. */
 export function segmentInStack(
   messageId: string,
