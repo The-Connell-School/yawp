@@ -126,22 +126,25 @@ test.describe('Dev panel artboard evidence', () => {
       });
     });
     await page.evaluate(() => {
-      const assign = Location.prototype.assign;
-      Location.prototype.assign = function (url: string | URL) {
+      const locationRef = window.location;
+      const original = locationRef.assign.bind(locationRef);
+      locationRef.assign = (url: string | URL) => {
         (window as unknown as { __blockedJumpUrl?: string }).__blockedJumpUrl =
           String(url);
       };
       (window as unknown as { __restoreJumpAssign?: () => void }).__restoreJumpAssign =
         () => {
-          Location.prototype.assign = assign;
+          locationRef.assign = original;
         };
     });
     await stateSheet.getByRole('button', { name: 'Jump to this state' }).click();
     await expect(stateSheet.getByRole('status').getByText('Switching…')).toBeVisible();
     await shot(page, '21');
-    await page.evaluate(() => {
-      (window as unknown as { __restoreJumpAssign?: () => void }).__restoreJumpAssign?.();
-    });
+    await page
+      .evaluate(() => {
+        (window as unknown as { __restoreJumpAssign?: () => void }).__restoreJumpAssign?.();
+      })
+      .catch(() => undefined);
     await page.unroute('**/api/dev-panel/free-tier-jump');
     await page.evaluate(() => localStorage.removeItem('yawp-dev-panel'));
     await page.request.post('/auth/dev-login', {
