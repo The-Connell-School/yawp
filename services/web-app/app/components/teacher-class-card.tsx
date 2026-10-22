@@ -1,6 +1,12 @@
 import { useRef, useState } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import { useFreeAccountUsage } from '~/components/free-account-usage';
+import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
+import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
+import {
+  teachingAccessMobileSheetBodyInvite,
+  TEACHING_ACCESS_LOCKED_TOOLTIP,
+} from '~/domain/free-tier/teaching-access-copy';
 import { StudentInvitationDialog } from '~/components/student-invitation-dialog';
 import {
   DropdownMenu,
@@ -40,10 +46,24 @@ export function TeacherClassCard({
 }) {
   const { title, subtitle } = getClassCardHeading(klass);
   const usage = useFreeAccountUsage();
+  const { locked: teachingLocked, state: teachingAccessState } =
+    useTeachingAccess();
+  const teachingAccessAdminName =
+    teachingAccessState.variant === 'locked'
+      ? teachingAccessState.adminName
+      : 'your administrator';
   const enabled =
     usage?.monthly && usage.classId === klass.id && Boolean(klass.code);
+  const showLockedInvite =
+    teachingLocked && usage?.classId === klass.id && usage?.monthly;
   const [invitationOpen, setInvitationOpen] = useState(false);
   const invitationTriggerRef = useRef<HTMLButtonElement>(null);
+  const inviteLockProps = {
+    locked: true as const,
+    adminName: teachingAccessAdminName,
+    mobileSheetBody: teachingAccessMobileSheetBodyInvite(teachingAccessAdminName),
+    tooltip: TEACHING_ACCESS_LOCKED_TOOLTIP,
+  };
 
   return (
     <div className="flex min-h-full flex-col overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md">
@@ -108,7 +128,21 @@ export function TeacherClassCard({
           </div>
         </div>
       </Link>
-      {enabled && (
+      {showLockedInvite ? (
+        <div className="flex items-center justify-end border-t px-4 py-3">
+          <LockedTeachingControl {...inviteLockProps}>
+            <button
+              type="button"
+              data-testid="my-classes-class-options"
+              aria-label={`Class options for ${title}`}
+              className="rounded-md p-2 hover:bg-secondary"
+            >
+              <MoreHorizontal size={20} />
+            </button>
+          </LockedTeachingControl>
+        </div>
+      ) : null}
+      {enabled && !showLockedInvite && (
         <div className="flex items-center justify-between gap-2 border-t px-4 py-3">
           <div>
             <p className="text-xs text-muted-foreground">Class code</p>
@@ -141,14 +175,14 @@ export function TeacherClassCard({
           </DropdownMenu>
         </div>
       )}
-      {enabled && (
+      {enabled && !showLockedInvite && klass.code ? (
         <StudentInvitationDialog
           returnFocusRef={invitationTriggerRef}
-          code={klass.code!}
+          code={klass.code}
           open={invitationOpen}
           onOpenChange={setInvitationOpen}
         />
-      )}
+      ) : null}
     </div>
   );
 }

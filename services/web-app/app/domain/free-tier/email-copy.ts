@@ -1,4 +1,6 @@
-export const ADMIN_APPROVAL_EMAIL_COPY_VERSION = '2026-10-14-v5';
+import { renderAdminApprovalEmailPlainText } from './admin-approval-copy';
+
+export const ADMIN_APPROVAL_EMAIL_COPY_VERSION = '2026-10-21-admin-v1';
 
 /** Matches the Privacy Policy model-training statement (single sentence). */
 export const FREE_TIER_MODEL_TRAINING_LINE =
@@ -46,26 +48,19 @@ export function renderAdminApprovalEmailBody(args: {
   notRightPersonUrl: string;
   adminRecipientName?: string | null;
   reminderLead?: string | null;
+  forwardedByAdminName?: string | null;
   copyVersion?: string;
+  reminder?: boolean;
 }) {
-  const version = args.copyVersion ?? ADMIN_APPROVAL_EMAIL_COPY_VERSION;
-  const reminder = args.reminderLead?.trim()
-    ? `${args.reminderLead.trim()}\n\n`
-    : '';
-  const greeting = adminApprovalGreeting(args.adminRecipientName);
-  return `${reminder}${greeting}
-
-${args.teacherName} (${args.teacherEmail}) at ${args.schoolName} would like to use Yawp! in their classroom.
-
-Yawp! helps students draft essays with feedback while teachers stay in control of assignments and grading. ${FREE_TIER_MODEL_TRAINING_LINE}
-
-Approve Yawp! for this school (link expires in ${APPROVAL_LINK_DAYS} days):
-${args.approveUrl}
-
-I'm not the right person to approve this:
-${args.notRightPersonUrl}
-
-Questions? Contact support@yawp.school.${copyVersionLine(version)}`;
+  return renderAdminApprovalEmailPlainText({
+    teacherName: args.teacherName,
+    teacherEmail: args.teacherEmail,
+    schoolName: args.schoolName,
+    approveUrl: args.approveUrl,
+    notRightPersonUrl: args.notRightPersonUrl,
+    forwardedByAdminName: args.forwardedByAdminName,
+    reminder: args.reminder ?? !!args.reminderLead?.trim(),
+  });
 }
 
 export function renderReleaseEmailBody(args: {
@@ -299,25 +294,4 @@ Brian`;
 }
 
 /** Recover signed admin links from rendered approval email bodies for QA logs. */
-export function adminApprovalUrlsFromEmailBody(text: string): {
-  approveUrl?: string;
-  notRightPersonUrl?: string;
-} {
-  const lines = text.split('\n').map((line) => line.trim());
-  const approveHeading = lines.findIndex(
-    (line) =>
-      line.startsWith('Approve Yawp! for this school') ||
-      /^Approve .+'s free classroom/.test(line)
-  );
-  const forwardHeading = lines.findIndex((line) =>
-    line.startsWith("I'm not the right person")
-  );
-  const approveUrl =
-    approveHeading >= 0 ? lines[approveHeading + 1] : undefined;
-  const notRightPersonUrl =
-    forwardHeading >= 0 ? lines[forwardHeading + 1] : undefined;
-  return {
-    ...(approveUrl?.startsWith('http') ? { approveUrl } : {}),
-    ...(notRightPersonUrl?.startsWith('http') ? { notRightPersonUrl } : {}),
-  };
-}
+export { adminApprovalUrlsFromDesignedEmailBody as adminApprovalUrlsFromEmailBody } from './admin-approval-copy';

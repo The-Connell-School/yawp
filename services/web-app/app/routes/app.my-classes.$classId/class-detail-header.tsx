@@ -7,7 +7,8 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Check, Copy } from 'lucide-react';
+import { Check, Copy, Lock } from 'lucide-react';
+import { TEACHING_ACCESS_CLASS_CODE_HIDDEN_LABEL } from '~/domain/free-tier/teaching-access-copy';
 import { ClassArt } from '~/components/class-art';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -52,7 +53,23 @@ export type ClassDetailHeaderProps = {
   activeTab: ClassHeaderTab;
   onTabChange: (tab: ClassHeaderTab) => void;
   onEdit: () => void;
+  classCodeHidden?: boolean;
 };
+
+function ClassCodeHiddenBadge() {
+  return (
+    <Badge
+      variant="outline"
+      size="sm"
+      className="font-mono text-muted-foreground"
+      data-testid="class-code-masked"
+      aria-label={TEACHING_ACCESS_CLASS_CODE_HIDDEN_LABEL}
+    >
+      ••••-••••-••••-••••
+      <Lock className="ml-1 size-3" aria-hidden />
+    </Badge>
+  );
+}
 
 function ClassCodeReveal({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
@@ -142,9 +159,11 @@ function ClassCodeReveal({ code }: { code: string }) {
 function ClassMetadata({
   klass,
   className,
+  classCodeHidden,
 }: {
   klass: ClassDetailHeaderProps['klass'];
   className?: string;
+  classCodeHidden?: boolean;
 }) {
   return (
     <div
@@ -155,7 +174,11 @@ function ClassMetadata({
     >
       {klass.school?.name ? <span>{klass.school.name}</span> : null}
       <span>{klass.schoolYear}</span>
-      <ClassCodeReveal code={klass.code} />
+      {classCodeHidden ? (
+        <ClassCodeHiddenBadge />
+      ) : (
+        <ClassCodeReveal code={klass.code} />
+      )}
     </div>
   );
 }
@@ -281,6 +304,7 @@ export function ClassDetailHeader({
   documentCount,
   assignmentCount = 0,
   showAssignmentsTab = false,
+  classCodeHidden = false,
   ...props
 }: ClassDetailHeaderProps) {
   const tabs = useMemo(() => {
@@ -323,7 +347,11 @@ export function ClassDetailHeader({
                   {subtitle}
                 </p>
               ) : null}
-              <ClassMetadata klass={props.klass} className="mt-1" />
+              <ClassMetadata
+                klass={props.klass}
+                className="mt-1"
+                classCodeHidden={classCodeHidden}
+              />
             </div>
             <EditClassButton onEdit={props.onEdit} />
           </div>

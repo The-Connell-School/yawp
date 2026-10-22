@@ -24,11 +24,13 @@ export function LockedTeachingControl({
   children,
   tooltip = TEACHING_ACCESS_LOCKED_TOOLTIP,
   adminName = 'your administrator',
+  mobileSheetBody,
 }: {
   locked: boolean;
   children: ReactElement;
   tooltip?: string;
   adminName?: string;
+  mobileSheetBody?: string;
 }) {
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === 'base' || breakpoint === 'sm';
@@ -84,6 +86,7 @@ export function LockedTeachingControl({
           onOpenChange={setSheetOpen}
           returnFocusRef={returnFocusRef}
           adminName={adminName}
+          body={mobileSheetBody}
         />
       </>
     );

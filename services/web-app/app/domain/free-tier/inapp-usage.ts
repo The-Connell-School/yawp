@@ -55,6 +55,8 @@ export type FreeAccountUsage = ReturnType<typeof buildFreeAccountUsage> & {
   renewsAt?: string;
   reporter?: UsageCount;
   classCode?: string | null;
+  /** True when the teacher is pending approval and join secrets must stay server-side. */
+  classCodeHidden?: boolean;
   classId: string | null;
   checklist: {
     classReady: boolean;
