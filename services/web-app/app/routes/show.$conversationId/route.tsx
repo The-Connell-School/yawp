@@ -45,6 +45,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 
 const CLOCK_KEY = 'yawp-show-clock';
+const ROOM_KEY = 'yawp-show-room';
 
 function readClock(): ClockMode {
   try {
@@ -66,7 +67,26 @@ export default function RunTheShowRoute() {
   const [classStart, setClassStart] = useState(() => Date.now());
   const [stepStart, setStepStart] = useState(() => Date.now());
   const [projector, setProjector] = useState(false);
+  // A teacher who mirrors this screen to the projector (one screen, no
+  // second display) hides what is theirs: notes, the clock, the times
+  // (Brian's run 4). Students then see the step and its slide.
+  const [roomView, setRoomView] = useState(false);
   useEffect(() => setClock(readClock()), []);
+  useEffect(() => {
+    try {
+      setRoomView(window.localStorage.getItem(ROOM_KEY) === 'on');
+    } catch {
+      // Off.
+    }
+  }, []);
+  function chooseRoomView(on: boolean) {
+    setRoomView(on);
+    try {
+      window.localStorage.setItem(ROOM_KEY, on ? 'on' : 'off');
+    } catch {
+      // Remembered for this visit only.
+    }
+  }
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
@@ -142,7 +162,20 @@ export default function RunTheShowRoute() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <div role="radiogroup" aria-label="Clock" className="flex items-center gap-1 rounded-xl bg-[#2A2622] p-1 text-sm">
+          <button
+            type="button"
+            data-testid="room-view"
+            aria-pressed={roomView}
+            onClick={() => chooseRoomView(!roomView)}
+            title="For a laptop screen mirrored to the projector: hides your notes and the clock"
+            className={cn(
+              'rounded-full border px-3 py-1.5 text-xs font-semibold',
+              roomView ? 'border-[#F3EDE4] bg-[#F3EDE4] text-[#1C1A17]' : 'border-white/20'
+            )}
+          >
+            {roomView ? 'Showing the class view · show my notes' : 'This screen is on the projector'}
+          </button>
+          <div role="radiogroup" aria-label="Clock" hidden={roomView} className="flex items-center gap-1 rounded-xl bg-[#2A2622] p-1 text-sm">
             <span className="px-2 text-xs text-white/60">Clock</span>
             {(['off', 'stopwatch', 'countdown'] as const).map((mode) => (
               <button
@@ -211,7 +244,7 @@ export default function RunTheShowRoute() {
                     </span>
                     <span className="flex items-center gap-1.5 text-xs text-white/60">
                       {block.isWriting ? <span aria-label="Writing" className="h-1.5 w-1.5 rounded-full bg-[#9B74CF]" /> : null}
-                      {block.minutes}′
+                      {roomView ? null : `${block.minutes}′`}
                     </span>
                   </button>
                 </li>
@@ -252,7 +285,7 @@ export default function RunTheShowRoute() {
                 <p className="text-sm font-bold uppercase tracking-[0.14em] text-[#A8482A]">
                   Now · Step {current + 1} of {blocks.length}
                 </p>
-                <div className="text-right text-sm text-[#45403A]" data-testid="show-clock">
+                <div className="text-right text-sm text-[#45403A]" data-testid="show-clock" hidden={roomView}>
                   {clock === 'off' ? (
                     <span>Planned: {step.minutes} min</span>
                   ) : clock === 'stopwatch' ? (
@@ -271,7 +304,7 @@ export default function RunTheShowRoute() {
                   )}
                 </div>
               </div>
-              {clock === 'countdown' && timer ? (
+              {clock === 'countdown' && timer && !roomView ? (
                 <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#E6E2DC]">
                   <div
                     className={cn('h-full rounded-full', timer.over > 0 ? 'bg-amber-500' : 'bg-[#3E9A84]')}
@@ -279,7 +312,7 @@ export default function RunTheShowRoute() {
                   />
                 </div>
               ) : null}
-              {clock === 'countdown' && headsUpOn && timer?.headsUp ? (
+              {clock === 'countdown' && headsUpOn && timer?.headsUp && !roomView ? (
                 <p data-testid="show-heads-up" className="mt-2 text-sm text-amber-800">
                   Two minutes left in this step.
                 </p>
@@ -296,9 +329,13 @@ export default function RunTheShowRoute() {
                 {step.title}
               </h1>
               <div className="mt-5 flex flex-1 flex-col gap-6 md:flex-row">
-                <p className="flex-1 text-lg leading-relaxed text-[#45403A] sm:text-xl">{notes[step.id]}</p>
+                {roomView ? null : (
+                  <p data-testid="show-notes" className="flex-1 text-lg leading-relaxed text-[#45403A] sm:text-xl">
+                    {notes[step.id]}
+                  </p>
+                )}
                 {deck && slideIndex != null ? (
-                  <figure className="w-full shrink-0 md:w-72">
+                  <figure className={cn('w-full shrink-0', roomView ? 'mx-auto max-w-4xl' : 'md:w-72')}>
                     <div className="aspect-video overflow-hidden rounded-xl bg-[#1C1A17]">
                       {gallery ? (
                         <GallerySlideCanvas deck={deck} index={slideIndex} />
@@ -306,13 +343,13 @@ export default function RunTheShowRoute() {
                         <TileSlideCanvas slide={deck.slides[slideIndex]!} />
                       )}
                     </div>
-                    <figcaption className="mt-1 text-xs text-[#6E665C]">
+                    <figcaption className="mt-1 text-xs text-[#6E665C]" hidden={roomView}>
                       On the projector now · slide {slideIndex + 1}
                     </figcaption>
                   </figure>
                 ) : null}
               </div>
-              {clock === 'countdown' ? (
+              {clock === 'countdown' && !roomView ? (
                 <label className="mt-4 flex items-center gap-2 text-xs text-[#6E665C]">
                   <input type="checkbox" checked={headsUpOn} onChange={() => setHeadsUpOn(!headsUpOn)} />
                   Heads-up at 2 minutes left, on this screen only
@@ -328,7 +365,7 @@ export default function RunTheShowRoute() {
               <div className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl bg-[#2A2622] px-5 py-3">
                 <span className="text-xs font-bold uppercase tracking-[0.14em] text-white/60">Up next</span>
                 <span className="truncate font-semibold">{next ? next.title : 'The end'}</span>
-                {next ? <span className="text-xs text-white/60">{next.minutes} min</span> : null}
+                {next && !roomView ? <span className="text-xs text-white/60">{next.minutes} min</span> : null}
               </div>
               <button
                 type="button"
