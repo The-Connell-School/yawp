@@ -257,6 +257,7 @@ for (const width of [390, 1440]) {
       .getByRole('dialog')
       .filter({ has: page.getByRole('heading', { name: 'New assignment' }) })
       .getByRole('button', { name: 'Close' })
+      .first()
       .click();
     await expect(page.getByRole('heading', { name: 'New assignment' })).toHaveCount(
       0
