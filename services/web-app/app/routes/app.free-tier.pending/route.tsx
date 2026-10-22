@@ -16,6 +16,14 @@ import {
   isApprovalV2Enabled,
   forwardApprovalRequest,
 } from '~/domain/free-tier/approval-v2.server';
+import { loadTeacherDeniedSurface } from '~/domain/free-tier/approval-deny.server';
+import {
+  teacherAllRequestsUsedBody,
+  teacherAskAnotherHint,
+  teacherDeniedStatusBody,
+  teacherDeniedStatusTitle,
+} from '~/domain/free-tier/admin-deny-copy';
+import { ADMIN_REDIRECT_CHAIN_CAP } from '~/domain/free-tier/admin-email-rules.server';
 import {
   approvalMailto,
   approvalSentDate,
@@ -108,6 +116,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       schoolName: true,
       email: true,
       name: true,
+      adminRedirectCount: true,
       adminApprovals: {
         where: { status: 'PENDING' },
         orderBy: { createdAt: 'desc' },
@@ -128,6 +137,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
         select: { error: true },
       })
     : null;
+  const teacherDenied = app
+    ? await loadTeacherDeniedSurface({ applicationId: app.id })
+    : null;
+  const askOpen =
+    new URL(request.url).searchParams.get('ask') === '1' ||
+    new URL(request.url).searchParams.get('ask') === 'true';
   return {
     app,
     pending,
@@ -135,6 +150,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     showExploreClassroom: await userHasPendingFreeTierTeachingLock(userId),
     approvalV2: app ? await getApprovalWaitingDetails(app) : null,
     approvalEmailFrom: getTransactionalEmailFrom(),
+    teacherDenied,
+    askOpen,
   };
 }
 
@@ -165,7 +182,22 @@ export async function action({ request }: ActionFunctionArgs) {
     where: { userId, status: { in: ['SENT', 'MANUAL_REVIEW'] } },
     select: { id: true, userId: true, organizationId: true, status: true },
   });
+  const deniedSurface = app
+    ? await loadTeacherDeniedSurface({ applicationId: app.id })
+    : null;
   if (app && intent === 'forward' && (await isApprovalV2Enabled(app))) {
+    const approvalId = String(form.get('approvalId') ?? '');
+    const currentApprovalId =
+      approvalId ||
+      deniedSurface?.denied.id ||
+      (
+        await prisma.freeTierAdminApproval.findFirst({
+          where: { applicationId: app.id, status: 'PENDING' },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true },
+        })
+      )?.id ||
+      '';
     const gate = await enforceUnauthByIpAndTarget({
       request,
       route: '/app/free-tier/pending:forward',
@@ -179,7 +211,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return await forwardApprovalRequest({
         applicationId: app.id,
         userId,
-        currentApprovalId: String(form.get('approvalId') ?? ''),
+        currentApprovalId,
         newAdminName: String(form.get('adminName') ?? ''),
         newAdminEmail: String(form.get('adminEmail') ?? ''),
         request,
@@ -260,6 +292,26 @@ function PendingDraftRequestLink({
   );
 }
 
+function TeacherAskAnotherForm({
+  approvalId,
+  busy,
+  hint,
+  open,
+}: {
+  approvalId: string;
+  busy: boolean;
+  hint: string;
+  open: boolean;
+}) {
+  if (!open) return null;
+  return (
+    <div className="flex w-full flex-col gap-3 text-left" data-testid="teacher-ask-another-form">
+      <p className="text-xs text-muted-foreground">{hint}</p>
+      <ApprovalForwardForm approvalId={approvalId} busy={busy} />
+    </div>
+  );
+}
+
 export default function FreeTierPendingRoute() {
   const {
     app,
@@ -268,16 +320,80 @@ export default function FreeTierPendingRoute() {
     showExploreClassroom,
     approvalV2,
     approvalEmailFrom,
+    teacherDenied,
+    askOpen,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const resending = navigation.state === 'submitting';
   const adminName = pending?.adminName ?? 'your administrator';
   const [forwardOpen, setForwardOpen] = useState(false);
+  const [askAnotherOpen, setAskAnotherOpen] = useState(askOpen);
 
   useEffect(() => {
     if (isForwardActionError(actionData)) setForwardOpen(true);
   }, [actionData]);
+
+  useEffect(() => {
+    if (askOpen) setAskAnotherOpen(true);
+  }, [askOpen]);
+
+  if (teacherDenied && approvalV2?.enabled) {
+    const { denied, chainCapReached } = teacherDenied;
+    const hint = teacherAskAnotherHint(
+      app?.adminRedirectCount ?? 0,
+      ADMIN_REDIRECT_CHAIN_CAP
+    );
+    return (
+      <FreeTierAuthCard
+        title={teacherDeniedStatusTitle()}
+        icon={<Clock />}
+        footer={<FreeTierSignOut />}
+      >
+        <p className="text-sm text-muted-foreground">
+          {teacherDeniedStatusBody(denied.adminName, app?.schoolName ?? 'your school')}
+        </p>
+        {chainCapReached ? (
+          <>
+            <p className="text-sm text-muted-foreground">
+              {teacherAllRequestsUsedBody()}
+            </p>
+            <FreeTierButton asChild>
+              <a href="mailto:support@yawp.school">Email support</a>
+            </FreeTierButton>
+          </>
+        ) : (
+          <>
+            {!askAnotherOpen ? (
+              <FreeTierButton type="button" onClick={() => setAskAnotherOpen(true)}>
+                Ask another administrator
+              </FreeTierButton>
+            ) : null}
+            <TeacherAskAnotherForm
+              approvalId={denied.id}
+              busy={resending}
+              hint={hint}
+              open={askAnotherOpen}
+            />
+            <FreeTierButton asChild variant="outline">
+              <a href="mailto:support@yawp.school">Email support</a>
+            </FreeTierButton>
+          </>
+        )}
+        {showExploreClassroom ? <LockedPreviewExploreButton /> : null}
+        {actionData?.ok && 'queued' in actionData ? (
+          <p role="status" className="text-sm text-muted-foreground">
+            Request sent to {actionData.adminName}!
+          </p>
+        ) : null}
+        {isForwardActionError(actionData) ? (
+          <p role="alert" className="text-sm text-destructive">
+            {approvalForwardError(actionData.reason)}
+          </p>
+        ) : null}
+      </FreeTierAuthCard>
+    );
+  }
 
   if (approvalV2) {
     const current = approvalV2.approval;

@@ -1673,3 +1673,99 @@ body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
     padding: 0 0 8px;
   }
 }
+
+.free-tier-approval-qa {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  max-width: 320px;
+  font-size: 14px;
+  line-height: 21px;
+  color: theme('colors.slate.700');
+}
+.free-tier-qa-group-label {
+  margin: 12px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: theme('colors.slate.500');
+}
+.free-tier-qa-group-label:first-child {
+  margin-top: 0;
+}
+.free-tier-qa-row {
+  border-bottom: 1px solid theme('colors.slate.200');
+}
+.free-tier-qa-trigger {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.free-tier-qa-trigger:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.free-tier-qa-chevron {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: theme('colors.slate.500');
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
+}
+.free-tier-qa-chevron-open {
+  transform: rotate(180deg);
+}
+.free-tier-qa-chevron-reduced.free-tier-qa-chevron-open {
+  transform: none;
+}
+.free-tier-qa-panel {
+  overflow: hidden;
+  transition-property: max-height, opacity;
+  transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
+}
+.free-tier-qa-panel-reduced {
+  transition: none;
+}
+.free-tier-qa-panel-inner {
+  padding-bottom: 12px;
+}
+.free-tier-qa-answer {
+  margin: 0;
+  color: theme('colors.slate.600');
+}
+.free-tier-qa-answer ul {
+  margin: 8px 0 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.free-tier-qa-privacy-list {
+  list-style: none;
+  padding-left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.free-tier-qa-privacy-list strong {
+  font-weight: 600;
+  color: theme('colors.slate.700');
+}
+
+.free-tier-deny-button {
+  margin-top: -4px;
+}

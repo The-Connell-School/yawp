@@ -16,6 +16,7 @@ import { plainTextEmailToHtml } from './email-html.server';
 import { buildDesignedAdminApprovalEmail } from './admin-approval-email.server';
 import {
   buildTeacherApprovedDesignedEmail,
+  buildTeacherDeniedDesignedEmail,
   buildTeacherReleaseDesignedEmail,
 } from '~/emails/build-free-tier-emails.server';
 import { sanitizeFreeTierEmailLogPayload } from './email-log-payload.server';
@@ -275,6 +276,60 @@ export async function sendFreeTierCongratulationsEmail(args: {
     await logEmail({
       applicationId: args.applicationId,
       kind: 'congratulations',
+      toEmail: args.teacherEmail,
+      success: false,
+      error: message,
+    });
+    return { ok: false, error: message };
+  }
+}
+
+export async function sendFreeTierTeacherDenyEmail(args: {
+  applicationId: string;
+  teacherEmail: string;
+  teacherName: string;
+  schoolName: string;
+  adminName: string;
+  statusUrl: string;
+  chainCapReached: boolean;
+}): Promise<EmailSendResult> {
+  try {
+    assertFreeTierRuntimeConfigured();
+    const designed = await buildTeacherDeniedDesignedEmail({
+      teacherName: args.teacherName,
+      adminName: args.adminName,
+      schoolName: args.schoolName,
+      statusUrl: args.statusUrl,
+      chainCapReached: args.chainCapReached,
+    });
+    const delivered = await deliverEmail({
+      to: args.teacherEmail,
+      subject: designed.subject,
+      text: designed.text,
+      html: designed.html,
+    });
+    if (!delivered.ok) {
+      await logEmail({
+        applicationId: args.applicationId,
+        kind: 'teacher_deny',
+        toEmail: args.teacherEmail,
+        success: false,
+        error: delivered.error,
+      });
+      return delivered;
+    }
+    await logEmail({
+      applicationId: args.applicationId,
+      kind: 'teacher_deny',
+      toEmail: args.teacherEmail,
+      success: true,
+    });
+    return { ok: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await logEmail({
+      applicationId: args.applicationId,
+      kind: 'teacher_deny',
       toEmail: args.teacherEmail,
       success: false,
       error: message,
