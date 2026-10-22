@@ -255,6 +255,7 @@ for (const width of [390, 1440]) {
     await capture(page, `locked-picker-${width}`);
     await page
       .getByRole('dialog')
+      .filter({ has: page.getByRole('heading', { name: 'New assignment' }) })
       .getByRole('button', { name: 'Close' })
       .click();
     await expect(page.getByRole('heading', { name: 'New assignment' })).toHaveCount(
