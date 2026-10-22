@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import * as router from 'react-router';
 import { afterAll, expect, mock, test } from 'bun:test';
+import * as router from 'react-router';
+afterAll(() => mock.restore());
 mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
   requireFreeTierEnabled: async () => {},
 }));
@@ -9,53 +10,55 @@ mock.module('~/utils/db.server', () => ({
     freeTierApplication: {
       findUnique: async () => ({
         id: 'app',
-        userId: 'teacher',
-        organizationId: null,
         status: 'SENT',
-        schoolName: 'Lincoln High',
-        name: 'Ms. Okafor',
-        email: 'okafor@example.org',
+        schoolName: 'Lincoln High School',
+        name: 'Jordan Rivera',
+        email: 'jrivera@lincolnhs.org',
       }),
     },
   },
 }));
 mock.module('~/domain/free-tier/signed-link.server', () => ({
   peekSignedLink: async () => ({ ok: true, applicationId: 'app' }),
+  applicationIdFromSignedToken: () => 'app',
 }));
-mock.module('~/domain/free-tier/approval-v2.server', () => ({
-  isApprovalV2Enabled: async () => true,
-  forwardApprovalByToken: async () => ({ ok: true, queued: true }),
+mock.module('~/domain/free-tier/admin-link-gate.server', () => ({
+  fetchFreeTierApplicationTerminalGate: async () => null,
+  resolveAdminLinkTerminalGate: async () => null,
+  resolveAdminLinkReplacedGate: async () => null,
 }));
 const approve = mock(async () => ({ ok: true }));
 mock.module('~/domain/free-tier/approval-flow.server', () => ({
   completeSchoolAdminApproval: approve,
 }));
-let approvalV2 = true;
 mock.module('react-router', () => ({
   ...router,
   useLoaderData: () => ({
     ok: true,
-    approvalV2,
-    teacherName: 'Ms. Okafor',
-    schoolName: 'Lincoln High',
     token: 'token',
+    teacherName: 'Jordan Rivera',
+    schoolName: 'Lincoln High School',
+    teacherEmail: 'jrivera@lincolnhs.org',
   }),
   useActionData: () => undefined,
+  useNavigation: () => ({ state: 'idle' }),
   Form: ({ children, ...props }: any) => <form {...props}>{children}</form>,
+  Link: ({ children, to }: any) => <a href={to}>{children}</a>,
 }));
 const { default: Page, loader, action } = await import('./route');
-afterAll(() => mock.restore());
-test('valid signed administrator request includes flagged layout and teacher details', async () => {
+
+test('valid signed administrator request includes teacher and school', async () => {
   const result = await loader({
     request: new Request('http://localhost/free/admin/approve?t=token'),
   } as never);
   expect(result).toMatchObject({
     ok: true,
-    approvalV2: true,
-    teacherEmail: 'okafor@example.org',
+    teacherName: 'Jordan Rivera',
+    schoolName: 'Lincoln High School',
   });
 });
-test('flagged approval rejects a blank role on the server without consuming a link', async () => {
+
+test('approval rejects a blank role on the server without consuming a link', async () => {
   const result = await action({
     request: new Request('http://localhost/free/admin/approve', {
       method: 'POST',
@@ -70,20 +73,11 @@ test('flagged approval rejects a blank role on the server without consuming a li
   expect(approve).not.toHaveBeenCalled();
 });
 
-test('calendar appears only in the flagged administrator learn-more section with a safe fallback', () => {
-  approvalV2 = true;
+test('approve page uses the designed heading and forward link', () => {
   const html = renderToStaticMarkup(<Page />);
-  expect(html).toContain('I&#x27;d like to learn more first');
   expect(html).toContain(
-    'src="https://app.usemotion.com/meet/brian-connell/ryxkqvr"'
+    'Approve Yawp! for Jordan Rivera at Lincoln High School'
   );
-  expect(html).toContain('title="Book a time with Brian"');
-  expect(html).toContain('loading="lazy"');
-  expect(html).toContain('height="700"');
-  expect(html).toContain('target="_blank" rel="noopener noreferrer"');
-  expect(html).toContain('Ms. Okafor&#x27;s request will stay open.');
-  approvalV2 = false;
-  const legacy = renderToStaticMarkup(<Page />);
-  expect(legacy).not.toContain('<iframe');
-  expect(legacy).not.toContain('Open the calendar');
+  expect(html).not.toContain('I&#x27;d like to learn more first');
+  expect(html).toContain('Forward this request');
 });

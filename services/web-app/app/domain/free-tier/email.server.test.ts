@@ -119,7 +119,7 @@ describe('approval recipients and fixed copy', () => {
         expect(delivered.html).not.toContain(args.personalNote);
         expect(delivered.text).toContain(args.approveUrl);
         expect(delivered.text).toContain(args.notRightPersonUrl);
-        expect(delivered.text).toContain('link expires in 14 days');
+        expect(delivered.text).toContain('This link works for 14 days');
         expect(logEmail.mock.calls.at(-1)?.[0].data.success).toBe(true);
       });
     }

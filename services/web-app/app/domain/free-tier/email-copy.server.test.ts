@@ -37,28 +37,26 @@ test('admin approval email body exposes signed URLs for QA logs', () => {
   });
 });
 
-test('forwarded admin email greets the new administrator', () => {
+test('forwarded admin email names the forwarder', () => {
   const body = renderAdminApprovalEmailBody({
     teacherName: 'Ada',
     teacherEmail: 'ada@example.edu',
     schoolName: 'Example HS',
     approveUrl: 'https://yawp.school/a',
     notRightPersonUrl: 'https://yawp.school/n',
-    adminRecipientName: 'Principal Pat',
+    forwardedByAdminName: 'Principal Pat',
   });
-  expect(body).toContain('Hi Principal Pat,');
-  expect(body).not.toContain('Hi Wrong Person');
+  expect(body).toContain('Principal Pat forwarded this to you');
 });
 
-test('reminder email includes reminder lead and copy version', () => {
+test('reminder email includes reminder lead', () => {
   const body = renderAdminApprovalEmailBody({
     teacherName: 'Ada',
     teacherEmail: 'ada@example.edu',
     schoolName: 'Example HS',
     approveUrl: 'https://yawp.school/a',
     notRightPersonUrl: 'https://yawp.school/n',
-    reminderLead: 'This is a reminder about the approval request below.',
+    reminder: true,
   });
   expect(body).toContain('This is a reminder about the approval request below.');
-  expect(body).not.toContain('Copy version:');
 });
