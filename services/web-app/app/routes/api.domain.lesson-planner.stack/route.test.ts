@@ -8,12 +8,13 @@ const prisma = {
   lessonPlanMessage: { findFirst: mock() },
   lessonPlanMaterial: { updateMany: mock() },
   lessonShareLink: { count: mock(async () => 0) },
+  user: { findUnique: mock(async (_input: any) => ({ name: 'Brian Smith' })) },
   lessonPlanTemplate: { create: mock(async (_input: any) => ({ id: 'tpl-1' })) },
 };
 const ensureStudentVersion = mock();
 const share = {
   createShareLink: mock(async (_input: any) => ({ id: 'link-1', token: 'tok_abcdefghijklmnopqrstuvwxyz' })),
-  emailLessonLink: mock(async (_input: any) => ({ status: 'success' })),
+  emailLessonLink: mock(async (_input: any) => ({ sent: true })),
   revokeShareLinks: mock(async (_id: string, _audience?: string) => undefined),
   rewriteForAudience: mock(async (_input: any) => '## Minute 0 · Hook'),
 };
@@ -203,8 +204,26 @@ describe('Post to your class and Send this lesson (stack page redesign)', () => 
       note: 'Fire drill at 10.',
       body: '## Minute 0 · Hook',
     });
-    expect(share.emailLessonLink.mock.calls.at(-1)![0]).toMatchObject({ to: 'sub@school.org', note: 'Fire drill at 10.' });
+    expect(share.emailLessonLink.mock.calls.at(-1)![0]).toMatchObject({
+      to: 'sub@school.org',
+      audience: 'sub',
+      title: 'Day One',
+      note: 'Fire drill at 10.',
+      teacherName: 'Brian Smith',
+    });
     expect(response.data.sentTo).toBe('sub@school.org');
+    expect(response.data.sent).toBe(true);
+  });
+
+  test("a preview, where no email goes out, says so (Brian's run 4, item 5)", async () => {
+    getLessonPlannerReviewFlags.mockResolvedValue({ stackV3: true, share: true });
+    loadStackV3.mockResolvedValue({
+      packet: { title: 'Day One', className: 'English 10' },
+      v3: { timing: { blocks: [] }, steps: [], standards: [], lessonDate: null },
+    });
+    share.emailLessonLink.mockResolvedValueOnce({ sent: false });
+    const response = await post({ intent: 'send-lesson', conversationId: 'plan-1', audience: 'admin', recipient: 'p@school.org', includes: 'plan' });
+    expect(response.data).toMatchObject({ sent: false });
   });
 
   test('a bad address is refused, and so is a 21st send in a day', async () => {

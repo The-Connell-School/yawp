@@ -608,7 +608,7 @@ export default function LessonPlannerHowItWorksRoute() {
                   },
                   {
                     title: 'How much is writing',
-                    body: 'A meter shows how much of class students spend writing, from the steps they write in.',
+                    body: 'A meter shows how much of class students spend writing: class starters, exit tickets, Daily Pages, thesis work and reflections, in Yawp! or on paper. It is the one number everywhere, on what you send too.',
                   },
                   {
                     title: 'Change it in a line',
@@ -676,7 +676,9 @@ export default function LessonPlannerHowItWorksRoute() {
                     times, a catch-up page for a student who missed class, what
                     the class did and why for a family (with ways to talk about
                     it at dinner), or the plan for an admin, with the standards
-                    you named and an invitation to observe.
+                    you named and an invitation to observe. Each gets an email
+                    with a link; no login needed. A preview of Yawp! never sends
+                    email and says so; copy the link to send it yourself.
                   </Copy>
                 </Row>
               ) : null}
@@ -704,6 +706,7 @@ export default function LessonPlannerHowItWorksRoute() {
                       'Next step moves the slides on the projector with you.',
                       'A clock if you want one: stopwatch or countdown, off by default.',
                       'Running long is calm: a quiet note on your screen, never on the wall.',
+                      'One screen, mirrored to the projector? Turn on “This screen is on the projector”: your notes and the clock hide, and the class sees the step and its slide.',
                     ]}
                   />
                 </Row>
