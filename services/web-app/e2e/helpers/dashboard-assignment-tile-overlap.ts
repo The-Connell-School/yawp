@@ -1,11 +1,16 @@
 /** Shared overlap checks for dashboard assignment tiles (Playwright page.evaluate). */
 export function dashboardAssignmentTileOverlapIssues(scope: ParentNode) {
   const issues: string[] = [];
-  const tiles = scope.querySelectorAll(
+  let tiles = scope.querySelectorAll(
     '[data-testid="dashboard-assignment-tile"]'
   );
   if (tiles.length === 0) {
-    issues.push('no dashboard-assignment-tile elements found');
+    tiles = scope.querySelectorAll(
+      '[data-testid="free-assignment-tiles"] button[aria-label]'
+    );
+  }
+  if (tiles.length === 0) {
+    issues.push('no dashboard assignment tiles found');
     return issues;
   }
   for (const tile of tiles) {

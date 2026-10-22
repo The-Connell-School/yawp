@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { cn } from '~/utils/misc';
 
 /** Tiles v2: 56px mobile, 64px desktop (was 72 / 88). */
@@ -23,6 +24,43 @@ export function assignmentTypeTileFooterClassName(extra?: string) {
 
 export const assignmentTypeTileNameTestId = 'assignment-type-tile-name';
 export const assignmentTypeTileMetaTestId = 'assignment-type-tile-meta';
+export const dashboardAssignmentTileTestId = 'dashboard-assignment-tile';
+
+/** Dashboard Assignments grid tiles: name on its own row, meta + icon below (never overlaps). */
+export function DashboardAssignmentTileFooter({
+  label,
+  meta,
+  metaClassName,
+  trailing,
+}: {
+  label: string;
+  meta: ReactNode;
+  metaClassName?: string;
+  trailing: ReactNode;
+}) {
+  return (
+    <div className="flex w-full min-w-0 flex-col gap-y-0.5 px-3 py-1.5 sm:py-2">
+      <span
+        className="block min-w-0 w-full text-left text-[15px] font-medium leading-snug"
+        data-testid={assignmentTypeTileNameTestId}
+      >
+        {label}
+      </span>
+      <div className="flex w-full min-w-0 items-baseline justify-end gap-x-2">
+        <span
+          className={cn(
+            assignmentTypeTileMetaClassName('ml-0 text-[13px]'),
+            metaClassName
+          )}
+          data-testid={assignmentTypeTileMetaTestId}
+        >
+          {meta}
+        </span>
+        {trailing}
+      </div>
+    </div>
+  );
+}
 
 export function assignmentTypeTileNameClassName(extra?: string) {
   return cn('min-w-0 flex-1 max-w-full text-left leading-snug', extra);

@@ -52,6 +52,7 @@ test('FreeAssignmentTiles renders site-license locked tiles after entitled rows'
     </StaticRouter>
   );
   expect(html).toContain('data-testid="free-assignment-tiles"');
+  expect(html).toContain('data-testid="dashboard-assignment-tile"');
   expect(html).toContain('Daily Pages');
   expect(html).toContain('site-license-lock-button');
   expect(html).not.toContain('Available with a site license.');

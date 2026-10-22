@@ -31,14 +31,11 @@ import type { SiteLicenseLockedAssignmentTile as SiteLicenseLockedTile } from '~
 import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
 import {
   assignmentTypeTileCardClassName,
-  assignmentTypeTileFooterClassName,
   assignmentTypeTileImageClassName,
   assignmentTypeTileImageWrapClassName,
-  assignmentTypeTileMetaClassName,
-  assignmentTypeTileNameClassName,
-  assignmentTypeTileMetaTestId,
-  assignmentTypeTileNameTestId,
   assignmentTypeTileTrailingIconClassName,
+  DashboardAssignmentTileFooter,
+  dashboardAssignmentTileTestId,
 } from '~/components/assignment-type-tile-layout';
 import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
