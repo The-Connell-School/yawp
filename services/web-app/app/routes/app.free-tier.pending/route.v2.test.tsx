@@ -129,10 +129,15 @@ test('pending page offers draft request mailto, explore, and forward without leg
   expect(html).toContain('start%20writing%20with%20Yawp!');
   expect(html).not.toContain('with%20Yawp!.');
   expect(html).toContain('free-tier-draft-request');
+  expect(html).not.toContain('lucide-mail');
   expect(html).toContain('Explore my classroom');
+  const progressIdx = html.indexOf('aria-label="Approval progress"');
+  const personIdx = html.indexOf('free-tier-person-email');
   const draftIdx = html.indexOf('pending-draft-request');
   const exploreIdx = html.indexOf('locked-preview-explore');
-  expect(draftIdx).toBeGreaterThan(-1);
+  expect(progressIdx).toBeGreaterThan(-1);
+  expect(personIdx).toBeGreaterThan(progressIdx);
+  expect(draftIdx).toBeGreaterThan(personIdx);
   expect(exploreIdx).toBeGreaterThan(draftIdx);
   expect(html).not.toContain('Resend reminder');
   expect(html).not.toContain('Draft an email');
