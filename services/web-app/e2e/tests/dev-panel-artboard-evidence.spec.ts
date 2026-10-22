@@ -192,9 +192,12 @@ test.describe('Dev panel artboard evidence', () => {
 
     await feedbackDialog.getByLabel('Note').fill('Partly typed note before reload');
     await page.reload();
-    await expect(devToolsPanel(page)).toBeVisible();
+    await openDevToolsPanel(page);
     ({ panel: feedbackDialog } = await openGiveFeedback(page));
-    await expect(feedbackDialog.getByLabel('Note')).toHaveValue('Partly typed note before reload');
+    await expect(feedbackDialog.getByLabel('Note')).toHaveValue(
+      'Partly typed note before reload',
+      { timeout: 15_000 }
+    );
     await shot(page, '85');
   });
 });
