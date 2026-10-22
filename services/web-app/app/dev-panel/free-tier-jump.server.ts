@@ -115,28 +115,11 @@ async function upsertApplication(
   });
 }
 
-async function seedMonthlyLimits(organizationId: string) {
-  const value = JSON.stringify({
-    studentSeatCap: 35,
-    lessonPlannerMonthly: 5,
-    reporterMonthly: 2,
-    version: 1,
-    updatedAt: new Date().toISOString(),
-    updatedByEmail: 'dev-panel@yawp.local',
-  });
-  await prisma.setting.upsert({
-    where: { name: 'free_tier.limits.v1' },
-    create: { name: 'free_tier.limits.v1', value, valueType: 'json' },
-    update: { value },
-  });
-}
-
 async function seedMonthlyUsage(
   organizationId: string,
   lessonPlannerUsed: number,
   reporterUsed: number
 ) {
-  await seedMonthlyLimits(organizationId);
   const now = new Date();
   const period = lessonPlanMonthWindow(now).gte.toISOString();
   const prefix = (feature: 'lesson-planner' | 'reporter') =>

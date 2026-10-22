@@ -16,6 +16,27 @@ import { isLocalDevAuthEnabled } from '~/utils/local-dev-auth.server';
 
 export type DevPanelOrganization = { id: string; name: string };
 
+export async function assertDevPanelOrganizationInSeatScope(
+  request: Request,
+  organizationId: string
+): Promise<Response | null> {
+  if (!isPreviewDevLoginAccessCodeRequired()) return null;
+  const seat = await getPreviewAccessSeat(request);
+  if (!seat) {
+    return Response.json(
+      { error: 'Preview access code required.' },
+      { status: 401 }
+    );
+  }
+  if (seat.organizationId !== organizationId) {
+    return Response.json(
+      { error: 'Organization is not in your preview seat.' },
+      { status: 403 }
+    );
+  }
+  return null;
+}
+
 export async function listDevPanelOrganizations(
   request: Request
 ): Promise<DevPanelOrganization[]> {

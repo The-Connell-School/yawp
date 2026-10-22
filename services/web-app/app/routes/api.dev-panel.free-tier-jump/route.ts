@@ -1,4 +1,5 @@
 import type { ActionFunctionArgs } from 'react-router';
+import { assertDevPanelOrganizationInSeatScope } from '~/dev-panel/dev-panel-orgs.server';
 import { assertDevPanelRoute } from '~/dev-panel/dev-panel-route-guard.server';
 import { executeFreeTierStateJump } from '~/dev-panel/free-tier-jump.server';
 import { getUserId } from '~/utils/auth.server';
@@ -16,6 +17,11 @@ export async function action({ request }: ActionFunctionArgs) {
   if (!stateId || !organizationId) {
     return Response.json({ error: 'Missing state or organization.' }, { status: 400 });
   }
+  const orgBlocked = await assertDevPanelOrganizationInSeatScope(
+    request,
+    organizationId
+  );
+  if (orgBlocked) return orgBlocked;
   const currentUserId = await getUserId(request);
   const result = await executeFreeTierStateJump({
     request,
