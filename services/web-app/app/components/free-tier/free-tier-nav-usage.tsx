@@ -5,6 +5,7 @@ import {
 import {
   usageNavLevelFromCount,
   usageNavMobileWarningDot,
+  type UsageNavLevel,
 } from '~/domain/free-tier/usage-nav-meter';
 import { UsageNavRing } from '~/components/free-tier/usage-nav-ring';
 import type { SidebarNavLink } from '~/routes/app/sidebar-nav';
@@ -16,7 +17,7 @@ export function freeTierNavMobileWarningDot(
   loading: boolean
 ): boolean {
   if (!usage.usageNavMetersAvailable || loading) return false;
-  const levels = [];
+  const levels: UsageNavLevel[] = [];
   if (usage.lessonPlannerMonthlyMetering || usage.monthly) {
     levels.push(
       usageNavLevelFromCount(lessonPlannerMonthlyUsage(usage))

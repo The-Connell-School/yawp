@@ -24,6 +24,7 @@ const RING_SIZE = 18;
 const STROKE = 2;
 const R = (RING_SIZE - STROKE) / 2;
 const C = 2 * Math.PI * R;
+type HoverTimer = ReturnType<typeof setTimeout>;
 
 type UsageNavRingProps = {
   feature: UsageNavFeature;
@@ -56,9 +57,10 @@ export function UsageNavRing({
 }: UsageNavRingProps) {
   const [open, setOpen] = useState(false);
   const [animatedPercent, setAnimatedPercent] = useState<number | null>(null);
+  const [reducedMotion, setReducedMotion] = useState(false);
   const mounted = useRef(false);
-  const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const closeTimer = useRef<typeof setTimeout> | null>(null);
+  const openTimer = useRef<HoverTimer | null>(null);
+  const closeTimer = useRef<HoverTimer | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const labelId = useId();
@@ -69,9 +71,15 @@ export function UsageNavRing({
       ? usageNavLevelFromCount(count)
       : 'hidden';
   const targetPercent = loading || !count ? 0 : usagePercentLeft(count);
-  const reducedMotion =
-    typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReducedMotion(media.matches);
+    const onChange = () => setReducedMotion(media.matches);
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, []);
 
   useEffect(() => {
     if (!mounted.current) {
@@ -114,10 +122,11 @@ export function UsageNavRing({
     animatedPercent === null
       ? 0
       : (Math.max(0, Math.min(100, animatedPercent)) / 100) * C;
-  const ariaLabel =
-    loading || !count
-      ? 'Loading usage'
-      : usageNavAccessibleName({ feature, count, renewsAtIso });
+  const ariaLabel = loading
+    ? 'Loading usage'
+    : count
+      ? usageNavAccessibleName({ feature, count, renewsAtIso })
+      : 'Usage';
 
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'Escape') {
@@ -129,64 +138,50 @@ export function UsageNavRing({
   return (
     <span
       className={cn('relative inline-flex shrink-0', className)}
-      onMouseEnter={scheduleOpen}
-      onMouseLeave={scheduleClose}
+      onMouseEnter={loading ? undefined : scheduleOpen}
+      onMouseLeave={loading ? undefined : scheduleClose}
     >
+      {loading ? (
+        <span role="status" aria-live="polite" className="sr-only">
+          Loading usage
+        </span>
+      ) : null}
+      {loading ? (
+        <span
+          className="inline-flex items-center justify-center"
+          aria-hidden
+          data-testid={`usage-nav-ring-${feature}`}
+        >
+          <UsageNavRingSvg
+            dash={0}
+            terracotta={false}
+            animate={false}
+            reducedMotion
+          />
+        </span>
+      ) : (
       <button
         ref={triggerRef}
         type="button"
-        tabIndex={loading ? -1 : 0}
         aria-label={ariaLabel}
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-labelledby={open ? labelId : undefined}
-        disabled={loading}
-        className={cn(
-          'inline-flex items-center justify-center rounded-full outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring',
-          loading && 'pointer-events-none'
-        )}
+        className="inline-flex items-center justify-center rounded-full outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
         onFocus={() => setOpen(true)}
         onClick={() => setOpen((value) => !value)}
         onKeyDown={onKeyDown}
         data-testid={`usage-nav-ring-${feature}`}
       >
-        <svg
-          width={RING_SIZE}
-          height={RING_SIZE}
-          viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
-          className={cn(
-            '-rotate-90',
-            !loading &&
-              !reducedMotion &&
-              'transition-[stroke-dashoffset] duration-[400ms] ease-out'
-          )}
-          aria-hidden
-        >
-          <circle
-            cx={RING_SIZE / 2}
-            cy={RING_SIZE / 2}
-            r={R}
-            fill="none"
-            className="stroke-muted"
-            strokeWidth={STROKE}
-          />
-          {!loading && level !== 'all-used' ? (
-            <circle
-              cx={RING_SIZE / 2}
-              cy={RING_SIZE / 2}
-              r={R}
-              fill="none"
-              strokeWidth={STROKE}
-              strokeLinecap="round"
-              className={cn(
-                terracotta ? 'stroke-primary' : 'stroke-foreground'
-              )}
-              strokeDasharray={`${dash} ${C}`}
-            />
-          ) : null}
-        </svg>
-        <span className="sr-only">{ariaLabel}</span>
+        <UsageNavRingSvg
+          dash={level === 'all-used' ? 0 : dash}
+          terracotta={terracotta}
+          animate
+          reducedMotion={reducedMotion}
+          showArc={level !== 'all-used'}
+        />
       </button>
+      )}
       {open && !loading && count ? (
         <div
           ref={popoverRef}
@@ -194,9 +189,11 @@ export function UsageNavRing({
           id={labelId}
           className={cn(
             'absolute z-50 w-[min(280px,calc(100vw-24px))] rounded-xl border bg-popover p-4 text-sm shadow-md',
-            'animate-in fade-in duration-150 slide-in-from-left-1',
+            'animate-in fade-in duration-150',
+            !reducedMotion && 'slide-in-from-left-1',
             popoverAlign === 'end' ? 'left-full top-1/2 ml-2 -translate-y-1/2' : 'right-full top-1/2 mr-2 -translate-y-1/2',
-            'data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=closed]:duration-100'
+            'data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=closed]:duration-100',
+            reducedMotion && 'data-[state=closed]:slide-in-from-left-0'
           )}
           onMouseEnter={scheduleOpen}
           onMouseLeave={scheduleClose}
@@ -222,6 +219,54 @@ export function UsageNavRing({
         </div>
       ) : null}
     </span>
+  );
+}
+
+function UsageNavRingSvg({
+  dash,
+  terracotta,
+  animate,
+  reducedMotion,
+  showArc = true,
+}: {
+  dash: number;
+  terracotta: boolean;
+  animate: boolean;
+  reducedMotion: boolean;
+  showArc?: boolean;
+}) {
+  return (
+    <svg
+      width={RING_SIZE}
+      height={RING_SIZE}
+      viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
+      className={cn(
+        '-rotate-90',
+        animate && !reducedMotion && 'transition-all duration-[400ms] ease-out'
+      )}
+      aria-hidden
+    >
+      <circle
+        cx={RING_SIZE / 2}
+        cy={RING_SIZE / 2}
+        r={R}
+        fill="none"
+        className="stroke-muted"
+        strokeWidth={STROKE}
+      />
+      {showArc && dash > 0 ? (
+        <circle
+          cx={RING_SIZE / 2}
+          cy={RING_SIZE / 2}
+          r={R}
+          fill="none"
+          strokeWidth={STROKE}
+          strokeLinecap="round"
+          className={cn(terracotta ? 'stroke-primary' : 'stroke-foreground')}
+          strokeDasharray={`${dash} ${C}`}
+        />
+      ) : null}
+    </svg>
   );
 }
 
