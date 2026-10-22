@@ -23,6 +23,8 @@ export type TimedStep = {
   /** Null: the planner gave no time; the type's default is suggested. */
   minutes: number | null;
   isWriting: boolean;
+  /** What its writing is called ("Exit Ticket"), when it is writing. */
+  writingName?: string;
 };
 
 export type TimedBlock = TimedStep & {
@@ -73,7 +75,7 @@ export function stackTiming(steps: TimedStep[], period: number | null): StackTim
   const writing = blocks.filter((block) => block.isWriting);
   const writingMinutes = writing.reduce((sum, block) => sum + block.minutes, 0);
   const base = Math.max(period ?? 0, total);
-  const sources = [...new Set(writing.map((block) => STEP_TYPE_LABELS[block.type]))];
+  const sources = [...new Set(writing.map((block) => block.writingName ?? STEP_TYPE_LABELS[block.type]))];
   return {
     blocks,
     total,
@@ -83,7 +85,7 @@ export function stackTiming(steps: TimedStep[], period: number | null): StackTim
     status: statusText(total, period),
     writingMinutes,
     writingPercent: base > 0 ? Math.round((writingMinutes / base) * 100) : 0,
-    writingSources: sources.join(' + '),
+    writingSources: sources.join(' · '),
   };
 }
 

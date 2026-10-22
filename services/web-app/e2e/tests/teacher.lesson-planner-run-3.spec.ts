@@ -391,7 +391,7 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await expect(page.getByTestId('time-status')).toHaveText('Right on time');
       await expect(page.getByTestId('time-block')).toHaveCount(8);
       await expect(page.getByTestId('writing-strip')).toContainText('26% of class is writing · 13 min');
-      await expect(page.getByTestId('writing-strip')).toContainText('From Class Starter + Daily Pages + Closing');
+      await expect(page.getByTestId('writing-strip')).toContainText('From Class Starter · Daily Pages · Exit Ticket');
       const cards = page.getByTestId('run-card');
       await expect(cards).toHaveCount(8);
       await expect(cards.nth(1).getByTestId('run-card-start')).toHaveText('05');

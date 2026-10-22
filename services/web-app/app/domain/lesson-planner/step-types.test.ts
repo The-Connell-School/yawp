@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { isLectureStep, isWritingStep, parseStepType, stepChipText, stepTypeFor } from './step-types';
+import { isLectureStep, isWritingStep, writingName, parseStepType, stepChipText, stepTypeFor } from './step-types';
 
 describe('stepTypeFor (stack page redesign, writing time)', () => {
   test('kinds that say what they are', () => {
@@ -77,4 +77,11 @@ describe('a sticky-note check is a check for understanding, not an exit ticket (
     expect(stepTypeFor({ kind: 'step', title })).not.toBe('closing');
     expect(proseWritingTask(title, content)).toBeNull();
   });
+});
+
+test("what a writing step's writing is called (Brian's run 4, item 6)", () => {
+  expect(writingName({ kind: 'class-starter', stepType: 'class_starter' })).toBe('Class Starter');
+  expect(writingName({ kind: 'step', stepType: 'closing', title: 'Closing', content: 'Exit ticket: what does Holden avoid?' })).toBe('Exit Ticket');
+  expect(writingName({ kind: 'step', stepType: 'activity', title: 'Wrap-up', content: 'A written reflection on paper.' })).toBe('Reflection');
+  expect(writingName({ kind: 'step', stepType: 'thesis_essay', title: 'Module 1' })).toBe('Thesis Essay');
 });

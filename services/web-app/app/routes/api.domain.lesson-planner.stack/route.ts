@@ -298,7 +298,7 @@ export async function action({ request }: ActionFunctionArgs) {
       });
       const url = `${getDomainUrl(request)}/l/${token}`;
       const teacher = await prisma.user.findUnique({ where: { id: access.userId }, select: { name: true } });
-      const { sent } = await emailLessonLink({
+      const { delivery } = await emailLessonLink({
         to: data.recipient,
         audience: data.audience,
         title: loaded.packet.title,
@@ -308,8 +308,8 @@ export async function action({ request }: ActionFunctionArgs) {
         teacherName: teacher?.name ?? null,
         observe: data.audience === 'admin' && includes.includes('observe'),
       });
-      // On a preview no email goes out; say so rather than "Sent".
-      return dataResponse({ ok: true, url, sentTo: data.recipient, sent });
+      // Sent, a preview (no email goes out), or failed: the page says which.
+      return dataResponse({ ok: true, url, sentTo: data.recipient, delivery });
     }
 
     case 'save-template': {

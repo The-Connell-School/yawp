@@ -935,7 +935,7 @@ test.describe("Lesson Planner — Brian's second run", () => {
       expect(response.headers()['content-disposition']).toContain('Conclusion Paragraph - Lesson plan.docx');
       const document = zipParts(await response.body()).get('word/document.xml')!;
       for (const text of [
-        'YAWP! LESSON PLAN · THE CRITICAL ESSAY',
+        'Yawp! LESSON PLAN · THE CRITICAL ESSAY',
         'Land the plane',
         '5 of the writing process: conclusion',
         '[ Add the standards this lesson covers ]',

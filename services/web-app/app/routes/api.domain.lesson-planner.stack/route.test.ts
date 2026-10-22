@@ -14,7 +14,7 @@ const prisma = {
 const ensureStudentVersion = mock();
 const share = {
   createShareLink: mock(async (_input: any) => ({ id: 'link-1', token: 'tok_abcdefghijklmnopqrstuvwxyz' })),
-  emailLessonLink: mock(async (_input: any) => ({ sent: true })),
+  emailLessonLink: mock(async (_input: any) => ({ delivery: 'sent' })),
   revokeShareLinks: mock(async (_id: string, _audience?: string) => undefined),
   rewriteForAudience: mock(async (_input: any) => '## Minute 0 · Hook'),
 };
@@ -212,7 +212,7 @@ describe('Post to your class and Send this lesson (stack page redesign)', () => 
       teacherName: 'Brian Smith',
     });
     expect(response.data.sentTo).toBe('sub@school.org');
-    expect(response.data.sent).toBe(true);
+    expect(response.data.delivery).toBe('sent');
   });
 
   test("a preview, where no email goes out, says so (Brian's run 4, item 5)", async () => {
@@ -221,9 +221,9 @@ describe('Post to your class and Send this lesson (stack page redesign)', () => 
       packet: { title: 'Day One', className: 'English 10' },
       v3: { timing: { blocks: [] }, steps: [], standards: [], lessonDate: null },
     });
-    share.emailLessonLink.mockResolvedValueOnce({ sent: false });
+    share.emailLessonLink.mockResolvedValueOnce({ delivery: 'preview' });
     const response = await post({ intent: 'send-lesson', conversationId: 'plan-1', audience: 'admin', recipient: 'p@school.org', includes: 'plan' });
-    expect(response.data).toMatchObject({ sent: false });
+    expect(response.data).toMatchObject({ delivery: 'preview' });
   });
 
   test('a bad address is refused, and so is a 21st send in a day', async () => {

@@ -11,6 +11,7 @@ import { Link } from 'react-router';
 import { Check, ChevronLeft, CirclePlay, Pause, Play, X } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/utils/misc';
+import { BrandSafe } from '~/components/brand/brand-safe';
 
 /**
  * The way into a guide, for a feature's page header. It shrinks to its icon
@@ -216,7 +217,7 @@ export function GuideList({
 export function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
     <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
-      {children}
+      <BrandSafe>{children}</BrandSafe>
     </p>
   );
 }

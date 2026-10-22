@@ -57,7 +57,7 @@ describe('buildKitPlan: the lesson plan spec v1 data model', () => {
   test('kicker, title and subtitle match the deck; the lesson color is its primary', () => {
     const kit = plan();
     expect(kit.accent).toBe('9C4A22');
-    expect(kit.kicker).toBe('YAWP! LESSON PLAN · THE CRITICAL ESSAY');
+    expect(kit.kicker).toBe('Yawp! LESSON PLAN · THE CRITICAL ESSAY');
     expect(kit.title).toBe('Conclusion Paragraph');
     expect(kit.subtitle).toBe('Land the plane');
     expect(kit.footer).toBe('Conclusion Paragraph lesson plan');
@@ -110,7 +110,7 @@ describe('buildKitPlan: the lesson plan spec v1 data model', () => {
     const doc = buildLessonPlanDoc({ title: 'Day 3: Hooks', className: 'English 9', periodMinutes: 50, entries: entries.slice(0, 2) });
     const kit = buildKitPlan({ doc, entries: entries.slice(0, 2) });
     expect(kit.title).toBe('Hooks');
-    expect(kit.kicker).toBe('YAWP! LESSON PLAN');
+    expect(kit.kicker).toBe('Yawp! LESSON PLAN');
     expect(kit.meta[0]).toEqual(['Class', 'English 9 · 50 minutes']);
     expect(kit.accent).toMatch(/^[0-9A-F]{6}$/);
   });

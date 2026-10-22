@@ -26,7 +26,7 @@ describe('stackTiming', () => {
     const timing = stackTiming(DAY_ONE, 50);
     expect(timing.writingMinutes).toBe(10);
     expect(timing.writingPercent).toBe(20);
-    expect(timing.writingSources).toBe('Class Starter + Daily Pages');
+    expect(timing.writingSources).toBe('Class Starter · Daily Pages');
   });
 
   test('writing % is over the planned total when the stack runs longer', () => {

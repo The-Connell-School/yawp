@@ -156,7 +156,7 @@ export function PostToClass({ conversationId, title }: { conversationId: string;
 }
 
 export function SendLesson({ conversationId, standards = [] }: { conversationId: string; standards?: string[] }) {
-  const fetcher = useFetcher<{ ok?: boolean; sentTo?: string; sent?: boolean; url?: string; error?: string }>();
+  const fetcher = useFetcher<{ ok?: boolean; sentTo?: string; delivery?: 'sent' | 'preview' | 'failed'; url?: string; error?: string }>();
   const [audience, setAudience] = useState<ShareAudience>('sub');
   const setup = AUDIENCE_SETUP[audience];
   const [checked, setChecked] = useState<Record<ShareAudience, Set<ShareItem>>>(() =>
@@ -276,11 +276,17 @@ export function SendLesson({ conversationId, standards = [] }: { conversationId:
           <Send size={14} /> {fetcher.state !== 'idle' ? 'Writing it for them…' : setup.button}
         </button>
         {fetcher.data?.sentTo ? (
-          <p data-testid="send-done" className="text-xs font-semibold text-[#1F5C4E]">
-            {fetcher.data.sent === false
+          <p
+            data-testid="send-done"
+            data-delivery={fetcher.data.delivery}
+            className={cn('text-xs font-semibold', fetcher.data.delivery === 'failed' ? 'text-red-700' : 'text-[#1F5C4E]')}
+          >
+            {fetcher.data.delivery === 'preview'
               ? // Previews log email and never deliver it (Brian's run 4, item 5).
                 `No email went out from this preview: the link is ready to send to ${fetcher.data.sentTo} yourself.`
-              : `Sent to ${fetcher.data.sentTo}.`}{' '}
+              : fetcher.data.delivery === 'failed'
+                ? `The email to ${fetcher.data.sentTo} did not go out. The link works: copy it and send it yourself.`
+                : `Sent to ${fetcher.data.sentTo}.`}{' '}
             {fetcher.data.url ? (
               <a href={fetcher.data.url} target="_blank" rel="noreferrer" data-testid="send-link" className="underline">
                 See what they see

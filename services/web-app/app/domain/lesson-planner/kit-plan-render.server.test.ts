@@ -6,7 +6,7 @@ import type { KitPlan } from './kit-plan';
 const plan: KitPlan = {
   accent: '9C4A22',
   colors: ['#9C4A22', '#3F5A73', '#7D6118'],
-  kicker: 'YAWP! LESSON PLAN · THE CRITICAL ESSAY',
+  kicker: 'Yawp! LESSON PLAN · THE CRITICAL ESSAY',
   title: 'Conclusion Paragraph',
   subtitle: 'Land the plane',
   footer: 'Conclusion Paragraph lesson plan',
@@ -104,7 +104,7 @@ describe('renderKitPlanDocx: the lesson plan spec v1 Word file', () => {
   test('the spec’s text: kicker, info lines, standards placeholder, slides line, colored runs', async () => {
     const { doc } = await documentXml();
     for (const text of [
-      'YAWP! LESSON PLAN · THE CRITICAL ESSAY',
+      'Yawp! LESSON PLAN · THE CRITICAL ESSAY',
       'Land the plane',
       '5 of the writing process: conclusion',
       '[ Add the standards this lesson covers ]',

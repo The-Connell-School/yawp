@@ -116,16 +116,23 @@ export async function rewriteForAudience({
 /** Ids the email util returns when it logs an email instead of sending it. */
 const NOT_SENT = new Set(['preview-captured', 'mocked', 'local-captured']);
 
+export type LessonEmailDelivery = 'sent' | 'preview' | 'failed';
+
 /**
- * Emails the link. `sent` is false on a PR preview (and locally), where email
- * is logged and never delivered, so the page can say so instead of "Sent"
- * (Brian's run 4, item 5).
+ * Emails the link and says what happened (Brian's run 4, item 5): sent;
+ * preview, where email is logged and never delivered (PR previews, local);
+ * or failed. The page says which, never "Sent" for an email that did not go.
  */
 export async function emailLessonLink(
   options: Parameters<typeof lessonEmail>[0] & { to: string }
-): Promise<{ sent: boolean }> {
+): Promise<{ delivery: LessonEmailDelivery }> {
   const { subject, text, html } = lessonEmail(options);
-  const result = await sendEmail({ to: options.to, subject, text, html });
-  const id = result.status === 'success' ? (result.data as { id?: string } | undefined)?.id : undefined;
-  return { sent: result.status === 'success' && !NOT_SENT.has(id ?? '') };
+  try {
+    const result = await sendEmail({ to: options.to, subject, text, html });
+    if (result.status !== 'success') return { delivery: 'failed' };
+    const id = (result.data as { id?: string } | undefined)?.id;
+    return { delivery: NOT_SENT.has(id ?? '') ? 'preview' : 'sent' };
+  } catch {
+    return { delivery: 'failed' };
+  }
 }

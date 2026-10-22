@@ -125,6 +125,33 @@ export function isWritingStep({
   return PROSE_WRITING.test(title) || PROSE_WRITING.test(content);
 }
 
+/**
+ * What a writing step's writing is called, for "From Class Starter · Exit
+ * Ticket" (Brian's run 4, item 6): what students write, in or out of Yawp!.
+ */
+export function writingName({
+  kind,
+  stepType,
+  title = '',
+  content = '',
+}: {
+  kind: string;
+  stepType: StepType;
+  title?: string;
+  content?: string;
+}): string {
+  const text = `${title}\n${content}`;
+  if (kind === 'class-starter' || stepType === 'class_starter') return 'Class Starter';
+  if (kind === 'daily-pages' || stepType === 'daily_pages') return 'Daily Pages';
+  if (kind === 'thesis-module' || stepType === 'thesis_essay') return 'Thesis Essay';
+  if (kind === 'exit-ticket' || /\bexit (?:ticket|slip)/i.test(text)) return 'Exit Ticket';
+  if (/\bquick[- ]?write/i.test(text)) return 'Quick Write';
+  if (/\bfree[- ]?write/i.test(text)) return 'Free Write';
+  if (/\bjournal/i.test(text)) return 'Journal';
+  if (/\breflection/i.test(text)) return 'Reflection';
+  return STEP_TYPE_LABELS[stepType];
+}
+
 /** Students writing, said in a step's words. */
 const PROSE_WRITING =
   /\b(?:exit (?:ticket|slip)s?|class starter|daily pages|thesis|quick[- ]?writes?|free[- ]?writes?|journal(?:s|ing)?|(?:written|writing a) reflection|reflection (?:writing|paragraph)|students write|write (?:a|one|two|three) (?:sentence|paragraph|line)s?|write for (?:\d+|one|two|three|four|five|a few) min)/i;

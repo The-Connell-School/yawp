@@ -22,6 +22,7 @@ import { Button } from '~/components/ui/button';
 import { cn } from '~/utils/misc';
 import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
+import { BrandSafe } from '~/components/brand/brand-safe';
 
 const MEDIA = '/img/lesson-planner-guide';
 
@@ -100,7 +101,7 @@ function Clip({ name, label }: { name: string; label: string }) {
 function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
     <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
-      {children}
+      <BrandSafe>{children}</BrandSafe>
     </p>
   );
 }

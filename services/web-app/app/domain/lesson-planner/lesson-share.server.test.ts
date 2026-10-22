@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = { lessonShareLink: { findUnique: mock(), create: mock(), updateMany: mock() } };
 mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/email.server', () => ({ sendEmail: mock() }));
-const { createShareLink, findShareLink, hashShareToken, newShareToken } = await import('./lesson-share.server');
+const sendEmail = mock();
+mock.module('~/utils/email.server', () => ({ sendEmail }));
+const { createShareLink, emailLessonLink, findShareLink, hashShareToken, newShareToken } = await import('./lesson-share.server');
 
 const LIVE = {
   id: 'l1',
@@ -49,5 +50,20 @@ describe('share links: the link is the key (stack page redesign)', () => {
     prisma.lessonShareLink.findUnique.mockResolvedValue(LIVE);
     expect(await findShareLink(token)).toMatchObject({ id: 'l1' });
     expect(prisma.lessonShareLink.findUnique.mock.calls.at(-1)![0].where).toEqual({ tokenHash: hashShareToken(token) });
+  });
+});
+
+describe("emailLessonLink: says what happened (Brian's run 4, item 5)", () => {
+  const send = () =>
+    emailLessonLink({ to: 'sub@school.org', audience: 'sub', title: 'Day One', className: null, link: 'https://x/l/t', note: null, teacherName: null });
+  test('sent, a preview that logs instead of sending, or failed', async () => {
+    sendEmail.mockResolvedValueOnce({ status: 'success', data: { id: 'msg_123' } });
+    expect(await send()).toEqual({ delivery: 'sent' });
+    sendEmail.mockResolvedValueOnce({ status: 'success', data: { id: 'preview-captured' } });
+    expect(await send()).toEqual({ delivery: 'preview' });
+    sendEmail.mockResolvedValueOnce({ status: 'error', error: new Error('nope') });
+    expect(await send()).toEqual({ delivery: 'failed' });
+    sendEmail.mockRejectedValueOnce(new Error('network'));
+    expect(await send()).toEqual({ delivery: 'failed' });
   });
 });

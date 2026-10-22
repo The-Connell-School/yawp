@@ -7,7 +7,7 @@
 import type { LessonPacket } from './lesson-packet';
 import type { StackCreateLink } from './stack-create-link';
 import { stackEntryKey } from './stack-order';
-import { isWritingStep, stepTypeFor, type StepType } from './step-types';
+import { isWritingStep, stepTypeFor, writingName, type StepType } from './step-types';
 import type { TimedStep } from './stack-timing';
 
 export type StackStep = TimedStep & {
@@ -93,6 +93,7 @@ export function stackSteps({
         label: meta?.label ?? null,
         minutes,
         isWriting,
+        writingName: isWriting ? writingName({ kind, stepType: type, title, content: section.content }) : undefined,
         hasHandout:
           meta?.hasHandout ?? (STUDENT_KINDS.has(kind) || section.audience === 'student' || isWriting),
         excerpt: excerptOf(section.content),

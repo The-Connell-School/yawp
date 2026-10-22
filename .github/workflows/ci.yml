@@ -934,6 +934,7 @@ jobs:
             app/domain/lesson-planner/step-handout.test.ts \
             app/domain/lesson-planner/lesson-share.test.ts \
             app/domain/lesson-planner/lesson-share.server.test.ts \
+            app/domain/brand.test.ts \
             app/domain/lesson-planner/run-show.test.ts \
             app/domain/lesson-planner/slide-deck-gallery.test.ts \
             app/domain/lesson-planner/deck-gallery.test.ts \

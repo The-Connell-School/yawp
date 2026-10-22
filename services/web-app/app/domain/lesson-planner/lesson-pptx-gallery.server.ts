@@ -28,6 +28,7 @@ import {
 } from './deck-gallery';
 import type { SlideDeck } from './slide-deck';
 import { notesWithMinutes } from './tile-theme';
+import { upperKeepingBrand } from '~/domain/brand';
 
 const LAYOUT = { name: 'YAWP_GALLERY_16x9', width: 13.333, height: 7.5 };
 const SERIF = 'Georgia';
@@ -105,7 +106,7 @@ const sans = (text: string, size: number, color: string, extra: PptxGenJS.TextPr
   options: { fontFace: SANS, fontSize: pt(size), color, ...extra },
 });
 const caps = (text: string, size: number, color: string): Run =>
-  sans(text.toUpperCase(), size, color, { bold: true, charSpacing: size * 0.16 * 0.75 });
+  sans(upperKeepingBrand(text), size, color, { bold: true, charSpacing: size * 0.16 * 0.75 });
 
 /** Text with its color marks, as runs in one face. */
 function marked(ctx: Ctx, text: string, make: (text: string, color: string, extra?: PptxGenJS.TextPropsOptions) => Run, color: string, accentWord?: string): Run[] {

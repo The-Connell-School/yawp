@@ -13,6 +13,7 @@ import { deckColors, normalizedHex, withoutColorMarks } from './deck-colors';
 import { WRITING_PROCESS_STEPS, withoutLessonNumber } from './deck-gallery';
 import type { LessonPlanDoc, LessonPlanEntry, LessonPlanStep } from './lesson-plan-doc';
 import { readSlideDeck, type SlideDeck } from './slide-deck';
+import { upperKeepingBrand } from '~/domain/brand';
 
 export type KitListItem = string | { t: string; sub: string[] };
 
@@ -168,7 +169,7 @@ export function buildKitPlan({ doc, entries }: { doc: LessonPlanDoc; entries: Le
   return {
     accent,
     colors,
-    kicker: ['YAWP! LESSON PLAN', deck?.unit?.toUpperCase()].filter(Boolean).join(' · '),
+    kicker: upperKeepingBrand(['Yawp! Lesson Plan', deck?.unit].filter(Boolean).join(' · ')),
     title,
     subtitle,
     footer: `${title} lesson plan`,

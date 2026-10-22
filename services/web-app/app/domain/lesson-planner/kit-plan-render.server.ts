@@ -29,6 +29,7 @@ import {
 import PDFDocument from 'pdfkit';
 import { KIT_PLAN_MORE_STANDARDS, KIT_PLAN_PROGRAM, KIT_PLAN_STANDARDS_PLACEHOLDER, kitRuns, type KitBlock, type KitListItem, type KitPlan } from './kit-plan';
 import { registerKitFonts } from './kit-fonts.server';
+import { upperKeepingBrand } from '~/domain/brand';
 
 /** Spec "Type and color". */
 export const KIT_PLAN_COLORS = {
@@ -447,7 +448,7 @@ export async function renderKitPlanPdf(plan: KitPlan): Promise<Uint8Array> {
     pdf.x = margin;
   };
   const caps = (value: string, x: number, size: number, color: string) =>
-    pdf.font(F.sansBold).fontSize(size).fillColor(color).text(value.toUpperCase(), x, pdf.y, { characterSpacing: 1.2, width });
+    pdf.font(F.sansBold).fontSize(size).fillColor(color).text(upperKeepingBrand(value), x, pdf.y, { characterSpacing: 1.2, width });
 
   caps(plan.kicker, margin, 7.5, accent);
   pdf.moveDown(0.5).font(F.serif).fontSize(26).fillColor(hex(C.ink)).text(plan.title, margin, pdf.y, { width });

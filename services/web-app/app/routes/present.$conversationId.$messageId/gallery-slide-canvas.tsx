@@ -21,6 +21,7 @@ import {
   type GallerySlidePlan,
 } from '~/domain/lesson-planner/deck-gallery';
 import type { SlideDeck } from '~/domain/lesson-planner/slide-deck';
+import { BrandSafe } from '~/components/brand/brand-safe';
 
 /** Georgia and Arial first; these only stand in where a machine lacks them. */
 export const GALLERY_FONTS_HREF = GALLERY_FALLBACK_FONTS_HREF;
@@ -137,7 +138,7 @@ function RunningHead({ deck, tone, art, left = 80, right = 80, swatch = true }: 
           <img aria-hidden alt="" src={art.crops.swatch} style={{ width: u(26), height: u(26), flexShrink: 0, objectFit: 'cover' }} />
         ) : null}
         <span className="truncate" style={{ ...CAPS, fontSize: u(13), color: tone.muted }}>
-          {galleryRunningHead(deck)}
+          <BrandSafe>{galleryRunningHead(deck)}</BrandSafe>
         </span>
       </div>
       <div style={{ marginTop: u(14), borderTop: `1px solid ${tone.rule}` }} />
@@ -250,7 +251,7 @@ function TemplateBody({ plan, deck, tone, art, colors }: { plan: GallerySlidePla
       return (
         <>
           <div className="absolute flex flex-col justify-center" style={{ left: u(80), right: art ? u(560) : u(80), top: u(80), bottom: u(80) }}>
-            {deck.unit ? <p style={{ ...CAPS, fontSize: u(15), color: tone.muted, marginBottom: u(28) }}>{deck.unit}</p> : null}
+            {deck.unit ? <p style={{ ...CAPS, fontSize: u(15), color: tone.muted, marginBottom: u(28) }}><BrandSafe>{deck.unit}</BrandSafe></p> : null}
             <h1 style={{ ...SERIF, fontSize: u(slide.title.length > 24 ? 84 : 112), lineHeight: 0.92, letterSpacing: '-0.02em' }}>{slide.title}</h1>
             {slide.subtitle ? (
               <p style={{ ...SERIF, fontStyle: 'italic', fontSize: u(42), lineHeight: 1.1, color: tone.accent, marginTop: u(18) }}>{slide.subtitle}</p>
