@@ -177,14 +177,6 @@ function GiveFeedbackSheet({
     void captureFeedbackScreenshot().then(setScreenshot).catch(() => setScreenshot(null));
   }, [state.subSheet]);
 
-  useEffect(() => {
-    if (state.subSheet !== 'give-feedback') return;
-    const frame = window.requestAnimationFrame(() => {
-      document.getElementById(noteId)?.focus();
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [noteId, state.subSheet]);
-
   if (state.subSheet !== 'give-feedback' || !path) return null;
 
   const submit = async () => {
