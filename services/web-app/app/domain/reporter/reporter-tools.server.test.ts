@@ -1091,3 +1091,9 @@ describe('cold vs warm writes', () => {
     ).toBe(true);
   });
 });
+
+describe('REPORTER_TOOLS copy', () => {
+  test('writes the name as Yawp! in every tool description', () => {
+    expect(JSON.stringify(REPORTER_TOOLS)).not.toMatch(/\bYawp\b(?!!)/);
+  });
+});

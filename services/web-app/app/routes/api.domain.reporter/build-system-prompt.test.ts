@@ -137,3 +137,17 @@ describe('cold vs warm write guidance', () => {
     expect(entry!.prompt.toLowerCase()).toContain('tutor');
   });
 });
+
+describe('buildReporterSystemPrompt — the name is written Yawp!', () => {
+  test('introduces itself as Yawp! Reporter and never writes a bare Yawp', () => {
+    const prompt = buildReporterSystemPrompt({
+      teacherName: 'Ms. Rivera',
+      organizationName: 'Connell School',
+    });
+    expect(prompt).toContain('You are Yawp! Reporter');
+    expect(prompt).not.toMatch(/\bYawp\b(?!!)/);
+    for (const { label, prompt: ask } of RECOMMENDED_REPORTER_PROMPTS) {
+      expect(`${label} ${ask}`).not.toMatch(/\bYawp\b(?!!)/);
+    }
+  });
+});

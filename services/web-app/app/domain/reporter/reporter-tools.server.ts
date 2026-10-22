@@ -81,7 +81,7 @@ export const REPORTER_TOOLS: ReporterTool[] = [
   {
     name: 'get_class_grade_report',
     description:
-      "Get a grade summary for one class: each student's average percentage across released, graded submissions, plus the class average. Only released grades are included. Also returns `writeModes`: the class split into cold writes (assignments with the Yawp tutor OFF — independent work) and warm writes (tutor ON — AI-supported work), with each student's cold and warm averages on their row.",
+      "Get a grade summary for one class: each student's average percentage across released, graded submissions, plus the class average. Only released grades are included. Also returns `writeModes`: the class split into cold writes (assignments with the Yawp! tutor OFF — independent work) and warm writes (tutor ON — AI-supported work), with each student's cold and warm averages on their row.",
     input_schema: {
       type: 'object',
       properties: {
