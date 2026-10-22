@@ -133,6 +133,7 @@ EOF
   cat >"$ROOT/services/web-app/.env" <<EOF
 NODE_ENV=development
 YAWP_ENVIRONMENT="${YAWP_ENVIRONMENT:-development}"
+PREVIEW_SLUG="${PREVIEW_SLUG:-}"
 TESTER_FEEDBACK_ENABLED=true
 DATABASE_URL="${DATABASE_URL}"
 DATABASE_PATH=".local-dev.sqlite"

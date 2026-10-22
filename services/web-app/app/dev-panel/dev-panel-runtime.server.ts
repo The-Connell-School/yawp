@@ -18,7 +18,8 @@ export function isDevPanelRuntimeEnabled(
   env: NodeJS.ProcessEnv = process.env
 ): boolean {
   if (!isDevPanelBuildEnabled(env)) return false;
-  if (isDemoEnvironment(env)) return true;
+  const yawp = String(env.YAWP_ENVIRONMENT ?? '').trim().toLowerCase();
+  if (yawp === 'demo' || isDemoEnvironment(env)) return true;
   return isLocalDevPanelEnvironment(env);
 }
 

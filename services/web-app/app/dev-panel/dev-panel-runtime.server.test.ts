@@ -28,6 +28,16 @@ describe('dev panel runtime gate', () => {
     expect(devPanelEnvBadge(env)).toBe('Demo');
   });
 
+  test('YAWP_ENVIRONMENT=demo enables panel without preview slug', () => {
+    const env = {
+      YAWP_ENVIRONMENT: 'demo',
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgresql://u:p@remote:5432/yawp',
+    } as unknown as NodeJS.ProcessEnv;
+    expect(isDevPanelRuntimeEnabled(env)).toBe(true);
+    expect(devPanelEnvBadge(env)).toBe('Demo');
+  });
+
   test('local dev enables panel', () => {
     const env = {
       NODE_ENV: 'development',
