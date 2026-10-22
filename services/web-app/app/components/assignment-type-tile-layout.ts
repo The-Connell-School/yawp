@@ -24,7 +24,7 @@ export function assignmentTypeTileFooterClassName(extra?: string) {
 export const assignmentTypeTileNameTestId = 'assignment-type-tile-name';
 
 export function assignmentTypeTileNameClassName(extra?: string) {
-  return cn('min-w-0 flex-1 text-left leading-snug', extra);
+  return cn('min-w-0 text-left leading-snug', extra);
 }
 
 export function assignmentTypeTileMetaClassName(extra?: string) {

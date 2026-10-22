@@ -130,10 +130,10 @@ async function expectTileNamesWrapOnWordBoundaries(
         for (const node of nodes) {
           const el = node as HTMLElement;
           const text = el.textContent ?? '';
+          const words = text.trim().split(/\s+/).filter(Boolean);
           if (el.scrollWidth > el.clientWidth + 1) {
             issues.push(`horizontal overflow: "${text}"`);
           }
-          const words = text.trim().split(/\s+/).filter(Boolean);
           const textNode = el.firstChild;
           if (!words.length || !textNode || textNode.nodeType !== Node.TEXT_NODE) {
             continue;
@@ -160,10 +160,10 @@ async function expectTileNamesWrapOnWordBoundaries(
         for (const node of nodes) {
           const el = node as HTMLElement;
           const text = el.textContent ?? '';
+          const words = text.trim().split(/\s+/).filter(Boolean);
           if (el.scrollWidth > el.clientWidth + 1) {
             issues.push(`horizontal overflow: "${text}"`);
           }
-          const words = text.trim().split(/\s+/).filter(Boolean);
           const textNode = el.firstChild;
           if (!words.length || !textNode || textNode.nodeType !== Node.TEXT_NODE) {
             continue;
