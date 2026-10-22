@@ -5,12 +5,12 @@ import {
   EMAIL_BANNER_BG,
   EMAIL_CARD_BG,
   EMAIL_CARD_BORDER,
+  EMAIL_CARD_PAD_X,
   EMAIL_CODE_BG,
   EMAIL_DIVIDER,
   EMAIL_FOREGROUND,
   EMAIL_IDENTITY_BG,
   EMAIL_LINK,
-  EMAIL_LOGO_CELL_BG,
   EMAIL_MUTED,
   EMAIL_PAGE_BG,
   EMAIL_PRIMARY,
@@ -19,6 +19,7 @@ import {
 } from '../brand';
 import { escapeHtml } from '../escape';
 import { EMAIL_STYLES, PREHEADER_PAD } from './email-styles';
+import { padX } from './spacing';
 
 export type IdentityRow = {
   label: string;
@@ -130,7 +131,9 @@ export function YawpEmailLayout({
                             />
                             {banner ? (
                               <tr>
-                                <td style={cellPad(0, 24, 0, 24)}>{banner}</td>
+                                <td className="yawp-pad-x" style={padX(0, 0)}>
+                                  {banner}
+                                </td>
                               </tr>
                             ) : null}
                             {celebrationHeadline ? (
@@ -139,19 +142,15 @@ export function YawpEmailLayout({
                             {headline ? (
                               <tr>
                                 <td
-                                  className="yawp-headline yawp-text"
+                                  className="yawp-headline yawp-text yawp-pad-x"
                                   style={{
-                                    ...cellPad(
-                                      celebrationHeadline ? 20 : 24,
-                                      24,
-                                      0,
-                                      24
-                                    ),
+                                    ...padX(celebrationHeadline ? 20 : 24, 0),
                                     fontFamily: FONT_SERIF,
                                     fontSize: '34px',
                                     lineHeight: '40px',
                                     fontWeight: 600,
                                     color: EMAIL_FOREGROUND,
+                                    textAlign: 'left',
                                   }}
                                 >
                                   {headline}
@@ -161,14 +160,14 @@ export function YawpEmailLayout({
                             {children}
                             {showBrianSignOff ? (
                               <tr>
-                                <td style={cellPad(24, 24, 0, 24)}>
+                                <td className="yawp-pad-x" style={padX(24, 0)}>
                                   <BrianSignOff />
                                 </td>
                               </tr>
                             ) : null}
                             {linkFallbackUrl ? (
                               <tr>
-                                <td style={cellPad(24, 24, 24, 24)}>
+                                <td className="yawp-pad-x" style={padX(24, 24)}>
                                   <LinkFallback url={linkFallbackUrl} />
                                 </td>
                               </tr>
@@ -240,11 +239,12 @@ function LogoHeader({
     <>
       <tr>
         <td
-          align="center"
-          bgcolor={EMAIL_LOGO_CELL_BG}
+          align="left"
+          bgcolor={EMAIL_CARD_BG}
+          className="yawp-pad-x yawp-logo-cell"
           style={{
-            ...cellPad(24, 24, 16, 24),
-            backgroundColor: EMAIL_LOGO_CELL_BG,
+            ...padX(32, 16),
+            backgroundColor: EMAIL_CARD_BG,
           }}
         >
           <img
@@ -273,7 +273,7 @@ function LogoHeader({
         </td>
       </tr>
       <tr>
-        <td style={cellPad(0, 24, 0, 24)}>
+        <td className="yawp-pad-x" style={padX(0, 0)}>
           <table
             role="presentation"
             width="100%"
@@ -332,10 +332,10 @@ function CelebrationBand({ text }: { text: string }) {
     <tr>
       <td
         bgcolor={EMAIL_PRIMARY}
-        className="yawp-celebration"
+        className="yawp-celebration yawp-pad-x"
         style={{
           backgroundColor: EMAIL_PRIMARY,
-          padding: '20px 24px',
+          padding: `20px ${EMAIL_CARD_PAD_X}px`,
           fontFamily: FONT_SERIF,
           fontSize: '34px',
           lineHeight: '40px',
@@ -356,12 +356,14 @@ export function EmailBodyBlocks({ paragraphs }: { paragraphs: React.ReactNode[] 
         <tr key={index}>
           <td
             className="yawp-text"
+            className="yawp-pad-x"
             style={{
-              ...cellPad(index === 0 ? 20 : 20, 24, 0, 24),
+              ...padX(index === 0 ? 20 : 20, 0),
               fontFamily: FONT_SANS,
               fontSize: '16px',
               lineHeight: '26px',
               color: EMAIL_FOREGROUND,
+              textAlign: 'left',
             }}
           >
             {paragraph}
@@ -377,13 +379,15 @@ export function EmailMutedLead({ children }: { children: React.ReactNode }) {
     <tr>
       <td
         className="yawp-muted"
+        className="yawp-pad-x"
         style={{
-          ...cellPad(20, 24, 0, 24),
+          ...padX(20, 0),
           fontFamily: FONT_SANS,
           fontSize: '15px',
           lineHeight: '22px',
           fontStyle: 'italic',
           color: EMAIL_MUTED,
+          textAlign: 'left',
         }}
       >
         {children}
@@ -395,7 +399,7 @@ export function EmailMutedLead({ children }: { children: React.ReactNode }) {
 export function IdentityCard({ rows }: { rows: IdentityRow[] }) {
   return (
     <tr>
-      <td style={cellPad(20, 24, 0, 24)}>
+      <td className="yawp-pad-x" style={padX(20, 0)}>
         <table
           role="presentation"
           width="100%"
@@ -469,7 +473,7 @@ export function AboutYawpList({
 }) {
   return (
     <tr>
-      <td style={cellPad(20, 24, 0, 24)}>
+      <td className="yawp-pad-x" style={padX(20, 0)}>
         <div
           className="yawp-text"
           style={{
@@ -479,6 +483,7 @@ export function AboutYawpList({
             fontWeight: 700,
             color: EMAIL_FOREGROUND,
             paddingBottom: '8px',
+            textAlign: 'left',
           }}
         >
           {label}
@@ -545,7 +550,7 @@ export function CodeBlock({
   const digits = code.replace(/\s+/g, '');
   return (
     <tr>
-      <td style={cellPad(20, 24, 0, 24)}>
+      <td className="yawp-pad-x" style={padX(20, 0)}>
         <table
           role="presentation"
           width="100%"
@@ -619,7 +624,7 @@ export function PersonalNoteBlock({
 }) {
   return (
     <tr>
-      <td style={cellPad(20, 24, 0, 24)}>
+      <td className="yawp-pad-x" style={padX(20, 0)}>
         <table
           role="presentation"
           width="100%"
@@ -681,13 +686,13 @@ export function PillButton({
   const safeHref = escapeHtml(href);
   return (
     <tr>
-      <td align="center" style={cellPad(24, 24, 0, 24)}>
+      <td align="left" className="yawp-pad-x" style={padX(24, 0)}>
         <table
           role="presentation"
           cellPadding={0}
           cellSpacing={0}
           className="yawp-btn-wrap"
-          style={{ margin: '0 auto' }}
+          align="left"
         >
           <tbody>
             <tr>
@@ -745,18 +750,18 @@ export function SecondaryLink({
   return (
     <tr>
       <td
-        align="center"
-        className="yawp-muted"
+        align="left"
+        className="yawp-pad-x yawp-text"
         style={{
-          ...cellPad(16, 24, 0, 24),
+          ...padX(16, 0),
           fontFamily: FONT_SANS,
-          fontSize: '15px',
-          lineHeight: '22px',
-          color: EMAIL_MUTED,
-          textAlign: 'center',
+          fontSize: '16px',
+          lineHeight: '26px',
+          color: EMAIL_FOREGROUND,
+          textAlign: 'left',
         }}
       >
-        {before}{' '}
+        {before ? `${before} ` : null}
         <a href={href} style={{ color: EMAIL_LINK, textDecoration: 'underline' }}>
           {linkLabel}
         </a>
@@ -765,19 +770,20 @@ export function SecondaryLink({
   );
 }
 
+/** 14px muted copy below CTAs (admin link expiry, etc.). */
 export function FinePrint({ children }: { children: React.ReactNode }) {
   return (
     <tr>
       <td
-        align="center"
-        className="yawp-muted"
+        align="left"
+        className="yawp-pad-x yawp-muted"
         style={{
-          ...cellPad(16, 24, 0, 24),
+          ...padX(16, 0),
           fontFamily: FONT_SANS,
           fontSize: '14px',
           lineHeight: '20px',
           color: EMAIL_MUTED,
-          textAlign: 'center',
+          textAlign: 'left',
         }}
       >
         {children}

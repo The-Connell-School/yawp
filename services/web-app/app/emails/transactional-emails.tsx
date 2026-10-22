@@ -52,7 +52,9 @@ export function TeacherReleaseEmail(props: {
         ]}
       />
       <PillButton label="Get started" href={props.joinUrl} />
-      <FinePrint>This link is just for you and expires in 30 days.</FinePrint>
+      <EmailBodyBlocks
+        paragraphs={[<>This link is just for you and expires in 30 days.</>]}
+      />
       <EmailBodyBlocks
         paragraphs={[
           <>
@@ -386,7 +388,7 @@ export function ClassInviteEmail(props: {
         ]}
       />
       <PillButton label="Join class" href={props.joinUrl} />
-      <FinePrint>This invitation expires in 3 days.</FinePrint>
+      <EmailBodyBlocks paragraphs={[<>This invitation expires in 3 days.</>]} />
     </YawpEmailLayout>
   );
 }
@@ -419,7 +421,7 @@ export function OrgTeacherInviteEmail(props: {
         ]}
       />
       <PillButton label="Accept invitation" href={props.acceptUrl} />
-      <FinePrint>This invitation expires in 3 days.</FinePrint>
+      <EmailBodyBlocks paragraphs={[<>This invitation expires in 3 days.</>]} />
     </YawpEmailLayout>
   );
 }
@@ -457,7 +459,11 @@ export function SchoolSetupInviteEmail(props: {
         <PersonalNoteBlock label="A note from Yawp!" note={note} />
       ) : null}
       <PillButton label="Accept invitation" href={props.acceptUrl} />
-      <FinePrint>This invitation expires in {props.expiresInDays} days.</FinePrint>
+      <EmailBodyBlocks
+        paragraphs={[
+          <>This invitation expires in {props.expiresInDays} days.</>,
+        ]}
+      />
     </YawpEmailLayout>
   );
 }

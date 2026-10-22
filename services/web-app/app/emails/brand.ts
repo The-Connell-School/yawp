@@ -8,8 +8,13 @@ export const EMAIL_LINK = '#1f7cda';
 export const EMAIL_BANNER_BG = '#f3e4de';
 export const EMAIL_IDENTITY_BG = '#f7f5ee';
 export const EMAIL_CODE_BG = '#f0ece4';
+/** Gmail dark-mode logo cell (sticky 10); light header matches card white. */
 export const EMAIL_LOGO_CELL_BG = '#f7f5ee';
 export const EMAIL_DIVIDER = '#e6e2d6';
+
+/** Horizontal padding inside the card (desktop / mobile via `.yawp-pad-x`). */
+export const EMAIL_CARD_PAD_X = 48;
+export const EMAIL_CARD_PAD_X_MOBILE = 20;
 
 export const FONT_SERIF =
   "'Cormorant Garamond', Georgia, serif";

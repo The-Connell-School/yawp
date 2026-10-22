@@ -1,7 +1,7 @@
 export const EMAIL_STYLES = `
 @media only screen and (max-width: 480px) {
   .yawp-container { width: 100% !important; }
-  .yawp-card-pad { padding-left: 20px !important; padding-right: 20px !important; }
+  .yawp-pad-x { padding-left: 20px !important; padding-right: 20px !important; }
   .yawp-headline { font-size: 28px !important; line-height: 34px !important; }
   .yawp-logo-light, .yawp-logo-dark { width: 96px !important; height: 49px !important; }
   .yawp-btn-wrap { width: 100% !important; }
@@ -23,8 +23,10 @@ export const EMAIL_STYLES = `
   .yawp-logo-light { display: none !important; max-height: 0 !important; overflow: hidden !important; }
   .yawp-logo-dark { display: block !important; max-height: none !important; }
   .yawp-footer { color: #b8b4a8 !important; }
+  .yawp-logo-cell { background-color: #2a2720 !important; }
 }
 [data-ogsc] .yawp-page { background-color: #1a1814 !important; }
+[data-ogsc] .yawp-logo-cell { background-color: #f7f5ee !important; }
 [data-ogsc] .yawp-card { background-color: #2a2720 !important; }
 [data-ogsc] .yawp-text { color: #f7f5ee !important; }
 [data-ogsc] .yawp-muted { color: #b8b4a8 !important; }

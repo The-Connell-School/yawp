@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright';
+import { startEmailAssetServer } from '../app/emails/local-asset-server';
 import {
   buildAdminApprovalDesignedEmail,
   buildTeacherApprovedDesignedEmail,
@@ -16,8 +17,6 @@ import {
   buildSignInCodeEmail,
   buildWelcomeVerifyEmail,
 } from '../app/emails/build-account-emails.server';
-
-process.env.PRIMARY_APP_URL = 'https://yawp.test';
 
 const outDir =
   process.env.EMAIL_SCREENSHOT_DIR ?? '/opt/cursor/artifacts/email-screenshots';
@@ -158,12 +157,15 @@ async function captures(): Promise<Capture[]> {
 }
 
 async function screenshot(page: import('playwright').Page, html: string, file: string) {
-  await page.setContent(html, { waitUntil: 'load' });
+  await page.setContent(html, { waitUntil: 'networkidle' });
   await page.screenshot({ path: file, fullPage: true });
 }
 
 async function main() {
   await mkdir(outDir, { recursive: true });
+  const publicRoot = path.join(import.meta.dir, '../public');
+  const assetServer = await startEmailAssetServer(publicRoot);
+  process.env.PRIMARY_APP_URL = assetServer.origin;
   const browser = await chromium.launch();
   const desktop = await browser.newPage({ viewport: { width: 600, height: 1200 } });
   const mobile = await browser.newPage({ viewport: { width: 390, height: 1400 } });
@@ -197,9 +199,10 @@ async function main() {
   );
 
   await browser.close();
+  await assetServer.close();
   await writeFile(
     path.join(outDir, 'manifest.json'),
-    JSON.stringify({ outDir, logoBase: 'https://yawp.test/img/' }, null, 2)
+    JSON.stringify({ outDir, logoBase: `${assetServer.origin}/img/` }, null, 2)
   );
 }
 
