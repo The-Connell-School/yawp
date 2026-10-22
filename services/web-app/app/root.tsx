@@ -45,6 +45,12 @@ import posthog from 'posthog-js';
 import omit from 'lodash/omit';
 import { getMembershipId } from './cookies/membership-id.server.ts';
 import { LocalDevEnvironmentBar } from './components/local-dev-environment-bar.tsx';
+import { DevPanelMount } from './dev-panel/dev-panel-entry.tsx';
+import { devPanelRestoreInlineScript } from './dev-panel/dev-panel-restore-inline.ts';
+import {
+  devPanelEnvBadge,
+  isDevPanelRuntimeEnabled,
+} from './dev-panel/dev-panel-runtime.server.ts';
 import { isLocalDevAuthEnabled } from './utils/local-dev-auth.server.ts';
 import { isBlackboardLtiMockUiEnabled } from './utils/blackboard-lti-mock-ui.server.ts';
 import { useContrastPreference } from './routes/api.preferences.contrast/route.tsx';
@@ -130,6 +136,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
         previewAccessGateEnabled: isPreviewDevLoginAccessCodeRequired(),
         previewAccessSeat: null,
         blackboardLtiMockEnabled: false,
+        devPanelEnabled: false,
+        devPanelEnvBadge: 'Dev' as const,
         lessonPlannerEnabled: false,
         impersonation: { isReadOnly: false, impersonatorUserId: null },
         toast: null,
@@ -261,6 +269,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       previewAccessGateEnabled: isPreviewDevLoginAccessCodeRequired(),
       previewAccessSeat,
       blackboardLtiMockEnabled: isBlackboardLtiMockUiEnabled(),
+      devPanelEnabled: isDevPanelRuntimeEnabled(),
+      devPanelEnvBadge: devPanelEnvBadge(),
       impersonation,
       internalImpersonation: internal ? { ...internal, email: user?.email ?? internal.userId } : null,
       toast,
@@ -310,6 +320,15 @@ function Document({
         />
         <meta name="theme-color" content="#ffffff" />
         <Links />
+        {typeof __YAWP_DEV_PANEL_BUILD__ !== 'undefined' &&
+        __YAWP_DEV_PANEL_BUILD__ ? (
+          <script
+            nonce={nonce}
+            dangerouslySetInnerHTML={{
+              __html: devPanelRestoreInlineScript(),
+            }}
+          />
+        ) : null}
       </head>
       <body style={internal ? { paddingTop: '4rem' } : undefined}>
         {internal ? (
@@ -419,7 +438,13 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
       env={data.ENV}
       contrastPreference={contrastPreference}
     >
-      {data.bannerWarning && !data.internalImpersonation ? (
+      {data.devPanelEnabled && !data.internalImpersonation ? (
+        <DevPanelMount
+          envBadge={data.devPanelEnvBadge}
+          previewAccessGateEnabled={data.previewAccessGateEnabled}
+          previewAccessSeatLabel={data.previewAccessSeat?.label ?? null}
+        />
+      ) : data.bannerWarning && !data.internalImpersonation ? (
         <LocalDevEnvironmentBar
           bannerWarning={data.bannerWarning}
           localDevQuickLogin={data.localDevQuickLogin}
@@ -429,13 +454,29 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
         />
       ) : null}
       <GlobalLoading />
-      <div data-feedback-content-frame className="flex h-screen min-h-screen flex-col justify-between">
+      <div
+        data-yawp-app-shell
+        data-feedback-content-frame
+        className="flex h-screen min-h-screen flex-col justify-between"
+      >
         <div className="flex-1 bg-background">
           <Outlet />
         </div>
       </div>
-      {data.testerFeedbackAvailable && !data.demoFeedbackAvailable ? <TesterFeedbackWidget /> : null}
-      {data.demoFeedbackAvailable ? <DemoFeedbackWidget analytics={data.ENV.POSTHOG_API_KEY && !data.internalImpersonation ? posthog : undefined} /> : null}
+      {!data.internalImpersonation &&
+      data.testerFeedbackAvailable &&
+      !data.demoFeedbackAvailable ? (
+        <TesterFeedbackWidget />
+      ) : null}
+      {!data.devPanelEnabled && data.demoFeedbackAvailable ? (
+        <DemoFeedbackWidget
+          analytics={
+            data.ENV.POSTHOG_API_KEY && !data.internalImpersonation
+              ? posthog
+              : undefined
+          }
+        />
+      ) : null}
       <Toaster toast={data.toast} />
     </Document>
   );

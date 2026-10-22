@@ -6,6 +6,7 @@ import { createE2EPrismaClient } from '../prisma-client';
 import { provisionFreeClassroomForE2E } from '../helpers/provision-free-classroom-for-e2e';
 import { seedSiteLicenseLockedCatalogForE2E } from '../helpers/seed-site-license-locked-catalog-for-e2e';
 import { dashboardAssignmentTileOverlapIssues } from '../helpers/dashboard-assignment-tile-overlap';
+import { expectGiveFeedbackAccessible } from '../helpers/dev-panel-feedback';
 if (!process.env.CLASS_STEP_PORT) {
   throw new Error(
     'Run class-step tests with ./bin/project test --profile free-tier-locked-preview-browser'
@@ -70,6 +71,10 @@ async function fixture(
     });
   }
   return { user, app };
+}
+
+async function expectLockedAppHome(page: import('@playwright/test').Page) {
+  await expect(page).toHaveURL(/\/app\/?$/);
 }
 
 async function login(page: import('@playwright/test').Page, email: string) {
@@ -279,6 +284,10 @@ test.beforeEach(async () => {
   await flag(true);
 });
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.removeItem('yawp-dev-panel'));
+});
+
 test.afterAll(async () => {
   await flag(false);
   const applications = await prisma.freeTierApplication.findMany({
@@ -325,7 +334,7 @@ for (const width of [390, 1440]) {
     const exploreLink = page.getByRole('link', { name: 'Explore my classroom' });
     await expect(exploreLink).toHaveAttribute('href', '/app');
     await exploreLink.click();
-    await expect(page).toHaveURL(/\/app$/);
+    await expectLockedAppHome(page);
     await expect(page).not.toHaveURL(/free-tier\/preview/);
     await expect(
       page.getByRole('heading', { name: /Look around while you wait/i })
@@ -524,9 +533,7 @@ for (const width of [390, 1440]) {
       await capture(page, 'dashboard-approved-390');
     }
     if (width === 1440) {
-      await expect(
-        page.getByRole('button', { name: 'Give feedback' })
-      ).toBeVisible();
+      await expectGiveFeedbackAccessible(page);
       await capture(page, 'approval-toast-above-feedback-1440');
     }
     await page
@@ -553,7 +560,7 @@ test('explore stays on pending when classroom is not provisioned yet', async ({
     page.getByRole('link', { name: 'Explore my classroom' })
   ).toBeVisible();
   await page.getByRole('link', { name: 'Explore my classroom' }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expectLockedAppHome(page);
   await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
   const updated = await prisma.freeTierApplication.findUniqueOrThrow({
     where: { id: app.id },
@@ -585,7 +592,7 @@ test('explore shows with a stale default-org membership cookie', async ({
     page.getByRole('link', { name: 'Explore my classroom' })
   ).toBeVisible();
   await page.getByRole('link', { name: 'Explore my classroom' }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expectLockedAppHome(page);
   await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
 });
 
@@ -698,7 +705,7 @@ async function exploreLockedApp(page: import('@playwright/test').Page, userEmail
   await login(page, userEmail);
   await page.goto('/app/free-tier/pending');
   await page.getByRole('link', { name: 'Explore my classroom' }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expectLockedAppHome(page);
   await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
 }
 

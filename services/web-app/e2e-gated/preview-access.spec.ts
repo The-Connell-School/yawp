@@ -128,7 +128,7 @@ test.describe('in-app preview access gate', () => {
     ).toBeVisible();
     await page
       .getByRole('button', {
-        name: 'Local development environment. Open dev login menu.',
+        name: /Open dev login menu\.$/,
       })
       .click();
     await expect(page.getByText('Current seat: Yawp Local Dev')).toBeVisible();
@@ -152,7 +152,7 @@ test.describe('in-app preview access gate', () => {
 
     await page
       .getByRole('button', {
-        name: 'Local development environment. Open dev login menu.',
+        name: /Open dev login menu\.$/,
       })
       .click();
 
@@ -275,7 +275,7 @@ test.describe('in-app preview access gate', () => {
 
     await page
       .getByRole('button', {
-        name: 'Local development environment. Open dev login menu.',
+        name: /Open dev login menu\.$/,
       })
       .click();
     await expect(page.getByText('Current seat: Master')).toBeVisible();

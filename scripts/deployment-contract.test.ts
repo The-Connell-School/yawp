@@ -334,6 +334,40 @@ describe('production deployment contract', () => {
     expect(dockerfile).toContain('FROM oven/bun:1.4.3 AS base');
   });
 
+  test('dev panel Docker build args default to production; demo web image passes demo', () => {
+    const dockerfile = readRepoFile('services/web-app/Dockerfile');
+    const demoWorkflow = readRepoFile('.github/workflows/demo-environment.yml');
+    const compose = readRepoFile('scripts/preview/render-compose.mjs');
+    const viteConfig = readRepoFile('services/web-app/vite.config.ts');
+
+    expect(dockerfile).toMatch(/ARG YAWP_ENVIRONMENT=production/);
+
+    const demoWebBuild = demoWorkflow.slice(
+      demoWorkflow.indexOf('- name: Build and push demo web image'),
+      demoWorkflow.indexOf('- name: Build and push demo toolbox image')
+    );
+    expect(demoWebBuild).toContain('build-args:');
+    expect(demoWebBuild).toContain('YAWP_ENVIRONMENT=demo');
+
+    const demoToolboxBuild = demoWorkflow.slice(
+      demoWorkflow.indexOf('- name: Build and push demo toolbox image'),
+      demoWorkflow.indexOf('  demo-deploy:')
+    );
+    expect(demoToolboxBuild).not.toContain('build-args:');
+
+    expect(compose).toContain('dockerfile: services/web-app/Dockerfile');
+    expect(compose).toContain('target: production');
+    expect(compose).not.toMatch(
+      /web:[\s\S]*?build:[\s\S]*?args:[\s\S]*?YAWP_ENVIRONMENT/m
+    );
+
+    expect(viteConfig).toContain(
+      "process.env.YAWP_ENVIRONMENT === 'production'"
+    );
+    expect(viteConfig).toContain('__YAWP_DEV_PANEL_BUILD__');
+    expect(viteConfig).toContain('process.env.YAWP_ENVIRONMENT !== \'production\'');
+  });
+
   test('Docker image build does not bake preview database credentials into the image', () => {
     const dockerfile = readRepoFile('services/web-app/Dockerfile');
     const renderCompose = readRepoFile('scripts/preview/render-compose.mjs');

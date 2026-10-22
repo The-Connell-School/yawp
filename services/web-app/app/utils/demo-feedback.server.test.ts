@@ -41,6 +41,23 @@ describe('demo feedback endpoint', () => {
     expect(FEATURE_FLAGS).toHaveProperty('demo-feedback-widget');
     expect(parseFeatureFlagValue(undefined).mode).toBe('off');
   });
+  test('local dev panel still respects the demo feedback flag', async () => {
+    const env = {
+      NODE_ENV: 'development',
+      DATABASE_URL: 'postgresql://postgres:postgres@127.0.0.1:5432/yawp',
+      YAWP_ENVIRONMENT: 'development',
+    };
+    const previous = { ...process.env };
+    Object.assign(process.env, env);
+    try {
+      const { deps, save } = setup({ flagEnabled: async () => false });
+      expect(await demoFeedbackAvailable(deps)).toBe(false);
+      expect((await submitDemoFeedback(request(), deps)).status).toBe(404);
+      expect(save).not.toHaveBeenCalled();
+    } finally {
+      process.env = previous;
+    }
+  });
   test('requires demo runtime and a successful flag read for rendering and submission', async () => {
     for (const environment of ['production', 'development', 'pr-123', 'test']) {
       const { deps, save } = setup({ environment: () => environment });
