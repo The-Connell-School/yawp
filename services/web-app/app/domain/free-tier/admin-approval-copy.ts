@@ -67,6 +67,13 @@ This link works for ${ADMIN_APPROVAL_LINK_DAYS} days. You don't need a Yawp! acc
 Sent by Yawp! · yawp.school`;
 }
 
+function firstAdminLinkInText(text: string, path: '/free/admin/approve' | '/free/admin/not-right-person') {
+  const re = new RegExp(
+    `(https?:\\/\\/[^\\s]+${path.replace(/\//g, '\\/')}[^\\s]*)`
+  );
+  return re.exec(text)?.[1];
+}
+
 export function adminApprovalUrlsFromDesignedEmailBody(text: string): {
   approveUrl?: string;
   notRightPersonUrl?: string;
@@ -76,10 +83,28 @@ export function adminApprovalUrlsFromDesignedEmailBody(text: string): {
   const forwardHeading = lines.findIndex(
     (line) => line === 'Not the right person? Forward this request:'
   );
-  const approveUrl =
+  const approveFromDesigned =
     approveHeading >= 0 ? lines[approveHeading + 1] : undefined;
-  const notRightPersonUrl =
+  const forwardFromDesigned =
     forwardHeading >= 0 ? lines[forwardHeading + 1] : undefined;
+  const approveV2Heading = lines.findIndex((line) =>
+    /^Approve .+'s free classroom \(link expires in \d+ days\):$/.test(line)
+  );
+  const forwardV2Heading = lines.findIndex(
+    (line) => line === "I'm not the right person to approve this:"
+  );
+  const approveUrl =
+    approveFromDesigned?.startsWith('http')
+      ? approveFromDesigned
+      : approveV2Heading >= 0
+        ? lines[approveV2Heading + 1]
+        : firstAdminLinkInText(text, '/free/admin/approve');
+  const notRightPersonUrl =
+    forwardFromDesigned?.startsWith('http')
+      ? forwardFromDesigned
+      : forwardV2Heading >= 0
+        ? lines[forwardV2Heading + 1]
+        : firstAdminLinkInText(text, '/free/admin/not-right-person');
   return {
     ...(approveUrl?.startsWith('http') ? { approveUrl } : {}),
     ...(notRightPersonUrl?.startsWith('http') ? { notRightPersonUrl } : {}),

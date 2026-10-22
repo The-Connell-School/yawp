@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { renderAdminApprovalEmailV2Body } from './email-copy';
 import {
   adminApprovalUrlsFromDesignedEmailBody,
   approveCheckboxError,
@@ -76,4 +77,17 @@ test('link replaced body names teacher and school', () => {
   expect(linkReplacedBody('Jordan Rivera', 'Lincoln High School')).toBe(
     'The request for Jordan Rivera at Lincoln High School was forwarded to someone else, so this link no longer works. Questions? Email support@yawp.school.'
   );
+});
+
+test('admin approval v2 plain text exposes signed URLs for QA logs', () => {
+  const text = renderAdminApprovalEmailV2Body({
+    teacherName: 'Grace Okafor',
+    schoolName: 'Lincoln High School',
+    approveUrl: 'https://yawp.school/free/admin/approve?t=a',
+    notRightPersonUrl: 'https://yawp.school/free/admin/not-right-person?t=n',
+  });
+  expect(adminApprovalUrlsFromDesignedEmailBody(text)).toEqual({
+    approveUrl: 'https://yawp.school/free/admin/approve?t=a',
+    notRightPersonUrl: 'https://yawp.school/free/admin/not-right-person?t=n',
+  });
 });
