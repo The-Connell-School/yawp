@@ -5,6 +5,7 @@ import { test, expect } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
 import { provisionFreeClassroomForE2E } from '../helpers/provision-free-classroom-for-e2e';
 import { seedSiteLicenseLockedCatalogForE2E } from '../helpers/seed-site-license-locked-catalog-for-e2e';
+import { dashboardAssignmentTileOverlapIssues } from '../helpers/dashboard-assignment-tile-overlap';
 if (!process.env.CLASS_STEP_PORT) {
   throw new Error(
     'Run class-step tests with ./bin/project test --profile free-tier-locked-preview-browser'
@@ -179,63 +180,44 @@ async function expectTileNamesWrapOnWordBoundaries(
   expect(violations).toEqual([]);
 }
 
-async function expectTileNameMetaNoOverlap(
+async function expectDashboardAssignmentTileNameMetaNoOverlap(
   page: import('@playwright/test').Page,
-  root?: import('@playwright/test').Locator
+  root: import('@playwright/test').Locator
 ) {
-  const violations = root
-    ? await root.evaluate((scope) => {
-        const issues: string[] = [];
-        const names = scope.querySelectorAll(
-          '[data-testid="assignment-type-tile-name"]'
+  const violations = await root.evaluate(dashboardAssignmentTileOverlapIssues);
+  expect(violations).toEqual([]);
+}
+
+async function expectPickerTileNameMetaNoOverlap(
+  page: import('@playwright/test').Page,
+  listbox: import('@playwright/test').Locator
+) {
+  const violations = await listbox.evaluate((scope) => {
+    const issues: string[] = [];
+    const names = scope.querySelectorAll(
+      '[data-testid="assignment-type-tile-name"]'
+    );
+    for (const nameEl of names) {
+      const meta = nameEl.parentElement?.querySelector(
+        '[data-testid="assignment-type-tile-meta"]'
+      ) as HTMLElement | null;
+      if (!meta) continue;
+      const a = nameEl.getBoundingClientRect();
+      const b = meta.getBoundingClientRect();
+      const pad = 0.5;
+      const intersect =
+        a.right > b.left + pad &&
+        a.left < b.right - pad &&
+        a.bottom > b.top + pad &&
+        a.top < b.bottom - pad;
+      if (intersect) {
+        issues.push(
+          `overlap: "${nameEl.textContent ?? ''}" × "${meta.textContent ?? ''}"`
         );
-        for (const nameEl of names) {
-          const meta = nameEl.parentElement?.querySelector(
-            '[data-testid="assignment-type-tile-meta"]'
-          ) as HTMLElement | null;
-          if (!meta) continue;
-          const a = nameEl.getBoundingClientRect();
-          const b = meta.getBoundingClientRect();
-          const pad = 0.5;
-          const intersect =
-            a.right > b.left + pad &&
-            a.left < b.right - pad &&
-            a.bottom > b.top + pad &&
-            a.top < b.bottom - pad;
-          if (intersect) {
-            issues.push(
-              `overlap: "${nameEl.textContent ?? ''}" × "${meta.textContent ?? ''}"`
-            );
-          }
-        }
-        return issues;
-      })
-    : await page.evaluate(() => {
-        const issues: string[] = [];
-        const names = document.querySelectorAll(
-          '[data-testid="assignment-type-tile-name"]'
-        );
-        for (const nameEl of names) {
-          const meta = nameEl.parentElement?.querySelector(
-            '[data-testid="assignment-type-tile-meta"]'
-          ) as HTMLElement | null;
-          if (!meta) continue;
-          const a = nameEl.getBoundingClientRect();
-          const b = meta.getBoundingClientRect();
-          const pad = 0.5;
-          const intersect =
-            a.right > b.left + pad &&
-            a.left < b.right - pad &&
-            a.bottom > b.top + pad &&
-            a.top < b.bottom - pad;
-          if (intersect) {
-            issues.push(
-              `overlap: "${nameEl.textContent ?? ''}" × "${meta.textContent ?? ''}"`
-            );
-          }
-        }
-        return issues;
-      });
+      }
+    }
+    return issues;
+  });
   expect(violations).toEqual([]);
 }
 
@@ -333,7 +315,13 @@ for (const width of [390, 1440]) {
       page,
       page.getByTestId('free-assignment-tiles')
     );
-    await expectTileNameMetaNoOverlap(page, page.getByTestId('free-assignment-tiles'));
+    await expectDashboardAssignmentTileNameMetaNoOverlap(
+      page,
+      page.getByTestId('free-assignment-tiles')
+    );
+    if (width === 390) {
+      await capture(page, 'dashboard-pending-390');
+    }
     await page
       .getByRole('button', { name: /New Class Starter assignment/i })
       .click();
@@ -358,7 +346,7 @@ for (const width of [390, 1440]) {
     await expect(listbox.getByText('Prewrit...')).toHaveCount(0);
     await expect(listbox.getByText(/^Prewritin$/)).toHaveCount(0);
     await expectTileNamesWrapOnWordBoundaries(page, listbox);
-    await expectTileNameMetaNoOverlap(page, listbox);
+    await expectPickerTileNameMetaNoOverlap(page, listbox);
     await expect(
       page
         .getByRole('dialog')
@@ -472,11 +460,17 @@ for (const width of [390, 1440]) {
     await page.reload();
     await expect(page.getByTestId('teaching-access-banner')).toHaveCount(0);
     await expect(page.getByTestId('teaching-access-approval-toast')).toBeVisible();
-    await expectTileNameMetaNoOverlap(page, page.getByTestId('free-assignment-tiles'));
+    await expectDashboardAssignmentTileNameMetaNoOverlap(
+      page,
+      page.getByTestId('free-assignment-tiles')
+    );
     await expectTileNamesWrapOnWordBoundaries(
       page,
       page.getByTestId('free-assignment-tiles')
     );
+    if (width === 390) {
+      await capture(page, 'dashboard-approved-390');
+    }
     if (width === 1440) {
       await expect(
         page.getByRole('button', { name: 'Give feedback' })
