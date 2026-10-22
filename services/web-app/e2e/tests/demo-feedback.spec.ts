@@ -44,6 +44,7 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
       update: { value: 'false' },
     });
     await page.goto('/app/assignments');
+    await page.reload();
     if (!(await isDevPanelActive(page))) {
       await expect(
         page.getByRole('button', { name: 'Give feedback', exact: true })

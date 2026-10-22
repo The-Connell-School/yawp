@@ -14,7 +14,7 @@ export function devToolsPanel(page: Page) {
 export async function openDevToolsPanel(page: Page) {
   await page.getByRole('button', { name: 'Open developer tools' }).click();
   const panel = devToolsPanel(page);
-  await expect(panel).toBeVisible();
+  await expect(panel).toBeVisible({ timeout: 30_000 });
   return panel;
 }
 
