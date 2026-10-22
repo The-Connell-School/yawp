@@ -173,7 +173,7 @@ export default function NewAssignmentPage() {
         method="post"
         className="space-y-4 rounded-xl border bg-popover p-6"
         onSubmit={(event) => {
-          if (submitLocked && !approvalBlocked) event.preventDefault();
+          if (teachingLoading) event.preventDefault();
         }}
       >
         {approvalBlocked ? <TeachingApprovalRequiredAlert /> : null}

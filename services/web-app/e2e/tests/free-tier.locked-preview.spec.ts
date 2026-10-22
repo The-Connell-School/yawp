@@ -572,9 +572,12 @@ test('full-page assignment form shows inline approval alert and keeps field valu
   await provisionPendingClassroom(app.id, user.id!);
   await exploreLockedApp(page, user.email!);
   await page.goto('/app/assignments/new');
+  await page.locator('#assignmentTypeId').selectOption({ index: 1 });
   await page.getByLabel('Title').fill('Community Gardens — Prewriting');
   await page.getByLabel('Prompt').fill('Pick one community garden in your town.');
-  await page.getByRole('button', { name: 'Create assignment' }).click();
+  await page
+    .getByRole('button', { name: 'Create assignment' })
+    .click({ force: true });
   await expect(page.getByTestId('teaching-approval-required-alert')).toBeVisible();
   await expect(page.getByLabel('Title')).toHaveValue('Community Gardens — Prewriting');
   await expect(page.getByLabel('Prompt')).toHaveValue(
