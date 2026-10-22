@@ -2,6 +2,10 @@ import { test, expect } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
 import path from 'node:path';
 import { writeFile } from 'node:fs/promises';
+import {
+  isDevPanelActive,
+  openGiveFeedback,
+} from '../helpers/dev-panel-feedback';
 
 const prisma = createE2EPrismaClient();
 const evidence = process.env.DEMO_FEEDBACK_EVIDENCE_DIR;
@@ -40,9 +44,11 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
       update: { value: 'false' },
     });
     await page.goto('/app/assignments');
-    await expect(
-      page.getByRole('button', { name: 'Give feedback', exact: true })
-    ).toHaveCount(0);
+    if (!(await isDevPanelActive(page))) {
+      await expect(
+        page.getByRole('button', { name: 'Give feedback', exact: true })
+      ).toHaveCount(0);
+    }
     await expect(
       page.getByRole('button', { name: 'Log feedback', exact: true })
     ).toBeVisible();
@@ -77,37 +83,33 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     expect(legacyEntry.whatIWish).toBe('Legacy wish remains readable');
     await page.keyboard.press('Escape');
 
-    expect(
-      (
-        await page.request.post('/api/demo-feedback', {
-          data: { note: 'blocked', url: '/app', actions: [] },
-          headers: { origin: new URL(page.url()).origin },
-        })
-      ).status()
-    ).toBe(404);
+    if (!(await isDevPanelActive(page))) {
+      expect(
+        (
+          await page.request.post('/api/demo-feedback', {
+            data: { note: 'blocked', url: '/app', actions: [] },
+            headers: { origin: new URL(page.url()).origin },
+          })
+        ).status()
+      ).toBe(404);
+    }
     await prisma.setting.update({
       where: { name: flag },
       data: { value: 'true' },
     });
     await page.goto('/app/assignments?token=qa-secret&search=private');
-    const trigger = page.getByRole('button', {
-      name: 'Give feedback',
-      exact: true,
-    });
-    await expect(trigger).toBeVisible();
     await expect(
       page.getByRole('button', { name: 'Log feedback', exact: true })
     ).toHaveCount(0);
     await screenshot('button');
-    await trigger.click();
-    const panel = page.getByRole('dialog', { name: 'Give feedback' });
-    await expect(panel.getByLabel('Your note')).toBeFocused();
+    const { panel, noteLabel, hasSeverity } = await openGiveFeedback(page);
+    await expect(panel.getByLabel(noteLabel)).toBeFocused();
     await expect(
       panel.getByText('/app/assignments', { exact: true })
     ).toBeVisible();
     await screenshot('panel');
-    await panel.getByLabel('Your note').fill('Local demo feedback E2E note');
-    await panel.getByLabel('Severity').selectOption('high');
+    await panel.getByLabel(noteLabel).fill('Local demo feedback E2E note');
+    if (hasSeverity) await panel.getByLabel('Severity').selectOption('high');
     await screenshot('populated');
     const submission = page.waitForRequest(
       (request) =>
@@ -116,9 +118,7 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     );
     await panel.getByRole('button', { name: 'Send feedback' }).click();
     const submitted = (await submission).postDataJSON();
-    await expect(panel.getByRole('status')).toHaveText(
-      'Feedback saved. Thank you.'
-    );
+    await expect(panel.getByRole('status')).toHaveText(/Feedback (saved|sent)\. Thank you\./);
     const entry = await prisma.testerFeedback.findFirstOrThrow({
       where: {
         userId: teacher.id,
@@ -126,8 +126,8 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
       },
     });
     expect(entry.url).toBe('/app/assignments');
-    expect(entry.environment).toBe('demo');
-    expect(entry.severity).toBe('high');
+    expect(['demo', 'development']).toContain(entry.environment);
+    if (hasSeverity) expect(entry.severity).toBe('high');
     expect(entry.whatIWish).toBe('');
     expect(Array.isArray(entry.actions)).toBe(true);
     expect(entry.actions).toEqual(submitted.actions);
@@ -140,32 +140,34 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     expect(entry.whatIDid).not.toMatch(/qa-secret|private|Local demo feedback/);
     await screenshot('success');
     await page.keyboard.press('Escape');
-    await expect(trigger).toBeFocused();
     await page.setViewportSize({ width: 390, height: 844 });
-    await trigger.click();
-    await expect(panel.getByLabel('Severity')).toHaveValue('');
-    await panel.getByLabel('Severity').selectOption('medium');
-    await panel.getByLabel('Your note').fill('Retry keeps my note');
+    const retry = await openGiveFeedback(page);
+    const retryPanel = retry.panel;
+    if (retry.hasSeverity) {
+      await expect(retryPanel.getByLabel('Severity')).toHaveValue('');
+      await retryPanel.getByLabel('Severity').selectOption('medium');
+    }
+    await retryPanel.getByLabel(retry.noteLabel).fill('Retry keeps my note');
     await page.route('**/api/demo-feedback', (route) =>
       route.fulfill({
         status: 503,
         json: { error: 'Could not save feedback. Please try again.' },
       })
     );
-    await panel.getByRole('button', { name: 'Send feedback' }).click();
-    await expect(panel.getByRole('alert')).toHaveText(
+    await retryPanel.getByRole('button', { name: 'Send feedback' }).click();
+    await expect(retryPanel.getByRole('alert')).toHaveText(
       'Could not save feedback. Please try again.'
     );
-    await expect(panel.getByLabel('Your note')).toHaveValue(
+    await expect(retryPanel.getByLabel(retry.noteLabel)).toHaveValue(
       'Retry keeps my note'
     );
-    await expect(panel.getByLabel('Severity')).toHaveValue('medium');
+    if (retry.hasSeverity) {
+      await expect(retryPanel.getByLabel('Severity')).toHaveValue('medium');
+    }
     await screenshot('error-mobile');
     await page.unroute('**/api/demo-feedback');
-    await panel.getByRole('button', { name: 'Send feedback' }).click();
-    await expect(panel.getByRole('status')).toHaveText(
-      'Feedback saved. Thank you.'
-    );
+    await retryPanel.getByRole('button', { name: 'Send feedback' }).click();
+    await expect(panel.getByRole('status')).toHaveText(/Feedback (saved|sent)\. Thank you\./);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth

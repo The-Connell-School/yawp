@@ -205,7 +205,7 @@ function GiveFeedbackSheet() {
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
         {status === 'sent' ? (
           <div className="space-y-3">
-            <p role="status">Feedback sent. Thank you.</p>
+            <p role="status">Feedback saved. Thank you.</p>
             <Button
               type="button"
               variant="outline"
