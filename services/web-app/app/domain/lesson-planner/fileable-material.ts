@@ -9,7 +9,7 @@
  */
 import { artifactFromAssistantReply } from './artifact-from-reply';
 import type { LessonMaterial } from './lesson-material';
-import { blockMinutesInReply, pieceRankInReply, soleBlockStepMinutes } from './reply-pieces';
+import { blockMinutesInReply, optionStepMinutes, pieceRankInReply, soleBlockStepMinutes } from './reply-pieces';
 import { parseStepType } from './step-types';
 
 const TITLE_MINUTES = /\(\s*\d+[^)]*min/i;
@@ -30,7 +30,7 @@ export function fileableMaterial(
   const minutes =
     found.minutes ??
     blockMinutesInReply(content)[key] ??
-    (alone ? soleBlockStepMinutes(content)[key] : undefined) ??
+    (alone ? (optionStepMinutes(content)[key] ?? soleBlockStepMinutes(content)[key]) : undefined) ??
     null;
   return {
     rank: pieceRankInReply(content, key),

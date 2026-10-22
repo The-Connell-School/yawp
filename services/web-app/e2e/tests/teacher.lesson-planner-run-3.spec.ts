@@ -390,8 +390,8 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await expect(page.getByTestId('time-total')).toHaveText('50');
       await expect(page.getByTestId('time-status')).toHaveText('Right on time');
       await expect(page.getByTestId('time-block')).toHaveCount(8);
-      await expect(page.getByTestId('writing-strip')).toContainText('20% of class is writing · 10 min');
-      await expect(page.getByTestId('writing-strip')).toContainText('From Class Starter + Daily Pages');
+      await expect(page.getByTestId('writing-strip')).toContainText('26% of class is writing · 13 min');
+      await expect(page.getByTestId('writing-strip')).toContainText('From Class Starter + Daily Pages + Closing');
       const cards = page.getByTestId('run-card');
       await expect(cards).toHaveCount(8);
       await expect(cards.nth(1).getByTestId('run-card-start')).toHaveText('05');
@@ -491,7 +491,7 @@ test.describe("Lesson Planner — Brian's third run", () => {
       const panel = page.getByTestId('add-panel');
       await expect(panel.getByTestId('add-panel-where')).toHaveText('Goes in at minute 20, after “Hook activity: What’s in your bag?”');
       const card = panel.getByTestId('suggestion-card').filter({ hasText: 'The heaviest thing' });
-      await expect(card.getByTestId('suggestion-impact')).toHaveText('+5 min · puts you 5 over · writing to 27%');
+      await expect(card.getByTestId('suggestion-impact')).toHaveText('+5 min · puts you 5 over · writing to 33%');
       await card.getByRole('button', { name: 'Add' }).click();
       await expect(page.getByTestId('run-card')).toHaveCount(9);
       await expect(page.getByTestId('run-card').nth(2).getByTestId('run-card-title')).toHaveText(
@@ -532,7 +532,7 @@ test.describe("Lesson Planner — Brian's third run", () => {
       const set = page.getByTestId('lesson-set');
       await expect(set).toContainText('Lesson set for');
       await expect(set.getByTestId('stat-planned')).toHaveText('50 min');
-      await expect(set.getByTestId('stat-writing')).toHaveText('20%');
+      await expect(set.getByTestId('stat-writing')).toHaveText('26%');
       await expect(page.getByTestId('stack-save-state')).toContainText('Lesson set · saved');
       await set.getByTestId('keep-editing').click();
       await expect(page.getByTestId('finish-line')).toBeVisible();
@@ -993,7 +993,7 @@ test.describe("Lesson Planner — Brian's third run", () => {
         await expect(row).toBeVisible({ timeout: 1_000 });
       }).toPass({ timeout: 15_000 });
       await expect(row).toContainText('Class Starter → Activity → Context → Read aloud → Daily Pages → Closing · 50 min');
-      await expect(row).toContainText('20% writing');
+      await expect(row).toContainText('26% writing');
       await row.click();
       await expect(page.getByTestId('template-chip')).toHaveText(/Using your template: Read & write day/);
       await expect(page.getByLabel('Message the Lesson Planner')).toHaveAttribute('placeholder', /What are we reading\?/);

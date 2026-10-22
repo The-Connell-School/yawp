@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { blockMinutesInReply, pieceKeysInReply, segmentInStack, optionSteps, stepSegments, stepsOfferingChoice } from './reply-pieces';
+import { blockMinutesInReply, pieceKeysInReply, segmentInStack, optionStepMinutes, stepSegments, stepsOfferingChoice } from './reply-pieces';
 import { readPlanSteps } from './plan-steps';
 
 const DECK = JSON.stringify({
@@ -147,31 +147,26 @@ describe('stepsOfferingChoice: a step whose options each have their own Add (Kev
   });
 });
 
-describe("optionSteps: picking an option files its step (Brian's run 4, item 2)", () => {
-  const ticket = (text: string) => '```yawp-exit-ticket\n' + text + '\n```';
-  const reply = [
-    '## Discussion (20 min)',
-    'Talk about Holden.',
-    '## Closing (5 min) {type: closing}',
-    'Name the one thing Holden avoids. Then pick a ticket.',
-    ticket('mode: basic'),
-    ticket('mode: basic'),
-    ticket('mode: basic'),
-  ].join('\n\n');
-
-  test('each option under a Closing with its own words files the Closing too', () => {
-    const steps = readPlanSteps(reply);
-    const held = optionSteps(reply);
-    const keys = Object.keys(held);
-    expect(keys).toHaveLength(3);
-    for (const key of keys) {
-      expect(held[key]!.step).toBe(steps[1]!.key);
-      expect(held[key]!.options).toEqual(keys);
-    }
+describe("optionStepMinutes: a picked option carries its step's minutes (Brian's run 4, item 2)", () => {
+  const ticket = (body: string) => '```yawp-exit-ticket\n' + body + '\n```';
+  const starter = (text: string) => '```yawp-daily-pages\nkind: class-starter\n' + text + '\n```';
+  test('each exit ticket under "Closing (5 min)" carries 5 minutes', () => {
+    const reply = [
+      '## Discussion (20 min)',
+      'Talk about Holden.',
+      '## Closing (5 min) {type: closing}',
+      'Bring it back to the hat. Then pick a ticket.',
+      ticket('mode: basic'),
+      ticket('mode: basic'),
+      ticket('mode: basic'),
+    ].join('\n\n');
+    expect(optionStepMinutes(reply)).toEqual({ ticket: 5, 'ticket:1': 5, 'ticket:2': 5 });
   });
-
-  test('options under a step that is only its options file on their own', () => {
-    const bare = ['## Discussion (20 min)', 'Talk.', '## Closing (5 min)', ticket('mode: basic'), ticket('mode: specific\nfocus: explain-concept\ntopic: phonies')].join('\n\n');
-    expect(optionSteps(bare)).toEqual({});
+  test('class starters under "Class starter (8 min): Pick one" carry 8', () => {
+    const reply = ['## Class starter (8 min)', 'Pick one:', starter('One.'), starter('Two.'), '## Reading (40 min)', 'Read.'].join('\n\n');
+    expect(Object.values(optionStepMinutes(reply))).toEqual([8, 8]);
+  });
+  test('a single block is not an option', () => {
+    expect(optionStepMinutes(['## Closing (5 min)', 'Wrap up.', ticket('mode: basic'), '## Next (5 min)', 'Go.'].join('\n\n'))).toEqual({});
   });
 });

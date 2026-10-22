@@ -100,7 +100,7 @@ test.describe("Lesson Planner — Brian's fourth run", () => {
     for (const flag of FLAGS) await setLessonPlannerReviewFlag(flag, false);
   });
 
-  test('item 2: picking one of the Closing’s exit tickets files the Closing too, and it reaches the run of show', async ({
+  test('item 2: the exit ticket picked from the Closing carries the Closing’s minutes into the run of show', async ({
     page,
     signIn,
     e2eContext,
@@ -130,8 +130,11 @@ test.describe("Lesson Planner — Brian's fourth run", () => {
     expect((await save).ok()).toBe(true);
 
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
-    const titles = page.getByTestId('run-card').getByTestId('run-card-title');
-    await expect(titles.filter({ hasText: /^Closing$/ })).toHaveCount(1);
+    // One card, the ticket, as the Closing: 5 minutes, never a second card for the step.
+    const cards = page.getByTestId('run-card');
+    await expect(cards).toHaveCount(1);
+    await expect(cards.first().getByTestId('step-minutes')).toHaveText('5 min');
+    await expect(cards.first()).toContainText('Closing');
   });
 
   test('item 3: a step dragged by its handle moves, one place down included', async ({ page, signIn, e2eContext }) => {

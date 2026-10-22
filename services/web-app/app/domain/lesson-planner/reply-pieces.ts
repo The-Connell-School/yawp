@@ -119,25 +119,23 @@ export function stepsOfferingChoice(content: string): Set<string> {
 }
 
 /**
- * The step each option files with (Brian's run 4, item 2). A step that offers
- * a choice and has words of its own ("## Closing (5 min)", the takeaway, then
- * three exit tickets) has no button, so picking an option files the step too:
- * otherwise the Closing never reaches the stack or the run of show. `options`
- * is every option under that step, so taking the last one out takes the step
- * out with it.
+ * Minutes for an option picked on its own from a step that offers a choice
+ * (Brian's run 4, item 2). Only one of "## Closing (5 min)"'s three exit
+ * tickets will be used, so the one picked carries the Closing's 5 minutes
+ * and the lesson still adds up, without a second card for the step.
  */
-export function optionSteps(content: string): Record<string, { step: string; options: string[] }> {
-  const held: Record<string, { step: string; options: string[] }> = {};
+export function optionStepMinutes(content: string): Record<string, number> {
+  const minutes: Record<string, number> = {};
   const pieces = placedPieces(content);
   const choices = stepsOfferingChoice(content);
   pieces.forEach((piece, index) => {
-    if (!piece.step || piece.emptyStep || !choices.has(piece.key)) return;
-    const options = blocksUnder(pieces, index).filter((key) =>
-      pieces.some((other) => other.key === key && other.block && OPTION_BLOCKS.has(other.block))
-    );
-    for (const key of options) held[key] = { step: piece.key, options };
+    if (!piece.step || piece.minutes == null || !choices.has(piece.key)) return;
+    for (const key of blocksUnder(pieces, index)) {
+      const block = pieces.find((other) => other.key === key)?.block;
+      if (block && OPTION_BLOCKS.has(block)) minutes[key] = piece.minutes;
+    }
   });
-  return held;
+  return minutes;
 }
 
 /** A segment is in the stack when every piece it files as is. */

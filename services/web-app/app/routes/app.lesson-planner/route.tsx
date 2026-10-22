@@ -95,7 +95,7 @@ import { TEMPLATE_SLOTS, type LessonTemplate } from '~/domain/lesson-planner/les
 import { TemplateChip, TemplateList } from './template-picker';
 import { FULL_LESSON_FRAMING, stripPlanPreamble } from '~/domain/lesson-planner/plan-framing';
 import { announceStackChange, useStackChanges } from '~/components/lesson-planner/stack-channel';
-import { optionSteps, pieceKeysInReply, segmentInStack, stepSegments, stepsOfferingChoice } from '~/domain/lesson-planner/reply-pieces';
+import { pieceKeysInReply, segmentInStack, stepSegments, stepsOfferingChoice } from '~/domain/lesson-planner/reply-pieces';
 import {
   asksToSwapStarter,
   BUILD_FROM_STACK_REQUESTS,
@@ -1632,21 +1632,6 @@ function MessageBubble({
   // A step offering options (three class starters) has no button of its own:
   // each option has its Add, and the step cannot know which is meant.
   const choiceSteps = planSteps.length ? stepsOfferingChoice(message.content) : new Set<string>();
-  // Picking one files the step it sits under too, so a Closing that offers
-  // three exit tickets still reaches the run of show (Brian's run 4, item 2).
-  const heldBy = planSteps.length ? optionSteps(message.content) : {};
-  const toggleOption = (blockKey: string, add: boolean) => {
-    if (!message.id) return;
-    const holder = heldBy[blockKey];
-    const stepIn = holder ? addedMaterials.has(`${message.id}:${holder.step}`) : false;
-    const othersIn = holder
-      ? holder.options.some((key) => key !== blockKey && addedMaterials.has(`${message.id}:${key}`))
-      : false;
-    // One request for both, so neither cancels the other.
-    const withStep = holder && (add ? !stepIn : stepIn && !othersIn);
-    if (withStep && onSegment) onSegment(message.id, [holder.step, blockKey], add);
-    else onMaterial(message.id, blockKey, add);
-  };
   const segmentKeys = (stepKey: string) => segments[stepKey] ?? [stepKey];
   const toggleSegment = (keys: string[], add: boolean) => {
     if (!message.id || !keys.length) return;
@@ -1750,7 +1735,7 @@ function MessageBubble({
           }
           onToggle={
             stackV2 && message.id
-              ? (next) => toggleOption(part.blockKey, next)
+              ? (next) => onMaterial(message.id!, part.blockKey, next)
               : undefined
           }
           onReplace={
@@ -1777,7 +1762,7 @@ function MessageBubble({
           }
           onToggle={
             message.id
-              ? (added) => toggleOption(part.blockKey, added)
+              ? (added) => onMaterial(message.id!, part.blockKey, added)
               : null
           }
           disabled={disabled}
@@ -1801,7 +1786,7 @@ function MessageBubble({
           }
           onToggle={
             stackV2 && message.id
-              ? (next) => toggleOption(part.blockKey, next)
+              ? (next) => onMaterial(message.id!, part.blockKey, next)
               : null
           }
           disabled={disabled}
