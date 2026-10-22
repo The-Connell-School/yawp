@@ -282,6 +282,7 @@ export function FreeAssignmentTiles({
             <button
               key={row.kind}
               type="button"
+              data-testid={dashboardAssignmentTileTestId}
               disabled={
                 !teachingLocked &&
                 (!type || (!usage.monthly && row.remaining === 0))
@@ -301,73 +302,40 @@ export function FreeAssignmentTiles({
                   className={assignmentTypeTileImageClassName}
                 />
               </div>
-              {teachingLocked ? (
-                <span
-                  className={assignmentTypeTileFooterClassName(
-                    'text-[15px] font-medium'
-                  )}
-                >
-                  <span
-                    className={assignmentTypeTileNameClassName()}
-                    data-testid={assignmentTypeTileNameTestId}
-                  >
-                    {row.label}
-                  </span>
-                  <span
-                    className={cn(
-                      assignmentTypeTileMetaClassName('text-[13px]'),
-                      !usage.monthly && row.remaining === 0 && 'text-amber-800'
-                    )}
-                    data-testid={assignmentTypeTileMetaTestId}
-                  >
-                    {usage.monthly
-                      ? 'Unlimited'
-                      : row.remaining
-                        ? `${row.remaining} of ${row.total} left`
-                        : 'None left'}
-                  </span>
-                  <Lock
-                    size={16}
-                    className={assignmentTypeTileTrailingIconClassName(
-                      'text-muted-foreground'
-                    )}
-                    aria-hidden
-                  />
-                </span>
-              ) : (
-                <span
-                  className={assignmentTypeTileFooterClassName(
-                    'text-[15px] font-medium'
-                  )}
-                >
-                  <span
-                    className={assignmentTypeTileNameClassName()}
-                    data-testid={assignmentTypeTileNameTestId}
-                  >
-                    {row.label}
-                  </span>
-                  <span
-                    className={cn(
-                      assignmentTypeTileMetaClassName('text-[13px]'),
-                      !usage.monthly && row.remaining === 0 && 'text-amber-800'
-                    )}
-                    data-testid={assignmentTypeTileMetaTestId}
-                  >
-                    {usage.monthly
-                      ? 'Unlimited'
-                      : row.remaining
-                        ? `${row.remaining} of ${row.total} left`
-                        : 'None left'}
-                  </span>
-                  <Plus
-                    size={16}
-                    className={assignmentTypeTileTrailingIconClassName(
-                      'text-muted-foreground'
-                    )}
-                    aria-hidden
-                  />
-                </span>
-              )}
+              <DashboardAssignmentTileFooter
+                label={row.label}
+                meta={
+                  usage.monthly
+                    ? 'Unlimited'
+                    : row.remaining
+                      ? `${row.remaining} of ${row.total} left`
+                      : 'None left'
+                }
+                metaClassName={
+                  !usage.monthly && row.remaining === 0
+                    ? 'text-amber-800'
+                    : undefined
+                }
+                trailing={
+                  teachingLocked ? (
+                    <Lock
+                      size={16}
+                      className={assignmentTypeTileTrailingIconClassName(
+                        'text-muted-foreground'
+                      )}
+                      aria-hidden
+                    />
+                  ) : (
+                    <Plus
+                      size={16}
+                      className={assignmentTypeTileTrailingIconClassName(
+                        'text-muted-foreground'
+                      )}
+                      aria-hidden
+                    />
+                  )
+                }
+              />
             </button>
           );
         })}
