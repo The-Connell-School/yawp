@@ -117,6 +117,74 @@ async function provisionPendingClassroom(appId: string, userId: string) {
 
 const pr655FinalDir = '/cursor/stores/self/artifacts/screenshots/pr655-final';
 
+async function expectTileNamesWrapOnWordBoundaries(
+  page: import('@playwright/test').Page,
+  root?: import('@playwright/test').Locator
+) {
+  const violations = root
+    ? await root.evaluate((scope) => {
+        const nodes = scope.querySelectorAll(
+          '[data-testid="assignment-type-tile-name"]'
+        );
+        const issues: string[] = [];
+        for (const node of nodes) {
+          const el = node as HTMLElement;
+          if (el.scrollWidth > el.clientWidth + 1) {
+            issues.push(`horizontal overflow: "${el.textContent ?? ''}"`);
+          }
+          const text = el.textContent ?? '';
+          const words = text.trim().split(/\s+/).filter(Boolean);
+          const textNode = el.firstChild;
+          if (!words.length || !textNode || textNode.nodeType !== Node.TEXT_NODE) {
+            continue;
+          }
+          for (const word of words) {
+            if (word.length < 2) continue;
+            const start = text.indexOf(word);
+            if (start < 0) continue;
+            const range = document.createRange();
+            range.setStart(textNode, start);
+            range.setEnd(textNode, start + word.length);
+            if (range.getClientRects().length > 1) {
+              issues.push(`mid-word break: "${word}" in "${text}"`);
+            }
+          }
+        }
+        return issues;
+      })
+    : await page.evaluate(() => {
+        const nodes = document.querySelectorAll(
+          '[data-testid="assignment-type-tile-name"]'
+        );
+        const issues: string[] = [];
+        for (const node of nodes) {
+          const el = node as HTMLElement;
+          if (el.scrollWidth > el.clientWidth + 1) {
+            issues.push(`horizontal overflow: "${el.textContent ?? ''}"`);
+          }
+          const text = el.textContent ?? '';
+          const words = text.trim().split(/\s+/).filter(Boolean);
+          const textNode = el.firstChild;
+          if (!words.length || !textNode || textNode.nodeType !== Node.TEXT_NODE) {
+            continue;
+          }
+          for (const word of words) {
+            if (word.length < 2) continue;
+            const start = text.indexOf(word);
+            if (start < 0) continue;
+            const range = document.createRange();
+            range.setStart(textNode, start);
+            range.setEnd(textNode, start + word.length);
+            if (range.getClientRects().length > 1) {
+              issues.push(`mid-word break: "${word}" in "${text}"`);
+            }
+          }
+        }
+        return issues;
+      });
+  expect(violations).toEqual([]);
+}
+
 async function capture(page: import('@playwright/test').Page, state: string) {
   if (!shots) return;
   fs.mkdirSync(shots, { recursive: true });
@@ -207,6 +275,10 @@ for (const width of [390, 1440]) {
         .getByText(/Waiting for Dr\. Patel to approve your classroom/)
     ).toBeVisible();
     await capture(page, `locked-app-before-${width}`);
+    await expectTileNamesWrapOnWordBoundaries(
+      page,
+      page.getByTestId('free-assignment-tiles')
+    );
     await page
       .getByRole('button', { name: /New Class Starter assignment/i })
       .click();
@@ -230,9 +302,23 @@ for (const width of [390, 1440]) {
     await expect(listbox.getByText('Class ...')).toHaveCount(0);
     await expect(listbox.getByText('Prewrit...')).toHaveCount(0);
     await expect(listbox.getByText(/^Prewritin$/)).toHaveCount(0);
+    await expectTileNamesWrapOnWordBoundaries(page, listbox);
+    await expect(
+      page
+        .getByRole('dialog')
+        .filter({ has: page.getByRole('heading', { name: 'New assignment' }) })
+        .getByRole('button', { name: 'Close' })
+    ).toHaveCount(1);
     const lockedTileImg = page
       .locator('[data-testid="site-license-locked-assignment-tile"] img')
       .first();
+    await expect(lockedTiles.locator('img')).toHaveCount(6);
+    for (let i = 0; i < 6; i++) {
+      await expect(lockedTiles.nth(i).locator('img')).toHaveAttribute(
+        'src',
+        /\/api\/image\/course\//
+      );
+    }
     if (width === 1440) {
       if (await lockedTileImg.count()) {
         const imgBox = await lockedTileImg.boundingBox();
@@ -292,6 +378,9 @@ for (const width of [390, 1440]) {
       const sheet = page.getByRole('dialog');
       const box = await sheet.boundingBox();
       expect(box?.height ?? 0).toBeLessThan(900 * 0.75);
+      await expect(page.getByRole('dialog').getByRole('button', { name: 'Close' })).toHaveCount(
+        0
+      );
       await capture(page, 'mobile-unlock-sheet-390');
       await page.getByRole('button', { name: 'Got it' }).click();
     }

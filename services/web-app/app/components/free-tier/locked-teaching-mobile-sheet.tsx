@@ -40,6 +40,7 @@ export function LockedTeachingMobileSheet({
         side="bottom"
         className="h-auto max-h-[min(90dvh,100%)] rounded-t-2xl pb-8"
         overlayClassName="bg-black/35"
+        showCloseButton={false}
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted" />

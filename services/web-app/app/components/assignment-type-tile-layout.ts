@@ -21,16 +21,15 @@ export function assignmentTypeTileFooterClassName(extra?: string) {
   );
 }
 
+export const assignmentTypeTileNameTestId = 'assignment-type-tile-name';
+
 export function assignmentTypeTileNameClassName(extra?: string) {
-  return cn(
-    'min-w-0 flex-1 basis-[40%] text-left leading-snug break-words',
-    extra
-  );
+  return cn('min-w-0 flex-1 text-left leading-snug', extra);
 }
 
 export function assignmentTypeTileMetaClassName(extra?: string) {
   return cn(
-    'max-w-[45%] shrink-0 self-start text-right text-xs font-normal leading-snug text-muted-foreground',
+    'shrink-0 self-start whitespace-nowrap text-xs font-normal text-muted-foreground',
     extra
   );
 }

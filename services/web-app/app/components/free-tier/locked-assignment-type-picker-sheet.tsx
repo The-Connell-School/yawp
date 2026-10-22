@@ -15,6 +15,7 @@ import {
   assignmentTypeTileImageWrapClassName,
   assignmentTypeTileMetaClassName,
   assignmentTypeTileNameClassName,
+  assignmentTypeTileNameTestId,
 } from '~/components/assignment-type-tile-layout';
 import { SiteLicenseLockedAssignmentGridTile } from '~/components/site-license-locked-assignment-tile';
 import type { SiteLicenseLockedAssignmentTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
@@ -98,6 +99,7 @@ export function LockedAssignmentTypePickerSheet({
       <SheetContent
         className="flex w-full flex-col sm:max-w-[560px]"
         overlayClassName="bg-black/35"
+        showCloseButton={false}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           tileRefs.current[0]?.focus();
@@ -194,7 +196,10 @@ export function LockedAssignmentTypePickerSheet({
                     'text-sm font-medium'
                   )}
                 >
-                  <span className={assignmentTypeTileNameClassName()}>
+                  <span
+                    className={assignmentTypeTileNameClassName()}
+                    data-testid={assignmentTypeTileNameTestId}
+                  >
                     {tile.label}
                   </span>
                   <span className={assignmentTypeTileMetaClassName()}>

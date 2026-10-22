@@ -3,6 +3,26 @@ import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 
 const emptyJson = {};
 
+async function attachDonorImageIfMissing(
+  prisma: PrismaClient,
+  assignmentTypeId: string,
+  donor: { contentType: string; blob: Buffer; altText: string | null }
+) {
+  const existing = await prisma.assignmentTypeImage.findUnique({
+    where: { assignmentTypeId },
+    select: { id: true },
+  });
+  if (existing) return;
+  await prisma.assignmentTypeImage.create({
+    data: {
+      assignmentTypeId,
+      contentType: donor.contentType,
+      blob: donor.blob,
+      altText: donor.altText,
+    },
+  });
+}
+
 /** Minimal platform catalog rows so locked picker tiles render in CI E2E. */
 export async function seedSiteLicenseLockedCatalogForE2E(
   prisma: PrismaClient
@@ -90,5 +110,48 @@ export async function seedSiteLicenseLockedCatalogForE2E(
         data: { ...base, title, position },
       });
     }
+  }
+
+  const donorImage = await prisma.assignmentTypeImage.findFirst({
+    where: {
+      assignmentType: {
+        ownerOrgId: null,
+        ownerMembershipId: null,
+        kind: { in: ['class_starter', 'prewriting', 'thesis_statement'] },
+      },
+    },
+    select: { contentType: true, blob: true, altText: true },
+  });
+  if (!donorImage) return;
+
+  const lockedTypes = await prisma.assignmentType.findMany({
+    where: {
+      ownerOrgId: null,
+      ownerMembershipId: null,
+      archivedAt: null,
+      OR: [
+        { kind: { in: ['daily_pages', 'act_writing', 'ap_history'] } },
+        {
+          title: {
+            equals: 'The Thesis-Driven Essay',
+            mode: 'insensitive',
+          },
+        },
+        {
+          title: { equals: 'AP English Language', mode: 'insensitive' },
+        },
+        {
+          title: {
+            equals: 'AP English Literature',
+            mode: 'insensitive',
+          },
+        },
+      ],
+    },
+    select: { id: true },
+  });
+
+  for (const type of lockedTypes) {
+    await attachDonorImageIfMissing(prisma, type.id, donorImage);
   }
 }

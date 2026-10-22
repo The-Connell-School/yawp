@@ -6,6 +6,7 @@ import {
   assignmentTypeTileImageWrapClassName,
   assignmentTypeTileMetaClassName,
   assignmentTypeTileNameClassName,
+  assignmentTypeTileNameTestId,
 } from '~/components/assignment-type-tile-layout';
 import { SiteLicenseLockButton } from '~/components/site-license-lock-button';
 import { cn } from '~/utils/misc';
@@ -60,19 +61,33 @@ export function SiteLicenseLockedAssignmentTile({
       data-testid="site-license-locked-assignment-tile"
       className={cn(
         assignmentTypeTileCardClassName(
-          'cursor-not-allowed bg-muted/30 opacity-80'
+          'cursor-not-allowed bg-muted/20'
         ),
         className
       )}
     >
-      <div className={assignmentTypeTileImageWrapClassName()}>
+      <div
+        className={cn(
+          assignmentTypeTileImageWrapClassName(),
+          'relative grayscale'
+        )}
+      >
         <AssignmentTypeTileImage
           imageId={imageId}
           className={assignmentTypeTileImageClassName}
         />
+        <div
+          className="pointer-events-none absolute inset-0 bg-muted/35"
+          aria-hidden
+        />
       </div>
       <span className={assignmentTypeTileFooterClassName('font-medium')}>
-        <span className={assignmentTypeTileNameClassName()}>{label}</span>
+        <span
+          className={assignmentTypeTileNameClassName()}
+          data-testid={assignmentTypeTileNameTestId}
+        >
+          {label}
+        </span>
         <SiteLicenseLockButton className="self-start" />
       </span>
     </div>
@@ -103,19 +118,33 @@ export function SiteLicenseLockedAssignmentGridTile({
       data-testid="site-license-locked-assignment-tile"
       className={cn(
         assignmentTypeTileCardClassName(
-          'cursor-not-allowed bg-muted/30 opacity-70 outline-none focus-visible:ring-2 focus-visible:ring-ring'
+          'cursor-not-allowed bg-muted/20 outline-none focus-visible:ring-2 focus-visible:ring-ring'
         )
       )}
     >
-      <div className={assignmentTypeTileImageWrapClassName()}>
+      <div
+        className={cn(
+          assignmentTypeTileImageWrapClassName(),
+          'relative grayscale'
+        )}
+      >
         <AssignmentTypeTileImage
           imageId={imageId}
           imageTitle={imageTitle}
           className={assignmentTypeTileImageClassName}
         />
+        <div
+          className="pointer-events-none absolute inset-0 bg-muted/35"
+          aria-hidden
+        />
       </div>
       <div className={assignmentTypeTileFooterClassName('text-sm font-medium')}>
-        <span className={assignmentTypeTileNameClassName()}>{label}</span>
+        <span
+          className={assignmentTypeTileNameClassName()}
+          data-testid={assignmentTypeTileNameTestId}
+        >
+          {label}
+        </span>
         <SiteLicenseLockButton className="self-start" />
       </div>
     </div>
