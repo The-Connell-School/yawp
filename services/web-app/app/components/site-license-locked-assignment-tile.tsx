@@ -7,54 +7,22 @@ import {
   assignmentTypeTileNameClassName,
   assignmentTypeTileNameTestId,
   assignmentTypeTileTrailingIconClassName,
-  dashboardAssignmentTileClassName,
-  DashboardAssignmentTileFooter,
 } from '~/components/assignment-type-tile-layout';
 import { SiteLicenseLockButton } from '~/components/site-license-lock-button';
 import { cn } from '~/utils/misc';
 
 type SiteLicenseLockedAssignmentTileProps = {
   label: string;
-  /** `dashboard` matches FreeAssignmentTiles; `picker` matches the creation sheet list. */
-  variant: 'dashboard' | 'picker';
+  /** Legacy list-row layout in the assignment creation sheet (non-grid). */
+  variant: 'picker';
   className?: string;
 };
 
 export function SiteLicenseLockedAssignmentTile({
   label,
-  variant,
   className,
   imageId,
 }: SiteLicenseLockedAssignmentTileProps & { imageId?: string | null }) {
-  if (variant === 'picker') {
-    return (
-      <div
-        role="group"
-        aria-disabled="true"
-        aria-label={label}
-        data-testid="site-license-locked-assignment-tile"
-        className={cn(
-          'flex min-h-[52px] w-full cursor-not-allowed items-center gap-3 rounded-lg p-2.5 text-left text-sm text-muted-foreground opacity-70',
-          className
-        )}
-      >
-        <AssignmentTypeTileImage
-          imageId={imageId}
-          className="h-10 w-10 shrink-0 rounded-md sm:h-11 sm:w-11"
-        />
-        <span
-          className={cn(
-            assignmentTypeTileFooterClassName('min-w-0 flex-1 p-0'),
-            'text-foreground'
-          )}
-        >
-          <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
-          <SiteLicenseLockButton />
-        </span>
-      </div>
-    );
-  }
-
   return (
     <div
       role="group"
@@ -62,20 +30,23 @@ export function SiteLicenseLockedAssignmentTile({
       aria-label={label}
       data-testid="site-license-locked-assignment-tile"
       className={cn(
-        dashboardAssignmentTileClassName(
-          'cursor-not-allowed text-muted-foreground opacity-80'
-        ),
+        'flex min-h-[52px] w-full cursor-not-allowed items-center gap-3 rounded-lg p-2.5 text-left text-sm text-muted-foreground opacity-70',
         className
       )}
     >
-      <DashboardAssignmentTileFooter
-        label={label}
-        trailing={
-          <SiteLicenseLockButton
-            className={assignmentTypeTileTrailingIconClassName()}
-          />
-        }
+      <AssignmentTypeTileImage
+        imageId={imageId}
+        className="h-10 w-10 shrink-0 rounded-md sm:h-11 sm:w-11"
       />
+      <span
+        className={cn(
+          assignmentTypeTileFooterClassName('min-w-0 flex-1 p-0'),
+          'text-foreground'
+        )}
+      >
+        <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
+        <SiteLicenseLockButton />
+      </span>
     </div>
   );
 }
