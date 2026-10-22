@@ -171,6 +171,7 @@ type SidebarNavLinksProps = {
   pathname: string;
   isAppNavLinkActive: (linkTo: string, pathname: string) => boolean;
   forceFullNavigation?: boolean;
+  renderLinkTrailing?: (link: SidebarNavLink) => React.ReactNode;
 };
 
 export function SidebarNavLinks({
@@ -180,6 +181,7 @@ export function SidebarNavLinks({
   pathname,
   isAppNavLinkActive,
   forceFullNavigation = false,
+  renderLinkTrailing,
 }: SidebarNavLinksProps) {
   const lessonPlannerFlagOn =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root')
@@ -241,8 +243,13 @@ export function SidebarNavLinks({
                       )
                     ) : null}
                     {navExpanded ? (
-                      <span className="w-full min-w-0">{link.label}</span>
-                    ) : null}
+                      <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                        <span className="min-w-0 truncate">{link.label}</span>
+                        {renderLinkTrailing?.(link)}
+                      </span>
+                    ) : (
+                      renderLinkTrailing?.(link)
+                    )}
                   </Link>
                 );
               }
@@ -269,8 +276,13 @@ export function SidebarNavLinks({
                     )
                   ) : null}
                   {navExpanded ? (
-                    <span className="w-full min-w-0">{link.label}</span>
-                  ) : null}
+                    <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                      <span className="min-w-0 truncate">{link.label}</span>
+                      {renderLinkTrailing?.(link)}
+                    </span>
+                  ) : (
+                    renderLinkTrailing?.(link)
+                  )}
                 </Link>
               );
             })}

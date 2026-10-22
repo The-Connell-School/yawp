@@ -1,5 +1,6 @@
 import {
   FreeReporterLocked,
+  FreeReporterMonthlyLimit,
   useFreeAccountUsage,
   MonthlyUsageNotice,
 } from '~/components/free-account-usage';
@@ -11,6 +12,7 @@ import {
   useLoaderData,
   useNavigation,
   useSearchParams,
+  useRevalidator,
   type LoaderFunctionArgs,
 } from 'react-router';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
@@ -140,6 +142,7 @@ export default function ReporterRoute() {
   } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const fetcher = useFetcher<ReporterActionData>();
+  const revalidator = useRevalidator();
 
   const [messages, setMessages] = useState<ChatMessage[]>(
     selectedConversation?.messages ?? []
@@ -232,6 +235,7 @@ export default function ReporterRoute() {
         // Replace so the browser back button doesn't bounce between states.
         setSearchParams(next, { replace: true });
       }
+      revalidator.revalidate();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetcher.state, fetcher.data]);
@@ -281,7 +285,11 @@ export default function ReporterRoute() {
     return <TeachingAccessReporterSkeleton />;
   }
 
-  if (freeLocked) return <FreeReporterLocked />;
+  if (freeLocked) return <FreeReporterLocked variant="pending" />;
+
+  if (usage?.monthly && usage.reporter?.remaining === 0) {
+    return <FreeReporterMonthlyLimit usage={usage} />;
+  }
 
   return (
     <section className="flex h-full w-full">

@@ -1,6 +1,9 @@
 import './free-account.css';
 import { readFreeAccountUsage } from '~/domain/free-tier/inapp-usage.server';
-import { FreeAccountUsagePopover } from '~/components/free-account-usage';
+import {
+  freeTierNavMobileWarningDot,
+  renderFreeTierNavTrailing,
+} from '~/components/free-tier/free-tier-nav-usage';
 import { canUseMockAdmin, requireMockAdmin } from '~/utils/mock-admin.server';
 import {
   Form,
@@ -16,8 +19,9 @@ import {
   useFetcher,
   useRevalidator,
   useRouteLoaderData,
+  useNavigation,
 } from 'react-router';
-import { Settings2, Cog, Microscope, Lock } from 'lucide-react';
+import { Settings2, Cog, Microscope } from 'lucide-react';
 import { useCallback, useEffect, useState, useRef, createContext } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import {
@@ -248,6 +252,7 @@ function isAppNavLinkActive(linkTo: string, pathname: string) {
 }
 
 export default function Route() {
+  const navigation = useNavigation();
   const location = useLocation();
   const user = useUser();
   const shellData = useLoaderData<typeof loader>();
@@ -255,6 +260,8 @@ export default function Route() {
     shellData;
   const freeAccountUsage =
     'freeAccountUsage' in shellData ? shellData.freeAccountUsage : null;
+  const usageNavLoading =
+    navigation.state === 'loading' && Boolean(freeAccountUsage);
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
   const isReadOnlyImpersonation = rootData?.impersonation?.isReadOnly ?? false;
@@ -426,12 +433,7 @@ export default function Route() {
                         {
                           to: '/app/reporter',
                           label: 'Reporter',
-                          icon: (
-                            <>
-                              <Microscope size={18} />
-                              {!freeAccountUsage.monthly && <Lock size={12} />}
-                            </>
-                          ),
+                          icon: <Microscope size={18} />,
                         },
                       ],
                     },
@@ -443,18 +445,20 @@ export default function Route() {
             pathname={location.pathname}
             isAppNavLinkActive={isAppNavLinkActive}
             forceFullNavigation={isClassDetailRoute}
+            renderLinkTrailing={
+              freeAccountUsage
+                ? (link) =>
+                    renderFreeTierNavTrailing({
+                      link,
+                      usage: freeAccountUsage,
+                      loading: usageNavLoading,
+                      navExpanded,
+                    })
+                : undefined
+            }
           />
         </div>
         <div className="flex flex-grow flex-col justify-end">
-          {freeAccountUsage && (
-            <FreeAccountUsagePopover
-              usage={freeAccountUsage}
-              expanded={navExpanded}
-              isMobile={isMobile}
-              onMobileOpen={() => setIsMobileNavOpen(false)}
-              onMobileClose={() => mobileNavTrigger.current?.focus()}
-            />
-          )}
           {guidedTours && !isReadOnlyImpersonation ? (
             <TourThisPageButton
               navExpanded={navExpanded}
@@ -598,8 +602,16 @@ export default function Route() {
             ref={mobileNavTrigger}
             aria-label={freeAccountUsage ? 'Open app navigation' : undefined}
             onClick={() => setIsMobileNavOpen(true)}
+            className="relative"
           >
             <HamburgerIcon />
+            {freeAccountUsage &&
+            freeTierNavMobileWarningDot(freeAccountUsage, usageNavLoading) ? (
+              <span
+                className="absolute right-1 top-1 size-2 rounded-full bg-primary"
+                aria-hidden
+              />
+            ) : null}
           </Button>
           <div className="flex items-center">
             {freeAccountUsage &&

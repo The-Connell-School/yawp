@@ -107,6 +107,8 @@ export type FreeAccountUsage = ReturnType<typeof buildFreeAccountUsage> & {
     graded: boolean;
   };
   gradingPause: { retryAt: string; limit: number; window: string } | null;
+  /** When false, nav usage rings are hidden (load failure); nav links still work. */
+  usageNavMetersAvailable?: boolean;
 };
 
 export function lessonPlannerMonthlyUsage(usage: FreeAccountUsage): UsageCount {

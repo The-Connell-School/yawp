@@ -120,6 +120,9 @@ export async function readFreeAccountUsage(
   return {
     ...usageCounts,
     monthly: shellMonthly,
+    usageNavMetersAvailable: !(
+      'meteringLookupFailed' in policy && policy.meteringLookupFailed
+    ),
     lessonPlannerMonthlyMetering,
     unlimitedFreeAssignmentTiles: lessonPlannerMonthlyMetering,
     reporterLocked: lessonPlannerMonthlyMetering && !policy.enabled,
