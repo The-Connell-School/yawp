@@ -26,8 +26,6 @@ import type {
 } from '~/domain/free-tier/inapp-usage';
 import { lessonPlanMonthWindow } from '~/utils/lesson-planner/month-window';
 import { cn } from '~/utils/misc';
-import { SiteLicenseLockedAssignmentTile } from '~/components/site-license-locked-assignment-tile';
-import type { SiteLicenseLockedAssignmentTile as SiteLicenseLockedTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
 import {
   dashboardAssignmentTileClassName,
   DashboardAssignmentTileFooter,
@@ -229,7 +227,6 @@ function FreeAccountUsageDetails({ usage }: { usage: FreeAccountUsage }) {
 export function FreeAssignmentTiles({
   usage,
   types,
-  lockedAssignmentTiles = [],
   teachingLocked = false,
   onCreate,
   createTriggerRef,
@@ -241,7 +238,6 @@ export function FreeAssignmentTiles({
     imageId?: string | null;
     imageTitle?: string | null;
   }>;
-  lockedAssignmentTiles?: SiteLicenseLockedTile[];
   teachingLocked?: boolean;
   onCreate: (id?: string) => void;
   createTriggerRef?: RefObject<HTMLButtonElement | null>;
@@ -327,14 +323,6 @@ export function FreeAssignmentTiles({
             </button>
           );
         })}
-        {lockedAssignmentTiles.map((tile) => (
-          <SiteLicenseLockedAssignmentTile
-            key={tile.key}
-            label={tile.label}
-            variant="dashboard"
-            imageId={tile.imageId}
-          />
-        ))}
       </div>
     </div>
   );
