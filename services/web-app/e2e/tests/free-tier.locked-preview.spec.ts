@@ -529,8 +529,11 @@ test('locked class surfaces hide the real class code and lock invite controls', 
   await expect(joinCard.getByTestId('class-code-masked')).toBeVisible();
   await expect(joinCard.getByTestId('class-qr-locked-placeholder')).toBeVisible();
   await joinCard.getByTestId('copy-join-link-button').hover();
+  await page.waitForTimeout(350);
   await expect(
-    page.getByText('Unlocks once your administrator approves.')
+    page.getByRole('tooltip', {
+      name: /Unlocks once your administrator approves/,
+    })
   ).toBeVisible();
 });
 
