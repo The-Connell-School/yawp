@@ -2,7 +2,6 @@ import { sendEmail } from '~/utils/email.server';
 import { prisma } from '~/utils/db.server';
 import {
   ADMIN_APPROVAL_EMAIL_COPY_VERSION,
-  renderAdminApprovalEmailBody,
   renderCongratulationsEmailBody,
   renderReleaseEmailBody,
 } from './email-copy.server';
@@ -15,6 +14,7 @@ import {
 import { mintSignedLink, RELEASE_LINK_TTL_MS } from './signed-link.server';
 import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
 import { plainTextEmailToHtml } from './email-html.server';
+import { buildDesignedAdminApprovalEmail } from './admin-approval-email.server';
 import { sanitizeFreeTierEmailLogPayload } from './email-log-payload.server';
 import { assertFreeTierRuntimeConfigured } from './free-tier-config.server';
 import { resolveFreeTierRuntimeEnvironment } from './usage-budget.server';
@@ -147,32 +147,31 @@ export async function sendFreeTierAdminApprovalEmail(args: {
   approveUrl: string;
   notRightPersonUrl: string;
   adminRecipientName?: string | null;
+  forwardedByAdminName?: string | null;
   isReminder?: boolean;
 }): Promise<EmailSendResult> {
-  const text = renderAdminApprovalEmailBody({
+  const { subject, text, html } = buildDesignedAdminApprovalEmail({
     teacherName: args.teacherName,
     teacherEmail: args.teacherEmail,
     schoolName: args.schoolName,
     approveUrl: args.approveUrl,
     notRightPersonUrl: args.notRightPersonUrl,
-    adminRecipientName: args.adminRecipientName,
-    reminderLead: args.isReminder
-      ? 'This is a reminder about the approval request below.'
-      : undefined,
+    forwardedByAdminName: args.forwardedByAdminName,
+    reminder: args.isReminder,
   });
-  const subject = args.isReminder
-    ? `Reminder: Approve Yawp! for ${args.schoolName}`
-    : `Approve Yawp! for ${args.schoolName}`;
   try {
     assertFreeTierRuntimeConfigured();
-    const delivered = await deliverEmail({
+    const result = await sendEmail({
       to: args.to,
       ...(resolveFreeTierRuntimeEnvironment() === 'demo'
         ? { bcc: [args.teacherEmail] }
         : {}),
       subject,
       text,
+      html,
     });
+    const error = emailSendErrorMessage(result);
+    const delivered = error ? { ok: false as const, error } : { ok: true as const };
     if (!delivered.ok) {
       await logEmail({
         applicationId: args.applicationId,

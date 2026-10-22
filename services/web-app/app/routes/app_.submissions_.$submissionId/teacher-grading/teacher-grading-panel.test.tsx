@@ -288,4 +288,39 @@ describe('TeacherGradingPanel', () => {
       )?.value
     ).toBe('Assistant feedback.');
   });
+
+  it('shows rubric band names without a numeric score suffix in accordion headers', async () => {
+    ({ root } = renderPanel({
+      rubricConfig: {
+        source: 'assignment-type',
+        minScore: 0,
+        maxScore: 30,
+        scoringType: 'points_scale',
+        categories: [
+          {
+            key: 'engagement_with_prompt',
+            label: 'Engagement with Prompt',
+            description: 'Engagement only.',
+            weight: 1,
+            bands: [
+              {
+                label: 'SHOWED UP',
+                min: 17,
+                max: 23,
+                description: 'Meaningful engagement.',
+              },
+            ],
+          },
+        ],
+      },
+      existingGrade: {
+        rubricScores: {
+          engagement_with_prompt: { score: 20, comment: '' },
+        },
+      },
+    }));
+
+    expect(document.body.textContent).toContain('Good');
+    expect(document.body.textContent).not.toMatch(/Good\s*\(\s*20\/30\s*\)/);
+  });
 });

@@ -69,6 +69,7 @@ test('loads locked tiles from the global catalog for FREE_CLASSROOM orgs', async
       systemKey: true,
       ownerOrgId: true,
       ownerMembershipId: true,
+      image: { select: { id: true } },
     },
     orderBy: { position: 'asc' },
   });

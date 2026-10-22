@@ -1,5 +1,6 @@
 import {
-  MonthlyUsageNotice,
+  LessonPlannerMonthlyLimitNotice,
+  lessonPlannerPausedPlaceholder,
   useFreeAccountUsage,
 } from '~/components/free-account-usage';
 import { replyTopScroll, transcriptScrollTarget } from '~/domain/lesson-planner/transcript-scroll';
@@ -12,16 +13,20 @@ import {
 import { groupOptionParts } from '~/domain/lesson-planner/option-groups';
 import type { ReplyPart } from '~/domain/lesson-planner/reply-parts';
 import { OptionRow } from '~/components/ai-chat/option-row';
+import { isLessonPlannerMonthlyExhausted } from '~/domain/free-tier/inapp-usage';
 import { useEffect, useRef, useState } from 'react';
 import {
   Link,
   redirect,
   useFetcher,
   useLoaderData,
+  useNavigation,
   useRevalidator,
   useSearchParams,
   type LoaderFunctionArgs,
 } from 'react-router';
+import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
+import { TeachingAccessLessonPlannerSkeleton } from '~/components/free-tier/teaching-access-lesson-planner-skeleton';
 import {
   BookmarkCheck,
   BookmarkPlus,
@@ -404,6 +409,9 @@ type LessonPlannerActionData = {
 };
 
 export default function LessonPlannerRoute() {
+  const navigation = useNavigation();
+  const { locked: teachingLocked, loading: teachingLoading } =
+    useTeachingAccess();
   const freeUsage = useFreeAccountUsage();
   const {
     conversations,
@@ -974,7 +982,7 @@ export default function LessonPlannerRoute() {
     setStreamed(landed ?? { error: PLANNER_UNREACHABLE });
     // The loader owns the lesson list and which unit days are built, and the
     // fetcher would have refreshed both for us.
-    if (landed?.reply) revalidator.revalidate();
+    if (landed?.reply || landed?.conversationId) revalidator.revalidate();
   }
 
   const hasMessages = messages.length > 0;
@@ -988,6 +996,13 @@ export default function LessonPlannerRoute() {
   const firstAssistantIndex = messages.findIndex(
     (message) => message.role === 'assistant'
   );
+
+  if (
+    (teachingLocked || teachingLoading) &&
+    navigation.state === 'loading'
+  ) {
+    return <TeachingAccessLessonPlannerSkeleton />;
+  }
 
   return (
     <section className="flex h-full w-full">
@@ -1113,9 +1128,6 @@ export default function LessonPlannerRoute() {
               hasMessages ? 'max-w-3xl' : 'max-w-4xl py-6 sm:py-10'
             )}
           >
-            {freeUsage?.monthly && (
-              <MonthlyUsageNotice usage={freeUsage} feature="lesson-planner" />
-            )}
             {!hasMessages ? (
               <LessonPlannerEmptyState
                 prompts={recommendedPrompts}
@@ -1271,6 +1283,7 @@ function LessonComposer({
   chip = null,
   placeholder = null,
   sources = null,
+  placeholderOverride,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -1283,6 +1296,7 @@ function LessonComposer({
   /** Shown inside the box, above the text: the template in use (run 3). */
   chip?: React.ReactNode;
   placeholder?: string | null;
+  placeholderOverride?: string;
 }) {
   const rotating = useRotatingPlaceholder(value.length > 0);
 
@@ -1313,7 +1327,11 @@ function LessonComposer({
           }
         }}
         rows={hero ? 2 : 1}
-        placeholder={placeholder ?? (hero ? rotating : 'Describe the lesson and your class…')}
+        placeholder={
+          placeholderOverride ??
+          placeholder ??
+          (hero ? rotating : 'Describe the lesson and your class…')
+        }
         aria-label="Message the Lesson Planner"
         className={cn(
           'w-full flex-1 resize-none max-sm:text-base',
@@ -1365,7 +1383,12 @@ function LessonPlannerEmptyState({
 }) {
   const [showTemplates, setShowTemplates] = useState(false);
   const freeUsage = useFreeAccountUsage();
-  const exhausted = freeUsage?.lessonPlans.remaining === 0;
+  const exhausted =
+    freeUsage && isLessonPlannerMonthlyExhausted(freeUsage);
+  const pausedPlaceholder =
+    exhausted && freeUsage
+      ? lessonPlannerPausedPlaceholder(freeUsage)
+      : undefined;
   return (
     <div className="flex flex-col items-center gap-8">
       <div className="flex w-full max-w-3xl flex-col items-center gap-5 text-center">
@@ -1383,7 +1406,8 @@ function LessonPlannerEmptyState({
           value={input}
           onChange={onInput}
           onSend={onSend}
-          disabled={disabled || exhausted}
+          disabled={disabled || Boolean(exhausted)}
+          placeholderOverride={pausedPlaceholder}
           sources={sources}
           chip={
             template && onTemplate ? (
@@ -1401,7 +1425,12 @@ function LessonPlannerEmptyState({
             onPick={(picked) => onTemplate(picked)}
           />
         ) : null}
-        {freeUsage && !freeUsage.monthly && (
+        {freeUsage ? (
+          <LessonPlannerMonthlyLimitNotice usage={freeUsage} />
+        ) : null}
+        {freeUsage &&
+        !freeUsage.lessonPlannerMonthlyMetering &&
+        !freeUsage.monthly ? (
           <div
             className="text-sm text-muted-foreground"
             data-testid="free-lesson-remaining"
@@ -1409,18 +1438,12 @@ function LessonPlannerEmptyState({
             {exhausted ? (
               <>
                 <p>
-                  You have used all {freeUsage.lessonPlans.total} lesson plans
-                  {freeUsage.monthly
-                    ? ' this month. Come back next month to plan another.'
-                    : '. Delete one to plan another.'}
+                  You have used all {freeUsage.lessonPlans.total} lesson plans.
+                  Delete one to plan another.
                 </p>
                 <Link
                   className="mt-2 inline-block text-primary underline"
-                  to={
-                    freeUsage.monthly
-                      ? 'mailto:hello@yawp.school?subject=More%20access%20to%20Yawp!'
-                      : '/app/free-tier/status'
-                  }
+                  to="/app/free-tier/status"
                 >
                   Need more? Talk to us
                 </Link>
@@ -1429,7 +1452,7 @@ function LessonPlannerEmptyState({
               `${freeUsage.lessonPlans.remaining} of ${freeUsage.lessonPlans.total} lesson plans left`
             )}
           </div>
-        )}
+        ) : null}
       </div>
       {seedContext ? (
         <div
@@ -1453,7 +1476,7 @@ function LessonPlannerEmptyState({
         <PromptTiles
           prompts={prompts}
           onPick={onPick}
-          disabled={disabled || exhausted}
+          disabled={disabled || Boolean(exhausted)}
           templateTile={
             templates
               ? { active: showTemplates, onClick: () => setShowTemplates((open) => !open) }

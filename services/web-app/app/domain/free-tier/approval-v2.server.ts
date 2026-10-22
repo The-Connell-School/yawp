@@ -19,26 +19,32 @@ import {
   resolvedFreeTierRollout,
 } from '~/domain/feature-flags/feature-flags.server';
 import {
+  applicationIdFromSignedToken,
   claimSignedLinkInTransaction,
   invalidateOpenAdminApprovalLinks,
   mintSignedLink,
   peekSignedLink,
 } from './signed-link.server';
-import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
 import {
-  renderAdminApprovalEmailBody,
-  adminApprovalEmailCopyVersionHash,
-} from './email-copy.server';
+  fetchFreeTierApplicationTerminalGate,
+  forwardIdempotentReplay,
+  resolveAdminLinkReplacedGate,
+  resolveAdminLinkTerminalGate,
+} from './admin-link-gate.server';
+import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
+import { adminApprovalEmailCopyVersionHash } from './email-copy.server';
 import {
   adminApprovalUrlsFromEmailBody,
   FORWARD_NOTICE_V2_SUBJECT,
   TEACHER_REMINDER_V2_SUBJECT,
   isOnboardingV2CopyVersion,
-  renderAdminApprovalEmailV2Body,
-  renderAdminApprovalEmailV2Subject,
   renderForwardNoticeV2Body,
   renderTeacherReminderV2Body,
 } from './email-copy';
+import {
+  buildDesignedAdminApprovalEmail,
+  htmlForStoredAdminApprovalEmail,
+} from './admin-approval-email.server';
 import { sanitizeFreeTierEmailLogPayload } from './email-log-payload.server';
 import { plainTextEmailToHtml } from './email-html.server';
 import {
@@ -60,6 +66,7 @@ type Message = {
   to: string;
   subject: string;
   text: string;
+  html?: string;
   approveLinkId?: string;
   declineLinkId?: string;
 };
@@ -133,7 +140,8 @@ async function adminMessage(
   tx: Tx,
   app: FreeTierApplication,
   approval: FreeTierAdminApproval,
-  reminder: boolean
+  reminder: boolean,
+  options: { forwardedByAdminName?: string | null } = {}
 ): Promise<Message> {
   const approve = await mintSignedLink({
     applicationId: app.id,
@@ -148,37 +156,20 @@ async function adminMessage(
   const base = freeTierPublicAppOrigin();
   const approveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(approve.token)}`;
   const notRightPersonUrl = `${base}/free/admin/not-right-person?t=${encodeURIComponent(decline.token)}`;
-  if (isOnboardingV2CopyVersion(app.releaseEmailCopyVersion)) {
-    return {
-      to: approval.adminEmail,
-      subject: renderAdminApprovalEmailV2Subject({ teacherName: app.name, reminder }),
-      text: renderAdminApprovalEmailV2Body({
-        teacherName: app.name,
-        schoolName: app.schoolName,
-        className: app.starterClassName,
-        adminRecipientName: approval.adminName,
-        approveUrl,
-        notRightPersonUrl,
-        reminder,
-      }),
-      approveLinkId: approve.linkId,
-      declineLinkId: decline.linkId,
-    };
-  }
+  const designed = buildDesignedAdminApprovalEmail({
+    teacherName: app.name,
+    teacherEmail: app.email,
+    schoolName: app.schoolName,
+    approveUrl,
+    notRightPersonUrl,
+    forwardedByAdminName: options.forwardedByAdminName,
+    reminder,
+  });
   return {
     to: approval.adminEmail,
-    subject: `${reminder ? 'Reminder: ' : ''}Approve Yawp! for ${app.schoolName}`,
-    text: renderAdminApprovalEmailBody({
-      teacherName: app.name,
-      teacherEmail: app.email,
-      schoolName: app.schoolName,
-      adminRecipientName: approval.adminName,
-      approveUrl: `${base}/free/admin/approve?t=${encodeURIComponent(approve.token)}`,
-      notRightPersonUrl: `${base}/free/admin/not-right-person?t=${encodeURIComponent(decline.token)}`,
-      reminderLead: reminder
-        ? 'This is a reminder about the approval request below.'
-        : undefined,
-    }),
+    subject: designed.subject,
+    text: designed.text,
+    html: designed.html,
     approveLinkId: approve.linkId,
     declineLinkId: decline.linkId,
   };
@@ -363,6 +354,20 @@ export async function forwardApprovalRequest(args: {
     });
     if (!app || !(await isApprovalV2Enabled(app, tx)))
       return fail('not_allowed');
+    if (app.status === 'APPROVED') {
+      return {
+        ok: false as const,
+        reason: 'already_approved' as const,
+        schoolName: app.schoolName,
+      };
+    }
+    if (app.status === 'REJECTED' || app.status === 'EXPIRED') {
+      return {
+        ok: false as const,
+        reason: 'declined' as const,
+        schoolName: app.schoolName,
+      };
+    }
     if (app.status !== 'SENT' && app.status !== 'MANUAL_REVIEW')
       return fail('already_decided');
     const pending = await tx.freeTierAdminApproval.findFirst({
@@ -429,7 +434,9 @@ export async function forwardApprovalRequest(args: {
       },
     });
     if (!rules.manualReview) {
-      const message = await adminMessage(tx, app, next, false);
+      const message = await adminMessage(tx, app, next, false, {
+        forwardedByAdminName: pending.adminName,
+      });
       await tx.freeTierAdminApproval.update({
         where: { id: next.id },
         data: { signedLinkId: message.approveLinkId },
@@ -476,19 +483,74 @@ export async function forwardApprovalByToken(args: {
   newAdminEmail: string;
   request: Request;
 }) {
+  const parsed = forwardApprovalSchema.safeParse({
+    newAdminName: args.newAdminName,
+    newAdminEmail: args.newAdminEmail,
+  });
+  if (!parsed.success) {
+    return {
+      ...fail('validation'),
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  const earlyAppId = applicationIdFromSignedToken(args.token);
+  if (earlyAppId) {
+    const gate = await fetchFreeTierApplicationTerminalGate(earlyAppId);
+    if (gate) return { ok: false as const, ...gate };
+  }
+  if (
+    await forwardIdempotentReplay({
+      token: args.token,
+      newAdminName: parsed.data.newAdminName,
+      newAdminEmail: parsed.data.newAdminEmail,
+    })
+  ) {
+    return { ok: true as const, idempotent: true as const };
+  }
+
   const peek = await peekSignedLink({
     token: args.token,
     expectedPurpose: args.purpose ?? 'ADMIN_NOT_RIGHT_PERSON',
   });
-  if (!peek.ok) return peek;
+  if (!peek.ok) {
+    if (
+      peek.reason === 'used' &&
+      (await forwardIdempotentReplay({
+        token: args.token,
+        newAdminName: parsed.data.newAdminName,
+        newAdminEmail: parsed.data.newAdminEmail,
+      }))
+    ) {
+      return { ok: true as const, idempotent: true as const };
+    }
+    const gate = await resolveAdminLinkTerminalGate({ token: args.token, peek });
+    if (gate) return { ok: false as const, ...gate };
+    const replaced = await resolveAdminLinkReplacedGate({
+      token: args.token,
+      peek,
+    });
+    if (replaced) return { ok: false as const, ...replaced };
+    return peek;
+  }
+
+  const gate = await fetchFreeTierApplicationTerminalGate(peek.applicationId);
+  if (gate) return { ok: false as const, ...gate };
+
   const pending = await prisma.freeTierAdminApproval.findFirst({
     where: { applicationId: peek.applicationId, status: 'PENDING' },
     orderBy: { createdAt: 'desc' },
     select: { id: true },
   });
-  if (!pending) return fail('not_allowed');
+  if (!pending) {
+    const lateGate = await fetchFreeTierApplicationTerminalGate(peek.applicationId);
+    if (lateGate) return { ok: false as const, ...lateGate };
+    return fail('not_allowed');
+  }
   return forwardApprovalRequest({
     ...args,
+    newAdminName: parsed.data.newAdminName,
+    newAdminEmail: parsed.data.newAdminEmail,
     tokenPurpose: args.purpose,
     applicationId: peek.applicationId,
     currentApprovalId: pending.id,
@@ -876,11 +938,22 @@ async function deliverJob(id: string, now: Date) {
       let accepted = false,
         retryable = false;
       try {
+        const html =
+          job.kind === 'admin_approval' || job.kind === 'admin_reminder'
+            ? htmlForStoredAdminApprovalEmail({
+                subject: message.subject,
+                text: message.text,
+                html: message.html,
+                teacherName: app.name,
+                teacherEmail: app.email,
+                schoolName: app.schoolName,
+              })
+            : plainTextEmailToHtml(message.text);
         const result = await sendEmail({
           to: message.to,
           subject: message.subject,
           text: message.text,
-          html: plainTextEmailToHtml(message.text),
+          html,
           singleAttempt: true,
         });
         accepted = result.status === 'success';

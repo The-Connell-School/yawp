@@ -43,11 +43,16 @@ type SendEmailOptions = {
 	| { react: ReactElement; html?: never; text?: never }
 )
 
-export async function sendEmail(options: SendEmailOptions) {
-	const from =
+export function getTransactionalEmailFrom() {
+	return (
 		process.env.SES_FROM_EMAIL ??
 		process.env.RESEND_FROM_EMAIL ??
 		'test@example.com'
+	)
+}
+
+export async function sendEmail(options: SendEmailOptions) {
+	const from = getTransactionalEmailFrom()
 	const content =
 		'react' in options && options.react
 			? await renderReactEmail(options.react)

@@ -16,11 +16,13 @@ import {
 import { effectiveFreeTierLimits } from './limits.server';
 import { buildFreeAccountUsage, type FreeAccountUsage } from './inapp-usage';
 import { readGradingLimitStatus } from '~/utils/rate-limit.server';
+import { shouldHideFreeTierTeachingSecrets } from './locked-preview.server';
 
 /** Gate before performing any additional v2 usage reads. */
 export async function readFreeAccountUsage(
   profile: FreeTierInappProfile & { id: string },
-  freeTierRouteOpen: boolean
+  freeTierRouteOpen: boolean,
+  userId: string
 ): Promise<FreeAccountUsage | null> {
   if (
     !freeTierRouteOpen ||
@@ -38,8 +40,12 @@ export async function readFreeAccountUsage(
     return null;
   const organizationId = profile.organization.id;
   const membershipId = profile.id;
+  const hideTeachingSecrets = await shouldHideFreeTierTeachingSecrets(userId);
   const { limits, monthly } = await effectiveFreeTierLimits(organizationId);
+  const shellMonthly = policy.enabled;
+  const lessonPlannerMonthlyMetering = policy.lessonPlannerMeteringEnabled;
   const entitlements = getEntitlementsForPlan('FREE_CLASSROOM', limits);
+  const lessonPlanCap = entitlements.features.lessonPlanQuota!;
   const klass = await prisma.class.findFirst({
     where: {
       isArchived: false,
@@ -56,6 +62,7 @@ export async function readFreeAccountUsage(
     writingSubmitted,
     graded,
     gradingPause,
+    monthlyLessonPlansUsed,
   ] = await Promise.all([
     klass
       ? countFreeClassSeatUsage(
@@ -85,36 +92,60 @@ export async function readFreeAccountUsage(
         })
       : 0,
     readGradingLimitStatus(membershipId),
+    lessonPlannerMonthlyMetering && !shellMonthly
+      ? countOrganizationLessonPlans(organizationId, true)
+      : Promise.resolve(null),
   ]);
-  const reporter = policy.enabled
+  const reporterUsed = policy.enabled
     ? await readMonthlyUsage(organizationId, 'reporter')
     : 0;
+  const usageCounts = buildFreeAccountUsage({
+    monthly: shellMonthly,
+    seatCap: entitlements.studentSeatCap!,
+    lessonPlanCap,
+    assignmentCaps: FREE_CLASSROOM_ASSIGNMENT_QUOTAS,
+    students: seats.currentStudents,
+    pendingInvites: seats.pendingInvites,
+    lessonPlans,
+    assignmentCounts: Object.fromEntries(assignmentCounts),
+  });
+  const lessonPlannerMonthly =
+    monthlyLessonPlansUsed === null
+      ? undefined
+      : {
+          used: monthlyLessonPlansUsed,
+          total: lessonPlanCap,
+          remaining: Math.max(0, lessonPlanCap - monthlyLessonPlansUsed),
+        };
   return {
-    ...buildFreeAccountUsage({
-      monthly: policy.enabled,
-      seatCap: entitlements.studentSeatCap!,
-      lessonPlanCap: entitlements.features.lessonPlanQuota!,
-      assignmentCaps: FREE_CLASSROOM_ASSIGNMENT_QUOTAS,
-      students: seats.currentStudents,
-      pendingInvites: seats.pendingInvites,
-      lessonPlans,
-      assignmentCounts: Object.fromEntries(assignmentCounts),
-    }),
-    monthly: policy.enabled,
-    ...(policy.enabled
+    ...usageCounts,
+    monthly: shellMonthly,
+    usageNavMetersAvailable: !(
+      'meteringLookupFailed' in policy && policy.meteringLookupFailed
+    ),
+    lessonPlannerMonthlyMetering,
+    unlimitedFreeAssignmentTiles: lessonPlannerMonthlyMetering,
+    reporterLocked: lessonPlannerMonthlyMetering && !policy.enabled,
+    ...(lessonPlannerMonthly ? { lessonPlannerMonthly } : {}),
+    ...(shellMonthly
       ? {
           renewsAt: lessonPlanMonthWindow(new Date()).lt.toISOString(),
           reporter: {
-            used: reporter,
+            used: reporterUsed,
             total: limits.reporterMonthly,
-            remaining: Math.max(0, limits.reporterMonthly - reporter),
+            remaining: Math.max(0, limits.reporterMonthly - reporterUsed),
           },
         }
-      : {}),
-    classCode: klass?.code ?? null,
+      : lessonPlannerMonthlyMetering
+        ? {
+            renewsAt: lessonPlanMonthWindow(new Date()).lt.toISOString(),
+          }
+        : {}),
+    classCode: hideTeachingSecrets ? null : (klass?.code ?? null),
+    classCodeHidden: hideTeachingSecrets,
     classId: klass?.id ?? null,
     checklist: {
-      classReady: Boolean(klass?.code),
+      classReady: Boolean(klass?.id),
       assignmentCreated: [...assignmentCounts.values()].some((n) => n > 0),
       writingSubmitted: writingSubmitted > 0,
       graded: graded > 0,

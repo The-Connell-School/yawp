@@ -94,14 +94,17 @@ describe('approval recipients and fixed copy', () => {
         const args = {
           applicationId: 'app_test',
           to: 'principal@example.edu',
-          teacherEmail: 'teacher@example.edu',
-          teacherName: 'Teacher',
-          schoolName: 'Example High',
+          teacherEmail: 'jrivera@lincolnhs.org',
+          teacherName: 'Jordan Rivera',
+          schoolName: 'Lincoln High School',
           personalNote: 'CRAFTED OR HISTORICAL INTRODUCTION',
           approveUrl: 'https://yawp.test/approve',
           notRightPersonUrl: 'https://yawp.test/forward',
           ...(path === 'replacement'
-            ? { adminRecipientName: 'New Principal' }
+            ? {
+                adminRecipientName: 'New Principal',
+                forwardedByAdminName: 'Sam Chen',
+              }
             : {}),
         };
         const result = await (
@@ -119,7 +122,25 @@ describe('approval recipients and fixed copy', () => {
         expect(delivered.html).not.toContain(args.personalNote);
         expect(delivered.text).toContain(args.approveUrl);
         expect(delivered.text).toContain(args.notRightPersonUrl);
-        expect(delivered.text).toContain('link expires in 14 days');
+        expect(delivered.text).toContain('This link works for 14 days');
+        expect(delivered.text).toContain('Review and approve:');
+        expect(delivered.html).toContain('Review and approve</a>');
+        expect(delivered.html).toContain(`href="${args.approveUrl}"`);
+        if (path === 'replacement') {
+          expect(delivered.subject).toBe(
+            'Can you approve Yawp! for Jordan Rivera at Lincoln High School?'
+          );
+        } else {
+          expect(delivered.subject).toBe(
+            path === 'reminder'
+              ? 'Reminder: Jordan Rivera at Lincoln High School would like to use Yawp!'
+              : 'Jordan Rivera at Lincoln High School would like to use Yawp!'
+          );
+        }
+        expect(delivered.subject).not.toBe('Approve Yawp! for Lincoln High School');
+        expect(delivered.html).toContain(
+          'Approve Yawp! for Jordan Rivera at Lincoln High School'
+        );
         expect(logEmail.mock.calls.at(-1)?.[0].data.success).toBe(true);
       });
     }

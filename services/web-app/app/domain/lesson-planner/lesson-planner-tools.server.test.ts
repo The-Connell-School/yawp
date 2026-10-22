@@ -118,7 +118,11 @@ describe('handleLessonPlannerToolCall', () => {
     expect(handleReporterToolCall).toHaveBeenCalledWith(
       'list_classes',
       {},
-      { membershipId: 'member-1', organizationId: 'org-1' }
+      expect.objectContaining({
+        membershipId: 'member-1',
+        organizationId: 'org-1',
+        lessonPlannerReadOnlyDelegation: expect.objectContaining({}),
+      })
     );
   });
 

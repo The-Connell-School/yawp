@@ -14,6 +14,10 @@
  *   on rather than a description they have to go find.
  */
 import {
+  createLessonPlannerReporterReadOnlyDelegation,
+  LESSON_PLANNER_REPORTER_READONLY_TOOL_NAMES,
+} from './lesson-planner-reporter-delegation.server';
+import {
   handleReporterToolCall,
   REPORTER_TOOLS,
   type ReporterTool,
@@ -70,11 +74,8 @@ const productionDependencies: LessonPlannerToolDependencies = {
  * exist, how each did against the rubric, and who is struggling enough to need
  * a differentiated path through the lesson.
  */
-export const LESSON_PLANNER_REPORTER_TOOL_NAMES = [
-  'list_classes',
-  'get_class_grade_report',
-  'find_students_needing_attention',
-] as const;
+export const LESSON_PLANNER_REPORTER_TOOL_NAMES =
+  LESSON_PLANNER_REPORTER_READONLY_TOOL_NAMES;
 
 /** Catalog tools, served locally rather than through the reporter. */
 export const LESSON_PLANNER_CATALOG_TOOLS: ReporterTool[] = [
@@ -420,13 +421,17 @@ export async function handleLessonPlannerToolCall(
 ): Promise<string> {
   const { assertOrganizationTeachingApproved } = await import('~/domain/free-tier/locked-preview.server');
   const { prisma } = await import('~/utils/db.server');
-  await assertOrganizationTeachingApproved(prisma, ctx.organizationId);
+  await assertOrganizationTeachingApproved(prisma, ctx.organizationId, {
+    allowPendingLessonPlanner: true,
+  });
   if (allowedReporterTools.has(name)) {
     // Rebuild the context explicitly: the reporter handler stages writes into a
     // caller-supplied buffer, and the planner must never hand it one.
     return dependencies.handleReporterTool(name, input, {
       membershipId: ctx.membershipId,
       organizationId: ctx.organizationId,
+      lessonPlannerReadOnlyDelegation:
+        createLessonPlannerReporterReadOnlyDelegation(),
     });
   }
 

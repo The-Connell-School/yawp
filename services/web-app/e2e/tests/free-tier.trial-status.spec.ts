@@ -64,7 +64,7 @@ for (const width of [1280, 390]) test(`expiry, rejection, budget pause, reading 
     await expect(page.getByRole('heading', { name: 'Request not approved', exact: true })).toBeVisible();
     await capture(page, 'rejected');
     await status('SENT');
-    await page.goto(route);
+    await page.goto('/app/free-tier/pending');
     await expect(page).toHaveURL(/\/app\/free-tier\/pending$/);
     await capture(page, 'pending');
     await status('APPROVED');
@@ -139,7 +139,7 @@ test('inactive and foreign membership, pending gates and disabled feature protec
   test.skip(before);
   await login(page);
   const direct = `${route}.data?_routes=routes/app.free-tier.status`;
-  for (const [state, destination] of [['SENT', '/app/free-tier/pending'], ['MANUAL_REVIEW', '/app/free-tier/pending'], ['ACCOUNT_CREATED', '/app/free-tier/onboarding'], ['ADMIN_SUBMITTED', '/app/free-tier/onboarding']] as const) {
+  for (const [state, destination] of [['SENT', '/app'], ['MANUAL_REVIEW', '/app'], ['ACCOUNT_CREATED', '/app/free-tier/onboarding'], ['ADMIN_SUBMITTED', '/app/free-tier/onboarding']] as const) {
     await status(state);
     const response = await page.request.get(direct, { maxRedirects: 0 });
     expect(`${await response.text()}${response.headers().location}`).toContain(destination);

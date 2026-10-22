@@ -1,4 +1,6 @@
 import { useFreeAccountUsage } from '~/components/free-account-usage';
+import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
+import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
@@ -469,6 +471,12 @@ function SavedAssignmentsPanel({
 
 export default function MyAssignmentsRoute() {
   const freeUsage = useFreeAccountUsage();
+  const { locked: teachingLocked, state: teachingAccessState } =
+    useTeachingAccess();
+  const teachingAccessAdminName =
+    teachingAccessState.variant === 'locked'
+      ? teachingAccessState.adminName
+      : 'your administrator';
   const {
     assignments,
     savedAssignments,
@@ -642,18 +650,33 @@ export default function MyAssignmentsRoute() {
               </Tooltip>
             </Form>
           ) : null}
-          <Button
-            type="button"
-            size="sm"
-            className="shrink-0"
-            data-testid="my-assignments-new-assignment"
-            data-tour="my-assignments-new"
-            disabled={!freeUsage?.monthly && freeUsage?.allAssignmentsUsed}
-            onClick={() => setIsCreateSheetOpen(true)}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            New Assignment
-          </Button>
+          {(() => {
+            const createButton = (
+              <Button
+                type="button"
+                size="sm"
+                className="shrink-0"
+                data-testid="my-assignments-new-assignment"
+                data-tour="my-assignments-new"
+                disabled={
+                  !teachingLocked &&
+                  !freeUsage?.monthly &&
+                  freeUsage?.allAssignmentsUsed
+                }
+                onClick={() => setIsCreateSheetOpen(true)}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                New Assignment
+              </Button>
+            );
+            return teachingLocked ? (
+              <LockedTeachingControl locked adminName={teachingAccessAdminName}>
+                {createButton}
+              </LockedTeachingControl>
+            ) : (
+              createButton
+            );
+          })()}
           {!freeUsage?.monthly && freeUsage?.allAssignmentsUsed && (
             <span className="text-xs text-amber-800">
               No free assignments left
@@ -793,6 +816,7 @@ export default function MyAssignmentsRoute() {
         assignmentTypes={assignmentCreationTypes}
         siteLicenseLockedAssignmentTiles={siteLicenseLockedAssignmentTiles}
         teacherClasses={assignmentCreationClasses}
+        teachingLocked={teachingLocked}
       />
     </div>
   );

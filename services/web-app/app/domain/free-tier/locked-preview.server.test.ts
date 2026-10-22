@@ -1,7 +1,7 @@
 import { afterEach, expect, mock, test } from 'bun:test';
 
 let enabled = true;
-let application: any = { status: 'SENT', organizationId: 'org-a' };
+let application: any = { id: 'app-a', status: 'SENT', organizationId: 'org-a' };
 let memberships: any[] = [{ role: 'TEACHER', organizationId: 'org-a', organization: { plan: 'FREE_CLASSROOM' } }];
 const queries: any[] = [];
 const db = {
@@ -13,23 +13,56 @@ mock.module('~/utils/db.server', () => ({ prisma: db }));
 mock.module('~/domain/feature-flags/feature-flags.server', () => ({
   isFeatureFlagEnabled: mock(async (_key: string, org: string) => enabled && (!org || org === 'org-a')),
 }));
-const { enforceLockedPreviewRequest, assertOrganizationTeachingApproved } = await import('./locked-preview.server');
+const {
+  enforceLockedPreviewRequest,
+  assertOrganizationTeachingApproved,
+  getLockedPreviewApplication,
+  userHasPendingFreeTierTeachingLock,
+} = await import('./locked-preview.server');
 afterEach(() => {
   enabled = true;
-  application = { status: 'SENT', organizationId: 'org-a' };
+  application = { id: 'app-a', status: 'SENT', organizationId: 'org-a' };
   memberships = [{ role: 'TEACHER', organizationId: 'org-a', organization: { plan: 'FREE_CLASSROOM' } }];
   queries.length = 0;
+  db.freeTierApplication.findFirst = mock(async (q: any) => {
+    queries.push(q);
+    return application;
+  });
 });
-test('pending direct APIs fail with 403 before execution; reads redirect to the preview', async () => {
-  for (const path of ['/api/domain/reporter', '/api/domain/lesson-planner', '/app/assignments']) {
+test('pending direct APIs fail with 403 before execution; app reads pass through', async () => {
+  for (const path of ['/api/domain/reporter', '/app/assignments']) {
     try { await enforceLockedPreviewRequest(new Request(`http://local${path}`, { method: 'POST' }), 'teacher'); throw Error('allowed'); }
     catch (e) { expect((e as Response).status).toBe(403); }
   }
-  try { await enforceLockedPreviewRequest(new Request('http://local/app/reporter'), 'teacher'); throw Error('allowed'); }
-  catch (e) { expect((e as Response).headers.get('location')).toBe('/app/free-tier/preview'); }
+  await enforceLockedPreviewRequest(
+    new Request('http://local/api/domain/lesson-planner', { method: 'POST' }),
+    'teacher'
+  );
+  for (const status of ['ACCOUNT_CREATED', 'ADMIN_SUBMITTED'] as const) {
+    application.status = status;
+    await expect(
+      enforceLockedPreviewRequest(
+        new Request('http://local/api/domain/lesson-planner', {
+          method: 'POST',
+        }),
+        'teacher'
+      )
+    ).rejects.toMatchObject({ status: 403 });
+  }
+  application.status = 'SENT';
+  await expect(
+    enforceLockedPreviewRequest(
+      new Request('http://local/api/domain/lesson-planner/packet', {
+        method: 'POST',
+      }),
+      'teacher'
+    )
+  ).rejects.toMatchObject({ status: 403 });
+  await enforceLockedPreviewRequest(new Request('http://local/app/reporter'), 'teacher');
+  await enforceLockedPreviewRequest(new Request('http://local/app/my-classes'), 'teacher');
 });
-test('allowed preview reads, preparation and approval actions pass', async () => {
-  await enforceLockedPreviewRequest(new Request('http://local/app/free-tier/preview'), 'teacher');
+test('allowed app reads, preparation and approval actions pass', async () => {
+  await enforceLockedPreviewRequest(new Request('http://local/app/assignment-types/at-1'), 'teacher');
   await enforceLockedPreviewRequest(new Request('http://local/app/free-tier/onboarding', { method: 'POST' }), 'teacher');
   await enforceLockedPreviewRequest(new Request('http://local/app/free-tier/pending', { method: 'POST' }), 'teacher');
 });
@@ -41,21 +74,85 @@ test('a new teacher has no organization membership until approval; the default s
   await expect(enforceLockedPreviewRequest(new Request('http://local/api/assignments/create', { method: 'POST' }), 'teacher')).rejects.toMatchObject({ status: 403 });
 });
 test('flag off, approved and other roles retain normal behavior', async () => {
-  const req = new Request('http://local/api/domain/lesson-planner', { method: 'POST' });
-  enabled = false; await enforceLockedPreviewRequest(req, 'teacher');
-  enabled = true; application.status = 'APPROVED'; await enforceLockedPreviewRequest(req, 'teacher');
-  application.status = 'SENT'; memberships[0].role = 'STUDENT'; await enforceLockedPreviewRequest(req, 'teacher');
-  memberships[0].role = 'ADMIN'; await enforceLockedPreviewRequest(req, 'teacher');
+  const plannerReq = new Request('http://local/api/domain/lesson-planner', {
+    method: 'POST',
+  });
+  const assignmentReq = new Request('http://local/api/assignments/create', {
+    method: 'POST',
+  });
+  enabled = false;
+  await enforceLockedPreviewRequest(plannerReq, 'teacher');
+  enabled = true;
+  application.status = 'APPROVED';
+  await enforceLockedPreviewRequest(plannerReq, 'teacher');
+  application.status = 'SENT';
+  memberships[0].role = 'STUDENT';
+  await enforceLockedPreviewRequest(plannerReq, 'teacher');
+  await expect(
+    enforceLockedPreviewRequest(assignmentReq, 'teacher')
+  ).rejects.toMatchObject({
+    status: 403,
+  });
+  memberships[0].role = 'ADMIN';
+  await expect(
+    enforceLockedPreviewRequest(assignmentReq, 'teacher')
+  ).rejects.toMatchObject({
+    status: 403,
+  });
 });
-test('an application cannot lock a different tenant or existing paid membership', async () => {
+test('stale default-org membership hides preview app identity but pending lock stays on', async () => {
+  memberships = [
+    { id: 'default', role: 'TEACHER', organizationId: 'default-org', organization: { plan: 'FREE_CLASSROOM' } },
+    { id: 'free', role: 'TEACHER', organizationId: 'org-a', organization: { plan: 'FREE_CLASSROOM' } },
+  ];
+  expect(await getLockedPreviewApplication('teacher', 'default')).toBeNull();
+  expect(await userHasPendingFreeTierTeachingLock('teacher')).toBe(true);
+  expect(await getLockedPreviewApplication('teacher')).toEqual(
+    expect.objectContaining({ organizationId: 'org-a' })
+  );
+});
+test('a pending application blocks mutations even with a mismatched membership cookie', async () => {
   memberships[0].organizationId = 'org-b';
-  await enforceLockedPreviewRequest(new Request('http://local/app/reporter'), 'teacher');
-  memberships[0].organizationId = 'org-a'; memberships[0].organization.plan = 'SCHOOL';
-  await enforceLockedPreviewRequest(new Request('http://local/app/reporter'), 'teacher');
+  await expect(
+    enforceLockedPreviewRequest(
+      new Request('http://local/api/assignments/create', { method: 'POST' }),
+      'teacher',
+      'stale-membership-id'
+    )
+  ).rejects.toMatchObject({ status: 403 });
+  memberships[0].organizationId = 'org-a';
+  memberships[0].organization.plan = 'SCHOOL';
+  await expect(
+    enforceLockedPreviewRequest(
+      new Request('http://local/app/my-classes', { method: 'POST' }),
+      'teacher'
+    )
+  ).rejects.toMatchObject({ status: 403 });
 });
+test('userHasPendingFreeTierTeachingLock fails closed when application lookup throws', async () => {
+  db.freeTierApplication.findFirst = mock(async () => {
+    throw new Error('db_unavailable');
+  });
+  await expect(userHasPendingFreeTierTeachingLock('teacher')).resolves.toBe(true);
+});
+
 test('domain enrollment/assignment guard denies pending and does not deny approved or flag off', async () => {
   await expect(assertOrganizationTeachingApproved(db as any, 'org-a')).rejects.toMatchObject({ status: 403 });
   application.status = 'APPROVED'; await assertOrganizationTeachingApproved(db as any, 'org-a');
   application.status = 'SENT'; enabled = false; await assertOrganizationTeachingApproved(db as any, 'org-a');
   expect(queries[0].where.organizationId).toBe('org-a');
+});
+test('pending lesson planner scope allows SENT and MANUAL_REVIEW only', async () => {
+  for (const status of ['SENT', 'MANUAL_REVIEW'] as const) {
+    application.status = status;
+    await assertOrganizationTeachingApproved(db as any, 'org-a', {
+      allowPendingLessonPlanner: true,
+    });
+  }
+  application.status = 'ACCOUNT_CREATED';
+  await expect(
+    assertOrganizationTeachingApproved(db as any, 'org-a', {
+      allowPendingLessonPlanner: true,
+    })
+  ).rejects.toMatchObject({ status: 403 });
 });

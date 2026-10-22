@@ -8,6 +8,7 @@ import {
 } from '~/components/ui/sheet';
 import { Link, useRouteLoaderData } from 'react-router';
 import {
+  AlertTriangle,
   ChartNoAxesColumn,
   Check,
   ChevronRight,
@@ -24,10 +25,25 @@ import type {
   FreeAccountUsage,
   UsageCount,
 } from '~/domain/free-tier/inapp-usage';
+import {
+  formatUsageRenewsLabel,
+  isLessonPlannerMonthlyExhausted,
+} from '~/domain/free-tier/inapp-usage';
 import { lessonPlanMonthWindow } from '~/utils/lesson-planner/month-window';
 import { cn } from '~/utils/misc';
-import { SiteLicenseLockedAssignmentTile } from '~/components/site-license-locked-assignment-tile';
-import type { SiteLicenseLockedAssignmentTile as SiteLicenseLockedTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
+import {
+  dashboardAssignmentTileClassName,
+  DashboardAssignmentTileFooter,
+  dashboardAssignmentTileTestId,
+  assignmentTypeTileTrailingIconClassName,
+} from '~/components/assignment-type-tile-layout';
+import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
+import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
+import type { RefObject } from 'react';
+import {
+  teachingAccessMobileSheetBodyInvite,
+  TEACHING_ACCESS_LOCKED_TOOLTIP,
+} from '~/domain/free-tier/teaching-access-copy';
 
 export function useFreeAccountUsage() {
   return (
@@ -216,68 +232,107 @@ function FreeAccountUsageDetails({ usage }: { usage: FreeAccountUsage }) {
 export function FreeAssignmentTiles({
   usage,
   types,
-  lockedAssignmentTiles = [],
+  teachingLocked = false,
   onCreate,
+  createTriggerRef,
 }: {
   usage: FreeAccountUsage;
-  types: Array<{ id: string; kind?: string | null }>;
-  lockedAssignmentTiles?: SiteLicenseLockedTile[];
+  types: Array<{
+    id: string;
+    kind?: string | null;
+    imageId?: string | null;
+    imageTitle?: string | null;
+  }>;
+  teachingLocked?: boolean;
   onCreate: (id?: string) => void;
+  createTriggerRef?: RefObject<HTMLButtonElement | null>;
 }) {
+  const { state } = useTeachingAccess();
+  const adminName =
+    state.variant === 'locked' ? state.adminName : 'your administrator';
+  const createButton = (
+    <button
+      ref={createTriggerRef as RefObject<HTMLButtonElement> | undefined}
+      type="button"
+      disabled={
+        !teachingLocked &&
+        !usage.unlimitedFreeAssignmentTiles &&
+        usage.allAssignmentsUsed
+      }
+      onClick={() => onCreate()}
+      className="text-sm text-primary underline disabled:text-muted-foreground"
+    >
+      {teachingLocked ? 'Create assignment' : 'New assignment'}
+    </button>
+  );
   return (
     <div data-testid="free-assignment-tiles">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-bold">Assignments</h2>
-        <button
-          type="button"
-          disabled={!usage.monthly && usage.allAssignmentsUsed}
-          onClick={() => onCreate()}
-          className="text-sm text-primary underline disabled:text-muted-foreground"
-        >
-          New assignment
-        </button>
+        {teachingLocked ? (
+          <LockedTeachingControl locked adminName={adminName}>
+            {createButton}
+          </LockedTeachingControl>
+        ) : (
+          createButton
+        )}
       </div>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid auto-rows-min grid-cols-2 items-start gap-3 lg:grid-cols-3">
         {usage.assignments.map((row) => {
           const type = types.find((t) => t.kind === row.kind);
           return (
             <button
               key={row.kind}
               type="button"
-              disabled={!type || (!usage.monthly && row.remaining === 0)}
-              onClick={() => onCreate(type?.id)}
+              data-testid={dashboardAssignmentTileTestId}
+              disabled={
+                !teachingLocked &&
+                (!type ||
+                  (!usage.unlimitedFreeAssignmentTiles && row.remaining === 0))
+              }
+              onClick={() => onCreate(teachingLocked ? undefined : type?.id)}
               aria-label={`New ${row.label} assignment`}
-              className="flex min-h-[92px] flex-col gap-1.5 rounded-xl border bg-popover p-3.5 text-left shadow-sm disabled:bg-muted/30"
+              className={cn(
+                dashboardAssignmentTileClassName('disabled:bg-muted/30')
+              )}
             >
-              <span className="flex w-full items-start justify-between gap-2 text-[15px] font-medium">
-                {row.label}
-                <Plus
-                  size={16}
-                  className="mt-1 shrink-0 text-muted-foreground"
-                />
-              </span>
-              <span
-                className={cn(
-                  'text-[13px] text-muted-foreground',
-                  !usage.monthly && row.remaining === 0 && 'text-amber-800'
-                )}
-              >
-                {usage.monthly
-                  ? 'Unlimited assignments'
-                  : row.remaining
-                    ? `${row.remaining} of ${row.total} left`
-                    : 'None left'}
-              </span>
+              <DashboardAssignmentTileFooter
+                label={row.label}
+                meta={
+                  usage.monthly
+                    ? 'Unlimited'
+                    : row.remaining
+                      ? `${row.remaining} of ${row.total} left`
+                      : 'None left'
+                }
+                metaClassName={
+                  !usage.monthly && row.remaining === 0
+                    ? 'text-amber-800'
+                    : undefined
+                }
+                trailing={
+                  teachingLocked ? (
+                    <Lock
+                      size={16}
+                      className={assignmentTypeTileTrailingIconClassName(
+                        'text-muted-foreground'
+                      )}
+                      aria-hidden
+                    />
+                  ) : (
+                    <Plus
+                      size={16}
+                      className={assignmentTypeTileTrailingIconClassName(
+                        'text-muted-foreground'
+                      )}
+                      aria-hidden
+                    />
+                  )
+                }
+              />
             </button>
           );
         })}
-        {lockedAssignmentTiles.map((tile) => (
-          <SiteLicenseLockedAssignmentTile
-            key={tile.key}
-            label={tile.label}
-            variant="dashboard"
-          />
-        ))}
       </div>
     </div>
   );
@@ -285,6 +340,18 @@ export function FreeAssignmentTiles({
 export function FreeAccountChecklist({ usage }: { usage: FreeAccountUsage }) {
   const [invitationOpen, setInvitationOpen] = useState(false);
   const invitationTriggerRef = useRef<HTMLButtonElement>(null);
+  const { locked: teachingLocked, state: teachingAccessState } =
+    useTeachingAccess();
+  const teachingAccessAdminName =
+    teachingAccessState.variant === 'locked'
+      ? teachingAccessState.adminName
+      : 'your administrator';
+  const lockedInviteProps = {
+    locked: true as const,
+    adminName: teachingAccessAdminName,
+    mobileSheetBody: teachingAccessMobileSheetBodyInvite(teachingAccessAdminName),
+    tooltip: TEACHING_ACCESS_LOCKED_TOOLTIP,
+  };
   const steps = [
     {
       label: usage.monthly
@@ -386,6 +453,29 @@ export function FreeAccountChecklist({ usage }: { usage: FreeAccountUsage }) {
                   </span>
                   Add your students to your class
                 </button>
+              ) : usage.monthly &&
+                step.label === 'Add your students to your class' &&
+                usage.classId &&
+                (usage.classCodeHidden || (teachingLocked && !usage.classCode)) ? (
+                <LockedTeachingControl {...lockedInviteProps}>
+                  <button
+                    type="button"
+                    data-testid="checklist-invite-locked"
+                    className="flex gap-3 text-left text-sm text-primary underline opacity-60"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'flex size-[22px] shrink-0 items-center justify-center rounded-full border-2',
+                        step.done &&
+                          'border-emerald-800 bg-emerald-800 text-white'
+                      )}
+                    >
+                      {step.done && <Check size={14} />}
+                    </span>
+                    Add your students to your class
+                  </button>
+                </LockedTeachingControl>
               ) : (
                 <Link to={step.to} className="flex gap-3 text-sm">
                   <span
@@ -429,7 +519,11 @@ export function FreeAccountChecklist({ usage }: { usage: FreeAccountUsage }) {
     </>
   );
 }
-export function FreeReporterLocked() {
+export function FreeReporterLocked({
+  variant = 'pending',
+}: {
+  variant?: 'pending' | 'site-license';
+}) {
   return (
     <section
       data-testid="free-reporter-locked"
@@ -437,6 +531,11 @@ export function FreeReporterLocked() {
     >
       <header className="bg-secondary px-4 py-6 sm:px-12">
         <h1 className="text-[28px] font-bold leading-[1.2]">Reporter</h1>
+        {variant === 'pending' ? (
+          <p className="mt-1 text-sm text-muted-foreground">
+            Your class reports.
+          </p>
+        ) : null}
       </header>
       <div className="px-4 pb-12 pt-6 sm:px-12">
         <section
@@ -450,28 +549,37 @@ export function FreeReporterLocked() {
             <Lock size={20} aria-hidden="true" />
           </span>
           <h2 className="text-xl font-bold leading-[1.35]">
-            Reporter comes with a Yawp! site license
+            {variant === 'pending'
+              ? 'Unlocks after approval'
+              : 'Reporter comes with a Yawp! site license'}
           </h2>
-          <ul className="flex flex-col gap-2.5 text-[15px]">
-            <li className="flex gap-2.5">
-              <ChartNoAxesColumn
-                size={18}
-                className="mt-0.5 shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              />
-              Writing growth across every class
-            </li>
-            <li className="flex gap-2.5">
-              <Users
-                size={18}
-                className="mt-0.5 shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              />
-              Reports for departments and families
-            </li>
-          </ul>
+          {variant === 'pending' ? (
+            <p className="text-[15px] text-muted-foreground">
+              Reporter opens once your administrator approves your free
+              classroom.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2.5 text-[15px]">
+              <li className="flex gap-2.5">
+                <ChartNoAxesColumn
+                  size={18}
+                  className="mt-0.5 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                Writing growth across every class
+              </li>
+              <li className="flex gap-2.5">
+                <Users
+                  size={18}
+                  className="mt-0.5 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                Reports for departments and families
+              </li>
+            </ul>
+          )}
           <Link
-            to="/app/free-tier/status"
+            to={variant === 'pending' ? '/app/free-tier/status' : '/app/free-tier/status'}
             className="inline-flex h-10 items-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
           >
             Talk to us
@@ -482,8 +590,108 @@ export function FreeReporterLocked() {
   );
 }
 
+export function FreeReporterMonthlyLimit({
+  usage,
+}: {
+  usage: FreeAccountUsage;
+}) {
+  if (!usage.renewsAt || !usage.reporter) return null;
+  const renews = formatUsageRenewsLabel(usage.renewsAt).replace(/^Renews /, '');
+  return (
+    <section
+      data-testid="free-reporter-monthly-limit"
+      className="flex h-full flex-col overflow-auto"
+    >
+      <header className="bg-secondary px-4 py-6 sm:px-12">
+        <h1 className="text-[28px] font-bold leading-[1.2]">Reporter</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Your class reports.</p>
+      </header>
+      <div className="px-4 pb-12 pt-6 sm:px-12">
+        <section className="flex max-w-[616px] flex-col items-start gap-3 rounded-xl border bg-popover p-7 text-left shadow-sm">
+          <UsageNavRingMiniStatic />
+          <h2 className="text-xl font-bold leading-[1.35]">
+            You&apos;ve reached this month&apos;s Reporter limit
+          </h2>
+          <p className="text-[15px] text-muted-foreground">
+            Renews {renews}. Unlimited with a site license.
+          </p>
+          <a
+            href={FULL_ACCESS_CONTACT}
+            className="inline-flex h-10 items-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
+          >
+            Talk to us
+          </a>
+        </section>
+      </div>
+    </section>
+  );
+}
+
+function UsageNavRingMiniStatic() {
+  return (
+    <svg
+      width={18}
+      height={18}
+      viewBox="0 0 18 18"
+      className="shrink-0 text-muted-foreground"
+      aria-hidden
+    >
+      <circle
+        cx={9}
+        cy={9}
+        r={7}
+        fill="none"
+        className="stroke-muted"
+        strokeWidth={2}
+      />
+    </svg>
+  );
+}
+
 export const FULL_ACCESS_CONTACT =
   'mailto:hello@yawp.school?subject=More%20access%20to%20Yawp!';
+
+export function LessonPlannerMonthlyLimitNotice({
+  usage,
+}: {
+  usage: FreeAccountUsage;
+}) {
+  if (
+    !usage.lessonPlannerMonthlyMetering ||
+    !isLessonPlannerMonthlyExhausted(usage) ||
+    !usage.renewsAt
+  ) {
+    return null;
+  }
+  const renews = formatUsageRenewsLabel(usage.renewsAt).replace(/^Renews /, '');
+  return (
+    <div
+      className="w-full max-w-3xl rounded-xl border border-red-200 bg-popover p-4 text-left shadow-sm"
+      data-testid="lesson-planner-monthly-limit"
+    >
+      <p className="flex items-start gap-2 text-sm font-semibold text-red-900">
+        <AlertTriangle size={18} className="mt-0.5 shrink-0" aria-hidden />
+        You&apos;ve reached this month&apos;s Lesson Planner limit
+      </p>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Renews {renews}. Unlimited with a site license.
+      </p>
+      <a
+        href={FULL_ACCESS_CONTACT}
+        className="mt-3 inline-flex h-10 items-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
+      >
+        Talk to us
+      </a>
+    </div>
+  );
+}
+
+export function lessonPlannerPausedPlaceholder(usage: FreeAccountUsage): string {
+  if (!usage.renewsAt) return 'Lesson Planner is paused until next month.';
+  const renews = formatUsageRenewsLabel(usage.renewsAt).replace(/^Renews /, '');
+  return `Lesson Planner is paused until ${renews}.`;
+}
+
 export function AdvocatePackEntry() {
   return (
     <section className="rounded-xl border bg-popover p-5 shadow-sm">

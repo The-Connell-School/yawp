@@ -1,4 +1,6 @@
-export const ADMIN_APPROVAL_EMAIL_COPY_VERSION = '2026-10-14-v5';
+import { renderAdminApprovalEmailPlainText } from './admin-approval-copy';
+
+export const ADMIN_APPROVAL_EMAIL_COPY_VERSION = '2026-10-21-admin-v1';
 
 /** Matches the Privacy Policy model-training statement (single sentence). */
 export const FREE_TIER_MODEL_TRAINING_LINE =
@@ -11,20 +13,6 @@ export function renderReleaseEmailSubject(_args: { copyVersion?: string } = {}) 
   // Bryant and Brian (10/19): one subject for every release email.
   return "You're in — start your Yawp! classroom!";
 }
-
-/** When true, admin approval email may state NDPA completion. Defaults to omitted. */
-export function isFreeTierNdpaCompleted() {
-  return process.env.FREE_TIER_NDPA_COMPLETED === 'true';
-}
-
-function ferpaComplianceBullet() {
-  if (isFreeTierNdpaCompleted()) {
-    return '- Is Yawp! FERPA compliant? Yes. Yawp! has completed the National Student Data Privacy Agreement (NDPA).';
-  }
-  return '- Is Yawp! FERPA compliant? Yes.';
-}
-
-const APPROVAL_LINK_DAYS = 14;
 
 function copyVersionLine(_version: string) {
   return '';
@@ -46,26 +34,19 @@ export function renderAdminApprovalEmailBody(args: {
   notRightPersonUrl: string;
   adminRecipientName?: string | null;
   reminderLead?: string | null;
+  forwardedByAdminName?: string | null;
   copyVersion?: string;
+  reminder?: boolean;
 }) {
-  const version = args.copyVersion ?? ADMIN_APPROVAL_EMAIL_COPY_VERSION;
-  const reminder = args.reminderLead?.trim()
-    ? `${args.reminderLead.trim()}\n\n`
-    : '';
-  const greeting = adminApprovalGreeting(args.adminRecipientName);
-  return `${reminder}${greeting}
-
-${args.teacherName} (${args.teacherEmail}) at ${args.schoolName} would like to use Yawp! in their classroom.
-
-Yawp! helps students draft essays with feedback while teachers stay in control of assignments and grading. ${FREE_TIER_MODEL_TRAINING_LINE}
-
-Approve Yawp! for this school (link expires in ${APPROVAL_LINK_DAYS} days):
-${args.approveUrl}
-
-I'm not the right person to approve this:
-${args.notRightPersonUrl}
-
-Questions? Contact support@yawp.school.${copyVersionLine(version)}`;
+  return renderAdminApprovalEmailPlainText({
+    teacherName: args.teacherName,
+    teacherEmail: args.teacherEmail,
+    schoolName: args.schoolName,
+    approveUrl: args.approveUrl,
+    notRightPersonUrl: args.notRightPersonUrl,
+    forwardedByAdminName: args.forwardedByAdminName,
+    reminder: args.reminder ?? !!args.reminderLead?.trim(),
+  });
 }
 
 export function renderReleaseEmailBody(args: {
@@ -116,9 +97,6 @@ ${args.signInUrl}
 // "site license" wording, and no "AI" in user-facing copy.
 // ---------------------------------------------------------------------------
 
-export const FREE_TIER_BOOKING_URL =
-  'https://app.usemotion.com/meet/brian-connell/ryxkqvr';
-
 const BRIAN_SIGNATURE = `Best always,
 
 Brian Connell
@@ -149,87 +127,6 @@ This link is for you only and expires in 30 days.
 Changed your mind? That's okay. Reply to this email and let us know, and we'll pass your spot to another teacher.
 
 ${BRIAN_SIGNATURE}`;
-}
-
-export function renderAdminApprovalEmailV2Subject(args: {
-  teacherName: string;
-  reminder?: boolean;
-}) {
-  return args.reminder
-    ? `Reminder: ${args.teacherName} is waiting on your approval for Yawp!`
-    : `${args.teacherName} would like to use Yawp! with their students`;
-}
-
-export function renderAdminApprovalEmailV2Body(args: {
-  teacherName: string;
-  schoolName: string;
-  className?: string | null;
-  approveUrl: string;
-  notRightPersonUrl: string;
-  adminRecipientName?: string | null;
-  reminder?: boolean;
-}) {
-  const admin = args.adminRecipientName?.trim();
-  const greeting = admin ? `Dear ${admin},` : 'Hello,';
-  const className = args.className?.trim();
-  const teaches = className
-    ? `${args.teacherName}, who teaches ${className} at ${args.schoolName},`
-    : `${args.teacherName}, a teacher at ${args.schoolName},`;
-  const reminderLead = args.reminder
-    ? `We're checking in on behalf of ${args.teacherName} about their request to use the Yawp! Writing Program with their students. It's free, and approval takes one click. The details from our original email are below.
-
-Approve ${args.teacherName}'s free classroom (link expires in ${APPROVAL_LINK_DAYS} days):
-${args.approveUrl}
-
----
-
-`
-    : '';
-  return `${greeting}
-
-${reminderLead}${teaches} would like to use the Yawp! Writing Program to help their students become stronger writers. Before we open their free classroom, we'd like your approval.
-
-It's free. ${args.teacherName} has been given a free Yawp! license for one class of up to 35 students. There's no cost to the teacher or the school, no credit card, and nothing to purchase.
-
-What Yawp! is. Yawp! gives teachers the tools to become expert writing instructors and build a culture of writing in their classrooms.
-- Students practice writing alongside a writing tutor that gives thoughtful, immediate feedback and never does the writing for them.
-- Teachers grade quickly on the platform with a rubric-aligned grading assistant.
-- Class summaries show each class's strengths and areas for growth.
-- Real-time reports track student writing over the year.
-- A lesson planner helps teachers close the gaps they find.
-
-Why we built it. Not every educational technology is good for students and teachers. Yawp! was built by classroom teachers in response to problems we lived with:
-- Students using software to write for them
-- The hours it takes to give thoughtful feedback, often on nights and weekends
-- Students losing time waiting for that feedback
-- Schools having little data on student writing beyond a test given once or twice a year
-- Teachers (especially new teachers) lacking a strong writing curriculum
-
-Yawp! answers each of these by keeping the thinking with the student, the feedback timely, and the teacher in charge.
-
-Why we ask you. When administrators know what's happening in their buildings, they're better equipped to tell the story of their students' success. Your approval provides oversight and clear communication, and it lets you see and support good work as it happens. A free Yawp! classroom is an easy win: you'll be backing a teacher who is taking initiative, and you'll be able to see evidence of their students' growth.
-
-Approve ${args.teacherName}'s free classroom (link expires in ${APPROVAL_LINK_DAYS} days):
-${args.approveUrl}
-
-I'd like to learn more first (schedule a call with Brian):
-${FREE_TIER_BOOKING_URL}
-
-I'm not the right person to approve this:
-${args.notRightPersonUrl}
-
-Questions about student privacy?
-${ferpaComplianceBullet()}
-- What student information do you collect? Students join with a class code and their first and last name. We don't collect student email addresses.
-- Is student writing used to train models? No.
-- Who can see student work? Only the student and their teacher. (We encourage teachers to share student work and reports with administrators on request.)
-- Can student data be deleted? Yes, on request.
-- Who is it for? The free tier is for high school classes only.
-
-Thank you for supporting your teachers.
-
-Brian Connell
-Founder, Yawp! Writing Program`;
 }
 
 export const TEACHER_REMINDER_V2_SUBJECT =
@@ -299,25 +196,4 @@ Brian`;
 }
 
 /** Recover signed admin links from rendered approval email bodies for QA logs. */
-export function adminApprovalUrlsFromEmailBody(text: string): {
-  approveUrl?: string;
-  notRightPersonUrl?: string;
-} {
-  const lines = text.split('\n').map((line) => line.trim());
-  const approveHeading = lines.findIndex(
-    (line) =>
-      line.startsWith('Approve Yawp! for this school') ||
-      /^Approve .+'s free classroom/.test(line)
-  );
-  const forwardHeading = lines.findIndex((line) =>
-    line.startsWith("I'm not the right person")
-  );
-  const approveUrl =
-    approveHeading >= 0 ? lines[approveHeading + 1] : undefined;
-  const notRightPersonUrl =
-    forwardHeading >= 0 ? lines[forwardHeading + 1] : undefined;
-  return {
-    ...(approveUrl?.startsWith('http') ? { approveUrl } : {}),
-    ...(notRightPersonUrl?.startsWith('http') ? { notRightPersonUrl } : {}),
-  };
-}
+export { adminApprovalUrlsFromDesignedEmailBody as adminApprovalUrlsFromEmailBody } from './admin-approval-copy';

@@ -8,9 +8,6 @@ mock.module('~/components/student-invitation-dialog', () => ({
 }));
 
 const { FreeAssignmentTiles } = await import('./free-account-usage');
-const { SITE_LICENSE_UNAVAILABLE_REASON } = await import(
-  '~/domain/free-tier/site-license-message'
-);
 
 const usage: FreeAccountUsage = {
   monthly: true,
@@ -20,6 +17,20 @@ const usage: FreeAccountUsage = {
     {
       kind: 'class_starter',
       label: 'Class Starter',
+      used: 0,
+      total: 12,
+      remaining: 12,
+    },
+    {
+      kind: 'prewriting',
+      label: 'Prewriting',
+      used: 0,
+      total: 12,
+      remaining: 12,
+    },
+    {
+      kind: 'thesis_statement',
+      label: 'Thesis Statement',
       used: 0,
       total: 12,
       remaining: 12,
@@ -37,29 +48,30 @@ const usage: FreeAccountUsage = {
   gradingPause: null,
 };
 
-test('FreeAssignmentTiles renders site-license locked tiles after entitled rows', () => {
+test('FreeAssignmentTiles renders only entitled free assignment rows on the dashboard', () => {
   const html = renderToStaticMarkup(
     <StaticRouter location="/app">
       <FreeAssignmentTiles
         usage={usage}
-        types={[{ id: 'starter', kind: 'class_starter' }]}
-        lockedAssignmentTiles={[
-          {
-            key: 'daily_pages',
-            label: 'Daily Pages',
-            assignmentTypeId: 'daily',
-          },
+        types={[
+          { id: 'starter', kind: 'class_starter' },
+          { id: 'pre', kind: 'prewriting' },
+          { id: 'thesis', kind: 'thesis_statement' },
         ]}
         onCreate={() => {}}
       />
     </StaticRouter>
   );
   expect(html).toContain('data-testid="free-assignment-tiles"');
-  expect(html).toContain('Daily Pages');
-  expect(html).toContain(SITE_LICENSE_UNAVAILABLE_REASON);
+  expect(html.match(/data-testid="dashboard-assignment-tile"/g)).toHaveLength(3);
+  expect(html).toContain('Class Starter');
+  expect(html).toContain('Prewriting');
+  expect(html).toContain('Thesis Statement');
+  expect(html).not.toContain('site-license-locked-assignment-tile');
+  expect(html).not.toContain('Daily Pages');
 });
 
-test('FreeAssignmentTiles omits locked tiles when the list is empty', () => {
+test('FreeAssignmentTiles shows Unlimited meta for monthly free assignments', () => {
   const html = renderToStaticMarkup(
     <StaticRouter location="/app">
       <FreeAssignmentTiles
@@ -69,5 +81,6 @@ test('FreeAssignmentTiles omits locked tiles when the list is empty', () => {
       />
     </StaticRouter>
   );
-  expect(html).not.toContain('site-license-locked-assignment-tile');
+  expect(html).toContain('Unlimited');
+  expect(html).not.toContain('site-license-lock-button');
 });

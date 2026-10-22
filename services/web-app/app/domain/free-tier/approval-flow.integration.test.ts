@@ -182,9 +182,13 @@ describe('free-tier approval flow', () => {
           expect(deliveries.length).toBeGreaterThan(0);
           return deliveries.at(-1)!;
         };
+        const teacherAtSchoolLabel = `${user.name} at ${app.schoolName}`;
         const checkDelivery = (
           to: string,
-          options: { expectDemoBcc?: boolean } = {}
+          options: {
+            expectDemoBcc?: boolean;
+            expectSubject?: string;
+          } = {}
         ) => {
           const delivery = findDeliveryTo(to);
           if (options.expectDemoBcc && environment === 'demo') {
@@ -196,6 +200,12 @@ describe('free-tier approval flow', () => {
           expect(delivery.text.includes('HISTORICAL INTRO')).toBe(false);
           expect(delivery.text).toContain('/free/admin/approve?t=');
           expect(delivery.text).toContain('/free/admin/not-right-person?t=');
+          expect(delivery.text).toContain('Review and approve:');
+          expect(delivery.html).toContain('Review and approve</a>');
+          expect(delivery.subject).not.toBe(`Approve Yawp! for ${app.schoolName}`);
+          if (options.expectSubject) {
+            expect(delivery.subject).toBe(options.expectSubject);
+          }
           return delivery;
         };
         expect(
@@ -210,7 +220,10 @@ describe('free-tier approval flow', () => {
             })
           ).ok
         ).toBe(true);
-        checkDelivery('principal@school.edu', { expectDemoBcc: true });
+        checkDelivery('principal@school.edu', {
+          expectDemoBcc: true,
+          expectSubject: `${teacherAtSchoolLabel} would like to use Yawp!`,
+        });
         await prisma.freeTierAdminApproval.updateMany({
           where: { applicationId: app.id },
           data: { personalNote: 'HISTORICAL INTRO' },
@@ -241,8 +254,12 @@ describe('free-tier approval flow', () => {
           ).ok
         ).toBe(true);
         if (approvalV2) await runApprovalJobs(new Date());
-        const replacement = checkDelivery('replacement@school.edu');
-        expect(replacement.text).toContain('Hi Principal Lee,');
+        const replacement = checkDelivery('replacement@school.edu', {
+          expectSubject: approvalV2
+            ? `Can you approve Yawp! for ${teacherAtSchoolLabel}?`
+            : undefined,
+        });
+        expect(replacement.text).toContain('Principal Pat forwarded this to you');
         const approveUrl = replacement.text
           .split('\n')
           .find((line: string) => line.includes('/free/admin/approve?t='))!;
@@ -658,6 +675,343 @@ describe('free-tier approval flow', () => {
       orderBy: { createdAt: 'desc' },
     });
     expect(reminderLog?.toEmail).toBe('principal@school.edu');
+  });
+
+  test('not-right-person forward on approved application returns already_approved without consuming the link', async () => {
+    const email = `ft-forward-approved-${Date.now()}@school.edu`;
+    const app = await prisma.freeTierApplication.create({
+      data: {
+        email,
+        name: 'Approved Forward Teacher',
+        schoolName: 'Approved Forward HS',
+        location: 'NY',
+        gradeLevel: '9',
+        status: 'ACCOUNT_CREATED',
+        userId: (
+          await prisma.user.create({
+            data: { email, name: 'Approved Forward Teacher' },
+            select: { id: true },
+          })
+        ).id,
+      },
+    });
+    const submit = await submitAdminDetails({
+      applicationId: app.id,
+      userId: app.userId!,
+      adminName: 'Wrong Person',
+      adminEmail: 'wrong@school.edu',
+      adminRole: 'Principal',
+    });
+    expect(submit.ok).toBe(true);
+    const emailLog = await prisma.freeTierEmailLog.findFirst({
+      where: { applicationId: app.id, kind: 'admin_approval', success: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    const declineUrl = (
+      emailLog?.payload as { notRightPersonUrl?: string } | null
+    )?.notRightPersonUrl;
+    const declineToken = declineUrl
+      ? new URL(declineUrl).searchParams.get('t')
+      : null;
+    if (!declineToken) throw new Error('missing decline token');
+    const linkId = (
+      await prisma.freeTierSignedLink.findFirst({
+        where: {
+          applicationId: app.id,
+          purpose: 'ADMIN_NOT_RIGHT_PERSON',
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      })
+    )?.id;
+    if (!linkId) throw new Error('missing decline link row');
+
+    const approveUrl = (emailLog?.payload as { approveUrl?: string } | null)
+      ?.approveUrl;
+    const approveToken = approveUrl
+      ? new URL(approveUrl).searchParams.get('t')
+      : null;
+    if (!approveToken) throw new Error('missing approve token');
+    const req = new Request('https://yawp.test/free/admin/approve', {
+      headers: { 'user-agent': 'test', 'x-forwarded-for': '203.0.113.50' },
+    });
+    const approved = await completeSchoolAdminApproval({
+      token: approveToken,
+      adminRole: 'Principal',
+      authorized: true,
+      request: req,
+    });
+    expect(approved.ok).toBe(true);
+
+    const forwardReq = new Request('https://yawp.test/free/admin/not-right-person', {
+      headers: { 'user-agent': 'test', 'x-forwarded-for': '203.0.113.51' },
+    });
+    const forwarded = await redirectSchoolAdmin({
+      token: declineToken,
+      newAdminName: 'Too Late Principal',
+      newAdminEmail: 'late@school.edu',
+      request: forwardReq,
+    });
+    expect(forwarded.ok).toBe(false);
+    if (forwarded.ok) throw new Error('expected already_approved');
+    expect(forwarded).toMatchObject({
+      reason: 'already_approved',
+      schoolName: 'Approved Forward HS',
+    });
+    const declineLink = await prisma.freeTierSignedLink.findUnique({
+      where: { id: linkId },
+      select: { usedAt: true },
+    });
+    expect(declineLink?.usedAt).toBeNull();
+  });
+
+  test('not-right-person GET and HEAD-style peeks then POST still forwards without consuming links early', async () => {
+    const email = `ft-forward-peek-${Date.now()}@school.edu`;
+    const app = await prisma.freeTierApplication.create({
+      data: {
+        email,
+        name: 'Peek Forward Teacher',
+        schoolName: 'Peek Forward HS',
+        location: 'NY',
+        gradeLevel: '9',
+        status: 'ACCOUNT_CREATED',
+        userId: (
+          await prisma.user.create({
+            data: { email, name: 'Peek Forward Teacher' },
+            select: { id: true },
+          })
+        ).id,
+      },
+    });
+    const submit = await submitAdminDetails({
+      applicationId: app.id,
+      userId: app.userId!,
+      adminName: 'Wrong Person',
+      adminEmail: 'wrong@school.edu',
+      adminRole: 'Principal',
+    });
+    expect(submit.ok).toBe(true);
+    const emailLog = await prisma.freeTierEmailLog.findFirst({
+      where: { applicationId: app.id, kind: 'admin_approval', success: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    const declineUrl = (
+      emailLog?.payload as { notRightPersonUrl?: string } | null
+    )?.notRightPersonUrl;
+    const declineToken = declineUrl
+      ? new URL(declineUrl).searchParams.get('t')
+      : null;
+    if (!declineToken) throw new Error('missing decline token');
+
+    const approveUrl = (emailLog?.payload as { approveUrl?: string } | null)
+      ?.approveUrl;
+    const approveToken = approveUrl
+      ? new URL(approveUrl).searchParams.get('t')
+      : null;
+    if (!approveToken) throw new Error('missing approve token');
+    const declineLinkId = (
+      await prisma.freeTierSignedLink.findFirst({
+        where: {
+          applicationId: app.id,
+          purpose: 'ADMIN_NOT_RIGHT_PERSON',
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      })
+    )?.id;
+    const approveLinkId = (
+      await prisma.freeTierSignedLink.findFirst({
+        where: { applicationId: app.id, purpose: 'ADMIN_APPROVE' },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      })
+    )?.id;
+    if (!declineLinkId || !approveLinkId) throw new Error('missing link rows');
+
+    for (const _method of ['GET', 'HEAD'] as const) {
+      for (const peekResult of [
+        await peekSignedLink({
+          token: declineToken,
+          expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
+        }),
+        await peekSignedLink({
+          token: approveToken,
+          expectedPurpose: 'ADMIN_APPROVE',
+        }),
+      ]) {
+        expect(peekResult.ok).toBe(true);
+      }
+    }
+    const beforeForwardDecline = await prisma.freeTierSignedLink.findUnique({
+      where: { id: declineLinkId },
+      select: { usedAt: true },
+    });
+    const beforeForwardApprove = await prisma.freeTierSignedLink.findUnique({
+      where: { id: approveLinkId },
+      select: { usedAt: true },
+    });
+    expect(beforeForwardDecline?.usedAt).toBeNull();
+    expect(beforeForwardApprove?.usedAt).toBeNull();
+
+    const req = new Request('https://yawp.test/free/admin/not-right-person', {
+      headers: { 'user-agent': 'test', 'x-forwarded-for': '203.0.113.52' },
+    });
+    const forwarded = await redirectSchoolAdmin({
+      token: declineToken,
+      newAdminName: 'Right Principal',
+      newAdminEmail: 'principal@school.edu',
+      request: req,
+    });
+    expect(forwarded.ok).toBe(true);
+
+    const declineLink = await prisma.freeTierSignedLink.findUnique({
+      where: { id: declineLinkId },
+      select: { usedAt: true },
+    });
+    const approveLink = await prisma.freeTierSignedLink.findUnique({
+      where: { id: approveLinkId },
+      select: { usedAt: true },
+    });
+    expect(declineLink?.usedAt).not.toBeNull();
+    expect(approveLink?.usedAt).not.toBeNull();
+  });
+
+  test('not-right-person double POST is idempotent', async () => {
+    const email = `ft-forward-double-${Date.now()}@school.edu`;
+    const app = await prisma.freeTierApplication.create({
+      data: {
+        email,
+        name: 'Double Forward Teacher',
+        schoolName: 'Double Forward HS',
+        location: 'NY',
+        gradeLevel: '9',
+        status: 'ACCOUNT_CREATED',
+        userId: (
+          await prisma.user.create({
+            data: { email, name: 'Double Forward Teacher' },
+            select: { id: true },
+          })
+        ).id,
+      },
+    });
+    const submit = await submitAdminDetails({
+      applicationId: app.id,
+      userId: app.userId!,
+      adminName: 'Wrong Person',
+      adminEmail: 'wrong@school.edu',
+      adminRole: 'Principal',
+    });
+    expect(submit.ok).toBe(true);
+    const emailLog = await prisma.freeTierEmailLog.findFirst({
+      where: { applicationId: app.id, kind: 'admin_approval', success: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    const declineUrl = (
+      emailLog?.payload as { notRightPersonUrl?: string } | null
+    )?.notRightPersonUrl;
+    const declineToken = declineUrl
+      ? new URL(declineUrl).searchParams.get('t')
+      : null;
+    if (!declineToken) throw new Error('missing decline token');
+    const req = new Request('https://yawp.test/free/admin/not-right-person', {
+      headers: { 'user-agent': 'test', 'x-forwarded-for': '203.0.113.53' },
+    });
+    const first = await redirectSchoolAdmin({
+      token: declineToken,
+      newAdminName: 'Right Principal',
+      newAdminEmail: 'principal@school.edu',
+      request: req,
+    });
+    expect(first.ok).toBe(true);
+    const second = await redirectSchoolAdmin({
+      token: declineToken,
+      newAdminName: 'Right Principal',
+      newAdminEmail: 'principal@school.edu',
+      request: req,
+    });
+    expect(second).toEqual({ ok: true, idempotent: true });
+  });
+
+  test('not-right-person invalid token is rejected without consuming a real link', async () => {
+    const req = new Request('https://yawp.test/free/admin/not-right-person', {
+      headers: { 'user-agent': 'test', 'x-forwarded-for': '203.0.113.55' },
+    });
+    const result = await redirectSchoolAdmin({
+      token: 'not.a.valid.token',
+      newAdminName: 'Someone',
+      newAdminEmail: 'someone@school.edu',
+      request: req,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected invalid token');
+    expect(result.reason).toBe('invalid');
+  });
+
+  test('not-right-person forward validation rejects bad email without consuming link', async () => {
+    const email = `ft-forward-bad-${Date.now()}@school.edu`;
+    const app = await prisma.freeTierApplication.create({
+      data: {
+        email,
+        name: 'Bad Email Teacher',
+        schoolName: 'Bad Email HS',
+        location: 'NY',
+        gradeLevel: '9',
+        status: 'ACCOUNT_CREATED',
+        userId: (
+          await prisma.user.create({
+            data: { email, name: 'Bad Email Teacher' },
+            select: { id: true },
+          })
+        ).id,
+      },
+    });
+    const submit = await submitAdminDetails({
+      applicationId: app.id,
+      userId: app.userId!,
+      adminName: 'Wrong Person',
+      adminEmail: 'wrong@school.edu',
+      adminRole: 'Principal',
+    });
+    expect(submit.ok).toBe(true);
+    const emailLog = await prisma.freeTierEmailLog.findFirst({
+      where: { applicationId: app.id, kind: 'admin_approval', success: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    const declineUrl = (
+      emailLog?.payload as { notRightPersonUrl?: string } | null
+    )?.notRightPersonUrl;
+    const declineToken = declineUrl
+      ? new URL(declineUrl).searchParams.get('t')
+      : null;
+    if (!declineToken) throw new Error('missing decline token');
+    const linkId = (
+      await prisma.freeTierSignedLink.findFirst({
+        where: {
+          applicationId: app.id,
+          purpose: 'ADMIN_NOT_RIGHT_PERSON',
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      })
+    )?.id;
+    if (!linkId) throw new Error('missing decline link row');
+    const req = new Request('https://yawp.test/free/admin/not-right-person', {
+      headers: { 'user-agent': 'test', 'x-forwarded-for': '203.0.113.54' },
+    });
+    const result = await redirectSchoolAdmin({
+      token: declineToken,
+      newAdminName: 'Someone',
+      newAdminEmail: 'not-an-email',
+      request: req,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected validation failure');
+    expect(result.reason).toBe('validation');
+    const declineLink = await prisma.freeTierSignedLink.findUnique({
+      where: { id: linkId },
+      select: { usedAt: true },
+    });
+    expect(declineLink?.usedAt).toBeNull();
   });
 
   test('resend reminder invalidates previous approve and decline links', async () => {

@@ -1,9 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Form, Link } from 'react-router';
 import { ArrowDown, ArrowUp, Plus, Search, Trash2 } from 'lucide-react';
+import { Badge } from '~/components/ui/badge';
+import {
+  teachingAccessMobileSheetBodySend,
+  TEACHING_ACCESS_LOCKED_TOOLTIP,
+} from '~/domain/free-tier/teaching-access-copy';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
+import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
 import type { AssignmentEditRecord } from '~/components/assignments/assignment-edit-sheet';
-import { AssignmentDocumentsPill } from './assignment-documents-pill';
+import {
+  AssignmentDocumentsPill,
+  assignmentDocumentsLabel,
+} from './assignment-documents-pill';
+import { badgeVariants } from '~/components/ui/badge';
+import { ChevronRight } from 'lucide-react';
+import { cn } from '~/utils/misc';
 import { TutorOffBadge } from '~/components/assignments/tutor-off-badge';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
@@ -52,6 +64,8 @@ type ClassAssignmentsTabProps = {
   apHistoryAssignmentTypeId?: string | null;
   /** Gated on the organization's classInsightsEnabled flag. */
   classInsightsEnabled: boolean;
+  teachingLocked?: boolean;
+  teachingAccessAdminName?: string;
   onViewDocuments: (assignmentId: string) => void;
   /**
    * Selecting a row navigates to the assignment detail full page (see
@@ -82,9 +96,17 @@ export function ClassAssignmentsTab({
   siteLicenseLockedAssignmentTiles = [],
   apHistoryAssignmentTypeId,
   classInsightsEnabled,
+  teachingLocked = false,
+  teachingAccessAdminName = 'your administrator',
   onViewDocuments,
   onSelectAssignment,
 }: ClassAssignmentsTabProps) {
+  const sendLockProps = {
+    locked: teachingLocked,
+    adminName: teachingAccessAdminName,
+    mobileSheetBody: teachingAccessMobileSheetBodySend(teachingAccessAdminName),
+    tooltip: TEACHING_ACCESS_LOCKED_TOOLTIP,
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [pagination, setPagination] = useState({ skip: 0, take: 20 });
@@ -217,16 +239,33 @@ export function ClassAssignmentsTab({
               </Tooltip>
             </Form>
           ) : null}
-          <Button
-            type="button"
-            size="sm"
-            className="shrink-0"
-            data-testid="new-assignment-button"
-            onClick={() => setIsCreateSheetOpen(true)}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            New Assignment
-          </Button>
+          {(() => {
+            const createButton = (
+              <Button
+                type="button"
+                size="sm"
+                className="shrink-0"
+                data-testid="new-assignment-button"
+                onClick={() => setIsCreateSheetOpen(true)}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                New Assignment
+              </Button>
+            );
+            return teachingLocked ? (
+              <LockedTeachingControl
+                locked
+                adminName={teachingAccessAdminName}
+                mobileSheetBody={teachingAccessMobileSheetBodySend(
+                  teachingAccessAdminName
+                )}
+              >
+                {createButton}
+              </LockedTeachingControl>
+            ) : (
+              createButton
+            );
+          })()}
         </div>
       </div>
 
@@ -249,18 +288,20 @@ export function ClassAssignmentsTab({
           <Table aria-label="Assignments">
             <TableHeader className="rounded-t-lg">
               <TableRow className="rounded-t-lg bg-muted/50">
-                <TableHead className="w-[50px] rounded-tl-lg pl-4">
-                  <Checkbox
-                    aria-label="Select all assignments"
-                    checked={
-                      filteredAssignments.length > 0 &&
-                      selectedAssignmentIds.length ===
-                        filteredAssignments.length
-                    }
-                    onCheckedChange={handleSelectAll}
-                  />
-                </TableHead>
-                <TableHead>
+                {!teachingLocked ? (
+                  <TableHead className="w-[50px] rounded-tl-lg pl-4">
+                    <Checkbox
+                      aria-label="Select all assignments"
+                      checked={
+                        filteredAssignments.length > 0 &&
+                        selectedAssignmentIds.length ===
+                          filteredAssignments.length
+                      }
+                      onCheckedChange={handleSelectAll}
+                    />
+                  </TableHead>
+                ) : null}
+                <TableHead className={teachingLocked ? 'rounded-tl-lg pl-4' : undefined}>
                   <Button
                     type="button"
                     variant="ghost"
@@ -284,7 +325,11 @@ export function ClassAssignmentsTab({
                   </Button>
                 </TableHead>
                 <TableHead className="whitespace-nowrap">Type</TableHead>
-                <TableHead className="whitespace-nowrap">Graded</TableHead>
+                {teachingLocked ? (
+                  <TableHead className="whitespace-nowrap">Status</TableHead>
+                ) : (
+                  <TableHead className="whitespace-nowrap">Graded</TableHead>
+                )}
                 <TableHead className="whitespace-nowrap pr-4">
                   Documents
                 </TableHead>
@@ -297,24 +342,30 @@ export function ClassAssignmentsTab({
                 return (
                   <TableRow
                     key={assignment.classAssignmentId}
-                    className="cursor-pointer"
+                    className={teachingLocked ? undefined : 'cursor-pointer'}
                     data-state={
                       selectedAssignmentIds.includes(assignment.id)
                         ? 'selected'
                         : undefined
                     }
-                    onClick={() => onSelectAssignment(assignment.id)}
+                    onClick={
+                      teachingLocked
+                        ? undefined
+                        : () => onSelectAssignment(assignment.id)
+                    }
                   >
-                    <TableCell
-                      className="max-h-[37px] pl-4"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <Checkbox
-                        aria-label={`Select assignment ${title}`}
-                        checked={selectedAssignmentIds.includes(assignment.id)}
-                        onCheckedChange={() => handleSelect(assignment.id)}
-                      />
-                    </TableCell>
+                    {!teachingLocked ? (
+                      <TableCell
+                        className="max-h-[37px] pl-4"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <Checkbox
+                          aria-label={`Select assignment ${title}`}
+                          checked={selectedAssignmentIds.includes(assignment.id)}
+                          onCheckedChange={() => handleSelect(assignment.id)}
+                        />
+                      </TableCell>
+                    ) : null}
                     <TableCell className="font-medium">
                       <div className="flex flex-wrap items-center gap-2">
                         <span
@@ -323,24 +374,56 @@ export function ClassAssignmentsTab({
                         >
                           {title}
                         </span>
-                        <TutorOffBadge tutorEnabled={assignment.tutorEnabled} />
+                        {teachingLocked ? (
+                          <Badge variant="secondary" className="font-normal">
+                            Sample · Not sent
+                          </Badge>
+                        ) : (
+                          <TutorOffBadge tutorEnabled={assignment.tutorEnabled} />
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {assignment.assignmentType.title}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {assignment.gradedCount}
-                    </TableCell>
+                    {teachingLocked ? (
+                      <TableCell className="text-muted-foreground">
+                        Not sent
+                      </TableCell>
+                    ) : (
+                      <TableCell className="text-muted-foreground">
+                        {assignment.gradedCount}
+                      </TableCell>
+                    )}
                     <TableCell className="pr-4">
-                      <AssignmentDocumentsPill
-                        documentCount={assignment.documentCount}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onViewDocuments(assignment.id);
-                        }}
-                        ariaLabel={`View documents for ${title}`}
-                      />
+                      {teachingLocked ? (
+                        <LockedTeachingControl {...sendLockProps}>
+                          <button
+                            type="button"
+                            className={cn(
+                              badgeVariants({ variant: 'secondary' }),
+                              'cursor-pointer gap-1 py-1 pl-2 pr-1 opacity-60'
+                            )}
+                            aria-label={`View documents for ${title}`}
+                            data-testid={`assignment-documents-${assignment.id}`}
+                          >
+                            {assignmentDocumentsLabel(assignment.documentCount)}
+                            <ChevronRight
+                              className="size-3 shrink-0"
+                              aria-hidden="true"
+                            />
+                          </button>
+                        </LockedTeachingControl>
+                      ) : (
+                        <AssignmentDocumentsPill
+                          documentCount={assignment.documentCount}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onViewDocuments(assignment.id);
+                          }}
+                          ariaLabel={`View documents for ${title}`}
+                        />
+                      )}
                     </TableCell>
                   </TableRow>
                 );
@@ -366,6 +449,7 @@ export function ClassAssignmentsTab({
         fixedClassId={classOption.id}
         assignmentTypes={assignmentTypes}
         siteLicenseLockedAssignmentTiles={siteLicenseLockedAssignmentTiles}
+        teachingLocked={teachingLocked}
         teacherClasses={[classOption]}
       />
     </div>

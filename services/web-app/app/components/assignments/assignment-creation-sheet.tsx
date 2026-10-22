@@ -83,6 +83,8 @@ import {
 import { cn } from '~/utils/misc';
 import { SiteLicenseLockedAssignmentTile } from '~/components/site-license-locked-assignment-tile';
 import type { SiteLicenseLockedAssignmentTile as SiteLicenseLockedTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
+import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
+import { LockedAssignmentTypePickerSheet } from '~/components/free-tier/locked-assignment-type-picker-sheet';
 import { toDateInputValue } from '~/utils/date-only';
 import {
   assignmentTypeUsesDailyPagesEngagementRubric,
@@ -211,6 +213,8 @@ export type AssignmentCreationAssignmentType = {
    * forgot to load it would render an exit ticket as a blank prompt.
    */
   kind: string | null;
+  imageId?: string | null;
+  imageTitle?: string | null;
   /** Library rubric name when the type points at a shared rubric (e.g. SJP Daily Pages). */
   rubricName?: string | null;
   /** Displayed for a catalog type excluded by the organization plan. */
@@ -330,6 +334,8 @@ export type AssignmentCreationSheetProps = {
   initialExitTicketAnswerType?: ExitTicketAnswerType | null;
   /** Present reopens the notes section filled in; absent leaves the default. */
   initialExitTicketLessonNotes?: ExitTicketLessonNotes | null;
+  teachingLocked?: boolean;
+  createAssignmentTriggerRef?: React.RefObject<HTMLButtonElement | null>;
 };
 
 type AssignmentCreationSheetContentProps = AssignmentCreationSheetProps & {
@@ -499,6 +505,25 @@ export function AssignmentCreationSheet({
     if (!props.open) setPickedTypeId(undefined);
   }, [props.open]);
   if (
+    props.teachingLocked &&
+    usage &&
+    !props.editingAssignment &&
+    !pickedTypeId
+  ) {
+    return (
+      <LockedAssignmentTypePickerSheet
+        open={props.open}
+        onOpenChange={props.onOpenChange}
+        usage={usage}
+        assignmentTypes={props.assignmentTypes}
+        lockedAssignmentTiles={props.siteLicenseLockedAssignmentTiles ?? []}
+        createTriggerRef={props.createAssignmentTriggerRef}
+      />
+    );
+  }
+
+  if (
+    !props.teachingLocked &&
     usage &&
     props.assignmentTypes.some(
       (type) => !type.unavailableReason && !type.quotaExhausted
@@ -532,8 +557,9 @@ export function AssignmentCreationSheet({
                   key={row.kind}
                   disabled={
                     !type ||
-                    (!usage.monthly && row.remaining === 0) ||
-                    Boolean(type.unavailableReason)
+                    (!usage.unlimitedFreeAssignmentTiles &&
+                      row.remaining === 0) ||
+                    Boolean(type?.unavailableReason)
                   }
                   onClick={() => setPickedTypeId(type?.id)}
                   className={cn(
@@ -541,6 +567,10 @@ export function AssignmentCreationSheet({
                     selected && 'bg-secondary'
                   )}
                 >
+                  <AssignmentTypeTileImage
+                    imageId={type?.imageId}
+                    className="h-10 w-10 shrink-0 rounded-md"
+                  />
                   <span className="w-4 shrink-0">
                     {selected && <Check size={14} />}
                   </span>
@@ -552,14 +582,15 @@ export function AssignmentCreationSheet({
                         row.remaining === 0 && 'text-amber-800'
                       )}
                     >
-                      {usage.monthly
-                        ? 'Unlimited assignments'
+                      {usage.unlimitedFreeAssignmentTiles
+                        ? 'Unlimited'
                         : row.remaining
                           ? `${row.remaining} of ${row.total} left`
                           : 'None left'}
                     </span>
                   </span>
-                  {!usage.monthly && row.remaining === 0 && <Lock size={14} />}
+                  {!usage.unlimitedFreeAssignmentTiles &&
+                    row.remaining === 0 && <Lock size={14} />}
                 </button>
               );
             })}
@@ -568,11 +599,12 @@ export function AssignmentCreationSheet({
                 key={tile.key}
                 label={tile.label}
                 variant="picker"
+                imageId={tile.imageId}
               />
             ))}
           </div>
           <p className="mt-5 text-xs text-muted-foreground">
-            {usage.monthly
+            {usage.unlimitedFreeAssignmentTiles
               ? 'Unlimited Class Starter, pre-writing, and thesis assignments.'
               : "Deleting an assignment doesn't give it back."}
           </p>
@@ -2061,7 +2093,6 @@ export function AssignmentCreationSheetContent({
         {formError ? (
           <p className="text-sm text-destructive">{formError}</p>
         ) : null}
-
         <div className="flex items-center justify-end gap-2 pt-4">
           <Button
             type="button"

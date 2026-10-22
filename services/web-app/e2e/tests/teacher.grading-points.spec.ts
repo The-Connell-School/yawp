@@ -223,9 +223,10 @@ for (const scenario of [
       }
       await page.getByRole('option', { name: scenario.selectedLabel, exact: true }).click();
 
-      await expect(
-        page.getByText(new RegExp(`\\(${scenario.selectedScore}/${scenario.pointValue}\\)`))
-      ).toBeVisible();
+      await expect(category).toContainText(scenario.selectedLabel);
+      await expect(category).not.toContainText(
+        new RegExp(`\\(${scenario.selectedScore}/${scenario.pointValue}\\)`)
+      );
       await expect(page.getByLabel(`Total points (out of ${scenario.pointValue})`, { exact: true }))
         .toHaveValue(String(scenario.selectedScore));
       await page.getByTestId('grading-overall-comment').fill('Manual Daily Pages feedback.');

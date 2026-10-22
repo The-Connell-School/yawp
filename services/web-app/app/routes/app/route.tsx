@@ -1,6 +1,10 @@
 import './free-account.css';
 import { readFreeAccountUsage } from '~/domain/free-tier/inapp-usage.server';
-import { FreeAccountUsagePopover } from '~/components/free-account-usage';
+import {
+  freeTierNavMobileWarningDot,
+  renderFreeTierNavRow,
+  renderFreeTierNavTrailing,
+} from '~/components/free-tier/free-tier-nav-usage';
 import { canUseMockAdmin, requireMockAdmin } from '~/utils/mock-admin.server';
 import {
   Form,
@@ -16,8 +20,9 @@ import {
   useFetcher,
   useRevalidator,
   useRouteLoaderData,
+  useNavigation,
 } from 'react-router';
-import { Settings2, Cog, Microscope, Lock } from 'lucide-react';
+import { Settings2, Cog, Microscope } from 'lucide-react';
 import { useCallback, useEffect, useState, useRef, createContext } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import {
@@ -82,6 +87,9 @@ import {
   TourThisPageButton,
 } from '~/components/guided-tour/guided-tour';
 import { loadGuidedTours } from '~/domain/guided-tours/guided-tours.server';
+import { TeachingAccessProvider } from '~/components/free-tier/teaching-access-context';
+import type { TeachingAccessShellState } from '~/domain/free-tier/teaching-access-shell.server';
+import { getMembershipId } from '~/cookies/membership-id.server';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -105,8 +113,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
         options: [] as string[],
         isStudent: false,
       },
-      guidedTours: null,
-    });
+        guidedTours: null,
+        teachingAccess: { variant: 'none' } satisfies TeachingAccessShellState,
+      });
   }
   const userId = await requireUserId(request);
   const mockAdminAvailable = await canUseMockAdmin(userId);
@@ -123,6 +132,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (freeTierApplication) {
     const { retryFreeClassroomProvisioningForUser } =
       await import('~/domain/free-tier/provision-free-classroom.server');
+    const { ensureLockedPreviewClassroomForUser } =
+      await import('~/domain/free-tier/locked-preview.server');
+    await ensureLockedPreviewClassroomForUser(userId);
     await retryFreeClassroomProvisioningForUser(userId);
     await enforceFreeTierTeacherGate({
       userId,
@@ -140,6 +152,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           isStudent: false,
         },
         guidedTours: null,
+        teachingAccess: { variant: 'none' } satisfies TeachingAccessShellState,
       });
     }
   }
@@ -190,16 +203,31 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // Free classroom teachers get page tours instead of a hands-on orientation.
   const guidedTours = await loadGuidedTours(userId, profile, request);
-
+  const { loadTeachingAccessShellState } =
+    await import('~/domain/free-tier/teaching-access-shell.server');
+  const teachingAccess = freeTierRouteOpen
+    ? await loadTeachingAccessShellState({
+        userId,
+        membershipId: await getMembershipId(request),
+        role: profile.role,
+        organizationPlan: profile.organization.plan,
+        organizationId: profile.organization.id,
+      })
+    : ({ variant: 'none' } satisfies TeachingAccessShellState);
   return data({
     mockAdminAvailable,
-    freeAccountUsage: await readFreeAccountUsage(profile, freeTierRouteOpen),
+    freeAccountUsage: await readFreeAccountUsage(
+      profile,
+      freeTierRouteOpen,
+      userId
+    ),
     schoolYearScope: {
       selected,
       options: selectableOptions,
       isStudent: profile.role === 'STUDENT',
     },
     guidedTours,
+    teachingAccess,
   });
 }
 
@@ -225,12 +253,16 @@ function isAppNavLinkActive(linkTo: string, pathname: string) {
 }
 
 export default function Route() {
+  const navigation = useNavigation();
   const location = useLocation();
   const user = useUser();
   const shellData = useLoaderData<typeof loader>();
-  const { schoolYearScope, guidedTours, mockAdminAvailable } = shellData;
+  const { schoolYearScope, guidedTours, mockAdminAvailable, teachingAccess } =
+    shellData;
   const freeAccountUsage =
     'freeAccountUsage' in shellData ? shellData.freeAccountUsage : null;
+  const usageNavLoading =
+    navigation.state === 'loading' && Boolean(freeAccountUsage);
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
   const isReadOnlyImpersonation = rootData?.impersonation?.isReadOnly ?? false;
@@ -402,12 +434,7 @@ export default function Route() {
                         {
                           to: '/app/reporter',
                           label: 'Reporter',
-                          icon: (
-                            <>
-                              <Microscope size={18} />
-                              {!freeAccountUsage.monthly && <Lock size={12} />}
-                            </>
-                          ),
+                          icon: <Microscope size={18} />,
                         },
                       ],
                     },
@@ -419,18 +446,38 @@ export default function Route() {
             pathname={location.pathname}
             isAppNavLinkActive={isAppNavLinkActive}
             forceFullNavigation={isClassDetailRoute}
+            renderLinkTrailing={
+              freeAccountUsage
+                ? (link) =>
+                    renderFreeTierNavTrailing({
+                      link,
+                      usage: freeAccountUsage,
+                      loading: usageNavLoading,
+                      navExpanded,
+                      isMobile,
+                    })
+                : undefined
+            }
+            renderNavRow={
+              freeAccountUsage
+                ? ({ link, isActive, rowClassName, linkClassName, icon }) =>
+                    renderFreeTierNavRow({
+                      link,
+                      usage: freeAccountUsage,
+                      loading: usageNavLoading,
+                      navExpanded,
+                      isMobile,
+                      isActive,
+                      rowClassName,
+                      linkClassName,
+                      forceFullNavigation: isClassDetailRoute,
+                      icon,
+                    })
+                : undefined
+            }
           />
         </div>
         <div className="flex flex-grow flex-col justify-end">
-          {freeAccountUsage && (
-            <FreeAccountUsagePopover
-              usage={freeAccountUsage}
-              expanded={navExpanded}
-              isMobile={isMobile}
-              onMobileOpen={() => setIsMobileNavOpen(false)}
-              onMobileClose={() => mobileNavTrigger.current?.focus()}
-            />
-          )}
           {guidedTours && !isReadOnlyImpersonation ? (
             <TourThisPageButton
               navExpanded={navExpanded}
@@ -574,8 +621,16 @@ export default function Route() {
             ref={mobileNavTrigger}
             aria-label={freeAccountUsage ? 'Open app navigation' : undefined}
             onClick={() => setIsMobileNavOpen(true)}
+            className="relative"
           >
             <HamburgerIcon />
+            {freeAccountUsage &&
+            freeTierNavMobileWarningDot(freeAccountUsage, usageNavLoading) ? (
+              <span
+                className="absolute right-1 top-1 size-2 rounded-full bg-primary"
+                aria-hidden
+              />
+            ) : null}
           </Button>
           <div className="flex items-center">
             {freeAccountUsage &&
@@ -610,13 +665,19 @@ export default function Route() {
           height:100% of this whole column (which double-counts that chrome
           and pushes fixed-height app shells like the Reporter off-screen).
         */}
-        <NavExpandedContext.Provider
-          value={{ isMobileNavOpen, setIsMobileNavOpen }}
+        <TeachingAccessProvider
+          state={
+            teachingAccess ?? ({ variant: 'none' } satisfies TeachingAccessShellState)
+          }
         >
-          <div className="min-h-0 flex-1">
-            <Outlet key={location.pathname} />
-          </div>
-        </NavExpandedContext.Provider>
+          <NavExpandedContext.Provider
+            value={{ isMobileNavOpen, setIsMobileNavOpen }}
+          >
+            <div className="min-h-0 flex-1">
+              <Outlet key={location.pathname} />
+            </div>
+          </NavExpandedContext.Provider>
+        </TeachingAccessProvider>
         {guidedTours && !isReadOnlyImpersonation ? (
           <GuidedTour {...guidedTours} />
         ) : null}

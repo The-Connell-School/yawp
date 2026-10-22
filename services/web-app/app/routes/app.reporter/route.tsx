@@ -1,5 +1,6 @@
 import {
   FreeReporterLocked,
+  FreeReporterMonthlyLimit,
   useFreeAccountUsage,
   MonthlyUsageNotice,
 } from '~/components/free-account-usage';
@@ -9,9 +10,13 @@ import {
   redirect,
   useFetcher,
   useLoaderData,
+  useNavigation,
   useSearchParams,
+  useRevalidator,
   type LoaderFunctionArgs,
 } from 'react-router';
+import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
+import { TeachingAccessReporterSkeleton } from '~/components/free-tier/teaching-access-reporter-skeleton';
 import {
   CornerDownRight,
   Loader2,
@@ -123,6 +128,9 @@ type GrowthPlanProposal = {
 };
 
 export default function ReporterRoute() {
+  const navigation = useNavigation();
+  const { locked: teachingLocked, loading: teachingLoading } =
+    useTeachingAccess();
   const usage = useFreeAccountUsage();
   const monthlyUsage = usage?.monthly ? usage.reporter : null;
   const exhausted = monthlyUsage?.remaining === 0;
@@ -134,6 +142,7 @@ export default function ReporterRoute() {
   } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const fetcher = useFetcher<ReporterActionData>();
+  const revalidator = useRevalidator();
 
   const [messages, setMessages] = useState<ChatMessage[]>(
     selectedConversation?.messages ?? []
@@ -226,6 +235,7 @@ export default function ReporterRoute() {
         // Replace so the browser back button doesn't bounce between states.
         setSearchParams(next, { replace: true });
       }
+      revalidator.revalidate();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetcher.state, fetcher.data]);
@@ -268,7 +278,18 @@ export default function ReporterRoute() {
 
   const hasMessages = messages.length > 0;
 
-  if (freeLocked) return <FreeReporterLocked />;
+  if (
+    (teachingLocked || teachingLoading) &&
+    navigation.state === 'loading'
+  ) {
+    return <TeachingAccessReporterSkeleton />;
+  }
+
+  if (freeLocked) return <FreeReporterLocked variant="pending" />;
+
+  if (usage?.monthly && usage.reporter?.remaining === 0) {
+    return <FreeReporterMonthlyLimit usage={usage} />;
+  }
 
   return (
     <section className="flex h-full w-full">
