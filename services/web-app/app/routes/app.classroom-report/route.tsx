@@ -66,7 +66,7 @@ export default function ClassroomReportRoute() {
         </section>
         <section data-report-controls aria-labelledby="share-report" className="space-y-3 border-t pt-5">
           <h2 id="share-report" className="text-lg font-semibold">Share this report</h2>
-          <p className="text-sm text-muted-foreground">Copy or print these aggregate counts. Recipients do not need a Yawp account. The summary contains no student names or writing.</p>
+          <p className="text-sm text-muted-foreground">Copy or print these aggregate counts. Recipients do not need a Yawp! account. The summary contains no student names or writing.</p>
           <div className="flex flex-wrap gap-2">
             <Button onClick={copySummary}>Copy summary</Button>
             <Button variant="outline" onClick={() => window.print()}>Print report</Button>

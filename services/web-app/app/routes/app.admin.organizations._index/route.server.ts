@@ -42,14 +42,14 @@ export async function organizationsAction({ request }: ActionFunctionArgs) {
 
   if (intent === 'create') {
     return dataResponse(
-      { error: 'Organization creation has moved to Yawp Internal.' },
+      { error: 'Organization creation has moved to Yawp! Internal.' },
       { status: 410 }
     );
   }
 
   if (intent === 'legacy-create') {
     return dataResponse(
-      { error: 'Organization creation has moved to Yawp Internal.' },
+      { error: 'Organization creation has moved to Yawp! Internal.' },
       { status: 410 }
     );
   }

@@ -18,7 +18,7 @@ export function AuthBrandLockup({ partner }: { partner?: 'ua' | null }) {
     return (
       <div
         className="mx-auto flex w-full max-w-md flex-col items-center gap-5 px-6"
-        aria-label="The University of Alabama and Yawp"
+        aria-label="The University of Alabama and Yawp!"
       >
         <UaNameplate className="max-w-sm" />
         <div className="flex w-full max-w-sm items-center gap-3" aria-hidden="true">
@@ -34,7 +34,7 @@ export function AuthBrandLockup({ partner }: { partner?: 'ua' | null }) {
   return (
     <img
       src="/img/logo_for_light_mode.png"
-      alt="Yawp"
+      alt="Yawp!"
       className="mx-auto h-auto w-48 rounded object-cover sm:w-52"
     />
   );
@@ -54,7 +54,7 @@ function YawpMark({ className = 'w-52 sm:w-64' }: { className?: string }) {
   return (
     <img
       src="/img/yawp_black_logo.png"
-      alt="Yawp"
+      alt="Yawp!"
       className={`h-auto shrink-0 object-contain ${className}`}
     />
   );

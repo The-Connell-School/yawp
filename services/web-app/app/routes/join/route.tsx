@@ -216,7 +216,7 @@ export default function JoinRoute() {
         <h1 className="text-lg font-semibold">Join your class</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Ask your teacher for the class join link or scan their QR code. Class
-          codes alone are not enough to join on Yawp.
+          codes alone are not enough to join on Yawp!
         </p>
         <p className="mt-6 text-center text-sm text-muted-foreground">
           Already have an account?{' '}

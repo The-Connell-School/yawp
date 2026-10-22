@@ -257,7 +257,7 @@ export default function AssignmentTypeRoute() {
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-        <div className="font-semibold">Read-only Assignment Type inspection moved to Yawp Internal.</div>
+        <div className="font-semibold">Read-only Assignment Type inspection moved to Yawp! Internal.</div>
         <p className="mt-1">
           This legacy editor remains available for write tools that have not moved yet. Use Internal first when you only need to inspect catalog content, modules, organization assignments, images, or rubric references.
         </p>

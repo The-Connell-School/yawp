@@ -69,6 +69,7 @@ export const AUDIENCE_SETUP: Record<Exclude<ShareAudience, 'student'> | 'student
     items: [
       { item: 'summary', label: 'What we did and why', hint: 'In plain language, no jargon', checked: true },
       { item: 'help', label: 'Talking about it at dinner', hint: 'Two or three ways to start the conversation', checked: true },
+      { item: 'deck', label: 'The slides from class', hint: 'What students saw, without your notes', checked: false },
     ],
   },
   admin: {
@@ -81,6 +82,7 @@ export const AUDIENCE_SETUP: Record<Exclude<ShareAudience, 'student'> | 'student
       { item: 'plan', label: 'Lesson plan', hint: 'Timed, with a why for each step', checked: true },
       { item: 'writing', label: 'Writing time', hint: 'How much of class is writing', checked: true },
       { item: 'standards', label: 'Standards', hint: 'The ones you named in the planner', checked: true },
+      { item: 'deck', label: 'Slides', hint: 'The deck as students see it', checked: false },
       { item: 'observe', label: 'Invite them to observe', hint: 'An invitation to come and see this lesson', checked: false },
     ],
   },

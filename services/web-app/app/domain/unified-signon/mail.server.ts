@@ -57,7 +57,7 @@ export async function deliverCode(email: string, code: string) {
     );
   const result = await sendEmail({
     to: email,
-    subject: 'Your Yawp sign-in code',
+    subject: 'Your Yawp! sign-in code',
     text: `Your code is ${code}. It expires in 10 minutes.`,
     html: `<p>Your code is <strong>${code}</strong>. It expires in 10 minutes.</p>`,
   });

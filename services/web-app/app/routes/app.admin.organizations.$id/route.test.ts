@@ -175,7 +175,7 @@ describe('admin organization detail route', () => {
       init: { status: 410 },
       data: {
         status: 'error',
-        error: 'Organization updates have moved to Yawp Internal.',
+        error: 'Organization updates have moved to Yawp! Internal.',
       },
     });
     expect(prisma.organization.update).not.toHaveBeenCalled();
@@ -198,7 +198,7 @@ describe('admin organization detail route', () => {
       init: { status: 410 },
       data: {
         status: 'error',
-        error: 'Organization updates have moved to Yawp Internal.',
+        error: 'Organization updates have moved to Yawp! Internal.',
       },
     });
     expect(prisma.organization.update).not.toHaveBeenCalled();

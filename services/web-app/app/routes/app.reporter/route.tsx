@@ -331,7 +331,7 @@ export default function ReporterRoute() {
             <Search size={20} className="shrink-0 text-primary" />
             <div className="min-w-0 flex-1">
               <h2 className="text-lg font-semibold leading-none">
-                Yawp Reporter
+                Yawp! Reporter
               </h2>
               <p className="hidden text-sm text-muted-foreground sm:block">
                 Ask about your classes and students in plain language.
@@ -460,8 +460,8 @@ export default function ReporterRoute() {
                 }
               }}
               rows={1}
-              placeholder="Ask Yawp Reporter…"
-              aria-label="Message Yawp Reporter"
+              placeholder="Ask Yawp! Reporter…"
+              aria-label="Message Yawp! Reporter"
               className="max-h-40 min-h-[44px] flex-1 resize-none max-sm:text-base"
               disabled={isSending || exhausted}
             />
@@ -497,7 +497,7 @@ function ReporterEmptyState({
         </div>
         <h3 className="text-xl font-semibold">What would you like to know?</h3>
         <p className="max-w-md text-sm text-muted-foreground">
-          Yawp Reporter reads your classes, assignments, and released grades to
+          Yawp! Reporter reads your classes, assignments, and released grades to
           answer questions and build reports. Try one of these, or just ask.
         </p>
       </div>
@@ -556,7 +556,7 @@ function MessageBubble({
           <div className="mt-1.5 flex justify-end">
             <button
               type="button"
-              onClick={() => printAssistantMessage(body, 'Yawp Reporter')}
+              onClick={() => printAssistantMessage(body, 'Yawp! Reporter')}
               className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
             >
               <Printer size={13} />

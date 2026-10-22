@@ -29,13 +29,13 @@ describe('Post to your class and Send this lesson (stack page redesign)', () => 
   });
 
   test('family: what we did and why, and ways to talk about it at dinner', () => {
-    expect(AUDIENCE_SETUP.family.items.map((item) => item.label)).toEqual(['What we did and why', 'Talking about it at dinner']);
+    expect(AUDIENCE_SETUP.family.items.map((item) => item.label)).toEqual(['What we did and why', 'Talking about it at dinner', 'The slides from class']);
     expect(REWRITE_SYSTEM.family).toContain('two or three');
     expect(REWRITE_SYSTEM.family).toContain('## Talking about it at dinner');
   });
 
   test('admin: the plan, writing time, standards only as named, and an invitation to observe', () => {
-    expect(AUDIENCE_SETUP.admin.items.map((item) => item.item)).toEqual(['plan', 'writing', 'standards', 'observe']);
+    expect(AUDIENCE_SETUP.admin.items.map((item) => item.item)).toEqual(['plan', 'writing', 'standards', 'deck', 'observe']);
     const standards = AUDIENCE_SETUP.admin.items.find((item) => item.item === 'standards')!;
     expect(standards.hint).toBe('The ones you named in the planner');
     expect(REWRITE_SYSTEM.admin).toContain('Never name a standard');

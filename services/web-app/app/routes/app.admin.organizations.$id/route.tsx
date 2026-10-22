@@ -102,7 +102,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse(
       {
         status: 'error',
-        error: 'Organization updates have moved to Yawp Internal.',
+        error: 'Organization updates have moved to Yawp! Internal.',
       },
       { status: 410 }
     );
@@ -112,7 +112,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse(
       {
         status: 'error',
-        error: 'Organization updates have moved to Yawp Internal.',
+        error: 'Organization updates have moved to Yawp! Internal.',
       },
       { status: 410 }
     );
@@ -155,7 +155,7 @@ export default function OrganizationRoute() {
   return (
     <div className="grid gap-4 p-3 md:p-5">
       <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        Organization create/update writes have moved to Yawp Internal. This
+        Organization create/update writes have moved to Yawp! Internal. This
         platform detail page is read-only for organization settings.
       </div>
       <div className="flex justify-between">
@@ -171,7 +171,7 @@ export default function OrganizationRoute() {
               <Button
                 variant="outline"
                 disabled
-                title="Edit organizations in Yawp Internal"
+                title="Edit organizations in Yawp! Internal"
               >
                 <Settings className="mr-2 h-4 w-4" />
                 Edit Organization
@@ -265,7 +265,7 @@ export default function OrganizationRoute() {
                         className="mt-1 h-4 w-4"
                       />
                       <span className="min-w-0">
-                        <span className="block font-medium">Yawp Reporter</span>
+                        <span className="block font-medium">Yawp! Reporter</span>
                         <span className="block text-xs text-muted-foreground">
                           Retired: Reporter is always on for all organizations.
                           This toggle is kept for historical data only.

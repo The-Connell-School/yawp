@@ -20,7 +20,7 @@ export async function action({ request }: ActionFunctionArgs) {
     {
       ok: false,
       error:
-        'Free tier admin controls have moved to Yawp Internal. Use the signed internal Free Trial operator pages for this environment.',
+        'Free tier admin controls have moved to Yawp! Internal. Use the signed internal Free Trial operator pages for this environment.',
     },
     { status: 410 },
   );
@@ -31,12 +31,12 @@ export default function AdminFreeTierRoute() {
     <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
       <div className="rounded-lg border bg-card p-5 shadow-sm">
         <p className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Moved to Yawp Internal
+          Moved to Yawp! Internal
         </p>
         <h2 className="text-2xl font-semibold">Free tier controls are no longer operated here.</h2>
         <p className="mt-3 text-sm text-muted-foreground">
           Token creation, waitlist release, review queue decisions, approvals, rejections, manual review,
-          reopen, and CSV export now run from Yawp Internal through signed platform APIs with operator
+          reopen, and CSV export now run from Yawp! Internal through signed platform APIs with operator
           attribution and audit coverage.
         </p>
         <p className="mt-3 text-sm text-muted-foreground">

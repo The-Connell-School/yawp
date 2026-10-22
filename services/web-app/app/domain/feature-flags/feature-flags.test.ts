@@ -119,13 +119,13 @@ describe('feature flag registry', () => {
     expect(isFeatureFlagKey('toString')).toBe(false);
   });
 
-  test('has the Rubrics from Yawp Internal flag, stored under its own row', () => {
+  test('has the Rubrics from Yawp! Internal flag, stored under its own row', () => {
     expect(INTERNAL_RUBRICS_FLAG).toBe('internal_rubrics');
     expect(featureFlagSettingName(INTERNAL_RUBRICS_FLAG)).toBe(
       'feature_flag.internal_rubrics'
     );
     expect(FEATURE_FLAGS[INTERNAL_RUBRICS_FLAG].label).toBe(
-      'Rubrics from Yawp Internal'
+      'Rubrics from Yawp! Internal'
     );
   });
 });

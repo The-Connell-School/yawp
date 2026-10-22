@@ -132,9 +132,9 @@ export const FEATURE_FLAGS = {
       'Shows the Lesson Planner in the teacher nav and allows planner pages, exports, and lesson generation. Off: entry points are hidden and direct URLs are blocked; saved lessons are not deleted.',
   },
   [INTERNAL_RUBRICS_FLAG]: {
-    label: 'Rubrics from Yawp Internal',
+    label: 'Rubrics from Yawp! Internal',
     description:
-      "Schools with this on get the rubric version Yawp Internal released for each rubric when a new assignment is created. Off: new assignments use the platform's current rubric. Existing assignments keep the version they were created with.",
+      "Schools with this on get the rubric version Yawp! Internal released for each rubric when a new assignment is created. Off: new assignments use the platform's current rubric. Existing assignments keep the version they were created with.",
   },
   [FREE_TIER_FLAG]: {
     label: 'Free tier',

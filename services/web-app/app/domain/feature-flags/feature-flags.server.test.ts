@@ -73,7 +73,7 @@ describe('feature flags (server)', () => {
     }
   });
 
-  test('Rubrics from Yawp Internal is off with no row and follows per-school targeting', async () => {
+  test('Rubrics from Yawp! Internal is off with no row and follows per-school targeting', async () => {
     prisma.setting.findUnique.mockResolvedValue(null);
     expect(await isFeatureFlagEnabled(INTERNAL_RUBRICS_FLAG, 'org-1')).toBe(false);
     expect(prisma.setting.findUnique.mock.calls[0]?.[0]).toMatchObject({

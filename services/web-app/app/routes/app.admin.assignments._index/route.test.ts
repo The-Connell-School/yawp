@@ -72,7 +72,7 @@ describe('AssignmentTypes loader', () => {
 
     const html = renderToStaticMarkup(React.createElement(AssignmentTypesRoute));
 
-    expect(html).toContain('Assignment Types read-only review moved to Yawp Internal.');
+    expect(html).toContain('Assignment Types read-only review moved to Yawp! Internal.');
     expect(html).toContain('href="/app/admin/assignment-types/new"');
     expect(html).toContain('Create assignment type');
   });

@@ -105,7 +105,7 @@ test.describe.serial('Tester feedback', () => {
         page.getByRole('heading', { name: 'Tester feedback' })
       ).toBeVisible();
       await expect(
-        page.getByText('Tester feedback review has moved to Yawp Internal')
+        page.getByText('Tester feedback review has moved to Yawp! Internal')
       ).toBeVisible();
       await expect(page.getByText('E2E admin export')).toHaveCount(0);
       await expect(

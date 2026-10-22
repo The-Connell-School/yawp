@@ -6,6 +6,7 @@
  * (a sub's plan is the rewrite, made for them).
  */
 import { prisma } from '~/utils/db.server';
+import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
 import { buildLessonPacket } from './lesson-packet';
 import { findShareLink } from './lesson-share.server';
 import { parseShareItems, type ShareAudience } from './lesson-share';
@@ -27,6 +28,8 @@ export type SharedLesson = {
   /** Speaker notes go to a sub, who has to run the slides; never to students. */
   withNotes: boolean;
   writing: { percent: number; minutes: number } | null;
+  /** How the slides are drawn: the same template the teacher presents with. */
+  deckTemplate: 'gallery' | 'tile' | 'plain';
 };
 
 export async function loadSharedLesson(token: string): Promise<SharedLesson | null> {
@@ -36,6 +39,7 @@ export async function loadSharedLesson(token: string): Promise<SharedLesson | nu
   const conversation = await prisma.lessonPlanConversation.findUnique({
     where: { id: link.conversation.id },
     select: {
+      organizationId: true,
       title: true,
       packetTitle: true,
       periodMinutes: true,
@@ -127,6 +131,9 @@ export async function loadSharedLesson(token: string): Promise<SharedLesson | nu
     : undefined;
   const deckOutcome = deckRow ? readSlideDeck(deckRow.content) : null;
   const timing = stackTiming(steps, conversation.periodMinutes);
+  const { deckV2, deckGallery } = deckOutcome?.kind === 'deck'
+    ? await getLessonPlannerReviewFlags(conversation.organizationId)
+    : { deckV2: false, deckGallery: false };
   const audience = link.audience as ShareAudience;
 
   return {
@@ -143,5 +150,6 @@ export async function loadSharedLesson(token: string): Promise<SharedLesson | nu
     writing: includes.has('writing')
       ? { percent: timing.writingPercent, minutes: timing.writingMinutes }
       : null,
+    deckTemplate: deckGallery ? 'gallery' : deckV2 ? 'tile' : 'plain',
   };
 }
