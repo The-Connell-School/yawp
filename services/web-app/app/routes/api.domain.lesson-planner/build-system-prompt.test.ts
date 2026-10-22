@@ -1722,7 +1722,7 @@ describe("planner prompt — Brian's run 3", () => {
   });
 
   test('the prompt version moved', () => {
-    expect(LESSON_PLANNER_PROMPT_VERSION).toBe('2026-10-21-review-v1');
+    expect(LESSON_PLANNER_PROMPT_VERSION).toBe('2026-10-22-review-v1');
   });
 });
 
@@ -1889,4 +1889,21 @@ describe('planner prompt — the painting is chosen, not reused (Kevin, Oct 22)'
     expect(text).toContain('Do not use one of these again unless this lesson is in that same unit');
     expect(textOf()).not.toContain('Paintings this teacher has used lately');
   });
+});
+
+describe("planner prompt — Brian's run 4", () => {
+  for (const intakeV2 of [false, true]) {
+    const prompt = buildLessonPlannerSystemPrompt({ teacherName: 'Brian', organizationName: 'Connell School', intakeV2 });
+
+    test(`one way to answer per turn: a typed question goes alone, the title first (intake v2: ${intakeV2})`, () => {
+      expect(prompt).toContain('One way to answer per turn.');
+      expect(prompt).toContain('no `suggestions` block and no controls in that reply');
+      expect(prompt).toContain('ask for the text first, alone');
+    });
+
+    test(`no "not this, but that"; every student contribution received warmly (intake v2: ${intakeV2})`, () => {
+      expect(prompt).toContain('Never use the "not this, but that" turn');
+      expect(prompt).toContain('Every student contribution is received warmly.');
+    });
+  }
 });
