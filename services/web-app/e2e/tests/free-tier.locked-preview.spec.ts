@@ -553,9 +553,12 @@ test('locked assignments tab shows sample rows and locked documents pill', async
   await expect(page.getByText('Sample · Not sent').first()).toBeVisible();
   const documentsPill = page.getByTestId(/assignment-documents-/).first();
   await expect(documentsPill).toBeVisible();
-  await documentsPill.click({ force: true, timeout: 15_000 });
+  await documentsPill.focus();
+  await page.keyboard.press('Enter');
+  const sheet = page.getByRole('dialog');
+  await expect(sheet).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Unlocks after approval' })
+    sheet.getByRole('heading', { name: 'Unlocks after approval' })
   ).toBeVisible();
   await expect(
     page.getByText(/Sending assignments to your class unlocks once Dr\. Patel/)
