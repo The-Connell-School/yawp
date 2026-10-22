@@ -144,17 +144,18 @@ test.describe('Dev panel artboard evidence', () => {
     });
     await page.unroute('**/api/dev-panel/free-tier-jump');
     await page.evaluate(() => localStorage.removeItem('yawp-dev-panel'));
-
+    await page.request.post('/auth/dev-login', {
+      form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
+    });
     await page.goto('/app/assignments');
-    const feedbackTools = await openDevToolsPanel(page);
-    await feedbackTools.getByRole('button', { name: 'Give feedback' }).click();
+    let { panel: feedbackDialog } = await openGiveFeedback(page);
     await shot(page, '58');
 
-    await page.getByRole('button', { name: 'Send feedback' }).click();
-    await expect(page.getByRole('alert')).toHaveText(/Add a note/);
+    await feedbackDialog.getByRole('button', { name: 'Send feedback' }).click();
+    await expect(feedbackDialog.getByRole('alert')).toHaveText(/Add a note/);
     await shot(page, '62');
 
-    await page.getByLabel('Note').fill('Evidence note for sent state');
+    await feedbackDialog.getByLabel('Note').fill('Evidence note for sent state');
     await page.route('**/api/demo-feedback', async (route) => {
       await route.fulfill({
         status: 200,
@@ -162,36 +163,35 @@ test.describe('Dev panel artboard evidence', () => {
         body: JSON.stringify({ ok: true }),
       });
     });
-    await page.getByRole('button', { name: 'Send feedback' }).click();
-    await expect(page.getByRole('status')).toContainText('Thank you');
+    await feedbackDialog.getByRole('button', { name: 'Send feedback' }).click();
+    await expect(feedbackDialog.getByRole('status')).toContainText('Thank you');
     await shot(page, '67');
     await page.unroute('**/api/demo-feedback');
-    await page.getByRole('button', { name: 'Send more feedback' }).click();
+    await feedbackDialog.getByRole('button', { name: 'Send more feedback' }).click();
 
-    await page.getByLabel('Note').fill('Evidence note kept on error');
+    await feedbackDialog.getByLabel('Note').fill('Evidence note kept on error');
     await page.route('**/api/demo-feedback', async (route) => {
       await route.fulfill({
         status: 503,
         json: { error: 'Could not save feedback. Please try again.' },
       });
     });
-    await page.getByRole('button', { name: 'Send feedback' }).click();
-    await expect(page.getByRole('alert')).toBeVisible();
+    await feedbackDialog.getByRole('button', { name: 'Send feedback' }).click();
+    await expect(feedbackDialog.getByRole('alert')).toBeVisible();
     await shot(page, '73');
     await page.unroute('**/api/demo-feedback');
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/app/assignments');
-    const mobileTools = await openDevToolsPanel(page);
-    await mobileTools.getByRole('button', { name: 'Give feedback' }).click();
-    await page.getByLabel('Note').fill('Mobile footer evidence');
+    ({ panel: feedbackDialog } = await openGiveFeedback(page));
+    await feedbackDialog.getByLabel('Note').fill('Mobile footer evidence');
     await shot(page, '74');
 
-    await page.getByLabel('Note').fill('Partly typed note before reload');
+    await feedbackDialog.getByLabel('Note').fill('Partly typed note before reload');
     await page.reload();
     await expect(devToolsPanel(page)).toBeVisible();
-    await devToolsPanel(page).getByRole('button', { name: 'Give feedback' }).click();
-    await expect(page.getByLabel('Note')).toHaveValue('Partly typed note before reload');
+    ({ panel: feedbackDialog } = await openGiveFeedback(page));
+    await expect(feedbackDialog.getByLabel('Note')).toHaveValue('Partly typed note before reload');
     await shot(page, '85');
   });
 });
