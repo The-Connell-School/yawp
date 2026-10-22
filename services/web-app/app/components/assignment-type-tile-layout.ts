@@ -16,20 +16,25 @@ export function assignmentTypeTileImageWrapClassName(extra?: string) {
 
 export function assignmentTypeTileFooterClassName(extra?: string) {
   return cn(
-    'grid grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-x-2 gap-y-0.5 px-3 py-1.5 sm:py-2',
+    'flex w-full flex-wrap items-baseline gap-x-2 gap-y-0.5 px-3 py-1.5 sm:py-2',
     extra
   );
 }
 
 export const assignmentTypeTileNameTestId = 'assignment-type-tile-name';
+export const assignmentTypeTileMetaTestId = 'assignment-type-tile-meta';
 
 export function assignmentTypeTileNameClassName(extra?: string) {
-  return cn('min-w-0 text-left leading-snug', extra);
+  return cn('min-w-0 flex-1 max-w-full text-left leading-snug', extra);
 }
 
 export function assignmentTypeTileMetaClassName(extra?: string) {
   return cn(
-    'shrink-0 self-start whitespace-nowrap text-xs font-normal text-muted-foreground',
+    'ml-auto shrink-0 whitespace-nowrap text-xs font-normal text-muted-foreground',
     extra
   );
+}
+
+export function assignmentTypeTileTrailingIconClassName(extra?: string) {
+  return cn('shrink-0 self-baseline', extra);
 }

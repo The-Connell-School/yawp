@@ -36,7 +36,9 @@ import {
   assignmentTypeTileImageWrapClassName,
   assignmentTypeTileMetaClassName,
   assignmentTypeTileNameClassName,
+  assignmentTypeTileMetaTestId,
   assignmentTypeTileNameTestId,
+  assignmentTypeTileTrailingIconClassName,
 } from '~/components/assignment-type-tile-layout';
 import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
@@ -309,18 +311,17 @@ export function FreeAssignmentTiles({
                   )}
                 >
                   <span
-                    className={assignmentTypeTileNameClassName('col-start-1 row-start-1')}
+                    className={assignmentTypeTileNameClassName()}
                     data-testid={assignmentTypeTileNameTestId}
                   >
                     {row.label}
                   </span>
                   <span
                     className={cn(
-                      assignmentTypeTileMetaClassName(
-                        'col-start-2 row-start-1 text-[13px]'
-                      ),
+                      assignmentTypeTileMetaClassName('text-[13px]'),
                       !usage.monthly && row.remaining === 0 && 'text-amber-800'
                     )}
+                    data-testid={assignmentTypeTileMetaTestId}
                   >
                     {usage.monthly
                       ? 'Unlimited'
@@ -330,7 +331,9 @@ export function FreeAssignmentTiles({
                   </span>
                   <Lock
                     size={16}
-                    className="col-start-3 row-start-1 mt-0.5 shrink-0 self-start text-muted-foreground"
+                    className={assignmentTypeTileTrailingIconClassName(
+                      'text-muted-foreground'
+                    )}
                     aria-hidden
                   />
                 </span>
@@ -351,6 +354,7 @@ export function FreeAssignmentTiles({
                       assignmentTypeTileMetaClassName('text-[13px]'),
                       !usage.monthly && row.remaining === 0 && 'text-amber-800'
                     )}
+                    data-testid={assignmentTypeTileMetaTestId}
                   >
                     {usage.monthly
                       ? 'Unlimited'
@@ -360,7 +364,9 @@ export function FreeAssignmentTiles({
                   </span>
                   <Plus
                     size={16}
-                    className="shrink-0 text-muted-foreground"
+                    className={assignmentTypeTileTrailingIconClassName(
+                      'text-muted-foreground'
+                    )}
                     aria-hidden
                   />
                 </span>

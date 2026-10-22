@@ -15,7 +15,9 @@ import {
   assignmentTypeTileImageWrapClassName,
   assignmentTypeTileMetaClassName,
   assignmentTypeTileNameClassName,
+  assignmentTypeTileMetaTestId,
   assignmentTypeTileNameTestId,
+  assignmentTypeTileTrailingIconClassName,
 } from '~/components/assignment-type-tile-layout';
 import { SiteLicenseLockedAssignmentGridTile } from '~/components/site-license-locked-assignment-tile';
 import type { SiteLicenseLockedAssignmentTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
@@ -202,12 +204,17 @@ export function LockedAssignmentTypePickerSheet({
                   >
                     {tile.label}
                   </span>
-                  <span className={assignmentTypeTileMetaClassName()}>
+                  <span
+                    className={assignmentTypeTileMetaClassName()}
+                    data-testid={assignmentTypeTileMetaTestId}
+                  >
                     {tile.included}
                   </span>
                   {tile.selected ? (
                     <Check
-                      className="h-4 w-4 shrink-0 self-start text-primary"
+                      className={assignmentTypeTileTrailingIconClassName(
+                        'h-4 w-4 text-primary'
+                      )}
                       aria-hidden
                     />
                   ) : null}

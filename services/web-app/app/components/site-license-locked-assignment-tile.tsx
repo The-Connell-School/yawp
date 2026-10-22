@@ -7,6 +7,7 @@ import {
   assignmentTypeTileMetaClassName,
   assignmentTypeTileNameClassName,
   assignmentTypeTileNameTestId,
+  assignmentTypeTileTrailingIconClassName,
 } from '~/components/assignment-type-tile-layout';
 import { SiteLicenseLockButton } from '~/components/site-license-lock-button';
 import { cn } from '~/utils/misc';
@@ -81,19 +82,16 @@ export function SiteLicenseLockedAssignmentTile({
           aria-hidden
         />
       </div>
-      <span
-        className={cn(
-          assignmentTypeTileFooterClassName('font-medium'),
-          'grid-cols-[minmax(0,1fr)_auto]'
-        )}
-      >
+      <span className={assignmentTypeTileFooterClassName('font-medium')}>
         <span
-          className={assignmentTypeTileNameClassName('col-start-1 row-start-1')}
+          className={assignmentTypeTileNameClassName()}
           data-testid={assignmentTypeTileNameTestId}
         >
           {label}
         </span>
-        <SiteLicenseLockButton className="col-start-2 row-start-1 self-start" />
+        <SiteLicenseLockButton
+          className={assignmentTypeTileTrailingIconClassName('ml-auto')}
+        />
       </span>
     </div>
   );
@@ -143,19 +141,16 @@ export function SiteLicenseLockedAssignmentGridTile({
           aria-hidden
         />
       </div>
-      <div
-        className={cn(
-          assignmentTypeTileFooterClassName('text-sm font-medium'),
-          'grid-cols-[minmax(0,1fr)_auto]'
-        )}
-      >
+      <div className={assignmentTypeTileFooterClassName('text-sm font-medium')}>
         <span
-          className={assignmentTypeTileNameClassName('col-start-1 row-start-1')}
+          className={assignmentTypeTileNameClassName()}
           data-testid={assignmentTypeTileNameTestId}
         >
           {label}
         </span>
-        <SiteLicenseLockButton className="col-start-2 row-start-1 self-start" />
+        <SiteLicenseLockButton
+          className={assignmentTypeTileTrailingIconClassName('ml-auto')}
+        />
       </div>
     </div>
   );
