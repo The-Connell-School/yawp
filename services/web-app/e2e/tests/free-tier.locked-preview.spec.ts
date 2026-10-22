@@ -235,9 +235,11 @@ for (const width of [390, 1440]) {
         const imgBox = await lockedTileImg.boundingBox();
         expect(imgBox?.height ?? 0).toBeLessThanOrEqual(64);
       }
-      const siteLock = page.getByTestId('site-license-lock-button').first();
+      const siteLock = lockedTiles
+        .first()
+        .getByTestId('site-license-lock-button');
       await siteLock.scrollIntoViewIfNeeded();
-      await siteLock.hover();
+      await siteLock.focus();
       await page.waitForTimeout(350);
       await expect(
         page.getByRole('tooltip', { name: /Available with a site license/i })
