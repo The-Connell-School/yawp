@@ -71,6 +71,9 @@ test.describe('Dev panel artboard evidence', () => {
 
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.context().clearCookies();
+    await page.request.post('/auth/dev-login', {
+      form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
+    });
     await page.goto('/app/assignments');
     await openDevToolsPanel(page);
     if (await page.getByRole('button', { name: 'Enter access code' }).count()) {
@@ -79,15 +82,15 @@ test.describe('Dev panel artboard evidence', () => {
       await shot(page, '35');
       await page.keyboard.press('Escape');
     }
-
-    await page.request.post('/auth/dev-login', {
-      form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
-    });
-    await page.goto('/app/assignments');
     const tools = await openDevToolsPanel(page);
+    await tools
+      .locator('button')
+      .filter({ hasText: 'Free-tier states' })
+      .first()
+      .click();
     await tools.getByRole('button', { name: 'Choose a state to jump to' }).click();
     const stateSheet = page.getByRole('dialog', { name: 'Free-tier states' });
-    await expect(stateSheet).toBeVisible();
+    await expect(stateSheet).toBeVisible({ timeout: 15_000 });
     await shot(page, '19');
 
     await stateSheet.locator('input[name="free-tier-state"]').first().check();
@@ -101,11 +104,10 @@ test.describe('Dev panel artboard evidence', () => {
     await shot(page, '20');
 
     await page.getByRole('button', { name: 'Cancel' }).click();
-    await page.getByRole('checkbox').setChecked(true);
-    await page
-      .locator('input[name="free-tier-state"]')
-      .first()
-      .check();
+    await stateSheet
+      .getByRole('checkbox', { name: 'Use a throwaway test account' })
+      .setChecked(true);
+    await stateSheet.locator('input[name="free-tier-state"]').first().check();
     await page.route('**/api/dev-panel/free-tier-jump', async (route) => {
       await route.fulfill({
         status: 200,
@@ -121,8 +123,8 @@ test.describe('Dev panel artboard evidence', () => {
         }),
       });
     });
-    await page.getByRole('button', { name: 'Jump to this state' }).click();
-    await expect(page.getByText('Switching…')).toBeVisible();
+    await stateSheet.getByRole('button', { name: 'Jump to this state' }).click();
+    await expect(stateSheet.getByText('Switching…')).toBeVisible();
     await shot(page, '21');
     await page.unroute('**/api/dev-panel/free-tier-jump');
 
