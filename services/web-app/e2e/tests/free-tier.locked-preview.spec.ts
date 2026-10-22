@@ -541,6 +541,7 @@ test('locked assignments tab shows sample rows and locked documents pill', async
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 900 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   const { user, app } = await fixture('11', 'SENT');
   await provisionPendingClassroom(app.id, user.id!);
   const klass = await prisma.class.findFirstOrThrow({
@@ -550,7 +551,9 @@ test('locked assignments tab shows sample rows and locked documents pill', async
   await exploreLockedApp(page, user.email!);
   await page.goto(`/app/my-classes/${klass.id}?tab=assignments`);
   await expect(page.getByText('Sample · Not sent').first()).toBeVisible();
-  await page.getByTestId(/assignment-documents-/).first().click();
+  const documentsPill = page.getByTestId(/assignment-documents-/).first();
+  await documentsPill.scrollIntoViewIfNeeded();
+  await documentsPill.click({ force: true });
   await expect(
     page.getByRole('heading', { name: 'Unlocks after approval' })
   ).toBeVisible();
