@@ -45,7 +45,7 @@ import posthog from 'posthog-js';
 import omit from 'lodash/omit';
 import { getMembershipId } from './cookies/membership-id.server.ts';
 import { LocalDevEnvironmentBar } from './components/local-dev-environment-bar.tsx';
-import { DevPanelMount } from './dev-panel/dev-panel-mount.tsx';
+import { DevPanelMount } from './dev-panel/dev-panel-entry.tsx';
 import { devPanelRestoreInlineScript } from './dev-panel/dev-panel-restore-inline.ts';
 import {
   devPanelEnvBadge,
