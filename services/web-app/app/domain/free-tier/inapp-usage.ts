@@ -50,8 +50,50 @@ export function buildFreeAccountUsage(input: {
               : null,
   };
 }
+export function usagePercent(count: UsageCount): number {
+  if (count.total <= 0) return 0;
+  return Math.min(100, Math.round((count.used / count.total) * 100));
+}
+
+export function formatUsageRenewsLabel(renewsAtIso: string): string {
+  const date = new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(renewsAtIso));
+  return `Renews ${date}`;
+}
+
+export function formatUsageRenewsUntil(renewsAtIso: string): string {
+  const date = new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(renewsAtIso));
+  return date;
+}
+
+export type MonthlyUsageWarning = 'none' | 'warning' | 'limit';
+
+export function lessonPlannerMonthlyWarning(
+  count: UsageCount
+): MonthlyUsageWarning {
+  const percent = usagePercent(count);
+  if (percent >= 100) return 'limit';
+  if (percent >= 90) return 'warning';
+  return 'none';
+}
+
 export type FreeAccountUsage = ReturnType<typeof buildFreeAccountUsage> & {
   monthly?: boolean;
+  /** Org-scoped monthly LP quota applies (pending or approved); sidebar meter stays on `monthly`. */
+  lessonPlannerMonthlyMetering?: boolean;
+  /** Monthly LP counts for limit UI when pending (`monthly` is false). */
+  lessonPlannerMonthly?: UsageCount;
+  /** Assignment tiles show unlimited copy while `monthly` may still be false for pending teachers. */
+  unlimitedFreeAssignmentTiles?: boolean;
+  /** Reporter row is locked until school administrator approval. */
+  reporterLocked?: boolean;
   renewsAt?: string;
   reporter?: UsageCount;
   classCode?: string | null;
@@ -65,4 +107,19 @@ export type FreeAccountUsage = ReturnType<typeof buildFreeAccountUsage> & {
     graded: boolean;
   };
   gradingPause: { retryAt: string; limit: number; window: string } | null;
+  /** When false, nav usage rings are hidden (load failure); nav links still work. */
+  usageNavMetersAvailable?: boolean;
 };
+
+export function lessonPlannerMonthlyUsage(usage: FreeAccountUsage): UsageCount {
+  return usage.lessonPlannerMonthly ?? usage.lessonPlans;
+}
+
+export function isLessonPlannerMonthlyExhausted(
+  usage: FreeAccountUsage
+): boolean {
+  if (usage.lessonPlannerMonthlyMetering) {
+    return lessonPlannerMonthlyUsage(usage).remaining === 0;
+  }
+  return !usage.monthly && usage.lessonPlans.remaining === 0;
+}

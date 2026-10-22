@@ -20,6 +20,23 @@ import { replaceStudentClassRoster } from '~/domain/collaboration/student-roster
 
 const enabled = process.env.LOCKED_PREVIEW_DB_TESTS === '1';
 const local = enabled ? test : test.skip;
+function actionStatus(result: unknown): number {
+  if (result instanceof Response) return result.status;
+  if (result && typeof result === 'object' && 'init' in result) {
+    return (result as { init?: { status?: number } }).init?.status ?? 200;
+  }
+  return 200;
+}
+async function invokeAction(
+  action: (args: never) => unknown,
+  request: Request
+) {
+  try {
+    return await action({ request } as never);
+  } catch (error) {
+    return error;
+  }
+}
 const prefix = `locked-preview-${Date.now()}`;
 const flag = 'feature_flag.free_tier';
 let orgId: string, classId: string, userId: string, membershipId: string, appId: string;
@@ -55,17 +72,17 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-local('targeted pending lock rejects shared writers/tools with no writes or usage', async () => {
+local('targeted pending lock rejects teaching writers except lesson planner admission', async () => {
   const assignmentCount = await prisma.assignment.count();
   const ctx = { membershipId, organizationId: orgId };
   await expect(prisma.$transaction(tx => assertCanCreateAssignmentOfKindInTransaction(tx, { id: orgId, plan: 'FREE_CLASSROOM' }, 'class_starter'))).rejects.toMatchObject({ status: 403 });
   await expect(enrollStudentInClassWithSeatCap({ membershipId, classId, organizationId: orgId })).rejects.toMatchObject({ status: 403 });
   await expect(handleReporterToolCall('list_classes', {}, ctx)).rejects.toMatchObject({ status: 403 });
-  await expect(handleLessonPlannerToolCall('search_daily_pages_prompts', {}, ctx)).rejects.toMatchObject({ status: 403 });
-  await expect(reserveAiRequest({ ...ctx, feature: 'lesson-planner', policy: { membershipLimit: 10, organizationLimit: 10, membershipWindowMs: 1000, organizationWindowMs: 1000 } })).rejects.toMatchObject({ status: 403 });
+  await handleLessonPlannerToolCall('search_daily_pages_prompts', {}, ctx);
+  await reserveAiRequest({ ...ctx, feature: 'lesson-planner', policy: { membershipLimit: 10, organizationLimit: 10, membershipWindowMs: 1000, organizationWindowMs: 1000 } });
   expect(await prisma.assignment.count()).toBe(assignmentCount);
   expect(await prisma.freeClassroomAssignmentKindUsage.count({ where: { organizationId: orgId } })).toBe(0);
-  expect(await prisma.aiRequestReservation.count({ where: { organizationId: orgId } })).toBe(0);
+  expect(await prisma.aiRequestReservation.count({ where: { organizationId: orgId } })).toBe(1);
   expect(await prisma.orgMembership.count({ where: { classesAsStudent: { some: { id: classId } } } })).toBe(0);
 });
 
@@ -76,11 +93,20 @@ local('real authenticated route actions reject crafted requests before parsing o
   try {
     for (const [path, action] of [
       ['/api/assignments/create', createAssignment], ['/api/domain/reporter', reporter],
-      ['/api/domain/lesson-planner', planner], ['/api/domain/lesson-planner/packet', packet],
+      ['/api/domain/lesson-planner/packet', packet],
       ['/app/organization/students', students],
     ] as const) {
       await expect(action({ request: new Request(`http://localhost${path}`, { method: 'POST', headers, body: 'crafted-invalid-body' }) } as never)).rejects.toMatchObject({ status: 403 });
     }
+    const plannerResult = await invokeAction(
+      planner,
+      new Request('http://localhost/api/domain/lesson-planner', {
+        method: 'POST',
+        headers,
+        body: 'crafted-invalid-body',
+      })
+    );
+    expect(actionStatus(plannerResult)).not.toBe(403);
     try {
       await preview({
         request: new Request(
@@ -229,8 +255,10 @@ local('waiting tour POST persists only its own progress while all teaching route
     expect((await prisma.userTour.findUniqueOrThrow({ where: { userId_tourId: { userId, tourId: 'waiting-preview' } } })).status).toBe('completed');
     for (const fields of [{ tourId: 'dashboard', status: 'completed' }, { intent: 'reset' }] as Record<string, string>[])
       expect((await post(fields)).status).toBe(403);
-    for (const path of ['/api/assignments/create', '/api/domain/reporter', '/api/domain/lesson-planner', '/app/organization/students'])
+    for (const path of ['/api/assignments/create', '/api/domain/reporter', '/app/organization/students'])
       await expect(enforceLockedPreviewRequest(new Request(`http://localhost${path}`, { method: 'POST' }), userId)).rejects.toMatchObject({ status: 403 });
+    await enforceLockedPreviewRequest(new Request('http://localhost/api/domain/lesson-planner', { method: 'POST' }), userId);
+    await expect(enforceLockedPreviewRequest(new Request('http://localhost/api/domain/lesson-planner/packet', { method: 'POST' }), userId)).rejects.toMatchObject({ status: 403 });
     expect(await prisma.assignment.count()).toBe(before.assignments);
     expect(await prisma.orgMembership.count()).toBe(before.members);
     expect(await prisma.aiRequestReservation.count()).toBe(before.reservations);
@@ -272,6 +300,73 @@ local('pending teacher with stale membership cookie is still denied on default-d
   } finally {
     await prisma.orgMembership.delete({ where: { id: staleMembership.id } });
     await prisma.organization.delete({ where: { id: foreignOrg.id } });
+  }
+});
+
+local('pending teacher lesson planner monthly quota reserves and exhausts', async () => {
+  const { monthlyFreeTierPolicy } = await import('./monthly-policy.server');
+  const {
+    beginMonthlyOperation,
+    readMonthlyUsage,
+    monthlyOperationResponse,
+  } = await import('./monthly-operations.server');
+  const policy = await monthlyFreeTierPolicy({
+    id: orgId,
+    plan: 'FREE_CLASSROOM',
+  });
+  expect(policy.enabled).toBe(false);
+  expect(policy.lessonPlannerMeteringEnabled).toBe(true);
+  const cap = policy.limits.lessonPlannerMonthly;
+  try {
+    for (let i = 0; i < cap; i++) {
+      const admitted = await beginMonthlyOperation({
+        organizationId: orgId,
+        membershipId,
+        feature: 'lesson-planner',
+        cap,
+        requestId: `pending-lp-${i}-${Date.now()}`,
+        input: { message: `plan-${i}` },
+      });
+      expect(admitted.kind).toBe('reserved');
+    }
+    expect(await readMonthlyUsage(orgId, 'lesson-planner')).toBe(cap);
+    const exhausted = await beginMonthlyOperation({
+      organizationId: orgId,
+      membershipId,
+      feature: 'lesson-planner',
+      cap,
+      requestId: `pending-lp-over-${Date.now()}`,
+      input: { message: 'one-more' },
+    });
+    expect(exhausted.kind).toBe('exhausted');
+    if (exhausted.kind === 'exhausted') {
+      expect(monthlyOperationResponse(exhausted).status).toBe(403);
+    }
+  } finally {
+    await prisma.setting.deleteMany({
+      where: {
+        name: { startsWith: `free_tier.monthly.v1:${orgId}:lesson-planner:` },
+      },
+    });
+  }
+});
+
+local('flag OFF disables pending lesson planner monthly metering', async () => {
+  await setFlag('false');
+  try {
+    const { monthlyFreeTierPolicy } = await import('./monthly-policy.server');
+    const policy = await monthlyFreeTierPolicy({
+      id: orgId,
+      plan: 'FREE_CLASSROOM',
+    });
+    expect(policy.lessonPlannerMeteringEnabled).toBe(false);
+    await handleLessonPlannerToolCall(
+      'search_daily_pages_prompts',
+      {},
+      { membershipId, organizationId: orgId }
+    );
+  } finally {
+    await setFlag(JSON.stringify({ mode: 'targeted', orgIds: [orgId] }));
   }
 });
 

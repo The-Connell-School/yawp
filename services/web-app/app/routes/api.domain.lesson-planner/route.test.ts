@@ -7,6 +7,7 @@ const failMonthlyOperation = mock();
 mock.module('~/domain/free-tier/monthly-policy.server', () => ({
   monthlyFreeTierPolicy: async () => ({
     enabled: monthlyEnabled,
+    lessonPlannerMeteringEnabled: monthlyEnabled,
     limits: { reporterMonthly: 2, lessonPlannerMonthly: 5 },
   }),
 }));
