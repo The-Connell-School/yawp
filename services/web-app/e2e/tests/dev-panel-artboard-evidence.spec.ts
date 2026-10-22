@@ -20,6 +20,7 @@ test.describe('Dev panel artboard evidence', () => {
   });
 
   test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => localStorage.removeItem('yawp-dev-panel'));
     await page.request.post('/auth/dev-login', {
       form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
     });

@@ -17,6 +17,7 @@ test.describe.serial('Tester feedback', () => {
       where: { name: demoFeedbackFlag },
     });
     try {
+      await page.addInitScript(() => localStorage.removeItem('yawp-dev-panel'));
       await prisma.setting.upsert({
         where: { name: demoFeedbackFlag },
         create: {

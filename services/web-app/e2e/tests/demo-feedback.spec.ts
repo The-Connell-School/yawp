@@ -15,6 +15,7 @@ test.afterAll(async () => {
 test('local demo note persistence, accessibility, error recovery and disabled gate', async ({
   page,
 }) => {
+  await page.addInitScript(() => localStorage.removeItem('yawp-dev-panel'));
   await page.request.post('/auth/dev-login', {
     form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
   });
@@ -206,6 +207,7 @@ test('local demo single trigger reserves mobile content space on landing, classe
   page,
 }) => {
   test.setTimeout(120_000);
+  await page.addInitScript(() => localStorage.removeItem('yawp-dev-panel'));
   const flag = 'feature_flag.demo-feedback-widget';
   const oldFlag = await prisma.setting.findUnique({ where: { name: flag } });
   const teacher = await prisma.user.findUniqueOrThrow({
