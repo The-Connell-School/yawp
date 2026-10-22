@@ -44,7 +44,9 @@ local('original copy survives duplicates, later token admission and a flag chang
   expect(deliver.mock.calls[0][0].subject).toBe("You're in: start your Yawp! classroom");
   expect(deliver.mock.calls[0][0].text).toContain('Your spot is ready.');
   expect(deliver.mock.calls[0][0].html).toContain('Your Yawp! classroom is waiting');
-  expect(deliver.mock.calls[0][0].html).toContain('Hi Ada,');
+  expect(deliver.mock.calls[0][0].html.replace(/<!-- -->/g, '')).toContain(
+    'Hi Ada,'
+  );
   expect(deliver.mock.calls[0][0].html).not.toContain('<Teacher>');
   expect(deliver.mock.calls[1][0].subject).toBe("You're in — start your Yawp! classroom!");
   expect(deliver.mock.calls[1][0].html).toContain('Ada &lt;Teacher&gt;');
