@@ -213,11 +213,10 @@ for (const width of [390, 1440]) {
     await expect(page.getByRole('heading', { name: 'New assignment' })).toBeVisible();
     await expect(page.getByText('Choose a type.')).toBeVisible();
     const listbox = page.getByRole('listbox');
-    await expect(
-      listbox.getByTestId('site-license-locked-assignment-tile')
-    ).toHaveCount(6, { timeout: 15_000 });
+    const lockedTiles = listbox.getByTestId('site-license-locked-assignment-tile');
+    await expect(lockedTiles).toHaveCount(6, { timeout: 15_000 });
     const pickerTiles = listbox.locator(
-      ':scope > button, :scope > [data-testid="site-license-locked-assignment-tile"]'
+      'button[role="option"], [data-testid="site-license-locked-assignment-tile"]'
     );
     const tileCount = await pickerTiles.count();
     expect(tileCount).toBeGreaterThanOrEqual(6);

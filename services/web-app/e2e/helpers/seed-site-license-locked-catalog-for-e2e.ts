@@ -40,7 +40,7 @@ export async function seedSiteLicenseLockedCatalogForE2E(
   });
 
   await prisma.assignmentType.upsert({
-    where: { systemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY },
+    where: { kind: 'ap_history' },
     create: {
       ...base,
       title: 'AP History Essay',
@@ -48,7 +48,11 @@ export async function seedSiteLicenseLockedCatalogForE2E(
       systemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY,
       position: 913,
     },
-    update: { archivedAt: null },
+    update: {
+      archivedAt: null,
+      systemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY,
+      title: 'AP History Essay',
+    },
   });
 
   const thesis = await prisma.assignmentType.findFirst({
