@@ -69,10 +69,17 @@ export function aiAdmissionErrorResponse(error: unknown): Response | null {
  * Paid plans and environments with the flag off keep their existing behavior.
  */
 export async function assertAiFreeTierSpendAllowed(
-  organizationId: string
+  organizationId: string,
+  options?: { feature?: string }
 ): Promise<void> {
   const { assertOrganizationTeachingApproved } = await import('~/domain/free-tier/locked-preview.server');
-  await assertOrganizationTeachingApproved(prisma, organizationId);
+  await assertOrganizationTeachingApproved(
+    prisma,
+    organizationId,
+    options?.feature === 'lesson-planner'
+      ? { allowPendingLessonPlanner: true }
+      : undefined
+  );
   const { isFreeTierEnabled } = await import(
     '~/domain/feature-flags/feature-flags.server'
   );
@@ -83,7 +90,16 @@ export async function assertAiFreeTierSpendAllowed(
     });
     if (org) {
       const { isAiUnlocked } = await import('~/domain/free-tier/is-ai-unlocked.server');
-      if (!(await isAiUnlocked(org))) {
+      let unlocked = await isAiUnlocked(org);
+      if (!unlocked && options?.feature === 'lesson-planner') {
+        const { organizationHasPendingFreeTierLessonPlannerMetering } =
+          await import('~/domain/free-tier/locked-preview.server');
+        unlocked =
+          await organizationHasPendingFreeTierLessonPlannerMetering(
+            organizationId
+          );
+      }
+      if (!unlocked) {
         throw new AiLockedForFreeTierError();
       }
       if (org.plan === 'FREE_CLASSROOM') {
@@ -122,7 +138,7 @@ export async function reserveAiRequest({
   if (!Number.isInteger(units) || units < 1) {
     throw new Error('AI reservation units must be a positive integer');
   }
-  await assertAiFreeTierSpendAllowed(organizationId);
+  await assertAiFreeTierSpendAllowed(organizationId, { feature });
   const membershipSince = new Date(now.getTime() - policy.membershipWindowMs);
   const organizationSince = new Date(
     now.getTime() - policy.organizationWindowMs

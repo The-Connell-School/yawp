@@ -31,6 +31,21 @@ test('crafted requests cannot mutate teaching routes or resource APIs', () => {
     for (const method of ['POST', 'PUT', 'PATCH', 'DELETE'])
       expect(isLockedPreviewRequestAllowed(method, path)).toBe(false);
 });
+test('only the exact lesson planner POST is open while packet stays closed', () => {
+  expect(
+    isLockedPreviewRequestAllowed('POST', '/api/domain/lesson-planner')
+  ).toBe(true);
+  for (const method of ['GET', 'PUT', 'PATCH', 'DELETE'])
+    expect(
+      isLockedPreviewRequestAllowed(method, '/api/domain/lesson-planner')
+    ).toBe(false);
+  expect(
+    isLockedPreviewRequestAllowed('POST', '/api/domain/lesson-planner/packet')
+  ).toBe(false);
+  expect(
+    isLockedPreviewRequestAllowed('POST', '/api/domain/lesson-planner/extra')
+  ).toBe(false);
+});
 
 test('only the exact tour POST enters its own eligibility and intent checks', () => {
   expect(isLockedPreviewRequestAllowed('POST', '/api/guided-tours')).toBe(true);

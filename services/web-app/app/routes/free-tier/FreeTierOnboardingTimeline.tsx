@@ -12,6 +12,15 @@ export const ONBOARDING_TIMELINE_STEPS = [
  * `current` counts from the class step (0 = set up your class) because the
  * account step is always done by the time a teacher sees this timeline.
  */
+function onboardingTimelineLabel(
+  step: (typeof ONBOARDING_TIMELINE_STEPS)[number],
+  index: number,
+  current: 0 | 1 | 2
+) {
+  if (index === 0 && current >= 1) return 'Account and class created';
+  return step;
+}
+
 export function FreeTierOnboardingTimeline({
   current,
 }: {
@@ -42,7 +51,7 @@ export function FreeTierOnboardingTimeline({
           >
             {index < active ? <Check className="h-3.5 w-3.5" /> : index + 1}
           </span>
-          <span>{step}</span>
+          <span>{onboardingTimelineLabel(step, index, current)}</span>
         </li>
       ))}
     </ol>

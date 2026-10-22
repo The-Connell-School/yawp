@@ -27,7 +27,10 @@ import { useTable } from '~/hooks/useTable';
 import { cn, getDomainUrl } from '~/utils/misc';
 import { Tooltip } from '~/components/ui/tooltip';
 import { sendEmail } from '~/utils/email.server';
-import * as E from '@react-email/components';
+import {
+  buildOrgTeacherInviteEmail,
+  inviteeFirstName,
+} from '~/emails/build-account-emails.server';
 import { generateTOTP } from '~/utils/totp.server';
 import { Prisma } from '@app/prisma';
 import {
@@ -339,6 +342,11 @@ export async function action({ request }: ActionFunctionArgs) {
       where: { id: profile.organization.id },
       select: { name: true },
     });
+    const inviter = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { name: true },
+    });
+    const inviterName = inviter?.name?.trim() || 'Your administrator';
 
     let successCount = 0;
     for (const email of emailList) {
@@ -385,16 +393,17 @@ export async function action({ request }: ActionFunctionArgs) {
 
         await prisma.invitation.create({ data: verificationData });
 
+        const designed = await buildOrgTeacherInviteEmail({
+          firstName: inviteeFirstName(email),
+          inviterName,
+          schoolName: organization?.name ?? 'your organization',
+          acceptUrl: verifyUrl.toString(),
+        });
         await sendEmail({
           to: email,
-          subject: "You're invited to join your organization on Yawp!",
-          react: (
-            <OrganizationInviteEmail
-              verifyUrl={verifyUrl.toString()}
-              organizationName={organization?.name ?? 'your organization'}
-              userType="teacher"
-            />
-          ),
+          subject: designed.subject,
+          text: designed.text,
+          html: designed.html,
         });
 
         successCount++;
@@ -411,41 +420,6 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   return dataResponse({ error: 'Invalid intent' }, { status: 400 });
-}
-
-function OrganizationInviteEmail({
-  verifyUrl,
-  userType,
-  organizationName,
-}: {
-  verifyUrl: string;
-  userType: 'teacher' | 'student' | 'owner';
-  organizationName: string;
-}) {
-  return (
-    <E.Html lang="en" dir="ltr">
-      <E.Container>
-        <h1>
-          <E.Text>Welcome to Yawp!</E.Text>
-        </h1>
-        <p>
-          <E.Text>
-            You've been invited to join {organizationName} as{' '}
-            {userType === 'owner' ? 'an owner' : `a ${userType}`} on Yawp!
-          </E.Text>
-        </p>
-        <p>
-          <E.Text>Click the link to get started:</E.Text>
-        </p>
-        <E.Link href={verifyUrl}>{verifyUrl}</E.Link>
-        <p>
-          <E.Text>
-            This invitation will expire in 3 days for security reasons.
-          </E.Text>
-        </p>
-      </E.Container>
-    </E.Html>
-  );
 }
 
 export default function OrganizationTeachersRoute() {

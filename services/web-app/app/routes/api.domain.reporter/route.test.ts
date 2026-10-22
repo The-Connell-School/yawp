@@ -510,6 +510,20 @@ describe('api.domain.reporter action', () => {
 });
 
 describe('monthly direct action admission', () => {
+  test('approved free-tier teacher at zero remaining cannot start a new report', async () => {
+    monthlyEnabled = true;
+    beginMonthlyOperation.mockResolvedValue({ kind: 'exhausted' });
+    const result = (await action({
+      request: formRequest({
+        message: 'New report turn',
+        requestId: 'zero-remaining',
+      }),
+    } as any)) as Response;
+    expect(result.status).toBe(403);
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+    expect(reserveAiRequest).not.toHaveBeenCalled();
+    expect(prisma.reporterConversation.create).not.toHaveBeenCalled();
+  });
   test('zero/exhausted cap denies generation and persistence; pending duplicates return 409', async () => {
     monthlyEnabled = true;
     for (const kind of ['exhausted', 'pending', 'conflict']) {

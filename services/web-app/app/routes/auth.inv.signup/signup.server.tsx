@@ -1,4 +1,3 @@
-import * as E from '@react-email/components';
 import { redirect, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { Prisma } from '@app/prisma';
@@ -9,6 +8,10 @@ import {
 } from '~/components/student-signup-form';
 import { prisma } from '~/utils/db.server';
 import { sendEmail } from '~/utils/email.server';
+import {
+  buildWelcomeVerifyEmail,
+  inviteeFirstName,
+} from '~/emails/build-account-emails.server';
 import { generateTOTP } from '~/utils/totp.server';
 import { getDomainUrl } from '~/utils/misc';
 import { normalizeEmail } from '~/utils/normalize-email';
@@ -160,27 +163,16 @@ export async function studentSignupAction(
     prisma.invitation.create({ data: verificationData }),
   ]);
 
+  const designed = await buildWelcomeVerifyEmail({
+    firstName: inviteeFirstName(normalizedEmail),
+    code: otp,
+    verifyUrl: verifyUrl.toString(),
+  });
   const response = await sendEmail({
     to: normalizedEmail,
-    subject: `Welcome to Yawp!`,
-    react: (
-      <E.Html lang="en" dir="ltr">
-        <E.Container>
-          <h1>
-            <E.Text>Welcome to Yawp!</E.Text>
-          </h1>
-          <p>
-            <E.Text>
-              Here's your verification code: <strong>{otp}</strong>
-            </E.Text>
-          </p>
-          <p>
-            <E.Text>Or click the link to get started:</E.Text>
-          </p>
-          <E.Link href={verifyUrl.toString()}>{verifyUrl.toString()}</E.Link>
-        </E.Container>
-      </E.Html>
-    ),
+    subject: designed.subject,
+    text: designed.text,
+    html: designed.html,
   });
 
   if (response.status === 'success') {

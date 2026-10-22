@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { beforeEach, afterEach, expect, test } from 'bun:test';
 import { buildDesignedAdminApprovalEmail } from './admin-approval-email.server';
 import { teacherAtSchool } from './admin-approval-copy';
 
@@ -9,10 +9,11 @@ const approveUrl = 'https://yawp.test/free/admin/approve?t=fake-approve';
 const notRightPersonUrl =
   'https://yawp.test/free/admin/not-right-person?t=fake-forward';
 
-function expectDesignedAdminEmail(
-  designed: ReturnType<typeof buildDesignedAdminApprovalEmail>,
+async function expectDesignedAdminEmail(
+  designedPromise: ReturnType<typeof buildDesignedAdminApprovalEmail>,
   options: { reminder?: boolean; forwardedByAdminName?: string } = {}
 ) {
+  const designed = await designedPromise;
   const atSchool = teacherAtSchool(teacherName, schoolName);
   if (options.forwardedByAdminName) {
     expect(designed.subject).toBe(`Can you approve Yawp! for ${atSchool}?`);
@@ -35,10 +36,24 @@ function expectDesignedAdminEmail(
   expect(designed.html).toContain('Review and approve</a>');
   expect(designed.html).toContain(`href="${approveUrl}"`);
   expect(designed.html).toContain(`Approve Yawp! for ${atSchool}`);
+  expect(designed.html).toContain('yawp_black_logo.png');
+  expect(designed.html).toContain('yawp_white_logo.png');
+  expect(designed.html).toContain('color-scheme');
+  expect(designed.text).not.toMatch(/\bAI\b/);
+  return designed;
 }
 
-test('approval v2 delivery uses designed approval email', () => {
-  expectDesignedAdminEmail(
+const primary = process.env.PRIMARY_APP_URL;
+beforeEach(() => {
+  process.env.PRIMARY_APP_URL = 'https://yawp.test';
+});
+afterEach(() => {
+  if (primary === undefined) delete process.env.PRIMARY_APP_URL;
+  else process.env.PRIMARY_APP_URL = primary;
+});
+
+test('approval v2 delivery uses designed approval email', async () => {
+  await expectDesignedAdminEmail(
     buildDesignedAdminApprovalEmail({
       teacherName,
       teacherEmail,
@@ -49,8 +64,8 @@ test('approval v2 delivery uses designed approval email', () => {
   );
 });
 
-test('approval v2 reminder uses designed reminder email', () => {
-  expectDesignedAdminEmail(
+test('approval v2 reminder uses designed reminder email', async () => {
+  await expectDesignedAdminEmail(
     buildDesignedAdminApprovalEmail({
       teacherName,
       teacherEmail,
@@ -63,8 +78,8 @@ test('approval v2 reminder uses designed reminder email', () => {
   );
 });
 
-test('approval v2 forward recipient uses designed forward email', () => {
-  expectDesignedAdminEmail(
+test('approval v2 forward recipient uses designed forward email', async () => {
+  await expectDesignedAdminEmail(
     buildDesignedAdminApprovalEmail({
       teacherName,
       teacherEmail,

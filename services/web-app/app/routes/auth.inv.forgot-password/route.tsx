@@ -1,4 +1,3 @@
-import * as E from '@react-email/components';
 import {
   redirect,
   type MetaFunction,
@@ -95,12 +94,18 @@ export async function action({ request }: ActionFunctionArgs) {
 
   await prisma.invitation.create({ data: verificationData });
 
+  const { buildResetPasswordEmail } = await import(
+    '~/emails/build-account-emails.server'
+  );
+  const designed = await buildResetPasswordEmail({
+    code: otp,
+    resetUrl: verifyUrl.toString(),
+  });
   const response = await sendEmail({
     to: user.email!,
-    subject: `Yawp!`,
-    react: (
-      <ForgotPasswordEmail onboardingUrl={verifyUrl.toString()} otp={otp} />
-    ),
+    subject: designed.subject,
+    text: designed.text,
+    html: designed.html,
   });
 
   if (response.status === 'success') {
@@ -113,33 +118,6 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
   }
-}
-
-function ForgotPasswordEmail({
-  onboardingUrl,
-  otp,
-}: {
-  onboardingUrl: string;
-  otp: string;
-}) {
-  return (
-    <E.Html lang="en" dir="ltr">
-      <E.Container>
-        <h1>
-          <E.Text>Yawp! Password Reset</E.Text>
-        </h1>
-        <p>
-          <E.Text>
-            Here's your verification code: <strong>{otp}</strong>
-          </E.Text>
-        </p>
-        <p>
-          <E.Text>Or click the link:</E.Text>
-        </p>
-        <E.Link href={onboardingUrl}>{onboardingUrl}</E.Link>
-      </E.Container>
-    </E.Html>
-  );
 }
 
 export const meta: MetaFunction = () => {

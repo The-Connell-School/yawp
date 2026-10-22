@@ -570,11 +570,13 @@ test('invitation links retain the admin flow public origin behind the proxy', as
   const req = request();
   req.headers.set('X-Forwarded-Host', 'public.yawp.test');
   expect((await f.handlers.create(req, 'org-1')).status).toBe(201);
-  const element = mail.mock.calls[0][0].react;
-  const link = element.props.children.props.children.find(
-    (child: any) => child?.props?.href
+  const delivery = mail.mock.calls[0]![0] as { html: string; text: string };
+  const hrefMatch = delivery.html.match(
+    /href="(https:\/\/[^"]+\/auth\/inv\/verify[^"]*)"/
   );
-  expect(new URL(link.props.href).origin).toBe('https://public.yawp.test');
+  expect(hrefMatch).not.toBeNull();
+  expect(new URL(hrefMatch![1]!).origin).toBe('https://public.yawp.test');
+  expect(delivery.text).toContain('https://public.yawp.test/auth/inv/verify');
 });
 
 

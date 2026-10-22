@@ -4,6 +4,25 @@ import { randomBytes } from 'node:crypto';
 const mail = mock(async (_options: unknown) => ({ status: 'success' }));
 mock.module('~/utils/email.server', () => ({ sendEmail: mail }));
 
+function ownerInviteVerificationCode(delivery: { html: string; text: string }) {
+  const hrefMatch = delivery.html.match(
+    /href="(https?:\/\/[^"]+\/auth\/inv\/verify[^"]*)"/
+  );
+  if (hrefMatch) {
+    const code = new URL(hrefMatch[1]!).searchParams.get('code');
+    if (code) return code;
+  }
+  const line = delivery.text
+    .split('\n')
+    .find((row) => row.includes('/auth/inv/verify'));
+  if (!line) throw new Error('Expected owner invitation verify URL in delivery');
+  const urlMatch = line.match(/https?:\/\/\S+\/auth\/inv\/verify\S*/);
+  if (!urlMatch) throw new Error('Expected owner invitation verify URL in delivery');
+  const code = new URL(urlMatch[0]!).searchParams.get('code');
+  if (!code) throw new Error('Expected OTP code in owner invitation verify URL');
+  return code;
+}
+
 test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
   'signed owner invitation lifecycle persists rotation, replay and audit history in Postgres',
   async () => {
@@ -121,12 +140,13 @@ test.skipIf(!process.env.INTERNAL_DIRECTORY_TEST_DATABASE_URL)(
         where: { id: replacement.id },
       });
       expect(newRow.secret).not.toBe(oldRow.secret);
+      expect(mail).toHaveBeenCalledTimes(2);
       // Verification uses the same persisted OTP configuration as the existing flow.
-      const element = (mail.mock.calls[1][0] as any).react;
-      const link = element.props.children.props.children.find(
-        (child: any) => child?.props?.href
-      );
-      const code = new URL(link.props.href).searchParams.get('code')!;
+      const rotatedDelivery = mail.mock.calls[1]![0] as {
+        html: string;
+        text: string;
+      };
+      const code = ownerInviteVerificationCode(rotatedDelivery);
       expect(await verifyTOTP({ otp: code, ...newRow })).toBeTruthy();
       expect(await verifyTOTP({ otp: code, ...oldRow })).toBeNull();
       mail.mockImplementationOnce(async () => {
