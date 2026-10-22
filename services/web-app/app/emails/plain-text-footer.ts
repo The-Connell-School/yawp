@@ -1,7 +1,14 @@
-import { transactionalEmailPublicOrigin } from './public-origin.server';
+export function defaultTransactionalEmailOrigin() {
+  const primary =
+    typeof process !== 'undefined'
+      ? process.env.PRIMARY_APP_URL?.trim()
+      : undefined;
+  if (primary) return primary.replace(/\/$/, '');
+  return 'https://yawp.school';
+}
 
 export function plainTextEmailFooter(whyYouGotThis: string, origin?: string) {
-  const site = (origin ?? transactionalEmailPublicOrigin()).replace(/\/$/, '');
+  const site = (origin ?? defaultTransactionalEmailOrigin()).replace(/\/$/, '');
   return `--\nSent by Yawp! · ${site}\n${whyYouGotThis}\nQuestions? support@yawp.school`;
 }
 

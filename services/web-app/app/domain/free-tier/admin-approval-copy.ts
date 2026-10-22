@@ -1,10 +1,10 @@
 /** Admin approval email + school-admin pages (2026-10-21 design). */
 
 import {
+  defaultTransactionalEmailOrigin,
   plainTextButton,
   plainTextEmailFooter,
 } from '~/emails/plain-text-footer';
-import { transactionalEmailPublicOrigin } from '~/emails/public-origin.server';
 
 export const ADMIN_APPROVAL_LINK_DAYS = 14;
 
@@ -50,7 +50,7 @@ export function renderAdminApprovalEmailPlainText(args: {
   forwardedByAdminName?: string | null;
   reminder?: boolean;
 }) {
-  const origin = transactionalEmailPublicOrigin();
+  const origin = defaultTransactionalEmailOrigin();
   const teacherSchool = teacherAtSchool(args.teacherName, args.schoolName);
   const forwarder = args.forwardedByAdminName?.trim();
   const forwardLead = forwarder

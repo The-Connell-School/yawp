@@ -3,7 +3,7 @@ import {
   plainTextButton,
   plainTextEmailFooter,
 } from '~/emails/plain-text-footer';
-import { transactionalEmailPublicOrigin } from '~/emails/public-origin.server';
+import { defaultTransactionalEmailOrigin } from '~/emails/plain-text-footer';
 
 export const ADMIN_APPROVAL_EMAIL_COPY_VERSION = '2026-10-21-admin-v1';
 // Pass the version stored with the application when admission was requested.
@@ -118,7 +118,7 @@ export const RELEASE_EMAIL_V2_SUBJECT =
   "You're in: start your Yawp! classroom";
 
 export function renderReleaseEmailV2Body(args: { name: string; joinUrl: string }) {
-  const origin = transactionalEmailPublicOrigin();
+  const origin = defaultTransactionalEmailOrigin();
   return `Hi ${firstName(args.name)},
 
 Your spot is ready. Your free Yawp! classroom license covers one class of up to 35 students, at no cost to you or your school.
@@ -148,7 +148,7 @@ export function renderTeacherReminderV2Body(args: {
   pendingUrl: string;
   changeAdminUrl?: string;
 }) {
-  const origin = transactionalEmailPublicOrigin();
+  const origin = defaultTransactionalEmailOrigin();
   const changeAdminUrl = args.changeAdminUrl ?? args.pendingUrl;
   return `Hi ${firstName(args.teacherName)},
 
@@ -182,7 +182,7 @@ export function renderForwardNoticeV2Body(args: {
   manualReview: boolean;
   pendingUrl: string;
 }) {
-  const origin = transactionalEmailPublicOrigin();
+  const origin = defaultTransactionalEmailOrigin();
   const followUp = args.manualReview
     ? 'Our team is reviewing the new request.'
     : "We'll let you know the moment they approve.";
@@ -208,7 +208,7 @@ export function renderCongratulationsEmailV2Body(args: {
   adminName: string;
   signInUrl: string;
 }) {
-  const origin = transactionalEmailPublicOrigin();
+  const origin = defaultTransactionalEmailOrigin();
   return `Hi ${firstName(args.teacherName)},
 
 ${args.adminName} approved your classroom, so all free features are now unlocked.
