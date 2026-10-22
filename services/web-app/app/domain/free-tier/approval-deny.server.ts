@@ -66,7 +66,18 @@ export async function resolveAdminDenyAnsweredGate(args: {
 }
 
 export type DenySchoolAdminApprovalResult =
-  | { ok: true; idempotent?: true }
+  | {
+      ok: true;
+      idempotent?: true;
+      notify?: {
+        applicationId: string;
+        teacherEmail: string;
+        teacherName: string;
+        schoolName: string;
+        adminName: string;
+        chainCapReached: boolean;
+      };
+    }
   | { ok: false; reason: string; teacherName?: string; schoolName?: string; status?: string };
 
 export async function denySchoolAdminApproval(args: {
@@ -90,15 +101,6 @@ export async function denySchoolAdminApproval(args: {
 
   const meta = hashRequestMeta(args.request);
   let result: DenySchoolAdminApprovalResult;
-  let notify: {
-    applicationId: string;
-    teacherEmail: string;
-    teacherName: string;
-    schoolName: string;
-    adminName: string;
-    chainCapReached: boolean;
-  } | null = null;
-
   try {
     result = await prisma.$transaction(async (tx) => {
       if (earlyAppId) await lockApprovalApplication(tx, earlyAppId);
@@ -193,30 +195,37 @@ export async function denySchoolAdminApproval(args: {
         },
       });
 
-      notify = {
-        applicationId: app.id,
-        teacherEmail: app.email,
-        teacherName: app.name,
-        schoolName: app.schoolName,
-        adminName: pending.adminName,
-        chainCapReached: app.adminRedirectCount >= ADMIN_REDIRECT_CHAIN_CAP,
+      return {
+        ok: true as const,
+        notify: {
+          applicationId: app.id,
+          teacherEmail: app.email,
+          teacherName: app.name,
+          schoolName: app.schoolName,
+          adminName: pending.adminName,
+          chainCapReached: app.adminRedirectCount >= ADMIN_REDIRECT_CHAIN_CAP,
+        },
       };
-      return { ok: true as const };
     });
   } catch {
     result = fail('unavailable');
   }
 
-  if (result.ok && !('idempotent' in result && result.idempotent) && notify) {
+  if (
+    result.ok &&
+    !('idempotent' in result && result.idempotent) &&
+    'notify' in result &&
+    result.notify
+  ) {
     const statusUrl = `${freeTierPublicAppOrigin()}/app/free-tier/pending?ask=1`;
     const emailResult = await sendFreeTierTeacherDenyEmail({
-      applicationId: notify.applicationId,
-      teacherEmail: notify.teacherEmail,
-      teacherName: notify.teacherName,
-      schoolName: notify.schoolName,
-      adminName: notify.adminName,
+      applicationId: result.notify.applicationId,
+      teacherEmail: result.notify.teacherEmail,
+      teacherName: result.notify.teacherName,
+      schoolName: result.notify.schoolName,
+      adminName: result.notify.adminName,
       statusUrl,
-      chainCapReached: notify.chainCapReached,
+      chainCapReached: result.notify.chainCapReached,
     });
     if (!emailResult.ok) {
       return { ok: false, reason: 'email_failed' };

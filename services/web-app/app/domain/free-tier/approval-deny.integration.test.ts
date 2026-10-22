@@ -64,7 +64,7 @@ describe.skipIf(!enabled)('admin deny approval', () => {
   const app = await prisma.freeTierApplication.create({
     data: {
       userId: user.id,
-      email: user.email,
+      email: user.email!,
       name: 'Jordan Rivera',
       schoolName: 'Lincoln High School',
       location: 'Local',
@@ -123,10 +123,11 @@ describe.skipIf(!enabled)('admin deny approval', () => {
     });
     expect(cancelled.every((d) => d.state === 'CANCELLED')).toBe(true);
     expect(sendEmailMock).toHaveBeenCalled();
-    const payload = sendEmailMock.mock.calls.at(-1)?.[0] as {
-      text?: string;
-      html?: string;
-    };
+    const calls = sendEmailMock.mock.calls as unknown as Array<
+      [{ text?: string; html?: string }]
+    >;
+    expect(calls.length).toBeGreaterThan(0);
+    const payload = calls.at(-1)![0];
     expect(payload.text).not.toContain('secret team note');
     expect(payload.html).not.toContain('secret team note');
     const decision = await prisma.freeTierApprovalDecision.findFirst({
