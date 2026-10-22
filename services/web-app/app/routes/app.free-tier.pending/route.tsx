@@ -16,7 +16,10 @@ import {
   isApprovalV2Enabled,
   forwardApprovalRequest,
 } from '~/domain/free-tier/approval-v2.server';
-import { approvalSentDate } from '~/domain/free-tier/approval-waiting';
+import {
+  approvalMailto,
+  approvalSentDate,
+} from '~/domain/free-tier/approval-waiting';
 import {
   ApprovalForwardForm,
   approvalForwardError,
@@ -218,6 +221,27 @@ function LockedPreviewExploreButton() {
   );
 }
 
+function PendingDraftRequestLink({
+  adminEmail,
+  adminName,
+  teacherName,
+}: {
+  adminEmail: string;
+  adminName: string;
+  teacherName: string;
+}) {
+  return (
+    <FreeTierButton asChild variant="outline" data-testid="pending-draft-request">
+      <a
+        href={approvalMailto({ adminEmail, adminName, teacherName })}
+        rel="noopener noreferrer"
+      >
+        Draft a Request
+      </a>
+    </FreeTierButton>
+  );
+}
+
 export default function FreeTierPendingRoute() {
   const { app, pending, lastFailedEmail, showExploreClassroom, approvalV2 } =
     useLoaderData<typeof loader>();
@@ -309,6 +333,11 @@ export default function FreeTierPendingRoute() {
                 <FreeTierPerson
                   name={current.adminName}
                   email={current.adminEmail}
+                />
+                <PendingDraftRequestLink
+                  adminEmail={current.adminEmail}
+                  adminName={current.adminName}
+                  teacherName={app.name}
                 />
                 {showExploreClassroom ? <LockedPreviewExploreButton /> : null}
               </>

@@ -138,6 +138,12 @@ for (const width of [1280, 390])
     await expect(
       page.getByText('Sent to Dr. Patel on October 14')
     ).toBeVisible();
+    const draftRequest = page.getByRole('link', { name: 'Draft a Request' });
+    await expect(draftRequest).toBeVisible();
+    await expect(draftRequest).toHaveAttribute(
+      'href',
+      /mailto:patel%2Bapproval%40example\.org\?subject=/
+    );
     await expect(
       page.getByRole('link', { name: 'Explore my classroom' })
     ).toBeVisible();
@@ -201,7 +207,7 @@ test('flag-off and non-target controls', async ({ page }) => {
     await flag(mode);
     await page.goto('/app/free-tier/pending');
     await expect(
-      page.getByRole('link', { name: 'Draft an email' })
+      page.getByRole('link', { name: 'Draft a Request' })
     ).toHaveCount(0);
     await expect(
       page.getByRole('button', { name: 'Resend reminder' })
@@ -314,7 +320,7 @@ for (const width of [1280, 390])
       await page.goto('/app/free-tier/pending');
       await capture(page, `${width}-waiting-${status.toLowerCase()}`);
       await expect(
-        page.getByRole('link', { name: 'Draft an email' })
+        page.getByRole('link', { name: 'Draft a Request' })
       ).toHaveCount(0);
     }
     await page.goto('/free/admin/approve?t=invalid');
@@ -337,7 +343,7 @@ test('paid member remains on legacy waiting page with rollout on', async ({
     });
     await page.goto('/app/free-tier/pending');
     await expect(
-      page.getByRole('link', { name: 'Draft an email' })
+      page.getByRole('link', { name: 'Draft a Request' })
     ).toHaveCount(0);
     await expect(
       page.getByRole('button', { name: 'Resend reminder' })

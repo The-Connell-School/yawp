@@ -103,11 +103,16 @@ test('crafted forward is refused when rollout is off', async () => {
   expect(forward).not.toHaveBeenCalled();
 });
 
-test('pending page offers explore and forward actions without legacy resend controls', () => {
+test('pending page offers draft request mailto, explore, and forward without legacy resend', () => {
   stopped = false;
   const html = renderToStaticMarkup(<Page />);
   expect(html).toContain('Explore my classroom');
   expect(html).toContain('Not the right person?');
+  expect(html).toContain('Draft a Request');
+  expect(html).toContain('data-testid="pending-draft-request"');
+  expect(html).toContain(
+    'href="mailto:very.long.administrator.email.address%2Btag%40subdomain.example-school.edu?'
+  );
   expect(html).not.toContain('Resend reminder');
   expect(html).not.toContain('Draft an email');
   expect(html).not.toContain('Take a look around');
