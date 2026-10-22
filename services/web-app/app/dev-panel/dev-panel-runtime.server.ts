@@ -19,6 +19,8 @@ export function isDevPanelRuntimeEnabled(
 ): boolean {
   if (!isDevPanelBuildEnabled(env)) return false;
   const yawp = String(env.YAWP_ENVIRONMENT ?? '').trim().toLowerCase();
+  // PR preview hosts keep the legacy environment beaker and dev-login menu.
+  if (yawp === 'preview') return false;
   if (yawp === 'demo' || isDemoEnvironment(env)) return true;
   return isLocalDevPanelEnvironment(env);
 }

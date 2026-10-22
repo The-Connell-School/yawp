@@ -55,4 +55,15 @@ describe('dev panel runtime gate', () => {
     } as unknown as NodeJS.ProcessEnv;
     expect(isDevPanelRuntimeEnabled(env)).toBe(false);
   });
+
+  test('preview gate E2E dev server does not enable panel over legacy beaker', () => {
+    const env = {
+      YAWP_ENVIRONMENT: 'preview',
+      PREVIEW_SLUG: 'pr-e2e-gate',
+      PR_NUMBER: '1',
+      NODE_ENV: 'development',
+      DATABASE_URL: 'postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e',
+    } as unknown as NodeJS.ProcessEnv;
+    expect(isDevPanelRuntimeEnabled(env)).toBe(false);
+  });
 });
