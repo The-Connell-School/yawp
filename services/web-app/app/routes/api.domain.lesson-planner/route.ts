@@ -686,6 +686,10 @@ export async function action({ request }: ActionFunctionArgs) {
           .filter((message) => message.role === AgentType.Assistant)
           .map((message) => message.content),
         teacherNamedIt: Boolean(activeConversation?.packetTitle?.trim()),
+        stillPlaceholder: (() => {
+          const first = priorMessages.find((message) => message.role === AgentType.User);
+          return Boolean(activeConversation && first && activeConversation.title === firstMessageTitle(first.content));
+        })(),
       });
 
       // Stamp explicit, strictly-increasing timestamps: both rows land in one

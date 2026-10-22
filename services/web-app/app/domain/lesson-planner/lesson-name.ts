@@ -59,15 +59,22 @@ export function shouldRenameLesson({
   reply,
   priorReplies,
   teacherNamedIt,
+  stillPlaceholder = false,
 }: {
   reply: string;
   /** Assistant replies already in this conversation, oldest first. */
   priorReplies: string[];
   /** The teacher gave the packet a name of their own. */
   teacherNamedIt: boolean;
+  /**
+   * The lesson is still called after the teacher's first message: an earlier
+   * plan gave it no name worth using, so this one may (Brian's run 4: drafts
+   * kept the first prompt as their title).
+   */
+  stillPlaceholder?: boolean;
 }): string | null {
   if (teacherNamedIt) return null;
-  if (priorReplies.some((prior) => looksLikeLessonPlan(prior))) return null;
+  if (!stillPlaceholder && priorReplies.some((prior) => looksLikeLessonPlan(prior))) return null;
   return deriveLessonName(reply);
 }
 

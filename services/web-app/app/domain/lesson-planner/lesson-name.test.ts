@@ -160,3 +160,13 @@ describe("a lesson still named after the teacher's first message (Brian's review
     ).toBe(false);
   });
 });
+
+describe("a lesson still named after its first message takes the next plan's name (Brian's run 4)", () => {
+  const plan = '# Catcher, chapters 1–4\n\n## Discussion (20 min)\n\nTalk.\n\n## Closing (5 min)\n\nWrap up.';
+  test('an earlier plan named nothing: this one names it', () => {
+    expect(shouldRenameLesson({ reply: plan, priorReplies: [plan.replace('# Catcher, chapters 1–4', '# Lesson Plan')], teacherNamedIt: false, stillPlaceholder: true })).toBe('Catcher, chapters 1–4');
+  });
+  test('already named from a plan: a revision does not rename it', () => {
+    expect(shouldRenameLesson({ reply: plan, priorReplies: [plan], teacherNamedIt: false })).toBeNull();
+  });
+});

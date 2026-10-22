@@ -21,6 +21,10 @@ export type LibraryLessonInput = {
   updatedAt: Date | string;
   publishedAt: Date | string | null;
   messages: Array<{ keptAudience: string | null }>;
+  /** The stack's pieces, filed one by one from the chat. */
+  materials?: Array<{ kind: string; audience: string | null }>;
+  /** The class the teacher named for the lesson. */
+  lessonClassLabel?: string | null;
   originClassAssignment?: {
     class: {
       title: string | null;
@@ -70,16 +74,19 @@ export function buildLessonLibrary(
 ): LibraryLesson[] {
   return lessons.map((lesson) => {
     const kept = lesson.messages.filter((message) => message.keptAudience);
+    // The deck belongs to the lesson, not its count of pieces (as the run of show).
+    const pieces = (lesson.materials ?? []).filter((material) => material.kind !== 'slides');
     return {
       id: lesson.id,
       title: (lesson.packetTitle ?? lesson.title).trim() || 'Lesson plan',
       className: lesson.originClassAssignment
         ? classDisplayName(lesson.originClassAssignment.class)
-        : null,
+        : lesson.lessonClassLabel?.trim() || null,
       assignmentTitle: lesson.originClassAssignment?.assignment.title ?? null,
-      sectionCount: kept.length,
-      handoutCount: kept.filter((message) => message.keptAudience === 'student')
-        .length,
+      sectionCount: kept.length + pieces.length,
+      handoutCount:
+        kept.filter((message) => message.keptAudience === 'student').length +
+        pieces.filter((material) => material.audience === 'student').length,
       published: Boolean(lesson.publishedAt),
       updatedAt: asIsoString(lesson.updatedAt),
     };

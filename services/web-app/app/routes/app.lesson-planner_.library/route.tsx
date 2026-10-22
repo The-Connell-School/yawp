@@ -52,10 +52,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
       packetTitle: true,
       updatedAt: true,
       publishedAt: true,
+      lessonClassLabel: true,
       messages: {
         where: { keptAt: { not: null } },
         select: { keptAudience: true },
       },
+      // The stack's pieces (Brian's run 4: every lesson read "Empty").
+      materials: { select: { kind: true, audience: true } },
       originClassAssignment: {
         select: {
           class: { select: { title: true, grade: true, period: true } },

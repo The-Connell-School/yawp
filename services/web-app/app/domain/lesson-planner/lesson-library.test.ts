@@ -184,3 +184,23 @@ describe('lessonHref', () => {
     ).toBe('/app/lesson-planner?c=lesson-3');
   });
 });
+
+describe("the library counts the stack's pieces (Brian's run 4: every lesson read \"Empty\")", () => {
+  test('pieces filed from the chat count, the deck aside; handouts are the student pieces', () => {
+    const [row] = buildLessonLibrary([
+      lesson({
+        messages: [],
+        originClassAssignment: null,
+        lessonClassLabel: 'English 10 · Period 3',
+        materials: [
+          { kind: 'class-starter', audience: 'student' },
+          { kind: 'notes', audience: 'teacher' },
+          { kind: 'slides', audience: 'teacher' },
+        ],
+      }),
+    ]);
+    expect(row!.sectionCount).toBe(2);
+    expect(row!.handoutCount).toBe(1);
+    expect(row!.className).toBe('English 10 · Period 3');
+  });
+});
