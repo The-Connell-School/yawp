@@ -1,7 +1,8 @@
-import * as E from '@react-email/components';
 import type { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server.js';
 import { sendEmail } from '~/utils/email.server';
+import { buildClassInviteEmail } from '~/emails/build-account-emails.server';
+import { formatClassLabel } from '~/utils/class-display';
 import { getDomainUrl } from '~/utils/misc';
 import { normalizeEmail } from '~/utils/normalize-email';
 import { generateTOTP } from '~/utils/totp.server';
@@ -189,39 +190,6 @@ export async function enrollExistingStudentInClass({
   return { status: 'enrolled' };
 }
 
-function StudentClassInviteEmail({
-  verifyUrl,
-  organizationName,
-}: {
-  verifyUrl: string;
-  organizationName: string;
-}) {
-  return (
-    <E.Html lang="en" dir="ltr">
-      <E.Container>
-        <h1>
-          <E.Text>Welcome to Yawp!</E.Text>
-        </h1>
-        <p>
-          <E.Text>
-            {"You've been invited to join a class at "}
-            {organizationName} on Yawp!
-          </E.Text>
-        </p>
-        <p>
-          <E.Text>Click the link to finish signing up:</E.Text>
-        </p>
-        <E.Link href={verifyUrl}>{verifyUrl}</E.Link>
-        <p>
-          <E.Text>
-            This invitation will expire in 3 days for security reasons.
-          </E.Text>
-        </p>
-      </E.Container>
-    </E.Html>
-  );
-}
-
 export async function sendStudentClassInvite({
   email: rawEmail,
   classId,
@@ -252,10 +220,28 @@ export async function sendStudentClassInvite({
     };
   }
 
-  const organization = await prisma.organization.findUnique({
-    where: { id: organizationId },
-    select: { name: true },
-  });
+  const [organization, klass] = await Promise.all([
+    prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { name: true },
+    }),
+    prisma.class.findUnique({
+      where: { id: classId },
+      select: {
+        title: true,
+        period: true,
+        grade: true,
+        teachers: {
+          take: 1,
+          select: { user: { select: { name: true } } },
+        },
+      },
+    }),
+  ]);
+  const teacherName =
+    klass?.teachers[0]?.user?.name?.trim() || 'Your teacher';
+  const className = klass ? formatClassLabel(klass) : 'your class';
+  const schoolName = organization?.name ?? 'your school';
 
   const existingInvitation = await prisma.invitation.findFirst({
     where: {
@@ -322,15 +308,17 @@ export async function sendStudentClassInvite({
     throw error;
   }
 
+  const designed = await buildClassInviteEmail({
+    teacherName,
+    className,
+    schoolName,
+    joinUrl: verifyUrl.toString(),
+  });
   const response = await sendEmail({
     to: email,
-    subject: "You're invited to join a class on Yawp!",
-    react: (
-      <StudentClassInviteEmail
-        verifyUrl={verifyUrl.toString()}
-        organizationName={organization?.name ?? 'your school'}
-      />
-    ),
+    subject: designed.subject,
+    text: designed.text,
+    html: designed.html,
   });
 
   if (response.status !== 'success') {

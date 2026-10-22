@@ -1,7 +1,10 @@
 import type { Prisma } from '@app/prisma';
-import * as E from '@react-email/components';
 import { generateTOTP } from '~/utils/totp.server';
 import { sendEmail } from '~/utils/email.server';
+import {
+  buildSchoolSetupInviteEmail,
+  inviteeFirstName,
+} from '~/emails/build-account-emails.server';
 import { emailDeliveryDiagnostic } from '~/utils/email-delivery-error.server';
 
 const type = 'onboard-owner';
@@ -191,28 +194,20 @@ export async function issueOwnerInvitation(
   verifyUrl.searchParams.set('target', input.email);
   verifyUrl.searchParams.set('code', otp);
   try {
+    const designed = await buildSchoolSetupInviteEmail({
+      firstName: inviteeFirstName(input.email),
+      schoolName: input.organization.name,
+      acceptUrl: verifyUrl.toString(),
+      expiresInDays: input.expiresInDays,
+      personalNote: input.note,
+      origin: input.origin,
+    });
     const delivery = await sendEmail({
       to: input.email,
       singleAttempt: true,
-      subject: "You're invited to join your organization on Yawp!",
-      react: (
-        <E.Html lang="en" dir="ltr">
-          <E.Container>
-            <E.Heading>Welcome to Yawp!</E.Heading>
-            <E.Text>
-              You've been invited to join {input.organization.name} as an owner
-              on Yawp!
-            </E.Text>
-            {input.note && <E.Text>{input.note}</E.Text>}
-            <E.Text>Click the link to get started:</E.Text>
-            <E.Link href={verifyUrl.toString()}>Accept invitation</E.Link>
-            <E.Text>
-              This invitation will expire in {input.expiresInDays} days for
-              security reasons.
-            </E.Text>
-          </E.Container>
-        </E.Html>
-      ),
+      subject: designed.subject,
+      text: designed.text,
+      html: designed.html,
     });
     if (delivery.status !== 'success') throw delivery.error;
   } catch (error) {

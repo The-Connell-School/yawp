@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import {
   CONGRATULATIONS_V2_SUBJECT,
   RELEASE_EMAIL_V2_COPY_VERSION,
@@ -11,13 +11,21 @@ import {
 import { plainTextEmailToHtml } from './email-html.server';
 
 const application = { name: '<Ada> Lovelace', joinUrl: 'https://example.test/free/join?t=local-only' };
-const SUBJECT = "You're in — start your Yawp! classroom!";
+const SUBJECT = "You're in: start your Yawp! classroom";
+const primary = process.env.PRIMARY_APP_URL;
+beforeEach(() => {
+  process.env.PRIMARY_APP_URL = 'https://yawp.test';
+});
+afterEach(() => {
+  if (primary === undefined) delete process.env.PRIMARY_APP_URL;
+  else process.env.PRIMARY_APP_URL = primary;
+});
 
 test('explicit v2 email copy renders Brian\'s release copy and subject without delivery', () => {
   const args = { ...application, copyVersion: RELEASE_EMAIL_V2_COPY_VERSION };
   const text = renderReleaseEmailBody(args);
   expect(renderReleaseEmailSubject(args)).toBe(SUBJECT);
-  expect(text).toContain('Good news: your spot is ready.');
+  expect(text).toContain('Your spot is ready.');
   expect(text).toContain('one class of up to 35 students');
   expect(text).toContain(application.joinUrl);
   expect(text).toContain('expires in 30 days');
@@ -27,10 +35,12 @@ test('explicit v2 email copy renders Brian\'s release copy and subject without d
   expect(html).not.toContain('<Ada>');
 });
 
-test('legacy and unknown copy versions keep legacy body wording with the new subject', () => {
+test('legacy and unknown copy versions keep legacy body wording and subject', () => {
   for (const copyVersion of [undefined, '2026-10-14-v5', 'unknown']) {
     const args = { ...application, copyVersion };
-    expect(renderReleaseEmailSubject(args)).toBe(SUBJECT);
+    expect(renderReleaseEmailSubject(args)).toBe(
+      "You're in — start your Yawp! classroom!"
+    );
     expect(renderReleaseEmailBody(args)).toContain("You're in — we'd love to have you try Yawp! with your students.");
   }
 });

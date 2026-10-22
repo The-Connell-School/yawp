@@ -1,5 +1,11 @@
 /** Admin approval email + school-admin pages (2026-10-21 design). */
 
+import {
+  plainTextButton,
+  plainTextEmailFooter,
+} from '~/emails/plain-text-footer';
+import { transactionalEmailPublicOrigin } from '~/emails/public-origin.server';
+
 export const ADMIN_APPROVAL_LINK_DAYS = 14;
 
 export const FREE_TIER_ADMIN_MODEL_TRAINING_LINE =
@@ -23,6 +29,18 @@ export function renderAdminApprovalEmailSubject(args: {
   return args.reminder ? `Reminder: ${core}` : core;
 }
 
+export function adminApprovalFooterWhy(args: {
+  teacherName: string;
+  schoolName: string;
+  forwardedByAdminName?: string | null;
+}) {
+  const forwarder = args.forwardedByAdminName?.trim();
+  if (forwarder) {
+    return `You're getting this because ${forwarder} forwarded ${args.teacherName}'s request to you.`;
+  }
+  return `You're getting this because ${args.teacherName} named you as an administrator who can approve classroom software at ${args.schoolName}.`;
+}
+
 export function renderAdminApprovalEmailPlainText(args: {
   teacherName: string;
   teacherEmail: string;
@@ -32,39 +50,47 @@ export function renderAdminApprovalEmailPlainText(args: {
   forwardedByAdminName?: string | null;
   reminder?: boolean;
 }) {
-  const heading = `Approve Yawp! for ${teacherAtSchool(args.teacherName, args.schoolName)}`;
+  const origin = transactionalEmailPublicOrigin();
+  const teacherSchool = teacherAtSchool(args.teacherName, args.schoolName);
   const forwarder = args.forwardedByAdminName?.trim();
   const forwardLead = forwarder
-    ? `${forwarder} forwarded this to you as the right person to approve classroom software for ${teacherAtSchool(args.teacherName, args.schoolName)}.\n\n`
+    ? `${forwarder} forwarded this to you as the right person to approve classroom software for ${teacherSchool}.\n\n`
     : '';
   const reminderLead = args.reminder
     ? `This is a reminder about the approval request below.\n\n`
     : '';
-  const classroomIntro = `${teacherAtSchool(args.teacherName, args.schoolName)} would like to use Yawp! in their classroom.`;
+  const classroomIntro = `${teacherSchool} would like to use Yawp! in their classroom.`;
   const administratorIntro = forwarder
     ? ''
     : ' They named you as the administrator who can approve classroom software.';
-  return `${reminderLead}${forwardLead}${heading}
+  return `${reminderLead}${forwardLead}Approve Yawp! for ${teacherSchool}
 
 ${classroomIntro}${administratorIntro}
 
-${args.teacherName}
-Teacher at ${args.schoolName}
-${args.teacherEmail}
+Teacher: ${args.teacherName}
+School: ${args.schoolName}
+Email: ${args.teacherEmail}
 
+About Yawp!
 Students draft essays with feedback as they write.
 Teachers control assignments and grading.
 ${FREE_TIER_ADMIN_MODEL_TRAINING_LINE}
 
-Review and approve:
-${args.approveUrl}
+${plainTextButton('Review and approve', args.approveUrl)}
 
 Not the right person? Forward this request:
 ${args.notRightPersonUrl}
 
 This link works for ${ADMIN_APPROVAL_LINK_DAYS} days. You don't need a Yawp! account.
 
-Sent by Yawp! · yawp.school`;
+${plainTextEmailFooter(
+  adminApprovalFooterWhy({
+    teacherName: args.teacherName,
+    schoolName: args.schoolName,
+    forwardedByAdminName: args.forwardedByAdminName,
+  }),
+  origin
+)}`;
 }
 
 function firstAdminLinkInText(text: string, path: '/free/admin/approve' | '/free/admin/not-right-person') {
