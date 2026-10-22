@@ -33,7 +33,8 @@ export function LockedTeachingControl({
   mobileSheetBody?: string;
 }) {
   const breakpoint = useBreakpoint();
-  const isMobile = breakpoint === 'base' || breakpoint === 'sm';
+  const isMobile =
+    breakpoint === 'base' || breakpoint === 'sm' || breakpoint === undefined;
   const [sheetOpen, setSheetOpen] = useState(false);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const descriptionId = useId();
