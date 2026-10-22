@@ -107,16 +107,23 @@ local('real authenticated route actions reject crafted requests before parsing o
       })
     );
     expect(actionStatus(plannerResult)).not.toBe(403);
+    const targetedFlag = JSON.stringify({ mode: 'targeted', orgIds: [orgId] });
+    await setFlag(JSON.stringify({ mode: 'everyone', orgIds: [] }));
     try {
-      await preview({
-        request: new Request(
-          'http://localhost/app/free-tier/preview?organizationId=foreign-org',
-          { headers }
-        ),
-      } as never);
-      throw new Error('expected redirect');
-    } catch (error) {
-      expect((error as Response).headers.get('location')).toBe('/app');
+      try {
+        await preview({
+          request: new Request(
+            'http://localhost/app/free-tier/preview?organizationId=foreign-org',
+            { headers }
+          ),
+        } as never);
+        throw new Error('expected redirect');
+      } catch (error) {
+        expect(error).toBeInstanceOf(Response);
+        expect((error as Response).headers.get('location')).toBe('/app');
+      }
+    } finally {
+      await setFlag(targetedFlag);
     }
     await expect(createAssignment({ request: new Request('http://localhost/api/assignments/create', { method: 'POST' }) } as never)).rejects.toMatchObject({ status: 302 });
   } finally { await prisma.session.delete({ where: { id: session.id } }); }
