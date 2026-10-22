@@ -41,6 +41,14 @@ export async function expectGiveFeedbackAccessible(page: Page) {
 }
 
 export async function openGiveFeedback(page: Page) {
+  const devPanelDialog = page.getByRole('dialog', { name: 'Give feedback' });
+  if (await devPanelDialog.isVisible().catch(() => false)) {
+    return {
+      panel: devPanelDialog,
+      noteLabel: 'Note',
+      hasSeverity: false,
+    };
+  }
   const legacyTrigger = page.getByRole('button', {
     name: 'Give feedback',
     exact: true,
