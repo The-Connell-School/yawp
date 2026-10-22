@@ -134,7 +134,7 @@ function AccessCodeModal({
             <Button
               type="button"
               className="w-full"
-              disabled={checking || !code.trim()}
+              disabled={checking || code.length === 0}
               onClick={() => void submit()}
             >
               {checking ? (
@@ -175,11 +175,18 @@ function GiveFeedbackSheet({
   useEffect(() => {
     if (state.subSheet !== 'give-feedback') return;
     const focusNote = () => {
-      window.setTimeout(() => document.getElementById(noteId)?.focus(), 0);
+      const el = document.getElementById(noteId);
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      if (document.activeElement !== el) {
+        window.requestAnimationFrame(() => {
+          el.focus({ preventScroll: true });
+        });
+      }
     };
     if (typeof navigator !== 'undefined' && navigator.webdriver) {
       setScreenshot(null);
-      focusNote();
+      window.setTimeout(focusNote, 0);
       return;
     }
     void captureFeedbackScreenshot()
