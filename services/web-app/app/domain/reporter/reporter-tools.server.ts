@@ -15,6 +15,10 @@ import {
   type SubmissionRubricEntry,
 } from '~/domain/assignment-insights/aggregate-rubric-performance';
 import {
+  isLessonPlannerReporterReadOnlyDelegation,
+  isLessonPlannerReporterReadOnlyToolName,
+} from '~/domain/lesson-planner/lesson-planner-reporter-delegation.server';
+import {
   buildGrowthSeries,
   buildPlanProgress,
   buildRubricTrends,
@@ -36,6 +40,11 @@ export type ReporterToolContext = {
   organizationId: string;
   /** Model-requested writes staged until the containing LLM turn succeeds. */
   pendingGrowthPlanSaves?: Map<string, PendingReporterGrowthPlan>;
+  /**
+   * Set only by `handleLessonPlannerToolCall` when delegating read-only class
+   * context tools. Never accept from HTTP request bodies or route handlers.
+   */
+  lessonPlannerReadOnlyDelegation?: import('~/domain/lesson-planner/lesson-planner-reporter-delegation.server').LessonPlannerReporterReadOnlyDelegation;
 };
 
 export type PendingReporterGrowthPlan = {
@@ -1014,7 +1023,13 @@ export async function handleReporterToolCall(
   ctx: ReporterToolContext
 ): Promise<string> {
   const { assertOrganizationTeachingApproved } = await import('~/domain/free-tier/locked-preview.server');
-  await assertOrganizationTeachingApproved(prisma, ctx.organizationId);
+  const pendingLessonPlannerReadOnly =
+    isLessonPlannerReporterReadOnlyDelegation(
+      ctx.lessonPlannerReadOnlyDelegation
+    ) && isLessonPlannerReporterReadOnlyToolName(name);
+  await assertOrganizationTeachingApproved(prisma, ctx.organizationId, {
+    ...(pendingLessonPlannerReadOnly ? { allowPendingLessonPlanner: true } : {}),
+  });
   try {
     let result: unknown;
     switch (name) {

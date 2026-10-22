@@ -27,7 +27,7 @@ test.describe('Free classroom bundle quotas', () => {
     const prewritingPicker = sheet.getByRole('button', { name: /Prewriting/i });
     if (await prewritingPicker.count()) {
       await expect(prewritingPicker).toContainText(
-        /Unlimited assignments|\d+ of \d+|None left/
+        /Unlimited|\d+ of \d+|None left/
       );
       await sheet.getByRole('button', { name: /Class Starter/i }).click();
       await expect(sheet.getByRole('combobox').first()).toBeVisible({

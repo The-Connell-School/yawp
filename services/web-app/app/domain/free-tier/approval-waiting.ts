@@ -17,9 +17,11 @@ export function approvalMailto(args: {
   adminEmail: string;
   adminName: string;
   teacherName: string;
+  schoolName: string;
+  approvalEmailFrom: string;
 }) {
   const subject = 'My Yawp! classroom approval request';
-  const body = `Hi ${args.adminName},\n\nI requested your approval to use Yawp! with my class. Please look for the approval request from Yawp! in your inbox.\n\nThank you,\n${args.teacherName}`;
+  const body = `Hi ${args.adminName},\n\nI requested Yawp! for my classroom at ${args.schoolName}, and Yawp! just sent you an approval email. It should be in your inbox from ${args.approvalEmailFrom}.\n\nApproving takes about a minute, and it lets my students start writing with Yawp!\n\nThank you!\n${args.teacherName}`;
   return `mailto:${encodeURIComponent(args.adminEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 export function approvalSentDate(date: string | Date) {

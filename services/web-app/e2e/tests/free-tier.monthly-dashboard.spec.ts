@@ -150,7 +150,7 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
     await shot(page, `assignments-${label}`);
     await page.getByTestId('my-assignments-new-assignment').click();
     await expect(
-      page.getByRole('dialog').getByText('Unlimited assignments').first()
+      page.getByRole('dialog').getByText('Unlimited').first()
     ).toBeVisible();
     await shot(page, `type-picker-${label}`);
     await page.keyboard.press('Escape');

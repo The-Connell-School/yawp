@@ -331,8 +331,20 @@ for (const width of [390, 1440]) {
       page.getByRole('button', { name: 'Not the right person?' })
     ).toBeVisible();
     await capture(page, `waiting-${width}`);
-    await page.getByRole('link', { name: 'Explore my classroom' }).click();
+    const exploreLink = page.getByRole('link', { name: 'Explore my classroom' });
+    await expect(exploreLink).toHaveAttribute('href', '/app');
+    await exploreLink.click();
     await expectLockedAppHome(page);
+    await expect(page).not.toHaveURL(/free-tier\/preview/);
+    await expect(
+      page.getByRole('heading', { name: /Look around while you wait/i })
+    ).toHaveCount(0);
+    await expect(page.locator('[data-tour="preview-content-nav"]')).toHaveCount(
+      0
+    );
+    await expect(
+      page.getByRole('heading', { name: 'New assignment' })
+    ).toHaveCount(0);
     await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
     await expect(
       page
@@ -477,7 +489,7 @@ for (const width of [390, 1440]) {
     for (const path of [
       '/api/assignments/create',
       '/api/domain/reporter',
-      '/api/domain/lesson-planner',
+      '/api/domain/lesson-planner/packet',
       '/app/organization/students',
     ]) {
       const response = await page.request.post(path, {
@@ -486,6 +498,14 @@ for (const width of [390, 1440]) {
       });
       expect(response.status(), path).toBe(403);
     }
+    const plannerResponse = await page.request.post(
+      '/api/domain/lesson-planner',
+      {
+        form: { message: 'Outline a lesson on thesis statements' },
+        maxRedirects: 0,
+      }
+    );
+    expect(plannerResponse.status()).not.toBe(403);
     expect(await prisma.assignment.count()).toBe(before);
     if (width === 1440) {
       await demoFeedbackFlag(true);

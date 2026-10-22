@@ -23,5 +23,7 @@ export function isLockedPreviewRequestAllowed(method: string, pathname: string) 
   if (pathname === '/api/guided-tours') return method === 'POST';
   // Full-page teaching forms handle approval_required inline in their actions.
   if (pathname === '/app/assignments/new') return method === 'POST';
+  // Exact path only — packet export and other LP routes stay on the deny list.
+  if (pathname === '/api/domain/lesson-planner') return method === 'POST';
   return false;
 }

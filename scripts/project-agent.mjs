@@ -518,7 +518,9 @@ function runTestProfile(profile, { json }) {
       }) });
   }
   else if (chosen === "free-tier-locked-preview-unit") {
-    for (const file of ["app/routes/auth.inv.onboard-student/ua-onboarding.test.ts", "app/domain/free-tier/locked-preview.test.ts", "app/domain/free-tier/locked-preview.server.test.ts", "app/domain/collaboration/student-roster.server.test.ts", "app/domain/lesson-planner/lesson-planner-tools.server.test.ts", "app/domain/reporter/reporter-tools.server.test.ts", "app/utils/assignment-quota.server.test.ts", "app/utils/ai-admission.server.test.ts", "app/utils/impersonation-read-only.server.test.ts", "app/utils/auth.server.test.ts"]) runWebApp(file, ["test", "--max-concurrency=2", file]);
+    for (const file of ["app/routes/auth.inv.onboard-student/ua-onboarding.test.ts", "app/domain/free-tier/locked-preview.test.ts", "app/domain/free-tier/locked-preview.server.test.ts", "app/domain/free-tier/monthly-policy.test.ts", "app/domain/free-tier/inapp-usage.test.ts",
+      "app/domain/free-tier/usage-nav-meter.test.ts",  "app/domain/collaboration/student-roster.server.test.ts", "app/domain/lesson-planner/lesson-planner-tools.server.test.ts",
+      "app/domain/lesson-planner/lesson-planner-pending-reporter-delegation.server.test.ts", "app/domain/reporter/reporter-tools.server.test.ts", "app/utils/assignment-quota.server.test.ts", "app/utils/ai-admission.server.test.ts", "app/utils/impersonation-read-only.server.test.ts", "app/utils/auth.server.test.ts"]) runWebApp(file, ["test", "--max-concurrency=2", file]);
   }
   else if (chosen === "free-tier-locked-preview-db") {
     const local = requireConfig();
@@ -599,6 +601,8 @@ function runTestProfile(profile, { json }) {
       'app/domain/free-tier/approval-v2.real-db.integration.test.ts',
       'app/domain/free-tier/approval-waiting.test.ts',
       'app/routes/app.free-tier.pending/route.v2.test.tsx',
+      'app/routes/app.free-tier.pending/route.draft-request.test.tsx',
+      'app/routes/app.free-tier.pending/route.explore-button.test.tsx',
       'app/routes/free.admin.approve/route.v2.test.tsx',
       'app/routes/app.free-tier.pending/route.test.tsx',
       'app/routes/free.admin.approve/route.loader.test.ts',
@@ -736,7 +740,8 @@ function runTestProfile(profile, { json }) {
     });
   }
   else if (chosen === "free-tier-inapp-unit") {
-    for (const file of ["app/domain/feature-flags/feature-flags.test.ts", "app/domain/feature-flags/feature-flags.server.test.ts", "app/utils/internal-feature-flags-http.server.test.ts", "app/domain/feature-flags/is-free-tier-enabled.server.test.ts", "app/domain/free-tier/inapp-usage.test.ts", "app/domain/free-tier/inapp-usage.server.test.ts", "app/domain/free-tier/site-license-locked-assignment-tiles.test.ts", "app/utils/grading-limit-status.server.test.ts", "app/utils/assignment-quota.server.test.ts", "app/utils/entitlements.server.test.ts", "app/domain/free-tier/class-seat-cap.test.ts", "app/utils/lesson-planner/lesson-planner-quota.server.test.ts", "app/routes/app/route.test.tsx", "app/components/site-license-locked-assignment-tile.test.tsx", "app/components/free-account-usage.locked-tiles.test.tsx", "app/components/assignments/assignment-creation-sheet.test.tsx"]) runWebApp(file, ["test", file]);
+    for (const file of ["app/domain/feature-flags/feature-flags.test.ts", "app/domain/feature-flags/feature-flags.server.test.ts", "app/utils/internal-feature-flags-http.server.test.ts", "app/domain/feature-flags/is-free-tier-enabled.server.test.ts", "app/domain/free-tier/inapp-usage.test.ts",
+      "app/domain/free-tier/usage-nav-meter.test.ts", "app/domain/free-tier/inapp-usage.server.test.ts", "app/domain/free-tier/site-license-locked-assignment-tiles.test.ts", "app/utils/grading-limit-status.server.test.ts", "app/utils/assignment-quota.server.test.ts", "app/utils/entitlements.server.test.ts", "app/domain/free-tier/class-seat-cap.test.ts", "app/utils/lesson-planner/lesson-planner-quota.server.test.ts", "app/routes/app/route.test.tsx", "app/components/site-license-locked-assignment-tile.test.tsx", "app/components/free-account-usage.locked-tiles.test.tsx", "app/components/assignments/assignment-creation-sheet.test.tsx"]) runWebApp(file, ["test", file]);
   }
   else if (chosen === "free-tier-inapp-browser") {
     const local = requireConfig();

@@ -182,9 +182,13 @@ describe('free-tier approval flow', () => {
           expect(deliveries.length).toBeGreaterThan(0);
           return deliveries.at(-1)!;
         };
+        const teacherAtSchoolLabel = `${user.name} at ${app.schoolName}`;
         const checkDelivery = (
           to: string,
-          options: { expectDemoBcc?: boolean } = {}
+          options: {
+            expectDemoBcc?: boolean;
+            expectSubject?: string;
+          } = {}
         ) => {
           const delivery = findDeliveryTo(to);
           if (options.expectDemoBcc && environment === 'demo') {
@@ -196,6 +200,12 @@ describe('free-tier approval flow', () => {
           expect(delivery.text.includes('HISTORICAL INTRO')).toBe(false);
           expect(delivery.text).toContain('/free/admin/approve?t=');
           expect(delivery.text).toContain('/free/admin/not-right-person?t=');
+          expect(delivery.text).toContain('Review and approve:');
+          expect(delivery.html).toContain('Review and approve</a>');
+          expect(delivery.subject).not.toBe(`Approve Yawp! for ${app.schoolName}`);
+          if (options.expectSubject) {
+            expect(delivery.subject).toBe(options.expectSubject);
+          }
           return delivery;
         };
         expect(
@@ -210,7 +220,10 @@ describe('free-tier approval flow', () => {
             })
           ).ok
         ).toBe(true);
-        checkDelivery('principal@school.edu', { expectDemoBcc: true });
+        checkDelivery('principal@school.edu', {
+          expectDemoBcc: true,
+          expectSubject: `${teacherAtSchoolLabel} would like to use Yawp!`,
+        });
         await prisma.freeTierAdminApproval.updateMany({
           where: { applicationId: app.id },
           data: { personalNote: 'HISTORICAL INTRO' },
@@ -241,7 +254,11 @@ describe('free-tier approval flow', () => {
           ).ok
         ).toBe(true);
         if (approvalV2) await runApprovalJobs(new Date());
-        const replacement = checkDelivery('replacement@school.edu');
+        const replacement = checkDelivery('replacement@school.edu', {
+          expectSubject: approvalV2
+            ? `Can you approve Yawp! for ${teacherAtSchoolLabel}?`
+            : undefined,
+        });
         expect(replacement.text).toContain('Principal Pat forwarded this to you');
         const approveUrl = replacement.text
           .split('\n')
