@@ -28,7 +28,7 @@ const webServer = process.env.APPROVAL_V2_REUSE_DEV
 
 export default defineConfig({
   testDir: './e2e/tests',
-  testMatch: 'free-tier.admin-deny-design-evidence.spec.tsx',
+  testMatch: 'free-tier.admin-deny-design-evidence.spec.ts',
   fullyParallel: false,
   workers: 1,
   retries: 0,
