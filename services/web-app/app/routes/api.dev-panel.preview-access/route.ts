@@ -41,10 +41,12 @@ export async function action({ request }: ActionFunctionArgs) {
     return Response.json({ error: 'That access code did not work.' }, { status: 401 });
   }
   clearFailedPreviewAccessAttempts(request);
+  // Dev panel unlock is seat-code only; master codes belong to the public preview-access flow.
   if (credential.kind !== 'organization') {
+    recordFailedPreviewAccessAttempt(request);
     return Response.json(
-      { error: 'Choose an organization from the master access flow.' },
-      { status: 400 }
+      { error: 'That access code did not work.' },
+      { status: 401 }
     );
   }
   const cookie = await grantPreviewAccessCookie(credential.seat);

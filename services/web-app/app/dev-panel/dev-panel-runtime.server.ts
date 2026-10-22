@@ -33,7 +33,8 @@ function isLocalDevPanelEnvironment(env: NodeJS.ProcessEnv) {
 export function devPanelEnvBadge(
   env: NodeJS.ProcessEnv = process.env
 ): 'Demo' | 'Dev' {
-  return isDemoEnvironment(env) ? 'Demo' : 'Dev';
+  const yawp = String(env.YAWP_ENVIRONMENT ?? '').trim().toLowerCase();
+  return yawp === 'demo' || isDemoEnvironment(env) ? 'Demo' : 'Dev';
 }
 
 export function rejectDevPanelInProduction() {

@@ -68,6 +68,7 @@ export const FREE_TIER_STATE_GROUPS: FreeTierStateGroup[] = [
     id: 'approved',
     title: 'Approved',
     summary: 'Signs in as a teacher',
+    // Design exports 19/81 will add two more Approved rows; do not invent them here.
     states: [
       {
         id: 'approved.first-time-toast',
