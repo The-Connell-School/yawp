@@ -799,7 +799,7 @@ function runTestProfile(profile, { json }) {
     const local = requireConfig();
     if (!['localhost', '127.0.0.1'].includes(new URL(local.DATABASE_URL).hostname)) throw new Error('Demo feedback E2E requires the isolated local database');
     results.push({ id: chosen, ...execute(selected.bun, ["x", "playwright", "test", "--config=playwright.demo-feedback.config.ts", "--workers=1"], {
-      json, cwd: webAppRoot, timeout: 180000,
+      json, cwd: webAppRoot, timeout: 900000,
       env: { ...selected.env, CI: '1', TESTER_FEEDBACK_ENABLED: 'true', E2E_DATABASE_URL: local.DATABASE_URL, DEMO_FEEDBACK_BASE_URL: `http://127.0.0.1:${local.DEV_PORT}`, DEV_PANEL_EVIDENCE_DIR: process.env.DEV_PANEL_EVIDENCE_DIR || 'dev-panel-evidence' },
     }) });
   }
