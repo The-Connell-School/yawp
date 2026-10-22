@@ -139,6 +139,7 @@ test.describe('Dev panel artboard evidence', () => {
       (window as unknown as { __restoreJumpAssign?: () => void }).__restoreJumpAssign?.();
     });
     await page.unroute('**/api/dev-panel/free-tier-jump');
+    await page.evaluate(() => localStorage.removeItem('yawp-dev-panel'));
 
     await page.goto('/app/assignments');
     const feedbackTools = await openDevToolsPanel(page);

@@ -57,8 +57,10 @@ export async function openGiveFeedback(page: Page) {
   const feedbackRow = tools.getByRole('button', { name: 'Give feedback' });
   await expect(feedbackRow).toBeVisible({ timeout: 15_000 });
   await feedbackRow.click();
+  const dialog = page.getByRole('dialog', { name: 'Give feedback' });
+  await expect(dialog.getByLabel('Note')).toBeFocused({ timeout: 15_000 });
   return {
-    panel: page.getByRole('dialog', { name: 'Give feedback' }),
+    panel: dialog,
     noteLabel: 'Note',
     hasSeverity: false,
   };
