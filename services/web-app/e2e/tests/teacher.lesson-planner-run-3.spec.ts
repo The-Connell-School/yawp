@@ -215,6 +215,42 @@ test.describe("Lesson Planner — Brian's third run", () => {
       await expect(listed.getByTestId('plan-step-toggle')).toHaveText('In the stack');
     });
 
+    test('a step offering three class starters has no Add of its own: each option has one (Kevin, Oct 22)', async ({
+      page,
+      signIn,
+      e2eContext,
+    }) => {
+      await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+      const starter = (text: string) => '```yawp-daily-pages\nkind: class-starter\n' + text + '\n```';
+      const reply = [
+        '# Day One',
+        '## Class starter (5 min)',
+        'While everyone settles, students write to one of the three prompts below.',
+        'Pick one:',
+        starter('Think of a conversation where the real issue was never actually named.'),
+        starter('Describe a time someone said one thing and meant another.'),
+        starter('What do people avoid saying out loud?'),
+        '## Mini-lesson: the iceberg (15 min)',
+        'Teach the iceberg theory with the opening of "Hills Like White Elephants".',
+      ].join('\n\n');
+      const seeded = await seedConversation(e2eContext, [
+        { role: 'user', content: 'Hemingway, day one, 50 minutes.' },
+        { role: 'assistant', content: reply },
+      ]);
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/lesson-planner?c=${seeded.conversationId}`);
+      const starterStep = page.getByTestId('plan-segment').filter({ hasText: 'Class starter' });
+      await expect(starterStep).toBeVisible();
+      await expect(starterStep.getByTestId('segment-toggle')).toHaveCount(0);
+      await expect(page.getByTestId('plan-segment').filter({ hasText: 'Mini-lesson' }).getByTestId('segment-toggle')).toHaveText(
+        'Add to stack'
+      );
+      const listed = page.getByTestId('plan-step').filter({ hasText: 'Class starter' });
+      await expect(listed.getByTestId('plan-step-toggle')).toHaveCount(0);
+      await expect(listed.getByTestId('plan-step-choice')).toHaveText('Pick an option below');
+      await expect(page.getByTestId('daily-pages-stack-toggle')).toHaveCount(3);
+    });
+
     test('adding from a card marks its step; the framing step is its three notes', async ({
       page,
       signIn,

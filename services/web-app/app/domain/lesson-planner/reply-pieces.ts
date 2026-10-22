@@ -94,6 +94,30 @@ export function stepSegments(content: string): Record<string, string[]> {
   return segments;
 }
 
+/** Blocks that are alternatives when a step holds more than one: the teacher picks one. */
+const OPTION_BLOCKS = new Set(['yawp-daily-pages', 'yawp-exit-ticket', 'yawp-practice']);
+
+/**
+ * The steps that offer a choice: two or more class starters, Daily Pages
+ * prompts, exit tickets or practice sets under one step (Kevin, Oct 22). Each
+ * option has its own Add to stack, and the step's own button cannot know
+ * which one is meant, so it is not shown.
+ */
+export function stepsOfferingChoice(content: string): Set<string> {
+  const offering = new Set<string>();
+  const pieces = placedPieces(content);
+  pieces.forEach((piece, index) => {
+    if (!piece.step) return;
+    const counts = new Map<string, number>();
+    for (const held of pieces.slice(index + 1)) {
+      if (held.step) break;
+      if (held.block && OPTION_BLOCKS.has(held.block)) counts.set(held.block, (counts.get(held.block) ?? 0) + 1);
+    }
+    if ([...counts.values()].some((count) => count > 1)) offering.add(piece.key);
+  });
+  return offering;
+}
+
 /** A segment is in the stack when every piece it files as is. */
 export function segmentInStack(
   messageId: string,
@@ -107,6 +131,8 @@ type Placed = {
   at: number;
   order: number;
   key: string;
+  /** The fence a block came from, for telling options apart from a set. */
+  block?: string;
   step?: boolean;
   emptyStep?: boolean;
   minutes?: number | null;
@@ -135,7 +161,7 @@ function placedPieces(content: string): Placed[] {
   for (const match of content.matchAll(FILEABLE_BLOCK)) {
     const at = match.index ?? 0;
     const block = match[0];
-    const push = (key: string, order: number) => placed.push({ at, order, key });
+    const push = (key: string, order: number) => placed.push({ at, order, key, block: match[1] });
     if (match[1] === 'yawp-material') {
       if (readLessonMaterials(block).materials.length) push(String(materials++), 1);
     } else if (match[1] === 'yawp-daily-pages') {

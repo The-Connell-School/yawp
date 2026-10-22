@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { blockMinutesInReply, pieceKeysInReply, segmentInStack, stepSegments } from './reply-pieces';
+import { blockMinutesInReply, pieceKeysInReply, segmentInStack, stepSegments, stepsOfferingChoice } from './reply-pieces';
+import { readPlanSteps } from './plan-steps';
 
 const DECK = JSON.stringify({
   title: 'Day 1',
@@ -118,5 +119,30 @@ describe("stepSegments: one status per segment (Brian's run 3, items 1, 2)", () 
 
   test("a step's minutes go to its block only when it holds one", () => {
     expect(blockMinutesInReply(REPLY)).toEqual({ dp: 5 });
+  });
+});
+
+describe('stepsOfferingChoice: a step whose options each have their own Add (Kevin, Oct 22)', () => {
+  const starter = (text: string) => '```yawp-daily-pages\nkind: class-starter\n' + text + '\n```';
+  const reply = [
+    '## Class starter (5 min)',
+    'While everyone settles, students write to one of the three prompts below.',
+    'Pick one:',
+    starter('Think of a conversation where the real issue was never named.'),
+    starter('Describe a time someone said one thing and meant another.'),
+    starter('What do people avoid saying out loud?'),
+    '## Mini-lesson (15 min)',
+    'Teach the iceberg theory.',
+    '## Exit ticket (5 min)',
+    starter('One line: what was left unsaid?'),
+  ].join('\n\n');
+
+  test('three class starters under one step: that step offers a choice', () => {
+    expect([...stepsOfferingChoice(reply)]).toEqual([readPlanSteps(reply)[0]!.key]);
+  });
+
+  test('a step with one block, or none, does not', () => {
+    const one = ['## Class starter (5 min)', 'Write.', starter('One prompt.')].join('\n\n');
+    expect(stepsOfferingChoice(one).size).toBe(0);
   });
 });

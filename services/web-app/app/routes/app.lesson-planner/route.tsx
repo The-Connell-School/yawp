@@ -2,6 +2,7 @@ import {
   MonthlyUsageNotice,
   useFreeAccountUsage,
 } from '~/components/free-account-usage';
+import { replyTopScroll, transcriptScrollTarget } from '~/domain/lesson-planner/transcript-scroll';
 import {
   SourceAttachButton,
   SourceChips,
@@ -94,7 +95,7 @@ import { TEMPLATE_SLOTS, type LessonTemplate } from '~/domain/lesson-planner/les
 import { TemplateChip, TemplateList } from './template-picker';
 import { FULL_LESSON_FRAMING, stripPlanPreamble } from '~/domain/lesson-planner/plan-framing';
 import { announceStackChange, useStackChanges } from '~/components/lesson-planner/stack-channel';
-import { pieceKeysInReply, segmentInStack, stepSegments } from '~/domain/lesson-planner/reply-pieces';
+import { pieceKeysInReply, segmentInStack, stepSegments, stepsOfferingChoice } from '~/domain/lesson-planner/reply-pieces';
 import {
   asksToSwapStarter,
   BUILD_FROM_STACK_REQUESTS,
@@ -548,13 +549,26 @@ export default function LessonPlannerRoute() {
   }, [result]);
 
   useEffect(() => {
-    // Only a transcript follows its own bottom. The opening page is a page:
-    // scrolling it down puts its own heading and box above the fold.
-    if (messages.length === 0) return;
-    transcriptRef.current?.scrollTo({
-      top: transcriptRef.current.scrollHeight,
+    // The opening page is a page: scrolling it down puts its own heading and
+    // box above the fold. While waiting, the bottom (the question and the
+    // progress); once a reply is in, its top, to read down from (Kevin, Oct 22).
+    const container = transcriptRef.current;
+    const target = transcriptScrollTarget(messages, isSending);
+    if (!container || !target) return;
+    const replies = container.querySelectorAll<HTMLElement>('[data-role="assistant"]');
+    const reply = target === 'reply-top' ? replies[replies.length - 1] : undefined;
+    container.scrollTo({
+      top: reply
+        ? replyTopScroll({
+            containerTop: container.getBoundingClientRect().top,
+            scrollTop: container.scrollTop,
+            replyTop: reply.getBoundingClientRect().top,
+          })
+        : container.scrollHeight,
       behavior: 'smooth',
     });
+    // The count and the sending state, not every re-render of the messages.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length, isSending]);
 
   function startNewLesson() {
@@ -1615,6 +1629,9 @@ function MessageBubble({
   const planSteps =
     stackV2 && deliveredPlan && message.id ? readPlanSteps(message.content) : [];
   const segments = planSteps.length ? stepSegments(message.content) : {};
+  // A step offering options (three class starters) has no button of its own:
+  // each option has its Add, and the step cannot know which is meant.
+  const choiceSteps = planSteps.length ? stepsOfferingChoice(message.content) : new Set<string>();
   const segmentKeys = (stepKey: string) => segments[stepKey] ?? [stepKey];
   const toggleSegment = (keys: string[], add: boolean) => {
     if (!message.id || !keys.length) return;
@@ -1688,7 +1705,7 @@ function MessageBubble({
                 className="mt-5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border/70 pt-4"
               >
                 <StepHeading line={chunk.heading} number={chunk.index + 1} />
-                {keys.length ? (
+                {keys.length && !choiceSteps.has(step.key) ? (
                   <SegmentToggle
                     isIn={segmentInStack(message.id!, keys, addedMaterials)}
                     disabled={disabled}
@@ -1950,6 +1967,7 @@ function MessageBubble({
                 const keys = segmentKeys(step.key);
                 if (!keys.length) return null;
                 const isIn = segmentInStack(message.id!, keys, addedMaterials);
+                const choice = choiceSteps.has(step.key);
                 return (
                   <li
                     key={step.key}
@@ -1962,22 +1980,28 @@ function MessageBubble({
                         {step.minutes} min
                       </span>
                     ) : null}
-                    <button
-                      type="button"
-                      disabled={disabled}
-                      data-testid="plan-step-toggle"
-                      title={isIn ? 'Click to remove from stack' : undefined}
-                      onClick={() => toggleSegment(keys, !isIn)}
-                      className={cn(
-                        'inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium transition disabled:opacity-50',
-                        isIn
-                          ? 'bg-primary/10 text-primary hover:bg-primary/15'
-                          : 'border border-primary/40 text-primary hover:bg-primary/5'
-                      )}
-                    >
-                      {isIn ? <BookmarkCheck size={12} /> : <BookmarkPlus size={12} />}
-                      {isIn ? 'In the stack' : 'Add to stack'}
-                    </button>
+                    {choice ? (
+                      <span data-testid="plan-step-choice" className="shrink-0 text-xs text-muted-foreground">
+                        Pick an option below
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={disabled}
+                        data-testid="plan-step-toggle"
+                        title={isIn ? 'Click to remove from stack' : undefined}
+                        onClick={() => toggleSegment(keys, !isIn)}
+                        className={cn(
+                          'inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium transition disabled:opacity-50',
+                          isIn
+                            ? 'bg-primary/10 text-primary hover:bg-primary/15'
+                            : 'border border-primary/40 text-primary hover:bg-primary/5'
+                        )}
+                      >
+                        {isIn ? <BookmarkCheck size={12} /> : <BookmarkPlus size={12} />}
+                        {isIn ? 'In the stack' : 'Add to stack'}
+                      </button>
+                    )}
                   </li>
                 );
               })}
