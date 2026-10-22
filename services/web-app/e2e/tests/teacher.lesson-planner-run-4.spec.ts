@@ -230,4 +230,54 @@ test.describe("Lesson Planner — Brian's fourth run", () => {
     await expect(visitor.locator('main')).toContainText('% of class is writing');
     await stranger.close();
   });
+
+  test('share pages: print or save as PDF everywhere; a sub presents the slides; only what was made in Yawp! is said to be there', async ({
+    page,
+    signIn,
+    e2eContext,
+    browser,
+  }) => {
+    await setLessonPlannerReviewFlag('lesson_planner_stack_v2', true);
+    await setLessonPlannerReviewFlag('lesson_planner_stack_v3', true);
+    await setLessonPlannerReviewFlag('lesson_planner_share', true);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    const { conversationId, assistantIds } = await seedDayOneStack(page, e2eContext);
+    await seedDeck(conversationId, assistantIds[0]!);
+
+    const prisma = createE2EPrismaClient();
+    try {
+      // Nothing made in Yawp! yet: no claim that anything is there.
+      const send = async (audience: string) => {
+        const response = await page.request.post('/api/domain/lesson-planner/stack', {
+          form: { intent: 'send-lesson', conversationId, audience, recipient: 'x@school.org', includes: 'plan,deck,daily-pages,writing' },
+        });
+        expect(response.ok()).toBe(true);
+        return ((await response.json()) as { url: string }).url;
+      };
+      const stranger = await browser.newContext();
+      const visitor = await stranger.newPage();
+      await visitor.goto(await send('sub'));
+      await expect(visitor.getByTestId('shared-print')).toHaveText('Print or save as PDF');
+      await expect(visitor.getByTestId('shared-in-yawp')).toHaveCount(0);
+      await visitor.getByTestId('shared-present').click();
+      await expect(visitor.getByTestId('shared-presenter')).toBeVisible();
+      await expect(visitor.getByTestId('shared-presenter-count')).toHaveText('1 / 1');
+      await visitor.keyboard.press('Escape');
+      await expect(visitor.getByTestId('shared-presenter')).toHaveCount(0);
+
+      // The class starter made in Yawp!: the student page says so and links to it.
+      const starter = await prisma.lessonPlanMaterial.findFirstOrThrow({ where: { conversationId, kind: 'class-starter' } });
+      await prisma.lessonPlanMaterial.update({ where: { id: starter.id }, data: { yawpHref: '/app/assignment-types/x', yawpCreatedAt: new Date() } });
+      const share = await page.request.post('/api/domain/lesson-planner/stack', {
+        form: { intent: 'create-share', conversationId, includes: 'daily-pages' },
+      });
+      await visitor.goto(((await share.json()) as { url: string }).url);
+      await expect(visitor.getByTestId('shared-in-yawp')).toContainText('These writing exercises are available to students as assignments in Yawp!');
+      await expect(visitor.getByTestId('shared-present')).toHaveCount(0);
+      await expect(visitor.getByTestId('shared-prompt-link').first()).toHaveAttribute('target', '_blank');
+      await stranger.close();
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
 });

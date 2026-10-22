@@ -117,3 +117,20 @@ describe("lessonEmail: each audience's email (Brian's run 4, item 5)", () => {
     expect(lessonEmail({ ...base, audience: 'sub', note: 'Seats <b>fixed</b>' }).html).toContain('Seats &lt;b&gt;fixed&lt;/b&gt;');
   });
 });
+
+describe("share rewrites follow Brian's run 4 notes", () => {
+  test('family: about the class, for any family; student: never "Hey!"', () => {
+    expect(REWRITE_SYSTEM.family).toContain('Today in class, students');
+    expect(REWRITE_SYSTEM.family).toContain('never "Your student…"');
+    expect(REWRITE_SYSTEM.student).toContain('We missed you in class.');
+    expect(REWRITE_SYSTEM.student).toContain('Never "Hey!"');
+  });
+  test('every rewrite: the class and step names as given, plain voice, Yawp!', () => {
+    for (const system of Object.values(REWRITE_SYSTEM)) {
+      expect(system).toContain('Use the class name exactly as given');
+      expect(system).toContain('not "Do Now"');
+      expect(system).toContain('No "not this, but that" contrasts');
+      expect(system).toContain('The product is written Yawp!');
+    }
+  });
+});

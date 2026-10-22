@@ -5,7 +5,7 @@
  */
 import { useLoaderData, type LoaderFunctionArgs, type MetaFunction } from 'react-router';
 import { useEffect, useRef, useState } from 'react';
-import { Printer } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MonitorPlay, Printer, X } from 'lucide-react';
 import type { SlideDeck } from '~/domain/lesson-planner/slide-deck';
 import { SlideCanvas } from '../present.$conversationId.$messageId/slide-canvas';
 import { TileSlideThumbnail } from '../present.$conversationId.$messageId/tile-slide-canvas';
@@ -84,8 +84,58 @@ function SharedSlide({
   );
 }
 
+/** The slides full screen, for a sub to run: arrows or a tap to move, Esc to leave. */
+function SlidePresenter({
+  deck,
+  index,
+  template,
+  onIndex,
+  onClose,
+}: {
+  deck: SlideDeck;
+  index: number;
+  template: 'gallery' | 'tile' | 'plain';
+  onIndex: (index: number) => void;
+  onClose: () => void;
+}) {
+  const last = deck.slides.length - 1;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+      if (event.key === 'ArrowRight' || event.key === ' ') onIndex(Math.min(last, index + 1));
+      if (event.key === 'ArrowLeft') onIndex(Math.max(0, index - 1));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [index, last, onIndex, onClose]);
+  return (
+    <div data-testid="shared-presenter" role="dialog" aria-label="Slides" className="fixed inset-0 z-50 flex flex-col bg-black print:hidden">
+      <div className="flex flex-1 items-center justify-center p-2">
+        <div className="w-full max-w-[calc((100vh-4rem)*16/9)]">
+          <SharedSlide deck={deck} index={index} template={template} />
+        </div>
+      </div>
+      <div className="flex items-center justify-center gap-3 pb-3 text-white">
+        <button type="button" aria-label="Previous slide" disabled={index === 0} onClick={() => onIndex(index - 1)} className="rounded-full p-2 disabled:opacity-30">
+          <ChevronLeft size={20} />
+        </button>
+        <span data-testid="shared-presenter-count" className="text-sm tabular-nums">
+          {index + 1} / {deck.slides.length}
+        </span>
+        <button type="button" aria-label="Next slide" disabled={index === last} onClick={() => onIndex(index + 1)} className="rounded-full p-2 disabled:opacity-30">
+          <ChevronRight size={20} />
+        </button>
+        <button type="button" aria-label="Stop presenting" onClick={onClose} className="ml-4 rounded-full p-2">
+          <X size={20} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function SharedLessonRoute() {
   const lesson = useLoaderData<typeof loader>();
+  const [presenting, setPresenting] = useState<number | null>(null);
   return (
     <div data-testid="shared-lesson" className="min-h-screen" style={STACK_THEME}>
       <link rel="stylesheet" href={STACK_FONTS_HREF} />
@@ -98,6 +148,28 @@ export default function SharedLessonRoute() {
           {lesson.title}
         </h1>
         {lesson.className ? <p className="mt-1 text-sm text-[var(--sv-muted)]">{lesson.className}</p> : null}
+        {/* Every page prints, or saves as a PDF from the print dialog; a sub
+            can also present the slides (Brian's run 4). */}
+        <div className="mt-4 flex flex-wrap gap-2 print:hidden">
+          <button
+            type="button"
+            data-testid="shared-print"
+            onClick={() => window.print()}
+            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--sv-line)] bg-[var(--sv-card)] px-3 py-1.5 text-sm font-semibold"
+          >
+            <Printer size={14} /> Print or save as PDF
+          </button>
+          {lesson.audience === 'sub' && lesson.deck ? (
+            <button
+              type="button"
+              data-testid="shared-present"
+              onClick={() => setPresenting(0)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-[var(--sv-primary)] px-3 py-1.5 text-sm font-semibold text-white"
+            >
+              <MonitorPlay size={14} /> Present the slides
+            </button>
+          ) : null}
+        </div>
 
         {lesson.note ? (
           <section data-testid="shared-note" className="mt-6 rounded-xl border border-[#F3E3C8] bg-[#FBF3E6] p-4 text-sm">
@@ -117,7 +189,24 @@ export default function SharedLessonRoute() {
         {lesson.writing ? (
           <p className="mt-4 text-sm" style={{ color: 'var(--sv-writing)' }}>
             {lesson.writing.percent}% of class is writing · {lesson.writing.minutes} min
+            {lesson.writing.sources ? ` · ${lesson.writing.sources}` : ''}
           </p>
+        ) : null}
+
+        {lesson.inYawp.length ? (
+          <section data-testid="shared-in-yawp" className="mt-6 rounded-xl border border-[#E7D9F3] p-4 text-sm" style={{ backgroundColor: 'var(--sv-writing-strip)' }}>
+            <p className="font-semibold">These writing exercises are available to students as assignments in Yawp!</p>
+            <ul className="mt-1 list-disc pl-5">
+              {lesson.inYawp.map((name) => (
+                <li key={name}>{name}</li>
+              ))}
+            </ul>
+            {lesson.audience === 'student' ? (
+              <a href="/app" target="_blank" rel="noreferrer" className="mt-2 inline-block font-semibold underline">
+                Open Yawp! to write them
+              </a>
+            ) : null}
+          </section>
         ) : null}
 
         {lesson.prompts.length ? (
@@ -125,16 +214,28 @@ export default function SharedLessonRoute() {
             <h2 className="text-xl font-bold" style={HEADING_FONT}>
               The writing prompt
             </h2>
-            {lesson.prompts.map((prompt) => (
-              <blockquote
-                key={prompt.id}
-                data-testid="shared-prompt"
-                className="mt-3 rounded-xl border-l-4 px-4 py-3 text-sm"
-                style={{ borderColor: 'var(--sv-writing)', backgroundColor: 'var(--sv-writing-strip)' }}
-              >
-                {prompt.content}
-              </blockquote>
-            ))}
+            {lesson.prompts.map((prompt) => {
+              const quote = (
+                <blockquote
+                  data-testid="shared-prompt"
+                  className="mt-3 rounded-xl border-l-4 px-4 py-3 text-sm"
+                  style={{ borderColor: 'var(--sv-writing)', backgroundColor: 'var(--sv-writing-strip)' }}
+                >
+                  {prompt.content}
+                  {lesson.audience === 'student' && prompt.inYawp ? (
+                    <span className="mt-1 block text-xs font-semibold underline">Write it in Yawp! ↗</span>
+                  ) : null}
+                </blockquote>
+              );
+              // A student opens a prompt made in Yawp! to write it there.
+              return lesson.audience === 'student' && prompt.inYawp ? (
+                <a key={prompt.id} href="/app" target="_blank" rel="noreferrer" data-testid="shared-prompt-link" className="block">
+                  {quote}
+                </a>
+              ) : (
+                <div key={prompt.id}>{quote}</div>
+              );
+            })}
           </section>
         ) : null}
 
@@ -194,6 +295,15 @@ export default function SharedLessonRoute() {
 
         <p className="mt-12 text-center text-xs text-[var(--sv-muted)]">Made with the Yawp! Lesson Planner</p>
       </main>
+      {presenting != null && lesson.deck ? (
+        <SlidePresenter
+          deck={lesson.deck}
+          index={presenting}
+          template={lesson.deckTemplate}
+          onIndex={setPresenting}
+          onClose={() => setPresenting(null)}
+        />
+      ) : null}
     </div>
   );
 }

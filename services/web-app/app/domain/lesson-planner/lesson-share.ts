@@ -212,28 +212,42 @@ export function teamsShareUrl(link: string, title: string): string {
   return `https://teams.microsoft.com/share?${params}`;
 }
 
+/** Said to every rewrite (Brian's run 4): his voice rules and the lesson's own names. */
+const REWRITE_VOICE = [
+  'Use the class name exactly as given (for example "English 10 · Period 3"); never name a course, department or subject area of your own ("ELA / Secondary Literature").',
+  'Call each step by the name it has in the lesson ("Class Starter", not "Do Now").',
+  'Say what things are, plainly. No "not this, but that" contrasts, no staged reveals, and no closing aphorism ("Students remember being seen more than being taught").',
+  'The product is written Yawp! (capital Y, lowercase "awp", the exclamation point), never YAWP or Yawp.',
+].join('\n');
+
 export const REWRITE_SYSTEM: Record<ShareAudience, string> = {
   sub: [
     'Rewrite a teacher’s lesson as a plan a substitute can run cold.',
     'Step by step, in order, each with its exact start time from the start of class and its minutes, and the words to say in quotes.',
     'No teacher shorthand, no "as usual", nothing that assumes they know the class or the book. Say where the materials are only if the lesson says.',
     'Markdown: one "## " heading per step. At most 450 words. Return only the plan.',
+    REWRITE_VOICE,
   ].join('\n'),
   student: [
     'Rewrite a teacher’s lesson for a student who missed class.',
     'Write to the student ("you"): what the class did, in order, in two or three sentences each, and what they need to do to catch up.',
+    'Open with "We missed you in class." Never "Hey!", "Hey there" or any other greeting that sounds like an ad.',
     'Never include teacher moves or answers. Warm and short. Markdown. At most 300 words. Return only the page.',
+    REWRITE_VOICE,
   ].join('\n'),
   family: [
     'Rewrite a teacher’s lesson for a student’s family.',
-    'Plain language, no education jargon: what the class did and why it matters, in four or five sentences, then a "## Talking about it at dinner" section with two or three open questions or conversation starters a family could use, tied to what the class actually did, none with a right answer to check.',
+    'Plain language, no education jargon. Write for any family, about the class: begin "Today in class, students…", never "Your student…" or "Your child…" (the same page goes to every family).',
+    'What the class did and why it matters, in four or five sentences, then a "## Talking about it at dinner" section with two or three open questions or conversation starters a family could use, tied to what the class actually did, none with a right answer to check.',
     'Markdown. At most 260 words. Return only the page.',
+    REWRITE_VOICE,
   ].join('\n'),
   admin: [
     'Summarize a teacher’s lesson for a school administrator.',
     'What the lesson does and for whom, then the steps with their minutes and one line of why each.',
     'Never name a standard, a standards code or an alignment claim: Yawp! adds the standards the teacher named itself, and says nothing about the ones they did not.',
     'Professional and concise. Markdown. At most 350 words. Return only the summary.',
+    REWRITE_VOICE,
   ].join('\n'),
 };
 

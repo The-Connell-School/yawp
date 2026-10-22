@@ -23,11 +23,16 @@ export type SharedLesson = {
   note: string | null;
   body: string | null;
   handouts: Array<{ id: string; title: string; content: string; lines: number }>;
-  prompts: Array<{ id: string; title: string; content: string }>;
+  prompts: Array<{ id: string; title: string; content: string; inYawp: boolean }>;
+  /**
+   * The writing steps the teacher made in Yawp!, by name (Brian's run 4):
+   * only these are said to be "available to students as assignments".
+   */
+  inYawp: string[];
   deck: SlideDeck | null;
   /** Speaker notes go to a sub, who has to run the slides; never to students. */
   withNotes: boolean;
-  writing: { percent: number; minutes: number } | null;
+  writing: { percent: number; minutes: number; sources: string } | null;
   /** How the slides are drawn: the same template the teacher presents with. */
   deckTemplate: 'gallery' | 'tile' | 'plain';
 };
@@ -109,6 +114,11 @@ export async function loadSharedLesson(token: string): Promise<SharedLesson | nu
     stackDetails: {},
   });
 
+  const madeInYawp = (id: string) => {
+    const row = byId.get(id);
+    return Boolean(row?.yawpAssignmentId || row?.yawpCreatedAt);
+  };
+
   const handouts = includes.has('handouts')
     ? steps.flatMap((step) => {
         if (!step.hasHandout) return [];
@@ -124,7 +134,7 @@ export async function loadSharedLesson(token: string): Promise<SharedLesson | nu
   const prompts = includes.has('daily-pages')
     ? steps
         .filter((step) => step.kind === 'daily-pages' || step.kind === 'class-starter')
-        .map((step) => ({ id: step.id, title: step.title, content: step.content }))
+        .map((step) => ({ id: step.id, title: step.title, content: step.content, inYawp: madeInYawp(step.id) }))
     : [];
   const deckRow = includes.has('deck')
     ? conversation.materials.find((material) => material.kind === 'slides')
@@ -148,8 +158,9 @@ export async function loadSharedLesson(token: string): Promise<SharedLesson | nu
     deck: deckOutcome?.kind === 'deck' ? deckOutcome.deck : null,
     withNotes: audience === 'sub',
     writing: includes.has('writing')
-      ? { percent: timing.writingPercent, minutes: timing.writingMinutes }
+      ? { percent: timing.writingPercent, minutes: timing.writingMinutes, sources: timing.writingSources }
       : null,
     deckTemplate: deckGallery ? 'gallery' : deckV2 ? 'tile' : 'plain',
+    inYawp: steps.filter((step) => step.isWriting && madeInYawp(step.id)).map((step) => step.title),
   };
 }
