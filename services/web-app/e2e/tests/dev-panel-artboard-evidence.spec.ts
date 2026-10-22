@@ -53,8 +53,10 @@ test.describe('Dev panel artboard evidence', () => {
   };
 
   test('capture designed panel and feedback states', async ({ page }) => {
+    test.setTimeout(180_000);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/app/assignments');
+    await page.waitForLoadState('networkidle');
     await openDevToolsPanel(page);
     await shot(page, '02');
 

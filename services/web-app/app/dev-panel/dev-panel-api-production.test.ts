@@ -5,7 +5,7 @@ const productionEnv = {
   YAWP_ENVIRONMENT: 'production',
   NODE_ENV: 'production',
   DATABASE_URL: 'postgresql://u:p@localhost:5432/yawp',
-} as NodeJS.ProcessEnv;
+} as unknown as NodeJS.ProcessEnv;
 
 describe('dev panel HTTP routes in production', () => {
   test('assertDevPanelRoute returns 404', async () => {

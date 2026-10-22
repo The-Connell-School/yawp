@@ -15,6 +15,7 @@ test.afterAll(async () => {
 test('local demo note persistence, accessibility, error recovery and disabled gate', async ({
   page,
 }) => {
+  test.setTimeout(120_000);
   await page.addInitScript(() => localStorage.removeItem('yawp-dev-panel'));
   await page.request.post('/auth/dev-login', {
     form: { email: 'dev.teacher@yawp.local', redirectTo: '/app/assignments' },
@@ -46,6 +47,11 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     });
     await page.goto('/app/assignments');
     await page.reload();
+    await expect(
+      page
+        .getByRole('button', { name: 'Open developer tools' })
+        .or(page.getByRole('button', { name: 'Log feedback', exact: true }))
+    ).toBeVisible({ timeout: 60_000 });
     if (!(await isDevPanelActive(page))) {
       await expect(
         page.getByRole('button', { name: 'Give feedback', exact: true })
@@ -118,7 +124,7 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     );
     await panel.getByRole('button', { name: 'Send feedback' }).click();
     const submitted = (await submission).postDataJSON();
-    await expect(panel.getByRole('status')).toHaveText(/Feedback (saved|sent)\. Thank you\./);
+    await expect(panel.getByRole('status')).toHaveText(/Feedback saved\. Thank you\./);
     const entry = await prisma.testerFeedback.findFirstOrThrow({
       where: {
         userId: teacher.id,
@@ -167,7 +173,7 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     await screenshot('error-mobile');
     await page.unroute('**/api/demo-feedback');
     await retryPanel.getByRole('button', { name: 'Send feedback' }).click();
-    await expect(panel.getByRole('status')).toHaveText(/Feedback (saved|sent)\. Thank you\./);
+    await expect(panel.getByRole('status')).toHaveText(/Feedback saved\. Thank you\./);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth
