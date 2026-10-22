@@ -44,7 +44,7 @@ test.afterAll(async () => {
   await db.$disconnect();
 });
 
-test('free-tier flag on shows locked assignment tiles on dashboard and picker', async ({
+test('free-tier flag on shows three dashboard tiles and locked tiles in picker', async ({
   page,
 }) => {
   await flag('free_tier', true);
@@ -53,17 +53,15 @@ test('free-tier flag on shows locked assignment tiles on dashboard and picker', 
   await loginFreeTeacher(page);
   await page.goto('/app');
   const tiles = page.getByTestId('free-assignment-tiles');
-  await expect(tiles.getByTestId('site-license-locked-assignment-tile')).not.toHaveCount(
+  await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(3);
+  await expect(tiles.getByTestId('site-license-locked-assignment-tile')).toHaveCount(
     0
   );
   await expect(tiles).not.toContainText('Available with a site license.');
   await expect(tiles.locator('img')).toHaveCount(0);
-  const lock = tiles.getByTestId('site-license-lock-button').first();
-  await lock.focus();
-  await page.waitForTimeout(350);
-  await expect(
-    page.getByRole('tooltip', { name: /Available with a site license/i })
-  ).toBeVisible();
+  await expect(tiles.getByText('Class Starter', { exact: true })).toBeVisible();
+  await expect(tiles.getByText('Prewriting', { exact: true })).toBeVisible();
+  await expect(tiles.getByText('Thesis Statement', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'New assignment' }).click();
   await expect(
     page.getByTestId('site-license-locked-assignment-tile').first()
@@ -79,17 +77,19 @@ test('free-tier flag on shows locked assignment tiles on dashboard and picker', 
   ).toBeVisible();
 });
 
-test('site-license lock tooltip on mobile tap (~2s)', async ({ page }) => {
+test('site-license lock tooltip on mobile tap (~2s) in assignment picker', async ({
+  page,
+}) => {
   await flag('free_tier', true);
   await flag('free-tier-inapp-v2', true);
   await flag('free-tier-onboarding-v2', { mode: 'targeted', orgIds: [org] });
   await page.setViewportSize({ width: 390, height: 844 });
   await loginFreeTeacher(page);
   await page.goto('/app');
-  const lock = page
-    .getByTestId('free-assignment-tiles')
-    .getByTestId('site-license-lock-button')
-    .first();
+  await page.getByRole('button', { name: 'New assignment' }).click();
+  const listbox = page.getByRole('listbox');
+  await expect(listbox).toBeVisible();
+  const lock = listbox.getByTestId('site-license-lock-button').first();
   await lock.click();
   await expect(
     page.getByRole('tooltip', { name: /Available with a site license/i })

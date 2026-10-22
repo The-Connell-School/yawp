@@ -459,9 +459,6 @@ export default function AppRoute() {
                   <FreeAssignmentTiles
                     usage={freeUsage}
                     types={data.assignmentCreationTypes}
-                    lockedAssignmentTiles={
-                      data.siteLicenseLockedAssignmentTiles
-                    }
                     teachingLocked={locked}
                     createTriggerRef={createAssignmentTriggerRef}
                     onCreate={(id) => {

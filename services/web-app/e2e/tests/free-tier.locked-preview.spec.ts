@@ -117,6 +117,7 @@ async function provisionPendingClassroom(appId: string, userId: string) {
 }
 
 const pr655FinalDir = '/cursor/stores/self/artifacts/screenshots/pr655-final';
+const artifactScreenshotDir = '/opt/cursor/artifacts/screenshots';
 
 async function expectTileNamesWrapOnWordBoundaries(
   page: import('@playwright/test').Page,
@@ -238,6 +239,25 @@ async function capture(page: import('@playwright/test').Page, state: string) {
   } catch {
     /* Agent store may be read-only in some runners. */
   }
+  try {
+    fs.mkdirSync(artifactScreenshotDir, { recursive: true });
+    fs.copyFileSync(shotPath, path.join(artifactScreenshotDir, `${state}.png`));
+  } catch {
+    /* Artifact dir may be unavailable in some runners. */
+  }
+}
+
+async function expectFreeDashboardAssignmentTiles(
+  page: import('@playwright/test').Page
+) {
+  const tiles = page.getByTestId('free-assignment-tiles');
+  await expect(tiles.getByTestId('dashboard-assignment-tile')).toHaveCount(3);
+  await expect(tiles.getByTestId('site-license-locked-assignment-tile')).toHaveCount(
+    0
+  );
+  await expect(tiles.getByText('Class Starter', { exact: true })).toBeVisible();
+  await expect(tiles.getByText('Prewriting', { exact: true })).toBeVisible();
+  await expect(tiles.getByText('Thesis Statement', { exact: true })).toBeVisible();
 }
 
 test.describe.configure({ mode: 'serial' });
@@ -311,6 +331,7 @@ for (const width of [390, 1440]) {
         .getByText(/Waiting for Dr\. Patel to approve your classroom/)
     ).toBeVisible();
     await capture(page, `locked-app-before-${width}`);
+    await expectFreeDashboardAssignmentTiles(page);
     await expectTileNamesWrapOnWordBoundaries(
       page,
       page.getByTestId('free-assignment-tiles')
@@ -384,6 +405,7 @@ for (const width of [390, 1440]) {
         page.getByRole('tooltip', { name: /Available with a site license/i })
       ).toBeVisible();
       await capture(page, 'site-license-lock-tooltip-1440');
+      await capture(page, 'picker-1440');
       await siteLock.blur();
       await page.waitForTimeout(150);
     }
@@ -474,6 +496,7 @@ for (const width of [390, 1440]) {
     await page.reload();
     await expect(page.getByTestId('teaching-access-banner')).toHaveCount(0);
     await expect(page.getByTestId('teaching-access-approval-toast')).toBeVisible();
+    await expectFreeDashboardAssignmentTiles(page);
     await expectDashboardAssignmentTileNameMetaNoOverlap(
       page,
       page.getByTestId('free-assignment-tiles')
