@@ -153,8 +153,15 @@ function AccessCodeModal({
   );
 }
 
-function GiveFeedbackSheet() {
+function GiveFeedbackSheet({
+  onClose,
+  pushed,
+}: {
+  onClose?: () => void;
+  pushed?: boolean;
+}) {
   const { state, closeSubSheet, updateForms, clearFeedbackForm } = useDevPanel();
+  const close = onClose ?? closeSubSheet;
   const location = useLocation();
   const path = feedbackPath(location.pathname + location.search);
   const noteId = useId();
@@ -208,15 +215,28 @@ function GiveFeedbackSheet() {
 
   return (
     <div
-      className="absolute inset-y-0 left-0 z-10 flex w-full max-w-md flex-col border-r bg-background shadow-lg md:-translate-x-full"
+      className={cn(
+        'flex flex-col bg-background',
+        pushed
+          ? 'relative min-h-full'
+          : 'absolute inset-y-0 left-0 z-10 w-full max-w-md border-r shadow-lg md:-translate-x-full'
+      )}
       role="dialog"
       aria-label="Give feedback"
     >
       <div className="flex items-center justify-between border-b px-4 py-3">
-        <h2 className="text-base font-semibold">Give feedback</h2>
-        <Button type="button" variant="ghost" size="sm" onClick={closeSubSheet}>
-          Close
-        </Button>
+        {pushed ? (
+          <Button type="button" variant="ghost" size="sm" onClick={close}>
+            <ChevronLeft className="size-4" aria-hidden="true" />
+            Back
+          </Button>
+        ) : null}
+        <h2 className="flex-1 text-base font-semibold">Give feedback</h2>
+        {!pushed ? (
+          <Button type="button" variant="ghost" size="sm" onClick={close}>
+            Close
+          </Button>
+        ) : null}
       </div>
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
         {status === 'sent' ? (
@@ -321,6 +341,7 @@ export function DevPanelShell() {
   const currentEmail = rootData?.user?.email ?? null;
   const selectedOrg = state.org ?? orgs[0]?.id ?? null;
   const feedbackPathValue = feedbackPath(location.pathname + location.search);
+  const demoFeedbackEnabled = Boolean(rootData?.demoFeedbackAvailable);
 
   useEffect(() => {
     if (!state.open) return;
@@ -570,7 +591,7 @@ export function DevPanelShell() {
         )}
       </div>
 
-      {feedbackPathValue ? (
+      {demoFeedbackEnabled && feedbackPathValue ? (
         <div className="border-t px-2 py-2">
           <button
             type="button"
@@ -603,8 +624,10 @@ export function DevPanelShell() {
         <span>Toggle Alt Shift D</span>
       </footer>
       <AccessCodeModal open={accessOpen} onOpenChange={setAccessOpen} />
-      <GiveFeedbackSheet />
-      {state.subSheet === 'free-tier-states' ? (
+      {!isPhone && state.subSheet === 'give-feedback' ? (
+        <GiveFeedbackSheet />
+      ) : null}
+      {!isPhone && state.subSheet === 'free-tier-states' ? (
         <FreeTierStatesSheet onClose={closeSubSheet} orgId={selectedOrg} />
       ) : null}
     </>
@@ -623,7 +646,9 @@ export function DevPanelShell() {
           role={isPhone ? 'dialog' : undefined}
           aria-modal={isPhone ? true : undefined}
         >
-          {isPhone && state.subSheet ? (
+          {isPhone && state.subSheet === 'give-feedback' ? (
+            <GiveFeedbackSheet onClose={closeSubSheet} pushed />
+          ) : isPhone && state.subSheet === 'free-tier-states' ? (
             <FreeTierStatesSheet
               onClose={closeSubSheet}
               orgId={selectedOrg}

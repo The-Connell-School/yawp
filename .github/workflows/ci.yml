@@ -1500,6 +1500,7 @@ jobs:
           PREVIEW_SLUG: demo
           TESTER_FEEDBACK_ENABLED: 'true'
           DEV_PANEL_EVIDENCE_DIR: dev-panel-evidence
+          DEV_PANEL_ARTIFACT_COPY_DIR: /opt/cursor/artifacts/screenshots
           RESEND_API_KEY: ''
           RESEND_FROM_EMAIL: ''
         run: |

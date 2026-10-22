@@ -85,16 +85,14 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     expect(legacyEntry.whatIWish).toBe('Legacy wish remains readable');
     await page.keyboard.press('Escape');
 
-    if (!(await isDevPanelActive(page))) {
-      expect(
-        (
-          await page.request.post('/api/demo-feedback', {
-            data: { note: 'blocked', url: '/app', actions: [] },
-            headers: { origin: new URL(page.url()).origin },
-          })
-        ).status()
-      ).toBe(404);
-    }
+    expect(
+      (
+        await page.request.post('/api/demo-feedback', {
+          data: { note: 'blocked', url: '/app/assignments', actions: [] },
+          headers: { origin: new URL(page.url()).origin },
+        })
+      ).status()
+    ).toBe(404);
     await prisma.setting.update({
       where: { name: flag },
       data: { value: 'true' },

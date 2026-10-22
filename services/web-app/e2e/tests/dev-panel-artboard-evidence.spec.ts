@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { copyFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { test, expect } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
@@ -7,6 +7,8 @@ import { devToolsPanel, openDevToolsPanel } from '../helpers/dev-panel-feedback'
 const evidenceRoot =
   process.env.DEV_PANEL_EVIDENCE_DIR ??
   path.join(process.cwd(), 'dev-panel-evidence');
+const artifactCopyRoot =
+  process.env.DEV_PANEL_ARTIFACT_COPY_DIR ?? '/opt/cursor/artifacts/screenshots';
 
 const prisma = createE2EPrismaClient();
 
@@ -17,6 +19,7 @@ test.describe('Dev panel artboard evidence', () => {
 
   test.beforeAll(() => {
     mkdirSync(evidenceRoot, { recursive: true });
+    mkdirSync(artifactCopyRoot, { recursive: true });
   });
 
   test.beforeEach(async ({ page }) => {
@@ -37,10 +40,16 @@ test.describe('Dev panel artboard evidence', () => {
 
   const shot = async (page: import('@playwright/test').Page, artboard: string) => {
     await page.waitForTimeout(300);
+    const file = path.join(evidenceRoot, `${artboard}.png`);
     await page.screenshot({
-      path: path.join(evidenceRoot, `${artboard}.png`),
+      path: file,
       fullPage: false,
     });
+    try {
+      copyFileSync(file, path.join(artifactCopyRoot, `${artboard}.png`));
+    } catch {
+      // CI may only have evidenceRoot writable.
+    }
   };
 
   test('capture designed panel and feedback states', async ({ page }) => {

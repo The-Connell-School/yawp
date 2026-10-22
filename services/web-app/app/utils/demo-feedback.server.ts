@@ -15,8 +15,9 @@ export interface DemoFeedbackDependencies {
 export async function demoFeedbackAvailable(
   deps: Pick<DemoFeedbackDependencies, 'environment' | 'flagEnabled'>
 ) {
-  if (isDevPanelRuntimeEnabled()) return true;
-  if (deps.environment() !== 'demo') return false;
+  const onDemo = deps.environment() === 'demo';
+  const onDevPanel = isDevPanelRuntimeEnabled();
+  if (!onDemo && !onDevPanel) return false;
   try {
     return await deps.flagEnabled();
   } catch {
