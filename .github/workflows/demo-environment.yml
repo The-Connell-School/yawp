@@ -126,6 +126,8 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: ${{ steps.images-ecr.outputs.web_image }}
+          build-args: |
+            YAWP_ENVIRONMENT=demo
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
