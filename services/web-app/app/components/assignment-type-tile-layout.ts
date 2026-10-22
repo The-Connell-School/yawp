@@ -16,21 +16,21 @@ export function assignmentTypeTileImageWrapClassName(extra?: string) {
 
 export function assignmentTypeTileFooterClassName(extra?: string) {
   return cn(
-    'flex items-start justify-between gap-x-2 gap-y-0.5 px-3 py-1.5 sm:py-2',
+    'flex flex-wrap items-start justify-between gap-x-2 gap-y-0.5 px-3 py-1.5 sm:py-2',
     extra
   );
 }
 
 export function assignmentTypeTileNameClassName(extra?: string) {
   return cn(
-    'min-w-0 flex-1 text-left leading-snug [overflow-wrap:anywhere]',
+    'min-w-0 flex-1 basis-[40%] text-left leading-snug break-words',
     extra
   );
 }
 
 export function assignmentTypeTileMetaClassName(extra?: string) {
   return cn(
-    'shrink-0 self-start text-xs font-normal text-muted-foreground whitespace-nowrap',
+    'max-w-[45%] shrink-0 self-start text-right text-xs font-normal leading-snug text-muted-foreground',
     extra
   );
 }
