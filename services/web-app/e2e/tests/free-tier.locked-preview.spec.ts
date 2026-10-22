@@ -391,6 +391,13 @@ test('flag OFF keeps the waiting page and does not expose the in-app lock', asyn
   page,
 }) => {
   const { user } = await fixture('11', 'SENT');
+  await prisma.orgMembership.create({
+    data: {
+      userId: user.id,
+      organizationId: 'default-org',
+      role: 'TEACHER',
+    },
+  });
   await flag(false);
   await login(page, user.email!);
   await page.goto('/app/free-tier/onboarding');
