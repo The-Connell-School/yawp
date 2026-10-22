@@ -13,8 +13,8 @@ test.describe('Yawp! developer side panel', () => {
     await page.goto('/app/assignments');
     await page.getByRole('button', { name: 'Open developer tools' }).click();
     await expect(page.getByRole('complementary', { name: 'Developer tools' })).toBeVisible();
-    await page.getByLabel('Note').fill('Draft note kept across reload');
     await page.getByRole('button', { name: 'Give feedback' }).click();
+    await page.getByLabel('Note').fill('Draft note kept across reload');
     await expect(page.getByRole('dialog', { name: 'Give feedback' })).toBeVisible();
     await page.reload();
     await expect(page.getByRole('complementary', { name: 'Developer tools' })).toBeVisible();

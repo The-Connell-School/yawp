@@ -1,10 +1,25 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 export async function isDevPanelActive(page: Page) {
   return (
     (await page.getByRole('button', { name: 'Open developer tools' }).count()) >
     0
   );
+}
+
+export async function expectGiveFeedbackAccessible(page: Page) {
+  if (await isDevPanelActive(page)) {
+    await page.getByRole('button', { name: 'Open developer tools' }).click();
+    await expect(
+      page
+        .getByRole('complementary', { name: 'Developer tools' })
+        .getByRole('button', { name: 'Give feedback' })
+    ).toBeVisible();
+    return;
+  }
+  await expect(
+    page.getByRole('button', { name: 'Give feedback', exact: true })
+  ).toBeVisible();
 }
 
 export async function openGiveFeedback(page: Page) {

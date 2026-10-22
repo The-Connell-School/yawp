@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e/tests',
-  testMatch: /demo-feedback\.spec\.ts/,
+  testMatch: /demo-feedback\.spec\.ts|dev-panel-artboard-evidence\.spec\.ts/,
   workers: 1,
   fullyParallel: false,
   retries: 0,

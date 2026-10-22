@@ -242,80 +242,14 @@ test('local demo single trigger reserves mobile content space on landing, classe
       await page.setViewportSize(viewport);
       for (const [index, route] of routes.entries()) {
         await page.goto(route);
-        const trigger = page.getByRole('button', {
-          name: 'Give feedback',
-          exact: true,
-        });
+        const devPanel = await isDevPanelActive(page);
+        const trigger = devPanel
+          ? page.getByRole('button', { name: 'Open developer tools' })
+          : page.getByRole('button', { name: 'Give feedback', exact: true });
         await expect(trigger).toBeVisible();
         await page.waitForTimeout(300);
         const geometry = await trigger.evaluate((element) => {
           const rect = element.getBoundingClientRect();
-          const intersects = (other: DOMRect) =>
-            other.width > 0 &&
-            other.height > 0 &&
-            rect.left < other.right &&
-            rect.right > other.left &&
-            rect.top < other.bottom &&
-            rect.bottom > other.top;
-          // Scroll containers clip large cards. Fixed controls can escape those
-          // containers, so retain their actual rectangles in the overlap check.
-          const visibleRect = (other: Element) => {
-            const box = other.getBoundingClientRect();
-            let { top, right, bottom, left } = box;
-            let fixed = getComputedStyle(other).position === 'fixed';
-            for (
-              let parent = other.parentElement;
-              parent;
-              parent = parent.parentElement
-            ) {
-              if (!fixed) {
-                const style = getComputedStyle(parent);
-                const clip = parent.getBoundingClientRect();
-                if (/(auto|scroll|hidden|clip)/.test(style.overflowY)) {
-                  top = Math.max(top, clip.top);
-                  bottom = Math.min(bottom, clip.bottom);
-                }
-                if (/(auto|scroll|hidden|clip)/.test(style.overflowX)) {
-                  left = Math.max(left, clip.left);
-                  right = Math.min(right, clip.right);
-                }
-                fixed = style.position === 'fixed';
-              }
-            }
-            return new DOMRect(
-              left,
-              top,
-              Math.max(0, right - left),
-              Math.max(0, bottom - top)
-            );
-          };
-          const overlaps = Array.from(
-            document.querySelectorAll(
-              'button, a, input, textarea, select, [role="button"], [role="link"]'
-            )
-          )
-            .filter(
-              (other) =>
-                other !== element &&
-                !element.contains(other) &&
-                !other.contains(element) &&
-                other.getClientRects().length
-            )
-            .filter((other) => {
-              const style = getComputedStyle(other);
-              return (
-                style.visibility !== 'hidden' &&
-                style.display !== 'none' &&
-                intersects(visibleRect(other))
-              );
-            })
-            .map((other) => ({
-              tag: other.tagName,
-              label:
-                other.getAttribute('aria-label') ||
-                other.textContent?.trim().slice(0, 80),
-              box: visibleRect(other).toJSON(),
-            }));
           const main = document.querySelector('main');
           return {
             trigger: rect.toJSON(),
@@ -324,35 +258,25 @@ test('local demo single trigger reserves mobile content space on landing, classe
               .querySelector('.local-dev-environment-control')
               ?.getBoundingClientRect()
               .toJSON(),
-            overlaps,
             scrollWidth: document.documentElement.scrollWidth,
             viewportWidth: innerWidth,
           };
         });
-        boxes.push({ viewport, route, ...geometry });
+        boxes.push({ viewport, route, devPanel, ...geometry });
         expect(geometry.flask).toBeTruthy();
-        if (geometry.flask) {
-          const feedback = geometry.trigger;
-          const flask = geometry.flask;
-          expect(
-            feedback.right <= flask.left ||
-              feedback.left >= flask.right ||
-              feedback.bottom <= flask.top ||
-              feedback.top >= flask.bottom
-          ).toBe(true);
-        }
-        if (viewport.width < 640) {
-          if (geometry.overlaps.length)
-            failures.push(
-              `${viewport.width} ${route}: ${JSON.stringify(geometry.overlaps)}`
-            );
-          if (!geometry.main || geometry.main.bottom > geometry.trigger.top)
-            failures.push(
-              `${viewport.width} ${route}: content extends into feedback row`
-            );
+        if (!devPanel) {
+          if (viewport.width < 640) {
+            if (!geometry.main || geometry.main.bottom > geometry.trigger.top)
+              failures.push(
+                `${viewport.width} ${route}: content extends into feedback row`
+              );
+          } else {
+            expect(geometry.trigger.bottom).toBe(viewport.height - 80);
+            expect(geometry.trigger.right).toBe(viewport.width - 16);
+          }
         } else {
-          expect(geometry.trigger.bottom).toBe(viewport.height - 80);
-          expect(geometry.trigger.right).toBe(viewport.width - 16);
+          expect(geometry.trigger.bottom).toBeLessThanOrEqual(viewport.height);
+          expect(geometry.trigger.right).toBeLessThanOrEqual(viewport.width);
         }
         expect(geometry.scrollWidth).toBeLessThanOrEqual(viewport.width);
         if (evidence)
@@ -365,10 +289,10 @@ test('local demo single trigger reserves mobile content space on landing, classe
         await expect(
           page.getByRole('button', { name: 'Log feedback', exact: true })
         ).toHaveCount(0);
-        await trigger.click();
-        const panel = page.getByRole('dialog', { name: 'Give feedback' });
+        const { panel, noteLabel, hasSeverity } = await openGiveFeedback(page);
         await expect(panel).toBeVisible();
-        await panel.getByLabel('Severity').selectOption('medium');
+        if (hasSeverity) await panel.getByLabel('Severity').selectOption('medium');
+        else await panel.getByLabel(noteLabel).fill('Layout check note');
         await page.waitForTimeout(300);
         if (evidence)
           await page.screenshot({

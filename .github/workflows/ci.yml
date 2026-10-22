@@ -1498,10 +1498,11 @@ jobs:
           RECORD_PORT_LTI_MOCK: '9789'
           YAWP_ENVIRONMENT: demo
           TESTER_FEEDBACK_ENABLED: 'true'
+          DEV_PANEL_EVIDENCE_DIR: dev-panel-evidence
           RESEND_API_KEY: ''
           RESEND_FROM_EMAIL: ''
         run: |
-          mkdir -p "$TMPDIR"
+          mkdir -p "$TMPDIR" services/web-app/dev-panel-evidence
           cleanup() {
             ./bin/project dev stop --json || true
             if [ -f .worktree-local/config.env ]; then
@@ -1516,6 +1517,15 @@ jobs:
           ./bin/project dev start --json
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:5489/ > /dev/null
           ./bin/project test --profile demo-feedback-browser --json
+
+      - name: Upload dev panel artboard evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-panel-artboard-evidence-${{ github.run_id }}
+          path: services/web-app/dev-panel-evidence/
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: 🔐 Run preview access gate tests
         working-directory: services/web-app

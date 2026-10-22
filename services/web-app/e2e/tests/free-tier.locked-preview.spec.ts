@@ -6,6 +6,7 @@ import { createE2EPrismaClient } from '../prisma-client';
 import { provisionFreeClassroomForE2E } from '../helpers/provision-free-classroom-for-e2e';
 import { seedSiteLicenseLockedCatalogForE2E } from '../helpers/seed-site-license-locked-catalog-for-e2e';
 import { dashboardAssignmentTileOverlapIssues } from '../helpers/dashboard-assignment-tile-overlap';
+import { expectGiveFeedbackAccessible } from '../helpers/dev-panel-feedback';
 if (!process.env.CLASS_STEP_PORT) {
   throw new Error(
     'Run class-step tests with ./bin/project test --profile free-tier-locked-preview-browser'
@@ -504,9 +505,7 @@ for (const width of [390, 1440]) {
       await capture(page, 'dashboard-approved-390');
     }
     if (width === 1440) {
-      await expect(
-        page.getByRole('button', { name: 'Give feedback' })
-      ).toBeVisible();
+      await expectGiveFeedbackAccessible(page);
       await capture(page, 'approval-toast-above-feedback-1440');
     }
     await page
