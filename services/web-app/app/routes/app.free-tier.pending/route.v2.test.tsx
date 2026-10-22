@@ -144,4 +144,5 @@ test('pending page offers draft request mailto, explore, and forward without leg
   expect(html).not.toContain('Take a look around');
   expect(html).toContain('[overflow-wrap:anywhere]');
   expect(html).toContain('data-testid="free-tier-person-email"');
+  expect(html).toContain('Account and class created');
 });
