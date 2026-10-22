@@ -147,13 +147,13 @@ for (const width of [1280, 390])
     await page
       .getByRole('button', { name: 'Forward request', exact: true })
       .click();
-    await expect(page.getByLabel('Administrator name')).toHaveAttribute(
+    await expect(page.getByLabel('Their name')).toHaveAttribute(
       'aria-invalid',
       'true'
     );
     await capture(page, `${width}-forward-validation`);
-    await page.getByLabel('Administrator name').fill('Ms. Rivera');
-    await page.getByLabel('Administrator email').fill(fixtureData.app.email);
+    await page.getByLabel('Their name').fill('Ms. Rivera');
+    await page.getByLabel('Their email').fill(fixtureData.app.email);
     await page
       .getByRole('button', { name: 'Forward request', exact: true })
       .click();
@@ -173,7 +173,7 @@ for (const width of [1280, 390])
       })
     ).toBe(0);
     await capture(page, `${width}-teacher-self-forward-rejected`);
-    await page.getByLabel('Administrator email').fill('rivera@example.org');
+    await page.getByLabel('Their email').fill('rivera@example.org');
     await page
       .getByRole('button', { name: 'Forward request', exact: true })
       .click();
@@ -245,7 +245,7 @@ for (const width of [1280, 390])
       page.getByText(
         'Ms. Okafor at Lincoln High would like to use Yawp! in their classroom.'
       )
-    ).toBeVisible();
+    ).toHaveCount(0);
     await capture(page, `${width}-admin`);
     await page
       .getByRole('button', { name: 'Approve Yawp!', exact: true })
@@ -262,10 +262,12 @@ for (const width of [1280, 390])
     await page
       .getByRole('button', { name: 'Forward request', exact: true })
       .click();
-    await expect(page.getByRole('alert')).toContainText('Fix the errors below');
+    await expect(page.getByRole('alert')).toContainText(
+      'Two things need your attention before you can forward this.'
+    );
     await capture(page, `${width}-admin-forward-validation`);
-    await page.getByLabel('Administrator name').fill('Ms. Rivera');
-    await page.getByLabel('Administrator email').fill(app.email);
+    await page.getByLabel('Their name').fill('Ms. Rivera');
+    await page.getByLabel('Their email').fill(app.email);
     await page
       .getByRole('button', { name: 'Forward request', exact: true })
       .click();
@@ -282,13 +284,13 @@ for (const width of [1280, 390])
     await page.goto(
       `/free/admin/not-right-person?t=${encodeURIComponent(redirect.token)}`
     );
-    await page.getByLabel('Administrator name').fill('Ms. Rivera');
-    await page.getByLabel('Administrator email').fill('rivera@example.org');
+    await page.getByLabel('Their name').fill('Ms. Rivera');
+    await page.getByLabel('Their email').fill('rivera@example.org');
     await page
       .getByRole('button', { name: 'Forward request', exact: true })
       .click();
     await expect(
-      page.getByRole('heading', { name: 'Forward sent' })
+      page.getByRole('heading', { name: 'Request forwarded' })
     ).toBeVisible();
     await capture(page, `${width}-admin-forwarded`);
     await page.goto(url);

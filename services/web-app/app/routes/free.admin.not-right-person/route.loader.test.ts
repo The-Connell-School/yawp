@@ -77,6 +77,7 @@ describe('free.admin.not-right-person loader', () => {
       token: 'token',
       schoolName: 'TS High',
       teacherName: 'Jordan Rivera',
+      approveBackToken: undefined,
     });
     expect(peekSignedLink).toHaveBeenCalled();
   });

@@ -139,7 +139,7 @@ export function thankYouBody(teacherName: string, schoolName: string) {
 }
 
 export function alreadyApprovedBody(teacherName: string, schoolName: string) {
-  return `Yawp! is already approved for ${teacherAtSchool(teacherName, schoolName)}.`;
+  return `Yawp! is already approved for ${teacherAtSchool(teacherName, schoolName)}. There's nothing else to do.`;
 }
 
 export function declinedBody(teacherName: string, schoolName: string) {
@@ -157,9 +157,26 @@ export function linkReplacedBody(teacherName: string, schoolName: string) {
   return `The request for ${teacherAtSchool(teacherName, schoolName)} was forwarded to someone else, so this link no longer works. Questions? Email support@yawp.school.`;
 }
 
-export function forwardPageIntro(teacherName: string, schoolName: string) {
-  return `${teacherAtSchool(teacherName, schoolName)} would like to use Yawp! in their classroom.`;
+export function forwardPageTitle() {
+  return 'Send this to the right person';
 }
 
-export const forwardSentBody =
-  'We emailed the person you named with a link to review and approve.';
+export function forwardPageIntro(teacherName: string, schoolName: string) {
+  return `Who approves classroom software for ${teacherAtSchool(teacherName, schoolName)}? A site or district administrator.`;
+}
+
+export function forwardValidationSummary(errorCount: number) {
+  if (errorCount === 1) {
+    return 'One thing needs your attention before you can forward this.';
+  }
+  return 'Two things need your attention before you can forward this.';
+}
+
+export function forwardSentBody(args: {
+  teacherName: string;
+  schoolName: string;
+  recipientName: string;
+  recipientEmail: string;
+}) {
+  return `We sent the request for ${teacherAtSchool(args.teacherName, args.schoolName)} to ${args.recipientName} (${args.recipientEmail}). You're all set.`;
+}

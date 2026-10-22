@@ -228,20 +228,47 @@ for (const width of [1440, 390]) {
       data: { signedLinkId: fwdApprove.linkId },
     });
     const fwdApproveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(fwdApprove.token)}`;
-    const fwdForwardUrl = `${base}/free/admin/not-right-person?t=${encodeURIComponent(fwdForward.token)}`;
+    const fwdForwardUrl = `${base}/free/admin/not-right-person?t=${encodeURIComponent(fwdForward.token)}&approveT=${encodeURIComponent(fwdApprove.token)}`;
 
-    // 05 — forward form
+    // 05a — forward form (default)
     await page.goto(fwdForwardUrl);
     await expect(
-      page.getByRole('heading', { name: 'Forward this request' })
+      page.getByRole('heading', { name: 'Send this to the right person' })
     ).toBeVisible();
-    await capture(page, `${width}-05-forward-form`);
+    await expect(
+      page.getByText(
+        `Who approves classroom software for ${TEACHER} at ${SCHOOL}? A site or district administrator.`
+      )
+    ).toBeVisible();
+    await expect(page.getByLabel('Their name')).toBeVisible();
+    await expect(page.getByLabel('Their email')).toHaveAttribute(
+      'placeholder',
+      'name@district.org'
+    );
+    await expect(page.getByRole('link', { name: 'Back to approval' })).toBeVisible();
+    await capture(page, `${width}-05a-forward-form`);
 
-    // 06 — forward sent
-    await page.getByLabel('Administrator name').fill('Ms. Rivera');
-    await page.getByLabel('Administrator email').fill('rivera@example.org');
+    // 05c — forward validation errors
     await page.getByRole('button', { name: 'Forward request', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Forward sent' })).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText(
+      'Two things need your attention before you can forward this.'
+    );
+    await expect(page.getByText('Enter their name.', { exact: true })).toBeVisible();
+    await page.getByLabel('Their email').fill('patel@lincolnusd');
+    await page.getByRole('button', { name: 'Forward request', exact: true }).click();
+    await expect(page.getByText('Enter a valid email address.', { exact: true })).toBeVisible();
+    await capture(page, `${width}-05c-forward-validation`);
+
+    // 06 — request forwarded
+    await page.getByLabel('Their name').fill('Dr. Patel');
+    await page.getByLabel('Their email').fill('patel@lincolnusd.org');
+    await page.getByRole('button', { name: 'Forward request', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Request forwarded' })).toBeVisible();
+    await expect(
+      page.getByText(
+        `We sent the request for ${TEACHER} at ${SCHOOL} to Dr. Patel (patel@lincolnusd.org). You're all set.`
+      )
+    ).toBeVisible();
     await capture(page, `${width}-06-forward-sent`);
 
     // 07 — forward recipient email

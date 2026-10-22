@@ -39,12 +39,12 @@ mock.module('react-router', () => ({
 const { default: Page } = await import('./route');
 afterAll(() => mock.restore());
 
-test('approve page renders teacher at school in heading and intro', () => {
+test('approve page renders teacher at school in heading without intro paragraph', () => {
   const html = renderToStaticMarkup(<Page />);
   expect(html).toContain(
     'Approve Yawp! for Jordan Rivera at Lincoln High School'
   );
-  expect(html).toContain(
+  expect(html).not.toContain(
     'Jordan Rivera at Lincoln High School would like to use Yawp! in their classroom.'
   );
   expect(html).toContain('Teacher at Lincoln High School');

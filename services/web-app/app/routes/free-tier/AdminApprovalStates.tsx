@@ -3,6 +3,7 @@ import {
   CircleCheck,
   Info,
   PencilLine,
+  Send,
   Shield,
   UserRound,
 } from 'lucide-react';
@@ -11,11 +12,11 @@ import {
   alreadyApprovedBody,
   approveCheckboxError,
   approveCheckboxLabel,
-  approvePageIntro,
   approvePageTitle,
   declinedBody,
   forwardPageIntro,
-  forwardSentBody,
+  forwardPageTitle,
+  teacherAtSchool,
   FREE_TIER_ADMIN_MODEL_TRAINING_LINE,
   linkExpiredBody,
   linkInvalidBody,
@@ -143,10 +144,26 @@ export function AdminLinkReplacedCard({
   );
 }
 
-export function AdminForwardSentCard() {
+export function AdminForwardSentCard({
+  teacherName,
+  schoolName,
+  recipientName,
+  recipientEmail,
+}: {
+  teacherName: string;
+  schoolName: string;
+  recipientName: string;
+  recipientEmail: string;
+}) {
   return (
-    <FreeTierAuthCard title="Forward sent" icon={<CircleCheck />} status>
-      <p className="text-sm text-muted-foreground">{forwardSentBody}</p>
+    <FreeTierAuthCard title="Request forwarded" icon={<Send />} status>
+      <p className="text-sm text-muted-foreground">
+        We sent the request for {teacherAtSchool(teacherName, schoolName)} to{' '}
+        <strong className="font-semibold text-card-foreground">
+          {recipientName}
+        </strong>{' '}
+        ({recipientEmail}). You&apos;re all set.
+      </p>
     </FreeTierAuthCard>
   );
 }
@@ -162,9 +179,6 @@ export function AdminApprovePageIntro({
 }) {
   return (
     <>
-      <p className="text-sm text-card-foreground">
-        {approvePageIntro(teacherName, schoolName)}
-      </p>
       <FreeTierPerson
         name={teacherName}
         email={teacherEmail}
@@ -183,6 +197,30 @@ export function adminForwardPageIntro(teacherName: string, schoolName: string) {
   return forwardPageIntro(teacherName, schoolName);
 }
 
+export function adminForwardPageTitle() {
+  return forwardPageTitle();
+}
+
+export function AdminForwardBackLink({
+  approveToken,
+  className,
+}: {
+  approveToken?: string;
+  className?: string;
+}) {
+  if (!approveToken) return null;
+  return (
+    <p className={`text-center text-sm ${className ?? ''}`}>
+      <Link
+        to={`/free/admin/approve?t=${encodeURIComponent(approveToken)}`}
+        className="font-medium text-primary underline underline-offset-4"
+      >
+        Back to approval
+      </Link>
+    </p>
+  );
+}
+
 export function AdminForwardLink({
   token,
   className,
@@ -194,7 +232,7 @@ export function AdminForwardLink({
     <p className={`text-center text-sm text-muted-foreground ${className ?? ''}`}>
       Not the right person?{' '}
       <Link
-        to={`/free/admin/not-right-person?t=${encodeURIComponent(token)}`}
+        to={`/free/admin/not-right-person?t=${encodeURIComponent(token)}&approveT=${encodeURIComponent(token)}`}
         className="font-medium text-primary underline underline-offset-4"
       >
         Forward this request

@@ -22,11 +22,13 @@ import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate
 import {
   AdminAlreadyApprovedCard,
   AdminDeclinedCard,
+  AdminForwardBackLink,
   AdminForwardSentCard,
   AdminLinkExpiredCard,
   AdminLinkInvalidCard,
   AdminLinkReplacedCard,
   adminForwardPageIntro,
+  adminForwardPageTitle,
 } from '../free-tier/AdminApprovalStates';
 import { AdminForwardForm } from '../free-tier/AdminApprovalForms';
 
@@ -42,11 +44,57 @@ type LoaderData =
       token: string;
       schoolName: string;
       teacherName: string;
+      approveBackToken?: string;
     };
+
+function forwardFormCard(
+  data: Extract<LoaderData, { ok: true }>,
+  options: {
+    serverErrors?: {
+      adminName?: string;
+      adminEmail?: string;
+    };
+    alertMessage?: string;
+  } = {}
+) {
+  return (
+    <FreeTierAuthCard title={adminForwardPageTitle()}>
+      <p className="text-sm text-card-foreground">
+        {adminForwardPageIntro(data.teacherName, data.schoolName)}
+      </p>
+      {options.alertMessage ? (
+        <p role="alert" className="text-sm text-destructive">
+          {options.alertMessage}
+        </p>
+      ) : null}
+      <AdminForwardForm
+        token={data.token}
+        serverErrors={options.serverErrors}
+      />
+    </FreeTierAuthCard>
+  );
+}
+
+function forwardPageWithBackLink(
+  data: Extract<LoaderData, { ok: true }>,
+  options: Parameters<typeof forwardFormCard>[1] = {}
+) {
+  return (
+    <>
+      {forwardFormCard(data, options)}
+      <AdminForwardBackLink
+        approveToken={data.approveBackToken}
+        className="mt-4 text-muted-foreground"
+      />
+    </>
+  );
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireFreeTierEnabled();
-  const token = new URL(request.url).searchParams.get('t') ?? '';
+  const url = new URL(request.url);
+  const token = url.searchParams.get('t') ?? '';
+  const approveBackToken = url.searchParams.get('approveT') ?? undefined;
   if (!token) return { ok: false as const, reason: 'invalid' as const };
   const peek = await peekSignedLink({
     token,
@@ -69,6 +117,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       token,
       schoolName: app?.schoolName ?? 'your school',
       teacherName: app?.name ?? 'A teacher',
+      approveBackToken,
     };
   }
   if (peek.reason === 'expired') {
@@ -97,17 +146,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export async function action({ request }: ActionFunctionArgs) {
   await requireFreeTierEnabled();
   const formData = await request.formData();
+  const token = String(formData.get('token') ?? '');
+  const newAdminName = String(formData.get('adminName') ?? '');
+  const newAdminEmail = String(formData.get('adminEmail') ?? '');
   const result = await redirectSchoolAdmin({
-    token: String(formData.get('token') ?? ''),
-    newAdminName: String(formData.get('adminName') ?? ''),
-    newAdminEmail: String(formData.get('adminEmail') ?? ''),
+    token,
+    newAdminName,
+    newAdminEmail,
     request,
   });
   if (!result.ok && result.reason === 'link_replaced') {
     return result;
   }
   if (!result.ok && result.reason === 'superseded') {
-    const token = String(formData.get('token') ?? '');
     const appId = applicationIdFromSignedToken(token);
     if (appId) {
       const gate = await fetchFreeTierApplicationTerminalGate(appId);
@@ -125,6 +176,22 @@ export async function action({ request }: ActionFunctionArgs) {
         };
       }
     }
+  }
+  if (result.ok) {
+    const appId = applicationIdFromSignedToken(token);
+    const app = appId
+      ? await prisma.freeTierApplication.findUnique({
+          where: { id: appId },
+          select: { name: true, schoolName: true },
+        })
+      : null;
+    return {
+      ...result,
+      teacherName: app?.name ?? 'A teacher',
+      schoolName: app?.schoolName ?? 'your school',
+      recipientName: newAdminName.trim(),
+      recipientEmail: newAdminEmail.trim(),
+    };
   }
   return result;
 }
@@ -229,7 +296,14 @@ export default function FreeAdminNotRightPersonRoute() {
   const actionData = useActionData<typeof action>();
 
   if (actionData?.ok) {
-    return <AdminForwardSentCard />;
+    return (
+      <AdminForwardSentCard
+        teacherName={actionData.teacherName}
+        schoolName={actionData.schoolName}
+        recipientName={actionData.recipientName}
+        recipientEmail={actionData.recipientEmail}
+      />
+    );
   }
 
   if (!data.ok) {
@@ -258,24 +332,16 @@ export default function FreeAdminNotRightPersonRoute() {
               newAdminEmail?: string[];
             })
           : undefined;
-      return (
-        <FreeTierAuthCard title="Forward this request">
-          <p className="text-sm text-card-foreground">
-            {adminForwardPageIntro(data.teacherName, data.schoolName)}
-          </p>
-          <AdminForwardForm
-            token={data.token}
-            teacherName={data.teacherName}
-            schoolName={data.schoolName}
-            serverErrors={{
-              adminName: fieldErrors?.newAdminName?.[0] ?? 'Enter their name.',
-              adminEmail:
-                fieldErrors?.newAdminEmail?.[0] ??
-                'Enter a valid email address.',
-            }}
-          />
-        </FreeTierAuthCard>
-      );
+      return forwardPageWithBackLink(data, {
+        serverErrors: {
+          ...(fieldErrors?.newAdminName?.[0]
+            ? { adminName: 'Enter their name.' }
+            : {}),
+          ...(fieldErrors?.newAdminEmail?.[0]
+            ? { adminEmail: 'Enter a valid email address.' }
+            : {}),
+        },
+      });
     }
     if (
       actionData.reason === 'same_as_teacher' ||
@@ -283,23 +349,12 @@ export default function FreeAdminNotRightPersonRoute() {
       actionData.reason === 'chain_cap' ||
       actionData.reason === 'email_failed'
     ) {
-      return (
-        <FreeTierAuthCard title="Forward this request">
-          <p className="text-sm text-card-foreground">
-            {adminForwardPageIntro(data.teacherName, data.schoolName)}
-          </p>
-          <p role="alert" className="text-sm text-destructive">
-            {actionData.reason === 'email_failed'
-              ? "We couldn't send the email. Try again."
-              : approvalForwardError(actionData.reason)}
-          </p>
-          <AdminForwardForm
-            token={data.token}
-            teacherName={data.teacherName}
-            schoolName={data.schoolName}
-          />
-        </FreeTierAuthCard>
-      );
+      return forwardPageWithBackLink(data, {
+        alertMessage:
+          actionData.reason === 'email_failed'
+            ? "We couldn't send the email. Try again."
+            : approvalForwardError(actionData.reason),
+      });
     }
     return (
       <FreeTierAuthCard title="Unable to forward" icon={<CircleAlert />}>
@@ -310,16 +365,5 @@ export default function FreeAdminNotRightPersonRoute() {
     );
   }
 
-  return (
-    <FreeTierAuthCard title="Forward this request">
-      <p className="text-sm text-card-foreground">
-        {adminForwardPageIntro(data.teacherName, data.schoolName)}
-      </p>
-      <AdminForwardForm
-        token={data.token}
-        teacherName={data.teacherName}
-        schoolName={data.schoolName}
-      />
-    </FreeTierAuthCard>
-  );
+  return forwardPageWithBackLink(data);
 }

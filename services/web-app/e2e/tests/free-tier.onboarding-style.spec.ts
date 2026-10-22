@@ -360,7 +360,7 @@ for (const viewport of [
         .fill(`replacement-${stamp}@example.edu`);
       await admin.getByRole('button', { name: 'Forward request' }).click();
       await expect(
-        admin.getByRole('heading', { name: 'Forward sent' })
+        admin.getByRole('heading', { name: 'Request forwarded' })
       ).toBeVisible();
       await capture('forward-confirmation', admin);
       await drainFreeTierApprovalJobs();

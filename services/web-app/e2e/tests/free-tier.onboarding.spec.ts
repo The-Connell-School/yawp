@@ -198,7 +198,7 @@ test.describe.serial('Free tier teacher onboarding (full path)', () => {
     await forwardPage.fill('input[name="adminName"]', 'E2E Principal');
     await forwardPage.fill('input[name="adminEmail"]', `principal-${stamp}@${ADMIN_DOMAIN}`);
     await forwardPage.getByRole('button', { name: /Forward request/i }).click();
-    await expect(forwardPage.getByRole('heading', { name: /Forward sent/i })).toBeVisible({
+    await expect(forwardPage.getByRole('heading', { name: /Request forwarded/i })).toBeVisible({
       timeout: 30_000,
     });
     await forwardPage.close();

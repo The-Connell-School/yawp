@@ -5,6 +5,7 @@ import {
   approveCheckboxError,
   approveCheckboxLabel,
   approveValidationSummary,
+  forwardValidationSummary,
 } from '~/domain/free-tier/admin-approval-copy';
 import {
   FreeTierButton,
@@ -77,11 +78,18 @@ export function AdminApproveForm({
   const errors = { ...clientErrors, ...serverErrors };
 
   useEffect(() => {
-    if (!Object.keys(clientErrors).length) return;
+    const hasClient = Object.keys(clientErrors).length > 0;
+    const hasServer = Boolean(
+      serverErrors?.adminRole || serverErrors?.authorized
+    );
+    if (!hasClient && !hasServer) return;
     summaryRef.current?.focus();
-    if (clientErrors.adminRole) roleRef.current?.focus();
-    else if (clientErrors.authorized) checkboxRef.current?.focus();
-  }, [clientErrors]);
+    const roleError = clientErrors.adminRole ?? serverErrors?.adminRole;
+    const authorizedError =
+      clientErrors.authorized ?? serverErrors?.authorized;
+    if (roleError) roleRef.current?.focus();
+    else if (authorizedError) checkboxRef.current?.focus();
+  }, [clientErrors, serverErrors]);
 
   return (
     <Form
@@ -170,13 +178,9 @@ export function AdminApproveForm({
 
 export function AdminForwardForm({
   token,
-  teacherName,
-  schoolName,
   serverErrors,
 }: {
   token: string;
-  teacherName: string;
-  schoolName: string;
   serverErrors?: FieldErrors;
 }) {
   const navigation = useNavigation();
@@ -192,11 +196,17 @@ export function AdminForwardForm({
   const errors = { ...clientErrors, ...serverErrors };
 
   useEffect(() => {
-    if (!Object.keys(clientErrors).length) return;
+    const hasClient = Object.keys(clientErrors).length > 0;
+    const hasServer = Boolean(
+      serverErrors?.adminName || serverErrors?.adminEmail
+    );
+    if (!hasClient && !hasServer) return;
     summaryRef.current?.focus();
-    if (clientErrors.adminName) nameRef.current?.focus();
-    else if (clientErrors.adminEmail) emailRef.current?.focus();
-  }, [clientErrors]);
+    const nameError = clientErrors.adminName ?? serverErrors?.adminName;
+    const emailError = clientErrors.adminEmail ?? serverErrors?.adminEmail;
+    if (nameError) nameRef.current?.focus();
+    else if (emailError) emailRef.current?.focus();
+  }, [clientErrors, serverErrors]);
 
   return (
     <Form
@@ -218,14 +228,16 @@ export function AdminForwardForm({
       }}
     >
       <input type="hidden" name="token" value={token} />
-      <p className="text-sm text-card-foreground">
-        Who should approve classroom software for{' '}
-        {teacherName} at {schoolName}?
-      </p>
       <div ref={summaryRef}>
-        <ValidationSummary errors={errors} intro="Fix the errors below." />
+        <ValidationSummary
+          errors={errors}
+          intro={forwardValidationSummary(
+            Number(Boolean(errors.adminName)) +
+              Number(Boolean(errors.adminEmail))
+          )}
+        />
       </div>
-      <FreeTierFieldLabel label="Administrator name" htmlFor="adminName">
+      <FreeTierFieldLabel label="Their name" htmlFor="adminName">
         <FreeTierTextInput
           ref={nameRef}
           id="adminName"
@@ -245,7 +257,7 @@ export function AdminForwardForm({
           </span>
         ) : null}
       </FreeTierFieldLabel>
-      <FreeTierFieldLabel label="Administrator email" htmlFor="adminEmail">
+      <FreeTierFieldLabel label="Their email" htmlFor="adminEmail">
         <FreeTierTextInput
           ref={emailRef}
           id="adminEmail"

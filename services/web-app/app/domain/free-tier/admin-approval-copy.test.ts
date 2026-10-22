@@ -2,7 +2,10 @@ import { expect, test } from 'bun:test';
 import { renderAdminApprovalEmailV2Body } from './email-copy';
 import {
   adminApprovalUrlsFromDesignedEmailBody,
+  alreadyApprovedBody,
   approveCheckboxError,
+  forwardPageIntro,
+  forwardPageTitle,
   linkReplacedBody,
   renderAdminApprovalEmailPlainText,
   renderAdminApprovalEmailSubject,
@@ -76,6 +79,19 @@ test('checkbox validation copy names teacher and school', () => {
 test('link replaced body names teacher and school', () => {
   expect(linkReplacedBody('Jordan Rivera', 'Lincoln High School')).toBe(
     'The request for Jordan Rivera at Lincoln High School was forwarded to someone else, so this link no longer works. Questions? Email support@yawp.school.'
+  );
+});
+
+test('already approved body ends with nothing else to do', () => {
+  expect(alreadyApprovedBody('Jordan Rivera', 'Lincoln High School')).toBe(
+    "Yawp! is already approved for Jordan Rivera at Lincoln High School. There's nothing else to do."
+  );
+});
+
+test('forward page intro matches approved frame', () => {
+  expect(forwardPageTitle()).toBe('Send this to the right person');
+  expect(forwardPageIntro('Jordan Rivera', 'Lincoln High School')).toBe(
+    'Who approves classroom software for Jordan Rivera at Lincoln High School? A site or district administrator.'
   );
 });
 
