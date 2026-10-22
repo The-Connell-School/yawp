@@ -593,6 +593,8 @@ function runTestProfile(profile, { json }) {
       'app/domain/free-tier/approval-v2.real-db.integration.test.ts',
       'app/domain/free-tier/approval-waiting.test.ts',
       'app/routes/app.free-tier.pending/route.v2.test.tsx',
+      'app/routes/app.free-tier.pending/route.draft-request.test.tsx',
+      'app/routes/app.free-tier.pending/route.explore-button.test.tsx',
       'app/routes/free.admin.approve/route.v2.test.tsx',
       'app/routes/app.free-tier.pending/route.test.tsx',
       'app/routes/free.admin.approve/route.loader.test.ts',

@@ -16,10 +16,11 @@ function mockPage(loaderData: Record<string, unknown>) {
 }
 
 const baseV2 = {
-  app: { status: 'SENT', name: 'Teacher' },
+  app: { status: 'SENT', name: 'Teacher', schoolName: 'Demo School' },
   pending: { adminName: 'Patel', adminEmail: 'patel@example.org' },
   lastFailedEmail: null,
   showExploreClassroom: true,
+  approvalEmailFrom: 'from@example.org',
   approvalV2: {
     enabled: true,
     approval: {
@@ -56,10 +57,11 @@ test('approval v2 MANUAL_REVIEW shows explore without pending admin row', async 
 
 test('legacy pending path shows explore when showExploreClassroom is true', async () => {
   mockPage({
-    app: { status: 'SENT', name: 'Teacher' },
+    app: { status: 'SENT', name: 'Teacher', schoolName: 'Demo School' },
     pending: { adminName: 'Patel', adminEmail: 'patel@example.org' },
     lastFailedEmail: null,
     showExploreClassroom: true,
+    approvalEmailFrom: 'from@example.org',
     approvalV2: null,
   });
   const { default: Page } = await import('./route');
