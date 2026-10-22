@@ -25,6 +25,12 @@ function readTeachingAccessMobileViewport() {
   return window.matchMedia(TEACHING_ACCESS_MOBILE_MEDIA).matches;
 }
 
+function useHasMounted() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  return mounted;
+}
+
 function useTeachingAccessMobileViewport() {
   const [isMobile, setIsMobile] = useState(readTeachingAccessMobileViewport);
   useEffect(() => {
@@ -50,6 +56,7 @@ export function LockedTeachingControl({
   adminName?: string;
   mobileSheetBody?: string;
 }) {
+  const mounted = useHasMounted();
   const isMobile = useTeachingAccessMobileViewport();
   const [sheetOpen, setSheetOpen] = useState(false);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -91,6 +98,28 @@ export function LockedTeachingControl({
     },
   });
 
+  const mobileSheet = (
+    <LockedTeachingMobileSheet
+      open={sheetOpen}
+      onOpenChange={setSheetOpen}
+      returnFocusRef={returnFocusRef}
+      adminName={adminName}
+      body={mobileSheetBody}
+    />
+  );
+
+  if (!mounted) {
+    return (
+      <>
+        <span id={descriptionId} className="sr-only">
+          {tooltip}
+        </span>
+        {lockedChild}
+        {mobileSheet}
+      </>
+    );
+  }
+
   if (isMobile) {
     return (
       <>
@@ -98,13 +127,7 @@ export function LockedTeachingControl({
           {tooltip}
         </span>
         {lockedChild}
-        <LockedTeachingMobileSheet
-          open={sheetOpen}
-          onOpenChange={setSheetOpen}
-          returnFocusRef={returnFocusRef}
-          adminName={adminName}
-          body={mobileSheetBody}
-        />
+        {mobileSheet}
       </>
     );
   }
