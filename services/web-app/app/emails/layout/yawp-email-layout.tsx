@@ -242,6 +242,7 @@ function LogoHeader({
     fontSize: '22px',
     fontWeight: 700,
     color: EMAIL_FOREGROUND,
+    textAlign: 'left' as const,
   } as const;
   return (
     <>

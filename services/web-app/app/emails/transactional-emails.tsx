@@ -450,8 +450,9 @@ export function SchoolSetupInviteEmail(props: {
         paragraphs={[
           <>Hi {props.firstName},</>,
           <>
-            We&apos;ve created an account for {props.schoolName} on Yawp! and added you
-            as the owner. Accept the invitation to finish setup.
+            Our team created a Yawp! account for {props.schoolName} and named you as
+            its owner. Accept the invitation to add teachers and manage your
+            school&apos;s classes.
           </>,
         ]}
       />

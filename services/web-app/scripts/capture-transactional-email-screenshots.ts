@@ -161,6 +161,14 @@ async function screenshot(page: import('playwright').Page, html: string, file: s
   await page.screenshot({ path: file, fullPage: true });
 }
 
+/** Simulate blocked images: alt text + dashed wordmark box (design frame 62). */
+function htmlWithBlockedLogos(html: string) {
+  return html.replace(
+    /(<img[^>]*class="yawp-logo-(?:light|dark)"[^>]*)\ssrc="[^"]*"/gi,
+    '$1 src=""'
+  );
+}
+
 async function main() {
   await mkdir(outDir, { recursive: true });
   const publicRoot = path.join(import.meta.dir, '../public');
@@ -191,10 +199,13 @@ async function main() {
 
   const release = all[0]!.html;
   await screenshot(dark, release, path.join(outDir, '01-teacher-release-dark-600.png'));
-  await imagesOff.route('**/*.{png,jpg,jpeg,gif,webp}', (route) => route.abort());
+  await imagesOff.addStyleTag({
+    content:
+      '.yawp-logo-light, .yawp-logo-dark { border: 1px dashed #b8b4a8 !important; box-sizing: border-box; }',
+  });
   await screenshot(
     imagesOff,
-    release,
+    htmlWithBlockedLogos(release),
     path.join(outDir, '01-teacher-release-images-off-600.png')
   );
 

@@ -211,7 +211,7 @@ Your school is ready to set up
 
 Hi ${args.firstName},
 
-We've created an account for ${args.schoolName} on Yawp! and added you as the owner. Accept the invitation to finish setup.
+Our team created a Yawp! account for ${args.schoolName} and named you as its owner. Accept the invitation to add teachers and manage your school's classes.
 ${note ? `\n\nA note from Yawp!\n${note}\n` : ''}
 ${plainTextButton('Accept invitation', args.acceptUrl)}
 
