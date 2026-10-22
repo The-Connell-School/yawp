@@ -73,6 +73,10 @@ async function fixture(
   return { user, app };
 }
 
+async function expectLockedAppHome(page: import('@playwright/test').Page) {
+  await expect(page).toHaveURL(/\/app\/?$/);
+}
+
 async function login(page: import('@playwright/test').Page, email: string) {
   const user = await prisma.user.findUniqueOrThrow({ where: { email } });
   const session = await prisma.session.create({
@@ -328,7 +332,7 @@ for (const width of [390, 1440]) {
     ).toBeVisible();
     await capture(page, `waiting-${width}`);
     await page.getByRole('link', { name: 'Explore my classroom' }).click();
-    await expect(page).toHaveURL(/\/app$/);
+    await expectLockedAppHome(page);
     await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
     await expect(
       page
@@ -536,7 +540,7 @@ test('explore stays on pending when classroom is not provisioned yet', async ({
     page.getByRole('link', { name: 'Explore my classroom' })
   ).toBeVisible();
   await page.getByRole('link', { name: 'Explore my classroom' }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expectLockedAppHome(page);
   await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
   const updated = await prisma.freeTierApplication.findUniqueOrThrow({
     where: { id: app.id },
@@ -568,7 +572,7 @@ test('explore shows with a stale default-org membership cookie', async ({
     page.getByRole('link', { name: 'Explore my classroom' })
   ).toBeVisible();
   await page.getByRole('link', { name: 'Explore my classroom' }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expectLockedAppHome(page);
   await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
 });
 
@@ -681,7 +685,7 @@ async function exploreLockedApp(page: import('@playwright/test').Page, userEmail
   await login(page, userEmail);
   await page.goto('/app/free-tier/pending');
   await page.getByRole('link', { name: 'Explore my classroom' }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expectLockedAppHome(page);
   await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
 }
 
