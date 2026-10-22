@@ -44,7 +44,10 @@ function cellPad(top = 0, right = 0, bottom = 0, left = 0) {
   return { padding: `${top}px ${right}px ${bottom}px ${left}px` };
 }
 
-/** HTML `bgcolor` for Outlook; omitted from React's typed TD props. */
+/** HTML `bgcolor` for Outlook; omitted from React's typed table/td props. */
+function tableBg(color: string) {
+  return { bgcolor: color } as React.TableHTMLAttributes<HTMLTableElement>;
+}
 function tdBg(color: string) {
   return { bgcolor: color } as React.TdHTMLAttributes<HTMLTableCellElement>;
 }
@@ -97,7 +100,7 @@ export function YawpEmailLayout({
           width="100%"
           cellPadding={0}
           cellSpacing={0}
-          {...tdBg(EMAIL_PAGE_BG)}
+          {...tableBg(EMAIL_PAGE_BG)}
           className="yawp-page"
           style={{ backgroundColor: EMAIL_PAGE_BG, width: '100%' }}
         >
@@ -408,7 +411,6 @@ export function IdentityCard({ rows }: { rows: IdentityRow[] }) {
           width="100%"
           cellPadding={0}
           cellSpacing={0}
-          {...tdBg(EMAIL_IDENTITY_BG)}
           className="yawp-identity"
           style={{
             backgroundColor: EMAIL_IDENTITY_BG,
@@ -559,7 +561,6 @@ export function CodeBlock({
           width="100%"
           cellPadding={0}
           cellSpacing={0}
-          {...tdBg(EMAIL_CODE_BG)}
           className="yawp-code"
           style={{
             backgroundColor: EMAIL_CODE_BG,
@@ -633,7 +634,6 @@ export function PersonalNoteBlock({
           width="100%"
           cellPadding={0}
           cellSpacing={0}
-          {...tdBg(EMAIL_IDENTITY_BG)}
           className="yawp-identity"
           style={{
             backgroundColor: EMAIL_IDENTITY_BG,
