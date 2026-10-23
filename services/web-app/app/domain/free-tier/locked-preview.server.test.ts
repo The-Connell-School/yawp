@@ -157,3 +157,21 @@ test('pending lesson planner scope allows SENT and MANUAL_REVIEW only', async ()
     })
   ).rejects.toMatchObject({ status: 403 });
 });
+
+test('redactClassTeachingSecrets blanks code and drops join token for locked preview', () => {
+  const row = {
+    id: 'class-1',
+    code: 'SECRET',
+    studentJoinToken: 'join-token',
+    title: 'Class',
+  };
+  expect(redactClassTeachingSecrets(row, false)).toEqual(row);
+  expect(redactClassTeachingSecrets(row, true)).toEqual({
+    id: 'class-1',
+    code: null,
+    title: 'Class',
+  });
+  expect(JSON.stringify(redactClassTeachingSecrets(row, true))).not.toContain(
+    'join-token'
+  );
+});
