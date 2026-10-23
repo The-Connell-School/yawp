@@ -117,6 +117,8 @@ import thesisPromptsRaw from './thesis-prompts-library/prompts.json';
 import { getGrammarGradingAssignmentTypeIds } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { isThesisDrivenEssayTitle } from '~/domain/assignment-types/thesis-driven-essay';
 import { SeeHowItWorksLink } from '~/components/how-it-works/guide';
+import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
+import { wrapPreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
 
 /** How the Lesson Planner hands a written warm-up to this page. */
 const NEW_PROMPT_PARAM = 'newPrompt';
@@ -735,6 +737,7 @@ export default function AppAssignmentTypesIdRoute() {
       ?.lessonPlannerEnabled ?? false;
   const data = useLoaderData<typeof loader>();
   const isTeacher = user.selectedMembership?.role === 'TEACHER';
+  const { locked: teachingLockedPreview } = useTeachingAccess();
   const hasModules = data.assignmentType.assignmentModules.length > 0;
   const modulesVisible = showModulesAccordion(
     data.assignmentType,
@@ -769,7 +772,7 @@ export default function AppAssignmentTypesIdRoute() {
   // once the sheet has done its job.
   const fromLesson = searchParams.get(FROM_LESSON_PARAM);
   useEffect(() => {
-    if (!incomingPrompt) return;
+    if (!incomingPrompt || teachingLockedPreview) return;
     setLibraryPrompt(incomingPrompt);
     setApHistoryEntry(null);
     setIsAssignmentSheetOpen(true);
@@ -781,7 +784,7 @@ export default function AppAssignmentTypesIdRoute() {
       },
       { replace: true, preventScrollReset: true }
     );
-  }, [incomingPrompt, setSearchParams]);
+  }, [incomingPrompt, setSearchParams, teachingLockedPreview]);
 
   const showShortFormLibrary = data.shortFormPromptLibrary != null;
   const showDailyPagesAbout =
@@ -811,11 +814,16 @@ export default function AppAssignmentTypesIdRoute() {
     );
     // A hand-edited link that describes no ticket we can build opens nothing,
     // rather than a sheet answered with something nobody chose.
-    if (!incomingExitTicket) return;
+    if (!incomingExitTicket || teachingLockedPreview) return;
     setPlannedExitTicket(incomingExitTicket);
     setApHistoryEntry(null);
     setIsAssignmentSheetOpen(true);
-  }, [incomingExitTicketMode, incomingExitTicket, setSearchParams]);
+  }, [
+    incomingExitTicketMode,
+    incomingExitTicket,
+    setSearchParams,
+    teachingLockedPreview,
+  ]);
 
   const showThesisLibrary = data.thesisPromptLibrary != null;
   const isApHistoryAssignmentType =
@@ -859,7 +867,9 @@ export default function AppAssignmentTypesIdRoute() {
 
           {isTeacher ? (
             <div className="flex items-center gap-2">
-              {isThesisDrivenEssayTitle(data.assignmentType.title) ? (
+              {isThesisDrivenEssayTitle(data.assignmentType.title) ||
+              (teachingLockedPreview &&
+                data.assignmentType.kind === 'thesis_statement') ? (
                 <SeeHowItWorksLink
                   to={`/app/assignment-types/${data.assignmentType.id}/how-it-works`}
                 />
@@ -867,8 +877,9 @@ export default function AppAssignmentTypesIdRoute() {
               {canCreateDirectDocument ? (
                 <>
                   <Form method="post" ref={docFormRef} className="hidden" />
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
+                  {teachingLockedPreview ? (
+                    wrapPreviewAssignmentCreationControl(
+                      true,
                       <Button
                         type="button"
                         className="w-fit"
@@ -876,61 +887,83 @@ export default function AppAssignmentTypesIdRoute() {
                       >
                         New <ChevronDownIcon className="ml-1 h-4 w-4" />
                       </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        disabled={!hasModules || isLoading}
-                        onSelect={() => docFormRef.current?.requestSubmit()}
-                      >
-                        Document
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={data.teacherClasses.length === 0}
-                        onSelect={() => {
-                          setLibraryPrompt('');
-                          setApHistoryEntry(null);
-                          setIsAssignmentSheetOpen(true);
-                        }}
-                      >
-                        Assignment
-                      </DropdownMenuItem>
-                      {showThesisLibrary || showPromptsLibrary ? (
+                    )
+                  ) : (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          className="w-fit"
+                          data-tour="type-new"
+                        >
+                          New <ChevronDownIcon className="ml-1 h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          disabled={!hasModules || isLoading}
+                          onSelect={() => docFormRef.current?.requestSubmit()}
+                        >
+                          Document
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           disabled={data.teacherClasses.length === 0}
-                          onSelect={() => setIsPromptGeneratorOpen(true)}
+                          onSelect={() => {
+                            setLibraryPrompt('');
+                            setApHistoryEntry(null);
+                            setIsAssignmentSheetOpen(true);
+                          }}
                         >
-                          Generate a prompt
+                          Assignment
                         </DropdownMenuItem>
-                      ) : null}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                        {showThesisLibrary || showPromptsLibrary ? (
+                          <DropdownMenuItem
+                            disabled={data.teacherClasses.length === 0}
+                            onSelect={() => setIsPromptGeneratorOpen(true)}
+                          >
+                            Generate a prompt
+                          </DropdownMenuItem>
+                        ) : null}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </>
               ) : null}
               {isApHistoryAssignmentType ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      className="w-fit"
-                      disabled={assignmentSheetClasses.length === 0}
-                    >
+                teachingLockedPreview ? (
+                  wrapPreviewAssignmentCreationControl(
+                    true,
+                    <Button type="button" className="w-fit">
                       Create assignment{' '}
                       <ChevronDownIcon className="ml-1 h-4 w-4" />
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onSelect={() => setCustomEssayType('dbq')}
-                    >
-                      New DBQ (document-based)
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() => setCustomEssayType('leq')}
-                    >
-                      New LEQ (long essay)
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  )
+                ) : (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        className="w-fit"
+                        disabled={assignmentSheetClasses.length === 0}
+                      >
+                        Create assignment{' '}
+                        <ChevronDownIcon className="ml-1 h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onSelect={() => setCustomEssayType('dbq')}
+                      >
+                        New DBQ (document-based)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() => setCustomEssayType('leq')}
+                      >
+                        New LEQ (long essay)
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )
               ) : null}
               <CreateAssignmentSheet
                 assignmentTypeAvailability={data.assignmentCreationAvailability}
@@ -1092,6 +1125,7 @@ export default function AppAssignmentTypesIdRoute() {
               facets={data.thesisPromptLibrary.facets}
               optionCounts={data.thesisPromptLibrary.optionCounts}
               totalCount={data.thesisPromptLibrary.totalCount}
+              assignmentCreationLocked={teachingLockedPreview}
               onSelectPrompt={(prompt) => {
                 setApHistoryEntry(null);
                 setLibraryPrompt(prompt);
