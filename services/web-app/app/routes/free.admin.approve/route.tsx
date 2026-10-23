@@ -4,6 +4,12 @@ import {
   useActionData,
   useLoaderData,
 } from 'react-router';
+import {
+  freeClassroomsPausedBody,
+  thankYouTeacherEmailFailedBody,
+} from '~/domain/free-tier/admin-approval-copy';
+import type { FreeTierAdminLinkReplacedVariant } from '~/domain/free-tier/admin-link-gate.server';
+import { useAdminCopyPass1 } from '../free-tier/useAdminCopyPass1';
 import { CircleAlert, CircleCheck } from 'lucide-react';
 import {
   applicationIdFromSignedToken,
@@ -36,6 +42,7 @@ type LoaderData =
       reason?: string;
       schoolName?: string;
       teacherName?: string;
+      variant?: FreeTierAdminLinkReplacedVariant;
     }
   | {
       ok: true;
@@ -165,11 +172,17 @@ function terminalFromLoader(data: Extract<LoaderData, { ok: false }>) {
       <AdminLinkReplacedCard
         teacherName={teacherName}
         schoolName={schoolName}
+        variant={data.variant ?? 'forwarded'}
       />
     );
   }
   if (data.reason === 'invalid') {
-    return <AdminLinkInvalidCard />;
+    return (
+      <AdminLinkInvalidCard
+        teacherName={data.teacherName}
+        schoolName={data.schoolName}
+      />
+    );
   }
   return null;
 }
@@ -213,6 +226,12 @@ function terminalFromAction(actionData: NonNullable<ReturnType<typeof useActionD
       <AdminLinkReplacedCard
         teacherName={teacherName}
         schoolName={schoolName}
+        variant={
+          'variant' in actionData
+            ? (actionData as { variant?: FreeTierAdminLinkReplacedVariant })
+                .variant ?? 'forwarded'
+            : 'forwarded'
+        }
       />
     );
   }
@@ -243,6 +262,7 @@ function terminalFromAction(actionData: NonNullable<ReturnType<typeof useActionD
 export default function FreeAdminApproveRoute() {
   const data = useLoaderData<LoaderData>();
   const actionData = useActionData<typeof action>();
+  const pass1 = useAdminCopyPass1();
 
   if (actionData?.ok && 'idempotent' in actionData && actionData.idempotent) {
     const teacherName = data.ok ? data.teacherName : 'A teacher';
@@ -288,8 +308,11 @@ export default function FreeAdminApproveRoute() {
       return (
         <FreeTierAuthCard title="Thank you" icon={<CircleCheck />} status>
           <p className="text-sm text-muted-foreground">
-            {data.teacherName} at {data.schoolName} can start using Yawp! We
-            could not send your confirmation email.
+            {thankYouTeacherEmailFailedBody(
+              data.teacherName,
+              data.schoolName,
+              pass1
+            )}
           </p>
         </FreeTierAuthCard>
       );
@@ -312,8 +335,11 @@ export default function FreeAdminApproveRoute() {
           icon={<CircleAlert />}
         >
           <p className="text-sm text-muted-foreground">
-            Yawp! has reached the current free-tier budget for this environment.
-            We did not use this approval link; our team will follow up.
+            {freeClassroomsPausedBody(
+              data.teacherName,
+              data.schoolName,
+              pass1
+            )}
           </p>
         </FreeTierAuthCard>
       );

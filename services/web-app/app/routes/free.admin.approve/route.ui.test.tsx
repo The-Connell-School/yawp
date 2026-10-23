@@ -21,6 +21,10 @@ mock.module('~/domain/free-tier/approval-flow.server', () => ({
   completeSchoolAdminApproval: async () => ({ ok: true }),
 }));
 
+mock.module('../free-tier/useAdminCopyPass1', () => ({
+  useAdminCopyPass1: () => false,
+}));
+
 mock.module('react-router', () => ({
   ...router,
   useLoaderData: () => ({

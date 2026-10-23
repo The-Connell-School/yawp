@@ -39,6 +39,7 @@ import {
   FreeTierPerson,
 } from '../free-tier/FreeTierAuthCard';
 import { freeTierConfigErrorMessage } from '~/domain/free-tier/free-tier-config.server';
+import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
 import { Button } from '~/components/ui/button';
 
@@ -135,6 +136,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     showExploreClassroom: await userHasPendingFreeTierTeachingLock(userId),
     approvalV2: app ? await getApprovalWaitingDetails(app) : null,
     approvalEmailFrom: getTransactionalEmailFrom(),
+    adminCopyPass1: await isFreeTierEnabled(),
   };
 }
 
@@ -268,6 +270,7 @@ export default function FreeTierPendingRoute() {
     showExploreClassroom,
     approvalV2,
     approvalEmailFrom,
+    adminCopyPass1,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
@@ -379,7 +382,12 @@ export default function FreeTierPendingRoute() {
             ) : null}
             {isForwardActionError(actionData) ? (
               <p role="alert" className="text-sm text-destructive">
-                {approvalForwardError(actionData.reason)}
+                {approvalForwardError(actionData.reason, {
+                  pass1: adminCopyPass1,
+                  teacherName: app?.name,
+                  schoolName: app?.schoolName ?? 'your school',
+                  adminName: current?.adminName,
+                })}
               </p>
             ) : null}
           </>

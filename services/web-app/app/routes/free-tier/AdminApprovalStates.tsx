@@ -12,17 +12,20 @@ import {
   alreadyApprovedBody,
   approveCheckboxError,
   approveCheckboxLabel,
+  approvePageIntro,
   approvePageTitle,
   declinedBody,
   forwardPageIntro,
   forwardPageTitle,
-  teacherAtSchool,
+  forwardSentBody,
+  type AdminLinkReplacedVariant,
   FREE_TIER_ADMIN_MODEL_TRAINING_LINE,
   linkExpiredBody,
-  linkInvalidBody,
+  linkInvalidBodyForRequest,
   linkReplacedBody,
   thankYouBody,
 } from '~/domain/free-tier/admin-approval-copy';
+import { useAdminCopyPass1 } from './useAdminCopyPass1';
 import {
   FreeTierAuthCard,
   FreeTierPerson,
@@ -120,10 +123,23 @@ export function AdminLinkExpiredCard({
   );
 }
 
-export function AdminLinkInvalidCard() {
+export function AdminLinkInvalidCard({
+  teacherName,
+  schoolName,
+}: {
+  teacherName?: string;
+  schoolName?: string;
+} = {}) {
+  const pass1 = useAdminCopyPass1();
   return (
     <FreeTierAuthCard title="We couldn't open this link" icon={<CircleAlert />} status>
-      <p className="text-sm text-muted-foreground">{linkInvalidBody}</p>
+      <p className="text-sm text-muted-foreground">
+        {linkInvalidBodyForRequest({
+          teacherName,
+          schoolName,
+          pass1,
+        })}
+      </p>
     </FreeTierAuthCard>
   );
 }
@@ -131,14 +147,17 @@ export function AdminLinkInvalidCard() {
 export function AdminLinkReplacedCard({
   teacherName,
   schoolName,
+  variant = 'forwarded',
 }: {
   teacherName: string;
   schoolName: string;
+  variant?: AdminLinkReplacedVariant;
 }) {
+  const pass1 = useAdminCopyPass1();
   return (
     <FreeTierAuthCard title="This link was replaced" icon={<Info />} status>
       <p className="text-sm text-muted-foreground">
-        {linkReplacedBody(teacherName, schoolName)}
+        {linkReplacedBody(teacherName, schoolName, variant, pass1)}
       </p>
     </FreeTierAuthCard>
   );
@@ -149,20 +168,26 @@ export function AdminForwardSentCard({
   schoolName,
   recipientName,
   recipientEmail,
+  manualReview = false,
 }: {
   teacherName: string;
   schoolName: string;
   recipientName: string;
   recipientEmail: string;
+  manualReview?: boolean;
 }) {
+  const pass1 = useAdminCopyPass1();
   return (
     <FreeTierAuthCard title="Request forwarded" icon={<Send />} status>
       <p className="text-sm text-muted-foreground">
-        We sent the request for {teacherAtSchool(teacherName, schoolName)} to{' '}
-        <strong className="font-semibold text-card-foreground">
-          {recipientName}
-        </strong>{' '}
-        ({recipientEmail}). You&apos;re all set.
+        {forwardSentBody({
+          teacherName,
+          schoolName,
+          recipientName,
+          recipientEmail,
+          manualReview,
+          pass1,
+        })}
       </p>
     </FreeTierAuthCard>
   );
@@ -177,8 +202,14 @@ export function AdminApprovePageIntro({
   schoolName: string;
   teacherEmail?: string;
 }) {
+  const pass1 = useAdminCopyPass1();
   return (
     <>
+      {pass1 ? (
+        <p className="text-sm text-muted-foreground">
+          {approvePageIntro(teacherName, schoolName)}
+        </p>
+      ) : null}
       <FreeTierPerson
         name={teacherName}
         email={teacherEmail}
@@ -193,12 +224,16 @@ export function adminApprovePageTitle(teacherName: string, schoolName: string) {
   return approvePageTitle(teacherName, schoolName);
 }
 
-export function adminForwardPageIntro(teacherName: string, schoolName: string) {
-  return forwardPageIntro(teacherName, schoolName);
+export function adminForwardPageIntro(
+  teacherName: string,
+  schoolName: string,
+  pass1: boolean
+) {
+  return forwardPageIntro(teacherName, schoolName, pass1);
 }
 
-export function adminForwardPageTitle() {
-  return forwardPageTitle();
+export function adminForwardPageTitle(teacherName: string, pass1: boolean) {
+  return forwardPageTitle(teacherName, pass1);
 }
 
 export function AdminForwardBackLink({
