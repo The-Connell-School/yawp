@@ -8,9 +8,18 @@ import {
 describe('dev panel runtime gate', () => {
   test('production build and runtime are disabled', () => {
     const env = {
-      YAWP_ENVIRONMENT: 'production',
       NODE_ENV: 'production',
       DATABASE_URL: 'postgresql://u:p@localhost:5432/yawp',
+    } as unknown as NodeJS.ProcessEnv;
+    expect(isDevPanelBuildEnabled(env)).toBe(false);
+    expect(isDevPanelRuntimeEnabled(env)).toBe(false);
+  });
+
+  test('SLUG=demo without PREVIEW_SLUG does not enable panel', () => {
+    const env = {
+      SLUG: 'demo',
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgresql://u:p@remote:5432/yawp',
     } as unknown as NodeJS.ProcessEnv;
     expect(isDevPanelBuildEnabled(env)).toBe(false);
     expect(isDevPanelRuntimeEnabled(env)).toBe(false);
@@ -54,6 +63,19 @@ describe('dev panel runtime gate', () => {
       DATABASE_URL: 'postgresql://u:p@preview-postgres:5432/yawp_pr_1',
     } as unknown as NodeJS.ProcessEnv;
     expect(isDevPanelRuntimeEnabled(env)).toBe(false);
+  });
+
+  test('preview yawp with demo slug and no PR enables panel', () => {
+    const env = {
+      YAWP_ENVIRONMENT: 'preview',
+      PREVIEW_SLUG: 'demo',
+      PR_NUMBER: '',
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgresql://u:p@remote:5432/yawp',
+    } as unknown as NodeJS.ProcessEnv;
+    expect(isDevPanelBuildEnabled(env)).toBe(true);
+    expect(isDevPanelRuntimeEnabled(env)).toBe(true);
+    expect(devPanelEnvBadge(env)).toBe('Demo');
   });
 
   test('preview gate E2E dev server does not enable panel over legacy beaker', () => {
