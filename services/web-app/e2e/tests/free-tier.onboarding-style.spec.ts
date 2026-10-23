@@ -425,7 +425,7 @@ for (const viewport of [
       if (!before)
         await expect(
           admin.getByText(
-            'Grace Okafor at Lincoln High School can start using Yawp! We let them know.',
+            "Grace Okafor at Lincoln High School can start using Yawp! We've let Grace know.",
             { exact: true }
           )
         ).toBeVisible();

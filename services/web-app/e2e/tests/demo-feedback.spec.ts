@@ -113,12 +113,17 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
     await screenshot('populated');
     const submission = page.waitForRequest(
       (request) =>
-        request.url().endsWith('/api/demo-feedback') &&
+        (request.url().endsWith('/api/dev-panel/feedback') ||
+          request.url().endsWith('/api/demo-feedback')) &&
         request.method() === 'POST'
     );
-    await panel.getByRole('button', { name: 'Send feedback' }).click();
+    const sendButton = panel.getByRole('button', { name: 'Send feedback' });
+    await sendButton.scrollIntoViewIfNeeded();
+    await sendButton.click();
     const submitted = (await submission).postDataJSON();
-    await expect(panel.getByRole('status')).toHaveText(/Feedback saved\. Thank you\./);
+    await expect(panel.getByRole('status')).toContainText(
+      'Thanks. The Yawp! team has your note, screenshot and page URL.'
+    );
     const entry = await prisma.testerFeedback.findFirstOrThrow({
       where: {
         userId: teacher.id,
@@ -148,15 +153,26 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
       await retryPanel.getByLabel('Severity').selectOption('medium');
     }
     await retryPanel.getByLabel(retry.noteLabel).fill('Retry keeps my note');
+    await page.route('**/api/dev-panel/feedback', (route) =>
+      route.fulfill({
+        status: 503,
+        json: { error: 'Could not save feedback. Please try again.' },
+      })
+    );
     await page.route('**/api/demo-feedback', (route) =>
       route.fulfill({
         status: 503,
         json: { error: 'Could not save feedback. Please try again.' },
       })
     );
-    await retryPanel.getByRole('button', { name: 'Send feedback' }).click();
-    await expect(retryPanel.getByRole('alert')).toHaveText(
-      'Could not save feedback. Please try again.'
+    const retrySend = retryPanel.getByRole('button', { name: 'Send feedback' });
+    await retrySend.scrollIntoViewIfNeeded();
+    await retrySend.click();
+    await expect(retryPanel.getByRole('alert')).toContainText(
+      "Couldn't send your feedback"
+    );
+    await expect(retryPanel.getByRole('alert')).toContainText(
+      'Your note is still here. Check your connection and try again.'
     );
     await expect(retryPanel.getByLabel(retry.noteLabel)).toHaveValue(
       'Retry keeps my note'
@@ -165,9 +181,14 @@ test('local demo note persistence, accessibility, error recovery and disabled ga
       await expect(retryPanel.getByLabel('Severity')).toHaveValue('medium');
     }
     await screenshot('error-mobile');
+    await page.unroute('**/api/dev-panel/feedback');
     await page.unroute('**/api/demo-feedback');
-    await retryPanel.getByRole('button', { name: 'Send feedback' }).click();
-    await expect(retryPanel.getByRole('status')).toHaveText(/Feedback saved\. Thank you\./);
+    const retryAgain = retryPanel.getByRole('button', { name: 'Try again' });
+    await retryAgain.scrollIntoViewIfNeeded();
+    await retryAgain.click();
+    await expect(retryPanel.getByRole('status')).toContainText(
+      'Thanks. The Yawp! team has your note, screenshot and page URL.'
+    );
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth

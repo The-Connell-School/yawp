@@ -6,7 +6,7 @@ test('admin creates a persistent seeded preview seat and retrieves its code', as
   page,
 }) => {
   await page.goto('/accessibility');
-  await page.getByLabel('Access code').fill(MASTER_CODE);
+  await page.locator('#preview-access-code').fill(MASTER_CODE);
   await page.getByRole('button', { name: 'Open preview' }).click();
 
   await page
@@ -40,7 +40,7 @@ test('admin creates a persistent seeded preview seat and retrieves its code', as
     })
     .click();
   await page.getByRole('button', { name: 'Re-enter access code' }).click();
-  await page.getByLabel('Access code').fill(accessCode!);
+  await page.locator('#preview-access-code').fill(accessCode!);
   await page.getByRole('button', { name: 'Open preview' }).click();
   await expect(page.getByRole('alert')).toHaveCount(0);
   await expect(page.locator('[data-preview-access-screen]')).toHaveCount(0);

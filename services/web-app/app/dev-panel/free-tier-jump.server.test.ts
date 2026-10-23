@@ -64,7 +64,25 @@ mock.module('./dev-panel-session.server', () => ({
   createDevPanelSessionHeaders: async () => new Headers(),
 }));
 
-const { executeFreeTierStateJump } = await import('./free-tier-jump.server');
+const { executeFreeTierStateJump, PENDING_STATES_NEED_THROWAWAY } = await import(
+  './free-tier-jump.server'
+);
+
+describe('executeFreeTierStateJump pending guard', () => {
+  test('refuses pending states without throwaway before writes', async () => {
+    const result = await executeFreeTierStateJump({
+      request: new Request('http://localhost/'),
+      stateId: 'pending.waiting-on-admin',
+      throwaway: false,
+      currentUserId: 'user-1',
+      organizationId: 'org-1',
+    });
+    expect(result).toEqual({
+      ok: false,
+      error: PENDING_STATES_NEED_THROWAWAY,
+    });
+  });
+});
 
 describe('executeFreeTierStateJump monthly usage seeding', () => {
   test('does not upsert global free_tier.limits.v1', async () => {

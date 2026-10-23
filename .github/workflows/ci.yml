@@ -165,7 +165,7 @@ jobs:
 
       - name: 🧪 Validate deployment contract
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        run: bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-ecr-deploy.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js ./scripts/preview/demo-mail-config.test.ts ./scripts/worktree-local-setup.test.ts --max-concurrency=2
+        run: bun test ./scripts/deployment-contract.test.ts ./scripts/preview/demo-ecr-deploy.test.ts ./scripts/preview/demo-internal-api-config.test.ts ./scripts/preview/render-compose.test.js ./scripts/preview/demo-mail-config.test.ts ./scripts/worktree-local-setup.test.ts ./scripts/preview/deploy-log-secrets.test.js ./scripts/preview/redact-deploy-logs.test.js --max-concurrency=2
 
       - name: 🧪 Validate Blackboard LTI mock
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -252,6 +252,7 @@ jobs:
           ./services/web-app/app/domain/free-tier/service.integration.test.ts
           ./services/web-app/app/routes/api.free-tier.waitlist/route.integration.test.ts
           ./services/web-app/app/domain/free-tier/site-license-locked-tiles.join-flow.integration.test.ts
+          ./services/web-app/app/dev-panel/dev-panel-feedback.server.integration.test.ts
 
       - name: Free tier class preparation (isolated Postgres)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -268,6 +269,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
           APPROVAL_V2_DB_TESTS: '1'
+          FREE_TIER_JUMP_DB_TESTS: '1'
           FREE_TIER_LINK_HMAC_SECRET: ci-free-tier-link-hmac-secret-key-32b
           PRIMARY_APP_URL: https://yawp.test
         run: |
@@ -277,6 +279,11 @@ jobs:
           bun test --max-concurrency=2 ./services/web-app/app/domain/free-tier/approval-deny.integration.test.ts
           bun test --max-concurrency=2 ./services/web-app/app/routes/app.free-tier.pending/route.v2.test.tsx
           bun test --max-concurrency=2 ./services/web-app/app/routes/free.admin.approve/route.v2.test.tsx
+          bun test --max-concurrency=2 ./services/web-app/app/dev-panel/free-tier-jump.pending.real-db.integration.test.ts
+
+      - name: Free-tier approval suppress-email (isolated prisma mocks)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        run: bun test ./services/web-app/app/domain/free-tier/approval-flow.suppress-email.server.test.ts
 
       - name: 🧪 Free-tier operator cap denial persistence (isolated)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -334,7 +341,7 @@ jobs:
           ./services/web-app/app/utils/preview-access-rate-limit.server.test.ts
           ./services/web-app/app/utils/internal-free-tier-http.server.test.ts
           ./services/web-app/app/utils/mock-admin-environment.test.ts
-          $(find ./services/web-app/app/domain/free-tier -type f -name '*.test.ts' ! -name 'student-join.server.test.ts' ! -name 'inapp-usage.server.test.ts' ! -name 'monthly-policy.test.ts' ! -name 'locked-preview.server.test.ts' ! -name 'teaching-access-shell.server.test.ts' ! -name 'email.server.test.ts' ! -name 'demo-signup-admin-email.test.ts' ! -name 'admin-link-gate.server.test.ts' ! -name 'admin-approval-email-facts.test.ts' ! -name 'approval-flow-pass1-send.test.ts' ! -name 'application-id-opaque-hash-verified.test.ts' ! -name 'admin-token-s9a-actions.test.ts' ! -name 'service.create-token-idempotency.test.ts' ! -name 'posthog-*.test.ts' ! -name 'service.analytics.server.test.ts' ! -name 'public-onboarding.route.test.ts' ! -name 'provision.analytics.server.test.ts' ! -name '*.integration.test.ts')
+          $(find ./services/web-app/app/domain/free-tier -type f -name '*.test.ts' ! -name 'student-join.server.test.ts' ! -name 'inapp-usage.server.test.ts' ! -name 'monthly-policy.test.ts' ! -name 'locked-preview.server.test.ts' ! -name 'teaching-access-shell.server.test.ts' ! -name 'email.server.test.ts' ! -name 'demo-signup-admin-email.test.ts' ! -name 'admin-link-gate.server.test.ts' ! -name 'admin-approval-email-facts.test.ts' ! -name 'approval-flow-pass1-send.test.ts' ! -name 'approval-flow.suppress-email.server.test.ts' ! -name 'application-id-opaque-hash-verified.test.ts' ! -name 'admin-token-s9a-actions.test.ts' ! -name 'service.create-token-idempotency.test.ts' ! -name 'posthog-*.test.ts' ! -name 'service.analytics.server.test.ts' ! -name 'public-onboarding.route.test.ts' ! -name 'provision.analytics.server.test.ts' ! -name '*.integration.test.ts')
           ./services/web-app/app/routes/app/sidebar-nav.reporter.test.ts
           ./packages/prisma/preview-access-code.free-classroom.test.ts
           ./packages/prisma/scripts/preview-seats.test.ts
@@ -866,6 +873,12 @@ jobs:
             bun test --max-concurrency=2 "$file"
           done
 
+      # route.test.ts mocks preview-access modules; guard integration must run alone.
+      - name: Dev panel preview-access unlock route (isolated)
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        run: bun test app/routes/api.dev-panel.preview-access/route.guard.test.ts
+
       # Free-tier / enrollment suites also mock Prisma; run isolated like Daily Pages.
       # Feature flags (and the suites around them). These suites
       # replace modules with mocks, which leak across files in one bun process,
@@ -958,6 +971,15 @@ jobs:
             'app/dev-panel/dev-panel-route-guard.server.test.ts' \
             'app/dev-panel/dev-panel-orgs.server.test.ts' \
             'app/dev-panel/dev-panel-storage.test.ts' \
+            'app/dev-panel/dev-panel-provider.test.tsx' \
+            'app/dev-panel/dev-panel-free-tier-flyout.test.tsx' \
+            'app/dev-panel/dev-panel-flyout-instant.test.tsx' \
+            'app/dev-panel/dev-panel-feedback-path.test.ts' \
+            'app/dev-panel/dev-panel-bundle.test.ts' \
+            'app/dev-panel/dev-panel-feedback-screenshot.server.test.ts' \
+            'app/dev-panel/feedback-route-contract.test.ts' \
+            'app/routes/auth.dev-login/route.test.ts' \
+            'app/dev-panel/feedback-route-contract.isolated.test.ts' \
             'app/dev-panel/free-tier-jump.server.test.ts' \
             'app/dev-panel/free-tier-states.catalog.test.ts' \
             'app/utils/preview-access.server.test.ts' \

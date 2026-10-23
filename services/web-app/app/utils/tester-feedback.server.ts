@@ -228,7 +228,7 @@ function isDemoAppOrigin(value: string | null) {
   return headerOrigin(value) === 'https://demo.yawp.school';
 }
 
-function acceptsFeedbackOrigin(request: Request, environment: string) {
+export function acceptsFeedbackOrigin(request: Request, environment: string) {
   const normalizedEnvironment = environment.trim().toLowerCase();
   const originHeader = request.headers.get('origin');
   const origin = headerOrigin(originHeader);

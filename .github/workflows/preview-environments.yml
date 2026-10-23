@@ -365,6 +365,7 @@ jobs:
           deploy_log="${PREVIEW_ROOT}/logs/pr-${PR_NUMBER}-deploy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.log"
           deploy_command="cd $(shell_quote "$remote_control") && ${remote_env[*]} bash scripts/preview/admit-and-deploy.sh"
           set +e
+          REDACT_DEPLOY_LOGS_SCRIPT="${remote_control}/scripts/preview/redact-deploy-logs.sh" \
           SSH_IDENTITY="$HOME/.ssh/preview_key" \
           SSH_TARGET="$ssh_target" \
           LOCK_FILE="$lock_file" \
@@ -405,11 +406,18 @@ jobs:
           preview_url="$(awk -F= '/^PREVIEW_URL=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
           ua_preview_url="$(awk -F= '/^UA_PREVIEW_URL=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
           blackboard_url="$(awk -F= '/^BLACKBOARD_URL=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
-          access_code="$(awk -F= '/^PREVIEW_ACCESS_CODE=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
+          access_seats_file="$(awk -F= '/^PREVIEW_ACCESS_SEATS_FILE=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
           elapsed_ms="$(awk -F= '/^PREVIEW_ELAPSED_MS=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
           master_org_gate_enabled="$(awk -F= '/^PREVIEW_MASTER_ORG_GATE_ENABLED=/{print $2}' "$RUNNER_TEMP/preview-deploy.log" | tail -1)"
           test -n "$preview_url" || { echo "Deploy script did not print PREVIEW_URL"; exit 1; }
-          test -n "$access_code" || { echo "Deploy script did not print PREVIEW_ACCESS_CODE"; exit 1; }
+          test -n "$access_seats_file" || { echo "Deploy script did not print PREVIEW_ACCESS_SEATS_FILE"; exit 1; }
+          read_smoke_script="${remote_control}/scripts/preview/read-smoke-access-code-from-seats-file.mjs"
+          access_code="$(
+            ssh -i "$HOME/.ssh/preview_key" -o BatchMode=yes "$ssh_target" \
+              "node $(shell_quote "$read_smoke_script") $(shell_quote "$access_seats_file")"
+          )"
+          test -n "$access_code" || { echo "Could not read smoke access code from host seats file"; exit 1; }
+          echo "::add-mask::$access_code"
           echo "Preview capacity OK: ${running}/${PREVIEW_MAX_RUNNING} running before deploy, ${resident}/${PREVIEW_MAX_RESIDENT} resident."
           {
             echo "url=$preview_url"
@@ -419,6 +427,11 @@ jobs:
             echo "elapsed_ms=${elapsed_ms:-unknown}"
             echo "master_org_gate_enabled=${master_org_gate_enabled:-false}"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Print deploy log redaction summary
+        if: always() && steps.preview_gate.outputs.skip_preview != 'true'
+        run: |
+          grep -sE '^REDACT_(FILES_CHANGED|VALUES_MASKED|WARNING)=[0-9]+$' "$RUNNER_TEMP/preview-deploy.log" || echo 'REDACT_SUMMARY=none'
 
       - name: Verify preview access gate
         if: steps.preview_gate.outputs.skip_preview != 'true'

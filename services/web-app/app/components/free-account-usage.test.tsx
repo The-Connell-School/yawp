@@ -78,6 +78,8 @@ test('monthly guidance is absent with the monthly flag off', () => {
 });
 test('Advocate Pack follows incomplete first steps, leads after completion, and stays hidden for legacy usage', () => {
   const html = render(<FreeAccountRail usage={usage} />);
+  expect(html).toContain('Create your first assignment');
+  expect(html).not.toContain('Give your first assignment');
   expect(html.indexOf('free-account-checklist')).toBeLessThan(
     html.indexOf('Loving what Yawp!')
   );

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { DEV_PANEL_SIGNED_OUT_TESTER_EMAIL } from '~/dev-panel/dev-panel-signed-out-feedback.server';
 
 const prisma = {
   user: { findFirst: mock(), findMany: mock(), findUnique: mock() },
@@ -269,7 +270,10 @@ describe('auth.dev-login action', () => {
     );
 
     expect(prisma.user.findMany).toHaveBeenCalledWith({
-      where: { memberships: { some: { isActive: true, organizationId: 'preview-seat-2' } } },
+      where: {
+        email: { not: DEV_PANEL_SIGNED_OUT_TESTER_EMAIL },
+        memberships: { some: { isActive: true, organizationId: 'preview-seat-2' } },
+      },
       select: {
         email: true,
         name: true,
@@ -310,7 +314,10 @@ describe('auth.dev-login action', () => {
     );
 
     expect(prisma.user.findMany).toHaveBeenCalledWith({
-      where: { memberships: { some: { isActive: true, organizationId: 'default-org' } } },
+      where: {
+        email: { not: DEV_PANEL_SIGNED_OUT_TESTER_EMAIL },
+        memberships: { some: { isActive: true, organizationId: 'default-org' } },
+      },
       select: {
         email: true,
         name: true,
@@ -386,7 +393,10 @@ describe('auth.dev-login options pagination', () => {
     );
 
     expect(prisma.user.findMany).toHaveBeenCalledWith({
-      where: { memberships: { some: { isActive: true, organizationId: 'preview-seat-2' } } },
+      where: {
+        email: { not: DEV_PANEL_SIGNED_OUT_TESTER_EMAIL },
+        memberships: { some: { isActive: true, organizationId: 'preview-seat-2' } },
+      },
       select: {
         email: true,
         name: true,

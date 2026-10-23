@@ -252,7 +252,8 @@ describe('buildPreviewEnv', () => {
     const deprecatedTransportAuth = ['PREVIEW', 'BASIC', 'AUTH'].join('_');
 
     expect(workflow).not.toContain(deprecatedTransportAuth);
-    expect(workflow).toContain('PREVIEW_ACCESS_CODE=');
+    expect(workflow).toContain('read-smoke-access-code-from-seats-file.mjs');
+    expect(workflow).toContain('PREVIEW_ACCESS_SEATS_FILE=');
     expect(deploy).toContain('access-code.mjs');
     expect(deploy).toContain('oven/bun:1.4.3');
     expect(deploy).toContain('bun scripts/preview/access-code.mjs --seats');
@@ -261,7 +262,8 @@ describe('buildPreviewEnv', () => {
     expect(deploy).toContain('PREVIEW_ACCESS_SECRET');
     expect(deploy).toContain('PREVIEW_MASTER_ACCESS_CODE');
     expect(deploy).toContain('PREVIEW_SESSION_SECRET');
-    expect(deploy).toContain('PREVIEW_ACCESS_CODE=');
+    expect(deploy).toContain('PREVIEW_ACCESS_SEATS_FILE=$ACCESS_SEATS_FILE');
+    expect(deploy).not.toContain('PREVIEW_SEAT_CODE_');
     expect(deploy).toContain('PREVIEW_SEAT_COUNT="${PREVIEW_SEAT_COUNT:-1}"');
     expect(githubConfig).toContain(
       'gh_var PREVIEW_SEAT_COUNT "${PREVIEW_SEAT_COUNT:-1}"'

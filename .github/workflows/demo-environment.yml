@@ -439,6 +439,7 @@ jobs:
           lock_file="${PREVIEW_ROOT}/preview-host.lock"
           deploy_log="${PREVIEW_ROOT}/logs/demo-deploy-${GITHUB_RUN_ID}.log"
           deploy_command="cd $(shell_quote "$remote_control") && ${remote_env[*]} bash scripts/preview/deploy.sh"
+          REDACT_DEPLOY_LOGS_SCRIPT="${remote_control}/scripts/preview/redact-deploy-logs.sh" \
           SSH_IDENTITY="$HOME/.ssh/demo_key" \
           SSH_TARGET="$ssh_target" \
           LOCK_FILE="$lock_file" \
@@ -449,16 +450,28 @@ jobs:
             | tee /tmp/demo-deploy.log
           url="$(awk -F= '/^PREVIEW_URL=/{print $2}' /tmp/demo-deploy.log | tail -1)"
           ua_url="$(awk -F= '/^UA_PREVIEW_URL=/{print $2}' /tmp/demo-deploy.log | tail -1)"
-          access_code="$(awk -F= '/^PREVIEW_ACCESS_CODE=/{print $2}' /tmp/demo-deploy.log | tail -1)"
+          access_seats_file="$(awk -F= '/^PREVIEW_ACCESS_SEATS_FILE=/{print $2}' /tmp/demo-deploy.log | tail -1)"
           master_org_gate_enabled="$(awk -F= '/^PREVIEW_MASTER_ORG_GATE_ENABLED=/{print $2}' /tmp/demo-deploy.log | tail -1)"
           test -n "$url" || { echo "Deploy did not print PREVIEW_URL"; exit 1; }
-          test -n "$access_code" || { echo "Deploy did not print PREVIEW_ACCESS_CODE"; exit 1; }
+          test -n "$access_seats_file" || { echo "Deploy did not print PREVIEW_ACCESS_SEATS_FILE"; exit 1; }
+          read_smoke_script="${remote_control}/scripts/preview/read-smoke-access-code-from-seats-file.mjs"
+          access_code="$(
+            ssh -i "$HOME/.ssh/demo_key" -o BatchMode=yes "$ssh_target" \
+              "node $(shell_quote "$read_smoke_script") $(shell_quote "$access_seats_file")"
+          )"
+          test -n "$access_code" || { echo "Could not read smoke access code from host seats file"; exit 1; }
+          echo "::add-mask::$access_code"
           {
             echo "url=$url"
             echo "ua_url=$ua_url"
             echo "access_code=$access_code"
             echo "master_org_gate_enabled=${master_org_gate_enabled:-false}"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Print deploy log redaction summary
+        if: always()
+        run: |
+          grep -sE '^REDACT_(FILES_CHANGED|VALUES_MASKED|WARNING)=[0-9]+$' /tmp/demo-deploy.log || echo 'REDACT_SUMMARY=none'
 
       - name: Verify the demo actually serves
         run: |

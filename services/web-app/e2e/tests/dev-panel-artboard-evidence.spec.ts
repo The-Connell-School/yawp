@@ -89,14 +89,11 @@ test.describe('Dev panel artboard evidence', () => {
 
     const tools = await openDevToolsPanel(page);
     await tools.getByRole('button', { name: /^Free-tier states/ }).click();
-    await tools
-      .getByRole('button', { name: 'Choose a state to jump to', exact: true })
-      .click();
     const stateSheet = page.getByRole('dialog', { name: 'Free-tier states' });
     await expect(stateSheet).toBeVisible({ timeout: 15_000 });
     await shot(page, '19');
 
-    await stateSheet.locator('input[name="free-tier-state"]').first().check();
+    await stateSheet.getByRole('radio').first().check({ force: true });
     await stateSheet
       .getByRole('checkbox', { name: 'Use a throwaway test account' })
       .setChecked(false);
@@ -110,7 +107,7 @@ test.describe('Dev panel artboard evidence', () => {
     await stateSheet
       .getByRole('checkbox', { name: 'Use a throwaway test account' })
       .setChecked(true);
-    await stateSheet.locator('input[name="free-tier-state"]').first().check();
+    await stateSheet.getByRole('radio').first().check({ force: true });
     await page.route('**/api/dev-panel/free-tier-jump', async (route) => {
       await route.fulfill({
         status: 200,
@@ -139,7 +136,9 @@ test.describe('Dev panel artboard evidence', () => {
         };
     });
     await stateSheet.getByRole('button', { name: 'Jump to this state' }).click();
-    await expect(stateSheet.getByRole('status').getByText('Switching…')).toBeVisible();
+    await expect(
+      stateSheet.getByRole('button', { name: 'Jumping…' })
+    ).toBeVisible();
     await shot(page, '21');
     await page
       .evaluate(() => {
@@ -161,32 +160,33 @@ test.describe('Dev panel artboard evidence', () => {
     await shot(page, '57');
 
     await feedbackDialog.getByLabel('Note').fill('Evidence note for sent state');
-    await page.route('**/api/demo-feedback', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ ok: true }),
-      });
-    });
     await feedbackDialog.getByRole('button', { name: 'Send feedback' }).click();
-    await expect(feedbackDialog.getByRole('status')).toContainText('Thank you');
+    await expect(feedbackDialog.getByRole('heading', { name: 'Feedback sent' })).toBeVisible();
+    await expect(feedbackDialog.getByRole('status')).toContainText(
+      'Thanks. The Yawp! team has your note, screenshot and page URL.'
+    );
     await shot(page, '59');
 
-    await page.unroute('**/api/demo-feedback');
-    await feedbackDialog.getByRole('button', { name: 'Send more feedback' }).click();
+    await feedbackDialog.getByRole('button', { name: 'Send another' }).click();
 
     await feedbackDialog.getByLabel('Note').fill('Evidence note kept on error');
-    await page.route('**/api/demo-feedback', async (route) => {
+    await page.route('**/api/dev-panel/feedback', async (route) => {
       await route.fulfill({
         status: 503,
-        json: { error: 'Could not save feedback. Please try again.' },
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: false, error: 'Could not save feedback. Please try again.' }),
       });
     });
     await feedbackDialog.getByRole('button', { name: 'Send feedback' }).click();
-    await expect(feedbackDialog.getByRole('alert')).toBeVisible();
+    await expect(feedbackDialog.getByRole('alert')).toContainText(
+      "Couldn't send your feedback"
+    );
+    await expect(feedbackDialog.getByRole('alert')).toContainText(
+      'Your note is still here. Check your connection and try again.'
+    );
     await shot(page, '60');
 
-    await page.unroute('**/api/demo-feedback');
+    await page.unroute('**/api/dev-panel/feedback');
     await page.keyboard.press('Escape');
     await page.evaluate(() => {
       const raw = localStorage.getItem('yawp-dev-panel');
