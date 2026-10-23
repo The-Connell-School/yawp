@@ -778,9 +778,7 @@ describe('PR preview deployment contract', () => {
       resetIndex
     );
     const generateIndex = deployScript.indexOf('${prisma_cli} generate');
-    const migrateIndex = deployScript.indexOf(
-      'prisma-migrate-deploy-with-summary.sh'
-    );
+    const migrateIndex = deployScript.indexOf('${migrate_wrapper}');
     expect(deployScript).toContain(
       "prisma_cli='PRISMA_CLI_REPO_ROOT=/app bash /preview-control/prisma-cli.sh'"
     );

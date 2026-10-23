@@ -448,8 +448,7 @@ export_demo_tester_feedback_before_reset() {
 restore_demo_tester_feedback_after_reset() {
   [[ "$SLUG" == "demo" ]] || return 0
   [[ -n "${DEMO_TESTER_FEEDBACK_BACKUP_FILE:-}" ]] || return 0
-  PREVIEW_ROOT="$ROOT" \
-    DATABASE_NAME="$DATABASE_NAME" \
+  PREVIEW_ROOT="$ROOT" DATABASE_NAME="$DATABASE_NAME" \
     PREVIEW_POSTGRES_CONTAINER="$POSTGRES_CONTAINER" \
     DEMO_TESTER_FEEDBACK_BACKUP_FILE="$DEMO_TESTER_FEEDBACK_BACKUP_FILE" \
     BACKUP_FILE="$DEMO_TESTER_FEEDBACK_BACKUP_FILE" \

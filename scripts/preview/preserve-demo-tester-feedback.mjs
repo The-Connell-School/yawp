@@ -137,9 +137,15 @@ async function streamRestoreFromBase64Copy(databaseName, backupFile, includeScre
   base64Child.stdout.pipe(psqlChild.stdin, { end: false });
 
   const base64ExitCode = await once(base64Child, 'close').then(([code]) => code ?? 1);
-  if (base64ExitCode !== 0) {
-    psqlChild.stdin.destroy();
-    psqlChild.kill();
+  if (base64ExitCode !== 0 || psqlStdinBroken) {
+    if (!psqlStdinBroken) {
+      psqlChild.stdin.destroy();
+      psqlChild.kill();
+    }
+    const psqlExitCode = await psqlClosePromise;
+    if (psqlStdinBroken || psqlExitCode !== 0) {
+      throw failPsqlRestore();
+    }
     throw new Error(
       sanitizeCliFailure(
         'base64 encode',
