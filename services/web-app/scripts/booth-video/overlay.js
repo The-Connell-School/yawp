@@ -22,6 +22,8 @@
   };
 
   const css = `
+    /* The dev-only environment button has no place in a product video. */
+    [class*="local-dev-environment"] { display: none !important; }
     #booth-root { position: fixed; inset: 0; pointer-events: none; z-index: 2147483000; font-family: Roboto, system-ui, sans-serif; }
     #booth-root * { box-sizing: border-box; }
     .booth-caption { position: absolute; left: 50%; bottom: 26px; transform: translate(-50%, 16px); max-width: 1180px;

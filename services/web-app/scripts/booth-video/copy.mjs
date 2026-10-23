@@ -82,6 +82,10 @@ export const ESSAY = [
   "Bradbury did not predict a government that takes our books away. He predicted people who would give them up because something louder was easier. The good news is that a choice can be made differently. Every time we put the phone down and finish the chapter, we turn the volume down on Montag's world.",
 ];
 
+/** The intro's last sentence: written in the Thesis Statement step, before the rest of the intro. */
+export const THESIS =
+  "Our society is not burning books, but we are moving toward Montag's world in a quieter way: technology makes it easier than ever to choose noise over thinking, and we are losing the patience that real understanding requires.";
+
 /** Typed live at the end of drafting, so the time-lapse lands on a real keystroke. */
 export const ESSAY_LAST_SENTENCE =
   ' Every time we put the phone down and finish the chapter, we turn the volume down on Montag\'s world.';
@@ -402,10 +406,11 @@ export const VO = {
     generateCallout: { title: 'Prompts in seconds', body: 'Use your own prompt, pick one from the library, or have Yawp! draft three to choose from.' },
     sheet: 'Pick the class, check the settings, and send it.',
     tutorCallout: { title: 'You control the tutor', body: 'Turn the tutor off for a "cold write" when you want to see what students can do on their own.' },
-    sent: 'Sent. Every student gets their own document, with the tutor built in.',
+    sent: 'Sent to every student in the class.',
   },
   student: {
-    open: 'Maya opens the assignment. Pre-writing comes first.',
+    open: 'Maya opens the assignment.',
+    tutorBuiltIn: 'Every student gets their own document, with the tutor built in. Pre-writing comes first.',
     timelapse: 'Maya gets her ideas down.',
     feedback: 'She asks for feedback.',
     feedbackCallout: { title: 'Questions, not answers', body: 'The Yawp! tutor reads her notes and pushes her thinking forward.' },
@@ -413,11 +418,13 @@ export const VO = {
     asks: { title: 'The student asks the tutor to write for them.', body: '"Can you just write my thesis statement for me?"' },
     refusal: { title: 'The tutor\'s response', body: 'It won\'t write for her. It sends her back to her own best sentence.' },
     point: { title: 'The refusal is the point.', body: 'Yawp! protects the cognitive friction students need to learn.' },
-    later: 'A few days later: Maya\'s draft.',
+    steps: 'As you teach each step, the tutor supports students through it.',
+    stepsCallout: { title: 'A tutor for every step', body: 'Thesis, introduction, body paragraphs, conclusion, title: each step has its own coaching.' },
     submit: 'Every word is Maya\'s own. She submits.',
   },
   grading: {
-    open: 'Ms. Rivera opens Maya\'s essay.',
+    open: 'Back on Ms. Rivera\'s dashboard: one essay to grade.',
+    openCallout: { title: 'Grading starts here', body: 'Every essay waiting for a grade, one click away.' },
     run: 'One click runs the Grading Assistant.',
     results: 'Rubric scores and comments, grounded in Maya\'s actual sentences.',
     editCallout: { title: 'The teacher has the final say.', body: 'Teachers can change and edit anything the Grading Assistant does.' },
@@ -439,6 +446,7 @@ export const VO = {
   },
   planner: {
     open: 'The suggestion opens in the Lesson Planner.',
+    otherStarts: { title: 'Or start somewhere else', body: 'Plan from a skill, a standard, or a writing fundamental. Teachers start where they are.' },
     chat: 'A short conversation, and the plan comes back built from Yawp! materials.',
     runOfShow: { title: 'The run of show', body: 'A minute-by-minute plan for tomorrow\'s 50-minute period.' },
     stack: 'Add it all to the stack: handouts, practice, exit ticket.',

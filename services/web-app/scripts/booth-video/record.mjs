@@ -93,7 +93,7 @@ const segments = {
     await s.clearCallout();
     await s.click(page.getByRole('button', { name: 'Create Assignment' }), { after: 1500 });
     await s.dockCaption(null);
-    await go(page, '/app/my-classes');
+    await go(page, `/app/my-classes/${boothState().classId}`);
     await s.caption(VO.assign.sent);
     await rec.stop();
     await s.clearCaption();
@@ -114,21 +114,21 @@ async function nextTutorReply(before) {
 segments.student = async () => {
   await titleCard(SECTIONS.student);
   await as(copy.STUDENT.email);
-  await go(page, '/app');
+  await go(page, `/app/my-classes/${boothState().classId}`);
   await s.dockCaption(null);
   await s.chapter(SECTIONS.student, TOTAL_SECTIONS);
   await rec.start('student-open');
   await s.caption(VO.student.open, { hold: false });
+  const card = page.locator('button:has-text("Fahrenheit 451")').first();
+  await s.moveTo(card, 900);
   await sleep(1200);
-  await s.click('a:has-text("English 10 - Period 3")', { after: 1000 });
-  await page.waitForLoadState('networkidle');
-  await s.click(page.locator('button:has-text("Fahrenheit 451")').first(), { after: 0 });
+  await s.click(card, { after: 0 });
   await page.waitForURL(/\/app\/documents\//);
   await page.waitForLoadState('networkidle');
   await page.evaluate(() => document.fonts.ready);
   const editor = page.locator('.ProseMirror').first();
   await s.dockCaption(editor);
-  await sleep(1800);
+  await s.caption(VO.student.tutorBuiltIn);
 
   // Pre-writing, as a time-lapse: real keystrokes, just fast.
   await s.caption(VO.student.timelapse, { hold: false });
@@ -179,23 +179,35 @@ segments.student = async () => {
   await s.clearCallout();
   await rec.stop();
 
-  // Off camera: a few days of drafting. The draft replaces the notes.
-  await s.click(editor, { after: 100 });
-  await page.keyboard.press('Control+A');
-  const draft = copy.ESSAY.join('\n');
-  await page.keyboard.type(draft.slice(0, draft.length - copy.ESSAY_LAST_SENTENCE.length), { delay: 0 });
-  const titleInput = page.locator('[data-testid="document-title-input"]');
-  await titleInput.click();
-  await page.keyboard.press('Control+A');
-  await page.keyboard.type(copy.ESSAY_TITLE, { delay: 0 });
-  await page.keyboard.press('Tab');
-  await s.click(editor, { after: 100 });
-  await page.keyboard.press('Control+End');
-  await sleep(1500);
-
-  await rec.start('student-submit');
-  await s.caption(VO.student.later, { hold: false });
-  await sleep(1500);
+  // The tutor through each step while the essay comes together (a time-lapse).
+  await rec.start('student-steps');
+  await s.caption(VO.student.steps, { hold: false });
+  const nextStep = page.locator('[data-testid="tutor-next-module"]');
+  const steps = [
+    async () => { await s.caret(editor, 'end'); await page.keyboard.press('Control+A'); await s.write(copy.THESIS); },
+    async () => { await s.caret(editor, 'start'); await s.write(copy.ESSAY[0].slice(0, copy.ESSAY[0].length - copy.THESIS.length)); },
+    async () => { await s.caret(editor, 'end'); await s.write(`\n${copy.ESSAY.slice(1, 4).join('\n')}`); },
+    async () => { await s.caret(editor, 'end'); await s.write(`\n${copy.ESSAY[4].slice(0, copy.ESSAY[4].length - copy.ESSAY_LAST_SENTENCE.length)}`); },
+    async () => {
+      const titleInput = page.locator('[data-testid="document-title-input"]');
+      await titleInput.click();
+      await page.keyboard.press('Control+A');
+      await page.keyboard.type(copy.ESSAY_TITLE, { delay: 40 });
+      await page.keyboard.press('Tab');
+    },
+  ];
+  for (const [i, write] of steps.entries()) {
+    await s.click(nextStep, { ms: 450, after: 700 });
+    if (i === 0) {
+      await s.callout(page.locator('[data-tutor-message="true"]').last(), { ...VO.student.stepsCallout, side: 'right', dim: false, holdMs: 3800 });
+      await s.clearCallout();
+    }
+    await s.badge('Time-lapse');
+    await write();
+    await s.badge('');
+    await sleep(1300);
+  }
+  await s.caret(editor, 'end');
   await page.keyboard.type(copy.ESSAY_LAST_SENTENCE, { delay: 32 });
   await sleep(800);
   await s.caption(VO.student.submit, { hold: false });
@@ -211,13 +223,20 @@ segments.grading = async () => {
   const state = boothState();
   await titleCard(SECTIONS.grading);
   await as(copy.TEACHER.email);
-  await go(page, `/app/my-classes/${state.classId}/assignments/${state.assignmentId}`);
+  await go(page, '/app');
   await s.dockCaption(null);
   await s.chapter(SECTIONS.grading, TOTAL_SECTIONS);
+  const toGrade = page.getByRole('link', { name: /To grade/ }).first();
+  await s.scrollTo(toGrade, { ms: 900 });
   await rec.start('grading');
   await s.caption(VO.grading.open, { hold: false });
-  await sleep(1500);
-  await s.click(page.getByRole('link', { name: copy.ESSAY_TITLE }), { after: 0 });
+  await s.callout(toGrade, { ...VO.grading.openCallout, side: 'top', holdMs: 3800 });
+  await s.clearCallout();
+  await s.click(toGrade, { after: 0 });
+  await page.waitForURL(/\/app\/documents/);
+  await page.waitForLoadState('networkidle');
+  await sleep(1200);
+  await s.click(page.getByRole('row').filter({ hasText: copy.ESSAY_TITLE }).getByText(copy.ESSAY_TITLE).first(), { after: 0 });
   await page.waitForURL(/\/app\/submissions\//);
   await page.waitForLoadState('networkidle');
   await s.dockCaption('[data-testid="submission-essay-scroll"]');
@@ -364,6 +383,12 @@ segments.planner = async () => {
     holdMs: 5000,
   });
   await s.clearCallout();
+  // Other ways in: the starter tiles under the composer.
+  const tiles = page.getByText(/start from one of these/i).first();
+  await s.scrollTo(tiles, { block: 'start', ms: 1300 });
+  await s.callout(tiles.locator('xpath=..'), { ...VO.planner.otherStarts, side: 'top', dim: false, holdMs: 5000 });
+  await s.clearCallout();
+  await s.scrollTo(composer, { block: 'center', ms: 1100 });
   await s.click(composer, { after: 200 });
   await page.keyboard.press('Control+End');
   await page.keyboard.type(copy.PLANNER_ADDITION, { delay: 24 });

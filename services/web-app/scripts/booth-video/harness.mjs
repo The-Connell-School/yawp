@@ -41,12 +41,6 @@ export async function launch(profileDir) {
     ],
   });
   await context.addInitScript({ path: path.join(here, 'overlay.js') });
-  // The dev-only persona menu has no place in a product video.
-  await context.addInitScript(() => {
-    const css = 'button[aria-label$="Open dev login menu."] { display: none !important; }';
-    const add = () => { const s = document.createElement('style'); s.textContent = css; document.documentElement.appendChild(s); };
-    if (document.documentElement) add(); else document.addEventListener('DOMContentLoaded', add);
-  });
   const page = context.pages()[0] ?? (await context.newPage());
   return { context, page };
 }
@@ -148,6 +142,30 @@ export function stage(page) {
       await locator.waitFor({ state: 'attached', timeout: 20000 });
       await locator.evaluate((node, b) => node.scrollIntoView({ behavior: 'smooth', block: b }), block);
       await sleep(ms);
+    },
+    /** Puts the caret at the start or end of an editor without editing it. */
+    async caret(editor, where) {
+      await editor.evaluate((root, at) => {
+        root.focus();
+        const range = document.createRange();
+        range.selectNodeContents(root);
+        range.collapse(at === 'start');
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }, where);
+      await sleep(150);
+    },
+    /** Writes text a sentence at a time (real input events), for a time-lapse. */
+    async write(text, { pauseMs = 110 } = {}) {
+      const parts = text.split('\n');
+      for (const [i, part] of parts.entries()) {
+        if (i > 0) await page.keyboard.press('Enter');
+        for (const sentence of part.match(/[^.!?]+[.!?]*["”]?\s*/g) ?? []) {
+          await page.keyboard.insertText(sentence);
+          await sleep(pauseMs);
+        }
+      }
     },
     hold: (ms) => sleep(ms),
   };
