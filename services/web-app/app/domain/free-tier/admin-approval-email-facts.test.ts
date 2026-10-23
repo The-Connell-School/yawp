@@ -98,19 +98,35 @@ describe('admin approval email forward context', () => {
   });
 
   test('teacher reroute email does not claim the previous admin forwarded it', async () => {
-    const designed = await buildDesignedAdminApprovalEmail({
+    const flagOff = await buildDesignedAdminApprovalEmail({
       teacherName,
       teacherEmail,
       schoolName,
       approveUrl,
       notRightPersonUrl,
       routedByTeacher: true,
+      pass1: false,
     });
-    expect(designed.text).toContain(
-      adminApprovalTeacherRerouteLead(teacherName, schoolName)
+    expect(flagOff.text).not.toContain('forwarded this to you');
+    expect(flagOff.text).not.toContain(
+      adminApprovalTeacherRerouteLead(teacherName, schoolName, true)
     );
-    expect(designed.text).not.toContain('forwarded this to you');
-    expect(designed.text).not.toContain('They named you as the administrator');
+    expect(flagOff.text).toContain('They named you as the administrator');
+
+    const pass1 = await buildDesignedAdminApprovalEmail({
+      teacherName,
+      teacherEmail,
+      schoolName,
+      approveUrl,
+      notRightPersonUrl,
+      routedByTeacher: true,
+      pass1: true,
+    });
+    expect(pass1.text).toContain(
+      adminApprovalTeacherRerouteLead(teacherName, schoolName, true)
+    );
+    expect(pass1.text).not.toContain('forwarded this to you');
+    expect(pass1.text).not.toContain('They named you as the administrator');
   });
 
   test('outbox refresh reuses forward context from stored delivery payload', () => {
