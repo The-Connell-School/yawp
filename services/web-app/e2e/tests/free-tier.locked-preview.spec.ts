@@ -722,6 +722,14 @@ test('pending teacher /app HTML and loader data omit the real class code', async
     select: { id: true, code: true },
   });
   await exploreLockedApp(page, user.email!);
+  const appSsr = await page.request.get('/app');
+  expect(appSsr.status()).toBe(200);
+  expect(await appSsr.text()).not.toContain(klass.code);
+  const appData = await page.request.get(
+    '/app.data?_routes=routes/app._index'
+  );
+  expect(appData.status()).toBe(200);
+  expect(await appData.text()).not.toContain(klass.code);
   let html = await page.content();
   expect(html).not.toContain(klass.code);
   await page.goto('/app/my-classes');

@@ -66,6 +66,10 @@ mock.module('~/utils/assignment-type-access.server', () => ({
 mock.module('~/utils/student-classes.server', () => ({
   getStudentEnrolledClasses,
 }));
+const shouldHideFreeTierTeachingSecrets = mock(async () => false);
+mock.module('~/domain/free-tier/locked-preview.server', () => ({
+  shouldHideFreeTierTeachingSecrets,
+}));
 const { loader } = await import('./route');
 
 afterAll(() => {
@@ -96,6 +100,8 @@ describe('app index loader assignments', () => {
     getTeacherClassCardStats.mockReset();
     getTeacherRecentActiveClassIds.mockReset();
     getAvailableAssignmentTypesForScopes.mockReset();
+    shouldHideFreeTierTeachingSecrets.mockReset();
+    shouldHideFreeTierTeachingSecrets.mockResolvedValue(false);
     getStudentPreviewState.mockReset();
     getStudentPreviewState.mockResolvedValue({
       active: false,
@@ -743,5 +749,127 @@ describe('app index loader assignments', () => {
         rubricName: null,
       },
     ]);
+  });
+
+  test('omits class codes from serialized loader data for pending free-tier teachers', async () => {
+    shouldHideFreeTierTeachingSecrets.mockResolvedValue(true);
+    requireMembership.mockResolvedValue({
+      id: 'teacher-profile-1',
+      role: 'TEACHER',
+      isOrgOwner: false,
+      organization: { id: 'org-1', name: 'Org' },
+    });
+    getTeacherRecentActiveClassIds.mockResolvedValue(['class-1']);
+    const secretCode = 'PENDING-TEACHER-SECRET-CODE';
+    prisma.class.findMany.mockImplementation(async (args: any) => {
+      if (args.select?._count) {
+        return [
+          {
+            id: 'class-1',
+            grade: '9',
+            period: '1',
+            title: 'Pilot Class',
+            classArtKey: null,
+            classArtIndex: 0,
+            ...(args.select.code ? { code: secretCode } : {}),
+            school: {
+              id: 'school-1',
+              name: 'Parker High School',
+              organizationId: 'org-1',
+            },
+            _count: { students: 1, teachers: 1, classAssignments: 1 },
+          },
+        ];
+      }
+
+      return [
+        {
+          id: 'class-1',
+          school: { id: 'school-1', organizationId: 'org-1' },
+        },
+      ];
+    });
+    getTeacherClassCardStats.mockResolvedValue({
+      ungradedCount: 0,
+      gradedUnreleasedCount: 0,
+    });
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([]);
+
+    const response = await loader({
+      request: new Request('https://example.test/app'),
+      params: {},
+      context: {} as never,
+    } as any);
+    const data = (response as { data: unknown }).data;
+    const serialized = JSON.stringify(data);
+
+    expect(serialized).not.toContain(secretCode);
+    expect(serialized).not.toMatch(/"code"\s*:\s*"[^"]+"/);
+    expect(data).toMatchObject({
+      teacherClassCards: [{ id: 'class-1', code: null }],
+      teacherClasses: [{ id: 'class-1', title: 'Pilot Class' }],
+    });
+    expect(
+      (data as { teacherClasses: Array<{ code?: string }> }).teacherClasses[0]
+    ).not.toHaveProperty('code');
+  });
+
+  test('includes class codes in serialized loader data for approved teachers', async () => {
+    shouldHideFreeTierTeachingSecrets.mockResolvedValue(false);
+    requireMembership.mockResolvedValue({
+      id: 'teacher-profile-1',
+      role: 'TEACHER',
+      isOrgOwner: false,
+      organization: { id: 'org-1', name: 'Org' },
+    });
+    getTeacherRecentActiveClassIds.mockResolvedValue(['class-1']);
+    const secretCode = 'APPROVED-TEACHER-CLASS-CODE';
+    prisma.class.findMany.mockImplementation(async (args: any) => {
+      if (args.select?._count) {
+        return [
+          {
+            id: 'class-1',
+            grade: '9',
+            period: '1',
+            title: 'Pilot Class',
+            code: secretCode,
+            classArtKey: null,
+            classArtIndex: 0,
+            school: {
+              id: 'school-1',
+              name: 'Parker High School',
+              organizationId: 'org-1',
+            },
+            _count: { students: 1, teachers: 1, classAssignments: 1 },
+          },
+        ];
+      }
+
+      return [
+        {
+          id: 'class-1',
+          school: { id: 'school-1', organizationId: 'org-1' },
+        },
+      ];
+    });
+    getTeacherClassCardStats.mockResolvedValue({
+      ungradedCount: 0,
+      gradedUnreleasedCount: 0,
+    });
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([]);
+
+    const response = await loader({
+      request: new Request('https://example.test/app'),
+      params: {},
+      context: {} as never,
+    } as any);
+    const data = (response as { data: unknown }).data;
+    const serialized = JSON.stringify(data);
+
+    expect(serialized).toContain(secretCode);
+    expect(data).toMatchObject({
+      teacherClassCards: [{ id: 'class-1', code: secretCode }],
+      teacherClasses: [{ id: 'class-1', code: secretCode }],
+    });
   });
 });
