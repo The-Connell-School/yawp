@@ -799,11 +799,13 @@ export default function LessonPlannerHowItWorksRoute() {
               stack.
             </Copy>
             <Copy>
-              Plan a few days in one go, like a four-day flow, and{' '}
-              <strong className="text-foreground">Make each day its own lesson</strong>{' '}
-              gives every day its own run of show, stack and lesson plan, with
-              its steps and minutes already in. Your library keeps a unit as a
-              folder: its days in order, and the chat that planned them.
+              Plan a few days in one go, like a four-day flow, and each day
+              becomes its own lesson by itself: its own run of show, stack and
+              lesson plan, with its steps and minutes already in, together in a
+              folder in your library. Revise the week and you can replace the
+              days, keeping any you changed. Save the week as a framework to
+              start next week from it. Make your own folders in the library
+              too, and drag lessons into them.
             </Copy>
           </div>
           <Row
