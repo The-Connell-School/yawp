@@ -305,9 +305,10 @@ export type LessonPlannerReviewFlags = {
 };
 
 /** Yawp! Lesson Planner for teachers at the given school. */
-export function isLessonPlannerEnabled(
+export async function isLessonPlannerEnabled(
   orgId: string | null | undefined
 ): Promise<boolean> {
+  if (!(await isFreeTierCapabilityEnabled(orgId))) return false;
   return isFeatureFlagEnabled(LESSON_PLANNER_FLAG, orgId);
 }
 

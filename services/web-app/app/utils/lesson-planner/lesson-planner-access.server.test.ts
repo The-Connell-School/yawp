@@ -7,7 +7,13 @@ const requireMembership = mock();
 // the feature-flag module for the suites that share its process.
 const findUnique = mock();
 const flagValue = (value: string | null) =>
-  findUnique.mockResolvedValue(value === null ? null : { value });
+  findUnique.mockImplementation(({ where }: { where: { name: string } }) => {
+    const resolved = value === null ? null : { value };
+    if (where.name === 'feature_flag.free_tier') {
+      return Promise.resolve(resolved ?? { value: '{"mode":"everyone","orgIds":[]}' });
+    }
+    return Promise.resolve(resolved);
+  });
 
 mock.module('~/utils/auth.server', () => ({
   requireUserId,

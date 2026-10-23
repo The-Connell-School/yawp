@@ -143,13 +143,46 @@ describe('feature flags (server)', () => {
   });
 
   test('reads the row fresh on every call, so a toggle applies at once', async () => {
-    prisma.setting.findUnique.mockResolvedValueOnce({ value: 'false' });
-    expect(await isLessonPlannerEnabled('org-1')).toBe(false);
-    prisma.setting.findUnique.mockResolvedValueOnce({
-      value: '{"mode":"targeted","orgIds":["org-1"]}',
-    });
-    expect(await isLessonPlannerEnabled('org-1')).toBe(true);
-    expect(prisma.setting.findUnique).toHaveBeenCalledTimes(2);
+    const previous = process.env.YAWP_ENVIRONMENT;
+    process.env.YAWP_ENVIRONMENT = 'production';
+    try {
+      prisma.setting.findUnique.mockImplementation(({ where }: { where: { name: string } }) => {
+        if (where.name === 'feature_flag.free_tier') {
+          return Promise.resolve({ value: '{"mode":"everyone","orgIds":[]}' });
+        }
+        return Promise.resolve({ value: 'false' });
+      });
+      expect(await isLessonPlannerEnabled('org-1')).toBe(false);
+      prisma.setting.findUnique.mockImplementation(({ where }: { where: { name: string } }) => {
+        if (where.name === 'feature_flag.free_tier') {
+          return Promise.resolve({ value: '{"mode":"everyone","orgIds":[]}' });
+        }
+        return Promise.resolve({
+          value: '{"mode":"targeted","orgIds":["org-1"]}',
+        });
+      });
+      expect(await isLessonPlannerEnabled('org-1')).toBe(true);
+    } finally {
+      if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
+      else process.env.YAWP_ENVIRONMENT = previous;
+    }
+  });
+
+  test('stays off in production when free tier is off even if lesson planner is on', async () => {
+    const previous = process.env.YAWP_ENVIRONMENT;
+    process.env.YAWP_ENVIRONMENT = 'production';
+    try {
+      prisma.setting.findUnique.mockImplementation(({ where }: { where: { name: string } }) => {
+        if (where.name === 'feature_flag.free_tier') {
+          return Promise.resolve({ value: '{"mode":"off","orgIds":[]}' });
+        }
+        return Promise.resolve({ value: '{"mode":"everyone","orgIds":[]}' });
+      });
+      expect(await isLessonPlannerEnabled('org-1')).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.YAWP_ENVIRONMENT;
+      else process.env.YAWP_ENVIRONMENT = previous;
+    }
   });
 
   test('fails closed (off) when the database read fails', async () => {
