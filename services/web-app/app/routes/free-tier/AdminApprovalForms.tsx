@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Form, useNavigation } from 'react-router';
+import { Form, Link, useNavigation } from 'react-router';
 import { Checkbox } from '~/components/ui/checkbox';
 import {
   approveCheckboxError,
@@ -52,16 +52,20 @@ function ValidationSummary({
   );
 }
 
+const LEARN_MORE_URL = 'https://app.usemotion.com/meet/brian-connell/ryxkqvr';
+
 export function AdminApproveForm({
   token,
   schoolName,
   teacherName,
   serverErrors,
+  showDenyAndQa = false,
 }: {
   token: string;
   schoolName: string;
   teacherName: string;
   serverErrors?: FieldErrors;
+  showDenyAndQa?: boolean;
 }) {
   const navigation = useNavigation();
   const submitting =
@@ -168,10 +172,30 @@ export function AdminApproveForm({
           </span>
         ) : null}
       </div>
-      <FreeTierButton type="submit" isLoading={submitting} disabled={submitting}>
-        {submitting ? 'Approving…' : 'Approve Yawp!'}
-      </FreeTierButton>
-      <AdminForwardLink token={token} />
+      <div className="flex flex-col gap-2">
+        <FreeTierButton type="submit" isLoading={submitting} disabled={submitting}>
+          {submitting ? 'Approving…' : 'Approve Yawp!'}
+        </FreeTierButton>
+        {showDenyAndQa ? (
+          <FreeTierButton asChild variant="outline">
+            <a href={LEARN_MORE_URL} target="_blank" rel="noopener noreferrer">
+              I&apos;d like to learn more first
+            </a>
+          </FreeTierButton>
+        ) : null}
+        {showDenyAndQa ? (
+          <FreeTierButton
+            asChild
+            variant="ghost"
+            className="free-tier-deny-button h-auto py-2 text-card-foreground shadow-none hover:bg-muted/60"
+          >
+            <Link to={`/free/admin/approve/deny?t=${encodeURIComponent(token)}`}>
+              Deny request
+            </Link>
+          </FreeTierButton>
+        ) : null}
+      </div>
+      {!showDenyAndQa ? <AdminForwardLink token={token} /> : null}
     </Form>
   );
 }

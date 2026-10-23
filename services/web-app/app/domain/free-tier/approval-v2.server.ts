@@ -374,12 +374,23 @@ export async function forwardApprovalRequest(args: {
     }
     if (app.status !== 'SENT' && app.status !== 'MANUAL_REVIEW')
       return fail('already_decided');
-    const pending = await tx.freeTierAdminApproval.findFirst({
+    let pending = await tx.freeTierAdminApproval.findFirst({
       where: { applicationId: app.id, status: 'PENDING' },
       orderBy: { createdAt: 'desc' },
     });
-    if (!pending || pending.id !== args.currentApprovalId)
-      return fail('superseded');
+    let afterAdminDeny = false;
+    if (!pending || pending.id !== args.currentApprovalId) {
+      const denied = await tx.freeTierAdminApproval.findFirst({
+        where: {
+          applicationId: app.id,
+          id: args.currentApprovalId,
+          status: 'DENIED',
+        },
+      });
+      if (!denied || pending) return fail('superseded');
+      pending = denied;
+      afterAdminDeny = true;
+    }
     if (args.userId ? app.userId !== args.userId : !args.token)
       return fail('not_allowed');
     if (app.adminRedirectCount >= ADMIN_REDIRECT_CHAIN_CAP)
@@ -411,22 +422,24 @@ export async function forwardApprovalRequest(args: {
         throw new Error('Superseded approval link');
     }
     const now = new Date();
-    await tx.freeTierAdminApproval.update({
-      where: { id: pending.id },
-      data: {
-        status: 'REDIRECTED',
-        decidedAt: now,
-        autoRemindersStopped: true,
-        stopReason: 'forwarded',
-        nextAutoReminderAt: null,
-        nextTeacherFollowUpAt: null,
-      },
-    });
-    await tx.freeTierApprovalDelivery.updateMany({
-      where: { approvalId: pending.id, state: 'QUEUED' },
-      data: { state: 'CANCELLED', error: 'forwarded' },
-    });
-    await invalidateOpenAdminApprovalLinks(tx, app.id);
+    if (!afterAdminDeny) {
+      await tx.freeTierAdminApproval.update({
+        where: { id: pending.id },
+        data: {
+          status: 'REDIRECTED',
+          decidedAt: now,
+          autoRemindersStopped: true,
+          stopReason: 'forwarded',
+          nextAutoReminderAt: null,
+          nextTeacherFollowUpAt: null,
+        },
+      });
+      await tx.freeTierApprovalDelivery.updateMany({
+        where: { approvalId: pending.id, state: 'QUEUED' },
+        data: { state: 'CANCELLED', error: 'forwarded' },
+      });
+      await invalidateOpenAdminApprovalLinks(tx, app.id);
+    }
     const next = await tx.freeTierAdminApproval.create({
       data: {
         applicationId: app.id,

@@ -26,6 +26,9 @@ mock.module('~/utils/db.server', () => ({
     freeTierEmailLog: { findFirst: async () => null },
   },
 }));
+mock.module('~/domain/free-tier/approval-deny.server', () => ({
+  loadTeacherDeniedSurface: async () => null,
+}));
 mock.module('~/domain/free-tier/approval-v2.server', () => ({
   isApprovalV2Enabled: async () => enabled,
   getApprovalWaitingDetails: async () =>
