@@ -1,7 +1,8 @@
 import * as React from 'react';
 import {
-  adminApprovalTeacherRerouteFooterWhy,
+  adminApprovalEmailPreheader,
   adminApprovalTeacherRerouteLead,
+  adminApprovalFooterWhy,
   FREE_TIER_ADMIN_MODEL_TRAINING_LINE,
   teacherAtSchool,
 } from '~/domain/free-tier/admin-approval-copy';
@@ -213,26 +214,38 @@ export function AdminApprovalEmail(props: {
   forwardedByAdminName?: string | null;
   routedByTeacher?: boolean;
   reminder?: boolean;
+  pass1?: boolean;
   origin?: string;
 }) {
   const urls = logos(props.origin);
+  const pass1 = props.pass1 ?? false;
   const forwarder = props.forwardedByAdminName?.trim();
   const teacherSchool = teacherAtSchool(props.teacherName, props.schoolName);
-  const preheader = forwarder
-    ? `${forwarder} forwarded this to you. No Yawp! account needed.`
-    : "Review the request in a couple of minutes. You don't need a Yawp! account.";
-  const footerWhy = props.routedByTeacher
-    ? adminApprovalTeacherRerouteFooterWhy(props.teacherName)
-    : forwarder
-      ? `You're getting this because ${forwarder} forwarded ${props.teacherName}'s request to you.`
-      : `You're getting this because ${props.teacherName} named you as an administrator who can approve classroom software at ${props.schoolName}.`;
+  const preheader = adminApprovalEmailPreheader({
+    teacherName: props.teacherName,
+    schoolName: props.schoolName,
+    reminder: props.reminder,
+    forwardedByAdminName: forwarder,
+    pass1,
+  });
+  const footerWhy = adminApprovalFooterWhy({
+    teacherName: props.teacherName,
+    schoolName: props.schoolName,
+    forwardedByAdminName: forwarder,
+    routedByTeacher: props.routedByTeacher,
+    pass1,
+  });
   const intro =
     forwarder || props.routedByTeacher
       ? `${teacherSchool} would like to use Yawp! in their classroom.`
       : `${teacherSchool} would like to use Yawp! in their classroom. They named you as the administrator who can approve classroom software.`;
   const banner = props.routedByTeacher ? (
     <EmailBanner>
-      {adminApprovalTeacherRerouteLead(props.teacherName, props.schoolName)}
+      {adminApprovalTeacherRerouteLead(
+        props.teacherName,
+        props.schoolName,
+        pass1
+      )}
     </EmailBanner>
   ) : forwarder ? (
     <EmailBanner>
@@ -243,11 +256,7 @@ export function AdminApprovalEmail(props: {
 
   return (
     <YawpEmailLayout
-      preheader={
-        props.reminder
-          ? `${props.teacherName}'s request is still open. It takes a couple of minutes.`
-          : preheader
-      }
+      preheader={preheader}
       logoBlackUrl={urls.black}
       logoWhiteUrl={urls.white}
       siteUrl={urls.site}

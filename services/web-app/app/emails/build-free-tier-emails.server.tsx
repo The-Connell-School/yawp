@@ -8,8 +8,12 @@ import {
   renderReleaseEmailV2Body,
   renderTeacherReminderV2Body,
 } from '~/domain/free-tier/email-copy';
-import { renderAdminApprovalEmailBody } from '~/domain/free-tier/email-copy';
+import {
+  ADMIN_APPROVAL_EMAIL_COPY_VERSION_PASS1,
+  renderAdminApprovalEmailBody,
+} from '~/domain/free-tier/email-copy';
 import { renderAdminApprovalEmailSubject } from '~/domain/free-tier/admin-approval-copy';
+import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { renderTransactionalEmail } from './render.server';
 import {
   AdminApprovalEmail,
@@ -135,8 +139,10 @@ export async function buildAdminApprovalDesignedEmail(args: {
   routedByTeacher?: boolean;
   reminder?: boolean;
   origin?: string;
+  pass1?: boolean;
 }) {
   const origin = args.origin ?? transactionalEmailPublicOrigin();
+  const pass1 = args.pass1 ?? (await isFreeTierEnabled());
   const react = (
     <AdminApprovalEmail
       teacherName={args.teacherName}
@@ -147,6 +153,7 @@ export async function buildAdminApprovalDesignedEmail(args: {
       forwardedByAdminName={args.forwardedByAdminName}
       routedByTeacher={args.routedByTeacher}
       reminder={args.reminder}
+      pass1={pass1}
       origin={origin}
     />
   );
@@ -166,6 +173,10 @@ export async function buildAdminApprovalDesignedEmail(args: {
     forwardedByAdminName: args.forwardedByAdminName,
     routedByTeacher: args.routedByTeacher,
     reminder: args.reminder,
+    pass1,
+    copyVersion: pass1
+      ? ADMIN_APPROVAL_EMAIL_COPY_VERSION_PASS1
+      : undefined,
   });
   return {
     subject,
