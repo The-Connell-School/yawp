@@ -166,3 +166,27 @@ controls.
 3. R2 (automatic days, replace with confirm).
 4. R3 (migration, framework on the unit and in templates, prompt context).
 5. Suites, typecheck, push, PR, timesheet and questions.
+
+### Round 2 status (Oct 23)
+
+All five done and on PR 437. Notes:
+
+- **R1.**
+  - A table needs a time column ("Time", "Minutes", "Length") to be read as steps, so a vocabulary table never is.
+  - A table or list step has no heading in the chat, so its Add to stack is in the plan's step list, not inline.
+- **R2.**
+  - Only the newest multi-day reply makes days by itself. Opening an older conversation whose last reply is a week makes its days then, if none exist.
+  - Replacing never deletes: a replaced day is soft-deleted and kept out of sight.
+  - "Changed" means any of these, since the day was made:
+    - a turn of the teacher's own
+    - a piece edited or created in Yawp!
+    - the lesson set or published
+- **R3.**
+  - A framework keeps each day's steps by type, minutes and name, never their words.
+  - A unit made from "Create a Unit" keeps its map, not a framework.
+  - A framework is offered only when templates are on.
+- **K1.**
+  - A folder is a unit, so the planner's week folders and the teacher's own behave the same.
+  - Deleting a folder keeps its lessons.
+  - Moving a planning chat into another folder makes it a lesson there.
+- **Migration** `20261023120000_lesson_frameworks`: two nullable JSON columns, rollback tried on the e2e database both ways.
