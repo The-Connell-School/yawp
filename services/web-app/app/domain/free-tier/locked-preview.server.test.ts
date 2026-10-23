@@ -18,6 +18,8 @@ const {
   assertOrganizationTeachingApproved,
   getLockedPreviewApplication,
   userHasPendingFreeTierTeachingLock,
+  redactClassTeachingSecrets,
+  organizationClassListQueryParts,
 } = await import('./locked-preview.server');
 afterEach(() => {
   enabled = true;
@@ -155,4 +157,38 @@ test('pending lesson planner scope allows SENT and MANUAL_REVIEW only', async ()
       allowPendingLessonPlanner: true,
     })
   ).rejects.toMatchObject({ status: 403 });
+});
+
+test('organizationClassListQueryParts omits code search and sort for locked preview', () => {
+  const pending = organizationClassListQueryParts({
+    q: 'probe',
+    sort: 'code',
+    hideTeachingSecrets: true,
+  });
+  expect(pending.orClause?.some((clause) => 'code' in clause)).toBe(false);
+  expect(pending.orderByField).toBe('createdAt');
+
+  const approved = organizationClassListQueryParts({
+    q: 'probe',
+    sort: 'code',
+    hideTeachingSecrets: false,
+  });
+  expect(approved.orClause?.some((clause) => 'code' in clause)).toBe(true);
+  expect(approved.orderByField).toBe('code');
+});
+
+test('redactClassTeachingSecrets blanks code and drops join token for locked preview', () => {
+  const row = {
+    id: 'class-1',
+    code: 'SECRET',
+    studentJoinToken: 'join-token',
+    title: 'Class',
+  };
+  expect(redactClassTeachingSecrets(row, false)).toEqual(row);
+  const redacted = redactClassTeachingSecrets(row, true);
+  expect(redacted.id).toBe('class-1');
+  expect(redacted.title).toBe('Class');
+  expect(redacted.code).toBeNull();
+  expect('studentJoinToken' in redacted).toBe(false);
+  expect(JSON.stringify(redacted)).not.toContain('join-token');
 });

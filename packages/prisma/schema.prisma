@@ -54,6 +54,7 @@ model FreeTierApplication {
 enum FreeTierAdminApprovalStatus {
   PENDING
   APPROVED
+  DENIED
   REDIRECTED
   SUPERSEDED
   EXPIRED
@@ -112,6 +113,8 @@ model FreeTierAdminApproval {
   lastTeacherFollowUpAt DateTime? @db.Timestamptz(6)
   nextTeacherFollowUpAt DateTime? @db.Timestamptz(6)
   forwardedByRole      String?
+  /// Optional admin deny note; Yawp! team only — never shown to teachers or in email.
+  denyReason           String?
   deliveries           FreeTierApprovalDelivery[]
 
   @@index([applicationId, createdAt(sort: Desc)])
@@ -202,6 +205,7 @@ model AcquisitionTokenScan {
 enum FreeTierApprovalDecisionType {
   APPROVED
   REJECTED
+  DENIED
   MANUAL_REVIEW
   REOPENED
 }

@@ -334,6 +334,69 @@ describe('production deployment contract', () => {
     expect(dockerfile).toContain('FROM oven/bun:1.4.3 AS base');
   });
 
+  test('dev panel Docker build args default to production; demo web image passes demo', () => {
+    const dockerfile = readRepoFile('services/web-app/Dockerfile');
+    const demoWorkflow = readRepoFile('.github/workflows/demo-environment.yml');
+    const compose = readRepoFile('scripts/preview/render-compose.mjs');
+    const viteConfig = readRepoFile('services/web-app/vite.config.ts');
+
+    expect(dockerfile).toMatch(/ARG YAWP_ENVIRONMENT=production/);
+    expect(dockerfile).toMatch(/ARG YAWP_GIT_COMMIT=unknown/);
+    expect(dockerfile).toMatch(/ARG YAWP_BUILT_AT=unknown/);
+    expect(dockerfile).not.toMatch(
+      /FROM base AS production[\s\S]*ENV YAWP_ENVIRONMENT/m
+    );
+    expect(dockerfile).toMatch(
+      /EXPOSE 8080[\s\S]*ARG YAWP_GIT_COMMIT=unknown[\s\S]*ENV YAWP_GIT_COMMIT=\$YAWP_GIT_COMMIT[\s\S]*CMD \["bash", "services\/web-app\/start\.sh"\]/
+    );
+    const buildStage = dockerfile.slice(
+      dockerfile.indexOf('FROM deps AS build'),
+      dockerfile.indexOf('FROM base AS production')
+    );
+    expect(buildStage).not.toContain('YAWP_GIT_COMMIT');
+    expect(buildStage).not.toContain('YAWP_BUILT_AT');
+
+    const rootPackage = JSON.parse(readRepoFile('package.json'));
+    expect(rootPackage.scripts['web-app:docker:build']).toContain(
+      '--build-arg YAWP_GIT_COMMIT=$(git rev-parse HEAD)'
+    );
+    expect(rootPackage.scripts['web-app:docker:build']).toContain(
+      '--build-arg YAWP_BUILT_AT='
+    );
+
+    const demoWebBuild = demoWorkflow.slice(
+      demoWorkflow.indexOf('- name: Build and push demo web image'),
+      demoWorkflow.indexOf('- name: Build and push demo toolbox image')
+    );
+    expect(demoWebBuild).toContain('build-args:');
+    expect(demoWebBuild).toContain('YAWP_ENVIRONMENT=demo');
+    expect(demoWebBuild).toContain('YAWP_GIT_COMMIT=${{ steps.shipping.outputs.full_sha }}');
+    expect(demoWorkflow).toContain(
+      'built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)'
+    );
+    expect(demoWebBuild).toContain(
+      'YAWP_BUILT_AT=${{ steps.shipping.outputs.built_at }}'
+    );
+
+    const demoToolboxBuild = demoWorkflow.slice(
+      demoWorkflow.indexOf('- name: Build and push demo toolbox image'),
+      demoWorkflow.indexOf('  demo-deploy:')
+    );
+    expect(demoToolboxBuild).not.toContain('build-args:');
+
+    expect(compose).toContain('dockerfile: services/web-app/Dockerfile');
+    expect(compose).toContain('target: production');
+    expect(compose).not.toMatch(
+      /web:[\s\S]*?build:[\s\S]*?args:[\s\S]*?YAWP_ENVIRONMENT/m
+    );
+
+    expect(viteConfig).toContain(
+      "process.env.YAWP_ENVIRONMENT === 'production'"
+    );
+    expect(viteConfig).toContain('__YAWP_DEV_PANEL_BUILD__');
+    expect(viteConfig).toContain('process.env.YAWP_ENVIRONMENT !== \'production\'');
+  });
+
   test('Docker image build does not bake preview database credentials into the image', () => {
     const dockerfile = readRepoFile('services/web-app/Dockerfile');
     const renderCompose = readRepoFile('scripts/preview/render-compose.mjs');
@@ -993,6 +1056,8 @@ describe('PR preview deployment contract', () => {
     expect(gate).toContain("process.env.PREVIEW_ACCESS_GATE === 'on'");
     expect(gate).toContain('isDemoEnvironment');
     expect(gate).toContain("'/api/healthcheck'");
+    expect(gate).toContain("'/api/readyz'");
+    expect(gate).toContain("'/api/version'");
     expect(compose).toContain('PREVIEW_ACCESS_GATE: "on"');
     expect(compose).toContain('requirePreviewAccessSeats(accessSeats)');
     expect(compose).toContain('requirePreviewAccessSecret(accessSecret)');
@@ -1662,6 +1727,38 @@ describe('PR preview deployment contract', () => {
 });
 
 describe('demo environment deployment contract', () => {
+  test('demo auto-ships after production deploy succeeds on the default branch', () => {
+    const workflow = readRepoFile('.github/workflows/demo-environment.yml');
+    const buildJob = workflow.slice(
+      workflow.indexOf('  build-demo-images:'),
+      workflow.indexOf('  demo-deploy:')
+    );
+
+    expect(workflow).toContain('workflow_run:');
+    expect(workflow).toContain("'🚀 Deploy'");
+    expect(workflow).toContain('github.event.workflow_run.head_sha');
+    expect(workflow).toContain('github.event.workflow_run.conclusion');
+    expect(workflow).toContain('github.event.workflow_run.event');
+    expect(workflow).toContain("github.event.workflow_run.event == 'push'");
+    expect(workflow).toContain('github.event.workflow_run.head_repository.full_name');
+    expect(workflow).toContain(
+      'github.event.workflow_run.head_repository.full_name == github.repository'
+    );
+    expect(buildJob).toContain("github.event_name == 'workflow_dispatch'");
+    expect(buildJob).toContain(
+      'github.event.workflow_run.head_branch == github.event.repository.default_branch'
+    );
+    expect(workflow).toContain('cancel-in-progress: false');
+    expect(workflow).toContain('demo-environment-ignored-');
+    expect(workflow).toContain("format('demo-environment-ignored-{0}', github.run_id)");
+    expect(workflow).toContain('/api/version');
+    expect(workflow).toContain('"workflow_run"');
+    expect(workflow).toContain("inputs.reset_data == true &&");
+    expect(workflow).toContain("'true' || 'false'");
+    expect(workflow).toContain("github.event_name == 'workflow_run' && '14' || inputs.backup_retention");
+    expect(workflow).toContain('demo_git_sha');
+  });
+
   test('demo images build on GitHub-hosted runners with on-host build fallback', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');
     const deployScript = readRepoFile('scripts/preview/deploy.sh');

@@ -8,13 +8,16 @@ import {
 import {
   CONGRATULATIONS_V2_SUBJECT,
   isOnboardingV2CopyVersion,
-  renderCongratulationsEmailV2Body,
   renderReleaseEmailSubject,
 } from './email-copy';
 import { mintSignedLink, RELEASE_LINK_TTL_MS } from './signed-link.server';
 import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
 import { plainTextEmailToHtml } from './email-html.server';
 import { buildDesignedAdminApprovalEmail } from './admin-approval-email.server';
+import {
+  buildTeacherApprovedDesignedEmail,
+  buildTeacherReleaseDesignedEmail,
+} from '~/emails/build-free-tier-emails.server';
 import { sanitizeFreeTierEmailLogPayload } from './email-log-payload.server';
 import { assertFreeTierRuntimeConfigured } from './free-tier-config.server';
 import { resolveFreeTierRuntimeEnvironment } from './usage-budget.server';
@@ -35,8 +38,9 @@ async function deliverEmail(args: {
   bcc?: string[];
   subject: string;
   text: string;
+  html?: string;
 }): Promise<EmailSendResult> {
-  const html = plainTextEmailToHtml(args.text);
+  const html = args.html ?? plainTextEmailToHtml(args.text);
   const result = await sendEmail({
     to: args.to,
     ...(args.bcc?.length ? { bcc: args.bcc } : {}),
@@ -100,10 +104,17 @@ export async function sendFreeTierReleaseEmail(
     });
     const joinUrl = `${base}/free/join?t=${encodeURIComponent(minted.token)}`;
     const text = renderReleaseEmailBody({ name: payload.name, joinUrl, copyVersion });
+    const designed = isOnboardingV2CopyVersion(copyVersion)
+      ? await buildTeacherReleaseDesignedEmail({
+          name: payload.name,
+          joinUrl,
+        })
+      : null;
     const delivered = await deliverEmail({
       to: payload.email,
-      subject: renderReleaseEmailSubject({ copyVersion }),
-      text,
+      subject: designed?.subject ?? renderReleaseEmailSubject({ copyVersion }),
+      text: designed?.text ?? text,
+      html: designed?.html,
     });
     if (!delivered.ok) {
       await logEmail({
@@ -148,16 +159,20 @@ export async function sendFreeTierAdminApprovalEmail(args: {
   notRightPersonUrl: string;
   adminRecipientName?: string | null;
   forwardedByAdminName?: string | null;
+  routedByTeacher?: boolean;
   isReminder?: boolean;
+  pass1: boolean;
 }): Promise<EmailSendResult> {
-  const { subject, text, html } = buildDesignedAdminApprovalEmail({
+  const { subject, text, html } = await buildDesignedAdminApprovalEmail({
     teacherName: args.teacherName,
     teacherEmail: args.teacherEmail,
     schoolName: args.schoolName,
     approveUrl: args.approveUrl,
     notRightPersonUrl: args.notRightPersonUrl,
     forwardedByAdminName: args.forwardedByAdminName,
+    routedByTeacher: args.routedByTeacher,
     reminder: args.isReminder,
+    pass1: args.pass1,
   });
   try {
     assertFreeTierRuntimeConfigured();
@@ -224,19 +239,23 @@ export async function sendFreeTierCongratulationsEmail(args: {
       where: { id: args.applicationId }, select: { releaseEmailCopyVersion: true },
     });
     const v2 = isOnboardingV2CopyVersion(application?.releaseEmailCopyVersion);
-    const text = v2
-      ? renderCongratulationsEmailV2Body(args)
-      : renderCongratulationsEmailBody({
+    const designed = v2
+      ? await buildTeacherApprovedDesignedEmail(args)
+      : null;
+    const text = designed?.text
+      ?? renderCongratulationsEmailBody({
           teacherName: args.teacherName,
           adminName: args.adminName,
           signInUrl: args.signInUrl,
         });
     const delivered = await deliverEmail({
       to: args.teacherEmail,
-      subject: v2
-        ? CONGRATULATIONS_V2_SUBJECT
-        : `${args.adminName} approved Yawp! for your classroom`,
+      subject: designed?.subject
+        ?? (v2
+          ? CONGRATULATIONS_V2_SUBJECT
+          : `${args.adminName} approved Yawp! for your classroom`),
       text,
+      html: designed?.html,
     });
     if (!delivered.ok) {
       await logEmail({
@@ -277,6 +296,9 @@ export async function sendFreeTierAdminReminderEmail(args: {
   personalNote?: string | null;
   approveUrl: string;
   notRightPersonUrl: string;
+  forwardedByAdminName?: string | null;
+  routedByTeacher?: boolean;
+  pass1: boolean;
 }) {
   return sendFreeTierAdminApprovalEmail({
     ...args,

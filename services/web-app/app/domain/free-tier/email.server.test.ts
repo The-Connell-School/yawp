@@ -41,6 +41,7 @@ describe('free-tier email delivery', () => {
       schoolName: 'Test HS',
       approveUrl: 'https://yawp.test/a',
       notRightPersonUrl: 'https://yawp.test/n',
+      pass1: false,
     });
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error('expected failure');
@@ -100,6 +101,7 @@ describe('approval recipients and fixed copy', () => {
           personalNote: 'CRAFTED OR HISTORICAL INTRODUCTION',
           approveUrl: 'https://yawp.test/approve',
           notRightPersonUrl: 'https://yawp.test/forward',
+          pass1: false,
           ...(path === 'replacement'
             ? {
                 adminRecipientName: 'New Principal',

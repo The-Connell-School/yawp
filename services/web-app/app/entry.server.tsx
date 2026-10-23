@@ -13,6 +13,11 @@ import type { RenderToPipeableStreamOptions } from 'react-dom/server';
 import { renderToPipeableStream } from 'react-dom/server';
 import { getUserId } from './utils/auth.server';
 import { posthog } from './services/posthog.server';
+import {
+  buildSafeErrorForLog,
+  buildSafeRouteParamsForLog,
+  buildServerErrorRequestContext,
+} from './utils/server-error-request-context.server';
 
 startImpersonationEndDelivery();
 startApprovalDelivery();
@@ -64,7 +69,9 @@ export default function handleRequest(
           // errors encountered during initial shell rendering since they'll
           // reject and get logged in handleDocumentRequest.
           if (shellRendered) {
-            if (!reportImpersonationError(request, entry => console.error(entry))) console.error(error);
+            if (!reportImpersonationError(request, entry => console.error(entry))) {
+              console.error('Server streaming render error:', buildSafeErrorForLog(error));
+            }
           }
         },
       }
@@ -86,7 +93,7 @@ export const handleError: HandleErrorFunction = async (error, args) => {
 
   if (reportImpersonationError(request, entry => console.error(entry))) return;
 
-  console.log('🔥 Error caught by handleError:', error);
+  console.log('🔥 Error caught by handleError:', buildSafeErrorForLog(error));
 
   try {
     // Get user context for better error tracking
@@ -95,20 +102,9 @@ export const handleError: HandleErrorFunction = async (error, args) => {
     // Build comprehensive error context
     const errorContext = {
       timestamp: new Date().toISOString(),
-      error: {
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-        name: error instanceof Error ? error.name : 'UnknownError',
-      },
-      request: {
-        method: request.method,
-        url: request.url,
-        headers: Object.fromEntries(request.headers.entries()),
-        userAgent: request.headers.get('user-agent'),
-      },
-      route: {
-        params,
-      },
+      error: buildSafeErrorForLog(error),
+      request: buildServerErrorRequestContext(request),
+      route: buildSafeRouteParamsForLog(params),
       user: userId ? { id: userId } : null,
       environment: {
         nodeEnv: process.env.NODE_ENV,
@@ -127,8 +123,8 @@ export const handleError: HandleErrorFunction = async (error, args) => {
     }
   } catch (loggingError) {
     // Fallback logging if our error logger fails
-    console.error('❌ Error logging failed:', loggingError);
-    console.error('Original error:', error);
+    console.error('❌ Error logging failed:', buildSafeErrorForLog(loggingError));
+    console.error('Original error:', buildSafeErrorForLog(error));
   }
 };
 

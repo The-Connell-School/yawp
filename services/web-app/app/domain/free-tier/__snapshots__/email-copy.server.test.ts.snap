@@ -18,10 +18,11 @@ exports[`admin approval email ignores a custom note and retains links 1`] = `
 
 Ada at Example HS would like to use Yawp! in their classroom. They named you as the administrator who can approve classroom software.
 
-Ada
-Teacher at Example HS
-ada@example.edu
+Teacher: Ada
+School: Example HS
+Email: ada@example.edu
 
+About Yawp!
 Students draft essays with feedback as they write.
 Teachers control assignments and grading.
 Student writing is never used to train outside models.
@@ -34,5 +35,8 @@ https://yawp.school/n
 
 This link works for 14 days. You don't need a Yawp! account.
 
-Sent by Yawp! · yawp.school"
+--
+Sent by Yawp! · https://yawp.test
+You're getting this because Ada named you as an administrator who can approve classroom software at Example HS.
+Questions? support@yawp.school"
 `;

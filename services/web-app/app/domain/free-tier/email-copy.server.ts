@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import {
   ADMIN_APPROVAL_EMAIL_COPY_VERSION,
+  ADMIN_APPROVAL_EMAIL_COPY_VERSION_PASS1,
   renderAdminApprovalEmailBody,
   renderCongratulationsEmailBody,
   renderReleaseEmailBody,
@@ -8,11 +9,15 @@ import {
 
 export {
   ADMIN_APPROVAL_EMAIL_COPY_VERSION,
+  ADMIN_APPROVAL_EMAIL_COPY_VERSION_PASS1,
   renderAdminApprovalEmailBody,
   renderCongratulationsEmailBody,
   renderReleaseEmailBody,
 };
 
-export function adminApprovalEmailCopyVersionHash() {
-  return createHash('sha256').update(ADMIN_APPROVAL_EMAIL_COPY_VERSION).digest('hex');
+export async function adminApprovalEmailCopyVersionHash(pass1: boolean) {
+  const version = pass1
+    ? ADMIN_APPROVAL_EMAIL_COPY_VERSION_PASS1
+    : ADMIN_APPROVAL_EMAIL_COPY_VERSION;
+  return createHash('sha256').update(version).digest('hex');
 }

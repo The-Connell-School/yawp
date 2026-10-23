@@ -16,6 +16,8 @@ RUN bun install --ignore-scripts
 RUN DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build bun prisma generate
 
 FROM deps AS build
+ARG YAWP_ENVIRONMENT=production
+ENV YAWP_ENVIRONMENT=$YAWP_ENVIRONMENT
 ENV NODE_OPTIONS=--max-old-space-size=1280
 RUN bun web-app:build
 
@@ -38,4 +40,8 @@ COPY --from=build /app/scripts/preview ./scripts/preview
 RUN chmod +x services/web-app/start.sh
 
 EXPOSE 8080
+ARG YAWP_GIT_COMMIT=unknown
+ARG YAWP_BUILT_AT=unknown
+ENV YAWP_GIT_COMMIT=$YAWP_GIT_COMMIT
+ENV YAWP_BUILT_AT=$YAWP_BUILT_AT
 CMD ["bash", "services/web-app/start.sh"]

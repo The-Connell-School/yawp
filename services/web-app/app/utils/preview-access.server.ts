@@ -39,6 +39,10 @@ const OPEN_PATHS = new Set([
   '/api/preview/qa/signon-code',
   '/api/healthcheck',
   '/api/healthcheck/', // be tolerant of a trailing slash from probes
+  '/api/readyz',
+  '/api/readyz/',
+  '/api/version',
+  '/api/version/',
   // Stripe cannot present the human preview-access cookie. The route itself
   // remains protected by Stripe's signed webhook secret.
   '/api/stripe/webhook',

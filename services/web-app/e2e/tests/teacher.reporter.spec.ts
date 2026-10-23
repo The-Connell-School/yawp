@@ -1,5 +1,6 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import { assertChatControlsInBoundsAtBreakpoints } from '../test-helpers';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
 const STUDENT_PASSWORD = 'johndoe';
@@ -171,52 +172,19 @@ test.describe('Yawp! Reporter', () => {
     signIn,
     e2eContext,
   }) => {
-    const consoleErrors: string[] = [];
-    const pageErrors: string[] = [];
-    page.on('console', (message) => {
-      if (message.type() === 'error') consoleErrors.push(message.text());
-    });
-    page.on('pageerror', (error) => pageErrors.push(error.message));
-
     await setReporterEnabled(e2eContext.organizationId, true);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
 
-    for (const viewport of [
-      { width: 1440, height: 1000 },
-      { width: 390, height: 844 },
-    ]) {
-      await page.setViewportSize(viewport);
-      await page.goto('/app/reporter');
-
-      const composer = page.getByLabel('Message Yawp! Reporter');
-      const send = page.getByRole('button', { name: 'Send message' });
-      await expect(composer).toBeVisible();
-      await expect(send).toBeVisible();
-      if (viewport.width === 390) {
-        await expect(page.getByLabel('Past reports')).toBeVisible();
+    await assertChatControlsInBoundsAtBreakpoints(page, {
+      path: '/app/reporter',
+      composerLabel: 'Message Yawp! Reporter',
+      sendButtonName: 'Send message',
+      assertMobileControls: async (mobilePage) => {
+        await expect(mobilePage.getByLabel('Past reports')).toBeVisible();
         await expect(
-          page.getByRole('button', { name: 'New report' })
+          mobilePage.getByRole('button', { name: 'New report' })
         ).toBeVisible();
-      }
-
-      for (const control of [composer, send]) {
-        const box = await control.boundingBox();
-        expect(box).not.toBeNull();
-        expect(box!.x).toBeGreaterThanOrEqual(0);
-        expect(box!.y).toBeGreaterThanOrEqual(0);
-        expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
-        expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
-      }
-
-      const overflow = await page.evaluate(() => ({
-        body: document.body.scrollWidth - window.innerWidth,
-        document: document.documentElement.scrollWidth - window.innerWidth,
-      }));
-      expect(overflow.body).toBeLessThanOrEqual(0);
-      expect(overflow.document).toBeLessThanOrEqual(0);
-    }
-
-    expect(consoleErrors).toEqual([]);
-    expect(pageErrors).toEqual([]);
+      },
+    });
   });
 });

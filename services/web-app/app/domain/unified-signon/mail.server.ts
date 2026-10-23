@@ -55,11 +55,15 @@ export async function deliverCode(email: string, code: string) {
       "We couldn't send the email. Try again in a moment.",
       503
     );
+  const { buildSignInCodeEmail } = await import(
+    '~/emails/build-account-emails.server'
+  );
+  const designed = await buildSignInCodeEmail(code);
   const result = await sendEmail({
     to: email,
-    subject: 'Your Yawp! sign-in code',
-    text: `Your code is ${code}. It expires in 10 minutes.`,
-    html: `<p>Your code is <strong>${code}</strong>. It expires in 10 minutes.</p>`,
+    subject: designed.subject,
+    text: designed.text,
+    html: designed.html,
   });
   if (result.status !== 'success')
     throw new FlowError(

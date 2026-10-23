@@ -12,7 +12,21 @@ test.describe.serial('Tester feedback', () => {
     const user = await prisma.user.findUniqueOrThrow({
       where: { email: e2eContext.teacherEmail },
     });
+    const demoFeedbackFlag = 'feature_flag.demo-feedback-widget';
+    const previousDemoFlag = await prisma.setting.findUnique({
+      where: { name: demoFeedbackFlag },
+    });
     try {
+      await page.addInitScript(() => localStorage.removeItem('yawp-dev-panel'));
+      await prisma.setting.upsert({
+        where: { name: demoFeedbackFlag },
+        create: {
+          name: demoFeedbackFlag,
+          value: 'false',
+          valueType: 'boolean',
+        },
+        update: { value: 'false' },
+      });
       await prisma.user.update({
         where: { id: user.id },
         data: { isTester: false },
@@ -28,6 +42,7 @@ test.describe.serial('Tester feedback', () => {
       });
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto('/app/assignments?tab=work&access_token=test-secret');
+      await page.reload();
       const trigger = page.getByRole('button', { name: 'Log feedback' });
       await expect(page.getByRole('button', { name: 'Give feedback', exact: true })).toHaveCount(0);
       await trigger.click();
@@ -60,6 +75,14 @@ test.describe.serial('Tester feedback', () => {
         page.getByRole('heading', { name: 'Tester feedback' })
       ).toHaveCount(0);
     } finally {
+      if (previousDemoFlag) {
+        await prisma.setting.update({
+          where: { name: demoFeedbackFlag },
+          data: { value: previousDemoFlag.value },
+        });
+      } else {
+        await prisma.setting.deleteMany({ where: { name: demoFeedbackFlag } });
+      }
       await prisma.testerFeedback.deleteMany({
         where: {
           userId: user.id,

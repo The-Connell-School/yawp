@@ -1,10 +1,14 @@
-import { renderToStaticMarkup } from 'react-dom/server';
 import * as router from 'react-router';
 import { afterAll, expect, mock, test } from 'bun:test';
+import {
+  mockCardPageChromeForSsr,
+  renderWithCardPageChrome,
+} from '~/components/card-page-chrome.ssr-test-setup';
 
 afterAll(() => mock.restore());
 
 function mockPage(loaderData: Record<string, unknown>) {
+  mockCardPageChromeForSsr();
   mock.module('react-router', () => ({
     ...router,
     useLoaderData: () => loaderData,
@@ -35,7 +39,7 @@ const baseV2 = {
 test('approval v2 SENT shows explore when preview membership gate would fail', async () => {
   mockPage({ ...baseV2, showExploreClassroom: true });
   const { default: Page } = await import('./route');
-  const html = renderToStaticMarkup(<Page />);
+  const html = renderWithCardPageChrome(<Page />);
   expect(html).toContain('Explore my classroom');
   expect(html).toContain('data-testid="locked-preview-explore"');
   expect(html).toContain('to="/app"');
@@ -51,7 +55,7 @@ test('approval v2 MANUAL_REVIEW shows explore without pending admin row', async 
     showExploreClassroom: true,
   });
   const { default: Page } = await import('./route');
-  const html = renderToStaticMarkup(<Page />);
+  const html = renderWithCardPageChrome(<Page />);
   expect(html).toContain('Explore my classroom');
 });
 
@@ -65,14 +69,14 @@ test('legacy pending path shows explore when showExploreClassroom is true', asyn
     approvalV2: null,
   });
   const { default: Page } = await import('./route');
-  const html = renderToStaticMarkup(<Page />);
+  const html = renderWithCardPageChrome(<Page />);
   expect(html).toContain('Explore my classroom');
 });
 
 test('flag off hides explore via loader showExploreClassroom', async () => {
   mockPage({ ...baseV2, showExploreClassroom: false });
   const { default: Page } = await import('./route');
-  const html = renderToStaticMarkup(<Page />);
+  const html = renderWithCardPageChrome(<Page />);
   expect(html).not.toContain('Explore my classroom');
 });
 
@@ -109,6 +113,9 @@ test('loader sets showExploreClassroom from pending teaching lock', async () => 
   }));
   mock.module('~/domain/free-tier/approval-v2.server', () => ({
     getApprovalWaitingDetails: async () => null,
+  }));
+  mock.module('~/domain/free-tier/approval-deny.server', () => ({
+    loadTeacherDeniedSurface: async () => null,
   }));
   const { loader } = await import('./route');
   const data = await loader({

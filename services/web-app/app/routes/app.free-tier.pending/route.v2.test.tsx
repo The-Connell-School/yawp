@@ -1,6 +1,11 @@
-import { renderToStaticMarkup } from 'react-dom/server';
 import * as router from 'react-router';
 import { afterAll, expect, mock, test } from 'bun:test';
+import {
+  mockCardPageChromeForSsr,
+  renderWithCardPageChrome,
+} from '~/components/card-page-chrome.ssr-test-setup';
+import { featureFlagPrismaTables } from '~/domain/feature-flags/feature-flags.server.test-support';
+mockCardPageChromeForSsr();
 let enabled = true;
 const forward = mock(async (_args: any) => ({ ok: true, queued: true }));
 mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
@@ -9,8 +14,11 @@ mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
 mock.module('~/utils/auth.server', () => ({
   requireUserId: async () => 'owner',
 }));
+const featureFlagTables = featureFlagPrismaTables();
 mock.module('~/utils/db.server', () => ({
   prisma: {
+    ...featureFlagTables,
+    orgMembership: { findFirst: async () => null },
     freeTierApplication: {
       findFirst: async () => ({
         id: 'app',
@@ -21,6 +29,12 @@ mock.module('~/utils/db.server', () => ({
     },
     freeTierEmailLog: { findFirst: async () => null },
   },
+}));
+mock.module('~/domain/free-tier/class-preparation.server', () => ({
+  isClassPreparationEnabled: async () => false,
+}));
+mock.module('~/domain/free-tier/approval-deny.server', () => ({
+  loadTeacherDeniedSurface: async () => null,
 }));
 mock.module('~/domain/free-tier/approval-v2.server', () => ({
   isApprovalV2Enabled: async () => enabled,
@@ -116,7 +130,7 @@ test('crafted forward is refused when rollout is off', async () => {
 
 test('pending page offers draft request mailto, explore, and forward without legacy resend', () => {
   stopped = false;
-  const html = renderToStaticMarkup(<Page />);
+  const html = renderWithCardPageChrome(<Page />);
   expect(html).toContain('Explore my classroom');
   expect(html).toContain('Not the right person?');
   expect(html).toContain('Draft a Request');
@@ -144,4 +158,5 @@ test('pending page offers draft request mailto, explore, and forward without leg
   expect(html).not.toContain('Take a look around');
   expect(html).toContain('[overflow-wrap:anywhere]');
   expect(html).toContain('data-testid="free-tier-person-email"');
+  expect(html).toContain('Account and class created');
 });

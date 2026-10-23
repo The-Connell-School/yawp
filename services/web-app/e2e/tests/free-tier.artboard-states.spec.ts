@@ -1,15 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { createRequire } from 'node:module';
+import { encode } from 'turbo-stream';
 import type { Page } from '@playwright/test';
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { mintFreeTierLinkForE2E } from '../helpers/mint-free-tier-link';
-
-const require = createRequire(import.meta.url);
-const { encode } = require(
-  require.resolve('turbo-stream', { paths: [require.resolve('react-router')] })
-);
 const evidence = process.env.ONBOARDING_EVIDENCE_DIR;
 
 // Intercept only action responses to inspect rare presentation states. Normal

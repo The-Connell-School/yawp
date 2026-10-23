@@ -14,7 +14,7 @@ test('retains useful Resend diagnostics without provider-controlled private text
     message: 'The sender domain is not verified: owner@private.example https://secret.example/?code=otp re_private_key',
     cause: { token: 'private-token' },
   }, 'Owner@Example.COM')).toEqual({
-    provider: 'resend', recipientDomain: 'example.com',
+    provider: 'resend', recipient: 'O***@E***', recipientDomain: 'e***',
     name: 'validation_error', code: null, statusCode: 403,
     message: 'Sender domain is not verified', validationReason: 'sender_domain_unverified',
   });
@@ -25,7 +25,7 @@ test('retains SES error names and network codes while discarding unknown text', 
   expect(emailDeliveryDiagnostic(Object.assign(new Error('opaque-secret'), {
     name: 'CredentialsProviderError', code: 'ECONNREFUSED',
   }), 'owner@example.org')).toEqual({
-    provider: 'ses', recipientDomain: 'example.org',
+    provider: 'ses', recipient: 'o***@e***', recipientDomain: 'e***',
     name: 'CredentialsProviderError', code: 'ECONNREFUSED', statusCode: null,
     message: 'Provider error details redacted', validationReason: 'other',
   });
@@ -39,7 +39,7 @@ test.each([undefined, null, 'secret-token', {
 }])('never serializes arbitrary provider errors (%#)', (error) => {
   delete process.env.EMAIL_PROVIDER;
   expect(emailDeliveryDiagnostic(error, 'invalid@domain.example\nprivate-token')).toEqual({
-    provider: 'resend', recipientDomain: null, name: 'UnknownError',
+    provider: 'resend', recipient: '[redacted-email]', name: 'UnknownError',
     code: null, statusCode: null, message: 'Provider error details redacted', validationReason: 'other',
   });
 });
@@ -84,7 +84,7 @@ test.each([...rejectionCases])('classifies $validationReason and discards all pr
     token: 'fixture-token', cause: { message },
   }, 'owner@example.com');
   expect(diagnostic).toEqual({
-    provider: 'resend', recipientDomain: 'example.com', name: 'validation_error',
+    provider: 'resend', recipient: 'o***@e***', recipientDomain: 'e***', name: 'validation_error',
     code: null, statusCode, message: safeMessage, validationReason,
   });
   expect(JSON.stringify(diagnostic)).not.toMatch(/private|https:|fixture-|Invalid `to`|resend.com/);

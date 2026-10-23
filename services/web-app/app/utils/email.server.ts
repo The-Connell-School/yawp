@@ -3,6 +3,11 @@ import { renderAsync } from '@react-email/components'
 import { type ReactElement } from 'react'
 import { z } from 'zod'
 import { shouldUsePreviewEmailCapture } from './preview-email-capture.server'
+import { emailDeliveryDiagnostic } from './email-delivery-error.server'
+import {
+	buildSafeEmailLogSummary,
+	canLogFullEmailBody,
+} from './email-log.server'
 
 const resendErrorSchema = z.union([
 	z.object({
@@ -35,6 +40,8 @@ type EmailPayload = {
 type SendEmailOptions = {
 	/** Durable outbox owns retries; leave legacy provider behavior unchanged. */
 	singleAttempt?: boolean
+	/** Optional label for safe server logs only (never sent to providers). */
+	logKind?: string
 	to: string
 	bcc?: string[]
 	subject: string
@@ -79,7 +86,7 @@ export async function sendEmail(options: SendEmailOptions) {
 		return sendEmailWithSes(email, options.singleAttempt)
 	}
 
-	return sendEmailWithResend(email)
+	return sendEmailWithResend(email, { kind: options.logKind })
 }
 
 function getEmailProvider(): EmailProvider {
@@ -92,12 +99,15 @@ function getEmailProvider(): EmailProvider {
 	return 'resend'
 }
 
-async function sendEmailWithResend(email: EmailPayload) {
+async function sendEmailWithResend(
+	email: EmailPayload,
+	logMeta?: { kind?: string },
+) {
 	if (shouldUsePreviewEmailCapture()) {
 		// eslint-disable-next-line no-console
 		console.info(
 			'[preview-email-capture] accepted (not sent via Resend):',
-			JSON.stringify({ to: email.to, subject: email.subject }),
+			JSON.stringify(buildSafeEmailLogSummary(email, logMeta)),
 		)
 		return {
 			status: 'success',
@@ -119,7 +129,14 @@ async function sendEmailWithResend(email: EmailPayload) {
 			`To send emails, set the RESEND_API_KEY environment variable.`,
 		)
 		// eslint-disable-next-line no-console
-		console.error(`Would have sent the following email:`, JSON.stringify(email))
+		console.error(
+			`Would have sent the following email:`,
+			JSON.stringify(buildSafeEmailLogSummary(email, logMeta)),
+		)
+		if (canLogFullEmailBody()) {
+			// eslint-disable-next-line no-console
+			console.error('Full email payload (EMAIL_LOG_BODY=1):', JSON.stringify(email))
+		}
 		return {
 			status: 'success',
 			data: { id: 'mocked' },
@@ -145,19 +162,30 @@ async function sendEmailWithResend(email: EmailPayload) {
 	} else {
 		const parseResult = resendErrorSchema.safeParse(data)
 		if (parseResult.success) {
+			// eslint-disable-next-line no-console
+			console.error('email_delivery_failed', {
+				...emailDeliveryDiagnostic(parseResult.data, email.to),
+				...(logMeta?.kind ? { kind: logMeta.kind } : {}),
+			})
 			return {
 				status: 'error',
 				error: parseResult.data,
 			} as const
 		} else {
+			const error = {
+				name: 'UnknownError',
+				message: 'Unknown Error',
+				statusCode: 500,
+				cause: data,
+			} satisfies ResendError
+			// eslint-disable-next-line no-console
+			console.error('email_delivery_failed', {
+				...emailDeliveryDiagnostic(error, email.to),
+				...(logMeta?.kind ? { kind: logMeta.kind } : {}),
+			})
 			return {
 				status: 'error',
-				error: {
-					name: 'UnknownError',
-					message: 'Unknown Error',
-					statusCode: 500,
-					cause: data,
-				} satisfies ResendError,
+				error,
 			} as const
 		}
 	}
@@ -194,9 +222,15 @@ async function sendEmailWithSes(email: EmailPayload, singleAttempt = false) {
 			data: { id: response.MessageId ?? 'unknown' },
 		} as const
 	} catch (error) {
+		const normalized = normalizeSesError(error)
+		// eslint-disable-next-line no-console
+		console.error(
+			'email_delivery_failed',
+			emailDeliveryDiagnostic(normalized, email.to),
+		)
 		return {
 			status: 'error',
-			error: normalizeSesError(error),
+			error: normalized,
 		} as const
 	}
 }

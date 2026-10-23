@@ -1,6 +1,32 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { reactRouter } from '@react-router/dev/vite';
 import { defineConfig, type Plugin } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
+
+const viteDir = path.dirname(fileURLToPath(import.meta.url));
+const devPanelEntryStub = path.resolve(
+  viteDir,
+  'app/dev-panel/dev-panel-entry.stub.tsx'
+);
+
+function omitDevPanelFromProductionBuild(): Plugin {
+  const production = process.env.YAWP_ENVIRONMENT === 'production';
+  return {
+    name: 'yawp-omit-dev-panel-production',
+    enforce: 'pre',
+    resolveId(source) {
+      if (!production) return null;
+      if (
+        source.endsWith('dev-panel/dev-panel-entry.tsx') ||
+        source.endsWith('dev-panel/dev-panel-entry')
+      ) {
+        return devPanelEntryStub;
+      }
+      return null;
+    },
+  };
+}
 
 function redirectBareAppRoute(): Plugin {
   return {
@@ -21,7 +47,17 @@ function redirectBareAppRoute(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [redirectBareAppRoute(), reactRouter(), tsconfigPaths()],
+  define: {
+    __YAWP_DEV_PANEL_BUILD__: JSON.stringify(
+      process.env.YAWP_ENVIRONMENT !== 'production'
+    ),
+  },
+  plugins: [
+    omitDevPanelFromProductionBuild(),
+    redirectBareAppRoute(),
+    reactRouter(),
+    tsconfigPaths(),
+  ],
   resolve: {
     conditions: ['import', 'require'],
   },

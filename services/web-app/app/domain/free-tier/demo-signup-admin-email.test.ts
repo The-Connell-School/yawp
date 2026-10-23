@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { teacherAtSchool } from './admin-approval-copy';
+import {
+  adminApprovalPass1ForwardBanner,
+  teacherAtSchool,
+} from './admin-approval-copy';
 import {
   buildDesignedAdminApprovalEmail,
   htmlForStoredAdminApprovalEmail,
@@ -81,6 +84,7 @@ describe('demo free-tier signup admin email subjects (#659)', () => {
       schoolName,
       approveUrl,
       notRightPersonUrl,
+      pass1: false,
     });
     expect(result.ok).toBe(true);
     const delivery = sendEmail.mock.calls[0]![0] as {
@@ -93,26 +97,30 @@ describe('demo free-tier signup admin email subjects (#659)', () => {
   });
 
   test('forward recipient on approval-v2 outbox uses the forward subject with button and plain text', async () => {
-    const designed = buildDesignedAdminApprovalEmail({
+    const designed = await buildDesignedAdminApprovalEmail({
       teacherName,
       teacherEmail,
       schoolName,
       approveUrl,
       notRightPersonUrl,
       forwardedByAdminName: 'Sam Chen',
+      pass1: true,
     });
     expect(designed.subject).toBe(`Can you approve Yawp! for ${atSchool}?`);
     expectDesignedDelivery(designed);
 
-    const html = htmlForStoredAdminApprovalEmail({
+    const html = await htmlForStoredAdminApprovalEmail({
       subject: designed.subject,
       text: designed.text,
       html: designed.html,
       teacherName,
       teacherEmail,
       schoolName,
+      pass1: true,
     });
     expect(html).toContain('Review and approve</a>');
-    expect(designed.text).toContain('Sam Chen forwarded this to you');
+    expect(designed.text).toContain(
+      adminApprovalPass1ForwardBanner('Sam Chen', teacherName, schoolName)
+    );
   });
 });

@@ -6,6 +6,7 @@ import { createE2EPrismaClient } from '../prisma-client';
 import { provisionFreeClassroomForE2E } from '../helpers/provision-free-classroom-for-e2e';
 import { seedSiteLicenseLockedCatalogForE2E } from '../helpers/seed-site-license-locked-catalog-for-e2e';
 import { dashboardAssignmentTileOverlapIssues } from '../helpers/dashboard-assignment-tile-overlap';
+import { expectGiveFeedbackAccessible } from '../helpers/dev-panel-feedback';
 if (!process.env.CLASS_STEP_PORT) {
   throw new Error(
     'Run class-step tests with ./bin/project test --profile free-tier-locked-preview-browser'
@@ -70,6 +71,10 @@ async function fixture(
     });
   }
   return { user, app };
+}
+
+async function expectLockedAppHome(page: import('@playwright/test').Page) {
+  await expect(page).toHaveURL(/\/app\/?$/);
 }
 
 async function login(page: import('@playwright/test').Page, email: string) {
@@ -279,6 +284,10 @@ test.beforeEach(async () => {
   await flag(true);
 });
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.removeItem('yawp-dev-panel'));
+});
+
 test.afterAll(async () => {
   await flag(false);
   const applications = await prisma.freeTierApplication.findMany({
@@ -325,7 +334,7 @@ for (const width of [390, 1440]) {
     const exploreLink = page.getByRole('link', { name: 'Explore my classroom' });
     await expect(exploreLink).toHaveAttribute('href', '/app');
     await exploreLink.click();
-    await expect(page).toHaveURL(/\/app$/);
+    await expectLockedAppHome(page);
     await expect(page).not.toHaveURL(/free-tier\/preview/);
     await expect(
       page.getByRole('heading', { name: /Look around while you wait/i })
@@ -524,9 +533,7 @@ for (const width of [390, 1440]) {
       await capture(page, 'dashboard-approved-390');
     }
     if (width === 1440) {
-      await expect(
-        page.getByRole('button', { name: 'Give feedback' })
-      ).toBeVisible();
+      await expectGiveFeedbackAccessible(page);
       await capture(page, 'approval-toast-above-feedback-1440');
     }
     await page
@@ -553,7 +560,7 @@ test('explore stays on pending when classroom is not provisioned yet', async ({
     page.getByRole('link', { name: 'Explore my classroom' })
   ).toBeVisible();
   await page.getByRole('link', { name: 'Explore my classroom' }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expectLockedAppHome(page);
   await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
   const updated = await prisma.freeTierApplication.findUniqueOrThrow({
     where: { id: app.id },
@@ -585,7 +592,7 @@ test('explore shows with a stale default-org membership cookie', async ({
     page.getByRole('link', { name: 'Explore my classroom' })
   ).toBeVisible();
   await page.getByRole('link', { name: 'Explore my classroom' }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expectLockedAppHome(page);
   await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
 });
 
@@ -698,8 +705,34 @@ async function exploreLockedApp(page: import('@playwright/test').Page, userEmail
   await login(page, userEmail);
   await page.goto('/app/free-tier/pending');
   await page.getByRole('link', { name: 'Explore my classroom' }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expectLockedAppHome(page);
   await expect(page.getByTestId('teaching-access-banner')).toBeVisible();
+}
+
+async function expectRouteOmitsTeachingSecrets(
+  page: import('@playwright/test').Page,
+  path: string,
+  routeId: string,
+  classId: string,
+  secrets: { code: string; joinToken: string | null }
+) {
+  const ssr = await page.request.get(path);
+  expect(ssr.status()).toBe(200);
+  const ssrText = await ssr.text();
+  expect(ssrText).not.toContain(secrets.code);
+  if (secrets.joinToken) {
+    expect(ssrText).not.toContain(secrets.joinToken);
+  }
+  expect(ssrText).toContain(classId);
+
+  const data = await page.request.get(`${path}.data?_routes=${routeId}`);
+  expect(data.status()).toBe(200);
+  const dataText = await data.text();
+  expect(dataText).not.toContain(secrets.code);
+  if (secrets.joinToken) {
+    expect(dataText).not.toContain(secrets.joinToken);
+  }
+  expect(dataText).toContain(classId);
 }
 
 test('pending teacher /app HTML and loader data omit the real class code', async ({
@@ -715,6 +748,14 @@ test('pending teacher /app HTML and loader data omit the real class code', async
     select: { id: true, code: true },
   });
   await exploreLockedApp(page, user.email!);
+  const appSsr = await page.request.get('/app');
+  expect(appSsr.status()).toBe(200);
+  expect(await appSsr.text()).not.toContain(klass.code);
+  const appData = await page.request.get(
+    '/app.data?_routes=routes/app._index'
+  );
+  expect(appData.status()).toBe(200);
+  expect(await appData.text()).not.toContain(klass.code);
   let html = await page.content();
   expect(html).not.toContain(klass.code);
   await page.goto('/app/my-classes');
@@ -723,6 +764,48 @@ test('pending teacher /app HTML and loader data omit the real class code', async
   await page.goto(`/app/my-classes/${klass.id}?tab=students`);
   html = await page.content();
   expect(html).not.toContain(klass.code);
+});
+
+test('pending org owner organization pages omit class code and join token', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { user, app } = await fixture('11', 'SENT');
+  await provisionPendingClassroom(app.id, user.id!);
+  const joinToken = `e2e-locked-preview-join-${crypto.randomUUID()}`;
+  const klass = await prisma.class.findFirstOrThrow({
+    where: {
+      teachers: { some: { user: { id: user.id } } },
+    },
+    select: { id: true, code: true, schoolId: true, studentJoinToken: true },
+  });
+  await prisma.class.update({
+    where: { id: klass.id },
+    data: { studentJoinToken: joinToken },
+  });
+  const secrets = { code: klass.code, joinToken };
+  await exploreLockedApp(page, user.email!);
+  await expectRouteOmitsTeachingSecrets(
+    page,
+    '/app/organization/classes',
+    'routes/app.organization.classes',
+    klass.id,
+    secrets
+  );
+  await expectRouteOmitsTeachingSecrets(
+    page,
+    '/app/organization/students',
+    'routes/app.organization.students',
+    klass.id,
+    secrets
+  );
+  await expectRouteOmitsTeachingSecrets(
+    page,
+    `/app/organizations/schools/${klass.schoolId}`,
+    'routes/app.organizations.schools.$schoolId',
+    klass.id,
+    secrets
+  );
 });
 
 test('approved teacher sees the real class code on the dashboard card', async ({

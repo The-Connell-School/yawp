@@ -89,6 +89,9 @@ mock.module('~/utils/auth.server', () => ({
   requireMembership: mock(),
 }));
 mock.module('~/utils/db.server', () => ({ prisma }));
+mock.module('~/domain/free-tier/locked-preview.server', () => ({
+  organizationHasPendingFreeTierLessonPlannerMetering: async () => false,
+}));
 mock.module('~/utils/lesson-planner/lesson-planner-access.server', () => ({
   requireLessonPlannerAccess,
 }));

@@ -4,11 +4,15 @@ import {
   useActionData,
   useLoaderData,
 } from 'react-router';
-import { CircleAlert, CircleCheck } from 'lucide-react';
 import {
-  applicationIdFromSignedToken,
-  peekSignedLink,
-} from '~/domain/free-tier/signed-link.server';
+  freeClassroomsPausedBody,
+  thankYouTeacherEmailFailedBody,
+} from '~/domain/free-tier/admin-approval-copy';
+import type { FreeTierAdminLinkReplacedVariant } from '~/domain/free-tier/admin-link-gate.server';
+import { useFreeTierEnabled } from '../free-tier/useFreeTierLayoutContext';
+import { CircleAlert, CircleCheck } from 'lucide-react';
+import { applicationIdForAdminLinkNaming } from '~/domain/free-tier/admin-link-known-request.server';
+import { peekSignedLink } from '~/domain/free-tier/signed-link.server';
 import {
   fetchFreeTierApplicationTerminalGate,
   resolveAdminLinkReplacedGate,
@@ -17,10 +21,14 @@ import { completeSchoolAdminApproval } from '~/domain/free-tier/approval-flow.se
 import { prisma } from '~/utils/db.server';
 import { FreeTierAuthCard } from '../free-tier/FreeTierAuthCard';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
+import { FREE_TIER_FLAG } from '~/domain/feature-flags/feature-flags';
+import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { resolveAdminDenyAnsweredGate } from '~/domain/free-tier/approval-deny.server';
 import {
   AdminAlreadyApprovedCard,
   AdminApprovePageIntro,
   AdminDeclinedCard,
+  AdminDenyAlreadyAnsweredCard,
   AdminLinkExpiredCard,
   AdminLinkInvalidCard,
   AdminLinkReplacedCard,
@@ -29,6 +37,8 @@ import {
   approveCheckboxError,
 } from '../free-tier/AdminApprovalStates';
 import { AdminApproveForm } from '../free-tier/AdminApprovalForms';
+import { AdminApprovalQa } from '../free-tier/AdminApprovalQa';
+import { AdminForwardLink } from '../free-tier/AdminApprovalStates';
 
 type LoaderData =
   | {
@@ -36,6 +46,8 @@ type LoaderData =
       reason?: string;
       schoolName?: string;
       teacherName?: string;
+      variant?: FreeTierAdminLinkReplacedVariant;
+      decidedAt?: string;
     }
   | {
       ok: true;
@@ -43,10 +55,18 @@ type LoaderData =
       schoolName: string;
       teacherName: string;
       teacherEmail?: string;
+      showDenyAndQa: boolean;
     };
 
-async function applicationFromToken(token: string) {
-  const applicationId = applicationIdFromSignedToken(token);
+async function applicationFromVerifiedToken(
+  token: string,
+  peek: Awaited<ReturnType<typeof peekSignedLink>>
+) {
+  const applicationId = await applicationIdForAdminLinkNaming(
+    token,
+    peek,
+    'ADMIN_APPROVE'
+  );
   if (!applicationId) return null;
   return prisma.freeTierApplication.findUnique({
     where: { id: applicationId },
@@ -62,12 +82,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
     token,
     expectedPurpose: 'ADMIN_APPROVE',
   });
-  const appId = peek.ok
-    ? peek.applicationId
-    : applicationIdFromSignedToken(token);
+  const appId = await applicationIdForAdminLinkNaming(
+    token,
+    peek,
+    'ADMIN_APPROVE'
+  );
+  const showDenyAndQa = await isFeatureFlagEnabled(FREE_TIER_FLAG);
   if (appId) {
     const gate = await fetchFreeTierApplicationTerminalGate(appId);
     if (gate) return { ok: false as const, ...gate };
+    if (showDenyAndQa) {
+      const denied = await resolveAdminDenyAnsweredGate({ token });
+      if (denied?.reason === 'admin_denied') {
+        return {
+          ok: false as const,
+          reason: 'admin_denied' as const,
+          teacherName: denied.teacherName,
+          schoolName: denied.schoolName,
+          decidedAt: denied.decidedAt.toISOString(),
+        };
+      }
+    }
   }
   if (peek.ok) {
     const app = await prisma.freeTierApplication.findUnique({
@@ -84,10 +119,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
       schoolName: app?.schoolName ?? 'your school',
       teacherName: app?.name ?? 'A teacher',
       teacherEmail: app?.email,
+      showDenyAndQa,
     };
   }
   if (peek.reason === 'expired') {
-    const app = await applicationFromToken(token);
+    const app = await applicationFromVerifiedToken(token, peek);
     if (app) {
       return {
         ok: false as const,
@@ -96,10 +132,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
         teacherName: app.name,
       };
     }
+    return { ok: false as const, reason: 'invalid' as const };
   }
-  const replaced = await resolveAdminLinkReplacedGate({ token, peek });
+  const replaced = await resolveAdminLinkReplacedGate({
+    token,
+    peek,
+    expectedPurpose: 'ADMIN_APPROVE',
+  });
   if (replaced) return { ok: false as const, ...replaced };
-  if (peek.reason === 'invalid' || !peek.reason) {
+  if (
+    peek.reason === 'invalid' ||
+    peek.reason === 'purpose_mismatch' ||
+    !peek.reason
+  ) {
     return { ok: false as const, reason: 'invalid' as const };
   }
   return { ok: false as const, reason: peek.reason };
@@ -121,16 +166,31 @@ export async function action({ request }: ActionFunctionArgs) {
     request,
   });
   if (!result.ok && result.reason === 'superseded') {
-    const appId = applicationIdFromSignedToken(token);
+    const peek = await peekSignedLink({
+      token,
+      expectedPurpose: 'ADMIN_APPROVE',
+    });
+    const replaced = await resolveAdminLinkReplacedGate({
+      token,
+      peek,
+      expectedPurpose: 'ADMIN_APPROVE',
+    });
+    if (replaced) return { ok: false as const, ...replaced };
+    const appId = await applicationIdForAdminLinkNaming(
+      token,
+      peek,
+      'ADMIN_APPROVE'
+    );
     if (appId) {
       const gate = await fetchFreeTierApplicationTerminalGate(appId);
       if (gate) return { ok: false as const, ...gate };
     }
-    const app = await applicationFromToken(token);
+    const app = await applicationFromVerifiedToken(token, peek);
     if (app && !['APPROVED', 'REJECTED', 'EXPIRED'].includes(app.status)) {
       return {
         ok: false as const,
         reason: 'link_replaced' as const,
+        variant: 'resent' as const,
         teacherName: app.name,
         schoolName: app.schoolName,
       };
@@ -155,6 +215,19 @@ function terminalFromLoader(data: Extract<LoaderData, { ok: false }>) {
       <AdminDeclinedCard teacherName={teacherName} schoolName={schoolName} />
     );
   }
+  if (
+    data.reason === 'admin_denied' &&
+    'decidedAt' in data &&
+    typeof data.decidedAt === 'string'
+  ) {
+    return (
+      <AdminDenyAlreadyAnsweredCard
+        teacherName={teacherName}
+        schoolName={schoolName}
+        decidedAt={new Date(data.decidedAt)}
+      />
+    );
+  }
   if (data.reason === 'expired') {
     return (
       <AdminLinkExpiredCard teacherName={teacherName} schoolName={schoolName} />
@@ -165,11 +238,17 @@ function terminalFromLoader(data: Extract<LoaderData, { ok: false }>) {
       <AdminLinkReplacedCard
         teacherName={teacherName}
         schoolName={schoolName}
+        variant={data.variant ?? 'forwarded'}
       />
     );
   }
   if (data.reason === 'invalid') {
-    return <AdminLinkInvalidCard />;
+    return (
+      <AdminLinkInvalidCard
+        teacherName={data.teacherName}
+        schoolName={data.schoolName}
+      />
+    );
   }
   return null;
 }
@@ -213,6 +292,12 @@ function terminalFromAction(actionData: NonNullable<ReturnType<typeof useActionD
       <AdminLinkReplacedCard
         teacherName={teacherName}
         schoolName={schoolName}
+        variant={
+          'variant' in actionData
+            ? (actionData as { variant?: FreeTierAdminLinkReplacedVariant })
+                .variant ?? 'forwarded'
+            : 'forwarded'
+        }
       />
     );
   }
@@ -243,6 +328,7 @@ function terminalFromAction(actionData: NonNullable<ReturnType<typeof useActionD
 export default function FreeAdminApproveRoute() {
   const data = useLoaderData<LoaderData>();
   const actionData = useActionData<typeof action>();
+  const pass1 = useFreeTierEnabled();
 
   if (actionData?.ok && 'idempotent' in actionData && actionData.idempotent) {
     const teacherName = data.ok ? data.teacherName : 'A teacher';
@@ -288,8 +374,11 @@ export default function FreeAdminApproveRoute() {
       return (
         <FreeTierAuthCard title="Thank you" icon={<CircleCheck />} status>
           <p className="text-sm text-muted-foreground">
-            {data.teacherName} at {data.schoolName} can start using Yawp! We
-            could not send your confirmation email.
+            {thankYouTeacherEmailFailedBody(
+              data.teacherName,
+              data.schoolName,
+              pass1
+            )}
           </p>
         </FreeTierAuthCard>
       );
@@ -302,6 +391,12 @@ export default function FreeAdminApproveRoute() {
         <AdminLinkReplacedCard
           teacherName={data.teacherName}
           schoolName={data.schoolName}
+          variant={
+            'variant' in actionData
+              ? (actionData as { variant?: FreeTierAdminLinkReplacedVariant })
+                  .variant ?? 'forwarded'
+              : 'forwarded'
+          }
         />
       );
     }
@@ -312,8 +407,11 @@ export default function FreeAdminApproveRoute() {
           icon={<CircleAlert />}
         >
           <p className="text-sm text-muted-foreground">
-            Yawp! has reached the current free-tier budget for this environment.
-            We did not use this approval link; our team will follow up.
+            {freeClassroomsPausedBody(
+              data.teacherName,
+              data.schoolName,
+              pass1
+            )}
           </p>
         </FreeTierAuthCard>
       );
@@ -323,6 +421,16 @@ export default function FreeAdminApproveRoute() {
   return (
     <FreeTierAuthCard
       title={adminApprovePageTitle(data.teacherName, data.schoolName)}
+      belowCard={
+        data.showDenyAndQa ? (
+          <AdminForwardLink token={data.token} />
+        ) : undefined
+      }
+      stackAfterCard={
+        data.showDenyAndQa ? (
+          <AdminApprovalQa teacherName={data.teacherName} />
+        ) : undefined
+      }
     >
       <AdminApprovePageIntro
         teacherName={data.teacherName}
@@ -333,6 +441,7 @@ export default function FreeAdminApproveRoute() {
         token={data.token}
         schoolName={data.schoolName}
         teacherName={data.teacherName}
+        showDenyAndQa={data.showDenyAndQa}
         serverErrors={
           actionData && !actionData.ok && actionData.reason === 'validation'
             ? {

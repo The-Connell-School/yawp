@@ -360,7 +360,7 @@ test.each(['returned', 'thrown'] as const)('create logs a redacted %s delivery f
     expect(await result.json()).toEqual({ error: 'Invitation delivery failed' });
     expect(log).toHaveBeenCalledTimes(1);
     expect(log.mock.calls[0]).toEqual(['owner_invitation_delivery_failed', {
-      provider: 'resend', recipientDomain: 'example.test', name: 'validation_error',
+      provider: 'resend', recipient: 'n***@e***', recipientDomain: 'e***', name: 'validation_error',
       code: null, statusCode: 403, message: 'Sender domain is not verified',
       validationReason: 'sender_domain_unverified',
     }]);
@@ -570,11 +570,13 @@ test('invitation links retain the admin flow public origin behind the proxy', as
   const req = request();
   req.headers.set('X-Forwarded-Host', 'public.yawp.test');
   expect((await f.handlers.create(req, 'org-1')).status).toBe(201);
-  const element = mail.mock.calls[0][0].react;
-  const link = element.props.children.props.children.find(
-    (child: any) => child?.props?.href
+  const delivery = mail.mock.calls[0]![0] as { html: string; text: string };
+  const hrefMatch = delivery.html.match(
+    /href="(https:\/\/[^"]+\/auth\/inv\/verify[^"]*)"/
   );
-  expect(new URL(link.props.href).origin).toBe('https://public.yawp.test');
+  expect(hrefMatch).not.toBeNull();
+  expect(new URL(hrefMatch![1]!).origin).toBe('https://public.yawp.test');
+  expect(delivery.text).toContain('https://public.yawp.test/auth/inv/verify');
 });
 
 

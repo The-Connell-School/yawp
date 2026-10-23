@@ -16,15 +16,22 @@ import {
   isApprovalV2Enabled,
   forwardApprovalRequest,
 } from '~/domain/free-tier/approval-v2.server';
+import { loadTeacherDeniedSurface } from '~/domain/free-tier/approval-deny.server';
+import {
+  teacherAllRequestsUsedBody,
+  teacherDeniedStatusBody,
+  teacherDeniedStatusTitle,
+} from '~/domain/free-tier/admin-deny-copy';
 import {
   approvalMailto,
   approvalSentDate,
 } from '~/domain/free-tier/approval-waiting';
+import { teacherPendingForwardError } from '~/domain/free-tier/admin-approval-copy';
 import {
   ApprovalForwardForm,
   approvalForwardError,
 } from '../free-tier/ApprovalForwardForm';
-import { Clock } from 'lucide-react';
+import { Clock, Info } from 'lucide-react';
 import { getTransactionalEmailFrom } from '~/utils/email.server';
 import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -41,17 +48,43 @@ import {
 import { freeTierConfigErrorMessage } from '~/domain/free-tier/free-tier-config.server';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
 import { Button } from '~/components/ui/button';
+import { yawpE2eForwardShouldFail } from '~/domain/free-tier/e2e-stub.server';
 
 const FORWARD_ERROR_REASONS = new Set([
   'validation',
+  'same_as_teacher',
   'same_administrator',
   'chain_cap',
+  'email_failed',
   'superseded',
   'rate_limited',
   'unavailable',
 ]);
 
 type PendingActionData = Awaited<ReturnType<typeof action>>;
+
+function pendingForwardAlertMessage(
+  reason: string,
+  ctx: { schoolName: string; adminName?: string }
+) {
+  switch (reason) {
+    case 'same_as_teacher':
+    case 'same_administrator':
+    case 'chain_cap':
+    case 'email_failed':
+      return teacherPendingForwardError({
+        reason,
+        schoolName: ctx.schoolName,
+        adminName: ctx.adminName,
+      });
+    default:
+      return approvalForwardError(reason, {
+        pass1: false,
+        schoolName: ctx.schoolName,
+        adminName: ctx.adminName,
+      });
+  }
+}
 
 function isForwardActionError(
   data: PendingActionData | undefined
@@ -108,6 +141,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       schoolName: true,
       email: true,
       name: true,
+      adminRedirectCount: true,
       adminApprovals: {
         where: { status: 'PENDING' },
         orderBy: { createdAt: 'desc' },
@@ -128,6 +162,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
         select: { error: true },
       })
     : null;
+  const teacherDenied = app
+    ? await loadTeacherDeniedSurface({ applicationId: app.id })
+    : null;
+  const askOpen =
+    new URL(request.url).searchParams.get('ask') === '1' ||
+    new URL(request.url).searchParams.get('ask') === 'true';
   return {
     app,
     pending,
@@ -135,6 +175,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     showExploreClassroom: await userHasPendingFreeTierTeachingLock(userId),
     approvalV2: app ? await getApprovalWaitingDetails(app) : null,
     approvalEmailFrom: getTransactionalEmailFrom(),
+    teacherDenied,
+    askOpen,
   };
 }
 
@@ -165,7 +207,22 @@ export async function action({ request }: ActionFunctionArgs) {
     where: { userId, status: { in: ['SENT', 'MANUAL_REVIEW'] } },
     select: { id: true, userId: true, organizationId: true, status: true },
   });
+  const deniedSurface = app
+    ? await loadTeacherDeniedSurface({ applicationId: app.id })
+    : null;
   if (app && intent === 'forward' && (await isApprovalV2Enabled(app))) {
+    const approvalId = String(form.get('approvalId') ?? '');
+    const currentApprovalId =
+      approvalId ||
+      deniedSurface?.denied.id ||
+      (
+        await prisma.freeTierAdminApproval.findFirst({
+          where: { applicationId: app.id, status: 'PENDING' },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true },
+        })
+      )?.id ||
+      '';
     const gate = await enforceUnauthByIpAndTarget({
       request,
       route: '/app/free-tier/pending:forward',
@@ -175,11 +232,14 @@ export async function action({ request }: ActionFunctionArgs) {
       perTargetPerHour: 10,
     });
     if (!gate.allowed) return { ok: false as const, reason: 'rate_limited' };
+    if (yawpE2eForwardShouldFail(request)) {
+      return { ok: false as const, reason: 'unavailable' };
+    }
     try {
       return await forwardApprovalRequest({
         applicationId: app.id,
         userId,
-        currentApprovalId: String(form.get('approvalId') ?? ''),
+        currentApprovalId,
         newAdminName: String(form.get('adminName') ?? ''),
         newAdminEmail: String(form.get('adminEmail') ?? ''),
         request,
@@ -260,6 +320,26 @@ function PendingDraftRequestLink({
   );
 }
 
+function TeacherAskAnotherForm({
+  approvalId,
+  busy,
+  hint,
+  open,
+}: {
+  approvalId: string;
+  busy: boolean;
+  hint: string;
+  open: boolean;
+}) {
+  if (!open) return null;
+  return (
+    <div className="flex w-full flex-col gap-3 text-left" data-testid="teacher-ask-another-form">
+      <p className="text-xs text-muted-foreground">{hint}</p>
+      <ApprovalForwardForm approvalId={approvalId} busy={busy} />
+    </div>
+  );
+}
+
 export default function FreeTierPendingRoute() {
   const {
     app,
@@ -268,16 +348,92 @@ export default function FreeTierPendingRoute() {
     showExploreClassroom,
     approvalV2,
     approvalEmailFrom,
+    teacherDenied,
+    askOpen,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const resending = navigation.state === 'submitting';
   const adminName = pending?.adminName ?? 'your administrator';
   const [forwardOpen, setForwardOpen] = useState(false);
+  const [askAnotherOpen, setAskAnotherOpen] = useState(askOpen);
 
   useEffect(() => {
     if (isForwardActionError(actionData)) setForwardOpen(true);
   }, [actionData]);
+
+  useEffect(() => {
+    if (askOpen) setAskAnotherOpen(true);
+  }, [askOpen]);
+
+  if (teacherDenied && approvalV2?.enabled) {
+    const { denied, chainCapReached, askAnotherHint: hint } = teacherDenied;
+    return (
+      <FreeTierAuthCard
+        title={teacherDeniedStatusTitle()}
+        icon={<Info className="h-5 w-5" aria-hidden />}
+        footer={
+          <div className="flex flex-col items-center gap-1">
+            {showExploreClassroom ? (
+              <Button
+                type="button"
+                variant="link"
+                asChild
+                className="h-auto p-0 text-sm underline"
+              >
+                <Link to="/app">Explore my classroom</Link>
+              </Button>
+            ) : null}
+            <FreeTierSignOut />
+          </div>
+        }
+      >
+        <p className="text-sm text-muted-foreground">
+          {teacherDeniedStatusBody(denied.adminName, app?.schoolName ?? 'your school')}
+        </p>
+        {chainCapReached ? (
+          <>
+            <p className="text-sm text-muted-foreground">
+              {teacherAllRequestsUsedBody()}
+            </p>
+            <FreeTierButton asChild>
+              <a href="mailto:support@yawp.school">Email support</a>
+            </FreeTierButton>
+          </>
+        ) : (
+          <>
+            {!askAnotherOpen ? (
+              <FreeTierButton type="button" onClick={() => setAskAnotherOpen(true)}>
+                Ask another administrator
+              </FreeTierButton>
+            ) : null}
+            <TeacherAskAnotherForm
+              approvalId={denied.id}
+              busy={resending}
+              hint={hint}
+              open={askAnotherOpen}
+            />
+            <FreeTierButton asChild variant="outline">
+              <a href="mailto:support@yawp.school">Email support</a>
+            </FreeTierButton>
+          </>
+        )}
+        {actionData?.ok && 'queued' in actionData ? (
+          <p role="status" className="text-sm text-muted-foreground">
+            Request sent to {actionData.adminName}!
+          </p>
+        ) : null}
+        {isForwardActionError(actionData) ? (
+          <p role="alert" className="text-sm text-destructive">
+            {pendingForwardAlertMessage(actionData.reason, {
+              schoolName: app?.schoolName ?? 'your school',
+              adminName: denied?.adminName,
+            })}
+          </p>
+        ) : null}
+      </FreeTierAuthCard>
+    );
+  }
 
   if (approvalV2) {
     const current = approvalV2.approval;
@@ -343,7 +499,7 @@ export default function FreeTierPendingRoute() {
             ) : null}
             <FreeTierProgress
               steps={[
-                'Account created',
+                'Account and class created',
                 'Request sent',
                 app?.status === 'MANUAL_REVIEW'
                   ? 'Yawp! review'
@@ -379,7 +535,10 @@ export default function FreeTierPendingRoute() {
             ) : null}
             {isForwardActionError(actionData) ? (
               <p role="alert" className="text-sm text-destructive">
-                {approvalForwardError(actionData.reason)}
+                {pendingForwardAlertMessage(actionData.reason, {
+                  schoolName: app?.schoolName ?? 'your school',
+                  adminName: current?.adminName,
+                })}
               </p>
             ) : null}
           </>
@@ -430,11 +589,11 @@ export default function FreeTierPendingRoute() {
       ) : null}
       <FreeTierProgress
         steps={[
-          'Account created',
+          'Account and class created',
           'Request sent',
           app?.status === 'MANUAL_REVIEW'
             ? 'Yawp! review'
-            : `${adminName} approves`,
+            : `${pending?.adminName ?? 'Your administrator'} approves`,
           'Start teaching',
         ]}
         current={2}

@@ -1,3 +1,5 @@
+import { redactEmailForLog } from './redact-email-for-log.server';
+
 // Provider errors can contain addresses, verification links, credentials, or
 // arbitrary response bodies. Log only allowlisted identifiers and fixed prose;
 // regex replacement alone cannot safely redact opaque tokens.
@@ -45,12 +47,21 @@ export function emailDeliveryDiagnostic(error: unknown, recipient: string) {
     ? detail.code : null;
   const message = typeof detail.message === 'string' ? detail.message : '';
   const domain = recipient.split('@');
-  const recipientDomain = domain.length === 2
-    && domain[1]!.length <= 253
-    && /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(domain[1]!)
-    ? domain[1]!.toLowerCase() : null;
+  const domainHost =
+    domain.length === 2 &&
+    domain[1]!.length <= 253 &&
+    /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(domain[1]!)
+      ? domain[1]!.toLowerCase()
+      : null;
+  const domainLabel = domainHost?.split('.')[0] ?? '';
+  const recipientDomain =
+    domainHost && domainLabel.length > 0 ? `${domainLabel[0]}***` : null;
   return {
-    provider, recipientDomain, name, code,
+    provider,
+    recipient: redactEmailForLog(recipient),
+    ...(recipientDomain ? { recipientDomain } : {}),
+    name,
+    code,
     validationReason: provider === 'resend' ? resendValidationReason(message) : 'other',
     statusCode: typeof detail.statusCode === 'number' && Number.isInteger(detail.statusCode)
       && detail.statusCode >= 100 && detail.statusCode <= 599 ? detail.statusCode : null,

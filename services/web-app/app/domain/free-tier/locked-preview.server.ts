@@ -85,6 +85,63 @@ export async function shouldHideFreeTierTeachingSecrets(userId: string) {
   return userHasPendingFreeTierTeachingLock(userId);
 }
 
+type ClassTeachingSecretCarrier = {
+  code?: string | null;
+  studentJoinToken?: string | null;
+};
+
+/** Strip join tokens and blank class codes for locked-preview teachers (matches my-classes loaders). */
+export function redactClassTeachingSecrets<T extends ClassTeachingSecretCarrier>(
+  klass: T,
+  hideTeachingSecrets: boolean
+): T {
+  if (!hideTeachingSecrets) return klass;
+  const { studentJoinToken: _token, ...rest } = klass;
+  return { ...rest, code: null } as T;
+}
+
+export type OrganizationClassListSort =
+  | 'code'
+  | 'schoolYear'
+  | 'grade'
+  | 'period'
+  | 'createdAt';
+
+function organizationClassSearchOrWithoutCode(q: string) {
+  return [
+    { schoolYear: { contains: q, mode: 'insensitive' as const } },
+    { grade: { contains: q, mode: 'insensitive' as const } },
+    { period: { contains: q, mode: 'insensitive' as const } },
+    { title: { contains: q, mode: 'insensitive' as const } },
+    {
+      school: {
+        name: { contains: q, mode: 'insensitive' as const },
+      },
+    },
+  ];
+}
+
+/** Prevent locked-preview owners from inferring class codes via list filters. */
+export function organizationClassListQueryParts(options: {
+  q: string | null;
+  sort: OrganizationClassListSort;
+  hideTeachingSecrets: boolean;
+}) {
+  const orClause = options.q
+    ? options.hideTeachingSecrets
+      ? organizationClassSearchOrWithoutCode(options.q)
+      : [
+          { code: { contains: options.q, mode: 'insensitive' as const } },
+          ...organizationClassSearchOrWithoutCode(options.q),
+        ]
+    : undefined;
+  const orderByField: OrganizationClassListSort =
+    options.hideTeachingSecrets && options.sort === 'code'
+      ? 'createdAt'
+      : options.sort;
+  return { orClause, orderByField };
+}
+
 export async function ensureLockedPreviewClassroomForUser(userId: string) {
   const application = await prisma.freeTierApplication.findFirst({
     where: {

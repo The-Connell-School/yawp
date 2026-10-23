@@ -22,6 +22,8 @@ export function FreeTierAuthCard({
   icon,
   status,
   aside,
+  belowCard,
+  stackAfterCard,
 }: {
   title: string;
   subtitle?: string;
@@ -29,27 +31,49 @@ export function FreeTierAuthCard({
   footer?: ReactNode;
   icon?: ReactNode;
   status?: boolean;
+  /** @deprecated Use stackAfterCard for Q&A below the approve card. */
   aside?: ReactNode;
+  belowCard?: ReactNode;
+  stackAfterCard?: ReactNode;
 }) {
+  const stacked = Boolean(stackAfterCard || belowCard);
   return (
-    <div className={`free-tier-page${aside ? ' free-tier-approval-v2' : ''}`}>
+    <div
+      className={`free-tier-page${
+        stacked
+          ? ' free-tier-approval-stack'
+          : aside
+            ? ' free-tier-approval-v2'
+            : ''
+      }`}
+    >
       <AuthPageShell>
-        {aside ? <div className="free-tier-approval-info">{aside}</div> : null}
-        <AuthFormCard
-          title={title}
-          subtitle={subtitle}
-          className="free-tier-form-card"
-          role={status ? 'status' : undefined}
-          icon={
-            icon ? (
-              <div className="free-tier-state-icon" aria-hidden="true">
-                {icon}
-              </div>
-            ) : undefined
-          }
-        >
-          <div className="flex flex-col gap-4">{children}</div>
-        </AuthFormCard>
+        {aside && !stacked ? (
+          <div className="free-tier-approval-info">{aside}</div>
+        ) : null}
+        <div className={stacked ? 'free-tier-approval-column' : undefined}>
+          <AuthFormCard
+            title={title}
+            subtitle={subtitle}
+            className="free-tier-form-card"
+            role={status ? 'status' : undefined}
+            icon={
+              icon ? (
+                <div className="free-tier-state-icon" aria-hidden="true">
+                  {icon}
+                </div>
+              ) : undefined
+            }
+          >
+            <div className="flex flex-col gap-4">{children}</div>
+          </AuthFormCard>
+          {belowCard ? (
+            <div className="free-tier-below-card">{belowCard}</div>
+          ) : null}
+          {stackAfterCard ? (
+            <div className="free-tier-stack-after-card">{stackAfterCard}</div>
+          ) : null}
+        </div>
         {footer ? <div className="free-tier-footer">{footer}</div> : null}
         <FreeTierLegalLinks />
       </AuthPageShell>

@@ -29,10 +29,10 @@ jobs:
       prisma: ${{ steps.filter.outputs.prisma }}
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: 🔍 Paths filter
         id: filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4
         with:
           filters: |
             # scripts/** is included in the core code filter so the Prisma job
@@ -71,20 +71,20 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
       - name: ⏭️ Skip (no preview tooling changes)
         if: ${{ needs.paths.outputs.preview_tooling != 'true' }}
         run: echo "No scripts/preview changes; skipping heavy steps."
 
       - name: 📥 Setup Bun
         if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
           bun-version: '1.4.3'
 
       - name: 💾 Cache bun install
         if: ${{ needs.paths.outputs.preview_tooling == 'true' }}
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
@@ -116,7 +116,7 @@ jobs:
     runs-on: ubuntu-22.04
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16@sha256:f9d1e581cde3e4c8bc696b07e6f7b7aea1d41014b33a52b27990762daae61beb # postgres:16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -129,20 +129,20 @@ jobs:
           --health-retries=10
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
       - name: ⏭️ Skip (no Prisma or core/code changes)
         if: ${{ !(needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true') }}
         run: echo "No packages/prisma changes; skipping heavy steps."
 
       - name: 📥 Setup Bun
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
           bun-version: '1.4.3'
 
       - name: 💾 Cache bun install
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
@@ -247,6 +247,7 @@ jobs:
           ./services/web-app/app/utils/free-tier-class-create-route.real-db.integration.test.ts
           ./services/web-app/app/utils/assignment-quota.real-db.integration.test.ts
           ./services/web-app/app/domain/free-tier/approval-flow.integration.test.ts
+          ./services/web-app/app/domain/free-tier/approval-flow-pass1-send.integration.test.ts
           ./services/web-app/app/domain/free-tier/approval.integration.test.ts
           ./services/web-app/app/domain/free-tier/service.integration.test.ts
           ./services/web-app/app/routes/api.free-tier.waitlist/route.integration.test.ts
@@ -267,8 +268,13 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
           APPROVAL_V2_DB_TESTS: '1'
+          FREE_TIER_LINK_HMAC_SECRET: ci-free-tier-link-hmac-secret-key-32b
+          PRIMARY_APP_URL: https://yawp.test
         run: |
           bun test --max-concurrency=2 ./services/web-app/app/domain/free-tier/approval-v2.real-db.integration.test.ts
+          bun test --max-concurrency=2 ./services/web-app/app/domain/free-tier/application-id-opaque-hash-verified.test.ts
+          bun test --max-concurrency=2 ./services/web-app/app/domain/free-tier/admin-token-s9a-actions.test.ts
+          bun test --max-concurrency=2 ./services/web-app/app/domain/free-tier/approval-deny.integration.test.ts
           bun test --max-concurrency=2 ./services/web-app/app/routes/app.free-tier.pending/route.v2.test.tsx
           bun test --max-concurrency=2 ./services/web-app/app/routes/free.admin.approve/route.v2.test.tsx
 
@@ -328,7 +334,7 @@ jobs:
           ./services/web-app/app/utils/preview-access-rate-limit.server.test.ts
           ./services/web-app/app/utils/internal-free-tier-http.server.test.ts
           ./services/web-app/app/utils/mock-admin-environment.test.ts
-          $(find ./services/web-app/app/domain/free-tier -type f -name '*.test.ts' ! -name 'student-join.server.test.ts' ! -name 'inapp-usage.server.test.ts' ! -name 'monthly-policy.test.ts' ! -name 'locked-preview.server.test.ts' ! -name 'teaching-access-shell.server.test.ts' ! -name 'email.server.test.ts' ! -name 'demo-signup-admin-email.test.ts' ! -name 'admin-link-gate.server.test.ts' ! -name 'service.create-token-idempotency.test.ts' ! -name 'posthog-*.test.ts' ! -name 'service.analytics.server.test.ts' ! -name 'public-onboarding.route.test.ts' ! -name 'provision.analytics.server.test.ts' ! -name '*.integration.test.ts')
+          $(find ./services/web-app/app/domain/free-tier -type f -name '*.test.ts' ! -name 'student-join.server.test.ts' ! -name 'inapp-usage.server.test.ts' ! -name 'monthly-policy.test.ts' ! -name 'locked-preview.server.test.ts' ! -name 'teaching-access-shell.server.test.ts' ! -name 'email.server.test.ts' ! -name 'demo-signup-admin-email.test.ts' ! -name 'admin-link-gate.server.test.ts' ! -name 'admin-approval-email-facts.test.ts' ! -name 'approval-flow-pass1-send.test.ts' ! -name 'application-id-opaque-hash-verified.test.ts' ! -name 'admin-token-s9a-actions.test.ts' ! -name 'service.create-token-idempotency.test.ts' ! -name 'posthog-*.test.ts' ! -name 'service.analytics.server.test.ts' ! -name 'public-onboarding.route.test.ts' ! -name 'provision.analytics.server.test.ts' ! -name '*.integration.test.ts')
           ./services/web-app/app/routes/app/sidebar-nav.reporter.test.ts
           ./packages/prisma/preview-access-code.free-classroom.test.ts
           ./packages/prisma/scripts/preview-seats.test.ts
@@ -371,7 +377,10 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
           LOCKED_PREVIEW_DB_TESTS: '1'
-        run: bun test --max-concurrency=2 ./services/web-app/app/domain/free-tier/locked-preview.real-db.integration.test.ts
+        run: |
+          bun test --max-concurrency=2 ./services/web-app/app/domain/free-tier/locked-preview.real-db.integration.test.ts
+          bun test --max-concurrency=2 ./services/web-app/app/utils/cookies.organization-classes-table.test.ts
+          bun test --max-concurrency=2 ./services/web-app/app/domain/free-tier/teaching-secrets-loader.integration.test.ts
 
       - name: 🧪 Free-tier locked teaching UI (isolated)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -441,6 +450,12 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun test ./services/web-app/app/domain/free-tier/email.server.test.ts
 
+      - name: 🧪 Legacy pass1 send unit tests (isolated; mocks prisma)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./services/web-app/app/domain/free-tier/approval-flow-pass1-send.test.ts
+
       - name: 🧪 Demo signup admin email subjects (isolated; mocks prisma)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
         env:
@@ -452,6 +467,12 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun test ./services/web-app/app/domain/free-tier/admin-link-gate.server.test.ts
+
+      - name: 🧪 Free-tier admin approval email facts tests (isolated; mocks prisma)
+        if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./services/web-app/app/domain/free-tier/admin-approval-email-facts.test.ts
 
       - name: 🧪 Free-tier PostHog signup tests (isolated; mocks prisma)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -640,12 +661,12 @@ jobs:
 
       - name: 🐳 Set up Docker Buildx
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       # Layer cache in the GitHub Actions cache, so unchanged layers are not rebuilt.
       - name: 🐳 Build production image (cached layers)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: services/web-app/Dockerfile
@@ -748,32 +769,46 @@ jobs:
           INTERNAL_DIRECTORY_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: CI=1 bun test --max-concurrency=2 app/utils/internal-teacher-trainings.integration.test.ts
 
+      - name: Organization teachers invite delivery tests
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        run: |
+          set -e
+          for file in \
+            app/routes/app.organization.teachers/route.invite-teachers.action.test.ts \
+            app/routes/app.organization.teachers/teacher-invite-copy.test.ts \
+            app/routes/app.organization.teachers/invite-teachers-sheet.test.tsx; do
+            CI=1 bun test --max-concurrency=2 "$file"
+          done
+
   typecheck-web-app:
     needs: [paths]
     name: ʦ TypeScript
     runs-on: ubuntu-22.04
+    env:
+      YAWP_CI_TYPECHECK_NO_DATABASE: '1'
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
       - name: ⏭️ Skip (no code changes)
         if: ${{ needs.paths.outputs.code != 'true' }}
         run: echo "No code changes; skipping heavy steps."
 
       - name: ⎔ Setup node
         if: ${{ needs.paths.outputs.code == 'true' }}
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
         with:
           node-version: 22
 
       - name: 📥 Download deps
         if: ${{ needs.paths.outputs.code == 'true' }}
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
           bun-version: '1.4.3'
 
       - name: 💾 Cache bun install
         if: ${{ needs.paths.outputs.code == 'true' }}
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
@@ -841,6 +876,12 @@ jobs:
         run: |
           set -e
           for f in \
+            app/entry.server.test.ts \
+            app/utils/server-error-request-context.server.test.ts \
+            app/utils/email.server.test.ts \
+            app/utils/email-log.server.test.ts \
+            app/domain/rubrics/rubric-catalog.logging.test.ts \
+            'app/routes/app.organization.teachers/route.logging.test.ts' \
             app/domain/feature-flags/feature-flags.test.ts \
             app/domain/feature-flags/feature-flags.server.test.ts \
             app/utils/internal-feature-flags-http.server.test.ts \
@@ -876,6 +917,11 @@ jobs:
             app/domain/free-tier/admin-email-rules.server.test.ts \
             app/routes/app.free-tier.pending/route.test.tsx \
             app/routes/free.admin.approve/route.loader.test.ts \
+            app/routes/free.admin.approve_.deny/route.loader.test.ts \
+            app/routes/free.admin.approve_.deny/route.action.test.ts \
+            app/routes/free.admin.not-right-person/route.loader.test.ts \
+            app/routes/free.admin.not-right-person/route.action.test.ts \
+            app/routes/free-tier/AdminApprovalStates.test.tsx \
             app/routes/free._index/route.action.test.ts \
             app/routes/free._index/LegalLinks.test.tsx \
             app/routes/privacy/route.test.tsx \
@@ -906,6 +952,14 @@ jobs:
             'app/utils/tester-feedback.server.test.ts' \
             'app/utils/tester-feedback-runtime.server.test.ts' \
             'app/routes/api.admin.tester-feedback/route.test.ts' \
+            'app/dev-panel/dev-panel-api-production.test.ts' \
+            'app/dev-panel/dev-panel-runtime.server.test.ts' \
+            'app/dev-panel/dev-panel-production-guard.test.ts' \
+            'app/dev-panel/dev-panel-route-guard.server.test.ts' \
+            'app/dev-panel/dev-panel-orgs.server.test.ts' \
+            'app/dev-panel/dev-panel-storage.test.ts' \
+            'app/dev-panel/free-tier-jump.server.test.ts' \
+            'app/dev-panel/free-tier-states.catalog.test.ts' \
             'app/utils/preview-access.server.test.ts' \
             'app/utils/preview-free-tier-access.server.test.ts' \
             'app/utils/internal-grading-stats.server.test.ts' \
@@ -1000,17 +1054,14 @@ jobs:
     if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     name: 🧪 E2E smoke (shard ${{ matrix.shard }})
     runs-on: ubuntu-22.04
-    env:
-      # Fixture steps isolate XDG_CACHE_HOME; keep browser install and lookup shared.
-      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4, 5, 6]
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16@sha256:f9d1e581cde3e4c8bc696b07e6f7b7aea1d41014b33a52b27990762daae61beb # postgres:16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -1023,20 +1074,20 @@ jobs:
           --health-retries=10
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
 
       - name: ⎔ Setup node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
         with:
           node-version: 22
 
       - name: 📥 Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
           bun-version: '1.4.3'
 
       - name: 💾 Cache bun install
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
@@ -1050,36 +1101,36 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
 
-      # Keyed on the resolved version rather than a hardcoded one, so a bump in
-      # package.json invalidates the cache instead of restoring browsers that no
-      # longer match the runner.
+      # Keyed on the resolved version from bun.lock so lockfile bumps invalidate stale browsers.
 
       - name: 🔖 Resolve Playwright version
         id: playwright-version
-        working-directory: services/web-app
         run: |
-          echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "version=$(bash scripts/ci/resolve-playwright-version.sh)" >> "$GITHUB_OUTPUT"
 
-      - name: 💾 Cache Playwright browsers
+      - name: 💾 Restore Playwright browsers cache
         id: playwright-cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
-          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright-version.outputs.version }}
 
-      # Chromium only. On a browser cache hit, install the binary only — apt deps
-      # are already on the runner and `install-deps` has timed out on cache hits.
+      # On cache hit, browsers live under ~/.cache/ms-playwright; only sync OS deps.
+      # On miss, download chromium with deps. Only shard 1 saves the shared cache entry.
 
       - name: Install Playwright chromium
         working-directory: services/web-app
-        timeout-minutes: 15
-        run: |
-          version=$(node -p "require('@playwright/test/package.json').version")
-          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
-            bunx --package "@playwright/test@${version}" playwright install chromium
-          else
-            bunx --package "@playwright/test@${version}" playwright install --with-deps chromium
-          fi
+        timeout-minutes: 28
+        env:
+          PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT: 12m
+        run: bash ../../scripts/ci/install-playwright-chromium.sh "${{ steps.playwright-cache.outputs.cache-hit }}"
+
+      - name: 💾 Save Playwright browsers cache
+        if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' && matrix.shard == 1 }}
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright-version.outputs.version }}
 
       - name: 🧪 Run Playwright tests
         working-directory: services/web-app
@@ -1096,7 +1147,7 @@ jobs:
 
       - name: Upload blob report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: blob-report-${{ matrix.shard }}
           path: services/web-app/blob-report/
@@ -1105,7 +1156,7 @@ jobs:
 
       - name: Upload free classroom status evidence
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: free-classroom-status-evidence-${{ matrix.shard }}
           path: services/web-app/test-results/trial-status/
@@ -1116,7 +1167,7 @@ jobs:
 
       - name: Upload test results on failure
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: playwright-results-${{ github.run_id }}-${{ matrix.shard }}
           path: services/web-app/test-results/
@@ -1127,12 +1178,10 @@ jobs:
     if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     name: 🧪 Free-tier locked preview browser
     runs-on: ubuntu-22.04
-    env:
-      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
-    timeout-minutes: 30
+    timeout-minutes: 45
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16@sha256:f9d1e581cde3e4c8bc696b07e6f7b7aea1d41014b33a52b27990762daae61beb # postgres:16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -1145,20 +1194,20 @@ jobs:
           --health-retries=10
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
 
       - name: ⎔ Setup node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
         with:
           node-version: 22
 
       - name: 📥 Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
           bun-version: '1.4.3'
 
       - name: 💾 Cache bun install
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
@@ -1184,27 +1233,22 @@ jobs:
 
       - name: 🔖 Resolve Playwright version
         id: playwright-version
-        working-directory: services/web-app
         run: |
-          echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "version=$(bash scripts/ci/resolve-playwright-version.sh)" >> "$GITHUB_OUTPUT"
 
-      - name: 💾 Cache Playwright browsers
+      - name: 💾 Restore Playwright browsers cache
         id: playwright-cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
-          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright-version.outputs.version }}
 
       - name: Install Playwright chromium
         working-directory: services/web-app
-        timeout-minutes: 15
-        run: |
-          version=$(node -p "require('@playwright/test/package.json').version")
-          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
-            bunx --package "@playwright/test@${version}" playwright install chromium
-          else
-            bunx --package "@playwright/test@${version}" playwright install --with-deps chromium
-          fi
+        timeout-minutes: 28
+        env:
+          PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT: 12m
+        run: bash ../../scripts/ci/install-playwright-chromium.sh "${{ steps.playwright-cache.outputs.cache-hit }}"
 
       - name: 🧪 Locked preview Playwright + evidence
         working-directory: services/web-app
@@ -1225,7 +1269,7 @@ jobs:
 
       - name: Upload locked preview evidence
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: locked-preview-evidence-${{ github.run_id }}
           path: services/web-app/locked-preview-evidence/
@@ -1234,7 +1278,7 @@ jobs:
 
       - name: Upload Playwright results on failure
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: locked-preview-playwright-results-${{ github.run_id }}
           path: services/web-app/test-results/
@@ -1245,13 +1289,10 @@ jobs:
     if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     name: 🔐 Sign-on browser flows
     runs-on: ubuntu-22.04
-    env:
-      # Fixture steps isolate XDG_CACHE_HOME; keep browser install and lookup shared.
-      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
-    timeout-minutes: 30
+    timeout-minutes: 45
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16@sha256:f9d1e581cde3e4c8bc696b07e6f7b7aea1d41014b33a52b27990762daae61beb # postgres:16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -1264,20 +1305,20 @@ jobs:
           --health-retries=10
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
 
       - name: ⎔ Setup node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
         with:
           node-version: 22
 
       - name: 📥 Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
           bun-version: '1.4.3'
 
       - name: 💾 Cache bun install
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
@@ -1291,36 +1332,26 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
 
-      # Keyed on the resolved version rather than a hardcoded one, so a bump in
-      # package.json invalidates the cache instead of restoring browsers that no
-      # longer match the runner.
+      # Keyed on the resolved version from bun.lock so lockfile bumps invalidate stale browsers.
 
       - name: 🔖 Resolve Playwright version
         id: playwright-version
-        working-directory: services/web-app
         run: |
-          echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "version=$(bash scripts/ci/resolve-playwright-version.sh)" >> "$GITHUB_OUTPUT"
 
-      - name: 💾 Cache Playwright browsers
+      - name: 💾 Restore Playwright browsers cache
         id: playwright-cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
-          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
-
-      # Chromium only. On a browser cache hit, install the binary only — apt deps
-      # are already on the runner and `install-deps` has timed out on cache hits.
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright-version.outputs.version }}
 
       - name: Install Playwright chromium
         working-directory: services/web-app
-        timeout-minutes: 15
-        run: |
-          version=$(node -p "require('@playwright/test/package.json').version")
-          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
-            bunx --package "@playwright/test@${version}" playwright install chromium
-          else
-            bunx --package "@playwright/test@${version}" playwright install --with-deps chromium
-          fi
+        timeout-minutes: 28
+        env:
+          PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT: 12m
+        run: bash ../../scripts/ci/install-playwright-chromium.sh "${{ steps.playwright-cache.outputs.cache-hit }}"
 
       # The sign-on flows used to run after the smoke suite, which migrated and
       # seeded yop_e2e on startup. Prepare it the same way here.
@@ -1434,7 +1465,7 @@ jobs:
 
       - name: Upload Playwright results on failure
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: e2e-signon-results-${{ github.run_id }}
           path: |
@@ -1447,13 +1478,10 @@ jobs:
     if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     name: 🧪 Demo feedback + preview access browser checks
     runs-on: ubuntu-22.04
-    env:
-      # Fixture steps isolate XDG_CACHE_HOME; keep browser install and lookup shared.
-      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
-    timeout-minutes: 30
+    timeout-minutes: 45
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16@sha256:f9d1e581cde3e4c8bc696b07e6f7b7aea1d41014b33a52b27990762daae61beb # postgres:16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -1466,20 +1494,24 @@ jobs:
           --health-retries=10
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
+
+      # Fixture steps isolate XDG_CACHE_HOME; keep browser lookup on the shared CI cache path.
+      - name: Configure Playwright browser path
+        run: echo "PLAYWRIGHT_BROWSERS_PATH=${HOME}/.cache/ms-playwright" >> "$GITHUB_ENV"
 
       - name: ⎔ Setup node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
         with:
           node-version: 22
 
       - name: 📥 Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
           bun-version: '1.4.3'
 
       - name: 💾 Cache bun install
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
@@ -1493,36 +1525,26 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
 
-      # Keyed on the resolved version rather than a hardcoded one, so a bump in
-      # package.json invalidates the cache instead of restoring browsers that no
-      # longer match the runner.
+      # Keyed on the resolved version from bun.lock so lockfile bumps invalidate stale browsers.
 
       - name: 🔖 Resolve Playwright version
         id: playwright-version
-        working-directory: services/web-app
         run: |
-          echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "version=$(bash scripts/ci/resolve-playwright-version.sh)" >> "$GITHUB_OUTPUT"
 
-      - name: 💾 Cache Playwright browsers
+      - name: 💾 Restore Playwright browsers cache
         id: playwright-cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
-          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
-
-      # Chromium only. On a browser cache hit, install the binary only — apt deps
-      # are already on the runner and `install-deps` has timed out on cache hits.
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright-version.outputs.version }}
 
       - name: Install Playwright chromium
         working-directory: services/web-app
-        timeout-minutes: 15
-        run: |
-          version=$(node -p "require('@playwright/test/package.json').version")
-          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
-            bunx --package "@playwright/test@${version}" playwright install chromium
-          else
-            bunx --package "@playwright/test@${version}" playwright install --with-deps chromium
-          fi
+        timeout-minutes: 28
+        env:
+          PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT: 12m
+        run: bash ../../scripts/ci/install-playwright-chromium.sh "${{ steps.playwright-cache.outputs.cache-hit }}"
 
       - name: Verify demo feedback headless browser executable
         working-directory: services/web-app
@@ -1557,11 +1579,14 @@ jobs:
           RECORD_PORT_DATABASE: '54489'
           RECORD_PORT_LTI_MOCK: '9789'
           YAWP_ENVIRONMENT: demo
+          PREVIEW_SLUG: demo
           TESTER_FEEDBACK_ENABLED: 'true'
+          DEV_PANEL_EVIDENCE_DIR: dev-panel-evidence
+          DEV_PANEL_ARTIFACT_COPY_DIR: /opt/cursor/artifacts/screenshots
           RESEND_API_KEY: ''
           RESEND_FROM_EMAIL: ''
         run: |
-          mkdir -p "$TMPDIR"
+          mkdir -p "$TMPDIR" services/web-app/dev-panel-evidence
           cleanup() {
             ./bin/project dev stop --json || true
             if [ -f .worktree-local/config.env ]; then
@@ -1577,6 +1602,15 @@ jobs:
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:5489/ > /dev/null
           ./bin/project test --profile demo-feedback-browser --json
 
+      - name: Upload dev panel artboard evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dev-panel-artboard-evidence-${{ github.run_id }}
+          path: services/web-app/dev-panel-evidence/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: 🔐 Run preview access gate tests
         working-directory: services/web-app
         env:
@@ -1586,7 +1620,7 @@ jobs:
 
       - name: Upload Playwright results on failure
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: e2e-browser-checks-results-${{ github.run_id }}
           path: |
@@ -1602,15 +1636,15 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: 📥 Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
         with:
           bun-version: '1.4.3'
 
       - name: 💾 Cache bun install
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
@@ -1620,7 +1654,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: 📥 Download blob reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: services/web-app/all-blob-reports
           pattern: blob-report-*
@@ -1636,7 +1670,7 @@ jobs:
           fi
 
       - name: Upload merged Playwright report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: playwright-report-${{ github.run_id }}
           path: services/web-app/playwright-report/

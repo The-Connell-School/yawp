@@ -27,7 +27,12 @@ import { useTable } from '~/hooks/useTable';
 import { cn, getDomainUrl } from '~/utils/misc';
 import { Tooltip } from '~/components/ui/tooltip';
 import { sendEmail } from '~/utils/email.server';
-import * as E from '@react-email/components';
+import { emailDeliveryDiagnostic } from '~/utils/email-delivery-error.server';
+import { buildSafeErrorForLog } from '~/utils/server-error-request-context.server';
+import {
+  buildOrgTeacherInviteEmail,
+  inviteeFirstName,
+} from '~/emails/build-account-emails.server';
 import { generateTOTP } from '~/utils/totp.server';
 import { Prisma } from '@app/prisma';
 import {
@@ -38,9 +43,10 @@ import {
   SheetTitle,
 } from '~/components/ui/sheet';
 import { Label } from '~/components/ui/label';
-import { Textarea } from '~/components/ui/textarea';
 import { useEffect, useState } from 'react';
 import { normalizeEmail } from '~/utils/normalize-email';
+import { InviteTeachersSheet } from './invite-teachers-sheet';
+import { TEACHER_INVITE_SERVER_ERROR_MESSAGE } from './teacher-invite-copy';
 
 function getSchoolEffectiveAssignmentTypeIds({
   school,
@@ -335,124 +341,120 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    const organization = await prisma.organization.findUnique({
-      where: { id: profile.organization.id },
-      select: { name: true },
-    });
+    try {
+      const organization = await prisma.organization.findUnique({
+        where: { id: profile.organization.id },
+        select: { name: true },
+      });
+      const inviter = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { name: true },
+      });
+      const inviterName = inviter?.name?.trim() || 'Your administrator';
 
-    let successCount = 0;
-    for (const email of emailList) {
-      try {
-        // Check for existing invitation and delete if found
-        const existingInvitation = await prisma.invitation.findFirst({
-          where: {
-            target: { equals: email, mode: 'insensitive' },
-            type: 'onboard-teacher',
+      let sentCount = 0;
+      const failedEmails: string[] = [];
+
+      for (const email of emailList) {
+        let designed: Awaited<ReturnType<typeof buildOrgTeacherInviteEmail>>;
+        try {
+          // Check for existing invitation and delete if found
+          const existingInvitation = await prisma.invitation.findFirst({
+            where: {
+              target: { equals: email, mode: 'insensitive' },
+              type: 'onboard-teacher',
+              metadata: JSON.stringify({
+                organizationId: profile.organization.id,
+              }),
+            },
+          });
+
+          if (existingInvitation) {
+            await prisma.invitation.delete({
+              where: { id: existingInvitation.id },
+            });
+          }
+
+          const { otp, ...verificationConfig } = await generateTOTP({
+            algorithm: 'SHA-256',
+            charSet: 'ABCDEFGHIJKLMNPQRSTUVWXYZ123456789',
+            period: 3 * 24 * 60 * 60,
+          });
+
+          const type = 'onboard-teacher';
+          const target = email;
+          const verifyUrl = new URL(`${getDomainUrl(request)}/auth/inv/verify`);
+          verifyUrl.searchParams.set('type', type);
+          verifyUrl.searchParams.set('target', target);
+          verifyUrl.searchParams.set('code', otp);
+
+          const verificationData: Prisma.InvitationCreateInput = {
+            type,
+            target,
+            ...verificationConfig,
+            expiresAt: new Date(Date.now() + verificationConfig.period * 1000),
             metadata: JSON.stringify({
               organizationId: profile.organization.id,
             }),
-          },
-        });
+          };
 
-        if (existingInvitation) {
-          await prisma.invitation.delete({
-            where: { id: existingInvitation.id },
+          await prisma.invitation.create({ data: verificationData });
+
+          designed = await buildOrgTeacherInviteEmail({
+            firstName: inviteeFirstName(email),
+            inviterName,
+            schoolName: organization?.name ?? 'your organization',
+            acceptUrl: verifyUrl.toString(),
           });
+        } catch (error) {
+          console.error('org_teacher_invite_failed', buildSafeErrorForLog(error));
+          failedEmails.push(email);
+          continue;
         }
 
-        const { otp, ...verificationConfig } = await generateTOTP({
-          algorithm: 'SHA-256',
-          charSet: 'ABCDEFGHIJKLMNPQRSTUVWXYZ123456789',
-          period: 3 * 24 * 60 * 60,
-        });
+        try {
+          const emailResult = await sendEmail({
+            to: email,
+            subject: designed.subject,
+            text: designed.text,
+            html: designed.html,
+          });
 
-        const type = 'onboard-teacher';
-        const target = email;
-        const verifyUrl = new URL(`${getDomainUrl(request)}/auth/inv/verify`);
-        verifyUrl.searchParams.set('type', type);
-        verifyUrl.searchParams.set('target', target);
-        verifyUrl.searchParams.set('code', otp);
+          if (emailResult.status === 'error') {
+            failedEmails.push(email);
+            continue;
+          }
 
-        const verificationData: Prisma.InvitationCreateInput = {
-          type,
-          target,
-          ...verificationConfig,
-          expiresAt: new Date(Date.now() + verificationConfig.period * 1000),
-          metadata: JSON.stringify({
-            organizationId: profile.organization.id,
-          }),
-        };
-
-        await prisma.invitation.create({ data: verificationData });
-
-        await sendEmail({
-          to: email,
-          subject: "You're invited to join your organization on Yawp!",
-          react: (
-            <OrganizationInviteEmail
-              verifyUrl={verifyUrl.toString()}
-              organizationName={organization?.name ?? 'your organization'}
-              userType="teacher"
-            />
-          ),
-        });
-
-        successCount++;
-      } catch (error) {
-        console.error(`Failed to send invitation to ${email}:`, error);
+          sentCount++;
+        } catch (error) {
+          console.error(
+            'org_teacher_invite_delivery_failed',
+            emailDeliveryDiagnostic(error, email)
+          );
+          failedEmails.push(email);
+        }
       }
-    }
 
-    return dataResponse({
-      success: true,
-      message: `Invitations sent to ${successCount} teacher(s)`,
-      invited: successCount,
-    });
+      return dataResponse({
+        sentCount,
+        failedEmails,
+      });
+    } catch (error) {
+      console.error('org_teacher_invite_failed', buildSafeErrorForLog(error));
+      return dataResponse(
+        { error: TEACHER_INVITE_SERVER_ERROR_MESSAGE },
+        { status: 500 }
+      );
+    }
   }
 
   return dataResponse({ error: 'Invalid intent' }, { status: 400 });
-}
-
-function OrganizationInviteEmail({
-  verifyUrl,
-  userType,
-  organizationName,
-}: {
-  verifyUrl: string;
-  userType: 'teacher' | 'student' | 'owner';
-  organizationName: string;
-}) {
-  return (
-    <E.Html lang="en" dir="ltr">
-      <E.Container>
-        <h1>
-          <E.Text>Welcome to Yawp!</E.Text>
-        </h1>
-        <p>
-          <E.Text>
-            You've been invited to join {organizationName} as{' '}
-            {userType === 'owner' ? 'an owner' : `a ${userType}`} on Yawp!
-          </E.Text>
-        </p>
-        <p>
-          <E.Text>Click the link to get started:</E.Text>
-        </p>
-        <E.Link href={verifyUrl}>{verifyUrl}</E.Link>
-        <p>
-          <E.Text>
-            This invitation will expire in 3 days for security reasons.
-          </E.Text>
-        </p>
-      </E.Container>
-    </E.Html>
-  );
 }
 
 export default function OrganizationTeachersRoute() {
   const { teachers, teacherTrainings, assignmentTypes, orgAssignmentTypeIds, q } =
     useLoaderData<typeof loader>();
   const fetcher = useFetcher();
-  const inviteFetcher = useFetcher();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [isInviteSheetOpen, setIsInviteSheetOpen] = useState(false);
@@ -601,48 +603,10 @@ export default function OrganizationTeachersRoute() {
         orgAssignmentTypeIds={orgAssignmentTypeIds}
       />
 
-      {/* Invite Teacher Sheet */}
-      <Sheet open={isInviteSheetOpen} onOpenChange={setIsInviteSheetOpen}>
-        <SheetContent>
-          <SheetHeader>
-            <SheetTitle>Invite Teachers</SheetTitle>
-          </SheetHeader>
-          <inviteFetcher.Form method="post" className="mt-4 space-y-4">
-            <input type="hidden" name="intent" value="invite-teachers" />
-            <div className="space-y-2">
-              <Label htmlFor="emails">
-                Email addresses (comma or line separated)
-              </Label>
-              <Textarea
-                id="emails"
-                name="emails"
-                placeholder="teacher1@example.com, teacher2@example.com"
-                rows={4}
-                required
-              />
-            </div>
-            {inviteFetcher.data?.error && (
-              <div className="text-sm text-red-600">
-                {inviteFetcher.data.error}
-              </div>
-            )}
-            {inviteFetcher.data?.success && (
-              <div className="text-sm text-green-600">
-                {inviteFetcher.data.message}
-              </div>
-            )}
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={inviteFetcher.state !== 'idle'}
-            >
-              {inviteFetcher.state !== 'idle'
-                ? 'Sending...'
-                : 'Send Invitations'}
-            </Button>
-          </inviteFetcher.Form>
-        </SheetContent>
-      </Sheet>
+      <InviteTeachersSheet
+        open={isInviteSheetOpen}
+        onOpenChange={setIsInviteSheetOpen}
+      />
     </div>
   );
 }
