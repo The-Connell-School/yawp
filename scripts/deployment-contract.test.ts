@@ -1727,6 +1727,38 @@ describe('PR preview deployment contract', () => {
 });
 
 describe('demo environment deployment contract', () => {
+  test('demo auto-ships after production deploy succeeds on the default branch', () => {
+    const workflow = readRepoFile('.github/workflows/demo-environment.yml');
+    const buildJob = workflow.slice(
+      workflow.indexOf('  build-demo-images:'),
+      workflow.indexOf('  demo-deploy:')
+    );
+
+    expect(workflow).toContain('workflow_run:');
+    expect(workflow).toContain("'🚀 Deploy'");
+    expect(workflow).toContain('github.event.workflow_run.head_sha');
+    expect(workflow).toContain('github.event.workflow_run.conclusion');
+    expect(workflow).toContain('github.event.workflow_run.event');
+    expect(workflow).toContain("github.event.workflow_run.event == 'push'");
+    expect(workflow).toContain('github.event.workflow_run.head_repository.full_name');
+    expect(workflow).toContain(
+      'github.event.workflow_run.head_repository.full_name == github.repository'
+    );
+    expect(buildJob).toContain("github.event_name == 'workflow_dispatch'");
+    expect(buildJob).toContain(
+      'github.event.workflow_run.head_branch == github.event.repository.default_branch'
+    );
+    expect(workflow).toContain('cancel-in-progress: false');
+    expect(workflow).toContain('demo-environment-ignored-');
+    expect(workflow).toContain("format('demo-environment-ignored-{0}', github.run_id)");
+    expect(workflow).toContain('/api/version');
+    expect(workflow).toContain('"workflow_run"');
+    expect(workflow).toContain("inputs.reset_data == true &&");
+    expect(workflow).toContain("'true' || 'false'");
+    expect(workflow).toContain("github.event_name == 'workflow_run' && '14' || inputs.backup_retention");
+    expect(workflow).toContain('demo_git_sha');
+  });
+
   test('demo images build on GitHub-hosted runners with on-host build fallback', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');
     const deployScript = readRepoFile('scripts/preview/deploy.sh');

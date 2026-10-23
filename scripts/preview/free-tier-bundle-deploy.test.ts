@@ -61,7 +61,8 @@ printf 'SERVING\\n'
 
 test('Demo environment code-only workflow uses the reviewed deploy tooling with the demo target', () => {
   const workflow = readFileSync(new URL('../../.github/workflows/demo-environment.yml', import.meta.url), 'utf8');
-  expect(workflow).toContain('DEMO_RESET_DATA: ${{ inputs.reset_data }}');
+  expect(workflow).toContain("inputs.reset_data == true &&");
+  expect(workflow).toContain("'true' || 'false'");
   expect(workflow).toContain('bash scripts/preview/deploy.sh');
   expect(workflow).toContain('yawp_demo');
 });
