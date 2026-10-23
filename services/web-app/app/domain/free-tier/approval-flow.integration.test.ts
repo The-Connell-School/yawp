@@ -259,9 +259,19 @@ describe('free-tier approval flow', () => {
             ? `Can you approve Yawp! for ${teacherAtSchoolLabel}?`
             : undefined,
         });
-        expect(replacement.text).toContain(
-          "Principal Pat forwarded Local Teacher's request at Example High to you."
-        );
+        const { isFreeTierEnabled } =
+          await import('~/domain/feature-flags/feature-flags.server');
+        const { adminApprovalPass1ForwardBanner } =
+          await import('./admin-approval-copy');
+        const pass1Forward = await isFreeTierEnabled();
+        const forwardLead = pass1Forward
+          ? adminApprovalPass1ForwardBanner(
+              'Principal Pat',
+              user.name!,
+              app.schoolName
+            )
+          : 'Principal Pat forwarded this to you as the right person to approve classroom software for Local Teacher at Example High.';
+        expect(replacement.text).toContain(forwardLead);
         const approveUrl = replacement.text
           .split('\n')
           .find((line: string) => line.includes('/free/admin/approve?t='))!;
