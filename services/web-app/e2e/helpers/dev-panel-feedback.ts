@@ -28,6 +28,19 @@ export async function openDevToolsPanel(page: Page) {
   return panel;
 }
 
+/** Opens a dev panel collapsible section when persisted state left it closed. */
+export async function openDevPanelSection(page: Page, sectionName: string) {
+  const panel = await openDevToolsPanel(page);
+  const trigger = panel.getByRole('button', { name: sectionName, exact: true });
+  await expect(trigger).toBeVisible({ timeout: 15_000 });
+  const expanded = await trigger.getAttribute('aria-expanded');
+  if (expanded !== 'true') {
+    await trigger.click();
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  }
+  return panel;
+}
+
 export async function expectGiveFeedbackAccessible(page: Page) {
   const beaker = page.getByRole('button', { name: 'Open developer tools' });
   const legacy = page.getByRole('button', { name: 'Give feedback', exact: true });
