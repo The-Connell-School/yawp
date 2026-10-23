@@ -18,7 +18,7 @@ describe('GET /api/version', () => {
     process.env.YAWP_GIT_COMMIT = 'abc123def456';
     process.env.YAWP_BUILT_AT = '2026-10-23T00:00:00Z';
     process.env.YAWP_ENVIRONMENT = 'production';
-    const { loader } = await import('./api.version');
+    const { loader } = await import('~/routes/api.version');
     const response = await loader({} as never);
     expect(response.status).toBe(200);
     expect(response.headers.get('Cache-Control')).toBe('no-store');
@@ -33,7 +33,7 @@ describe('GET /api/version', () => {
     delete process.env.YAWP_GIT_COMMIT;
     delete process.env.YAWP_BUILT_AT;
     delete process.env.YAWP_ENVIRONMENT;
-    const { loader } = await import('./api.version');
+    const { loader } = await import('~/routes/api.version');
     const response = await loader({} as never);
     expect(await response.json()).toEqual({
       commit: 'unknown',

@@ -8,7 +8,7 @@ mock.module('~/utils/db.server', () => ({
   },
 }));
 
-const { loader } = await import('./api.healthcheck');
+const { loader } = await import('~/routes/api.healthcheck');
 
 describe('GET /api/healthcheck (liveness)', () => {
   beforeEach(() => {

@@ -24,7 +24,7 @@ describe('GET /api/readyz (readiness)', () => {
   });
 
   test('returns 200 with db ok when SELECT 1 succeeds', async () => {
-    const { loader } = await import('./api.readyz');
+    const { loader } = await import('~/routes/api.readyz');
     const response = await loader({} as never);
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true, db: 'ok' });
@@ -34,7 +34,7 @@ describe('GET /api/readyz (readiness)', () => {
     queryRaw.mockRejectedValue(
       new Error('password authentication failed for user "secret"')
     );
-    const { loader } = await import('./api.readyz');
+    const { loader } = await import('~/routes/api.readyz');
     const response = await loader({} as never);
     expect(response.status).toBe(503);
     const body = await response.json();
