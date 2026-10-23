@@ -64,6 +64,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "full_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
       - name: On-host build fallback (ECR push role unset)
         id: images-fallback
@@ -128,6 +129,8 @@ jobs:
           tags: ${{ steps.images-ecr.outputs.web_image }}
           build-args: |
             YAWP_ENVIRONMENT=demo
+            YAWP_GIT_COMMIT=${{ steps.shipping.outputs.full_sha }}
+            YAWP_BUILT_AT=${{ steps.shipping.outputs.built_at }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

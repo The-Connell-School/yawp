@@ -26,7 +26,7 @@
     "web-app:build": "bun run --cwd services/web-app build",
     "web-app:start": "bun run --cwd services/web-app start",
     "web-app:typecheck": "bun run --cwd services/web-app typecheck",
-    "web-app:docker:build": "docker build --platform linux/amd64 -t yawp-web-app:latest -f services/web-app/Dockerfile .",
+    "web-app:docker:build": "docker build --platform linux/amd64 -t yawp-web-app:latest -f services/web-app/Dockerfile --build-arg YAWP_GIT_COMMIT=$(git rev-parse HEAD) --build-arg YAWP_BUILT_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ) .",
     "web-app:docker:staging:tag": "docker tag yawp-web-app:latest 422348803522.dkr.ecr.us-east-1.amazonaws.com/yawp-staging-web-app:latest",
     "web-app:docker:staging:login": "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 422348803522.dkr.ecr.us-east-1.amazonaws.com",
     "web-app:docker:staging:push": "bun web-app:docker:staging:login && docker push 422348803522.dkr.ecr.us-east-1.amazonaws.com/yawp-staging-web-app:latest",
