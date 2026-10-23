@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { CLOUDFRONT_IPV4_RANGES } from '~/utils/cloudfront-ranges.server';
-import { PREVIEW_ACCESS_COOKIE_NAME } from '~/utils/preview-access.server';
+import {
+  getPreviewAccessSeat,
+  PREVIEW_ACCESS_COOKIE_NAME,
+} from '~/utils/preview-access.server';
 import { resetPreviewAccessRateLimitForTests } from '~/utils/preview-access-rate-limit.server';
 
 const PRIMARY_SEAT_CODE = 'brave-otter-4193';
@@ -17,6 +20,20 @@ mock.module('~/utils/db.server', () => ({
         }) => {
           if (where.previewSeatCode === SECOND_SEAT_CODE) {
             return { id: 'preview-seat-2', name: 'Preview seat two' };
+          }
+          if (where.id === 'local-dev-org') {
+            return {
+              id: 'local-dev-org',
+              name: 'Master seat',
+              previewSeatCode: PRIMARY_SEAT_CODE,
+            };
+          }
+          if (where.id === 'preview-seat-2') {
+            return {
+              id: 'preview-seat-2',
+              name: 'Preview seat two',
+              previewSeatCode: SECOND_SEAT_CODE,
+            };
           }
           return null;
         }
@@ -144,8 +161,40 @@ describe('api.dev-panel.preview-access guard integration', () => {
     expect(blockedBody.error).toBe('Too many attempts. Try again later.');
   });
 
-  test('master credentials are still refused on the dev panel unlock route', async () => {
+  test('master credentials unlock with a master access cookie for the configured primary org', async () => {
     demoGateEnv();
+    const { action } = await import('./route');
+    const response = await action({
+      request: postPreviewAccess({ code: MASTER_CODE }),
+    } as never);
+    expect(response.status).toBe(200);
+    const setCookie = response.headers.get('set-cookie') ?? '';
+    expect(setCookie).toContain(`${PREVIEW_ACCESS_COOKIE_NAME}=`);
+    const body = await response.json();
+    expect(body.ok).toBe(true);
+    expect(body.seatLabel).toBe('Master seat');
+    const cookiePair = setCookie.split(';', 1)[0] ?? '';
+    const seat = await getPreviewAccessSeat(
+      new Request('http://localhost/', {
+        headers: { cookie: cookiePair },
+      })
+    );
+    expect(seat).toEqual({
+      organizationId: 'local-dev-org',
+      label: 'Master seat',
+      accessKind: 'master',
+    });
+  });
+
+  test('master credentials return 401 when no configured master organization exists', async () => {
+    demoGateEnv();
+    process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
+      {
+        code: SECOND_SEAT_CODE,
+        organizationId: 'preview-seat-2',
+        label: 'Preview seat two',
+      },
+    ]);
     const { action } = await import('./route');
     const response = await action({
       request: postPreviewAccess({ code: MASTER_CODE }),

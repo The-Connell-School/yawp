@@ -298,6 +298,19 @@ export function getPreviewMasterAccessCode() {
   return configuredGlobalMasterCode() ?? configuredPrimarySeat()?.code ?? null;
 }
 
+/** Master override seat for dev-panel unlock (configured primary org, not org-picker flow). */
+export function getPreviewMasterPanelSeat(): PreviewAccessSeat | null {
+  const primarySeat = configuredPrimarySeat();
+  if (!primarySeat || masterCredentialVersion() === null) {
+    return null;
+  }
+  return {
+    organizationId: primarySeat.organizationId,
+    label: primarySeat.label,
+    accessKind: 'master',
+  };
+}
+
 export function getConfiguredPreviewOrganizationAccessCode(
   organizationId: string
 ) {
