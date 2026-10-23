@@ -161,7 +161,7 @@ jobs:
           done
 
       - name: Checkout preview guard
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
@@ -213,7 +213,7 @@ jobs:
 
       - name: Checkout reviewed preview control plane
         if: steps.preview_gate.outputs.skip_preview != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.event.repository.default_branch }}
           path: preview-control
@@ -503,7 +503,7 @@ jobs:
 
       - name: Comment preview URL on PR
         if: steps.preview_gate.outputs.skip_preview != 'true'
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@773744901bac0e8cbb5a0dc842800d45e9b2b405 # v2.9.4
         with:
           header: pr-preview-${{ github.event.pull_request.number }}
           append: false
@@ -564,7 +564,7 @@ jobs:
           ssh-keyscan -H "$PREVIEW_HOST" >> ~/.ssh/known_hosts
 
       - name: Checkout current cleanup implementation
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.event.repository.default_branch }}
 
@@ -611,7 +611,7 @@ jobs:
           test -n "$PREVIEW_SSH_PRIVATE_KEY" || { echo "Missing repository secret PREVIEW_SSH_PRIVATE_KEY"; exit 1; }
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.sha }}
 
