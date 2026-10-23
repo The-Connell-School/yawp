@@ -9,7 +9,7 @@ mock.module('~/utils/email.server', () => ({
 
 const userIds: string[] = [];
 const appIds: string[] = [];
-const orgIds: string[] = [];
+const provisionedOrgIds: string[] = [];
 
 async function loadJump() {
   return import('./free-tier-jump.server');
@@ -41,8 +41,7 @@ async function defaultOrg(prisma: Awaited<ReturnType<typeof loadPrisma>>) {
       data: { id: 'default-org', name: 'Default org', plan: 'SCHOOL' },
       select: { id: true },
     }));
-  orgIds.push(org.id);
-  return org.id;
+    return org.id;
 }
 
 const APPROVED_STATE_IDS = [
@@ -64,13 +63,24 @@ describe.skipIf(!enabled)('executeFreeTierStateJump approved states (real db)', 
 
   afterAll(async () => {
     const prisma = await loadPrisma();
-    await prisma.setting.deleteMany({
-      where: {
-        name: {
-          startsWith: 'free_tier.monthly.v1:',
+    if (provisionedOrgIds.length) {
+      await prisma.setting.deleteMany({
+        where: {
+          OR: provisionedOrgIds.flatMap((organizationId) => [
+            {
+              name: {
+                startsWith: `free_tier.monthly.v1:${organizationId}:lesson-planner:`,
+              },
+            },
+            {
+              name: {
+                startsWith: `free_tier.monthly.v1:${organizationId}:reporter:`,
+              },
+            },
+          ]),
         },
-      },
-    });
+      });
+    }
     await prisma.freeTierApprovalDelivery.deleteMany({
       where: { approval: { applicationId: { in: appIds } } },
     });
@@ -83,13 +93,17 @@ describe.skipIf(!enabled)('executeFreeTierStateJump approved states (real db)', 
     await prisma.freeTierApplication.deleteMany({ where: { id: { in: appIds } } });
     await prisma.orgMembership.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
-    await prisma.class.deleteMany({
-      where: { school: { organizationId: { in: orgIds } } },
-    });
-    await prisma.school.deleteMany({ where: { organizationId: { in: orgIds } } });
-    await prisma.organization.deleteMany({
-      where: { id: { in: orgIds.filter((id) => id !== 'default-org') } },
-    });
+    if (provisionedOrgIds.length) {
+      await prisma.class.deleteMany({
+        where: { school: { organizationId: { in: provisionedOrgIds } } },
+      });
+      await prisma.school.deleteMany({
+        where: { organizationId: { in: provisionedOrgIds } },
+      });
+      await prisma.organization.deleteMany({
+        where: { id: { in: provisionedOrgIds } },
+      });
+    }
   });
 
   for (const stateId of APPROVED_STATE_IDS) {
@@ -126,7 +140,7 @@ describe.skipIf(!enabled)('executeFreeTierStateJump approved states (real db)', 
       expect(app?.organizationId).toBeTruthy();
       if (app) {
         appIds.push(app.id);
-        if (app.organizationId) orgIds.push(app.organizationId);
+        if (app.organizationId) provisionedOrgIds.push(app.organizationId);
       }
 
       const second = await executeFreeTierStateJump({

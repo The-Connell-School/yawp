@@ -37,12 +37,24 @@ mock.module('~/utils/db.server', () => ({
       findUniqueOrThrow: async () => ({ organizationId: 'org-1' }),
       update: async () => ({}),
     },
-    orgMembership: { findFirst: async () => null },
+    orgMembership: {
+      findFirst: async ({
+        where,
+      }: {
+        where?: { organizationId?: string; userId?: string };
+      }) =>
+        where?.organizationId === 'org-fc-1'
+          ? { id: 'mem-fc-1' }
+          : null,
+    },
     session: { deleteMany: async () => ({ count: 0 }) },
   },
 }));
 mock.module('~/domain/free-tier/provision-free-classroom.server', () => ({
-  provisionFreeClassroom: async () => {},
+  provisionFreeClassroom: async () => ({
+    status: 'provisioned' as const,
+    organizationId: 'org-fc-1',
+  }),
 }));
 mock.module('~/domain/free-tier/signed-link.server', () => ({
   mintSignedLink: async () => ({ token: 't' }),
@@ -88,7 +100,7 @@ describe('executeFreeTierStateJump pending guard', () => {
 
 describe('formatFreeTierJumpErrorForClient', () => {
   test('hides raw prisma failures', async () => {
-    const { formatFreeTierJumpErrorForClient } = await import('./free-tier-jump.server');
+    const { formatFreeTierJumpErrorForClient } = await import('./free-tier-jump-messages');
     expect(
       formatFreeTierJumpErrorForClient(
         new Error('Invalid prisma.freeTierApplication.upsert() invocation')

@@ -32,6 +32,10 @@ import {
   findFreeTierState,
   isCatalogFreeTierJumpLabel,
 } from './free-tier-states.catalog';
+import {
+  FREE_TIER_JUMP_GENERIC_ERROR,
+  formatFreeTierJumpErrorForClient,
+} from './free-tier-jump-messages';
 const JUMP_TOAST_KEY = 'yawp-dev-panel-jump-toast';
 const JUMP_TOAST_QUERY = 'devPanelJumpToast';
 
@@ -88,6 +92,9 @@ export function DevPanelFreeTierFlyout({
   const [jumping, setJumping] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [jumpFailed, setJumpFailed] = useState(false);
+  const [jumpErrorMessage, setJumpErrorMessage] = useState(
+    FREE_TIER_JUMP_GENERIC_ERROR
+  );
   const throwawayRef = useRef<HTMLInputElement>(null);
   const filterId = useId();
   const isPhone = useMedia('(max-width: 639px)');
@@ -138,6 +145,7 @@ export function DevPanelFreeTierFlyout({
     setConfirmOpen(false);
     setJumping(true);
     setJumpFailed(false);
+    setJumpErrorMessage(FREE_TIER_JUMP_GENERIC_ERROR);
     try {
       const response = await fetch('/api/dev-panel/free-tier-jump', {
         method: 'POST',
@@ -147,6 +155,15 @@ export function DevPanelFreeTierFlyout({
       });
       const result = await response.json().catch(() => null);
       if (!response.ok || result?.ok === false) {
+        setJumpErrorMessage(
+          formatFreeTierJumpErrorForClient(
+            new Error(
+              typeof result?.error === 'string'
+                ? result.error
+                : FREE_TIER_JUMP_GENERIC_ERROR
+            )
+          )
+        );
         setJumpFailed(true);
         setJumping(false);
         return;
@@ -162,6 +179,7 @@ export function DevPanelFreeTierFlyout({
         window.location.assign(redirectTo);
       }, 350);
     } catch {
+      setJumpErrorMessage(FREE_TIER_JUMP_GENERIC_ERROR);
       setJumpFailed(true);
       setJumping(false);
     }
@@ -281,7 +299,7 @@ export function DevPanelFreeTierFlyout({
         >
           <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <div>
-            <p className="font-semibold">Couldn&apos;t jump to this state.</p>
+            <p className="font-semibold">{jumpErrorMessage}</p>
             <p>
               Your choice is still selected. Try again, or pick another state.
             </p>
