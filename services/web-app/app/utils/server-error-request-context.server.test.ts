@@ -39,7 +39,7 @@ describe('buildServerErrorRequestContext', () => {
       'Error: join failed\n    at handler (/app/join?code=SECRET)\n    at https://yawp.school/path?token=abc';
     const safe = buildSafeErrorForLog(error);
     expect(safe.name).toBe('Error');
-    expect(safe.message).toContain('join failed');
+    expect('message' in safe && safe.message).toContain('join failed');
     expect(JSON.stringify(safe)).not.toContain('teacher@school.edu');
     expect(JSON.stringify(safe)).not.toContain('SECRET-TOKEN');
     expect(JSON.stringify(safe)).not.toContain('ABC123');
