@@ -19,6 +19,10 @@ const isFreeTierEnabled = mock(async () => false);
 mock.module('~/domain/feature-flags/feature-flags.server', () => ({
   isFreeTierEnabled,
 }));
+mock.module('~/domain/free-tier/locked-preview.server', () => ({
+  assertOrganizationTeachingApproved: async () => {},
+  organizationHasPendingFreeTierLessonPlannerMetering: async () => false,
+}));
 const isAiUnlocked = mock(async () => true);
 mock.module('~/domain/free-tier/is-ai-unlocked.server', () => ({
   isAiUnlocked,
