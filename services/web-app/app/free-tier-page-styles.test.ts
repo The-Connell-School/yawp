@@ -10,8 +10,11 @@ describe('free-tier page styles', () => {
     expect(block).toContain('letter-spacing: 0.06em');
   });
 
-  test('narrow free-tier chrome shell clears the fixed back link above the logo', () => {
+  test('narrow free-tier chrome adds top padding only when the back link is present', () => {
     expect(css).toMatch(
+      /@media \(max-width: 639px\)\s*\{[^}]*\.free-tier-page \.auth-page-shell--chrome:has\(> \.card-page-back-link\)\s*\{[^}]*padding-top:\s*72px;/s
+    );
+    expect(css).not.toMatch(
       /@media \(max-width: 639px\)\s*\{[^}]*\.free-tier-page \.auth-page-shell--chrome\s*\{[^}]*padding-top:\s*72px;/s
     );
   });
