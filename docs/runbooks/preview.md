@@ -89,17 +89,9 @@ The demo environment (`demo.yawp.school`, `.github/workflows/demo-environment.ym
 
 ### Retrieve or add seat access codes
 
-On the first deploy, `scripts/preview/deploy.sh` creates six isolated seats and generates one memorable code per seat from curated adjective and animal lists. Seat 1 is Brian Connell's adopted `local-dev-org`; seat 2 is Bryant Brock's; seats 3–6 are generic. The deploy retains the code-to-organization map across redeploys and prints every code in the job log:
+On the first deploy, `scripts/preview/deploy.sh` creates six isolated seats and generates one memorable code per seat from curated adjective and animal lists. Seat 1 is Brian Connell's adopted `local-dev-org`; seat 2 is Bryant Brock's; seats 3–6 are generic. The deploy retains the code-to-organization map across redeploys. Deploy logs print only non-secret metadata (for example `PREVIEW_ACCESS_SEATS_FILE=${PREVIEW_DIR}/access-seats.json`, `PREVIEW_SEAT_COUNT`, and `PREVIEW_SEAT_LABEL_n` lines). GitHub Actions reads the seat-1 smoke code from that host file over SSH; PR comments and workflow outputs still receive the code, but job logs do not echo code values.
 
-```text
-PREVIEW_ACCESS_CODE=brave-otter-4193
-PREVIEW_SEAT_CODE_1=brave-otter-4193
-Preview seat 1 (Brian Connell): brave-otter-4193
-PREVIEW_SEAT_CODE_2=calm-panda-8127
-Preview seat 2 (Bryant Brock): calm-panda-8127
-```
-
-`PREVIEW_ACCESS_CODE` remains the seat-1 value used by smoke verification. Entering any seat code both authenticates the visitor and binds the signed cookie to that seat's organization. The access session is an `HttpOnly`, `SameSite=Lax` cookie with a 30-day lifetime.
+Entering any seat code both authenticates the visitor and binds the signed cookie to that seat's organization. The access session is an `HttpOnly`, `SameSite=Lax` cookie with a 30-day lifetime.
 
 The deploy stores independent random secrets for the application session and preview gate. The app receives them as `SESSION_SECRET` and `PREVIEW_ACCESS_SECRET`; the gate fails closed if its dedicated secret or seat map is absent. Neither secret is printed. Do not reuse the session secret for the gate.
 
@@ -160,7 +152,7 @@ PREVIEW_DIRECT_PORT=18080 \
 bash scripts/preview/deploy.sh
 ```
 
-The command prints `PREVIEW_ACCESS_CODE=...` plus every seat-labelled code after the health, access-gate, and login smoke checks pass. To use fixed local codes, provide `PREVIEW_ACCESS_SEATS` as described above. Direct-port local smoke uses the same anonymous transport as deployed self-verification.
+After the health, access-gate, and login smoke checks pass, the command prints `PREVIEW_ACCESS_SEATS_FILE=...` plus seat labels and count; read codes from that JSON file on the host. To use fixed local codes, provide `PREVIEW_ACCESS_SEATS` as described above. Direct-port local smoke uses the same anonymous transport as deployed self-verification.
 
 Destroy it with:
 
