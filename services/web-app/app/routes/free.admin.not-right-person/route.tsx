@@ -152,6 +152,26 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (gate) return { ok: false as const, ...gate };
   const replaced = await resolveAdminLinkReplacedGate({ token, peek });
   if (replaced) return { ok: false as const, ...replaced };
+  if (
+    peek.reason === 'invalid' ||
+    peek.reason === 'purpose_mismatch' ||
+    !peek.reason
+  ) {
+    const app = appId
+      ? await prisma.freeTierApplication.findUnique({
+          where: { id: appId },
+          select: { name: true, schoolName: true },
+        })
+      : null;
+    if (app) {
+      return {
+        ok: false as const,
+        reason: 'invalid' as const,
+        teacherName: app.name,
+        schoolName: app.schoolName,
+      };
+    }
+  }
   return { ok: false as const, reason: peek.reason ?? 'invalid' };
 }
 

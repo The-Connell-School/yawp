@@ -40,6 +40,28 @@ export async function fetchFreeTierApplicationTerminalGate(
   return null;
 }
 
+async function supersededLinkReplacedVariant(
+  applicationId: string,
+  token: string
+): Promise<FreeTierAdminLinkReplacedVariant> {
+  const linkId = linkIdFromSignedToken(token);
+  if (!linkId) return 'resent';
+  const link = await prisma.freeTierSignedLink.findUnique({
+    where: { id: linkId },
+    select: { createdAt: true },
+  });
+  if (!link) return 'resent';
+  const redirected = await prisma.freeTierAdminApproval.findFirst({
+    where: {
+      applicationId,
+      status: 'REDIRECTED',
+      decidedAt: { gte: link.createdAt },
+    },
+    select: { id: true },
+  });
+  return redirected ? 'forwarded' : 'resent';
+}
+
 function linkIdFromSignedToken(token: string): string | null {
   const segments = token.split('.');
   if (segments.length !== 3) return null;
@@ -150,9 +172,10 @@ export async function resolveAdminLinkReplacedGate(args: {
   if (['APPROVED', 'REJECTED', 'EXPIRED'].includes(app.status)) return null;
 
   if (args.peek.reason === 'superseded') {
+    const variant = await supersededLinkReplacedVariant(applicationId, args.token);
     return {
       reason: 'link_replaced',
-      variant: 'resent',
+      variant,
       teacherName: app.name,
       schoolName: app.schoolName,
     };

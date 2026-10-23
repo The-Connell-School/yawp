@@ -106,7 +106,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
   const replaced = await resolveAdminLinkReplacedGate({ token, peek });
   if (replaced) return { ok: false as const, ...replaced };
-  if (peek.reason === 'invalid' || !peek.reason) {
+  if (
+    peek.reason === 'invalid' ||
+    peek.reason === 'purpose_mismatch' ||
+    !peek.reason
+  ) {
+    const app = await applicationFromToken(token);
+    if (app) {
+      return {
+        ok: false as const,
+        reason: 'invalid' as const,
+        teacherName: app.name,
+        schoolName: app.schoolName,
+      };
+    }
     return { ok: false as const, reason: 'invalid' as const };
   }
   return { ok: false as const, reason: peek.reason };
@@ -128,6 +141,12 @@ export async function action({ request }: ActionFunctionArgs) {
     request,
   });
   if (!result.ok && result.reason === 'superseded') {
+    const peek = await peekSignedLink({
+      token,
+      expectedPurpose: 'ADMIN_APPROVE',
+    });
+    const replaced = await resolveAdminLinkReplacedGate({ token, peek });
+    if (replaced) return { ok: false as const, ...replaced };
     const appId = applicationIdFromSignedToken(token);
     if (appId) {
       const gate = await fetchFreeTierApplicationTerminalGate(appId);
@@ -138,6 +157,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return {
         ok: false as const,
         reason: 'link_replaced' as const,
+        variant: 'resent' as const,
         teacherName: app.name,
         schoolName: app.schoolName,
       };
@@ -325,6 +345,12 @@ export default function FreeAdminApproveRoute() {
         <AdminLinkReplacedCard
           teacherName={data.teacherName}
           schoolName={data.schoolName}
+          variant={
+            'variant' in actionData
+              ? (actionData as { variant?: FreeTierAdminLinkReplacedVariant })
+                  .variant ?? 'forwarded'
+              : 'forwarded'
+          }
         />
       );
     }
