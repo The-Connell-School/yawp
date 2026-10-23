@@ -155,6 +155,7 @@ export async function buildAdminApprovalDesignedEmail(args: {
     schoolName: args.schoolName,
     reminder: args.reminder,
     forwardedByAdminName: args.forwardedByAdminName,
+    routedByTeacher: args.routedByTeacher,
   });
   const text = renderAdminApprovalEmailBody({
     teacherName: args.teacherName,

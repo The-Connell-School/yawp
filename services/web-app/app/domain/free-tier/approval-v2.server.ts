@@ -1246,3 +1246,11 @@ export async function runApprovalJobs(now = new Date()) {
         });
     });
 }
+
+/** Integration tests: read/write encrypted outbox payloads without sending. */
+export function sealApprovalDeliveryPayloadForTests(message: Message) {
+  return encrypt(message);
+}
+export function openApprovalDeliveryPayloadForTests(value: string): Message {
+  return decrypt(value);
+}

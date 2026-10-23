@@ -575,6 +575,76 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
     expect(reminder?.text).not.toContain('They named you as the administrator');
     expect(next.id).not.toBe(approval.id);
   });
+  test('teacher reroute outbox refresh keeps reroute copy when links expire', async () => {
+    const { app, approval } = await fixture();
+    const input = {
+      applicationId: app.id,
+      userId: 'approval-test-user',
+      currentApprovalId: approval.id,
+      newAdminName: 'Rivera',
+      newAdminEmail: 'rivera@example.org',
+      request: new Request('http://localhost/test'),
+    };
+    expect((await api.forwardApprovalRequest(input)).ok).toBe(true);
+    await db.freeTierSignedLink.updateMany({
+      where: { applicationId: app.id },
+      data: { expiresAt: new Date(0) },
+    });
+    await api.runApprovalJobs(new Date());
+    const message = send.mock.calls.find(
+      ([args]) => args.to === 'rivera@example.org'
+    )?.[0];
+    expect(message?.text).toContain('asked us to send this to you');
+    expect(message?.text).not.toContain('forwarded this to you');
+  });
+  test('teacher reroute refresh ignores legacy payload with admin-forward lead text', async () => {
+    const { app, approval } = await fixture();
+    const {
+      openApprovalDeliveryPayloadForTests,
+      sealApprovalDeliveryPayloadForTests,
+    } = api;
+    expect(
+      (
+        await api.forwardApprovalRequest({
+          applicationId: app.id,
+          userId: 'approval-test-user',
+          currentApprovalId: approval.id,
+          newAdminName: 'Rivera',
+          newAdminEmail: 'rivera@example.org',
+          request: new Request('http://localhost/test'),
+        })
+      ).ok
+    ).toBe(true);
+    const pending = await db.freeTierAdminApproval.findFirstOrThrow({
+      where: { applicationId: app.id, status: 'PENDING' },
+    });
+    const delivery = await db.freeTierApprovalDelivery.findFirstOrThrow({
+      where: { approvalId: pending.id, kind: 'admin_approval', state: 'QUEUED' },
+    });
+    const opened = openApprovalDeliveryPayloadForTests(delivery.payload);
+    const legacy = {
+      ...opened,
+      routedByTeacher: undefined,
+      forwardedByAdminName: undefined,
+      text: `Dr. Patel forwarded this to you as the right person to approve classroom software for Ms. Okafor at Lincoln High.\n\n${opened.text}`,
+    };
+    await db.freeTierApprovalDelivery.update({
+      where: { id: delivery.id },
+      data: {
+        payload: sealApprovalDeliveryPayloadForTests(legacy),
+      },
+    });
+    await db.freeTierSignedLink.updateMany({
+      where: { applicationId: app.id },
+      data: { expiresAt: new Date(0) },
+    });
+    await api.runApprovalJobs(new Date());
+    const message = send.mock.calls.find(
+      ([args]) => args.to === 'rivera@example.org'
+    )?.[0];
+    expect(message?.text).toContain('asked us to send this to you');
+    expect(message?.text).not.toContain('forwarded this to you');
+  });
   test('outbox refresh preserves admin forward context when links expire', async () => {
     const { app } = await fixture();
     const { mintSignedLink } = await import('./signed-link.server');

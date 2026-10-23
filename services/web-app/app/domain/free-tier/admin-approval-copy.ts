@@ -42,9 +42,11 @@ export function renderAdminApprovalEmailSubject(args: {
   schoolName: string;
   reminder?: boolean;
   forwardedByAdminName?: string | null;
+  routedByTeacher?: boolean;
 }) {
   const initial = `${teacherAtSchool(args.teacherName, args.schoolName)} would like to use Yawp!`;
   const forwardRecipient = `Can you approve Yawp! for ${teacherAtSchool(args.teacherName, args.schoolName)}?`;
+  // PLACEHOLDER: pending design (admin-copy) — teacher reroute (`routedByTeacher`) uses `initial` subject until design decides.
   const core = args.forwardedByAdminName?.trim()
     ? forwardRecipient
     : initial;

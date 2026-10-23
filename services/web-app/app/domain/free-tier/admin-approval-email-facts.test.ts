@@ -106,4 +106,13 @@ describe('admin approval email forward context', () => {
     });
     expect(teacherStored).toEqual({ routedByTeacher: true });
   });
+
+  test('teacher reroute on approval row overrides legacy admin-forward payload text', () => {
+    const legacy = adminApprovalEmailContextFromStoredMessage({
+      text: 'Sam Chen forwarded this to you as the right person to approve classroom software for Jordan Rivera at Lincoln High School.\n\nApprove',
+    });
+    expect(
+      mergeAdminApprovalEmailContext({ routedByTeacher: true }, legacy)
+    ).toEqual({ routedByTeacher: true });
+  });
 });

@@ -53,6 +53,9 @@ export function mergeAdminApprovalEmailContext(
   fromApproval: AdminApprovalEmailContext,
   fromMessage: AdminApprovalEmailContext
 ): AdminApprovalEmailContext {
+  if (fromApproval.routedByTeacher) {
+    return { routedByTeacher: true };
+  }
   if (fromMessage.routedByTeacher || fromMessage.forwardedByAdminName) {
     return fromMessage;
   }
