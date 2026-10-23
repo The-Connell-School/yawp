@@ -2,7 +2,10 @@ import { currentInsightSummary } from '../db-helpers';
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { readFile } from 'node:fs/promises';
-import { EDITOR_SELECTOR } from '../test-helpers';
+import {
+  EDITOR_SELECTOR,
+  assertChatControlsInBoundsAtBreakpoints,
+} from '../test-helpers';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
 const STUDENT_PASSWORD = 'johndoe';
@@ -1072,52 +1075,19 @@ test.describe('Yawp! Lesson Planner', () => {
     signIn,
     e2eContext,
   }) => {
-    const consoleErrors: string[] = [];
-    const pageErrors: string[] = [];
-    page.on('console', (message) => {
-      if (message.type() === 'error') consoleErrors.push(message.text());
-    });
-    page.on('pageerror', (error) => pageErrors.push(error.message));
-
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
 
-    for (const viewport of [
-      { width: 1440, height: 1000 },
-      { width: 390, height: 844 },
-    ]) {
-      await page.setViewportSize(viewport);
-      await page.goto('/app/lesson-planner');
-
-      const composer = page.getByLabel('Message the Lesson Planner');
-      const send = page.getByRole('button', { name: 'Send message' });
-      await expect(composer).toBeVisible();
-      await expect(send).toBeVisible();
-      if (viewport.width === 390) {
-        await expect(page.getByLabel('Switch lesson')).toBeVisible();
+    await assertChatControlsInBoundsAtBreakpoints(page, {
+      path: '/app/lesson-planner',
+      composerLabel: 'Message the Lesson Planner',
+      sendButtonName: 'Send message',
+      assertMobileControls: async (mobilePage) => {
+        await expect(mobilePage.getByLabel('Switch lesson')).toBeVisible();
         await expect(
-          page.getByRole('button', { name: 'New lesson' })
+          mobilePage.getByRole('button', { name: 'New lesson' })
         ).toBeVisible();
-      }
-
-      for (const control of [composer, send]) {
-        const box = await control.boundingBox();
-        expect(box).not.toBeNull();
-        expect(box!.x).toBeGreaterThanOrEqual(0);
-        expect(box!.y).toBeGreaterThanOrEqual(0);
-        expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
-        expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
-      }
-
-      const overflow = await page.evaluate(() => ({
-        body: document.body.scrollWidth - window.innerWidth,
-        document: document.documentElement.scrollWidth - window.innerWidth,
-      }));
-      expect(overflow.body).toBeLessThanOrEqual(0);
-      expect(overflow.document).toBeLessThanOrEqual(0);
-    }
-
-    expect(consoleErrors).toEqual([]);
-    expect(pageErrors).toEqual([]);
+      },
+    });
   });
 
   /**

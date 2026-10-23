@@ -1,4 +1,128 @@
-import { Page, expect } from '@playwright/test';
+import { Locator, Page, expect } from '@playwright/test';
+
+/** Console noise from react-router when a new navigation aborts an in-flight /__manifest fetch. */
+const ABORTED_MANIFEST_PATCH_CONSOLE =
+  /^Failed to fetch manifest patches TypeError: Failed to fetch$/;
+
+export type StrictPageObservability = {
+  consoleErrors: string[];
+  pageErrors: string[];
+  gotoAndSettle: (url: string) => Promise<void>;
+  waitForRouteSettled: () => Promise<void>;
+  assertNoErrors: () => void;
+};
+
+/** Collect console/page errors; ignore only the exact manifest-patch abort during controlled navigations. */
+export function attachStrictPageObservability(
+  page: Page
+): StrictPageObservability {
+  const consoleErrors: string[] = [];
+  const pageErrors: string[] = [];
+  let inControlledNavigation = false;
+
+  page.on('console', (message) => {
+    if (message.type() !== 'error') return;
+    const text = message.text();
+    if (inControlledNavigation && ABORTED_MANIFEST_PATCH_CONSOLE.test(text)) {
+      return;
+    }
+    consoleErrors.push(text);
+  });
+  page.on('pageerror', (error) => {
+    pageErrors.push(error.message);
+  });
+
+  async function waitForRouteSettled() {
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForLoadState('networkidle');
+  }
+
+  async function gotoAndSettle(url: string) {
+    inControlledNavigation = true;
+    try {
+      await page.goto(url, { waitUntil: 'networkidle' });
+      await waitForRouteSettled();
+    } finally {
+      inControlledNavigation = false;
+    }
+  }
+
+  function assertNoErrors() {
+    expect(consoleErrors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+
+  return {
+    consoleErrors,
+    pageErrors,
+    gotoAndSettle,
+    waitForRouteSettled,
+    assertNoErrors,
+  };
+}
+
+type ViewportSize = { width: number; height: number };
+
+type ChatControlsInBoundsOptions = {
+  path: string;
+  composerLabel: string;
+  sendButtonName: string;
+  viewports?: ViewportSize[];
+  assertMobileControls?: (page: Page) => Promise<void>;
+};
+
+const DEFAULT_DESKTOP_MOBILE_VIEWPORTS: ViewportSize[] = [
+  { width: 1440, height: 1000 },
+  { width: 390, height: 844 },
+];
+
+/** Desktop + mobile layout checks with strict error collection (shared by planner/reporter specs). */
+export async function assertChatControlsInBoundsAtBreakpoints(
+  page: Page,
+  options: ChatControlsInBoundsOptions
+) {
+  const observability = attachStrictPageObservability(page);
+  const viewports = options.viewports ?? DEFAULT_DESKTOP_MOBILE_VIEWPORTS;
+
+  for (let index = 0; index < viewports.length; index++) {
+    if (index > 0) {
+      await observability.waitForRouteSettled();
+    }
+
+    const viewport = viewports[index]!;
+    await page.setViewportSize(viewport);
+    await observability.gotoAndSettle(options.path);
+
+    const composer = page.getByLabel(options.composerLabel);
+    const send = page.getByRole('button', { name: options.sendButtonName });
+    await expect(composer).toBeVisible();
+    await expect(send).toBeVisible();
+
+    if (viewport.width === 390 && options.assertMobileControls) {
+      await options.assertMobileControls(page);
+    }
+
+    for (const control of [composer, send] as Locator[]) {
+      const box = await control.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.x).toBeGreaterThanOrEqual(0);
+      expect(box!.y).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
+      expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+    }
+
+    const overflow = await page.evaluate(() => ({
+      body: document.body.scrollWidth - window.innerWidth,
+      document: document.documentElement.scrollWidth - window.innerWidth,
+    }));
+    expect(overflow.body).toBeLessThanOrEqual(0);
+    expect(overflow.document).toBeLessThanOrEqual(0);
+
+    await observability.waitForRouteSettled();
+  }
+
+  observability.assertNoErrors();
+}
 
 /** Single source of truth for the editor DOM selector */
 export const EDITOR_SELECTOR = '.ProseMirror';
