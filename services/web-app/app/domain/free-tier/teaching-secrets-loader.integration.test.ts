@@ -90,8 +90,8 @@ beforeAll(async () => {
   originalFlag =
     (await prisma.setting.findUnique({ where: { name: flag } }))?.value ??
     null;
-  classCode = `${prefix}-code`.toUpperCase();
-  codeSearchProbe = classCode.slice(4, 14);
+  codeSearchProbe = `search-probe-${prefix}`;
+  classCode = `${prefix}-${codeSearchProbe}`.toUpperCase();
   joinToken = `${prefix}-join-token`;
   const org = await prisma.organization.create({
     data: { name: prefix, plan: 'FREE_CLASSROOM' },
@@ -104,7 +104,7 @@ beforeAll(async () => {
   const sortOlder = await prisma.class.create({
     data: {
       schoolId: school.id,
-      code: `${prefix}-sort-older-zzz`,
+      code: `${prefix}-SORT-ZZZ`.toUpperCase(),
       studentJoinToken: `${prefix}-sort-older-token`,
     },
   });
@@ -120,7 +120,7 @@ beforeAll(async () => {
   const sortNewer = await prisma.class.create({
     data: {
       schoolId: school.id,
-      code: `${prefix}-sort-newer-aaa`,
+      code: `${prefix}-SORT-AAA`.toUpperCase(),
       studentJoinToken: `${prefix}-sort-newer-token`,
     },
   });
