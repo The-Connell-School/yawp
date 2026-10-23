@@ -434,7 +434,7 @@ export default function FreeTierPendingRoute() {
           'Request sent',
           app?.status === 'MANUAL_REVIEW'
             ? 'Yawp! review'
-            : `${adminName} approves`,
+            : `${pending?.adminName ?? 'Your administrator'} approves`,
           'Start teaching',
         ]}
         current={2}
