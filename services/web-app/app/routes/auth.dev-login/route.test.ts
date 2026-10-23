@@ -119,14 +119,19 @@ describe('auth.dev-login action', () => {
   });
 
   test('rejects simulated demo students', async () => {
-    prisma.user.findUnique.mockResolvedValueOnce({
+    isPreviewAccessGateEnabled.mockReturnValue(true);
+    getPreviewAccessSeat.mockResolvedValue({
+      organizationId: 'preview-seat-2',
+      label: 'Preview',
+    });
+    prisma.user.findFirst.mockResolvedValueOnce({
       id: 'sim-user',
       simulatedForClassId: 'class-1',
       memberships: [{ id: 'mem-sim', role: 'STUDENT' }],
     });
 
     const response = await action(
-      actionArgs(makeRequest('sim-abc-1@example.test'))
+      actionArgs(makeRequest('sim-abc12x-1@example.test', 'preview=seat-2'))
     );
 
     expect(response.status).toBe(403);
