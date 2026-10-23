@@ -1,6 +1,11 @@
-import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, expect, mock, test } from 'bun:test';
 import * as router from 'react-router';
+import {
+  mockCardPageChromeForSsr,
+  renderWithCardPageChrome,
+} from '~/components/card-page-chrome.ssr-test-setup';
+
+mockCardPageChromeForSsr({ signedIn: false });
 
 mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
   requireFreeTierEnabled: async () => {},
@@ -19,10 +24,6 @@ mock.module('~/domain/free-tier/admin-link-gate.server', () => ({
 }));
 mock.module('~/domain/free-tier/approval-flow.server', () => ({
   completeSchoolAdminApproval: async () => ({ ok: true }),
-}));
-
-mock.module('../free-tier/useFreeTierLayoutContext', () => ({
-  useFreeTierEnabled: () => false,
 }));
 
 mock.module('react-router', () => ({
@@ -44,7 +45,10 @@ const { default: Page } = await import('./route');
 afterAll(() => mock.restore());
 
 test('approve page renders teacher at school in heading without intro paragraph', () => {
-  const html = renderToStaticMarkup(<Page />);
+  const html = renderWithCardPageChrome(
+    <Page />,
+    '/free/admin/approve?t=token'
+  );
   expect(html).toContain(
     'Approve Yawp! for Jordan Rivera at Lincoln High School'
   );

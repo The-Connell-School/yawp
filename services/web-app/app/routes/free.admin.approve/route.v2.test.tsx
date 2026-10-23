@@ -1,7 +1,11 @@
-import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, expect, mock, test } from 'bun:test';
 import * as router from 'react-router';
+import {
+  mockCardPageChromeForSsr,
+  renderWithCardPageChrome,
+} from '~/components/card-page-chrome.ssr-test-setup';
 afterAll(() => mock.restore());
+mockCardPageChromeForSsr({ signedIn: false });
 mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
   requireFreeTierEnabled: async () => {},
 }));
@@ -27,6 +31,12 @@ mock.module('~/domain/free-tier/admin-link-gate.server', () => ({
   resolveAdminLinkTerminalGate: async () => null,
   resolveAdminLinkReplacedGate: async () => null,
 }));
+mock.module('~/domain/feature-flags/feature-flags.server', () => ({
+  isFeatureFlagEnabled: async () => true,
+}));
+mock.module('~/domain/free-tier/approval-deny.server', () => ({
+  resolveAdminDenyAnsweredGate: async () => null,
+}));
 const approve = mock(async () => ({ ok: true }));
 mock.module('~/domain/free-tier/approval-flow.server', () => ({
   completeSchoolAdminApproval: approve,
@@ -39,6 +49,7 @@ mock.module('react-router', () => ({
     teacherName: 'Jordan Rivera',
     schoolName: 'Lincoln High School',
     teacherEmail: 'jrivera@lincolnhs.org',
+    showDenyAndQa: true,
   }),
   useActionData: () => undefined,
   useNavigation: () => ({ state: 'idle' }),
@@ -74,10 +85,16 @@ test('approval rejects a blank role on the server without consuming a link', asy
 });
 
 test('approve page uses the designed heading and forward link', () => {
-  const html = renderToStaticMarkup(<Page />);
+  const html = renderWithCardPageChrome(
+    <Page />,
+    '/free/admin/approve?t=token'
+  );
   expect(html).toContain(
     'Approve Yawp! for Jordan Rivera at Lincoln High School'
   );
-  expect(html).not.toContain('I&#x27;d like to learn more first');
+  expect(html).toContain('Deny request');
+  expect(html).toContain('I&#x27;d like to learn more first');
+  expect(html).toContain('What Yawp! is');
   expect(html).toContain('Forward this request');
 });
+

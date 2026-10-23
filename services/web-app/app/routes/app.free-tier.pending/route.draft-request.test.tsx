@@ -1,10 +1,14 @@
-import { renderToStaticMarkup } from 'react-dom/server';
 import * as router from 'react-router';
 import { afterAll, expect, mock, test } from 'bun:test';
+import {
+  mockCardPageChromeForSsr,
+  renderWithCardPageChrome,
+} from '~/components/card-page-chrome.ssr-test-setup';
 
 afterAll(() => mock.restore());
 
 function mockPage(approvalEmail: string) {
+  mockCardPageChromeForSsr();
   mock.module('react-router', () => ({
     ...router,
     useLoaderData: () => ({
@@ -40,7 +44,7 @@ function mockPage(approvalEmail: string) {
 test('hides draft request when administrator email is missing', async () => {
   mockPage('');
   const { default: Page } = await import('./route');
-  const html = renderToStaticMarkup(<Page />);
+  const html = renderWithCardPageChrome(<Page />);
   expect(html).toContain(
     'It may be a good idea to give Dr. Patel a quick heads-up'
   );
@@ -51,7 +55,7 @@ test('hides draft request when administrator email is missing', async () => {
 test('shows draft mailto with design body fields when admin email is present', async () => {
   mockPage('patel@lincolnusd.org');
   const { default: Page } = await import('./route');
-  const html = renderToStaticMarkup(<Page />);
+  const html = renderWithCardPageChrome(<Page />);
   expect(html).toContain('data-testid="pending-draft-request"');
   expect(html).toContain('mailto:patel%40lincolnusd.org?');
   expect(html).toContain('Lincoln%20High%20School');
