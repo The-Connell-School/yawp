@@ -971,6 +971,7 @@ jobs:
             app/domain/lesson-planner/lesson-share.server.test.ts \
             app/domain/brand.test.ts \
             app/domain/lesson-planner/plan-days.test.ts \
+            app/domain/lesson-planner/planner-history.test.ts \
             app/domain/lesson-planner/lesson-library.test.ts \
             app/domain/lesson-planner/run-show.test.ts \
             app/domain/lesson-planner/slide-deck-gallery.test.ts \

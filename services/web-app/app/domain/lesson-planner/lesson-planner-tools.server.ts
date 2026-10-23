@@ -261,7 +261,7 @@ export const LESSON_PLANNER_CATALOG_TOOLS: ReporterTool[] = [
   {
     name: 'search_my_lessons',
     description:
-      "Search THIS teacher's own saved lessons — their library and drafts — by name, by the pieces they filed, or by what they asked for. Use it whenever the teacher refers to earlier work (\"that lesson we made on The Things They Carried\", \"last week's exit ticket\"). You do not remember earlier conversations; this is how you find them. An empty query lists their most recent lessons.",
+      "Search THIS teacher's own saved lessons — their library and drafts — by name, by the pieces they filed, or by what they asked for. Use it when the teacher refers to work from another conversation (\"that lesson we made on The Things They Carried\", \"last week's exit ticket\"). Never use it for something said earlier in this conversation: that is already in the messages above. An empty query lists their most recent lessons.",
     input_schema: {
       type: 'object',
       properties: {

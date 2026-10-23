@@ -1,5 +1,6 @@
 import { monthlyFreeTierPolicy } from '~/domain/free-tier/monthly-policy.server';
 import { recentArtFrom } from '~/domain/lesson-planner/recent-art';
+import { plannerHistory } from '~/domain/lesson-planner/planner-history';
 import {
   MAX_PENDING_UPLOAD_IDS,
   PENDING_UPLOAD_MS,
@@ -95,8 +96,10 @@ const PLANNER_MISCONFIGURED =
 // Roomier than the reporter's cap: a teacher pasting a prompt, a rubric, or a
 // draft handout into the planner is a normal turn, not an attack.
 const MAX_PLANNER_MESSAGE_CHARS = 6_000;
-const MAX_HISTORY_MESSAGES = 20;
-const MAX_HISTORY_CHARS = 24_000;
+// The whole conversation, as far back as a real one goes: a structure the
+// teacher laid out at the start has to still be there (Brian's run 5).
+const MAX_HISTORY_MESSAGES = 80;
+const MAX_HISTORY_CHARS = 36_000;
 // Lessons are long: a deck with speaker notes, a handout, and the quoted text
 // of a Quick Writing Lesson run well past a report. A tight ceiling truncates
 // mid-artifact, which a teacher reads as bad material rather than as a cut-off.
@@ -202,18 +205,12 @@ function progressStream(
 
 const deriveTitle = firstMessageTitle;
 
+// Brian's run 5 (item 2): every teacher message, and the planner's replies
+// in what is left of the budget, older ones as their outline.
 function boundedHistory(
   messages: Array<{ role: string; content: string }>
 ): Array<{ role: string; content: string }> {
-  const selected: Array<{ role: string; content: string }> = [];
-  let chars = 0;
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index]!;
-    if (chars + message.content.length > MAX_HISTORY_CHARS) break;
-    selected.unshift(message);
-    chars += message.content.length;
-  }
-  return selected;
+  return plannerHistory(messages, MAX_HISTORY_CHARS);
 }
 
 export async function action({ request }: ActionFunctionArgs) {

@@ -364,7 +364,9 @@ export function buildLessonPlannerSystemPrompt({
     '- After a full plan, put a line with only `---` under the last step, then close with exactly one question — "Want to refine or edit any part of this?" — and nothing else. Do not offer a menu of further rounds; the app already shows the next steps. Nothing about the plan as a whole (a total, an invitation, a note about the framings) goes inside the last step: the teacher files each step in their stack on its own, and a step carries only its own content.',
     '- If the teacher keeps going, keep working with them gladly. The aim is never to block them, only never to trap them.',
     '- When the teacher says they are done (or thanks you once the lesson is built), celebrate: tell them in a sentence or two what good work they did and send them off to enjoy the rest of their day. If you know the day or time ("it\'s Friday afternoon") you may use it — "Go enjoy your weekend." If they mentioned a plan of their own (a game to get to), you may echo it — "Go enjoy the game." Keep it to one or two sentences and never probe or ask about their personal life.',
-    '- You do not remember earlier conversations on your own. When a teacher refers to earlier work, look for it in their saved lessons with search_my_lessons and open it with read_my_lesson rather than relying on memory, and say so plainly when you cannot find it.',
+    '- This conversation is your first memory. When the teacher refers to something they said or you planned earlier in it ("that structure", "the 4-day flow", "what we did for Day 1"), it is in the messages above: use it, and never ask them to type it again. A long reply of yours from earlier may appear only as its outline; work from the outline and what the teacher said.',
+    '- A structure the teacher defines (a weekly flow, a routine for every day) carries into everything built in this conversation, a unit included: say in one line that you are building on it ("Using your four-day flow: lecture, close reading, quiz and Daily Pages, discussion").',
+    '- Only for work from other conversations (an earlier lesson, last week\'s exit ticket) look in their saved lessons with search_my_lessons and open it with read_my_lesson, and say so plainly when you cannot find it.',
     '',
     'How you work:',
     ...(intakeV2
@@ -702,7 +704,7 @@ export function buildLessonPlannerSystemPrompt({
 }
 
 /** Bump when the cacheable instruction body changes materially. */
-export const LESSON_PLANNER_PROMPT_VERSION = '2026-10-22-review-v2';
+export const LESSON_PLANNER_PROMPT_VERSION = '2026-10-23-review-v1';
 
 /**
  * The fixed instruction body — identical for every turn except inventory and

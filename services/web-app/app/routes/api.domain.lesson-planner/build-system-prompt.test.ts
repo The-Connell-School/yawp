@@ -1722,7 +1722,7 @@ describe("planner prompt — Brian's run 3", () => {
   });
 
   test('the prompt version moved', () => {
-    expect(LESSON_PLANNER_PROMPT_VERSION).toBe('2026-10-22-review-v2');
+    expect(LESSON_PLANNER_PROMPT_VERSION).toBe('2026-10-23-review-v1');
   });
 });
 
@@ -1922,5 +1922,15 @@ describe("planner prompt — Brian's run 5", () => {
   test('several days in one reply: a # heading per day, its steps as ## headings', () => {
     expect(prompt).toContain('give each day a `# Day N: title (50 min)` heading');
     expect(prompt).toContain('Each day must add up to its period on its own.');
+  });
+});
+
+describe("planner prompt — the conversation is the first memory (Brian's run 5, item 2)", () => {
+  const prompt = buildLessonPlannerSystemPrompt({ teacherName: 'Brian', organizationName: 'Connell School' });
+  test('look in this conversation first; a defined structure carries into the unit', () => {
+    expect(prompt).toContain('This conversation is your first memory.');
+    expect(prompt).toContain('never ask them to type it again');
+    expect(prompt).toContain('carries into everything built in this conversation, a unit included');
+    expect(prompt).toContain('Only for work from other conversations');
   });
 });
