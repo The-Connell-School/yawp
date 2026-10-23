@@ -91,9 +91,8 @@ const segments = {
     await s.scrollTo(tutorRow, { ms: 1200 });
     await s.callout(tutorRow, { ...VO.assign.tutorCallout, side: 'left', holdMs: 5500 });
     await s.clearCallout();
-    await s.click(page.getByRole('button', { name: 'Create Assignment' }), { after: 1500 });
+    await s.click(page.getByRole('button', { name: 'Create Assignment' }), { after: 900 });
     await s.dockCaption(null);
-    await go(page, `/app/my-classes/${boothState().classId}`);
     await s.caption(VO.assign.sent);
     await rec.stop();
     await s.clearCaption();
@@ -114,11 +113,15 @@ async function nextTutorReply(before) {
 segments.student = async () => {
   await titleCard(SECTIONS.student);
   await as(copy.STUDENT.email);
-  await go(page, `/app/my-classes/${boothState().classId}`);
+  await go(page, '/app');
   await s.dockCaption(null);
   await s.chapter(SECTIONS.student, TOTAL_SECTIONS, SECTION_COLORS[SECTIONS.student.n - 1].accent);
   await rec.start('student-open');
   await s.caption(VO.student.open, { hold: false });
+  await sleep(900);
+  await s.click(page.locator('a:has-text("English 10 - Period 3")').first(), { after: 0 });
+  await page.waitForURL(/\/app\/my-classes\//);
+  await page.waitForLoadState('networkidle');
   const card = page.locator('button:has-text("Fahrenheit 451")').first();
   await s.moveTo(card, 900);
   await sleep(1200);
@@ -447,9 +450,11 @@ segments.planner = async () => {
   await s.click(page.getByRole('button', { name: /^Remove / }).nth(3), { after: 1400 });
   await s.click(page.locator('[data-testid="remove-undo"]').getByRole('button', { name: 'Undo' }), { after: 1200 });
 
-  // Writing steps become Yawp! assignments.
+  // Writing steps become Yawp! assignments: say so first, then make one.
   const ticket = cards.filter({ hasText: 'how a quote proves a claim' }).first();
   await s.scrollTo(ticket, { ms: 900 });
+  await s.callout(ticket, { ...VO.planner.create, side: 'top', holdMs: 4800 });
+  await s.clearCallout();
   await s.click(ticket.locator('[data-testid="run-card-title"]'), { after: 900 });
   await s.click(ticket.locator('[data-testid="stack-create-assignment"]').first(), { after: 0 });
   await page.getByRole('button', { name: 'Create Assignment' }).waitFor({ timeout: 30000 });
@@ -461,8 +466,8 @@ segments.planner = async () => {
   await page.waitForLoadState('networkidle');
   const created = page.locator('[data-testid="in-yawp"]').first();
   await s.scrollTo(created, { ms: 900 });
-  await s.callout(created.locator('xpath=ancestor::*[@data-testid="run-card"][1]'), { ...VO.planner.create, side: 'top', holdMs: 5000 });
-  await s.clearCallout();
+  await s.moveTo(created, 600);
+  await sleep(2200);
   await rec.stop();
 
   // The slide deck, built from the stack.
@@ -482,9 +487,11 @@ segments.planner = async () => {
   await page.evaluate(() => document.fonts.ready);
   await booth('hideCursor', true);
   await sleep(2200);
-  for (let i = 0; i < 3; i += 1) {
+  // Title plate, class starter, agenda, the Look slide, the divider: the
+  // painting hangs on three of them.
+  for (let i = 0; i < 4; i += 1) {
     await page.keyboard.press('ArrowRight');
-    await sleep(2000);
+    await sleep(i === 2 || i === 3 ? 2600 : 1600);
   }
   await rec.stop();
 

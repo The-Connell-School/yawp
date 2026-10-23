@@ -336,7 +336,13 @@ Shorten the mini-lesson to 7 minutes
 \`\`\`
 `;
 
-/** The reply to "Build the slide deck from my stack": a Lesson Deck Kit deck. */
+/**
+ * The reply to "Build the slide deck from my stack": a Lesson Deck Kit deck to
+ * spec v3. It hangs one painting by theme (Turner's Temeraire, "the old giving
+ * way to the new"), takes its colors from the painting, and shows the art on
+ * the title plate, a divider and a Look slide (at most three large), plus the
+ * big-idea strip and the exit thumbnail.
+ */
 export const SLIDE_DECK = `Here is the deck for the lesson in your stack.
 
 \`\`\`yawp-slides
@@ -344,12 +350,15 @@ ${JSON.stringify({
   title: 'Making the Quote Do the Work',
   subtitle: 'Claim, quote, so what',
   unit: 'Fahrenheit 451',
-  colors: ['#B4441F', '#2F5873', '#7A4560'],
+  art: 'turner-temeraire',
+  colors: ['#9C4A22', '#3F5A73', '#7D6118'],
   slides: [
-    { layout: 'title', title: "The Quote's Work", subtitle: 'Claim, quote, so what', course: 'English 10 · Period 3', speakerNotes: 'Let the title sit while they settle.', minutes: 0 },
-    { layout: 'agenda', title: "Today's program", agenda: [{ title: 'A line that stuck', minutes: 5 }, { title: 'The quote sandwich', minutes: 10 }, { title: 'Two versions, one quote', minutes: 8 }, { title: 'Writing Practice', minutes: 10 }, { title: 'Repair your essay', minutes: 12 }, { title: 'Exit ticket', minutes: 5 }], speakerNotes: 'Walk the six steps in one breath.', minutes: 0 },
+    { layout: 'title', title: "The Quote's Work", subtitle: 'Claim, quote, so what', course: 'English 10 · Period 3', speakerNotes: 'Let the painting sit while they settle.', minutes: 0 },
     { layout: 'write', title: 'A line that stuck', routine: 'Class starter', body: 'Think of one sentence from a book, a song or a show that stayed with you. Why that sentence?', minutes: 5, step: 1, speakerNotes: 'Start the timer as the bell rings.' },
-    { layout: 'big_idea', title: 'The quote sandwich', body: '~~1|Claim~~, then ~~2|quote~~, then ~~3|so what~~: name the word that does the work and say what it does.', accentWord: 'word', minutes: 10, step: 2, speakerNotes: 'Build the three layers on the board.' },
+    { layout: 'agenda', title: "Today's program", agenda: [{ title: 'A line that stuck', minutes: 5 }, { title: 'The quote sandwich', minutes: 10 }, { title: 'Two versions, one quote', minutes: 8 }, { title: 'Writing Practice', minutes: 10 }, { title: 'Repair your essay', minutes: 12 }, { title: 'Exit ticket', minutes: 5 }], speakerNotes: 'Walk the six steps in one breath.', minutes: 0 },
+    { layout: 'look', title: 'What is being replaced?', question: 'A steam tug tows an old warship to be broken up. What is the painting saying about the new?', seconds: 60, followUp: 'Which detail made you say that?', minutes: 3, step: 2, speakerNotes: 'One minute of looking before anyone speaks. Bridge to Bradbury: the new thing wins, and something is lost.' },
+    { layout: 'divider', title: 'Body paragraphs', processStep: 4, minutes: 0, step: 2, speakerNotes: 'Today is about the middle of the essay: the evidence.' },
+    { layout: 'big_idea', title: 'The quote sandwich', body: '~~1|Claim~~, then ~~2|quote~~, then ~~3|so what~~: name the word that does the work and say what it does.', accentWord: 'word', minutes: 7, step: 2, speakerNotes: 'Build the three layers on the board.' },
     { layout: 'discuss', title: 'Which word works?', question: "Which word in 'It was a pleasure to burn' carries Montag's attitude?", choices: ['It', 'pleasure', 'burn'], answer: 2, grouping: 'Pairs', stem: 'The word ___ shows that…', minutes: 8, step: 3, speakerNotes: 'One minute in pairs, then reveal.' },
     { layout: 'steps', title: 'Repair your essay', bullets: ['Find one quote that sits on its own', 'Underline the word that does the most work', 'Add two sentences: what it means, what it proves'], minutes: 12, step: 5, speakerNotes: 'Circulate.' },
     { layout: 'exit', title: 'Before you go', body: 'Name one word in your quote and say what it proves.', button: 'Exit ticket', minutes: 5, step: 6, speakerNotes: 'Students open the exit ticket in Yawp!.' },
@@ -478,7 +487,7 @@ export const VO = {
     sent: 'Sent to every student in the class.',
   },
   student: {
-    open: 'Maya opens the assignment.',
+    open: 'Maya opens her class and finds the assignment.',
     tutorBuiltIn: 'Every student gets their own document, with the tutor built in. Pre-writing comes first.',
     timelapse: 'Maya gets her ideas down.',
     feedback: 'She asks for feedback.',
