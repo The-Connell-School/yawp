@@ -15,11 +15,13 @@ mock.module('./email-copy.server', () => ({
   ...emailCopyServer,
   adminApprovalEmailCopyVersionHash: async () => 'hash',
 }));
+const mintLinkRow = async () => ({
+  token: 'approve-token',
+  linkId: 'approve-link',
+});
 mock.module('./signed-link.server', () => ({
-  mintSignedLink: async () => ({
-    token: 'approve-token',
-    linkId: 'approve-link',
-  }),
+  mintSignedLink: mintLinkRow,
+  mintSignedLinkForDevPanel: mintLinkRow,
   abandonMintedSignedLinks: async () => {},
   FREE_TIER_LINK_TTL_MS: 60_000,
 }));

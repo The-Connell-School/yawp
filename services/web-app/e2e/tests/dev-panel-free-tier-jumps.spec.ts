@@ -1,9 +1,23 @@
+import { appendFileSync, mkdirSync } from 'node:fs';
+import path from 'node:path';
 import { test, expect } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
 import { openDevToolsPanel } from '../helpers/dev-panel-feedback';
 import { listCatalogFreeTierJumpExpectations } from '../../app/dev-panel/free-tier-jump-expectations';
 
 const prisma = createE2EPrismaClient();
+
+const JUMP_LOG_PATH = path.join(
+  process.cwd(),
+  'test-results',
+  'dev-panel-free-tier-jump.log'
+);
+
+function recordJumpLine(line: string) {
+  mkdirSync(path.dirname(JUMP_LOG_PATH), { recursive: true });
+  appendFileSync(JUMP_LOG_PATH, `${line}\n`, 'utf8');
+  console.log(line);
+}
 
 async function ensureDevTeacherSignedIn(page: import('@playwright/test').Page) {
   await page.context().clearCookies();
@@ -40,6 +54,9 @@ test.describe('Dev panel free-tier state jumps', () => {
 
   test('every catalog state jumps successfully', async ({ page }) => {
     test.setTimeout(600_000);
+    mkdirSync(path.dirname(JUMP_LOG_PATH), { recursive: true });
+    appendFileSync(JUMP_LOG_PATH, `# dev-panel free-tier jump catalog\n`, 'utf8');
+
     const entries = listCatalogFreeTierJumpExpectations();
 
     for (const entry of entries) {
@@ -74,13 +91,13 @@ test.describe('Dev panel free-tier state jumps', () => {
         const body = await response.json().catch(() => null);
         const jumpOk = response.ok() && body?.ok === true;
         if (jumpOk) {
-          console.log(`${entry.stateId}: ok`);
+          recordJumpLine(`${entry.stateId}: ok`);
         } else {
           const err =
             typeof body?.error === 'string'
               ? body.error
               : `HTTP ${response.status()}`;
-          console.log(`${entry.stateId}: ${err}`);
+          recordJumpLine(`${entry.stateId}: ${err}`);
         }
         expect.soft(response.ok(), `${entry.stateId} API HTTP status`).toBe(true);
         expect.soft(body?.ok, `${entry.stateId} API ok flag`).toBe(true);
@@ -94,12 +111,11 @@ test.describe('Dev panel free-tier state jumps', () => {
             .soft(new URL(redirectTo, page.url()).pathname, entry.stateId)
             .toContain(entry.redirectPath);
           await page.goto(redirectTo);
-          await expect
-            .soft(page.getByText('Lincoln High School', { exact: false }))
-            .toBeVisible({ timeout: 30_000 });
-          await expect
-            .soft(page.getByText('Test Teacher', { exact: false }))
-            .toBeVisible({ timeout: 30_000 });
+          if (entry.adminHeading) {
+            await expect
+              .soft(page.getByRole('heading', { name: entry.adminHeading }))
+              .toBeVisible({ timeout: 30_000 });
+          }
           return;
         }
 

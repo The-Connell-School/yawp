@@ -1573,6 +1573,15 @@ jobs:
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:5489/ > /dev/null
           ./bin/project test --profile demo-feedback-browser --json
 
+      - name: Cat dev panel free-tier jump log
+        if: ${{ !cancelled() && always() }}
+        run: |
+          if [ -f services/web-app/test-results/dev-panel-free-tier-jump.log ]; then
+            cat services/web-app/test-results/dev-panel-free-tier-jump.log
+          else
+            echo "(no dev-panel free-tier jump log)"
+          fi
+
       - name: Upload dev panel artboard evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

@@ -9,6 +9,8 @@ export type FreeTierJumpExpectation = {
   throwawayRequired?: boolean;
   /** Admin-side jumps sign the tester out before redirect. */
   adminSide?: boolean;
+  /** Unique heading on the admin page after jump (demo has free-tier flag on). */
+  adminHeading?: RegExp;
 };
 
 const EXPECTATIONS: Record<string, FreeTierJumpExpectation> = {
@@ -56,10 +58,12 @@ const EXPECTATIONS: Record<string, FreeTierJumpExpectation> = {
   'admin.approve-from-email': {
     redirectPath: '/free/admin/approve',
     adminSide: true,
+    adminHeading: /Approve Yawp! for Test Teacher at Lincoln High School/,
   },
   'admin.not-right-person': {
     redirectPath: '/free/admin/not-right-person',
     adminSide: true,
+    adminHeading: /Who should approve Yawp! for Test Teacher\?/,
   },
 };
 
