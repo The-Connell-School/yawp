@@ -222,9 +222,15 @@ async function sendEmailWithSes(email: EmailPayload, singleAttempt = false) {
 			data: { id: response.MessageId ?? 'unknown' },
 		} as const
 	} catch (error) {
+		const normalized = normalizeSesError(error)
+		// eslint-disable-next-line no-console
+		console.error(
+			'email_delivery_failed',
+			emailDeliveryDiagnostic(normalized, email.to),
+		)
 		return {
 			status: 'error',
-			error: normalizeSesError(error),
+			error: normalized,
 		} as const
 	}
 }

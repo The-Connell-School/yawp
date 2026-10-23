@@ -152,6 +152,52 @@ describe('sendEmail', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  test('logs email_delivery_failed when SES rejects without throwing', async () => {
+    const errorLog = mock((..._args: unknown[]) => {});
+    const originalError = console.error;
+    console.error = errorLog as typeof console.error;
+    try {
+      process.env.EMAIL_PROVIDER = 'ses';
+      process.env.AWS_REGION = 'us-east-1';
+      process.env.RESEND_FROM_EMAIL = 'info@yawp.school';
+      const secretEmail = 'leaky-recipient@example.test';
+      sesSend.mockRejectedValue(
+        Object.assign(
+          new Error(`Email address is not verified: ${secretEmail}`),
+          {
+            name: 'MessageRejected',
+            $metadata: { httpStatusCode: 400 },
+          },
+        ),
+      );
+
+      const result = await sendEmail({
+        to: secretEmail,
+        subject: 'Teacher invite',
+        html: '<p>invite</p>',
+        text: 'invite',
+      });
+
+      expect(result).toEqual({
+        status: 'error',
+        error: {
+          name: 'MessageRejected',
+          message: `Email address is not verified: ${secretEmail}`,
+          statusCode: 400,
+        },
+      });
+
+      expect(errorLog).toHaveBeenCalledTimes(1);
+      const serialized = JSON.stringify(errorLog.mock.calls);
+      expect(serialized).toContain('email_delivery_failed');
+      expect(serialized).toContain('"provider":"ses"');
+      expect(serialized).not.toContain(secretEmail);
+      expect(serialized).toContain('l***@e***');
+    } finally {
+      console.error = originalError;
+    }
+  });
+
   test('logs email_delivery_failed when Resend returns an error result without throwing', async () => {
     const errorLog = mock((..._args: unknown[]) => {});
     const originalError = console.error;

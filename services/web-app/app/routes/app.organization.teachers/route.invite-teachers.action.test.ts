@@ -203,7 +203,9 @@ describe('invite-teachers action', () => {
     expect(response.data.error).toBe(TEACHER_INVITE_SERVER_ERROR_MESSAGE);
   });
 
-  test('tracks status errors without route delivery logs', async () => {
+  // Resend and SES log `email_delivery_failed` inside sendEmail for {status:'error'};
+  // the route must not add org_teacher_invite_delivery_failed on top.
+  test('tracks status errors without route delivery logs (provider owns delivery logging)', async () => {
     const secretEmail = 'leaky-recipient@example.test';
     const logged: unknown[][] = [];
     const originalError = console.error;
@@ -232,6 +234,7 @@ describe('invite-teachers action', () => {
       const serialized = JSON.stringify(logged);
       expect(serialized).not.toContain(secretEmail);
       expect(serialized).not.toContain('org_teacher_invite_delivery_failed');
+      expect(serialized).not.toContain('email_delivery_failed');
     } finally {
       console.error = originalError;
     }
