@@ -345,7 +345,9 @@ function PromptCard({
   return (
     <li className="min-w-0">
       {assignmentCreationLocked ? (
-        <PreviewAssignmentCreationControl>{cardButton}</PreviewAssignmentCreationControl>
+        <PreviewAssignmentCreationControl fullWidth>
+          {cardButton}
+        </PreviewAssignmentCreationControl>
       ) : (
         cardButton
       )}

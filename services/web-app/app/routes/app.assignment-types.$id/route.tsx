@@ -750,6 +750,24 @@ export default function AppAssignmentTypesIdRoute() {
   const [isPromptGeneratorOpen, setIsPromptGeneratorOpen] = useState(false);
   const [customEssayType, setCustomEssayType] =
     useState<CustomEssayType | null>(null);
+
+  useEffect(() => {
+    if (!teachingLockedPreview) return;
+    if (isAssignmentSheetOpen) setIsAssignmentSheetOpen(false);
+    if (isPromptGeneratorOpen) setIsPromptGeneratorOpen(false);
+    if (customEssayType !== null) setCustomEssayType(null);
+  }, [
+    teachingLockedPreview,
+    isAssignmentSheetOpen,
+    isPromptGeneratorOpen,
+    customEssayType,
+  ]);
+
+  function beginAssignmentCreation() {
+    if (teachingLockedPreview) return;
+    setIsAssignmentSheetOpen(true);
+  }
+
   const [libraryPrompt, setLibraryPrompt] = useState('');
   const [plannedExitTicket, setPlannedExitTicket] =
     useState<ExitTicketPrefill | null>(null);
@@ -775,7 +793,7 @@ export default function AppAssignmentTypesIdRoute() {
     if (!incomingPrompt || teachingLockedPreview) return;
     setLibraryPrompt(incomingPrompt);
     setApHistoryEntry(null);
-    setIsAssignmentSheetOpen(true);
+    beginAssignmentCreation();
     setSearchParams(
       (previous) => {
         const next = new URLSearchParams(previous);
@@ -817,7 +835,7 @@ export default function AppAssignmentTypesIdRoute() {
     if (!incomingExitTicket || teachingLockedPreview) return;
     setPlannedExitTicket(incomingExitTicket);
     setApHistoryEntry(null);
-    setIsAssignmentSheetOpen(true);
+    beginAssignmentCreation();
   }, [
     incomingExitTicketMode,
     incomingExitTicket,
@@ -911,7 +929,7 @@ export default function AppAssignmentTypesIdRoute() {
                           onSelect={() => {
                             setLibraryPrompt('');
                             setApHistoryEntry(null);
-                            setIsAssignmentSheetOpen(true);
+                            beginAssignmentCreation();
                           }}
                         >
                           Assignment
@@ -983,6 +1001,7 @@ export default function AppAssignmentTypesIdRoute() {
                 plannedExitTicket={plannedExitTicket}
                 titleRequired={showThesisLibrary}
                 apHistoryEntry={apHistoryEntry}
+                teachingLocked={teachingLockedPreview}
               />
               {showThesisLibrary ? (
                 <ThesisPromptGenerator
@@ -990,10 +1009,11 @@ export default function AppAssignmentTypesIdRoute() {
                   onOpenChange={setIsPromptGeneratorOpen}
                   assignmentTypeId={data.assignmentType.id}
                   onUsePrompt={(promptBody) => {
+                    if (teachingLockedPreview) return;
                     setApHistoryEntry(null);
                     setLibraryPrompt(promptBody);
                     setIsPromptGeneratorOpen(false);
-                    setIsAssignmentSheetOpen(true);
+                    beginAssignmentCreation();
                   }}
                 />
               ) : showPromptsLibrary ? (
@@ -1002,10 +1022,11 @@ export default function AppAssignmentTypesIdRoute() {
                   onOpenChange={setIsPromptGeneratorOpen}
                   assignmentTypeId={data.assignmentType.id}
                   onUsePrompt={(prompt) => {
+                    if (teachingLockedPreview) return;
                     setApHistoryEntry(null);
                     setLibraryPrompt(prompt);
                     setIsPromptGeneratorOpen(false);
-                    setIsAssignmentSheetOpen(true);
+                    beginAssignmentCreation();
                   }}
                 />
               ) : null}
@@ -1095,10 +1116,12 @@ export default function AppAssignmentTypesIdRoute() {
               facets={data.promptLibrary.facets}
               optionCounts={data.promptLibrary.optionCounts}
               totalCount={data.promptLibrary.totalCount}
+              assignmentCreationLocked={teachingLockedPreview}
               onSelectPrompt={(prompt) => {
+                if (teachingLockedPreview) return;
                 setApHistoryEntry(null);
                 setLibraryPrompt(prompt);
-                setIsAssignmentSheetOpen(true);
+                beginAssignmentCreation();
               }}
             />
           </div>
@@ -1110,10 +1133,12 @@ export default function AppAssignmentTypesIdRoute() {
               facets={data.shortFormPromptLibrary.facets}
               optionCounts={data.shortFormPromptLibrary.optionCounts}
               totalCount={data.shortFormPromptLibrary.totalCount}
+              assignmentCreationLocked={teachingLockedPreview}
               onSelectPrompt={(prompt) => {
+                if (teachingLockedPreview) return;
                 setApHistoryEntry(null);
                 setLibraryPrompt(prompt);
-                setIsAssignmentSheetOpen(true);
+                beginAssignmentCreation();
               }}
             />
           </div>
@@ -1127,9 +1152,10 @@ export default function AppAssignmentTypesIdRoute() {
               totalCount={data.thesisPromptLibrary.totalCount}
               assignmentCreationLocked={teachingLockedPreview}
               onSelectPrompt={(prompt) => {
+                if (teachingLockedPreview) return;
                 setApHistoryEntry(null);
                 setLibraryPrompt(prompt);
-                setIsAssignmentSheetOpen(true);
+                beginAssignmentCreation();
               }}
             />
           </div>
@@ -1142,10 +1168,12 @@ export default function AppAssignmentTypesIdRoute() {
             <div className="pb-6">
               <ApPromptsLibrary
                 entries={data.apHistoryLibrary.entries}
+                assignmentCreationLocked={teachingLockedPreview}
                 onSelectEntry={(entry) => {
+                  if (teachingLockedPreview) return;
                   setApHistoryEntry(entry);
                   setLibraryPrompt('');
-                  setIsAssignmentSheetOpen(true);
+                  beginAssignmentCreation();
                 }}
               />
             </div>

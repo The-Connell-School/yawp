@@ -3,7 +3,6 @@ import {
   isValidElement,
   useEffect,
   useId,
-  useRef,
   useState,
   type ReactElement,
 } from 'react';
@@ -17,34 +16,37 @@ import {
 import { PREVIEW_ASSIGNMENT_CREATION_DISABLED_TOOLTIP } from '~/domain/free-tier/teaching-access-copy';
 import { cn } from '~/utils/misc';
 
-const TOUCH_TOOLTIP_MEDIA = '(max-width: 639px)';
+const COARSE_POINTER_MEDIA = '(pointer: coarse)';
 
-function readTouchTooltipViewport() {
+function readPreferTapTooltip() {
   if (typeof window === 'undefined') return false;
-  return window.matchMedia(TOUCH_TOOLTIP_MEDIA).matches;
+  return window.matchMedia(COARSE_POINTER_MEDIA).matches;
 }
 
-function useTouchTooltipViewport() {
-  const [isTouchLayout, setIsTouchLayout] = useState(readTouchTooltipViewport);
+function usePreferTapTooltip() {
+  const [preferTapTooltip, setPreferTapTooltip] = useState(readPreferTapTooltip);
   useEffect(() => {
-    const media = window.matchMedia(TOUCH_TOOLTIP_MEDIA);
-    const update = () => setIsTouchLayout(media.matches);
+    const media = window.matchMedia(COARSE_POINTER_MEDIA);
+    const update = () => setPreferTapTooltip(media.matches);
     update();
     media.addEventListener('change', update);
     return () => media.removeEventListener('change', update);
   }, []);
-  return isTouchLayout;
+  return preferTapTooltip;
 }
 
 /** Disabled, focusable control for assignment-creation actions in locked preview. */
 export function PreviewAssignmentCreationControl({
   children,
   tooltip = PREVIEW_ASSIGNMENT_CREATION_DISABLED_TOOLTIP,
+  fullWidth = false,
 }: {
   children: ReactElement;
   tooltip?: string;
+  /** Use for list/grid prompt cards so the wrapper spans the row width. */
+  fullWidth?: boolean;
 }) {
-  const isTouchLayout = useTouchTooltipViewport();
+  const preferTapTooltip = usePreferTapTooltip();
   const [touchTooltipOpen, setTouchTooltipOpen] = useState(false);
   const descriptionId = useId();
 
@@ -59,24 +61,26 @@ export function PreviewAssignmentCreationControl({
     disabled?: boolean;
     tabIndex?: number;
     'aria-disabled'?: boolean | 'true' | 'false';
+    'aria-describedby'?: string;
   }>;
 
   const lockedChild = cloneElement(child, {
     'aria-disabled': true as const,
+    'aria-describedby': descriptionId,
     disabled: undefined,
     tabIndex: child.props.tabIndex ?? 0,
     className: cn(child.props.className, 'pointer-events-auto opacity-60'),
     onClick: (event: React.MouseEvent) => {
       event.preventDefault();
       event.stopPropagation();
-      if (isTouchLayout) {
+      if (preferTapTooltip) {
         setTouchTooltipOpen(true);
       }
     },
     onKeyDown: (event: React.KeyboardEvent) => {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        if (isTouchLayout) {
+        if (preferTapTooltip) {
           setTouchTooltipOpen(true);
         }
       }
@@ -91,14 +95,17 @@ export function PreviewAssignmentCreationControl({
       </span>
       <TooltipProvider delayDuration={300}>
         <TooltipRoot
-          open={isTouchLayout ? touchTooltipOpen : undefined}
+          open={preferTapTooltip ? touchTooltipOpen : undefined}
           onOpenChange={(next) => {
-            if (isTouchLayout) setTouchTooltipOpen(next);
+            if (preferTapTooltip) setTouchTooltipOpen(next);
           }}
         >
           <TooltipTrigger asChild>
             <span
-              className="inline-flex max-w-full"
+              className={cn(
+                'max-w-full',
+                fullWidth ? 'block w-full' : 'inline-flex'
+              )}
               data-testid="preview-assignment-creation-disabled"
             >
               {lockedChild}

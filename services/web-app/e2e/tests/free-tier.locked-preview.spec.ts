@@ -392,6 +392,24 @@ for (const width of [390, 1440]) {
         name: /Creating assignments is turned off in this preview/,
       })
     ).toBeVisible();
+    await page.getByRole('button', { name: 'Prompt Library' }).click();
+    const classStarterPrompt = page
+      .locator('[data-tour="type-library"] button[type="button"]')
+      .first();
+    await classStarterPrompt.scrollIntoViewIfNeeded();
+    await classStarterPrompt.click({ force: true, timeout: 15_000 });
+    await page.waitForTimeout(350);
+    await expect(
+      page.getByRole('heading', { name: 'New assignment', exact: true })
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole('heading', { name: 'New Assignment', exact: true })
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole('tooltip', {
+        name: /Creating assignments is turned off in this preview/,
+      })
+    ).toBeVisible();
     await page.goto('/app');
     await expectFreeDashboardAssignmentTiles(page);
     await page

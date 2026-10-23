@@ -70,6 +70,7 @@ type Props = {
     essayType: string;
     sources?: ApHistorySourceCardData[];
   } | null;
+  teachingLocked?: boolean;
 };
 
 function classLabel(klass: TeacherClass) {
@@ -92,6 +93,7 @@ export function CreateAssignmentSheet({
   plannedExitTicket = null,
   titleRequired = false,
   apHistoryEntry = null,
+  teachingLocked = false,
 }: Props) {
   const fetcher = useFetcher<{ success?: boolean; message?: string }>();
   // Only a class the teacher came from is preselected; with several targets
@@ -122,6 +124,10 @@ export function CreateAssignmentSheet({
       onOpenChange(false);
     }
   }, [fetcher.state, fetcher.data, onOpenChange]);
+
+  if (teachingLocked) {
+    return null;
+  }
 
   if (!apHistoryEntry || assignmentTypeAvailability.unavailableReason) {
     return (
