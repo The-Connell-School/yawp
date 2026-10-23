@@ -33,5 +33,11 @@ describe('teacher invite copy helpers', () => {
         failedEmails: ['bad@example.test'],
       })
     ).toBe(formatFailedTeacherInviteEmailsForTextarea(['bad@example.test']));
+    expect(
+      formatFailedTeacherInviteEmailsForTextarea([
+        'jo@school.org',
+        'sam@school.org',
+      ])
+    ).toBe('jo@school.org, sam@school.org');
   });
 });

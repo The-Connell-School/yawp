@@ -20,7 +20,7 @@ export function teacherInvitePartialFailureMessage(
 export function formatFailedTeacherInviteEmailsForTextarea(
   failedEmails: string[]
 ): string {
-  return failedEmails.join(',\n');
+  return failedEmails.join(', ');
 }
 
 export function nextTeacherInviteEmailsAfterResult({

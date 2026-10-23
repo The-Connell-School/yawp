@@ -27,7 +27,7 @@ import { useTable } from '~/hooks/useTable';
 import { cn, getDomainUrl } from '~/utils/misc';
 import { Tooltip } from '~/components/ui/tooltip';
 import { sendEmail } from '~/utils/email.server';
-import { redactEmailForLog } from '~/utils/redact-email-for-log.server';
+import { emailDeliveryDiagnostic } from '~/utils/email-delivery-error.server';
 import {
   buildOrgTeacherInviteEmail,
   inviteeFirstName,
@@ -97,6 +97,17 @@ function getTeacherInheritedAssignmentTypeIds({
     return orgAssignmentTypeIds;
   }
   return Array.from(inheritedIds);
+}
+
+function orgTeacherInviteFailedSummary(error: unknown) {
+  const detail =
+    error && typeof error === 'object'
+      ? (error as { name?: unknown; code?: unknown })
+      : {};
+  return {
+    name: typeof detail.name === 'string' ? detail.name : 'UnknownError',
+    code: typeof detail.code === 'string' ? detail.code : null,
+  };
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -413,8 +424,8 @@ export async function action({ request }: ActionFunctionArgs) {
 
           if (emailResult.status === 'error') {
             console.error(
-              `Failed to send invitation to ${redactEmailForLog(email)}:`,
-              emailResult.error
+              'org_teacher_invite_delivery_failed',
+              emailDeliveryDiagnostic(emailResult.error, email)
             );
             failedEmails.push(email);
             continue;
@@ -423,8 +434,8 @@ export async function action({ request }: ActionFunctionArgs) {
           sentCount++;
         } catch (error) {
           console.error(
-            `Failed to send invitation to ${redactEmailForLog(email)}:`,
-            error
+            'org_teacher_invite_delivery_failed',
+            emailDeliveryDiagnostic(error, email)
           );
           failedEmails.push(email);
         }
@@ -435,7 +446,7 @@ export async function action({ request }: ActionFunctionArgs) {
         failedEmails,
       });
     } catch (error) {
-      console.error('Failed to process teacher invitations:', error);
+      console.error('org_teacher_invite_failed', orgTeacherInviteFailedSummary(error));
       return dataResponse(
         { error: TEACHER_INVITE_SERVER_ERROR_MESSAGE },
         { status: 500 }

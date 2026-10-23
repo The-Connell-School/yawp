@@ -758,7 +758,7 @@ jobs:
             app/routes/app.organization.teachers/route.invite-teachers.action.test.ts \
             app/routes/app.organization.teachers/teacher-invite-copy.test.ts \
             app/routes/app.organization.teachers/invite-teachers-sheet.test.tsx; do
-            bun test --max-concurrency=2 "$file"
+            CI=1 bun test --max-concurrency=2 "$file"
           done
 
   typecheck-web-app:

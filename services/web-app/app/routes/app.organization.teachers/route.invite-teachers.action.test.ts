@@ -202,4 +202,66 @@ describe('invite-teachers action', () => {
     expect(response.init?.status).toBe(500);
     expect(response.data.error).toBe(TEACHER_INVITE_SERVER_ERROR_MESSAGE);
   });
+
+  test('logs delivery failures without raw recipient addresses', async () => {
+    const secretEmail = 'leaky-recipient@example.test';
+    const logged: unknown[][] = [];
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => {
+      logged.push(args);
+      originalError(...args);
+    };
+
+    try {
+      sendEmail.mockResolvedValue({
+        status: 'error',
+        error: {
+          name: 'MessageRejected',
+          message: `Email address is not verified: ${secretEmail}`,
+          statusCode: 400,
+        },
+      });
+
+      await action({
+        request: inviteRequest(secretEmail),
+      } as never);
+
+      const serialized = JSON.stringify(logged);
+      expect(serialized).not.toContain(secretEmail);
+      expect(serialized).toContain('org_teacher_invite_delivery_failed');
+      expect(serialized).toContain('l***@e***');
+    } finally {
+      console.error = originalError;
+    }
+  });
+
+  test('logs invite setup failures without error messages', async () => {
+    const logged: unknown[][] = [];
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => {
+      logged.push(args);
+      originalError(...args);
+    };
+
+    try {
+      prisma.organization.findUnique.mockRejectedValue(
+        Object.assign(new Error('db connection leaked-secret-token'), {
+          name: 'PrismaClientKnownRequestError',
+          code: 'P1001',
+        })
+      );
+
+      await action({
+        request: inviteRequest('any@example.test'),
+      } as never);
+
+      const serialized = JSON.stringify(logged);
+      expect(serialized).toContain('org_teacher_invite_failed');
+      expect(serialized).toContain('PrismaClientKnownRequestError');
+      expect(serialized).toContain('P1001');
+      expect(serialized).not.toContain('leaked-secret-token');
+    } finally {
+      console.error = originalError;
+    }
+  });
 });
