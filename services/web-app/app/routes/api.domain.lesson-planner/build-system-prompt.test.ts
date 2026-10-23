@@ -1843,8 +1843,10 @@ describe('planner prompt — the Oct 21 review (standards, scope, checks, units)
     expect(prompt).toContain('offer the rest as suggestions');
   });
 
-  test('a sticky-note check is a check for understanding, not an exit ticket', () => {
-    expect(prompt).toContain('A sticky-note check is a check for understanding, not an exit ticket');
+  test("a quick visual check is a check for understanding; written work is a Yawp! assignment (Brian's run 5, item 6)", () => {
+    expect(prompt).toContain('is a check for understanding, not an exit ticket');
+    expect(prompt).toContain('Anything students write is a Yawp! assignment by default');
+    expect(prompt).toContain('Never set written work on a sticky note, an index card, a scrap of paper');
   });
 
   test('every day of a unit map says what students read, and where', () => {

@@ -5,9 +5,13 @@ import {
   findStep,
   quickCommand,
   readCommandResult,
+  STACK_COMMAND_SYSTEM,
   type CommandStep,
 } from './stack-command';
 import { readLessonMaterials } from './lesson-material';
+import { readPlannedExitTickets } from './exit-ticket-block';
+import { readDailyPagesExercises } from './daily-pages-block';
+import { stackCreateLink } from './stack-create-link';
 
 const STEPS: CommandStep[] = [
   { id: 'starter', title: 'Four minutes of writing, then a share', type: 'class_starter', minutes: 5, isWriting: true },
@@ -79,4 +83,45 @@ test('a proposed piece travels as a material block the stack can file', () => {
   const block = fencePiece({ title: 'Turn and talk', minutes: 5, type: 'activity', text: 'Pairs pick one item.' });
   const { materials } = readLessonMaterials(block);
   expect(materials[0]).toMatchObject({ title: 'Turn and talk', minutes: 5, stepType: 'activity', audience: 'teacher' });
+});
+
+describe("writing from the stack chat is a Yawp! assignment (Brian's run 5, item 6)", () => {
+  test('an exit ticket files as a Yawp! exit ticket, with its title, minutes and question', () => {
+    const block = fencePiece({
+      title: 'What the conch means',
+      minutes: 5,
+      type: 'closing',
+      text: 'In two sentences: what does the conch stand for by the end of chapter 2?',
+      writing: 'exit_ticket',
+    });
+    const ticket = readPlannedExitTickets(block).tickets[0]!;
+    expect(ticket.minutes).toBe(5);
+    expect(ticket.prompt).toContain('what does the conch stand for');
+    const link = stackCreateLink({
+      kind: 'exit-ticket',
+      content: ticket.prompt,
+      blockKey: 'ticket',
+      sourceContent: block,
+      typeIds: { dailyPages: 'dp', classStarter: 'cs', exitTicket: 'et' },
+      conversationId: 'plan-1',
+    });
+    expect(link?.label).toBe('Create this exit ticket in Yawp!');
+  });
+
+  test('a reflection or quick write files as a class starter; Daily Pages as Daily Pages', () => {
+    const quick = readDailyPagesExercises(
+      fencePiece({ title: 'Pre-write', minutes: 4, type: 'activity', text: 'Who should lead, and why?', writing: 'quick_write' })
+    ).exercises[0]!;
+    expect(quick.kind).toBe('class-starter');
+    expect(quick.minutes).toBe(4);
+    const pages = readDailyPagesExercises(
+      fencePiece({ title: 'Daily Pages', minutes: 10, type: 'daily_pages', text: 'Write about an island of your own.', writing: 'daily_pages' })
+    ).exercises[0]!;
+    expect(pages.kind).toBe('daily-pages');
+  });
+
+  test('the stack chat is told so, and never to use sticky notes or scrap paper', () => {
+    expect(STACK_COMMAND_SYSTEM).toContain('created as a Yawp! assignment');
+    expect(STACK_COMMAND_SYSTEM).toContain('Never set students writing on a sticky note');
+  });
 });

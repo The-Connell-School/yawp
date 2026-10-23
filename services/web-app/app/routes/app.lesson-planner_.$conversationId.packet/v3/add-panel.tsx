@@ -12,6 +12,7 @@ import type { SuggestedPiece } from '~/domain/lesson-planner/stack-suggestions';
 import { stackTiming, type StackTiming, type TimedStep } from '~/domain/lesson-planner/stack-timing';
 import { DEFAULT_STEP_MINUTES } from '~/domain/lesson-planner/step-types';
 import { cn } from '~/utils/misc';
+import { MarkdownContent } from '~/components/ai-chat/assistant-markdown';
 import { HEADING_FONT } from './theme';
 import { PIECE_DRAG_TYPE, TypeChip, WritingBadge } from './run-of-show';
 
@@ -50,6 +51,7 @@ function PieceCard({
   onDragEnd: () => void;
   busy: boolean;
 }) {
+  const [previewing, setPreviewing] = useState(false);
   return (
     <article
       data-testid="suggestion-card"
@@ -75,11 +77,28 @@ function PieceCard({
             </span>
           </div>
           <p className="mt-1 text-sm font-semibold">{piece.title}</p>
-          {piece.line ? <p className="mt-0.5 text-xs text-[var(--sv-muted)]">{piece.line}</p> : null}
+          {previewing ? (
+            <div data-testid="suggestion-preview" className="mt-1 max-h-72 overflow-y-auto rounded-lg bg-[#FBF8F3] p-2 text-xs">
+              <MarkdownContent content={piece.content || piece.line} />
+            </div>
+          ) : piece.line ? (
+            <p className="mt-0.5 text-xs text-[var(--sv-muted)]">{piece.line}</p>
+          ) : null}
           <div className="mt-2 flex items-center justify-between gap-2">
             <span data-testid="suggestion-impact" className="text-[11px] font-semibold text-[var(--sv-primary)]">
               {impact}
             </span>
+            <span className="flex items-center gap-1.5">
+            {/* Read the whole piece first (Brian's run 5, item 5). */}
+            <button
+              type="button"
+              data-testid="suggestion-preview-toggle"
+              aria-expanded={previewing}
+              onClick={() => setPreviewing((open) => !open)}
+              className="rounded-full border border-[var(--sv-line)] px-3 py-1 text-xs font-semibold transition hover:bg-[#F1EBE2]"
+            >
+              {previewing ? 'Hide' : 'Preview'}
+            </button>
             <button
               type="button"
               disabled={busy}
@@ -88,6 +107,7 @@ function PieceCard({
             >
               <Plus size={12} /> Add
             </button>
+            </span>
           </div>
         </div>
       </div>

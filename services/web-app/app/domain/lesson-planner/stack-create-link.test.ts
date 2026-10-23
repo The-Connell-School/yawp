@@ -149,3 +149,13 @@ describe("lessonBackHref (Brian's run 4, item 4)", () => {
     expect(lessonBackHref('plan-1', null)).toBe('/app/lesson-planner?c=plan-1');
   });
 });
+
+describe("reflections and pre-writes can be made in Yawp! (Brian's run 5, item 6)", () => {
+  const typeIds = { dailyPages: 'dp', classStarter: 'cs', exitTicket: 'et' };
+  test('a pre-write or a written reflection offers a quick write', () => {
+    for (const content of ['Pre-write: who should lead the boys, and why?', 'A written reflection: what changed in Ralph today?']) {
+      const link = stackCreateLink({ kind: 'step', title: 'Wrap-up', content, blockKey: 'st', sourceContent: null, typeIds, conversationId: 'plan-1' });
+      expect(link?.label).toBe('Create this quick write in Yawp!');
+    }
+  });
+});

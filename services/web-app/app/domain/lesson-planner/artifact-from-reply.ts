@@ -61,8 +61,9 @@ export function exitTicketAsMaterial(
   ticket: PlannedExitTicket,
   key: string = EXIT_TICKET_BLOCK_KEY
 ): LessonMaterial {
-  const title =
-    ticket.config.mode === 'specific' && ticket.config.topic.trim()
+  const title = ticket.title
+    ? `Exit ticket: ${ticket.title}`
+    : ticket.config.mode === 'specific' && ticket.config.topic.trim()
       ? `Exit ticket: ${ticket.config.topic}`
       : 'Exit ticket';
   return {
@@ -72,6 +73,7 @@ export function exitTicketAsMaterial(
     title,
     audience: 'student',
     content: ticket.prompt,
+    minutes: ticket.minutes ?? null,
   };
 }
 

@@ -36,6 +36,8 @@ export const PROPOSED_PIECE = z.object({
   minutes: z.number().int().min(1).max(120),
   type: z.enum(STEP_TYPES),
   text: z.string().min(1).max(4000),
+  /** What students write, when they write: it files as that Yawp! assignment. */
+  writing: z.enum(['exit_ticket', 'class_starter', 'daily_pages', 'quick_write']).optional(),
 });
 
 export type ProposedPiece = z.infer<typeof PROPOSED_PIECE>;
@@ -155,6 +157,7 @@ export const STACK_COMMAND_SYSTEM = [
   '  {"op":"remove","stepId":"…"}',
   '- Change only what the teacher asked for. Never touch another step. Never cut or shorten a writing step unless the teacher names it.',
   '- pieces: when the teacher asks for something new ("a quick pair activity after the read aloud"), one to three new pieces, each {"title","minutes","type","text"} with type one of class_starter, activity, context, read_aloud, daily_pages, thesis_essay, closing. Do not add them to ops; the teacher adds the one they want.',
+  '- writing: on any piece where students write (an exit ticket, a class starter, Daily Pages, a reflection, a pre-write, a quick write), add "writing": one of exit_ticket, class_starter, daily_pages, quick_write, and make "text" exactly what students are asked, nothing else. It is created as a Yawp! assignment the teacher sends to the class. Never set students writing on a sticky note, an index card or scrap paper.',
   '- toPlanner: true, with no ops and no pieces, when the line is a question or a bigger change that belongs in the planner chat (why something works, rethink the lesson). Then reply "That’s one for the planner."',
   '- Write the product name as Yawp!. Never write a library prompt id.',
 ].join('\n');
@@ -203,6 +206,17 @@ export function readCommandResult(text: string): CommandResult | null {
 
 /** A proposed piece as the stack-surface reply carries it: a material block. */
 export function fencePiece(piece: ProposedPiece): string {
+  const oneLine = (text: string) => text.replace(/\s+/g, ' ').trim();
+  const head = [`title: ${oneLine(piece.title)}`, `minutes: ${piece.minutes}`];
+  // Writing files as the Yawp! assignment it is (Brian's run 5, item 6),
+  // with its Create button, never as a note.
+  if (piece.writing === 'exit_ticket') {
+    return ['```yawp-exit-ticket', ...head, 'mode: basic', 'prompt: custom', `promptText: ${oneLine(piece.text)}`, '```'].join('\n');
+  }
+  if (piece.writing) {
+    const kind = piece.writing === 'daily_pages' ? 'daily-pages' : 'class-starter';
+    return ['```yawp-daily-pages', `kind: ${kind}`, ...head, piece.text.trim(), '```'].join('\n');
+  }
   return [
     '```yawp-material',
     'kind: notes',

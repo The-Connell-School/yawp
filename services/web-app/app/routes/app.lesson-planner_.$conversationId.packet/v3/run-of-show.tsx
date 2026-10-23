@@ -53,6 +53,74 @@ export function WritingBadge() {
   );
 }
 
+/**
+ * A step's minutes: tap "5 min" and type 50 (Brian's run 5, item 4), instead
+ * of tapping + forty-five times. Enter or leaving the field saves; Esc
+ * cancels. Kept between 1 and 120.
+ */
+function MinutesField({
+  minutes,
+  suggested,
+  title,
+  disabled,
+  onSet,
+}: {
+  minutes: number;
+  suggested: boolean;
+  title: string;
+  disabled: boolean;
+  onSet: (minutes: number) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(String(minutes));
+  const save = () => {
+    setEditing(false);
+    const next = Math.round(Number(draft));
+    if (Number.isFinite(next) && next >= 1 && next !== minutes) onSet(Math.min(120, next));
+  };
+  if (editing) {
+    return (
+      <input
+        type="number"
+        inputMode="numeric"
+        min={1}
+        max={120}
+        autoFocus
+        data-testid="step-minutes-input"
+        aria-label={`Minutes for ${title}`}
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onFocus={(event) => event.target.select()}
+        onBlur={save}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') save();
+          if (event.key === 'Escape') setEditing(false);
+        }}
+        className="w-14 rounded-md border border-[var(--sv-line)] bg-white px-1 py-0.5 text-center text-sm font-semibold tabular-nums"
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      data-testid="step-minutes"
+      disabled={disabled}
+      onClick={() => {
+        setDraft(String(minutes));
+        setEditing(true);
+      }}
+      aria-label={`${minutes} minutes for ${title}: change`}
+      title={suggested ? 'Suggested time · tap to type the minutes' : 'Tap to type the minutes'}
+      className={cn(
+        'w-14 rounded-md text-center text-sm font-semibold tabular-nums underline decoration-dotted underline-offset-4 transition hover:bg-[#F1EBE2] disabled:no-underline',
+        suggested && 'text-[var(--sv-muted)]'
+      )}
+    >
+      {minutes} min
+    </button>
+  );
+}
+
 function InsertPoint({
   active,
   dragging,
@@ -308,13 +376,13 @@ export function RunOfShow({
                     >
                       <Minus size={12} />
                     </button>
-                    <span
-                      data-testid="step-minutes"
-                      className={cn('w-12 text-center text-sm font-semibold tabular-nums', block?.suggested && 'text-[var(--sv-muted)]')}
-                      title={block?.suggested ? 'Suggested time' : undefined}
-                    >
-                      {minutes} min
-                    </span>
+                    <MinutesField
+                      minutes={minutes}
+                      suggested={Boolean(block?.suggested)}
+                      title={step.title}
+                      disabled={!editable || busy}
+                      onSet={(next) => onMinutes(step, next)}
+                    />
                     <button
                       type="button"
                       aria-label={`More minutes for ${step.title}`}

@@ -56,8 +56,9 @@ export function proseWritingTask(
   if (/\bexit (?:ticket|slip)\b/i.test(title) && text.trim()) {
     return { kind: 'exit-ticket', prompt: firstLine(text) };
   }
+  // Brian's run 5 (item 6): reflections and pre-writes are writing too.
   const writes =
-    /\b(?:quick[- ]?write|free[- ]?write|journal|students write|write for (?:\d+|one|two|three|four|five|a few) min)/i;
+    /\b(?:quick[- ]?write|free[- ]?write|pre[- ]?write|journal|(?:written|writing a) reflection|reflection (?:writing|paragraph|prompt)|written response|students write|write for (?:\d+|one|two|three|four|five|a few) min)/i;
   if (writes.test(title) || writes.test(text)) {
     const quoted = /["“]([^"”]{8,300})["”]/.exec(text)?.[1];
     return { kind: 'quick-write', prompt: (quoted ?? firstLine(text)).trim() };

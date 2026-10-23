@@ -39,6 +39,23 @@ async function seedConversation(e2eContext: Ctx, turns: Turn[], title = 'Lord of
   }
 }
 
+/** Day one, every piece added through the real "Add everything" path. */
+async function seedDayOneStack(page: import('@playwright/test').Page, e2eContext: Ctx) {
+  const seeded = await seedConversation(
+    e2eContext,
+    [
+      { role: 'user', content: 'Day one of The Things They Carried, English 10, 50 minutes.' },
+      { role: 'assistant', content: DAY_ONE_REPLY },
+    ],
+    'Day One'
+  );
+  const response = await page.request.post('/api/domain/lesson-planner/packet', {
+    form: { intent: 'keep-all', conversationId: seeded.conversationId, messageId: seeded.assistantIds[0]! },
+  });
+  expect(response.ok()).toBe(true);
+  return seeded;
+}
+
 async function stackOn() {
   for (const flag of FLAGS) await setLessonPlannerReviewFlag(flag, true);
 }
@@ -142,6 +159,67 @@ test.describe("Lesson Planner — Brian's fifth run", () => {
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
     await expect(page.getByTestId('day-lessons')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Add everything to the stack' })).toBeVisible();
+  });
+
+  test('item 4: tap the minutes and type them', async ({ page, signIn, e2eContext }) => {
+    await stackOn();
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    const { conversationId } = await seedDayOneStack(page, e2eContext);
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+    const hook = page.getByTestId('run-card').nth(1);
+    await expect(hook.getByTestId('step-minutes')).toHaveText('15 min');
+    await hook.getByTestId('step-minutes').click();
+    const input = hook.getByTestId('step-minutes-input');
+    await input.fill('40');
+    const saved = page.waitForResponse((response) => response.url().includes('/api/domain/lesson-planner/stack') && response.request().method() === 'POST');
+    await input.press('Enter');
+    expect((await saved).ok()).toBe(true);
+    await expect(hook.getByTestId('step-minutes')).toHaveText('40 min');
+    await expect(page.getByTestId('time-total')).toHaveText('75');
+    // It saved.
+    await page.reload();
+    await expect(page.getByTestId('run-card').nth(1).getByTestId('step-minutes')).toHaveText('40 min');
+    // Esc leaves it as it was.
+    await page.getByTestId('run-card').nth(1).getByTestId('step-minutes').click();
+    await page.getByTestId('run-card').nth(1).getByTestId('step-minutes-input').fill('3');
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('run-card').nth(1).getByTestId('step-minutes')).toHaveText('40 min');
+  });
+
+  test('item 5: read a piece in full before adding it', async ({ page, signIn, e2eContext }) => {
+    await stackOn();
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    const { conversationId } = await seedDayOneStack(page, e2eContext);
+    const prisma = createE2EPrismaClient();
+    try {
+      await prisma.lessonPlanMessage.create({
+        data: {
+          conversationId,
+          role: 'assistant',
+          content: [
+            'One more you could use.',
+            '',
+            '```yawp-daily-pages',
+            'kind: class-starter',
+            'title: The heaviest thing',
+            'Write about something heavy you once carried, real or not. Then say who else carried it with you, and what it cost them.',
+            '```',
+          ].join('\n'),
+          createdAt: new Date(Date.UTC(2026, 9, 23, 11)),
+        },
+      });
+    } finally {
+      await prisma.$disconnect();
+    }
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+    await page.getByTestId('run-card').nth(1).hover();
+    await page.getByRole('button', { name: /Add a piece after Hook activity/ }).click();
+    const card = page.getByTestId('add-panel').getByTestId('suggestion-card').filter({ hasText: 'The heaviest thing' });
+    await expect(card.getByTestId('suggestion-preview')).toHaveCount(0);
+    await card.getByTestId('suggestion-preview-toggle').click();
+    await expect(card.getByTestId('suggestion-preview')).toContainText('who else carried it with you, and what it cost them');
+    await card.getByTestId('suggestion-preview-toggle').click();
+    await expect(card.getByTestId('suggestion-preview')).toHaveCount(0);
   });
 });
 

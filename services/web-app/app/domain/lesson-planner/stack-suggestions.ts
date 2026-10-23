@@ -22,6 +22,8 @@ export type SuggestedPiece = {
   isWriting: boolean;
   /** One line on what it is. */
   line: string;
+  /** The whole piece, to read before adding it (Brian's run 5, item 5). */
+  content: string;
 };
 
 const MINUTES_IN_TITLE = /\s*\(\s*\d+[^)]*min[^)]*\)\s*$/i;
@@ -72,6 +74,7 @@ export function suggestedPieces({
         minutes: material.minutes ?? null,
         isWriting: isWritingStep({ kind: material.kind, stepType: type, title: material.title, content: material.content }),
         line: firstSentence(material.content),
+        content: material.content.replace(/```[\s\S]*?```/g, '').trim(),
       });
     }
   }
