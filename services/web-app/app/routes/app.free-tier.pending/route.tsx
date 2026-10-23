@@ -46,7 +46,6 @@ import {
   FreeTierPerson,
 } from '../free-tier/FreeTierAuthCard';
 import { freeTierConfigErrorMessage } from '~/domain/free-tier/free-tier-config.server';
-import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
 import { Button } from '~/components/ui/button';
 import { yawpE2eForwardShouldFail } from '~/domain/free-tier/e2e-stub.server';
@@ -176,7 +175,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     showExploreClassroom: await userHasPendingFreeTierTeachingLock(userId),
     approvalV2: app ? await getApprovalWaitingDetails(app) : null,
     approvalEmailFrom: getTransactionalEmailFrom(),
-    freeTierEnabled: await isFreeTierEnabled(),
     teacherDenied,
     askOpen,
   };
@@ -350,7 +348,6 @@ export default function FreeTierPendingRoute() {
     showExploreClassroom,
     approvalV2,
     approvalEmailFrom,
-    freeTierEnabled,
     teacherDenied,
     askOpen,
   } = useLoaderData<typeof loader>();
