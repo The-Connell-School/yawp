@@ -10,6 +10,9 @@
     "packages/*",
     "services/*"
   ],
+  "overrides": {
+    "axios": "^1.20.0"
+  },
   "scripts": {
     "typecheck": "bun web-app:typecheck",
     "export-env": "export $(grep -v '^#' .env | xargs) ",
