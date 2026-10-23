@@ -6,7 +6,10 @@
  * (a sub's plan is the rewrite, made for them).
  */
 import { prisma } from '~/utils/db.server';
-import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
+import {
+  getLessonPlannerReviewFlags,
+  isLessonPlannerEnabled,
+} from '~/domain/feature-flags/feature-flags.server';
 import { buildLessonPacket } from './lesson-packet';
 import { findShareLink } from './lesson-share.server';
 import { parseShareItems, type ShareAudience } from './lesson-share';
@@ -71,6 +74,7 @@ export async function loadSharedLesson(token: string): Promise<SharedLesson | nu
     },
   });
   if (!conversation) return null;
+  if (!(await isLessonPlannerEnabled(conversation.organizationId))) return null;
 
   const ordered = orderStackEntries(
     conversation.materials.map((material) => ({

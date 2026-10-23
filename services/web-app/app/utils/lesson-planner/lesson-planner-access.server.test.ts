@@ -6,14 +6,22 @@ const requireMembership = mock();
 // The flag is read from its real Setting row, so this suite never replaces
 // the feature-flag module for the suites that share its process.
 const findUnique = mock();
-const flagValue = (value: string | null) =>
+const findMany = mock();
+const flagValue = (value: string | null) => {
+  const freeTierRow = { name: 'feature_flag.free_tier', value: '{"mode":"everyone","orgIds":[]}' };
+  findMany.mockImplementation(({ where }: { where: { name: { in: string[] } } }) =>
+    Promise.resolve(
+      where.name.in.includes('feature_flag.free_tier') ? [freeTierRow] : []
+    )
+  );
   findUnique.mockImplementation(({ where }: { where: { name: string } }) => {
     const resolved = value === null ? null : { value };
     if (where.name === 'feature_flag.free_tier') {
-      return Promise.resolve(resolved ?? { value: '{"mode":"everyone","orgIds":[]}' });
+      return Promise.resolve(resolved ?? { value: freeTierRow.value });
     }
     return Promise.resolve(resolved);
   });
+};
 
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
@@ -21,7 +29,7 @@ mock.module('~/utils/auth.server', () => ({
   requireMutableRequest: mock(),
 }));
 mock.module('~/utils/db.server', () => ({
-  prisma: { setting: { findUnique } },
+  prisma: { setting: { findUnique, findMany } },
 }));
 
 const { getLessonPlannerAccess, requireLessonPlannerAccess } =
@@ -45,6 +53,7 @@ beforeEach(() => {
   requireUserId.mockReset().mockResolvedValue('user-1');
   requireMembership.mockReset().mockResolvedValue(membership('TEACHER'));
   findUnique.mockReset();
+  findMany.mockReset();
   flagValue('true');
 });
 
