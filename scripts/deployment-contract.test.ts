@@ -1727,6 +1727,20 @@ describe('PR preview deployment contract', () => {
 });
 
 describe('demo environment deployment contract', () => {
+  test('demo auto-ships after production deploy succeeds on the default branch', () => {
+    const workflow = readRepoFile('.github/workflows/demo-environment.yml');
+
+    expect(workflow).toContain('workflow_run:');
+    expect(workflow).toContain("'🚀 Deploy'");
+    expect(workflow).toContain('github.event.workflow_run.head_sha');
+    expect(workflow).toContain('github.event.workflow_run.conclusion');
+    expect(workflow).toContain('cancel-in-progress: true');
+    expect(workflow).toContain('/api/version');
+    expect(workflow).toContain("inputs.reset_data == true &&");
+    expect(workflow).toContain("'true' || 'false'");
+    expect(workflow).toContain('demo_git_sha');
+  });
+
   test('demo images build on GitHub-hosted runners with on-host build fallback', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');
     const deployScript = readRepoFile('scripts/preview/deploy.sh');

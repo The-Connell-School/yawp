@@ -3,8 +3,8 @@ name: Demo environment
 # The demo box at demo.yawp.school. Brian demos from this, so it is the one environment
 # that must not surprise anyone:
 #
-#   - It ships ONLY when someone asks. No push trigger, no schedule. A merge to main does
-#     not change what a client sees mid-demo.
+#   - It auto-ships after a successful production deploy of the default branch (same commit
+#     SHA as Deploy). Manual workflow_dispatch remains for rollbacks and optional reseeds.
 #   - It runs the PRODUCTION build path, not the fast dev-server path previews use. Slower
 #     to deploy, but what Brian shows is what production does.
 #   - It lives on its own host, so a preview host wedging cannot take the demo down with it.
@@ -13,6 +13,11 @@ name: Demo environment
 # Rolling back is the same operation as shipping: dispatch again with an older ref.
 
 on:
+  workflow_run:
+    workflows:
+      - '🚀 Deploy'
+    types:
+      - completed
   workflow_dispatch:
     inputs:
       ref:
@@ -37,7 +42,7 @@ on:
 
 concurrency:
   group: demo-environment
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -45,16 +50,25 @@ permissions:
 
 jobs:
   build-demo-images:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == github.event.repository.default_branch)
     runs-on: ubuntu-22.04
     environment: demo
+    env:
+      DEMO_APP_REF: >-
+        ${{ github.event_name == 'workflow_dispatch' && inputs.ref ||
+            github.event.workflow_run.head_sha }}
     outputs:
       demo_web_image: ${{ steps.images-ecr.outputs.web_image || steps.images-fallback.outputs.web_image }}
       demo_toolbox_image: ${{ steps.images-ecr.outputs.toolbox_image || steps.images-fallback.outputs.toolbox_image }}
+      demo_git_sha: ${{ steps.shipping.outputs.full_sha }}
     steps:
       - name: Checkout the requested application ref
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ env.DEMO_APP_REF }}
           path: demo-source
           persist-credentials: false
 
@@ -148,10 +162,15 @@ jobs:
           cache-to: type=gha,mode=max
 
   demo-deploy:
+    if: >-
+      !cancelled() && needs.build-demo-images.result == 'success'
     runs-on: ubuntu-22.04
     needs: build-demo-images
     environment: demo
     env:
+      DEMO_APP_REF: >-
+        ${{ github.event_name == 'workflow_dispatch' && inputs.ref ||
+            github.event.workflow_run.head_sha }}
       PREVIEW_SLUG: demo
       PREVIEW_DOMAIN: ${{ vars.DEMO_DOMAIN || 'yawp.school' }}
       PREVIEW_HOST: ${{ vars.DEMO_HOST }}
@@ -185,11 +204,17 @@ jobs:
       PREVIEW_POSTGRES_ADMIN_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
       PREVIEW_LOGIN_EMAIL: ${{ secrets.DEMO_LOGIN_EMAIL || secrets.PREVIEW_LOGIN_EMAIL }}
       PREVIEW_LOGIN_PASSWORD: ${{ secrets.DEMO_LOGIN_PASSWORD || secrets.PREVIEW_LOGIN_PASSWORD }}
-      DEMO_RESET_DATA: ${{ inputs.reset_data }}
-      DEMO_RESET_CONFIRMATION: ${{ inputs.reset_confirmation }}
-      DEMO_BACKUP_RETENTION: ${{ inputs.backup_retention }}
+      DEMO_RESET_DATA: >-
+        ${{ github.event_name == 'workflow_dispatch' && inputs.reset_data == true &&
+            'true' || 'false' }}
+      DEMO_RESET_CONFIRMATION: >-
+        ${{ github.event_name == 'workflow_dispatch' && inputs.reset_confirmation || '' }}
+      DEMO_BACKUP_RETENTION: >-
+        ${{ github.event_name == 'workflow_dispatch' && inputs.backup_retention || '14' }}
       DEMO_BACKUP_S3_URI: ${{ vars.DEMO_BACKUP_S3_URI || 's3://yawp-preview-videos/demo-backups' }}
-      DEMO_REQUESTED_REF: ${{ inputs.ref }}
+      DEMO_REQUESTED_REF: >-
+        ${{ github.event_name == 'workflow_dispatch' && inputs.ref ||
+            github.event.workflow_run.head_sha }}
       DEMO_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
     steps:
       - name: Mask optional Google OAuth credentials
@@ -264,7 +289,7 @@ jobs:
       - name: Checkout the requested application ref
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ env.DEMO_APP_REF }}
           path: demo-source
           persist-credentials: false
 
@@ -274,6 +299,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "full_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "subject=$(git log -1 --pretty=%s)" >> "$GITHUB_OUTPUT"
 
       - name: Prepare SSH
@@ -432,6 +458,14 @@ jobs:
           access_code="${{ steps.deploy.outputs.access_code }}"
           health="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' "$url/api/healthcheck")"
           test "$health" = "200" || { echo "Demo healthcheck returned HTTP $health"; exit 1; }
+
+          expected_commit='${{ needs.build-demo-images.outputs.demo_git_sha }}'
+          version_body="$(curl -sk -m 15 "$url/api/version")"
+          reported_commit="$(jq -er '.commit' <<<"$version_body")"
+          test "$reported_commit" = "$expected_commit" || {
+            echo "/api/version commit=$reported_commit expected=$expected_commit" >&2
+            exit 1
+          }
 
           public_home="$(curl -skL -m 15 "$url")"
           grep -q 'data-preview-access-screen' <<<"$public_home" && {
