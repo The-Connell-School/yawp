@@ -8,7 +8,7 @@
   }
 }
 
-@media (min-width: 1280px) {
+@media (min-width: 1280px) and (max-width: 1439px) {
   :root {
     --yawp-dev-panel-width: 400px;
   }
