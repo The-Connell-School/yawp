@@ -269,6 +269,44 @@ local(
 );
 
 local(
+  'pending org owner ignores forged organization-classes-table sort cookies',
+  async () => {
+    const forgedSortCases = [
+      { sort: ['code'] },
+      { sort: 'studentJoinToken' },
+      { sort: 'nope' },
+      { sort: 'code', direction: 'upward' },
+    ] as const;
+
+    for (const forged of forgedSortCases) {
+      const tableCookie = await organizationClassesTableCookie.serialize({
+        sort: forged.sort as unknown as 'code',
+        direction: ('direction' in forged ? forged.direction : 'asc') as 'asc',
+        skip: 0,
+        take: 10,
+      });
+      const { request, sessionId } = await authedRequest(
+        '/app/organization/classes',
+        tableCookie
+      );
+      try {
+        const result = await orgClassesLoader({
+          request,
+          params: {},
+          context: {} as never,
+        } as never);
+        const sortData = loaderPayload(result) as {
+          classes: Array<{ id: string }>;
+        };
+        expect(sortData.classes[0]?.id).toBe(sortOlderClassId);
+      } finally {
+        await prisma.session.delete({ where: { id: sessionId } });
+      }
+    }
+  }
+);
+
+local(
   'pending org owner cannot search or sort organization classes by code',
   async () => {
     const searchCookie = await organizationClassesTableCookie.serialize({

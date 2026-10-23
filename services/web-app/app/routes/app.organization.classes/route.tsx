@@ -187,8 +187,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const hideTeachingSecrets = await shouldHideFreeTierTeachingSecrets(user.id);
   const url = new URL(request.url);
   const q = url.searchParams.get('q');
-  const { sort, direction, skip, take } =
-    await getOrganizationClassesTableCookie(request);
+  const tableFilters = await getOrganizationClassesTableCookie(request);
+  const { sort, direction, skip, take } = tableFilters;
 
   const { orClause, orderByField } = organizationClassListQueryParts({
     q,
