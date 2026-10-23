@@ -294,6 +294,8 @@ export async function sendFreeTierAdminReminderEmail(args: {
   personalNote?: string | null;
   approveUrl: string;
   notRightPersonUrl: string;
+  forwardedByAdminName?: string | null;
+  routedByTeacher?: boolean;
 }) {
   return sendFreeTierAdminApprovalEmail({
     ...args,
