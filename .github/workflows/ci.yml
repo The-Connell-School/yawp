@@ -29,7 +29,7 @@ jobs:
       prisma: ${{ steps.filter.outputs.prisma }}
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: 🔍 Paths filter
         id: filter
         uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4
@@ -71,7 +71,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: ⏭️ Skip (no preview tooling changes)
         if: ${{ needs.paths.outputs.preview_tooling != 'true' }}
         run: echo "No scripts/preview changes; skipping heavy steps."
@@ -129,7 +129,7 @@ jobs:
           --health-retries=10
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: ⏭️ Skip (no Prisma or core/code changes)
         if: ${{ !(needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true') }}
         run: echo "No packages/prisma changes; skipping heavy steps."
@@ -755,7 +755,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: ⏭️ Skip (no code changes)
         if: ${{ needs.paths.outputs.code != 'true' }}
         run: echo "No code changes; skipping heavy steps."
@@ -970,7 +970,7 @@ jobs:
           --health-retries=10
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: ⎔ Setup node
         uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
@@ -1092,7 +1092,7 @@ jobs:
           --health-retries=10
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: ⎔ Setup node
         uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
@@ -1211,7 +1211,7 @@ jobs:
           --health-retries=10
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: ⎔ Setup node
         uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
@@ -1413,7 +1413,7 @@ jobs:
           --health-retries=10
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: ⎔ Setup node
         uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
@@ -1561,7 +1561,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: 📥 Setup Bun
         uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1.2.2
