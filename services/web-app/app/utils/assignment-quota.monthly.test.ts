@@ -3,6 +3,9 @@ let enabled = true;
 mock.module('~/domain/free-tier/monthly-policy.server', () => ({
   monthlyFreeTierPolicy: async () => ({ enabled }),
 }));
+mock.module('~/domain/free-tier/locked-preview.server', () => ({
+  assertOrganizationTeachingApproved: async () => {},
+}));
 const {
   assertCanCreateAssignmentOfKindInTransaction,
   assertCanRetypeAssignmentOfKindInTransaction,

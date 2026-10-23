@@ -1,6 +1,5 @@
 import { mock } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router';
 import type { ReactNode } from 'react';
 
 /** SSR tests that render AuthPageShell need router + root loader hooks mocked. */
@@ -26,6 +25,8 @@ export function renderWithCardPageChrome(
   node: ReactNode,
   location = '/app/free-tier/pending'
 ) {
+  // Resolve from the live module so hook mocks in react-router share Router context.
+  const { StaticRouter } = require('react-router') as typeof import('react-router');
   return renderToStaticMarkup(
     <StaticRouter location={location}>{node}</StaticRouter>
   );

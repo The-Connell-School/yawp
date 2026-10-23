@@ -1,4 +1,8 @@
-import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
+import { describe, expect, mock, test, beforeEach, afterEach } from 'bun:test';
+
+mock.module('~/domain/feature-flags/feature-flags.server', () => ({
+  isFreeTierEnabled: async () => process.env.YAWP_ENVIRONMENT === 'preview',
+}));
 
 const originalEnv = {
   YAWP_ENVIRONMENT: process.env.YAWP_ENVIRONMENT,

@@ -4,6 +4,7 @@ import {
   mockCardPageChromeForSsr,
   renderWithCardPageChrome,
 } from '~/components/card-page-chrome.ssr-test-setup';
+import { featureFlagPrismaTables } from '~/domain/feature-flags/feature-flags.server.test-support';
 mockCardPageChromeForSsr();
 let enabled = true;
 const forward = mock(async (_args: any) => ({ ok: true, queued: true }));
@@ -13,8 +14,11 @@ mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
 mock.module('~/utils/auth.server', () => ({
   requireUserId: async () => 'owner',
 }));
+const featureFlagTables = featureFlagPrismaTables();
 mock.module('~/utils/db.server', () => ({
   prisma: {
+    ...featureFlagTables,
+    orgMembership: { findFirst: async () => null },
     freeTierApplication: {
       findFirst: async () => ({
         id: 'app',
@@ -25,6 +29,9 @@ mock.module('~/utils/db.server', () => ({
     },
     freeTierEmailLog: { findFirst: async () => null },
   },
+}));
+mock.module('~/domain/free-tier/class-preparation.server', () => ({
+  isClassPreparationEnabled: async () => false,
 }));
 mock.module('~/domain/free-tier/approval-deny.server', () => ({
   loadTeacherDeniedSurface: async () => null,

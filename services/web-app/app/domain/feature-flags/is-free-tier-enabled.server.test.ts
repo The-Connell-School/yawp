@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { featureFlagPrismaTables } from './feature-flags.server.test-support';
 
-const prisma = {
-  setting: {
-    findUnique: mock(),
-  },
-};
+const prisma = featureFlagPrismaTables();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 
@@ -14,6 +11,7 @@ describe('isFreeTierEnabled', () => {
   beforeEach(() => {
     mock.module('~/utils/db.server', () => ({ prisma }));
     prisma.setting.findUnique.mockReset();
+    prisma.setting.findMany.mockReset().mockResolvedValue([]);
   });
 
   test('is on only for everyone', async () => {

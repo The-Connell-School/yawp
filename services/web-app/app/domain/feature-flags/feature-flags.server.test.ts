@@ -1,15 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { featureFlagPrismaTables } from './feature-flags.server.test-support';
 
-const prisma = {
-  setting: {
-    findUnique: mock(),
-    findMany: mock(),
-    upsert: mock(),
-  },
-  organization: {
-    findMany: mock(),
-  },
-};
+const prisma = featureFlagPrismaTables();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 
@@ -36,7 +28,7 @@ describe('feature flags (server)', () => {
     // Other suites mock db.server in the same process; take it back.
     mock.module('~/utils/db.server', () => ({ prisma }));
     prisma.setting.findUnique.mockReset();
-    prisma.setting.findMany.mockReset();
+    prisma.setting.findMany.mockReset().mockResolvedValue([]);
     prisma.setting.upsert.mockReset();
     prisma.organization.findMany.mockReset();
   });

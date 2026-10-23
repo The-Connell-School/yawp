@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { featureFlagPrismaTables } from '~/domain/feature-flags/feature-flags.server.test-support';
 
 const requireAnonymous = mock();
 const verifyUserPassword = mock();
@@ -9,7 +10,9 @@ const captureException = mock();
 const getPreviewAccessSeat = mock();
 const setMembershipId = mock();
 
+const featureFlagTables = featureFlagPrismaTables();
 const prisma = {
+  ...featureFlagTables,
   orgMembership: {
     findFirst: mock(),
   },
