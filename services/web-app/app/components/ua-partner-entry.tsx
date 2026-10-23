@@ -43,7 +43,7 @@ export function UaPartnerEntry({
       <div className="w-full max-w-lg text-center">
         <AuthBrandLockup partner="ua" />
         <div className="mt-12 rounded-xl border bg-background p-8 text-left shadow-sm">
-          <h1 className="text-center">Continue to Yawp</h1>
+          <h1 className="text-center">Continue to Yawp!</h1>
           <Form method="post" className="mt-8">
             {!codeAccepted ? (
               <div className="mb-4 text-left">

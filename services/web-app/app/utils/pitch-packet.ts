@@ -11,7 +11,7 @@ export function pitchPacketSections(
   return [
     {
       heading: 'Purpose of this evaluation',
-      paragraphs: ['Use this packet to discuss a classroom trial with an administrator. Agree on a classroom goal and review your local requirements before deciding whether Yawp fits your teaching workflow.'],
+      paragraphs: ['Use this packet to discuss a classroom trial with an administrator. Agree on a classroom goal and review your local requirements before deciding whether Yawp! fits your teaching workflow.'],
       items: [],
     },
     {
@@ -32,7 +32,7 @@ export function pitchPacketSections(
     },
     {
       heading: 'Next steps',
-      paragraphs: ['The teacher can return to My Classes to continue the classroom evaluation and open Share this report for the same aggregate summary. Review the packet together and agree on any further evaluation through your existing approval process.', 'The teacher must sign in to open the packet or activity report in Yawp. An administrator does not gain access from a page link. Copy or print prepares a document for you to share yourself; it sends nothing.'],
+      paragraphs: ['The teacher can return to My Classes to continue the classroom evaluation and open Share this report for the same aggregate summary. Review the packet together and agree on any further evaluation through your existing approval process.', 'The teacher must sign in to Yawp! to open the packet or activity report. An administrator does not gain access from a page link. Copy or print prepares a document for you to share yourself; it sends nothing.'],
       items: ['Privacy policy: https://yawp.school/privacy', 'Terms of service: https://yawp.school/terms'],
     },
   ];
