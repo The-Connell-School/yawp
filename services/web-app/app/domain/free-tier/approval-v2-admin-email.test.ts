@@ -22,9 +22,15 @@ async function expectDesignedAdminEmail(
   const atSchool = teacherAtSchool(teacherName, schoolName);
   if (options.forwardedByAdminName) {
     expect(designed.subject).toBe(`Can you approve Yawp! for ${atSchool}?`);
-    expect(designed.text).toContain(
-      `${options.forwardedByAdminName} forwarded this to you`
-    );
+    if (pass1) {
+      expect(designed.text).toContain(
+        `${options.forwardedByAdminName} forwarded ${teacherName}'s request at ${schoolName} to you.`
+      );
+    } else {
+      expect(designed.text).toContain(
+        `${options.forwardedByAdminName} forwarded this to you`
+      );
+    }
   } else if (options.reminder) {
     expect(designed.subject).toBe(
       `Reminder: ${atSchool} would like to use Yawp!`

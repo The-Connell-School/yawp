@@ -3,8 +3,8 @@ import {
   type ConsumeLinkResult,
 } from './signed-link.server';
 
-/** Flip to true to stop naming teachers on invalid links unless peek validates the opaque segment. */
-export const REQUIRE_OPAQUE_HASH_FOR_KNOWN_REQUEST_LOOKUP = false;
+/** S9a: name teachers on invalid links only when peek fully validates the token. */
+export const REQUIRE_OPAQUE_HASH_FOR_KNOWN_REQUEST_LOOKUP = true;
 
 export function applicationIdForKnownRequestOnFailedPeek(
   token: string,

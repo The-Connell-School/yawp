@@ -161,39 +161,27 @@ describe('free.admin.approve loader', () => {
     expect(data).toEqual({ ok: false, reason: 'invalid' });
   });
 
-  test('bad-opaque token may name the request when structurally decodable', async () => {
+  test('bad-opaque token shows generic invalid copy without names', async () => {
     peekSignedLink.mockResolvedValueOnce({ ok: false, reason: 'invalid' });
     applicationIdFromSignedToken.mockReturnValue('app-1');
     terminalGate.mockResolvedValueOnce(null);
     linkReplacedGate.mockResolvedValueOnce(null);
-    findUnique.mockResolvedValueOnce({
-      name: 'Jordan Rivera',
-      schoolName: 'Lincoln High School',
-    });
     const data = await loader({
       request: new Request('https://yawp.test/free/admin/approve?t=bad-opaque'),
       params: {},
       context: {},
     } as LoaderFunctionArgs);
-    expect(data).toEqual({
-      ok: false,
-      reason: 'invalid',
-      teacherName: 'Jordan Rivera',
-      schoolName: 'Lincoln High School',
-    });
+    expect(data).toEqual({ ok: false, reason: 'invalid' });
+    expect(findUnique).not.toHaveBeenCalled();
   });
 
-  test('purpose_mismatch token may name the request when structurally decodable', async () => {
+  test('purpose_mismatch token shows generic invalid copy without names', async () => {
     peekSignedLink.mockResolvedValueOnce({
       ok: false,
       reason: 'purpose_mismatch',
     });
     applicationIdFromSignedToken.mockReturnValue('app-1');
     linkReplacedGate.mockResolvedValueOnce(null);
-    findUnique.mockResolvedValueOnce({
-      name: 'Jordan Rivera',
-      schoolName: 'Lincoln High School',
-    });
     const data = await loader({
       request: new Request(
         'https://yawp.test/free/admin/approve?t=purpose-mismatch'
@@ -201,11 +189,7 @@ describe('free.admin.approve loader', () => {
       params: {},
       context: {},
     } as LoaderFunctionArgs);
-    expect(data).toEqual({
-      ok: false,
-      reason: 'invalid',
-      teacherName: 'Jordan Rivera',
-      schoolName: 'Lincoln High School',
-    });
+    expect(data).toEqual({ ok: false, reason: 'invalid' });
+    expect(findUnique).not.toHaveBeenCalled();
   });
 });

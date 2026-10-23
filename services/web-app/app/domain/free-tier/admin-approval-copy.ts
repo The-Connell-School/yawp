@@ -33,6 +33,15 @@ export function adminApprovalTeacherRerouteLeadMarker(pass1 = false) {
     : ADMIN_APPROVAL_TEACHER_REROUTE_LEAD_MARKER_LEGACY;
 }
 
+/** Pass1 frames E2f / E3 — admin forward recipient banner (flag on only). */
+export function adminApprovalPass1ForwardBanner(
+  forwarderName: string,
+  teacherName: string,
+  schoolName: string
+) {
+  return `${forwarderName} forwarded ${teacherName}'s request at ${schoolName} to you.`;
+}
+
 export function adminApprovalTeacherRerouteLead(
   teacherName: string,
   schoolName: string,
@@ -160,7 +169,9 @@ export function renderAdminApprovalEmailPlainText(args: {
       : args.routedByTeacher && pass1
         ? `${adminApprovalTeacherRerouteLead(args.teacherName, args.schoolName, true)}\n\n`
         : forwarder
-          ? `${forwarder} forwarded this to you as the right person to approve classroom software for ${teacherSchool}.\n\n`
+          ? pass1
+            ? `${adminApprovalPass1ForwardBanner(forwarder, args.teacherName, args.schoolName)}\n\n`
+            : `${forwarder} forwarded this to you as the right person to approve classroom software for ${teacherSchool}.\n\n`
           : '';
   const reminderLead = args.reminder
     ? `${adminApprovalReminderMutedLead({
@@ -451,4 +462,28 @@ export function unableToForwardBody(
 
 export function forwardRateLimitedBody() {
   return 'Please wait a few minutes before trying again.';
+}
+
+/** Teacher pending page forward errors (app.free-tier.pending). */
+export function teacherPendingForwardError(args: {
+  reason:
+    | 'same_administrator'
+    | 'chain_cap'
+    | 'email_failed'
+    | 'same_as_teacher';
+  schoolName: string;
+  adminName?: string;
+}) {
+  switch (args.reason) {
+    case 'same_as_teacher':
+      return `That's your own email. Enter the administrator who approves classroom software at ${args.schoolName}.`;
+    case 'same_administrator':
+      return `${args.adminName?.trim() || 'They'} already has your request. Choose a different administrator at ${args.schoolName}.`;
+    case 'chain_cap':
+      return `Your request has been forwarded too many times. Email ${FREE_TIER_SUPPORT_EMAIL} and we'll sort it out.`;
+    case 'email_failed':
+      return "We couldn't send your request. Try again.";
+    default:
+      return '';
+  }
 }

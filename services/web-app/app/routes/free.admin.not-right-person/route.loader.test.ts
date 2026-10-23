@@ -123,13 +123,9 @@ describe('free.admin.not-right-person loader', () => {
     expect(data).toEqual({ ok: false, reason: 'invalid' });
   });
 
-  test('bad-opaque token may name the request when structurally decodable', async () => {
+  test('bad-opaque token shows generic invalid copy without names', async () => {
     peekSignedLink.mockResolvedValueOnce({ ok: false, reason: 'invalid' });
     applicationIdFromSignedToken.mockReturnValueOnce('app-1');
-    findUnique.mockResolvedValueOnce({
-      name: 'Jordan Rivera',
-      schoolName: 'Lincoln High School',
-    });
     const data = await loader({
       request: new Request(
         'https://yawp.test/free/admin/not-right-person?t=bad-opaque'
@@ -137,24 +133,15 @@ describe('free.admin.not-right-person loader', () => {
       params: {},
       context: {},
     } as LoaderFunctionArgs);
-    expect(data).toEqual({
-      ok: false,
-      reason: 'invalid',
-      teacherName: 'Jordan Rivera',
-      schoolName: 'Lincoln High School',
-    });
+    expect(data).toEqual({ ok: false, reason: 'invalid' });
   });
 
-  test('purpose_mismatch token may name the request when structurally decodable', async () => {
+  test('purpose_mismatch token shows generic invalid copy without names', async () => {
     peekSignedLink.mockResolvedValueOnce({
       ok: false,
       reason: 'purpose_mismatch',
     });
     applicationIdFromSignedToken.mockReturnValueOnce('app-1');
-    findUnique.mockResolvedValueOnce({
-      name: 'Jordan Rivera',
-      schoolName: 'Lincoln High School',
-    });
     const data = await loader({
       request: new Request(
         'https://yawp.test/free/admin/not-right-person?t=purpose-mismatch'
@@ -162,11 +149,6 @@ describe('free.admin.not-right-person loader', () => {
       params: {},
       context: {},
     } as LoaderFunctionArgs);
-    expect(data).toEqual({
-      ok: false,
-      reason: 'invalid',
-      teacherName: 'Jordan Rivera',
-      schoolName: 'Lincoln High School',
-    });
+    expect(data).toEqual({ ok: false, reason: 'purpose_mismatch' });
   });
 });

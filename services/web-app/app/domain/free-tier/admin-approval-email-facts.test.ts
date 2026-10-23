@@ -130,6 +130,10 @@ describe('admin approval email forward context', () => {
   });
 
   test('outbox refresh reuses forward context from stored delivery payload', () => {
+    const pass1Stored = adminApprovalEmailContextFromStoredMessage({
+      text: "Sam Chen forwarded Jordan Rivera's request at Lincoln High School to you.\n\nApprove",
+    });
+    expect(pass1Stored).toEqual({ forwardedByAdminName: 'Sam Chen' });
     const stored = adminApprovalEmailContextFromStoredMessage({
       text: 'Sam Chen forwarded this to you as the right person to approve classroom software for Jordan Rivera at Lincoln High School.\n\nApprove',
       forwardedByAdminName: 'Sam Chen',

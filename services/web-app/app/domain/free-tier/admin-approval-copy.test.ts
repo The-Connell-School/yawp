@@ -12,8 +12,10 @@ import {
   renderAdminApprovalEmailPlainText,
   renderAdminApprovalEmailSubject,
   adminApprovalTeacherRerouteLead,
+  adminApprovalPass1ForwardBanner,
   adminApprovalReminderMutedLead,
   adminApprovalTeacherRerouteLeadMarker,
+  teacherPendingForwardError,
 } from './admin-approval-copy';
 import {
   ADMIN_APPROVAL_EMAIL_COPY_VERSION_PASS1,
@@ -74,6 +76,18 @@ test('pass1 E2 reminder muted lead names teacher at school', () => {
     })
   ).toBe(
     'A quick reminder: Jordan Rivera at Lincoln High School is still waiting on your approval.'
+  );
+});
+
+test('pass1 E2f forwarded reminder banner string is pinned', () => {
+  expect(
+    adminApprovalPass1ForwardBanner(
+      'Sam Chen',
+      'Jordan Rivera',
+      'Lincoln High School'
+    )
+  ).toBe(
+    "Sam Chen forwarded Jordan Rivera's request at Lincoln High School to you."
   );
 });
 
@@ -139,7 +153,16 @@ test('pass1 E3b teacher reroute lead and plain text', () => {
   );
 });
 
-test('forward recipient email names the forwarder', () => {
+test('pass1 E3 forward recipient banner is pinned', () => {
+  expect(
+    adminApprovalPass1ForwardBanner(
+      'Sam Chen',
+      'Jordan Rivera',
+      'Lincoln High School'
+    )
+  ).toBe(
+    "Sam Chen forwarded Jordan Rivera's request at Lincoln High School to you."
+  );
   const text = renderAdminApprovalEmailPlainText({
     teacherName: 'Jordan Rivera',
     teacherEmail: 'jrivera@lincolnhs.org',
@@ -149,7 +172,10 @@ test('forward recipient email names the forwarder', () => {
     forwardedByAdminName: 'Sam Chen',
     pass1: true,
   });
-  expect(text).toContain('Sam Chen forwarded this to you');
+  expect(text).toContain(
+    "Sam Chen forwarded Jordan Rivera's request at Lincoln High School to you."
+  );
+  expect(text).not.toContain('forwarded this to you as the right person');
   expect(text).toContain(
     "You're getting this because Sam Chen forwarded Jordan Rivera's request at Lincoln High School to you."
   );
@@ -217,4 +243,30 @@ test('pass1 forward inline alerts name teacher and school', () => {
   ).toBe(
     "That's Jordan's own email. Enter the administrator who approves classroom software at Lincoln High School."
   );
+});
+
+test('teacher pending forward errors are pinned', () => {
+  const school = 'Lincoln High School';
+  expect(
+    teacherPendingForwardError({ reason: 'same_as_teacher', schoolName: school })
+  ).toBe(
+    "That's your own email. Enter the administrator who approves classroom software at Lincoln High School."
+  );
+  expect(
+    teacherPendingForwardError({
+      reason: 'same_administrator',
+      schoolName: school,
+      adminName: 'Dr. Patel',
+    })
+  ).toBe(
+    'Dr. Patel already has your request. Choose a different administrator at Lincoln High School.'
+  );
+  expect(
+    teacherPendingForwardError({ reason: 'chain_cap', schoolName: school })
+  ).toBe(
+    "Your request has been forwarded too many times. Email support@yawp.school and we'll sort it out."
+  );
+  expect(
+    teacherPendingForwardError({ reason: 'email_failed', schoolName: school })
+  ).toBe("We couldn't send your request. Try again.");
 });

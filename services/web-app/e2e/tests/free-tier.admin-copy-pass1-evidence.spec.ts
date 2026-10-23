@@ -216,7 +216,7 @@ for (const width of [1280, 390]) {
     );
     await capture(page, `05-s5-paused-${suffix}`);
 
-    // S9a — invalid link, known request (bad opaque on signed token)
+    // S9a — expired link with fully valid token (named state)
     const app3 = await createSentApplication();
     const approval3 = await pendingApproval(app3.id);
     const approveMint3 = await mintFreeTierLinkForE2E(db, {
@@ -227,7 +227,33 @@ for (const width of [1280, 390]) {
       where: { id: approval3.id },
       data: { signedLinkId: approveMint3.linkId },
     });
-    const badToken = corruptOpaqueToken(approveMint3.token);
+    await db.freeTierSignedLink.update({
+      where: { id: approveMint3.linkId },
+      data: { expiresAt: new Date(0) },
+    });
+    await page.goto(
+      `${base}/free/admin/approve?t=${encodeURIComponent(approveMint3.token)}`
+    );
+    await expect(
+      page.getByRole('heading', { name: 'This link expired' })
+    ).toBeVisible();
+    await expect(
+      page.getByText(`It was for ${TEACHER} at ${SCHOOL}.`, { exact: false })
+    ).toBeVisible();
+    await capture(page, `07-s9a-expired-link-named-request-${suffix}`);
+
+    // S9a — bad opaque (generic invalid, no teacher/school names)
+    const app3b = await createSentApplication();
+    const approval3b = await pendingApproval(app3b.id);
+    const approveMint3b = await mintFreeTierLinkForE2E(db, {
+      applicationId: app3b.id,
+      purpose: 'ADMIN_APPROVE',
+    });
+    await db.freeTierAdminApproval.update({
+      where: { id: approval3b.id },
+      data: { signedLinkId: approveMint3b.linkId },
+    });
+    const badToken = corruptOpaqueToken(approveMint3b.token);
     await page.goto(
       `${base}/free/admin/approve?t=${encodeURIComponent(badToken)}`
     );
@@ -236,8 +262,11 @@ for (const width of [1280, 390]) {
     ).toBeVisible();
     await expect(
       page.getByText(`This link was for ${TEACHER} at ${SCHOOL}.`)
+    ).not.toBeVisible();
+    await expect(
+      page.getByText('Copy it again from the email', { exact: false })
     ).toBeVisible();
-    await capture(page, `07-s9a-couldn-t-open-link-request-known-${suffix}`);
+    await capture(page, `07b-s9a-bad-opaque-generic-${suffix}`);
 
     // S9b — unknown request
     await page.goto(`${base}/free/admin/approve?t=not-a-valid-token`);

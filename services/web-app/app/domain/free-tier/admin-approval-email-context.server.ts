@@ -37,6 +37,12 @@ export function adminApprovalEmailContextFromStoredMessage(args: {
   if (args.forwardedByAdminName?.trim()) {
     return { forwardedByAdminName: args.forwardedByAdminName.trim() };
   }
+  const pass1ForwardLead = args.text.match(
+    /^(.+) forwarded .+'s request at .+ to you\./m
+  );
+  if (pass1ForwardLead?.[1]?.trim()) {
+    return { forwardedByAdminName: pass1ForwardLead[1].trim() };
+  }
   const forwardLead = args.text.match(
     /^(.+) forwarded this to you as the right person/m
   );

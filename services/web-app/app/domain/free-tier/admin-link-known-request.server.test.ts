@@ -25,8 +25,8 @@ afterAll(() => {
   restoreRealSignedLinkModule();
 });
 
-test('known-request lookup switch defaults off (structural decode allowed)', () => {
-  expect(REQUIRE_OPAQUE_HASH_FOR_KNOWN_REQUEST_LOOKUP).toBe(false);
+test('known-request lookup requires full peek validation (S9a strict)', () => {
+  expect(REQUIRE_OPAQUE_HASH_FOR_KNOWN_REQUEST_LOOKUP).toBe(true);
 });
 
 test('forged and unsigned peeks do not resolve an application id', () => {

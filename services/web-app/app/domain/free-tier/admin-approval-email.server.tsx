@@ -37,9 +37,12 @@ export async function htmlForStoredAdminApprovalEmail(args: {
 }) {
   if (args.html) return args.html;
   const urls = adminApprovalUrlsFromEmailBody(args.text);
-  const forwardLead = args.text.match(
-    /^(.+) forwarded this to you as the right person/m
+  const pass1ForwardLead = args.text.match(
+    /^(.+) forwarded .+'s request at .+ to you\./m
   );
+  const forwardLead =
+    pass1ForwardLead ??
+    args.text.match(/^(.+) forwarded this to you as the right person/m);
   const routedByTeacher =
     args.text.includes(adminApprovalTeacherRerouteLeadMarker(true)) ||
     args.text.includes(adminApprovalTeacherRerouteLeadMarker(false));
