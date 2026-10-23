@@ -45,6 +45,14 @@ mock.module('~/domain/free-tier/admin-link-gate.server', () => ({
   resolveAdminLinkReplacedGate: linkReplacedGate,
 }));
 
+mock.module('~/domain/feature-flags/feature-flags.server', () => ({
+  isFeatureFlagEnabled: async () => true,
+}));
+
+mock.module('~/domain/free-tier/approval-deny.server', () => ({
+  resolveAdminDenyAnsweredGate: async () => null,
+}));
+
 afterAll(() => mock.restore());
 
 mock.module('~/domain/free-tier/approval-flow.server', () => ({

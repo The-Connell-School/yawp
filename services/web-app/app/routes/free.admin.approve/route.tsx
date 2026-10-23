@@ -23,10 +23,14 @@ import { completeSchoolAdminApproval } from '~/domain/free-tier/approval-flow.se
 import { prisma } from '~/utils/db.server';
 import { FreeTierAuthCard } from '../free-tier/FreeTierAuthCard';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
+import { FREE_TIER_FLAG } from '~/domain/feature-flags/feature-flags';
+import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
+import { resolveAdminDenyAnsweredGate } from '~/domain/free-tier/approval-deny.server';
 import {
   AdminAlreadyApprovedCard,
   AdminApprovePageIntro,
   AdminDeclinedCard,
+  AdminDenyAlreadyAnsweredCard,
   AdminLinkExpiredCard,
   AdminLinkInvalidCard,
   AdminLinkReplacedCard,
@@ -35,6 +39,8 @@ import {
   approveCheckboxError,
 } from '../free-tier/AdminApprovalStates';
 import { AdminApproveForm } from '../free-tier/AdminApprovalForms';
+import { AdminApprovalQa } from '../free-tier/AdminApprovalQa';
+import { AdminForwardLink } from '../free-tier/AdminApprovalStates';
 
 type LoaderData =
   | {
@@ -43,6 +49,7 @@ type LoaderData =
       schoolName?: string;
       teacherName?: string;
       variant?: FreeTierAdminLinkReplacedVariant;
+      decidedAt?: string;
     }
   | {
       ok: true;
@@ -50,6 +57,7 @@ type LoaderData =
       schoolName: string;
       teacherName: string;
       teacherEmail?: string;
+      showDenyAndQa: boolean;
     };
 
 async function applicationFromToken(token: string) {
@@ -72,9 +80,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const appId = peek.ok
     ? peek.applicationId
     : applicationIdFromSignedToken(token);
+  const showDenyAndQa = await isFeatureFlagEnabled(FREE_TIER_FLAG);
   if (appId) {
     const gate = await fetchFreeTierApplicationTerminalGate(appId);
     if (gate) return { ok: false as const, ...gate };
+    if (showDenyAndQa) {
+      const denied = await resolveAdminDenyAnsweredGate({ token });
+      if (denied?.reason === 'admin_denied') {
+        return {
+          ok: false as const,
+          reason: 'admin_denied' as const,
+          teacherName: denied.teacherName,
+          schoolName: denied.schoolName,
+          decidedAt: denied.decidedAt.toISOString(),
+        };
+      }
+    }
   }
   if (peek.ok) {
     const app = await prisma.freeTierApplication.findUnique({
@@ -91,6 +112,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       schoolName: app?.schoolName ?? 'your school',
       teacherName: app?.name ?? 'A teacher',
       teacherEmail: app?.email,
+      showDenyAndQa,
     };
   }
   if (peek.reason === 'expired') {
@@ -180,6 +202,19 @@ function terminalFromLoader(data: Extract<LoaderData, { ok: false }>) {
   if (data.reason === 'declined') {
     return (
       <AdminDeclinedCard teacherName={teacherName} schoolName={schoolName} />
+    );
+  }
+  if (
+    data.reason === 'admin_denied' &&
+    'decidedAt' in data &&
+    typeof data.decidedAt === 'string'
+  ) {
+    return (
+      <AdminDenyAlreadyAnsweredCard
+        teacherName={teacherName}
+        schoolName={schoolName}
+        decidedAt={new Date(data.decidedAt)}
+      />
     );
   }
   if (data.reason === 'expired') {
@@ -375,6 +410,16 @@ export default function FreeAdminApproveRoute() {
   return (
     <FreeTierAuthCard
       title={adminApprovePageTitle(data.teacherName, data.schoolName)}
+      belowCard={
+        data.showDenyAndQa ? (
+          <AdminForwardLink token={data.token} />
+        ) : undefined
+      }
+      stackAfterCard={
+        data.showDenyAndQa ? (
+          <AdminApprovalQa teacherName={data.teacherName} />
+        ) : undefined
+      }
     >
       <AdminApprovePageIntro
         teacherName={data.teacherName}
@@ -385,6 +430,7 @@ export default function FreeAdminApproveRoute() {
         token={data.token}
         schoolName={data.schoolName}
         teacherName={data.teacherName}
+        showDenyAndQa={data.showDenyAndQa}
         serverErrors={
           actionData && !actionData.ok && actionData.reason === 'validation'
             ? {

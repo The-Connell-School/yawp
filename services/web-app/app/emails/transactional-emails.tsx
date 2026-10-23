@@ -159,6 +159,49 @@ export function TeacherForwardedEmail(props: {
   );
 }
 
+export function TeacherDeniedEmail(props: {
+  firstName: string;
+  adminName: string;
+  schoolName: string;
+  statusUrl: string;
+  chainCapReached: boolean;
+  origin?: string;
+}) {
+  const urls = logos(props.origin);
+  return (
+    <YawpEmailLayout
+      preheader="Your class is still here. You can ask another administrator."
+      logoBlackUrl={urls.black}
+      logoWhiteUrl={urls.white}
+      siteUrl={urls.site}
+      footerWhy="You're getting this because a school administrator responded to your Yawp! classroom request."
+      headline={`Your Yawp! request for ${props.schoolName}`}
+      showBrianSignOff
+      linkFallbackUrl={props.statusUrl}
+    >
+      <EmailBodyBlocks
+        paragraphs={[
+          <>Hi {props.firstName},</>,
+          <>
+            {props.adminName} wasn&apos;t able to approve your Yawp! classroom right
+            now. That happens, and it&apos;s usually about timing or a school policy,
+            not about you.
+          </>,
+          <>
+            Your class is still here. You can ask another administrator at your
+            school to approve Yawp! for your classroom.
+          </>,
+        ]}
+      />
+      {props.chainCapReached ? (
+        <PillButton label="Email support" href="mailto:support@yawp.school" />
+      ) : (
+        <PillButton label="Ask another administrator" href={props.statusUrl} />
+      )}
+    </YawpEmailLayout>
+  );
+}
+
 export function TeacherApprovedEmail(props: {
   firstName: string;
   adminName: string;

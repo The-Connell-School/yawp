@@ -27,6 +27,13 @@ import {
 } from '~/domain/free-tier/admin-approval-copy';
 import { useFreeTierEnabled } from './useFreeTierLayoutContext';
 import {
+  adminDenyAlreadyAnsweredBody,
+  adminDenyAlreadyAnsweredTitle,
+  adminDenyReopenHint,
+  adminDenyThanksBody,
+  adminDenyThanksTitle,
+} from '~/domain/free-tier/admin-deny-copy';
+import {
   FreeTierAuthCard,
   FreeTierPerson,
 } from './FreeTierAuthCard';
@@ -103,6 +110,42 @@ export function AdminDeclinedCard({
       <p className="text-sm text-muted-foreground">
         {declinedBody(teacherName, schoolName)}
       </p>
+    </FreeTierAuthCard>
+  );
+}
+
+export function AdminDenyThanksCard({
+  teacherName,
+  schoolName,
+}: {
+  teacherName: string;
+  schoolName: string;
+}) {
+  return (
+    <FreeTierAuthCard title={adminDenyThanksTitle()} status>
+      <p className="text-sm text-muted-foreground">
+        {adminDenyThanksBody(teacherName, schoolName)}
+      </p>
+      <p className="text-sm text-muted-foreground">{adminDenyReopenHint}</p>
+    </FreeTierAuthCard>
+  );
+}
+
+export function AdminDenyAlreadyAnsweredCard({
+  teacherName,
+  schoolName,
+  decidedAt,
+}: {
+  teacherName: string;
+  schoolName: string;
+  decidedAt: Date;
+}) {
+  return (
+    <FreeTierAuthCard title={adminDenyAlreadyAnsweredTitle()} status>
+      <p className="text-sm text-muted-foreground">
+        {adminDenyAlreadyAnsweredBody(teacherName, schoolName, decidedAt)}
+      </p>
+      <p className="text-sm text-muted-foreground">{adminDenyReopenHint}</p>
     </FreeTierAuthCard>
   );
 }

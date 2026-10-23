@@ -114,6 +114,9 @@ test('loader sets showExploreClassroom from pending teaching lock', async () => 
   mock.module('~/domain/free-tier/approval-v2.server', () => ({
     getApprovalWaitingDetails: async () => null,
   }));
+  mock.module('~/domain/free-tier/approval-deny.server', () => ({
+    loadTeacherDeniedSurface: async () => null,
+  }));
   const { loader } = await import('./route');
   const data = await loader({
     request: new Request('https://yawp.test/app/free-tier/pending'),

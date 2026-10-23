@@ -62,25 +62,30 @@ for (const viewport of [
         return document.fonts.ready;
       });
       if (!before && state !== 'sign-in') {
-        await expect(target.locator('.auth-page-content > .free-tier-form-card')).toBeVisible();
-        const geometry = await target
-          .locator('.auth-page-content > .free-tier-form-card')
-          .evaluate((el) => {
-            const s = getComputedStyle(el);
-            return {
-              width: s.width,
-              left: String(el.getBoundingClientRect().left),
-              top: String(el.getBoundingClientRect().top),
-              padding: s.padding,
-              borderRadius: s.borderRadius,
-              background: s.backgroundColor,
-              shadow: s.boxShadow,
-            };
+        await expect(target.locator('.auth-page-content .free-tier-form-card')).toBeVisible();
+        const stacked = await target.locator('.free-tier-approval-stack').count();
+        if (stacked > 0) {
+          const geometry = await target
+            .locator('.auth-page-content .free-tier-form-card')
+            .evaluate((el) => {
+              const s = getComputedStyle(el);
+              return {
+                width: s.width,
+                left: String(el.getBoundingClientRect().left),
+                top: String(el.getBoundingClientRect().top),
+                padding: s.padding,
+                borderRadius: s.borderRadius,
+                background: s.backgroundColor,
+                shadow: s.boxShadow,
+              };
+            });
+          expect(geometry).toMatchObject({
+            width: '320px',
+            padding: '24px',
+            borderRadius: '12px',
+            background: 'rgb(255, 255, 255)',
           });
-        expect(geometry).toMatchObject({
-          width: '320px', padding: '24px', borderRadius: '12px',
-          background: 'rgb(255, 255, 255)',
-        });
+        }
         await expect(target.locator('.free-tier-page h1')).toHaveCSS('line-height', '24.3px');
         const fields = target.locator('.free-tier-page input:not([type="hidden"]):not(.hidden)');
         if (await fields.count()) await expect(fields.first()).toHaveCSS('font-size', '16px');

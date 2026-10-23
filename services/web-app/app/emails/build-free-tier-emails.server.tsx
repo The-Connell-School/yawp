@@ -18,10 +18,14 @@ import { renderTransactionalEmail } from './render.server';
 import {
   AdminApprovalEmail,
   TeacherApprovedEmail,
+  TeacherDeniedEmail,
   TeacherForwardedEmail,
   TeacherReleaseEmail,
   TeacherStillWaitingEmail,
 } from './transactional-emails';
+import {
+  teacherDenyEmailSubject,
+} from '~/domain/free-tier/admin-deny-copy';
 import { transactionalEmailPublicOrigin } from './public-origin.server';
 
 export function teacherFirstName(name: string) {
@@ -103,6 +107,42 @@ export async function buildTeacherForwardedDesignedEmail(args: {
   const text = renderForwardNoticeV2Body(args);
   return {
     subject: FORWARD_NOTICE_V2_SUBJECT,
+    ...(await renderTransactionalEmail(react, text)),
+  };
+}
+
+export async function buildTeacherDeniedDesignedEmail(args: {
+  teacherName: string;
+  adminName: string;
+  schoolName: string;
+  statusUrl: string;
+  chainCapReached: boolean;
+  origin?: string;
+}) {
+  const origin = args.origin ?? transactionalEmailPublicOrigin();
+  const react = (
+    <TeacherDeniedEmail
+      firstName={teacherFirstName(args.teacherName)}
+      adminName={args.adminName}
+      schoolName={args.schoolName}
+      statusUrl={args.statusUrl}
+      chainCapReached={args.chainCapReached}
+      origin={origin}
+    />
+  );
+  const text = [
+    `Hi ${teacherFirstName(args.teacherName)},`,
+    '',
+    `${args.adminName} wasn't able to approve your Yawp! classroom right now. That happens, and it's usually about timing or a school policy, not about you.`,
+    '',
+    'Your class is still here. You can ask another administrator at your school to approve Yawp! for your classroom.',
+    '',
+    args.chainCapReached
+      ? 'Email support: support@yawp.school'
+      : `Ask another administrator: ${args.statusUrl}`,
+  ].join('\n');
+  return {
+    subject: teacherDenyEmailSubject(args.schoolName),
     ...(await renderTransactionalEmail(react, text)),
   };
 }
