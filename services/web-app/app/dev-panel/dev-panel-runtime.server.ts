@@ -1,6 +1,4 @@
 import { isLocalDatabaseUrl } from '../../../../packages/prisma/scripts/local-dev/database-url';
-import { isDemoEnvironment } from '~/utils/preview-access.server';
-
 /** True when this build may include dev-panel client modules (never production). */
 export function isDevPanelBuildEnabled(
   env: NodeJS.ProcessEnv = process.env
@@ -45,7 +43,7 @@ export function devPanelEnvBadge(
   env: NodeJS.ProcessEnv = process.env
 ): 'Demo' | 'Dev' {
   const yawp = String(env.YAWP_ENVIRONMENT ?? '').trim().toLowerCase();
-  return yawp === 'demo' || isDemoEnvironment(env) ? 'Demo' : 'Dev';
+  return yawp === 'demo' || isDevPanelDemoHost(env) ? 'Demo' : 'Dev';
 }
 
 export function rejectDevPanelInProduction() {

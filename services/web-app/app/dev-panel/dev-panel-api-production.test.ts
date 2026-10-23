@@ -13,9 +13,10 @@ const productionEnvKeys = [
 function restoreProcessEnv(
   previous: Record<(typeof productionEnvKeys)[number], string | undefined>
 ) {
+  const env = process.env as Record<string, string | undefined>;
   for (const key of productionEnvKeys) {
-    if (previous[key] === undefined) delete process.env[key];
-    else process.env[key] = previous[key];
+    if (previous[key] === undefined) delete env[key];
+    else env[key] = previous[key];
   }
 }
 
@@ -66,9 +67,10 @@ describe('dev panel HTTP routes in production', () => {
 
   test('assertDevPanelRoute returns 404', async () => {
     const previous = snapshotProcessEnv();
+    const env = process.env as Record<string, string | undefined>;
     for (const [key, value] of Object.entries(productionRuntimeEnv)) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
+      if (value === undefined) delete env[key];
+      else env[key] = value;
     }
     try {
       const response = await assertDevPanelRoute(

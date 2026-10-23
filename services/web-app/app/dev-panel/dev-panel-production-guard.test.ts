@@ -27,9 +27,10 @@ describe('dev panel production guard', () => {
       const response = rejectDevPanelInProduction();
       expect(response?.status).toBe(404);
     } finally {
+      const env = process.env as Record<string, string | undefined>;
       for (const key of keys) {
-        if (previous[key] === undefined) delete process.env[key];
-        else process.env[key] = previous[key];
+        if (previous[key] === undefined) delete env[key];
+        else env[key] = previous[key];
       }
     }
   });
