@@ -90,7 +90,12 @@ test('invite-teachers logs delivery failures without raw email', async () => {
       }),
     );
 
-    await action({ request: inviteRequest('teacher@school.edu') } as never);
+    const response = (await action({
+      request: inviteRequest('teacher@school.edu'),
+    } as never)) as { data: { sentCount: number; failedEmails: string[] } };
+
+    expect(response.data.sentCount).toBe(0);
+    expect(response.data.failedEmails).toEqual(['teacher@school.edu']);
 
     const serialized = JSON.stringify(errorLog.mock.calls);
     expect(serialized).toContain('org_teacher_invite_delivery_failed');
@@ -115,7 +120,12 @@ test('invite-teachers logs prisma failures with code and without delivery mislab
       }),
     );
 
-    await action({ request: inviteRequest('teacher@school.edu') } as never);
+    const response = (await action({
+      request: inviteRequest('teacher@school.edu'),
+    } as never)) as { data: { sentCount: number; failedEmails: string[] } };
+
+    expect(response.data.sentCount).toBe(0);
+    expect(response.data.failedEmails).toEqual(['teacher@school.edu']);
 
     const serialized = JSON.stringify(errorLog.mock.calls);
     expect(serialized).toContain('org_teacher_invite_failed');

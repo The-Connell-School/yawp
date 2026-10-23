@@ -769,6 +769,18 @@ jobs:
           INTERNAL_DIRECTORY_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: CI=1 bun test --max-concurrency=2 app/utils/internal-teacher-trainings.integration.test.ts
 
+      - name: Organization teachers invite delivery tests
+        if: ${{ needs.paths.outputs.code == 'true' }}
+        working-directory: services/web-app
+        run: |
+          set -e
+          for file in \
+            app/routes/app.organization.teachers/route.invite-teachers.action.test.ts \
+            app/routes/app.organization.teachers/teacher-invite-copy.test.ts \
+            app/routes/app.organization.teachers/invite-teachers-sheet.test.tsx; do
+            CI=1 bun test --max-concurrency=2 "$file"
+          done
+
   typecheck-web-app:
     needs: [paths]
     name: ʦ TypeScript
