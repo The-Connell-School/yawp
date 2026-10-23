@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { LoaderFunctionArgs } from 'react-router';
 
 const terminalGate = mock(
@@ -17,6 +17,7 @@ const peekSignedLink = mock(
     applicationId: 'app-1',
   })
 );
+const applicationIdFromSignedToken = mock((): string | null => 'app-1');
 const linkReplacedGate = mock(
   async (): Promise<{
     reason: 'link_replaced';
@@ -25,8 +26,9 @@ const linkReplacedGate = mock(
   } | null> => null
 );
 
+const findUnique = mock(async () => null as null | { name: string; schoolName: string; email?: string });
 mock.module('~/utils/db.server', () => ({
-  prisma: { freeTierApplication: { findUnique: async () => null } },
+  prisma: { freeTierApplication: { findUnique } },
 }));
 
 mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
@@ -35,7 +37,7 @@ mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
 
 mock.module('~/domain/free-tier/signed-link.server', () => ({
   peekSignedLink,
-  applicationIdFromSignedToken: () => 'app-1',
+  applicationIdFromSignedToken,
   isFreeTierLinkSigningConfigured: () => true,
 }));
 
@@ -54,6 +56,22 @@ mock.module('~/domain/free-tier/approval-deny.server', () => ({
 }));
 
 afterAll(() => mock.restore());
+
+beforeEach(() => {
+  applicationIdFromSignedToken.mockReset();
+  applicationIdFromSignedToken.mockReturnValue('app-1');
+  peekSignedLink.mockReset();
+  peekSignedLink.mockResolvedValue({
+    ok: true,
+    applicationId: 'app-1',
+  });
+  terminalGate.mockReset();
+  terminalGate.mockResolvedValue(null);
+  linkReplacedGate.mockReset();
+  linkReplacedGate.mockResolvedValue(null);
+  findUnique.mockReset();
+  findUnique.mockResolvedValue(null);
+});
 
 mock.module('~/domain/free-tier/approval-flow.server', () => ({
   completeSchoolAdminApproval: async () => ({ ok: true }),
@@ -109,5 +127,77 @@ describe('free.admin.approve loader', () => {
       teacherName: 'Jordan Rivera',
     });
     expect(linkReplacedGate).not.toHaveBeenCalled();
+  });
+
+  test('forged token shows generic invalid copy without names', async () => {
+    peekSignedLink.mockResolvedValueOnce({ ok: false, reason: 'invalid' });
+    applicationIdFromSignedToken.mockReturnValue(null);
+    linkReplacedGate.mockResolvedValueOnce(null);
+    const data = await loader({
+      request: new Request('https://yawp.test/free/admin/approve?t=forged'),
+      params: {},
+      context: {},
+    } as LoaderFunctionArgs);
+    expect(data).toEqual({ ok: false, reason: 'invalid' });
+  });
+
+  test('unsigned token shows generic invalid copy without names', async () => {
+    peekSignedLink.mockResolvedValueOnce({ ok: false, reason: 'invalid' });
+    applicationIdFromSignedToken.mockReturnValue(null);
+    linkReplacedGate.mockResolvedValueOnce(null);
+    const data = await loader({
+      request: new Request('https://yawp.test/free/admin/approve?t=unsigned'),
+      params: {},
+      context: {},
+    } as LoaderFunctionArgs);
+    expect(data).toEqual({ ok: false, reason: 'invalid' });
+  });
+
+  test('bad-opaque token may name the request when structurally decodable', async () => {
+    peekSignedLink.mockResolvedValueOnce({ ok: false, reason: 'invalid' });
+    applicationIdFromSignedToken.mockReturnValue('app-1');
+    terminalGate.mockResolvedValueOnce(null);
+    linkReplacedGate.mockResolvedValueOnce(null);
+    findUnique.mockResolvedValueOnce({
+      name: 'Jordan Rivera',
+      schoolName: 'Lincoln High School',
+    });
+    const data = await loader({
+      request: new Request('https://yawp.test/free/admin/approve?t=bad-opaque'),
+      params: {},
+      context: {},
+    } as LoaderFunctionArgs);
+    expect(data).toEqual({
+      ok: false,
+      reason: 'invalid',
+      teacherName: 'Jordan Rivera',
+      schoolName: 'Lincoln High School',
+    });
+  });
+
+  test('purpose_mismatch token may name the request when structurally decodable', async () => {
+    peekSignedLink.mockResolvedValueOnce({
+      ok: false,
+      reason: 'purpose_mismatch',
+    });
+    applicationIdFromSignedToken.mockReturnValue('app-1');
+    linkReplacedGate.mockResolvedValueOnce(null);
+    findUnique.mockResolvedValueOnce({
+      name: 'Jordan Rivera',
+      schoolName: 'Lincoln High School',
+    });
+    const data = await loader({
+      request: new Request(
+        'https://yawp.test/free/admin/approve?t=purpose-mismatch'
+      ),
+      params: {},
+      context: {},
+    } as LoaderFunctionArgs);
+    expect(data).toEqual({
+      ok: false,
+      reason: 'invalid',
+      teacherName: 'Jordan Rivera',
+      schoolName: 'Lincoln High School',
+    });
   });
 });

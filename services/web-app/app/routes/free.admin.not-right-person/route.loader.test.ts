@@ -5,6 +5,7 @@ const findUnique = mock();
 const findFirst = mock(async () => null);
 const peekSignedLink = mock();
 const fetchGate = mock();
+const applicationIdFromSignedToken = mock((): string | null => 'app-1');
 
 mock.module('~/utils/db.server', () => ({
   prisma: {
@@ -19,7 +20,7 @@ mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
 
 mock.module('~/domain/free-tier/signed-link.server', () => ({
   peekSignedLink,
-  applicationIdFromSignedToken: () => 'app-1',
+  applicationIdFromSignedToken,
 }));
 
 mock.module('~/domain/free-tier/admin-link-gate.server', () => ({
@@ -85,5 +86,78 @@ describe('free.admin.not-right-person loader', () => {
       pendingAdminName: undefined,
     });
     expect(peekSignedLink).toHaveBeenCalled();
+  });
+
+  test('forged token shows generic invalid copy without names', async () => {
+    peekSignedLink.mockResolvedValueOnce({ ok: false, reason: 'invalid' });
+    applicationIdFromSignedToken.mockReturnValueOnce(null);
+    const data = await loader({
+      request: new Request(
+        'https://yawp.test/free/admin/not-right-person?t=forged'
+      ),
+      params: {},
+      context: {},
+    } as LoaderFunctionArgs);
+    expect(data).toEqual({ ok: false, reason: 'invalid' });
+  });
+
+  test('unsigned token shows generic invalid copy without names', async () => {
+    peekSignedLink.mockResolvedValueOnce({ ok: false, reason: 'invalid' });
+    applicationIdFromSignedToken.mockReturnValueOnce(null);
+    const data = await loader({
+      request: new Request(
+        'https://yawp.test/free/admin/not-right-person?t=unsigned'
+      ),
+      params: {},
+      context: {},
+    } as LoaderFunctionArgs);
+    expect(data).toEqual({ ok: false, reason: 'invalid' });
+  });
+
+  test('bad-opaque token may name the request when structurally decodable', async () => {
+    peekSignedLink.mockResolvedValueOnce({ ok: false, reason: 'invalid' });
+    applicationIdFromSignedToken.mockReturnValueOnce('app-1');
+    findUnique.mockResolvedValueOnce({
+      name: 'Jordan Rivera',
+      schoolName: 'Lincoln High School',
+    });
+    const data = await loader({
+      request: new Request(
+        'https://yawp.test/free/admin/not-right-person?t=bad-opaque'
+      ),
+      params: {},
+      context: {},
+    } as LoaderFunctionArgs);
+    expect(data).toEqual({
+      ok: false,
+      reason: 'invalid',
+      teacherName: 'Jordan Rivera',
+      schoolName: 'Lincoln High School',
+    });
+  });
+
+  test('purpose_mismatch token may name the request when structurally decodable', async () => {
+    peekSignedLink.mockResolvedValueOnce({
+      ok: false,
+      reason: 'purpose_mismatch',
+    });
+    applicationIdFromSignedToken.mockReturnValueOnce('app-1');
+    findUnique.mockResolvedValueOnce({
+      name: 'Jordan Rivera',
+      schoolName: 'Lincoln High School',
+    });
+    const data = await loader({
+      request: new Request(
+        'https://yawp.test/free/admin/not-right-person?t=purpose-mismatch'
+      ),
+      params: {},
+      context: {},
+    } as LoaderFunctionArgs);
+    expect(data).toEqual({
+      ok: false,
+      reason: 'invalid',
+      teacherName: 'Jordan Rivera',
+      schoolName: 'Lincoln High School',
+    });
   });
 });

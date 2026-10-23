@@ -11,6 +11,7 @@ import {
 import type { FreeTierAdminLinkReplacedVariant } from '~/domain/free-tier/admin-link-gate.server';
 import { useFreeTierEnabled } from '../free-tier/useFreeTierLayoutContext';
 import { CircleAlert, CircleCheck } from 'lucide-react';
+import { applicationIdForKnownRequestOnFailedPeek } from '~/domain/free-tier/admin-link-known-request.server';
 import {
   applicationIdFromSignedToken,
   peekSignedLink,
@@ -79,7 +80,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
   const appId = peek.ok
     ? peek.applicationId
-    : applicationIdFromSignedToken(token);
+    : applicationIdForKnownRequestOnFailedPeek(token, peek) ??
+      applicationIdFromSignedToken(token);
   const showDenyAndQa = await isFeatureFlagEnabled(FREE_TIER_FLAG);
   if (appId) {
     const gate = await fetchFreeTierApplicationTerminalGate(appId);
@@ -133,14 +135,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
     peek.reason === 'purpose_mismatch' ||
     !peek.reason
   ) {
-    const app = await applicationFromToken(token);
-    if (app) {
-      return {
-        ok: false as const,
-        reason: 'invalid' as const,
-        teacherName: app.name,
-        schoolName: app.schoolName,
-      };
+    const knownAppId = applicationIdForKnownRequestOnFailedPeek(token, peek);
+    if (knownAppId) {
+      const app = await prisma.freeTierApplication.findUnique({
+        where: { id: knownAppId },
+        select: { schoolName: true, name: true },
+      });
+      if (app) {
+        return {
+          ok: false as const,
+          reason: 'invalid' as const,
+          teacherName: app.name,
+          schoolName: app.schoolName,
+        };
+      }
     }
     return { ok: false as const, reason: 'invalid' as const };
   }

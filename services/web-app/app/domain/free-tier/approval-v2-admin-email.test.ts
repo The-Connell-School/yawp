@@ -11,8 +11,13 @@ const notRightPersonUrl =
 
 async function expectDesignedAdminEmail(
   designedPromise: ReturnType<typeof buildDesignedAdminApprovalEmail>,
-  options: { reminder?: boolean; forwardedByAdminName?: string } = {}
+  options: {
+    reminder?: boolean;
+    forwardedByAdminName?: string;
+    pass1?: boolean;
+  } = {}
 ) {
+  const pass1 = options.pass1 ?? true;
   const designed = await designedPromise;
   const atSchool = teacherAtSchool(teacherName, schoolName);
   if (options.forwardedByAdminName) {
@@ -24,9 +29,15 @@ async function expectDesignedAdminEmail(
     expect(designed.subject).toBe(
       `Reminder: ${atSchool} would like to use Yawp!`
     );
-    expect(designed.text).toContain(
-      'A quick reminder: Jordan Rivera at Lincoln High School is still waiting on your approval.'
-    );
+    if (pass1) {
+      expect(designed.text).toContain(
+        'A quick reminder: Jordan Rivera at Lincoln High School is still waiting on your approval.'
+      );
+    } else {
+      expect(designed.text).toContain(
+        'This is a reminder about the approval request below.'
+      );
+    }
   } else {
     expect(designed.subject).toBe(`${atSchool} would like to use Yawp!`);
   }
@@ -60,7 +71,9 @@ test('approval v2 delivery uses designed approval email', async () => {
       schoolName,
       approveUrl,
       notRightPersonUrl,
-    })
+      pass1: true,
+    }),
+    { pass1: true }
   );
 });
 
@@ -73,8 +86,9 @@ test('approval v2 reminder uses designed reminder email', async () => {
       approveUrl,
       notRightPersonUrl,
       reminder: true,
+      pass1: true,
     }),
-    { reminder: true }
+    { reminder: true, pass1: true }
   );
 });
 
@@ -87,7 +101,8 @@ test('approval v2 forward recipient uses designed forward email', async () => {
       approveUrl,
       notRightPersonUrl,
       forwardedByAdminName: 'Sam Chen',
+      pass1: true,
     }),
-    { forwardedByAdminName: 'Sam Chen' }
+    { forwardedByAdminName: 'Sam Chen', pass1: true }
   );
 });
