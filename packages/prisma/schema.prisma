@@ -1836,7 +1836,11 @@ model User {
   isAdmin            Boolean         @default(false)
   isSuperAdmin       Boolean         @default(false)
   mockAdminGranted   Boolean         @default(false)
+  /// Dev-panel-only simulated students scoped to one class for demo data.
+  simulatedForClassId String?
   tours              UserTour[]
+
+  @@index([simulatedForClassId])
 }
 
 /// How a user left each in-app page tour (free classroom teachers). One row per
