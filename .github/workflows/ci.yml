@@ -1581,6 +1581,9 @@ jobs:
           else
             echo "(no dev-panel free-tier jump log)"
           fi
+          if [ -f .worktree-local/dev.log ]; then
+            grep '\[dev-panel free-tier jump failed\]' .worktree-local/dev.log || true
+          fi
 
       - name: Upload dev panel artboard evidence
         if: ${{ always() }}
