@@ -48,6 +48,7 @@ import {
 import { sanitizeFreeTierEmailLogPayload } from './email-log-payload.server';
 import { plainTextEmailToHtml } from './email-html.server';
 import {
+  buildTeacherDeniedDesignedEmail,
   buildTeacherForwardedDesignedEmail,
   buildTeacherStillWaitingDesignedEmail,
 } from '~/emails/build-free-tier-emails.server';
@@ -777,12 +778,19 @@ async function scheduleApplication(applicationId: string, now: Date) {
 
 async function allowedToDeliver(
   tx: Tx,
-  job: { kind: string },
+  job: { kind: string; approvalId: string },
   approval: FreeTierAdminApproval,
   app: FreeTierApplication,
   now: Date
 ) {
   // Callers check rollout eligibility before entering this status check.
+  if (job.kind === 'teacher_deny') {
+    return (
+      approval.status === 'DENIED' &&
+      approval.id === job.approvalId &&
+      (app.status === 'SENT' || app.status === 'MANUAL_REVIEW')
+    );
+  }
   if (approval.status !== 'PENDING') return false;
   const current = await tx.freeTierAdminApproval.findFirst({
     where: { applicationId: app.id, status: 'PENDING' },
@@ -800,6 +808,49 @@ async function allowedToDeliver(
         (!approval.lastReminderAt ||
           +now - +approval.lastReminderAt >= 600000)))
   );
+}
+
+export async function queueTeacherDenyEmailInTransaction(
+  tx: Tx,
+  args: {
+    approvalId: string;
+    now: Date;
+    teacherEmail: string;
+    teacherName: string;
+    schoolName: string;
+    adminName: string;
+    chainCapReached: boolean;
+  }
+) {
+  const statusUrl = `${freeTierPublicAppOrigin()}/app/free-tier/pending?ask=1`;
+  const designed = await buildTeacherDeniedDesignedEmail({
+    teacherName: args.teacherName,
+    adminName: args.adminName,
+    schoolName: args.schoolName,
+    statusUrl,
+    chainCapReached: args.chainCapReached,
+  });
+  return queue(tx, args.approvalId, 'teacher_deny', 1, args.now, {
+    to: args.teacherEmail,
+    subject: designed.subject,
+    text: designed.text,
+    html: designed.html,
+  });
+}
+
+export async function flushTeacherDenyEmail(approvalId: string, now = new Date()) {
+  const job = await prisma.freeTierApprovalDelivery.findUnique({
+    where: {
+      approvalId_kind_sequence: {
+        approvalId,
+        kind: 'teacher_deny',
+        sequence: 1,
+      },
+    },
+    select: { id: true, state: true, availableAt: true },
+  });
+  if (!job || job.state !== 'QUEUED' || +job.availableAt > +now) return;
+  await deliverJob(job.id, now);
 }
 async function deliverJob(id: string, now: Date) {
   const claimed = await prisma.$transaction(async (tx) => {
@@ -991,6 +1042,8 @@ async function deliverJob(id: string, now: Date) {
               pendingUrl,
             })
           ).html;
+        } else if (job.kind === 'teacher_deny' && message.html) {
+          html = message.html;
         } else {
           html = plainTextEmailToHtml(message.text);
         }

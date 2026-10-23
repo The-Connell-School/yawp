@@ -8,9 +8,11 @@ import {
 } from './signed-link.server';
 import { fetchFreeTierApplicationTerminalGate } from './admin-link-gate.server';
 import { hashRequestMeta } from './approval-flow.server';
-import { isApprovalV2Enabled } from './approval-v2.server';
-import { sendFreeTierTeacherDenyEmail } from './email.server';
-import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
+import {
+  flushTeacherDenyEmail,
+  isApprovalV2Enabled,
+  queueTeacherDenyEmailInTransaction,
+} from './approval-v2.server';
 import { ADMIN_REDIRECT_CHAIN_CAP } from './admin-email-rules.server';
 import { teacherAskAnotherHint } from './admin-deny-copy';
 import { applyYawpE2eDenyStub } from './e2e-stub.server';
@@ -72,6 +74,7 @@ export type DenySchoolAdminApprovalResult =
       ok: true;
       idempotent?: true;
       notify?: {
+        approvalId: string;
         applicationId: string;
         teacherEmail: string;
         teacherName: string;
@@ -198,10 +201,20 @@ export async function denySchoolAdminApproval(args: {
           reason: trimmedReason ?? `School admin deny (${pending.adminName})`,
         },
       });
+      await queueTeacherDenyEmailInTransaction(tx, {
+        approvalId: pending.id,
+        now,
+        teacherEmail: app.email,
+        teacherName: app.name,
+        schoolName: app.schoolName,
+        adminName: pending.adminName,
+        chainCapReached: app.adminRedirectCount >= ADMIN_REDIRECT_CHAIN_CAP,
+      });
 
       return {
         ok: true as const,
         notify: {
+          approvalId: pending.id,
           applicationId: app.id,
           teacherEmail: app.email,
           teacherName: app.name,
@@ -215,25 +228,24 @@ export async function denySchoolAdminApproval(args: {
     result = fail('unavailable');
   }
 
-  if (
-    result.ok &&
-    !('idempotent' in result && result.idempotent) &&
-    'notify' in result &&
-    result.notify
-  ) {
-    const statusUrl = `${freeTierPublicAppOrigin()}/app/free-tier/pending?ask=1`;
-    const emailResult = await sendFreeTierTeacherDenyEmail({
-      applicationId: result.notify.applicationId,
-      teacherEmail: result.notify.teacherEmail,
-      teacherName: result.notify.teacherName,
-      schoolName: result.notify.schoolName,
-      adminName: result.notify.adminName,
-      statusUrl,
-      chainCapReached: result.notify.chainCapReached,
-    });
-    if (!emailResult.ok) {
-      return { ok: false, reason: 'email_failed' };
-    }
+  if (result.ok) {
+    const linkId = linkIdFromSignedToken(args.token);
+    const approvalId =
+      ('notify' in result && result.notify?.approvalId) ||
+      (earlyAppId
+        ? (
+            await prisma.freeTierAdminApproval.findFirst({
+              where: {
+                applicationId: earlyAppId,
+                status: 'DENIED',
+                ...(linkId ? { signedLinkId: linkId } : {}),
+              },
+              orderBy: { decidedAt: 'desc' },
+              select: { id: true },
+            })
+          )?.id
+        : null);
+    if (approvalId) await flushTeacherDenyEmail(approvalId);
   }
   return result;
 }

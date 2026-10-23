@@ -1,4 +1,4 @@
-import React, { useId, useReducer, useRef, useEffect, useState } from 'react';
+import React, { useId, useReducer, useState, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
 
 type QaRow = {
@@ -32,15 +32,8 @@ function QaAccordionRow({
 }) {
   const panelId = useId();
   const buttonId = useId();
-  const innerRef = useRef<HTMLDivElement>(null);
-  const [height, setHeight] = useState(0);
-
-  useEffect(() => {
-    if (!innerRef.current) return;
-    setHeight(open ? innerRef.current.scrollHeight : 0);
-  }, [open, row.answer]);
-
   const durationMs = open ? 200 : 160;
+  const closedInert = !open && !reducedMotion;
 
   return (
     <div className="free-tier-qa-row">
@@ -53,34 +46,35 @@ function QaAccordionRow({
         onClick={onToggle}
       >
         <span>{row.question}</span>
-        <ChevronDown
+        <span
           aria-hidden
-          className={`free-tier-qa-chevron${open ? ' free-tier-qa-chevron-open' : ''}${reducedMotion ? ' free-tier-qa-chevron-reduced' : ''}`}
+          className={`free-tier-qa-chevron-wrap${
+            open ? ' free-tier-qa-chevron-wrap-open' : ''
+          }${reducedMotion ? ' free-tier-qa-chevron-wrap-reduced' : ''}`}
           style={
             reducedMotion
               ? undefined
               : { transitionDuration: `${durationMs}ms` }
           }
-        />
+        >
+          <ChevronDown className="free-tier-qa-chevron" />
+        </span>
       </button>
       <div
         id={panelId}
         role="region"
         aria-labelledby={buttonId}
-        className={`free-tier-qa-panel${reducedMotion ? ' free-tier-qa-panel-reduced' : ''}`}
+        {...(closedInert ? ({ inert: '' } as Record<string, string>) : {})}
+        className={`free-tier-qa-panel${
+          open ? ' free-tier-qa-panel-open' : ''
+        }${reducedMotion ? ' free-tier-qa-panel-reduced' : ''}`}
         style={
           reducedMotion
             ? { display: open ? 'block' : 'none' }
-            : {
-                maxHeight: height,
-                transitionDuration: `${durationMs}ms`,
-                opacity: open ? 1 : 0,
-              }
+            : { transitionDuration: `${durationMs}ms` }
         }
       >
-        <div ref={innerRef} className="free-tier-qa-panel-inner">
-          {row.answer}
-        </div>
+        <div className="free-tier-qa-panel-inner">{row.answer}</div>
       </div>
     </div>
   );

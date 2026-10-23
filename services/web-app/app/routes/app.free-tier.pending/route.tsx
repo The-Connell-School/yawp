@@ -349,7 +349,12 @@ export default function FreeTierPendingRoute() {
         footer={
           <div className="flex flex-col items-center gap-1">
             {showExploreClassroom ? (
-              <Button type="button" variant="link" asChild className="h-auto p-0">
+              <Button
+                type="button"
+                variant="link"
+                asChild
+                className="h-auto p-0 text-sm underline"
+              >
                 <Link to="/app">Explore my classroom</Link>
               </Button>
             ) : null}

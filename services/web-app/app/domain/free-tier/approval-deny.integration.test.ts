@@ -1,6 +1,11 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
-const sendEmailMock = mock(async () => ({ status: 'success' as const }));
+type SendEmailMockResult =
+  | { status: 'success' }
+  | { status: 'error'; error: { statusCode: number } };
+const sendEmailMock = mock(async (): Promise<SendEmailMockResult> => ({
+  status: 'success',
+}));
 mock.module('~/utils/email.server', () => ({
   sendEmail: sendEmailMock,
   getTransactionalEmailFrom: () => 'Yawp! <noreply@yawp.school>',
@@ -13,7 +18,8 @@ describe.skipIf(!enabled)('admin deny approval', () => {
   let denySchoolAdminApproval: typeof import('./approval-deny.server').denySchoolAdminApproval;
   let loadTeacherDeniedSurface: typeof import('./approval-deny.server').loadTeacherDeniedSurface;
   let resolveAdminDenyAnsweredGate: typeof import('./approval-deny.server').resolveAdminDenyAnsweredGate;
-  let forwardApprovalRequest: typeof import('./approval-v2.server').forwardApprovalRequest;
+    let forwardApprovalRequest: typeof import('./approval-v2.server').forwardApprovalRequest;
+    let runApprovalJobs: typeof import('./approval-v2.server').runApprovalJobs;
   const orgId = `deny-suite-${crypto.randomUUID()}`;
   const apps: string[] = [];
 
@@ -27,7 +33,7 @@ describe.skipIf(!enabled)('admin deny approval', () => {
       loadTeacherDeniedSurface,
       resolveAdminDenyAnsweredGate,
     } = await import('./approval-deny.server'));
-    ({ forwardApprovalRequest } = await import('./approval-v2.server'));
+    ({ forwardApprovalRequest, runApprovalJobs } = await import('./approval-v2.server'));
     sendEmailMock.mockClear();
     await prisma.setting.upsert({
       where: { name: 'feature_flag.free_tier' },
@@ -118,10 +124,15 @@ describe.skipIf(!enabled)('admin deny approval', () => {
     expect(row.status).toBe('DENIED');
     expect(row.denyReason).toBe('secret team note');
     expect(row.autoRemindersStopped).toBe(true);
-    const cancelled = await prisma.freeTierApprovalDelivery.findMany({
+    const deliveries = await prisma.freeTierApprovalDelivery.findMany({
       where: { approvalId: approval.id },
     });
-    expect(cancelled.every((d) => d.state === 'CANCELLED')).toBe(true);
+    expect(
+      deliveries
+        .filter((d) => d.kind === 'admin_reminder')
+        .every((d) => d.state === 'CANCELLED')
+    ).toBe(true);
+    expect(deliveries.find((d) => d.kind === 'teacher_deny')?.state).toBe('SENT');
     expect(sendEmailMock).toHaveBeenCalled();
     const calls = sendEmailMock.mock.calls as unknown as Array<
       [{ text?: string; html?: string }]
@@ -168,6 +179,45 @@ describe.skipIf(!enabled)('admin deny approval', () => {
     });
     const gate = await resolveAdminDenyAnsweredGate({ token });
     expect(gate?.reason).toBe('admin_denied');
+  });
+
+  test('teacher deny email retries from outbox after first send fails', async () => {
+    let attempts = 0;
+    sendEmailMock.mockImplementation(async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        return { status: 'error' as const, error: { statusCode: 429 } };
+      }
+      return { status: 'success' as const };
+    });
+    const { app, approval, token } = await seedSentApp('email-retry');
+    const req = new Request('http://localhost/deny', { method: 'POST' });
+    expect((await denySchoolAdminApproval({ token, request: req })).ok).toBe(true);
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    const delivery = await prisma.freeTierApprovalDelivery.findUnique({
+      where: {
+        approvalId_kind_sequence: {
+          approvalId: approval.id,
+          kind: 'teacher_deny',
+          sequence: 1,
+        },
+      },
+    });
+    expect(delivery?.state).toBe('QUEUED');
+    await prisma.freeTierApprovalDelivery.update({
+      where: { id: delivery!.id },
+      data: { availableAt: new Date() },
+    });
+    await runApprovalJobs(new Date());
+    expect(sendEmailMock).toHaveBeenCalledTimes(2);
+    const successLogs = await prisma.freeTierEmailLog.findMany({
+      where: { applicationId: app.id, kind: 'teacher_deny', success: true },
+    });
+    expect(successLogs).toHaveLength(1);
+    const sent = await prisma.freeTierApprovalDelivery.findUniqueOrThrow({
+      where: { id: delivery!.id },
+    });
+    expect(sent.state).toBe('SENT');
   });
 
   test('teacher ask after deny counts toward cap', async () => {

@@ -111,7 +111,9 @@ describe('demo ECR image pull path', () => {
 
   test('ECR push path builds per repository and skips existing immutable tags', () => {
     expect(buildJob).toContain('vars.DEMO_ECR_PUSH_ROLE_ARN !=');
-    expect(buildJob).toContain('configure-aws-credentials@v4');
+    expect(buildJob).toContain(
+      'configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1'
+    );
     expect(buildJob).toContain('amazon-ecr-login');
     expect(buildJob).toContain('describe-images --repository-name yawp-demo-web');
     expect(buildJob).toContain('describe-images --repository-name yawp-demo-toolbox');
