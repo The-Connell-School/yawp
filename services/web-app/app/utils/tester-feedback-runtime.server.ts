@@ -36,7 +36,6 @@ export const testerFeedbackDependencies: FeedbackDependencies = {
   auditInternalRead: recordInternalPlatformWriteAudit,
   save: saveTesterFeedback,
   list: listTesterFeedback,
-  screenshotPresence: loadTesterFeedbackScreenshotPresence,
   loadScreenshot: loadTesterFeedbackScreenshot,
 };
 
@@ -79,8 +78,7 @@ export async function listTesterFeedback(
     take: input.limit,
   });
   const presence = await loadTesterFeedbackScreenshotPresence(
-    rows.map((row) => row.id),
-    model
+    rows.map((row) => row.id)
   );
   return rows.map(({ user, ...entry }) => ({
     ...entry,
@@ -93,11 +91,11 @@ export async function listTesterFeedback(
 
 export async function loadTesterFeedbackScreenshotPresence(
   ids: string[],
-  model: Pick<typeof prisma, '$queryRaw'> = prisma
+  db: Pick<typeof prisma, '$queryRaw'> = prisma
 ) {
   const presence = new Map<string, boolean>();
   if (!ids.length) return presence;
-  const rows = await model.$queryRaw<{ id: string; hasScreenshot: boolean }[]>`
+  const rows = await db.$queryRaw<{ id: string; hasScreenshot: boolean }[]>`
     SELECT id,
       (screenshot IS NOT NULL AND btrim(screenshot) <> '') AS "hasScreenshot"
     FROM "TesterFeedback"

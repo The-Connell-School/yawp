@@ -46,4 +46,4 @@ Successful JSON list and CSV export calls append `InternalPlatformApiAudit` rows
 - Returns `404` when the row is missing or has no decodable screenshot.
 - Response body is raw image bytes. Content-Type is `image/jpeg` by default, or `image/webp` when the stored payload is WebP.
 - Headers: `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`.
-- Successful reads append an audit row with result `screenshot.success:<feedbackId>`. Audit entries never include image bytes, secrets, or email addresses beyond the signed actor header.
+- Successful reads append an audit row with result `screenshot.success:<feedbackId>`. Missing, invalid, or undecodable screenshots audit as `screenshot.not_found:<feedbackId>` (404), malformed ids as `screenshot.invalid_id` (400), and oversize decoded payloads as `screenshot.too_large:<feedbackId>` (413). Audit entries never include image bytes, secrets, or email addresses beyond the signed actor header.

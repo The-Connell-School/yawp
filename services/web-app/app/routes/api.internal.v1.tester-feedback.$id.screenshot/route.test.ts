@@ -41,6 +41,7 @@ describe('GET /api/internal/v1/tester-feedback/:id/screenshot', () => {
     resetInternalApiMemoryNonceStore();
     const url = `https://yawp.test/api/internal/v1/tester-feedback/${feedbackId}/screenshot`;
     const loadScreenshot = mock(async () => null as string | null);
+    const auditInternalRead = mock(async () => {});
     const deps = {
       enabled: () => true,
       environment: () => 'demo',
@@ -49,6 +50,7 @@ describe('GET /api/internal/v1/tester-feedback/:id/screenshot', () => {
       list: async () => [],
       authenticateInternal: authorizeInternalApiRequest,
       loadScreenshot,
+      auditInternalRead,
     };
 
     expect(
@@ -88,6 +90,12 @@ describe('GET /api/internal/v1/tester-feedback/:id/screenshot', () => {
         )
       ).status
     ).toBe(404);
+    expect(auditInternalRead).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: `screenshot.not_found:${feedbackId}`,
+      })
+    );
+    auditInternalRead.mockClear();
 
     const signedEmpty = signInternalApiRequest({
       method: 'GET',
@@ -125,6 +133,9 @@ describe('GET /api/internal/v1/tester-feedback/:id/screenshot', () => {
         )
       ).status
     ).toBe(400);
+    expect(auditInternalRead).toHaveBeenCalledWith(
+      expect.objectContaining({ result: 'screenshot.invalid_id' })
+    );
   });
 
   test('returns jpeg bytes, content-type, and audit row on success', async () => {

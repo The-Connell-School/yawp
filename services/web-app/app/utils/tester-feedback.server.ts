@@ -102,7 +102,6 @@ export interface FeedbackDependencies {
   environment(): string;
   save(input: FeedbackInput): Promise<boolean>;
   list(input: FeedbackQuery): Promise<FeedbackEntry[]>;
-  screenshotPresence?(ids: string[]): Promise<Map<string, boolean>>;
   loadScreenshot?(id: string): Promise<string | null>;
   authenticateInternal(
     request: Request
@@ -444,21 +443,56 @@ export async function readTesterFeedbackScreenshot(
     return response({ error: 'Unauthorized' }, 401);
   if (request.method !== 'GET')
     return response({ error: 'Method not allowed' }, 405, { Allow: 'GET' });
-  if (!TESTER_FEEDBACK_ID.test(feedbackId))
+  if (!TESTER_FEEDBACK_ID.test(feedbackId)) {
+    await auditInternalFeedbackRead(
+      request,
+      deps,
+      auth,
+      'screenshot.invalid_id'
+    );
     return response({ error: 'Invalid feedback id' }, 400);
-  if (!deps.loadScreenshot)
+  }
+  if (!deps.loadScreenshot) {
+    await auditInternalFeedbackRead(
+      request,
+      deps,
+      auth,
+      `screenshot.not_found:${feedbackId}`
+    );
     return response({ error: 'Not found' }, 404);
+  }
   const stored = await deps.loadScreenshot(feedbackId);
-  if (!stored) return response({ error: 'Not found' }, 404);
+  if (!stored) {
+    await auditInternalFeedbackRead(
+      request,
+      deps,
+      auth,
+      `screenshot.not_found:${feedbackId}`
+    );
+    return response({ error: 'Not found' }, 404);
+  }
   const decoded = decodeStoredFeedbackScreenshot(stored);
-  if (!decoded) return response({ error: 'Not found' }, 404);
+  if (!decoded.ok) {
+    await auditInternalFeedbackRead(
+      request,
+      deps,
+      auth,
+      decoded.reason === 'too_large'
+        ? `screenshot.too_large:${feedbackId}`
+        : `screenshot.not_found:${feedbackId}`
+    );
+    return response(
+      { error: decoded.reason === 'too_large' ? 'Screenshot too large' : 'Not found' },
+      decoded.reason === 'too_large' ? 413 : 404
+    );
+  }
   await auditInternalFeedbackRead(
     request,
     deps,
     auth,
     `screenshot.success:${feedbackId}`
   );
-  return new Response(decoded.bytes, {
+  return new Response(Buffer.from(decoded.bytes), {
     status: 200,
     headers: {
       'content-type': decoded.contentType,

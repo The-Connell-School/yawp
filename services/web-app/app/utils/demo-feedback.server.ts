@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import { readBoundedText } from './bounded-body.server';
 import { FEEDBACK_CAPTURE_EVENTS, feedbackPath } from './demo-feedback-context';
+import { isDevPanelRuntimeEnabled } from '~/dev-panel/dev-panel-runtime.server';
+import { DEMO_FEEDBACK_NOTE_LIMIT } from './demo-feedback-limits';
 import { severitySchema, type FeedbackInput } from './tester-feedback.server';
 
-export const DEMO_FEEDBACK_NOTE_LIMIT = 2000;
-import { isDevPanelRuntimeEnabled } from '~/dev-panel/dev-panel-runtime.server';
+export { DEMO_FEEDBACK_NOTE_LIMIT } from './demo-feedback-limits';
 
 export interface DemoFeedbackDependencies {
   environment(): string;

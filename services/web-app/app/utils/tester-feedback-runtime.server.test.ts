@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test';
 import {
   saveTesterFeedback,
-  listTesterFeedback,
+  loadTesterFeedbackScreenshotPresence,
   type FeedbackWriteTransaction,
 } from './tester-feedback-runtime.server';
 import type { FeedbackInput } from './tester-feedback.server';
@@ -58,7 +58,25 @@ describe('feedback database rate limit', () => {
   });
 });
 
+test('screenshot presence query uses the prisma client, not the testerFeedback delegate', async () => {
+  const queryRaw = mock(async () => [{ id: 'new', hasScreenshot: true }]);
+  const presence = await loadTesterFeedbackScreenshotPresence(['new'], {
+    $queryRaw: queryRaw,
+  } as never);
+  expect(queryRaw).toHaveBeenCalledTimes(1);
+  expect(presence.get('new')).toBe(true);
+});
+
 test('list joins only server User email/name, keeps filters and pagination, normalizes historical actions', async () => {
+  const queryRaw = mock(async () => [
+    { id: 'new', hasScreenshot: true },
+    { id: 'legacy', hasScreenshot: false },
+    { id: 'invalid-json', hasScreenshot: false },
+  ]);
+  mock.module('./db.server', () => ({
+    prisma: { $queryRaw: queryRaw },
+  }));
+  const { listTesterFeedback } = await import('./tester-feedback-runtime.server');
   const findMany = mock(async () => [
     {
       id: 'new',
@@ -72,11 +90,6 @@ test('list joins only server User email/name, keeps filters and pagination, norm
       user: { email: null, name: null },
     },
   ]);
-  const queryRaw = mock(async () => [
-    { id: 'new', hasScreenshot: true },
-    { id: 'legacy', hasScreenshot: false },
-    { id: 'invalid-json', hasScreenshot: false },
-  ]);
   const query = {
     environment: 'demo',
     userId: 'tester-1',
@@ -87,10 +100,7 @@ test('list joins only server User email/name, keeps filters and pagination, norm
     limit: 51,
     format: 'json',
   } as const;
-  const rows = await listTesterFeedback(query, {
-    findMany,
-    $queryRaw: queryRaw,
-  } as any);
+  const rows = await listTesterFeedback(query, { findMany } as never);
   expect(findMany).toHaveBeenCalledWith({
     where: {
       environment: 'demo',
@@ -117,6 +127,7 @@ test('list joins only server User email/name, keeps filters and pagination, norm
     skip: 1,
     take: 51,
   });
+  expect(queryRaw).toHaveBeenCalledTimes(1);
   expect(
     rows.map(({ id, actions, userEmail, userName, hasScreenshot }) => ({
       id,

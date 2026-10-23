@@ -16,7 +16,7 @@ import {
   feedbackPath,
   type FeedbackAnalytics,
 } from '~/utils/demo-feedback-context';
-import { DEMO_FEEDBACK_NOTE_LIMIT } from '~/utils/demo-feedback.server';
+import { DEMO_FEEDBACK_NOTE_LIMIT } from '~/utils/demo-feedback-limits';
 import './demo-feedback-widget.css';
 
 const demoFeedbackNoteLimitLabel =
