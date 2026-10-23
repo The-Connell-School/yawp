@@ -15,11 +15,7 @@ trap cleanup EXIT
 run_migrate() {
   (
     cd "$REPO_ROOT"
-    if [[ "$PRISMA_CLI_SCRIPT" == /* ]]; then
-      PRISMA_CLI_REPO_ROOT="$REPO_ROOT" bash "$PRISMA_CLI_SCRIPT" migrate deploy
-    else
-      PRISMA_CLI_REPO_ROOT="$REPO_ROOT" bash "$PRISMA_CLI_SCRIPT" migrate deploy
-    fi
+    PRISMA_CLI_REPO_ROOT="$REPO_ROOT" bash "$PRISMA_CLI_SCRIPT" migrate deploy
   ) 2>&1 | tee -a "$migrate_log"
 }
 

@@ -65,6 +65,12 @@ export function redactEmailForLogs(email) {
   return `${localHead}***@${domainHead}***${domainTail ? `.${domainTail}` : ''}`;
 }
 
+export function redactQuotedStrings(line) {
+  return line
+    .replace(/"([^"\\]|\\.)*"/g, '"<redacted>"')
+    .replace(/'([^'\\]|\\.)*'/g, "'<redacted>'");
+}
+
 export function sanitizeCliFailure(label, stderr) {
   const lines = (stderr || '')
     .split(/\r?\n/)
@@ -77,8 +83,11 @@ export function sanitizeCliFailure(label, stderr) {
         !/Failing row contains/i.test(line) &&
         !/^CONTEXT:/i.test(line)
     );
-  const first = lines[0] || `${label} failed`;
-  const sqlstate = (stderr || '').match(/\b([0-9A-Z]{5})\b/)?.[1];
+  let first = lines[0] || `${label} failed`;
+  first = redactQuotedStrings(first);
+  const sqlstate =
+    (stderr || '').match(/SQLSTATE[: ]+([0-9A-Z]{5})/i)?.[1] ||
+    (stderr || '').match(/ERROR:\s+([0-9A-Z]{5})\b/)?.[1];
   const compact = first.length > 240 ? `${first.slice(0, 240)}…` : first;
   return sqlstate ? `${compact} (SQLSTATE ${sqlstate})` : compact;
 }
@@ -90,7 +99,7 @@ export function sanitizeJsonFailure(error) {
   return 'Tester feedback backup JSON is invalid';
 }
 
-export function buildTesterFeedbackRestoreStreamParts(includeScreenshot) {
+function incomingRecordColumns(includeScreenshot) {
   const screenshotRecord = includeScreenshot ? '    screenshot text,\n' : '';
   const screenshotInsert = includeScreenshot ? '  screenshot,\n' : '';
   const screenshotSelect = includeScreenshot ? '  incoming.screenshot,\n' : '';
@@ -98,7 +107,11 @@ export function buildTesterFeedbackRestoreStreamParts(includeScreenshot) {
     ? '  screenshot = EXCLUDED.screenshot,\n'
     : '';
 
-  const prefix = `
+  return { screenshotRecord, screenshotInsert, screenshotSelect, screenshotUpdate };
+}
+
+export function buildTesterFeedbackRestoreCopyPrefix() {
+  return `
 BEGIN;
 DO $$
 BEGIN
@@ -111,14 +124,27 @@ BEGIN
   END IF;
 END $$;
 
-WITH incoming AS (
+CREATE TEMP TABLE _demo_tester_feedback_restore_b64 (
+  payload text
+) ON COMMIT DROP;
+
+COPY _demo_tester_feedback_restore_b64 (payload) FROM STDIN WITH (FORMAT text);
+`.trim();
+}
+
+export function buildTesterFeedbackRestoreCopySuffix(includeScreenshot) {
+  const { screenshotRecord, screenshotInsert, screenshotSelect, screenshotUpdate } =
+    incomingRecordColumns(includeScreenshot);
+
+  return `
+\\.
+WITH decoded AS (
+  SELECT convert_from(decode(string_agg(payload, ''), 'base64'), 'UTF8')::jsonb AS rows_json
+  FROM _demo_tester_feedback_restore_b64
+),
+incoming AS (
   SELECT *
-  FROM jsonb_to_recordset($data$
-`.trimStart();
-
-  const suffix = `
-
-$data$) AS row_data(
+  FROM jsonb_to_recordset((SELECT rows_json FROM decoded)) AS row_data(
     id text,
     "userId" text,
     "reporterEmail" text,
@@ -182,9 +208,15 @@ ${screenshotUpdate}  environment = EXCLUDED.environment,
 
 SELECT count(*) AS restored_rows FROM "TesterFeedback";
 COMMIT;
-`.trimStart();
+`.trim();
+}
 
-  return { prefix, suffix };
+/** @deprecated streaming restore uses COPY + base64; kept for tests */
+export function buildTesterFeedbackRestoreStreamParts(includeScreenshot) {
+  return {
+    prefix: buildTesterFeedbackRestoreCopyPrefix(),
+    suffix: buildTesterFeedbackRestoreCopySuffix(includeScreenshot),
+  };
 }
 
 export function buildTesterFeedbackRestoreSql(rows, includeScreenshot = true) {
@@ -195,11 +227,6 @@ export function buildTesterFeedbackRestoreSql(rows, includeScreenshot = true) {
     return 'SELECT 0 AS restored_rows;';
   }
 
-  const payload = JSON.stringify(rows);
-  if (payload.includes('$data$')) {
-    throw new Error('Tester feedback backup contains unsupported delimiter');
-  }
-
-  const { prefix, suffix } = buildTesterFeedbackRestoreStreamParts(includeScreenshot);
-  return `${prefix}${payload}${suffix}`;
+  const base64Payload = Buffer.from(JSON.stringify(rows), 'utf8').toString('base64');
+  return `${buildTesterFeedbackRestoreCopyPrefix()}\n${base64Payload}\n${buildTesterFeedbackRestoreCopySuffix(includeScreenshot)}`;
 }

@@ -179,4 +179,83 @@ INSERT INTO "TesterFeedback" (
       adminPsql(`DROP DATABASE IF EXISTS ${DEMO_DB_NAME} WITH (FORCE);`);
     }
   });
+
+  test('restore round-trips feedback text with $data$, quotes, SQL-ish tokens, newlines, and unicode', () => {
+    const whatIDid = "$data$\\n'; ;COMMIT; COPY x FROM PROGRAM 'sh'; --";
+    const whatHappened = '$$';
+    const whatIWish = "single'quote\\backslash\nsecond line\r\nthird\t\u2603\u0001";
+    const userAgent = 'Mozilla/5.0 (test)';
+
+    adminPsql(`DROP DATABASE IF EXISTS ${DEMO_DB_NAME} WITH (FORCE);`);
+    adminPsql(`CREATE DATABASE ${DEMO_DB_NAME};`);
+    prismaMigrateDeploy();
+
+    const seedSpecialFile = join(tmpdir(), `yawp-tf-special-seed-${Date.now()}.sql`);
+    writeFileSync(
+      seedSpecialFile,
+      `
+INSERT INTO "User" ("id","createdAt","updatedAt","email","name","isAdmin","isSuperAdmin")
+VALUES ('admin-before', now(), now(), 'dev.admin@yawp.local', 'Dev Admin', true, true);
+INSERT INTO "TesterFeedback" (
+  "id","userId","url","userAgent","whatIDid","whatHappened","whatIWish",
+  "severity","actions","environment","createdAt"
+) VALUES (
+  'tf_special',
+  'admin-before',
+  'https://demo.example/special',
+  $ua$${userAgent}$ua$,
+  $did$${whatIDid}$did$,
+  $hap$${whatHappened}$hap$,
+  $wish$${whatIWish}$wish$,
+  'high',
+  '[{"token":"$data$"}]'::jsonb,
+  'demo',
+  '2026-10-23T19:00:00Z'
+);
+`,
+      'utf8'
+    );
+    const seedSpecialRes = run('psql', ['-v', 'ON_ERROR_STOP=1', DEMO_DB, '-f', seedSpecialFile]);
+    rmSync(seedSpecialFile, { force: true });
+    if (seedSpecialRes.status !== 0) {
+      throw new Error(`special seed failed: ${seedSpecialRes.stderr || seedSpecialRes.stdout}`);
+    }
+
+    const previewRoot = mkdtempSync(join(tmpdir(), 'yawp-demo-tf-special-'));
+    try {
+      const exported = runPreserve('export', { PREVIEW_ROOT: previewRoot });
+      expect(exported.status).toBe(0);
+      const backupFile = exported.stdout.trim();
+
+      adminPsql(`DROP DATABASE IF EXISTS ${DEMO_DB_NAME} WITH (FORCE);`);
+      adminPsql(`CREATE DATABASE ${DEMO_DB_NAME};`);
+      prismaMigrateDeploy();
+      seedPostResetUsers();
+
+      const restored = runPreserve('restore', {
+        PREVIEW_ROOT: previewRoot,
+        BACKUP_FILE: backupFile,
+      });
+      expect(restored.status).toBe(0);
+
+      const row = demoJson<{
+        whatIDid: string;
+        whatHappened: string;
+        whatIWish: string;
+        userAgent: string;
+        actions: unknown;
+      }>(
+        `SELECT row_to_json(tf) FROM "TesterFeedback" tf WHERE tf.id = 'tf_special'`
+      );
+
+      expect(row.whatIDid).toBe(whatIDid);
+      expect(row.whatHappened).toBe(whatHappened);
+      expect(row.whatIWish).toBe(whatIWish);
+      expect(row.userAgent).toBe(userAgent);
+      expect(row.actions).toEqual([{ token: '$data$' }]);
+    } finally {
+      rmSync(previewRoot, { recursive: true, force: true });
+      adminPsql(`DROP DATABASE IF EXISTS ${DEMO_DB_NAME} WITH (FORCE);`);
+    }
+  });
 });

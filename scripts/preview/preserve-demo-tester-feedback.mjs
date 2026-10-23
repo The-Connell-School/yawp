@@ -1,13 +1,15 @@
 #!/usr/bin/env node
-import { createReadStream, createWriteStream } from 'node:fs';
+import { createWriteStream } from 'node:fs';
 import { mkdir, mkdtemp, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { finished } from 'node:stream/promises';
 import {
   SCREENSHOT_COLUMN_PROBE_SQL,
   buildTesterFeedbackExportSql,
-  buildTesterFeedbackRestoreStreamParts,
+  buildTesterFeedbackRestoreCopyPrefix,
+  buildTesterFeedbackRestoreCopySuffix,
   sanitizeCliFailure,
   sanitizeJsonFailure,
 } from './preserve-demo-tester-feedback-lib.mjs';
@@ -93,7 +95,7 @@ async function streamPsqlStdoutToFile(databaseName, psqlArgs, destinationPath) {
   }
 }
 
-async function streamRestoreSql(databaseName, prefix, backupFile, suffix) {
+async function streamRestoreFromBase64Copy(databaseName, backupFile, includeScreenshot) {
   const { command, args } = buildPsqlSpawnArgs(databaseName, [
     '--no-psqlrc',
     '-v',
@@ -101,30 +103,39 @@ async function streamRestoreSql(databaseName, prefix, backupFile, suffix) {
     '-f',
     '-',
   ]);
-  const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+  const psqlChild = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] });
   const stderrChunks = [];
-  child.stderr.on('data', (chunk) => stderrChunks.push(chunk));
+  psqlChild.stderr.on('data', (chunk) => stderrChunks.push(chunk));
 
-  await new Promise((resolve, reject) => {
-    child.stdin.write(prefix);
-    const input = createReadStream(backupFile);
-    input.on('error', reject);
-    child.stdin.on('error', reject);
-    input.on('data', (chunk) => {
-      if (!child.stdin.write(chunk)) {
-        input.pause();
-        child.stdin.once('drain', () => input.resume());
-      }
-    });
-    input.on('end', () => {
-      child.stdin.write(suffix);
-      child.stdin.end();
-      resolve(undefined);
-    });
+  const copyPrefix = buildTesterFeedbackRestoreCopyPrefix();
+  const copySuffix = buildTesterFeedbackRestoreCopySuffix(includeScreenshot);
+  psqlChild.stdin.write(`${copyPrefix}\n`);
+
+  const base64Child = spawn('base64', ['-w', '0', backupFile], {
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
+  const base64Errors = [];
+  base64Child.stderr.on('data', (chunk) => base64Errors.push(chunk));
 
-  const exitCode = await new Promise((resolve) => child.on('close', resolve));
-  if (exitCode !== 0) {
+  base64Child.stdout.pipe(psqlChild.stdin, { end: false });
+
+  const base64ExitCode = await once(base64Child, 'close').then(([code]) => code ?? 1);
+  if (base64ExitCode !== 0) {
+    psqlChild.stdin.destroy();
+    psqlChild.kill();
+    throw new Error(
+      sanitizeCliFailure(
+        'base64 encode',
+        Buffer.concat(base64Errors).toString('utf8') || 'base64 failed'
+      )
+    );
+  }
+
+  psqlChild.stdin.write(`\n${copySuffix}\n`);
+  psqlChild.stdin.end();
+
+  const psqlExitCode = await once(psqlChild, 'close').then(([code]) => code ?? 1);
+  if (psqlExitCode !== 0) {
     throw new Error(
       sanitizeCliFailure('psql restore', Buffer.concat(stderrChunks).toString('utf8'))
     );
@@ -219,8 +230,7 @@ async function restoreBackup() {
   }
 
   const includeScreenshot = await screenshotColumnExists(databaseName);
-  const { prefix, suffix } = buildTesterFeedbackRestoreStreamParts(includeScreenshot);
-  await streamRestoreSql(databaseName, prefix, backupFile, suffix);
+  await streamRestoreFromBase64Copy(databaseName, backupFile, includeScreenshot);
 
   const countOutput = (
     await runPsql(databaseName, [

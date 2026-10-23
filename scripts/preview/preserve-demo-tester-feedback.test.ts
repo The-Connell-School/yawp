@@ -3,6 +3,7 @@ import { chmod, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
+  buildTesterFeedbackRestoreCopyPrefix,
   buildTesterFeedbackRestoreSql,
   redactEmailForLogs,
   sanitizeCliFailure,
@@ -36,6 +37,17 @@ describe('preserve demo tester feedback helpers', () => {
     expect(message).not.toContain('dev.admin');
   });
 
+  test('sanitizeCliFailure extracts SQLSTATE and redacts quoted values on first line', () => {
+    const message = sanitizeCliFailure(
+      'psql',
+      'ERROR: duplicate key value violates unique constraint "TesterFeedback_pkey"\nSQLSTATE: 23505\nDETAIL: Key (id)=(tf_1) already exists.\n'
+    );
+    expect(message).toContain('SQLSTATE 23505');
+    expect(message).toContain('<redacted>');
+    expect(message).not.toContain('TesterFeedback_pkey');
+    expect(message).not.toContain('tf_1');
+  });
+
   test('restore SQL remaps reporter email and keeps screenshot column', () => {
     const sql = buildTesterFeedbackRestoreSql([
       {
@@ -55,10 +67,41 @@ describe('preserve demo tester feedback helpers', () => {
       },
     ]);
 
-    expect(sql).toContain('"screenshot"');
+    expect(sql).toContain('incoming.screenshot');
     expect(sql).toContain('dev.admin@yawp.local');
     expect(sql).toContain('reporterEmail');
     expect(sql).toContain('ON CONFLICT (id) DO UPDATE');
+    expect(sql).toContain('decode(string_agg');
+    expect(sql).toContain('COPY _demo_tester_feedback_restore_b64');
+    expect(sql).not.toContain('$data$');
+  });
+
+  test('restore SQL base64-encodes user text so nothing raw appears in SQL', () => {
+    const injection =
+      "$data$\\n'; DROP TABLE \"TesterFeedback\"; COPY x FROM PROGRAM 'id'; COMMIT; --";
+    const rows = [
+      {
+        id: 'tf_inj',
+        userId: 'old',
+        reporterEmail: 'dev.student@yawp.local',
+        url: 'https://demo.example',
+        userAgent: 'ua',
+        whatIDid: injection,
+        whatHappened: '$$',
+        whatIWish: 'line1\nline2\t\u2603',
+        severity: 'low',
+        actions: [{ note: injection }],
+        environment: 'demo',
+        createdAt: '2026-10-23T18:00:00.000Z',
+      },
+    ];
+    const sql = buildTesterFeedbackRestoreSql(rows, false);
+    expect(sql).not.toContain('$data$');
+    expect(sql).not.toContain('DROP TABLE');
+    expect(sql).not.toContain(injection);
+    const prefix = buildTesterFeedbackRestoreCopyPrefix();
+    const base64Line = sql.slice(prefix.length + 1).split('\n')[0];
+    expect(Buffer.from(base64Line, 'base64').toString('utf8')).toBe(JSON.stringify(rows));
   });
 });
 
