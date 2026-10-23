@@ -641,7 +641,7 @@ jobs:
 
       - name: 🐳 Set up Docker Buildx
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       # Layer cache in the GitHub Actions cache, so unchanged layers are not rebuilt.
       - name: 🐳 Build production image (cached layers)
