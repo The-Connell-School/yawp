@@ -1,10 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
-import {
-  devToolsPanel,
-  openDevPanelClassSimulationFlyout,
-  openDevPanelSection,
-} from '../helpers/dev-panel-feedback';
+import { openDevPanelClassSimulationFlyout } from '../helpers/dev-panel-feedback';
 
 const prisma = createE2EPrismaClient();
 
