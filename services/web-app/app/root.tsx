@@ -383,7 +383,9 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
           if (response.ok) {
             window.location.href = '/app';
           }
-        } catch (error) {}
+        } catch {
+          // Dev-only window.authenticate helper: network failures need no UI signal.
+        }
       };
     }
 
