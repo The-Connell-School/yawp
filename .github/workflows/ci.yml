@@ -1383,6 +1383,10 @@ jobs:
       - name: ⬇️ Checkout repo
         uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
 
+      # Fixture steps isolate XDG_CACHE_HOME; keep browser lookup on the shared CI cache path.
+      - name: Configure Playwright browser path
+        run: echo "PLAYWRIGHT_BROWSERS_PATH=${HOME}/.cache/ms-playwright" >> "$GITHUB_ENV"
+
       - name: ⎔ Setup node
         uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
         with:
