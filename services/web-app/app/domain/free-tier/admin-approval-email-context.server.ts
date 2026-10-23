@@ -1,6 +1,10 @@
 import type { FreeTierAdminApproval, Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
-import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
+import {
+  FREE_TIER_FLAG,
+  isFeatureFlagEnabled,
+  isFreeTierEnabled,
+} from '~/domain/feature-flags/feature-flags.server';
 import { adminApprovalTeacherRerouteLeadMarker } from './admin-approval-copy';
 
 export type AdminApprovalEmailContext = {
@@ -16,9 +20,13 @@ export async function resolveAdminApprovalEmailContext(
     'redirectedFromId' | 'forwardedByRole'
   >,
   db: Tx | typeof prisma = prisma,
-  options?: { pass1?: boolean }
+  options?: { pass1?: boolean; organizationId?: string | null }
 ): Promise<AdminApprovalEmailContext> {
-  const pass1 = options?.pass1 ?? (await isFreeTierEnabled());
+  const pass1 =
+    options?.pass1 ??
+    (options?.organizationId != null
+      ? await isFeatureFlagEnabled(FREE_TIER_FLAG, options.organizationId)
+      : await isFreeTierEnabled());
   if (approval.forwardedByRole === 'teacher' && pass1) {
     return { routedByTeacher: true };
   }

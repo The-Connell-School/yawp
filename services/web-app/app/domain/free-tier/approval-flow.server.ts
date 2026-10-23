@@ -38,7 +38,10 @@ import {
   sendFreeTierReleaseEmail,
 } from './email.server';
 import { resolveAdminApprovalEmailContext } from './admin-approval-email-context.server';
-import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
+import {
+  FREE_TIER_FLAG,
+  isFeatureFlagEnabled,
+} from '~/domain/feature-flags/feature-flags.server';
 import { getApprovalHooks } from './approval-hooks.server';
 import { getClientIp } from '~/utils/ip.server';
 import {
@@ -499,9 +502,11 @@ export async function resendFreeTierAdminApprovalReminder(args: {
   const approveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(minted.approveMint.token)}`;
   const notRightPersonUrl = `${base}/free/admin/not-right-person?t=${encodeURIComponent(minted.declineMint.token)}`;
 
-  const pass1 = await isFreeTierEnabled();
+  const pass1 = await isFeatureFlagEnabled(FREE_TIER_FLAG, app.organizationId);
   const emailContext = pass1
-    ? await resolveAdminApprovalEmailContext(pendingRow)
+    ? await resolveAdminApprovalEmailContext(pendingRow, prisma, {
+        organizationId: app.organizationId,
+      })
     : {};
   const emailResult = await sendFreeTierAdminReminderEmail({
     applicationId: app.id,

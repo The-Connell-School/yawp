@@ -6,7 +6,6 @@ import {
 } from './signed-link.server';
 import { applicationIdForAdminLinkNaming } from './admin-link-known-request.server';
 import type { FreeTierSignedLinkPurpose } from '@app/prisma';
-import type { FreeTierSignedLinkPurpose } from '@app/prisma';
 import { normalizeEmail } from './service.server';
 
 export type FreeTierAdminTerminalReason = 'already_approved' | 'declined';

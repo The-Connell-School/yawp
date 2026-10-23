@@ -20,9 +20,8 @@ const peekSignedLink = mock(
 const applicationIdForAdminLinkNaming = mock(
   async (
     _token: string,
-    peek: { ok: boolean; applicationId?: string }
-  ): Promise<string | null> =>
-    peek.ok ? (peek.applicationId ?? 'app-1') : null
+    peek: { ok: true; applicationId: string } | { ok: false; reason: string }
+  ): Promise<string | null> => (peek.ok ? peek.applicationId : null)
 );
 const linkReplacedGate = mock(
   async (): Promise<{

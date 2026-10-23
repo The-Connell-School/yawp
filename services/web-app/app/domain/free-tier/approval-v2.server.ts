@@ -16,7 +16,6 @@ import { sendEmail } from '~/utils/email.server';
 import { FREE_TIER_FLAG } from '~/domain/feature-flags/feature-flags';
 import {
   isFeatureFlagEnabled,
-  isFreeTierEnabled,
   resolvedFreeTierRollout,
 } from '~/domain/feature-flags/feature-flags.server';
 import {
@@ -465,7 +464,10 @@ export async function forwardApprovalRequest(args: {
       },
     });
     if (!rules.manualReview) {
-      const pass1 = await isFreeTierEnabled();
+      const pass1 = await isFeatureFlagEnabled(
+        FREE_TIER_FLAG,
+        app.organizationId
+      );
       const forwardContext: AdminApprovalEmailContext = pass1
         ? args.userId != null
           ? { routedByTeacher: true }
@@ -657,13 +659,17 @@ export async function queueManualApprovalReminder(args: {
           +now - +(previous.sentAt ?? previous.createdAt) < 600000))
     )
       return fail('rate_limited');
-    const pass1 = await isFreeTierEnabled();
+    const pass1 = await isFeatureFlagEnabled(FREE_TIER_FLAG, app.organizationId);
     const message = await adminMessage(
       tx,
       app,
       approval,
       true,
-      pass1 ? await resolveAdminApprovalEmailContext(approval, tx) : {}
+      pass1
+        ? await resolveAdminApprovalEmailContext(approval, tx, {
+            organizationId: app.organizationId,
+          })
+        : {}
     );
     const job = await queue(
       tx,
@@ -766,7 +772,10 @@ async function scheduleApplication(applicationId: string, now: Date) {
         },
       });
       if (!existing) {
-        const pass1 = await isFreeTierEnabled();
+        const pass1 = await isFeatureFlagEnabled(
+          FREE_TIER_FLAG,
+          app.organizationId
+        );
         await queue(
           tx,
           approval.id,
@@ -778,7 +787,11 @@ async function scheduleApplication(applicationId: string, now: Date) {
             app,
             approval,
             true,
-            pass1 ? await resolveAdminApprovalEmailContext(approval, tx) : {}
+            pass1
+              ? await resolveAdminApprovalEmailContext(approval, tx, {
+                  organizationId: app.organizationId,
+                })
+              : {}
           ),
           { source: 'auto' }
         );
@@ -954,7 +967,10 @@ async function deliverJob(id: string, now: Date) {
         select: { expiresAt: true, usedAt: true },
       });
       if (!link || link.usedAt || +link.expiresAt <= Date.now() + HOUR_MS) {
-        const pass1 = await isFreeTierEnabled();
+        const pass1 = await isFeatureFlagEnabled(
+          FREE_TIER_FLAG,
+          job.approval.application.organizationId
+        );
         let emailContext: AdminApprovalEmailContext = {};
         if (pass1) {
           const storedContext = adminApprovalEmailContextFromStoredMessage(
@@ -962,7 +978,8 @@ async function deliverJob(id: string, now: Date) {
           );
           const approvalContext = await resolveAdminApprovalEmailContext(
             job.approval,
-            tx
+            tx,
+            { organizationId: job.approval.application.organizationId }
           );
           emailContext = mergeAdminApprovalEmailContext(
             approvalContext,

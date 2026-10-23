@@ -1,45 +1,49 @@
-import { afterAll, beforeAll, expect, mock, test } from 'bun:test';
+import { afterAll, beforeAll, expect, test } from 'bun:test';
 
 const realSignedLink =
   globalThis.__realModules['~/domain/free-tier/signed-link.server'];
 
-let applicationIdForKnownRequestOnFailedPeek: typeof import('./admin-link-known-request.server').applicationIdForKnownRequestOnFailedPeek;
-let REQUIRE_OPAQUE_HASH_FOR_KNOWN_REQUEST_LOOKUP: typeof import('./admin-link-known-request.server').REQUIRE_OPAQUE_HASH_FOR_KNOWN_REQUEST_LOOKUP;
-
-function restoreRealSignedLinkModule() {
+beforeAll(() => {
   if (realSignedLink) {
     mock.module('~/domain/free-tier/signed-link.server', () => realSignedLink);
   }
-}
-
-beforeAll(async () => {
-  restoreRealSignedLinkModule();
-  const mod = await import('./admin-link-known-request.server');
-  applicationIdForKnownRequestOnFailedPeek =
-    mod.applicationIdForKnownRequestOnFailedPeek;
-  REQUIRE_OPAQUE_HASH_FOR_KNOWN_REQUEST_LOOKUP =
-    mod.REQUIRE_OPAQUE_HASH_FOR_KNOWN_REQUEST_LOOKUP;
 });
 
 afterAll(() => {
-  restoreRealSignedLinkModule();
+  if (realSignedLink) {
+    mock.module('~/domain/free-tier/signed-link.server', () => realSignedLink);
+  }
 });
 
-test('known-request lookup requires full peek validation (S9a strict)', () => {
-  expect(REQUIRE_OPAQUE_HASH_FOR_KNOWN_REQUEST_LOOKUP).toBe(true);
+import { mock } from 'bun:test';
+
+const { applicationIdForAdminLinkNaming } = await import(
+  './admin-link-known-request.server'
+);
+
+test('invalid and purpose_mismatch peeks never resolve an application id', async () => {
+  for (const reason of ['invalid', 'purpose_mismatch'] as const) {
+    expect(
+      await applicationIdForAdminLinkNaming(
+        'not-a-token',
+        { ok: false, reason },
+        'ADMIN_APPROVE'
+      )
+    ).toBeNull();
+  }
 });
 
-test('forged and unsigned peeks do not resolve an application id', () => {
+test('valid peek returns application id', async () => {
   expect(
-    applicationIdForKnownRequestOnFailedPeek('not-a-token', {
-      ok: false,
-      reason: 'invalid',
-    })
-  ).toBeNull();
-  expect(
-    applicationIdForKnownRequestOnFailedPeek('a.b', {
-      ok: false,
-      reason: 'invalid',
-    })
-  ).toBeNull();
+    await applicationIdForAdminLinkNaming(
+      'token',
+      {
+        ok: true,
+        applicationId: 'app-1',
+        purpose: 'ADMIN_APPROVE',
+        linkId: 'link-1',
+      },
+      'ADMIN_APPROVE'
+    )
+  ).toBe('app-1');
 });
