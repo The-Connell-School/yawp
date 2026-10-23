@@ -4,21 +4,13 @@ import { mock } from 'bun:test';
 export function featureFlagPrismaTables() {
   return {
     setting: {
-      findUnique: mock(async () => null),
-      findMany: mock(async () => [] as Array<{ name?: string; value: string }>),
-      upsert: mock(async (args: {
-        create?: { value: string };
-        update?: { value: string };
-      }) => ({
-        name: 'feature_flag.test',
-        value: args.update?.value ?? args.create?.value ?? '{"mode":"off","orgIds":[]}',
-        description: null,
-        updatedAt: new Date(),
-      })),
+      findUnique: mock(),
+      findMany: mock(),
+      upsert: mock(),
     },
     organization: {
-      findMany: mock(async () => [] as Array<{ id: string }>),
-      findUnique: mock(async () => null),
+      findMany: mock(),
+      findUnique: mock(),
     },
   };
 }

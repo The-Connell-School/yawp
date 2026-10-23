@@ -10,7 +10,7 @@ const { isFreeTierEnabled } = await import('./feature-flags.server');
 describe('isFreeTierEnabled', () => {
   beforeEach(() => {
     mock.module('~/utils/db.server', () => ({ prisma }));
-    prisma.setting.findUnique.mockReset().mockResolvedValue(null);
+    prisma.setting.findUnique.mockReset();
     prisma.setting.findMany.mockReset().mockResolvedValue([]);
   });
 

@@ -27,10 +27,10 @@ describe('feature flags (server)', () => {
   beforeEach(() => {
     // Other suites mock db.server in the same process; take it back.
     mock.module('~/utils/db.server', () => ({ prisma }));
-    prisma.setting.findUnique.mockReset().mockResolvedValue(null);
+    prisma.setting.findUnique.mockReset();
     prisma.setting.findMany.mockReset().mockResolvedValue([]);
     prisma.setting.upsert.mockReset();
-    prisma.organization.findMany.mockReset().mockResolvedValue([]);
+    prisma.organization.findMany.mockReset();
   });
 
   test('tours stay off without a row on demo and production and support organization targeting', async () => {
