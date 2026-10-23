@@ -1,11 +1,15 @@
 export const PENDING_STATES_NEED_THROWAWAY =
   'Pending states need a throwaway test account.';
 
+export const APPROVED_ADMIN_STATES_NEED_THROWAWAY =
+  'Approved and admin jumps need a throwaway test account.';
+
 export const FREE_TIER_JUMP_GENERIC_ERROR = "Couldn't jump to this state.";
 
 const FREE_TIER_JUMP_USER_ERRORS = new Set([
   'Unknown state.',
   PENDING_STATES_NEED_THROWAWAY,
+  APPROVED_ADMIN_STATES_NEED_THROWAWAY,
   'State is not implemented yet.',
   'Sign in to jump without a throwaway test account.',
   'Current user is not an active teacher in this org.',

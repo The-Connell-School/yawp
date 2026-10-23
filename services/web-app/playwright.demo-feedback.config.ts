@@ -8,7 +8,7 @@ export default defineConfig({
   retries: 0,
   timeout: 240_000,
   expect: { timeout: 15_000 },
-  reporter: 'list',
+  reporter: [['list', { printSteps: true }]],
   forbidOnly: !!process.env.CI,
   outputDir: `${process.env.TMPDIR}/demo-feedback-results`,
   use: {

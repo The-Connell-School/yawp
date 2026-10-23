@@ -11,8 +11,9 @@ import { saveClassPreparation } from '~/domain/free-tier/class-preparation.serve
 import { assertTransition, type FreeTierStatus } from '~/domain/free-tier/state';
 import {
   FREE_TIER_LINK_TTL_MS,
-  mintSignedLink,
+  mintSignedLinkForDevPanel,
 } from '~/domain/free-tier/signed-link.server';
+import { FreeTierConfigError } from '~/domain/free-tier/free-tier-config.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { setMembershipId } from '~/cookies/membership-id.server';
 import { prisma } from '~/utils/db.server';
@@ -30,18 +31,35 @@ const PENDING_THROWAWAY_EMAIL =
 
 export {
   PENDING_STATES_NEED_THROWAWAY,
+  APPROVED_ADMIN_STATES_NEED_THROWAWAY,
   FREE_TIER_JUMP_GENERIC_ERROR,
   formatFreeTierJumpErrorForClient,
 } from './free-tier-jump-messages';
 import {
   PENDING_STATES_NEED_THROWAWAY,
+  APPROVED_ADMIN_STATES_NEED_THROWAWAY,
   FREE_TIER_JUMP_GENERIC_ERROR,
   formatFreeTierJumpErrorForClient,
 } from './free-tier-jump-messages';
+import type { FreeTierStateDefinition } from './free-tier-states.catalog';
 
 function logFreeTierJumpFailure(stateId: string, error: unknown) {
   const name = error instanceof Error ? error.name : 'Error';
-  console.error('[dev-panel free-tier jump failed]', { stateId, errorName: name });
+  const code =
+    error instanceof FreeTierConfigError
+      ? error.code
+      : error instanceof Error
+        ? error.message.slice(0, 80)
+        : undefined;
+  console.error('[dev-panel free-tier jump failed]', { stateId, errorName: name, code });
+}
+
+function devPanelStateRequiresThrowaway(state: FreeTierStateDefinition) {
+  return (
+    state.id.startsWith('pending.') ||
+    state.id.startsWith('approved.') ||
+    Boolean(state.adminSide)
+  );
 }
 
 export type FreeTierJumpStep = { id: string; label: string; done: boolean };
@@ -67,13 +85,33 @@ type JumpInput = {
 type JumpTarget = {
   userId: string;
   email: string;
-  membershipId: string;
+  /** Null when the throwaway has no dev-panel SCHOOL org membership (approved/admin). */
+  membershipId: string | null;
   /** Set when this jump minted a fresh pending throwaway in-process. */
   pendingThrowaway?: true;
 };
 
 export function isDevPanelPendingThrowawayEmail(email: string) {
   return PENDING_THROWAWAY_EMAIL.test(email);
+}
+
+async function ensureThrowawayTeacherWithoutOrgMembership(): Promise<JumpTarget> {
+  const tag = randomUUID().slice(0, 12);
+  const email = `dev-panel+${randomUUID()}@jump-${tag}.example.test`;
+  const passwordHash = bcrypt.hashSync(LOCAL_DEV_PASSWORD, 10);
+  const user = await prisma.user.create({
+    data: {
+      email,
+      name: 'Test Teacher',
+      password: { create: { hash: passwordHash } },
+    },
+    select: { id: true, email: true },
+  });
+  return {
+    userId: user.id,
+    email: user.email!,
+    membershipId: null,
+  };
 }
 
 async function ensureThrowawayTeacher(organizationId: string): Promise<JumpTarget> {
@@ -150,11 +188,14 @@ function assertPendingThrowawayTarget(target: JumpTarget) {
 
 async function resolveTargetUser(
   input: JumpInput,
-  stateId: string
+  state: FreeTierStateDefinition
 ): Promise<JumpTarget> {
   if (input.throwaway) {
-    if (stateId.startsWith('pending.')) {
+    if (state.id.startsWith('pending.')) {
       return ensureThrowawayPendingTeacher(input.organizationId);
+    }
+    if (state.id.startsWith('approved.') || state.adminSide) {
+      return ensureThrowawayTeacherWithoutOrgMembership();
     }
     return ensureThrowawayTeacher(input.organizationId);
   }
@@ -435,6 +476,12 @@ export async function executeFreeTierStateJump(
   if (found.state.id.startsWith('pending.') && !input.throwaway) {
     return { ok: false, error: PENDING_STATES_NEED_THROWAWAY };
   }
+  if (
+    (found.state.id.startsWith('approved.') || found.state.adminSide) &&
+    !input.throwaway
+  ) {
+    return { ok: false, error: APPROVED_ADMIN_STATES_NEED_THROWAWAY };
+  }
 
   const steps: FreeTierJumpStep[] = [
     { id: 'account', label: 'Made test account', done: false },
@@ -443,14 +490,14 @@ export async function executeFreeTierStateJump(
   ];
 
   try {
-    const target = await resolveTargetUser(input, found.state.id);
+    const target = await resolveTargetUser(input, found.state);
     steps[0].label = input.throwaway
       ? `Made test account: ${target.email}`
       : `Using ${target.email}`;
     steps[0].done = true;
 
     let redirectTo = '/app';
-    let sessionMembershipId = target.membershipId;
+    let sessionMembershipId = target.membershipId ?? '';
     let throwawayEmail = input.throwaway ? target.email : undefined;
     const { state } = found;
 
@@ -469,14 +516,14 @@ export async function executeFreeTierStateJump(
             emailCopyVersionHash: 'dev-panel',
           },
         });
-        const link = await mintSignedLink({
+        const link = await mintSignedLinkForDevPanel({
           applicationId: app.id,
           purpose: 'ADMIN_APPROVE',
           ttlMs: FREE_TIER_LINK_TTL_MS,
         });
         redirectTo = `/free/admin/approve?t=${encodeURIComponent(link.token)}`;
       } else {
-        const link = await mintSignedLink({
+        const link = await mintSignedLinkForDevPanel({
           applicationId: app.id,
           purpose: 'ADMIN_NOT_RIGHT_PERSON',
           ttlMs: FREE_TIER_LINK_TTL_MS,
@@ -514,7 +561,7 @@ export async function executeFreeTierStateJump(
         break;
       case 'signup.returning-lead': {
         const app = await upsertApplication(target.userId, target.email, 'LEAD');
-        const link = await mintSignedLink({
+        const link = await mintSignedLinkForDevPanel({
           applicationId: app.id,
           purpose: 'RELEASE',
           ttlMs: FREE_TIER_LINK_TTL_MS,
@@ -596,6 +643,9 @@ export async function executeFreeTierStateJump(
     }
 
     steps[1].done = true;
+    if (!sessionMembershipId) {
+      throw new Error(FREE_TIER_JUMP_GENERIC_ERROR);
+    }
     const sessionHeaders = await createDevPanelSessionHeaders(
       target.userId,
       sessionMembershipId,

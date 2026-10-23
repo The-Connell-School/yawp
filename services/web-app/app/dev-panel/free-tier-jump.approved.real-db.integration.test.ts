@@ -143,11 +143,18 @@ describe.skipIf(!enabled)('executeFreeTierStateJump approved states (real db)', 
         if (app.organizationId) provisionedOrgIds.push(app.organizationId);
       }
 
-      const second = await executeFreeTierStateJump({
+      const { APPROVED_ADMIN_STATES_NEED_THROWAWAY } = await loadJump();
+      const blocked = await executeFreeTierStateJump({
         ...input,
         throwaway: false,
         currentUserId: user!.id,
       });
+      expect(blocked).toEqual({
+        ok: false,
+        error: APPROVED_ADMIN_STATES_NEED_THROWAWAY,
+      });
+
+      const second = await executeFreeTierStateJump(input);
       expect(second.ok).toBe(true);
     });
   }

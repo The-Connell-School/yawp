@@ -73,13 +73,12 @@ function decodeToken(token: string): { payload: SignedLinkPayload; secret: strin
   return null;
 }
 
-export async function mintSignedLink(args: {
+async function mintSignedLinkCore(args: {
   applicationId: string;
   purpose: FreeTierSignedLinkPurpose;
   ttlMs?: number;
   tx?: Prisma.TransactionClient;
 }) {
-  assertFreeTierRuntimeConfigured();
   const secrets = linkSecrets();
   if (!secrets.length) throw new Error('FREE_TIER_LINK_HMAC_SECRET is not configured');
   const secret = secrets[0]!;
@@ -107,6 +106,29 @@ export async function mintSignedLink(args: {
   };
   const signed = encodeToken(payload, secret);
   return { token: `${signed}.${opaque}`, linkId: row.id, expiresAt: row.expiresAt };
+}
+
+export async function mintSignedLink(args: {
+  applicationId: string;
+  purpose: FreeTierSignedLinkPurpose;
+  ttlMs?: number;
+  tx?: Prisma.TransactionClient;
+}) {
+  assertFreeTierRuntimeConfigured();
+  return mintSignedLinkCore(args);
+}
+
+/** Dev panel jumps use same-origin redirects; signing secret only, no PRIMARY_APP_URL. */
+export async function mintSignedLinkForDevPanel(args: {
+  applicationId: string;
+  purpose: FreeTierSignedLinkPurpose;
+  ttlMs?: number;
+  tx?: Prisma.TransactionClient;
+}) {
+  if (!isFreeTierLinkSigningConfigured()) {
+    throw new Error('FREE_TIER_LINK_HMAC_SECRET is not configured');
+  }
+  return mintSignedLinkCore(args);
 }
 
 export type ConsumeLinkResult =

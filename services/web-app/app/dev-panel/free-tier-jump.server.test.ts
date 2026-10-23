@@ -57,7 +57,7 @@ mock.module('~/domain/free-tier/provision-free-classroom.server', () => ({
   }),
 }));
 mock.module('~/domain/free-tier/signed-link.server', () => ({
-  mintSignedLink: async () => ({ token: 't' }),
+  mintSignedLinkForDevPanel: async () => ({ token: 't' }),
   FREE_TIER_LINK_TTL_MS: 60_000,
 }));
 mock.module('~/domain/free-tier/free-tier-public-url.server', () => ({
@@ -79,10 +79,11 @@ mock.module('./dev-panel-session.server', () => ({
 const {
   executeFreeTierStateJump,
   PENDING_STATES_NEED_THROWAWAY,
+  APPROVED_ADMIN_STATES_NEED_THROWAWAY,
   FREE_TIER_JUMP_GENERIC_ERROR,
 } = await import('./free-tier-jump.server');
 
-describe('executeFreeTierStateJump pending guard', () => {
+describe('executeFreeTierStateJump throwaway guards', () => {
   test('refuses pending states without throwaway before writes', async () => {
     const result = await executeFreeTierStateJump({
       request: new Request('http://localhost/'),
@@ -94,6 +95,20 @@ describe('executeFreeTierStateJump pending guard', () => {
     expect(result).toEqual({
       ok: false,
       error: PENDING_STATES_NEED_THROWAWAY,
+    });
+  });
+
+  test('refuses approved states without throwaway before writes', async () => {
+    const result = await executeFreeTierStateJump({
+      request: new Request('http://localhost/'),
+      stateId: 'approved.first-time-toast',
+      throwaway: false,
+      currentUserId: 'user-1',
+      organizationId: 'org-1',
+    });
+    expect(result).toEqual({
+      ok: false,
+      error: APPROVED_ADMIN_STATES_NEED_THROWAWAY,
     });
   });
 });
