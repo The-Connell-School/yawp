@@ -60,6 +60,7 @@ describe('transactional email renders', () => {
       schoolName: FIXTURE.schoolName,
       approveUrl: FIXTURE.approveUrl,
       notRightPersonUrl: FIXTURE.forwardUrl,
+      pass1: false,
     });
     assertBrand(email);
     expect(email.text).toContain(FREE_TIER_ADMIN_MODEL_TRAINING_LINE);

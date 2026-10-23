@@ -1,4 +1,5 @@
 import {
+  adminApprovalTeacherRerouteLeadMarker,
   renderAdminApprovalEmailSubject,
 } from './admin-approval-copy';
 import { renderAdminApprovalEmailBody } from './email-copy';
@@ -15,7 +16,9 @@ export async function buildDesignedAdminApprovalEmail(args: {
   approveUrl: string;
   notRightPersonUrl: string;
   forwardedByAdminName?: string | null;
+  routedByTeacher?: boolean;
   reminder?: boolean;
+  pass1: boolean;
 }) {
   return buildAdminApprovalDesignedEmail({
     ...args,
@@ -31,12 +34,24 @@ export async function htmlForStoredAdminApprovalEmail(args: {
   teacherEmail: string;
   schoolName: string;
   html?: string;
+  pass1: boolean;
 }) {
   if (args.html) return args.html;
   const urls = adminApprovalUrlsFromEmailBody(args.text);
-  const forwardLead = args.text.match(
-    /^(.+) forwarded this to you as the right person/m
+  const pass1ForwardLead = args.text.match(
+    /^(.+) forwarded .+'s request at .+ to you\./m
   );
+  const forwardLead =
+    pass1ForwardLead ??
+    args.text.match(/^(.+) forwarded this to you as the right person/m);
+  const routedByTeacher =
+    args.text.includes(adminApprovalTeacherRerouteLeadMarker(true)) ||
+    args.text.includes(adminApprovalTeacherRerouteLeadMarker(false));
+  const escapedSchool = args.schoolName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pass1ForwardFooter = new RegExp(
+    `forwarded ${args.teacherName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'s request at ${escapedSchool} to you`
+  ).test(args.text);
+  const pass1 = args.pass1;
   const origin = transactionalEmailPublicOrigin();
   const react = (
     <AdminApprovalEmail
@@ -47,6 +62,8 @@ export async function htmlForStoredAdminApprovalEmail(args: {
       notRightPersonUrl={urls.notRightPersonUrl ?? ''}
       reminder={args.subject.startsWith('Reminder:')}
       forwardedByAdminName={forwardLead?.[1] ?? null}
+      routedByTeacher={routedByTeacher}
+      pass1={pass1}
       origin={origin}
     />
   );
