@@ -392,23 +392,27 @@ for (const width of [390, 1440]) {
         name: /Creating assignments is turned off in this preview/,
       })
     ).toBeVisible();
+    const previewCreationTooltip =
+      /Creating assignments is turned off in this preview/;
     await page.getByRole('button', { name: 'Prompt Library' }).click();
-    const classStarterPrompt = page
-      .locator('[data-tour="type-library"] button[type="button"]')
+    const lockedPromptCard = page
+      .locator('[data-tour="type-library"]')
+      .getByTestId('locked-prompt-card')
       .first();
-    await classStarterPrompt.scrollIntoViewIfNeeded();
-    await classStarterPrompt.click({ force: true, timeout: 15_000 });
-    await page.waitForTimeout(350);
+    await expect(lockedPromptCard).toBeVisible();
+    const lockedPromptButton = lockedPromptCard.getByRole('button').first();
+    await expect(lockedPromptButton).toHaveAttribute('aria-disabled', 'true');
+    await lockedPromptButton.click({ force: true, timeout: 15_000 });
     await expect(
       page.getByRole('heading', { name: 'New assignment', exact: true })
     ).toHaveCount(0);
     await expect(
       page.getByRole('heading', { name: 'New Assignment', exact: true })
     ).toHaveCount(0);
+    await lockedPromptButton.focus();
+    await page.waitForTimeout(350);
     await expect(
-      page.getByRole('tooltip', {
-        name: /Creating assignments is turned off in this preview/,
-      })
+      page.getByRole('tooltip', { name: previewCreationTooltip })
     ).toBeVisible();
     await page.goto('/app');
     await expectFreeDashboardAssignmentTiles(page);
@@ -423,8 +427,6 @@ for (const width of [390, 1440]) {
     await expect(page).toHaveURL(/\/app\/assignment-types\/[^/]+$/);
     await page.getByRole('link', { name: /Back to dashboard/i }).click();
     await expectLockedAppHome(page);
-    const previewCreationTooltip =
-      /Creating assignments is turned off in this preview/;
     const dashboardCreate = page
       .getByTestId('preview-assignment-creation-disabled')
       .getByRole('button', { name: 'Create assignment' });

@@ -106,7 +106,11 @@ export function PreviewAssignmentCreationControl({
                 'max-w-full',
                 fullWidth ? 'block w-full' : 'inline-flex'
               )}
-              data-testid="preview-assignment-creation-disabled"
+              data-testid={
+                fullWidth
+                  ? 'locked-prompt-card'
+                  : 'preview-assignment-creation-disabled'
+              }
             >
               {lockedChild}
             </span>

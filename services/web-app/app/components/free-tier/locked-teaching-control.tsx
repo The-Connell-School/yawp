@@ -66,6 +66,7 @@ export function LockedTeachingControl({
     disabled?: boolean;
     tabIndex?: number;
     'aria-disabled'?: boolean | 'true' | 'false';
+    'aria-describedby'?: string;
   }>;
 
   const lockedChild = cloneElement(child, {
