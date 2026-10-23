@@ -259,7 +259,9 @@ describe('free-tier approval flow', () => {
             ? `Can you approve Yawp! for ${teacherAtSchoolLabel}?`
             : undefined,
         });
-        expect(replacement.text).toContain('Principal Pat forwarded this to you');
+        expect(replacement.text).toContain(
+          "Principal Pat forwarded Local Teacher's request at Example High to you."
+        );
         const approveUrl = replacement.text
           .split('\n')
           .find((line: string) => line.includes('/free/admin/approve?t='))!;
