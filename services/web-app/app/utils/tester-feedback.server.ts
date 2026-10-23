@@ -6,6 +6,7 @@ import {
 } from './internal-platform-auth.server';
 import type { FeedbackAction } from './demo-feedback-context';
 import { readBoundedText } from './bounded-body.server';
+import { decodeStoredFeedbackScreenshot } from './tester-feedback-screenshot.server';
 
 export const FEEDBACK_TEXT_LIMIT = 4000;
 export const severitySchema = z.enum(['low', 'medium', 'high']);
@@ -87,9 +88,12 @@ export type FeedbackEntry = Omit<FeedbackInput, 'severity' | 'actions'> & {
   actions?: unknown[] | null;
   userEmail?: string | null;
   userName?: string | null;
+  hasScreenshot?: boolean;
   id: string;
   createdAt: Date;
 };
+
+export const TESTER_FEEDBACK_ID = /^c[a-z0-9]{24}$/;
 export interface FeedbackDependencies {
   enabled(): boolean;
   getUser(
@@ -98,6 +102,7 @@ export interface FeedbackDependencies {
   environment(): string;
   save(input: FeedbackInput): Promise<boolean>;
   list(input: FeedbackQuery): Promise<FeedbackEntry[]>;
+  loadScreenshot?(id: string): Promise<string | null>;
   authenticateInternal(
     request: Request
   ): Promise<Response | InternalApiAuthContext | null>;
@@ -404,16 +409,97 @@ export async function readTesterFeedback(
     });
   }
   const page = entries.slice(0, input.limit).map((entry) => ({
-    ...entry,
+    id: entry.id,
+    userId: entry.userId,
+    url: entry.url,
+    userAgent: entry.userAgent,
+    whatIDid: entry.whatIDid,
+    whatHappened: entry.whatHappened,
+    whatIWish: entry.whatIWish,
+    severity: entry.severity,
+    environment: entry.environment,
+    createdAt: entry.createdAt,
     actions: Array.isArray(entry.actions) ? entry.actions : null,
     userEmail: entry.userEmail ?? null,
     userName: entry.userName ?? null,
+    hasScreenshot: entry.hasScreenshot ?? false,
   }));
   if (internalAuth)
     await auditInternalFeedbackRead(request, deps, internalAuth, 'list.success');
   return response({
     entries: page,
     nextCursor: entries.length > input.limit ? page.at(-1)?.id : null,
+  });
+}
+
+export async function readTesterFeedbackScreenshot(
+  request: Request,
+  feedbackId: string,
+  deps: FeedbackDependencies
+) {
+  const auth = await deps.authenticateInternal(request);
+  if (auth instanceof Response) return auth;
+  if (auth?.mode !== 'hmac')
+    return response({ error: 'Unauthorized' }, 401);
+  if (request.method !== 'GET')
+    return response({ error: 'Method not allowed' }, 405, { Allow: 'GET' });
+  if (!TESTER_FEEDBACK_ID.test(feedbackId)) {
+    await auditInternalFeedbackRead(
+      request,
+      deps,
+      auth,
+      'screenshot.invalid_id'
+    );
+    return response({ error: 'Invalid feedback id' }, 400);
+  }
+  if (!deps.loadScreenshot) {
+    await auditInternalFeedbackRead(
+      request,
+      deps,
+      auth,
+      `screenshot.not_found:${feedbackId}`
+    );
+    return response({ error: 'Not found' }, 404);
+  }
+  const stored = await deps.loadScreenshot(feedbackId);
+  if (!stored) {
+    await auditInternalFeedbackRead(
+      request,
+      deps,
+      auth,
+      `screenshot.not_found:${feedbackId}`
+    );
+    return response({ error: 'Not found' }, 404);
+  }
+  const decoded = decodeStoredFeedbackScreenshot(stored);
+  if (!decoded.ok) {
+    await auditInternalFeedbackRead(
+      request,
+      deps,
+      auth,
+      decoded.reason === 'too_large'
+        ? `screenshot.too_large:${feedbackId}`
+        : `screenshot.not_found:${feedbackId}`
+    );
+    return response(
+      { error: decoded.reason === 'too_large' ? 'Screenshot too large' : 'Not found' },
+      decoded.reason === 'too_large' ? 413 : 404
+    );
+  }
+  await auditInternalFeedbackRead(
+    request,
+    deps,
+    auth,
+    `screenshot.success:${feedbackId}`
+  );
+  return new Response(Buffer.from(decoded.bytes), {
+    status: 200,
+    headers: {
+      'content-type': decoded.contentType,
+      'cache-control': 'no-store',
+      'referrer-policy': 'no-referrer',
+      'x-content-type-options': 'nosniff',
+    },
   });
 }
 

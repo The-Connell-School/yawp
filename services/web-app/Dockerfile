@@ -1,11 +1,21 @@
-FROM oven/bun:1.4.3 AS base
+FROM oven/bun:1.4.4 AS base
 RUN apt-get update -y && apt-get install -y openssl
 
 FROM base AS deps
 WORKDIR /app
-RUN apt-get update -y && apt-get install -y ca-certificates curl gnupg \
-  && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-  && apt-get install -y nodejs
+ARG NODE_VERSION=22.23.4
+RUN apt-get update -y && apt-get install -y ca-certificates curl xz-utils \
+  && ARCH="$(dpkg --print-architecture)" \
+  && case "${ARCH}" in \
+       amd64) NODE_DIST_ARCH=linux-x64; NODE_SHA256=1805bcd35e6815559bd2eb97db438d3fdb0eb3a5e6a977b7c1badca76337e9ce ;; \
+       arm64) NODE_DIST_ARCH=linux-arm64; NODE_SHA256=6287aa46b6c375d816e63ae66d024fbbfd70404825aabdfdf898a970871d2f4b ;; \
+       *) echo "unsupported architecture: ${ARCH}" >&2; exit 1 ;; \
+     esac \
+  && curl -fsSLO "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-${NODE_DIST_ARCH}.tar.xz" \
+  && echo "${NODE_SHA256}  node-v${NODE_VERSION}-${NODE_DIST_ARCH}.tar.xz" | sha256sum -c - \
+  && tar -xJf "node-v${NODE_VERSION}-${NODE_DIST_ARCH}.tar.xz" -C /usr/local --strip-components=1 \
+  && rm "node-v${NODE_VERSION}-${NODE_DIST_ARCH}.tar.xz" \
+  && node --version
 COPY package.json bun.lock ./
 COPY services/web-app ./services/web-app
 COPY packages/prisma ./packages/prisma

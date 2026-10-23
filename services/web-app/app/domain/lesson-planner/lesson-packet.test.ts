@@ -164,7 +164,9 @@ describe('buildLessonPacket', () => {
     // both would print "Warm-up (5 min)" twice on paper.
     expect(packet.sections[0]!.title).toBe('Warm-up (5 min)');
     expect(packet.sections[0]!.content).not.toContain('# Warm-up (5 min)');
-    expect(packet.sections[0]!.content).toContain('Daily Pages prompt FW-001');
+    // Brian's run 2 (item 17): the library code never reaches the teacher.
+    expect(packet.sections[0]!.content).not.toContain('FW-001');
+    expect(packet.sections[0]!.content).not.toMatch(/^\.$/m);
     // Inner headings survive — only the duplicated title is removed.
     expect(packet.sections[0]!.content).toContain('### Teacher moves');
   });
@@ -591,5 +593,63 @@ describe('buildLessonPacket — a kept reply that carries a deck', () => {
     expect(packet.sections[0]!.deck).toBeNull();
     expect(packet.sections[0]!.deckFailed).toBe(false);
     expect(packet.sections[0]!.content).toContain('Sort the sentences.');
+  });
+});
+
+describe("buildLessonPacket — a stack of pieces adds up (Brian's run 2, B2)", () => {
+  test("a filed piece's minutes come from its own title", () => {
+    const packet = buildLessonPacket({
+      title: 'Day 1',
+      className: null,
+      sections: [
+        { id: 'm1', content: 'Read the first pages.', keptTitle: 'Read aloud (25 min)', origin: 'material', kind: 'plan', keptAudience: 'teacher' },
+        { id: 'm2', content: 'Pairs compare.', keptTitle: 'Pair talk (12 min)', origin: 'material', kind: 'plan', keptAudience: 'teacher' },
+      ],
+    });
+    expect(packet.outline.map((entry) => entry.minutes)).toEqual([25, 12]);
+    expect(packet.totalMinutes).toBe(37);
+  });
+});
+
+describe("buildLessonPacket — times come from the step, not its first sentence (Brian's run 3, item 9)", () => {
+  test("a filed hook keeps its 15 minutes when its text says 'Give students 2 minutes'", () => {
+    const packet = buildLessonPacket({
+      title: 'Day 1',
+      className: null,
+      sections: [
+        {
+          id: 'm1',
+          content: 'Give students 2 minutes to lay out what is in their bag. Then pairs share.',
+          keptTitle: 'Hook activity: What’s in your bag? (15 min)',
+          origin: 'material',
+          kind: 'plan',
+          keptAudience: 'teacher',
+        },
+      ],
+    });
+    expect(packet.outline[0]!.minutes).toBe(15);
+    expect(packet.totalMinutes).toBe(15);
+  });
+
+  test('the stored minutes win over any title', () => {
+    const packet = buildLessonPacket({
+      title: 'Day 1',
+      className: null,
+      sections: [
+        { id: 'm1', content: 'Background.', keptTitle: 'Frame — Historical context', origin: 'material', kind: 'plan', keptAudience: 'teacher', minutes: 4 },
+        { id: 'm2', content: 'Write.', keptTitle: 'Hook (15 min)', origin: 'material', kind: 'plan', keptAudience: 'teacher', minutes: 10 },
+      ],
+    });
+    expect(packet.outline.map((entry) => entry.minutes)).toEqual([4, 10]);
+    expect(packet.totalMinutes).toBe(14);
+  });
+
+  test("'2 mini-lessons' is not two minutes", () => {
+    const packet = buildLessonPacket({
+      title: 'Day 1',
+      className: null,
+      sections: [{ id: 'r1', content: '## 2 mini-lessons\n\nWe teach them back to back.' }],
+    });
+    expect(packet.outline[0]!.minutes).toBeNull();
   });
 });

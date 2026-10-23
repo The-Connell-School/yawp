@@ -5,7 +5,7 @@
  * thing on the card.
  */
 import { Link } from 'react-router';
-import { Check, Download, Play, Plus, Presentation } from 'lucide-react';
+import { Check, Download, PenLine, Play, Plus, Presentation } from 'lucide-react';
 import { cn } from '~/utils/misc';
 import {
   deckDurationMinutes,
@@ -19,6 +19,10 @@ export function SlideDeckCard({
   added,
   onToggle,
   disabled,
+  editHref = null,
+  edited = false,
+  periodMinutes = null,
+  onFit = null,
 }: {
   deck: SlideDeck;
   /** Absent while the reply is still unsaved and has no id to present by. */
@@ -34,6 +38,17 @@ export function SlideDeckCard({
   /** Absent in the stack itself, where the deck is already filed. */
   onToggle?: ((added: boolean) => void) | null;
   disabled?: boolean;
+  /**
+   * Deck v2 (Brian's review, E2): where to edit this deck. Its presence also
+   * switches the card to "Save to PowerPoint", "Edit", "Present".
+   */
+  editHref?: string | null;
+  /** The teacher's edited version, shown in place of the planner's. */
+  edited?: boolean;
+  /** The lesson's length: a deck past it says so (Brian's run 2, B2). */
+  periodMinutes?: number | null;
+  /** Ask the planner to fit the deck to the period. */
+  onFit?: (() => void) | null;
 }) {
   const minutes = deckDurationMinutes(deck);
   const preview = deck.slides.slice(0, 4);
@@ -47,8 +62,21 @@ export function SlideDeckCard({
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <Presentation size={16} />
         </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{deck.title}</p>
+        {/* A floor on the title's width, so the buttons wrap to their own
+            line rather than squeezing the deck's name to a few letters. */}
+        <div className="min-w-[14rem] flex-1">
+          <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+            {deck.title}
+            {edited ? (
+              <span
+                data-testid="deck-edited-badge"
+                className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
+              >
+                <PenLine size={11} />
+                Edited
+              </span>
+            ) : null}
+          </p>
           <p className="truncate text-xs text-muted-foreground">
             {[
               `${deck.slides.length} ${deck.slides.length === 1 ? 'slide' : 'slides'}`,
@@ -58,12 +86,34 @@ export function SlideDeckCard({
               .filter(Boolean)
               .join(' · ')}
           </p>
+          {periodMinutes && minutes > periodMinutes ? (
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+              <span
+                data-testid="deck-over-time"
+                className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-900 dark:bg-amber-950/50 dark:text-amber-200"
+              >
+                {minutes} min for a {periodMinutes}-minute period
+              </span>
+              {onFit ? (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={onFit}
+                  className="font-medium text-primary hover:underline disabled:opacity-50"
+                >
+                  Fit the deck to {periodMinutes} minutes
+                </button>
+              ) : null}
+            </p>
+          ) : null}
         </div>
         {onToggle ? (
           <button
             type="button"
             disabled={disabled}
             onClick={() => onToggle(!added)}
+            // Brian's review (B3): the toggle removes, and says so before the click.
+            title={added ? 'Click to remove from stack' : undefined}
             data-testid="deck-toggle"
             className={cn(
               'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50',
@@ -84,8 +134,18 @@ export function SlideDeckCard({
             className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
           >
             <Download size={14} />
-            PowerPoint
+            {editHref ? 'Save to PowerPoint' : 'PowerPoint'}
           </a>
+        ) : null}
+        {editHref ? (
+          <Link
+            to={editHref}
+            data-testid="deck-edit"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-primary/40 px-3 py-1.5 text-sm font-medium text-primary transition hover:bg-primary/5"
+          >
+            <PenLine size={14} />
+            Edit
+          </Link>
         ) : null}
         {presentHref ? (
           <Link

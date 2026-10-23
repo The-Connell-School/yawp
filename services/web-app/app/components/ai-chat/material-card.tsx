@@ -37,6 +37,10 @@ const KIND_ICON: Record<ArtifactKind, typeof FileText> = {
   notes: NotebookPen,
   // A deck is drawn by the deck card, never here; present for completeness.
   slides: Presentation,
+  'class-starter': PenLine,
+  'daily-pages': PenLine,
+  step: NotebookPen,
+  practice: PenLine,
 };
 
 export function MaterialCard({
@@ -92,6 +96,8 @@ export function MaterialCard({
             type="button"
             disabled={disabled}
             onClick={() => onToggle(!added)}
+            // Brian's review (B3): the toggle removes, and says so before the click.
+            title={added ? 'Click to remove from stack' : undefined}
             data-testid="material-toggle"
             className={cn(
               'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50',

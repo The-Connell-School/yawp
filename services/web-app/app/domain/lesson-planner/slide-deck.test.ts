@@ -150,6 +150,13 @@ describe('parseSlideDeck', () => {
       if (layout === 'statement' || layout === 'prompt' || layout === 'quote') {
         slide.body = 'The body.';
       }
+      // The gallery templates, each with the slot it is made of.
+      if (['big_idea', 'write', 'excerpt', 'exit', 'discuss', 'look'].includes(layout)) {
+        slide.body = 'The body.';
+      }
+      if (layout === 'agenda') slide.agenda = [{ title: 'Hook', minutes: 10 }];
+      if (layout === 'notes') slide.facts = ['One fact.'];
+      if (layout === 'read') slide.tasks = [{ verb: 'Circle', text: 'names' }];
       const parsed = parseSlideDeck(fenced({ title: 'Deck', slides: [slide] }));
       expect(parsed?.deck.slides[0]!.layout).toBe(layout);
     }

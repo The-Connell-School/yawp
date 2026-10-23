@@ -10,6 +10,7 @@ import {
   PLANNER_PICKS_ACTIVITIES,
   readLessonAsks,
   type LessonAsk,
+  composeIntakeReply,
 } from './lesson-ask';
 
 function fenced(body: string): string {
@@ -247,5 +248,120 @@ describe('asksWorthShowing — the clock waits for the subject', () => {
         topicSettled: false,
       })
     ).toEqual([]);
+  });
+});
+
+describe("intake v2 controls (Brian's review, A1–A3)", () => {
+  test('reads a classes control', () => {
+    const { asks } = readLessonAsks('Which class?\n\n```yawp-ask\nclasses\n```');
+    expect(asks).toEqual([{ kind: 'classes' }]);
+  });
+
+  test('collects every choose line into one single-choice question, in order', () => {
+    const { asks, body } = readLessonAsks(
+      'How do you want to fill the time?\n\n```yawp-ask\nclasses\nminutes\n' +
+        'choose: Read the whole first story together\n' +
+        'choose: Just the opening pages, enough to hook them\n' +
+        'choose: As much as we can, assign the rest for homework\n```'
+    );
+    expect(asks).toEqual([
+      { kind: 'classes' },
+      { kind: 'minutes', defaultMinutes: 50, hinted: false },
+      {
+        kind: 'choose',
+        options: [
+          'Read the whole first story together',
+          'Just the opening pages, enough to hook them',
+          'As much as we can, assign the rest for homework',
+        ],
+      },
+    ]);
+    expect(body).toBe('How do you want to fill the time?');
+  });
+
+  test('keeps colons inside a choose option', () => {
+    const { asks } = readLessonAsks('```yawp-ask\nchoose: Two stops: one at Lavender, one at the end\n```');
+    expect(asks).toEqual([
+      { kind: 'choose', options: ['Two stops: one at Lavender, one at the end'] },
+    ]);
+  });
+
+  test('says whether the model actually gave a length', () => {
+    const { asks } = readLessonAsks('```yawp-ask\nminutes: 80\n```');
+    expect(asks).toEqual([{ kind: 'minutes', defaultMinutes: 80, hinted: true }]);
+  });
+
+  test('holds the length and the reading plan back until the topic is settled, and after a plan', () => {
+    const asks = [
+      { kind: 'classes' as const },
+      { kind: 'minutes' as const, defaultMinutes: 50, hinted: false },
+      { kind: 'choose' as const, options: ['A', 'B'] },
+    ];
+    expect(asksWorthShowing(asks, { topicSettled: false }).map((a) => a.kind)).toEqual(['classes']);
+    expect(
+      asksWorthShowing(asks, { topicSettled: true, planAlreadyWritten: true }).map((a) => a.kind)
+    ).toEqual([]);
+    expect(asksWorthShowing(asks, { topicSettled: true }).map((a) => a.kind)).toEqual([
+      'classes',
+      'minutes',
+      'choose',
+    ]);
+  });
+});
+
+describe('composeIntakeReply', () => {
+  test('one class, its length, and how to fill the time', () => {
+    expect(
+      composeIntakeReply({
+        classes: [{ title: 'English 11 · Period 3', minutes: 90 }],
+        choice: 'Read the whole first story together',
+        activityIds: [],
+      })
+    ).toBe('For English 11 · Period 3, 90 minutes. Read the whole first story together.');
+  });
+
+  test('several classes, each with its own length', () => {
+    expect(
+      composeIntakeReply({
+        classes: [
+          { title: 'English 11 · Period 3', minutes: 90 },
+          { title: 'English 10 · Period 5', minutes: 50 },
+        ],
+        choice: null,
+        activityIds: [],
+      })
+    ).toBe('For English 11 · Period 3, 90 minutes. For English 10 · Period 5, 50 minutes. The same lesson for both classes.');
+  });
+
+  test('a class typed by hand, with no length asked', () => {
+    expect(
+      composeIntakeReply({
+        classes: [{ title: 'my 11th grade section', minutes: null }],
+        choice: null,
+        activityIds: ['planner-picks'],
+      })
+    ).toBe('For my 11th grade section. You pick the activities that fit this lesson best.');
+  });
+
+  test('nothing chosen is an empty message, so Send stays off', () => {
+    expect(composeIntakeReply({ classes: [], choice: null, activityIds: [] })).toBe('');
+  });
+});
+
+describe("two classes: the same lesson, said once (Brian's run 4)", () => {
+  const classes = [
+    { title: 'English 10 · Period 3', minutes: 50 },
+    { title: 'English 11 · Period 5', minutes: 50 },
+  ];
+  test('the same lesson for both classes is the default', () => {
+    expect(composeIntakeReply({ classes, choice: null, activityIds: [] })).toBe(
+      'For English 10 · Period 3, 50 minutes. For English 11 · Period 5, 50 minutes. The same lesson for both classes.'
+    );
+  });
+  test('or a version for each', () => {
+    expect(composeIntakeReply({ classes, choice: null, activityIds: [], sameLesson: false })).toContain('A version of the lesson for each class.');
+  });
+  test('one class says nothing about it', () => {
+    expect(composeIntakeReply({ classes: classes.slice(0, 1), choice: null, activityIds: [] })).toBe('For English 10 · Period 3, 50 minutes.');
   });
 });

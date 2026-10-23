@@ -1,0 +1,184 @@
+/**
+ * What each moment of a lesson is (Kevin's stack page redesign, "Writing
+ * time"): its type and color. Whether a step is writing is a separate thing,
+ * set from what it is tied to in Yawp!, never by the teacher.
+ */
+
+export const STEP_TYPES = [
+  'class_starter',
+  'activity',
+  'context',
+  'read_aloud',
+  'daily_pages',
+  'thesis_essay',
+  'closing',
+] as const;
+
+export type StepType = (typeof STEP_TYPES)[number];
+
+export const STEP_TYPE_LABELS: Record<StepType, string> = {
+  class_starter: 'Class Starter',
+  activity: 'Activity',
+  context: 'Context',
+  read_aloud: 'Read aloud',
+  daily_pages: 'Daily Pages',
+  thesis_essay: 'Thesis Essay',
+  closing: 'Closing',
+};
+
+/** Tint / text / accent for each type. No type uses purple: that is writing. */
+export const STEP_TYPE_COLORS: Record<StepType, { tint: string; text: string; accent: string }> = {
+  class_starter: { tint: '#F3E3C8', text: '#6B4A12', accent: '#C99A3E' },
+  activity: { tint: '#F8D9CC', text: '#8A3315', accent: '#D9714F' },
+  context: { tint: '#DCE4F2', text: '#2B4370', accent: '#5E7DB8' },
+  read_aloud: { tint: '#D5EBE5', text: '#1F5C4E', accent: '#3E9A84' },
+  daily_pages: { tint: '#F6DCE6', text: '#7A2550', accent: '#C2577F' },
+  thesis_essay: { tint: '#E3E9D4', text: '#3D5220', accent: '#6E8F3C' },
+  closing: { tint: '#E6E2DC', text: '#45403A', accent: '#8C847A' },
+};
+
+/** Reserved for writing: the line, the badge and the meter. */
+export const WRITING_COLOR = '#7B4FB0';
+export const WRITING_STRIP = '#F4EEF9';
+
+export function parseStepType(value: unknown): StepType | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if ((STEP_TYPES as readonly string[]).includes(normalized)) return normalized as StepType;
+  if (normalized === 'starter' || normalized === 'warm_up') return 'class_starter';
+  if (normalized === 'reading' || normalized === 'readaloud') return 'read_aloud';
+  if (normalized === 'thesis' || normalized === 'essay') return 'thesis_essay';
+  if (normalized === 'framing' || normalized === 'background') return 'context';
+  return null;
+}
+
+/** Kinds that are always a Yawp! writing assignment. */
+const WRITING_KINDS = new Set(['class-starter', 'daily-pages', 'exit-ticket', 'thesis-module']);
+
+const TITLE_TYPES: [RegExp, StepType][] = [
+  [/\bthesis\b/i, 'thesis_essay'],
+  [/\bdaily pages\b/i, 'daily_pages'],
+  [/\bclass starter\b|\bwarm[- ]?up\b|\bbell ?ringer\b|\bdo now\b/i, 'class_starter'],
+  [/\bread(?:ing)?[- ]?aloud\b|\bread the\b|\breading\b/i, 'read_aloud'],
+  [/\bclos(?:e|ing)\b|\bexit\b|\bwrap[- ]?up\b/i, 'closing'],
+  [/\bcontext\b|\bbackground\b|\bframe\b|\bframing\b|\bthe author\b|\bhistorical\b/i, 'context'],
+];
+
+/**
+ * The type of a filed piece, from what it is and then what it is called. The
+ * planner's own tag (stored in `stepType`) wins over this.
+ */
+export function stepTypeFor({
+  kind,
+  title,
+  stored,
+}: {
+  kind: string;
+  title: string;
+  stored?: string | null;
+}): StepType {
+  const tagged = parseStepType(stored);
+  if (tagged) return tagged;
+  switch (kind) {
+    case 'class-starter':
+      return 'class_starter';
+    case 'daily-pages':
+      return 'daily_pages';
+    case 'exit-ticket':
+      return 'closing';
+    case 'thesis-module':
+      return 'thesis_essay';
+    case 'notes':
+      return 'context';
+  }
+  for (const [pattern, type] of TITLE_TYPES) if (pattern.test(title)) return type;
+  return 'activity';
+}
+
+/**
+ * A step counts as writing when it is tied to a Yawp! writing assignment: by
+ * its kind (class starter, Daily Pages, exit ticket, Thesis Essay module), or
+ * because one was created from it. Never set by the teacher.
+ */
+export function isWritingStep({
+  kind,
+  yawpAssignmentId,
+  stepType,
+  title = '',
+  content = '',
+}: {
+  kind: string;
+  yawpAssignmentId?: string | null;
+  stepType?: StepType | null;
+  /** A step's own words: students writing on paper is writing too. */
+  title?: string;
+  content?: string;
+}): boolean {
+  if (WRITING_KINDS.has(kind)) return true;
+  if (yawpAssignmentId) return true;
+  // A quick write the planner tagged as Daily Pages or a Thesis Essay module
+  // is a Yawp! writing assignment in waiting, and a class starter is writing
+  // wherever it is filed.
+  if (stepType === 'daily_pages' || stepType === 'thesis_essay' || stepType === 'class_starter') return true;
+  // Brian's run 4, item 6: an exit ticket or a reflection written on paper
+  // counts as much as one made in Yawp!.
+  return PROSE_WRITING.test(title) || PROSE_WRITING.test(content);
+}
+
+/**
+ * What a writing step's writing is called, for "From Class Starter · Exit
+ * Ticket" (Brian's run 4, item 6): what students write, in or out of Yawp!.
+ */
+export function writingName({
+  kind,
+  stepType,
+  title = '',
+  content = '',
+}: {
+  kind: string;
+  stepType: StepType;
+  title?: string;
+  content?: string;
+}): string {
+  const text = `${title}\n${content}`;
+  if (kind === 'class-starter' || stepType === 'class_starter') return 'Class Starter';
+  if (kind === 'daily-pages' || stepType === 'daily_pages') return 'Daily Pages';
+  if (kind === 'thesis-module' || stepType === 'thesis_essay') return 'Thesis Essay';
+  if (kind === 'exit-ticket' || /\bexit (?:ticket|slip)/i.test(text)) return 'Exit Ticket';
+  if (/\bquick[- ]?write/i.test(text)) return 'Quick Write';
+  if (/\bfree[- ]?write/i.test(text)) return 'Free Write';
+  if (/\bjournal/i.test(text)) return 'Journal';
+  if (/\breflection/i.test(text)) return 'Reflection';
+  return STEP_TYPE_LABELS[stepType];
+}
+
+/** Students writing, said in a step's words. */
+const PROSE_WRITING =
+  /\b(?:exit (?:ticket|slip)s?|class starter|daily pages|thesis|quick[- ]?writes?|free[- ]?writes?|journal(?:s|ing)?|(?:written|writing a) reflection|reflection (?:writing|paragraph)|students write|write (?:a|one|two|three) (?:sentence|paragraph|line)s?|written answer|(?:one|a)[- ]sentence (?:written )?answer|in (?:their|your) (?:notes|notebooks?)|\d+\s*(?:seconds?|minutes?|min) of writing|write for (?:\d+|one|two|three|four|five|a few) min)/i;
+
+/** The chip's text: the type, and its label when it has one. */
+export function stepChipText(type: StepType, label?: string | null): string {
+  const name = STEP_TYPE_LABELS[type];
+  return label?.trim() ? `${name} · ${label.trim()}` : name;
+}
+
+/** Minutes to suggest for a step the planner gave no time. */
+export const DEFAULT_STEP_MINUTES: Record<StepType, number> = {
+  class_starter: 5,
+  activity: 10,
+  context: 5,
+  read_aloud: 10,
+  daily_pages: 10,
+  thesis_essay: 15,
+  closing: 5,
+};
+
+const LECTURE = /\bmini[- ]?(?:lesson|lecture)\b|\blecture\b|\bdirect instruction\b/i;
+
+/**
+ * A step the teacher talks the class through (a lecture, a mini-lesson):
+ * one slide is not enough for it, so the stack page offers slides for it.
+ */
+export function isLectureStep(title: string): boolean {
+  return LECTURE.test(title);
+}

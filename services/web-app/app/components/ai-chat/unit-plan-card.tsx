@@ -77,6 +77,11 @@ export function UnitPlanCard({
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {day.objective}
               </p>
+              {day.reading ? (
+                <p data-testid="unit-day-reading" className="mt-1 text-xs">
+                  <span className="font-medium">Reading:</span> {day.reading}
+                </p>
+              ) : null}
               <p className="mt-1 text-xs">{day.students}</p>
               {day.check ? (
                 <p className="mt-1 text-xs text-muted-foreground">

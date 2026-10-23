@@ -1,4 +1,13 @@
 import { monthlyFreeTierPolicy } from '~/domain/free-tier/monthly-policy.server';
+import { recentArtFrom } from '~/domain/lesson-planner/recent-art';
+import { plannerHistory } from '~/domain/lesson-planner/planner-history';
+import {
+  MAX_PENDING_UPLOAD_IDS,
+  PENDING_UPLOAD_MS,
+  readUploadPart,
+  UPLOAD_TOOL,
+  type LessonUpload,
+} from '~/domain/lesson-planner/lesson-uploads';
 import { organizationHasPendingFreeTierLessonPlannerMetering } from '~/domain/free-tier/locked-preview.server';
 import {
   beginMonthlyOperation,
@@ -41,8 +50,17 @@ import {
   verifyLessonLinks,
 } from '~/domain/lesson-planner/lesson-links';
 import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
-import { shouldRenameLesson } from '~/domain/lesson-planner/lesson-name';
+import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
+import { readLessonLength } from '~/domain/lesson-planner/lesson-length';
+import { asksForDeck } from '~/domain/lesson-planner/suggestions';
+import { loadStackContents } from '~/domain/lesson-planner/stack-contents.server';
+import {
+  firstMessageTitle,
+  shouldRenameLesson,
+} from '~/domain/lesson-planner/lesson-name';
 import { findWritingExerciseTypeIds } from '~/domain/lesson-planner/yawp-catalog.server';
+import { TEMPLATE_DAYS, TEMPLATE_SLOTS } from '~/domain/lesson-planner/lesson-templates';
+import { frameworkContext, readWeekFramework } from '~/domain/lesson-planner/plan-days';
 import { buildLessonPlannerSystemPromptBlocks } from './build-system-prompt';
 import {
   buildLessonPlannerAdmissionPolicy,
@@ -79,8 +97,10 @@ const PLANNER_MISCONFIGURED =
 // Roomier than the reporter's cap: a teacher pasting a prompt, a rubric, or a
 // draft handout into the planner is a normal turn, not an attack.
 const MAX_PLANNER_MESSAGE_CHARS = 6_000;
-const MAX_HISTORY_MESSAGES = 20;
-const MAX_HISTORY_CHARS = 24_000;
+// The whole conversation, as far back as a real one goes: a structure the
+// teacher laid out at the start has to still be there (Brian's run 5).
+const MAX_HISTORY_MESSAGES = 80;
+const MAX_HISTORY_CHARS = 36_000;
 // Lessons are long: a deck with speaker notes, a handout, and the quoted text
 // of a Quick Writing Lesson run well past a report. A tight ceiling truncates
 // mid-artifact, which a teacher reads as bad material rather than as a cut-off.
@@ -113,6 +133,14 @@ const POST = z
     unitDay: z.coerce.number().int().min(1).max(60).optional(),
     /** The day's title from the map, so the new lesson is named before it exists. */
     unitDayTitle: z.string().trim().max(120).optional(),
+    /** A lesson started from one of the teacher's templates (run 3). */
+    templateId: z.string().min(1).max(64).optional(),
+    /** Documents added before the lesson's first message, to attach to it (Oct 21). */
+    uploadIds: z
+      .string()
+      .max(400)
+      .regex(/^[\w-]{1,40}(,[\w-]{1,40}){0,9}$/)
+      .optional(),
     /**
      * Opt in to the progress stream. Absent, the turn answers with one JSON
      * body exactly as it always has — so the streaming path can be turned off
@@ -176,24 +204,14 @@ function progressStream(
   });
 }
 
-function deriveTitle(message: string): string {
-  const trimmed = message.trim().replace(/\s+/g, ' ');
-  if (trimmed.length <= 60) return trimmed || 'New lesson';
-  return `${trimmed.slice(0, 57)}…`;
-}
+const deriveTitle = firstMessageTitle;
 
+// Brian's run 5 (item 2): every teacher message, and the planner's replies
+// in what is left of the budget, older ones as their outline.
 function boundedHistory(
   messages: Array<{ role: string; content: string }>
 ): Array<{ role: string; content: string }> {
-  const selected: Array<{ role: string; content: string }> = [];
-  let chars = 0;
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index]!;
-    if (chars + message.content.length > MAX_HISTORY_CHARS) break;
-    selected.unshift(message);
-    chars += message.content.length;
-  }
-  return selected;
+  return plannerHistory(messages, MAX_HISTORY_CHARS);
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -425,9 +443,17 @@ export async function action({ request }: ActionFunctionArgs) {
     const activeDay = dayTarget
       ? turn.unitDay!
       : (activeConversation?.unitDay ?? null);
+    // A day made from a week's framework hears its place in that week.
+    let weekContext: string[] = [];
     if (unitId && activeDay != null) {
       const map = await loadUnitMap({ db: prisma, unitId });
       unitContext = map ? buildUnitContext(map, activeDay) : null;
+      const unit = await prisma.lessonPlanUnit.findFirst({
+        where: { id: unitId, deletedAt: null },
+        select: { title: true, framework: true },
+      });
+      const framework = readWeekFramework(unit?.framework);
+      if (framework && unit) weekContext = frameworkContext(framework, unit.title, activeDay);
     }
 
     // Whether this teacher can actually assign an exit ticket. Without the type
@@ -437,13 +463,112 @@ export async function action({ request }: ActionFunctionArgs) {
       (await findWritingExerciseTypeIds(ctx)).exitTicket
     );
 
+    // Brian's review (B6): with stack v2 on, outputs are built from what the
+    // teacher kept, so the planner sees the stack itself, not just its titles.
+    const { stackV2, intakeV2, templates: templatesOn, deckGallery, uploads: uploadsOn } = await getLessonPlannerReviewFlags(
+      ctx.organizationId
+    );
+    // The teacher's own documents (Oct 21): this lesson's, and any added
+    // before its first message, which this turn attaches. Only theirs.
+    const pendingUploadIds = (turn.uploadIds ?? '').split(',').filter(Boolean).slice(0, MAX_PENDING_UPLOAD_IDS);
+    const sources: Array<LessonUpload & { conversationId: string | null }> = uploadsOn
+      ? await prisma.lessonPlanUpload.findMany({
+          where: {
+            membershipId: ctx.membershipId,
+            OR: [
+              ...(activeConversation ? [{ conversationId: activeConversation.id }] : []),
+              ...(pendingUploadIds.length
+                ? [{ id: { in: pendingUploadIds }, conversationId: null, createdAt: { gt: new Date(Date.now() - PENDING_UPLOAD_MS) } }]
+                : []),
+            ],
+          },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          select: { id: true, name: true, text: true, truncated: true, conversationId: true },
+        })
+      : [];
+    const attachUploadIds = sources.filter((source) => !source.conversationId).map((source) => source.id);
+    // Brian's run 3: a lesson built from the teacher's own template keeps its
+    // shape. Only the teacher's own, and only with templates on.
+    const templateRow =
+      templatesOn && turn.templateId
+        ? await prisma.lessonPlanTemplate.findFirst({
+            where: { id: turn.templateId, membershipId: access.membership.id, deletedAt: null },
+            select: { id: true, name: true, slots: true, periodMinutes: true, days: true },
+          })
+        : null;
+    const parsedSlots = templateRow ? TEMPLATE_SLOTS.safeParse(templateRow.slots) : null;
+    const parsedDays = templateRow?.days ? TEMPLATE_DAYS.safeParse(templateRow.days) : null;
+    const template =
+      templateRow && parsedSlots?.success
+        ? {
+            id: templateRow.id,
+            name: templateRow.name,
+            slots: parsedSlots.data,
+            periodMinutes: templateRow.periodMinutes,
+            days: parsedDays?.success ? parsedDays.data : null,
+          }
+        : null;
+    const stackContents =
+      stackV2 && activeConversation
+        ? await loadStackContents(activeConversation.id, {
+            // A deck is built from the pieces, not from the last deck (C1).
+            leaveOutDeck: asksForDeck(turn.message),
+          })
+        : [];
+
+    // How long this lesson is (Brian's run 2, B1): from this very message when
+    // the teacher just said, otherwise what they said earlier in the lesson.
+    const heardLength = readLessonLength(turn.message);
+    const lessonLength =
+      heardLength ??
+      (template?.periodMinutes && !activeConversation?.periodMinutes
+        ? { minutes: template.periodMinutes, classLabel: null }
+        : null) ??
+      (activeConversation?.periodMinutes
+        ? {
+            minutes: activeConversation.periodMinutes,
+            classLabel: activeConversation.lessonClassLabel ?? null,
+          }
+        : null);
+
+    // The paintings on this teacher's other recent decks, so a painting is
+    // chosen for the lesson rather than reused (Kevin, Oct 22).
+    const recentArt = deckGallery
+      ? recentArtFrom(
+          (
+            await prisma.lessonPlanMessage.findMany({
+              where: {
+                role: AgentType.Assistant,
+                content: { contains: '```yawp-slides' },
+                conversation: {
+                  membershipId: ctx.membershipId,
+                  deletedAt: null,
+                  ...(activeConversation ? { id: { not: activeConversation.id } } : {}),
+                },
+              },
+              orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+              take: 20,
+              select: { content: true },
+            })
+          ).map((message) => message.content)
+        )
+      : [];
+
     const system = buildLessonPlannerSystemPromptBlocks({
       teacherName: null,
+      lessonLength,
       organizationName: access.membership.organization.name,
       lessonInventory: conversation?.materials ?? [],
+      stackContents,
+      intakeV2,
       unitContext,
       exitTicketsAvailable,
       writingPracticeAvailable: ctx.writingPracticeEnabled,
+      template,
+      deckGallery,
+      sources,
+      recentArt,
+      weekContext,
     });
 
     const messages: { role: AgentType; content: string; name?: string }[] = [
@@ -486,12 +611,14 @@ export async function action({ request }: ActionFunctionArgs) {
             ipHash: computeIpHash(request),
           },
           maxToolRounds: PLANNER_MAX_TOOL_ROUNDS,
-          tools: LESSON_PLANNER_TOOLS,
+          tools: sources.length ? [...LESSON_PLANNER_TOOLS, UPLOAD_TOOL] : LESSON_PLANNER_TOOLS,
           handleToolCall: async (name, input) => {
             // Reported before the call, not after: the teacher should see what is
             // being looked up while it is being looked up.
             toolRound += 1;
             report(planningProgressForTool(name, input, toolRound));
+            // Read from this turn's own documents: never another lesson's.
+            if (name === UPLOAD_TOOL.name) return JSON.stringify(readUploadPart(sources, input));
             const result = await handleLessonPlannerToolCall(name, input, ctx);
             for (const link of collectToolLinks(result)) toolLinks.add(link);
             return result;
@@ -587,6 +714,10 @@ export async function action({ request }: ActionFunctionArgs) {
           .filter((message) => message.role === AgentType.Assistant)
           .map((message) => message.content),
         teacherNamedIt: Boolean(activeConversation?.packetTitle?.trim()),
+        stillPlaceholder: (() => {
+          const first = priorMessages.find((message) => message.role === AgentType.User);
+          return Boolean(activeConversation && first && activeConversation.title === firstMessageTitle(first.content));
+        })(),
       });
 
       // Stamp explicit, strictly-increasing timestamps: both rows land in one
@@ -621,6 +752,12 @@ export async function action({ request }: ActionFunctionArgs) {
                   select: { id: true },
                 }));
 
+          if (attachUploadIds.length) {
+            await transaction.lessonPlanUpload.updateMany({
+              where: { id: { in: attachUploadIds }, membershipId: ctx.membershipId, conversationId: null },
+              data: { conversationId: persistedConversation.id },
+            });
+          }
           await transaction.lessonPlanMessage.create({
             data: {
               conversationId: persistedConversation.id,
@@ -651,6 +788,12 @@ export async function action({ request }: ActionFunctionArgs) {
               // would break the one-to-one with the board.
               ...(lessonName && dayTarget === null
                 ? { title: lessonName }
+                : {}),
+              ...(heardLength
+                ? {
+                    periodMinutes: heardLength.minutes,
+                    lessonClassLabel: heardLength.classLabel,
+                  }
                 : {}),
             },
           });

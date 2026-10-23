@@ -10,6 +10,17 @@ import {
   FREE_TIER_FLAG_LEGACY_KEY,
   UNIFIED_SIGN_ON_FLAG,
   FEATURE_FLAG_KEYS,
+  LESSON_PLANNER_INTAKE_V2_FLAG,
+  LESSON_PLANNER_STACK_V2_FLAG,
+  LESSON_PLANNER_DECK_V2_FLAG,
+  LESSON_PLANNER_PLAN_EXPORT_V2_FLAG,
+  LESSON_PLANNER_STACK_V3_FLAG,
+  LESSON_PLANNER_SHARE_FLAG,
+  LESSON_PLANNER_RUN_SHOW_FLAG,
+  LESSON_PLANNER_TEMPLATES_FLAG,
+  LESSON_PLANNER_DECK_GALLERY_FLAG,
+  LESSON_PLANNER_UPLOADS_FLAG,
+  LESSON_PLANNER_STACK_PANEL_FLAG,
   FOLDED_FREE_TIER_LEGACY_SETTINGS,
   isFreeTierGloballyEnabled,
   featureFlagSettingName,
@@ -35,6 +46,17 @@ describe('feature flag registry', () => {
       LESSON_PLANNER_FLAG,
       INTERNAL_RUBRICS_FLAG,
       FREE_TIER_FLAG,
+      LESSON_PLANNER_INTAKE_V2_FLAG,
+      LESSON_PLANNER_STACK_V2_FLAG,
+      LESSON_PLANNER_DECK_V2_FLAG,
+      LESSON_PLANNER_STACK_PANEL_FLAG,
+      LESSON_PLANNER_PLAN_EXPORT_V2_FLAG,
+      LESSON_PLANNER_STACK_V3_FLAG,
+      LESSON_PLANNER_SHARE_FLAG,
+      LESSON_PLANNER_RUN_SHOW_FLAG,
+      LESSON_PLANNER_TEMPLATES_FLAG,
+      LESSON_PLANNER_DECK_GALLERY_FLAG,
+      LESSON_PLANNER_UPLOADS_FLAG,
       UNIFIED_SIGN_ON_FLAG,
       CLASS_CODE_UNIQUE_FLAG,
       DEMO_FEEDBACK_FLAG,
@@ -61,6 +83,32 @@ describe('feature flag registry', () => {
       'feature_flag.free-tier-onboarding-v2',
       'feature_flag.free-tier-inapp-v2',
     ]);
+  });
+
+  test('has the lesson planner review flags, each with a setting name', () => {
+    expect(featureFlagSettingName(LESSON_PLANNER_INTAKE_V2_FLAG)).toBe(
+      'feature_flag.lesson_planner_intake_v2'
+    );
+    expect(featureFlagSettingName(LESSON_PLANNER_STACK_V2_FLAG)).toBe(
+      'feature_flag.lesson_planner_stack_v2'
+    );
+    expect(featureFlagSettingName(LESSON_PLANNER_DECK_V2_FLAG)).toBe(
+      'feature_flag.lesson_planner_deck_v2'
+    );
+    expect(featureFlagSettingName(LESSON_PLANNER_STACK_PANEL_FLAG)).toBe(
+      'feature_flag.lesson_planner_stack_panel'
+    );
+    expect(featureFlagSettingName(LESSON_PLANNER_PLAN_EXPORT_V2_FLAG)).toBe(
+      'feature_flag.lesson_planner_plan_export_v2'
+    );
+    expect(featureFlagSettingName(LESSON_PLANNER_STACK_V3_FLAG)).toBe(
+      'feature_flag.lesson_planner_stack_v3'
+    );
+    expect(featureFlagSettingName(LESSON_PLANNER_SHARE_FLAG)).toBe('feature_flag.lesson_planner_share');
+    expect(featureFlagSettingName(LESSON_PLANNER_RUN_SHOW_FLAG)).toBe('feature_flag.lesson_planner_run_show');
+    expect(featureFlagSettingName(LESSON_PLANNER_TEMPLATES_FLAG)).toBe('feature_flag.lesson_planner_templates');
+    expect(featureFlagSettingName(LESSON_PLANNER_DECK_GALLERY_FLAG)).toBe('feature_flag.lesson_planner_deck_gallery');
+    expect(featureFlagSettingName(LESSON_PLANNER_UPLOADS_FLAG)).toBe('feature_flag.lesson_planner_uploads');
   });
 
   test('rejects anything that is not a registered flag', () => {

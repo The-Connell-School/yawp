@@ -8,7 +8,7 @@
  * read top to bottom.
  *
  * So the map is structured. The planner emits it as a fenced `yawp-unit` block
- * of JSON, and Yawp renders a real day-by-day board where each day carries its
+ * of JSON, and Yawp! renders a real day-by-day board where each day carries its
  * own "build this day" button. That button is the whole point — the map is
  * worth having because it is the way into the lessons, not because it is a
  * nice summary of them.
@@ -31,7 +31,23 @@ const MAX_TITLE_CHARS = 120;
  */
 const MAX_CELL_CHARS = 220;
 
-const cell = z.string().trim().min(1).max(MAX_CELL_CHARS);
+/**
+ * A cell a little over the limit is trimmed at a word rather than costing
+ * the teacher the whole map (Oct 21: the first map "glitched"); a paragraph
+ * pretending to be a cell, past twice the limit, still fails.
+ */
+function trimmed(limit: number) {
+  return (value: unknown) => {
+    if (typeof value !== 'string') return value;
+    const text = value.trim();
+    if (text.length <= limit || text.length > limit * 2) return text;
+    const cut = text.slice(0, limit - 1);
+    const at = cut.lastIndexOf(' ');
+    return `${(at > limit / 2 ? cut.slice(0, at) : cut).replace(/[\s,;:–—-]+$/, '')}…`;
+  };
+}
+
+const cell = z.preprocess(trimmed(MAX_CELL_CHARS), z.string().trim().min(1).max(MAX_CELL_CHARS));
 
 const daySchema = z
   .object({
@@ -41,11 +57,13 @@ const daySchema = z
      * which day is which.
      */
     day: z.number().int().min(1).max(MAX_DAYS),
-    title: z.string().trim().min(1).max(MAX_TITLE_CHARS),
+    title: z.preprocess(trimmed(MAX_TITLE_CHARS), z.string().trim().min(1).max(MAX_TITLE_CHARS)),
     /** What students will be able to do by the end of this period. */
     objective: cell,
     /** What they actually do — the activity, not the pedagogy. */
     students: cell,
+    /** What students read for this day, and whether in class or at home (Oct 21). */
+    reading: cell.optional(),
     /** What this day hands to the next one. The arc, made checkable. */
     buildsTo: cell.optional(),
     /** How this day finds out whether it worked. */
@@ -88,6 +106,10 @@ const DAY_ALIASES: Record<string, keyof UnitPlanDay> = {
   handsTo: 'buildsTo',
   assessment: 'check',
   checkForUnderstanding: 'check',
+  readings: 'reading',
+  assignedReading: 'reading',
+  readingAssignment: 'reading',
+  text: 'reading',
 };
 
 const UNIT_ALIASES: Record<string, string> = {
@@ -251,7 +273,7 @@ export function hasUnitPlan(content: string): boolean {
  * JSON, a rejected map reads back to it as a map that shipped.
  */
 export const FAILED_UNIT_NOTE =
-  '[The unit map you wrote here failed validation. Yawp never rendered it and the teacher never saw it. If they ask about the unit, believe them, apologise briefly, and write the map again from scratch — fewer days, one short line per field. Do not refer back to this one as if it exists.]';
+  '[The unit map you wrote here failed validation. Yawp! never rendered it and the teacher never saw it. If they ask about the unit, believe them, apologise briefly, and write the map again from scratch — fewer days, one short line per field. Do not refer back to this one as if it exists.]';
 
 export function markFailedUnitPlans(content: string): string {
   const outcome = readUnitPlan(content);
@@ -272,6 +294,7 @@ export function buildDayRequest(unit: UnitPlan, day: UnitPlanDay): string {
     `The objective is: ${day.objective}`,
   ];
   if (day.students) parts.push(`Students: ${day.students}`);
+  if (day.reading) parts.push(`Reading: ${day.reading}`);
   if (day.minutes) parts.push(`I have ${day.minutes} minutes.`);
   parts.push(
     `Keep it inside the arc of the unit — this day comes after day ${
@@ -327,11 +350,12 @@ export function inlineUnitPlan(content: string): string {
   const lines: string[] = [`## ${unit.title}`];
   if (unit.subtitle) lines.push('', `*${unit.subtitle}*`);
   if (unit.endsWith) lines.push('', `**Ends with:** ${unit.endsWith}`);
-  lines.push('', '| Day | Lesson | Objective | Students do | Check |');
-  lines.push('| --- | --- | --- | --- | --- |');
+  const reading = unit.days.some((day) => day.reading);
+  lines.push('', `| Day | Lesson | Objective |${reading ? ' Reading |' : ''} Students do | Check |`);
+  lines.push(`| --- | --- | --- |${reading ? ' --- |' : ''} --- | --- |`);
   for (const day of unit.days) {
     lines.push(
-      `| ${day.day}${day.minutes ? ` (${day.minutes} min)` : ''} | ${day.title} | ${day.objective} | ${day.students} | ${day.check ?? '—'} |`
+      `| ${day.day}${day.minutes ? ` (${day.minutes} min)` : ''} | ${day.title} | ${day.objective} |${reading ? ` ${day.reading ?? '—'} |` : ''} ${day.students} | ${day.check ?? '—'} |`
     );
   }
   return content.replace(outcome.block, () => lines.join('\n'));
