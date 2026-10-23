@@ -25,6 +25,19 @@ const RUBRIC_KEYS = [
 ] as const;
 const RUBRIC_WEIGHTS = [0.25, 0.25, 0.2, 0.2, 0.1];
 
+const EVERYONE = JSON.stringify({ mode: 'everyone', orgIds: [] });
+const PLANNER_FLAGS = [
+  'lesson_planner_stack_v2',
+  'lesson_planner_stack_v3',
+  'lesson_planner_stack_panel',
+  'lesson_planner_share',
+  'lesson_planner_run_show',
+  'lesson_planner_templates',
+  'lesson_planner_deck_v2',
+  'lesson_planner_deck_gallery',
+  'lesson_planner_plan_export_v2',
+];
+
 const SHORT_COMMENTS: Record<(typeof RUBRIC_KEYS)[number], string[]> = {
   thesis_and_content: ['Your thesis wanders; say what you are arguing in one sentence.', 'A clear position, but it needs to be more specific.', 'A clear, arguable thesis.', 'A sharp, original thesis that drives the whole essay.', 'An original thesis that drives every paragraph.'],
   organization_and_structure: ['Paragraphs need a clear claim to organize around.', 'Paragraph two drifts into plot summary.', 'Each paragraph opens with a claim.', 'Well organized, with purposeful transitions.', 'Every paragraph builds the argument.'],
@@ -99,6 +112,18 @@ async function seedBase(prisma: PrismaClient) {
     create: { id: 'booth-lesson-planner', name: 'feature_flag.lesson_planner', value: 'true', valueType: 'boolean' },
     update: { value: 'true' },
   });
+  // The new stack (run of show), sharing and the Lesson Deck Kit, from the
+  // Lesson Planner branch (The-Connell-School/yawp#437). On a checkout without
+  // them these rows are unused. Intake v2 stays off: the video starts the plan
+  // from the Class Summary's seeded message.
+  for (const flag of PLANNER_FLAGS) {
+    const name = `feature_flag.${flag}`;
+    await prisma.setting.upsert({
+      where: { name },
+      create: { id: `booth-${flag}`, name, value: EVERYONE, valueType: 'json' },
+      update: { value: EVERYONE, valueType: 'json' },
+    });
+  }
 
   // One class on screen: archive everything the dev seed made.
   await prisma.class.updateMany({ where: { school: { organizationId } }, data: { isArchived: true } });

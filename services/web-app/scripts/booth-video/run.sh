@@ -8,6 +8,15 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../../.." && pwd)"
+
+# BOOTH_APP_ROOT records against another checkout of the app (for example a
+# feature branch in a git worktree): this folder is copied there and run from it.
+if [[ -n "${BOOTH_APP_ROOT:-}" && "$(realpath "$BOOTH_APP_ROOT")" != "$ROOT" ]]; then
+  APP_ROOT="$(realpath "$BOOTH_APP_ROOT")"
+  mkdir -p "$APP_ROOT/services/web-app/scripts/booth-video"
+  cp -R "$HERE/." "$APP_ROOT/services/web-app/scripts/booth-video/"
+  BOOTH_APP_ROOT= exec bash "$APP_ROOT/services/web-app/scripts/booth-video/run.sh" "$(realpath -m "${1:-$ROOT/yawp-ncte-booth.mp4}")"
+fi
 WEB="$ROOT/services/web-app"
 OUT="$(realpath -m "${1:-$ROOT/yawp-ncte-booth.mp4}")"
 WORK="${BOOTH_WORK_DIR:-${TMPDIR:-/tmp}/booth-video}"
@@ -41,7 +50,8 @@ export ANTHROPIC_API_KEY=booth-video-stand-in
 export ANTHROPIC_OUTAGE_FALLBACK_ENABLED=false
 export CLASS_INSIGHT_MOCK_MODE=live
 export BLACKBOARD_LTI_MOCK_URL=
-./bin/project dev start --json >/dev/null
+BOOTH_BASE_URL="$(./bin/project dev start --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).url.replace(/\/$/,"")))')"
+export BOOTH_BASE_URL
 
 cd "$WEB"
 xvfb-run -a -s "-screen 0 1920x1080x24" node scripts/booth-video/record.mjs --out "$WORK/clips"
