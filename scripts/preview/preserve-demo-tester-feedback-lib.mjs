@@ -5,7 +5,19 @@
 
 export const DEMO_TESTER_FEEDBACK_FALLBACK_EMAIL = 'dev.admin@yawp.local';
 
-export const TESTER_FEEDBACK_EXPORT_SQL = `
+export const SCREENSHOT_COLUMN_PROBE_SQL = `
+SELECT EXISTS (
+  SELECT 1
+  FROM information_schema.columns
+  WHERE table_schema = 'public'
+    AND table_name = 'TesterFeedback'
+    AND column_name = 'screenshot'
+)::text;
+`.trim();
+
+export function buildTesterFeedbackExportSql(includeScreenshot) {
+  const screenshotSelect = includeScreenshot ? '        tf.screenshot,\n' : '';
+  return `
 SELECT COALESCE(
   (
     SELECT json_agg(row_to_json(payload) ORDER BY payload."createdAt", payload.id)
@@ -21,8 +33,7 @@ SELECT COALESCE(
         tf."whatIWish",
         tf.severity,
         tf.actions,
-        tf.screenshot,
-        tf.environment,
+${screenshotSelect}        tf.environment,
         tf."createdAt"
       FROM "TesterFeedback" tf
       LEFT JOIN "User" u ON u.id = tf."userId"
@@ -32,6 +43,10 @@ SELECT COALESCE(
   '[]'::json
 )::text;
 `.trim();
+}
+
+/** @deprecated use buildTesterFeedbackExportSql */
+export const TESTER_FEEDBACK_EXPORT_SQL = buildTesterFeedbackExportSql(true);
 
 export function redactEmailForLogs(email) {
   if (!email || typeof email !== 'string') {
@@ -50,20 +65,40 @@ export function redactEmailForLogs(email) {
   return `${localHead}***@${domainHead}***${domainTail ? `.${domainTail}` : ''}`;
 }
 
-export function buildTesterFeedbackRestoreSql(rows) {
-  if (!Array.isArray(rows)) {
-    throw new Error('Tester feedback backup must be a JSON array');
-  }
-  if (rows.length === 0) {
-    return 'SELECT 0 AS restored_rows;';
-  }
+export function sanitizeCliFailure(label, stderr) {
+  const lines = (stderr || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter(
+      (line) =>
+        !/^DETAIL:/i.test(line) &&
+        !/^HINT:/i.test(line) &&
+        !/Failing row contains/i.test(line) &&
+        !/^CONTEXT:/i.test(line)
+    );
+  const first = lines[0] || `${label} failed`;
+  const sqlstate = (stderr || '').match(/\b([0-9A-Z]{5})\b/)?.[1];
+  const compact = first.length > 240 ? `${first.slice(0, 240)}…` : first;
+  return sqlstate ? `${compact} (SQLSTATE ${sqlstate})` : compact;
+}
 
-  const payload = JSON.stringify(rows);
-  if (payload.includes('$data$')) {
-    throw new Error('Tester feedback backup contains unsupported delimiter');
+export function sanitizeJsonFailure(error) {
+  if (!(error instanceof SyntaxError)) {
+    return 'Tester feedback backup JSON is invalid';
   }
+  return 'Tester feedback backup JSON is invalid';
+}
 
-  return `
+export function buildTesterFeedbackRestoreStreamParts(includeScreenshot) {
+  const screenshotRecord = includeScreenshot ? '    screenshot text,\n' : '';
+  const screenshotInsert = includeScreenshot ? '  screenshot,\n' : '';
+  const screenshotSelect = includeScreenshot ? '  incoming.screenshot,\n' : '';
+  const screenshotUpdate = includeScreenshot
+    ? '  screenshot = EXCLUDED.screenshot,\n'
+    : '';
+
+  const prefix = `
 BEGIN;
 DO $$
 BEGIN
@@ -78,7 +113,12 @@ END $$;
 
 WITH incoming AS (
   SELECT *
-  FROM jsonb_to_recordset($data$${payload}$data$) AS row_data(
+  FROM jsonb_to_recordset($data$
+`.trimStart();
+
+  const suffix = `
+
+$data$) AS row_data(
     id text,
     "userId" text,
     "reporterEmail" text,
@@ -89,8 +129,7 @@ WITH incoming AS (
     "whatIWish" text,
     severity text,
     actions jsonb,
-    screenshot text,
-    environment text,
+${screenshotRecord}    environment text,
     "createdAt" timestamptz
   )
 ),
@@ -110,8 +149,7 @@ INSERT INTO "TesterFeedback" (
   "whatIWish",
   severity,
   actions,
-  screenshot,
-  environment,
+${screenshotInsert}  environment,
   "createdAt"
 )
 SELECT
@@ -124,8 +162,7 @@ SELECT
   incoming."whatIWish",
   incoming.severity,
   incoming.actions,
-  incoming.screenshot,
-  incoming.environment,
+${screenshotSelect}  incoming.environment,
   incoming."createdAt"
 FROM incoming
 LEFT JOIN "User" reporter
@@ -140,11 +177,29 @@ ON CONFLICT (id) DO UPDATE SET
   "whatIWish" = EXCLUDED."whatIWish",
   severity = EXCLUDED.severity,
   actions = EXCLUDED.actions,
-  screenshot = EXCLUDED.screenshot,
-  environment = EXCLUDED.environment,
+${screenshotUpdate}  environment = EXCLUDED.environment,
   "createdAt" = EXCLUDED."createdAt";
 
 SELECT count(*) AS restored_rows FROM "TesterFeedback";
 COMMIT;
-`.trim();
+`.trimStart();
+
+  return { prefix, suffix };
+}
+
+export function buildTesterFeedbackRestoreSql(rows, includeScreenshot = true) {
+  if (!Array.isArray(rows)) {
+    throw new Error('Tester feedback backup must be a JSON array');
+  }
+  if (rows.length === 0) {
+    return 'SELECT 0 AS restored_rows;';
+  }
+
+  const payload = JSON.stringify(rows);
+  if (payload.includes('$data$')) {
+    throw new Error('Tester feedback backup contains unsupported delimiter');
+  }
+
+  const { prefix, suffix } = buildTesterFeedbackRestoreStreamParts(includeScreenshot);
+  return `${prefix}${payload}${suffix}`;
 }

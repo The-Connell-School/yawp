@@ -5,6 +5,7 @@ import path from 'node:path';
 import {
   buildTesterFeedbackRestoreSql,
   redactEmailForLogs,
+  sanitizeCliFailure,
 } from './preserve-demo-tester-feedback-lib.mjs';
 
 const scriptPath = path.resolve('scripts/preview/preserve-demo-tester-feedback.sh');
@@ -23,6 +24,16 @@ describe('preserve demo tester feedback helpers', () => {
   test('redacts reporter emails in logs', () => {
     expect(redactEmailForLogs('dev.admin@yawp.local')).toBe('d***@y***.local');
     expect(redactEmailForLogs('')).toBe('[redacted]');
+  });
+
+  test('sanitizeCliFailure omits DETAIL and row payloads', () => {
+    const message = sanitizeCliFailure(
+      'psql',
+      'ERROR: bad input\nDETAIL: Failing row contains (secret, dev.admin@yawp.local).\n'
+    );
+    expect(message).toContain('ERROR: bad input');
+    expect(message).not.toContain('DETAIL');
+    expect(message).not.toContain('dev.admin');
   });
 
   test('restore SQL remaps reporter email and keeps screenshot column', () => {
@@ -76,7 +87,11 @@ printf '\n' >> "$COMMAND_LOG"
 joined="$*"
 if [[ "$joined" == *"to_regclass"* ]]; then
   printf '${options.tableExists === false ? 'f' : 't'}\n'
-elif [[ "$joined" == *"json_agg"* ]]; then
+elif [[ "$joined" == *"information_schema"* ]] || [[ "$joined" == *"column_name"* ]]; then
+  printf 't\n'
+elif [[ "$joined" == *"count(*) FROM"* && "$joined" != *"json_agg"* ]]; then
+  printf '${options.userCount ?? '1'}\n'
+elif [[ "$joined" == *"json_agg"* ]] || [[ "$joined" == *"row_to_json"* ]]; then
   cat "${payloadFile}"
   printf '\n'
 elif [[ "$joined" == *" -f "* ]]; then
@@ -84,8 +99,6 @@ elif [[ "$joined" == *" -f "* ]]; then
   if [[ "${options.restoreFails ? 'true' : 'false'}" == "true" ]]; then
     exit 9
   fi
-elif [[ "$joined" == *"TesterFeedback"* && "$joined" == *"count"* ]]; then
-  printf '${options.userCount ?? '1'}\n'
 fi
 `
   );
@@ -227,6 +240,50 @@ describe('preserve demo tester feedback reset path', () => {
       stderr: 'pipe',
     });
     expect(result.exitCode).not.toBe(0);
+  });
+
+  test('export streams multi-megabyte screenshots without stdout buffering limits', async () => {
+    const large = 'B'.repeat(600 * 1024);
+    const payload = JSON.stringify([
+      {
+        id: 'tf_big_1',
+        reporterEmail: 'dev.student@yawp.local',
+        screenshot: large,
+        url: 'https://demo.example/one',
+        userAgent: 'ua',
+        whatIDid: 'a',
+        whatHappened: 'b',
+        whatIWish: 'c',
+        environment: 'demo',
+        createdAt: '2026-10-23T18:00:00.000Z',
+      },
+      {
+        id: 'tf_big_2',
+        reporterEmail: 'dev.student@yawp.local',
+        screenshot: large,
+        url: 'https://demo.example/two',
+        userAgent: 'ua',
+        whatIDid: 'a',
+        whatHappened: 'b',
+        whatIWish: 'c',
+        environment: 'demo',
+        createdAt: '2026-10-23T18:01:00.000Z',
+      },
+    ]);
+    const harness = await makeDockerHarness({ exportPayload: payload });
+    const result = Bun.spawnSync({
+      cmd: ['bash', scriptPath, 'export'],
+      cwd: path.resolve('.'),
+      env: harness.env,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    expect(result.exitCode).toBe(0);
+    const backupFile = result.stdout.toString().trim();
+    const saved = await Bun.file(backupFile).text();
+    const parsed = JSON.parse(saved);
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0].screenshot.length).toBe(600 * 1024);
   });
 
   test('mjs export validates json payload shape', async () => {

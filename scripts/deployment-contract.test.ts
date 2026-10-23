@@ -2016,6 +2016,9 @@ describe('demo environment deployment contract', () => {
     expect(deployScript).toContain('restore_demo_tester_feedback_after_reset');
     expect(deployScript).toContain('preserve-demo-tester-feedback.sh');
     expect(deployScript).toContain('prisma-migrate-deploy-with-summary.sh');
+    expect(deployScript).toContain(
+      'bash /preview-control/prisma-migrate-deploy-with-summary.sh'
+    );
     expect(deployScript).toContain('DEMO_PRISMA_MIGRATE_SUMMARY=Skipped');
     expect(deployScript).toContain('log_demo_tester_feedback_count');
     expect(existsSync(join(repoRoot, 'scripts/preview/preserve-demo-tester-feedback.sh'))).toBe(

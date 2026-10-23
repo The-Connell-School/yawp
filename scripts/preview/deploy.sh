@@ -440,6 +440,7 @@ export_demo_tester_feedback_before_reset() {
     bash "$SCRIPT_DIR/preserve-demo-tester-feedback.sh" export)"
   if [[ -n "$backup_file" ]]; then
     DEMO_TESTER_FEEDBACK_BACKUP_FILE="$backup_file"
+    chmod 600 "$backup_file" 2>/dev/null || true
     echo "Preserved demo tester feedback for reset restore."
   fi
 }
@@ -494,7 +495,6 @@ arm_demo_reset_recovery() {
 recover_demo_database_on_failure() {
   local status=$?
   trap - EXIT
-  cleanup_demo_tester_feedback_backup
   if (( status != 0 )) && [[ "$DEMO_RESET_RECOVERY_ARMED" == "true" ]]; then
     DEMO_RESET_RECOVERY_ARMED=false
     echo "Demo deployment failed after reset; restoring the pre-reset database." >&2
@@ -503,9 +503,15 @@ recover_demo_database_on_failure() {
       bash "$SCRIPT_DIR/restore-demo-backup.sh" \
       && harden_preview_database; then
       echo "Demo pre-reset database restored; existing web container can reconnect." >&2
+      cleanup_demo_tester_feedback_backup
     else
       echo "CRITICAL: automatic demo database recovery failed; use $DEMO_RESET_BACKUP_FILE." >&2
+      if [[ -n "${DEMO_TESTER_FEEDBACK_BACKUP_FILE:-}" ]]; then
+        echo "Tester feedback backup retained at ${DEMO_TESTER_FEEDBACK_BACKUP_FILE} for manual restore." >&2
+      fi
     fi
+  else
+    cleanup_demo_tester_feedback_backup
   fi
   return "$status"
 }
@@ -860,9 +866,13 @@ run_tooling_if_needed() {
     "${compose[@]}" pull --quiet toolbox web || true
   fi
 
-  local tooling_command quoted_prisma_cli
-  quoted_prisma_cli="$(printf '%q' "$prisma_cli")"
-  tooling_command="bun install --ignore-scripts && ${prisma_cli} generate && PRISMA_MIGRATE_PRISMA_CLI=${quoted_prisma_cli} bash scripts/preview/prisma-migrate-deploy-with-summary.sh && cd packages/prisma"
+  local tooling_command migrate_wrapper
+  if [[ "$SLUG" =~ ^pr-[1-9][0-9]*$ ]]; then
+    migrate_wrapper='PRISMA_MIGRATE_REPO_ROOT=/app PRISMA_MIGRATE_PRISMA_CLI_SCRIPT=/preview-control/prisma-cli.sh PRISMA_MIGRATE_SUMMARY_SCRIPT=/preview-control/emit-prisma-migrate-summary.mjs bash /preview-control/prisma-migrate-deploy-with-summary.sh'
+  else
+    migrate_wrapper='bash scripts/preview/prisma-migrate-deploy-with-summary.sh'
+  fi
+  tooling_command="bun install --ignore-scripts && ${prisma_cli} generate && ${migrate_wrapper} && cd packages/prisma"
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/backfill-class-art-key.ts" ]]; then
     tooling_command+=' && bun run scripts/backfill-class-art-key.ts'
   fi
