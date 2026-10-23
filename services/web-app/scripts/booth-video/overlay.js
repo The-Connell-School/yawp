@@ -24,42 +24,49 @@
   const css = `
     /* The dev-only environment button has no place in a product video. */
     [class*="local-dev-environment"] { display: none !important; }
-    #booth-root { position: fixed; inset: 0; pointer-events: none; z-index: 2147483000; font-family: Roboto, system-ui, sans-serif; }
+    /* Colors and type are the Lesson Planner stack's own: --accent is the
+       current section's step color, set by chapter(). */
+    #booth-root { position: fixed; inset: 0; pointer-events: none; z-index: 2147483000; --accent: #3E9A84;
+      font-family: 'Instrument Sans', Roboto, system-ui, sans-serif; }
     #booth-root * { box-sizing: border-box; }
     .booth-caption { position: absolute; left: 50%; bottom: 26px; transform: translate(-50%, 16px); max-width: 1180px;
-      background: rgba(39, 37, 26, 0.94); color: #FFFEFA; border-radius: 16px; padding: 16px 30px 17px 26px;
-      font-size: 30px; line-height: 1.3; font-weight: 500; letter-spacing: -0.01em; box-shadow: 0 12px 32px rgba(0,0,0,.28);
+      background: rgba(28, 26, 23, 0.95); color: #FFFFFF; border-radius: 16px; padding: 16px 30px 17px 28px;
+      font-size: 30px; line-height: 1.3; font-weight: 600; letter-spacing: -0.005em; box-shadow: 0 14px 34px rgba(0,0,0,.30);
       opacity: 0; transition: opacity .45s ease, transform .45s ease; text-align: left; }
     .booth-caption.on { opacity: 1; transform: translate(-50%, 0); }
     .booth-chapter { position: absolute; top: 18px; right: 22px; display: flex; align-items: center; gap: 10px;
-      background: rgba(255, 254, 250, 0.96); border: 1px solid #D6D5CF; border-radius: 999px; padding: 8px 16px 8px 9px;
-      font-size: 17px; font-weight: 500; color: #3C3828; box-shadow: 0 4px 14px rgba(0,0,0,.10); opacity: 0; transition: opacity .4s ease; }
+      background: #FFFFFF; border-radius: 999px; padding: 8px 16px 8px 9px;
+      font-size: 17px; font-weight: 600; color: #1C1A17; box-shadow: 0 2px 4px rgba(0,0,0,.08), 0 10px 24px rgba(0,0,0,.14); opacity: 0; transition: opacity .4s ease; }
     .booth-chapter.on { opacity: 1; }
     html:has([role="dialog"][data-state="open"]) .booth-chapter { opacity: 0; }
     /* Full-screen views (editor, grading, revision) keep their own controls top right. */
     html:not(:has(a[href="/app/my-classes"])) .booth-chapter { opacity: 0; }
-    .booth-chapter b { background: var(--chapter-color, #7B4FB0); color: #FFFEFA; border-radius: 999px; padding: 3px 10px; font-size: 15px; font-weight: 700; }
-    .booth-spot { position: absolute; border-radius: 14px; box-shadow: 0 0 0 4px #9D6BE0, 0 0 22px 6px rgba(157,107,224,.55), 0 0 0 9999px rgba(0,0,0,0.45);
+    .booth-chapter b { background: var(--accent); color: #FFFFFF; border-radius: 999px; padding: 3px 10px; font-size: 15px; font-weight: 700; }
+    .booth-spot { position: absolute; border-radius: 14px;
+      box-shadow: 0 0 0 4px var(--accent), 0 0 0 9px color-mix(in srgb, var(--accent) 30%, transparent), 0 0 0 9999px rgba(0,0,0,0.45);
       opacity: 0; transition: opacity .35s ease, left .45s ease, top .45s ease, width .45s ease, height .45s ease; }
-    .booth-spot.nodim { box-shadow: 0 0 0 4px #9D6BE0, 0 0 26px 8px rgba(157,107,224,.5); }
+    .booth-spot.nodim { box-shadow: 0 0 0 4px var(--accent), 0 0 0 10px color-mix(in srgb, var(--accent) 28%, transparent); }
     .booth-spot.on { opacity: 1; }
-    .booth-card { position: absolute; width: 470px; background: #FFFEFA; color: #27251A; border: 1px solid #D6D5CF;
-      border-radius: 16px; padding: 24px 26px 22px; box-shadow: 0 18px 40px -8px rgba(0,0,0,.35), 0 6px 12px -6px rgba(0,0,0,.2);
-      opacity: 0; transform: scale(.95); transition: opacity .35s ease, transform .35s ease; }
-    .booth-card.on { opacity: 1; transform: scale(1); }
-    .booth-card .eyebrow { font-size: 14px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #7B4FB0; margin-bottom: 8px; }
-    .booth-card h2 { margin: 0; font-size: 26px; line-height: 1.22; font-weight: 700; color: #0f172a; letter-spacing: -0.01em; }
-    .booth-card p { margin: 10px 0 0; font-size: 21px; line-height: 1.4; color: #57554b; }
+    /* The callout: pure white, floating well above the page. */
+    .booth-card { position: absolute; width: 480px; background: #FFFFFF; color: #1C1A17; border-radius: 18px; padding: 26px 28px 24px;
+      box-shadow: 0 1px 2px rgba(0,0,0,.10), 0 4px 8px rgba(0,0,0,.10), 0 18px 36px -6px rgba(0,0,0,.28), 0 42px 80px -16px rgba(0,0,0,.40);
+      opacity: 0; transform: translateY(14px) scale(.96); transition: opacity .4s ease, transform .5s cubic-bezier(.2,.8,.2,1); }
+    .booth-card.on { opacity: 1; transform: translateY(0) scale(1); }
+    .booth-card::before { content: ""; position: absolute; left: 28px; top: 0; width: 56px; height: 5px; border-radius: 0 0 4px 4px; background: var(--accent); }
+    .booth-card .eyebrow { font-size: 14px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+    .booth-card h2 { margin: 0; font-family: 'Bricolage Grotesque', 'Instrument Sans', system-ui, sans-serif; font-size: 28px; line-height: 1.18; font-weight: 700; color: #1C1A17; letter-spacing: -0.015em; }
+    .booth-card p { margin: 10px 0 0; font-size: 21px; line-height: 1.42; color: #4A453F; }
     .booth-card .pills { display: flex; gap: 6px; margin-top: 18px; }
-    .booth-card .pills i { display: block; height: 6px; width: 16px; border-radius: 999px; background: #E6E2D6; }
-    .booth-card .pills i.done { background: rgba(123,79,176,.35); }
-    .booth-card .pills i.cur { width: 26px; background: #7B4FB0; }
-    .booth-badge { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); background: #3E9A84; color: #FFFEFA;
-      border-radius: 999px; padding: 8px 18px; font-size: 18px; font-weight: 700; letter-spacing: .04em; opacity: 0; transition: opacity .3s ease; }
+    .booth-card .pills i { display: block; height: 6px; width: 16px; border-radius: 999px; background: #E7DFD3; }
+    .booth-card .pills i.done { background: color-mix(in srgb, var(--accent) 40%, white); }
+    .booth-card .pills i.cur { width: 26px; background: var(--accent); }
+    .booth-badge { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #FFFFFF;
+      border-radius: 999px; padding: 8px 18px; font-size: 18px; font-weight: 700; letter-spacing: .04em; opacity: 0; transition: opacity .3s ease;
+      box-shadow: 0 6px 16px rgba(0,0,0,.2); }
     .booth-badge.on { opacity: 1; }
     .booth-cursor { position: absolute; width: 30px; height: 30px; left: 0; top: 0; transition-property: transform; transition-timing-function: cubic-bezier(.45,.05,.25,1); }
     .booth-cursor svg { filter: drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
-    .booth-ripple { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 999px; border: 3px solid #9D6BE0;
+    .booth-ripple { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 999px; border: 3px solid var(--accent);
       animation: booth-ripple .6s ease-out forwards; }
     @keyframes booth-ripple { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.4); opacity: 0; } }
   `;
@@ -121,7 +128,7 @@
     chapter(n, total, title, instant, color) {
       if (!n) { chapter.classList.remove('on'); writeState({ chapter: null }); return; }
       chapter.innerHTML = `<b>${n} / ${total}</b><span>${escape(title)}</span>`;
-      if (color) chapter.style.setProperty('--chapter-color', color);
+      if (color) root.style.setProperty('--accent', color);
       if (instant) chapter.style.transition = 'none';
       chapter.classList.add('on');
       writeState({ chapter: { n, total, title, color } });
