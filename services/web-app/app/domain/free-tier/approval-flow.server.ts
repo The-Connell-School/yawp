@@ -162,7 +162,7 @@ export async function submitAdminDetails(args: {
     resolveFreeTierRuntimeEnvironment()
   );
 
-  const copyHash = adminApprovalEmailCopyVersionHash();
+  const copyHash = await adminApprovalEmailCopyVersionHash();
   // Kept in the API for older callers; introductions are no longer accepted.
   const note = null;
 
@@ -641,7 +641,7 @@ export async function redirectSchoolAdmin(args: {
 
   const newEmail = parsed.data.newAdminEmail;
   const meta = hashRequestMeta(args.request);
-  const copyHash = adminApprovalEmailCopyVersionHash();
+  const copyHash = await adminApprovalEmailCopyVersionHash();
 
   const preApp = await prisma.freeTierApplication.findUnique({
     where: { id: peek.applicationId },

@@ -43,7 +43,10 @@ export function adminApprovalEmailContextFromStoredMessage(args: {
   if (forwardLead?.[1]?.trim()) {
     return { forwardedByAdminName: forwardLead[1].trim() };
   }
-  if (args.text.includes(adminApprovalTeacherRerouteLeadMarker())) {
+  if (
+    args.text.includes(adminApprovalTeacherRerouteLeadMarker(true)) ||
+    args.text.includes(adminApprovalTeacherRerouteLeadMarker(false))
+  ) {
     return { routedByTeacher: true };
   }
   return {};

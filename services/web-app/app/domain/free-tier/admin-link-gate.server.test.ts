@@ -1,5 +1,8 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test';
-import { linkReplacedBody, teacherAtSchool } from './admin-approval-copy';
+import {
+  linkReplacedBody,
+  teacherAtSchool,
+} from './admin-approval-copy';
 
 const findUnique = mock(async (): Promise<Record<string, unknown> | null> => null);
 const findFirst = mock(async () => null);
@@ -35,12 +38,13 @@ describe('resolveAdminLinkReplacedGate', () => {
     });
     expect(gate).toEqual({
       reason: 'link_replaced',
+      variant: 'resent',
       teacherName: 'Jordan Rivera',
       schoolName: 'Lincoln High School',
     });
   });
 
-  test('superseded link after resend (not forward) maps to S10 copy about forwarding', async () => {
+  test('superseded link after resend maps to S10b resent copy when pass1 is on', async () => {
     const teacherName = 'Jordan Rivera';
     const schoolName = 'Lincoln High School';
     findUnique.mockResolvedValueOnce({
@@ -52,12 +56,11 @@ describe('resolveAdminLinkReplacedGate', () => {
       token: 'fixture-token',
       peek: { ok: false, reason: 'superseded' },
     });
-    expect(gate).toEqual({
-      reason: 'link_replaced',
-      teacherName,
-      schoolName,
-    });
-    expect(linkReplacedBody(teacherName, schoolName)).toBe(
+    expect(gate?.variant).toBe('resent');
+    expect(linkReplacedBody(teacherName, schoolName, 'resent', true)).toBe(
+      `A newer link was sent for ${teacherAtSchool(teacherName, schoolName)}. Use the most recent email, or email support@yawp.school.`
+    );
+    expect(linkReplacedBody(teacherName, schoolName, 'forwarded', true)).toBe(
       `The request for ${teacherAtSchool(teacherName, schoolName)} was forwarded to someone else, so this link no longer works. Questions? Email support@yawp.school.`
     );
   });

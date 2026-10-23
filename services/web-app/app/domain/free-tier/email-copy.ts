@@ -6,6 +6,8 @@ import {
 import { defaultTransactionalEmailOrigin } from '~/emails/plain-text-footer';
 
 export const ADMIN_APPROVAL_EMAIL_COPY_VERSION = '2026-10-21-admin-v1';
+export const ADMIN_APPROVAL_EMAIL_COPY_VERSION_PASS1 =
+  '2026-10-23-admin-pass1';
 // Pass the version stored with the application when admission was requested.
 // Do not derive delayed email wording from the flag at delivery time.
 export const RELEASE_EMAIL_V2_COPY_VERSION = 'free-tier-onboarding-v2';
@@ -42,7 +44,11 @@ export function renderAdminApprovalEmailBody(args: {
   routedByTeacher?: boolean;
   copyVersion?: string;
   reminder?: boolean;
+  pass1?: boolean;
 }) {
+  const pass1 =
+    args.pass1 ??
+    args.copyVersion === ADMIN_APPROVAL_EMAIL_COPY_VERSION_PASS1;
   return renderAdminApprovalEmailPlainText({
     teacherName: args.teacherName,
     teacherEmail: args.teacherEmail,
@@ -52,6 +58,7 @@ export function renderAdminApprovalEmailBody(args: {
     forwardedByAdminName: args.forwardedByAdminName,
     routedByTeacher: args.routedByTeacher,
     reminder: args.reminder ?? !!args.reminderLead?.trim(),
+    pass1,
   });
 }
 

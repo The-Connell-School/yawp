@@ -362,6 +362,7 @@ export async function forwardApprovalRequest(args: {
       ...fail('validation'),
       fieldErrors: parsed.error.flatten().fieldErrors,
     };
+  const copyHash = await adminApprovalEmailCopyVersionHash();
   return prisma.$transaction(async (tx) => {
     await lockApprovalApplication(tx, args.applicationId);
     const app = await tx.freeTierApplication.findUnique({
@@ -445,7 +446,7 @@ export async function forwardApprovalRequest(args: {
         adminEmail: newAdminEmail,
         redirectedFromId: pending.id,
         forwardedByRole: args.userId ? 'teacher' : 'admin',
-        emailCopyVersionHash: adminApprovalEmailCopyVersionHash(),
+        emailCopyVersionHash: copyHash,
       },
     });
     if (!rules.manualReview) {

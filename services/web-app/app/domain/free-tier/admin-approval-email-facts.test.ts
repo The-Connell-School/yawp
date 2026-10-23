@@ -9,6 +9,10 @@ const notRightPersonUrl =
 
 const findUnique = mock(async (): Promise<Record<string, unknown> | null> => null);
 
+mock.module('~/domain/feature-flags/feature-flags.server', () => ({
+  isFreeTierEnabled: async () => false,
+}));
+
 mock.module('~/utils/db.server', () => ({
   prisma: {
     freeTierApplication: { findUnique },

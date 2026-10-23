@@ -18,6 +18,7 @@ export async function buildDesignedAdminApprovalEmail(args: {
   forwardedByAdminName?: string | null;
   routedByTeacher?: boolean;
   reminder?: boolean;
+  pass1?: boolean;
 }) {
   return buildAdminApprovalDesignedEmail({
     ...args,
@@ -39,9 +40,17 @@ export async function htmlForStoredAdminApprovalEmail(args: {
   const forwardLead = args.text.match(
     /^(.+) forwarded this to you as the right person/m
   );
-  const routedByTeacher = args.text.includes(
-    adminApprovalTeacherRerouteLeadMarker()
-  );
+  const routedByTeacher =
+    args.text.includes(adminApprovalTeacherRerouteLeadMarker(true)) ||
+    args.text.includes(adminApprovalTeacherRerouteLeadMarker(false));
+  const escapedSchool = args.schoolName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pass1ForwardFooter = new RegExp(
+    `forwarded ${args.teacherName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'s request at ${escapedSchool} to you`
+  ).test(args.text);
+  const pass1 =
+    routedByTeacher && args.text.includes(adminApprovalTeacherRerouteLeadMarker(true))
+      ? true
+      : pass1ForwardFooter;
   const origin = transactionalEmailPublicOrigin();
   const react = (
     <AdminApprovalEmail
@@ -53,6 +62,7 @@ export async function htmlForStoredAdminApprovalEmail(args: {
       reminder={args.subject.startsWith('Reminder:')}
       forwardedByAdminName={forwardLead?.[1] ?? null}
       routedByTeacher={routedByTeacher}
+      pass1={pass1}
       origin={origin}
     />
   );

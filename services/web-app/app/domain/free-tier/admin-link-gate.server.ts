@@ -122,8 +122,11 @@ export async function peekAdminSignedLinkForLoader(args: {
   return peekSignedLink(args);
 }
 
+export type FreeTierAdminLinkReplacedVariant = 'forwarded' | 'resent';
+
 export type FreeTierAdminLinkReplacedGate = {
   reason: 'link_replaced';
+  variant: FreeTierAdminLinkReplacedVariant;
   schoolName: string;
   teacherName: string;
 };
@@ -149,6 +152,7 @@ export async function resolveAdminLinkReplacedGate(args: {
   if (args.peek.reason === 'superseded') {
     return {
       reason: 'link_replaced',
+      variant: 'resent',
       teacherName: app.name,
       schoolName: app.schoolName,
     };
@@ -157,6 +161,7 @@ export async function resolveAdminLinkReplacedGate(args: {
   if (await forwardAlreadySucceededForToken(args.token)) {
     return {
       reason: 'link_replaced',
+      variant: 'forwarded',
       teacherName: app.name,
       schoolName: app.schoolName,
     };
@@ -177,6 +182,7 @@ export async function resolveAdminLinkReplacedGate(args: {
   if (redirected?.decidedAt && redirected.decidedAt >= link.usedAt) {
     return {
       reason: 'link_replaced',
+      variant: 'forwarded',
       teacherName: app.name,
       schoolName: app.schoolName,
     };
