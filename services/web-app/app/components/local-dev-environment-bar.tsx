@@ -180,8 +180,9 @@ function LocalDevQuickLoginPanel({
   const location = useLocation();
   const devLoginReturnTo = `${location.pathname}${location.search}`;
   const loginFetcher = useFetcher();
+  const onPreviewAccessPage = location.pathname === '/auth/preview-access';
   const needsDevLoginAccessCode =
-    previewAccessGateEnabled && !previewAccessSeatLabel;
+    previewAccessGateEnabled && !previewAccessSeatLabel && !onPreviewAccessPage;
   const [options, setOptions] = useState<LocalDevLoginOption[]>([]);
   const [nextCursor, setNextCursor] = useState<number | null>(null);
   const [hasLoadedFirstPage, setHasLoadedFirstPage] = useState(false);
