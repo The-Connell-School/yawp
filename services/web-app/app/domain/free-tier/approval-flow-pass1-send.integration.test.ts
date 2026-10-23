@@ -2,7 +2,8 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { adminApprovalEmailPreheader } from './admin-approval-copy';
 
-const sendEmailMock = mock(async () => ({
+type SendPayload = { to: string; text: string; html: string };
+const sendEmailMock = mock(async (_options: SendPayload) => ({
   status: 'success' as const,
   data: { id: 'pass1-send-integration' },
 }));
@@ -135,7 +136,7 @@ describe.skipIf(!enabled)('legacy approval flow threads org pass1 into delivered
 
   function lastDeliveryTo(to: string) {
     const deliveries = sendEmailMock.mock.calls
-      .map((call) => call[0] as { to: string; text: string; html: string })
+      .map((call) => call[0] as SendPayload)
       .filter((d) => d.to === to);
     expect(deliveries.length).toBeGreaterThan(0);
     return deliveries.at(-1)!;

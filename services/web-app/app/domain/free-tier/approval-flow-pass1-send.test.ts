@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { adminApprovalEmailPreheader } from './admin-approval-copy';
 
-const sendEmail = mock(async () => ({ status: 'success' as const }));
+type SendPayload = { to: string; text: string; html: string };
+const sendEmail = mock(async (_options: SendPayload) => ({
+  status: 'success' as const,
+}));
 mock.module('~/utils/email.server', () => ({ sendEmail }));
 mock.module('~/utils/db.server', () => ({
   prisma: { freeTierEmailLog: { create: async () => ({}) } },
@@ -42,7 +45,7 @@ describe('legacy send paths thread pass1 into designed email', () => {
       pass1: true,
     });
     expect(result.ok).toBe(true);
-    const delivered = sendEmail.mock.calls[0]![0] as { text: string; html: string };
+    const delivered = sendEmail.mock.calls[0]![0] as SendPayload;
     expect(delivered.html).toContain(PASS1_PREHEADER);
     expect(delivered.html).toContain('needs your OK');
     expect(delivered.text).toContain(
@@ -63,7 +66,7 @@ describe('legacy send paths thread pass1 into designed email', () => {
       pass1: true,
     });
     expect(result.ok).toBe(true);
-    const delivered = sendEmail.mock.calls[0]![0] as { text: string };
+    const delivered = sendEmail.mock.calls[0]![0] as SendPayload;
     expect(delivered.text).toContain(
       'A quick reminder: Jordan Rivera at Lincoln High School is still waiting on your approval.'
     );
@@ -83,7 +86,7 @@ describe('legacy send paths thread pass1 into designed email', () => {
       pass1: true,
     });
     expect(result.ok).toBe(true);
-    const delivered = sendEmail.mock.calls[0]![0] as { text: string };
+    const delivered = sendEmail.mock.calls[0]![0] as SendPayload;
     expect(delivered.text).toContain(
       "Sam Chen forwarded Jordan Rivera's request at Lincoln High School to you."
     );
