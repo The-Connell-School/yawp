@@ -21,9 +21,7 @@ export function pathnameUsesCardPageChrome(pathname: string): boolean {
 
 export function isAdminApprovalCardPage(pathname: string): boolean {
   const path = normalizePathname(pathname);
-  return (
-    path === '/free/admin/approve' || path === '/free/admin/not-right-person'
-  );
+  return path.startsWith('/free/admin/');
 }
 
 export function shouldShowCardPageBackLink(
@@ -71,6 +69,7 @@ export const CARD_PAGE_CHROME_ROUTES = [
   '/free',
   '/free/join',
   '/free/admin/approve',
+  '/free/admin/approve/deny',
   '/free/admin/not-right-person',
   '/app/free-tier/onboarding',
   '/app/free-tier/pending',
