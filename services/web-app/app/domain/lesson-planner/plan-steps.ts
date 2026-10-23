@@ -129,7 +129,74 @@ export function readPlanSteps(content: string): PlanStep[] {
       };
     });
   }
-  return readBoldSteps(content, masked);
+  const bold = readBoldSteps(content, masked);
+  if (bold.length) return bold;
+  // Brian's run 5 (round 2): a plan written as a table or a plain list still
+  // has steps, each with its minutes, not one piece with the default time.
+  const table = readTableSteps(masked);
+  return table.length ? table : readListSteps(masked);
+}
+
+const MINUTES_ONLY = /^\s*(?:\*\*)?\s*(\d{1,3})\s*(?:min(?:utes?|s)?\.?)?\s*(?:\*\*)?\s*$/i;
+
+function tableCells(line: string): string[] {
+  return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim());
+}
+
+function readTableSteps(masked: string): PlanStep[] {
+  const lines = masked.split('\n');
+  let offset = 0;
+  const starts = lines.map((line) => {
+    const at = offset;
+    offset += line.length + 1;
+    return at;
+  });
+  for (let index = 0; index + 2 < lines.length; index += 1) {
+    if (!/^\s*\|.*\|\s*$/.test(lines[index]!) || !/^\s*\|?\s*:?-{3,}/.test(lines[index + 1]!)) continue;
+    const header = tableCells(lines[index]!).map((cell) => cell.replace(/\*\*/g, '').toLowerCase());
+    const timeColumn = header.findIndex((cell) => /\b(?:min(?:utes?)?|time|length|duration)\b/.test(cell));
+    if (timeColumn < 0) continue;
+    const named = header.findIndex(
+      (cell, column) => column !== timeColumn && /\b(?:step|segment|activity|part|phase|what|title|block)\b/.test(cell)
+    );
+    const titleColumn = named >= 0 ? named : header.findIndex((_, column) => column !== timeColumn);
+    const steps: PlanStep[] = [];
+    for (let row = index + 2; row < lines.length && /^\s*\|/.test(lines[row]!); row += 1) {
+      const cells = tableCells(lines[row]!);
+      const minutes = MINUTES_ONLY.exec(cells[timeColumn] ?? '') ?? MINUTES.exec(cells[timeColumn] ?? '');
+      const { title } = cleanTitle((cells[titleColumn] ?? '').replace(/\*\*/g, ''));
+      if (!minutes || !title) continue;
+      steps.push({
+        key: planStepKey(steps.length),
+        title,
+        minutes: Number(minutes[1]),
+        stepType: readTypeTag(cells.join(' ')),
+        content: cells
+          .filter((_, column) => column !== timeColumn && column !== titleColumn)
+          .filter(Boolean)
+          .join('\n\n')
+          .replace(TYPE_TAG, '')
+          .trim(),
+        at: starts[row]!,
+      });
+    }
+    if (steps.length >= 2) return steps;
+  }
+  return [];
+}
+
+const LIST_STEP = /^\s{0,3}(?:[-*+]|\d+[.)])\s+([^\n(:—–]{2,60}?)\s*\((\d{1,3})\s*min(?:utes?)?\)\s*[:—–-]?\s*([^\n]*)$/gim;
+
+function readListSteps(masked: string): PlanStep[] {
+  const steps = [...masked.matchAll(LIST_STEP)].map((match, index) => ({
+    key: planStepKey(index),
+    title: match[1]!.replace(/\*\*/g, '').trim(),
+    minutes: Number(match[2]),
+    stepType: readTypeTag(match[3] ?? ''),
+    content: (match[3] ?? '').replace(TYPE_TAG, '').trim(),
+    at: match.index!,
+  }));
+  return steps.length >= 2 ? steps : [];
 }
 
 const BOLD_STEP =

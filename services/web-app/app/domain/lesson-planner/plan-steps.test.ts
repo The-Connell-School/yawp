@@ -151,3 +151,42 @@ describe('readStepHeading', () => {
     expect(readStepHeading('## Closing')).toEqual({ level: 2, title: 'Closing', minutes: null });
   });
 });
+
+describe("steps written as a table or a list keep their minutes (Brian's run 5, round 2)", () => {
+  test('a table with a time column: each row is a step', () => {
+    const table = [
+      '# Day 1: The Brian Connell Show',
+      '',
+      '| Time | Segment | What happens |',
+      '| --- | --- | --- |',
+      '| 5 min | **Opening hook** | One sentence: when do rules matter? |',
+      '| 25 min | Mini-lecture | Civilization vs. savagery, symbolism, allegory |',
+      '| 10 min | Guided note-check | Pairs compare notes |',
+      '| 5 min | Read aloud | The conch scene |',
+      '| 5 | Transitions | |',
+    ].join('\n');
+    const steps = readPlanSteps(table);
+    expect(steps.map((step) => [step.title, step.minutes])).toEqual([
+      ['Opening hook', 5],
+      ['Mini-lecture', 25],
+      ['Guided note-check', 10],
+      ['Read aloud', 5],
+      ['Transitions', 5],
+    ]);
+    expect(steps[1]!.content).toContain('symbolism');
+  });
+
+  test('a numbered list with minutes: each item is a step', () => {
+    const list = ['1. Opening hook (5 min): one sentence on rules.', '2. Mini-lecture (25 min): the war behind the book.', '3. Note-check (10 min) — pairs.'].join('\n');
+    expect(readPlanSteps(list).map((step) => [step.title, step.minutes])).toEqual([
+      ['Opening hook', 5],
+      ['Mini-lecture', 25],
+      ['Note-check', 10],
+    ]);
+  });
+
+  test('a table with no time column, or a list without minutes, is not a plan', () => {
+    expect(readPlanSteps('| Word | Meaning |\n| --- | --- |\n| conch | shell |\n| littlun | small boy |')).toEqual([]);
+    expect(readPlanSteps('1. Read.\n2. Talk.')).toEqual([]);
+  });
+});

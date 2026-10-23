@@ -159,3 +159,15 @@ describe("reflections and pre-writes can be made in Yawp! (Brian's run 5, item 6
     }
   });
 });
+
+test("the writing moments from Brian's week offer a Yawp! quick write (run 5, round 2)", () => {
+  const typeIds = { dailyPages: 'dp', classStarter: 'cs', exitTicket: 'et' };
+  for (const content of [
+    'Hook: a one-sentence written answer to "When do rules matter?"',
+    'Class starter: 90 seconds of writing on the conch.',
+    'Closing: students write one sentence in their notes about Ralph.',
+  ]) {
+    const link = stackCreateLink({ kind: 'step', title: 'Step', content, blockKey: 'st', sourceContent: null, typeIds, conversationId: 'plan-1' });
+    expect(link?.label).toBe('Create this quick write in Yawp!');
+  }
+});

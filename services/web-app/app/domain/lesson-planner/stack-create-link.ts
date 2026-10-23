@@ -58,7 +58,7 @@ export function proseWritingTask(
   }
   // Brian's run 5 (item 6): reflections and pre-writes are writing too.
   const writes =
-    /\b(?:quick[- ]?write|free[- ]?write|pre[- ]?write|journal|(?:written|writing a) reflection|reflection (?:writing|paragraph|prompt)|written response|students write|write for (?:\d+|one|two|three|four|five|a few) min)/i;
+    /\b(?:quick[- ]?write|free[- ]?write|pre[- ]?write|journal|(?:written|writing a) reflection|reflection (?:writing|paragraph|prompt)|written (?:response|answer)|(?:one|a)[- ]sentence (?:written )?(?:answer|response)|(?:write|jot)s?\b[^.\n]{0,40}\bin (?:their|your) (?:notes|notebooks?)|\d+\s*(?:seconds?|minutes?|min) of writing|students write|write for (?:\d+|one|two|three|four|five|a few) min)/i;
   if (writes.test(title) || writes.test(text)) {
     const quoted = /["“]([^"”]{8,300})["”]/.exec(text)?.[1];
     return { kind: 'quick-write', prompt: (quoted ?? firstLine(text)).trim() };

@@ -144,3 +144,25 @@ All six done and on PR 437, with `main` merged in. Notes:
 - **No new flags or migrations.** Items 1 and 3 sit behind
   `lesson_planner_stack_v3`; the rest change behavior already behind it or
   the prompt (version `2026-10-23-review-v1`).
+
+## Round 2: Brian's full notes and Kevin's library folders
+
+Brian's full notes (`Lesson-Planner-test-2026-10-23.md`) confirm the six
+items above and add four things. Kevin added library folders the teacher
+controls.
+
+| # | Note | Cause | Plan |
+| --- | --- | --- | --- |
+| R1 | Day 1's plan came into the stack as one 5-minute Context piece ("Day 1 Lecture Notes") | Besides days read as steps (fixed above), a plan whose steps are a table row or a numbered list without bold labels has no steps the stack can read. Only the material blocks file, and the lecture notes landed with the default 5 minutes | `readPlanSteps` falls back to a table with a minutes column ("\| 5 min \| Hook \| …"), and to numbered or bulleted steps with minutes ("1. Hook (5 min)"). Each row is a step with its minutes |
+| R2 | The planner should do it automatically: a multi-day request makes the folder and one lesson per day | Day lessons are made only on the button | The first multi-day reply in a conversation makes the unit and its day lessons as it is saved, and the card shows the days, ready to open. A later revision of the week shows **Replace the day lessons with this version**, which asks first, then replaces the days the teacher has not changed (an edited day is kept and named) |
+| R3 | A teacher's structure as a named framework: carried into the unit, offered to save, and each day knows its type | Nothing keeps a week's shape | Migration (additive, with rollback): `LessonPlanUnit.framework` and `LessonPlanTemplate.days` (both nullable JSON). Making the days stores the unit's framework: each day's title and its steps' types and minutes. Each day lesson's prompt says which day of the framework it is and what that day is for. The days card offers **Save this week as a framework**. "Build from my templates" lists saved frameworks and plans the next week from one |
+| R4 | Writing in the weekly plan was set for paper or the board: a one-sentence written answer, 90 seconds of writing, a sentence in their notes, 30 minutes of Daily Pages | The prompt rule above covers the planner. A step written that way had no Create link | The prose writing check also reads "a one-sentence answer", "a written answer", "in their notes/notebooks", "N seconds/minutes of writing" and Daily Pages, so each offers "Create this … in Yawp!" |
+| K1 | Library: create folders, drag lessons in, organize | Folders exist only as units the planner makes | A folder is a unit. In the library: **New folder** (named), rename, and delete (its lessons stay, back to standalone). Drag a lesson onto a folder, or use **Move to…** on any lesson (keyboard and phone friendly). Inside a folder, up and down reorder the lessons, and **Take out of folder** ends membership. All scoped to the teacher; behind `lesson_planner_stack_v3` |
+
+### Order of work
+
+1. R1 and R4 (step and writing reading).
+2. K1 (folders: API, library UI, e2e).
+3. R2 (automatic days, replace with confirm).
+4. R3 (migration, framework on the unit and in templates, prompt context).
+5. Suites, typecheck, push, PR, timesheet and questions.

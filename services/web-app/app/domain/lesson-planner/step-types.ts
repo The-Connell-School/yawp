@@ -154,7 +154,7 @@ export function writingName({
 
 /** Students writing, said in a step's words. */
 const PROSE_WRITING =
-  /\b(?:exit (?:ticket|slip)s?|class starter|daily pages|thesis|quick[- ]?writes?|free[- ]?writes?|journal(?:s|ing)?|(?:written|writing a) reflection|reflection (?:writing|paragraph)|students write|write (?:a|one|two|three) (?:sentence|paragraph|line)s?|write for (?:\d+|one|two|three|four|five|a few) min)/i;
+  /\b(?:exit (?:ticket|slip)s?|class starter|daily pages|thesis|quick[- ]?writes?|free[- ]?writes?|journal(?:s|ing)?|(?:written|writing a) reflection|reflection (?:writing|paragraph)|students write|write (?:a|one|two|three) (?:sentence|paragraph|line)s?|written answer|(?:one|a)[- ]sentence (?:written )?answer|in (?:their|your) (?:notes|notebooks?)|\d+\s*(?:seconds?|minutes?|min) of writing|write for (?:\d+|one|two|three|four|five|a few) min)/i;
 
 /** The chip's text: the type, and its label when it has one. */
 export function stepChipText(type: StepType, label?: string | null): string {

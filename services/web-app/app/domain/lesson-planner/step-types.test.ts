@@ -85,3 +85,10 @@ test("what a writing step's writing is called (Brian's run 4, item 6)", () => {
   expect(writingName({ kind: 'step', stepType: 'activity', title: 'Wrap-up', content: 'A written reflection on paper.' })).toBe('Reflection');
   expect(writingName({ kind: 'step', stepType: 'thesis_essay', title: 'Module 1' })).toBe('Thesis Essay');
 });
+
+test("the writing in Brian's week counts as writing (run 5, round 2)", () => {
+  const step = (content: string) => isWritingStep({ kind: 'step', title: 'Step', content });
+  expect(step('A one-sentence written answer.')).toBe(true);
+  expect(step('90 seconds of writing on the conch.')).toBe(true);
+  expect(step('One sentence in their notes.')).toBe(true);
+});
