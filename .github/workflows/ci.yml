@@ -280,6 +280,7 @@ jobs:
           bun test --max-concurrency=2 ./services/web-app/app/routes/app.free-tier.pending/route.v2.test.tsx
           bun test --max-concurrency=2 ./services/web-app/app/routes/free.admin.approve/route.v2.test.tsx
           bun test --max-concurrency=2 ./services/web-app/app/dev-panel/free-tier-jump.pending.real-db.integration.test.ts
+          bun test --max-concurrency=2 ./services/web-app/app/dev-panel/free-tier-jump.approved.real-db.integration.test.ts
 
       - name: Free-tier approval suppress-email (isolated prisma mocks)
         if: ${{ needs.paths.outputs.prisma == 'true' || needs.paths.outputs.code == 'true' }}
@@ -982,6 +983,7 @@ jobs:
             'app/dev-panel/feedback-route-contract.isolated.test.ts' \
             'app/dev-panel/free-tier-jump.server.test.ts' \
             'app/dev-panel/free-tier-states.catalog.test.ts' \
+            'app/dev-panel/free-tier-jump-expectations.test.ts' \
             'app/utils/preview-access.server.test.ts' \
             'app/utils/preview-free-tier-access.server.test.ts' \
             'app/utils/internal-grading-stats.server.test.ts' \

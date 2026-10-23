@@ -64,9 +64,11 @@ mock.module('./dev-panel-session.server', () => ({
   createDevPanelSessionHeaders: async () => new Headers(),
 }));
 
-const { executeFreeTierStateJump, PENDING_STATES_NEED_THROWAWAY } = await import(
-  './free-tier-jump.server'
-);
+const {
+  executeFreeTierStateJump,
+  PENDING_STATES_NEED_THROWAWAY,
+  FREE_TIER_JUMP_GENERIC_ERROR,
+} = await import('./free-tier-jump.server');
 
 describe('executeFreeTierStateJump pending guard', () => {
   test('refuses pending states without throwaway before writes', async () => {
@@ -81,6 +83,20 @@ describe('executeFreeTierStateJump pending guard', () => {
       ok: false,
       error: PENDING_STATES_NEED_THROWAWAY,
     });
+  });
+});
+
+describe('formatFreeTierJumpErrorForClient', () => {
+  test('hides raw prisma failures', async () => {
+    const { formatFreeTierJumpErrorForClient } = await import('./free-tier-jump.server');
+    expect(
+      formatFreeTierJumpErrorForClient(
+        new Error('Invalid prisma.freeTierApplication.upsert() invocation')
+      )
+    ).toBe(FREE_TIER_JUMP_GENERIC_ERROR);
+    expect(formatFreeTierJumpErrorForClient(new Error(PENDING_STATES_NEED_THROWAWAY))).toBe(
+      PENDING_STATES_NEED_THROWAWAY
+    );
   });
 });
 
