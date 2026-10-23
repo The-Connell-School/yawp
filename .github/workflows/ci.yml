@@ -947,9 +947,6 @@ jobs:
     if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     name: 🧪 E2E smoke (shard ${{ matrix.shard }})
     runs-on: ubuntu-22.04
-    env:
-      # Fixture steps isolate XDG_CACHE_HOME; keep browser install and lookup shared.
-      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -997,36 +994,34 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
 
-      # Keyed on the resolved version rather than a hardcoded one, so a bump in
-      # package.json invalidates the cache instead of restoring browsers that no
-      # longer match the runner.
+      # Keyed on the resolved version from bun.lock so lockfile bumps invalidate stale browsers.
 
       - name: 🔖 Resolve Playwright version
         id: playwright-version
-        working-directory: services/web-app
         run: |
-          echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "version=$(bash scripts/ci/resolve-playwright-version.sh)" >> "$GITHUB_OUTPUT"
 
-      - name: 💾 Cache Playwright browsers
+      - name: 💾 Restore Playwright browsers cache
         id: playwright-cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
+          path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
 
-      # Chromium only. On a browser cache hit, install the binary only — apt deps
-      # are already on the runner and `install-deps` has timed out on cache hits.
+      # On cache hit, browsers live under ~/.cache/ms-playwright; only sync OS deps.
+      # On miss, download chromium with deps. Only shard 1 saves the shared cache entry.
 
       - name: Install Playwright chromium
         working-directory: services/web-app
         timeout-minutes: 15
-        run: |
-          version=$(node -p "require('@playwright/test/package.json').version")
-          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
-            bunx --package "@playwright/test@${version}" playwright install chromium
-          else
-            bunx --package "@playwright/test@${version}" playwright install --with-deps chromium
-          fi
+        run: bash ../../scripts/ci/install-playwright-chromium.sh "${{ steps.playwright-cache.outputs.cache-hit }}"
+
+      - name: 💾 Save Playwright browsers cache
+        if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' && matrix.shard == 1 }}
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
 
       - name: 🧪 Run Playwright tests
         working-directory: services/web-app
@@ -1074,8 +1069,6 @@ jobs:
     if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     name: 🧪 Free-tier locked preview browser
     runs-on: ubuntu-22.04
-    env:
-      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
     timeout-minutes: 30
     services:
       postgres:
@@ -1131,27 +1124,20 @@ jobs:
 
       - name: 🔖 Resolve Playwright version
         id: playwright-version
-        working-directory: services/web-app
         run: |
-          echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "version=$(bash scripts/ci/resolve-playwright-version.sh)" >> "$GITHUB_OUTPUT"
 
-      - name: 💾 Cache Playwright browsers
+      - name: 💾 Restore Playwright browsers cache
         id: playwright-cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
+          path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
 
       - name: Install Playwright chromium
         working-directory: services/web-app
         timeout-minutes: 15
-        run: |
-          version=$(node -p "require('@playwright/test/package.json').version")
-          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
-            bunx --package "@playwright/test@${version}" playwright install chromium
-          else
-            bunx --package "@playwright/test@${version}" playwright install --with-deps chromium
-          fi
+        run: bash ../../scripts/ci/install-playwright-chromium.sh "${{ steps.playwright-cache.outputs.cache-hit }}"
 
       - name: 🧪 Locked preview Playwright + evidence
         working-directory: services/web-app
@@ -1192,9 +1178,6 @@ jobs:
     if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     name: 🔐 Sign-on browser flows
     runs-on: ubuntu-22.04
-    env:
-      # Fixture steps isolate XDG_CACHE_HOME; keep browser install and lookup shared.
-      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
     timeout-minutes: 30
     services:
       postgres:
@@ -1238,36 +1221,24 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
 
-      # Keyed on the resolved version rather than a hardcoded one, so a bump in
-      # package.json invalidates the cache instead of restoring browsers that no
-      # longer match the runner.
+      # Keyed on the resolved version from bun.lock so lockfile bumps invalidate stale browsers.
 
       - name: 🔖 Resolve Playwright version
         id: playwright-version
-        working-directory: services/web-app
         run: |
-          echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "version=$(bash scripts/ci/resolve-playwright-version.sh)" >> "$GITHUB_OUTPUT"
 
-      - name: 💾 Cache Playwright browsers
+      - name: 💾 Restore Playwright browsers cache
         id: playwright-cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
+          path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
-
-      # Chromium only. On a browser cache hit, install the binary only — apt deps
-      # are already on the runner and `install-deps` has timed out on cache hits.
 
       - name: Install Playwright chromium
         working-directory: services/web-app
         timeout-minutes: 15
-        run: |
-          version=$(node -p "require('@playwright/test/package.json').version")
-          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
-            bunx --package "@playwright/test@${version}" playwright install chromium
-          else
-            bunx --package "@playwright/test@${version}" playwright install --with-deps chromium
-          fi
+        run: bash ../../scripts/ci/install-playwright-chromium.sh "${{ steps.playwright-cache.outputs.cache-hit }}"
 
       # The sign-on flows used to run after the smoke suite, which migrated and
       # seeded yop_e2e on startup. Prepare it the same way here.
@@ -1394,9 +1365,6 @@ jobs:
     if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     name: 🧪 Demo feedback + preview access browser checks
     runs-on: ubuntu-22.04
-    env:
-      # Fixture steps isolate XDG_CACHE_HOME; keep browser install and lookup shared.
-      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
     timeout-minutes: 30
     services:
       postgres:
@@ -1440,36 +1408,24 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
 
-      # Keyed on the resolved version rather than a hardcoded one, so a bump in
-      # package.json invalidates the cache instead of restoring browsers that no
-      # longer match the runner.
+      # Keyed on the resolved version from bun.lock so lockfile bumps invalidate stale browsers.
 
       - name: 🔖 Resolve Playwright version
         id: playwright-version
-        working-directory: services/web-app
         run: |
-          echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "version=$(bash scripts/ci/resolve-playwright-version.sh)" >> "$GITHUB_OUTPUT"
 
-      - name: 💾 Cache Playwright browsers
+      - name: 💾 Restore Playwright browsers cache
         id: playwright-cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
+          path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
-
-      # Chromium only. On a browser cache hit, install the binary only — apt deps
-      # are already on the runner and `install-deps` has timed out on cache hits.
 
       - name: Install Playwright chromium
         working-directory: services/web-app
         timeout-minutes: 15
-        run: |
-          version=$(node -p "require('@playwright/test/package.json').version")
-          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
-            bunx --package "@playwright/test@${version}" playwright install chromium
-          else
-            bunx --package "@playwright/test@${version}" playwright install --with-deps chromium
-          fi
+        run: bash ../../scripts/ci/install-playwright-chromium.sh "${{ steps.playwright-cache.outputs.cache-hit }}"
 
       - name: Verify demo feedback headless browser executable
         working-directory: services/web-app
