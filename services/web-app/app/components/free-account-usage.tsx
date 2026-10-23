@@ -365,7 +365,7 @@ export function FreeAccountChecklist({ usage }: { usage: FreeAccountUsage }) {
         : '/app/my-classes',
     },
     {
-      label: usage.monthly ? 'Give your first assignment' : 'Create your first assignment',
+      label: 'Create your first assignment',
       done: usage.checklist.assignmentCreated,
       to: '/app/assignments',
       hint: usage.monthly
