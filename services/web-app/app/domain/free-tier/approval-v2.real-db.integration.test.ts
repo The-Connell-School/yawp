@@ -1,6 +1,5 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { adminApprovalTeacherRerouteLeadMarker } from './admin-approval-copy';
 const send = mock(
   async (_: any): Promise<any> => ({
     status: 'success',
@@ -217,8 +216,13 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
     const message = send.mock.calls.find(
       ([args]) => args.to === 'rivera@example.org'
     )?.[0];
-    expect(message.text).toContain(adminApprovalTeacherRerouteLeadMarker(true));
+    expect(message.text).toContain(
+      'They named you as the administrator who can approve classroom software'
+    );
     expect(message.text).not.toContain('Dr. Patel forwarded this to you');
+    expect(message.text).not.toContain(
+      'asked you to approve classroom software for their class at'
+    );
     const token = new URL(
       message.text.match(/http[^\s]+\/free\/admin\/approve\?t=[^\s]+/)[0]
     ).searchParams.get('t')!;
@@ -573,12 +577,12 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
       .map(([args]) => args)
       .find((args) => args.to === 'rivera@example.org' && args.subject.startsWith('Reminder:'));
     expect(reminder?.text).toContain(
-      'A quick reminder: Dr. Patel forwarded Ms. Okafor'
+      'This is a reminder about the approval request below'
+    );
+    expect(reminder?.text).toContain(
+      'Dr. Patel forwarded this to you as the right person'
     );
     expect(reminder?.text).not.toContain('They named you as the administrator');
-    expect(reminder?.text).not.toContain(
-      'forwarded this to you as the right person'
-    );
     expect(next.id).not.toBe(approval.id);
   });
   test('teacher reroute outbox refresh keeps reroute copy when links expire', async () => {
@@ -600,8 +604,13 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
     const message = send.mock.calls.find(
       ([args]) => args.to === 'rivera@example.org'
     )?.[0];
-    expect(message?.text).toContain(adminApprovalTeacherRerouteLeadMarker(true));
+    expect(message?.text).toContain(
+      'They named you as the administrator who can approve classroom software'
+    );
     expect(message?.text).not.toContain('forwarded this to you');
+    expect(message?.text).not.toContain(
+      'asked you to approve classroom software for their class at'
+    );
   });
   test('teacher reroute refresh ignores legacy payload with admin-forward lead text', async () => {
     const { app, approval } = await fixture();
@@ -648,8 +657,13 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
     const message = send.mock.calls.find(
       ([args]) => args.to === 'rivera@example.org'
     )?.[0];
-    expect(message?.text).toContain(adminApprovalTeacherRerouteLeadMarker(true));
+    expect(message?.text).toContain(
+      'They named you as the administrator who can approve classroom software'
+    );
     expect(message?.text).not.toContain('forwarded this to you');
+    expect(message?.text).not.toContain(
+      'asked you to approve classroom software for their class at'
+    );
   });
   test('outbox refresh preserves admin forward context when links expire', async () => {
     const { app } = await fixture();

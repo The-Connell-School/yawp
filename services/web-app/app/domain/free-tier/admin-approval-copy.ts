@@ -158,7 +158,7 @@ export function renderAdminApprovalEmailPlainText(args: {
     skipForwardLeadForPass1Reminder
       ? ''
       : args.routedByTeacher && pass1
-        ? `${adminApprovalTeacherRerouteLead(args.teacherName, args.schoolName, pass1)}\n\n`
+        ? `${adminApprovalTeacherRerouteLead(args.teacherName, args.schoolName, true)}\n\n`
         : forwarder
           ? `${forwarder} forwarded this to you as the right person to approve classroom software for ${teacherSchool}.\n\n`
           : '';
