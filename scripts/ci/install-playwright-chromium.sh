@@ -3,12 +3,14 @@ set -euo pipefail
 
 cache_hit="${1:-false}"
 max_attempts=2
-attempt_timeout="${PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT:-6m}"
+attempt_timeout="${PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT:-5m}"
 apt_lock_wait_seconds="${PLAYWRIGHT_APT_LOCK_WAIT_SECONDS:-60}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 version="$("$repo_root/scripts/ci/resolve-playwright-version.sh")"
 
 SCRIPT_PGID="$(ps -o pgid= -p $$ | tr -d ' ')"
+SCRIPT_SID="$(ps -o sid= -p $$ | tr -d ' ')"
+SCRIPT_PID=$$
 
 if [[ -z "$version" ]]; then
   echo "::error::Could not resolve @playwright/test version from bun.lock" >&2
@@ -99,7 +101,33 @@ wait_bounded_for_pid() {
     sleep 1
     elapsed=$((elapsed + 1))
   done
+  if kill -0 "$pid" 2>/dev/null; then
+    return 0
+  fi
   wait "$pid" 2>/dev/null || true
+}
+
+may_pkill_leader_session() {
+  local sid="$1"
+  local leader_pid="$2"
+  [[ -n "$sid" && -n "$leader_pid" && "$sid" == "$leader_pid" && "$sid" != "$SCRIPT_SID" ]]
+}
+
+signal_pid_tree() {
+  local pid="$1"
+  local sig="$2"
+  local child
+
+  while IFS= read -r child; do
+    [[ -z "$child" ]] && continue
+    signal_pid_tree "$child" "$sig"
+  done < <(pgrep -P "$pid" 2>/dev/null || true)
+
+  if have_passwordless_sudo; then
+    sudo -n kill "-${sig}" -- "$pid" 2>/dev/null || true
+  else
+    kill "-${sig}" -- "$pid" 2>/dev/null || true
+  fi
 }
 
 configure_apt_dpkg_lock_timeout() {
@@ -200,12 +228,12 @@ stop_process_group() {
 
   if have_passwordless_sudo; then
     sudo -n kill -TERM -- "-${pgid}" 2>/dev/null || true
-    if [[ -n "$sid" ]]; then
+    if may_pkill_leader_session "$sid" "$leader_pid"; then
       sudo -n pkill -TERM -s "$sid" 2>/dev/null || true
     fi
     sleep 5
     sudo -n kill -KILL -- "-${pgid}" 2>/dev/null || true
-    if [[ -n "$sid" ]]; then
+    if may_pkill_leader_session "$sid" "$leader_pid"; then
       sudo -n pkill -KILL -s "$sid" 2>/dev/null || true
     fi
     return 0
@@ -219,32 +247,12 @@ stop_process_group() {
 
 stop_leader_pid_tree() {
   local pid="$1"
-  local sid=""
 
-  if kill -0 "$pid" 2>/dev/null; then
-    sid="$(read_sid_for_pid "$pid")"
-  fi
-
-  if have_passwordless_sudo; then
-    sudo -n kill -TERM -- "$pid" 2>/dev/null || true
-    sudo -n pkill -TERM -P "$pid" 2>/dev/null || true
-    if [[ -n "$sid" ]]; then
-      sudo -n pkill -TERM -s "$sid" 2>/dev/null || true
-    fi
-    sleep 5
-    sudo -n kill -KILL -- "$pid" 2>/dev/null || true
-    sudo -n pkill -KILL -P "$pid" 2>/dev/null || true
-    if [[ -n "$sid" ]]; then
-      sudo -n pkill -KILL -s "$sid" 2>/dev/null || true
-    fi
-    return 0
-  fi
-
-  kill -TERM -- "$pid" 2>/dev/null || true
-  pkill -TERM -P "$pid" 2>/dev/null || true
+  signal_pid_tree "$pid" TERM
   sleep 5
-  kill -KILL -- "$pid" 2>/dev/null || true
-  pkill -KILL -P "$pid" 2>/dev/null || true
+  if kill -0 "$pid" 2>/dev/null; then
+    signal_pid_tree "$pid" KILL
+  fi
 }
 
 terminate_timed_out_leader() {
