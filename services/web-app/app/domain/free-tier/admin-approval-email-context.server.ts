@@ -1,7 +1,7 @@
 import type { FreeTierAdminApproval, Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
+import { FREE_TIER_FLAG } from '~/domain/feature-flags/feature-flags';
 import {
-  FREE_TIER_FLAG,
   isFeatureFlagEnabled,
   isFreeTierEnabled,
 } from '~/domain/feature-flags/feature-flags.server';

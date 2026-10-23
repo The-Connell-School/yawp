@@ -38,10 +38,8 @@ import {
   sendFreeTierReleaseEmail,
 } from './email.server';
 import { resolveAdminApprovalEmailContext } from './admin-approval-email-context.server';
-import {
-  FREE_TIER_FLAG,
-  isFeatureFlagEnabled,
-} from '~/domain/feature-flags/feature-flags.server';
+import { FREE_TIER_FLAG } from '~/domain/feature-flags/feature-flags';
+import { isFeatureFlagEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { getApprovalHooks } from './approval-hooks.server';
 import { getClientIp } from '~/utils/ip.server';
 import {
@@ -466,7 +464,13 @@ export async function resendFreeTierAdminApprovalReminder(args: {
   if (args.requireV2) return { ok: false as const, reason: 'flag_off' as const };
   const app = await prisma.freeTierApplication.findFirst({
     where: { id: args.applicationId, status: 'SENT' },
-    select: { id: true, name: true, schoolName: true, email: true },
+    select: {
+      id: true,
+      name: true,
+      schoolName: true,
+      email: true,
+      organizationId: true,
+    },
   });
   if (!app) return { ok: false as const, reason: 'not_allowed' as const };
 

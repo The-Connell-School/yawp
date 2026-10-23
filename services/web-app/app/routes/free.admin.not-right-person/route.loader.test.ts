@@ -64,8 +64,7 @@ afterAll(() => {
 beforeEach(() => {
   applicationIdForAdminLinkNaming.mockReset();
   applicationIdForAdminLinkNaming.mockImplementation(async (_t, peek) => {
-    if (peek.ok) return peek.applicationId ?? 'app-1';
-    if (peek.reason === 'expired') return null;
+    if (peek.ok) return peek.applicationId;
     return null;
   });
   peekSignedLink.mockReset();
@@ -165,7 +164,7 @@ describe('free.admin.not-right-person loader', () => {
   test('expired token with verified opaque shows names', async () => {
     peekSignedLink.mockResolvedValueOnce({ ok: false, reason: 'expired' });
     applicationIdForAdminLinkNaming.mockImplementation(async (_t, peek) =>
-      peek.reason === 'expired' ? 'app-1' : null
+      !peek.ok && peek.reason === 'expired' ? 'app-1' : null
     );
     findUnique.mockResolvedValueOnce({
       schoolName: 'TS High',
