@@ -2021,7 +2021,7 @@ describe('demo environment deployment contract', () => {
     expect(detached).toContain('mask_deploy_log');
     expect(detached).toContain('REDACT_DEPLOY_LOGS_SCRIPT');
     expect(detached).toContain('redact-deploy-logs.last');
-    expect(detached).toContain('timeout 600');
+    expect(detached).toContain('timeout -k 30 600');
     expect(detached).toContain('PREVIEW_ACCESS_CODE=');
     expect(detached).toContain('[REDACTED]');
     expect(workflow).toContain('REDACT_DEPLOY_LOGS_SCRIPT');

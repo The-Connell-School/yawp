@@ -22,7 +22,8 @@ cleanup_temps() {
     rm -f -- "$TEMP_FILE"
   fi
 }
-trap cleanup_temps EXIT TERM INT
+trap cleanup_temps EXIT
+trap 'cleanup_temps; exit 143' TERM INT
 
 usage() {
   echo "usage: redact-deploy-logs.sh LOG_DIR [--exclude PATH] [--only PATH] [--recent-minutes N] [--no-require-exit]" >&2
@@ -83,12 +84,14 @@ if [[ -n "$ONLY_PATH" ]]; then
 fi
 
 cleanup_stale_temps() {
-  find "$LOG_DIR" -maxdepth 1 -type f -name '.redact-deploy-logs.*' -mmin +10 -delete 2>/dev/null || true
+  find "$LOG_DIR" -maxdepth 1 -type f \( -name '.redact-deploy-logs.*' -o -name '.redact-summary.*' \) -mmin +10 -delete 2>/dev/null || true
 }
 
 apply_redaction_sed() {
   sed -E \
-    -e "s/(PREVIEW_ACCESS_CODE=)(${ACCESS_CODE_VALUE_RE})(\\r)?/\\1[REDACTED]\\3/g" \
+    -e "s/(PREVIEW_ACCESS_CODE=)(${PREVIEW_SEAT_CODE_RE})-[^[:space:]]*/\\1[REDACTED]/g" \
+    -e "s/(PREVIEW_ACCESS_CODE=)(${PREVIEW_SEAT_CODE_RE})/\\1[REDACTED]/g" \
+    -e "s/(PREVIEW_ACCESS_CODE=)(${PREVIEW_MASTER_CODE_RE})/\\1[REDACTED]/g" \
     -e "s/(PREVIEW_SEAT_CODE_[0-9]+=)(${PREVIEW_SEAT_CODE_RE})/\\1[REDACTED]/g" \
     -e "s/(Preview seat [0-9]+ \\([^)]+\\): )(${PREVIEW_SEAT_CODE_RE})/\\1[REDACTED]/g" \
     -e "s/(PREVIEW_MASTER_ACCESS_CODE=)(${PREVIEW_MASTER_CODE_RE})/\\1[REDACTED]/g" \

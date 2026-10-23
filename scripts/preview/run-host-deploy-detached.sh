@@ -51,7 +51,7 @@ emit_failure_log_tail() {
 # Pass command and paths as positional data to a fixed script. Interpolating an
 # already shell-quoted command inside double quotes would consume its escaping
 # before bash -lc receives it (including JSON quotes, dollars and backslashes).
-detached_script='log_dir="$(dirname "$3")"; summary="${log_dir}/redact-deploy-logs.last"; { if [[ -f "$summary" ]]; then grep -E "^(REDACT_FILES_SCANNED|REDACT_FILES_CHANGED|REDACT_VALUES_MASKED|REDACT_WARNING|REDACT_TIMESTAMP)=" "$summary" || true; fi; flock -w 1800 "$1" bash -lc "$2"; } > "$3" 2>&1; ec=$?; printf "%s\n" "$ec" > "$4"; if [[ -n "${REDACT_DEPLOY_LOGS_SCRIPT:-}" && -f "$REDACT_DEPLOY_LOGS_SCRIPT" ]]; then ( setsid nice timeout 600 bash "$REDACT_DEPLOY_LOGS_SCRIPT" "$log_dir" --recent-minutes 180 </dev/null >/dev/null 2>&1 & ); fi; exit "$ec"'
+detached_script='log_dir="$(dirname "$3")"; summary="${log_dir}/redact-deploy-logs.last"; { if [[ -f "$summary" ]]; then grep -E "^(REDACT_FILES_SCANNED|REDACT_FILES_CHANGED|REDACT_VALUES_MASKED|REDACT_WARNING|REDACT_TIMESTAMP)=" "$summary" || true; fi; flock -w 1800 "$1" bash -lc "$2"; } > "$3" 2>&1; ec=$?; printf "%s\n" "$ec" > "$4"; if [[ -n "${REDACT_DEPLOY_LOGS_SCRIPT:-}" && -f "$REDACT_DEPLOY_LOGS_SCRIPT" ]]; then ( setsid nice timeout -k 30 600 bash "$REDACT_DEPLOY_LOGS_SCRIPT" "$log_dir" --recent-minutes 180 </dev/null >/dev/null 2>&1 & ); fi; exit "$ec"'
 ssh -i "$SSH_IDENTITY" -o BatchMode=yes "$SSH_TARGET" bash -s <<REMOTE
 set -euo pipefail
 REDACT_DEPLOY_LOGS_SCRIPT=$(shell_quote "${REDACT_DEPLOY_LOGS_SCRIPT:-}")

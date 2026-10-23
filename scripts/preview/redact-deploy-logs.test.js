@@ -155,6 +155,34 @@ describe('redact-deploy-logs.sh', () => {
     expect(second.stdout).toContain('values_masked=0');
   });
 
+  test('masks master-shaped, suffixed, and CRLF access codes without partial leaks', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'yawp-redact-backref-'));
+    roots.push(dir);
+    const master = 'fakemaster-x9-zz';
+    const suffixed = `${FIXTURE.accessCode}-extra`;
+    const logPath = path.join(dir, 'demo-deploy-backref.log');
+    writeFileSync(
+      logPath,
+      `PREVIEW_ACCESS_CODE=${master}\r\n` +
+        `PREVIEW_MASTER_ACCESS_CODE=${master}\r\n` +
+        `PREVIEW_ACCESS_CODE=${suffixed}\n`,
+      { mode: 0o644 }
+    );
+    markFinished(logPath);
+    utimesSync(logPath, new Date('2018-01-01'), new Date('2018-01-01'));
+
+    const result = runRedact(dir);
+    expect(result.status).toBe(0);
+    const redacted = readFileSync(logPath, 'utf8');
+    expect(redacted).toBe(
+      'PREVIEW_ACCESS_CODE=[REDACTED]\r\nPREVIEW_MASTER_ACCESS_CODE=[REDACTED]\r\nPREVIEW_ACCESS_CODE=[REDACTED]\n'
+    );
+    expect(redacted.includes('x9')).toBe(false);
+    expect(redacted.includes('-zz')).toBe(false);
+    expect(redacted.includes('-extra')).toBe(false);
+    expect(redacted.includes(FIXTURE.accessCode)).toBe(false);
+  });
+
   test('handles CRLF lines and writes summary without secret values', () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'yawp-redact-crlf-'));
     roots.push(dir);
