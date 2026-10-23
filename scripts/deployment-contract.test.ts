@@ -1818,6 +1818,51 @@ describe('demo environment deployment contract', () => {
     }
   });
 
+  test('demo internal API keys audit is manual, read-only, and uses demo SSH only', () => {
+    const workflow = readRepoFile(
+      '.github/workflows/demo-internal-keys-audit.yml'
+    );
+    const parsed = Bun.YAML.parse(workflow) as {
+      on: Record<string, unknown>;
+      permissions: Record<string, string>;
+      jobs: { audit: { environment: string; steps: { run?: string; env?: Record<string, string> }[] } };
+    };
+
+    expect(parsed.on).toEqual({ workflow_dispatch: null });
+    expect(parsed.permissions).toEqual({ contents: 'read' });
+    expect(parsed.jobs.audit.environment).toBe('demo');
+    expect(workflow).toContain('group: demo-environment');
+    expect(workflow).toContain('cancel-in-progress: false');
+    expect(workflow).toContain('bash scripts/preview/prepare-demo-ssh.sh');
+    expect(workflow).toContain('timeout-minutes: 5');
+    expect(workflow).toContain('ConnectTimeout=20');
+    const auditStep = workflow.slice(
+      workflow.indexOf('- name: Audit live demo internal API keys'),
+      workflow.indexOf('- name: Summary')
+    );
+    expect(workflow).toContain('docker exec -i');
+    expect(auditStep).toContain('bun build');
+    expect(auditStep).toContain('print-demo-internal-api-key-audit.cli.mjs');
+    expect(auditStep).toContain('bun run -');
+    expect(auditStep).toContain('< "$audit_bundle"');
+    expect(auditStep).not.toMatch(/\bdocker cp\b/);
+    expect(auditStep).not.toMatch(/\bcat > /);
+    expect(auditStep).not.toMatch(/yawp-key-audit/);
+    expect(auditStep).not.toMatch(/ssh[^\n]*\bmkdir\b/);
+    expect(auditStep).not.toMatch(/docker exec[^\n]*\bmkdir\b/);
+    expect(workflow).toContain('audit-demo-internal-api-keys-on-host.sh');
+    expect(workflow).toContain('validate_audit_output');
+    expect(workflow).toContain('^PARSE_ERROR[[:space:]][A-Za-z]+$');
+    expect(workflow).not.toContain('DEMO_INTERNAL_API_KEYS');
+    expect(workflow).not.toContain('set -x');
+    expect(workflow).not.toMatch(/PARSE_ERROR[\s\S]*exit 0/);
+    for (const step of parsed.jobs.audit.steps) {
+      for (const value of Object.values(step.env ?? {})) {
+        expect(String(value)).not.toContain('secrets.DEMO_INTERNAL_API_KEYS');
+      }
+    }
+  });
+
   test('demo host diagnostics expose only non-secret container and mount metadata', () => {
     const diagnostics = readRepoFile(
       '.github/workflows/demo-host-diagnostics.yml'
