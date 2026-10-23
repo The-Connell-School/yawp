@@ -63,6 +63,7 @@ function QaAccordionRow({
         id={panelId}
         role="region"
         aria-labelledby={buttonId}
+        inert={!open && !reducedMotion ? true : undefined}
         className={`free-tier-qa-panel${
           open ? ' free-tier-qa-panel-open' : ''
         }${reducedMotion ? ' free-tier-qa-panel-reduced' : ''}`}

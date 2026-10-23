@@ -141,7 +141,22 @@ test.afterAll(async () => {
   await db.$disconnect();
 });
 
-test('free-tier pages use app sans stack (computed + font requests)', async ({
+async function assertNotoSansOnFreeTierPage(page: import('@playwright/test').Page) {
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+  });
+  const fontFamily = await page.locator('.free-tier-page').evaluate((el) =>
+    getComputedStyle(el).fontFamily
+  );
+  expect(fontFamily).toMatch(/Noto Sans/i);
+  const check = await page.evaluate(() =>
+    document.fonts.check('16px "Noto Sans"')
+  );
+  expect(check).toBe(true);
+  return fontFamily;
+}
+
+test('free-tier pages load Noto Sans (computed, network, fonts.check)', async ({
   page,
 }) => {
   test.skip(!evidenceEnabled, 'Set APPROVAL_V2_BASE_URL, E2E_DATABASE_URL, SESSION_SECRET');
@@ -150,14 +165,32 @@ test('free-tier pages use app sans stack (computed + font requests)', async ({
   const approveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(seed.mint.token)}`;
   const fontRequests: string[] = [];
   page.on('request', (req) => {
-    if (req.resourceType() === 'font') fontRequests.push(req.url());
+    const url = req.url();
+    if (
+      req.resourceType() === 'font' ||
+      url.includes('fonts.googleapis.com') ||
+      url.includes('fonts.gstatic.com')
+    ) {
+      fontRequests.push(url);
+    }
   });
 
-  await page.goto(approveUrl, { waitUntil: 'networkidle' });
-  const approveFont = await page.locator('.free-tier-page').evaluate((el) =>
-    getComputedStyle(el).fontFamily
+  const notoResponse = page.waitForResponse(
+    (res) =>
+      res.url().includes('fonts.gstatic.com') &&
+      res.status() === 200 &&
+      (res.request().resourceType() === 'font' ||
+        res.headers()['content-type']?.includes('font') ||
+        /\.woff2?(\?|$)/i.test(res.url())),
+    { timeout: 60_000 }
   );
-  expect(approveFont.toLowerCase()).not.toMatch(/^arial\b/);
+
+  await page.goto(approveUrl, { waitUntil: 'networkidle' });
+  await notoResponse;
+  const approveFont = await assertNotoSansOnFreeTierPage(page);
+  expect(fontRequests.some((url) => /noto\s*sans|Noto\+Sans/i.test(url))).toBe(
+    true
+  );
 
   await page.getByRole('button', { name: 'Questions about student privacy?' }).click();
   const panel = page.locator('.free-tier-qa-panel-open .free-tier-qa-panel-inner').first();
@@ -170,17 +203,15 @@ test('free-tier pages use app sans stack (computed + font requests)', async ({
 
   const denyUrl = `${base}/free/admin/approve/deny?t=${encodeURIComponent(seed.mint.token)}`;
   await page.goto(denyUrl, { waitUntil: 'domcontentloaded' });
-  const denyFont = await page.locator('.free-tier-page').evaluate((el) =>
-    getComputedStyle(el).fontFamily
-  );
-  expect(denyFont.toLowerCase()).not.toMatch(/^arial\b/);
+  const denyFont = await assertNotoSansOnFreeTierPage(page);
 
   await loginTeacher(page, seed.user.id);
   await page.goto(`${base}/app/free-tier/pending`, { waitUntil: 'networkidle' });
-  const pendingFont = await page.locator('.free-tier-page').evaluate((el) =>
-    getComputedStyle(el).fontFamily
+  const pendingFont = await assertNotoSansOnFreeTierPage(page);
+
+  const notoCheck = await page.evaluate(() =>
+    document.fonts.check('16px "Noto Sans"')
   );
-  expect(pendingFont.toLowerCase()).not.toMatch(/^arial\b/);
 
   await writeFile(
     path.join(OUT, 'font-audit.json'),
@@ -189,8 +220,12 @@ test('free-tier pages use app sans stack (computed + font requests)', async ({
         approveFont,
         denyFont,
         pendingFont,
+        notoSansFontsCheck: notoCheck,
         fontRequestCount: fontRequests.length,
-        fontRequestsSample: fontRequests.slice(0, 5),
+        fontRequestsSample: fontRequests.slice(0, 8),
+        notoNetworkOk: fontRequests.some((url) =>
+          /fonts\.gstatic\.com.*noto|Noto\+Sans/i.test(url)
+        ),
       },
       null,
       2
@@ -209,6 +244,9 @@ for (const width of [1440, 390]) {
     const seed = await seedPendingApproval();
     const approveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(seed.mint.token)}`;
     await page.goto(approveUrl, { waitUntil: 'networkidle' });
+    if (width === 1440) {
+      await capture(page, `frame_compare_deny-v2_01_approve_${suffix}`);
+    }
     await page.getByRole('button', { name: 'What Yawp! is' }).click();
     await capture(page, `deny-v2_approve_qa_b_one_question_open_${suffix}`);
 
@@ -231,5 +269,8 @@ for (const width of [1440, 390]) {
     const explore = page.getByRole('link', { name: 'Explore my classroom' });
     await expect(explore).toHaveCSS('text-decoration-line', 'underline');
     await capture(page, `14_teacher-denied-status-page_${suffix}`);
+    if (width === 1440) {
+      await capture(page, `frame_compare_deny-v2_14_teacher_denied_${suffix}`);
+    }
   });
 }
