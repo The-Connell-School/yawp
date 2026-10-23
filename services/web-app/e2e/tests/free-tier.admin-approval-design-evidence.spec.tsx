@@ -9,7 +9,7 @@ import path from 'node:path';
 import { createE2EPrismaClient } from '../prisma-client';
 import { mintFreeTierLinkForE2E } from '../helpers/mint-free-tier-link';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { renderAdminApprovalEmailHtml } from '../../app/domain/free-tier/admin-approval-email-html.server';
+import { buildDesignedAdminApprovalEmail } from '../../app/domain/free-tier/admin-approval-email.server';
 import {
   AdminAlreadyApprovedCard,
   AdminDeclinedCard,
@@ -151,17 +151,15 @@ for (const width of [1440, 390]) {
     const forwardUrl = `${base}/free/admin/not-right-person?t=${encodeURIComponent(forwardMint.token)}`;
 
     // 01 — initial approval email
-    await captureEmail(
-      page,
-      `${width}-01-approval-email`,
-      renderAdminApprovalEmailHtml({
-        teacherName: TEACHER,
-        teacherEmail: TEACHER_EMAIL,
-        schoolName: SCHOOL,
-        approveUrl,
-        notRightPersonUrl: forwardUrl,
-      })
-    );
+    const initialApprovalEmail = await buildDesignedAdminApprovalEmail({
+      teacherName: TEACHER,
+      teacherEmail: TEACHER_EMAIL,
+      schoolName: SCHOOL,
+      approveUrl,
+      notRightPersonUrl: forwardUrl,
+      pass1: true,
+    });
+    await captureEmail(page, `${width}-01-approval-email`, initialApprovalEmail.html);
 
     // 02a — approve form (default)
     await page.goto(approveUrl);
@@ -272,17 +270,19 @@ for (const width of [1440, 390]) {
     await capture(page, `${width}-06-forward-sent`);
 
     // 07 — forward recipient email
+    const forwardRecipientEmail = await buildDesignedAdminApprovalEmail({
+      teacherName: TEACHER,
+      teacherEmail: TEACHER_EMAIL,
+      schoolName: SCHOOL,
+      approveUrl: fwdApproveUrl,
+      notRightPersonUrl: fwdForwardUrl,
+      forwardedByAdminName: 'Sam Chen',
+      pass1: true,
+    });
     await captureEmail(
       page,
       `${width}-07-forward-recipient-email`,
-      renderAdminApprovalEmailHtml({
-        teacherName: TEACHER,
-        teacherEmail: TEACHER_EMAIL,
-        schoolName: SCHOOL,
-        approveUrl: fwdApproveUrl,
-        notRightPersonUrl: fwdForwardUrl,
-        forwardedByAdminName: 'Sam Chen',
-      })
+      forwardRecipientEmail.html
     );
 
     // 10 — link replaced (old approve link after forward)
