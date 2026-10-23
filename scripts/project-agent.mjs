@@ -315,6 +315,9 @@ async function devStart({ json }) {
       DATABASE_URL: local.DATABASE_URL,
       E2E_PORT: process.env.RECORD_PORT_E2E || process.env.E2E_PORT || "",
       TESTER_FEEDBACK_ENABLED: process.env.TESTER_FEEDBACK_ENABLED || "true",
+      ...(process.env.FREE_TIER_LINK_HMAC_SECRET
+        ? { FREE_TIER_LINK_HMAC_SECRET: process.env.FREE_TIER_LINK_HMAC_SECRET }
+        : {}),
     },
     detached: true,
     stdio: ["ignore", logFd, logFd],

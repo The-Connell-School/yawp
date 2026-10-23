@@ -72,9 +72,19 @@ test.describe('Dev panel free-tier state jumps', () => {
         await stateSheet.getByRole('button', { name: 'Jump to this state' }).click();
         const response = await jumpResponse;
         const body = await response.json().catch(() => null);
+        const jumpOk = response.ok() && body?.ok === true;
+        if (jumpOk) {
+          console.log(`${entry.stateId}: ok`);
+        } else {
+          const err =
+            typeof body?.error === 'string'
+              ? body.error
+              : `HTTP ${response.status()}`;
+          console.log(`${entry.stateId}: ${err}`);
+        }
         expect.soft(response.ok(), `${entry.stateId} API HTTP status`).toBe(true);
         expect.soft(body?.ok, `${entry.stateId} API ok flag`).toBe(true);
-        if (!response.ok() || !body?.ok) {
+        if (!jumpOk) {
           return;
         }
 

@@ -46,12 +46,12 @@ import type { FreeTierStateDefinition } from './free-tier-states.catalog';
 function logFreeTierJumpFailure(stateId: string, error: unknown) {
   const name = error instanceof Error ? error.name : 'Error';
   const code =
-    error instanceof FreeTierConfigError
-      ? error.code
-      : error instanceof Error
-        ? error.message.slice(0, 80)
-        : undefined;
-  console.error('[dev-panel free-tier jump failed]', { stateId, errorName: name, code });
+    error instanceof FreeTierConfigError ? error.code : undefined;
+  console.error('[dev-panel free-tier jump failed]', {
+    stateId,
+    errorName: name,
+    ...(code ? { code } : {}),
+  });
 }
 
 function devPanelStateRequiresThrowaway(state: FreeTierStateDefinition) {
@@ -60,6 +60,12 @@ function devPanelStateRequiresThrowaway(state: FreeTierStateDefinition) {
     state.id.startsWith('approved.') ||
     Boolean(state.adminSide)
   );
+}
+
+function throwawayRequiredError(state: FreeTierStateDefinition) {
+  return state.id.startsWith('pending.')
+    ? PENDING_STATES_NEED_THROWAWAY
+    : APPROVED_ADMIN_STATES_NEED_THROWAWAY;
 }
 
 export type FreeTierJumpStep = { id: string; label: string; done: boolean };
@@ -473,14 +479,8 @@ export async function executeFreeTierStateJump(
   const found = findFreeTierState(input.stateId);
   if (!found) return { ok: false, error: 'Unknown state.' };
 
-  if (found.state.id.startsWith('pending.') && !input.throwaway) {
-    return { ok: false, error: PENDING_STATES_NEED_THROWAWAY };
-  }
-  if (
-    (found.state.id.startsWith('approved.') || found.state.adminSide) &&
-    !input.throwaway
-  ) {
-    return { ok: false, error: APPROVED_ADMIN_STATES_NEED_THROWAWAY };
+  if (devPanelStateRequiresThrowaway(found.state) && !input.throwaway) {
+    return { ok: false, error: throwawayRequiredError(found.state) };
   }
 
   const steps: FreeTierJumpStep[] = [
