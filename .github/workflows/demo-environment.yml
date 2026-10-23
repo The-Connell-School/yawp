@@ -366,6 +366,8 @@ jobs:
           jq -e 'all(.[]; type == "number" and . >= 0)' <<<"$signature" >/dev/null
           echo "signature=$signature" >> "$GITHUB_OUTPUT"
           echo "Demo aggregate data before deploy: $signature"
+          tester_feedback_before="$(jq -er '.testerFeedback // 0' <<<"$signature")"
+          echo "TesterFeedback rows before deploy: ${tester_feedback_before}"
 
       - name: Prepare demo host capacity
         run: |
@@ -472,6 +474,20 @@ jobs:
         if: always()
         run: |
           grep -sE '^REDACT_(FILES_CHANGED|VALUES_MASKED|WARNING)=[0-9]+$' /tmp/demo-deploy.log || echo 'REDACT_SUMMARY=none'
+
+      - name: Surface demo deploy database signals
+        if: always()
+        run: |
+          set -euo pipefail
+          log=/tmp/demo-deploy.log
+          if [[ ! -f "$log" ]]; then
+            echo "Demo deploy log not available on runner; skipping host-log database signals"
+            exit 0
+          fi
+          echo "=== Prisma migrate deploy summary (from host deploy log) ==="
+          grep -E '^DEMO_PRISMA_MIGRATE_' "$log" || echo 'DEMO_PRISMA_MIGRATE_SUMMARY=none'
+          echo "=== TesterFeedback row counts recorded during deploy (host log) ==="
+          grep -E '^DEMO_TESTER_FEEDBACK_COUNT_' "$log" || echo 'DEMO_TESTER_FEEDBACK_COUNT_host=not-recorded'
 
       - name: Verify the demo actually serves
         run: |
@@ -606,6 +622,14 @@ jobs:
           jq -e 'all(.[]; type == "number" and . >= 0)' <<<"$signature" >/dev/null
           echo "signature=$signature" >> "$GITHUB_OUTPUT"
           echo "Demo aggregate data after deploy: $signature"
+          tester_feedback_before="$(jq -er '.testerFeedback // 0' <<<"$BEFORE_SIGNATURE")"
+          tester_feedback_after="$(jq -er '.testerFeedback // 0' <<<"$signature")"
+          echo "TesterFeedback rows before deploy: ${tester_feedback_before}"
+          echo "TesterFeedback rows after deploy: ${tester_feedback_after}"
+          (( tester_feedback_after >= tester_feedback_before )) || {
+            echo "TesterFeedback row count decreased during deploy: ${tester_feedback_before} -> ${tester_feedback_after}" >&2
+            exit 1
+          }
           if [[ "$DEMO_RESET_DATA" == "false" ]]; then
             for key in organizations users classes assignments documents submissions moduleSessions; do
               before_count="$(jq -er --arg key "$key" '.[$key]' <<<"$BEFORE_SIGNATURE")"
