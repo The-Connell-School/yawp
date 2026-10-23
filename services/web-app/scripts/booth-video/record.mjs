@@ -13,7 +13,7 @@ import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { closingCard, openingCard, sectionCard } from './cards.mjs';
+import { closingCard, openingCard, SECTION_COLORS, sectionCard } from './cards.mjs';
 import * as copy from './copy.mjs';
 import { go, launch, loginAs, Recorder, showCard, sleep, stage } from './harness.mjs';
 
@@ -30,7 +30,7 @@ const s = stage(page);
 const { booth } = s;
 
 /** A title card for a section, held for its read time. */
-async function titleCard(section, holdMs = 3600) {
+async function titleCard(section, holdMs = 3300) {
   await showCard(page, sectionCard({ ...section, total: TOTAL_SECTIONS }));
   await rec.start(`title-${section.n}`);
   await sleep(holdMs);
@@ -59,7 +59,7 @@ const segments = {
     await titleCard(SECTIONS.assign);
     await as(copy.TEACHER.email);
     await go(page, '/app');
-    await s.chapter(SECTIONS.assign, TOTAL_SECTIONS);
+    await s.chapter(SECTIONS.assign, TOTAL_SECTIONS, SECTION_COLORS[SECTIONS.assign.n - 1].accent);
     await rec.start('assign');
     await s.caption(VO.assign.dashboard, { hold: false });
     await s.moveTo('a:has-text("The Thesis-Driven Essay")', 1200);
@@ -116,7 +116,7 @@ segments.student = async () => {
   await as(copy.STUDENT.email);
   await go(page, `/app/my-classes/${boothState().classId}`);
   await s.dockCaption(null);
-  await s.chapter(SECTIONS.student, TOTAL_SECTIONS);
+  await s.chapter(SECTIONS.student, TOTAL_SECTIONS, SECTION_COLORS[SECTIONS.student.n - 1].accent);
   await rec.start('student-open');
   await s.caption(VO.student.open, { hold: false });
   const card = page.locator('button:has-text("Fahrenheit 451")').first();
@@ -225,7 +225,7 @@ segments.grading = async () => {
   await as(copy.TEACHER.email);
   await go(page, '/app');
   await s.dockCaption(null);
-  await s.chapter(SECTIONS.grading, TOTAL_SECTIONS);
+  await s.chapter(SECTIONS.grading, TOTAL_SECTIONS, SECTION_COLORS[SECTIONS.grading.n - 1].accent);
   const toGrade = page.getByRole('link', { name: /To grade/ }).first();
   await s.scrollTo(toGrade, { ms: 900 });
   await rec.start('grading');
@@ -280,7 +280,7 @@ segments.revision = async () => {
   await as(copy.STUDENT.email);
   await go(page, `/app/documents/${state.documentId}`);
   await s.dockCaption(null);
-  await s.chapter(SECTIONS.revision, TOTAL_SECTIONS);
+  await s.chapter(SECTIONS.revision, TOTAL_SECTIONS, SECTION_COLORS[SECTIONS.revision.n - 1].accent);
   await rec.start('revision');
   await s.caption(VO.revision.open);
   await s.click('[data-testid="submission-revise-essay"]', { after: 0 });
@@ -327,7 +327,7 @@ segments.summary = async () => {
   await as(copy.TEACHER.email);
   await go(page, `/app/my-classes/${state.classId}/assignments/${state.assignmentId}`);
   await s.dockCaption(null);
-  await s.chapter(SECTIONS.summary, TOTAL_SECTIONS);
+  await s.chapter(SECTIONS.summary, TOTAL_SECTIONS, SECTION_COLORS[SECTIONS.summary.n - 1].accent);
   await rec.start('summary');
   await s.caption(VO.summary.open, { hold: false });
   await sleep(1800);
@@ -371,7 +371,7 @@ segments.planner = async () => {
   await as(copy.TEACHER.email);
   await go(page, `/app/lesson-planner?from=${state.classAssignmentId}&step=0`);
   await s.dockCaption(null);
-  await s.chapter(SECTIONS.planner, TOTAL_SECTIONS);
+  await s.chapter(SECTIONS.planner, TOTAL_SECTIONS, SECTION_COLORS[SECTIONS.planner.n - 1].accent);
   await rec.start('planner');
   await s.caption(VO.planner.open, { hold: false });
   const composer = page.getByLabel('Message the Lesson Planner');
@@ -395,29 +395,113 @@ segments.planner = async () => {
   await sleep(500);
   await s.caption(VO.planner.chat, { hold: false });
   await s.click(page.getByLabel('Send message'), { after: 0 });
-  const table = page.locator('table').first();
-  await table.waitFor({ timeout: 60000 });
+  const stepsList = page.getByText('Steps in this plan').first();
+  await stepsList.waitFor({ timeout: 90000 });
   await sleep(1500);
-  await s.scrollTo(table, { block: 'center', ms: 1400 });
-  await s.callout(table, { ...VO.planner.runOfShow, side: 'right', dim: false, holdMs: 6000 });
+  await s.scrollTo(stepsList, { block: 'center', ms: 1400 });
+  await s.callout(stepsList.locator('xpath=..'), { ...VO.planner.steps, side: 'right', dim: false, holdMs: 4500 });
   await s.clearCallout();
-  await s.scrollTo(page.locator('text=Practice in Yawp!').last(), { block: 'start', ms: 1600 });
-  await sleep(2000);
 
   await s.caption(VO.planner.stack, { hold: false });
-  const addAll = page.getByRole('button', { name: 'Add all of this' }).first();
-  await s.scrollTo(addAll, { ms: 1200 });
-  await s.click(addAll, { after: 1200 });
-  await s.click(page.getByRole('link', { name: /Open the stack/ }).or(page.getByRole('button', { name: /Open the stack/ })).first(), { after: 0 });
+  const addEverything = page.getByRole('button', { name: /Add everything to the stack/ }).first();
+  await s.scrollTo(addEverything, { ms: 900 });
+  await s.click(addEverything, { after: 1200 });
+  await s.click(page.locator('[data-testid="lesson-packet-bar"]').getByRole('link', { name: /Open the stack/ }), { after: 0 });
   await page.waitForURL(/\/packet/);
+  await page.locator('[data-testid="stack-v3"]').waitFor({ timeout: 30000 });
   await page.waitForLoadState('networkidle');
-  await sleep(1500);
-  await s.callout(null, { ...VO.planner.stackCallout, holdMs: 5000 });
-  await s.clearCallout();
-  const outline = page.getByRole('button', { name: 'Outline' }).or(page.getByRole('tab', { name: 'Outline' })).first();
-  await s.click(outline, { after: 1500 });
-  await sleep(3500);
+  await page.evaluate(() => document.fonts.ready);
+  const stackUrl = page.url();
+  await sleep(1200);
   await rec.stop();
+
+  // The stack: the run of show.
+  await rec.start('stack');
+  await s.clearCaption();
+  await s.callout('[data-testid="time-bar-card"]', { ...VO.planner.runOfShow, side: 'bottom', holdMs: 5500 });
+  await s.clearCallout();
+
+  // The teacher stays in control: drag a step to a new place, cut one, undo.
+  const cards = page.locator('[data-testid="run-card"]');
+  await s.scrollTo(cards.nth(2), { ms: 900 });
+  const from = await cards.nth(2).boundingBox();
+  const to = await cards.nth(3).boundingBox();
+  const start = { x: from.x + 70, y: from.y + from.height / 2 };
+  const end = { x: to.x + 70, y: to.y + to.height * 0.8 };
+  await booth('cursorTo', start.x, start.y, 600);
+  await sleep(700);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  for (let i = 1; i <= 24; i += 1) {
+    const x = start.x + ((end.x - start.x) * i) / 24;
+    const y = start.y + ((end.y - start.y) * i) / 24;
+    await page.mouse.move(x, y);
+    await booth('cursorTo', x, y, 40);
+    await sleep(45);
+  }
+  await page.mouse.up();
+  await sleep(1300);
+  await s.callout(cards.nth(3), { ...VO.planner.control, side: 'top', dim: false, holdMs: 4200 });
+  await s.clearCallout();
+  // A removal commits after six seconds unless it's undone, so undo promptly.
+  await s.click(page.getByRole('button', { name: /^Remove / }).nth(3), { after: 1400 });
+  await s.click(page.locator('[data-testid="remove-undo"]').getByRole('button', { name: 'Undo' }), { after: 1200 });
+
+  // Writing steps become Yawp! assignments.
+  const ticket = cards.filter({ hasText: 'how a quote proves a claim' }).first();
+  await s.scrollTo(ticket, { ms: 900 });
+  await s.click(ticket.locator('[data-testid="run-card-title"]'), { after: 900 });
+  await s.click(ticket.locator('[data-testid="stack-create-assignment"]').first(), { after: 0 });
+  await page.getByRole('button', { name: 'Create Assignment' }).waitFor({ timeout: 30000 });
+  await sleep(900);
+  await s.click(page.locator('label[for^="assignment-create-class-"]', { hasText: copy.CLASS.title }), { after: 600 });
+  await s.click(page.getByRole('button', { name: 'Create Assignment' }), { after: 1500 });
+  await s.click('[data-testid="back-to-lesson"]', { after: 0 });
+  await page.locator('[data-testid="stack-v3"]').waitFor({ timeout: 30000 });
+  await page.waitForLoadState('networkidle');
+  const created = page.locator('[data-testid="in-yawp"]').first();
+  await s.scrollTo(created, { ms: 900 });
+  await s.callout(created.locator('xpath=ancestor::*[@data-testid="run-card"][1]'), { ...VO.planner.create, side: 'top', holdMs: 5000 });
+  await s.clearCallout();
+  await rec.stop();
+
+  // The slide deck, built from the stack.
+  await rec.start('deck');
+  const buildDeck = page.locator('[data-testid="build-deck"]');
+  await s.scrollTo(buildDeck, { ms: 800 });
+  await s.click(buildDeck, { after: 0 });
+  const deckCard = page.locator('[data-testid="slide-deck-card"]').last();
+  await deckCard.waitFor({ timeout: 90000 });
+  await sleep(1200);
+  await s.scrollTo(deckCard, { ms: 900 });
+  await s.callout(deckCard, { ...VO.planner.deck, side: 'right', dim: false, holdMs: 4500 });
+  await s.clearCallout();
+  await s.click(deckCard.getByRole('link', { name: /Present/ }).first(), { after: 0 });
+  await page.waitForURL(/\/present\//);
+  await page.waitForLoadState('networkidle');
+  await page.evaluate(() => document.fonts.ready);
+  await booth('hideCursor', true);
+  await sleep(2200);
+  for (let i = 0; i < 3; i += 1) {
+    await page.keyboard.press('ArrowRight');
+    await sleep(2000);
+  }
+  await rec.stop();
+
+  // Send it: an administrator, a sub, a student who missed class.
+  await go(page, stackUrl);
+  const send = page.locator('[data-testid="send-lesson"]');
+  await s.scrollTo(send, { block: 'start', ms: 900 });
+  await rec.start('send');
+  await s.click(send.getByRole('tab', { name: 'Student' }), { after: 900 });
+  await s.click(send.getByRole('tab', { name: 'Admin' }), { after: 700 });
+  await s.type(send.locator('[data-testid="send-recipient"]'), 'principal@northridge.example.org', { delay: 18 });
+  await s.callout(send, { ...VO.planner.send, side: 'left', dim: false, holdMs: 5000 });
+  await s.clearCallout();
+  // End on "Writing it for them…": locally the email can only be previewed.
+  await s.click(send.locator('[data-testid="send-button"]'), { after: 1500 });
+  await rec.stop();
+  await send.locator('[data-testid="send-done"]').waitFor({ timeout: 60000 });
   await s.clearCaption();
 };
 
@@ -426,7 +510,7 @@ segments.practice = async () => {
   await as(copy.TEACHER.email);
   await go(page, '/app/writing-lessons');
   await s.dockCaption(null);
-  await s.chapter(SECTIONS.practice, TOTAL_SECTIONS);
+  await s.chapter(SECTIONS.practice, TOTAL_SECTIONS, SECTION_COLORS[SECTIONS.practice.n - 1].accent);
   await rec.start('practice');
   await s.caption(VO.practice.library, { hold: false });
   await sleep(1500);

@@ -17,6 +17,9 @@ export const BASE_URL = process.env.BOOTH_BASE_URL ?? 'http://localhost:5190';
 const CHROMIUM = process.env.BOOTH_CHROMIUM ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** How long captions and callouts stay up, relative to reading time (BOOTH_PACE). */
+const PACE = Number(process.env.BOOTH_PACE ?? 0.85);
+
 /** Time a viewer needs to read a line: about 3.3 words a second, never under 2.4s. */
 export const readingMs = (text) => Math.max(2400, (String(text).split(/\s+/).length / 3.3) * 1000 + 700);
 
@@ -95,10 +98,10 @@ export function stage(page) {
     booth,
     async caption(text, { hold = true } = {}) {
       await booth('caption', text);
-      if (hold && text) await sleep(readingMs(text));
+      if (hold && text) await sleep(readingMs(text) * PACE);
     },
-    async chapter(section, total) {
-      await booth('chapter', section.n, total, section.title);
+    async chapter(section, total, color) {
+      await booth('chapter', section.n, total, section.title, false, color);
     },
     clearCaption: () => booth('caption', ''),
     /** Docks the caption under a column (e.g. the editor) so it never covers controls. */
@@ -111,7 +114,7 @@ export function stage(page) {
     async callout(target, { title, body, eyebrow, side, step, steps, dim = true, holdMs } = {}) {
       const rect = target ? (await rectOf(target)).rect : undefined;
       await booth('callout', { rect, title, body, eyebrow, side, step, steps, dim });
-      await sleep(holdMs ?? readingMs(`${title} ${body ?? ''}`));
+      await sleep((holdMs ?? readingMs(`${title} ${body ?? ''}`)) * PACE);
     },
     clearCallout: () => booth('clearCallout'),
     badge: (text) => booth('badge', text),
@@ -143,9 +146,15 @@ export function stage(page) {
       await locator.evaluate((node, b) => node.scrollIntoView({ behavior: 'smooth', block: b }), block);
       await sleep(ms);
     },
-    /** Puts the caret at the start or end of an editor without editing it. */
+    /**
+     * Puts the caret at the start or end of an editor without editing it:
+     * through the page's TipTap editor where it's exposed (a selection-only
+     * change), else by moving the DOM selection.
+     */
     async caret(editor, where) {
       await editor.evaluate((root, at) => {
+        const tiptap = window.__yawpEditor;
+        if (tiptap?.commands?.focus) { tiptap.commands.focus(at); return; }
         root.focus();
         const range = document.createRange();
         range.selectNodeContents(root);
@@ -154,7 +163,7 @@ export function stage(page) {
         selection.removeAllRanges();
         selection.addRange(range);
       }, where);
-      await sleep(150);
+      await sleep(200);
     },
     /** Writes text a sentence at a time (real input events), for a time-lapse. */
     async write(text, { pauseMs = 110 } = {}) {
