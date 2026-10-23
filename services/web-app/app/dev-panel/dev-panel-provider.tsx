@@ -33,6 +33,7 @@ type DevPanelContextValue = {
   previewAccessSeatLabel: string | null;
   setPreviewAccessSeatLabel: (label: string | null) => void;
   previewAccessGateEnabled: boolean;
+  flyoutSwitchInstant: boolean;
 };
 
 const DevPanelContext = createContext<DevPanelContextValue | null>(null);
@@ -60,6 +61,7 @@ export function DevPanelProvider({
     return { ...restored, restored: restored.open };
   });
   const [seatLabel, setSeatLabel] = useState(initialSeatLabel);
+  const [flyoutSwitchInstant, setFlyoutSwitchInstant] = useState(false);
   const unlocked = !previewAccessGateEnabled || Boolean(seatLabel);
   const persistTimer = useRef<number | null>(null);
 
@@ -119,7 +121,12 @@ export function DevPanelProvider({
           : [...state.openSections, sectionId];
         persist({ ...state, openSections });
       },
-      openSubSheet: (sheet) => persist({ ...state, subSheet: sheet, restored: false }),
+      openSubSheet: (sheet) => {
+        setFlyoutSwitchInstant(
+          Boolean(state.subSheet && sheet && state.subSheet !== sheet)
+        );
+        persist({ ...state, subSheet: sheet, restored: false });
+      },
       closeSubSheet: () => persist({ ...state, subSheet: null }),
       updateForms: (forms) =>
         persist({ ...state, forms: { ...state.forms, ...forms } }),
@@ -132,6 +139,7 @@ export function DevPanelProvider({
       previewAccessSeatLabel: seatLabel,
       setPreviewAccessSeatLabel: setSeatLabel,
       previewAccessGateEnabled,
+      flyoutSwitchInstant,
     }),
     [
       closePanel,
@@ -143,8 +151,15 @@ export function DevPanelProvider({
       state,
       togglePanel,
       unlocked,
+      flyoutSwitchInstant,
     ]
   );
+
+  useEffect(() => {
+    if (!flyoutSwitchInstant) return;
+    const id = window.requestAnimationFrame(() => setFlyoutSwitchInstant(false));
+    return () => window.cancelAnimationFrame(id);
+  }, [flyoutSwitchInstant, state.subSheet]);
 
   return (
     <DevPanelContext.Provider value={value}>{children}</DevPanelContext.Provider>

@@ -130,6 +130,14 @@ export const FREE_TIER_STATE_GROUPS: FreeTierStateGroup[] = [
   },
 ];
 
+const CATALOG_JUMP_LABELS = new Set(
+  FREE_TIER_STATE_GROUPS.flatMap((group) => group.states.map((state) => state.label))
+);
+
+export function isCatalogFreeTierJumpLabel(label: string) {
+  return CATALOG_JUMP_LABELS.has(label);
+}
+
 export function findFreeTierState(stateId: string) {
   for (const group of FREE_TIER_STATE_GROUPS) {
     const state = group.states.find((entry) => entry.id === stateId);

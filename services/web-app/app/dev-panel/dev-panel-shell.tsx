@@ -1,6 +1,5 @@
 import {
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
   Copy,
   FlaskConical,
@@ -8,7 +7,7 @@ import {
   Lock,
   MessageSquare,
 } from 'lucide-react';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Form, useFetcher, useLocation, useRouteLoaderData } from 'react-router';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -18,16 +17,6 @@ import {
   CollapsibleTrigger,
 } from '~/components/ui/collapsible';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '~/components/ui/alert-dialog';
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -36,23 +25,17 @@ import {
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import { Sheet, SheetContent } from '~/components/ui/sheet';
-import { Textarea } from '~/components/ui/textarea';
 import { cn } from '~/utils/misc';
 import type { loader as rootLoader } from '~/root';
-import { captureFeedbackScreenshot } from './capture-feedback-screenshot';
 import { useDevPanel } from './dev-panel-provider';
-import {
-  FREE_TIER_STATE_GROUPS,
-  findFreeTierState,
-  freeTierStateSummary,
-} from './free-tier-states.catalog';
+import { freeTierStateSummary } from './free-tier-states.catalog';
 import { DevPanelOrgPicker } from './dev-panel-org-picker';
-import { useVisualViewportFooterStyle } from './use-visual-viewport-footer';
-import type { FreeTierJumpStep } from './free-tier-jump.server';
+import { createDevPanelFeedbackContext } from './dev-panel-feedback-context';
+import { DevPanelGiveFeedbackFlyout } from './dev-panel-give-feedback-flyout';
 import {
-  createFeedbackContext,
-  feedbackPath,
-} from '~/utils/demo-feedback-context';
+  consumeDevPanelJumpToast,
+  DevPanelFreeTierFlyout,
+} from './dev-panel-free-tier-flyout';
 
 function useMedia(query: string) {
   const [matches, setMatches] = useState(false);
@@ -156,191 +139,6 @@ function AccessCodeModal({
   );
 }
 
-function GiveFeedbackSheet({
-  onClose,
-  pushed,
-  feedbackActions,
-}: {
-  onClose?: () => void;
-  pushed?: boolean;
-  feedbackActions: () => ReturnType<
-    ReturnType<typeof createFeedbackContext>['snapshot']
-  >;
-}) {
-  const { state, closeSubSheet, updateForms, clearFeedbackForm } = useDevPanel();
-  const close = onClose ?? closeSubSheet;
-  const location = useLocation();
-  const path = feedbackPath(location.pathname + location.search);
-  const noteId = useId();
-  const pageUrlId = useId();
-  const isPhone = useMedia('(max-width: 639px)');
-  const footerStyle = useVisualViewportFooterStyle(isPhone);
-  const [screenshot, setScreenshot] = useState<string | null>(null);
-  const [status, setStatus] = useState<'idle' | 'submitting' | 'sent' | 'error'>('idle');
-  const [error, setError] = useState('');
-  const note = state.forms.feedbackNote ?? '';
-
-  useEffect(() => {
-    if (state.subSheet !== 'give-feedback') return;
-    const focusNote = () => {
-      const el = document.getElementById(noteId);
-      if (!el) return;
-      el.focus({ preventScroll: true });
-      if (document.activeElement !== el) {
-        window.requestAnimationFrame(() => {
-          el.focus({ preventScroll: true });
-        });
-      }
-    };
-    if (typeof navigator !== 'undefined' && navigator.webdriver) {
-      setScreenshot(null);
-      window.setTimeout(focusNote, 0);
-      return;
-    }
-    void captureFeedbackScreenshot()
-      .then(setScreenshot)
-      .catch(() => setScreenshot(null))
-      .finally(focusNote);
-  }, [noteId, state.subSheet]);
-
-  if (state.subSheet !== 'give-feedback' || !path) return null;
-
-  const submit = async () => {
-    if (!note.trim()) {
-      setError('Add a note before sending.');
-      document.getElementById(noteId)?.focus();
-      return;
-    }
-    setStatus('submitting');
-    setError('');
-    try {
-      const response = await fetch('/api/demo-feedback', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          note: note.trim(),
-          url: path,
-          actions: feedbackActions(),
-          screenshot,
-        }),
-      });
-      const result = await response.json().catch(() => null);
-      if (!response.ok || !result?.ok) {
-        setError(result?.error ?? 'Could not send feedback.');
-        setStatus('error');
-        return;
-      }
-      setStatus('sent');
-      clearFeedbackForm();
-    } catch {
-      setError('Could not send feedback.');
-      setStatus('error');
-    }
-  };
-
-  return (
-    <div
-      className={cn(
-        'flex flex-col bg-background',
-        pushed
-          ? 'relative min-h-full'
-          : 'absolute inset-y-0 left-0 z-10 w-full max-w-md border-r shadow-lg md:-translate-x-full'
-      )}
-      role="dialog"
-      aria-label="Give feedback"
-    >
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        {pushed ? (
-          <Button type="button" variant="ghost" size="sm" onClick={close}>
-            <ChevronLeft className="size-4" aria-hidden="true" />
-            Back
-          </Button>
-        ) : null}
-        <h2 className="flex-1 text-base font-semibold">Give feedback</h2>
-        {!pushed ? (
-          <Button type="button" variant="ghost" size="sm" onClick={close}>
-            Close
-          </Button>
-        ) : null}
-      </div>
-      <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        {status === 'sent' ? (
-          <div className="space-y-3">
-            <p role="status">Feedback saved. Thank you.</p>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setStatus('idle');
-                updateForms({ feedbackNote: '' });
-              }}
-            >
-              Send more feedback
-            </Button>
-          </div>
-        ) : (
-          <>
-            <p className="text-sm text-muted-foreground">
-              Goes straight to the Yawp! team, with a screenshot and this page&apos;s URL.
-            </p>
-            <div className="space-y-1">
-              <Label htmlFor={noteId}>Note</Label>
-              <Textarea
-                id={noteId}
-                autoFocus
-                rows={6}
-                maxLength={2000}
-                value={note}
-                disabled={status === 'submitting'}
-                onChange={(event) => {
-                  updateForms({ feedbackNote: event.target.value });
-                  if (error) setError('');
-                }}
-                aria-describedby={error ? 'dev-panel-feedback-error' : undefined}
-              />
-              <p className="text-xs text-muted-foreground">{note.length} / 2000</p>
-              {error ? (
-                <p id="dev-panel-feedback-error" role="alert" className="text-sm text-destructive">
-                  {error}
-                </p>
-              ) : null}
-            </div>
-            {screenshot ? (
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Screenshot</p>
-                <img src={screenshot} alt="Automatic screenshot of the page" className="max-h-32 rounded border" />
-              </div>
-            ) : null}
-            <div className="space-y-1">
-              <Label htmlFor={pageUrlId}>Page URL</Label>
-              <Input id={pageUrlId} readOnly value={path} />
-            </div>
-          </>
-        )}
-      </div>
-      {status !== 'sent' ? (
-        <div
-          className={cn(
-            'border-t bg-background p-4',
-            isPhone && 'fixed inset-x-0 bottom-0 z-20 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]'
-          )}
-          style={isPhone ? footerStyle : undefined}
-        >
-          <Button
-            type="button"
-            className="w-full"
-            disabled={status === 'submitting'}
-            onClick={() => void submit()}
-          >
-            {status === 'submitting' ? 'Sending…' : 'Send feedback'}
-          </Button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 export function DevPanelShell() {
   const {
     state,
@@ -360,6 +158,8 @@ export function DevPanelShell() {
   const isTablet = useMedia('(min-width: 640px) and (max-width: 1023px)');
   const [accessOpen, setAccessOpen] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const feedbackRowRef = useRef<HTMLButtonElement>(null);
+  const freeTierRowRef = useRef<HTMLButtonElement>(null);
   const [orgs, setOrgs] = useState<Array<{ id: string; name: string }>>([]);
   const [logins, setLogins] = useState<Array<{ email: string; label: string; role: string }>>([]);
   const [loginState, setLoginState] = useState<'idle' | 'loading' | 'error' | 'empty'>('idle');
@@ -367,9 +167,44 @@ export function DevPanelShell() {
   const location = useLocation();
   const currentEmail = rootData?.user?.email ?? null;
   const selectedOrg = state.org ?? orgs[0]?.id ?? null;
-  const feedbackPathValue = feedbackPath(location.pathname + location.search);
-  const demoFeedbackEnabled = Boolean(rootData?.demoFeedbackAvailable);
-  const feedbackContext = useRef(createFeedbackContext());
+  const feedbackContext = useRef(createDevPanelFeedbackContext());
+
+  useEffect(() => {
+    consumeDevPanelJumpToast();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const root = document.documentElement;
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const sync = () => {
+      root.classList.toggle('yawp-dev-panel-reduced-motion', media.matches);
+    };
+    sync();
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, []);
+
+  useEffect(() => {
+    if (!state.subSheet) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (
+        document.querySelector(
+          '[role=alertdialog],[data-state=open][aria-modal=true]'
+        )
+      ) {
+        return;
+      }
+      event.preventDefault();
+      const returningTo =
+        state.subSheet === 'give-feedback' ? feedbackRowRef : freeTierRowRef;
+      closeSubSheet();
+      window.requestAnimationFrame(() => returningTo.current?.focus());
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [closeSubSheet, state.subSheet]);
 
   useEffect(() => {
     if (!state.open) return;
@@ -466,29 +301,25 @@ export function DevPanelShell() {
 
       <div className="flex-1 overflow-y-auto px-2 py-2">
         {!unlocked ? (
-          <div className="space-y-4 px-2 py-2">
-            <div className="rounded-lg border bg-muted/40 p-4">
-              <div className="flex items-center gap-2 font-medium">
-                <Lock className="size-4" aria-hidden="true" />
-                Developer tools are locked
-              </div>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Enter the access code to use quick logins, state jumps and the Blackboard link on demo and dev.
-              </p>
-              <Button type="button" className="mt-3 w-full" onClick={() => setAccessOpen(true)}>
-                Enter access code
-              </Button>
+          <div className="flex flex-col items-center px-4 py-8 text-center">
+            <div
+              className="mb-4 flex size-12 items-center justify-center rounded-full border bg-muted/30"
+              aria-hidden="true"
+            >
+              <Lock className="size-5 text-muted-foreground" />
             </div>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              {['Sign in as', 'Free-tier states', 'Blackboard link', 'Tester tools'].map(
-                (item) => (
-                  <li key={item} className="flex items-center gap-2">
-                    <Lock className="size-3.5" aria-hidden="true" />
-                    {item}
-                  </li>
-                )
-              )}
-            </ul>
+            <p className="font-medium">Developer tools are locked</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Enter the access code to use them in this browser.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-4 w-full max-w-xs"
+              onClick={() => setAccessOpen(true)}
+            >
+              Enter access code
+            </Button>
           </div>
         ) : (
           <>
@@ -553,31 +384,24 @@ export function DevPanelShell() {
               </CollapsibleContent>
             </Collapsible>
 
-            <Collapsible
-              open={state.openSections.includes('free-tier-states')}
-              onOpenChange={() => toggleSection('free-tier-states')}
+            <button
+              ref={freeTierRowRef}
+              type="button"
+              className={cn(
+                'flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm font-medium hover:bg-accent',
+                state.subSheet === 'free-tier-states' && 'bg-accent/60'
+              )}
+              onClick={() => openSubSheet('free-tier-states')}
             >
-              <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm font-medium hover:bg-accent">
-                <span>
-                  Free-tier states
-                  <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
-                    {freeTierStateSummary(state.forms.selectedStateId) ??
-                      'Choose a state to jump to'}
-                  </span>
+              <span>
+                Free-tier states
+                <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+                  {freeTierStateSummary(state.forms.selectedStateId) ??
+                    'Choose a state to jump to'}
                 </span>
-                <ChevronDown className="size-4" aria-hidden="true" />
-              </CollapsibleTrigger>
-              <CollapsibleContent className="px-2 pb-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => openSubSheet('free-tier-states')}
-                >
-                  Choose a state to jump to
-                </Button>
-              </CollapsibleContent>
-            </Collapsible>
+              </span>
+              <ChevronRight className="size-4 shrink-0" aria-hidden="true" />
+            </button>
 
             <Collapsible
               open={state.openSections.includes('blackboard')}
@@ -649,11 +473,15 @@ export function DevPanelShell() {
         )}
       </div>
 
-      {demoFeedbackEnabled && feedbackPathValue ? (
+      {unlocked ? (
         <div className="border-t px-2 py-2">
           <button
+            ref={feedbackRowRef}
             type="button"
-            className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-accent"
+            className={cn(
+              'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-accent',
+              state.subSheet === 'give-feedback' && 'bg-accent/60'
+            )}
             onClick={() => openSubSheet('give-feedback')}
           >
             <MessageSquare className="size-4" aria-hidden="true" />
@@ -682,13 +510,14 @@ export function DevPanelShell() {
         <span>Toggle Alt Shift D</span>
       </footer>
       <AccessCodeModal open={accessOpen} onOpenChange={setAccessOpen} />
-      {!isPhone && state.subSheet === 'give-feedback' ? (
-        <GiveFeedbackSheet
+      {!isPhone && !isTablet && state.subSheet === 'give-feedback' ? (
+        <DevPanelGiveFeedbackFlyout
+          onClose={closeSubSheet}
           feedbackActions={() => feedbackContext.current.snapshot()}
         />
       ) : null}
-      {!isPhone && state.subSheet === 'free-tier-states' ? (
-        <FreeTierStatesSheet onClose={closeSubSheet} orgId={selectedOrg} />
+      {!isPhone && !isTablet && state.subSheet === 'free-tier-states' ? (
+        <DevPanelFreeTierFlyout onClose={closeSubSheet} orgId={selectedOrg} />
       ) : null}
     </>
   );
@@ -700,26 +529,43 @@ export function DevPanelShell() {
       <Sheet open={state.open} onOpenChange={(open) => !open && closePanel()}>
         <SheetContent
           side="right"
-          className="flex w-full max-w-none flex-col p-0 sm:max-w-[360px]"
+          showCloseButton={false}
+          className="relative flex w-full max-w-none flex-col p-0 sm:max-w-[360px]"
           data-yawp-dev-panel
           id="devtools"
           role={isPhone ? 'dialog' : undefined}
           aria-modal={isPhone ? true : undefined}
         >
           {isPhone && state.subSheet === 'give-feedback' ? (
-            <GiveFeedbackSheet
+            <DevPanelGiveFeedbackFlyout
               onClose={closeSubSheet}
               pushed
               feedbackActions={() => feedbackContext.current.snapshot()}
             />
           ) : isPhone && state.subSheet === 'free-tier-states' ? (
-            <FreeTierStatesSheet
+            <DevPanelFreeTierFlyout
               onClose={closeSubSheet}
               orgId={selectedOrg}
               pushed
             />
           ) : (
-            panelBody
+            <>
+              {panelBody}
+              {isTablet && state.subSheet === 'give-feedback' ? (
+                <DevPanelGiveFeedbackFlyout
+                  onClose={closeSubSheet}
+                  pushed
+                  feedbackActions={() => feedbackContext.current.snapshot()}
+                />
+              ) : null}
+              {isTablet && state.subSheet === 'free-tier-states' ? (
+                <DevPanelFreeTierFlyout
+                  onClose={closeSubSheet}
+                  orgId={selectedOrg}
+                  pushed
+                />
+              ) : null}
+            </>
           )}
         </SheetContent>
       </Sheet>
@@ -738,209 +584,5 @@ export function DevPanelShell() {
     >
       {panelBody}
     </aside>
-  );
-}
-
-function FreeTierStatesSheet({
-  onClose,
-  orgId,
-  pushed,
-}: {
-  onClose: () => void;
-  orgId: string | null;
-  pushed?: boolean;
-}) {
-  const { state, updateForms } = useDevPanel();
-  const [filter, setFilter] = useState('');
-  const [jumping, setJumping] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [switchSteps, setSwitchSteps] = useState<FreeTierJumpStep[] | null>(
-    null
-  );
-  const [error, setError] = useState('');
-  const selected = state.forms.selectedStateId ?? null;
-  const throwaway = state.forms.throwawaySwitch !== false;
-
-  const groups = useMemo(() => {
-    const needle = filter.trim().toLowerCase();
-    if (!needle) return FREE_TIER_STATE_GROUPS;
-    return FREE_TIER_STATE_GROUPS.map((group) => ({
-      ...group,
-      states: group.states.filter(
-        (entry) =>
-          entry.label.toLowerCase().includes(needle) ||
-          entry.description.toLowerCase().includes(needle)
-      ),
-    })).filter((group) => group.states.length > 0);
-  }, [filter]);
-
-  const beginJump = () => {
-    if (!selected || !orgId) return;
-    if (!throwaway) {
-      setConfirmOpen(true);
-      return;
-    }
-    void runJump();
-  };
-
-  const runJump = async () => {
-    if (!selected || !orgId) return;
-    const found = findFreeTierState(selected);
-    const pendingSteps: FreeTierJumpStep[] = [
-      {
-        id: 'account',
-        label: throwaway ? 'Making test account…' : 'Using signed-in account…',
-        done: false,
-      },
-      {
-        id: 'state',
-        label: found
-          ? `Setting up ${found.state.label}…`
-          : 'Setting up state…',
-        done: false,
-      },
-      { id: 'reload', label: 'Reloading Yawp!…', done: false },
-    ];
-    setConfirmOpen(false);
-    setJumping(true);
-    setSwitchSteps(pendingSteps);
-    setError('');
-    try {
-      const response = await fetch('/api/dev-panel/free-tier-jump', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ stateId: selected, throwaway, organizationId: orgId }),
-      });
-      const result = await response.json().catch(() => null);
-      if (!response.ok) {
-        setError(result?.error ?? 'Jump failed.');
-        setJumping(false);
-        setSwitchSteps(null);
-        return;
-      }
-      const steps = (result.steps ?? pendingSteps) as FreeTierJumpStep[];
-      setSwitchSteps(steps);
-      window.setTimeout(() => {
-        window.location.assign(result.redirectTo);
-      }, 350);
-    } catch {
-      setError('Jump failed.');
-      setJumping(false);
-      setSwitchSteps(null);
-    }
-  };
-
-  return (
-    <div
-      className={cn(
-        'absolute inset-0 z-20 flex flex-col bg-background',
-        pushed ? 'relative inset-auto min-h-full' : 'md:left-auto md:w-[420px]'
-      )}
-      role="dialog"
-      aria-label="Free-tier states"
-    >
-      <div className="flex items-center gap-2 border-b px-3 py-2">
-        {pushed ? (
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-            <ChevronLeft className="size-4" aria-hidden="true" />
-            Back
-          </Button>
-        ) : null}
-        <h2 className="flex-1 text-sm font-semibold">Free-tier states</h2>
-        {!pushed ? (
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-            Close
-          </Button>
-        ) : null}
-      </div>
-      <div className="flex-1 space-y-3 overflow-y-auto p-3">
-        {jumping && switchSteps ? (
-          <div className="space-y-3 rounded-md border bg-muted/30 p-3" role="status">
-            <p className="text-sm font-medium">Switching…</p>
-            <ol className="space-y-2 text-sm">
-              {switchSteps.map((step) => (
-                <li key={step.id} className="flex items-start gap-2">
-                  <span aria-hidden="true">{step.done ? '✓' : '…'}</span>
-                  <span>{step.label}</span>
-                </li>
-              ))}
-            </ol>
-          </div>
-        ) : null}
-        <label className="flex items-center justify-between gap-2 text-sm">
-          <span>Use a throwaway test account</span>
-          <input
-            type="checkbox"
-            checked={throwaway}
-            disabled={jumping}
-            onChange={(event) => updateForms({ throwawaySwitch: event.target.checked })}
-          />
-        </label>
-        <Input
-          placeholder="Filter states"
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-        />
-        {groups.map((group) => (
-          <div key={group.id} className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {group.title}
-            </p>
-            {group.states.map((entry) => (
-              <label
-                key={entry.id}
-                className="flex cursor-pointer gap-2 rounded-md border px-2 py-2 text-sm"
-              >
-                <input
-                  type="radio"
-                  name="free-tier-state"
-                  checked={selected === entry.id}
-                  onChange={() => updateForms({ selectedStateId: entry.id })}
-                />
-                <span>
-                  <span className="font-medium">{entry.label}</span>
-                  <span className="block text-xs text-muted-foreground">
-                    {entry.description}
-                  </span>
-                </span>
-              </label>
-            ))}
-          </div>
-        ))}
-        {error ? (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        ) : null}
-      </div>
-      <div className="border-t p-3">
-        <Button
-          type="button"
-          className="w-full"
-          disabled={!selected || jumping}
-          onClick={() => beginJump()}
-        >
-          {jumping ? 'Switching…' : 'Jump to this state'}
-        </Button>
-      </div>
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Change the signed-in account?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Throwaway mode is off, so this jump will update data on the account you are
-              signed in with. Continue only if that is what you want.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void runJump()}>
-              Continue
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
   );
 }
