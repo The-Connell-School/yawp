@@ -29,3 +29,21 @@ export function buildServerErrorRequestContext(request: Request) {
     headers,
   };
 }
+
+/** Error name and message only — stacks and cause chains can embed tokens or URLs. */
+export function buildSafeErrorForLog(error: unknown) {
+  return {
+    message: error instanceof Error ? error.message : String(error),
+    name: error instanceof Error ? error.name : 'UnknownError',
+  };
+}
+
+/** Route param values may hold class codes, tokens, or emails — log sorted keys only. */
+export function buildSafeRouteParamsForLog(
+  params: Record<string, string | undefined> | undefined,
+) {
+  if (!params) {
+    return { paramKeys: [] as string[] };
+  }
+  return { paramKeys: Object.keys(params).sort() };
+}
