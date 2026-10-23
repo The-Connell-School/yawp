@@ -471,7 +471,7 @@ jobs:
       - name: Print deploy log redaction summary
         if: always()
         run: |
-          grep -E '^REDACT_(FILES_CHANGED|VALUES_MASKED)=[0-9]+$|^REDACT_WARNING' /tmp/demo-deploy.log || echo 'REDACT_SUMMARY=none'
+          grep -sE '^REDACT_(FILES_CHANGED|VALUES_MASKED|WARNING)=[0-9]+$' /tmp/demo-deploy.log || echo 'REDACT_SUMMARY=none'
 
       - name: Verify the demo actually serves
         run: |

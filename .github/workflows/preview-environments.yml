@@ -431,7 +431,7 @@ jobs:
       - name: Print deploy log redaction summary
         if: always() && steps.preview_gate.outputs.skip_preview != 'true'
         run: |
-          grep -E '^REDACT_(FILES_CHANGED|VALUES_MASKED)=[0-9]+$|^REDACT_WARNING' "$RUNNER_TEMP/preview-deploy.log" || echo 'REDACT_SUMMARY=none'
+          grep -sE '^REDACT_(FILES_CHANGED|VALUES_MASKED|WARNING)=[0-9]+$' "$RUNNER_TEMP/preview-deploy.log" || echo 'REDACT_SUMMARY=none'
 
       - name: Verify preview access gate
         if: steps.preview_gate.outputs.skip_preview != 'true'

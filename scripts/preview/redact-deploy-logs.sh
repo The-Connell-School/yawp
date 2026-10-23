@@ -235,9 +235,7 @@ write_summary() {
     printf 'REDACT_FILES_SCANNED=%s\n' "$files_scanned"
     printf 'REDACT_FILES_CHANGED=%s\n' "$files_changed"
     printf 'REDACT_VALUES_MASKED=%s\n' "$values_masked"
-    if [[ "$warning" != "0" ]]; then
-      printf 'REDACT_WARNING=1\n'
-    fi
+    printf 'REDACT_WARNING=%s\n' "$warning"
   } > "$tmp_summary"
   mv -- "$tmp_summary" "$SUMMARY_FILE"
 }
@@ -269,7 +267,11 @@ while IFS= read -r -d '' file; do
   fi
 done < <(collect_files)
 
-write_summary "$warning" || warning=1
+if ! write_summary "$warning"; then
+  warning=1
+  rm -f -- "$SUMMARY_FILE"
+  write_summary "$warning" || true
+fi
 
 printf 'files_scanned=%s\n' "$files_scanned"
 printf 'files_changed=%s\n' "$files_changed"

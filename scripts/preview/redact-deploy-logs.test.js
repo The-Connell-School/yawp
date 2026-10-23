@@ -134,6 +134,7 @@ describe('redact-deploy-logs.sh', () => {
     const summary = readFileSync(summaryPath(dir), 'utf8');
     expect(summary).toContain('REDACT_FILES_SCANNED=1');
     expect(summary).toContain('REDACT_TIMESTAMP=');
+    expect(summary).toContain('REDACT_WARNING=0');
     for (const needle of sensitivePatterns()) {
       expect(summary.includes(needle)).toBe(false);
       expect(first.stdout.includes(needle)).toBe(false);
@@ -200,9 +201,9 @@ describe('redact-deploy-logs.sh', () => {
     expect(redacted).toContain('PREVIEW_ACCESS_CODE=[REDACTED]');
     expect(redacted.includes(FIXTURE.accessCode)).toBe(false);
     expect(redacted.endsWith('\n') || redacted.endsWith('\r\n')).toBe(true);
-    expect(readFileSync(summaryPath(dir), 'utf8')).not.toContain(
-      FIXTURE.accessCode
-    );
+    const summary = readFileSync(summaryPath(dir), 'utf8');
+    expect(summary).not.toContain(FIXTURE.accessCode);
+    expect(summary).toContain('REDACT_WARNING=0');
   });
 
   test('skips in-flight logs without exit markers and symlink targets', () => {
