@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
-const enabled = Boolean(process.env.DATABASE_URL);
+const enabled = process.env.FREE_TIER_JUMP_DB_TESTS === '1';
 const sendEmail = mock(async () => ({ status: 'success' as const }));
 
 mock.module('~/utils/email.server', () => ({

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import * as emailCopyServer from './email-copy.server';
 
 const sendEmail = mock(async () => ({ status: 'success' as const }));
 const approvalUpdate = mock(async () => ({}));
@@ -11,6 +12,7 @@ mock.module('~/domain/feature-flags/feature-flags.server', () => ({
   isFeatureFlagEnabled: async () => true,
 }));
 mock.module('./email-copy.server', () => ({
+  ...emailCopyServer,
   adminApprovalEmailCopyVersionHash: async () => 'hash',
 }));
 mock.module('./signed-link.server', () => ({
@@ -68,6 +70,7 @@ describe('submitAdminDetails suppressEmailDelivery', () => {
     approvalUpdate.mockClear();
     process.env.FREE_TIER_LINK_HMAC_SECRET = 'unit-test-hmac-secret';
     process.env.PRIMARY_APP_URL = 'https://yawp.test';
+    process.env.YAWP_ENVIRONMENT = 'production';
   });
 
   test('logs approval without calling sendEmail when suppressEmailDelivery is set', async () => {
@@ -83,5 +86,19 @@ describe('submitAdminDetails suppressEmailDelivery', () => {
     expect(result.ok).toBe(true);
     expect(sendEmail).not.toHaveBeenCalled();
     expect(approvalUpdate).toHaveBeenCalled();
+  });
+
+  test('calls sendEmail when suppressEmailDelivery is false', async () => {
+    const { submitAdminDetails } = await import('./approval-flow.server');
+    const result = await submitAdminDetails({
+      applicationId: 'app-1',
+      userId: 'user-1',
+      adminName: 'Admin',
+      adminEmail: 'admin@example.test',
+      adminRole: 'Principal',
+      suppressEmailDelivery: false,
+    });
+    expect(result.ok).toBe(true);
+    expect(sendEmail).toHaveBeenCalledTimes(1);
   });
 });
