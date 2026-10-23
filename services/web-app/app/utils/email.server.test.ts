@@ -152,6 +152,56 @@ describe('sendEmail', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  test('logs email_delivery_failed when Resend returns an error result without throwing', async () => {
+    const errorLog = mock((..._args: unknown[]) => {});
+    const originalError = console.error;
+    console.error = errorLog as typeof console.error;
+    try {
+      process.env.EMAIL_PROVIDER = 'resend';
+      process.env.RESEND_API_KEY = 'resend-test-key';
+      process.env.RESEND_FROM_EMAIL = 'info@yawp.school';
+      fetchMock.mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            name: 'validation_error',
+            message:
+              'You can only send testing emails to your own email address (`private@example.test`).',
+            statusCode: 422,
+          }),
+          { status: 422, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+
+      const result = await sendEmail({
+        to: 'teacher@school.edu',
+        subject: 'Teacher invite',
+        html: '<p>invite</p>',
+        text: 'invite',
+        logKind: 'teacher-invite',
+      });
+
+      expect(result).toEqual({
+        status: 'error',
+        error: {
+          name: 'validation_error',
+          message:
+            'You can only send testing emails to your own email address (`private@example.test`).',
+          statusCode: 422,
+        },
+      });
+
+      const serialized = JSON.stringify(errorLog.mock.calls);
+      expect(serialized).toContain('email_delivery_failed');
+      expect(serialized).toContain('teacher-invite');
+      expect(serialized).toContain('validation_error');
+      expect(serialized).toContain('422');
+      expect(serialized).not.toContain('teacher@school.edu');
+      expect(serialized).toContain('t***@s***');
+    } finally {
+      console.error = originalError;
+    }
+  });
+
   test('keeps the explicit Resend provider path available', async () => {
     process.env.EMAIL_PROVIDER = 'resend';
     process.env.RESEND_API_KEY = 'resend-test-key';
