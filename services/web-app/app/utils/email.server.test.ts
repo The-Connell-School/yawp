@@ -33,7 +33,10 @@ const envKeys = [
 	'AWS_REGION',
 	'AWS_SES_REGION',
 	'DATABASE_URL',
+	'EMAIL_LOG_BODY',
 	'EMAIL_PROVIDER',
+	'MOCKS',
+	'NODE_ENV',
 	'RESEND_API_KEY',
 	'RESEND_FROM_EMAIL',
 	'SES_FROM_EMAIL',
@@ -192,6 +195,71 @@ describe('sendEmail', () => {
     process.env.RESEND_API_KEY = 'mock-key';
     await sendEmail({ to: 'principal@example.edu', bcc: ['teacher@example.edu'], subject: 'Approval', html: '<p>fixed</p>', text: 'fixed' } as Parameters<typeof sendEmail>[0]);
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ to: 'principal@example.edu', bcc: ['teacher@example.edu'] });
+  });
+
+  test('redacts unsent Resend payloads unless local dev explicitly opts into body logs', async () => {
+    const errorLog = mock(() => {});
+    const originalError = console.error;
+    console.error = errorLog as typeof console.error;
+    try {
+      process.env.NODE_ENV = 'development';
+      delete process.env.EMAIL_LOG_BODY;
+      delete process.env.RESEND_API_KEY;
+      delete process.env.RESEND_FROM_EMAIL;
+      delete process.env.MOCKS;
+
+      await sendEmail({
+        to: 'teacher@school.edu',
+        subject: 'Class code inside',
+        html: '<p>https://yawp.school/join?code=secret</p>',
+        text: 'https://yawp.school/join?code=secret',
+        logKind: 'teacher-invite',
+      });
+
+      const wouldHaveSent = errorLog.mock.calls.find((call) =>
+        String(call[0]).includes('Would have sent the following email:'),
+      );
+      expect(wouldHaveSent).toBeDefined();
+      const payload = JSON.parse(String(wouldHaveSent?.[1]));
+      expect(payload).toEqual({
+        to: 't***@s***',
+        subject: 'Class code inside',
+        kind: 'teacher-invite',
+        bodyLength: 43,
+      });
+      expect(errorLog.mock.calls.some((call) =>
+        String(call[0]).includes('Full email payload'),
+      )).toBe(false);
+    } finally {
+      console.error = originalError;
+    }
+  });
+
+  test('never logs full email bodies on preview even with EMAIL_LOG_BODY=1', async () => {
+    const errorLog = mock(() => {});
+    const originalError = console.error;
+    console.error = errorLog as typeof console.error;
+    try {
+      process.env.NODE_ENV = 'development';
+      process.env.EMAIL_LOG_BODY = '1';
+      process.env.YAWP_ENVIRONMENT = 'preview';
+      delete process.env.RESEND_API_KEY;
+      delete process.env.RESEND_FROM_EMAIL;
+      delete process.env.MOCKS;
+
+      await sendEmail({
+        to: 'teacher@school.edu',
+        subject: 'Preview',
+        html: '<p>secret-body</p>',
+        text: 'secret-body',
+      });
+
+      expect(errorLog.mock.calls.some((call) =>
+        String(call[0]).includes('Full email payload'),
+      )).toBe(false);
+    } finally {
+      console.error = originalError;
+    }
   });
 
 	test('captures email on yawp_pr preview without calling Resend', async () => {
