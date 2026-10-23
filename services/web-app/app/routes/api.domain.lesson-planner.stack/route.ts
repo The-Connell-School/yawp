@@ -256,7 +256,7 @@ export async function action({ request }: ActionFunctionArgs) {
           conversation: { membershipId: access.membership.id },
         },
       });
-      if (sentToday >= MAX_SENDS_PER_DAY) return bad('That is enough sends for this lesson today.', 429);
+      if (sentToday >= MAX_SENDS_PER_DAY) return bad('That is enough sends today.', 429);
       const includes = parseShareItems(data.includes);
       const loaded = await loadStackV3({ request, conversationId: conversation.id });
       if (!loaded) return bad('Not found.', 404);

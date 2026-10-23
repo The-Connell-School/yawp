@@ -18,9 +18,29 @@ import {
   SourceDocumentError,
 } from '~/domain/lesson-planner/source-documents.server';
 import { PENDING_UPLOAD_MS } from '~/domain/lesson-planner/lesson-uploads';
+import { readBoundedBytes } from '~/utils/bounded-body.server';
+
+/** File plus multipart framing; matches other upload routes' headroom. */
+const MAX_UPLOAD_BODY_BYTES = MAX_SOURCE_BYTES + 1024 * 1024;
 
 function bad(message: string, status = 400) {
   return dataResponse({ error: message }, { status });
+}
+
+async function requestWithinUploadCap(request: Request): Promise<Request | ReturnType<typeof bad>> {
+  const header = request.headers.get('content-length');
+  const declared = header === null || header.trim() === '' ? NaN : Number(header);
+  if (Number.isFinite(declared)) {
+    if (declared > MAX_UPLOAD_BODY_BYTES) return bad('That file is over 10 MB.', 413);
+    return request;
+  }
+  const body = await readBoundedBytes(request, MAX_UPLOAD_BODY_BYTES);
+  if (body === null) return bad('That file is over 10 MB.', 413);
+  return new Request(request.url, {
+    method: request.method,
+    headers: request.headers,
+    body,
+  });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -29,12 +49,10 @@ export async function action({ request }: ActionFunctionArgs) {
   const flags = await getLessonPlannerReviewFlags(access.membership.organization.id);
   if (!flags.uploads) return bad('Not found.', 404);
 
-  // Refused before the body is read: a request far over the limit never
-  // reaches memory.
-  const length = Number(request.headers.get('content-length'));
-  if (Number.isFinite(length) && length > MAX_SOURCE_BYTES + 1024 * 1024) return bad('That file is over 10 MB.', 413);
+  const capped = await requestWithinUploadCap(request);
+  if (capped instanceof Response) return capped;
 
-  const form = await request.formData();
+  const form = await capped.formData();
   const intent = form.get('intent');
   const conversationId = form.get('conversationId')?.toString() || null;
 
