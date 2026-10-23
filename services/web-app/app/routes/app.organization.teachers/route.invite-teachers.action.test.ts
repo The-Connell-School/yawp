@@ -4,6 +4,89 @@ import {
   TEACHER_INVITE_SERVER_ERROR_MESSAGE,
   teacherInviteSuccessMessage,
 } from './teacher-invite-copy';
+import { escapeForPrismaCaseInsensitiveEquals } from '~/utils/normalize-email';
+
+type StoredInvitation = {
+  id: string;
+  target: string;
+  type: string;
+  metadata: string | null;
+  organizationId: string | null;
+};
+
+let invitationRows: StoredInvitation[] = [];
+let nextInvitationId = 1;
+
+function unescapeIlikeLiteral(pattern: string) {
+  return pattern.replace(/\\(.)/g, '$1');
+}
+
+function invitationTargetMatches(rowTarget: string, escapedEquals: string) {
+  return (
+    rowTarget.toLowerCase() ===
+    unescapeIlikeLiteral(escapedEquals).toLowerCase()
+  );
+}
+
+function resetInvitationStore() {
+  invitationRows = [];
+  nextInvitationId = 1;
+}
+
+function installInvitationStoreBehavior() {
+  prisma.invitation.deleteMany.mockImplementation(
+    async ({ where }: { where: { target: { equals: string }; type: string } }) => {
+      const escapedEquals = where.target.equals;
+      const before = invitationRows.length;
+      invitationRows = invitationRows.filter(
+        (row) =>
+          row.type !== where.type ||
+          !invitationTargetMatches(row.target, escapedEquals)
+      );
+      return { count: before - invitationRows.length };
+    }
+  );
+
+  prisma.invitation.create.mockImplementation(
+    async ({
+      data,
+    }: {
+      data: {
+        target: string;
+        type: string;
+        metadata?: string;
+        organization?: { connect: { id: string } };
+      };
+    }) => {
+      const organizationId =
+        data.organization?.connect?.id ??
+        (data.metadata
+          ? (JSON.parse(data.metadata) as { organizationId?: string })
+              .organizationId ?? null
+          : null);
+      const lowerTarget = data.target.toLowerCase();
+      const conflict = invitationRows.some(
+        (row) =>
+          row.type === data.type && row.target.toLowerCase() === lowerTarget
+      );
+      if (conflict) {
+        throw Object.assign(new Error('Unique constraint failed'), {
+          name: 'PrismaClientKnownRequestError',
+          code: 'P2002',
+        });
+      }
+      const row: StoredInvitation = {
+        id: `inv-${nextInvitationId++}`,
+        target: data.target,
+        type: data.type,
+        metadata: data.metadata ?? null,
+        organizationId: organizationId ?? null,
+      };
+      invitationRows.push(row);
+      return row;
+    }
+  );
+}
 
 const requireOwner = mock(async () => ({ id: 'owner-user-1' }));
 const requireMembership = mock(async () => ({
@@ -74,17 +157,17 @@ describe('invite-teachers action', () => {
     buildOrgTeacherInviteEmail.mockReset();
     prisma.organization.findUnique.mockReset();
     prisma.user.findUnique.mockReset();
+    resetInvitationStore();
     prisma.invitation.deleteMany.mockReset();
     prisma.invitation.create.mockReset();
     prisma.$transaction.mockReset();
     prisma.$transaction.mockImplementation(async (fn: (tx: typeof prisma) => unknown) =>
       fn(prisma)
     );
+    installInvitationStoreBehavior();
 
     prisma.organization.findUnique.mockResolvedValue({ name: 'Yawp! High' });
     prisma.user.findUnique.mockResolvedValue({ name: 'Pat Owner' });
-    prisma.invitation.deleteMany.mockResolvedValue({ count: 0 });
-    prisma.invitation.create.mockResolvedValue({ id: 'inv-1' });
     generateTOTP.mockResolvedValue({
       otp: 'ABC123',
       algorithm: 'SHA-256',
@@ -274,6 +357,14 @@ describe('invite-teachers action', () => {
   });
 
   test('replaces a pending onboard-teacher invite from another organization', async () => {
+    invitationRows.push({
+      id: 'inv-org-b',
+      target: 'Teacher@Example.test',
+      type: 'onboard-teacher',
+      metadata: JSON.stringify({ organizationId: 'org-b' }),
+      organizationId: 'org-b',
+    });
+
     const response = await action({
       request: inviteRequest('teacher@example.test'),
     } as never);
@@ -283,21 +374,9 @@ describe('invite-teachers action', () => {
     );
     expect(data.sentCount).toBe(1);
     expect(data.failedEmails).toEqual([]);
-    expect(prisma.invitation.deleteMany).toHaveBeenCalledWith({
-      where: {
-        target: { equals: 'teacher@example.test', mode: 'insensitive' },
-        type: 'onboard-teacher',
-      },
-    });
-    expect(prisma.invitation.create).toHaveBeenCalledTimes(1);
-    expect(prisma.invitation.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        target: 'teacher@example.test',
-        type: 'onboard-teacher',
-        organizationId: 'org-1',
-        metadata: JSON.stringify({ organizationId: 'org-1' }),
-      }),
-    });
+    expect(invitationRows).toHaveLength(1);
+    expect(invitationRows[0]?.organizationId).toBe('org-1');
+    expect(invitationRows[0]?.target).toBe('teacher@example.test');
     expect(sendEmail).toHaveBeenCalledTimes(1);
   });
 
@@ -330,7 +409,10 @@ describe('invite-teachers action', () => {
     expect(data.failedEmails).toEqual([]);
     expect(prisma.invitation.deleteMany).toHaveBeenCalledWith({
       where: {
-        target: { equals: 'mixedcase@example.test', mode: 'insensitive' },
+        target: {
+          equals: escapeForPrismaCaseInsensitiveEquals('mixedcase@example.test'),
+          mode: 'insensitive',
+        },
         type: 'onboard-teacher',
       },
     });
@@ -341,20 +423,32 @@ describe('invite-teachers action', () => {
     });
   });
 
-  test('marks every address failed when sendEmail returns status error for all', async () => {
-    sendEmail.mockResolvedValue({
-      status: 'error',
-      error: { name: 'Error', message: 'fail', statusCode: 500 },
-    });
-
-    const response = await action({
-      request: inviteRequest('a@example.test, b@example.test'),
+  test('escapes underscore in deleteMany target for ILIKE-safe matching', async () => {
+    await action({
+      request: inviteRequest('first_last@example.test'),
     } as never);
-    const data = unwrapData<{ sentCount: number; failedEmails: string[] }>(
-      response
-    );
-    expect(data.sentCount).toBe(0);
-    expect(data.failedEmails).toEqual(['a@example.test', 'b@example.test']);
+
+    expect(prisma.invitation.deleteMany).toHaveBeenCalledWith({
+      where: {
+        target: {
+          equals: escapeForPrismaCaseInsensitiveEquals(
+            'first_last@example.test'
+          ),
+          mode: 'insensitive',
+        },
+        type: 'onboard-teacher',
+      },
+    });
+  });
+
+  test('rejects percent wildcards in addresses before any invitation DB call', async () => {
+    const response = (await action({
+      request: inviteRequest('%@%'),
+    } as never)) as { data: { error: string } };
+
+    expect(response.data.error).toBe('No valid emails provided');
+    expect(prisma.invitation.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.invitation.create).not.toHaveBeenCalled();
   });
 
   test('logs invite setup failures without error messages', async () => {

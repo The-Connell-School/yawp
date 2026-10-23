@@ -44,7 +44,10 @@ import {
 } from '~/components/ui/sheet';
 import { Label } from '~/components/ui/label';
 import { useEffect, useState } from 'react';
-import { normalizeEmail } from '~/utils/normalize-email';
+import {
+  escapeForPrismaCaseInsensitiveEquals,
+  normalizeEmail,
+} from '~/utils/normalize-email';
 import { InviteTeachersSheet } from './invite-teachers-sheet';
 import { TEACHER_INVITE_SERVER_ERROR_MESSAGE } from './teacher-invite-copy';
 
@@ -330,7 +333,10 @@ export async function action({ request }: ActionFunctionArgs) {
         emails
           .split(/[,\n]/)
           .map((email: string) => normalizeEmail(email))
-          .filter((email: string) => email && email.includes('@'))
+          .filter(
+            (email: string) =>
+              email && email.includes('@') && !email.includes('%')
+          )
       )
     );
 
@@ -379,13 +385,21 @@ export async function action({ request }: ActionFunctionArgs) {
             metadata: JSON.stringify({
               organizationId: profile.organization.id,
             }),
-            organizationId: profile.organization.id,
+            organization: {
+              connect: { id: profile.organization.id },
+            },
           };
+
+          const invitationDeleteTarget =
+            escapeForPrismaCaseInsensitiveEquals(email);
 
           await prisma.$transaction(async (tx) => {
             await tx.invitation.deleteMany({
               where: {
-                target: { equals: email, mode: 'insensitive' },
+                target: {
+                  equals: invitationDeleteTarget,
+                  mode: 'insensitive',
+                },
                 type: 'onboard-teacher',
               },
             });
