@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from 'bun:test';
+import { afterAll, describe, expect, mock, test } from 'bun:test';
 import type { LoaderFunctionArgs } from 'react-router';
 
 const findUnique = mock();
@@ -34,6 +34,15 @@ mock.module('~/domain/free-tier/approval-flow.server', () => ({
 }));
 
 const { loader } = await import('./route');
+
+const realSignedLink =
+  globalThis.__realModules['~/domain/free-tier/signed-link.server'];
+
+afterAll(() => {
+  if (realSignedLink) {
+    mock.module('~/domain/free-tier/signed-link.server', () => realSignedLink);
+  }
+});
 
 describe('free.admin.not-right-person loader', () => {
   test('shows already approved when application is approved even if peek succeeds', async () => {

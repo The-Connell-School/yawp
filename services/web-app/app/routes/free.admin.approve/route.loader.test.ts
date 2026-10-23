@@ -55,7 +55,15 @@ mock.module('~/domain/free-tier/approval-deny.server', () => ({
   resolveAdminDenyAnsweredGate: async () => null,
 }));
 
-afterAll(() => mock.restore());
+const realSignedLink =
+  globalThis.__realModules['~/domain/free-tier/signed-link.server'];
+
+afterAll(() => {
+  mock.restore();
+  if (realSignedLink) {
+    mock.module('~/domain/free-tier/signed-link.server', () => realSignedLink);
+  }
+});
 
 beforeEach(() => {
   applicationIdFromSignedToken.mockReset();
