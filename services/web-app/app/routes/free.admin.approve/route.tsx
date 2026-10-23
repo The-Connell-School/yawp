@@ -4,11 +4,15 @@ import {
   useActionData,
   useLoaderData,
 } from 'react-router';
-import { CircleAlert, CircleCheck } from 'lucide-react';
 import {
-  applicationIdFromSignedToken,
-  peekSignedLink,
-} from '~/domain/free-tier/signed-link.server';
+  freeClassroomsPausedBody,
+  thankYouTeacherEmailFailedBody,
+} from '~/domain/free-tier/admin-approval-copy';
+import type { FreeTierAdminLinkReplacedVariant } from '~/domain/free-tier/admin-link-gate.server';
+import { useFreeTierEnabled } from '../free-tier/useFreeTierLayoutContext';
+import { CircleAlert, CircleCheck } from 'lucide-react';
+import { applicationIdForAdminLinkNaming } from '~/domain/free-tier/admin-link-known-request.server';
+import { peekSignedLink } from '~/domain/free-tier/signed-link.server';
 import {
   fetchFreeTierApplicationTerminalGate,
   resolveAdminLinkReplacedGate,
@@ -42,6 +46,7 @@ type LoaderData =
       reason?: string;
       schoolName?: string;
       teacherName?: string;
+      variant?: FreeTierAdminLinkReplacedVariant;
       decidedAt?: string;
     }
   | {
@@ -53,8 +58,15 @@ type LoaderData =
       showDenyAndQa: boolean;
     };
 
-async function applicationFromToken(token: string) {
-  const applicationId = applicationIdFromSignedToken(token);
+async function applicationFromVerifiedToken(
+  token: string,
+  peek: Awaited<ReturnType<typeof peekSignedLink>>
+) {
+  const applicationId = await applicationIdForAdminLinkNaming(
+    token,
+    peek,
+    'ADMIN_APPROVE'
+  );
   if (!applicationId) return null;
   return prisma.freeTierApplication.findUnique({
     where: { id: applicationId },
@@ -70,9 +82,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     token,
     expectedPurpose: 'ADMIN_APPROVE',
   });
-  const appId = peek.ok
-    ? peek.applicationId
-    : applicationIdFromSignedToken(token);
+  const appId = await applicationIdForAdminLinkNaming(
+    token,
+    peek,
+    'ADMIN_APPROVE'
+  );
   const showDenyAndQa = await isFeatureFlagEnabled(FREE_TIER_FLAG);
   if (appId) {
     const gate = await fetchFreeTierApplicationTerminalGate(appId);
@@ -109,7 +123,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     };
   }
   if (peek.reason === 'expired') {
-    const app = await applicationFromToken(token);
+    const app = await applicationFromVerifiedToken(token, peek);
     if (app) {
       return {
         ok: false as const,
@@ -118,10 +132,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
         teacherName: app.name,
       };
     }
+    return { ok: false as const, reason: 'invalid' as const };
   }
-  const replaced = await resolveAdminLinkReplacedGate({ token, peek });
+  const replaced = await resolveAdminLinkReplacedGate({
+    token,
+    peek,
+    expectedPurpose: 'ADMIN_APPROVE',
+  });
   if (replaced) return { ok: false as const, ...replaced };
-  if (peek.reason === 'invalid' || !peek.reason) {
+  if (
+    peek.reason === 'invalid' ||
+    peek.reason === 'purpose_mismatch' ||
+    !peek.reason
+  ) {
     return { ok: false as const, reason: 'invalid' as const };
   }
   return { ok: false as const, reason: peek.reason };
@@ -143,16 +166,31 @@ export async function action({ request }: ActionFunctionArgs) {
     request,
   });
   if (!result.ok && result.reason === 'superseded') {
-    const appId = applicationIdFromSignedToken(token);
+    const peek = await peekSignedLink({
+      token,
+      expectedPurpose: 'ADMIN_APPROVE',
+    });
+    const replaced = await resolveAdminLinkReplacedGate({
+      token,
+      peek,
+      expectedPurpose: 'ADMIN_APPROVE',
+    });
+    if (replaced) return { ok: false as const, ...replaced };
+    const appId = await applicationIdForAdminLinkNaming(
+      token,
+      peek,
+      'ADMIN_APPROVE'
+    );
     if (appId) {
       const gate = await fetchFreeTierApplicationTerminalGate(appId);
       if (gate) return { ok: false as const, ...gate };
     }
-    const app = await applicationFromToken(token);
+    const app = await applicationFromVerifiedToken(token, peek);
     if (app && !['APPROVED', 'REJECTED', 'EXPIRED'].includes(app.status)) {
       return {
         ok: false as const,
         reason: 'link_replaced' as const,
+        variant: 'resent' as const,
         teacherName: app.name,
         schoolName: app.schoolName,
       };
@@ -200,11 +238,17 @@ function terminalFromLoader(data: Extract<LoaderData, { ok: false }>) {
       <AdminLinkReplacedCard
         teacherName={teacherName}
         schoolName={schoolName}
+        variant={data.variant ?? 'forwarded'}
       />
     );
   }
   if (data.reason === 'invalid') {
-    return <AdminLinkInvalidCard />;
+    return (
+      <AdminLinkInvalidCard
+        teacherName={data.teacherName}
+        schoolName={data.schoolName}
+      />
+    );
   }
   return null;
 }
@@ -248,6 +292,12 @@ function terminalFromAction(actionData: NonNullable<ReturnType<typeof useActionD
       <AdminLinkReplacedCard
         teacherName={teacherName}
         schoolName={schoolName}
+        variant={
+          'variant' in actionData
+            ? (actionData as { variant?: FreeTierAdminLinkReplacedVariant })
+                .variant ?? 'forwarded'
+            : 'forwarded'
+        }
       />
     );
   }
@@ -278,6 +328,7 @@ function terminalFromAction(actionData: NonNullable<ReturnType<typeof useActionD
 export default function FreeAdminApproveRoute() {
   const data = useLoaderData<LoaderData>();
   const actionData = useActionData<typeof action>();
+  const pass1 = useFreeTierEnabled();
 
   if (actionData?.ok && 'idempotent' in actionData && actionData.idempotent) {
     const teacherName = data.ok ? data.teacherName : 'A teacher';
@@ -323,8 +374,11 @@ export default function FreeAdminApproveRoute() {
       return (
         <FreeTierAuthCard title="Thank you" icon={<CircleCheck />} status>
           <p className="text-sm text-muted-foreground">
-            {data.teacherName} at {data.schoolName} can start using Yawp! We
-            could not send your confirmation email.
+            {thankYouTeacherEmailFailedBody(
+              data.teacherName,
+              data.schoolName,
+              pass1
+            )}
           </p>
         </FreeTierAuthCard>
       );
@@ -337,6 +391,12 @@ export default function FreeAdminApproveRoute() {
         <AdminLinkReplacedCard
           teacherName={data.teacherName}
           schoolName={data.schoolName}
+          variant={
+            'variant' in actionData
+              ? (actionData as { variant?: FreeTierAdminLinkReplacedVariant })
+                  .variant ?? 'forwarded'
+              : 'forwarded'
+          }
         />
       );
     }
@@ -347,8 +407,11 @@ export default function FreeAdminApproveRoute() {
           icon={<CircleAlert />}
         >
           <p className="text-sm text-muted-foreground">
-            Yawp! has reached the current free-tier budget for this environment.
-            We did not use this approval link; our team will follow up.
+            {freeClassroomsPausedBody(
+              data.teacherName,
+              data.schoolName,
+              pass1
+            )}
           </p>
         </FreeTierAuthCard>
       );

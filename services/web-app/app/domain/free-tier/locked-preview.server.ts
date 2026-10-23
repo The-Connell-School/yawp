@@ -85,6 +85,21 @@ export async function shouldHideFreeTierTeachingSecrets(userId: string) {
   return userHasPendingFreeTierTeachingLock(userId);
 }
 
+type ClassTeachingSecretCarrier = {
+  code?: string | null;
+  studentJoinToken?: string | null;
+};
+
+/** Strip join tokens and blank class codes for locked-preview teachers (matches my-classes loaders). */
+export function redactClassTeachingSecrets<T extends ClassTeachingSecretCarrier>(
+  klass: T,
+  hideTeachingSecrets: boolean
+): T {
+  if (!hideTeachingSecrets) return klass;
+  const { studentJoinToken: _token, ...rest } = klass;
+  return { ...rest, code: null } as T;
+}
+
 export async function ensureLockedPreviewClassroomForUser(userId: string) {
   const application = await prisma.freeTierApplication.findFirst({
     where: {

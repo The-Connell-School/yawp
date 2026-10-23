@@ -31,6 +31,7 @@ import {
   resolveAdminLinkReplacedGate,
   resolveAdminLinkTerminalGate,
 } from './admin-link-gate.server';
+import { verifiedApplicationIdForAdminToken } from './admin-link-known-request.server';
 import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
 import { adminApprovalEmailCopyVersionHash } from './email-copy.server';
 import {
@@ -59,6 +60,12 @@ import {
 import { resolveFreeTierRuntimeEnvironment } from './usage-budget.server';
 import { forwardApprovalSchema } from './approval-waiting';
 import { selfAdminEmailError } from './admin-email';
+import {
+  adminApprovalEmailContextFromStoredMessage,
+  mergeAdminApprovalEmailContext,
+  resolveAdminApprovalEmailContext,
+  type AdminApprovalEmailContext,
+} from './admin-approval-email-context.server';
 
 export const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const HOUR_MS = 3600000;
@@ -74,6 +81,8 @@ type Message = {
   html?: string;
   approveLinkId?: string;
   declineLinkId?: string;
+  forwardedByAdminName?: string | null;
+  routedByTeacher?: boolean;
 };
 const fail = (reason: string) => ({ ok: false as const, reason });
 
@@ -146,7 +155,7 @@ async function adminMessage(
   app: FreeTierApplication,
   approval: FreeTierAdminApproval,
   reminder: boolean,
-  options: { forwardedByAdminName?: string | null } = {}
+  emailContext: AdminApprovalEmailContext = {}
 ): Promise<Message> {
   const approve = await mintSignedLink({
     applicationId: app.id,
@@ -161,14 +170,20 @@ async function adminMessage(
   const base = freeTierPublicAppOrigin();
   const approveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(approve.token)}`;
   const notRightPersonUrl = `${base}/free/admin/not-right-person?t=${encodeURIComponent(decline.token)}`;
+  const pass1 = await isFeatureFlagEnabled(
+    FREE_TIER_FLAG,
+    app.organizationId
+  );
   const designed = await buildDesignedAdminApprovalEmail({
     teacherName: app.name,
     teacherEmail: app.email,
     schoolName: app.schoolName,
     approveUrl,
     notRightPersonUrl,
-    forwardedByAdminName: options.forwardedByAdminName,
+    forwardedByAdminName: emailContext.forwardedByAdminName,
+    routedByTeacher: emailContext.routedByTeacher,
     reminder,
+    pass1,
   });
   return {
     to: approval.adminEmail,
@@ -177,6 +192,8 @@ async function adminMessage(
     html: designed.html,
     approveLinkId: approve.linkId,
     declineLinkId: decline.linkId,
+    forwardedByAdminName: emailContext.forwardedByAdminName ?? null,
+    routedByTeacher: emailContext.routedByTeacher,
   };
 }
 async function queue(
@@ -359,6 +376,11 @@ export async function forwardApprovalRequest(args: {
     });
     if (!app || !(await isApprovalV2Enabled(app, tx)))
       return fail('not_allowed');
+    const pass1 = await isFeatureFlagEnabled(
+      FREE_TIER_FLAG,
+      app.organizationId
+    );
+    const copyHash = await adminApprovalEmailCopyVersionHash(pass1);
     if (app.status === 'APPROVED') {
       return {
         ok: false as const,
@@ -448,13 +470,20 @@ export async function forwardApprovalRequest(args: {
         adminEmail: newAdminEmail,
         redirectedFromId: pending.id,
         forwardedByRole: args.userId ? 'teacher' : 'admin',
-        emailCopyVersionHash: adminApprovalEmailCopyVersionHash(),
+        emailCopyVersionHash: copyHash,
       },
     });
     if (!rules.manualReview) {
-      const message = await adminMessage(tx, app, next, false, {
-        forwardedByAdminName: pending.adminName,
-      });
+      const pass1 = await isFeatureFlagEnabled(
+        FREE_TIER_FLAG,
+        app.organizationId
+      );
+      const forwardContext: AdminApprovalEmailContext = pass1
+        ? args.userId != null
+          ? { routedByTeacher: true }
+          : { forwardedByAdminName: pending.adminName }
+        : { forwardedByAdminName: pending.adminName };
+      const message = await adminMessage(tx, app, next, false, forwardContext);
       await tx.freeTierAdminApproval.update({
         where: { id: next.id },
         data: { signedLinkId: message.approveLinkId },
@@ -512,7 +541,11 @@ export async function forwardApprovalByToken(args: {
     };
   }
 
-  const earlyAppId = applicationIdFromSignedToken(args.token);
+  const purpose = args.purpose ?? 'ADMIN_NOT_RIGHT_PERSON';
+  const earlyAppId = await verifiedApplicationIdForAdminToken(
+    args.token,
+    purpose
+  );
   if (earlyAppId) {
     const gate = await fetchFreeTierApplicationTerminalGate(earlyAppId);
     if (gate) return { ok: false as const, ...gate };
@@ -529,7 +562,7 @@ export async function forwardApprovalByToken(args: {
 
   const peek = await peekSignedLink({
     token: args.token,
-    expectedPurpose: args.purpose ?? 'ADMIN_NOT_RIGHT_PERSON',
+    expectedPurpose: purpose,
   });
   if (!peek.ok) {
     if (
@@ -542,11 +575,17 @@ export async function forwardApprovalByToken(args: {
     ) {
       return { ok: true as const, idempotent: true as const };
     }
-    const gate = await resolveAdminLinkTerminalGate({ token: args.token, peek });
+    const purpose = args.purpose ?? 'ADMIN_NOT_RIGHT_PERSON';
+    const gate = await resolveAdminLinkTerminalGate({
+      token: args.token,
+      peek,
+      expectedPurpose: purpose,
+    });
     if (gate) return { ok: false as const, ...gate };
     const replaced = await resolveAdminLinkReplacedGate({
       token: args.token,
       peek,
+      expectedPurpose: purpose,
     });
     if (replaced) return { ok: false as const, ...replaced };
     return peek;
@@ -634,7 +673,18 @@ export async function queueManualApprovalReminder(args: {
           +now - +(previous.sentAt ?? previous.createdAt) < 600000))
     )
       return fail('rate_limited');
-    const message = await adminMessage(tx, app, approval, true);
+    const pass1 = await isFeatureFlagEnabled(FREE_TIER_FLAG, app.organizationId);
+    const message = await adminMessage(
+      tx,
+      app,
+      approval,
+      true,
+      pass1
+        ? await resolveAdminApprovalEmailContext(approval, tx, {
+            organizationId: app.organizationId,
+          })
+        : {}
+    );
     const job = await queue(
       tx,
       approval.id,
@@ -735,16 +785,31 @@ async function scheduleApplication(applicationId: string, now: Date) {
           },
         },
       });
-      if (!existing)
+      if (!existing) {
+        const pass1 = await isFeatureFlagEnabled(
+          FREE_TIER_FLAG,
+          app.organizationId
+        );
         await queue(
           tx,
           approval.id,
           'admin_reminder',
           approval.reminderCount + 1,
           now,
-          await adminMessage(tx, app, approval, true),
+          await adminMessage(
+            tx,
+            app,
+            approval,
+            true,
+            pass1
+              ? await resolveAdminApprovalEmailContext(approval, tx, {
+                  organizationId: app.organizationId,
+                })
+              : {}
+          ),
           { source: 'auto' }
         );
+      }
     }
     if (
       approval.nextTeacherFollowUpAt &&
@@ -916,11 +981,31 @@ async function deliverJob(id: string, now: Date) {
         select: { expiresAt: true, usedAt: true },
       });
       if (!link || link.usedAt || +link.expiresAt <= Date.now() + HOUR_MS) {
+        const pass1 = await isFeatureFlagEnabled(
+          FREE_TIER_FLAG,
+          job.approval.application.organizationId
+        );
+        let emailContext: AdminApprovalEmailContext = {};
+        if (pass1) {
+          const storedContext = adminApprovalEmailContextFromStoredMessage(
+            message
+          );
+          const approvalContext = await resolveAdminApprovalEmailContext(
+            job.approval,
+            tx,
+            { organizationId: job.approval.application.organizationId }
+          );
+          emailContext = mergeAdminApprovalEmailContext(
+            approvalContext,
+            storedContext
+          );
+        }
         const refreshed = await adminMessage(
           tx,
           job.approval.application,
           job.approval,
-          job.kind === 'admin_reminder'
+          job.kind === 'admin_reminder',
+          emailContext
         );
         await tx.freeTierApprovalDelivery.update({
           where: { id },
@@ -1009,6 +1094,10 @@ async function deliverJob(id: string, now: Date) {
         const pendingUrl = `${freeTierPublicAppOrigin()}/app/free-tier/pending`;
         let html: string;
         if (job.kind === 'admin_approval' || job.kind === 'admin_reminder') {
+          const pass1Html = await isFeatureFlagEnabled(
+            FREE_TIER_FLAG,
+            app.organizationId
+          );
           html = await htmlForStoredAdminApprovalEmail({
             subject: message.subject,
             text: message.text,
@@ -1016,6 +1105,7 @@ async function deliverJob(id: string, now: Date) {
             teacherName: app.name,
             teacherEmail: app.email,
             schoolName: app.schoolName,
+            pass1: pass1Html,
           });
         } else if (
           job.kind === 'teacher_followup' &&
@@ -1274,4 +1364,12 @@ export async function runApprovalJobs(now = new Date()) {
           },
         });
     });
+}
+
+/** Integration tests: read/write encrypted outbox payloads without sending. */
+export function sealApprovalDeliveryPayloadForTests(message: Message) {
+  return encrypt(message);
+}
+export function openApprovalDeliveryPayloadForTests(value: string): Message {
+  return decrypt(value);
 }
