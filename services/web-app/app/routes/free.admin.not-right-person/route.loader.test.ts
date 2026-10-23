@@ -2,11 +2,15 @@ import { describe, expect, mock, test } from 'bun:test';
 import type { LoaderFunctionArgs } from 'react-router';
 
 const findUnique = mock();
+const findFirst = mock(async () => null);
 const peekSignedLink = mock();
 const fetchGate = mock();
 
 mock.module('~/utils/db.server', () => ({
-  prisma: { freeTierApplication: { findUnique } },
+  prisma: {
+    freeTierApplication: { findUnique },
+    freeTierAdminApproval: { findFirst },
+  },
 }));
 
 mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
@@ -78,6 +82,7 @@ describe('free.admin.not-right-person loader', () => {
       schoolName: 'TS High',
       teacherName: 'Jordan Rivera',
       approveBackToken: undefined,
+      pendingAdminName: undefined,
     });
     expect(peekSignedLink).toHaveBeenCalled();
   });

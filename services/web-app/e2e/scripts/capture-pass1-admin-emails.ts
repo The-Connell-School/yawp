@@ -7,11 +7,12 @@ import path from 'node:path';
 import { chromium } from '@playwright/test';
 import { buildDesignedAdminApprovalEmail } from '../../app/domain/free-tier/admin-approval-email.server';
 
-const OUT = process.env.ADMIN_COPY_PASS1_EVIDENCE_DIR;
-if (!OUT) {
+const evidenceDir = process.env.ADMIN_COPY_PASS1_EVIDENCE_DIR;
+if (!evidenceDir) {
   console.error('Set ADMIN_COPY_PASS1_EVIDENCE_DIR');
   process.exit(1);
 }
+const OUT = evidenceDir;
 
 const TEACHER = 'Jordan Rivera';
 const SCHOOL = 'Lincoln High School';
@@ -41,7 +42,11 @@ for (const width of [1280, 390]) {
   await page.setViewportSize({ width, height: width === 390 ? 844 : 960 });
   const suffix = width === 1280 ? 'desktop' : 'mobile';
 
-  const cases: Array<[string, Parameters<typeof buildDesignedAdminApprovalEmail>[0]]> =
+  type EmailFlags = Pick<
+    Parameters<typeof buildDesignedAdminApprovalEmail>[0],
+    'pass1' | 'reminder' | 'forwardedByAdminName' | 'routedByTeacher'
+  >;
+  const cases: Array<[string, EmailFlags]> =
     [
       [
         width === 1280
