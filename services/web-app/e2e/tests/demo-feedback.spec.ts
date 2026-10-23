@@ -270,7 +270,7 @@ test('local demo single trigger reserves mobile content space on landing, classe
           name: 'Give feedback',
           exact: true,
         });
-        await expect(beaker.or(legacyGiveFeedback)).toBeVisible({
+        await expect(beaker.or(legacyGiveFeedback).first()).toBeVisible({
           timeout: 60_000,
         });
         const devPanel = (await beaker.count()) > 0;
