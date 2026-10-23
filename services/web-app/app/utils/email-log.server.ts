@@ -40,7 +40,6 @@ export function buildSafeEmailLogSummary(
   const bodyLength = Math.max(email.text?.length ?? 0, email.html?.length ?? 0);
   return {
     to: redactEmailForLog(email.to),
-    subject: email.subject,
     ...(logMeta?.kind ? { kind: logMeta.kind } : {}),
     bodyLength,
   };

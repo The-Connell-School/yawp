@@ -136,9 +136,7 @@ export default function Route() {
       password: '',
       confirmPassword: '',
     },
-    onSubmitFailure(error) {
-      console.log(error);
-    },
+    onSubmitFailure() {},
   });
 
   return (

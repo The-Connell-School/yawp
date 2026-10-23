@@ -24,7 +24,8 @@ describe('handleError logging', () => {
         headers: { cookie: 'session=secret' },
       });
       const routeError = new Error('class join failed');
-      routeError.stack = 'Error: class join failed\n    at /join/SECRET-CODE';
+      routeError.stack =
+        'Error: class join failed\n    at handler (https://example.test/join?code=SECRET-CODE:10:5)';
 
       await handleError(routeError, {
         request,
@@ -45,6 +46,7 @@ describe('handleError logging', () => {
       expect(serialized).toContain('Server Error Details');
       expect(serialized).not.toContain('class-secret-id');
       expect(serialized).not.toContain('JOIN-CODE-123');
+      expect(serialized).not.toContain('?code=');
       expect(serialized).not.toContain('SECRET-CODE');
       expect(serialized).toContain('paramKeys');
     } finally {

@@ -1,26 +1,129 @@
-import { describe, expect, mock, test } from 'bun:test';
+import { beforeEach, expect, mock, test } from 'bun:test';
 
-test('org teacher invite failures log redacted delivery diagnostics', async () => {
+const requireOwner = mock(async () => ({ id: 'user-1' }));
+const requireMembership = mock(async () => ({
+  organization: { id: 'org-1' },
+}));
+
+mock.module('~/utils/auth.server', () => ({
+  requireOwner,
+  requireMembership,
+}));
+
+const sendEmail = mock(async () => ({ status: 'success', data: { id: 'mock' } }));
+mock.module('~/utils/email.server', () => ({ sendEmail }));
+
+const generateTOTP = mock(async () => ({
+  otp: 'SECRET-OTP',
+  secret: 'secret',
+  period: 3600,
+  algorithm: 'SHA-256',
+}));
+
+mock.module('~/utils/totp.server', () => ({ generateTOTP }));
+
+mock.module('~/emails/build-account-emails.server', () => ({
+  buildOrgTeacherInviteEmail: async () => ({
+    subject: 'Join Yawp',
+    text: 'text',
+    html: '<p>html</p>',
+  }),
+  inviteeFirstName: (email: string) => email.split('@')[0] ?? 'Teacher',
+}));
+
+mock.module('~/utils/misc', () => ({
+  getDomainUrl: () => 'https://example.test',
+  cn: (...args: unknown[]) => args.filter(Boolean).join(' '),
+}));
+
+const prisma = {
+  organization: {
+    findUnique: mock(async () => ({ name: 'Test School' })),
+  },
+  user: {
+    findUnique: mock(async () => ({ name: 'Admin User' })),
+  },
+  invitation: {
+    findFirst: mock(async () => null),
+    delete: mock(async () => ({})),
+    create: mock(async () => ({})),
+  },
+};
+
+mock.module('~/utils/db.server', () => ({ prisma }));
+
+const { action } = await import('./route');
+
+function inviteRequest(email: string) {
+  const body = new URLSearchParams();
+  body.set('intent', 'invite-teachers');
+  body.set('emails', email);
+  return new Request('https://example.test/app/organization/teachers', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+}
+
+beforeEach(() => {
+  sendEmail.mockReset();
+  sendEmail.mockResolvedValue({ status: 'success', data: { id: 'mock' } });
+  prisma.invitation.findFirst.mockReset().mockResolvedValue(null);
+  prisma.invitation.create.mockReset().mockResolvedValue({});
+  generateTOTP.mockReset().mockResolvedValue({
+    otp: 'SECRET-OTP',
+    secret: 'secret',
+    period: 3600,
+    algorithm: 'SHA-256',
+  });
+});
+
+test('invite-teachers logs delivery failures without raw email', async () => {
   const errorLog = mock((..._args: unknown[]) => {});
   const originalError = console.error;
   console.error = errorLog as typeof console.error;
   try {
-    const { emailDeliveryDiagnostic } = await import(
-      '~/utils/email-delivery-error.server'
-    );
-    const diagnostic = emailDeliveryDiagnostic(
-      Object.assign(new Error('Provider rejected https://yawp.school/inv?code=OTP123'), {
+    sendEmail.mockRejectedValue(
+      Object.assign(new Error('Provider rejected'), {
         name: 'validation_error',
         statusCode: 422,
       }),
-      'teacher@school.edu',
     );
-    console.error('org_teacher_invite_delivery_failed', diagnostic);
+
+    await action({ request: inviteRequest('teacher@school.edu') } as never);
+
     const serialized = JSON.stringify(errorLog.mock.calls);
     expect(serialized).toContain('org_teacher_invite_delivery_failed');
     expect(serialized).not.toContain('teacher@school.edu');
-    expect(serialized).not.toContain('OTP123');
-    expect(serialized).toContain('t***@s***');
+    expect(serialized).toContain('validation_error');
+    expect(serialized).not.toContain('org_teacher_invite_failed');
+  } finally {
+    console.error = originalError;
+  }
+});
+
+test('invite-teachers logs prisma failures with code and without delivery mislabel', async () => {
+  const errorLog = mock((..._args: unknown[]) => {});
+  const originalError = console.error;
+  console.error = errorLog as typeof console.error;
+  try {
+    prisma.invitation.create.mockRejectedValue(
+      Object.assign(new Error('Unique constraint failed on teacher@school.edu'), {
+        name: 'PrismaClientKnownRequestError',
+        code: 'P2002',
+        meta: { modelName: 'Invitation', target: ['target'] },
+      }),
+    );
+
+    await action({ request: inviteRequest('teacher@school.edu') } as never);
+
+    const serialized = JSON.stringify(errorLog.mock.calls);
+    expect(serialized).toContain('org_teacher_invite_failed');
+    expect(serialized).toContain('P2002');
+    expect(serialized).toContain('Invitation');
+    expect(serialized).not.toContain('teacher@school.edu');
+    expect(serialized).not.toContain('org_teacher_invite_delivery_failed');
+    expect(serialized).not.toContain('UnknownError');
   } finally {
     console.error = originalError;
   }
