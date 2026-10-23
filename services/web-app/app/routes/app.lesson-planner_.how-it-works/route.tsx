@@ -605,7 +605,7 @@ export default function LessonPlannerHowItWorksRoute() {
                 {[
                   {
                     title: 'Time against the period',
-                    body: 'A bar shows every step against your class length. Run long and you get at most two fixes, each with Undo. Fixes never cut writing time.',
+                    body: 'A bar shows every step against your class length. Tap a step’s minutes to type them. Run long and you get at most two fixes, each with Undo. Fixes never cut writing time.',
                   },
                   {
                     title: 'How much is writing',
@@ -797,6 +797,13 @@ export default function LessonPlannerHowItWorksRoute() {
               <strong className="text-foreground">Build this day</strong>{' '}
               button, and each built day becomes its own lesson with its own
               stack.
+            </Copy>
+            <Copy>
+              Plan a few days in one go, like a four-day flow, and{' '}
+              <strong className="text-foreground">Make each day its own lesson</strong>{' '}
+              gives every day its own run of show, stack and lesson plan, with
+              its steps and minutes already in. Your library keeps a unit as a
+              folder: its days in order, and the chat that planned them.
             </Copy>
           </div>
           <Row

@@ -116,3 +116,31 @@ Tests first in each step; one commit per item.
 5. Item 6: writing defaults.
 6. e2e spec `teacher.lesson-planner-run-5.spec.ts`, the planner suites,
    typecheck, push, PR, timesheet and questions.
+
+## Status (Oct 23)
+
+All six done and on PR 437, with `main` merged in. Notes:
+
+- **Item 1.** Making the days is one click under the reply. The days are
+  ordinary lessons (`unitDay` set), so they open, set, share and run like
+  any lesson. A unit built from "Create a Unit" already worked this way,
+  one day at a time; its folder now shows in the library too.
+- **Item 2.** The fix is in what the model is sent each turn. There is no
+  saved "framework" yet: a lesson template keeps one lesson's shape, and
+  a week's shape is a new kind of thing to keep (see questions).
+- **Item 3.** It came from the same cause as item 1. A one-day plan still
+  files each timed step with its minutes, as before.
+- **Item 4.** The +/− buttons stay.
+- **Item 5.** Preview is on every Add panel card, including pieces from
+  "Ask the planner".
+- **Item 6.**
+  - Writing from the stack chat now files as the Yawp! assignment it is.
+  - The planner's own lessons use the exit ticket and Daily Pages blocks
+    for all written work. "Paper instead" is still on the before-class
+    list as the teacher's choice.
+  - Not testable end to end: what the model writes. E2E stubs the model,
+    so unit tests cover the prompt rules and the stack chat's filing. Try
+    a week and a stack-chat exit ticket on the preview.
+- **No new flags or migrations.** Items 1 and 3 sit behind
+  `lesson_planner_stack_v3`; the rest change behavior already behind it or
+  the prompt (version `2026-10-23-review-v1`).
