@@ -7,6 +7,16 @@ Plan and storyboard: `docs/plans/2026-10-22-ncte-booth-video.md`.
 bash services/web-app/scripts/booth-video/run.sh yawp-ncte-booth.mp4
 ```
 
+To record against another checkout (the new stack lives in the Lesson Planner
+branch, The-Connell-School/yawp#437), point `BOOTH_APP_ROOT` at a git worktree
+of it; this folder is copied there and run from it:
+
+```bash
+git worktree add ../yawp-437 origin/claude/beautiful-gates-i8db40
+(cd ../yawp-437 && bun install)
+BOOTH_APP_ROOT=../yawp-437 bash services/web-app/scripts/booth-video/run.sh yawp-ncte-booth.mp4
+```
+
 `run.sh` **wipes and re-seeds the local dev database**, starts the app, records
 every section in a 1920×1080 X display and joins the clips. It takes about ten
 minutes.
@@ -45,8 +55,12 @@ Linux with `Xvfb`, `ffmpeg` (libx264) and the pinned Chromium at
 `/opt/pw-browsers` (`BOOTH_CHROMIUM` overrides it), plus two fonts so the app
 renders as designed: **Roboto** (`apt-get install fonts-roboto`) and
 **Cormorant Garamond** (the editor's font, from
-`github.com/google/fonts/tree/main/ofl/cormorantgaramond`). Docker for the
-local database.
+`github.com/google/fonts/tree/main/ofl/cormorantgaramond`). The new stack and
+its slide decks also use **Bricolage Grotesque**, **Instrument Sans**,
+**Gelasio** and **Arimo** (all in `github.com/google/fonts/tree/main/ofl`).
+Docker for the local database.
+
+`BOOTH_PACE` (default 0.85) scales how long captions and callouts stay up.
 
 ## Playing it at the booth
 
