@@ -54,6 +54,32 @@ function isWebAppTestFile(): boolean {
   return !absoluteTestFile.startsWith(`${import.meta.dir}/scripts/`);
 }
 
+// The TypeScript CI job has no Postgres service; fail fast when a suite reaches the network.
+if (process.env.YAWP_CI_TYPECHECK_NO_DATABASE === '1' && isWebAppTestFile()) {
+  const originalConsoleError = console.error;
+  console.error = (...args: unknown[]) => {
+    originalConsoleError(...args);
+    const serialized = args
+      .map((arg) => {
+        if (typeof arg === 'string') return arg;
+        try {
+          return JSON.stringify(arg);
+        } catch {
+          return String(arg);
+        }
+      })
+      .join(' ');
+    if (
+      serialized.includes('feature_flag_read_failed') &&
+      serialized.includes("Can't reach database")
+    ) {
+      throw new Error(
+        'Unexpected Postgres access in TypeScript CI (mock ~/utils/db.server or feature flags).'
+      );
+    }
+  };
+}
+
 globalThis.__realModules = {};
 
 if (isWebAppTestFile()) {
