@@ -51,9 +51,11 @@ emit_failure_log_tail() {
 # Pass command and paths as positional data to a fixed script. Interpolating an
 # already shell-quoted command inside double quotes would consume its escaping
 # before bash -lc receives it (including JSON quotes, dollars and backslashes).
-detached_script='flock -w 1800 "$1" bash -lc "$2" > "$3" 2>&1; echo $? > "$4"'
+detached_script='flock -w 1800 "$1" bash -lc "$2" > "$3" 2>&1; ec=$?; if [[ -n "${REDACT_DEPLOY_LOGS_SCRIPT:-}" && -f "$REDACT_DEPLOY_LOGS_SCRIPT" ]]; then bash "$REDACT_DEPLOY_LOGS_SCRIPT" "$(dirname "$3")" || echo "warning: deploy log redaction failed" >&2; fi; printf "%s\n" "$ec" > "$4"'
 ssh -i "$SSH_IDENTITY" -o BatchMode=yes "$SSH_TARGET" bash -s <<REMOTE
 set -euo pipefail
+REDACT_DEPLOY_LOGS_SCRIPT=$(shell_quote "${REDACT_DEPLOY_LOGS_SCRIPT:-}")
+export REDACT_DEPLOY_LOGS_SCRIPT
 mkdir -p $(shell_quote "$LOG_DIR")
 rm -f $(shell_quote "$DEPLOY_LOG") $(shell_quote "$EXIT_FILE")
 if ! flock -n $(shell_quote "$LOCK_FILE") -c true; then

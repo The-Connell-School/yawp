@@ -365,6 +365,7 @@ jobs:
           deploy_log="${PREVIEW_ROOT}/logs/pr-${PR_NUMBER}-deploy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.log"
           deploy_command="cd $(shell_quote "$remote_control") && ${remote_env[*]} bash scripts/preview/admit-and-deploy.sh"
           set +e
+          REDACT_DEPLOY_LOGS_SCRIPT="${remote_control}/scripts/preview/redact-deploy-logs.sh" \
           SSH_IDENTITY="$HOME/.ssh/preview_key" \
           SSH_TARGET="$ssh_target" \
           LOCK_FILE="$lock_file" \
