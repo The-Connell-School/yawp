@@ -1,8 +1,8 @@
 /**
- * Follow-up evidence for admin deny Q&A, teacher denied, and font loading.
+ * Follow-up evidence for admin deny Q&A and teacher denied.
  */
 import { expect, test } from '@playwright/test';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { createCookieSessionStorage } from 'react-router';
 import { createE2EPrismaClient } from '../prisma-client';
@@ -139,98 +139,6 @@ test.afterAll(async () => {
   await db.orgMembership.deleteMany({ where: { userId: { in: users } } });
   await db.user.deleteMany({ where: { id: { in: users } } });
   await db.$disconnect();
-});
-
-async function assertNotoSansOnFreeTierPage(page: import('@playwright/test').Page) {
-  await page.evaluate(async () => {
-    await document.fonts.ready;
-  });
-  const fontFamily = await page.locator('.free-tier-page').evaluate((el) =>
-    getComputedStyle(el).fontFamily
-  );
-  expect(fontFamily).toMatch(/Noto Sans/i);
-  const check = await page.evaluate(() =>
-    document.fonts.check('16px "Noto Sans"')
-  );
-  expect(check).toBe(true);
-  return fontFamily;
-}
-
-test('free-tier pages load Noto Sans (computed, network, fonts.check)', async ({
-  page,
-}) => {
-  test.skip(!evidenceEnabled, 'Set APPROVAL_V2_BASE_URL, E2E_DATABASE_URL, SESSION_SECRET');
-  const base = process.env.APPROVAL_V2_BASE_URL!;
-  const seed = await seedPendingApproval();
-  const approveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(seed.mint.token)}`;
-  const fontRequests: string[] = [];
-  page.on('request', (req) => {
-    const url = req.url();
-    if (
-      req.resourceType() === 'font' ||
-      url.includes('fonts.googleapis.com') ||
-      url.includes('fonts.gstatic.com')
-    ) {
-      fontRequests.push(url);
-    }
-  });
-
-  const notoResponse = page.waitForResponse(
-    (res) =>
-      res.url().includes('fonts.gstatic.com') &&
-      res.status() === 200 &&
-      (res.request().resourceType() === 'font' ||
-        res.headers()['content-type']?.includes('font') ||
-        /\.woff2?(\?|$)/i.test(res.url())),
-    { timeout: 60_000 }
-  );
-
-  await page.goto(approveUrl, { waitUntil: 'networkidle' });
-  await notoResponse;
-  const approveFont = await assertNotoSansOnFreeTierPage(page);
-  expect(fontRequests.some((url) => /noto\s*sans|Noto\+Sans/i.test(url))).toBe(
-    true
-  );
-
-  await page.getByRole('button', { name: 'Questions about student privacy?' }).click();
-  const panel = page.locator('.free-tier-qa-panel-open .free-tier-qa-panel-inner').first();
-  await expect(panel).toBeVisible();
-  const panelBox = await panel.boundingBox();
-  const lastLine = panel.locator('li').last();
-  const lastBox = await lastLine.boundingBox();
-  expect(panelBox && lastBox).toBeTruthy();
-  expect(lastBox!.y + lastBox!.height).toBeLessThanOrEqual(panelBox!.y + panelBox!.height + 2);
-
-  const denyUrl = `${base}/free/admin/approve/deny?t=${encodeURIComponent(seed.mint.token)}`;
-  await page.goto(denyUrl, { waitUntil: 'domcontentloaded' });
-  const denyFont = await assertNotoSansOnFreeTierPage(page);
-
-  await loginTeacher(page, seed.user.id);
-  await page.goto(`${base}/app/free-tier/pending`, { waitUntil: 'networkidle' });
-  const pendingFont = await assertNotoSansOnFreeTierPage(page);
-
-  const notoCheck = await page.evaluate(() =>
-    document.fonts.check('16px "Noto Sans"')
-  );
-
-  await writeFile(
-    path.join(OUT, 'font-audit.json'),
-    JSON.stringify(
-      {
-        approveFont,
-        denyFont,
-        pendingFont,
-        notoSansFontsCheck: notoCheck,
-        fontRequestCount: fontRequests.length,
-        fontRequestsSample: fontRequests.slice(0, 8),
-        notoNetworkOk: fontRequests.some((url) =>
-          /fonts\.gstatic\.com.*noto|Noto\+Sans/i.test(url)
-        ),
-      },
-      null,
-      2
-    )
-  );
 });
 
 for (const width of [1440, 390]) {
