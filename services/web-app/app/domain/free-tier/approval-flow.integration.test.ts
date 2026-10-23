@@ -259,14 +259,15 @@ describe('free-tier approval flow', () => {
             ? `Can you approve Yawp! for ${teacherAtSchoolLabel}?`
             : undefined,
         });
-        const pass1ForwardLead =
-          "Principal Pat forwarded Local Teacher's request at Example High to you.";
-        const flagOffForwardLead =
-          'Principal Pat forwarded this to you as the right person to approve classroom software for Local Teacher at Example High.';
-        expect(
-          replacement.text.includes(pass1ForwardLead) ||
-            replacement.text.includes(flagOffForwardLead)
-        ).toBe(true);
+        if (approvalV2) {
+          expect(replacement.text).toContain(
+            "Principal Pat forwarded Local Teacher's request at Example High to you."
+          );
+        } else {
+          expect(replacement.text).toContain(
+            'Principal Pat forwarded this to you as the right person to approve classroom software for Local Teacher at Example High.'
+          );
+        }
         expect(replacement.text).not.toContain(
           'They named you as the administrator who can approve classroom software'
         );

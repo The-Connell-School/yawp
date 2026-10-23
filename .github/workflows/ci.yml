@@ -247,6 +247,7 @@ jobs:
           ./services/web-app/app/utils/free-tier-class-create-route.real-db.integration.test.ts
           ./services/web-app/app/utils/assignment-quota.real-db.integration.test.ts
           ./services/web-app/app/domain/free-tier/approval-flow.integration.test.ts
+          ./services/web-app/app/domain/free-tier/approval-flow-pass1-send.integration.test.ts
           ./services/web-app/app/domain/free-tier/approval.integration.test.ts
           ./services/web-app/app/domain/free-tier/service.integration.test.ts
           ./services/web-app/app/routes/api.free-tier.waitlist/route.integration.test.ts
@@ -269,6 +270,8 @@ jobs:
           APPROVAL_V2_DB_TESTS: '1'
         run: |
           bun test --max-concurrency=2 ./services/web-app/app/domain/free-tier/approval-v2.real-db.integration.test.ts
+          bun test --max-concurrency=2 ./services/web-app/app/domain/free-tier/application-id-opaque-hash-verified.test.ts
+          bun test --max-concurrency=2 ./services/web-app/app/domain/free-tier/admin-token-s9a-actions.test.ts
           bun test --max-concurrency=2 ./services/web-app/app/domain/free-tier/approval-deny.integration.test.ts
           bun test --max-concurrency=2 ./services/web-app/app/routes/app.free-tier.pending/route.v2.test.tsx
           bun test --max-concurrency=2 ./services/web-app/app/routes/free.admin.approve/route.v2.test.tsx
@@ -329,7 +332,7 @@ jobs:
           ./services/web-app/app/utils/preview-access-rate-limit.server.test.ts
           ./services/web-app/app/utils/internal-free-tier-http.server.test.ts
           ./services/web-app/app/utils/mock-admin-environment.test.ts
-          $(find ./services/web-app/app/domain/free-tier -type f -name '*.test.ts' ! -name 'student-join.server.test.ts' ! -name 'inapp-usage.server.test.ts' ! -name 'monthly-policy.test.ts' ! -name 'locked-preview.server.test.ts' ! -name 'teaching-access-shell.server.test.ts' ! -name 'email.server.test.ts' ! -name 'demo-signup-admin-email.test.ts' ! -name 'admin-link-gate.server.test.ts' ! -name 'admin-approval-email-facts.test.ts' ! -name 'service.create-token-idempotency.test.ts' ! -name 'posthog-*.test.ts' ! -name 'service.analytics.server.test.ts' ! -name 'public-onboarding.route.test.ts' ! -name 'provision.analytics.server.test.ts' ! -name '*.integration.test.ts')
+          $(find ./services/web-app/app/domain/free-tier -type f -name '*.test.ts' ! -name 'student-join.server.test.ts' ! -name 'inapp-usage.server.test.ts' ! -name 'monthly-policy.test.ts' ! -name 'locked-preview.server.test.ts' ! -name 'teaching-access-shell.server.test.ts' ! -name 'email.server.test.ts' ! -name 'demo-signup-admin-email.test.ts' ! -name 'admin-link-gate.server.test.ts' ! -name 'admin-approval-email-facts.test.ts' ! -name 'application-id-opaque-hash-verified.test.ts' ! -name 'admin-token-s9a-actions.test.ts' ! -name 'service.create-token-idempotency.test.ts' ! -name 'posthog-*.test.ts' ! -name 'service.analytics.server.test.ts' ! -name 'public-onboarding.route.test.ts' ! -name 'provision.analytics.server.test.ts' ! -name '*.integration.test.ts')
           ./services/web-app/app/routes/app/sidebar-nav.reporter.test.ts
           ./packages/prisma/preview-access-code.free-classroom.test.ts
           ./packages/prisma/scripts/preview-seats.test.ts
