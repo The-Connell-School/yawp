@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
-import { openDevPanelSection } from '../helpers/dev-panel-feedback';
+import {
+  devToolsPanel,
+  openDevPanelClassSimulationFlyout,
+  openDevPanelSection,
+} from '../helpers/dev-panel-feedback';
 
 const prisma = createE2EPrismaClient();
 
@@ -30,10 +34,8 @@ test.describe('Dev panel class simulation', () => {
     test.skip(!klass, 'No owned class for dev teacher');
 
     await page.goto('/app/my-classes');
-    await openDevPanelSection(page, 'Data');
-    await page.getByRole('button', { name: 'Populate class' }).click();
+    await openDevPanelClassSimulationFlyout(page);
     const simSheet = page.getByRole('dialog', { name: 'Class simulation' });
-    await expect(simSheet).toBeVisible();
     const classSelect = simSheet.locator('#dev-panel-simulation-class');
     await expect(classSelect).toBeVisible({ timeout: 30_000 });
     await classSelect.selectOption(klass!.id);
@@ -45,7 +47,9 @@ test.describe('Dev panel class simulation', () => {
     await expect(page.getByText('Alex Rivera')).toBeVisible({ timeout: 30_000 });
 
     await openDevPanelSection(page, 'Data');
-    await page.getByRole('button', { name: 'Clear simulated data' }).click();
+    await devToolsPanel(page)
+      .getByRole('button', { name: /^Clear simulated data Removes/ })
+      .click();
     await expect(page.getByRole('alertdialog')).toBeVisible();
     await page.getByRole('button', { name: 'Clear', exact: true }).click();
     await expect(page.getByText(/Cleared 3 simulated/i)).toBeVisible({ timeout: 60_000 });

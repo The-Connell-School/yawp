@@ -41,6 +41,17 @@ export async function openDevPanelSection(page: Page, sectionName: string) {
   return panel;
 }
 
+/** Opens the class simulation flyout from the Data section row (not the flyout action). */
+export async function openDevPanelClassSimulationFlyout(page: Page) {
+  const panel = await openDevPanelSection(page, 'Data');
+  await panel
+    .getByRole('button', { name: /^Populate class Fake/ })
+    .click();
+  await expect(
+    page.getByRole('dialog', { name: 'Class simulation' })
+  ).toBeVisible({ timeout: 15_000 });
+}
+
 export async function expectGiveFeedbackAccessible(page: Page) {
   const beaker = page.getByRole('button', { name: 'Open developer tools' });
   const legacy = page.getByRole('button', { name: 'Give feedback', exact: true });

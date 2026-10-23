@@ -3,7 +3,7 @@ import path from 'node:path';
 import { test, expect } from '@playwright/test';
 import { createE2EPrismaClient } from '../prisma-client';
 import {
-  openDevPanelSection,
+  openDevPanelClassSimulationFlyout,
   openDevToolsPanel,
   openGiveFeedback,
 } from '../helpers/dev-panel-feedback';
@@ -231,8 +231,7 @@ test.describe('Dev panel artboard evidence', () => {
       });
     });
     await page.goto('/app/assignments');
-    await openDevPanelSection(page, 'Data');
-    await page.getByRole('button', { name: 'Populate class' }).click();
+    await openDevPanelClassSimulationFlyout(page);
     const simSheet = page.getByRole('dialog', { name: 'Class simulation' });
     await expect(simSheet).toBeVisible();
     await shot(page, 'class-sim-selected');
@@ -273,8 +272,7 @@ test.describe('Dev panel artboard evidence', () => {
       });
     });
     await page.reload();
-    await openDevPanelSection(page, 'Data');
-    await page.getByRole('button', { name: 'Populate class' }).click();
+    await openDevPanelClassSimulationFlyout(page);
     await expect(page.getByText("You don't own any classes yet")).toBeVisible();
     await shot(page, 'class-sim-empty');
   });
