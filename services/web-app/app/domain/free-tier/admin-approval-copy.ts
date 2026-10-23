@@ -15,6 +15,28 @@ export function teacherAtSchool(teacherName: string, schoolName: string) {
   return `${teacherName} at ${schoolName}`;
 }
 
+// PLACEHOLDER: pending design (admin-copy)
+const ADMIN_APPROVAL_TEACHER_REROUTE_LEAD_MARKER =
+  'asked us to send this to you as the right person to approve classroom software for';
+
+export function adminApprovalTeacherRerouteLeadMarker() {
+  return ADMIN_APPROVAL_TEACHER_REROUTE_LEAD_MARKER;
+}
+
+// PLACEHOLDER: pending design (admin-copy)
+export function adminApprovalTeacherRerouteLead(
+  teacherName: string,
+  schoolName: string
+) {
+  const teacherSchool = teacherAtSchool(teacherName, schoolName);
+  return `${teacherName} ${ADMIN_APPROVAL_TEACHER_REROUTE_LEAD_MARKER} ${teacherSchool}.`;
+}
+
+// PLACEHOLDER: pending design (admin-copy)
+export function adminApprovalTeacherRerouteFooterWhy(teacherName: string) {
+  return `You're getting this because ${teacherName} asked us to send their approval request to you.`;
+}
+
 export function renderAdminApprovalEmailSubject(args: {
   teacherName: string;
   schoolName: string;
@@ -33,7 +55,11 @@ export function adminApprovalFooterWhy(args: {
   teacherName: string;
   schoolName: string;
   forwardedByAdminName?: string | null;
+  routedByTeacher?: boolean;
 }) {
+  if (args.routedByTeacher) {
+    return adminApprovalTeacherRerouteFooterWhy(args.teacherName);
+  }
   const forwarder = args.forwardedByAdminName?.trim();
   if (forwarder) {
     return `You're getting this because ${forwarder} forwarded ${args.teacherName}'s request to you.`;
@@ -48,21 +74,25 @@ export function renderAdminApprovalEmailPlainText(args: {
   approveUrl: string;
   notRightPersonUrl: string;
   forwardedByAdminName?: string | null;
+  routedByTeacher?: boolean;
   reminder?: boolean;
 }) {
   const origin = defaultTransactionalEmailOrigin();
   const teacherSchool = teacherAtSchool(args.teacherName, args.schoolName);
   const forwarder = args.forwardedByAdminName?.trim();
-  const forwardLead = forwarder
-    ? `${forwarder} forwarded this to you as the right person to approve classroom software for ${teacherSchool}.\n\n`
-    : '';
+  const forwardLead = args.routedByTeacher
+    ? `${adminApprovalTeacherRerouteLead(args.teacherName, args.schoolName)}\n\n`
+    : forwarder
+      ? `${forwarder} forwarded this to you as the right person to approve classroom software for ${teacherSchool}.\n\n`
+      : '';
   const reminderLead = args.reminder
     ? `This is a reminder about the approval request below.\n\n`
     : '';
   const classroomIntro = `${teacherSchool} would like to use Yawp! in their classroom.`;
-  const administratorIntro = forwarder
-    ? ''
-    : ' They named you as the administrator who can approve classroom software.';
+  const administratorIntro =
+    forwarder || args.routedByTeacher
+      ? ''
+      : ' They named you as the administrator who can approve classroom software.';
   return `${reminderLead}${forwardLead}Approve Yawp! for ${teacherSchool}
 
 ${classroomIntro}${administratorIntro}
@@ -88,6 +118,7 @@ ${plainTextEmailFooter(
     teacherName: args.teacherName,
     schoolName: args.schoolName,
     forwardedByAdminName: args.forwardedByAdminName,
+    routedByTeacher: args.routedByTeacher,
   }),
   origin
 )}`;

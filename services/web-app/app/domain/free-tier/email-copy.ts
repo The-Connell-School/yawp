@@ -39,6 +39,7 @@ export function renderAdminApprovalEmailBody(args: {
   adminRecipientName?: string | null;
   reminderLead?: string | null;
   forwardedByAdminName?: string | null;
+  routedByTeacher?: boolean;
   copyVersion?: string;
   reminder?: boolean;
 }) {
@@ -49,6 +50,7 @@ export function renderAdminApprovalEmailBody(args: {
     approveUrl: args.approveUrl,
     notRightPersonUrl: args.notRightPersonUrl,
     forwardedByAdminName: args.forwardedByAdminName,
+    routedByTeacher: args.routedByTeacher,
     reminder: args.reminder ?? !!args.reminderLead?.trim(),
   });
 }

@@ -216,6 +216,8 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
     const message = send.mock.calls.find(
       ([args]) => args.to === 'rivera@example.org'
     )?.[0];
+    expect(message.text).toContain('asked us to send this to you');
+    expect(message.text).not.toContain('Dr. Patel forwarded this to you');
     const token = new URL(
       message.text.match(/http[^\s]+\/free\/admin\/approve\?t=[^\s]+/)[0]
     ).searchParams.get('t')!;
@@ -537,6 +539,69 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
     expect(row.firstSentAt).toEqual(now);
     expect(row.autoRemindersStopped).toBe(true);
     expect(send).toHaveBeenCalledTimes(1); // Teacher only.
+  });
+  test('forwarded admin reminder keeps forward context', async () => {
+    const { app, approval } = await fixture();
+    const { mintSignedLink } = await import('./signed-link.server');
+    const forward = await mintSignedLink({
+      applicationId: app.id,
+      purpose: 'ADMIN_NOT_RIGHT_PERSON',
+    });
+    const request = new Request('http://localhost/test');
+    expect(
+      (
+        await api.forwardApprovalByToken({
+          token: forward.token,
+          newAdminName: 'Rivera',
+          newAdminEmail: 'rivera@example.org',
+          request,
+        })
+      ).ok
+    ).toBe(true);
+    await api.runApprovalJobs(new Date());
+    const next = await db.freeTierAdminApproval.findFirstOrThrow({
+      where: { applicationId: app.id, status: 'PENDING' },
+    });
+    await api.queueManualApprovalReminder({
+      applicationId: app.id,
+      idempotencyKey: 'forward-reminder',
+      now: new Date(+now + 601000),
+    });
+    await api.runApprovalJobs(new Date(+now + 602000));
+    const reminder = send.mock.calls
+      .map(([args]) => args)
+      .find((args) => args.to === 'rivera@example.org' && args.subject.startsWith('Reminder:'));
+    expect(reminder?.text).toContain('Dr. Patel forwarded this to you');
+    expect(reminder?.text).not.toContain('They named you as the administrator');
+    expect(next.id).not.toBe(approval.id);
+  });
+  test('outbox refresh preserves admin forward context when links expire', async () => {
+    const { app } = await fixture();
+    const { mintSignedLink } = await import('./signed-link.server');
+    const forward = await mintSignedLink({
+      applicationId: app.id,
+      purpose: 'ADMIN_NOT_RIGHT_PERSON',
+    });
+    expect(
+      (
+        await api.forwardApprovalByToken({
+          token: forward.token,
+          newAdminName: 'Rivera',
+          newAdminEmail: 'rivera@example.org',
+          request: new Request('http://localhost/test'),
+        })
+      ).ok
+    ).toBe(true);
+    await db.freeTierSignedLink.updateMany({
+      where: { applicationId: app.id },
+      data: { expiresAt: new Date(0) },
+    });
+    await api.runApprovalJobs(new Date());
+    const message = send.mock.calls.find(
+      ([args]) => args.to === 'rivera@example.org'
+    )?.[0];
+    expect(message?.text).toContain('Dr. Patel forwarded this to you');
+    expect(message?.subject).toBe('Can you approve Yawp! for Ms. Okafor at Lincoln High?');
   });
   test('replacement link approves; old approval and forward links cannot mutate after forwarding', async () => {
     const { app, approval } = await fixture();

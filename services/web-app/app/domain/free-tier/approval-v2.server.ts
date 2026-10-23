@@ -58,6 +58,12 @@ import {
 import { resolveFreeTierRuntimeEnvironment } from './usage-budget.server';
 import { forwardApprovalSchema } from './approval-waiting';
 import { selfAdminEmailError } from './admin-email';
+import {
+  adminApprovalEmailContextFromStoredMessage,
+  mergeAdminApprovalEmailContext,
+  resolveAdminApprovalEmailContext,
+  type AdminApprovalEmailContext,
+} from './admin-approval-email-context.server';
 
 export const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const HOUR_MS = 3600000;
@@ -73,6 +79,8 @@ type Message = {
   html?: string;
   approveLinkId?: string;
   declineLinkId?: string;
+  forwardedByAdminName?: string | null;
+  routedByTeacher?: boolean;
 };
 const fail = (reason: string) => ({ ok: false as const, reason });
 
@@ -145,7 +153,7 @@ async function adminMessage(
   app: FreeTierApplication,
   approval: FreeTierAdminApproval,
   reminder: boolean,
-  options: { forwardedByAdminName?: string | null } = {}
+  emailContext: AdminApprovalEmailContext = {}
 ): Promise<Message> {
   const approve = await mintSignedLink({
     applicationId: app.id,
@@ -166,7 +174,8 @@ async function adminMessage(
     schoolName: app.schoolName,
     approveUrl,
     notRightPersonUrl,
-    forwardedByAdminName: options.forwardedByAdminName,
+    forwardedByAdminName: emailContext.forwardedByAdminName,
+    routedByTeacher: emailContext.routedByTeacher,
     reminder,
   });
   return {
@@ -176,6 +185,8 @@ async function adminMessage(
     html: designed.html,
     approveLinkId: approve.linkId,
     declineLinkId: decline.linkId,
+    forwardedByAdminName: emailContext.forwardedByAdminName ?? null,
+    routedByTeacher: emailContext.routedByTeacher,
   };
 }
 async function queue(
@@ -438,9 +449,11 @@ export async function forwardApprovalRequest(args: {
       },
     });
     if (!rules.manualReview) {
-      const message = await adminMessage(tx, app, next, false, {
-        forwardedByAdminName: pending.adminName,
-      });
+      const forwardContext: AdminApprovalEmailContext =
+        args.userId != null
+          ? { routedByTeacher: true }
+          : { forwardedByAdminName: pending.adminName };
+      const message = await adminMessage(tx, app, next, false, forwardContext);
       await tx.freeTierAdminApproval.update({
         where: { id: next.id },
         data: { signedLinkId: message.approveLinkId },
@@ -620,7 +633,13 @@ export async function queueManualApprovalReminder(args: {
           +now - +(previous.sentAt ?? previous.createdAt) < 600000))
     )
       return fail('rate_limited');
-    const message = await adminMessage(tx, app, approval, true);
+    const message = await adminMessage(
+      tx,
+      app,
+      approval,
+      true,
+      await resolveAdminApprovalEmailContext(approval, tx)
+    );
     const job = await queue(
       tx,
       approval.id,
@@ -728,7 +747,13 @@ async function scheduleApplication(applicationId: string, now: Date) {
           'admin_reminder',
           approval.reminderCount + 1,
           now,
-          await adminMessage(tx, app, approval, true),
+          await adminMessage(
+            tx,
+            app,
+            approval,
+            true,
+            await resolveAdminApprovalEmailContext(approval, tx)
+          ),
           { source: 'auto' }
         );
     }
@@ -852,11 +877,23 @@ async function deliverJob(id: string, now: Date) {
         select: { expiresAt: true, usedAt: true },
       });
       if (!link || link.usedAt || +link.expiresAt <= Date.now() + HOUR_MS) {
+        const storedContext = adminApprovalEmailContextFromStoredMessage(
+          message
+        );
+        const approvalContext = await resolveAdminApprovalEmailContext(
+          job.approval,
+          tx
+        );
+        const emailContext = mergeAdminApprovalEmailContext(
+          approvalContext,
+          storedContext
+        );
         const refreshed = await adminMessage(
           tx,
           job.approval.application,
           job.approval,
-          job.kind === 'admin_reminder'
+          job.kind === 'admin_reminder',
+          emailContext
         );
         await tx.freeTierApprovalDelivery.update({
           where: { id },

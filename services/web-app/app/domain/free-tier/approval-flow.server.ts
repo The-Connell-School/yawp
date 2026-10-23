@@ -37,6 +37,7 @@ import {
   sendFreeTierCongratulationsEmail,
   sendFreeTierReleaseEmail,
 } from './email.server';
+import { resolveAdminApprovalEmailContext } from './admin-approval-email-context.server';
 import { getApprovalHooks } from './approval-hooks.server';
 import { getClientIp } from '~/utils/ip.server';
 import {
@@ -468,7 +469,12 @@ export async function resendFreeTierAdminApprovalReminder(args: {
   const pendingRow = await prisma.freeTierAdminApproval.findFirst({
     where: { applicationId: app.id, status: 'PENDING' },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, adminEmail: true },
+    select: {
+      id: true,
+      adminEmail: true,
+      redirectedFromId: true,
+      forwardedByRole: true,
+    },
   });
   if (!pendingRow) return { ok: false as const, reason: 'not_found' as const };
 
@@ -492,6 +498,7 @@ export async function resendFreeTierAdminApprovalReminder(args: {
   const approveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(minted.approveMint.token)}`;
   const notRightPersonUrl = `${base}/free/admin/not-right-person?t=${encodeURIComponent(minted.declineMint.token)}`;
 
+  const emailContext = await resolveAdminApprovalEmailContext(pendingRow);
   const emailResult = await sendFreeTierAdminReminderEmail({
     applicationId: app.id,
     to: pendingRow.adminEmail,
@@ -500,6 +507,8 @@ export async function resendFreeTierAdminApprovalReminder(args: {
     schoolName: app.schoolName,
     approveUrl,
     notRightPersonUrl,
+    forwardedByAdminName: emailContext.forwardedByAdminName,
+    routedByTeacher: emailContext.routedByTeacher,
   });
 
   if (!emailResult.ok) {

@@ -1,5 +1,10 @@
 import * as React from 'react';
-import { FREE_TIER_ADMIN_MODEL_TRAINING_LINE, teacherAtSchool } from '~/domain/free-tier/admin-approval-copy';
+import {
+  adminApprovalTeacherRerouteFooterWhy,
+  adminApprovalTeacherRerouteLead,
+  FREE_TIER_ADMIN_MODEL_TRAINING_LINE,
+  teacherAtSchool,
+} from '~/domain/free-tier/admin-approval-copy';
 import { transactionalEmailLogoUrls } from './public-origin.server';
 import {
   AboutYawpList,
@@ -206,6 +211,7 @@ export function AdminApprovalEmail(props: {
   approveUrl: string;
   notRightPersonUrl: string;
   forwardedByAdminName?: string | null;
+  routedByTeacher?: boolean;
   reminder?: boolean;
   origin?: string;
 }) {
@@ -215,13 +221,20 @@ export function AdminApprovalEmail(props: {
   const preheader = forwarder
     ? `${forwarder} forwarded this to you. No Yawp! account needed.`
     : "Review the request in a couple of minutes. You don't need a Yawp! account.";
-  const footerWhy = forwarder
-    ? `You're getting this because ${forwarder} forwarded ${props.teacherName}'s request to you.`
-    : `You're getting this because ${props.teacherName} named you as an administrator who can approve classroom software at ${props.schoolName}.`;
-  const intro = forwarder
-    ? `${teacherSchool} would like to use Yawp! in their classroom.`
-    : `${teacherSchool} would like to use Yawp! in their classroom. They named you as the administrator who can approve classroom software.`;
-  const banner = forwarder ? (
+  const footerWhy = props.routedByTeacher
+    ? adminApprovalTeacherRerouteFooterWhy(props.teacherName)
+    : forwarder
+      ? `You're getting this because ${forwarder} forwarded ${props.teacherName}'s request to you.`
+      : `You're getting this because ${props.teacherName} named you as an administrator who can approve classroom software at ${props.schoolName}.`;
+  const intro =
+    forwarder || props.routedByTeacher
+      ? `${teacherSchool} would like to use Yawp! in their classroom.`
+      : `${teacherSchool} would like to use Yawp! in their classroom. They named you as the administrator who can approve classroom software.`;
+  const banner = props.routedByTeacher ? (
+    <EmailBanner>
+      {adminApprovalTeacherRerouteLead(props.teacherName, props.schoolName)}
+    </EmailBanner>
+  ) : forwarder ? (
     <EmailBanner>
       {forwarder} forwarded this to you as the right person to approve classroom
       software for {teacherSchool}.

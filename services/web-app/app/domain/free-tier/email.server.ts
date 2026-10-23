@@ -159,6 +159,7 @@ export async function sendFreeTierAdminApprovalEmail(args: {
   notRightPersonUrl: string;
   adminRecipientName?: string | null;
   forwardedByAdminName?: string | null;
+  routedByTeacher?: boolean;
   isReminder?: boolean;
 }): Promise<EmailSendResult> {
   const { subject, text, html } = await buildDesignedAdminApprovalEmail({
@@ -168,6 +169,7 @@ export async function sendFreeTierAdminApprovalEmail(args: {
     approveUrl: args.approveUrl,
     notRightPersonUrl: args.notRightPersonUrl,
     forwardedByAdminName: args.forwardedByAdminName,
+    routedByTeacher: args.routedByTeacher,
     reminder: args.isReminder,
   });
   try {

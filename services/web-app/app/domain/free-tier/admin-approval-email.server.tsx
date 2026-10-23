@@ -1,4 +1,5 @@
 import {
+  adminApprovalTeacherRerouteLeadMarker,
   renderAdminApprovalEmailSubject,
 } from './admin-approval-copy';
 import { renderAdminApprovalEmailBody } from './email-copy';
@@ -15,6 +16,7 @@ export async function buildDesignedAdminApprovalEmail(args: {
   approveUrl: string;
   notRightPersonUrl: string;
   forwardedByAdminName?: string | null;
+  routedByTeacher?: boolean;
   reminder?: boolean;
 }) {
   return buildAdminApprovalDesignedEmail({
@@ -37,6 +39,9 @@ export async function htmlForStoredAdminApprovalEmail(args: {
   const forwardLead = args.text.match(
     /^(.+) forwarded this to you as the right person/m
   );
+  const routedByTeacher = args.text.includes(
+    adminApprovalTeacherRerouteLeadMarker()
+  );
   const origin = transactionalEmailPublicOrigin();
   const react = (
     <AdminApprovalEmail
@@ -47,6 +52,7 @@ export async function htmlForStoredAdminApprovalEmail(args: {
       notRightPersonUrl={urls.notRightPersonUrl ?? ''}
       reminder={args.subject.startsWith('Reminder:')}
       forwardedByAdminName={forwardLead?.[1] ?? null}
+      routedByTeacher={routedByTeacher}
       origin={origin}
     />
   );

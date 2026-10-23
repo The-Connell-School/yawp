@@ -132,6 +132,7 @@ export async function buildAdminApprovalDesignedEmail(args: {
   approveUrl: string;
   notRightPersonUrl: string;
   forwardedByAdminName?: string | null;
+  routedByTeacher?: boolean;
   reminder?: boolean;
   origin?: string;
 }) {
@@ -144,6 +145,7 @@ export async function buildAdminApprovalDesignedEmail(args: {
       approveUrl={args.approveUrl}
       notRightPersonUrl={args.notRightPersonUrl}
       forwardedByAdminName={args.forwardedByAdminName}
+      routedByTeacher={args.routedByTeacher}
       reminder={args.reminder}
       origin={origin}
     />
@@ -161,6 +163,7 @@ export async function buildAdminApprovalDesignedEmail(args: {
     approveUrl: args.approveUrl,
     notRightPersonUrl: args.notRightPersonUrl,
     forwardedByAdminName: args.forwardedByAdminName,
+    routedByTeacher: args.routedByTeacher,
     reminder: args.reminder,
   });
   return {
