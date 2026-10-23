@@ -27,6 +27,7 @@ import { useTable } from '~/hooks/useTable';
 import { cn, getDomainUrl } from '~/utils/misc';
 import { Tooltip } from '~/components/ui/tooltip';
 import { sendEmail } from '~/utils/email.server';
+import { redactEmailForLog } from '~/utils/redact-email-for-log.server';
 import {
   buildOrgTeacherInviteEmail,
   inviteeFirstName,
@@ -408,7 +409,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
         successCount++;
       } catch (error) {
-        console.error(`Failed to send invitation to ${email}:`, error);
+        console.error(
+          `Failed to send invitation to ${redactEmailForLog(email)}:`,
+          error
+        );
       }
     }
 

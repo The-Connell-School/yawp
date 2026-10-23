@@ -13,6 +13,7 @@ import type { RenderToPipeableStreamOptions } from 'react-dom/server';
 import { renderToPipeableStream } from 'react-dom/server';
 import { getUserId } from './utils/auth.server';
 import { posthog } from './services/posthog.server';
+import { buildServerErrorRequestContext } from './utils/server-error-request-context.server';
 
 startImpersonationEndDelivery();
 startApprovalDelivery();
@@ -100,12 +101,7 @@ export const handleError: HandleErrorFunction = async (error, args) => {
         stack: error instanceof Error ? error.stack : undefined,
         name: error instanceof Error ? error.name : 'UnknownError',
       },
-      request: {
-        method: request.method,
-        url: request.url,
-        headers: Object.fromEntries(request.headers.entries()),
-        userAgent: request.headers.get('user-agent'),
-      },
+      request: buildServerErrorRequestContext(request),
       route: {
         params,
       },

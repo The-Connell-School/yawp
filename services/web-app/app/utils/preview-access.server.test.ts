@@ -290,6 +290,8 @@ describe('preview access gate', () => {
 
     for (const path of [
       '/api/healthcheck',
+      '/api/readyz',
+      '/api/version',
       '/api/stripe/webhook',
       '/api/preview/qa/signon-code',
       '/auth/preview-access',
@@ -305,7 +307,7 @@ describe('preview access gate', () => {
       ).toBeNull();
     }
 
-    expect(next).toHaveBeenCalledTimes(5);
+    expect(next).toHaveBeenCalledTimes(7);
   });
 
   test('public legal reads need no seat and never authorize preview activity', async () => {
