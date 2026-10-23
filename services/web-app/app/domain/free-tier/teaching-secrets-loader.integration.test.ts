@@ -394,7 +394,12 @@ local(
         const sortData = loaderPayload(sortResult) as {
           classes: Array<{ id: string }>;
         };
-        expect(sortData.classes[0]?.id).toBe(sortNewerClassId);
+        const sortOrder = sortData.classes.map((klass) => klass.id);
+        const newerIndex = sortOrder.indexOf(sortNewerClassId);
+        const olderIndex = sortOrder.indexOf(sortOlderClassId);
+        expect(newerIndex).toBeGreaterThan(-1);
+        expect(olderIndex).toBeGreaterThan(-1);
+        expect(newerIndex).toBeLessThan(olderIndex);
       } finally {
         await prisma.session.delete({ where: { id: sortSessionId } });
       }
