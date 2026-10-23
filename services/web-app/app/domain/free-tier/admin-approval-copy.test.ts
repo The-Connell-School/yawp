@@ -17,6 +17,7 @@ import {
   adminApprovalReminderMutedLead,
   adminApprovalTeacherRerouteLeadMarker,
   teacherPendingForwardError,
+  thankYouBody,
 } from './admin-approval-copy';
 import {
   ADMIN_APPROVAL_EMAIL_COPY_VERSION_PASS1,
@@ -329,5 +330,13 @@ test('teacher pending forward errors are pinned', () => {
     })
   ).toBe(
     'They already have your request. Choose a different administrator at Lincoln High School.'
+  );
+});
+
+test('thank-you body names the teacher after approval', () => {
+  expect(
+    thankYouBody('Grace Okafor', 'Lincoln High School')
+  ).toBe(
+    "Grace Okafor at Lincoln High School can start using Yawp! We've let Grace know."
   );
 });

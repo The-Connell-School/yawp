@@ -289,7 +289,7 @@ export function approveCheckboxError(teacherName: string, schoolName: string) {
 }
 
 export function thankYouBody(teacherName: string, schoolName: string) {
-  return `${teacherAtSchool(teacherName, schoolName)} can start using Yawp! We let them know.`;
+  return `${teacherAtSchool(teacherName, schoolName)} can start using Yawp! We've let ${teacherFirstName(teacherName)} know.`;
 }
 
 export function thankYouTeacherEmailFailedBody(

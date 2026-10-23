@@ -76,7 +76,7 @@ export function AuthBrandLockup({ partner }: { partner?: 'ua' | null }) {
     return (
       <div
         className="mx-auto flex w-full max-w-md flex-col items-center gap-5 px-6"
-        aria-label="The University of Alabama and Yawp"
+        aria-label="The University of Alabama and Yawp!"
       >
         <UaNameplate className="max-w-sm" />
         <div className="flex w-full max-w-sm items-center gap-3" aria-hidden="true">
