@@ -1,5 +1,6 @@
 import {
   createContext,
+  startTransition,
   useCallback,
   useContext,
   useEffect,
@@ -38,6 +39,16 @@ type DevPanelContextValue = {
 
 const DevPanelContext = createContext<DevPanelContextValue | null>(null);
 
+/** Defer client-only state so lazy/Suspense trees finish hydrating first. */
+function scheduleAfterHydration(callback: () => void) {
+  if (typeof window === 'undefined') return;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      startTransition(callback);
+    });
+  });
+}
+
 export function useDevPanel() {
   const value = useContext(DevPanelContext);
   if (!value) throw new Error('Dev panel context missing');
@@ -62,6 +73,8 @@ export function DevPanelProvider({
   const [flyoutSwitchInstant, setFlyoutSwitchInstant] = useState(false);
   const unlocked = !previewAccessGateEnabled || Boolean(seatLabel);
   const persistTimer = useRef<number | null>(null);
+  /** Avoid writing default closed state over localStorage before post-hydration restore. */
+  const persistReady = useRef(false);
 
   const persist = useCallback((next: DevPanelPersistedState) => {
     setState(next);
@@ -72,13 +85,21 @@ export function DevPanelProvider({
   }, []);
 
   useEffect(() => {
-    setSeatLabel(initialSeatLabel);
+    scheduleAfterHydration(() => {
+      setSeatLabel((current) =>
+        current === initialSeatLabel ? current : initialSeatLabel
+      );
+    });
   }, [initialSeatLabel]);
 
   useEffect(() => {
-    const restored = readDevPanelState(window.localStorage);
-    if (!restored.open) return;
-    setState({ ...restored, restored: true });
+    scheduleAfterHydration(() => {
+      const restored = readDevPanelState(window.localStorage);
+      if (restored.open) {
+        setState({ ...restored, restored: true });
+      }
+      persistReady.current = true;
+    });
   }, []);
 
   useEffect(() => {
@@ -89,6 +110,7 @@ export function DevPanelProvider({
   }, [state.open, state.restored]);
 
   useEffect(() => {
+    if (!persistReady.current) return;
     writeDevPanelState(window.localStorage, state);
   }, [state]);
 
