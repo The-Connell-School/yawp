@@ -428,6 +428,11 @@ jobs:
             echo "master_org_gate_enabled=${master_org_gate_enabled:-false}"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Print deploy log redaction summary
+        if: always() && steps.preview_gate.outputs.skip_preview != 'true'
+        run: |
+          grep -E '^REDACT_(FILES_CHANGED|VALUES_MASKED)=[0-9]+$|^REDACT_WARNING' "$RUNNER_TEMP/preview-deploy.log" || echo 'REDACT_SUMMARY=none'
+
       - name: Verify preview access gate
         if: steps.preview_gate.outputs.skip_preview != 'true'
         run: |
