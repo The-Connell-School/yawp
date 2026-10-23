@@ -844,6 +844,12 @@ jobs:
         run: |
           set -e
           for f in \
+            app/entry.server.test.ts \
+            app/utils/server-error-request-context.server.test.ts \
+            app/utils/email.server.test.ts \
+            app/utils/email-log.server.test.ts \
+            app/domain/rubrics/rubric-catalog.logging.test.ts \
+            'app/routes/app.organization.teachers/route.logging.test.ts' \
             app/domain/feature-flags/feature-flags.test.ts \
             app/domain/feature-flags/feature-flags.server.test.ts \
             app/utils/internal-feature-flags-http.server.test.ts \
