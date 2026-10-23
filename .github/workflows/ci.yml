@@ -1573,6 +1573,7 @@ jobs:
           ./bin/project test --profile demo-feedback-browser --json
 
       - name: Dev panel signed-out /free browser regression
+        if: ${{ !cancelled() && always() }}
         env:
           CI: '1'
           NODE_OPTIONS: --dns-result-order=ipv4first
