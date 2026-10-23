@@ -118,7 +118,7 @@ jobs:
 
       - name: Build and push demo web image
         if: vars.DEMO_ECR_PUSH_ROLE_ARN != '' && steps.images-ecr.outputs.skip_web != 'true'
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: demo-source
           file: demo-source/services/web-app/Dockerfile
@@ -133,7 +133,7 @@ jobs:
 
       - name: Build and push demo toolbox image
         if: vars.DEMO_ECR_PUSH_ROLE_ARN != '' && steps.images-ecr.outputs.skip_toolbox != 'true'
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: demo-source
           file: demo-source/services/web-app/Dockerfile
