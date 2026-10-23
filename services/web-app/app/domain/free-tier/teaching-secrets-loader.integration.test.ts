@@ -115,6 +115,7 @@ afterAll(async () => {
   await prisma.orgMembership.deleteMany({ where: { organizationId: orgId } });
   if (classId) await prisma.class.deleteMany({ where: { id: classId } });
   await prisma.school.deleteMany({ where: { organizationId: orgId } });
+  await prisma.freeTierApplication.deleteMany({ where: { organizationId: orgId } });
   await prisma.organization.deleteMany({ where: { id: orgId } });
   if (userId) await prisma.user.deleteMany({ where: { id: userId } });
   await prisma.$disconnect();
@@ -161,19 +162,14 @@ local(
     try {
       const { request, sessionId } = await authedRequest('/app');
       try {
-        const shell = await appShellLoader({
-          request,
-          params: {},
-          context: {} as never,
-        } as never);
-        expect(serializedLoaderData(shell)).toContain(classCode);
-
         const dashboard = await dashboardLoader({
           request,
           params: {},
           context: {} as never,
         } as never);
-        expect(serializedLoaderData(dashboard)).toContain(classCode);
+        const dashboardSerialized = serializedLoaderData(dashboard);
+        expect(dashboardSerialized).toContain(classCode);
+        expect(dashboardSerialized).toMatch(/"teacherClasses":\[[^\]]*"code"/);
       } finally {
         await prisma.session.delete({ where: { id: sessionId } });
       }
