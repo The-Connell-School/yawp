@@ -55,11 +55,9 @@ export function DevPanelProvider({
   previewAccessSeatLabel: string | null;
   previewAccessGateEnabled: boolean;
 }) {
-  const [state, setState] = useState<DevPanelPersistedState>(() => {
-    if (typeof window === 'undefined') return { ...DEV_PANEL_DEFAULT_STATE };
-    const restored = readDevPanelState(window.localStorage);
-    return { ...restored, restored: restored.open };
-  });
+  const [state, setState] = useState<DevPanelPersistedState>(() => ({
+    ...DEV_PANEL_DEFAULT_STATE,
+  }));
   const [seatLabel, setSeatLabel] = useState(initialSeatLabel);
   const [flyoutSwitchInstant, setFlyoutSwitchInstant] = useState(false);
   const unlocked = !previewAccessGateEnabled || Boolean(seatLabel);
@@ -71,6 +69,16 @@ export function DevPanelProvider({
     persistTimer.current = window.setTimeout(() => {
       writeDevPanelState(window.localStorage, next);
     }, 0);
+  }, []);
+
+  useEffect(() => {
+    setSeatLabel(initialSeatLabel);
+  }, [initialSeatLabel]);
+
+  useEffect(() => {
+    const restored = readDevPanelState(window.localStorage);
+    if (!restored.open) return;
+    setState({ ...restored, restored: true });
   }, []);
 
   useEffect(() => {

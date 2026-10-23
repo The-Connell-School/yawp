@@ -972,6 +972,8 @@ jobs:
             'app/dev-panel/dev-panel-orgs.server.test.ts' \
             'app/dev-panel/dev-panel-storage.test.ts' \
             'app/dev-panel/dev-panel-provider.test.tsx' \
+            'app/dev-panel/dev-panel-shell-boundary.test.tsx' \
+            'app/root.dev-panel-user.test.ts' \
             'app/dev-panel/dev-panel-free-tier-flyout.test.tsx' \
             'app/dev-panel/dev-panel-flyout-instant.test.tsx' \
             'app/dev-panel/dev-panel-feedback-path.test.ts' \
@@ -1548,6 +1550,10 @@ jobs:
           RECORD_PORT_LTI_MOCK: '9789'
           YAWP_ENVIRONMENT: demo
           PREVIEW_SLUG: demo
+          PREVIEW_ACCESS_GATE: 'on'
+          PREVIEW_ACCESS_SECRET: 'ci-demo-feedback-preview-access-secret-32c'
+          PREVIEW_MASTER_ACCESS_CODE: 'ci-demo-master-access'
+          PREVIEW_ACCESS_SEATS: '[{"code":"ci-fixture-4193","organizationId":"local-dev-org","label":"Master"}]'
           TESTER_FEEDBACK_ENABLED: 'true'
           DEV_PANEL_EVIDENCE_DIR: dev-panel-evidence
           DEV_PANEL_ARTIFACT_COPY_DIR: /opt/cursor/artifacts/screenshots

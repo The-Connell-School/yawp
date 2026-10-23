@@ -4,6 +4,19 @@ export function devToolsPanel(page: Page) {
   return page.locator('#devtools');
 }
 
+/** Panel chrome is mounted and shows locked or unlocked content (not a hydration shell). */
+export async function waitForDevPanelReady(page: Page) {
+  const panel = devToolsPanel(page);
+  await expect(panel).toBeVisible({ timeout: 60_000 });
+  await expect(panel).toHaveAttribute('data-yawp-dev-panel-ready', 'true', {
+    timeout: 60_000,
+  });
+  const locked = page.getByText('Developer tools are locked');
+  const giveFeedback = panel.getByRole('button', { name: 'Give feedback' });
+  await expect(locked.or(giveFeedback)).toBeVisible({ timeout: 60_000 });
+  return panel;
+}
+
 export async function isDevPanelActive(page: Page) {
   if (await devToolsPanel(page).isVisible().catch(() => false)) return true;
   return (
@@ -20,12 +33,12 @@ export async function openDevToolsPanel(page: Page) {
   await expect(beaker).toBeVisible({ timeout: 60_000 });
   await beaker.click();
   try {
-    await expect(panel).toBeVisible({ timeout: 15_000 });
+    await waitForDevPanelReady(page);
   } catch {
     await page.keyboard.press('Alt+Shift+D');
-    await expect(panel).toBeVisible({ timeout: 30_000 });
+    await waitForDevPanelReady(page);
   }
-  return panel;
+  return devToolsPanel(page);
 }
 
 export async function expectGiveFeedbackAccessible(page: Page) {
@@ -63,7 +76,7 @@ export async function openGiveFeedback(page: Page) {
   }
   const tools = await openDevToolsPanel(page);
   const feedbackRow = tools.getByRole('button', { name: 'Give feedback' });
-  await expect(feedbackRow).toBeVisible({ timeout: 15_000 });
+  await expect(feedbackRow).toBeVisible({ timeout: 60_000 });
   await feedbackRow.click();
   return {
     panel: page.getByRole('dialog', { name: 'Give feedback' }),
