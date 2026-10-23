@@ -38,28 +38,28 @@
     html:has([role="dialog"][data-state="open"]) .booth-chapter { opacity: 0; }
     /* Full-screen views (editor, grading, revision) keep their own controls top right. */
     html:not(:has(a[href="/app/my-classes"])) .booth-chapter { opacity: 0; }
-    .booth-chapter b { background: #D27151; color: #FFFEFA; border-radius: 999px; padding: 3px 10px; font-size: 15px; font-weight: 700; }
-    .booth-spot { position: absolute; border-radius: 14px; box-shadow: 0 0 0 3px #D27151, 0 0 0 9999px rgba(0,0,0,0.45);
+    .booth-chapter b { background: var(--chapter-color, #7B4FB0); color: #FFFEFA; border-radius: 999px; padding: 3px 10px; font-size: 15px; font-weight: 700; }
+    .booth-spot { position: absolute; border-radius: 14px; box-shadow: 0 0 0 4px #9D6BE0, 0 0 22px 6px rgba(157,107,224,.55), 0 0 0 9999px rgba(0,0,0,0.45);
       opacity: 0; transition: opacity .35s ease, left .45s ease, top .45s ease, width .45s ease, height .45s ease; }
-    .booth-spot.nodim { box-shadow: 0 0 0 4px #D27151, 0 0 24px 6px rgba(210,113,81,.45); }
+    .booth-spot.nodim { box-shadow: 0 0 0 4px #9D6BE0, 0 0 26px 8px rgba(157,107,224,.5); }
     .booth-spot.on { opacity: 1; }
     .booth-card { position: absolute; width: 470px; background: #FFFEFA; color: #27251A; border: 1px solid #D6D5CF;
       border-radius: 16px; padding: 24px 26px 22px; box-shadow: 0 18px 40px -8px rgba(0,0,0,.35), 0 6px 12px -6px rgba(0,0,0,.2);
       opacity: 0; transform: scale(.95); transition: opacity .35s ease, transform .35s ease; }
     .booth-card.on { opacity: 1; transform: scale(1); }
-    .booth-card .eyebrow { font-size: 14px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #D27151; margin-bottom: 8px; }
+    .booth-card .eyebrow { font-size: 14px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #7B4FB0; margin-bottom: 8px; }
     .booth-card h2 { margin: 0; font-size: 26px; line-height: 1.22; font-weight: 700; color: #0f172a; letter-spacing: -0.01em; }
     .booth-card p { margin: 10px 0 0; font-size: 21px; line-height: 1.4; color: #57554b; }
     .booth-card .pills { display: flex; gap: 6px; margin-top: 18px; }
     .booth-card .pills i { display: block; height: 6px; width: 16px; border-radius: 999px; background: #E6E2D6; }
-    .booth-card .pills i.done { background: rgba(210,113,81,.4); }
-    .booth-card .pills i.cur { width: 26px; background: #D27151; }
-    .booth-badge { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); background: #D27151; color: #FFFEFA;
+    .booth-card .pills i.done { background: rgba(123,79,176,.35); }
+    .booth-card .pills i.cur { width: 26px; background: #7B4FB0; }
+    .booth-badge { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); background: #3E9A84; color: #FFFEFA;
       border-radius: 999px; padding: 8px 18px; font-size: 18px; font-weight: 700; letter-spacing: .04em; opacity: 0; transition: opacity .3s ease; }
     .booth-badge.on { opacity: 1; }
     .booth-cursor { position: absolute; width: 30px; height: 30px; left: 0; top: 0; transition-property: transform; transition-timing-function: cubic-bezier(.45,.05,.25,1); }
     .booth-cursor svg { filter: drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
-    .booth-ripple { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 999px; border: 3px solid #D27151;
+    .booth-ripple { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 999px; border: 3px solid #9D6BE0;
       animation: booth-ripple .6s ease-out forwards; }
     @keyframes booth-ripple { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.4); opacity: 0; } }
   `;
@@ -91,7 +91,7 @@
     cursor = el('booth-cursor', '<svg width="30" height="30" viewBox="0 0 24 24"><path d="M4 2.5 L4 19.5 L8.6 15.4 L11.6 22 L14.6 20.7 L11.7 14.2 L18 14.2 Z" fill="#27251A" stroke="#FFFEFA" stroke-width="1.6" stroke-linejoin="round"/></svg>');
     const state = readState();
     applyDock(state.dock);
-    if (state.chapter) api.chapter(state.chapter.n, state.chapter.total, state.chapter.title, true);
+    if (state.chapter) api.chapter(state.chapter.n, state.chapter.total, state.chapter.title, true, state.chapter.color);
     const pos = state.cursor || { x: innerWidth * 0.6, y: innerHeight * 0.55 };
     cursor.style.transitionDuration = '0ms';
     cursor.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
@@ -118,12 +118,13 @@
       writeState({ dock });
       applyDock(dock);
     },
-    chapter(n, total, title, instant) {
+    chapter(n, total, title, instant, color) {
       if (!n) { chapter.classList.remove('on'); writeState({ chapter: null }); return; }
       chapter.innerHTML = `<b>${n} / ${total}</b><span>${escape(title)}</span>`;
+      if (color) chapter.style.setProperty('--chapter-color', color);
       if (instant) chapter.style.transition = 'none';
       chapter.classList.add('on');
-      writeState({ chapter: { n, total, title } });
+      writeState({ chapter: { n, total, title, color } });
     },
     /** rect is in CSS px; omit for a centred card with no spotlight. */
     callout({ rect, title, body, eyebrow, side = 'auto', step, steps, dim = true }) {
