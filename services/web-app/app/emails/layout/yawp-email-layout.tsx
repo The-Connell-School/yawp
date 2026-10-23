@@ -35,6 +35,10 @@ export type YawpEmailLayoutProps = {
   showBrianSignOff?: boolean;
   linkFallbackUrl?: string;
   banner?: React.ReactNode;
+  /** Extra padding above the banner row (pass1 forward banners only). */
+  bannerSectionPaddingTop?: number;
+  /** Rows inserted after the banner and before the headline (pass1 E2 reminder). */
+  beforeHeadline?: React.ReactNode;
   celebrationHeadline?: string;
   headline?: string;
   children?: React.ReactNode;
@@ -61,6 +65,8 @@ export function YawpEmailLayout({
   showBrianSignOff,
   linkFallbackUrl,
   banner,
+  bannerSectionPaddingTop,
+  beforeHeadline,
   celebrationHeadline,
   headline,
   children,
@@ -139,11 +145,15 @@ export function YawpEmailLayout({
                             />
                             {banner ? (
                               <tr>
-                                <td className="yawp-pad-x" style={padX(0, 0)}>
+                                <td
+                                  className="yawp-pad-x"
+                                  style={padX(bannerSectionPaddingTop ?? 0, 0)}
+                                >
                                   {banner}
                                 </td>
                               </tr>
                             ) : null}
+                            {beforeHeadline}
                             {celebrationHeadline ? (
                               <CelebrationBand text={celebrationHeadline} />
                             ) : null}
@@ -303,7 +313,13 @@ function LogoHeader({
   );
 }
 
-export function EmailBanner({ children }: { children: React.ReactNode }) {
+export function EmailBanner({
+  children,
+  paddingTopPx = 20,
+}: {
+  children: React.ReactNode;
+  paddingTopPx?: number;
+}) {
   return (
     <table
       role="presentation"
@@ -311,7 +327,7 @@ export function EmailBanner({ children }: { children: React.ReactNode }) {
       cellPadding={0}
       cellSpacing={0}
       className="yawp-banner"
-      style={{ ...cellPad(20, 0, 0, 0) }}
+      style={{ ...cellPad(paddingTopPx, 0, 0, 0) }}
     >
       <tbody>
         <tr>

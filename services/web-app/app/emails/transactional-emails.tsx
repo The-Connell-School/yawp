@@ -285,8 +285,9 @@ export function AdminApprovalEmail(props: {
     forwarder || pass1Reroute || pass1
       ? `${teacherSchool} would like to use Yawp! in their classroom.`
       : `${teacherSchool} would like to use Yawp! in their classroom. They named you as the administrator who can approve classroom software.`;
+  const bannerPaddingTopPx = pass1 ? 0 : undefined;
   const banner = pass1Reroute ? (
-    <EmailBanner>
+    <EmailBanner paddingTopPx={bannerPaddingTopPx}>
       {adminApprovalTeacherRerouteLead(
         props.teacherName,
         props.schoolName,
@@ -294,7 +295,7 @@ export function AdminApprovalEmail(props: {
       )}
     </EmailBanner>
   ) : forwarder ? (
-    <EmailBanner>
+    <EmailBanner paddingTopPx={bannerPaddingTopPx}>
       {pass1 ? (
         adminApprovalPass1ForwardBanner(
           forwarder,
@@ -309,6 +310,15 @@ export function AdminApprovalEmail(props: {
       )}
     </EmailBanner>
   ) : undefined;
+  const pass1ReminderLead =
+    pass1 && props.reminder
+      ? adminApprovalReminderMutedLead({
+          teacherName: props.teacherName,
+          schoolName: props.schoolName,
+          forwardedByAdminName: forwarder,
+          pass1,
+        })
+      : null;
 
   return (
     <YawpEmailLayout
@@ -318,10 +328,16 @@ export function AdminApprovalEmail(props: {
       siteUrl={urls.site}
       footerWhy={footerWhy}
       banner={banner}
+      bannerSectionPaddingTop={pass1 && banner ? 16 : undefined}
+      beforeHeadline={
+        pass1ReminderLead ? (
+          <EmailMutedLead>{pass1ReminderLead}</EmailMutedLead>
+        ) : undefined
+      }
       headline={`Approve Yawp! for ${teacherSchool}`}
       linkFallbackUrl={props.approveUrl}
     >
-      {props.reminder ? (
+      {props.reminder && !pass1 ? (
         <EmailMutedLead>
           {adminApprovalReminderMutedLead({
             teacherName: props.teacherName,
