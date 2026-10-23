@@ -2020,7 +2020,8 @@ describe('demo environment deployment contract', () => {
     expect(detached).toContain('emit_failure_log_tail');
     expect(detached).toContain('mask_deploy_log');
     expect(detached).toContain('REDACT_DEPLOY_LOGS_SCRIPT');
-    expect(detached).toContain('deploy log redaction failed');
+    expect(detached).toContain('--output deploy');
+    expect(detached).toContain('REDACT_WARNING=1');
     expect(detached).toContain('PREVIEW_ACCESS_CODE=');
     expect(detached).toContain('[REDACTED]');
     expect(workflow).toContain('REDACT_DEPLOY_LOGS_SCRIPT');
