@@ -42,9 +42,9 @@ test.describe('Dev panel class simulation', () => {
     await page.goto(`/app/my-classes/${klass!.id}?tab=students`);
     await expect(page.getByText('Alex Rivera')).toBeVisible({ timeout: 30_000 });
 
-    await openDevPanelSection(page, 'Data');
-    await devToolsPanel(page)
-      .getByRole('button', { name: /^Clear simulated data Removes/ })
+    await openDevPanelClassSimulationFlyout(page);
+    await simSheet
+      .getByRole('button', { name: 'Clear simulated data', exact: true })
       .click();
     await expect(page.getByRole('alertdialog')).toBeVisible();
     await page.getByRole('button', { name: 'Clear', exact: true }).click();
