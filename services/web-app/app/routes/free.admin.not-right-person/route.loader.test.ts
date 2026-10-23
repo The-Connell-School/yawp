@@ -28,8 +28,11 @@ mock.module('~/domain/free-tier/signed-link.server', () => ({
   applicationIdFromSignedToken: () => null,
 }));
 
+const verifiedApplicationIdForAdminToken = mock(async () => null as string | null);
+
 mock.module('~/domain/free-tier/admin-link-known-request.server', () => ({
   applicationIdForAdminLinkNaming,
+  verifiedApplicationIdForAdminToken,
 }));
 
 mock.module('~/domain/free-tier/admin-link-gate.server', () => ({
@@ -93,6 +96,43 @@ describe('free.admin.not-right-person loader', () => {
       schoolName: 'TS High',
       teacherName: 'Jordan Rivera',
     });
+  });
+
+  test('HEAD requests use the same loader peek path as GET', async () => {
+    peekSignedLink.mockResolvedValueOnce({
+      ok: true,
+      applicationId: 'app-1',
+    });
+    fetchGate.mockResolvedValueOnce(null);
+    findUnique.mockResolvedValueOnce({
+      schoolName: 'TS High',
+      name: 'Jordan Rivera',
+    });
+    const getData = await loader({
+      request: new Request(
+        'https://yawp.test/free/admin/not-right-person?t=token'
+      ),
+      params: {},
+      context: {},
+    } as LoaderFunctionArgs);
+    peekSignedLink.mockResolvedValueOnce({
+      ok: true,
+      applicationId: 'app-1',
+    });
+    fetchGate.mockResolvedValueOnce(null);
+    findUnique.mockResolvedValueOnce({
+      schoolName: 'TS High',
+      name: 'Jordan Rivera',
+    });
+    const headData = await loader({
+      request: new Request(
+        'https://yawp.test/free/admin/not-right-person?t=token',
+        { method: 'HEAD' }
+      ),
+      params: {},
+      context: {},
+    } as LoaderFunctionArgs);
+    expect(headData).toEqual(getData);
   });
 
   test('shows already approved when application is approved even if peek succeeds', async () => {

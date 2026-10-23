@@ -46,7 +46,7 @@ test('forward recipient subject asks for approval', () => {
 test('admin approval plain text includes link lines and footer', () => {
   const text = renderAdminApprovalEmailPlainText({
     teacherName: 'Jordan Rivera',
-    teacherEmail: 'jrivera@lincolnhs.org',
+    teacherEmail: 'jrivera@example.test',
     schoolName: 'Lincoln High School',
     approveUrl: 'https://yawp.school/free/admin/approve?t=a',
     notRightPersonUrl: 'https://yawp.school/free/admin/not-right-person?t=n',
@@ -119,7 +119,7 @@ test('pass1 E1 preheader names teacher at school', () => {
 test('pass1 stored plain text includes reroute marker', () => {
   const text = renderAdminApprovalEmailBody({
     teacherName: 'Jordan Rivera',
-    teacherEmail: 'jrivera@lincolnhs.org',
+    teacherEmail: 'jrivera@example.test',
     schoolName: 'Lincoln High School',
     approveUrl: 'https://yawp.school/a',
     notRightPersonUrl: 'https://yawp.school/n',
@@ -138,7 +138,7 @@ test('pass1 E3b teacher reroute lead and plain text', () => {
   );
   const text = renderAdminApprovalEmailPlainText({
     teacherName: 'Jordan Rivera',
-    teacherEmail: 'jrivera@lincolnhs.org',
+    teacherEmail: 'jrivera@example.test',
     schoolName: 'Lincoln High School',
     approveUrl: 'https://yawp.school/a',
     notRightPersonUrl: 'https://yawp.school/n',
@@ -165,7 +165,7 @@ test('pass1 E3 forward recipient banner is pinned', () => {
   );
   const text = renderAdminApprovalEmailPlainText({
     teacherName: 'Jordan Rivera',
-    teacherEmail: 'jrivera@lincolnhs.org',
+    teacherEmail: 'jrivera@example.test',
     schoolName: 'Lincoln High School',
     approveUrl: 'https://yawp.school/a',
     notRightPersonUrl: 'https://yawp.school/n',
@@ -229,6 +229,21 @@ test('forward page intro matches pass1 frame', () => {
   );
   expect(forwardPageIntro('Jordan Rivera', 'Lincoln High School', true)).toBe(
     'Who approves classroom software at Lincoln High School? Usually a site or district administrator.'
+  );
+});
+
+test('forward page title and intro match legacy flag-off copy', () => {
+  expect(forwardPageTitle('Jordan Rivera', false)).toBe(
+    'Send this to the right person'
+  );
+  expect(forwardPageIntro('Jordan Rivera', 'Lincoln High School', false)).toBe(
+    'Who approves classroom software for Jordan Rivera at Lincoln High School? A site or district administrator.'
+  );
+});
+
+test('link replaced forwarded body default matches flag-off copy', () => {
+  expect(linkReplacedBody('Jordan Rivera', 'Lincoln High School', 'forwarded')).toBe(
+    'The request for Jordan Rivera at Lincoln High School was forwarded to someone else, so this link no longer works. Questions? Email support@yawp.school.'
   );
 });
 

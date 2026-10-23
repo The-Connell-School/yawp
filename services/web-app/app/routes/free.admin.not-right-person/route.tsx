@@ -5,11 +5,11 @@ import {
   useLoaderData,
 } from 'react-router';
 import { CircleAlert } from 'lucide-react';
-import { applicationIdForAdminLinkNaming } from '~/domain/free-tier/admin-link-known-request.server';
 import {
-  applicationIdFromSignedToken,
-  peekSignedLink,
-} from '~/domain/free-tier/signed-link.server';
+  applicationIdForAdminLinkNaming,
+  verifiedApplicationIdForAdminToken,
+} from '~/domain/free-tier/admin-link-known-request.server';
+import { peekSignedLink } from '~/domain/free-tier/signed-link.server';
 import {
   fetchFreeTierApplicationTerminalGate,
   resolveAdminLinkReplacedGate,
@@ -190,7 +190,10 @@ export async function action({ request }: ActionFunctionArgs) {
     return result;
   }
   if (!result.ok && result.reason === 'superseded') {
-    const appId = applicationIdFromSignedToken(token);
+    const appId = await verifiedApplicationIdForAdminToken(
+      token,
+      'ADMIN_NOT_RIGHT_PERSON'
+    );
     if (appId) {
       const gate = await fetchFreeTierApplicationTerminalGate(appId);
       if (gate) return { ok: false as const, ...gate };
@@ -209,7 +212,10 @@ export async function action({ request }: ActionFunctionArgs) {
     }
   }
   if (result.ok) {
-    const appId = applicationIdFromSignedToken(token);
+    const appId = await verifiedApplicationIdForAdminToken(
+      token,
+      'ADMIN_NOT_RIGHT_PERSON'
+    );
     const app = appId
       ? await prisma.freeTierApplication.findUnique({
           where: { id: appId },

@@ -885,6 +885,11 @@ jobs:
             app/domain/free-tier/admin-email-rules.server.test.ts \
             app/routes/app.free-tier.pending/route.test.tsx \
             app/routes/free.admin.approve/route.loader.test.ts \
+            app/routes/free.admin.approve_.deny/route.loader.test.ts \
+            app/routes/free.admin.approve_.deny/route.action.test.ts \
+            app/routes/free.admin.not-right-person/route.loader.test.ts \
+            app/routes/free.admin.not-right-person/route.action.test.ts \
+            app/routes/free-tier/AdminApprovalStates.test.tsx \
             app/routes/free._index/route.action.test.ts \
             app/routes/free._index/LegalLinks.test.tsx \
             app/routes/privacy/route.test.tsx \

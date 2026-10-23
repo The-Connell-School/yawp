@@ -15,10 +15,8 @@ export {
   renderReleaseEmailBody,
 };
 
-export async function adminApprovalEmailCopyVersionHash() {
-  const { isFreeTierEnabled } =
-    await import('~/domain/feature-flags/feature-flags.server');
-  const version = (await isFreeTierEnabled())
+export async function adminApprovalEmailCopyVersionHash(pass1: boolean) {
+  const version = pass1
     ? ADMIN_APPROVAL_EMAIL_COPY_VERSION_PASS1
     : ADMIN_APPROVAL_EMAIL_COPY_VERSION;
   return createHash('sha256').update(version).digest('hex');

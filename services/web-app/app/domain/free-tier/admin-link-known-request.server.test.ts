@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from 'bun:test';
+import { afterAll, beforeAll, expect, mock, test } from 'bun:test';
 
 const realSignedLink =
   globalThis.__realModules['~/domain/free-tier/signed-link.server'];
@@ -14,8 +14,6 @@ afterAll(() => {
     mock.module('~/domain/free-tier/signed-link.server', () => realSignedLink);
   }
 });
-
-import { mock } from 'bun:test';
 
 const { applicationIdForAdminLinkNaming } = await import(
   './admin-link-known-request.server'

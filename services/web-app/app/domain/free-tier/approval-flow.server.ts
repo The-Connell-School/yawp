@@ -22,6 +22,7 @@ import {
   invalidateOpenAdminApprovalLinks,
   abandonMintedSignedLinks,
 } from './signed-link.server';
+import { verifiedApplicationIdForAdminToken } from './admin-link-known-request.server';
 import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
 import { ensureFreeTierProductionApprovalHooks } from './approval-hooks.server';
 import { forwardApprovalSchema } from './approval-waiting';
@@ -164,7 +165,8 @@ export async function submitAdminDetails(args: {
     resolveFreeTierRuntimeEnvironment()
   );
 
-  const copyHash = await adminApprovalEmailCopyVersionHash();
+  const pass1 = await isFeatureFlagEnabled(FREE_TIER_FLAG, app.organizationId);
+  const copyHash = await adminApprovalEmailCopyVersionHash(pass1);
   // Kept in the API for older callers; introductions are no longer accepted.
   const note = null;
 
@@ -593,7 +595,10 @@ export async function redirectSchoolAdmin(args: {
     };
   }
 
-  const earlyAppId = applicationIdFromSignedToken(args.token);
+  const earlyAppId = await verifiedApplicationIdForAdminToken(
+    args.token,
+    'ADMIN_NOT_RIGHT_PERSON'
+  );
   if (earlyAppId) {
     const gate = await fetchFreeTierApplicationTerminalGate(earlyAppId);
     if (gate) return { ok: false as const, ...gate };
@@ -663,7 +668,11 @@ export async function redirectSchoolAdmin(args: {
 
   const newEmail = parsed.data.newAdminEmail;
   const meta = hashRequestMeta(args.request);
-  const copyHash = await adminApprovalEmailCopyVersionHash();
+  const pass1 = await isFeatureFlagEnabled(
+    FREE_TIER_FLAG,
+    identity!.organizationId
+  );
+  const copyHash = await adminApprovalEmailCopyVersionHash(pass1);
 
   const preApp = await prisma.freeTierApplication.findUnique({
     where: { id: peek.applicationId },

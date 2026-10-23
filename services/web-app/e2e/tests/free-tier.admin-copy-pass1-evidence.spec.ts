@@ -18,7 +18,7 @@ const { encode } = require(
 const OUT = process.env.ADMIN_COPY_PASS1_EVIDENCE_DIR;
 const TEACHER = 'Jordan Rivera';
 const SCHOOL = 'Lincoln High School';
-const TEACHER_EMAIL = 'jrivera@lincolnhs.org';
+const TEACHER_EMAIL = 'jrivera@example.test';
 const ADMIN_EMAIL = 'patel@example.test';
 const ADMIN_NAME = 'Dr. Patel';
 
@@ -112,7 +112,7 @@ async function createSentApplication() {
   const app = await db.freeTierApplication.create({
     data: {
       userId: user.id,
-      email: `jrivera+${stamp}@lincolnhs.org`,
+      email: `jrivera+${stamp}@example.test`,
       name: TEACHER,
       schoolName: SCHOOL,
       location: 'Local',

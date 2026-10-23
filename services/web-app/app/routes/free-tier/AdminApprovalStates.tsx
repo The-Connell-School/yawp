@@ -225,14 +225,14 @@ export function AdminForwardSentCard({
     <FreeTierAuthCard title="Request forwarded" icon={<Send />} status>
       <p className="text-sm text-muted-foreground">
         {pass1 && manualReview ? (
-          forwardSentBody({
-            teacherName,
-            schoolName,
-            recipientName,
-            recipientEmail,
-            manualReview,
-            pass1,
-          })
+          <>
+            We&apos;ll send the request for{' '}
+            {teacherAtSchool(teacherName, schoolName)} to{' '}
+            <strong className="font-semibold text-card-foreground">
+              {recipientName}
+            </strong>{' '}
+            ({recipientEmail}) shortly. You&apos;re all set.
+          </>
         ) : (
           <>
             We sent the request for {teacherAtSchool(teacherName, schoolName)} to{' '}

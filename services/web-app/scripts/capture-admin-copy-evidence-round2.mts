@@ -136,9 +136,12 @@ async function main() {
   await screenshotHtml(browser, e3Before, 'e3-banner-before-main', [...widths]);
   await screenshotHtml(browser, e3After, 'e3-banner-after-head', [...widths]);
 
-  const e2fBefore = await bannerCropHtml(false, true, FORWARDER);
+  const e2fBeforeHtml = await emailHtml({
+    pass1: false,
+    reminder: true,
+  });
   const e2fAfter = await bannerCropHtml(true, true, FORWARDER);
-  await screenshotHtml(browser, e2fBefore, 'e2f-banner-before-main', [...widths]);
+  await screenshotHtml(browser, e2fBeforeHtml, 'e2f-banner-before-main', [...widths]);
   await screenshotHtml(browser, e2fAfter, 'e2f-banner-after-head', [...widths]);
 
   const pendingSlugs = [
@@ -167,7 +170,7 @@ async function main() {
 Pinned pass1 forward banner: ${adminApprovalPass1ForwardBanner(FORWARDER, TEACHER, SCHOOL)}
 
 ## Email banners (HTML)
-- e2f-banner-before-main-{320,1280}.png — legacy forward banner, pass1 off
+- e2f-banner-before-main-{320,1280}.png — main reminder email (pass1 off, no E2f forward banner)
 - e2f-banner-after-head-{320,1280}.png — pass1 E2f reminder email (forwarded admin)
 - e3-banner-before-main-{320,1280}.png — legacy forward banner, pass1 off
 - e3-banner-after-head-{320,1280}.png — pass1 E3 forward recipient email

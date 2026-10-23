@@ -31,6 +31,7 @@ import {
   resolveAdminLinkReplacedGate,
   resolveAdminLinkTerminalGate,
 } from './admin-link-gate.server';
+import { verifiedApplicationIdForAdminToken } from './admin-link-known-request.server';
 import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
 import { adminApprovalEmailCopyVersionHash } from './email-copy.server';
 import {
@@ -169,6 +170,10 @@ async function adminMessage(
   const base = freeTierPublicAppOrigin();
   const approveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(approve.token)}`;
   const notRightPersonUrl = `${base}/free/admin/not-right-person?t=${encodeURIComponent(decline.token)}`;
+  const pass1 = await isFeatureFlagEnabled(
+    FREE_TIER_FLAG,
+    app.organizationId
+  );
   const designed = await buildDesignedAdminApprovalEmail({
     teacherName: app.name,
     teacherEmail: app.email,
@@ -178,6 +183,7 @@ async function adminMessage(
     forwardedByAdminName: emailContext.forwardedByAdminName,
     routedByTeacher: emailContext.routedByTeacher,
     reminder,
+    pass1,
   });
   return {
     to: approval.adminEmail,
@@ -363,7 +369,6 @@ export async function forwardApprovalRequest(args: {
       ...fail('validation'),
       fieldErrors: parsed.error.flatten().fieldErrors,
     };
-  const copyHash = await adminApprovalEmailCopyVersionHash();
   return prisma.$transaction(async (tx) => {
     await lockApprovalApplication(tx, args.applicationId);
     const app = await tx.freeTierApplication.findUnique({
@@ -371,6 +376,11 @@ export async function forwardApprovalRequest(args: {
     });
     if (!app || !(await isApprovalV2Enabled(app, tx)))
       return fail('not_allowed');
+    const pass1 = await isFeatureFlagEnabled(
+      FREE_TIER_FLAG,
+      app.organizationId
+    );
+    const copyHash = await adminApprovalEmailCopyVersionHash(pass1);
     if (app.status === 'APPROVED') {
       return {
         ok: false as const,
@@ -531,7 +541,11 @@ export async function forwardApprovalByToken(args: {
     };
   }
 
-  const earlyAppId = applicationIdFromSignedToken(args.token);
+  const purpose = args.purpose ?? 'ADMIN_NOT_RIGHT_PERSON';
+  const earlyAppId = await verifiedApplicationIdForAdminToken(
+    args.token,
+    purpose
+  );
   if (earlyAppId) {
     const gate = await fetchFreeTierApplicationTerminalGate(earlyAppId);
     if (gate) return { ok: false as const, ...gate };
@@ -548,7 +562,7 @@ export async function forwardApprovalByToken(args: {
 
   const peek = await peekSignedLink({
     token: args.token,
-    expectedPurpose: args.purpose ?? 'ADMIN_NOT_RIGHT_PERSON',
+    expectedPurpose: purpose,
   });
   if (!peek.ok) {
     if (
@@ -1080,6 +1094,10 @@ async function deliverJob(id: string, now: Date) {
         const pendingUrl = `${freeTierPublicAppOrigin()}/app/free-tier/pending`;
         let html: string;
         if (job.kind === 'admin_approval' || job.kind === 'admin_reminder') {
+          const pass1Html = await isFeatureFlagEnabled(
+            FREE_TIER_FLAG,
+            app.organizationId
+          );
           html = await htmlForStoredAdminApprovalEmail({
             subject: message.subject,
             text: message.text,
@@ -1087,6 +1105,7 @@ async function deliverJob(id: string, now: Date) {
             teacherName: app.name,
             teacherEmail: app.email,
             schoolName: app.schoolName,
+            pass1: pass1Html,
           });
         } else if (
           job.kind === 'teacher_followup' &&

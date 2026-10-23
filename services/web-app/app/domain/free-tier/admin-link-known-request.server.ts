@@ -1,6 +1,7 @@
 import type { FreeTierSignedLinkPurpose } from '@app/prisma';
 import {
   applicationIdIfOpaqueHashVerified,
+  peekSignedLink,
   type ConsumeLinkResult,
 } from './signed-link.server';
 
@@ -15,4 +16,13 @@ export async function applicationIdForAdminLinkNaming(
     return null;
   }
   return applicationIdIfOpaqueHashVerified({ token, expectedPurpose });
+}
+
+/** Peek + S9a naming for terminal/deny gates before link consumption. */
+export async function verifiedApplicationIdForAdminToken(
+  token: string,
+  expectedPurpose: FreeTierSignedLinkPurpose
+): Promise<string | null> {
+  const peek = await peekSignedLink({ token, expectedPurpose });
+  return applicationIdForAdminLinkNaming(token, peek, expectedPurpose);
 }

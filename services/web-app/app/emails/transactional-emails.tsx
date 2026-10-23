@@ -295,13 +295,18 @@ export function AdminApprovalEmail(props: {
     </EmailBanner>
   ) : forwarder ? (
     <EmailBanner>
-      {pass1
-        ? adminApprovalPass1ForwardBanner(
-            forwarder,
-            props.teacherName,
-            props.schoolName
-          )
-        : `${forwarder} forwarded this to you as the right person to approve classroom software for ${teacherSchool}.`}
+      {pass1 ? (
+        adminApprovalPass1ForwardBanner(
+          forwarder,
+          props.teacherName,
+          props.schoolName
+        )
+      ) : (
+        <>
+          {forwarder} forwarded this to you as the right person to approve
+          classroom software for {teacherSchool}.
+        </>
+      )}
     </EmailBanner>
   ) : undefined;
 

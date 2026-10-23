@@ -13,7 +13,6 @@ import {
   renderAdminApprovalEmailBody,
 } from '~/domain/free-tier/email-copy';
 import { renderAdminApprovalEmailSubject } from '~/domain/free-tier/admin-approval-copy';
-import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { renderTransactionalEmail } from './render.server';
 import {
   AdminApprovalEmail,
@@ -182,7 +181,7 @@ export async function buildAdminApprovalDesignedEmail(args: {
   pass1?: boolean;
 }) {
   const origin = args.origin ?? transactionalEmailPublicOrigin();
-  const pass1 = args.pass1 ?? (await isFreeTierEnabled());
+  const pass1 = args.pass1 ?? false;
   const react = (
     <AdminApprovalEmail
       teacherName={args.teacherName}

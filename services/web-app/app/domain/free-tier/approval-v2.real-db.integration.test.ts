@@ -545,7 +545,8 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
     expect(row.autoRemindersStopped).toBe(true);
     expect(send).toHaveBeenCalledTimes(1); // Teacher only.
   });
-  test('forwarded admin reminder keeps forward context', async () => {
+  test('forwarded admin reminder uses pass1 E2f copy when flag is on', async () => {
+    await flag('targeted', [organizationId]);
     const { app, approval } = await fixture();
     const { mintSignedLink } = await import('./signed-link.server');
     const forward = await mintSignedLink({
@@ -569,33 +570,116 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
     });
     await api.queueManualApprovalReminder({
       applicationId: app.id,
-      idempotencyKey: 'forward-reminder',
+      idempotencyKey: 'forward-reminder-pass1',
       now: new Date(+now + 601000),
     });
     await api.runApprovalJobs(new Date(+now + 602000));
     const reminder = send.mock.calls
       .map(([args]) => args)
-      .find((args) => args.to === 'rivera@example.org' && args.subject.startsWith('Reminder:'));
+      .find(
+        (args) =>
+          args.to === 'rivera@example.org' && args.subject.startsWith('Reminder:')
+      );
     expect(reminder?.text).toContain(
-      'This is a reminder about the approval request below'
+      "A quick reminder: Dr. Patel forwarded Ms. Okafor's request at Lincoln High to you, and it's still waiting on your approval."
     );
-    expect(reminder?.text).toContain(
-      'Dr. Patel forwarded this to you as the right person'
+    expect(reminder?.text).not.toContain(
+      'This is a reminder about the approval request below.'
     );
-    expect(reminder?.text).not.toContain('They named you as the administrator');
     expect(next.id).not.toBe(approval.id);
   });
-  test('teacher reroute outbox refresh keeps reroute copy when links expire', async () => {
+
+  test('forwarded admin reminder uses main copy when flag is off', async () => {
+    await flag('off');
     const { app, approval } = await fixture();
-    const input = {
+    const { mintSignedLink } = await import('./signed-link.server');
+    const forward = await mintSignedLink({
       applicationId: app.id,
-      userId: 'approval-test-user',
-      currentApprovalId: approval.id,
-      newAdminName: 'Rivera',
-      newAdminEmail: 'rivera@example.org',
-      request: new Request('http://localhost/test'),
-    };
-    expect((await api.forwardApprovalRequest(input)).ok).toBe(true);
+      purpose: 'ADMIN_NOT_RIGHT_PERSON',
+    });
+    const request = new Request('http://localhost/test');
+    expect(
+      (
+        await api.forwardApprovalByToken({
+          token: forward.token,
+          newAdminName: 'Rivera',
+          newAdminEmail: 'rivera@example.org',
+          request,
+        })
+      ).ok
+    ).toBe(true);
+    await api.runApprovalJobs(new Date());
+    await api.queueManualApprovalReminder({
+      applicationId: app.id,
+      idempotencyKey: 'forward-reminder-flag-off',
+      now: new Date(+now + 601000),
+    });
+    await api.runApprovalJobs(new Date(+now + 602000));
+    const reminder = send.mock.calls
+      .map(([args]) => args)
+      .find(
+        (args) =>
+          args.to === 'rivera@example.org' && args.subject.startsWith('Reminder:')
+      );
+    expect(reminder?.text).toContain(
+      'This is a reminder about the approval request below.'
+    );
+    expect(reminder?.text).not.toContain(
+      "Dr. Patel forwarded Ms. Okafor's request at Lincoln High to you"
+    );
+    expect(approval.id).not.toBe(
+      (
+        await db.freeTierAdminApproval.findFirstOrThrow({
+          where: { applicationId: app.id, status: 'PENDING' },
+        })
+      ).id
+    );
+    await flag('targeted', [organizationId]);
+  });
+  test('teacher reroute refresh uses pass1 E3b copy when flag is on', async () => {
+    await flag('targeted', [organizationId]);
+    const { app, approval } = await fixture();
+    expect(
+      (
+        await api.forwardApprovalRequest({
+          applicationId: app.id,
+          userId: 'approval-test-user',
+          currentApprovalId: approval.id,
+          newAdminName: 'Rivera',
+          newAdminEmail: 'rivera@example.org',
+          request: new Request('http://localhost/test'),
+        })
+      ).ok
+    ).toBe(true);
+    await db.freeTierSignedLink.updateMany({
+      where: { applicationId: app.id },
+      data: { expiresAt: new Date(0) },
+    });
+    await api.runApprovalJobs(new Date());
+    const message = send.mock.calls.find(
+      ([args]) => args.to === 'rivera@example.org'
+    )?.[0];
+    expect(message?.text).toContain(
+      'Ms. Okafor asked you to approve classroom software for their class at Lincoln High.'
+    );
+    expect(message?.text).not.toContain('forwarded this to you');
+  });
+
+  test('teacher reroute refresh drops forwarder when flag is off', async () => {
+    await flag('off');
+    const { app, approval } = await fixture();
+    expect(
+      (
+        await api.forwardApprovalRequest({
+          applicationId: app.id,
+          userId: 'approval-test-user',
+          currentApprovalId: approval.id,
+          newAdminName: 'Rivera',
+          newAdminEmail: 'rivera@example.org',
+          request: new Request('http://localhost/test'),
+        })
+      ).ok
+    ).toBe(true);
     await db.freeTierSignedLink.updateMany({
       where: { applicationId: app.id },
       data: { expiresAt: new Date(0) },
@@ -608,11 +692,10 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
       'They named you as the administrator who can approve classroom software'
     );
     expect(message?.text).not.toContain('forwarded this to you');
-    expect(message?.text).not.toContain(
-      'asked you to approve classroom software for their class at'
-    );
+    await flag('targeted', [organizationId]);
   });
-  test('teacher reroute refresh ignores legacy payload with admin-forward lead text', async () => {
+  test('teacher reroute refresh ignores legacy payload with admin-forward lead text when flag is off', async () => {
+    await flag('off');
     const { app, approval } = await fixture();
     const {
       openApprovalDeliveryPayloadForTests,
@@ -664,6 +747,7 @@ describe.skipIf(!enabled)('approval v2 durable lifecycle', () => {
     expect(message?.text).not.toContain(
       'asked you to approve classroom software for their class at'
     );
+    await flag('targeted', [organizationId]);
   });
   test('outbox refresh preserves admin forward context when links expire', async () => {
     const { app } = await fixture();

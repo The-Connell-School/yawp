@@ -1,13 +1,15 @@
 import { prisma } from '~/utils/db.server';
 import { lockApprovalApplication } from './approval-lock.server';
 import {
-  applicationIdFromSignedToken,
   claimSignedLinkInTransaction,
   invalidateOpenAdminApprovalLinks,
   peekSignedLink,
 } from './signed-link.server';
 import { fetchFreeTierApplicationTerminalGate } from './admin-link-gate.server';
-import { applicationIdForAdminLinkNaming } from './admin-link-known-request.server';
+import {
+  applicationIdForAdminLinkNaming,
+  verifiedApplicationIdForAdminToken,
+} from './admin-link-known-request.server';
 import { hashRequestMeta } from './approval-flow.server';
 import {
   flushTeacherDenyEmail,
@@ -98,7 +100,10 @@ export async function denySchoolAdminApproval(args: {
   const stubbed = await applyYawpE2eDenyStub(args.request);
   if (stubbed) return stubbed;
   const trimmedReason = args.reason?.trim().slice(0, 2000) || null;
-  const earlyAppId = applicationIdFromSignedToken(args.token);
+  const earlyAppId = await verifiedApplicationIdForAdminToken(
+    args.token,
+    'ADMIN_APPROVE'
+  );
   if (earlyAppId) {
     const terminal = await fetchFreeTierApplicationTerminalGate(earlyAppId);
     if (terminal?.reason === 'already_approved') {

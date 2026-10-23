@@ -34,6 +34,7 @@ export async function htmlForStoredAdminApprovalEmail(args: {
   teacherEmail: string;
   schoolName: string;
   html?: string;
+  pass1?: boolean;
 }) {
   if (args.html) return args.html;
   const urls = adminApprovalUrlsFromEmailBody(args.text);
@@ -51,9 +52,11 @@ export async function htmlForStoredAdminApprovalEmail(args: {
     `forwarded ${args.teacherName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'s request at ${escapedSchool} to you`
   ).test(args.text);
   const pass1 =
-    routedByTeacher && args.text.includes(adminApprovalTeacherRerouteLeadMarker(true))
+    args.pass1 ??
+    (routedByTeacher &&
+    args.text.includes(adminApprovalTeacherRerouteLeadMarker(true))
       ? true
-      : pass1ForwardFooter;
+      : pass1ForwardFooter);
   const origin = transactionalEmailPublicOrigin();
   const react = (
     <AdminApprovalEmail
