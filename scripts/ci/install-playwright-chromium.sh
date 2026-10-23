@@ -29,20 +29,23 @@ trap 'rm -f "$launch_log"; rm -rf "$playwright_state_dir"' EXIT
 
 timeout_to_seconds() {
   local spec="$1"
+  local sec=""
   if [[ "$spec" =~ ^([0-9]+)m$ ]]; then
-    echo $((BASH_REMATCH[1] * 60))
-    return 0
+    sec=$((10#${BASH_REMATCH[1]} * 60))
+  elif [[ "$spec" =~ ^([0-9]+)s$ ]]; then
+    sec=$((10#${BASH_REMATCH[1]}))
+  elif [[ "$spec" =~ ^[0-9]+$ ]]; then
+    sec=$((10#spec))
+  else
+    echo "::error::Unsupported timeout spec: ${spec}" >&2
+    return 1
   fi
-  if [[ "$spec" =~ ^([0-9]+)s$ ]]; then
-    echo "${BASH_REMATCH[1]}"
-    return 0
+  if (( sec < 1 )); then
+    echo "::error::Playwright install timeout must be at least 1 second (got: ${spec})" >&2
+    return 1
   fi
-  if [[ "$spec" =~ ^[0-9]+$ ]]; then
-    echo "$spec"
-    return 0
-  fi
-  echo "::error::Unsupported timeout spec: ${spec}" >&2
-  return 1
+  echo "$sec"
+  return 0
 }
 
 seconds_to_timeout_spec() {
@@ -234,7 +237,7 @@ wait_for_apt_locks() {
 
 repair_apt_after_kill() {
   if have_passwordless_sudo; then
-    timeout 60 sudo -n dpkg --configure -a || true
+    timeout -k 10 60 sudo -n dpkg --configure -a || true
   fi
 }
 
