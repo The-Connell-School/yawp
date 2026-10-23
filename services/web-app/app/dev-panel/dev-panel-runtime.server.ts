@@ -11,7 +11,7 @@ export function isDevPanelBuildEnabled(
     return true;
   }
   return (
-    yawp === 'demo' || isDemoEnvironment(env) || isLocalDevPanelEnvironment(env)
+    yawp === 'demo' || isDevPanelDemoHost(env) || isLocalDevPanelEnvironment(env)
   );
 }
 
@@ -21,7 +21,7 @@ export function isDevPanelRuntimeEnabled(
 ): boolean {
   if (!isDevPanelBuildEnabled(env)) return false;
   const yawp = String(env.YAWP_ENVIRONMENT ?? '').trim().toLowerCase();
-  if (yawp === 'demo' || isDemoEnvironment(env)) return true;
+  if (yawp === 'demo' || isDevPanelDemoHost(env)) return true;
   // PR preview hosts keep the legacy environment beaker and dev-login menu.
   if (yawp === 'preview') return false;
   return isLocalDevPanelEnvironment(env);
@@ -32,6 +32,13 @@ function isLocalDevPanelEnvironment(env: NodeJS.ProcessEnv) {
     env.NODE_ENV === 'development' &&
     isLocalDatabaseUrl(String(env.DATABASE_URL ?? ''))
   );
+}
+
+/** Demo host only (render-compose sets PREVIEW_SLUG); not env.SLUG. */
+function isDevPanelDemoHost(env: NodeJS.ProcessEnv) {
+  const slug = String(env.PREVIEW_SLUG ?? '').trim();
+  const prNumber = String(env.PR_NUMBER ?? '').trim();
+  return slug === 'demo' && !prNumber;
 }
 
 export function devPanelEnvBadge(

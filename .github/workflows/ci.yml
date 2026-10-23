@@ -952,6 +952,15 @@ jobs:
             'app/utils/tester-feedback.server.test.ts' \
             'app/utils/tester-feedback-runtime.server.test.ts' \
             'app/routes/api.admin.tester-feedback/route.test.ts' \
+            'app/dev-panel/dev-panel-api-production.test.ts' \
+            'app/dev-panel/dev-panel-runtime.server.test.ts' \
+            'app/dev-panel/dev-panel-production-guard.test.ts' \
+            'app/dev-panel/dev-panel-route-guard.server.test.ts' \
+            'app/dev-panel/dev-panel-bundle.test.ts' \
+            'app/dev-panel/dev-panel-orgs.server.test.ts' \
+            'app/dev-panel/dev-panel-storage.test.ts' \
+            'app/dev-panel/free-tier-jump.server.test.ts' \
+            'app/dev-panel/free-tier-states.catalog.test.ts' \
             'app/utils/preview-access.server.test.ts' \
             'app/utils/preview-free-tier-access.server.test.ts' \
             'app/utils/internal-grading-stats.server.test.ts' \
