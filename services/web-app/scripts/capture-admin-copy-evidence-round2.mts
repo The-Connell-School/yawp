@@ -2,16 +2,14 @@
  * Renders admin copy evidence PNGs for design review (round 2).
  * Output: /opt/cursor/artifacts/admin-copy-evidence/round2/
  */
+import { mkdirSync, readFileSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright';
 import { renderToStaticMarkup } from 'react-dom/server';
 import React from 'react';
-import {
-  adminApprovalPass1ForwardBanner,
-  forwardInlineAlert,
-  teacherPendingForwardError,
-} from '../app/domain/free-tier/admin-approval-copy';
+import { adminApprovalPass1ForwardBanner } from '../app/domain/free-tier/admin-approval-copy';
+import { spawnSync } from 'node:child_process';
 import { buildDesignedAdminApprovalEmail } from '../app/domain/free-tier/admin-approval-email.server';
 import { AdminApprovalEmail } from '../app/emails/transactional-emails';
 
@@ -41,11 +39,39 @@ async function emailHtml(args: {
   return designed.html;
 }
 
-function pendingAlertHtml(message: string) {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>
-    body { font-family: system-ui, sans-serif; margin: 16px; background: #fff; }
-    [role="alert"] { color: #dc2626; font-size: 14px; line-height: 1.4; max-width: 360px; }
-  </style></head><body><p role="alert">${message}</p></body></html>`;
+const PENDING_REASONS = [
+  'same_as_teacher',
+  'same_administrator',
+  'chain_cap',
+  'email_failed',
+] as const;
+
+function pendingPageDocument(body: string, cssHref: string) {
+  return `<!DOCTYPE html><html lang="en" class="h-full"><head><meta charset="utf-8"/><link rel="stylesheet" href="${cssHref}"/></head><body class="h-full">${body}</body></html>`;
+}
+
+function renderPendingFixtures(outDir: string) {
+  const tmp = path.join(outDir, '_pending-html');
+  mkdirSync(tmp, { recursive: true });
+  for (const reason of PENDING_REASONS) {
+    for (const mode of ['before-main', 'after-head'] as const) {
+      const result = spawnSync(
+        'bun',
+        [
+          'run',
+          'scripts/pending-admin-copy-evidence.ssr.tsx',
+          tmp,
+          mode,
+          reason,
+        ],
+        { cwd: path.join(import.meta.dirname, '..'), stdio: 'inherit' }
+      );
+      if (result.status !== 0) {
+        throw new Error(`pending SSR failed for ${reason} ${mode}`);
+      }
+    }
+  }
+  return tmp;
 }
 
 async function screenshotHtml(
@@ -91,6 +117,11 @@ async function bannerCropHtml(
 
 async function main() {
   await mkdir(OUT, { recursive: true });
+  const baseUrl =
+    process.env.ADMIN_COPY_EVIDENCE_BASE_URL?.replace(/\/$/, '') ??
+    'http://localhost:5194';
+  const cssHref = `${baseUrl}/app/app.css`;
+  const pendingHtmlDir = renderPendingFixtures(OUT);
   const browser = await chromium.launch();
   const widths = [320, 1280] as const;
 
@@ -110,81 +141,23 @@ async function main() {
   await screenshotHtml(browser, e2fBefore, 'e2f-banner-before-main', [...widths]);
   await screenshotHtml(browser, e2fAfter, 'e2f-banner-after-head', [...widths]);
 
-  const alerts: Array<[string, string]> = [
-    [
-      'pending-same-as-teacher',
-      teacherPendingForwardError({
-        reason: 'same_as_teacher',
-        schoolName: SCHOOL,
-      }),
-    ],
-    [
-      'pending-same-administrator',
-      teacherPendingForwardError({
-        reason: 'same_administrator',
-        schoolName: SCHOOL,
-        adminName: FORWARDER,
-      }),
-    ],
-    [
-      'pending-chain-cap',
-      teacherPendingForwardError({ reason: 'chain_cap', schoolName: SCHOOL }),
-    ],
-    [
-      'pending-email-failed',
-      teacherPendingForwardError({ reason: 'email_failed', schoolName: SCHOOL }),
-    ],
+  const pendingSlugs = [
+    'pending-same-as-teacher',
+    'pending-same-administrator',
+    'pending-chain-cap',
+    'pending-email-failed',
   ];
-  const legacyAlerts: Array<[string, string]> = [
-    [
-      'pending-same-as-teacher',
-      forwardInlineAlert({
-        reason: 'same_as_teacher',
-        teacherName: TEACHER,
-        schoolName: SCHOOL,
-        pass1: false,
-      }),
-    ],
-    [
-      'pending-same-administrator',
-      forwardInlineAlert({
-        reason: 'same_administrator',
-        teacherName: TEACHER,
-        schoolName: SCHOOL,
-        adminName: FORWARDER,
-        pass1: false,
-      }),
-    ],
-    [
-      'pending-chain-cap',
-      forwardInlineAlert({
-        reason: 'chain_cap',
-        teacherName: TEACHER,
-        schoolName: SCHOOL,
-        pass1: false,
-      }),
-    ],
-    [
-      'pending-email-failed',
-      forwardInlineAlert({
-        reason: 'email_failed',
-        teacherName: TEACHER,
-        schoolName: SCHOOL,
-        pass1: false,
-      }),
-    ],
-  ];
-  for (const [slug, message] of legacyAlerts) {
-    await screenshotHtml(
-      browser,
-      pendingAlertHtml(message),
-      `${slug}-before-main`,
-      [...widths]
-    );
-  }
-  for (const [slug, message] of alerts) {
-    const html = pendingAlertHtml(message);
-    await screenshotHtml(browser, html, `${slug}-after-head`, [...widths]);
+  for (const slug of pendingSlugs) {
+    for (const suffix of ['before-main', 'after-head'] as const) {
+      const fragmentPath = path.join(pendingHtmlDir, `${slug}-${suffix}.html`);
+      const body = readFileSync(fragmentPath, 'utf8');
+      await screenshotHtml(
+        browser,
+        pendingPageDocument(body, cssHref),
+        `${slug}-${suffix}`,
+        [...widths]
+      );
+    }
   }
 
   await browser.close();
@@ -199,8 +172,8 @@ Pinned pass1 forward banner: ${adminApprovalPass1ForwardBanner(FORWARDER, TEACHE
 - e3-banner-before-main-{320,1280}.png — legacy forward banner, pass1 off
 - e3-banner-after-head-{320,1280}.png — pass1 E3 forward recipient email
 
-## Teacher pending alerts
-- pending-*-before-main-{320,1280}.png — legacy forwardInlineAlert (pass1 off)
+## Teacher pending alerts (full app.free-tier.pending card chrome)
+- pending-*-before-main-{320,1280}.png — legacy approvalForwardError(reason) on main
 - pending-*-after-head-{320,1280}.png — teacherPendingForwardError (this branch)
 
 Tokens and emails redacted in rendered fixtures.
