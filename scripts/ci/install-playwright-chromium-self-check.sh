@@ -30,6 +30,7 @@ assert_true() {
 
 echo "Running install-playwright-chromium self-check (timeout + exit code)"
 
+# Production CI uses PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT (default 12m); keep this short for local checks.
 attempt_timeout="3s"
 export attempt_timeout
 

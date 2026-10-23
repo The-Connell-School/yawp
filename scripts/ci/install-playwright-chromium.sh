@@ -3,7 +3,8 @@ set -euo pipefail
 
 cache_hit="${1:-false}"
 max_attempts=2
-attempt_timeout="${PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT:-5m}"
+attempt_timeout_default="${PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT:-12m}"
+attempt_timeout_max="${PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT_MAX:-20m}"
 apt_lock_wait_seconds="${PLAYWRIGHT_APT_LOCK_WAIT_SECONDS:-60}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 version="$("$repo_root/scripts/ci/resolve-playwright-version.sh")"
@@ -28,21 +29,49 @@ trap 'rm -f "$launch_log"; rm -rf "$playwright_state_dir"' EXIT
 
 timeout_to_seconds() {
   local spec="$1"
+  local sec=""
   if [[ "$spec" =~ ^([0-9]+)m$ ]]; then
-    echo $((BASH_REMATCH[1] * 60))
-    return 0
+    sec=$((10#${BASH_REMATCH[1]} * 60))
+  elif [[ "$spec" =~ ^([0-9]+)s$ ]]; then
+    sec=$((10#${BASH_REMATCH[1]}))
+  elif [[ "$spec" =~ ^[0-9]+$ ]]; then
+    sec=$((10#${spec}))
+  else
+    echo "::error::Unsupported timeout spec: ${spec}" >&2
+    return 1
   fi
-  if [[ "$spec" =~ ^([0-9]+)s$ ]]; then
-    echo "${BASH_REMATCH[1]}"
-    return 0
+  if (( sec < 1 )); then
+    echo "::error::Playwright install timeout must be at least 1 second (got: ${spec})" >&2
+    return 1
   fi
-  if [[ "$spec" =~ ^[0-9]+$ ]]; then
-    echo "$spec"
-    return 0
-  fi
-  echo "::error::Unsupported timeout spec: ${spec}" >&2
-  return 1
+  echo "$sec"
+  return 0
 }
+
+seconds_to_timeout_spec() {
+  local sec="$1"
+  if (( sec >= 60 && sec % 60 == 0 )); then
+    echo "$((sec / 60))m"
+    return 0
+  fi
+  echo "${sec}s"
+}
+
+clamp_attempt_timeout() {
+  local requested="$1"
+  local max_spec="$2"
+  local req_sec max_sec
+  req_sec="$(timeout_to_seconds "$requested")" || return 1
+  max_sec="$(timeout_to_seconds "$max_spec")" || return 1
+  if (( req_sec > max_sec )); then
+    echo "::warning::PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT=${requested} exceeds max ${max_spec}; using ${max_spec}" >&2
+    seconds_to_timeout_spec "$max_sec"
+    return 0
+  fi
+  echo "$requested"
+}
+
+attempt_timeout="$(clamp_attempt_timeout "$attempt_timeout_default" "$attempt_timeout_max")"
 
 have_passwordless_sudo() {
   command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null
@@ -208,7 +237,7 @@ wait_for_apt_locks() {
 
 repair_apt_after_kill() {
   if have_passwordless_sudo; then
-    timeout 60 sudo -n dpkg --configure -a || true
+    timeout -k 10 60 sudo -n dpkg --configure -a || true
   fi
 }
 

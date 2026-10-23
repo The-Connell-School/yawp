@@ -1000,7 +1000,7 @@ jobs:
     if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     name: 🧪 E2E smoke (shard ${{ matrix.shard }})
     runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -1066,7 +1066,9 @@ jobs:
 
       - name: Install Playwright chromium
         working-directory: services/web-app
-        timeout-minutes: 15
+        timeout-minutes: 28
+        env:
+          PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT: 12m
         run: bash ../../scripts/ci/install-playwright-chromium.sh "${{ steps.playwright-cache.outputs.cache-hit }}"
 
       - name: 💾 Save Playwright browsers cache
@@ -1122,7 +1124,7 @@ jobs:
     if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     name: 🧪 Free-tier locked preview browser
     runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     services:
       postgres:
         image: postgres:16@sha256:f9d1e581cde3e4c8bc696b07e6f7b7aea1d41014b33a52b27990762daae61beb # postgres:16
@@ -1189,7 +1191,9 @@ jobs:
 
       - name: Install Playwright chromium
         working-directory: services/web-app
-        timeout-minutes: 15
+        timeout-minutes: 28
+        env:
+          PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT: 12m
         run: bash ../../scripts/ci/install-playwright-chromium.sh "${{ steps.playwright-cache.outputs.cache-hit }}"
 
       - name: 🧪 Locked preview Playwright + evidence
@@ -1231,7 +1235,7 @@ jobs:
     if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     name: 🔐 Sign-on browser flows
     runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     services:
       postgres:
         image: postgres:16@sha256:f9d1e581cde3e4c8bc696b07e6f7b7aea1d41014b33a52b27990762daae61beb # postgres:16
@@ -1290,7 +1294,9 @@ jobs:
 
       - name: Install Playwright chromium
         working-directory: services/web-app
-        timeout-minutes: 15
+        timeout-minutes: 28
+        env:
+          PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT: 12m
         run: bash ../../scripts/ci/install-playwright-chromium.sh "${{ steps.playwright-cache.outputs.cache-hit }}"
 
       # The sign-on flows used to run after the smoke suite, which migrated and
@@ -1418,7 +1424,7 @@ jobs:
     if: ${{ needs.paths.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     name: 🧪 Demo feedback + preview access browser checks
     runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     services:
       postgres:
         image: postgres:16@sha256:f9d1e581cde3e4c8bc696b07e6f7b7aea1d41014b33a52b27990762daae61beb # postgres:16
@@ -1481,7 +1487,9 @@ jobs:
 
       - name: Install Playwright chromium
         working-directory: services/web-app
-        timeout-minutes: 15
+        timeout-minutes: 28
+        env:
+          PLAYWRIGHT_INSTALL_ATTEMPT_TIMEOUT: 12m
         run: bash ../../scripts/ci/install-playwright-chromium.sh "${{ steps.playwright-cache.outputs.cache-hit }}"
 
       - name: Verify demo feedback headless browser executable
