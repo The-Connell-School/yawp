@@ -84,7 +84,6 @@ import { cn } from '~/utils/misc';
 import { SiteLicenseLockedAssignmentTile } from '~/components/site-license-locked-assignment-tile';
 import type { SiteLicenseLockedAssignmentTile as SiteLicenseLockedTile } from '~/domain/free-tier/site-license-locked-assignment-tiles';
 import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
-import { LockedAssignmentTypePickerSheet } from '~/components/free-tier/locked-assignment-type-picker-sheet';
 import { toDateInputValue } from '~/utils/date-only';
 import {
   assignmentTypeUsesDailyPagesEngagementRubric,
@@ -499,22 +498,8 @@ export function AssignmentCreationSheet({
   useEffect(() => {
     if (!props.open) setPickedTypeId(undefined);
   }, [props.open]);
-  if (
-    props.teachingLocked &&
-    usage &&
-    !props.editingAssignment &&
-    !pickedTypeId
-  ) {
-    return (
-      <LockedAssignmentTypePickerSheet
-        open={props.open}
-        onOpenChange={props.onOpenChange}
-        usage={usage}
-        assignmentTypes={props.assignmentTypes}
-        lockedAssignmentTiles={props.siteLicenseLockedAssignmentTiles ?? []}
-        createTriggerRef={props.createAssignmentTriggerRef}
-      />
-    );
+  if (props.teachingLocked && !props.editingAssignment) {
+    return null;
   }
 
   if (

@@ -31,13 +31,18 @@ import {
 } from '~/domain/free-tier/inapp-usage';
 import { lessonPlanMonthWindow } from '~/utils/lesson-planner/month-window';
 import { cn } from '~/utils/misc';
+import { AssignmentTypeTileImage } from '~/components/assignment-type-tile-image';
 import {
-  dashboardAssignmentTileClassName,
+  assignmentTypeTileCardClassName,
+  assignmentTypeTileFooterClassName,
+  assignmentTypeTileImageClassName,
+  assignmentTypeTileImageWrapClassName,
   DashboardAssignmentTileFooter,
   dashboardAssignmentTileTestId,
   assignmentTypeTileTrailingIconClassName,
 } from '~/components/assignment-type-tile-layout';
 import { LockedTeachingControl } from '~/components/free-tier/locked-teaching-control';
+import { PreviewAssignmentCreationControl } from '~/components/free-tier/preview-assignment-creation-control';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import type { RefObject } from 'react';
 import {
@@ -247,9 +252,6 @@ export function FreeAssignmentTiles({
   onCreate: (id?: string) => void;
   createTriggerRef?: RefObject<HTMLButtonElement | null>;
 }) {
-  const { state } = useTeachingAccess();
-  const adminName =
-    state.variant === 'locked' ? state.adminName : 'your administrator';
   const createButton = (
     <button
       ref={createTriggerRef as RefObject<HTMLButtonElement> | undefined}
@@ -270,9 +272,7 @@ export function FreeAssignmentTiles({
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-bold">Assignments</h2>
         {teachingLocked ? (
-          <LockedTeachingControl locked adminName={adminName}>
-            {createButton}
-          </LockedTeachingControl>
+          <PreviewAssignmentCreationControl>{createButton}</PreviewAssignmentCreationControl>
         ) : (
           createButton
         )}
@@ -285,49 +285,61 @@ export function FreeAssignmentTiles({
             (!type ||
               (!usage.unlimitedFreeAssignmentTiles && row.remaining === 0));
           const tileClassName = cn(
-            dashboardAssignmentTileClassName('disabled:bg-muted/30'),
-            !teachingLocked &&
-              !tileDisabled &&
+            assignmentTypeTileCardClassName(
+              'bg-popover shadow-sm disabled:bg-muted/30'
+            ),
+            !tileDisabled &&
               'outline-none focus-visible:ring-2 focus-visible:ring-ring'
           );
           const tileLabel = `New ${row.label} assignment`;
           const tileBody = (
-            <DashboardAssignmentTileFooter
-              label={row.label}
-              meta={
-                usage.monthly
-                  ? 'Unlimited'
-                  : row.remaining
-                    ? `${row.remaining} of ${row.total} left`
-                    : 'None left'
-              }
-              metaClassName={
-                !usage.monthly && row.remaining === 0
-                  ? 'text-amber-800'
-                  : undefined
-              }
-              trailing={
-                teachingLocked ? (
-                  <Lock
-                    size={16}
-                    className={assignmentTypeTileTrailingIconClassName(
-                      'text-muted-foreground'
-                    )}
-                    aria-hidden
-                  />
-                ) : (
-                  <Plus
-                    size={16}
-                    className={assignmentTypeTileTrailingIconClassName(
-                      'text-muted-foreground'
-                    )}
-                    aria-hidden
-                  />
-                )
-              }
-            />
+            <>
+              <div className={assignmentTypeTileImageWrapClassName()}>
+                <AssignmentTypeTileImage
+                  imageId={type?.imageId}
+                  imageTitle={type?.imageTitle}
+                  className={assignmentTypeTileImageClassName}
+                />
+              </div>
+              <div className={assignmentTypeTileFooterClassName('px-3 py-2')}>
+                <DashboardAssignmentTileFooter
+                  label={row.label}
+                  meta={
+                    usage.monthly
+                      ? 'Unlimited'
+                      : row.remaining
+                        ? `${row.remaining} of ${row.total} left`
+                        : 'None left'
+                  }
+                  metaClassName={
+                    !usage.monthly && row.remaining === 0
+                      ? 'text-amber-800'
+                      : undefined
+                  }
+                  trailing={
+                    teachingLocked ? (
+                      <Lock
+                        size={16}
+                        className={assignmentTypeTileTrailingIconClassName(
+                          'text-muted-foreground'
+                        )}
+                        aria-hidden
+                      />
+                    ) : (
+                      <Plus
+                        size={16}
+                        className={assignmentTypeTileTrailingIconClassName(
+                          'text-muted-foreground'
+                        )}
+                        aria-hidden
+                      />
+                    )
+                  }
+                />
+              </div>
+            </>
           );
-          if (!teachingLocked && type && !tileDisabled) {
+          if (type && !tileDisabled) {
             return (
               <Link
                 key={row.kind}
@@ -346,7 +358,7 @@ export function FreeAssignmentTiles({
               type="button"
               data-testid={dashboardAssignmentTileTestId}
               disabled={tileDisabled}
-              onClick={() => onCreate(teachingLocked ? undefined : type?.id)}
+              onClick={() => onCreate(type?.id)}
               aria-label={tileLabel}
               className={tileClassName}
             >
