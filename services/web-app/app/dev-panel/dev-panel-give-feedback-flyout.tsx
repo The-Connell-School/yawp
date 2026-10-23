@@ -226,11 +226,16 @@ export function DevPanelGiveFeedbackFlyout({
                   if (error) setError('');
                 }}
                 aria-describedby={
-                  status === 'error' ? 'dev-panel-feedback-error' : undefined
+                  error || status === 'error' ? 'dev-panel-feedback-error' : undefined
                 }
               />
               <p className="text-xs text-muted-foreground">{note.length} / 2000</p>
             </div>
+            {error && status !== 'error' ? (
+              <p id="dev-panel-feedback-error" role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            ) : null}
             {status === 'error' ? (
               <p id="dev-panel-feedback-error" role="alert" className="text-sm text-destructive">
                 Couldn&apos;t send feedback. Your note and screenshot are saved here. Check your
