@@ -114,8 +114,14 @@ export type UnitFolder = {
  * every other lesson stands on its own. Folders keep the order the newest
  * of their lessons has in the list.
  */
-export function groupUnits(lessons: LibraryLesson[]): { units: UnitFolder[]; lessons: LibraryLesson[] } {
-  const folders = new Map<string, UnitFolder>();
+export function groupUnits(
+  lessons: LibraryLesson[],
+  /** Every folder the teacher has, so a new, empty one shows too. */
+  allFolders: Array<{ id: string; title: string }> = []
+): { units: UnitFolder[]; lessons: LibraryLesson[] } {
+  const folders = new Map<string, UnitFolder>(
+    allFolders.map((folder) => [folder.id, { id: folder.id, title: folder.title, planning: null, days: [] }])
+  );
   const standalone: LibraryLesson[] = [];
   for (const lesson of lessons) {
     if (!lesson.unit) {

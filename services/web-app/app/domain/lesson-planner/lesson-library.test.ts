@@ -223,3 +223,8 @@ describe("unit folders (Brian's run 5, item 1)", () => {
     expect(units[0]!.days.map((row) => row.id)).toEqual(['d1', 'd2']);
   });
 });
+
+test('a folder the teacher just made shows, empty, first (Kevin, Oct 23)', () => {
+  const { units } = groupUnits([], [{ id: 'f1', title: 'Poetry' }]);
+  expect(units).toEqual([{ id: 'f1', title: 'Poetry', planning: null, days: [] }]);
+});

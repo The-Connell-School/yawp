@@ -15,12 +15,18 @@ import {
   useLoaderData,
   type LoaderFunctionArgs,
 } from 'react-router';
+import { useState } from 'react';
 import {
+  ArrowDown,
+  ArrowUp,
   BookMarked,
   ChevronLeft,
   FileText,
   FolderOpen,
+  FolderPlus,
+  GripVertical,
   Lightbulb,
+  Pencil,
   PenLine,
   Trash2,
 } from 'lucide-react';
@@ -75,6 +81,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 
   const { stackV3 } = await getLessonPlannerReviewFlags(access.membership.organization.id);
+  // Every folder, an empty one included, newest first (Kevin, Oct 23).
+  const allFolders = stackV3
+    ? await prisma.lessonPlanUnit.findMany({
+        where: { membershipId: access.membership.id, deletedAt: null },
+        orderBy: { updatedAt: 'desc' },
+        take: 100,
+        select: { id: true, title: true },
+      })
+    : [];
   return {
     lessons: buildLessonLibrary(
       lessons.map((lesson) => ({
@@ -85,11 +100,29 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ),
     // Brian's run 5: units as folders, behind the run-of-show flag.
     folders: stackV3,
+    allFolders,
   };
 }
 
-function LessonRow({ lesson }: { lesson: LibraryLesson }) {
+const FOLDERS_API = '/api/domain/lesson-planner/folders';
+/** What a dragged lesson row carries (Kevin, Oct 23: drag lessons into folders). */
+const LESSON_DRAG_TYPE = 'application/x-yawp-lesson';
+
+type FolderOption = { id: string; title: string };
+
+function LessonRow({
+  lesson,
+  folders = null,
+  inFolder = null,
+}: {
+  lesson: LibraryLesson;
+  /** Folders to move it to; null when folders are off. */
+  folders?: FolderOption[] | null;
+  /** In a folder: its place, and how to move it there. */
+  inFolder?: { first: boolean; last: boolean; onMove: (direction: -1 | 1) => void } | null;
+}) {
   const fetcher = useFetcher();
+  const mover = useFetcher();
   // Answer the click immediately rather than after the round trip: a button that
   // lags feels broken even when it works.
   const published = fetcher.formData
@@ -106,12 +139,25 @@ function LessonRow({ lesson }: { lesson: LibraryLesson }) {
     );
   }
 
+  function moveTo(folderId: string) {
+    mover.submit({ intent: 'move', conversationId: lesson.id, folderId }, { method: 'post', action: FOLDERS_API });
+  }
+
   return (
     <li>
       <div
         data-testid="history-lesson"
-        className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border bg-card p-4"
+        draggable={Boolean(folders)}
+        onDragStart={(event) => {
+          event.dataTransfer.setData(LESSON_DRAG_TYPE, lesson.id);
+          event.dataTransfer.effectAllowed = 'move';
+        }}
+        className={cn(
+          'flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border bg-card p-4',
+          folders && 'cursor-grab active:cursor-grabbing'
+        )}
       >
+        {folders ? <GripVertical size={14} className="shrink-0 text-muted-foreground/50" aria-hidden /> : null}
         <button
           type="button"
           onClick={() => send(published ? 'unpublish' : 'publish')}
@@ -150,7 +196,7 @@ function LessonRow({ lesson }: { lesson: LibraryLesson }) {
           </p>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           {lesson.sectionCount > 0 ? (
             <Badge variant="outline" size="sm">
               <FileText size={12} className="mr-1" />
@@ -185,6 +231,50 @@ function LessonRow({ lesson }: { lesson: LibraryLesson }) {
               <Link to={`/app/lesson-planner/${lesson.id}/packet`}>Stack</Link>
             </Button>
           ) : null}
+          {inFolder ? (
+            <span className="flex items-center">
+              <button
+                type="button"
+                aria-label={`Move ${lesson.title} up`}
+                disabled={inFolder.first}
+                onClick={() => inFolder.onMove(-1)}
+                className="rounded p-1 text-muted-foreground transition hover:bg-foreground/5 disabled:opacity-30"
+              >
+                <ArrowUp size={14} />
+              </button>
+              <button
+                type="button"
+                aria-label={`Move ${lesson.title} down`}
+                disabled={inFolder.last}
+                onClick={() => inFolder.onMove(1)}
+                className="rounded p-1 text-muted-foreground transition hover:bg-foreground/5 disabled:opacity-30"
+              >
+                <ArrowDown size={14} />
+              </button>
+            </span>
+          ) : null}
+          {folders ? (
+            // The way to file a lesson without dragging: keyboard and phone.
+            <select
+              data-testid="history-move"
+              aria-label={`Move ${lesson.title} to a folder`}
+              value=""
+              onChange={(event) => {
+                if (event.target.value) moveTo(event.target.value === NO_FOLDER ? '' : event.target.value);
+              }}
+              className="rounded-md border bg-background px-2 py-1 text-xs"
+            >
+              <option value="">Move to…</option>
+              {folders
+                .filter((folder) => folder.id !== lesson.unit?.id)
+                .map((folder) => (
+                  <option key={folder.id} value={folder.id}>
+                    {folder.title}
+                  </option>
+                ))}
+              {lesson.unit ? <option value={NO_FOLDER}>Take out of folder</option> : null}
+            </select>
+          ) : null}
           <button
             type="button"
             onClick={() => send('delete')}
@@ -200,24 +290,124 @@ function LessonRow({ lesson }: { lesson: LibraryLesson }) {
   );
 }
 
-function UnitFolderRow({ folder }: { folder: UnitFolder }) {
+const NO_FOLDER = '__none__';
+
+function UnitFolderRow({ folder, folders }: { folder: UnitFolder; folders: FolderOption[] }) {
+  const fetcher = useFetcher();
+  const [renaming, setRenaming] = useState(false);
+  const [name, setName] = useState(folder.title);
+  const [over, setOver] = useState(false);
+  const deleting = fetcher.formData?.get('intent') === 'delete';
+  if (deleting) return null;
+  const title = fetcher.formData?.get('intent') === 'rename' ? String(fetcher.formData.get('title')) : folder.title;
+  const post = (fields: Record<string, string>) =>
+    fetcher.submit({ folderId: folder.id, ...fields }, { method: 'post', action: FOLDERS_API });
+  const move = (index: number, direction: -1 | 1) => {
+    const order = folder.days.map((day) => day.id);
+    const to = index + direction;
+    [order[index], order[to]] = [order[to]!, order[index]!];
+    post({ intent: 'reorder', order: order.join(',') });
+  };
+
   return (
     <li>
-      <details data-testid="unit-folder" open className="rounded-xl border bg-card p-4">
+      <details
+        data-testid="unit-folder"
+        open
+        onDragOver={(event) => {
+          if (!event.dataTransfer.types.includes(LESSON_DRAG_TYPE)) return;
+          event.preventDefault();
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(event) => {
+          setOver(false);
+          const id = event.dataTransfer.getData(LESSON_DRAG_TYPE);
+          if (!id) return;
+          event.preventDefault();
+          post({ intent: 'move', conversationId: id });
+        }}
+        className={cn('rounded-xl border bg-card p-4 transition', over && 'border-primary bg-primary/5')}
+      >
         <summary className="flex cursor-pointer list-none items-center gap-2">
           <FolderOpen size={16} className="shrink-0 text-primary" />
           <span data-testid="unit-folder-title" className="min-w-0 flex-1 truncate font-medium">
-            {folder.title}
+            {title}
           </span>
           <Badge variant="outline" size="sm">
-            {folder.days.length} {folder.days.length === 1 ? 'day' : 'days'}
+            {folder.days.length} {folder.days.length === 1 ? 'lesson' : 'lessons'}
           </Badge>
+          {renaming ? null : (
+            <button
+              type="button"
+              aria-label={`Rename ${title}`}
+              data-testid="unit-folder-rename"
+              onClick={(event) => {
+                event.preventDefault();
+                setName(title);
+                setRenaming(true);
+              }}
+              className="rounded-md p-1.5 text-muted-foreground transition hover:bg-foreground/5"
+            >
+              <Pencil size={14} />
+            </button>
+          )}
+          <button
+            type="button"
+            aria-label={`Delete the folder ${title}`}
+            data-testid="unit-folder-delete"
+            onClick={(event) => {
+              event.preventDefault();
+              if (window.confirm(`Delete the folder “${title}”? Its lessons stay in your library.`)) post({ intent: 'delete' });
+            }}
+            className="rounded-md p-1.5 text-muted-foreground/60 transition hover:bg-destructive/10 hover:text-destructive"
+          >
+            <Trash2 size={14} />
+          </button>
         </summary>
-        <ol className="mt-3 flex flex-col gap-2">
-          {folder.days.map((day) => (
-            <LessonRow key={day.id} lesson={day} />
-          ))}
-        </ol>
+        {renaming ? (
+          // Outside the summary: typing a space there would fold the folder.
+          <form
+            className="mt-3 flex items-center gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setRenaming(false);
+              if (name.trim() && name.trim() !== folder.title) post({ intent: 'rename', title: name.trim() });
+            }}
+          >
+            <input
+              autoFocus
+              aria-label="Folder name"
+              data-testid="unit-folder-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="min-w-0 flex-1 rounded-md border bg-background px-2 py-1 text-sm"
+            />
+            <Button type="submit" size="sm" variant="outline" data-testid="unit-folder-save">
+              Save
+            </Button>
+          </form>
+        ) : null}
+        {folder.days.length ? (
+          <ol className="mt-3 flex flex-col gap-2">
+            {folder.days.map((day, index) => (
+              <LessonRow
+                key={day.id}
+                lesson={day}
+                folders={folders}
+                inFolder={{
+                  first: index === 0,
+                  last: index === folder.days.length - 1,
+                  onMove: (direction) => move(index, direction),
+                }}
+              />
+            ))}
+          </ol>
+        ) : (
+          <p data-testid="unit-folder-empty" className="mt-3 rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+            Drag a lesson here, or use Move to… on any lesson.
+          </p>
+        )}
         {folder.planning ? (
           <Link
             to={`/app/lesson-planner?c=${folder.planning.id}`}
@@ -232,10 +422,52 @@ function UnitFolderRow({ folder }: { folder: UnitFolder }) {
   );
 }
 
+function NewFolder() {
+  const fetcher = useFetcher();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  if (!open) {
+    return (
+      <Button variant="outline" size="sm" data-testid="new-folder" onClick={() => setOpen(true)}>
+        <FolderPlus size={14} className="mr-1" /> New folder
+      </Button>
+    );
+  }
+  return (
+    <form
+      className="flex items-center gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!name.trim()) return;
+        fetcher.submit({ intent: 'create', title: name.trim() }, { method: 'post', action: FOLDERS_API });
+        setName('');
+        setOpen(false);
+      }}
+    >
+      <input
+        autoFocus
+        aria-label="New folder name"
+        data-testid="new-folder-name"
+        placeholder="e.g. Lord of the Flies"
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        className="rounded-md border bg-background px-2 py-1 text-sm"
+      />
+      <Button type="submit" size="sm" data-testid="new-folder-create">
+        Create
+      </Button>
+      <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
+        Cancel
+      </Button>
+    </form>
+  );
+}
+
 export default function LessonHistoryRoute() {
-  const { lessons: all, folders } = useLoaderData<typeof loader>();
-  const { units, lessons } = folders ? groupUnits(all) : { units: [], lessons: all };
+  const { lessons: all, folders, allFolders } = useLoaderData<typeof loader>();
+  const { units, lessons } = folders ? groupUnits(all, allFolders) : { units: [], lessons: all };
   const { drafts, library } = splitDraftsAndLibrary(lessons);
+  const folderOptions = folders ? units.map((unit) => ({ id: unit.id, title: unit.title })) : null;
 
   return (
     // Own the scroll: the app shell is a fixed-height, overflow-hidden frame.
@@ -248,16 +480,17 @@ export default function LessonHistoryRoute() {
               Back to planning
             </Link>
           </Button>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h1 className="text-xl font-semibold leading-none">Your lessons</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Drafts you are still working on, and the lessons you have
               published to your library.
             </p>
           </div>
+          {folders ? <NewFolder /> : null}
         </div>
 
-        {all.length === 0 ? (
+        {all.length === 0 && units.length === 0 ? (
           <div className="rounded-2xl border border-dashed p-10 text-center">
             <div className="mx-auto mb-3 w-fit rounded-2xl bg-primary/10 p-3 text-primary">
               <Lightbulb size={24} />
@@ -274,11 +507,11 @@ export default function LessonHistoryRoute() {
               <div>
                 <h2 className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                   <FolderOpen size={12} className="text-primary" />
-                  Units
+                  Folders
                 </h2>
                 <ul className="flex flex-col gap-2">
                   {units.map((folder) => (
-                    <UnitFolderRow key={folder.id} folder={folder} />
+                    <UnitFolderRow key={folder.id} folder={folder} folders={folderOptions ?? []} />
                   ))}
                 </ul>
               </div>
@@ -291,7 +524,7 @@ export default function LessonHistoryRoute() {
                 </h2>
                 <ul className="flex flex-col gap-2">
                   {library.map((lesson) => (
-                    <LessonRow key={lesson.id} lesson={lesson} />
+                    <LessonRow key={lesson.id} lesson={lesson} folders={folderOptions} />
                   ))}
                 </ul>
               </div>
@@ -305,7 +538,7 @@ export default function LessonHistoryRoute() {
                 </h2>
                 <ul className="flex flex-col gap-2">
                   {drafts.map((lesson) => (
-                    <LessonRow key={lesson.id} lesson={lesson} />
+                    <LessonRow key={lesson.id} lesson={lesson} folders={folderOptions} />
                   ))}
                 </ul>
               </div>

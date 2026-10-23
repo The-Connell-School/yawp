@@ -221,6 +221,90 @@ test.describe("Lesson Planner — Brian's fifth run", () => {
     await card.getByTestId('suggestion-preview-toggle').click();
     await expect(card.getByTestId('suggestion-preview')).toHaveCount(0);
   });
+
+  test('library folders: make one, drag a lesson in, move another, reorder, rename, take out, delete (Kevin, Oct 23)', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await stackOn();
+    await seedConversation(e2eContext, [{ role: 'user', content: 'A.' }, { role: 'assistant', content: DAY_ONE_REPLY }], 'Poem one');
+    await seedConversation(e2eContext, [{ role: 'user', content: 'B.' }, { role: 'assistant', content: DAY_ONE_REPLY }], 'Poem two');
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto('/app/lesson-planner/library');
+    await page.waitForLoadState('networkidle');
+
+    await page.getByTestId('new-folder').click();
+    await page.getByTestId('new-folder-name').fill('Poetry');
+    await page.getByTestId('new-folder-create').click();
+    const folder = page.getByTestId('unit-folder');
+    await expect(folder.getByTestId('unit-folder-title')).toHaveText('Poetry');
+    await expect(folder.getByTestId('unit-folder-empty')).toBeVisible();
+
+    // Drag one in.
+    const loose = page.getByTestId('history-lesson').filter({ hasText: 'Poem one' });
+    await loose.dragTo(folder);
+    await expect(folder.getByTestId('history-lesson')).toHaveText([/Poem one/]);
+
+    // Move the other with Move to…, no dragging.
+    await page.getByTestId('history-lesson').filter({ hasText: 'Poem two' }).getByTestId('history-move').selectOption({ label: 'Poetry' });
+    await expect(folder.getByTestId('history-lesson')).toHaveText([/Poem one/, /Poem two/]);
+
+    // Reorder inside the folder; it holds after a reload.
+    await folder.getByRole('button', { name: 'Move Poem two up' }).click();
+    await expect(folder.getByTestId('history-lesson')).toHaveText([/Poem two/, /Poem one/]);
+    await page.reload();
+    await expect(page.getByTestId('unit-folder').getByTestId('history-lesson')).toHaveText([/Poem two/, /Poem one/]);
+
+    // Rename.
+    await page.getByTestId('unit-folder-rename').click();
+    await page.getByTestId('unit-folder-name').fill('Poetry unit');
+    await page.getByTestId('unit-folder-save').click();
+    await expect(page.getByTestId('unit-folder-title')).toHaveText('Poetry unit');
+
+    // Take one out.
+    await page.getByTestId('unit-folder').getByTestId('history-lesson').filter({ hasText: 'Poem one' }).getByTestId('history-move').selectOption({ label: 'Take out of folder' });
+    await expect(page.getByTestId('unit-folder').getByTestId('history-lesson')).toHaveText([/Poem two/]);
+
+    // Delete the folder: its lesson stays.
+    page.once('dialog', (dialog) => void dialog.accept());
+    await page.getByTestId('unit-folder-delete').click();
+    await expect(page.getByTestId('unit-folder')).toHaveCount(0);
+    await expect(page.getByTestId('history-lesson')).toHaveCount(2);
+  });
+
+  test("folders stay the teacher's own: another teacher's folder cannot be filled", async ({ page, signIn, e2eContext }) => {
+    await stackOn();
+    const prisma = createE2EPrismaClient();
+    let otherFolder = '';
+    try {
+      const other = await prisma.orgMembership.findFirst({
+        where: { organizationId: e2eContext.organizationId, id: { not: e2eContext.teacherMembershipId } },
+        select: { id: true },
+      });
+      test.skip(!other, 'no second membership in the e2e org');
+      otherFolder = (
+        await prisma.lessonPlanUnit.create({
+          data: { membershipId: other!.id, organizationId: e2eContext.organizationId, title: 'Not yours' },
+          select: { id: true },
+        })
+      ).id;
+    } finally {
+      await prisma.$disconnect();
+    }
+    const { conversationId } = await seedConversation(e2eContext, [{ role: 'user', content: 'A.' }, { role: 'assistant', content: 'Hi.' }]);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    const response = await page.request.post('/api/domain/lesson-planner/folders', {
+      form: { intent: 'move', conversationId, folderId: otherFolder },
+    });
+    expect(response.status()).toBe(404);
+    const cleanup = createE2EPrismaClient();
+    try {
+      await cleanup.lessonPlanUnit.delete({ where: { id: otherFolder } });
+    } finally {
+      await cleanup.$disconnect();
+    }
+  });
 });
 
 async function assistantId(conversationId: string) {
