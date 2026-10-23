@@ -9,6 +9,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import React from 'react';
 import {
   adminApprovalPass1ForwardBanner,
+  forwardInlineAlert,
   teacherPendingForwardError,
 } from '../app/domain/free-tier/admin-approval-copy';
 import { buildDesignedAdminApprovalEmail } from '../app/domain/free-tier/admin-approval-email.server';
@@ -134,6 +135,53 @@ async function main() {
       teacherPendingForwardError({ reason: 'email_failed', schoolName: SCHOOL }),
     ],
   ];
+  const legacyAlerts: Array<[string, string]> = [
+    [
+      'pending-same-as-teacher',
+      forwardInlineAlert({
+        reason: 'same_as_teacher',
+        teacherName: TEACHER,
+        schoolName: SCHOOL,
+        pass1: false,
+      }),
+    ],
+    [
+      'pending-same-administrator',
+      forwardInlineAlert({
+        reason: 'same_administrator',
+        teacherName: TEACHER,
+        schoolName: SCHOOL,
+        adminName: FORWARDER,
+        pass1: false,
+      }),
+    ],
+    [
+      'pending-chain-cap',
+      forwardInlineAlert({
+        reason: 'chain_cap',
+        teacherName: TEACHER,
+        schoolName: SCHOOL,
+        pass1: false,
+      }),
+    ],
+    [
+      'pending-email-failed',
+      forwardInlineAlert({
+        reason: 'email_failed',
+        teacherName: TEACHER,
+        schoolName: SCHOOL,
+        pass1: false,
+      }),
+    ],
+  ];
+  for (const [slug, message] of legacyAlerts) {
+    await screenshotHtml(
+      browser,
+      pendingAlertHtml(message),
+      `${slug}-before-main`,
+      [...widths]
+    );
+  }
   for (const [slug, message] of alerts) {
     const html = pendingAlertHtml(message);
     await screenshotHtml(browser, html, `${slug}-after-head`, [...widths]);
@@ -151,11 +199,9 @@ Pinned pass1 forward banner: ${adminApprovalPass1ForwardBanner(FORWARDER, TEACHE
 - e3-banner-before-main-{320,1280}.png — legacy forward banner, pass1 off
 - e3-banner-after-head-{320,1280}.png — pass1 E3 forward recipient email
 
-## Teacher pending alerts (after head)
-- pending-same-as-teacher-after-head-{320,1280}.png
-- pending-same-administrator-after-head-{320,1280}.png
-- pending-chain-cap-after-head-{320,1280}.png
-- pending-email-failed-after-head-{320,1280}.png
+## Teacher pending alerts
+- pending-*-before-main-{320,1280}.png — legacy forwardInlineAlert (pass1 off)
+- pending-*-after-head-{320,1280}.png — teacherPendingForwardError (this branch)
 
 Tokens and emails redacted in rendered fixtures.
 `;
