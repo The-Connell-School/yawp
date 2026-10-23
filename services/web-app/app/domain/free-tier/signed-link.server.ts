@@ -226,6 +226,39 @@ export async function abandonMintedSignedLinks(linkIds: string[]) {
   });
 }
 
+/** Opaque hash + signature verified; ignores JWT/link expiry (S9a naming on expired links). */
+export async function applicationIdIfOpaqueHashVerified(args: {
+  token: string;
+  expectedPurpose: FreeTierSignedLinkPurpose;
+}): Promise<string | null> {
+  const segments = args.token.split('.');
+  if (segments.length !== 3) return null;
+  const signedPart = `${segments[0]}.${segments[1]}`;
+  const opaque = segments[2]!;
+  const decoded = decodeToken(signedPart);
+  if (!decoded) return null;
+  const { payload } = decoded;
+  if (payload.purpose !== args.expectedPurpose) return null;
+  const tokenHash = hashToken(opaque);
+  const row = await prisma.freeTierSignedLink.findUnique({
+    where: { id: payload.linkId },
+    select: {
+      applicationId: true,
+      purpose: true,
+      tokenHash: true,
+    },
+  });
+  if (
+    !row ||
+    row.applicationId !== payload.applicationId ||
+    row.purpose !== args.expectedPurpose
+  ) {
+    return null;
+  }
+  if (row.tokenHash !== tokenHash) return null;
+  return row.applicationId;
+}
+
 export async function peekSignedLink(args: {
   token: string;
   expectedPurpose: FreeTierSignedLinkPurpose;

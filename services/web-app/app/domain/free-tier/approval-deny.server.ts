@@ -7,6 +7,7 @@ import {
   peekSignedLink,
 } from './signed-link.server';
 import { fetchFreeTierApplicationTerminalGate } from './admin-link-gate.server';
+import { applicationIdForAdminLinkNaming } from './admin-link-known-request.server';
 import { hashRequestMeta } from './approval-flow.server';
 import {
   flushTeacherDenyEmail,
@@ -37,7 +38,13 @@ export async function resolveAdminDenyAnsweredGate(args: {
   purpose?: 'ADMIN_APPROVE' | 'ADMIN_NOT_RIGHT_PERSON';
 }) {
   const purpose = args.purpose ?? 'ADMIN_APPROVE';
-  const appId = applicationIdFromSignedToken(args.token);
+  const peek = await peekSignedLink({ token: args.token, expectedPurpose: purpose });
+  if (peek.ok) return null;
+  const appId = await applicationIdForAdminLinkNaming(
+    args.token,
+    peek,
+    purpose
+  );
   if (!appId) return null;
   const app = await prisma.freeTierApplication.findUnique({
     where: { id: appId },
@@ -49,8 +56,6 @@ export async function resolveAdminDenyAnsweredGate(args: {
 
   const linkId = linkIdFromSignedToken(args.token);
   if (!linkId) return null;
-  const peek = await peekSignedLink({ token: args.token, expectedPurpose: purpose });
-  if (peek.ok) return null;
 
   const deniedForLink = await prisma.freeTierAdminApproval.findFirst({
     where: {

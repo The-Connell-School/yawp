@@ -38,6 +38,7 @@ import {
   sendFreeTierReleaseEmail,
 } from './email.server';
 import { resolveAdminApprovalEmailContext } from './admin-approval-email-context.server';
+import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { getApprovalHooks } from './approval-hooks.server';
 import { getClientIp } from '~/utils/ip.server';
 import {
@@ -498,7 +499,10 @@ export async function resendFreeTierAdminApprovalReminder(args: {
   const approveUrl = `${base}/free/admin/approve?t=${encodeURIComponent(minted.approveMint.token)}`;
   const notRightPersonUrl = `${base}/free/admin/not-right-person?t=${encodeURIComponent(minted.declineMint.token)}`;
 
-  const emailContext = await resolveAdminApprovalEmailContext(pendingRow);
+  const pass1 = await isFreeTierEnabled();
+  const emailContext = pass1
+    ? await resolveAdminApprovalEmailContext(pendingRow)
+    : {};
   const emailResult = await sendFreeTierAdminReminderEmail({
     applicationId: app.id,
     to: pendingRow.adminEmail,
@@ -507,8 +511,12 @@ export async function resendFreeTierAdminApprovalReminder(args: {
     schoolName: app.schoolName,
     approveUrl,
     notRightPersonUrl,
-    forwardedByAdminName: emailContext.forwardedByAdminName,
-    routedByTeacher: emailContext.routedByTeacher,
+    ...(pass1
+      ? {
+          forwardedByAdminName: emailContext.forwardedByAdminName,
+          routedByTeacher: emailContext.routedByTeacher,
+        }
+      : {}),
   });
 
   if (!emailResult.ok) {
@@ -606,11 +614,16 @@ export async function redirectSchoolAdmin(args: {
     ) {
       return { ok: true as const, idempotent: true as const };
     }
-    const gate = await resolveAdminLinkTerminalGate({ token: args.token, peek });
+    const gate = await resolveAdminLinkTerminalGate({
+      token: args.token,
+      peek,
+      expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
+    });
     if (gate) return { ok: false as const, ...gate };
     const replaced = await resolveAdminLinkReplacedGate({
       token: args.token,
       peek,
+      expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
     });
     if (replaced) return { ok: false as const, ...replaced };
     return peek;

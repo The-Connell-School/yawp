@@ -18,6 +18,7 @@ import {
   forwardPageIntro,
   forwardPageTitle,
   forwardSentBody,
+  teacherAtSchool,
   type AdminLinkReplacedVariant,
   FREE_TIER_ADMIN_MODEL_TRAINING_LINE,
   linkExpiredBody,
@@ -223,14 +224,24 @@ export function AdminForwardSentCard({
   return (
     <FreeTierAuthCard title="Request forwarded" icon={<Send />} status>
       <p className="text-sm text-muted-foreground">
-        {forwardSentBody({
-          teacherName,
-          schoolName,
-          recipientName,
-          recipientEmail,
-          manualReview,
-          pass1,
-        })}
+        {pass1 && manualReview ? (
+          forwardSentBody({
+            teacherName,
+            schoolName,
+            recipientName,
+            recipientEmail,
+            manualReview,
+            pass1,
+          })
+        ) : (
+          <>
+            We sent the request for {teacherAtSchool(teacherName, schoolName)} to{' '}
+            <strong className="font-semibold text-card-foreground">
+              {recipientName}
+            </strong>{' '}
+            ({recipientEmail}). You&apos;re all set.
+          </>
+        )}
       </p>
     </FreeTierAuthCard>
   );

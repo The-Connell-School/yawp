@@ -11,7 +11,7 @@ import {
 import type { FreeTierAdminLinkReplacedVariant } from '~/domain/free-tier/admin-link-gate.server';
 import { useFreeTierEnabled } from '../free-tier/useFreeTierLayoutContext';
 import { CircleAlert, CircleCheck } from 'lucide-react';
-import { applicationIdForKnownRequestOnFailedPeek } from '~/domain/free-tier/admin-link-known-request.server';
+import { applicationIdForAdminLinkNaming } from '~/domain/free-tier/admin-link-known-request.server';
 import {
   applicationIdFromSignedToken,
   peekSignedLink,
@@ -61,8 +61,15 @@ type LoaderData =
       showDenyAndQa: boolean;
     };
 
-async function applicationFromToken(token: string) {
-  const applicationId = applicationIdFromSignedToken(token);
+async function applicationFromVerifiedToken(
+  token: string,
+  peek: Awaited<ReturnType<typeof peekSignedLink>>
+) {
+  const applicationId = await applicationIdForAdminLinkNaming(
+    token,
+    peek,
+    'ADMIN_APPROVE'
+  );
   if (!applicationId) return null;
   return prisma.freeTierApplication.findUnique({
     where: { id: applicationId },
@@ -78,10 +85,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     token,
     expectedPurpose: 'ADMIN_APPROVE',
   });
-  const appId = peek.ok
-    ? peek.applicationId
-    : applicationIdForKnownRequestOnFailedPeek(token, peek) ??
-      applicationIdFromSignedToken(token);
+  const appId = await applicationIdForAdminLinkNaming(
+    token,
+    peek,
+    'ADMIN_APPROVE'
+  );
   const showDenyAndQa = await isFeatureFlagEnabled(FREE_TIER_FLAG);
   if (appId) {
     const gate = await fetchFreeTierApplicationTerminalGate(appId);
@@ -118,7 +126,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     };
   }
   if (peek.reason === 'expired') {
-    const app = await applicationFromToken(token);
+    const app = await applicationFromVerifiedToken(token, peek);
     if (app) {
       return {
         ok: false as const,
@@ -127,29 +135,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
         teacherName: app.name,
       };
     }
+    return { ok: false as const, reason: 'invalid' as const };
   }
-  const replaced = await resolveAdminLinkReplacedGate({ token, peek });
+  const replaced = await resolveAdminLinkReplacedGate({
+    token,
+    peek,
+    expectedPurpose: 'ADMIN_APPROVE',
+  });
   if (replaced) return { ok: false as const, ...replaced };
   if (
     peek.reason === 'invalid' ||
     peek.reason === 'purpose_mismatch' ||
     !peek.reason
   ) {
-    const knownAppId = applicationIdForKnownRequestOnFailedPeek(token, peek);
-    if (knownAppId) {
-      const app = await prisma.freeTierApplication.findUnique({
-        where: { id: knownAppId },
-        select: { schoolName: true, name: true },
-      });
-      if (app) {
-        return {
-          ok: false as const,
-          reason: 'invalid' as const,
-          teacherName: app.name,
-          schoolName: app.schoolName,
-        };
-      }
-    }
     return { ok: false as const, reason: 'invalid' as const };
   }
   return { ok: false as const, reason: peek.reason };
@@ -175,14 +173,22 @@ export async function action({ request }: ActionFunctionArgs) {
       token,
       expectedPurpose: 'ADMIN_APPROVE',
     });
-    const replaced = await resolveAdminLinkReplacedGate({ token, peek });
+    const replaced = await resolveAdminLinkReplacedGate({
+      token,
+      peek,
+      expectedPurpose: 'ADMIN_APPROVE',
+    });
     if (replaced) return { ok: false as const, ...replaced };
-    const appId = applicationIdFromSignedToken(token);
+    const appId = await applicationIdForAdminLinkNaming(
+      token,
+      peek,
+      'ADMIN_APPROVE'
+    );
     if (appId) {
       const gate = await fetchFreeTierApplicationTerminalGate(appId);
       if (gate) return { ok: false as const, ...gate };
     }
-    const app = await applicationFromToken(token);
+    const app = await applicationFromVerifiedToken(token, peek);
     if (app && !['APPROVED', 'REJECTED', 'EXPIRED'].includes(app.status)) {
       return {
         ok: false as const,

@@ -30,7 +30,7 @@ function installRouterMocks(reason: string) {
       },
       pending: {
         adminName: 'Dr. Patel',
-        adminEmail: 'patel@lincolnusd.org',
+        adminEmail: 'patel@example.test',
       },
       lastFailedEmail: null,
       showExploreClassroom: true,
@@ -42,7 +42,7 @@ function installRouterMocks(reason: string) {
         approval: {
           id: 'current',
           adminName: 'Dr. Patel',
-          adminEmail: 'patel@lincolnusd.org',
+          adminEmail: 'patel@example.test',
         },
         firstSentAt: new Date('2026-10-14'),
       },

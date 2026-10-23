@@ -1,5 +1,6 @@
 import type { FreeTierAdminApproval, Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
+import { isFreeTierEnabled } from '~/domain/feature-flags/feature-flags.server';
 import { adminApprovalTeacherRerouteLeadMarker } from './admin-approval-copy';
 
 export type AdminApprovalEmailContext = {
@@ -14,9 +15,11 @@ export async function resolveAdminApprovalEmailContext(
     FreeTierAdminApproval,
     'redirectedFromId' | 'forwardedByRole'
   >,
-  db: Tx | typeof prisma = prisma
+  db: Tx | typeof prisma = prisma,
+  options?: { pass1?: boolean }
 ): Promise<AdminApprovalEmailContext> {
-  if (approval.forwardedByRole === 'teacher') {
+  const pass1 = options?.pass1 ?? (await isFreeTierEnabled());
+  if (approval.forwardedByRole === 'teacher' && pass1) {
     return { routedByTeacher: true };
   }
   if (!approval.redirectedFromId) return {};

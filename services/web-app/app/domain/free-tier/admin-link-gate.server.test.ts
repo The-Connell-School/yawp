@@ -7,7 +7,6 @@ import {
 const findUnique = mock(async (): Promise<Record<string, unknown> | null> => null);
 const findFirst = mock(async () => null);
 
-beforeAll(() => mock.restore());
 afterAll(() => mock.restore());
 
 mock.module('~/utils/db.server', () => ({
@@ -16,6 +15,10 @@ mock.module('~/utils/db.server', () => ({
     freeTierSignedLink: { findUnique },
     freeTierAdminApproval: { findFirst },
   },
+}));
+
+mock.module('~/domain/free-tier/admin-link-known-request.server', () => ({
+  applicationIdForAdminLinkNaming: async () => 'app-1',
 }));
 
 mock.module('~/domain/free-tier/signed-link.server', () => ({
@@ -35,6 +38,7 @@ describe('resolveAdminLinkReplacedGate', () => {
     const gate = await resolveAdminLinkReplacedGate({
       token: 'fixture-token',
       peek: { ok: false, reason: 'superseded' },
+      expectedPurpose: 'ADMIN_APPROVE',
     });
     expect(gate).toEqual({
       reason: 'link_replaced',
@@ -55,6 +59,7 @@ describe('resolveAdminLinkReplacedGate', () => {
     const gate = await resolveAdminLinkReplacedGate({
       token: 'fixture-token',
       peek: { ok: false, reason: 'superseded' },
+      expectedPurpose: 'ADMIN_APPROVE',
     });
     expect(gate?.variant).toBe('resent');
     expect(linkReplacedBody(teacherName, schoolName, 'resent', true)).toBe(
@@ -74,6 +79,7 @@ describe('resolveAdminLinkReplacedGate', () => {
     const gate = await resolveAdminLinkReplacedGate({
       token: 'fixture-token',
       peek: { ok: false, reason: 'superseded' },
+      expectedPurpose: 'ADMIN_APPROVE',
     });
     expect(gate).toBeNull();
   });

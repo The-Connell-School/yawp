@@ -17,7 +17,13 @@ const peekSignedLink = mock(
     applicationId: 'app-1',
   })
 );
-const applicationIdFromSignedToken = mock((): string | null => 'app-1');
+const applicationIdForAdminLinkNaming = mock(
+  async (
+    _token: string,
+    peek: { ok: boolean; applicationId?: string }
+  ): Promise<string | null> =>
+    peek.ok ? (peek.applicationId ?? 'app-1') : null
+);
 const linkReplacedGate = mock(
   async (): Promise<{
     reason: 'link_replaced';
@@ -37,8 +43,12 @@ mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
 
 mock.module('~/domain/free-tier/signed-link.server', () => ({
   peekSignedLink,
-  applicationIdFromSignedToken,
+  applicationIdFromSignedToken: () => null,
   isFreeTierLinkSigningConfigured: () => true,
+}));
+
+mock.module('~/domain/free-tier/admin-link-known-request.server', () => ({
+  applicationIdForAdminLinkNaming,
 }));
 
 mock.module('~/domain/free-tier/admin-link-gate.server', () => ({
@@ -57,17 +67,29 @@ mock.module('~/domain/free-tier/approval-deny.server', () => ({
 
 const realSignedLink =
   globalThis.__realModules['~/domain/free-tier/signed-link.server'];
+const realKnownRequest =
+  globalThis.__realModules['~/domain/free-tier/admin-link-known-request.server'];
 
 afterAll(() => {
   mock.restore();
   if (realSignedLink) {
     mock.module('~/domain/free-tier/signed-link.server', () => realSignedLink);
   }
+  if (realKnownRequest) {
+    mock.module(
+      '~/domain/free-tier/admin-link-known-request.server',
+      () => realKnownRequest
+    );
+  }
 });
 
 beforeEach(() => {
-  applicationIdFromSignedToken.mockReset();
-  applicationIdFromSignedToken.mockReturnValue('app-1');
+  applicationIdForAdminLinkNaming.mockReset();
+  applicationIdForAdminLinkNaming.mockImplementation(async (_t, peek) => {
+    if (peek.ok) return peek.applicationId ?? 'app-1';
+    if (peek.reason === 'expired') return null;
+    return null;
+  });
   peekSignedLink.mockReset();
   peekSignedLink.mockResolvedValue({
     ok: true,
@@ -89,7 +111,26 @@ mock.module('~/domain/free-tier/approval-flow.server', () => ({
 const { loader } = await import('./route');
 
 describe('free.admin.approve loader', () => {
+  test('valid token on open request shows teacher and school', async () => {
+    findUnique.mockResolvedValueOnce({
+      name: 'Jordan Rivera',
+      schoolName: 'Lincoln High School',
+      email: 'j@example.test',
+    });
+    const data = await loader({
+      request: new Request('https://yawp.test/free/admin/approve?t=valid'),
+      params: {},
+      context: {},
+    } as LoaderFunctionArgs);
+    expect(data).toMatchObject({
+      ok: true,
+      teacherName: 'Jordan Rivera',
+      schoolName: 'Lincoln High School',
+    });
+  });
+
   test('does not offer the approve form when the application was rejected', async () => {
+    applicationIdForAdminLinkNaming.mockResolvedValueOnce('app-1');
     terminalGate.mockResolvedValueOnce({
       reason: 'declined',
       schoolName: 'Declined High',
@@ -113,6 +154,7 @@ describe('free.admin.approve loader', () => {
       ok: false,
       reason: 'superseded',
     });
+    applicationIdForAdminLinkNaming.mockResolvedValueOnce('app-1');
     terminalGate.mockResolvedValueOnce({
       reason: 'already_approved',
       schoolName: 'Lincoln High School',
@@ -137,51 +179,24 @@ describe('free.admin.approve loader', () => {
     expect(linkReplacedGate).not.toHaveBeenCalled();
   });
 
-  test('forged token shows generic invalid copy without names', async () => {
+  test('approved application with bad-opaque token shows generic invalid copy', async () => {
     peekSignedLink.mockResolvedValueOnce({ ok: false, reason: 'invalid' });
-    applicationIdFromSignedToken.mockReturnValue(null);
-    linkReplacedGate.mockResolvedValueOnce(null);
-    const data = await loader({
-      request: new Request('https://yawp.test/free/admin/approve?t=forged'),
-      params: {},
-      context: {},
-    } as LoaderFunctionArgs);
-    expect(data).toEqual({ ok: false, reason: 'invalid' });
-  });
-
-  test('unsigned token shows generic invalid copy without names', async () => {
-    peekSignedLink.mockResolvedValueOnce({ ok: false, reason: 'invalid' });
-    applicationIdFromSignedToken.mockReturnValue(null);
-    linkReplacedGate.mockResolvedValueOnce(null);
-    const data = await loader({
-      request: new Request('https://yawp.test/free/admin/approve?t=unsigned'),
-      params: {},
-      context: {},
-    } as LoaderFunctionArgs);
-    expect(data).toEqual({ ok: false, reason: 'invalid' });
-  });
-
-  test('bad-opaque token shows generic invalid copy without names', async () => {
-    peekSignedLink.mockResolvedValueOnce({ ok: false, reason: 'invalid' });
-    applicationIdFromSignedToken.mockReturnValue('app-1');
-    terminalGate.mockResolvedValueOnce(null);
-    linkReplacedGate.mockResolvedValueOnce(null);
+    applicationIdForAdminLinkNaming.mockResolvedValueOnce(null);
     const data = await loader({
       request: new Request('https://yawp.test/free/admin/approve?t=bad-opaque'),
       params: {},
       context: {},
     } as LoaderFunctionArgs);
     expect(data).toEqual({ ok: false, reason: 'invalid' });
-    expect(findUnique).not.toHaveBeenCalled();
+    expect(terminalGate).not.toHaveBeenCalled();
   });
 
-  test('purpose_mismatch token shows generic invalid copy without names', async () => {
+  test('approved application with purpose_mismatch token shows generic invalid copy', async () => {
     peekSignedLink.mockResolvedValueOnce({
       ok: false,
       reason: 'purpose_mismatch',
     });
-    applicationIdFromSignedToken.mockReturnValue('app-1');
-    linkReplacedGate.mockResolvedValueOnce(null);
+    applicationIdForAdminLinkNaming.mockResolvedValueOnce(null);
     const data = await loader({
       request: new Request(
         'https://yawp.test/free/admin/approve?t=purpose-mismatch'
@@ -190,6 +205,50 @@ describe('free.admin.approve loader', () => {
       context: {},
     } as LoaderFunctionArgs);
     expect(data).toEqual({ ok: false, reason: 'invalid' });
-    expect(findUnique).not.toHaveBeenCalled();
+    expect(terminalGate).not.toHaveBeenCalled();
+  });
+
+  test('declined application with forged token shows generic invalid copy', async () => {
+    peekSignedLink.mockResolvedValueOnce({ ok: false, reason: 'invalid' });
+    applicationIdForAdminLinkNaming.mockResolvedValueOnce(null);
+    const data = await loader({
+      request: new Request('https://yawp.test/free/admin/approve?t=forged'),
+      params: {},
+      context: {},
+    } as LoaderFunctionArgs);
+    expect(data).toEqual({ ok: false, reason: 'invalid' });
+  });
+
+  test('expired token with bad opaque shows generic invalid copy', async () => {
+    peekSignedLink.mockResolvedValueOnce({ ok: false, reason: 'expired' });
+    applicationIdForAdminLinkNaming.mockResolvedValueOnce(null);
+    const data = await loader({
+      request: new Request('https://yawp.test/free/admin/approve?t=expired-bad'),
+      params: {},
+      context: {},
+    } as LoaderFunctionArgs);
+    expect(data).toEqual({ ok: false, reason: 'invalid' });
+  });
+
+  test('expired token with verified opaque shows names', async () => {
+    peekSignedLink.mockResolvedValueOnce({ ok: false, reason: 'expired' });
+    applicationIdForAdminLinkNaming.mockImplementation(async (_t, peek) =>
+      peek.reason === 'expired' ? 'app-1' : null
+    );
+    findUnique.mockResolvedValueOnce({
+      name: 'Jordan Rivera',
+      schoolName: 'Lincoln High School',
+    });
+    const data = await loader({
+      request: new Request('https://yawp.test/free/admin/approve?t=expired-good'),
+      params: {},
+      context: {},
+    } as LoaderFunctionArgs);
+    expect(data).toEqual({
+      ok: false,
+      reason: 'expired',
+      teacherName: 'Jordan Rivera',
+      schoolName: 'Lincoln High School',
+    });
   });
 });

@@ -5,7 +5,7 @@ import {
   useLoaderData,
 } from 'react-router';
 import { CircleAlert } from 'lucide-react';
-import { applicationIdForKnownRequestOnFailedPeek } from '~/domain/free-tier/admin-link-known-request.server';
+import { applicationIdForAdminLinkNaming } from '~/domain/free-tier/admin-link-known-request.server';
 import {
   applicationIdFromSignedToken,
   peekSignedLink,
@@ -107,10 +107,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     token,
     expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
   });
-  const appId = peek.ok
-    ? peek.applicationId
-    : applicationIdForKnownRequestOnFailedPeek(token, peek) ??
-      applicationIdFromSignedToken(token);
+  const appId = await applicationIdForAdminLinkNaming(
+    token,
+    peek,
+    'ADMIN_NOT_RIGHT_PERSON'
+  );
   if (appId) {
     const gate = await fetchFreeTierApplicationTerminalGate(appId);
     if (gate) return { ok: false as const, ...gate };
@@ -149,31 +150,26 @@ export async function loader({ request }: LoaderFunctionArgs) {
         teacherName: app.name,
       };
     }
+    return { ok: false as const, reason: 'invalid' as const };
   }
-  const gate = await resolveAdminLinkTerminalGate({ token, peek });
+  const gate = await resolveAdminLinkTerminalGate({
+    token,
+    peek,
+    expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
+  });
   if (gate) return { ok: false as const, ...gate };
-  const replaced = await resolveAdminLinkReplacedGate({ token, peek });
+  const replaced = await resolveAdminLinkReplacedGate({
+    token,
+    peek,
+    expectedPurpose: 'ADMIN_NOT_RIGHT_PERSON',
+  });
   if (replaced) return { ok: false as const, ...replaced };
   if (
     peek.reason === 'invalid' ||
     peek.reason === 'purpose_mismatch' ||
     !peek.reason
   ) {
-    const knownAppId = applicationIdForKnownRequestOnFailedPeek(token, peek);
-    if (knownAppId) {
-      const app = await prisma.freeTierApplication.findUnique({
-        where: { id: knownAppId },
-        select: { name: true, schoolName: true },
-      });
-      if (app) {
-        return {
-          ok: false as const,
-          reason: 'invalid' as const,
-          teacherName: app.name,
-          schoolName: app.schoolName,
-        };
-      }
-    }
+    return { ok: false as const, reason: 'invalid' as const };
   }
   return { ok: false as const, reason: peek.reason ?? 'invalid' };
 }

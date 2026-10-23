@@ -94,7 +94,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
       showDenyFeatures,
     };
   }
-  const replaced = await resolveAdminLinkReplacedGate({ token, peek });
+  const replaced = await resolveAdminLinkReplacedGate({
+    token,
+    peek,
+    expectedPurpose: 'ADMIN_APPROVE',
+  });
   if (replaced) return { ok: false as const, ...replaced };
   return { ok: false as const, reason: peek.reason ?? 'invalid' };
 }

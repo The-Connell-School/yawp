@@ -38,12 +38,13 @@ const { adminApprovalTeacherRerouteLead, teacherAtSchool } = await import(
 describe('admin approval email forward context', () => {
   test('resolveAdminApprovalEmailContext treats teacher reroute separately from admin forward', async () => {
     findUnique.mockReset();
+    findUnique.mockResolvedValueOnce({ adminName: 'Sam Chen' });
     expect(
       await resolveAdminApprovalEmailContext({
         redirectedFromId: 'prev',
         forwardedByRole: 'teacher',
       })
-    ).toEqual({ routedByTeacher: true });
+    ).toEqual({ forwardedByAdminName: 'Sam Chen' });
     findUnique.mockResolvedValueOnce({ adminName: 'Sam Chen' });
     expect(
       await resolveAdminApprovalEmailContext({

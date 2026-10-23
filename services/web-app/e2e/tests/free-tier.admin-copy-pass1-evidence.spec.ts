@@ -19,7 +19,7 @@ const OUT = process.env.ADMIN_COPY_PASS1_EVIDENCE_DIR;
 const TEACHER = 'Jordan Rivera';
 const SCHOOL = 'Lincoln High School';
 const TEACHER_EMAIL = 'jrivera@lincolnhs.org';
-const ADMIN_EMAIL = 'patel@lincolnusd.org';
+const ADMIN_EMAIL = 'patel@example.test';
 const ADMIN_NAME = 'Dr. Patel';
 
 const evidenceEnabled =
@@ -307,7 +307,7 @@ for (const width of [1280, 390]) {
       data: {
         applicationId: app4.id,
         adminName: 'Sam Chen',
-        adminEmail: 'chen@lincolnusd.org',
+        adminEmail: 'chen@example.test',
         emailCopyVersionHash: 'pass1-evidence',
         firstSentAt: new Date(),
         status: 'PENDING',

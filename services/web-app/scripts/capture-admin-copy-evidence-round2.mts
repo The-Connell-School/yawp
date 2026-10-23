@@ -46,8 +46,8 @@ const PENDING_REASONS = [
   'email_failed',
 ] as const;
 
-function pendingPageDocument(body: string, cssHref: string) {
-  return `<!DOCTYPE html><html lang="en" class="h-full"><head><meta charset="utf-8"/><link rel="stylesheet" href="${cssHref}"/></head><body class="h-full">${body}</body></html>`;
+function pageDocument(body: string, cssHref: string, baseUrl: string) {
+  return `<!DOCTYPE html><html lang="en" class="h-full"><head><meta charset="utf-8"/><base href="${baseUrl}/"/><link rel="stylesheet" href="${cssHref}"/></head><body class="h-full">${body}</body></html>`;
 }
 
 function renderPendingFixtures(outDir: string) {
@@ -153,7 +153,7 @@ async function main() {
       const body = readFileSync(fragmentPath, 'utf8');
       await screenshotHtml(
         browser,
-        pendingPageDocument(body, cssHref),
+        pageDocument(body, cssHref, baseUrl),
         `${slug}-${suffix}`,
         [...widths]
       );

@@ -1,20 +1,18 @@
+import type { FreeTierSignedLinkPurpose } from '@app/prisma';
 import {
-  applicationIdFromSignedToken,
+  applicationIdIfOpaqueHashVerified,
   type ConsumeLinkResult,
 } from './signed-link.server';
 
-/** S9a: name teachers on invalid links only when peek fully validates the token. */
-export const REQUIRE_OPAQUE_HASH_FOR_KNOWN_REQUEST_LOOKUP = true;
-
-export function applicationIdForKnownRequestOnFailedPeek(
+/** S9a: show teacher/school names only when the token is fully verified (peek ok or opaque hash matches). */
+export async function applicationIdForAdminLinkNaming(
   token: string,
-  peek: Extract<ConsumeLinkResult, { ok: false }>
-): string | null {
-  if (peek.reason !== 'invalid' && peek.reason !== 'purpose_mismatch') {
+  peek: ConsumeLinkResult,
+  expectedPurpose: FreeTierSignedLinkPurpose
+): Promise<string | null> {
+  if (peek.ok) return peek.applicationId;
+  if (peek.reason === 'invalid' || peek.reason === 'purpose_mismatch') {
     return null;
   }
-  if (REQUIRE_OPAQUE_HASH_FOR_KNOWN_REQUEST_LOOKUP) {
-    return null;
-  }
-  return applicationIdFromSignedToken(token);
+  return applicationIdIfOpaqueHashVerified({ token, expectedPurpose });
 }

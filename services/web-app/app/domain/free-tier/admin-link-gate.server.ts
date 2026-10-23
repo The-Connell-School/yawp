@@ -4,6 +4,8 @@ import {
   peekSignedLink,
   type ConsumeLinkResult,
 } from './signed-link.server';
+import { applicationIdForAdminLinkNaming } from './admin-link-known-request.server';
+import type { FreeTierSignedLinkPurpose } from '@app/prisma';
 import type { FreeTierSignedLinkPurpose } from '@app/prisma';
 import { normalizeEmail } from './service.server';
 
@@ -129,10 +131,13 @@ export async function forwardIdempotentReplay(args: {
 export async function resolveAdminLinkTerminalGate(args: {
   token: string;
   peek: ConsumeLinkResult;
+  expectedPurpose: FreeTierSignedLinkPurpose;
 }): Promise<FreeTierAdminTerminalGate | null> {
-  const applicationId = args.peek.ok
-    ? args.peek.applicationId
-    : applicationIdFromSignedToken(args.token);
+  const applicationId = await applicationIdForAdminLinkNaming(
+    args.token,
+    args.peek,
+    args.expectedPurpose
+  );
   if (!applicationId) return null;
   return fetchFreeTierApplicationTerminalGate(applicationId);
 }
@@ -157,12 +162,17 @@ export type FreeTierAdminLinkReplacedGate = {
 export async function resolveAdminLinkReplacedGate(args: {
   token: string;
   peek: ConsumeLinkResult;
+  expectedPurpose: FreeTierSignedLinkPurpose;
 }): Promise<FreeTierAdminLinkReplacedGate | null> {
   if (args.peek.ok) return null;
   if (args.peek.reason !== 'superseded' && args.peek.reason !== 'used') {
     return null;
   }
-  const applicationId = applicationIdFromSignedToken(args.token);
+  const applicationId = await applicationIdForAdminLinkNaming(
+    args.token,
+    args.peek,
+    args.expectedPurpose
+  );
   if (!applicationId) return null;
   const app = await prisma.freeTierApplication.findUnique({
     where: { id: applicationId },

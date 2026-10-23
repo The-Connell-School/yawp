@@ -478,7 +478,10 @@ export function teacherPendingForwardError(args: {
     case 'same_as_teacher':
       return `That's your own email. Enter the administrator who approves classroom software at ${args.schoolName}.`;
     case 'same_administrator':
-      return `${args.adminName?.trim() || 'They'} already has your request. Choose a different administrator at ${args.schoolName}.`;
+      if (args.adminName?.trim()) {
+        return `${args.adminName.trim()} already has your request. Choose a different administrator at ${args.schoolName}.`;
+      }
+      return `They already have your request. Choose a different administrator at ${args.schoolName}.`;
     case 'chain_cap':
       return `Your request has been forwarded too many times. Email ${FREE_TIER_SUPPORT_EMAIL} and we'll sort it out.`;
     case 'email_failed':

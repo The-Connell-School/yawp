@@ -16,6 +16,7 @@ import { sendEmail } from '~/utils/email.server';
 import { FREE_TIER_FLAG } from '~/domain/feature-flags/feature-flags';
 import {
   isFeatureFlagEnabled,
+  isFreeTierEnabled,
   resolvedFreeTierRollout,
 } from '~/domain/feature-flags/feature-flags.server';
 import {
@@ -464,10 +465,12 @@ export async function forwardApprovalRequest(args: {
       },
     });
     if (!rules.manualReview) {
-      const forwardContext: AdminApprovalEmailContext =
-        args.userId != null
+      const pass1 = await isFreeTierEnabled();
+      const forwardContext: AdminApprovalEmailContext = pass1
+        ? args.userId != null
           ? { routedByTeacher: true }
-          : { forwardedByAdminName: pending.adminName };
+          : { forwardedByAdminName: pending.adminName }
+        : { forwardedByAdminName: pending.adminName };
       const message = await adminMessage(tx, app, next, false, forwardContext);
       await tx.freeTierAdminApproval.update({
         where: { id: next.id },
@@ -556,11 +559,17 @@ export async function forwardApprovalByToken(args: {
     ) {
       return { ok: true as const, idempotent: true as const };
     }
-    const gate = await resolveAdminLinkTerminalGate({ token: args.token, peek });
+    const purpose = args.purpose ?? 'ADMIN_NOT_RIGHT_PERSON';
+    const gate = await resolveAdminLinkTerminalGate({
+      token: args.token,
+      peek,
+      expectedPurpose: purpose,
+    });
     if (gate) return { ok: false as const, ...gate };
     const replaced = await resolveAdminLinkReplacedGate({
       token: args.token,
       peek,
+      expectedPurpose: purpose,
     });
     if (replaced) return { ok: false as const, ...replaced };
     return peek;
@@ -648,12 +657,13 @@ export async function queueManualApprovalReminder(args: {
           +now - +(previous.sentAt ?? previous.createdAt) < 600000))
     )
       return fail('rate_limited');
+    const pass1 = await isFreeTierEnabled();
     const message = await adminMessage(
       tx,
       app,
       approval,
       true,
-      await resolveAdminApprovalEmailContext(approval, tx)
+      pass1 ? await resolveAdminApprovalEmailContext(approval, tx) : {}
     );
     const job = await queue(
       tx,
@@ -755,7 +765,8 @@ async function scheduleApplication(applicationId: string, now: Date) {
           },
         },
       });
-      if (!existing)
+      if (!existing) {
+        const pass1 = await isFreeTierEnabled();
         await queue(
           tx,
           approval.id,
@@ -767,10 +778,11 @@ async function scheduleApplication(applicationId: string, now: Date) {
             app,
             approval,
             true,
-            await resolveAdminApprovalEmailContext(approval, tx)
+            pass1 ? await resolveAdminApprovalEmailContext(approval, tx) : {}
           ),
           { source: 'auto' }
         );
+      }
     }
     if (
       approval.nextTeacherFollowUpAt &&
@@ -942,17 +954,21 @@ async function deliverJob(id: string, now: Date) {
         select: { expiresAt: true, usedAt: true },
       });
       if (!link || link.usedAt || +link.expiresAt <= Date.now() + HOUR_MS) {
-        const storedContext = adminApprovalEmailContextFromStoredMessage(
-          message
-        );
-        const approvalContext = await resolveAdminApprovalEmailContext(
-          job.approval,
-          tx
-        );
-        const emailContext = mergeAdminApprovalEmailContext(
-          approvalContext,
-          storedContext
-        );
+        const pass1 = await isFreeTierEnabled();
+        let emailContext: AdminApprovalEmailContext = {};
+        if (pass1) {
+          const storedContext = adminApprovalEmailContextFromStoredMessage(
+            message
+          );
+          const approvalContext = await resolveAdminApprovalEmailContext(
+            job.approval,
+            tx
+          );
+          emailContext = mergeAdminApprovalEmailContext(
+            approvalContext,
+            storedContext
+          );
+        }
         const refreshed = await adminMessage(
           tx,
           job.approval.application,

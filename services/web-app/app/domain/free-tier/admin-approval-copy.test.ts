@@ -269,4 +269,12 @@ test('teacher pending forward errors are pinned', () => {
   expect(
     teacherPendingForwardError({ reason: 'email_failed', schoolName: school })
   ).toBe("We couldn't send your request. Try again.");
+  expect(
+    teacherPendingForwardError({
+      reason: 'same_administrator',
+      schoolName: school,
+    })
+  ).toBe(
+    'They already have your request. Choose a different administrator at Lincoln High School.'
+  );
 });
