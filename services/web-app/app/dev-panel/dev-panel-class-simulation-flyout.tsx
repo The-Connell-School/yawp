@@ -110,6 +110,15 @@ export function DevPanelClassSimulationFlyout({
       toast.success(result?.message ?? 'Done.', {
         className: 'yawp-dev-panel-jump-toast',
       });
+      if (intent === 'populate' && typeof result?.counts?.students === 'number') {
+        setClasses((prev) =>
+          prev.map((entry) =>
+            entry.id === classId
+              ? { ...entry, simulatedStudentCount: result.counts.students }
+              : entry
+          )
+        );
+      }
       if (intent === 'clear') {
         setClasses((prev) =>
           prev.map((entry) =>
@@ -304,7 +313,7 @@ export function DevPanelClassSimulationFlyout({
                 void run('clear');
               }}
             >
-              Confirm
+              Clear
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

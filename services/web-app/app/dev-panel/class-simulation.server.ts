@@ -5,7 +5,6 @@ import {
   lockClassCollaborationDeployments,
   lockStudentRosters,
 } from '~/domain/collaboration/class-assignment-lock.server';
-import { FreeClassSeatError } from '~/domain/free-tier/free-class-seat-error';
 import {
   buildAssignmentModuleSessionCreateData,
 } from '~/domain/documents.server';
@@ -583,20 +582,11 @@ export async function populateDevPanelClassSimulation(params: {
   );
 
   return { ok: true as const, counts: summary };
-  } catch (error) {
-    if (error instanceof FreeClassSeatError) {
-      return {
-        ok: false as const,
-        status: 409 as const,
-        error: error.message,
-      };
-    }
-    const message =
-      error instanceof Error ? error.message : 'Could not populate this class.';
+  } catch {
     return {
       ok: false as const,
       status: 400 as const,
-      error: message,
+      error: 'Could not populate this class. Try a smaller student count.',
     };
   }
 }
