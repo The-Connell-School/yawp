@@ -87,7 +87,7 @@ export function DevPanelFreeTierFlyout({
   const [filter, setFilter] = useState('');
   const [jumping, setJumping] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [error, setError] = useState('');
+  const [jumpFailed, setJumpFailed] = useState(false);
   const throwawayRef = useRef<HTMLInputElement>(null);
   const filterId = useId();
   const isPhone = useMedia('(max-width: 639px)');
@@ -123,8 +123,6 @@ export function DevPanelFreeTierFlyout({
 
   const noMatches = filter.trim().length > 0 && groups.length === 0;
   const selectedVisible = selected ? visibleStateIds.has(selected) : false;
-  const jumpErrorStateLabel = selectedState?.state.label ?? 'this state';
-
   const beginJump = () => {
     if (!selected || !orgId || !selectedVisible) return;
     if (!throwaway) {
@@ -139,7 +137,7 @@ export function DevPanelFreeTierFlyout({
     const found = findFreeTierState(selected);
     setConfirmOpen(false);
     setJumping(true);
-    setError('');
+    setJumpFailed(false);
     try {
       const response = await fetch('/api/dev-panel/free-tier-jump', {
         method: 'POST',
@@ -148,9 +146,8 @@ export function DevPanelFreeTierFlyout({
         body: JSON.stringify({ stateId: selected, throwaway, organizationId: orgId }),
       });
       const result = await response.json().catch(() => null);
-      if (!response.ok) {
-        const label = found?.state.label ?? 'this state';
-        setError(label);
+      if (!response.ok || result?.ok === false) {
+        setJumpFailed(true);
         setJumping(false);
         return;
       }
@@ -165,17 +162,17 @@ export function DevPanelFreeTierFlyout({
         window.location.assign(redirectTo);
       }, 350);
     } catch {
-      setError(jumpErrorStateLabel);
+      setJumpFailed(true);
       setJumping(false);
     }
   };
 
-  const primaryLabel = error ? 'Try again' : 'Jump to this state';
+  const primaryLabel = jumpFailed ? 'Try again' : 'Jump to this state';
   const jumpDisabled =
     jumping ||
     !orgId ||
-    (!error && (!selected || !selectedVisible)) ||
-    (Boolean(error) && !selectedVisible);
+    (!jumpFailed && (!selected || !selectedVisible)) ||
+    (jumpFailed && !selectedVisible);
 
   return (
     <div
@@ -277,14 +274,14 @@ export function DevPanelFreeTierFlyout({
             : null}
         </div>
       </div>
-      {error ? (
+      {jumpFailed ? (
         <div
           role="alert"
           className="mx-3 mb-2 flex gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
         >
           <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <div>
-            <p className="font-semibold">{`Couldn't jump to "${error}"`}</p>
+            <p className="font-semibold">Couldn&apos;t jump to this state.</p>
             <p>
               Your choice is still selected. Try again, or pick another state.
             </p>
