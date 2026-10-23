@@ -72,6 +72,11 @@ test('list joins only server User email/name, keeps filters and pagination, norm
       user: { email: null, name: null },
     },
   ]);
+  const queryRaw = mock(async () => [
+    { id: 'new', hasScreenshot: true },
+    { id: 'legacy', hasScreenshot: false },
+    { id: 'invalid-json', hasScreenshot: false },
+  ]);
   const query = {
     environment: 'demo',
     userId: 'tester-1',
@@ -82,7 +87,10 @@ test('list joins only server User email/name, keeps filters and pagination, norm
     limit: 51,
     format: 'json',
   } as const;
-  const rows = await listTesterFeedback(query, { findMany } as any);
+  const rows = await listTesterFeedback(query, {
+    findMany,
+    $queryRaw: queryRaw,
+  } as any);
   expect(findMany).toHaveBeenCalledWith({
     where: {
       environment: 'demo',
@@ -90,18 +98,32 @@ test('list joins only server User email/name, keeps filters and pagination, norm
       severity: 'high',
       createdAt: { gte: new Date(query.since), lte: new Date(query.until) },
     },
-    include: { user: { select: { email: true, name: true } } },
+    select: {
+      id: true,
+      userId: true,
+      url: true,
+      userAgent: true,
+      whatIDid: true,
+      whatHappened: true,
+      whatIWish: true,
+      severity: true,
+      createdAt: true,
+      environment: true,
+      actions: true,
+      user: { select: { email: true, name: true } },
+    },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     cursor: { id: 'cursor' },
     skip: 1,
     take: 51,
   });
   expect(
-    rows.map(({ id, actions, userEmail, userName }) => ({
+    rows.map(({ id, actions, userEmail, userName, hasScreenshot }) => ({
       id,
       actions,
       userEmail,
       userName,
+      hasScreenshot,
     }))
   ).toEqual([
     {
@@ -109,9 +131,22 @@ test('list joins only server User email/name, keeps filters and pagination, norm
       actions: [{ type: 'route', path: '/app' }],
       userEmail: 'server@example.test',
       userName: 'Server User',
+      hasScreenshot: true,
     },
-    { id: 'legacy', actions: null, userEmail: null, userName: null },
-    { id: 'invalid-json', actions: null, userEmail: null, userName: null },
+    {
+      id: 'legacy',
+      actions: null,
+      userEmail: null,
+      userName: null,
+      hasScreenshot: false,
+    },
+    {
+      id: 'invalid-json',
+      actions: null,
+      userEmail: null,
+      userName: null,
+      hasScreenshot: false,
+    },
   ]);
 });
 test('writes exact validated structured actions through the existing transaction', async () => {

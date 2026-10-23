@@ -16,7 +16,11 @@ import {
   feedbackPath,
   type FeedbackAnalytics,
 } from '~/utils/demo-feedback-context';
+import { DEMO_FEEDBACK_NOTE_LIMIT } from '~/utils/demo-feedback.server';
 import './demo-feedback-widget.css';
+
+const demoFeedbackNoteLimitLabel =
+  DEMO_FEEDBACK_NOTE_LIMIT.toLocaleString('en-US');
 
 type Analytics = FeedbackAnalytics & {
   on(
@@ -161,12 +165,14 @@ export function DemoFeedbackWidget({ analytics }: { analytics?: Analytics }) {
               id="demo-feedback-note"
               value={note}
               onChange={(event) => setNote(event.target.value)}
-              maxLength={4000}
+              maxLength={DEMO_FEEDBACK_NOTE_LIMIT}
               required
               rows={5}
               disabled={pending || status === 'saved'}
             />
-            <p className="text-xs text-slate-500">Up to 4,000 characters.</p>
+            <p className="text-xs text-slate-500">
+              Up to {demoFeedbackNoteLimitLabel} characters.
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="demo-feedback-severity">Severity</Label>

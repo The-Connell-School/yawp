@@ -1,4 +1,4 @@
-import type { Prisma } from '@app/prisma';
+import { Prisma, type Prisma as PrismaTypes } from '@app/prisma';
 import { prisma } from './db.server';
 import { getUserId } from './auth.server';
 import {
@@ -36,7 +36,24 @@ export const testerFeedbackDependencies: FeedbackDependencies = {
   auditInternalRead: recordInternalPlatformWriteAudit,
   save: saveTesterFeedback,
   list: listTesterFeedback,
+  screenshotPresence: loadTesterFeedbackScreenshotPresence,
+  loadScreenshot: loadTesterFeedbackScreenshot,
 };
+
+const listSelect = {
+  id: true,
+  userId: true,
+  url: true,
+  userAgent: true,
+  whatIDid: true,
+  whatHappened: true,
+  whatIWish: true,
+  severity: true,
+  createdAt: true,
+  environment: true,
+  actions: true,
+  user: { select: { email: true, name: true } },
+} as const;
 
 export async function listTesterFeedback(
   input: FeedbackQuery,
@@ -56,21 +73,54 @@ export async function listTesterFeedback(
           }
         : {}),
     },
-    include: { user: { select: { email: true, name: true } } },
+    select: listSelect,
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
     take: input.limit,
   });
+  const presence = await loadTesterFeedbackScreenshotPresence(
+    rows.map((row) => row.id),
+    model
+  );
   return rows.map(({ user, ...entry }) => ({
     ...entry,
     actions: Array.isArray(entry.actions) ? entry.actions : null,
     userEmail: user?.email ?? null,
     userName: user?.name ?? null,
+    hasScreenshot: presence.get(entry.id) ?? false,
   }));
 }
 
+export async function loadTesterFeedbackScreenshotPresence(
+  ids: string[],
+  model: Pick<typeof prisma, '$queryRaw'> = prisma
+) {
+  const presence = new Map<string, boolean>();
+  if (!ids.length) return presence;
+  const rows = await model.$queryRaw<{ id: string; hasScreenshot: boolean }[]>`
+    SELECT id,
+      (screenshot IS NOT NULL AND btrim(screenshot) <> '') AS "hasScreenshot"
+    FROM "TesterFeedback"
+    WHERE id IN (${Prisma.join(ids)})
+  `;
+  for (const row of rows) presence.set(row.id, row.hasScreenshot);
+  return presence;
+}
+
+export async function loadTesterFeedbackScreenshot(
+  id: string,
+  model = prisma.testerFeedback
+) {
+  const row = await model.findUnique({
+    where: { id },
+    select: { screenshot: true },
+  });
+  const stored = row?.screenshot?.trim();
+  return stored ? stored : null;
+}
+
 export type FeedbackWriteTransaction = Pick<
-  Prisma.TransactionClient,
+  PrismaTypes.TransactionClient,
   '$executeRaw' | 'testerFeedback'
 >;
 type FeedbackWriteRunner = (
