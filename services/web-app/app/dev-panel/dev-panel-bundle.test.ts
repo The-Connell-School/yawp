@@ -58,6 +58,17 @@ describe('dev panel production bundle guard', () => {
     expect(config).toContain('dev-panel-entry.stub.tsx');
   });
 
+  test('feedback server modules exclude local dev persona imports', () => {
+    for (const file of [
+      'dev-panel-feedback.server.ts',
+      'dev-panel-signed-out-feedback.server.ts',
+    ]) {
+      const src = readFileSync(path.join(import.meta.dir, file), 'utf8');
+      expect(src.includes('dev-personas')).toBe(false);
+      expect(src.includes('LOCAL_DEV_PASSWORD')).toBe(false);
+    }
+  });
+
   test(
     'production client build output excludes dev panel modules and shortcut handler',
     () => {

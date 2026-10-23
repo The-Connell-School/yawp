@@ -102,7 +102,7 @@ function AccessCodeModal({
           </div>
         ) : (
           <div className="space-y-3">
-            <Label htmlFor="dev-panel-access-code">Developer tools access code</Label>
+            <Label htmlFor="dev-panel-access-code">Access code</Label>
             <Input
               id="dev-panel-access-code"
               autoComplete="off"
@@ -312,7 +312,12 @@ export function DevPanelShell() {
             <p className="mt-2 text-sm text-muted-foreground">
               Enter the access code to use them in this browser.
             </p>
-            <Button type="button" className="mt-4 w-full max-w-xs" onClick={() => setAccessOpen(true)}>
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-4 w-full max-w-xs"
+              onClick={() => setAccessOpen(true)}
+            >
               Enter access code
             </Button>
           </div>
@@ -384,8 +389,7 @@ export function DevPanelShell() {
               type="button"
               className={cn(
                 'flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm font-medium hover:bg-accent',
-                state.subSheet === 'free-tier-states' &&
-                  'border-r-4 border-primary bg-accent/60'
+                state.subSheet === 'free-tier-states' && 'bg-accent/60'
               )}
               onClick={() => openSubSheet('free-tier-states')}
             >
@@ -476,8 +480,7 @@ export function DevPanelShell() {
             type="button"
             className={cn(
               'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-accent',
-              state.subSheet === 'give-feedback' &&
-                'border-r-4 border-primary bg-accent/60'
+              state.subSheet === 'give-feedback' && 'bg-accent/60'
             )}
             onClick={() => openSubSheet('give-feedback')}
           >
@@ -526,26 +529,43 @@ export function DevPanelShell() {
       <Sheet open={state.open} onOpenChange={(open) => !open && closePanel()}>
         <SheetContent
           side="right"
-          className="flex w-full max-w-none flex-col p-0 sm:max-w-[360px]"
+          showCloseButton={false}
+          className="relative flex w-full max-w-none flex-col p-0 sm:max-w-[360px]"
           data-yawp-dev-panel
           id="devtools"
           role={isPhone ? 'dialog' : undefined}
           aria-modal={isPhone ? true : undefined}
         >
-          {(isPhone || isTablet) && state.subSheet === 'give-feedback' ? (
+          {isPhone && state.subSheet === 'give-feedback' ? (
             <DevPanelGiveFeedbackFlyout
               onClose={closeSubSheet}
-              pushed={isPhone}
+              pushed
               feedbackActions={() => feedbackContext.current.snapshot()}
             />
-          ) : (isPhone || isTablet) && state.subSheet === 'free-tier-states' ? (
+          ) : isPhone && state.subSheet === 'free-tier-states' ? (
             <DevPanelFreeTierFlyout
               onClose={closeSubSheet}
               orgId={selectedOrg}
-              pushed={isPhone}
+              pushed
             />
           ) : (
-            panelBody
+            <>
+              {panelBody}
+              {isTablet && state.subSheet === 'give-feedback' ? (
+                <DevPanelGiveFeedbackFlyout
+                  onClose={closeSubSheet}
+                  pushed
+                  feedbackActions={() => feedbackContext.current.snapshot()}
+                />
+              ) : null}
+              {isTablet && state.subSheet === 'free-tier-states' ? (
+                <DevPanelFreeTierFlyout
+                  onClose={closeSubSheet}
+                  orgId={selectedOrg}
+                  pushed
+                />
+              ) : null}
+            </>
           )}
         </SheetContent>
       </Sheet>

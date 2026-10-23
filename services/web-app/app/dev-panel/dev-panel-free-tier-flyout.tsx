@@ -1,5 +1,17 @@
 import { ChevronLeft, CircleAlert, Loader2, Search } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+
+function useMedia(query: string) {
+  const [matches, setMatches] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const update = () => setMatches(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, [query]);
+  return matches;
+}
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -30,13 +42,13 @@ export function consumeDevPanelJumpToast() {
     params.delete(JUMP_TOAST_QUERY);
     const next = `${window.location.pathname}${params.size ? `?${params}` : ''}${window.location.hash}`;
     window.history.replaceState(null, '', next);
-    toast.success(`Jumped to ${fromQuery}`);
+    toast.success(`Jumped to ${fromQuery}`, { className: 'yawp-dev-panel-jump-toast' });
     return;
   }
   const label = window.sessionStorage.getItem(JUMP_TOAST_KEY);
   if (!label) return;
   window.sessionStorage.removeItem(JUMP_TOAST_KEY);
-  toast.success(`Jumped to ${label}`);
+  toast.success(`Jumped to ${label}`, { className: 'yawp-dev-panel-jump-toast' });
 }
 
 function appendJumpToastToRedirect(redirectTo: string, label: string) {
@@ -68,6 +80,7 @@ export function DevPanelFreeTierFlyout({
   const [error, setError] = useState('');
   const throwawayRef = useRef<HTMLInputElement>(null);
   const filterId = useId();
+  const isPhone = useMedia('(max-width: 639px)');
   const selected = state.forms.selectedStateId ?? null;
   const throwaway = state.forms.throwawaySwitch !== false;
   const selectedState = selected ? findFreeTierState(selected) : null;
@@ -127,9 +140,7 @@ export function DevPanelFreeTierFlyout({
       const result = await response.json().catch(() => null);
       if (!response.ok) {
         const label = found?.state.label ?? 'this state';
-        setError(
-          `Couldn't jump to '${label}' Your choice is still selected. Try again, or pick another state.`
-        );
+        setError(label);
         setJumping(false);
         return;
       }
@@ -144,16 +155,17 @@ export function DevPanelFreeTierFlyout({
         window.location.assign(redirectTo);
       }, 350);
     } catch {
-      setError(
-        `Couldn't jump to '${jumpErrorStateLabel}' Your choice is still selected. Try again, or pick another state.`
-      );
+      setError(jumpErrorStateLabel);
       setJumping(false);
     }
   };
 
   const primaryLabel = error ? 'Try again' : 'Jump to this state';
   const jumpDisabled =
-    jumping || !orgId || (!error && (!selected || !selectedVisible));
+    jumping ||
+    !orgId ||
+    (!error && (!selected || !selectedVisible)) ||
+    (Boolean(error) && !selectedVisible);
 
   return (
     <div
@@ -162,7 +174,10 @@ export function DevPanelFreeTierFlyout({
       className={cn(
         'flex flex-col bg-background',
         pushed
-          ? 'relative min-h-full'
+          ? cn(
+              'z-20 flex flex-col bg-background',
+              isPhone ? 'relative min-h-full' : 'absolute inset-0'
+            )
           : 'absolute inset-y-0 right-full z-10 w-[var(--yawp-dev-panel-width)] border-r shadow-lg'
       )}
       role="dialog"
@@ -227,7 +242,10 @@ export function DevPanelFreeTierFlyout({
               {group.states.map((entry) => (
                 <label
                   key={entry.id}
-                  className="flex cursor-pointer gap-2 rounded-md border px-2 py-2 text-sm"
+                  className={cn(
+                    'flex cursor-pointer gap-2 rounded-md border px-2 py-2 text-sm',
+                    selected === entry.id && 'border-primary/30 bg-accent/60'
+                  )}
                 >
                   <input
                     type="radio"
@@ -248,16 +266,21 @@ export function DevPanelFreeTierFlyout({
           ))
             : null}
         </div>
-        {error ? (
-          <div
-            role="alert"
-            className="flex gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-          >
-            <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-            <p>{error}</p>
-          </div>
-        ) : null}
       </div>
+      {error ? (
+        <div
+          role="alert"
+          className="mx-3 mb-2 flex gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
+          <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <div>
+            <p className="font-semibold">{`Couldn't jump to '${error}'`}</p>
+            <p>
+              Your choice is still selected. Try again, or pick another state.
+            </p>
+          </div>
+        </div>
+      ) : null}
       <div className="border-t p-3">
         <Button
           type="button"

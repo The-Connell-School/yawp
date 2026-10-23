@@ -27,8 +27,7 @@ mock.module('~/utils/preview-access.server', () => ({
 
 mock.module('~/dev-panel/dev-panel-signed-out-feedback.server', () => ({
   ensureDevPanelSignedOutTesterUser: async () => 'signed-out-user-id',
-  resolveSignedOutFeedbackOrganizationId: async () => 'org-preview-1',
-  devPanelSeatRateLimitKey: () => 'dev_panel_feedback_seat:org-preview-1',
+  devPanelSeatRateLimitKey: () => 'dev_panel_feedback_seat:org-preview-1:Preview seat',
   DEV_PANEL_SIGNED_OUT_TESTER_EMAIL: 'dev-panel-signed-out-tester@example.test',
 }));
 
@@ -139,7 +138,8 @@ describe.skipIf(!run)('submitDevPanelFeedback contract', () => {
   });
 
   test('accepts realistic compressed screenshot payloads under body limit', async () => {
-    const screenshot = 'data:image/jpeg;base64,' + 'A'.repeat(120_000);
+    const screenshot =
+      'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDABALDA4MChAODQ4SERATGCgaGBYWGCAjJycnJycnJycnJycnJycnJycnJycnJycnJycnJycnJycnJycnJycnJycnL/2wBDAQ4ODhANDg4dERUQEBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBL/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAGfAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQMBAT8Af//EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQIBAT8Af//EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAz8Cf//Z';
     const response = await submitDevPanelFeedback(
       post({ ...payload, screenshot })
     );

@@ -8,12 +8,6 @@
   }
 }
 
-@media (min-width: 1280px) and (max-width: 1439px) {
-  :root {
-    --yawp-dev-panel-width: 400px;
-  }
-}
-
 html.yawp-dev-panel-open {
   --yawp-dev-panel-width: 360px;
 }
@@ -21,12 +15,6 @@ html.yawp-dev-panel-open {
 @media (min-width: 1024px) and (max-width: 1279px) {
   html.yawp-dev-panel-open {
     --yawp-dev-panel-width: 320px;
-  }
-}
-
-@media (min-width: 1280px) {
-  html.yawp-dev-panel-open {
-    --yawp-dev-panel-width: 400px;
   }
 }
 
@@ -119,6 +107,13 @@ html.yawp-dev-panel-capturing [data-yawp-dev-panel] {
 body:has(.yawp-dev-panel-beaker),
 body:has([data-yawp-dev-panel]) {
   --teaching-access-toast-bottom: calc(5rem + 2.75rem + 0.75rem);
+}
+
+html.yawp-dev-panel-open [data-sonner-toast].yawp-dev-panel-jump-toast {
+  right: calc(var(--yawp-dev-panel-width) + 1rem);
+  left: auto;
+  bottom: 1.25rem;
+  font-weight: 600;
 }
 
 @media (max-width: 639px) {

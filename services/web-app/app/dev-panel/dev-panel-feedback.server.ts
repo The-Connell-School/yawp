@@ -6,9 +6,12 @@ import {
 } from '~/utils/demo-feedback-context';
 import { getUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import type { FeedbackInput } from '~/utils/tester-feedback.server';
 import { assertDevPanelRoute } from './dev-panel-route-guard.server';
 import { devPanelFeedbackPath } from './dev-panel-feedback-path';
+import {
+  parseDevPanelFeedbackScreenshot,
+  DEV_PANEL_SCREENSHOT_MAX_DECODED_BYTES,
+} from './dev-panel-feedback-screenshot.server';
 import {
   getPreviewAccessSeat,
   isPreviewDevLoginAccessCodeRequired,
@@ -16,7 +19,6 @@ import {
 import {
   devPanelSeatRateLimitKey,
   ensureDevPanelSignedOutTesterUser,
-  resolveSignedOutFeedbackOrganizationId,
 } from './dev-panel-signed-out-feedback.server';
 
 export const DEV_PANEL_FEEDBACK_BODY_LIMIT = 600_000;
@@ -55,7 +57,7 @@ const submissionSchema = z.object({
   note: z.string().trim().min(1).max(2000),
   url: pathSchema,
   actions: z.array(actionSchema).max(5),
-  screenshot: z.string().max(500_000).nullable().optional(),
+  screenshot: z.string().max(DEV_PANEL_FEEDBACK_BODY_LIMIT).nullable().optional(),
   screenshotOmitted: z.boolean().optional(),
 });
 
@@ -67,10 +69,20 @@ const json = (body: unknown, status: number) =>
 
 const SIGNED_OUT_ATTRIBUTION = '[Signed-out preview tester]';
 
-async function saveDevPanelFeedback(
-  input: FeedbackInput,
-  rateLimitKey: string
-) {
+type FeedbackRowInput = {
+  userId: string;
+  environment: string;
+  userAgent: string;
+  url: string;
+  whatHappened: string;
+  whatIDid: string;
+  whatIWish: string;
+  severity: null;
+  actions: FeedbackAction[];
+  screenshot: string | null;
+};
+
+async function saveDevPanelFeedback(input: FeedbackRowInput, rateLimitKey: string) {
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('tester_feedback:' || ${rateLimitKey}))`;
     const count = await tx.testerFeedback.count({
@@ -89,10 +101,7 @@ async function resolveFeedbackAuthor(request: Request) {
   const signedIn = await getUserId(request);
   if (signedIn) return { userId: signedIn, signedOut: false as const };
   const seat = await getPreviewAccessSeat(request);
-  const organizationId = await resolveSignedOutFeedbackOrganizationId(
-    seat?.organizationId
-  );
-  const userId = await ensureDevPanelSignedOutTesterUser(organizationId);
+  const userId = await ensureDevPanelSignedOutTesterUser();
   return { userId, signedOut: true as const, seat };
 }
 
@@ -112,8 +121,8 @@ function actionSummary(actions: FeedbackAction[]) {
     .slice(0, 4000);
 }
 
-function screenshotWish(screenshot: string | null | undefined, omitted?: boolean) {
-  if (screenshot) return '[screenshot attached in dev panel feedback]';
+function screenshotWish(screenshot: string | null, omitted?: boolean) {
+  if (screenshot) return '[screenshot stored on feedback record]';
   if (omitted) return '[screenshot omitted — capture exceeded size limit]';
   return '';
 }
@@ -124,18 +133,18 @@ export async function submitDevPanelFeedback(request: Request) {
   if (request.method !== 'POST') {
     return new Response(null, { status: 405, headers: { Allow: 'POST' } });
   }
+  const requestOrigin = new URL(request.url).origin;
   const origin = request.headers.get('origin');
-  if (
-    origin !== new URL(request.url).origin &&
-    origin !== 'https://demo.yawp.school'
-  ) {
+  if (origin && origin !== requestOrigin) {
     return json({ error: 'Invalid origin' }, 403);
   }
   if (request.headers.get('content-type')?.split(';')[0] !== 'application/json') {
     return json({ error: 'Unsupported content type' }, 415);
   }
   const body = await readBoundedText(request, DEV_PANEL_FEEDBACK_BODY_LIMIT);
-  if (body === null) return json({ error: 'Feedback is too large' }, 413);
+  if (body === null) {
+    return json({ error: 'Feedback payload is too large to send.' }, 413);
+  }
   let value: unknown;
   try {
     value = JSON.parse(body);
@@ -144,12 +153,27 @@ export async function submitDevPanelFeedback(request: Request) {
   }
   const parsed = submissionSchema.safeParse(value);
   if (!parsed.success) {
-    return json(
-      {
-        error: 'Add a note of up to 2,000 characters with a valid page location.',
-      },
-      400
-    );
+    const noteIssue = parsed.error.issues.find((issue) => issue.path[0] === 'note');
+    if (noteIssue) {
+      return json({ error: 'Add a note of up to 2,000 characters.' }, 400);
+    }
+    return json({ error: 'Invalid page location or feedback payload.' }, 400);
+  }
+  let screenshot: string | null = null;
+  if (parsed.data.screenshot) {
+    const shot = parseDevPanelFeedbackScreenshot(parsed.data.screenshot);
+    if (!shot.ok) {
+      if (shot.reason === 'size') {
+        return json(
+          {
+            error: `Screenshot is too large. Keep it under ${Math.floor(DEV_PANEL_SCREENSHOT_MAX_DECODED_BYTES / 1000)} KB.`,
+          },
+          413
+        );
+      }
+      return json({ error: 'Screenshot must be a JPEG or WebP image.' }, 400);
+    }
+    screenshot = shot.screenshot;
   }
   const author = await resolveFeedbackAuthor(request);
   if (author.signedOut && isPreviewDevLoginAccessCodeRequired()) {
@@ -187,17 +211,18 @@ export async function submitDevPanelFeedback(request: Request) {
         url: parsed.data.url,
         whatHappened: parsed.data.note,
         whatIDid,
-        whatIWish: screenshotWish(
-          parsed.data.screenshot,
-          parsed.data.screenshotOmitted
-        ),
+        whatIWish: screenshotWish(screenshot, parsed.data.screenshotOmitted),
         severity: null,
         actions: parsed.data.actions,
+        screenshot,
       },
       rateLimitKey
     );
     if (!saved) {
-      return json({ error: 'Please wait before sending more feedback.' }, 429);
+      return json(
+        { error: 'Please wait a few minutes before sending more feedback.' },
+        429
+      );
     }
     return json({ ok: true }, 201);
   } catch {

@@ -160,7 +160,10 @@ export function DevPanelGiveFeedbackFlyout({
       className={cn(
         'flex flex-col bg-background',
         pushed
-          ? 'relative min-h-full'
+          ? cn(
+              'z-20 flex flex-col bg-background',
+              isPhone ? 'relative min-h-full' : 'absolute inset-0'
+            )
           : 'absolute inset-y-0 right-full z-10 w-[var(--yawp-dev-panel-width)] border-r shadow-lg'
       )}
       role="dialog"
@@ -175,15 +178,27 @@ export function DevPanelGiveFeedbackFlyout({
         ) : null}
         <h2 className="flex-1 text-base font-semibold">Give feedback</h2>
         {!pushed ? (
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={status === 'submitting'}
+            onClick={onClose}
+          >
             Close
           </Button>
         ) : null}
       </div>
-      <div className="flex-1 space-y-4 overflow-y-auto p-4">
+      <div
+        className={cn(
+          'flex flex-1 flex-col overflow-hidden',
+          status === 'sent' && 'justify-center'
+        )}
+      >
+        <div className="flex-1 space-y-4 overflow-y-auto p-4">
         {status === 'sent' ? (
           <div className="space-y-4">
-            <div className="flex flex-col items-center gap-3 pt-2 text-center">
+            <div className="flex flex-col items-center gap-3 text-center">
               <div
                 className="flex size-12 items-center justify-center rounded-full bg-primary/15"
                 aria-hidden="true"
@@ -213,20 +228,6 @@ export function DevPanelGiveFeedbackFlyout({
                 <dd className="font-mono text-xs">{sentPathRef.current}</dd>
               </div>
             </dl>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => {
-                setStatus('idle');
-                updateForms({ feedbackNote: '' });
-                setScreenshot(null);
-                setScreenshotOmitted(false);
-                window.setTimeout(() => document.getElementById(noteId)?.focus(), 0);
-              }}
-            >
-              Send another
-            </Button>
           </div>
         ) : (
           <>
@@ -267,19 +268,6 @@ export function DevPanelGiveFeedbackFlyout({
                 {error}
               </p>
             ) : null}
-            {status === 'error' ? (
-              <div
-                id="dev-panel-feedback-error"
-                role="alert"
-                className="flex gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-              >
-                <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                <p>
-                  Couldn&apos;t send your feedback. Your note is still here. Check your connection
-                  and try again.
-                </p>
-              </div>
-            ) : null}
             {screenshot ? (
               <div
                 className={cn(
@@ -295,40 +283,89 @@ export function DevPanelGiveFeedbackFlyout({
                 />
               </div>
             ) : null}
-            <div className="space-y-1">
+            <div
+              className={cn(
+                'space-y-1',
+                status === 'submitting' && 'opacity-60'
+              )}
+            >
               <Label htmlFor={pageUrlId}>Page URL</Label>
-              <Input id={pageUrlId} readOnly value={displayPath} />
+              <Input
+                id={pageUrlId}
+                readOnly
+                disabled={status === 'submitting'}
+                value={displayPath}
+              />
             </div>
           </>
         )}
-      </div>
-      {status !== 'sent' ? (
-        <div
-          className={cn(
-            'border-t bg-background p-4',
-            isPhone && 'fixed inset-x-0 bottom-0 z-20 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]'
-          )}
-          style={isPhone ? footerStyle : undefined}
-        >
-          <Button
-            type="button"
-            className="w-full"
-            disabled={status === 'submitting'}
-            onClick={() => void submit()}
-          >
-            {status === 'submitting' ? (
-              <>
-                <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
-                Sending…
-              </>
-            ) : status === 'error' ? (
-              'Try again'
-            ) : (
-              'Send feedback'
-            )}
-          </Button>
         </div>
-      ) : null}
+        {status === 'error' ? (
+          <div
+            id="dev-panel-feedback-error"
+            role="alert"
+            className="mx-4 mb-2 flex gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            <div>
+              <p className="font-semibold">Couldn&apos;t send your feedback</p>
+              <p>
+                Your note is still here. Check your connection and try again.
+              </p>
+            </div>
+          </div>
+        ) : null}
+        {status === 'sent' ? (
+          <div
+            className={cn(
+              'border-t bg-background p-4',
+              isPhone && 'fixed inset-x-0 bottom-0 z-20 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]'
+            )}
+            style={isPhone ? footerStyle : undefined}
+          >
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                setStatus('idle');
+                updateForms({ feedbackNote: '' });
+                setScreenshot(null);
+                setScreenshotOmitted(false);
+                window.setTimeout(() => document.getElementById(noteId)?.focus(), 0);
+              }}
+            >
+              Send another
+            </Button>
+          </div>
+        ) : (
+          <div
+            className={cn(
+              'border-t bg-background p-4',
+              isPhone && 'fixed inset-x-0 bottom-0 z-20 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]'
+            )}
+            style={isPhone ? footerStyle : undefined}
+          >
+            <Button
+              type="button"
+              className="w-full"
+              disabled={status === 'submitting'}
+              onClick={() => void submit()}
+            >
+              {status === 'submitting' ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
+                  Sending…
+                </>
+              ) : status === 'error' ? (
+                'Try again'
+              ) : (
+                'Send feedback'
+              )}
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

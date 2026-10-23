@@ -115,15 +115,53 @@ export async function loader({ request }: LoaderFunctionArgs) {
     contrastCookie.contrast === 'high' ? 'high' : 'standard';
 
   if (publicLandingPage && !internal) {
+    const { getUserId } = await import('./utils/auth.server.ts');
+    const { prisma } = await import('./utils/db.server.ts');
+    const userId = await getUserId(request);
     const previewAccessSeat = isPreviewDevLoginAccessCodeRequired()
       ? await getPreviewAccessSeat(request)
       : null;
     const devPanelEnabled = isDevPanelRuntimeEnabled();
+    const userRecord = userId
+      ? await prisma.user.findUnique({
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            username: true,
+            mustChangePassword: true,
+            isTester: process.env.TESTER_FEEDBACK_ENABLED === 'true',
+            isAdmin: true,
+            memberships: {
+              orderBy: { createdAt: 'asc' },
+              select: {
+                id: true,
+                role: true,
+                isOrgOwner: true,
+                organizationId: true,
+                organization: { select: { name: true } },
+              },
+            },
+          },
+          where: { id: userId },
+        })
+      : null;
+    const membershipId = await getMembershipId(request);
+    const selectedMembership =
+      userRecord?.memberships.find((m) => m.id === membershipId) ??
+      userRecord?.memberships[0];
+    const user = userRecord
+      ? {
+          ...userRecord,
+          isAdmin: Boolean(userRecord.isAdmin),
+          selectedMembership,
+        }
+      : null;
     return data(
       {
         testerFeedbackAvailable: false,
         demoFeedbackAvailable: false,
-        user: null,
+        user,
         internalImpersonation: null,
         requestInfo: {
           hints: getHints(request),

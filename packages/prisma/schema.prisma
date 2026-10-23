@@ -2318,6 +2318,7 @@ model TesterFeedback {
   whatIWish    String   @db.VarChar(4000)
   severity     String?  @db.VarChar(20)
   actions      Json?
+  screenshot   String?  @db.Text
   environment  String   @db.VarChar(100)
   createdAt    DateTime @default(now()) @db.Timestamptz(6)
 
