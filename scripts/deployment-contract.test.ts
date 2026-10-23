@@ -2029,6 +2029,15 @@ describe('demo environment deployment contract', () => {
     expect(workflow).not.toContain(
       'flock -w 1800 $(shell_quote "$lock_file") bash -lc $(shell_quote "$deploy_command")'
     );
+
+    const demoRedactSummaryStep = `      - name: Print deploy log redaction summary
+        if: always()
+        run: |
+          grep -sE '^REDACT_(FILES_CHANGED|VALUES_MASKED|WARNING)=[0-9]+$' /tmp/demo-deploy.log || echo 'REDACT_SUMMARY=none'
+`;
+    expect(workflow).toContain(
+      `} >> "$GITHUB_OUTPUT"\n\n${demoRedactSummaryStep}`
+    );
   });
 
   test('demo host monitoring provisions alarms and verifies metrics', () => {
@@ -2166,6 +2175,14 @@ describe('isolated preview unified sign-on label deployment contract', () => {
     expect(workflow).toContain('REDACT_DEPLOY_LOGS_SCRIPT');
     expect(workflow).toContain('redact-deploy-logs.sh');
     expect(workflow).toContain('run-host-deploy-detached.sh');
+    const previewRedactSummaryStep = `      - name: Print deploy log redaction summary
+        if: always() && steps.preview_gate.outputs.skip_preview != 'true'
+        run: |
+          grep -sE '^REDACT_(FILES_CHANGED|VALUES_MASKED|WARNING)=[0-9]+$' "$RUNNER_TEMP/preview-deploy.log" || echo 'REDACT_SUMMARY=none'
+`;
+    expect(workflow).toContain(
+      `} >> "$GITHUB_OUTPUT"\n\n${previewRedactSummaryStep}`
+    );
     expect(workflow).toContain("needs.preview-policy.outputs.should_deploy == 'true'");
     expect(workflow).toContain(
       "contains(github.event.pull_request.body || '', '[skip preview]') == false"
