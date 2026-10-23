@@ -104,6 +104,19 @@ async function main() {
 
   await screenshotHtml(
     browser,
+    await wrapEmail({ pass1: true }),
+    'e1-banner-after-head',
+    [...widths]
+  );
+  await screenshotHtml(
+    browser,
+    await wrapEmail({ pass1: true, reminder: true }),
+    'e2-banner-after-head',
+    [...widths]
+  );
+
+  await screenshotHtml(
+    browser,
     await wrapEmail({ pass1: false, forwardedByAdminName: FORWARDER }),
     'e3-banner-before-main',
     [...widths]
@@ -158,6 +171,8 @@ async function main() {
 Pinned pass1 forward banner: ${adminApprovalPass1ForwardBanner(FORWARDER, TEACHER, SCHOOL)}
 
 ## Email banners (HTML)
+- e1-banner-after-head-{320,1280}.png — pass1 E1 first admin request (frame 35)
+- e2-banner-after-head-{320,1280}.png — pass1 E2 reminder (frame 37, no forward banner)
 - e2f-banner-before-main-{320,1280}.png — main reminder email (pass1 off, no E2f forward banner)
 - e2f-banner-after-head-{320,1280}.png — pass1 E2f reminder email (forwarded admin)
 - e3-banner-before-main-{320,1280}.png — legacy forward banner, pass1 off

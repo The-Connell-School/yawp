@@ -126,11 +126,7 @@ export function adminApprovalFooterWhy(args: {
       : `You're getting this because ${forwarder} forwarded ${args.teacherName}'s request to you.`;
   }
   if (pass1) {
-    return adminApprovalTeacherRerouteFooterWhy(
-      args.teacherName,
-      args.schoolName,
-      true
-    );
+    return `You're getting this because ${args.teacherName} named you as the administrator who can approve classroom software at ${args.schoolName}.`;
   }
   return `You're getting this because ${args.teacherName} named you as an administrator who can approve classroom software at ${args.schoolName}.`;
 }

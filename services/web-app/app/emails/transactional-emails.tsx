@@ -282,7 +282,7 @@ export function AdminApprovalEmail(props: {
     pass1,
   });
   const intro =
-    forwarder || pass1Reroute
+    forwarder || pass1Reroute || pass1
       ? `${teacherSchool} would like to use Yawp! in their classroom.`
       : `${teacherSchool} would like to use Yawp! in their classroom. They named you as the administrator who can approve classroom software.`;
   const banner = pass1Reroute ? (

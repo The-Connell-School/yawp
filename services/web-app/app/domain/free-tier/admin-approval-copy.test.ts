@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import {
   adminApprovalEmailPreheader,
+  adminApprovalFooterWhy,
   adminApprovalUrlsFromDesignedEmailBody,
   alreadyApprovedBody,
   approveCheckboxError,
@@ -113,6 +114,43 @@ test('pass1 E1 preheader names teacher at school', () => {
     })
   ).toBe(
     'Jordan Rivera at Lincoln High School needs your OK. It takes a couple of minutes, and no Yawp! account is needed.'
+  );
+});
+
+test('pass1 E1/E2 footer uses frame 35/37 administrator copy', () => {
+  const footer =
+    "You're getting this because Jordan Rivera named you as the administrator who can approve classroom software at Lincoln High School.";
+  expect(
+    adminApprovalFooterWhy({
+      teacherName: 'Jordan Rivera',
+      schoolName: 'Lincoln High School',
+      pass1: true,
+    })
+  ).toBe(footer);
+  const initial = renderAdminApprovalEmailPlainText({
+    teacherName: 'Jordan Rivera',
+    teacherEmail: 'jrivera@example.test',
+    schoolName: 'Lincoln High School',
+    approveUrl: 'https://yawp.school/a',
+    notRightPersonUrl: 'https://yawp.school/n',
+    pass1: true,
+  });
+  expect(initial).toContain(footer);
+  expect(initial).not.toContain(
+    'They named you as the administrator who can approve classroom software.'
+  );
+  const reminder = renderAdminApprovalEmailPlainText({
+    teacherName: 'Jordan Rivera',
+    teacherEmail: 'jrivera@example.test',
+    schoolName: 'Lincoln High School',
+    approveUrl: 'https://yawp.school/a',
+    notRightPersonUrl: 'https://yawp.school/n',
+    pass1: true,
+    reminder: true,
+  });
+  expect(reminder).toContain(footer);
+  expect(reminder).not.toContain(
+    'They named you as the administrator who can approve classroom software.'
   );
 });
 

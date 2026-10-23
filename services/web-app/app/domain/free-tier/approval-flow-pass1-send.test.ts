@@ -48,8 +48,20 @@ describe('legacy send paths thread pass1 into designed email', () => {
     const delivered = sendEmail.mock.calls[0]![0] as SendPayload;
     expect(delivered.html).toContain(PASS1_PREHEADER);
     expect(delivered.html).toContain('needs your OK');
-    expect(delivered.text).toContain(
-      "You're getting this because Jordan Rivera named you as an administrator at Lincoln High School."
+    const e1Footer =
+      "You're getting this because Jordan Rivera named you as the administrator who can approve classroom software at Lincoln High School.";
+    expect(delivered.text).toContain(e1Footer);
+    expect(delivered.html).toContain(
+      'named you as the administrator who can approve classroom software at Lincoln High School'
+    );
+    expect(delivered.text).not.toContain(
+      'They named you as the administrator who can approve classroom software.'
+    );
+    expect(delivered.html).not.toContain(
+      'They named you as the administrator who can approve classroom software.'
+    );
+    expect(delivered.text).not.toContain(
+      'named you as an administrator at Lincoln High School.'
     );
   });
 
