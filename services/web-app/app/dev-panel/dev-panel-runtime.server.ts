@@ -10,7 +10,9 @@ export function isDevPanelBuildEnabled(
   if (process.env.NODE_ENV === 'test' && env.FORCE_DEV_PANEL_BUILD === '1') {
     return true;
   }
-  return yawp === 'demo' || isLocalDevPanelEnvironment(env);
+  return (
+    yawp === 'demo' || isDemoEnvironment(env) || isLocalDevPanelEnvironment(env)
+  );
 }
 
 /** Runtime gate for HTTP handlers and root loader data. */
@@ -19,9 +21,9 @@ export function isDevPanelRuntimeEnabled(
 ): boolean {
   if (!isDevPanelBuildEnabled(env)) return false;
   const yawp = String(env.YAWP_ENVIRONMENT ?? '').trim().toLowerCase();
+  if (yawp === 'demo' || isDemoEnvironment(env)) return true;
   // PR preview hosts keep the legacy environment beaker and dev-login menu.
   if (yawp === 'preview') return false;
-  if (yawp === 'demo' || isDemoEnvironment(env)) return true;
   return isLocalDevPanelEnvironment(env);
 }
 
