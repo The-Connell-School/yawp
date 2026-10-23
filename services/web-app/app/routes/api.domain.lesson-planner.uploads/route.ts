@@ -27,20 +27,31 @@ function bad(message: string, status = 400) {
   return dataResponse({ error: message }, { status });
 }
 
-async function requestWithinUploadCap(request: Request): Promise<Request | ReturnType<typeof bad>> {
+type UploadCapResult =
+  | { ok: true; request: Request }
+  | { ok: false; response: ReturnType<typeof bad> };
+
+async function requestWithinUploadCap(request: Request): Promise<UploadCapResult> {
   const header = request.headers.get('content-length');
   const declared = header === null || header.trim() === '' ? NaN : Number(header);
   if (Number.isFinite(declared)) {
-    if (declared > MAX_UPLOAD_BODY_BYTES) return bad('That file is over 10 MB.', 413);
-    return request;
+    if (declared > MAX_UPLOAD_BODY_BYTES) {
+      return { ok: false, response: bad('That file is over 10 MB.', 413) };
+    }
+    return { ok: true, request };
   }
   const body = await readBoundedBytes(request, MAX_UPLOAD_BODY_BYTES);
-  if (body === null) return bad('That file is over 10 MB.', 413);
-  return new Request(request.url, {
-    method: request.method,
-    headers: request.headers,
-    body,
-  });
+  if (body === null) {
+    return { ok: false, response: bad('That file is over 10 MB.', 413) };
+  }
+  return {
+    ok: true,
+    request: new Request(request.url, {
+      method: request.method,
+      headers: request.headers,
+      body: body as unknown as BodyInit,
+    }),
+  };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -50,9 +61,9 @@ export async function action({ request }: ActionFunctionArgs) {
   if (!flags.uploads) return bad('Not found.', 404);
 
   const capped = await requestWithinUploadCap(request);
-  if (capped instanceof Response) return capped;
+  if (!capped.ok) return capped.response;
 
-  const form = await capped.formData();
+  const form = await capped.request.formData();
   const intent = form.get('intent');
   const conversationId = form.get('conversationId')?.toString() || null;
 
