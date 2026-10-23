@@ -20,6 +20,12 @@ shell_quote() { printf '%q' "$1"; }
 mask_deploy_log() {
   sed -E \
     -e 's/(PREVIEW_ACCESS_CODE=)[^[:space:]]*/\1[REDACTED]/g' \
+    -e 's/(PREVIEW_SEAT_CODE_[0-9]+=)[^[:space:]]*/\1[REDACTED]/g' \
+    -e 's/(Preview seat [0-9]+ \([^)]+\):)[[:space:]]*[^[:space:]]*/\1 [REDACTED]/g' \
+    -e 's/((PREVIEW_ACCESS_SEATS|YAWP_TEST_PREVIEW_ACCESS_SEATS)=).*/\1[REDACTED]/g' \
+    -e 's/(PREVIEW_MASTER_ACCESS_CODE=)[^[:space:]]*/\1[REDACTED]/g' \
+    -e 's/(PREVIEW_ACCESS_SECRET=)[^[:space:]]*/\1[REDACTED]/g' \
+    -e 's/(PREVIEW_SESSION_SECRET=)[^[:space:]]*/\1[REDACTED]/g' \
     -e 's/(PREVIEW_LOGIN_PASSWORD=)[^[:space:]]*/\1[REDACTED]/g' \
     -e 's/(PREVIEW_POSTGRES_ADMIN_PASSWORD=)[^[:space:]]*/\1[REDACTED]/g' \
     -e 's/(PREVIEW_MANAGEMENT_SERVICE_KEY=)[^[:space:]]*/\1[REDACTED]/g' \
@@ -73,6 +79,11 @@ if ! ssh -i "$SSH_IDENTITY" -o BatchMode=yes "$SSH_TARGET" \
 fi
 
 scp -i "$SSH_IDENTITY" -q "${SSH_TARGET}:${DEPLOY_LOG}" "$LOCAL_LOG_COPY"
+if [[ -f "$LOCAL_LOG_COPY" ]]; then
+  masked_copy="$(mktemp)"
+  mask_deploy_log < "$LOCAL_LOG_COPY" > "$masked_copy"
+  mv "$masked_copy" "$LOCAL_LOG_COPY"
+fi
 exit_code="$(
   ssh -i "$SSH_IDENTITY" -o BatchMode=yes "$SSH_TARGET" \
     "tr -d '[:space:]' < $(shell_quote "$EXIT_FILE")"

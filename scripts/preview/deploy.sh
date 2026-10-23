@@ -1011,13 +1011,14 @@ for attempt in $(seq 1 90); do
     echo "UA_PREVIEW_HOSTNAME=$UA_HOSTNAME"
     echo "BLACKBOARD_URL=$BLACKBOARD_URL"
     echo "BLACKBOARD_HOSTNAME=$BLACKBOARD_HOSTNAME"
-    echo "PREVIEW_ACCESS_CODE=$smoke_access_code"
+    echo "PREVIEW_ACCESS_SEATS_FILE=$ACCESS_SEATS_FILE"
     echo "PREVIEW_MASTER_ORG_GATE_ENABLED=$PREVIEW_MASTER_ORG_GATE_ENABLED"
     write_preview_metadata
     PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" node -e '
-      for (const [index, seat] of JSON.parse(process.env.PREVIEW_ACCESS_SEATS).entries()) {
-        console.log(`PREVIEW_SEAT_CODE_${index + 1}=${seat.code}`)
-        console.log(`Preview seat ${index + 1} (${seat.label}): ${seat.code}`)
+      const seats = JSON.parse(process.env.PREVIEW_ACCESS_SEATS);
+      console.log(`PREVIEW_SEAT_COUNT=${seats.length}`);
+      for (const [index, seat] of seats.entries()) {
+        console.log(`PREVIEW_SEAT_LABEL_${index + 1}=${seat.label}`);
       }
     '
     echo "PREVIEW_ELAPSED_MS=$elapsed_ms"
