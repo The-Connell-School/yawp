@@ -18,6 +18,24 @@ export type PlanningProgressState = { label: string; fraction: number };
 const EASE_RATE = 0.08;
 const TICK_MS = 120;
 
+/**
+ * The "…" after the label, always moving (Brian's run 4): between milestones
+ * the bar can sit still, and a still screen reads as a stuck one.
+ */
+function MovingDots() {
+  return (
+    <span data-testid="planning-dots" aria-hidden className="ml-0.5 inline-flex gap-[3px] pb-[5px]">
+      {[0, 150, 300].map((delay) => (
+        <span
+          key={delay}
+          className="h-1 w-1 rounded-full bg-current motion-safe:animate-bounce"
+          style={{ animationDelay: `${delay}ms` }}
+        />
+      ))}
+    </span>
+  );
+}
+
 export function PlanningProgressBar({
   progress,
 }: {
@@ -49,7 +67,10 @@ export function PlanningProgressBar({
       role="status"
       aria-live="polite"
     >
-      <p className="mb-1.5 text-sm text-muted-foreground">{progress.label}…</p>
+      <p className="mb-1.5 flex items-end text-sm text-muted-foreground">
+        {progress.label}
+        <MovingDots />
+      </p>
       <div
         className="h-1.5 w-full overflow-hidden rounded-full bg-foreground/10"
         // Announced as a bar for anyone who cannot see it move. The value is

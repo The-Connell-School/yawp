@@ -7,7 +7,8 @@
  * compare slide is two columns, not two bullets — because the layout is the
  * part a deck has and a list of slides does not.
  */
-import type { Slide } from '~/domain/lesson-planner/slide-deck';
+import { classicSlide, type Slide } from '~/domain/lesson-planner/slide-deck';
+import { BrandSafe } from '~/components/brand/brand-safe';
 
 /** Scales with the slide surface, floored and capped so it never gets silly. */
 const TITLE_TYPE = 'clamp(1.75rem, 4.6cqw, 4.5rem)';
@@ -17,7 +18,9 @@ const LABEL_TYPE = 'clamp(0.7rem, 1.3cqw, 1.1rem)';
 /** For a slide holding real student writing rather than a phrase. */
 const PASSAGE_TYPE = 'clamp(0.85rem, 1.9cqw, 1.7rem)';
 
-export function SlideCanvas({ slide }: { slide: Slide }) {
+export function SlideCanvas({ slide: raw }: { slide: Slide }) {
+  // A gallery slide drawn as its nearest classic layout.
+  const slide = classicSlide(raw);
   return (
     <div
       // Container queries: the slide sizes to its own box, so the same
@@ -106,7 +109,7 @@ function SlideBody({ slide }: { slide: Slide }) {
             className="font-semibold uppercase tracking-[0.14em] text-primary"
             style={{ fontSize: LABEL_TYPE }}
           >
-            {slide.title}
+            <BrandSafe>{slide.title}</BrandSafe>
           </p>
           <p
             className="max-w-[24ch] font-medium leading-[1.3] text-slate-900"
@@ -141,7 +144,7 @@ function SlideBody({ slide }: { slide: Slide }) {
                     className="font-semibold uppercase tracking-[0.12em] text-primary"
                     style={{ fontSize: LABEL_TYPE }}
                   >
-                    {column.label}
+                    <BrandSafe>{column.label}</BrandSafe>
                   </p>
                   <p
                     className="leading-[1.35] text-slate-900"

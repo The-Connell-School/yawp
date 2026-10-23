@@ -1,8 +1,9 @@
 /**
  * Access gate for the Yawp! Lesson Planner.
  *
- * Teacher-only, and gated by the Lesson Planner feature flag for the
- * teacher's school. Students get a 404 so the feature stays invisible to them.
+ * Teacher-only, and gated by the free-tier rollout and the Lesson Planner
+ * feature flag for the teacher's school. Students get a 404 so the feature
+ * stays invisible to them.
  */
 import { data } from 'react-router';
 import {

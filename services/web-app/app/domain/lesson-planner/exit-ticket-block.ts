@@ -55,6 +55,8 @@ const FIELD_LINE = /^\s*([A-Za-z][A-Za-z0-9]*)\s*:\s*(.*)$/;
  * the ticket is, not filling in a form's internals.
  */
 type BlockFields = {
+  title?: string;
+  minutes?: string;
   kind?: string;
   mode?: string;
   prompt?: string;
@@ -74,6 +76,8 @@ type BlockFields = {
 };
 
 const FIELD_ALIASES: Record<string, keyof BlockFields> = {
+  title: 'title',
+  minutes: 'minutes',
   kind: 'kind',
   mode: 'mode',
   prompt: 'prompt',
@@ -103,6 +107,9 @@ export type PlannedExitTicket = {
   graded: boolean;
   /** Null when ungraded; the exit ticket default when graded without one. */
   pointValue: number | null;
+  /** The block's own `title:` and `minutes:` lines (Brian's run 5, item 6). */
+  title?: string | null;
+  minutes?: number | null;
 };
 
 const YES = new Set(['yes', 'true', 'graded', 'y', '1']);
@@ -161,6 +168,11 @@ function readBlock(raw: string): PlannedExitTicket | null {
     lessonWatchFor: fields.watchFor,
   };
   const wantsGrade = YES.has(fields.graded?.trim().toLowerCase() ?? '');
+  const minutes = Number(fields.minutes?.replace(/\s*min.*$/i, '').trim());
+  const named = {
+    title: fields.title?.trim().slice(0, 80) || null,
+    minutes: Number.isInteger(minutes) && minutes >= 1 && minutes <= 120 ? minutes : null,
+  };
 
   // Grading the block cannot back up is dropped, not the ticket: a check with
   // no answer key is still a good ticket to hand over, just not yet a graded
@@ -181,6 +193,7 @@ function readBlock(raw: string): PlannedExitTicket | null {
       prompt: composeExitTicketPrompt(graded.config),
       graded: true,
       pointValue: blockPoints(fields.points) ?? EXIT_TICKET_DEFAULT_POINT_VALUE,
+      ...named,
     };
   }
 
@@ -192,6 +205,7 @@ function readBlock(raw: string): PlannedExitTicket | null {
     prompt: composeExitTicketPrompt(parsed.config),
     graded: false,
     pointValue: null,
+    ...named,
   };
 }
 

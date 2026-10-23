@@ -1014,7 +1014,63 @@ jobs:
             ../../packages/prisma/scripts/seed-preview-planner-qa.test.ts \
             ../../packages/prisma/scripts/exit-ticket-migration-image.test.ts \
             ../../packages/prisma/scripts/preview-seats.test.ts \
-            app/domain/lesson-planner/lesson-seed.test.ts
+            app/domain/lesson-planner/lesson-seed.test.ts \
+            app/routes/api.domain.lesson-planner/build-system-prompt.test.ts \
+            app/domain/lesson-planner/suggestions.test.ts \
+            app/domain/lesson-planner/daily-pages-block.test.ts \
+            app/domain/lesson-planner/reply-parts.test.ts \
+            app/domain/lesson-planner/stack-contents.server.test.ts \
+            app/domain/lesson-planner/deck-edit.server.test.ts \
+            app/domain/lesson-planner/lesson-pptx-tile.server.test.ts \
+            app/domain/lesson-planner/stack-order.test.ts \
+            app/domain/lesson-planner/stack-order.server.test.ts \
+            app/domain/lesson-planner/stack-items.test.ts \
+            app/domain/lesson-planner/stack-create-link.test.ts \
+            app/domain/lesson-planner/prompt-ids.test.ts \
+            app/domain/lesson-planner/lesson-length.test.ts \
+            app/domain/lesson-planner/plan-timing.test.ts \
+            app/domain/lesson-planner/plan-steps.test.ts \
+            app/domain/lesson-planner/reply-pieces.test.ts \
+            app/domain/lesson-planner/file-reply-pieces.server.test.ts \
+            app/domain/lesson-planner/lesson-plan-doc.test.ts \
+            app/domain/lesson-planner/plan-summary.server.test.ts \
+            app/domain/lesson-planner/lesson-plan-render.server.test.ts \
+            app/domain/lesson-planner/branding.test.ts \
+            app/components/lesson-planner/stack-list.test.ts \
+            app/domain/lesson-planner/step-types.test.ts \
+            app/domain/lesson-planner/stack-timing.test.ts \
+            app/domain/lesson-planner/short-title.test.ts \
+            app/domain/lesson-planner/fileable-material.test.ts \
+            app/domain/lesson-planner/plan-framing.test.ts \
+            app/domain/lesson-planner/stack-suggestions.test.ts \
+            app/domain/lesson-planner/stack-command.test.ts \
+            app/domain/lesson-planner/stack-steps.test.ts \
+            app/domain/lesson-planner/stack-actions.server.test.ts \
+            app/domain/lesson-planner/step-handout.test.ts \
+            app/domain/lesson-planner/lesson-share.test.ts \
+            app/domain/lesson-planner/lesson-share.server.test.ts \
+            app/domain/brand.test.ts \
+            app/domain/lesson-planner/plan-days.test.ts \
+            app/domain/lesson-planner/planner-history.test.ts \
+            app/domain/lesson-planner/lesson-library.test.ts \
+            app/domain/lesson-planner/run-show.test.ts \
+            app/domain/lesson-planner/slide-deck-gallery.test.ts \
+            app/domain/lesson-planner/deck-gallery.test.ts \
+            app/domain/lesson-planner/deck-colors.test.ts \
+            app/domain/lesson-planner/kit-plan.test.ts \
+            app/domain/lesson-planner/teacher-standards.test.ts \
+            app/domain/lesson-planner/lesson-uploads.test.ts \
+            app/domain/lesson-planner/transcript-scroll.test.ts \
+            app/domain/lesson-planner/recent-art.test.ts \
+            app/domain/lesson-planner/source-documents.server.test.ts \
+            app/utils/bounded-body.server.test.ts \
+            app/routes/api.domain.lesson-planner.uploads/route.test.ts \
+            app/domain/lesson-planner/kit-plan-render.server.test.ts \
+            app/domain/lesson-planner/lesson-pptx-gallery.server.test.ts \
+            app/domain/lesson-planner/option-groups.test.ts \
+            app/domain/lesson-planner/lesson-templates.test.ts \
+            app/domain/lesson-planner/yawp-catalog.server.test.ts \
+            app/routes/api.domain.lesson-planner.stack/route.test.ts
           do
             bun test "$f"
           done

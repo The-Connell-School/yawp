@@ -356,3 +356,30 @@ describe('the words a model reaches for when it names the exercise', () => {
     }
   );
 });
+
+describe("readDailyPagesExercises — one card per prompt, even when bundled (Brian's run 2, E2)", () => {
+  const bundled =
+    '```yawp-daily-pages\nkind: class-starter\nid: FW-021\nWhat do you carry every day?\n\nid: FW-093\nWhat is the heaviest thing you have carried?\n\nid: FW-024\nWhat do you carry that no one sees?\n```';
+
+  test('a block with several prompts becomes several exercises, each with its id', () => {
+    const { exercises } = readDailyPagesExercises(bundled);
+    expect(exercises.map((exercise) => exercise.promptId)).toEqual(['FW-021', 'FW-093', 'FW-024']);
+    expect(exercises[1]!.prompt).toBe('What is the heaviest thing you have carried?');
+    expect(exercises.every((exercise) => exercise.kind === 'class-starter')).toBe(true);
+  });
+
+  test('a prompt with a blank line inside it stays one prompt', () => {
+    const { exercises } = readDailyPagesExercises(
+      '```yawp-daily-pages\nkind: class-starter\nThink of a weight.\n\nNow write about it.\n```'
+    );
+    expect(exercises).toHaveLength(1);
+    expect(exercises[0]!.prompt).toContain('Now write about it.');
+  });
+
+  test('printed, a bundled block keeps every prompt and no id', () => {
+    const printed = inlineDailyPagesExercises(bundled);
+    expect(printed).toContain('> What do you carry every day?');
+    expect(printed).toContain('> What do you carry that no one sees?');
+    expect(printed).not.toContain('FW-');
+  });
+});
