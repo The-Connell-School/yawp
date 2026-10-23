@@ -1,7 +1,30 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { CLOUDFRONT_IPV4_RANGES } from '~/utils/cloudfront-ranges.server';
 import { PREVIEW_ACCESS_COOKIE_NAME } from '~/utils/preview-access.server';
 import { resetPreviewAccessRateLimitForTests } from '~/utils/preview-access-rate-limit.server';
+
+const PRIMARY_SEAT_CODE = 'brave-otter-4193';
+const SECOND_SEAT_CODE = 'calm-panda-8127';
+
+mock.module('~/utils/db.server', () => ({
+  prisma: {
+    organization: {
+      findUnique: mock(
+        async ({
+          where,
+        }: {
+          where: { previewSeatCode?: string; id?: string };
+        }) => {
+          if (where.previewSeatCode === SECOND_SEAT_CODE) {
+            return { id: 'preview-seat-2', name: 'Preview seat two' };
+          }
+          return null;
+        }
+      ),
+    },
+  },
+  basePrisma: {},
+}));
 
 const envKeys = [
   'YAWP_ENVIRONMENT',
@@ -17,7 +40,6 @@ const envKeys = [
   'DATABASE_URL',
 ] as const;
 
-const SEAT_CODE = 'brave-otter-4193';
 const MASTER_CODE = 'yawp-rocks-master-only';
 const INVALID_CODE = 'wrong-seat-code-9999';
 
@@ -48,12 +70,12 @@ function demoGateEnv() {
     PREVIEW_DATA_MODE: 'seed',
     PREVIEW_ACCESS_SEATS: JSON.stringify([
       {
-        code: 'brave-otter-4193',
+        code: PRIMARY_SEAT_CODE,
         organizationId: 'local-dev-org',
         label: 'Master seat',
       },
       {
-        code: SEAT_CODE,
+        code: SECOND_SEAT_CODE,
         organizationId: 'preview-seat-2',
         label: 'Preview seat two',
       },
@@ -92,14 +114,14 @@ describe('api.dev-panel.preview-access guard integration', () => {
     demoGateEnv();
     const { action } = await import('./route');
     const response = await action({
-      request: postPreviewAccess({ code: SEAT_CODE }),
+      request: postPreviewAccess({ code: SECOND_SEAT_CODE }),
     } as never);
     expect(response.status).toBe(200);
     const setCookie = response.headers.get('set-cookie') ?? '';
     expect(setCookie).toContain(`${PREVIEW_ACCESS_COOKIE_NAME}=`);
     const body = await response.json();
     expect(body.ok).toBe(true);
-    expect(body.seatLabel).toBe('Master seat');
+    expect(body.seatLabel).toBe('Preview seat two');
   });
 
   test('invalid codes return 401 through code validation and count toward rate limiting', async () => {
@@ -144,7 +166,7 @@ describe('api.dev-panel.preview-access guard integration', () => {
       PREVIEW_DATA_MODE: 'seed',
       PREVIEW_ACCESS_SEATS: JSON.stringify([
         {
-          code: SEAT_CODE,
+          code: SECOND_SEAT_CODE,
           organizationId: 'preview-seat-2',
           label: 'Preview seat two',
         },
@@ -153,7 +175,7 @@ describe('api.dev-panel.preview-access guard integration', () => {
     });
     const { action } = await import('./route');
     const response = await action({
-      request: postPreviewAccess({ code: SEAT_CODE }),
+      request: postPreviewAccess({ code: SECOND_SEAT_CODE }),
     } as never);
     expect(response.status).toBe(404);
     const body = await response.json();
