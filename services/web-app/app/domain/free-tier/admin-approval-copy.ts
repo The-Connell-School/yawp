@@ -103,7 +103,7 @@ export function adminApprovalFooterWhy(args: {
   pass1?: boolean;
 }) {
   const pass1 = args.pass1 ?? false;
-  if (args.routedByTeacher) {
+  if (args.routedByTeacher && pass1) {
     return adminApprovalTeacherRerouteFooterWhy(
       args.teacherName,
       args.schoolName,
@@ -157,7 +157,7 @@ export function renderAdminApprovalEmailPlainText(args: {
   const forwardLead =
     skipForwardLeadForPass1Reminder
       ? ''
-      : args.routedByTeacher
+      : args.routedByTeacher && pass1
         ? `${adminApprovalTeacherRerouteLead(args.teacherName, args.schoolName, pass1)}\n\n`
         : forwarder
           ? `${forwarder} forwarded this to you as the right person to approve classroom software for ${teacherSchool}.\n\n`
@@ -172,7 +172,7 @@ export function renderAdminApprovalEmailPlainText(args: {
     : '';
   const classroomIntro = `${teacherSchool} would like to use Yawp! in their classroom.`;
   const administratorIntro =
-    forwarder || args.routedByTeacher
+    forwarder || (args.routedByTeacher && pass1)
       ? ''
       : ' They named you as the administrator who can approve classroom software.';
   return `${reminderLead}${forwardLead}Approve Yawp! for ${teacherSchool}
@@ -200,7 +200,7 @@ ${plainTextEmailFooter(
     teacherName: args.teacherName,
     schoolName: args.schoolName,
     forwardedByAdminName: args.forwardedByAdminName,
-    routedByTeacher: args.routedByTeacher,
+    routedByTeacher: args.routedByTeacher && pass1,
     pass1,
   }),
   origin
@@ -315,9 +315,6 @@ export function linkExpiredBody(teacherName: string, schoolName: string) {
 
 export const linkInvalidBodyGeneric =
   'It may be incomplete. Copy it again from the email, or email support@yawp.school.';
-
-/** @deprecated use linkInvalidBodyForRequest */
-export const linkInvalidBody = linkInvalidBodyGeneric;
 
 export function linkInvalidKnownRequestLine(
   teacherName: string,

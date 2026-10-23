@@ -13,7 +13,12 @@ import {
   renderAdminApprovalEmailSubject,
   adminApprovalTeacherRerouteLead,
   adminApprovalReminderMutedLead,
+  adminApprovalTeacherRerouteLeadMarker,
 } from './admin-approval-copy';
+import {
+  ADMIN_APPROVAL_EMAIL_COPY_VERSION_PASS1,
+  renderAdminApprovalEmailBody,
+} from './email-copy';
 
 test('initial admin approval subject names teacher and school', () => {
   expect(
@@ -95,6 +100,20 @@ test('pass1 E1 preheader names teacher at school', () => {
   ).toBe(
     'Jordan Rivera at Lincoln High School needs your OK. It takes a couple of minutes, and no Yawp! account is needed.'
   );
+});
+
+test('pass1 stored plain text includes reroute marker', () => {
+  const text = renderAdminApprovalEmailBody({
+    teacherName: 'Jordan Rivera',
+    teacherEmail: 'jrivera@lincolnhs.org',
+    schoolName: 'Lincoln High School',
+    approveUrl: 'https://yawp.school/a',
+    notRightPersonUrl: 'https://yawp.school/n',
+    routedByTeacher: true,
+    pass1: true,
+    copyVersion: ADMIN_APPROVAL_EMAIL_COPY_VERSION_PASS1,
+  });
+  expect(text).toContain(adminApprovalTeacherRerouteLeadMarker(true));
 });
 
 test('pass1 E3b teacher reroute lead and plain text', () => {

@@ -272,18 +272,19 @@ export function AdminApprovalEmail(props: {
     forwardedByAdminName: forwarder,
     pass1,
   });
+  const pass1Reroute = Boolean(props.routedByTeacher && pass1);
   const footerWhy = adminApprovalFooterWhy({
     teacherName: props.teacherName,
     schoolName: props.schoolName,
     forwardedByAdminName: forwarder,
-    routedByTeacher: props.routedByTeacher,
+    routedByTeacher: pass1Reroute,
     pass1,
   });
   const intro =
-    forwarder || props.routedByTeacher
+    forwarder || pass1Reroute
       ? `${teacherSchool} would like to use Yawp! in their classroom.`
       : `${teacherSchool} would like to use Yawp! in their classroom. They named you as the administrator who can approve classroom software.`;
-  const banner = props.routedByTeacher ? (
+  const banner = pass1Reroute ? (
     <EmailBanner>
       {adminApprovalTeacherRerouteLead(
         props.teacherName,
