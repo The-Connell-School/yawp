@@ -1834,11 +1834,17 @@ describe('demo environment deployment contract', () => {
     expect(workflow).toContain('group: demo-environment');
     expect(workflow).toContain('cancel-in-progress: false');
     expect(workflow).toContain('bash scripts/preview/prepare-demo-ssh.sh');
+    expect(workflow).toContain('timeout-minutes: 5');
+    expect(workflow).toContain('ConnectTimeout=20');
     expect(workflow).toContain('docker exec -i');
-    expect(workflow).toContain('print-demo-internal-api-key-audit.mjs');
+    expect(workflow).toContain('bun run -');
+    expect(workflow).toContain('print-demo-internal-api-key-audit.cli.mjs');
+    expect(workflow).toContain('demo-internal-api-key-audit.mjs');
     expect(workflow).toContain('audit-demo-internal-api-keys-on-host.sh');
+    expect(workflow).toContain('validate_audit_output');
     expect(workflow).not.toContain('DEMO_INTERNAL_API_KEYS');
     expect(workflow).not.toContain('set -x');
+    expect(workflow).not.toMatch(/PARSE_ERROR[\s\S]*exit 0/);
     for (const step of parsed.jobs.audit.steps) {
       for (const value of Object.values(step.env ?? {})) {
         expect(String(value)).not.toContain('secrets.DEMO_INTERNAL_API_KEYS');

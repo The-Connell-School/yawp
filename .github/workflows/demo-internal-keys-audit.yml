@@ -13,6 +13,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-22.04
+    timeout-minutes: 5
     environment: demo
     env:
       PREVIEW_HOST: ${{ vars.DEMO_HOST }}
@@ -44,28 +45,62 @@ jobs:
         run: |
           set -euo pipefail
           shell_quote() { printf '%q' "$1"; }
+          validate_audit_output() {
+            local output="$1"
+            local count_line count entry_count
+            count_line="${output%%$'\n'*}"
+            [[ "$count_line" =~ ^count=[0-9]+$ ]] || {
+              echo "Audit output missing a valid count line" >&2
+              return 1
+            }
+            count="${count_line#count=}"
+            entry_count="$(printf '%s\n' "$output" | grep -c '^entry' || true)"
+            [[ "$entry_count" == "$count" ]] || {
+              echo "Audit entry count ($entry_count) does not match count=$count" >&2
+              return 1
+            }
+          }
           ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
           remote_root="$(shell_quote "$PREVIEW_ROOT")"
           host_script="scripts/preview/audit-demo-internal-api-keys-on-host.sh"
-          audit_script="scripts/preview/print-demo-internal-api-key-audit.mjs"
+          audit_config="scripts/preview/demo-internal-api-config.mjs"
+          audit_module="scripts/preview/demo-internal-api-key-audit.mjs"
+          audit_cli="scripts/preview/print-demo-internal-api-key-audit.cli.mjs"
+          remote_audit_dir="/tmp/yawp-key-audit-${GITHUB_RUN_ID}"
           web_container="$(
-            ssh -i ~/.ssh/demo_key -o BatchMode=yes "$ssh_target" \
+            ssh -i ~/.ssh/demo_key -o BatchMode=yes -o ConnectTimeout=20 "$ssh_target" \
               "PREVIEW_ROOT=${remote_root} bash -s" < "$host_script"
           )"
           [[ "$web_container" =~ ^[a-f0-9]{12,64}$ ]] || {
             echo "Unexpected demo web container id" >&2
             exit 1
           }
+          ssh -i ~/.ssh/demo_key -o BatchMode=yes -o ConnectTimeout=20 "$ssh_target" \
+            "mkdir -p $(shell_quote "$remote_audit_dir") && chmod 700 $(shell_quote "$remote_audit_dir")"
+          ssh -i ~/.ssh/demo_key -o BatchMode=yes -o ConnectTimeout=20 "$ssh_target" \
+            "docker exec -i $(shell_quote "$web_container") sh -ec 'mkdir -p /tmp/yawp-key-audit && chmod 700 /tmp/yawp-key-audit'" \
+            < /dev/null
+          ssh -i ~/.ssh/demo_key -o BatchMode=yes -o ConnectTimeout=20 "$ssh_target" \
+            "docker exec -i $(shell_quote "$web_container") sh -ec 'cat > /tmp/yawp-key-audit/demo-internal-api-config.mjs'" \
+            < "$audit_config"
+          ssh -i ~/.ssh/demo_key -o BatchMode=yes -o ConnectTimeout=20 "$ssh_target" \
+            "docker exec -i $(shell_quote "$web_container") sh -ec 'cat > /tmp/yawp-key-audit/demo-internal-api-key-audit.mjs'" \
+            < "$audit_module"
           audit_output="$(
-            ssh -i ~/.ssh/demo_key -o BatchMode=yes "$ssh_target" \
-              "docker exec -i $(shell_quote "$web_container") node -" \
-              < "$audit_script"
+            ssh -i ~/.ssh/demo_key -o BatchMode=yes -o ConnectTimeout=20 "$ssh_target" \
+              "docker exec -i $(shell_quote "$web_container") sh -ec 'cd /tmp/yawp-key-audit && bun run -'" \
+              < "$audit_cli"
           )"
+          ssh -i ~/.ssh/demo_key -o BatchMode=yes -o ConnectTimeout=20 "$ssh_target" \
+            "rm -rf $(shell_quote "$remote_audit_dir"); docker exec $(shell_quote "$web_container") rm -rf /tmp/yawp-key-audit" \
+            < /dev/null || true
+          validate_audit_output "$audit_output"
           printf '%s\n' "$audit_output"
+          audit_delim="audit_$(openssl rand -hex 16)"
           {
-            printf 'audit<<EOF\n'
+            printf 'audit<<%s\n' "$audit_delim"
             printf '%s\n' "$audit_output"
-            printf 'EOF\n'
+            printf '%s\n' "$audit_delim"
           } >> "$GITHUB_OUTPUT"
 
       - name: Summary
@@ -74,17 +109,11 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s\n' "$AUDIT_OUTPUT"
+          count_line="${AUDIT_OUTPUT%%$'\n'*}"
+          count="${count_line#count=}"
           {
             echo "### Demo internal API keys audit"
             echo
-            if [[ "$AUDIT_OUTPUT" == PARSE_ERROR* ]]; then
-              echo "**Result:** \`$AUDIT_OUTPUT\`"
-              echo
-              echo "The live demo web container could not parse \`YAWP_INTERNAL_API_KEYS\`."
-              exit 0
-            fi
-            count_line="${AUDIT_OUTPUT%%$'\n'*}"
-            count="${count_line#count=}"
             echo "**Entry count:** $count"
             echo
             echo "| id | scopes | fields |"

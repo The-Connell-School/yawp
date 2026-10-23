@@ -117,7 +117,9 @@ Before rebinding `DEMO_INTERNAL_API_KEYS`, dispatch the **Demo internal API keys
 audit** workflow (`.github/workflows/demo-internal-keys-audit.yml`). It SSHes to
 the demo host, reads `YAWP_INTERNAL_API_KEYS` from the running demo **web**
 container, and logs only each key's `id`, `scopes`, and field names — never
-`secret` values.
+`secret` values. Do not dispatch the audit while a **Demo environment** deploy
+is running or queued on the same concurrency group: GitHub allows only one
+pending run per group, so a queued deploy can be dropped behind a manual audit.
 
 Independent QA, from its prepared Internal worktree, sources credentials silently
 and uses the existing browser suite (no preview, no production writes):
