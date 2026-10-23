@@ -1,7 +1,8 @@
 import type { ActionFunctionArgs } from 'react-router';
-import { assertDevPanelRoute } from '~/dev-panel/dev-panel-route-guard.server';
+import { assertDevPanelUnlockRoute } from '~/dev-panel/dev-panel-route-guard.server';
 import {
   findPreviewAccessCredentialByCode,
+  getPreviewMasterPanelSeat,
   grantPreviewAccessCookie,
   isPreviewAccessConfigured,
 } from '~/utils/preview-access.server';
@@ -12,7 +13,7 @@ import {
 } from '~/utils/preview-access-rate-limit.server';
 
 export async function action({ request }: ActionFunctionArgs) {
-  const blocked = await assertDevPanelRoute(request);
+  const blocked = await assertDevPanelUnlockRoute(request);
   if (blocked) return blocked;
   if (request.method !== 'POST') {
     return new Response(null, { status: 405, headers: { Allow: 'POST' } });
@@ -40,18 +41,21 @@ export async function action({ request }: ActionFunctionArgs) {
     recordFailedPreviewAccessAttempt(request);
     return Response.json({ error: 'That access code did not work.' }, { status: 401 });
   }
-  clearFailedPreviewAccessAttempts(request);
-  // Dev panel unlock is seat-code only; master codes belong to the public preview-access flow.
-  if (credential.kind !== 'organization') {
+  const seat =
+    credential.kind === 'organization'
+      ? credential.seat
+      : getPreviewMasterPanelSeat();
+  if (!seat) {
     recordFailedPreviewAccessAttempt(request);
     return Response.json(
       { error: 'That access code did not work.' },
       { status: 401 }
     );
   }
-  const cookie = await grantPreviewAccessCookie(credential.seat);
+  clearFailedPreviewAccessAttempts(request);
+  const cookie = await grantPreviewAccessCookie(seat);
   return Response.json(
-    { ok: true, seatLabel: credential.seat.label },
+    { ok: true, seatLabel: seat.label },
     {
       headers: {
         'cache-control': 'no-store',

@@ -22,3 +22,13 @@ export async function assertDevPanelRoute(request: Request) {
   }
   return null;
 }
+
+/** Preview-access unlock: same env gates as assertDevPanelRoute, but no seat cookie yet. */
+export async function assertDevPanelUnlockRoute(_request: Request) {
+  const blocked = rejectDevPanelInProduction();
+  if (blocked) return blocked;
+  if (!isLocalDevAuthEnabled()) {
+    return Response.json({ error: 'Not found' }, { status: 404 });
+  }
+  return null;
+}

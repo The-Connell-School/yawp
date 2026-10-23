@@ -1,7 +1,8 @@
 import { describe, expect, mock, test } from 'bun:test';
+import * as previewAccessRateLimit from '~/utils/preview-access-rate-limit.server';
 
 mock.module('~/dev-panel/dev-panel-route-guard.server', () => ({
-  assertDevPanelRoute: async () => null,
+  assertDevPanelUnlockRoute: async () => null,
 }));
 mock.module('~/utils/preview-access.server', () => ({
   isPreviewAccessConfigured: () => true,
@@ -15,9 +16,15 @@ mock.module('~/utils/preview-access.server', () => ({
     if (code === 'master-code') return { kind: 'master' };
     return null;
   },
+  getPreviewMasterPanelSeat: () => ({
+    organizationId: 'local-dev-org',
+    label: 'Master panel seat',
+    accessKind: 'master' as const,
+  }),
   grantPreviewAccessCookie: async () => 'preview-access=test',
 }));
 mock.module('~/utils/preview-access-rate-limit.server', () => ({
+  ...previewAccessRateLimit,
   checkPreviewAccessAttempt: () => ({ allowed: true }),
   clearFailedPreviewAccessAttempts: () => {},
   recordFailedPreviewAccessAttempt: () => {},
@@ -39,7 +46,7 @@ describe('api.dev-panel.preview-access', () => {
     expect(body.seatLabel).toBe('Preview seat');
   });
 
-  test('rejects master credentials like a wrong seat code', async () => {
+  test('accepts master credentials via the configured master panel seat', async () => {
     const response = await action({
       request: new Request('http://localhost/api/dev-panel/preview-access', {
         method: 'POST',
@@ -47,8 +54,8 @@ describe('api.dev-panel.preview-access', () => {
         body: JSON.stringify({ code: 'master-code' }),
       }),
     } as never);
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.error).toBe('That access code did not work.');
+    expect(body.seatLabel).toBe('Master panel seat');
   });
 });
