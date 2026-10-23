@@ -13,7 +13,7 @@ describe('rubric catalog logging', () => {
         rubricRevision: { version: 2, fingerprint: 'abc' },
       };
       const catalog = new RubricCatalog({
-        $transaction: async (fn) =>
+        $transaction: async (fn: (tx: unknown) => Promise<unknown>) =>
           fn({
             rubricRelease: {
               findUnique: async () => previous,
