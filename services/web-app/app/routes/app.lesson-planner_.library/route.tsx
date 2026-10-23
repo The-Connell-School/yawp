@@ -19,6 +19,7 @@ import {
   BookMarked,
   ChevronLeft,
   FileText,
+  FolderOpen,
   Lightbulb,
   PenLine,
   Trash2,
@@ -28,10 +29,13 @@ import { Button } from '~/components/ui/button';
 import { cn } from '~/utils/misc';
 import { prisma } from '~/utils/db.server';
 import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
+import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
 import {
   buildLessonLibrary,
   lessonHref,
   splitDraftsAndLibrary,
+  groupUnits,
+  type UnitFolder,
   type LibraryLesson,
 } from '~/domain/lesson-planner/lesson-library';
 import { timeAgo } from '~/utils/timeAgo';
@@ -53,6 +57,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       updatedAt: true,
       publishedAt: true,
       lessonClassLabel: true,
+      unitDay: true,
+      unit: { select: { id: true, title: true, deletedAt: true } },
       messages: {
         where: { keptAt: { not: null } },
         select: { keptAudience: true },
@@ -68,7 +74,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
     },
   });
 
-  return { lessons: buildLessonLibrary(lessons) };
+  const { stackV3 } = await getLessonPlannerReviewFlags(access.membership.organization.id);
+  return {
+    lessons: buildLessonLibrary(
+      lessons.map((lesson) => ({
+        ...lesson,
+        // A deleted unit leaves its lessons standing on their own.
+        unit: lesson.unit && !lesson.unit.deletedAt ? { id: lesson.unit.id, title: lesson.unit.title } : null,
+      }))
+    ),
+    // Brian's run 5: units as folders, behind the run-of-show flag.
+    folders: stackV3,
+  };
 }
 
 function LessonRow({ lesson }: { lesson: LibraryLesson }) {
@@ -183,8 +200,41 @@ function LessonRow({ lesson }: { lesson: LibraryLesson }) {
   );
 }
 
+function UnitFolderRow({ folder }: { folder: UnitFolder }) {
+  return (
+    <li>
+      <details data-testid="unit-folder" open className="rounded-xl border bg-card p-4">
+        <summary className="flex cursor-pointer list-none items-center gap-2">
+          <FolderOpen size={16} className="shrink-0 text-primary" />
+          <span data-testid="unit-folder-title" className="min-w-0 flex-1 truncate font-medium">
+            {folder.title}
+          </span>
+          <Badge variant="outline" size="sm">
+            {folder.days.length} {folder.days.length === 1 ? 'day' : 'days'}
+          </Badge>
+        </summary>
+        <ol className="mt-3 flex flex-col gap-2">
+          {folder.days.map((day) => (
+            <LessonRow key={day.id} lesson={day} />
+          ))}
+        </ol>
+        {folder.planning ? (
+          <Link
+            to={`/app/lesson-planner?c=${folder.planning.id}`}
+            data-testid="unit-folder-planning"
+            className="mt-3 inline-block text-xs font-semibold text-primary underline"
+          >
+            The chat that planned it
+          </Link>
+        ) : null}
+      </details>
+    </li>
+  );
+}
+
 export default function LessonHistoryRoute() {
-  const { lessons } = useLoaderData<typeof loader>();
+  const { lessons: all, folders } = useLoaderData<typeof loader>();
+  const { units, lessons } = folders ? groupUnits(all) : { units: [], lessons: all };
   const { drafts, library } = splitDraftsAndLibrary(lessons);
 
   return (
@@ -207,7 +257,7 @@ export default function LessonHistoryRoute() {
           </div>
         </div>
 
-        {lessons.length === 0 ? (
+        {all.length === 0 ? (
           <div className="rounded-2xl border border-dashed p-10 text-center">
             <div className="mx-auto mb-3 w-fit rounded-2xl bg-primary/10 p-3 text-primary">
               <Lightbulb size={24} />
@@ -220,6 +270,19 @@ export default function LessonHistoryRoute() {
           </div>
         ) : (
           <div className="flex flex-col gap-6">
+            {units.length ? (
+              <div>
+                <h2 className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <FolderOpen size={12} className="text-primary" />
+                  Units
+                </h2>
+                <ul className="flex flex-col gap-2">
+                  {units.map((folder) => (
+                    <UnitFolderRow key={folder.id} folder={folder} />
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             {library.length ? (
               <div>
                 <h2 className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">

@@ -100,6 +100,8 @@ import { TEMPLATE_SLOTS, type LessonTemplate } from '~/domain/lesson-planner/les
 import { TemplateChip, TemplateList } from './template-picker';
 import { FULL_LESSON_FRAMING, stripPlanPreamble } from '~/domain/lesson-planner/plan-framing';
 import { announceStackChange, useStackChanges } from '~/components/lesson-planner/stack-channel';
+import { DayLessonsCard } from '~/components/lesson-planner/day-lessons-card';
+import { readPlanDays } from '~/domain/lesson-planner/plan-days';
 import { pieceKeysInReply, segmentInStack, stepBlockKeys, stepSegments, stepsOfferingChoice } from '~/domain/lesson-planner/reply-pieces';
 import {
   asksToSwapStarter,
@@ -1159,6 +1161,7 @@ export default function LessonPlannerRoute() {
                   practice={practice}
                   conversationId={conversationId}
                   builtDays={builtDays}
+                  daysOn={reviewFlags.stackV3}
                   onSuggestion={send}
                   onKeep={setKept}
                   stackV2={reviewFlags.stackV2}
@@ -1516,6 +1519,7 @@ function MessageBubble({
   onKeepAll = null,
   onSegment = null,
   stackPieces = {},
+  daysOn = false,
   disabled,
 }: {
   message: ChatMessage;
@@ -1539,6 +1543,8 @@ function MessageBubble({
   conversationId: string | null;
   /** Day number → the conversation each already-built day lives in. */
   builtDays: Record<number, string>;
+  /** Brian's run 5: a multi-day reply makes each day its own lesson. */
+  daysOn?: boolean;
   onSuggestion: (
     text: string,
     unitDay?: { day: number; title: string }
@@ -1649,8 +1655,12 @@ function MessageBubble({
   // Brian's run 3 (items 1, 2): every step, including one that is only its
   // blocks, with the pieces it files as, so its button and its status are
   // the same wherever it appears.
+  // Several days in one reply are lessons of their own, never steps of one
+  // (Brian's run 5, items 1 and 3): no per-step Add, no Add everything.
+  const planDays = daysOn && message.id ? readPlanDays(message.content) : [];
+  const multiDay = planDays.length >= 2;
   const planSteps =
-    stackV2 && deliveredPlan && message.id ? readPlanSteps(message.content) : [];
+    stackV2 && deliveredPlan && message.id && !multiDay ? readPlanSteps(message.content) : [];
   const segments = planSteps.length ? stepSegments(message.content) : {};
   const stepBlocks = planSteps.length ? stepBlockKeys(message.content) : {};
   // A step offering options (three class starters) has no button of its own:
@@ -1669,7 +1679,7 @@ function MessageBubble({
   let stepCursor = 0;
   const framePlan = stackV2 && deliveredPlan && Boolean(message.id);
   const replyPieceKeys =
-    stackV2 && deliveredPlan ? pieceKeysInReply(message.content) : [];
+    stackV2 && deliveredPlan && !multiDay ? pieceKeysInReply(message.content) : [];
   const everythingIn =
     Boolean(message.id) &&
     replyPieceKeys.length > 0 &&
@@ -1882,6 +1892,15 @@ function MessageBubble({
               </OptionRow>
             )
           )}
+          {multiDay && conversationId ? (
+            <DayLessonsCard
+              conversationId={conversationId}
+              messageId={message.id!}
+              days={planDays}
+              builtDays={builtDays}
+              disabled={disabled}
+            />
+          ) : null}
           {unitOutcome.kind === 'unit' ? (
             <div className="mt-3">
               <UnitPlanCard
@@ -2069,7 +2088,7 @@ function MessageBubble({
           </p>
         ) : null}
         <div className="mt-1.5 flex flex-wrap items-center gap-1">
-          {message.id && (!stackV2 || deliveredPlan || message.keptAudience) ? (
+          {message.id && !multiDay && (!stackV2 || deliveredPlan || message.keptAudience) ? (
             message.keptAudience ? (
               <>
                 <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary">

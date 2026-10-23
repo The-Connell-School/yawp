@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   buildLessonLibrary,
   classDisplayName,
+  groupUnits,
   lessonHref,
   splitDraftsAndLibrary,
 } from './lesson-library';
@@ -202,5 +203,23 @@ describe("the library counts the stack's pieces (Brian's run 4: every lesson rea
     expect(row!.sectionCount).toBe(2);
     expect(row!.handoutCount).toBe(1);
     expect(row!.className).toBe('English 10 · Period 3');
+  });
+});
+
+describe("unit folders (Brian's run 5, item 1)", () => {
+  test("a unit's days sit in its folder in day order, with its planning chat; other lessons stand alone", () => {
+    const unit = { id: 'u1', title: 'Lord of the Flies week' };
+    const rows = buildLessonLibrary([
+      lesson({ id: 'd2', unit, unitDay: 2, title: 'Day 2 — Close reading', packetTitle: null }),
+      lesson({ id: 'solo', title: 'A standalone lesson', packetTitle: null }),
+      lesson({ id: 'map', unit, unitDay: null, title: 'Plan the week', packetTitle: null }),
+      lesson({ id: 'd1', unit, unitDay: 1, title: 'Day 1 — Lecture', packetTitle: null }),
+    ]);
+    const { units, lessons } = groupUnits(rows);
+    expect(lessons.map((row) => row.id)).toEqual(['solo']);
+    expect(units).toHaveLength(1);
+    expect(units[0]!.title).toBe('Lord of the Flies week');
+    expect(units[0]!.planning?.id).toBe('map');
+    expect(units[0]!.days.map((row) => row.id)).toEqual(['d1', 'd2']);
   });
 });

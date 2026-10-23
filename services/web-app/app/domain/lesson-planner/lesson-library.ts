@@ -25,6 +25,9 @@ export type LibraryLessonInput = {
   materials?: Array<{ kind: string; audience: string | null }>;
   /** The class the teacher named for the lesson. */
   lessonClassLabel?: string | null;
+  /** The unit it belongs to, and which day (null: the unit's planning chat). */
+  unit?: { id: string; title: string } | null;
+  unitDay?: number | null;
   originClassAssignment?: {
     class: {
       title: string | null;
@@ -44,6 +47,8 @@ export type LibraryLesson = {
   handoutCount: number;
   published: boolean;
   updatedAt: string;
+  unit: { id: string; title: string } | null;
+  unitDay: number | null;
 };
 
 export function classDisplayName(klass: {
@@ -89,8 +94,41 @@ export function buildLessonLibrary(
         pieces.filter((material) => material.audience === 'student').length,
       published: Boolean(lesson.publishedAt),
       updatedAt: asIsoString(lesson.updatedAt),
+      unit: lesson.unit ?? null,
+      unitDay: lesson.unitDay ?? null,
     };
   });
+}
+
+export type UnitFolder = {
+  id: string;
+  title: string;
+  /** The chat that planned the unit, when it has one. */
+  planning: LibraryLesson | null;
+  days: LibraryLesson[];
+};
+
+/**
+ * The library as folders and lessons (Brian's run 5, item 1): a unit's days
+ * sit together in its folder, in day order, with the chat that planned them;
+ * every other lesson stands on its own. Folders keep the order the newest
+ * of their lessons has in the list.
+ */
+export function groupUnits(lessons: LibraryLesson[]): { units: UnitFolder[]; lessons: LibraryLesson[] } {
+  const folders = new Map<string, UnitFolder>();
+  const standalone: LibraryLesson[] = [];
+  for (const lesson of lessons) {
+    if (!lesson.unit) {
+      standalone.push(lesson);
+      continue;
+    }
+    const folder = folders.get(lesson.unit.id) ?? { id: lesson.unit.id, title: lesson.unit.title, planning: null, days: [] };
+    if (lesson.unitDay == null) folder.planning = folder.planning ?? lesson;
+    else folder.days.push(lesson);
+    folders.set(lesson.unit.id, folder);
+  }
+  for (const folder of folders.values()) folder.days.sort((a, b) => (a.unitDay ?? 0) - (b.unitDay ?? 0));
+  return { units: [...folders.values()], lessons: standalone };
 }
 
 /**

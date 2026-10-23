@@ -1916,3 +1916,11 @@ describe("planner prompt — Brian's run 4", () => {
     });
   }
 });
+
+describe("planner prompt — Brian's run 5", () => {
+  const prompt = buildLessonPlannerSystemPrompt({ teacherName: 'Brian', organizationName: 'Connell School', intakeV2: true });
+  test('several days in one reply: a # heading per day, its steps as ## headings', () => {
+    expect(prompt).toContain('give each day a `# Day N: title (50 min)` heading');
+    expect(prompt).toContain('Each day must add up to its period on its own.');
+  });
+});
