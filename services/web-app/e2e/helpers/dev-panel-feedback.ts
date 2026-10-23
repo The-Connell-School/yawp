@@ -32,6 +32,7 @@ export async function waitForDevPanelReady(page: Page) {
       .or(giveFeedbackSheet)
       .or(freeTierSheet)
       .or(signInSection)
+      .first()
   ).toBeVisible({ timeout: 60_000 });
   return panel;
 }
@@ -75,12 +76,12 @@ export async function openDevToolsPanel(page: Page) {
 export async function expectGiveFeedbackAccessible(page: Page) {
   const beaker = page.getByRole('button', { name: 'Open developer tools' });
   const legacy = page.getByRole('button', { name: 'Give feedback', exact: true });
-  await expect(beaker.or(legacy)).toBeVisible({ timeout: 30_000 });
+  await expect(beaker.or(legacy).first()).toBeVisible({ timeout: 30_000 });
   if ((await beaker.count()) > 0) {
     const panel = await openDevToolsPanel(page);
     const row = panel.getByRole('button', { name: 'Give feedback' });
     const sheet = giveFeedbackDialog(page);
-    await expect(row.or(sheet)).toBeVisible();
+    await expect(row.or(sheet).first()).toBeVisible();
     return;
   }
   await expect(legacy).toBeVisible();
