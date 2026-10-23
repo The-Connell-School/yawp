@@ -958,7 +958,9 @@ jobs:
             'app/utils/internal-management.server.test.ts' \
             'app/utils/internal-platform-auth.server.test.ts' \
             'app/utils/tester-feedback-gate.server.test.ts' \
+            'app/utils/tester-feedback-screenshot.server.test.ts' \
             'app/utils/tester-feedback-request.server.test.ts' \
+            'app/routes/api.internal.v1.tester-feedback.$id.screenshot/route.test.ts' \
             'app/utils/demo-feedback.server.test.ts' \
             'app/utils/demo-feedback-context.test.ts' \
             'app/utils/demo-feedback-analytics.test.ts' \
