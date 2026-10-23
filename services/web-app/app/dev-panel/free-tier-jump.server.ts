@@ -1,7 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { LOCAL_DEV_PASSWORD } from '../../../../packages/prisma/scripts/local-dev/dev-personas';
+import { emailDomain } from '~/domain/free-tier/admin-email-rules.server';
+import { submitAdminDetails } from '~/domain/free-tier/approval-flow.server';
+import { ensureLockedPreviewClassroomForUser } from '~/domain/free-tier/locked-preview.server';
 import { provisionFreeClassroom } from '~/domain/free-tier/provision-free-classroom.server';
+import { saveClassPreparation } from '~/domain/free-tier/class-preparation.server';
 import {
   FREE_TIER_LINK_TTL_MS,
   mintSignedLink,
@@ -16,6 +20,9 @@ import { findFreeTierState } from './free-tier-states.catalog';
 import { createDevPanelSessionHeaders } from './dev-panel-session.server';
 
 const sessionKey = 'sessionId';
+
+const DEV_PENDING_ADMIN_NAME = 'Dr. Alan Brooks';
+const DEV_PENDING_CLASS = { className: 'English 10', grade: '10' as const };
 
 export type FreeTierJumpStep = { id: string; label: string; done: boolean };
 
@@ -66,6 +73,27 @@ async function ensureThrowawayTeacher(organizationId: string) {
   };
 }
 
+async function ensureDevPanelTeacherSeat(userId: string, organizationId: string) {
+  const existing = await prisma.orgMembership.findFirst({
+    where: {
+      userId,
+      organizationId,
+      isActive: true,
+      role: 'TEACHER',
+    },
+    select: { id: true },
+  });
+  if (existing) return;
+  await prisma.orgMembership.create({
+    data: {
+      userId,
+      organizationId,
+      role: 'TEACHER',
+      isActive: true,
+    },
+  });
+}
+
 async function resolveTargetUser(input: JumpInput) {
   if (input.throwaway) {
     return ensureThrowawayTeacher(input.organizationId);
@@ -110,9 +138,129 @@ async function upsertApplication(
       userId,
       ...extra,
     },
-    update: { status: status as never, userId, ...extra },
+    update: { status: status as never, userId, email, ...extra },
     select: { id: true, status: true },
   });
+}
+
+function pendingFixtureTeacherEmail(localPart: string, fixtureDomain: string) {
+  return `${localPart}@${fixtureDomain}`;
+}
+
+async function alignTeacherEmailForPendingFixture(
+  userId: string,
+  email: string,
+  fixtureDomain: string
+) {
+  if (emailDomain(email) === fixtureDomain) return email;
+  const local =
+    email.split('@')[0]?.replace(/[^a-zA-Z0-9._+-]/g, '').slice(0, 40) ||
+    'dev-teacher';
+  const aligned = pendingFixtureTeacherEmail(
+    `${local}.${userId.slice(0, 8)}`,
+    fixtureDomain
+  );
+  await prisma.user.update({ where: { id: userId }, data: { email: aligned } });
+  return aligned;
+}
+
+async function resetApplicationForPendingJump(applicationId: string) {
+  await prisma.$transaction(async (tx) => {
+    const approvals = await tx.freeTierAdminApproval.findMany({
+      where: { applicationId },
+      select: { id: true },
+    });
+    const approvalIds = approvals.map((row) => row.id);
+    if (approvalIds.length) {
+      await tx.freeTierApprovalDelivery.updateMany({
+        where: { approvalId: { in: approvalIds } },
+        data: { state: 'CANCELLED', error: 'dev_panel_jump_reset' },
+      });
+      await tx.freeTierAdminApproval.deleteMany({
+        where: { applicationId },
+      });
+    }
+    await tx.freeTierApplication.update({
+      where: { id: applicationId },
+      data: {
+        status: 'ACCOUNT_CREATED',
+        organizationId: null,
+        adminRedirectCount: 0,
+        lockedPreviewApprovalToastSeenAt: null,
+        starterClassName: DEV_PENDING_CLASS.className,
+        starterClassGrade: DEV_PENDING_CLASS.grade,
+      },
+    });
+  });
+}
+
+async function jumpToPendingTeacherState(args: {
+  userId: string;
+  email: string;
+  manualReview: boolean;
+  devPanelOrganizationId: string;
+}) {
+  const teacherDomain = `pending-${randomUUID().slice(0, 12)}.example.test`;
+  const adminDomain = args.manualReview
+    ? `review-${randomUUID().slice(0, 12)}.example.test`
+    : teacherDomain;
+  const adminEmail = `admin.fixture@${adminDomain}`;
+  const teacherEmail = await alignTeacherEmailForPendingFixture(
+    args.userId,
+    args.email,
+    teacherDomain
+  );
+  const app = await upsertApplication(args.userId, teacherEmail, 'ACCOUNT_CREATED', {
+    starterClassName: DEV_PENDING_CLASS.className,
+    starterClassGrade: DEV_PENDING_CLASS.grade,
+    organizationId: null,
+  });
+  await resetApplicationForPendingJump(app.id);
+  await saveClassPreparation({
+    applicationId: app.id,
+    userId: args.userId,
+    ...DEV_PENDING_CLASS,
+  });
+  const submit = await submitAdminDetails({
+    applicationId: app.id,
+    userId: args.userId,
+    adminName: DEV_PENDING_ADMIN_NAME,
+    adminEmail,
+    adminRole: 'Principal',
+    suppressEmailDelivery: true,
+  });
+  if (!submit.ok) {
+    throw new Error(
+      submit.reason === 'email_failed'
+        ? 'Could not prepare pending approval state.'
+        : `Could not prepare pending approval state (${submit.reason}).`
+    );
+  }
+  const expectedStatus = args.manualReview ? 'MANUAL_REVIEW' : 'SENT';
+  if (submit.status !== expectedStatus) {
+    throw new Error('Pending jump produced an unexpected application status.');
+  }
+  // Dev-panel throwaways attach to the selected org before provisioning; drop
+  // that seat so free-tier provisioning matches the real signup path.
+  await prisma.orgMembership.deleteMany({
+    where: {
+      userId: args.userId,
+      organizationId: args.devPanelOrganizationId,
+    },
+  });
+  await ensureLockedPreviewClassroomForUser(args.userId);
+  const membership = await prisma.orgMembership.findFirst({
+    where: {
+      userId: args.userId,
+      organization: { plan: 'FREE_CLASSROOM' },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  });
+  if (!membership) {
+    throw new Error('Could not provision locked preview classroom.');
+  }
+  return { membershipId: membership.id };
 }
 
 async function seedMonthlyUsage(
@@ -190,6 +338,16 @@ export async function executeFreeTierStateJump(
   ];
 
   try {
+    if (
+      found.state.id.startsWith('pending.') &&
+      !input.throwaway &&
+      input.currentUserId
+    ) {
+      await ensureDevPanelTeacherSeat(
+        input.currentUserId,
+        input.organizationId
+      );
+    }
     const target = await resolveTargetUser(input);
     steps[0].label = input.throwaway
       ? `Made test account: ${target.email}`
@@ -197,6 +355,7 @@ export async function executeFreeTierStateJump(
     steps[0].done = true;
 
     let redirectTo = '/app';
+    let sessionMembershipId = target.membershipId;
     const { state } = found;
 
     if (state.adminSide) {
@@ -271,14 +430,28 @@ export async function executeFreeTierStateJump(
         redirectTo = `${freeTierPublicAppOrigin()}/free/join?t=${encodeURIComponent(link.token)}`;
         break;
       }
-      case 'pending.waiting-on-admin':
-        await upsertApplication(target.userId, target.email, 'SENT');
+      case 'pending.waiting-on-admin': {
+        const pending = await jumpToPendingTeacherState({
+          userId: target.userId,
+          email: target.email,
+          manualReview: false,
+          devPanelOrganizationId: input.organizationId,
+        });
+        sessionMembershipId = pending.membershipId;
         redirectTo = '/app/free-tier/pending';
         break;
-      case 'pending.manual-review':
-        await upsertApplication(target.userId, target.email, 'MANUAL_REVIEW');
+      }
+      case 'pending.manual-review': {
+        const pending = await jumpToPendingTeacherState({
+          userId: target.userId,
+          email: target.email,
+          manualReview: true,
+          devPanelOrganizationId: input.organizationId,
+        });
+        sessionMembershipId = pending.membershipId;
         redirectTo = '/app/free-tier/pending';
         break;
+      }
       case 'approved.first-time-toast':
       case 'approved.usage-plenty-left':
       case 'approved.usage-about-half-left':
@@ -336,7 +509,7 @@ export async function executeFreeTierStateJump(
     steps[1].done = true;
     const sessionHeaders = await createDevPanelSessionHeaders(
       target.userId,
-      target.membershipId,
+      sessionMembershipId,
       input.request
     );
     steps[2].done = true;
