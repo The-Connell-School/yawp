@@ -259,8 +259,9 @@ test.describe('Dev panel artboard evidence', () => {
         body: JSON.stringify({ error: 'Could not update this class.' }),
       });
     });
-    await simSheet.getByRole('button', { name: 'Try populate again' }).click();
+    await simSheet.getByRole('button', { name: 'Populate class', exact: true }).click();
     await expect(simSheet.getByRole('alert')).toBeVisible();
+    await simSheet.getByRole('button', { name: 'Try populate again' }).click();
     await shot(page, 'class-sim-error');
 
     await page.unroute('**/api/dev-panel/teacher-classes');
