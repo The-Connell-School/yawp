@@ -10,7 +10,6 @@ export const E2E_SMOKE_SPECS = [
   'e2e/tests/admin.assignment-type-creator.spec.ts',
   'e2e/tests/admin.assignment-types.spec.ts',
   'e2e/tests/teacher.dashboard-workspace.spec.ts',
-  'e2e/tests/teacher.assignments-page.spec.ts',
   'e2e/tests/teacher.tutor-off-badge.spec.ts',
   'e2e/tests/teacher.class-page-redesign.spec.ts',
   'e2e/tests/teacher.class-documents-filter-counts.spec.ts',
@@ -27,7 +26,6 @@ export const E2E_SMOKE_SPECS = [
   'e2e/tests/document-regression.spec.ts',
   'e2e/tests/document-editor-invariants.spec.ts',
   'e2e/tests/document-local-first-persistence.spec.ts',
-  'e2e/tests/teacher-class-pilot-rollout.spec.ts',
   'e2e/tests/teacher.my-assignments-nav.spec.ts',
   'e2e/tests/teacher.my-assignments-scroll.spec.ts',
   'e2e/tests/collab-carets.spec.ts',
@@ -60,8 +58,6 @@ export const E2E_SMOKE_SHARDS: Record<SmokeShard, readonly string[]> = {
     'e2e/tests/student.unreleased-grade-loader-privacy.spec.ts',
     'e2e/tests/teacher.tutor-off-badge.spec.ts',
     'e2e/tests/teacher.daily-pages-sjp-swap-persistence.spec.ts',
-    'e2e/tests/admin.organization-assignment-types.spec.ts',
-    'e2e/tests/teacher-class-pilot-rollout.spec.ts',
     'e2e/tests/teacher.class-starter-grading.spec.ts',
   ],
   2: [
@@ -82,7 +78,6 @@ export const E2E_SMOKE_SHARDS: Record<SmokeShard, readonly string[]> = {
     'e2e/tests/teacher.my-assignments-nav.spec.ts',
     'e2e/tests/teacher.assignment-insights.spec.ts',
     'e2e/tests/tester-feedback.spec.ts',
-    'e2e/tests/teacher.assignments-page.spec.ts',
     'e2e/tests/teacher.daily-pages-writing-conditions-removed.spec.ts',
     'e2e/tests/free-tier.onboarding-style.spec.ts',
   ],
@@ -110,6 +105,7 @@ export const E2E_SMOKE_SHARDS: Record<SmokeShard, readonly string[]> = {
     'e2e/tests/teacher.daily-pages-engagement-12pt.spec.ts',
   ],
   6: [
+    'e2e/tests/admin.organization-assignment-types.spec.ts',
     'e2e/tests/teacher.lesson-planner.spec.ts',
   ],
 };

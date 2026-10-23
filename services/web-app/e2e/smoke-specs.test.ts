@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { E2E_SMOKE_SHARDS, E2E_SMOKE_SPECS, type SmokeShard } from './smoke-specs.ts';
+
+const webAppRoot = join(import.meta.dir, '..');
 
 describe('E2E smoke shard assignment', () => {
   test('CI shards are numbered 1 through 6', () => {
@@ -18,4 +22,9 @@ describe('E2E smoke shard assignment', () => {
     expect([...fromShards].sort()).toEqual([...E2E_SMOKE_SPECS].sort());
   });
 
+  test('every smoke spec path exists under services/web-app', () => {
+    for (const spec of E2E_SMOKE_SPECS) {
+      expect(existsSync(join(webAppRoot, spec))).toBe(true);
+    }
+  });
 });
