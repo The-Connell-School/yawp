@@ -38,11 +38,16 @@ function serializedLoaderData(result: unknown) {
   return JSON.stringify(payload);
 }
 
-function expectTeachingSecretsAbsent(serialized: string) {
+function expectTeachingSecretsAbsent(
+  serialized: string,
+  options?: { requireClassId?: boolean }
+) {
   expect(serialized).not.toContain(classCode);
   expect(serialized).not.toContain(joinToken);
   expect(serialized).not.toMatch(/"studentJoinToken"\s*:\s*"[^"]+"/);
-  expect(serialized).toContain(classId);
+  if (options?.requireClassId !== false) {
+    expect(serialized).toContain(classId);
+  }
 }
 
 function expectTeachingSecretsPresent(serialized: string) {
@@ -149,32 +154,47 @@ local(
   'pending teacher app loaders omit the real class code from serialized loader data',
   async () => {
     const paths = [
-      ['/app', appShellLoader, {}] as const,
-      ['/app', dashboardLoader, {}] as const,
-      ['/app/my-classes', myClassesLoader, {}] as const,
-      [
-        `/app/my-classes/${classId}?tab=students`,
-        classDetailLoader,
-        { classId },
-      ] as const,
-      ['/app/organization/classes', orgClassesLoader, {}] as const,
-      ['/app/organization/students', orgStudentsLoader, {}] as const,
-      [
-        `/app/organizations/schools/${schoolId}`,
-        schoolDetailLoader,
-        { schoolId },
-      ] as const,
-    ];
+      {
+        path: '/app',
+        load: appShellLoader,
+        params: {},
+        requireClassId: false,
+      },
+      { path: '/app', load: dashboardLoader, params: {} },
+      { path: '/app/my-classes', load: myClassesLoader, params: {} },
+      {
+        path: `/app/my-classes/${classId}?tab=students`,
+        load: classDetailLoader,
+        params: { classId },
+      },
+      {
+        path: '/app/organization/classes',
+        load: orgClassesLoader,
+        params: {},
+      },
+      {
+        path: '/app/organization/students',
+        load: orgStudentsLoader,
+        params: {},
+      },
+      {
+        path: `/app/organizations/schools/${schoolId}`,
+        load: schoolDetailLoader,
+        params: { schoolId },
+      },
+    ] as const;
 
-    for (const [path, load, params] of paths) {
-      const { request, sessionId } = await authedRequest(path);
+    for (const entry of paths) {
+      const { request, sessionId } = await authedRequest(entry.path);
       try {
-        const result = await load({
+        const result = await entry.load({
           request,
-          params,
+          params: entry.params,
           context: {} as never,
         } as never);
-        expectTeachingSecretsAbsent(serializedLoaderData(result));
+        expectTeachingSecretsAbsent(serializedLoaderData(result), {
+          requireClassId: entry.requireClassId,
+        });
       } finally {
         await prisma.session.delete({ where: { id: sessionId } });
       }

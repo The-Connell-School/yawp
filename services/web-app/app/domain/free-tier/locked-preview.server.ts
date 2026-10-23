@@ -97,7 +97,7 @@ export function redactClassTeachingSecrets<T extends ClassTeachingSecretCarrier>
 ): T {
   if (!hideTeachingSecrets) return klass;
   const { studentJoinToken: _token, ...rest } = klass;
-  return { ...rest, code: null };
+  return { ...rest, code: null } as T;
 }
 
 export async function ensureLockedPreviewClassroomForUser(userId: string) {
