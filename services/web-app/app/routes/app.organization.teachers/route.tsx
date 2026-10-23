@@ -358,23 +358,6 @@ export async function action({ request }: ActionFunctionArgs) {
       for (const email of emailList) {
         let designed: Awaited<ReturnType<typeof buildOrgTeacherInviteEmail>>;
         try {
-          // Check for existing invitation and delete if found
-          const existingInvitation = await prisma.invitation.findFirst({
-            where: {
-              target: { equals: email, mode: 'insensitive' },
-              type: 'onboard-teacher',
-              metadata: JSON.stringify({
-                organizationId: profile.organization.id,
-              }),
-            },
-          });
-
-          if (existingInvitation) {
-            await prisma.invitation.delete({
-              where: { id: existingInvitation.id },
-            });
-          }
-
           const { otp, ...verificationConfig } = await generateTOTP({
             algorithm: 'SHA-256',
             charSet: 'ABCDEFGHIJKLMNPQRSTUVWXYZ123456789',
@@ -396,9 +379,18 @@ export async function action({ request }: ActionFunctionArgs) {
             metadata: JSON.stringify({
               organizationId: profile.organization.id,
             }),
+            organizationId: profile.organization.id,
           };
 
-          await prisma.invitation.create({ data: verificationData });
+          await prisma.$transaction(async (tx) => {
+            await tx.invitation.deleteMany({
+              where: {
+                target: { equals: email, mode: 'insensitive' },
+                type: 'onboard-teacher',
+              },
+            });
+            await tx.invitation.create({ data: verificationData });
+          });
 
           designed = await buildOrgTeacherInviteEmail({
             firstName: inviteeFirstName(email),

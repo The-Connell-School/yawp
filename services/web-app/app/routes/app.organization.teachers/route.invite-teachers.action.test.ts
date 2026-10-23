@@ -36,10 +36,10 @@ const prisma = {
     findUnique: mock(),
   },
   invitation: {
-    findFirst: mock(),
-    delete: mock(),
+    deleteMany: mock(),
     create: mock(),
   },
+  $transaction: mock(async (fn: (tx: typeof prisma) => unknown) => fn(prisma)),
 };
 
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -74,13 +74,16 @@ describe('invite-teachers action', () => {
     buildOrgTeacherInviteEmail.mockReset();
     prisma.organization.findUnique.mockReset();
     prisma.user.findUnique.mockReset();
-    prisma.invitation.findFirst.mockReset();
-    prisma.invitation.delete.mockReset();
+    prisma.invitation.deleteMany.mockReset();
     prisma.invitation.create.mockReset();
+    prisma.$transaction.mockReset();
+    prisma.$transaction.mockImplementation(async (fn: (tx: typeof prisma) => unknown) =>
+      fn(prisma)
+    );
 
     prisma.organization.findUnique.mockResolvedValue({ name: 'Yawp! High' });
     prisma.user.findUnique.mockResolvedValue({ name: 'Pat Owner' });
-    prisma.invitation.findFirst.mockResolvedValue(null);
+    prisma.invitation.deleteMany.mockResolvedValue({ count: 0 });
     prisma.invitation.create.mockResolvedValue({ id: 'inv-1' });
     generateTOTP.mockResolvedValue({
       otp: 'ABC123',
@@ -268,6 +271,90 @@ describe('invite-teachers action', () => {
     } finally {
       console.error = originalError;
     }
+  });
+
+  test('replaces a pending onboard-teacher invite from another organization', async () => {
+    const response = await action({
+      request: inviteRequest('teacher@example.test'),
+    } as never);
+
+    const data = unwrapData<{ sentCount: number; failedEmails: string[] }>(
+      response
+    );
+    expect(data.sentCount).toBe(1);
+    expect(data.failedEmails).toEqual([]);
+    expect(prisma.invitation.deleteMany).toHaveBeenCalledWith({
+      where: {
+        target: { equals: 'teacher@example.test', mode: 'insensitive' },
+        type: 'onboard-teacher',
+      },
+    });
+    expect(prisma.invitation.create).toHaveBeenCalledTimes(1);
+    expect(prisma.invitation.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        target: 'teacher@example.test',
+        type: 'onboard-teacher',
+        organizationId: 'org-1',
+        metadata: JSON.stringify({ organizationId: 'org-1' }),
+      }),
+    });
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+  });
+
+  test('re-inviting from the same organization replaces the pending row', async () => {
+    prisma.invitation.deleteMany.mockResolvedValue({ count: 1 });
+
+    const response = await action({
+      request: inviteRequest('repeat@example.test'),
+    } as never);
+
+    const data = unwrapData<{ sentCount: number; failedEmails: string[] }>(
+      response
+    );
+    expect(data.sentCount).toBe(1);
+    expect(data.failedEmails).toEqual([]);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.invitation.deleteMany).toHaveBeenCalledTimes(1);
+    expect(prisma.invitation.create).toHaveBeenCalledTimes(1);
+  });
+
+  test('replaces an existing invite when the stored address differs only by case', async () => {
+    const response = await action({
+      request: inviteRequest('MixedCase@Example.test'),
+    } as never);
+
+    const data = unwrapData<{ sentCount: number; failedEmails: string[] }>(
+      response
+    );
+    expect(data.sentCount).toBe(1);
+    expect(data.failedEmails).toEqual([]);
+    expect(prisma.invitation.deleteMany).toHaveBeenCalledWith({
+      where: {
+        target: { equals: 'mixedcase@example.test', mode: 'insensitive' },
+        type: 'onboard-teacher',
+      },
+    });
+    expect(prisma.invitation.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        target: 'mixedcase@example.test',
+      }),
+    });
+  });
+
+  test('marks every address failed when sendEmail returns status error for all', async () => {
+    sendEmail.mockResolvedValue({
+      status: 'error',
+      error: { name: 'Error', message: 'fail', statusCode: 500 },
+    });
+
+    const response = await action({
+      request: inviteRequest('a@example.test, b@example.test'),
+    } as never);
+    const data = unwrapData<{ sentCount: number; failedEmails: string[] }>(
+      response
+    );
+    expect(data.sentCount).toBe(0);
+    expect(data.failedEmails).toEqual(['a@example.test', 'b@example.test']);
   });
 
   test('logs invite setup failures without error messages', async () => {
