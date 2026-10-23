@@ -12,11 +12,15 @@ mock.module('~/utils/db.server', () => ({
 const originalConsoleError = console.error;
 
 describe('GET /api/readyz (readiness)', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     queryRaw.mockReset();
     queryRaw.mockResolvedValue([{ '?column?': 1 }]);
     console.error = consoleError;
     consoleError.mockClear();
+    const { resetDatabaseReadinessCacheForTests } = await import(
+      '~/utils/db-readiness.server'
+    );
+    resetDatabaseReadinessCacheForTests();
   });
 
   afterEach(() => {
@@ -31,9 +35,8 @@ describe('GET /api/readyz (readiness)', () => {
   });
 
   test('returns 503 without error details when the database fails', async () => {
-    queryRaw.mockRejectedValue(
-      new Error('password authentication failed for user "secret"')
-    );
+    const secretMessage = 'password authentication failed for user "secret"';
+    queryRaw.mockRejectedValue(new Error(secretMessage));
     const { loader } = await import('~/routes/api.readyz');
     const response = await loader({} as never);
     expect(response.status).toBe(503);
@@ -41,12 +44,13 @@ describe('GET /api/readyz (readiness)', () => {
     expect(body).toEqual({ ok: false, db: 'error' });
     expect(JSON.stringify(body)).not.toMatch(/secret|postgres|@/i);
     expect(consoleError).toHaveBeenCalled();
+    const logged = JSON.stringify(consoleError.mock.calls);
+    expect(logged).not.toContain(secretMessage);
+    expect(logged).not.toContain('secret');
   });
 
   test('returns 503 when the database check times out', async () => {
-    queryRaw.mockImplementation(
-      () => new Promise(() => {})
-    );
+    queryRaw.mockImplementation(() => new Promise(() => {}));
     const { isDatabaseReady, DB_READINESS_TIMEOUT_MS } = await import(
       '~/utils/db-readiness.server'
     );
@@ -55,5 +59,22 @@ describe('GET /api/readyz (readiness)', () => {
     expect(Date.now() - start).toBeGreaterThanOrEqual(
       DB_READINESS_TIMEOUT_MS - 50
     );
+  });
+
+  test('single-flights concurrent readiness checks', async () => {
+    queryRaw.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(() => resolve([{ '?column?': 1 }]), 30);
+        })
+    );
+    const { isDatabaseReady } = await import('~/utils/db-readiness.server');
+    const results = await Promise.all([
+      isDatabaseReady(),
+      isDatabaseReady(),
+      isDatabaseReady(),
+    ]);
+    expect(results).toEqual([true, true, true]);
+    expect(queryRaw).toHaveBeenCalledTimes(1);
   });
 });
